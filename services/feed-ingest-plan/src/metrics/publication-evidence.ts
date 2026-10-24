@@ -59,11 +59,10 @@ export const DigestEventItemSchema = z.object({
 export const RecordedEventPairSchema = z.object({
   version: SchemaVersionSchema,
   pair_key: Sha256Schema, left_url_key: Sha256Schema, right_url_key: Sha256Schema,
-  scorer_model: z.literal("all-minilm-l6-v2-quantized"), cosine_weight: z.number().finite().min(0).max(1),
+  scorer_model: SlugSchema, cosine_weight: z.number().finite().min(0).max(1),
   verdict: z.enum(["YES", "NO", "UNCLEAR"]).nullable(),
   verdict_swapped: z.enum(["YES", "NO", "UNCLEAR"]).nullable(), usable: z.boolean(),
-  judge_model: z.enum(["qwen3-5-9b-q4-k-m", "qwen3-5-9b-q4-k-m-thinking", "ornith-1-5-9b-q5-k-m",
-    "gemma-4-e4b-it-qat-ud-q4-k-xl"]).nullable(),
+  judge_model: SlugSchema.nullable(),
   prompt_digest: Sha256Schema.nullable(), grammar_digest: Sha256Schema.nullable(),
   judge_id: z.literal("content-similarity-judge"),
   judge_temperature: z.number().finite().nonnegative().nullable(), grammar_applied: z.boolean().nullable(),

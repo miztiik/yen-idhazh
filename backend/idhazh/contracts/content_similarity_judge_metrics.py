@@ -64,6 +64,11 @@ class ContentSimilarityJudgeMetrics(JudgeConfigStamp, Contract):
     __schema_stem__: ClassVar[str] = "content-similarity-judge-metrics"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-10-24",
+            change="Judge model identities accept any valid slug.",
+            why="Recorded identities must remain readable after the selected models change.",
+        ),
+        ChangelogEntry(
             version="2026-10-08",
             change="shard is renamed work_part_index. An old shard heading is read under it.",
             why="The ledger door writes its own shard cell on every row it files.",
@@ -91,9 +96,8 @@ class ContentSimilarityJudgeMetrics(JudgeConfigStamp, Contract):
     judge_model: JudgeModelId | None = Field(
         default=None,
         description=(
-            "Which weights judged. Narrowed to the sets this repository ships a model "
-            "file for, so swapping the judge is a schema diff rather than a silent "
-            "change in what a reading means. Empty where no model ran."
+            "Which weights judged, as the recorded model slug, independent of the "
+            "models currently configured. Empty where no model ran."
         ),
     )
 

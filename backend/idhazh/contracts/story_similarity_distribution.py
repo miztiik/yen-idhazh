@@ -90,6 +90,11 @@ class StorySimilarityDistribution(Contract):
     __schema_stem__: ClassVar[str] = "story-similarity-distribution"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-10-24",
+            change="Scorer and judge model identities accept any valid slug.",
+            why="Recorded identities must remain readable after the selected models change.",
+        ),
+        ChangelogEntry(
             version="2026-09-24",
             change="key_point_weight is gone. A record that still carries the key loads.",
             why="The term shipped at a weight of zero and never moved a score.",
@@ -103,11 +108,6 @@ class StorySimilarityDistribution(Contract):
             version="2026-09-21T14:00",
             change="decode_digest is gone. A record that still carries the key loads.",
             why="It proved two runs asked alike, and this project does not claim that.",
-        ),
-        ChangelogEntry(
-            version="2026-09-21T12:00",
-            change="`folded_dates` is now `counted_dates`. The old key still reads.",
-            why="Borrowed vocabulary for the count this field already holds.",
         ),
         ChangelogEntry(
             version="2026-09-18",
