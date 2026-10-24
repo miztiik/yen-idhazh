@@ -184,8 +184,8 @@ source-attributable CPU or memory evidence exists.
 ## D4 proposal: durable settlement
 
 Reuse the existing registered ledger writer for observed events and state.
-Keep one `settle-ingest-feedback` writer. Its versioned state snapshot should
-carry:
+Define a `settle-ingest-feedback` stage that writes a versioned state snapshot;
+concurrent invocations remain allowed. The snapshot should carry:
 
 | Field | Proposed type and bound |
 | --- | --- |
@@ -287,6 +287,11 @@ exhausted, leave the previously committed snapshot and restrictions unchanged,
 retain the run artifacts, report settlement as failed/unsettled, and do not
 claim completion. Missing or unreadable state is not empty history and must
 not clear known restrictions.
+
+A run that already read the previous snapshot may finish with that view; a new
+restriction governs allocations that read after it is published. Preventing
+already-running allocations from using an older view would require a separate
+per-source reservation rule, which is not included in this proposal.
 
 The next allocation must read the latest compatible committed snapshot while
 keeping its code and policy pinned. A failed commit does not advance
