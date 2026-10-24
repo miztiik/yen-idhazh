@@ -32,26 +32,33 @@ describe machine use, not which publisher caused it or how much was waste.
 
 ## D3 approved observation scope and remaining field details
 
-Reuse the event identity already declared in
-`FeedIngestEventSchema`: `event_id`, `correlation_id`, `run_id`, `attempt`,
-`sequence`, `occurred_at`, `stage`, `source_id` and `candidate_id`. Reuse the
-writer envelope's `git_sha` for the pipeline revision and the existing
-extractor revision where the producer records it. Do not add a second event ID,
-run ID or revision field.
+Keep `FeedIngestEventSchema` as the one TypeScript-owned planner event
+contract. Do not make a second native copy of that event stream. Persisted
+operational observations are a different payload: one registered
+`feed-ingest-plan/document-observations` raw/compact Parquet row projection
+owned by a Pydantic contract. Reuse `event_id`, `source_id`, `run_id`,
+`attempt`, `correlation_id` and `candidate_id` from existing observations;
+include operation, outcome, UTC occurrence time, duration, supported cause
+and actual dispatched-request accounting. Reuse the writer's `git_sha` for
+pipeline revision rather than adding another revision field.
 
-The current feed-ingest event, source-run and planner-operation contracts
-persist outcomes, durations, source/candidate identity and request attempts.
-They do not persist article-attributed CPU or private-memory cost. Host CPU and
-process RSS in other ledgers are not article costs. The existing feed
+The current planner observations and fetch-attempt records are fact sources,
+but there is no complete persisted Parquet record of actual plan fetch and
+parse work. A source-run aggregate is not enough where it loses per-operation
+facts. The new Parquet projection must preserve individual operations,
+including partial and unsuccessful work, before a later plan stage can fail.
+It does not add another planner event contract. These records do not provide
+article-attributed CPU or private-memory cost. Host CPU and process RSS in
+other ledgers are not article costs. The existing feed
 `parse_status` describes RSS entry parsing; `success` with `parsed_count > 0`
 does not prove article material was extracted. Keep those cases distinct.
 
-Propose recording `attribution` and nullable `failure_code` on existing
-operation records. Their source/pipeline/unresolved meaning and supported
-failure causes are approved; the exact field shape is not. The planner-only
-event stream remains its TypeScript-owned contract. Use the existing
-request-attempt and observation records for request counts; do not persist a
-duplicate counter on the event.
+Record the approved `source`, `pipeline` or `unresolved` attribution and
+supported failure cause on operation observations; exact field names and types
+are implementation details. The planner-only event stream remains its
+TypeScript-owned contract. Use existing request-attempt and observation
+records as the facts for request accounting; do not add a duplicate counter
+to the event.
 
 ### Table A - Observation field decisions
 
@@ -70,17 +77,14 @@ records with actual article-request totals, technical extraction outcomes and
 supported failure causes. Save per-source operational state with evidence
 dates, coverage and policy version. Do not invent CPU or memory costs.
 
-For requests, `FetchAttemptSchema` already records one row per producer
-execution, including retries and manually followed redirects. Its `phase`
-distinguishes `validation`, `robots` and `target`. Count only `target` rows in
-the article request measure. Keep feed polls and robots requests at their
-source-operation scope; do not copy their cost onto each article. The current
-producer's manual redirects make the attempt list complete at its
-`transport.request` boundary, not for work hidden inside another transport.
-The writer must keep that boundary and test the count against recorded
-attempts. The current feed-poll record does not carry a complete request
-census; keep that count null until the producer records each dispatched
-request. Do not infer it from a successful feed response.
+For requests, reuse `FetchAttemptSchema` as a fact source. Its `phase`
+distinguishes `validation`, `robots` and `target`; keep those scopes distinct.
+Count actual dispatched article-target requests, including retries and
+redirects once each. Do not count API validation, robots or feed polls as
+article requests, or copy feed-poll and robots costs onto articles. The
+feed-client path does not yet retain every dispatched attempt; wire that
+producer rather than infer a count from a successful response. Preserve
+unknown request coverage until each relevant dispatch is recorded.
 
 Use `(run_id, source_id, candidate_id)` as the article-opportunity key.
 Retries and correction records do not add article support. Use `event_id` as
@@ -101,16 +105,20 @@ do not. Do not add a second word-count test or semantic judgment.
 `FeedOutcomePayload.parse_status` only describes RSS entry parsing and is not
 an article extraction result.
 
-Extend existing source/run and operation records and their writers; do not
-add a parallel rollup. Record actual work for every fetch, parse and technical
-check, including article-target requests and extraction outcomes. This is
-collection of completed work, not a sample of 25 ordinary articles. Keep
-source, pipeline and unresolved causes distinct; only supported source-side
-failure can count as waste. Per-source operational-state coverage is measured
-opportunities divided by attempted opportunities; zero denominator means
-unknown. CPU and private-memory costs remain unavailable until attributable.
-Feed-poll and robots costs stay at their actual operation scope, not copied
-onto articles.
+The smallest persistence path is a Pydantic contract for the per-operation
+observation rows, a bound TypeScript projection from existing planner
+observations, registration in `config/ledgers.json`, then the existing
+registered Parquet writer and raw/compact reader. Do not duplicate the
+planner-only event schema or add a JSON sidecar. Extend existing observation
+and fetch-attempt producers for `/fetch`, `/parse` and `/plan`; persist actual
+work and partial outcomes before later plan stages can fail. The feed-client
+must emit each actual dispatched request. Then Row 5 attaches supported
+source, pipeline or unresolved causes, and Row 6 derives per-source request
+totals, waste and coverage from the registered rows. This covers all actual
+work, not a sample of 25 ordinary articles. Only supported source-side failure
+can count as waste. Zero opportunity denominator means unknown. CPU and
+private-memory costs remain unavailable until attributable. Feed-poll and
+robots costs stay at their actual operation scope, not copied onto articles.
 
 The correction identity, publisher mapping, full component schema and detailed
 per-operation bindings are implementation details to declare and test before
@@ -278,12 +286,14 @@ proposal.
 
 The next allocation reads the latest usable operational state with its code,
 revision and original UTC window. If the current state is unreadable, use the
-last valid saved state when one exists and label it `stale_fallback`; preserve its
-original window and do not invent an expiry time. Apply its saved qualified
-adjustment and known restrictions as the best available state, but do not call
-them current. If none is readable, continue selection without an operational
-adjustment and emit `restrictions_unverified`; never write empty history over
-saved state. Existing robots, trust and access-safety checks do not change.
+last valid saved state when one exists and label it `stale_fallback`; preserve
+its original window and do not invent an expiry time. Apply its saved
+qualified score adjustment as the best available state, but do not call it
+current. Do not apply D5 restrictions unless separately approved and
+implemented. If no state is readable, continue selection without an
+operational adjustment and emit `restrictions_unverified`; never write empty
+history over saved state. Existing robots, trust and access-safety checks do
+not change.
 
 The proposed read result carries `state_status: current|stale_fallback|unavailable`,
 nullable `state_revision` and nullable `window_start`/`window_end`. For
@@ -305,7 +315,7 @@ does not add selection idempotency, conditional HTTP or semantic assessment.
 
 | Id | Setting | Proposed type and value | Effect |
 | --- | --- | --- | --- |
-| C1 | `age_group_article_cap` | Up to 100 distinct eligible articles per age group for the bounded trial; fewer if fewer are available | A2 remains conditional on a small config/code change. At most 500 distinct articles can be selected across the five groups; retries and redirects can make actual HTTP request totals higher. It does not cap all-work telemetry, ordinary fetches, selection inputs or the existing 100-item selected-output limit. Report unknown-age entries separately. |
+| C1 | `age_group_article_cap` | Up to 100 distinct eligible articles per age group for the bounded trial; fewer if fewer are available | A2 remains conditional on total config/code cost. It depends on approved telemetry Rows 2, 4, 5 and 6; this is not a proven standalone small change. At most 500 distinct articles can be selected across the five groups; retries and redirects can make actual HTTP request totals higher. It does not cap all-work telemetry, ordinary fetches, selection inputs or the existing 100-item selected-output limit. Report unknown and future ages separately. |
 | C2 | `restriction_failures` | 3 consecutive known source-attributed failures for one source and endpoint/feed scope, within the configured window | A known success at that scope resets the streak; unknown, pipeline and unresolved outcomes neither assert failure nor reset it. Article refusal restricts only that article. |
 | C3 | `restriction_pause_hours` | Integer, 24 | Pause ends by making a recovery probe due; elapsed time alone does not restore ordinary work. |
 | C4 | `recovery_successes` | 3 distinct successful opportunities across at least 2 UTC dates, with at least 80 percent known outcomes | Restore trial access only after observed recovery. |
@@ -323,23 +333,32 @@ score's 20-opportunity support floor. Permanent retirement remains curated.
 
 For A2, use exact non-overlapping age groups: `[0,2)`, `[2,6)`, `[6,12)`,
 `[12,24)`, and `[24,36]` hours. Use the existing captured observation clock
-and trusted publication-time evidence. An item without a known age is counted
-in a separate unknown-age result; do not assign an age. The trial selects up to 100 distinct articles per group, fewer when fewer are
-eligible. This caps articles selected for the trial, not HTTP requests:
-retries and redirects can produce more requests. It does not cap the complete
-parsed-batch input, telemetry for other work or normal production selection.
+and trusted publication-time evidence. Unknown and future ages remain
+ungrouped. The trial selects up to 100 distinct articles per group, fewer when
+fewer are eligible. This caps articles selected for the trial, not HTTP
+requests: retries and redirects can produce more requests. It does not cap
+the complete parsed-batch input, telemetry for other work or normal production
+selection.
 
-The current harvester parses feed entries before article requests. It already
-computes publication age from the captured clock and records actual article
-work. The smallest implementation is one config-driven trial selector in
+The current harvester parses feed entries before article requests. Its age
+calculation is reusable, but the observation and registered Parquet path is
+not yet complete enough to audit the trial. First deliver the already-approved
+telemetry sequence: Row 2 declares and registers the native operation-row
+contract; Row 4 persists actual work and partial outcomes from `/fetch`,
+`/parse`, `/plan` and `feed-client.ts`; Row 5 classifies supported causes; Row
+6 derives request totals and coverage. Keep the planner-only event stream
+TypeScript-owned; the Parquet rows are its separate persisted projection.
+
+Only then add the age-group selector at
 `services/feed-ingest-plan/src/harvest-feeds/harvest-pool.ts`, before
-`harvestArticle`, then the existing fetch, parse, observation and registered
-Parquet writers. The bounded footprint is the config, its native Zod config declaration and
-validation case, this internal harvest seam, and focused tests.
-Reuse the current age calculation; do not add an HTTP or selection API field,
-another ranking system, a second pipeline or new age semantics. This is a
-small internal config/harvest change, not an API or selection-contract rewrite.
-If implementation needs broader changes, pause because A2 is conditional.
+`harvestArticle`, with config declared in the native Zod config schema and
+focused tests. Record each considered entry's trial disposition, including
+selected, excluded by the group cap, unknown age and future publication time;
+unknown and future ages do not enter a group. Continue recording all actual
+work through the same observation and Parquet path. Do not add an HTTP or
+selection API field, another ranking system, a second pipeline or new age
+semantics. The earlier config-only estimate omitted this telemetry dependency;
+do not claim the full change is small until the approved prerequisite is built.
 
 Owner ruling, kumarsnaveen_microsoft, 2026-10-24 UTC: approve A2 only if it is
 not too much of a configuration or coding change. The approved trial groups
@@ -348,9 +367,10 @@ are non-overlapping age ranges `[24,36]`, `[12,24)`, `[6,12)`, `[2,6)` and
 when available entries are fewer. The maximum is 500 distinct trial articles;
 actual HTTP request counts can be higher due to retries or redirects. This
 applies only to bounded trial measurement, not ordinary selection or a cap on
-captured work. Unknown age is reported separately, never assigned an invented
-age. The 25-article proposal is withdrawn. Implementation remains conditional
-until its actual config and coding cost is confirmed.
+captured work. Unknown and future ages remain ungrouped, never assigned an
+invented age. The 25-article proposal is withdrawn. Implementation remains
+conditional on confirming total cost after the approved telemetry path is
+delivered; no further approval is needed for that telemetry.
 
 Adaptive polling cadence remains unresolved. I Feed names new eligible
 discoveries per completed permitted poll as the evidence and requires due
@@ -458,12 +478,16 @@ exception does not make the saved score row TypeScript-only.
   details; they do not need another owner vote unless they change the approved
   concurrency, immutable-observation, failure, stale-read or late-correction
   behavior.
-- D5: trial/restriction/recovery thresholds, polling formula, review cadence,
-  caller and authority.
+- D5: restriction/recovery thresholds, polling formula, review cadence,
+  caller and authority remain unapproved. A2's trial remains conditional on
+  total implementation cost after the approved telemetry path is delivered.
 - D8: final trace field types against the existing score contract. Its
   requests-first arithmetic and trace boundary are approved above.
 
-These remaining choices need approval before implementation.
+Only D5 behavior or a proposed change to an approved meaning needs another
+owner decision. Native field names, bindings and D8 trace types are
+implementation work; proceed without another approval unless they change the
+settled behavior.
 
 ## Design rationale
 
