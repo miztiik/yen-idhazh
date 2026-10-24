@@ -20,6 +20,17 @@ The current default is `models/ornith-1.5-9b-q5km.json`. Keep it aligned with
 the committed selection when that selection changes. Recorded template checks
 remain tied to the model that produced their bytes, not the current selection.
 Server-setting checks accept the runtime's short and long flag spellings.
+The runtime-sweep utility has its own command-line options; these are not
+direct server flags. Its server launch must still use the shared argument
+builder.
+
+Owner ruling, kumarsnaveen, 2026-10-24: remove the turn-envelope, measurement
+and two-call pipeline test modules. This gives up their dedicated coverage,
+including stale tokenizer-reading checks in CI. The recorded measurements keep
+their original model identity; `backend/utilities/measure_budgets.py check`
+still reports stale readings when an operator asks. Judge tests cover role
+selection, verdicts and reasoning results without asserting runtime-specific
+output-limit or decoding keys. Request-builder tests own those wire details.
 
 **`config/idhazh.json` still carrying a `models` block is refused by name**, and refused rather than lifted onto the new file: a lift would read one model out of the old block while `models_file` named another file, and the run would stand a server up on whichever won.
 

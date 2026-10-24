@@ -3189,9 +3189,6 @@ class TestTheServerSettlesTheEntry:
     passes, and with one value changed it refuses and the message names both
     sides. A check nobody has made fail is a check nobody has tested.
 
-    The turn markers have their own module,
-    `backend/tests/contracts/test_turn_envelope.py`, because the derivation is a
-    contract about somebody else's template rather than a check on a reply.
     """
 
     def test_a_probe_fixture_that_hides_where_it_came_from_is_refused(
