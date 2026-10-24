@@ -2223,14 +2223,20 @@ Table I - Independent controls and expected faults
   the formerly invalid input. Restore exact production bytes. Then relax only
   the actual minimum length to one: both short-word refusal cases must fail
   for that reason. Restore exact production bytes and run all 25 cases as the
-  control. Record original/restored production hashes and exact test results.
-  These proofs are PENDING at freeze; no pass is claimed.
-- **Gate state at freeze:** Shared selector inspection, bounded affected
-  pytest, changed-file Ruff, changed-file mypy and whitespace checks are
-  PENDING. Use the documented shared lock only for pytest, not Ruff/mypy.
-  No redundant full local backend/frontend run. Full merge-candidate CI is
-  authoritative and PENDING; no browser check is required for this test/doc
-  change.
+  control. Both actual faults produced exactly the intended two
+  `DID NOT RAISE` failures. The restored full control passed all 25 cases.
+  Original and restored actual taxonomy source SHA-256:
+  `8d05f1209ba6a2fb5faffb005ea9ae8e9930c43e9813bdd79a2aad253c9a093a`.
+  The independent immutable full30 records these proofs as PENDING at freeze;
+  this current integration records the subsequent completed evidence.
+- **Gate state:** The shared selector names only `test_tag.py` and no build.
+  All 25 affected cases pass in the working checkout, changed-file Ruff and
+  whitespace checks pass. Changed-file mypy passes with no issues in the one
+  changed source file. Use the documented
+  shared lock only for pytest, not Ruff/mypy. No redundant full local
+  backend/frontend run. Full merge-candidate CI is authoritative and PENDING;
+  no browser check is required for this test/doc change. The independent
+  immutable full30 retains the truthful pending-at-freeze gate record.
 - **Immutable integration:** Verified and imported exact released Row 29,
   160,945 bytes, SHA-256
   `84dcb99543de018d2dd38b9ccf6e3a436f94f2c8d55dff51f881c5ee3b982d14`.
@@ -2245,9 +2251,15 @@ Table I - Independent controls and expected faults
   source hashes, actual fault/control evidence, immutable handoff and exact
   PR-head receipts to the coordinator. Do not rewrite historical frozen
   artifacts or add a CI-receipt-only commit. Keep this worktree and evidence.
+- **Current-main integration:** Normal merges retain the canonical plan from
+  `cb4eaa747eca52888319affa901329324f60f9c4`, including its newer complete
+  phase sections and receipts. Before this own-row gate update, deleting only
+  appended D23-D30 and their eight complete sections reconstructs that exact
+  main plan byte-for-byte. Every phase appears once. Tag test and taxonomy
+  page hashes remain identical to the released source; the independent
+  immutable full30 remains unchanged.
 - **Dependencies:** Row 1 supplies semantic test policy. Exact full Row 29 is
   the plan predecessor only; there is no production/source dependency.
-
 
 ## 2 - Row #31 - Bind declared UI defaults to their consumers
 
