@@ -36,6 +36,7 @@ from idhazh.contracts.base import (
     DateStamp,
     RunId,
     Sha256,
+    Slug,
     UrlKey,
     canonical_json,
     derive_text_digest,
@@ -88,29 +89,16 @@ class SameStoryVerdict(StrEnum):
     UNCLEAR = "UNCLEAR"
 
 
-#: Which encoder produced the two vectors a cosine was taken between. A Literal
-#: rather than a string, so swapping the encoder is a schema diff and a changelog
-#: entry rather than a silent change of what a 0.94 means.
-ScorerModelId = Literal["all-minilm-l6-v2-quantized"]
-
-#: Every set of weights this repository ships a `config/models/` file for. A
-#: Literal for the same reason the scorer is one: a judge swap changes what a
-#: verdict means, and a string column would let it happen without a review.
-JudgeModelId = Literal[
-    "qwen3-5-9b-q4-k-m",
-    "qwen3-5-9b-q4-k-m-thinking",
-    "ornith-1-5-9b-q5-k-m",
-    "gemma-4-e4b-it-qat-ud-q4-k-xl",
-    "qwen3-8-9b-q5-k-m-distill",
-]
+#: Recorded model identities use the config's slug format, not its current
+#: membership. Retired weights must remain readable without relabelling them.
+ScorerModelId = Slug
+JudgeModelId = Slug
 
 #: The slug this judge files its readings under. A closed set is honest here in
 #: the way it could not be on the shared call stamp: that stamp is inherited by
 #: judges nobody has written yet, and every row that carries this one is written
-#: by this judge and no other. It sits beside the two Literals above because all
-#: three are this judge's own vocabulary and three contracts already read that
-#: vocabulary off this module; declared on any of them instead, this row would
-#: have to import a module that imports this one back.
+#: by this judge and no other. Its software identity is fixed even when the
+#: weights it runs change.
 ContentSimilarityJudgeId = Literal["content-similarity-judge"]
 
 #: A first-token window as one cell: printable ASCII, one line, at most 1024
@@ -162,6 +150,11 @@ class StorySimilarityPair(Contract):
     __schema_stem__: ClassVar[str] = "story-similarity-pair"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-10-24T19:49",
+            change="Scorer and judge model identities accept any valid slug.",
+            why="Recorded identities must remain readable after the selected models change.",
+        ),
+        ChangelogEntry(
             version="2026-10-24",
             change="The Qwen 3.8 Distill Q5 model joins judge_model.",
             why="A shipped model file can be recorded in a future judge verdict.",
@@ -175,11 +168,6 @@ class StorySimilarityPair(Contract):
             version="2026-09-24",
             change="key_point and key_point_weight go. Both headings are carried and dropped.",
             why="The term shipped at a weight of zero and never moved a score.",
-        ),
-        ChangelogEntry(
-            version="2026-09-21T14:00",
-            change="decode_digest is gone. Its heading is carried and dropped on read.",
-            why="It proved two runs asked alike, and this project does not claim that.",
         ),
         ChangelogEntry(
             version="2026-09-21T12:00",
@@ -246,9 +234,8 @@ class StorySimilarityPair(Contract):
     )
     scorer_model: ScorerModelId = Field(
         description=(
-            "Which encoder produced the two vectors. A Literal rather than a string, so "
-            "swapping the encoder is a schema diff and a changelog entry rather than a "
-            "silent change of scale."
+            "Which encoder produced the two vectors. A recorded slug, independent of "
+            "the models currently configured."
         )
     )
     cosine_weight: float = Field(
@@ -301,7 +288,7 @@ class StorySimilarityPair(Contract):
     )
     judge_model: JudgeModelId | None = Field(
         default=None,
-        description="Which model judged. A Literal for the same reason the scorer is one.",
+        description="Which model judged, as its recorded slug. Empty until a judge ran.",
     )
     prompt_digest: Sha256 | None = Field(
         default=None,

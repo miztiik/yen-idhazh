@@ -144,6 +144,16 @@ def test_the_labeller_is_recorded_rather_than_checked_against_a_roster() -> None
         MergeLineHoldoutScore.model_validate(payload | {"labeller": "two\nlines"})
 
 
+def test_the_recorded_encoder_needs_a_valid_slug_not_current_membership() -> None:
+    payload = a_scoring("a-line-scored-against-the-holdout").model_dump(mode="json")
+    row = MergeLineHoldoutScore.model_validate(payload | {"scorer_model": "retired-encoder-v1"})
+
+    assert row.scorer_model == "retired-encoder-v1"
+    assert MergeLineHoldoutScore.from_csv_row(row.csv_row()) == row
+    with pytest.raises(ValidationError, match="scorer_model"):
+        MergeLineHoldoutScore.model_validate(payload | {"scorer_model": "../weights"})
+
+
 def test_the_door_roots_keep_the_similarity_judge_folder() -> None:
     """The ledger keeps its family nest and moves only under raw and compact."""
     which = LedgerName.CONTENT_SIMILARITY_JUDGE_MERGE_LINE_HOLDOUT_SCORES

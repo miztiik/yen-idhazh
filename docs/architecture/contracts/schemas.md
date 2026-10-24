@@ -34,6 +34,18 @@ tier identifiers. Historical readers do not require current registry membership.
 The migration and its compatibility checks are owned by
 [../sources/source-classification.md](../sources/source-classification.md).
 
+Saved similarity model identities use `Slug`, the same lowercase letters,
+digits and single separating hyphens accepted for configured model IDs.
+`StorySimilarityPair`, `StorySimilarityDistribution`,
+`FittedSimilarityThreshold`, `ContentSimilarityJudgeMetrics` and
+`MergeLineHoldoutScore` advance to `2026-10-24T19:49`. Readers validate the recorded
+spelling, never membership in today's selected model file. Existing JSON,
+CSV and Parquet strings, versions and provenance remain unchanged on read;
+no archive rewrite, second write format or migration is needed.
+Fixed judge software identities and verdict vocabularies remain closed.
+The owner-directed reversal of the former closed model lists is recorded in
+[similarity's design rationale](../publishing/autotune-content-similarity.md#design-rationale).
+
 The ledger layer reads a field annotation as a recursive tree: scalar (`string`, `int64`, `float64`, `bool`), list (`list[T]` and `tuple[T, ...]`), or struct (nested Pydantic model). A closed set of unions and wrapped aliases is reduced before the conversion, and unsupported shapes fail with the full nested field path. `backend/idhazh/ledger/arrow_schema.py` is the single entry point; `backend/idhazh/ledger/parquet.py` renders that tree to Arrow; `backend/idhazh/ledger/json_lines.py` stays format-generic and never adds contract-specific branches.
 
 The published-column gate compares current files exactly. For older file
@@ -101,6 +113,14 @@ cross-field refusals. Run `bun run check` and `bun test` in that package.
 The CI backend gate installs the locked package and runs these checks before
 pytest, which executes the Python-to-Zod bindings. It does not skip a binding
 when Bun or the package is absent.
+
+The publication observer's `RecordedEventPairSchema` is a read projection of
+the Python-owned pair, not a writer contract. The same binding module checks
+its actual runtime field types, closed vocabularies and model identity patterns
+against Python. Its bounded fixture names the projected fields, not an allowed
+model list. Historical example IDs in that fixture remain recorded evidence.
+Install the locked `services/feed-ingest-plan` dependencies before running this
+binding locally; the CI backend gate already does so.
 
 The shared feed planning contracts have independent stamps. Harvested content
 and terminal rejections use `2026-10-23`; source-run observations use

@@ -73,6 +73,31 @@ test("complete compatible recorded pairs yield true repetition and union-first e
   const sameEvent = await eventEvidence(articles.slice(1, 3), ["fire", "fire"]);
   expect(eventRepetitionRate(sameDay, articles.slice(1, 3), 1, sameEvent, ["2026-10-19"]).value).toBe(0);
 });
+test("unfamiliar model IDs remain measurable without relabelling historical evidence", async () => {
+  const articles = [article("2026-10-19", "a"), article("2026-10-20", "b")];
+  const evidence = await eventEvidence(articles, ["fire", "fire"]);
+  const original = evidence.pairs[0]!;
+  expect(original.scorer_model).toBe("all-minilm-l6-v2-quantized");
+  expect(original.judge_model).toBe("qwen3-5-9b-q4-k-m");
+  expect(groupPublishedEvents(articles, evidence).availability).toBe("available");
+  const pairs = evidence.pairs.map(pair => RecordedEventPairSchema.parse({
+    ...pair, scorer_model: "unseen-encoder-v2", judge_model: "retired-judge-v1",
+  }));
+  expect(pairs[0]!.version).toBe(original.version);
+  expect(pairs[0]!.judge_model).toBe("retired-judge-v1");
+  const input = days();
+  hold(input, "2026-10-19", articles.slice(0, 1));
+  hold(input, "2026-10-20", articles.slice(1));
+  const window = buildHistoryWindow(asOf, { rolling_window_days: 2, overlap_windows_days: [1, 3] }, input, "2026-10-20");
+  expect(eventRepetitionRate(window, articles.slice(1), 1, { ...evidence, pairs }, ["2026-10-20"])).toMatchObject({
+    value: 1, numerator: 1, denominator: 1, unavailable_reason: null,
+  });
+  for (const field of ["scorer_model", "judge_model"]) {
+    for (const identity of ["", "Upper-case", "../weights", "two\nlines", "weights_v2"]) {
+      expect(() => RecordedEventPairSchema.parse({ ...original, [field]: identity })).toThrow();
+    }
+  }
+});
 test("missing, unclear and incompatible complete-pair evidence cannot turn into zero repetition", async () => {
   const articles = [article("2026-10-19", "a"), article("2026-10-20", "b"), article("2026-10-20", "c")];
   const input = days();
@@ -85,6 +110,10 @@ test("missing, unclear and incompatible complete-pair evidence cannot turn into 
     { ...evidence, pairs: evidence.pairs.map((pair, i) => i === 0 ? { ...pair, verdict: "UNCLEAR", verdict_swapped: "UNCLEAR" } : pair) },
     { ...evidence, pairs: evidence.pairs.map((pair, i) => i === 0 ? { ...pair, prompt_digest: "c".repeat(64) } : pair) },
     { ...evidence, pairs: evidence.pairs.map((pair, i) => i === 0 ? { ...pair, usable: false } : pair) },
+    { ...evidence, pairs: evidence.pairs.map((pair, i) => i === 0 ? { ...pair, scorer_model: "another-encoder-v1" } : pair) },
+    { ...evidence, pairs: evidence.pairs.map((pair, i) => i === 0 ? { ...pair, judge_model: "another-judge-v1" } : pair) },
+    { ...evidence, pairs: evidence.pairs.map((pair, i) => i === 0 ? { ...pair, judge_temperature: null } : pair) },
+    { ...evidence, pairs: evidence.pairs.map((pair, i) => i === 0 ? { ...pair, grammar_applied: false } : pair) },
   ];
   for (const variant of variants) {
     expect(eventRepetitionRate(window, articles.slice(1), 1, variant, ["2026-10-20"])).toMatchObject({

@@ -274,6 +274,13 @@ integrity. Requiring complete named evidence permits truthful full audit
 completion without treating generated test publication as production output.
 The service stays default-off pending a separate owner approval for use.
 
+Recorded similarity evidence accepts valid model slugs without consulting
+today's selected model file. This changes no audit-row stamp or publication
+attribution: original IDs and provenance remain intact, and the observer still
+requires complete compatible instrument and decoder evidence. The
+[event-reading contract](../../reference/diversity-metrics.md#publication-and-history-observations)
+defines those consistency checks.
+
 ## See also
 
 - [../../reference/diversity-metrics.md](../../reference/diversity-metrics.md) -

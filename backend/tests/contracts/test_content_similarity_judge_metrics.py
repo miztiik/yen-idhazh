@@ -111,13 +111,8 @@ def test_a_rate_over_no_pairs_is_empty_rather_than_zero() -> None:
     assert ContentSimilarityJudgeMetrics.from_csv_row(cells) == row
 
 
-def test_the_shared_stamp_is_carried_and_narrowed_to_this_judge() -> None:
-    """The config stamp arrives whole, and both open columns close here.
-
-    A closed set is honest on this row in the way it cannot be on the shared
-    stamp: that stamp is inherited by judges nobody has written yet, and this
-    ledger holds the readings of one judge and no other.
-    """
+def test_the_shared_stamp_keeps_the_software_identity_closed_and_weights_open() -> None:
+    """The instrument is fixed; its recorded weights need not still be configured."""
     columns = ContentSimilarityJudgeMetrics.csv_columns()
     assert set(JudgeConfigStamp.model_fields) <= set(columns), (
         "the shard row stopped carrying the shared stamp, so two judges are free to "
@@ -130,10 +125,13 @@ def test_the_shared_stamp_is_carried_and_narrowed_to_this_judge() -> None:
     ).judge_id == "content-similarity-judge"
     with pytest.raises(ValidationError, match="judge_id"):
         ContentSimilarityJudgeMetrics.model_validate(payload | {"judge_id": "another-judge"})
+    row = ContentSimilarityJudgeMetrics.model_validate(
+        payload | {"judge_model": "a-model-this-repository-does-not-ship"}
+    )
+    assert row.judge_model == "a-model-this-repository-does-not-ship"
+    assert ContentSimilarityJudgeMetrics.from_csv_row(row.csv_row()) == row
     with pytest.raises(ValidationError, match="judge_model"):
-        ContentSimilarityJudgeMetrics.model_validate(
-            payload | {"judge_model": "a-model-this-repository-does-not-ship"}
-        )
+        ContentSimilarityJudgeMetrics.model_validate(payload | {"judge_model": "../weights"})
 
 
 def test_a_row_written_before_the_part_was_renamed_reads_its_part_under_the_new_name() -> None:
@@ -172,7 +170,7 @@ def test_the_door_reader_finds_the_day_the_door_filed(tmp_path: Path) -> None:
     state_root = tmp_path / ledger.STATE_DIRNAME
     which = LedgerName.CONTENT_SIMILARITY_JUDGE_METRICS
     rows = [
-        a_shard("a-shard-that-was-dealt-nothing").model_copy(update={"date": night})
+        a_shard("a-shard-that-read-its-pairs").model_copy(update={"date": night})
         for night in (A_NIGHT, ANOTHER_NIGHT)
     ]
     written = ledger.persist(

@@ -1,6 +1,6 @@
 # Autotuning the similarity line that groups one story
 
-**Last Updated**: 2026-10-12
+**Last Updated**: 2026-10-24
 
 A day runs the same story from more than one of our feeds. This page owns the
 line that decides when two items are one story, how that line fits itself once a
@@ -555,6 +555,19 @@ Two passes read the finished day inside `assemble.build_day`, and both were writ
 **What is still not a rule.** Nothing forbids a lead being a story the grouping folded, or two members of one group both leading - the source cap does not catch that, because a group is always across outlets. The first no longer leaves a dead link: the block is resolved against the list the page holds, which is the list after the fold, so a folded lead is not in the block at all. The block is one entry shorter and the story is still behind the anchor's pill, which is the trade the fold makes everywhere else. The second would print one story twice at the top of the page, which is what the block exists to avoid, and it has never fired on a committed day. Both are rules to write when the first day produces one.
 
 ## Design rationale
+
+**Saved model identities are open; recorded instruments must still agree.**
+Owner ruling, kumarsnaveen, 2026-10-24: a valid new model configuration must not
+require edits to saved-data model lists. This reverses the former policy that
+an encoder or judge swap required a similarity schema edit. The five saved
+similarity contracts now check the same slug spelling as model configuration.
+Historical readers never load today's selected model file to decide whether
+an older identity is allowed. They retain each recorded ID and its provenance;
+the live writer still records the entry used for the call and the encoder used
+for its vectors. Complete stamps, decoder evidence and rejection of mixed
+instruments remain required. The string wire type is unchanged, so old files
+remain readable without rewriting the archive. Contract and cross-language
+checks are defined in [the schema guide](../contracts/schemas.md).
 
 **The line falls fast and rises slow, and the next reader must not reverse it.**
 The house rule is to err on the side of publishing less: if two feeds give

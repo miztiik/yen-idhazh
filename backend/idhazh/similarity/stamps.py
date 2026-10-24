@@ -17,7 +17,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from idhazh import config
-from idhazh.contracts.story_similarity_pair import ScorerModelId
+from idhazh.contracts.story_similarity_pair import JudgeModelId, ScorerModelId
 from idhazh.embed import EMBEDDER_ID
 from idhazh.similarity import judge, prompt
 
@@ -34,11 +34,8 @@ class ScorerStamp:
 class JudgeStamp:
     """The five values that decide what a verdict means.
 
-    `judge_model` is a plain string where its scorer twin is a literal, and the
-    difference is real rather than untidy: the encoder is a constant this
-    repository declares, and the judge is whichever entry `config/models/`
-    names. Which of the known ids it has to be is checked where the value is
-    written down, by the contract that holds the column.
+    Both model identities record what ran. Their contracts check slug spelling,
+    not whether today's config still names those weights.
 
     **The last two say how the verdict was decoded, and the first three say
     what was asked.** Two runs can read the identical ask under two samplers and
@@ -46,7 +43,7 @@ class JudgeStamp:
     population with nothing able to separate them afterwards.
     """
 
-    judge_model: str
+    judge_model: JudgeModelId
     prompt_digest: str
     grammar_digest: str
     judge_temperature: float

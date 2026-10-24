@@ -44,8 +44,6 @@ test("read projections bind the recorded field sets, scalar types and terminal v
   expect(Object.keys(DigestEventItemSchema.shape)).toEqual(bindings.DigestEventItem.fields);
   expect(Object.keys(RecordedEventPairSchema.shape)).toEqual(bindings.RecordedEventPair.fields);
   expect(RecordedEventPairSchema.shape.verdict.unwrap().options).toEqual(bindings.RecordedEventPair.verdicts);
-  expect(RecordedEventPairSchema.shape.scorer_model.value).toBe(bindings.RecordedEventPair.scorer_model);
-  expect(RecordedEventPairSchema.shape.judge_model.unwrap().options).toEqual(bindings.RecordedEventPair.judge_models);
 });
 test("native published Parquet retries and compact history retain recorded item/run attribution", async () => {
   const root = await mkdtemp(join(tmpdir(), "publication-native-"));
