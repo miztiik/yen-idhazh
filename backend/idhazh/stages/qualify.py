@@ -134,7 +134,7 @@ def _freeze(
 ) -> tuple[list[_Frozen], int, list[str]]:
     """Fetch, extract and sanitize once, then hash what came back.
 
-    Once, and never again: the three deterministic repeats have to see identical
+    Once, and never again: the deterministic repeats have to see identical
     bytes, and a publisher rewriting a page between two of them would read as a
     decoding drift. The bytes stay on this job's own disk - only the hashes and
     the measurements travel, because an article body is never republished to a

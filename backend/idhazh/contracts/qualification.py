@@ -249,8 +249,8 @@ class ItemObservation(Model):
 class ItemScore(Model):
     """What the scorer and the counterweights read on one item.
 
-    Scored once per item, on the first repeat. Two more repeats of identical
-    words would add three identical rows and no information.
+    Scored once per item, on the first repeat. Later repeats of identical
+    words would add identical rows and no information.
     """
 
     item_id: ItemId

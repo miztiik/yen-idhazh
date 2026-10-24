@@ -139,14 +139,15 @@ class RunConfig(Model):
         ),
     )
     qualification_repeats: int = Field(
-        default=3,
-        ge=3,
+        default=2,
+        ge=2,
         le=10,
         description=(
-            "How many times a qualification shard replays each item. Three is the "
-            "smallest count that separates a model that is deterministic from one that "
-            "happened to agree twice, and it is the floor rather than the default "
-            "because a report built on fewer passes is a report that cannot fail. It "
+            "How many times a qualification shard replays each item. Two is the floor, "
+            "by owner decision on 2026-10-24; it was three until then. At two replays, "
+            "two agreeing answers can be luck, so the wording spread diagnostic reports "
+            "how far the sampler moved and no gate reads it. One replay is refused, "
+            "because it cannot show any spread at all. It "
             "used to be a dispatch input an operator typed per run, where `1` was legal "
             "and nothing downstream could refuse it. Ten is the ceiling because that is "
             "past any determinism question; a run that wants more edits this field. "
