@@ -16,8 +16,10 @@ import logging
 from collections.abc import Callable
 
 import pytest
+from pydantic import ValidationError
 
 from idhazh import config, extract
+from idhazh.contracts.app_config import AppConfig
 from idhazh.contracts.base import derive_url_key
 from idhazh.contracts.feed_health import FetchOutcome
 from idhazh.contracts.knobs.extract import ExtractConfig
@@ -136,28 +138,31 @@ def test_the_truncation_cap_sits_below_the_longest_band() -> None:
     assert shipped_cap_words < SUMMARIZE.bands[-1].min_source_words
 
 
-def test_a_long_read_lands_in_the_longest_band_even_though_it_was_cut() -> None:
-    """The band is read from the count taken before the cut.
-
-    The post-cap count no longer picks a different band. At cap 5000 the
-    post-cap ceiling is 3846 words, above the top band's floor, so a cut article
-    reaches the top tier on either count. What is still testable, and is the
-    whole claim, is that the two counts differ and that the band follows the one
-    from before the cut.
-    """
-    words = words_for_band(BANDS - 1)
+def test_a_cut_article_uses_its_pre_cap_length_to_select_its_band() -> None:
+    """The original length selects a higher band than the text left after truncation."""
+    extract_config = ExtractConfig.model_validate(
+        {
+            **SETTINGS.app.extract.model_dump(mode="json"),
+            "truncation_cap_tokens": 256,
+        }
+    )
     article = extract.to_article(
-        planned(1, BANDS - 1),
-        FetchResult(FetchOutcome.OK, status=200, body=body_of(words)),
-        config=SETTINGS.app.extract,
+        planned(1, 0),
+        FetchResult(FetchOutcome.OK, status=200, body=body_of(1800)),
+        config=extract_config,
         fetched_at="2026-08-26T06:00:00Z",
     )
     assert article.truncated
-    assert article.word_count <= CAP_WORDS
     assert article.source_word_count is not None
-    assert article.source_word_count > article.word_count
-    assert article.source_word_count >= SUMMARIZE.bands[-1].min_source_words
-    assert qualify.band_index(article.band_source_words, SUMMARIZE) == BANDS - 1
+    summary_payload = SUMMARIZE.model_dump(mode="json")
+    summary_payload["bands"] = summary_payload["bands"][:2]
+    summary_payload["bands"][0]["min_source_words"] = 0
+    summary_payload["bands"][1]["min_source_words"] = article.word_count + 1
+    summarize = type(SUMMARIZE).model_validate(summary_payload)
+
+    assert article.source_word_count >= summarize.bands[1].min_source_words > article.word_count
+    assert qualify.band_index(article.band_source_words, summarize) == 1
+    assert qualify.band_index(article.word_count, summarize) == 0
 
 
 def test_a_payload_written_before_the_field_reads_its_post_cap_count() -> None:
@@ -298,11 +303,9 @@ def test_the_selection_does_not_move_when_the_pool_is_reordered() -> None:
     assert [entry.row.url_key for entry in first] == [entry.row.url_key for entry in again]
 
 
-def test_the_pool_floor_is_read_from_config() -> None:
-    """Guardrail #6. The knob is the only number that sizes the walk.
+def test_config_refuses_a_nonpositive_pool_multiple() -> None:
+    settings = SETTINGS.app.model_dump(mode="json")
+    settings["evaluation"]["qualification_pool_multiple"] = 0
 
-    The band-against-cap assertion that used to sit here moved to
-    `test_the_truncation_cap_sits_below_the_longest_band`, which owns that
-    history and pins the cap it was true at. It never belonged to the pool.
-    """
-    assert SETTINGS.app.evaluation.qualification_pool_multiple >= 1
+    with pytest.raises(ValidationError, match="qualification_pool_multiple"):
+        AppConfig.model_validate(settings)

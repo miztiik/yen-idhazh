@@ -1,0 +1,4 @@
+{
+  "planning_timeout_minutes": 30,
+  "collection_timeout_minutes": 30
+}
