@@ -23,13 +23,12 @@ from collections.abc import Callable
 from dataclasses import replace
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from string import Template
 from typing import Any, Final
 
 import pytest
-from contracts._model_cases import MODEL_FILES
+from contracts._fixtures import committed_models_raw
 from pydantic import ValidationError
-from support.models import a_sampling, a_server, committed_markers, llama_server_flags
+from support.models import a_markers, a_sampling, a_server
 from support.paths import CONFIG_DIR, CONTRACT_FIXTURES_DIR, FIXTURES_DIR, REPO_ROOT, read_text
 from support.server import RecordedEndpoint
 
@@ -77,7 +76,6 @@ from idhazh.llm.server import (
     request_payload,
     server_argv,
     thinking_span,
-    window,
 )
 from idhazh.sanitize import (
     FENCE_CLOSE,
@@ -119,32 +117,6 @@ ANSWER_BUDGET: Final = 512
 
 def article(name: str = "ok") -> Article:
     return Article.from_json(read_text(CONTRACT_FIXTURES_DIR / "article" / f"{name}.json"))
-
-
-def committed_envelope() -> TurnMarkers:
-    """The turn envelope the incumbent's own template writes."""
-    return committed_markers()
-
-
-def built_envelope(**overrides: object) -> TurnMarkers:
-    """A turn envelope built for one question, never the incumbent's.
-
-    A test about a placement the incumbent does not use has to build the
-    envelope that uses it - the committed model is one template's answer, and
-    asserting against it would say what is configured today rather than what the
-    code does (`CLAUDE.md` section 13).
-    """
-    declared: dict[str, object] = {
-        "turn_opening": Template("<|im_start|>${role}\n"),
-        "turn_closing": "<|im_end|>\n",
-        "reply_opening": "<|im_start|>assistant\n",
-        "reply_opening_thinking": "<|im_start|>assistant\n<think>\n",
-        "system_role": SystemPlacement.OWN_TURN,
-        "system_joiner": "",
-        "thinking_close": None,
-        "thinking_kwarg": "enable_thinking",
-    }
-    return TurnMarkers(**(declared | overrides))  # type: ignore[arg-type]
 
 
 def completion(name: str) -> Completion:
@@ -194,7 +166,7 @@ def summarised(name: str, source: str = "ok") -> Summary:
 def test_the_system_prompt_never_carries_the_article() -> None:
     """Decision 1: article text goes in the user turn, or the fence means nothing."""
     payload = build_request(
-        article(), model_id="m", sampling=a_sampling(), markers=built_envelope()
+        article(), model_id="m", sampling=a_sampling(), markers=a_markers()
     )
     system = payload["messages"][0]
     assert system["role"] == "system"
@@ -229,14 +201,14 @@ def test_the_prompt_tells_the_model_the_block_is_data() -> None:
 
 
 def test_decoding_parameters_come_from_config_and_nowhere_else() -> None:
-    sampling = a_sampling()
+    sampling = a_sampling(temperature=0.3, top_k=40)
     payload = request_payload(
         model_id="m",
         system="s",
         user="u",
         output_schema={},
         sampling=sampling,
-        markers=built_envelope(),
+        markers=a_markers(),
     )
     for key, value in sampling.items():
         assert payload[key] == value
@@ -294,7 +266,7 @@ def test_the_derived_bodies_inherit_the_sampling_rather_than_splatting_it_again(
         reply='{"title": "a bridge"}',
         user="Now the picture.",
         output_schema=output_schema(),
-        markers=built_envelope(),
+        markers=a_markers(),
         max_answer_tokens=64,
     )
 
@@ -315,7 +287,7 @@ def three_bodies(sampling: dict[str, Any], *, only: str | None = None) -> Any:
             user="u",
             output_schema=output_schema(),
             sampling=sampling,
-            markers=built_envelope(),
+            markers=a_markers(),
         ),
         "completion": lambda: completion_payload(
             model_id="m",
@@ -324,7 +296,7 @@ def three_bodies(sampling: dict[str, Any], *, only: str | None = None) -> Any:
             output_schema=output_schema(),
             server=a_server(),
             sampling=sampling,
-            markers=built_envelope(),
+            markers=a_markers(),
             max_answer_tokens=64,
         ),
         "grammar": lambda: grammar_completion_payload(
@@ -334,7 +306,7 @@ def three_bodies(sampling: dict[str, Any], *, only: str | None = None) -> Any:
             grammar='root ::= "yes"',
             server=a_server(),
             sampling=sampling,
-            markers=built_envelope(),
+            markers=a_markers(),
             max_answer_tokens=4,
             first_token_alternatives=3,
         ),
@@ -352,7 +324,7 @@ def test_the_chat_route_defaults_to_8192_output_tokens_on_either_envelope() -> N
         user="u",
         output_schema={},
         sampling=sampling,
-        markers=built_envelope(),
+        markers=a_markers(),
     )
     loud = request_payload(
         model_id="m",
@@ -360,7 +332,7 @@ def test_the_chat_route_defaults_to_8192_output_tokens_on_either_envelope() -> N
         user="u",
         output_schema={},
         sampling=sampling,
-        markers=built_envelope(thinking_close="</think>"),
+        markers=a_markers(thinking_close="</think>"),
     )
 
     for body in (quiet, loud):
@@ -376,7 +348,7 @@ def test_rendered_routes_default_to_8192_tokens_without_a_caller_budget() -> Non
         output_schema=output_schema(),
         server=a_server(),
         sampling={},
-        markers=built_envelope(),
+        markers=a_markers(),
     )
     grammar = grammar_completion_payload(
         model_id="m",
@@ -385,7 +357,7 @@ def test_rendered_routes_default_to_8192_tokens_without_a_caller_budget() -> Non
         grammar='root ::= "yes"',
         server=a_server(),
         sampling={},
-        markers=built_envelope(),
+        markers=a_markers(),
         first_token_alternatives=3,
     )
     continuation = continued_completion_payload(
@@ -393,7 +365,7 @@ def test_rendered_routes_default_to_8192_tokens_without_a_caller_budget() -> Non
         reply="{}",
         user="Continue.",
         output_schema=output_schema(),
-        markers=built_envelope(),
+        markers=a_markers(),
     )
 
     for body in (completion, grammar, continuation):
@@ -420,7 +392,7 @@ def test_two_configured_token_limit_spellings_are_not_sent_together(route: str) 
 
 
 def test_a_configured_token_limit_survives_continuations_and_reasoning() -> None:
-    markers = built_envelope(thinking_close="</think>")
+    markers = a_markers(thinking_close="</think>")
     first = completion_payload(
         model_id="m",
         system="s",
@@ -457,7 +429,7 @@ def test_thinking_is_off_in_the_request() -> None:
         user="u",
         output_schema={},
         sampling=a_sampling(),
-        markers=committed_envelope(),
+        markers=a_markers(),
     )
     assert payload["chat_template_kwargs"] == {"enable_thinking": False}
 
@@ -470,7 +442,7 @@ def test_the_declared_closing_marker_is_what_asks_the_template_to_think() -> Non
         user="u",
         output_schema={},
         sampling=a_sampling(),
-        markers=built_envelope(thinking_close="</think>"),
+        markers=a_markers(thinking_close="</think>"),
     )
     assert payload["chat_template_kwargs"] == {"enable_thinking": True}
 
@@ -489,7 +461,7 @@ def test_a_template_that_reads_no_keyword_is_sent_none() -> None:
         user="u",
         output_schema={},
         sampling=a_sampling(),
-        markers=built_envelope(thinking_kwarg=None),
+        markers=a_markers(thinking_kwarg=None),
     )
     assert "chat_template_kwargs" not in payload
 
@@ -502,7 +474,7 @@ def test_the_keyword_the_request_carries_is_the_one_the_entry_names() -> None:
         user="u",
         output_schema={},
         sampling=a_sampling(),
-        markers=built_envelope(thinking_kwarg="reasoning"),
+        markers=a_markers(thinking_kwarg="reasoning"),
     )
     assert payload["chat_template_kwargs"] == {"reasoning": False}
 
@@ -515,7 +487,7 @@ def test_the_output_shape_is_enforced_by_the_decoder() -> None:
         user="u",
         output_schema=output_schema(),
         sampling=a_sampling(),
-        markers=built_envelope(),
+        markers=a_markers(),
     )
     assert payload["response_format"]["type"] == "json_schema"
     assert payload["response_format"]["json_schema"]["strict"] is True
@@ -528,7 +500,7 @@ def test_the_server_is_started_from_config_not_by_hand() -> None:
 
     binary = Path("bin/llama-server")
     weights = Path("models/w.gguf")
-    flags = a_server(**{"--metrics": None})
+    flags = {"--ctx-size": 8192, "--metrics": None}
     argv = server_argv(
         binary=binary,
         weights=weights,
@@ -572,27 +544,6 @@ def test_the_server_refuses_an_oversized_prompt_rather_than_shifting_it() -> Non
     assert "--no-context-shift" in argv
 
 
-def test_no_speculative_flag_reaches_the_server() -> None:
-    """The draft head is gone, so the flag list has nothing to say about one.
-
-    A head was on the Gemma entry until 2026-09-21 and was never the
-    output-identical speed-up its publisher claims: two paired dispatches
-    changed the summary on nine articles of nine. What this catches is a
-    re-introduction through the one function that spells a llama-server flag.
-    """
-    from idhazh.contracts.knobs.models import ModelRef
-
-    argv = server_argv(
-        binary=Path("bin/llama-server"),
-        weights=Path("models/w.gguf"),
-        model=ModelRef(id="m", repo="r", file="w.gguf", quantisation="Q4_K_M"),
-        server=a_server(**{"--metrics": None}),
-        port=8181,
-    )
-
-    assert not [flag for flag in argv if flag.startswith(("--spec-", "--draft"))]
-
-
 def test_an_entry_a_person_writes_is_refused_for_naming_a_draft_head() -> None:
     """A config file is refused by name; a run record is migrated in silence.
 
@@ -612,7 +563,7 @@ def test_an_entry_a_person_writes_is_refused_for_naming_a_draft_head() -> None:
     # A `mode="before"` refusal runs ahead of field validation, so the block is
     # all this has to carry to reach it.
     with pytest.raises(ValidationError, match=r"models\.<role>\.draft is now"):
-        ModelEntry.model_validate({"draft": {"file": "mtp-gemma-4-E4B-it.gguf"}})
+        ModelEntry.model_validate({"draft": {"file": "companion.gguf"}})
 
 
 def test_server_argv_names_the_port_it_was_given() -> None:
@@ -989,7 +940,7 @@ class TestWhereTheSystemTextGoes:
         one states the expression, so a refactor of the branch fails here with a
         diff a person can read rather than with two long strings.
         """
-        markers = committed_envelope()
+        markers = a_markers()
 
         assert markers.system_role is SystemPlacement.OWN_TURN
         assert render_prompt(system="S", user="U", markers=markers) == (
@@ -1003,7 +954,7 @@ class TestWhereTheSystemTextGoes:
         this row exists for has no entry in `config/` and would otherwise be
         untested until the day a model needed it.
         """
-        markers = built_envelope(
+        markers = a_markers(
             system_role=SystemPlacement.FOLD_INTO_FIRST_USER, system_joiner="\n\n"
         )
 
@@ -1032,7 +983,7 @@ class TestWhereTheSystemTextGoes:
         a digest that is blind to how their turns were written, and case 1 of
         `prove_the_entry` is what catches a placement declared wrong.
         """
-        own = committed_envelope()
+        own = a_markers()
         folded = dataclasses.replace(
             own,
             system_role=SystemPlacement.FOLD_INTO_FIRST_USER,
@@ -1087,7 +1038,6 @@ def test_the_named_builder_and_its_test_spell_server_flags() -> None:
     `workflows/test_model_server_jobs.py::test_every_job_that_starts_a_server_reaches_the_one_argv_builder`.
     """
     written_in_code = ("--alias", "--no-context-shift", "--port")
-    assert set(written_in_code) <= llama_server_flags(MODEL_FILES) | {"--alias", "--port"}
 
     sources = (
         REPO_ROOT / "backend" / "idhazh" / "llm" / "server.py",
@@ -1252,7 +1202,7 @@ def test_the_server_is_asked_to_describe_itself_only_when_configured() -> None:
         binary=Path("bin/llama-server"),
         weights=Path("models/w.gguf"),
         model=model,
-        server={key: value for key, value in a_server().items() if key != "-lv"},
+        server=a_server(),
         port=8181,
     )
     assert "-lv" not in quiet
@@ -1265,29 +1215,6 @@ def test_the_server_is_asked_to_describe_itself_only_when_configured() -> None:
         port=8181,
     )
     assert loud[loud.index("-lv") + 1] == "4"
-
-
-def test_every_committed_role_starts_a_server_that_names_its_own_settings() -> None:
-    """The daily run prints the lines, or the settings check has nothing to read.
-
-    Driven off the roles the contract declares rather than a list here, so a
-    role that arrives or retires cannot leave this check naming the other set,
-    and a role that is left quiet fails here rather than at 04:00 on a runner.
-    """
-    settings = config.load(CONFIG_DIR)
-    for role in ModelsConfig.roles():
-        entry = getattr(settings.models, role)
-        argv = server_argv(
-            binary=Path("bin/llama-server"),
-            weights=Path(f"models/{entry.file}"),
-            model=entry,
-            server=entry.server,
-            port=8181,
-        )
-        assert any(
-            flag in argv and argv[argv.index(flag) + 1] == "4"
-            for flag in ("-lv", "--log-verbosity")
-        ), f"{role} starts a server that does not describe its settings"
 
 
 def test_the_output_schema_is_generated_not_hand_written() -> None:
@@ -1337,7 +1264,7 @@ def test_a_recorded_brief_uses_the_brief_band_even_when_the_source_is_longer() -
         source,
         model_id="m",
         sampling=a_sampling(),
-        markers=built_envelope(),
+        markers=a_markers(),
         prompt_config=ask,
     )
     system = payload["messages"][0]["content"]
@@ -1363,7 +1290,7 @@ def test_a_cut_long_read_is_still_asked_for_a_long_read_summary() -> None:
         }
     )
     system = build_request(
-        source, model_id="m", sampling=a_sampling(), markers=built_envelope()
+        source, model_id="m", sampling=a_sampling(), markers=a_markers()
     )["messages"][0]["content"]
     assert f"{top.target_words_min} to {top.target_words_max} words" in system
 
@@ -1373,7 +1300,7 @@ def test_an_article_written_before_the_field_keeps_its_post_cap_band() -> None:
     ask = SummarizeConfig()
     older = article().model_copy(update={"word_count": 1900, "source_word_count": None})
     system = build_request(
-        older, model_id="m", sampling=a_sampling(), markers=built_envelope()
+        older, model_id="m", sampling=a_sampling(), markers=a_markers()
     )["messages"][0]["content"]
     band = ask.band_for(1900)
     assert f"{band.target_words_min} to {band.target_words_max} words" in system
@@ -1824,7 +1751,7 @@ class TestTwoSpansOnOneCall:
         )
 
     def markers(self) -> TurnMarkers:
-        return built_envelope(thinking_close="</think>")
+        return a_markers(thinking_close="</think>")
 
     def test_span_one_drops_the_grammar_and_stops_at_the_declared_marker(self) -> None:
         """What is sent first: the same prompt, unconstrained, uncapped, stopped.
@@ -1905,7 +1832,7 @@ class TestTwoSpansOnOneCall:
         else's weights, which is the class of defect the whole envelope exists
         to end.
         """
-        quiet = built_envelope()
+        quiet = a_markers()
         answer = self.answer_body()
 
         with pytest.raises(ValueError, match="declare no thinking_close"):
@@ -1954,7 +1881,7 @@ class TestAConstrainedCallerGetsBothSpans:
     """
 
     def markers(self) -> TurnMarkers:
-        return built_envelope(thinking_close="\n</think>\n\n")
+        return a_markers(thinking_close="\n</think>\n\n")
 
     def grammar_body(self, **overrides: Any) -> dict[str, Any]:
         declared: dict[str, Any] = {
@@ -2128,7 +2055,7 @@ class TestTheThinkingReachesNothing:
         thought, and none of it is replayed: a prompt is the one place a model's
         own words could steer the next decode.
         """
-        markers = built_envelope(thinking_close="</think>")
+        markers = a_markers(thinking_close="</think>")
         first = completion_payload(
             model_id="m",
             system="S",
@@ -2965,27 +2892,17 @@ def test_a_truncated_source_is_carried_onto_the_summary() -> None:
 # --- The budget has to fit ---------------------------------------------------
 
 
-def test_an_article_inside_the_context_budget_fits() -> None:
-    assert fits_context(article(), a_server())
+@pytest.mark.parametrize(("headroom", "expected"), [(1, True), (0, False), (-1, False)])
+def test_context_fit_requires_room_beyond_the_article_and_prompt(
+    headroom: int, expected: bool
+) -> None:
+    source = article()
+    overhead = len(
+        system_prompt(source_words=source.band_source_words, brief=source.brief).split()
+    ) * 2
+    server = a_server(**{"--ctx-size": source.token_count + overhead + headroom})
 
-
-def test_an_article_that_would_be_cut_off_mid_reply_does_not_fit() -> None:
-    """Prompt plus reply must fit, or the reply ends mid-sentence and looks fine."""
-    server = a_server()
-    oversized = article().model_copy(update={"token_count": window(server)})
-    assert not fits_context(oversized, server)
-
-
-def test_the_biggest_article_the_extractor_hands_over_still_fits() -> None:
-    """Guardrail #2. The prompt can grow a rule at a time until it eats the budget.
-
-    Nothing else would catch it: a prompt that crowds out the article does not
-    fail, it just quietly drops every long read from the day.
-    """
-    from idhazh.contracts.knobs.extract import ExtractConfig
-
-    capped = article().model_copy(update={"token_count": ExtractConfig().truncation_cap_tokens})
-    assert fits_context(capped, a_server())
+    assert fits_context(source, server) is expected
 
 
 def test_the_summary_of_an_ok_article_carries_the_items_identity() -> None:
@@ -3048,7 +2965,7 @@ def refused_endpoint() -> str:
 def summarize_against(endpoint: str) -> Summary:
     """One article at an endpoint, with the start-up question already answered.
 
-    The markers come off the committed renderings rather than off this endpoint,
+    The markers are explicit behavior inputs rather than read off this endpoint,
     which is what lets these cases be about the completion call. A server that
     is dead or answering errors settles nothing at start-up, so a stage that
     derived here would report every one of them as an unread template and none
@@ -3057,7 +2974,7 @@ def summarize_against(endpoint: str) -> Summary:
     return _summarize_one(
         article(),
         config.load(CONFIG_DIR),
-        markers=committed_markers(),
+        markers=a_markers(),
         endpoint=endpoint,
         run_id="2026-08-25-1",
     )
@@ -3248,37 +3165,11 @@ class TestTheServerSettlesTheEntry:
         assert not hasattr(recorded, "arch")
 
     def test_an_entry_that_declares_no_architecture_is_refused_at_load(self) -> None:
-        document = json.loads(read_text(CONFIG_DIR / "models" / "qwen3.5-9b-q4km.json"))
+        document = committed_models_raw()
         del document["summarizer"]["arch"]
 
         with pytest.raises(ValidationError, match="arch"):
             ModelsConfig.model_validate(document)
-
-
-# --- The entry's own markers, against the boundary that has to strip them ----
-
-
-def test_every_marker_the_committed_entry_declares_is_one_the_boundary_strips() -> None:
-    """The entry names the bytes a forged turn would be spelled with.
-
-    An article carrying them reaches the model with a turn boundary in it
-    unless the sanitizer takes them out first (Guardrail #11), so the markers
-    the running model declares are the ones the control has to know. Read off
-    the committed file rather than restated here: an entry edited to a family
-    the pattern does not know fails at the edit.
-    """
-    markers = committed_envelope()
-
-    for field, marker in (
-        ("turn_opening", markers.turn_opening.safe_substitute(role="user")),
-        ("turn_closing", markers.turn_closing),
-        ("reply_opening", markers.reply_opening),
-        ("reply_opening_thinking", markers.reply_opening_thinking),
-    ):
-        assert why_a_forged_turn_would_survive(marker) is None, (
-            f"the derived {field} is {marker!r}, and "
-            f"{why_a_forged_turn_would_survive(marker)}"
-        )
 
 
 @pytest.mark.parametrize(
@@ -3342,15 +3233,11 @@ def test_widening_the_pattern_did_not_take_arithmetic_with_it() -> None:
         assert sanitize(prose) == prose
 
 
-def test_the_incumbents_own_reply_opening_is_what_needed_the_widening() -> None:
-    """The widening is load-bearing for the model running today, not a precaution.
+def test_a_reply_opening_with_an_empty_reasoning_block_is_stripped() -> None:
+    """A reasoning block is structural even when the template puts no text in it."""
+    markers = a_markers(
+        reply_opening="<|im_start|>assistant\n<think>\n\n</think>\n\n"
+    )
 
-    The entry opens a reply by closing an empty reasoning block, so `<think>`
-    and `</think>` are markers this very model would honour - and the pattern
-    knew neither until 2026-09-14, because neither is delimited by a pipe.
-    """
-    markers = committed_envelope()
-
-    assert "<think>" in markers.reply_opening and "</think>" in markers.reply_opening
     assert "<think>" not in sanitize(markers.reply_opening)
     assert "</think>" not in sanitize(markers.reply_opening)

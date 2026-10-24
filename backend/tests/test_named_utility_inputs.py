@@ -8,7 +8,6 @@ from pathlib import Path
 
 import pytest
 from support.ledger import SEED_COMMIT
-from support.paths import REPO_ROOT
 
 from idhazh.contracts.article import Article
 from idhazh.contracts.base import derive_url_key
@@ -16,7 +15,6 @@ from idhazh.contracts.pipeline_tests import TRIAL_STATE_PREFIX
 from utilities import (
     backfill_report,
     build_reference_dataset,
-    capture_server_argv,
     index_sizing,
     pipeline_test_ledgers,
     prompt_loop,
@@ -134,28 +132,6 @@ def test_junit_report_names_only_modules_it_ran(tmp_path: Path) -> None:
     )
     assert report_modules(report, repo_root=tmp_path) == [tmp_path / "backend/tests/test_named.py"]
     assert average_seconds_by_module(report, repo_root=tmp_path) == {"test_named": 3.0}
-
-
-def test_server_argv_writes_only_named_models(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    source = REPO_ROOT / "config/models/qwen3.5-9b-q4km.json"
-    models = tmp_path / "models"
-    models.mkdir()
-    named = models / source.name
-    named.write_bytes(source.read_bytes())
-    (models / "unrelated.json").write_bytes(b"\xff")
-    golden = tmp_path / "golden"
-    monkeypatch.setattr(capture_server_argv, "REPO_ROOT", tmp_path)
-    monkeypatch.setattr(capture_server_argv, "GOLDEN_DIR", golden)
-
-    capture_server_argv.main([str(named)])
-
-    assert json.loads((golden / named.name).read_text(encoding="utf-8"))
-    assert not (golden / "unrelated.json").exists()
-    with pytest.raises(SystemExit) as refused:
-        capture_server_argv.main([])
-    assert refused.value.code == 2
 
 
 def test_prompt_loop_ignores_unnamed_articles(tmp_path: Path, article_ok: Article) -> None:

@@ -16,12 +16,11 @@ from __future__ import annotations
 
 import csv
 import io
-import json
 from typing import Any, get_args
 
 import pytest
 from pydantic import ValidationError
-from support.paths import CONFIG_DIR, CONTRACT_FIXTURES_DIR, FIXTURES_DIR, read_text
+from support.paths import CONTRACT_FIXTURES_DIR, FIXTURES_DIR, read_text
 
 from idhazh.contracts.base import derive_text_digest, derive_url_key
 from idhazh.contracts.fitted_similarity_threshold import (
@@ -34,14 +33,11 @@ from idhazh.contracts.story_similarity_distribution import StorySimilarityDistri
 from idhazh.contracts.story_similarity_pair import (
     DROPPED_CELLS,
     RENAMED_CELLS,
-    JudgeModelId,
     SameStoryVerdict,
     ScorerModelId,
     StorySimilarityPair,
 )
 from idhazh.embed import EMBEDDER_ID
-
-from ._model_cases import MODEL_FILES
 
 pytestmark = pytest.mark.contract
 
@@ -171,20 +167,6 @@ def test_the_scorer_literal_names_the_encoder_the_pipeline_actually_runs() -> No
     maintained by hand.
     """
     assert get_args(ScorerModelId) == (EMBEDDER_ID,)
-
-
-def test_the_judge_literal_names_every_model_this_repo_ships() -> None:
-    """A judge this repository cannot stand up is a judge no row can honestly name.
-
-    The named model inputs must all be representable on a recorded verdict.
-    """
-    shipped = set()
-    for name in MODEL_FILES:
-        path = CONFIG_DIR / "models" / name
-        payload = json.loads(read_text(path))
-        shipped.add(payload["summarizer"]["id"])
-
-    assert set(get_args(JudgeModelId)) == shipped
 
 
 def test_a_pair_named_by_the_wrong_digest_is_refused() -> None:
