@@ -1,54 +1,7 @@
-"""Every measured number a gate or a test reads, in one place, with its provenance.
+"""Store measured values and judgements with their sources and remeasurement steps.
 
-A number like the site's growth rate is measured once and then read by code that
-cannot see the measurement. Written as a constant with the derivation in a doc,
-the two drift silently: deleting the prose leaves a live constant that nobody can
-re-derive, and every test still passes, so nothing says so. That happened - the
-sole written derivation of the site growth rate sat in a page section the page's
-own retention rule said to delete.
-
-So the provenance travels with the value, as fields rather than as a comment, and
-this module is the only place either lives. **Docs cite this module; this module
-cites no doc**, because a doc section can be renamed or removed and a link into
-prose is the thing that rots.
-
-Every record also says what to do when it fires. These are guardrails for riding
-a boundary, not walls: a number that only ever stops work gets raised by whoever
-finds it inconvenient, and a number that says how to re-derive it gets re-derived.
-
-**And every record says why it is a number at all, because most of them should
-not be.** A threshold is a proxy for a property nobody stated, and it fails in
-two directions that are both green: too tight it fires on ordinary work and the
-cheapest answer is to raise it, too loose it fires on nothing and nothing says
-so. `page_weight.ceilings_bytes` did both - it fired on ordinary publishing four
-times and was raised each time, while `/console/` sat at 7.2 times the page it
-bounded for four days with the build green. Four of its six numbers were deleted
-on 2026-09-10 and the property behind them is asserted directly, by
-`frontend/tests/payload-weight.spec.ts`, which looks for a day payload in a
-document that should not carry one and has no number in it at all.
-
-**The test a number has to pass to live here: does it have to move when nobody
-wrote any code, because a run appended more?** That is Guardrail #12's question with
-one noun changed. Yes means it is the defect and the property behind it should be
-asserted instead. No means it is a design statement and it is welcome. And where
-a number must exist, prefer putting the direction it may not move into the type -
-`retention.pages_hard_cap_mb` is bounded `le=PAGES_HARD_CAP_MB`, so the loose
-failure is unrepresentable rather than merely unlikely.
-
-**A count of tokens also says which weights counted them.** A second and a
-resident set belong to the box that took them, so a timing record names hardware
-and nothing else. A token count belongs to the tokenizer, the tokenizer ships
-inside the weights, and a swap therefore invalidates every such reading at one
-stroke while leaving each one looking fine. So a tokenizer reading is a
-`TokenizerMeasured` and carries the weights digest as `subject`, and
-`refuse_a_reading_taken_against_other_weights` is what says so out loud.
-
-**Three constants shaped by a vocabulary cannot be moved in here, and their
-readings are here anyway.** Two sit in `contracts/`, which may import no other
-subpackage (`CLAUDE.md` section 4), and the third is read by an import-time
-assertion, so none of the three can read a record back at the moment it is
-declared. `SIZED_BY_A_READING_HERE` pairs each site with the reading that sized
-it, so the `subject` is visible to a gate even where the constant is not.
+Token counts identify the model weights used to measure them. Helpers reject
+readings for different weights and list external constants that need remeasurement.
 """
 
 from __future__ import annotations
