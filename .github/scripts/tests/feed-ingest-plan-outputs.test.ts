@@ -181,7 +181,8 @@ test("actual CLI planning proof and all native files survive both real report mo
     const refusalInput = { response: { ...summary, source_records: refusalSources }, host, progress, historyStagingMs: null };
     const groupedReport = formatExecutionReport(refusalInput);
     const refusalRows = groupedReport.match(/^\| D\d+ \|.*$/gm);
-    expect(refusalRows?.map(row => row.split("|").slice(2, -1).map(cell => cell.trim()))).toEqual([
+    if (refusalRows === null) throw new Error("Report fixture requires refusal rows");
+    expect(refusalRows.map(row => row.split("|").slice(2, -1).map(cell => cell.trim()))).toEqual([
       ["feed", "harvest feeds", "FETCH&#95;FAILED&#95;HTTP", "2/5 configured sources"],
       ["feed", "harvest feeds", "SOURCE&#95;INACTIVE", "1/5 configured sources"],
       ["article", "harvest feeds", "FETCH&#95;FAILED&#95;HTTP", "5/30 observed parsed entries"],
@@ -193,6 +194,12 @@ test("actual CLI planning proof and all native files survive both real report mo
       ["article", "curate article portfolio", "DUPLICATE&#95;CANONICAL&#95;URL", "1/30 observed parsed entries"],
       ["article", "curate article portfolio", "MMR&#95;PORTFOLIO&#95;CUTOFF", "1/30 observed parsed entries"],
     ]);
+    const refusalMarkdown = groupedReport.split("## Table D - Refusals\n")[1]?.split("## Table E -")[0];
+    if (refusalMarkdown === undefined) throw new Error("Report fixture requires Table D");
+    const refusalHtml = Bun.markdown.html(refusalMarkdown);
+    expect(refusalHtml).toContain("<table>");
+    expect(refusalHtml.match(/<th>/g)).toHaveLength(5);
+    expect(refusalHtml.match(/<td>/g)).toHaveLength(refusalRows.length * 5);
     expect(groupedReport).toContain("| C1 | Offered feed entries | 30 articles; 2/5 sources measured |");
     expect(groupedReport).toContain("| C8 | Feed fetch failures | 2/4 attempted feeds |");
     const reversedReport = formatExecutionReport({

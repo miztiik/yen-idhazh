@@ -221,7 +221,7 @@ export function formatExecutionReport(input: Readonly<{
     "## Table D - Refusals",
     "",
     "| Id | Subject | Stage | Reason | Count and denominator |",
-    "| --- | --- | --- | --- | --- | --- |",
+    "| --- | --- | --- | --- | --- |",
     ...orderedDrops.map((drop, index) => `| D${index + 1} | ${escapeMarkdown(drop.subject)} | ${escapeMarkdown(drop.stage.replaceAll("-", " "))} | ${escapeMarkdown(drop.reason)} | ${drop.count}/${drop.subject === "feed" ? sources.length : observedEntries} ${drop.subject === "feed" ? "configured sources" : "observed parsed entries"} |`),
     ...(drops.size === 0 ? ["No recorded refusals."] : []),
     "",
