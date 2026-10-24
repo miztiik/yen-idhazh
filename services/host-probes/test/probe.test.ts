@@ -102,6 +102,7 @@ test("periodic file sampling uses closing minus opening counters and closes with
   for (const sample_interval_ms of [100, 200]) {
     const config = { ...(await loadConfig()), sample_interval_ms };
     await Bun.write(join(directory, "stat"), await fixture("runtime/2026-08-30-probe-proc-stat-at-start.txt"));
+    const observedAt = performance.now();
     const pending = sampleHost(config, { platform: "linux", procRoot: directory });
     const update = (async () => {
       await Bun.sleep(25);
@@ -111,7 +112,8 @@ test("periodic file sampling uses closing minus opening counters and closes with
       );
     })();
     const [sample] = await Promise.all([pending, update]);
-    expect(sample.interval_ms).toBeGreaterThanOrEqual(config.sample_interval_ms);
+    expect(sample.interval_ms).toBeGreaterThan(0);
+    expect(sample.interval_ms).toBeLessThanOrEqual(performance.now() - observedAt);
     expect(sample.cpu?.user).toBeCloseTo(53 / 7991 * 100, 10);
     expect(sample.memory_kb.available).toBe(8192000);
     expect(sample.vmstat?.pgmajfault).toBe(42);

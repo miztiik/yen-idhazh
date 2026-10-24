@@ -1,6 +1,6 @@
 # What the pipeline records about the machine it ran on
 
-**Last Updated**: 2026-10-23
+**Last Updated**: 2026-10-24
 
 Every host-fingerprint field, what it means and which readings are optional.
 The hardware fingerprint is reusable by any pipeline. Callers name their
@@ -219,6 +219,11 @@ changes these controls. Each request has its own opening and closing snapshot;
 the wait is asynchronous, not a blocking sleep. `interval_ms` reports actual
 monotonic elapsed time between those snapshots; `sampled_at` is the closing
 observation's UTC instant.
+
+The delay is requested, not a minimum-duration guarantee: timer precision and
+scheduling can make the actual interval differ. `interval_ms` is measured from
+the monotonic clock, never copied from configuration. Task work is not padded
+to turn a partial observation into a full CPU window.
 
 The response contains `cpu`, `memory_kb`, `vmstat`, and an `unavailable` map.
 CPU percentages are differences from the aggregate `/proc/stat` line, not
