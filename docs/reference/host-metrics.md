@@ -12,8 +12,8 @@ returns transient CPU and memory samples without writing a ledger. Item resource
 readings and diagnostic memory files are separate optional instruments.
 
 Read this when a number surprises you and you want to know which machine
-produced it. Why the record exists at all, and what the fleet does to a reading,
-is [the processor lottery](benchmarks/the-processor-lottery.md).
+produced it. Runner hardware varies between jobs, so compare measurements only
+when their recorded hardware and conditions match.
 
 **The operator console reads it, from 2026-09-17.** Which machines one run was
 given, whether some machines do the same work slower, what kinds of machine we
@@ -861,6 +861,5 @@ neither control may defeat the other.
 ## See also
 
 - [../concepts/telemetry.md](../concepts/telemetry.md) - the instrument as a whole, and the two finer grains this sits beside.
-- [benchmarks/the-processor-lottery.md](benchmarks/the-processor-lottery.md) - what the fleet does to a reading, and why this record exists.
 - [pipeline-cost.md](pipeline-cost.md) - the instrument log.
 - [../../CLAUDE.md](../../CLAUDE.md) - Guardrail #10 (a number carries its hardware) and Guardrail #12 (a growing read declares itself).

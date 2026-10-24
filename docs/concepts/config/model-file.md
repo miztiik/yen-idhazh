@@ -12,7 +12,7 @@ only a pointer. What a knob is, and what is not one, is [../config.md](../config
 
 Everything that is a fact about one set of weights lives in one file of its own: the repository, the revision, the digest, the flags its server is started with, the sampling values that go in a request body, how long one request may wait, and the two turn-envelope strings no template can answer. `config/idhazh.json` carries `models_file` and nothing else about the model.
 
-**The swap is that one line, and so is the revert.** Point `models_file` at another committed file and the run opens another model; point it back and the incumbent's measured numbers are still on disk rather than in git history. Before 2026-09-14 a swap was eleven lines edited in place in the file every other knob lives in, and a revert had to reconstruct the previous model's numbers out of a diff.
+**The swap is that one line, and so is the revert.** Point `models_file` at another committed file and the run opens another model; point it back and the previous model's settings are still in its file. Before 2026-09-14 a swap was eleven lines edited in place in the file every other knob lives in, and a revert had to reconstruct the previous model's settings out of a diff.
 
 `models_file` is spelled relative to `config/` and its grammar pins it to `config/models/` and to `.json`, because the value is an operator's edit that becomes a path this build opens (`CLAUDE.md` section 2). It is required. A fresh clone reads the committed selection from `config/idhazh.json`; source code selects no model file.
 
@@ -55,7 +55,7 @@ tokenizer ratios, performance tests, encoders, evaluation tools or fine-tuning.
 
 The alternative was to leave the block where it was and make the swap a careful multi-line edit with a checklist. It was rejected because the checklist is the failure: the summarizer moved from the 8B to the 9B on 2026-08-27 and the settings block did not move with it, which is the incident the `declared_for` rule below exists for. A rule that catches a half-done edit is worth having; not needing the edit is worth more.
 
-The second alternative was one file holding every model, keyed by name, with the pointer naming a key rather than a file. It was rejected because a candidate is then an edit to a file the incumbent is also in, so a bad candidate can break the model that is running - and because two models in one file is exactly the shape that let one measured `inference` block be applied to weights it was never measured on. Ruled by Fowler, 2026-09-14.
+The second alternative was one file holding every model, keyed by name, with the pointer naming a key rather than a file. It was rejected because an alternate model would then be an edit to the same file as the active model, so an invalid entry could break the model that is running. Ruled by Fowler, 2026-09-14.
 
 **The `sampling` block is sent whole, and the file is the only place a sampler is named.** Three keys were wired one at a time until 2026-09-23 - `temperature`, `top_p`, `seed` - through a table whose rows for those three mapped each name to itself. A fourth key validated and was dropped in silence, and the request the server really answered carried thirteen: the other ten were llama.cpp's own choices and no diff of ours could move them. The block is now splatted into the request body, so naming one more sampler is a key in this file and no code edit, and a key this runtime does not accept is refused at request time with the key named.
 
@@ -80,7 +80,7 @@ its limit is still reported as truncated rather than published as complete.
 
 ## The model references are the only values in `config/` with no default
 
-There is no honest default for "which weights" - a wrong guess would silently run the wrong model rather than failing. A reference names the repository, the file, and the `revision` those bytes were uploaded in; the revision is what makes the recorded `sha256` mean anything, because a download that named a branch would get whatever was uploaded last. No workflow keeps a copy of any of it: `digest.yml`, `measure.yml` and `validate.yml` each follow `models_file` to the active model file, read `summarizer` out of it, and republish it as job outputs, including into the weights cache key ([../../reference/github-actions.md](../../reference/github-actions.md)).
+There is no honest default for "which weights" - a wrong guess would silently run the wrong model rather than failing. A reference names the repository, the file, and the `revision` those bytes were uploaded in; the revision is what makes the recorded `sha256` mean anything, because a download that named a branch would get whatever was uploaded last. No workflow keeps a copy of any of it: `digest.yml` and `idhazh-pipeline-tests.yaml` follow `models_file` to the active model file, read `summarizer` out of it, and use the result to load the weights ([../../reference/github-actions.md](../../reference/github-actions.md)).
 
 **Six spellings were retired on 2026-09-13, and a file still carrying one is
 refused by name.** Plan 11 row #6 deleted `models.visual_planner`,
@@ -104,22 +104,22 @@ a typo - one moved and two name a model that is gone.
 
 **The refusal only covers a reader that goes through the contract.** A
 workflow step reading the raw JSON, or resolving a `models` key by attribute
-name, sees the file and not the model - so `digest.yml`, `measure.yml` and
-`backend/utilities/model_runtime.py` move with the key rather than relying on
-the contract. Retiring a key without moving those readers breaks the next
-scheduled run. The same applies to the pointer: those readers follow
+name, sees the file and not the model - so `digest.yml`,
+`idhazh-pipeline-tests.yaml` and `backend/utilities/model_runtime.py` move with
+the key rather than relying on the contract. Retiring a key without moving
+those readers breaks the next scheduled run. The same applies to the pointer:
+those readers follow
 `models_file` to the model's own file rather than naming that file, so a swap
 stays one line for them too, and
 `backend/tests/workflows/test_weights_and_model_refs.py::test_every_config_key_a_workflow_indexes_is_in_the_committed_config`
 resolves each key path against whichever of the two documents the step really
 opened.
 
-## Runtime sweep surface
+## Runtime settings
 
-the entry's settings holds both the ordinary deterministic decode knobs and
-the flag-sweep knobs, and there is one block per model entry rather than one for
-the pipeline. The sweep surface is explicit so a measurement changes one thing at
-a time through config, not through workflow literals:
+the entry's settings hold the deterministic decode values and server settings.
+Each model has its own block, so changing the model also changes the settings
+that travel with it:
 
 - `n_ctx`, `n_threads`, `n_batch`, `n_ubatch`
 - `n_parallel`, `n_threads_batch`
@@ -189,68 +189,11 @@ gets is unchanged at `n_parallel: 1`, because non-unified KV divides `n_ctx` by
 the `-kvu` help text, read 2026-08-25; both behaviours appear in the run logs
 recorded at [../../reference/pipeline-cost.md](../../reference/pipeline-cost.md).
 
-**`n_parallel` above 1 is settled and dead.** Measured 2026-08-25 on a
-GitHub-hosted `ubuntu-latest` (AMD EPYC 9V74, 4 vCPU, 15 GB), three repeats:
-aggregate decode rises **1.055x** from one sequence to two, spread 0.022,
-against a pre-registered 1.4x gate. Decode is 36.8 percent of model time, so
-that is about 1.9 percent of a run's wall-clock. Four sequences reach 1.133x and
-oversubscribe the 4 vCPU, so no level on this runner clears the gate. The knob
-stays, because `null` and `1` still differ and both are in use - but no value
-above 1 is a candidate here, and sweeping it again needs new hardware or a new
-runtime, not a repeat
-([Current throughput measurement rules](../../reference/pipeline-cost.md#inference-throughput)).
-
 A knob's presence is not evidence that it improves a run. Owner-selected
 settings remain labelled unmeasured until a runner measurement records their
 hardware, date and spread in
 [../../reference/pipeline-cost.md](../../reference/pipeline-cost.md). Setting a value
 claims no speed, memory or quality gain on its own.
-
-### Where the committed numbers came from, and which entry they are declared for
-
-A runtime setting is a measurement about one model on one runner. Quoting one
-without saying which model, which runner and which date makes it an unmeasured
-number justifying a design (Guardrail #10). So the committed block states its
-provenance here:
-
-| Entry | `declared_for` | Where the numbers came from |
-| --- | --- | --- |
-| `models.summarizer` (`qwen3-5-9b-q4-k-m`) | `03b74727...b7e8` | The owner selected the explicit runtime settings on 2026-09-20 and approved the 65,536-token window on 2026-09-21. Both caches use q8_0 and the answer budget is 2,000 tokens. The article and candidate limits are unchanged. This combination has not been benchmarked. Earlier measurements used different settings and do not establish this combination's speed, memory use or output quality. The committed model file is the complete list of selected values. |
-
-**One of those quantities has since been read off the ledger rather than
-benchmarked.** `load_mode`, `cache_ram` and `ctx_checkpoints` took effect on
-2026-09-21 and the runner's free memory fell with them; what it fell to, and
-what that does and does not threaten, is on
-[the model's own dossier](../../reference/models/qwen3.5-9b-q4km.md#what-the-machine-had-free-while-these-weights-worked-and-the-day-it-changed).
-Speed and output quality for this combination are still unmeasured.
-
-The row says the uncomfortable thing, which is the point of writing it
-down: the file now states a pairing where before it implied one. `declared_for`
-is named for what a person can honestly assert - that these numbers are set for
-these bytes - rather than `derived_against`, which would be a measurement claim
-nobody made. A second entry, `models.visual_planner`, carried the same numbers
-without ever having been measured against its own 4B; plan 11 row #6 retired it
-on 2026-09-13 and that inheritance went with it.
-
-The two window figures that used to sit here are both superseded, and by one run:
-`2026-09-09-34379502244`, taken 2026-09-09 on a stock GitHub-hosted
-`ubuntu-latest`, 4 vCPU, no GPU.
-
-**The widest request is no longer 3,775 prompt tokens against an `n_ctx` of
-8,192.** One item on that run reached **8,741 input tokens**, which the old 8,192
-window would have refused outright, and the busiest request held 9,082 of the
-16,384 cells - **55 percent of the window in use, 45 percent spare**
-([The window raise was load-bearing on the first run](../../reference/benchmarks/a-run-at-the-doubled-window-and-cap.md#the-window-raise-was-load-bearing-on-the-first-run-and-nothing-predicted-that)).
-
-**And the summarizer does not peak at 82 percent of the runner's memory.** That
-figure is llama-server's own resident-set high-water mark read as though it were
-the whole job's, and a resident-set mark counts mapped weight pages the kernel
-can evict. It never said what the machine had free, in either direction, and it
-is withdrawn. The same run measured free memory directly instead.
-`MemAvailable` never fell below **6.84 GiB**, with per-shard lows of 6.84, 7.36,
-7.44 and 7.46 GiB over 846 samples. The escalation trigger asks for 1.0 GiB, so
-the run finished with 6.8 times the bar
-([MemAvailable went up by 1.21 GiB](../../reference/benchmarks/a-run-at-the-doubled-window-and-cap.md#memavailable-went-up-by-121-gib-and-the-runner-is-why)).
 
 ### A model swap can no longer inherit settings nothing declared for it
 
@@ -313,8 +256,7 @@ start.
 
 **What is per model is the envelope, never the words.** The instructions stay
 one set for every model - a per-model prompt would hide every wording change
-inside the swap that carried it, and would make a qualification run measure two
-changes and report one number
+inside the swap that carried it, and would combine two changes in one result
 ([../../architecture/summarize/model-boundary.md](../../architecture/summarize/model-boundary.md)).
 
 **The file's reappearance is refused at config load.** `idhazh.config.load`
@@ -337,55 +279,6 @@ across this change and every committed row stays comparable
 ([../../architecture/contracts/determinism.md](../../architecture/contracts/determinism.md)).
 Digesting it would have moved the stamp on a swap that `model_sha256` already
 moves.
-
-**The qualification path declares the pairing out loud instead of inheriting
-it.** `validate.yml` copies `config/` to a scratch directory and rewrites the
-model file the pointer names, so the candidate's entry is the candidate and
-every other control is the committed one - which is what makes it an experiment
-rather than a second pipeline. The pointer itself is left alone, so a candidate
-is qualified through the same one line a swap would later move. Both of the
-incumbent's declared blocks travel onto the candidate entry and both
-`declared_for` values become the candidate's digest: that run is what puts those
-numbers in front of those weights, and `context_fit` is the gate that says
-whether they held. `turns` has no default, so a candidate built without it is a
-config that cannot load.
-
-#### Rejected alternatives
-
-**Keep one shared block and refuse an unmeasured pairing at qualification.** It
-refuses the wrong run. Qualification is the one place that deliberately pairs the
-incumbent's settings with candidate weights - that pairing is the control the
-gates hold fixed - so a gate against it would refuse the measurement and leave
-the daily pipeline, where the swap actually reaches readers, exactly as silent.
-A shared block can also bind to at most one entry, so with two roles it closes
-half the hazard at best.
-
-**Move the block onto the entry and stop there.** It catches a new entry written
-with no settings and misses the swap that actually happens, which is five strings
-edited in place under a block nobody touched. That was the confirmed failure, so
-a fix that does not catch it is not a fix.
-
-**Lift `models.inference` onto both entries as a read-side migration.** Refused,
-because the lift *is* the inheritance: it would hand a swapped entry the previous
-weights' numbers and raise nothing, which is the defect. `models.inference` is
-refused by name instead, the way `quarantine_after_failures` was - and for a
-config contract the migration is the file edit in the same commit, because no run
-writes these files.
-
-**A comment saying the settings are model-specific.** A comment is not a gate,
-and the failure it would warn about is silent and produces a plausible run.
-Authority: Fowler.
-
-**Put the runner and the date in the contract too.** A validator cannot check
-either, and a field nothing checks is a comment with a schema entry. They live in
-the table above, where a reader looks for provenance.
-
-Authority: Fowler on the shape (the shared block is one canonical model applied
-to two things that are not the same thing, and the read-side answer to a removed
-config key is refusal rather than a lift); Carmack on what the binding has to be
-(the weights file is a contract, not a blob - pin the exact bytes and record the
-hash, because a run that cannot say which bytes produced its output has not been
-measured).
 
 ## Training-corpus surface
 
@@ -430,9 +323,7 @@ See [../../how-to/fine-tune-a-model.md](../../how-to/fine-tune-a-model.md).
 ## See also
 
 - [../config.md](../config.md) - what a knob is, and what is not one.
-- [../../how-to/evaluate-new-summarizer-model.md](../../how-to/evaluate-new-summarizer-model.md) - test and adopt different summary weights without bypassing config or measurements.
-- [../../how-to/set-up-local-inference.md](../../how-to/set-up-local-inference.md) - running the same server on a developer machine.
-- [../../reference/models.md](../../reference/models.md) - one row a model, pointing at that model's dossier.
+- [../../reference/github-actions.md#pipeline-tests](../../reference/github-actions.md#pipeline-tests) - where model inference runs.
 - [../../reference/pipeline-cost.md](../../reference/pipeline-cost.md) - what a run on these settings has actually cost.
 - [../../architecture/summarize/model-boundary.md](../../architecture/summarize/model-boundary.md) - what is per model and what is not.
 - [summary-length.md](summary-length.md) - the length the prompt asks for, which is editorial rather than per model.

@@ -262,6 +262,12 @@ def test_typescript_envelope_fields_and_footer_keys(typescript_schemas: dict[str
         theirs = typescript_schemas[contract.__name__]
         assert normalized_shape(theirs, theirs) == normalized_shape(ours, ours)
     assert typescript_schemas["__footer_keys"] == list(file_envelope._KEYS)
+    envelope_versions = typescript_schemas["__envelope_versions"]
+    assert len(envelope_versions) == len(set(envelope_versions))
+    assert set(envelope_versions) == set(file_envelope._ENVELOPE_VERSIONS)
+    assert typescript_schemas["__file_envelope_version"] == (
+        file_envelope.FileEnvelope.schema_version()
+    )
     assert typescript_schemas["__row_identity_column_versions"] == dict(
         file_envelope.RowIdentity.__column_versions__
     )

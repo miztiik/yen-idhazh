@@ -416,8 +416,8 @@ def render_paste(readings: Sequence[BudgetReading]) -> str:
         "that no longer matches its `measures` is worse than a stale one.",
         "",
         f"`subject` is a named constant, not a string. These were taken against {subject}.",
-        "Use the constant that already names those weights, or add one beside",
-        "QWEN35_9B_Q4_K_M named for the weights file rather than for a config slot.",
+        "Use the constant that already names those weights, or add a named digest",
+        "constant for the weights file rather than for a config slot.",
         "",
         "A retake that moves a number deletes the old one. A reading is a variable and",
         "not a log entry, and git history holds what it used to say (Guardrail #10).",
@@ -432,62 +432,6 @@ def render_paste(readings: Sequence[BudgetReading]) -> str:
             "    subject=<the constant naming those weights>,",
             "",
         ]
-    return "\n".join(lines)
-
-
-def render_dossier(readings: Sequence[BudgetReading]) -> str:
-    """The dossier section these readings replace, ready to paste as it stands.
-
-    The tool prints the heading, the table and the note, because those are the
-    reading restated and a person retyping them is how the last set went stale
-    unnoticed. It prints no sentence about *why* a number moved: that is history
-    the tool cannot see, it survives a retake, and it is marked here as the
-    person's to keep.
-
-    `Taken over` is the load-bearing column. A total can move because the probe
-    text moved rather than the vocabulary, so the size sits beside the value and
-    neither is quoted alone.
-    """
-    if not readings:
-        return ""
-    taken = readings[0].taken_on
-    lines = [
-        "Paste into docs/reference/models/<the configured model>.md, replacing the",
-        "'## What the tokenizer costs' heading down to the end of the note below the",
-        "table. Keep the '### Each reading is a point in time' subsection that follows",
-        "it: that is the history of what moved and why, it survives a retake, and this",
-        "tool cannot see it.",
-        "",
-        "-----8<-----",
-        "",
-        "## What the tokenizer costs",
-        "",
-        "Three counts of **our own text** in this model's vocabulary. Each sizes a budget",
-        "the pipeline spends before it reads a single article word, so each one moves when",
-        "the weights move.",
-        "",
-        f"**Taken {taken}** against these weights, by",
-        "`python backend/utilities/measure_budgets.py read`, which asks the running",
-        "`llama-server` to tokenize the exact text the pipeline sends.",
-        "",
-        "| Quantity | Reading | Taken over | What it measures |",
-        "| --- | --- | --- | --- |",
-    ]
-    for reading in readings:
-        value = f"{format_number(reading.value)} {reading.unit}"
-        lines.append(
-            f"| `{reading.record}` | {value} | {reading.probe_size} | {reading.measures} |"
-        )
-    lines += [
-        "",
-        "**Spread is 0 on all three, and is printed rather than left out.** A tokenizer",
-        "over fixed text returns the identical count every time, so there is nothing to",
-        "repeat - but a reading with no spread field would read as one that forgot to take",
-        "it (Guardrail #10).",
-        "",
-        "-----8<-----",
-        "",
-    ]
     return "\n".join(lines)
 
 
@@ -587,7 +531,7 @@ def run_read(args: argparse.Namespace) -> int:
         print(str(refused), file=sys.stderr)
         return 2
 
-    body = f"{render_readings(readings)}\n{render_paste(readings)}\n{render_dossier(readings)}"
+    body = f"{render_readings(readings)}\n{render_paste(readings)}"
     print(body)
     if args.readings is not None:
         args.readings.parent.mkdir(parents=True, exist_ok=True)

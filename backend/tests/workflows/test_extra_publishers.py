@@ -1,4 +1,4 @@
-"""Do the remaining real clients deliver only their checked completed files?"""
+"""Does the pipeline-test client publish only its checked completed files?"""
 
 import dataclasses
 import json
@@ -10,18 +10,14 @@ from retention._trees import health_row
 from support.ledger import writer_identity
 from support.paths import CONFIG_DIR
 
-from idhazh import completed_writes, config, ledger
+from idhazh import ledger
 from idhazh.contracts.base import ServerJob
-from idhazh.contracts.file_envelope import WriterIdentity
 from idhazh.contracts.item_health import ItemStage
 from idhazh.contracts.ledger_name import LedgerName
-from idhazh.telemetry import silicon
 from idhazh.telemetry.traces import committed_trace_path
 from utilities import (
     pipeline_test_ledgers,
     pipeline_test_publish,
-    publication_evidence,
-    record_publish,
 )
 from utilities.publication_git import Repository
 from utilities.publication_request import IntegrityError
@@ -35,55 +31,6 @@ RETRY = {
     "ceiling_seconds": 0.001,
     "ceiling_after": 1,
 }
-
-
-def test_measure_publishes_the_real_native_probe_without_foreign_index(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    quiet_git(tmp_path, monkeypatch)
-    origin, repo = an_origin(
-        tmp_path,
-        {"seed": "seed\n", "config/push-retry.json": json.dumps(RETRY) + "\n"},
-    )
-    source = git(repo, "rev-parse", "HEAD").strip()
-    monkeypatch.setenv("GITHUB_RUN_ID", EXECUTION)
-    monkeypatch.setenv("GITHUB_RUN_ATTEMPT", "1")
-    monkeypatch.setenv("GITHUB_SHA", source)
-    identity = WriterIdentity(
-        run_id=f"{DATE}-{EXECUTION}",
-        attempt=1,
-        job=ServerJob.RUNTIME,
-        shard=0,
-        producer="utilities.record_publish",
-        git_sha=source,
-    )
-    settings = config.load(CONFIG_DIR)
-    settings.app.observability.host_fingerprint = True
-    settings.app.observability.host_fingerprint_bandwidth_floor_mib = 0
-    with ledger.use_registry(ledger.overlay_registry(("pipeline-tests",))):
-        with completed_writes.collect() as evidence:
-            silicon.stage_fingerprint(
-                date=DATE,
-                run_id=identity.run_id,
-                settings=settings,
-                state_root=repo / "state",
-                commit_sha=source,
-                job=ServerJob.RUNTIME,
-            )
-    assert evidence
-    publication_evidence.save(repo, identity, "measure", evidence)
-    write(repo / "foreign-staged", "must not publish\n")
-    git(repo, "add", "foreign-staged")
-    index = (repo / ".git/index").read_bytes()
-    assert record_publish.land("measure", repo=repo) == 0
-    assert (repo / ".git/index").read_bytes() == index
-    assert Repository(origin, git_dir=origin).entry("main", "foreign-staged") is None
-    for path in evidence:
-        relative = path.relative_to(repo).as_posix()
-        entry = Repository(origin, git_dir=origin).entry("main", relative)
-        assert entry is not None
-        assert Repository(origin, git_dir=origin).blob(entry.oid) == path.read_bytes()
 
 
 @pytest.mark.parametrize("wrong_execution", [False, True])

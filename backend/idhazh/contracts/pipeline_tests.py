@@ -1,12 +1,11 @@
 """`config/pipeline-tests.json` - what one dispatch of the pipeline test workflow runs.
 
-**The whole point of this file is a fast check of a model on the production
-path.** A production run takes hours, so a model or a pipeline change is checked
-here instead: a few articles down the real fetcher, extractor, prompts and model
-server. It is a check, not a benchmark - measuring and tuning a server is
-`measure.yml`'s job - so everything here is shaped for the shortest wait: the
-articles split into shards the way production splits a day, and every shard of
-every test case runs at once, each on a runner of its own.
+**The whole point of this file is a fast check of the production path.** A
+production run takes hours, so a model or a pipeline change is checked here
+instead: a few articles down the real fetcher, extractor, prompts and model
+server. It is an execution check, not a performance report: the articles split
+into shards the way production splits a day, and every shard of every test case
+runs at once, each on a runner of its own.
 
 **A test case is switched on or off here, and nowhere else.** The workflow asks
 this file which test cases are enabled and starts one job for each runner they

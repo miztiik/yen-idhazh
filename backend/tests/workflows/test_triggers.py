@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import datetime
-import re
 from pathlib import Path
 
 import pytest
@@ -35,7 +34,6 @@ from ._harness import (
 
 pytestmark = pytest.mark.workflow
 
-_DISPATCH_FALLBACK = re.compile(r"^inputs\.(?P<input>[a-z_]+) \|\| '(?P<fallback>[^']+)'$")
 
 def test_workflow_names_and_trigger_classes_are_pinned() -> None:
     workflows = _load_workflows()
@@ -89,7 +87,7 @@ def test_a_scheduled_run_reports_which_slot_it_is_and_how_late() -> None:
 def test_expensive_workflows_do_not_run_on_pull_request_or_push() -> None:
     workflows = _load_workflows()
 
-    for filename in ("backfill.yml", "digest.yml", "measure.yml", "validate.yml"):
+    for filename in ("backfill.yml", "digest.yml"):
         assert {"pull_request", "push"}.isdisjoint(_triggers(workflows[filename]))
 
 
@@ -144,37 +142,8 @@ def test_every_dispatch_input_is_shaped_before_anything_acts_on_it() -> None:
         )
 
 
-def _render_concurrency_group(group: str, dispatched: dict[str, str]) -> str:
-    """Substitute a group's one expression the way GitHub would, or refuse to guess.
-
-    Only the `inputs.<name> || '<literal>'` form is understood. Anything else
-    raises rather than rendering something GitHub would not, because a test that
-    quietly renders an expression wrong reports a distinctness that does not
-    exist on the platform.
-    """
-    spans = re.findall(r"\$\{\{(.*?)\}\}", group)
-    if not spans:
-        return group
-    rendered = group
-    for span in spans:
-        matched = _DISPATCH_FALLBACK.match(span.strip())
-        assert matched, f"a concurrency group this test cannot evaluate: ${{{{{span}}}}}"
-        name = matched.group("input")
-        assert name in dispatched, f"the group names an input the dispatch form has no {name}"
-        rendered = rendered.replace(
-            f"${{{{{span}}}}}", dispatched[name] or matched.group("fallback")
-        )
-    return rendered
-
-
 def test_every_workflow_that_commits_a_ledger_says_which_of_its_runs_may_overlap() -> None:
     """A `state/` writer that neither groups its runs nor is named here is an accident.
-
-    `measure.yml` was the last one to miss a group. It is dispatched by hand
-    many times a day, and its `runtime` job pushes one host row. That row is a
-    raw file of its own now, named for its writer, so two dispatches no longer
-    race one day file; they still push to one branch, and the group makes a
-    second bench wait for the first rather than race it.
 
     A workflow whose runs are meant to overlap says so by appearing in
     `RUNS_MAY_OVERLAP` rather than by leaving the key out, so the difference
@@ -183,8 +152,7 @@ def test_every_workflow_that_commits_a_ledger_says_which_of_its_runs_may_overlap
 
     What this settles is that none is missing. It cannot settle that a group is
     the right one: whether two dispatches are one question is a judgement about
-    what the dispatch means, and the candidate test below is where that is
-    argued for the one workflow it matters most in.
+    what the dispatch means, and this test cannot settle that decision.
 
     `cancel-in-progress` is checked as well, because the cancelling kind is not
     a queue - it throws the running job away, and a job that was about to
@@ -236,45 +204,6 @@ def test_nothing_holds_one_content_refresh_run_behind_another() -> None:
     assert jobs, "a workflow with no jobs proves nothing about what holds them"
     held = sorted(name for name, body in jobs.items() if "concurrency" in _mapping(body, name))
     assert not held, f"these jobs hold the same job of another run behind them: {held}"
-
-
-def test_two_candidates_dispatched_together_are_two_qualifications_and_not_one() -> None:
-    """One group per candidate, because two candidates are two questions.
-
-    `group: validate` admitted one run. GitHub keeps only ONE pending run per
-    group and a newer pending run cancels the older one, so a comparison fired
-    several candidates wide kept the run that started and the case dispatched
-    last, and cancelled every case between them - no error anywhere, only a
-    cancelled run.
-
-    Two distinct dispatch values and the empty value cover the grouping rule.
-    Model declarations are not inputs to concurrency expression rendering.
-    """
-    concurrency = _mapping(_load_workflows()["validate.yml"]["concurrency"], "validate.yml")
-    assert str(concurrency["cancel-in-progress"]) != "true", (
-        "a queued qualification waits; cancelling one throws away an hour of runner time"
-    )
-    group = str(concurrency["group"])
-
-    candidates = ["models/first-candidate.json", "models/second-candidate.json"]
-    # The empty field is the incumbent, which is a candidate like any other.
-    dispatched = [*candidates, ""]
-    groups = {
-        value: _render_concurrency_group(group, {"candidate_models_file": value})
-        for value in dispatched
-    }
-
-    assert len(set(groups.values())) == len(dispatched), (
-        f"two candidates share a concurrency group, so GitHub cancels one of them: {groups}"
-    )
-    for value, rendered in groups.items():
-        assert rendered.strip(), f"the group for {value or 'the configured model'!r} is empty"
-        assert not rendered.endswith("-"), (
-            f"the group for {value or 'the configured model'!r} ends in a bare dash, "
-            "which every dispatch that fills nothing in would collide on"
-        )
-
-
 @requires_bash
 def test_a_scheduled_run_still_decides_its_own_date(tmp_path: Path) -> None:
     """The pattern runs after the default, so the automatic path is the one it

@@ -17,11 +17,8 @@ import dataclasses
 import json
 import logging
 import re
-import socket
-import threading
 from collections.abc import Callable
 from dataclasses import replace
-from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any, Final
 
@@ -85,11 +82,9 @@ from idhazh.sanitize import (
     sanitize,
     why_a_forged_turn_would_survive,
 )
-from idhazh.stages.validate import _summarize_one
 from idhazh.summarize import (
     build_request,
     draft_model,
-    fits_context,
     length_verdict,
     output_schema,
     output_schema_text,
@@ -746,7 +741,7 @@ def test_one_server_is_named_once_however_many_items_are_sent(
     given.
 
     The cache is keyed on the origin rather than the endpoint, because the
-    qualification process posts to two routes on one server and an endpoint key
+    two-call process posts to two routes on one server and an endpoint key
     would write the identical line twice. `lru_cache` is process-global, so the
     clear is what makes this a statement about the code rather than about
     whatever ran before it.
@@ -971,25 +966,8 @@ class TestWhereTheSystemTextGoes:
         assert "system" not in rendered, "no system role header is written at all"
         assert "S" in rendered and "U" in rendered, "the same bytes, one turn earlier"
 
-    def test_the_fold_moves_the_digest_runs_stamp_and_not_the_qualification_runs(self) -> None:
-        """Case 2. Which stamp can see a topology change, and which cannot.
-
-        The row expected neither to see it - a placement moves the same bytes to
-        a different address, so the argument ran that `prompt_sha256` could not
-        move. Row #2 closed that before this row arrived: since the prompt bytes
-        became ours, `classify.calls.prompt_inputs` renders both turns through
-        the envelope, so the digest run's stamp moves with the render and a fold
-        is as loud as a reworded instruction.
-
-        The qualification run's stamp still cannot see it.
-        `stages.qualify` hands `build_inputs` the content-only digest from
-        `summarize.prompt_inputs`, which takes no envelope and carries no turn
-        marker, so no field on `turns` can move it. **That is why the envelope is
-        declared on the entry and proved against the server at start-up rather
-        than inferred from a stamp**: the eleven gates compare two models through
-        a digest that is blind to how their turns were written, and case 1 of
-        `prove_the_entry` is what catches a placement declared wrong.
-        """
+    def test_the_digest_run_stamp_moves_when_turn_placement_moves(self) -> None:
+        """Rendered turns change the live digest input, not the content-only prompt."""
         own = a_markers()
         folded = dataclasses.replace(
             own,
@@ -1006,8 +984,7 @@ class TestWhereTheSystemTextGoes:
             "the digest run's prompt_sha256 renders through the envelope"
         )
         assert own.turn_opening.template not in prompt_inputs(), (
-            "the qualification run's stamp carries no turn marker, so no envelope "
-            "field can move it"
+            "the content-only corpus digest does not include turn placement"
         )
 
     def test_only_two_placements_exist_to_be_derived(self) -> None:
@@ -1149,7 +1126,7 @@ def test_no_module_that_opens_a_model_branches_on_which_model_it_is() -> None:
     )
 
 
-def test_runtime_sweep_flags_are_emitted_only_when_configured() -> None:
+def test_runtime_server_flags_are_emitted_only_when_configured() -> None:
     from idhazh.contracts.knobs.models import ModelRef
 
     flags = {
@@ -2803,7 +2780,7 @@ def test_the_summarizer_never_imports_the_scorer() -> None:
     """It borrows one model-free metric and may reach no further.
 
     `verbatim_run` is pure string work. `evals/hhem.py` loads a model and
-    `evals/score.py` and `evals/qualify.py` decide what publishes, so a
+    `evals/score.py` decides what publishes, so a
     summarizer able to import any of them would let the thing being measured
     reach its own judge - and would drag a model load into every worker.
     """
@@ -2816,8 +2793,9 @@ def test_the_summarizer_never_imports_the_scorer() -> None:
             names = [node.module]
         for name in names:
             assert "hhem" not in name, f"summarize.py imports {name}"
-            for grader in ("idhazh.evals.score", "idhazh.evals.qualify"):
-                assert not name.startswith(grader), f"summarize.py imports {name}"
+            assert not name.startswith("idhazh.evals.score"), (
+                f"summarize.py imports {name}"
+            )
 
 
 # --- An address never reaches our own words ---------------------------------
@@ -2937,22 +2915,6 @@ def test_a_truncated_source_is_carried_onto_the_summary() -> None:
     assert result.source_truncated is True
 
 
-# --- The budget has to fit ---------------------------------------------------
-
-
-@pytest.mark.parametrize(("headroom", "expected"), [(1, True), (0, False), (-1, False)])
-def test_context_fit_requires_room_beyond_the_article_and_prompt(
-    headroom: int, expected: bool
-) -> None:
-    source = article()
-    overhead = len(
-        system_prompt(source_words=source.band_source_words, brief=source.brief).split()
-    ) * 2
-    server = a_server(**{"--ctx-size": source.token_count + overhead + headroom})
-
-    assert fits_context(source, server) is expected
-
-
 def test_the_summary_of_an_ok_article_carries_the_items_identity() -> None:
     source = article()
     result = summarised("ok")
@@ -2961,123 +2923,12 @@ def test_the_summary_of_an_ok_article_carries_the_items_identity() -> None:
     assert source.status is ArticleStatus.OK
 
 
-# --- A server that answered is not a server that is down ---------------------
-
-
-class RecordedErrorEndpoint:
-    """A real local server that replays one recorded llama-server error reply.
-
-    Nothing is mocked: the worker makes its ordinary POST over a loopback
-    socket, and the bytes it reads back are the ones a llama-server wrote
-    (Guardrail #7). The stdlib server owns the framing, so the test is about the
-    body and not about HTTP.
-    """
-
-    def __init__(self, status: int, body: bytes) -> None:
-        class Handler(BaseHTTPRequestHandler):
-            protocol_version = "HTTP/1.1"
-
-            def do_POST(self) -> None:
-                self.rfile.read(int(self.headers.get("Content-Length") or 0))
-                self.send_response(status)
-                self.send_header("Content-Type", "application/json")
-                self.send_header("Content-Length", str(len(body)))
-                self.end_headers()
-                self.wfile.write(body)
-
-        self._server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
-        self._thread = threading.Thread(target=self._server.serve_forever, daemon=True)
-
-    @property
-    def endpoint(self) -> str:
-        return f"http://127.0.0.1:{self._server.server_port}/v1/chat/completions"
-
-    def __enter__(self) -> RecordedErrorEndpoint:
-        self._thread.start()
-        return self
-
-    def __exit__(self, *_exc: object) -> None:
-        self._server.shutdown()
-        self._server.server_close()
-        self._thread.join(timeout=5.0)
-
-
-def refused_endpoint() -> str:
-    """A loopback port that refused a real socket before the test used it."""
-    with socket.socket() as reserved:
-        reserved.bind(("127.0.0.1", 0))
-        port = int(reserved.getsockname()[1])
-    return f"http://127.0.0.1:{port}/v1/chat/completions"
-
-
-def summarize_against(endpoint: str) -> Summary:
-    """One article at an endpoint, with the start-up question already answered.
-
-    The markers are explicit behavior inputs rather than read off this endpoint,
-    which is what lets these cases be about the completion call. A server that
-    is dead or answering errors settles nothing at start-up, so a stage that
-    derived here would report every one of them as an unread template and none
-    of them as the named item failure each of these tests is the oracle for.
-    """
-    return _summarize_one(
-        article(),
-        config.load(CONFIG_DIR),
-        markers=a_markers(),
-        endpoint=endpoint,
-        run_id="2026-08-25-1",
-    )
-
-
 def test_the_recognised_context_error_is_read_off_the_type_not_the_message() -> None:
     """The message states the token counts and its wording moves between builds."""
     assert is_context_exceeded(read_text(LLM_ERRORS / "context-exceeded.json"))
     assert not is_context_exceeded(read_text(LLM_ERRORS / "server-unavailable.json"))
     assert not is_context_exceeded("exceeds the available context size")
     assert not is_context_exceeded("<html>502 Bad Gateway</html>")
-
-
-def test_a_prompt_the_server_refused_for_length_says_so(article_ok: Article) -> None:
-    """The oracle: a running server that refused is never reported as a dead one."""
-    body = (LLM_ERRORS / "context-exceeded.json").read_bytes()
-
-    with RecordedErrorEndpoint(400, body) as server:
-        result = summarize_against(server.endpoint)
-
-    assert result.item_id == article_ok.item_id
-    assert result.status is SummaryStatus.FAILED
-    assert result.failure_code is FailureCode.CONTEXT_EXCEEDED
-    assert "context window" in (result.failure_detail or "")
-
-
-def test_a_refused_connection_is_still_an_unreachable_model() -> None:
-    result = summarize_against(refused_endpoint())
-
-    assert result.status is SummaryStatus.FAILED
-    assert result.failure_code is FailureCode.MODEL_UNREACHABLE
-
-
-def test_a_server_that_answered_with_an_error_is_not_an_unreachable_one() -> None:
-    """The Oracle. `model_unreachable` means nobody answered, and only that.
-
-    An earlier decision sent every unrecognised status to `model_unreachable` so
-    that it could not become a new silent class. A named code is louder than a
-    borrowed one, so that reason is better served here than it was: the status
-    still cannot pass unnamed, and an operator is no longer sent to a process
-    that is running.
-
-    The morning this cost: Gemma named a speculation kind its head could not
-    drive, the server answered 500 on every request, five items of five died,
-    and the whole run reported a network fault against a healthy server
-    (run 34941400155).
-    """
-    body = (LLM_ERRORS / "server-unavailable.json").read_bytes()
-
-    with RecordedErrorEndpoint(503, body) as server:
-        result = summarize_against(server.endpoint)
-
-    assert result.status is SummaryStatus.FAILED
-    assert result.failure_code is FailureCode.MODEL_REFUSED
-    assert "answered with an error" in (result.failure_detail or "")
 
 
 # --- The five things the server proves before the first item ----------------

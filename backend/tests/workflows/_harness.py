@@ -70,13 +70,11 @@ EXPECTED_WORKFLOWS: Final = {
     "encoder-comparison.yml": ("Encoder comparison", frozenset({"workflow_dispatch"})),
     "idhazh-pipeline-tests.yaml": ("Pipeline tests", frozenset({"workflow_dispatch"})),
     "llm-council.yml": ("LLM-COUNCIL", frozenset({"schedule", "workflow_dispatch"})),
-    "measure.yml": ("Measurements", frozenset({"workflow_dispatch"})),
     "pages.yml": (
         "Pages publication",
         frozenset({"workflow_run", "workflow_dispatch"}),
     ),
     "idhazh-gardener.yml": ("Idhazh Gardener", frozenset({"schedule", "workflow_dispatch"})),
-    "validate.yml": ("Model validation", frozenset({"workflow_dispatch"})),
 }
 
 # Named inputs keep workflow checks independent of new files in the checkout.
@@ -166,31 +164,7 @@ DISPATCH_INPUT_SHAPES: Final[dict[tuple[str, str], str]] = {
     # The planner validates a nonempty unique JSON list of registered slugs,
     # refuses retired judges, and allows paused judges only as isolated trials.
     ("llm-council.yml", "judges"): DISPATCH_READ_BY_NAME,
-    ("measure.yml", "candidate_models_file"): DISPATCH_READ_BY_NAME,
-    ("measure.yml", "corpus_links"): "^[1-9][0-9]{0,4}$",
-    ("measure.yml", "runtime_candidate"): DISPATCH_CHOICE,
-    # Read by name, and the floor is checked where it is used rather than by a
-    # pattern here: "at least 2" is a statement about a spread, and a regex that
-    # said it would be a second copy of the rule.
-    ("measure.yml", "runtime_repeats"): DISPATCH_READ_BY_NAME,
-    # Read by name for the reason above, plus one: the ceiling is the job
-    # timeout and the timeout is spent per PASS, so what fits depends on how
-    # many cases the dispatch runs. The contract bounds it on the way in.
-    ("measure.yml", "runtime_corpus_items"): DISPATCH_READ_BY_NAME,
-    ("measure.yml", "runtime_corpus_offset"): DISPATCH_READ_BY_NAME,
-    ("measure.yml", "runtime_threads"): DISPATCH_READ_BY_NAME,
-    ("measure.yml", "runtime_threads_batch"): DISPATCH_READ_BY_NAME,
-    ("measure.yml", "budget_samples"): "^[1-9][0-9]{0,4}$",
-    ("measure.yml", "model_speed_case"): DISPATCH_CHOICE,
-    ("measure.yml", "memory_profiling"): DISPATCH_CHOICE,
-    ("measure.yml", "host_telemetry"): DISPATCH_CHOICE,
-    ("measure.yml", "target"): DISPATCH_CHOICE,
-    ("measure.yml", "threads"): "^[1-9][0-9]*$",
     ("idhazh-gardener.yml", "force"): DISPATCH_BOOLEAN,
-    ("validate.yml", "candidate_models_file"): DISPATCH_READ_BY_NAME,
-    ("validate.yml", "corpus_per_shard"): "^[1-9][0-9]{0,3}$",
-    ("validate.yml", "job_budget_minutes"): "^[1-9][0-9]{0,3}$",
-    ("validate.yml", "shards"): "^[1-8]$",
 }
 
 # The one variable digest.yml's `decide` step reads. Nothing else in that
@@ -252,8 +226,8 @@ def _read_the_pin() -> tuple[str, str, str]:
     return build, asset, digest
 
 
-# One llama.cpp build for the pipeline, the validation case and the measurement
-# harness. The sha256 is the release API's own `digest` field, confirmed by
+# One llama.cpp build for the pipeline and its manual test workflows. The
+# sha256 is the release API's own `digest` field, confirmed by
 # downloading the 16,377,727-byte archive and hashing it, on 2026-08-25.
 PINNED_LLAMA_BUILD, PINNED_LLAMA_ASSET, PINNED_LLAMA_SHA256 = _read_the_pin()
 
@@ -266,8 +240,6 @@ LLAMA_RUNTIME_WORKFLOWS: Final = frozenset(
         "digest.yml",
         "idhazh-pipeline-tests.yaml",
         "llm-council.yml",
-        "measure.yml",
-        "validate.yml",
         "yen-ai-pipeline.yml",
         "ai-pipeline-tests.yml",
     }
@@ -319,60 +291,12 @@ VERIFY_MODEL_FILES: Final = f"{MODEL_RUNTIME_MODULE} verify-model-files"
 #: program's, and a caller that spells one again has taken the fetch back.
 HUB_HOST: Final = "huggingface.co"
 
-#: What a step runs instead of writing a download of its own. A job whose fetch
-#: step is one call to this has converted; `measure.yml`'s four inline jobs have
-#: not, and every rule scoped to the converted set skips them.
+#: What a step runs instead of writing a download of its own.
 SHARED_DOWNLOAD_CALLS: Final = (DOWNLOAD_MODEL_FILES,)
 
-#: How many jobs download a `.gguf`. The SET is asserted below and the COUNT is
-#: asserted beside it, because the two fail differently: the set catches a job
-#: that appeared, and the count catches discovery itself going blind. When the
-#: download moved into Python the literal host stopped appearing in four of
-#: these jobs, and a search over `run:` bodies alone would have found four -
-#: which every check written over that search would have passed, quietly.
-WEIGHTS_FETCH_JOBS: Final = 10
-
-# Every job in the repository that downloads a `.gguf`, the step that checks it,
-# the first step that reads it, and the one place the expected digest is
-# written. Discovery is closed-world, and this table holds only the jobs that
-# still spell a download for themselves - the four `measure.yml` inline ones.
-# Every converted job is derived where the table is compared, off the verb its
-# check step runs, because listing a job whose check is one shared call would
-# be a list of jobs rather than a check of anything.
-WEIGHTS_CHECKS: Final = {
-    ("measure.yml", "runtime"): (
-        "Fetch runtime and weights",
-        "Verify the weights",
-        "Measure runtime candidate",
-        "${{ needs.models.outputs.candidate_sha256 }}",
-    ),
-    # The raw job downloads the draft head and never runs it - llama-bench has
-    # no speculative path. It fetches it to fill the cache the server job
-    # restores, which is why the check matters more here than the reader does:
-    # nothing in this job would notice a corrupt copy, and the job that loads it
-    # is a different job on a different machine. The bench step is named below
-    # as the ordering anchor, not as a reader of these bytes.
-    ("measure.yml", "llama-bench"): (
-        "Fetch the draft head",
-        "Verify the draft head",
-        "Benchmark the candidate",
-        "${{ needs.models.outputs.candidate_draft_sha256 }}",
-    ),
-    ("measure.yml", "batched"): (
-        "Download the summarizer weights",
-        "Verify the weights",
-        "Benchmark parallel decode",
-        '["summarizer"]["sha256"]',
-    ),
-    # The one candidate whose digest is not a config field: the plan job decides
-    # it once, from the dispatch input or from config, and republishes it.
-    ("measure.yml", "budgets"): (
-        "Fetch runtime and weights",
-        "Verify the weights",
-        "Start the tokenizer",
-        "${{ needs.models.outputs.candidate_sha256 }}",
-    ),
-}
+# The number of workflow jobs that fetch model weights. Kept separate from
+# discovery so a search that stops finding callers cannot make this check pass.
+WEIGHTS_FETCH_JOBS: Final = 5
 
 # The refs the daily run needs and the one place they are written. The model
 # block reads `config/idhazh.json` where the model is used, so the workflow
@@ -401,11 +325,7 @@ MODEL_ENV_NAMES: Final = frozenset(
 # The weights cache jobs, and the config role each one serves.
 WEIGHTS_CACHE_ROLES: Final = {"work": "summarizer"}
 
-#: The one cache-key format written in two places, so the two have to resolve to
-#: one string. `qualify-` in `validate.yml` and `bench-` in `measure.yml` are
-#: deliberately different formats - production must not share an entry with a
-#: bench candidate - so an equality across all six cache steps is false by
-#: construction and only this prefix carries one.
+#: The one cache-key format used by the production model server.
 SHARED_WEIGHTS_KEY_PREFIX: Final = "llm-"
 
 # Bumped from v4 when the model half of the key became a digest over every file
@@ -422,109 +342,8 @@ BROWSER_CACHE_PATH: Final = "~/.cache/ms-playwright"
 # reader, because a key written twice drifts and a drifted key never hits.
 BROWSER_VERSION_SOURCE: Final = ("ci.yml", "scope", "browsers", "playwright")
 
-MEASUREMENT_TARGETS: Final = frozenset({"bench", "corpus", "batched", "budgets"})
-
-
-#: The bench is one target and two jobs: raw prefill and decode first, then a
-#: real server doing real work. The raw case saves the weights cache entry and
-#: the server case restores it, so a key that differs by one character is a
-#: second multi-gigabyte download inside one dispatch (Guardrail #2).
-BENCH_TARGET: Final = "bench"
-
-#: The job that drives the `llama-bench` binary. It was keyed `llm` until
-#: 2026-09-17, which named a whole field of software rather than the one thing
-#: the job does, and showed in the run list as a bare three-letter key because
-#: no job in this file carried a `name:`.
-BENCH_RAW_JOB: Final = "llama-bench"
-
-#: How that key is spelled inside an expression. A hyphen is subtraction there,
-#: so `needs.llama-bench.result` does not resolve and the index form is the only
-#: reading of it.
-BENCH_RAW_JOB_EXPRESSION: Final = f"needs['{BENCH_RAW_JOB}']"
-
-BENCH_SERVER_JOB: Final = "runtime"
-
-#: The dispatch input that decides whether the speed case runs at all, and the
-#: `models` output that carries the answer to a job's `if:`. A job cannot read a
-#: step of its own job, so the decision travels as an output.
-BENCH_SPEED_INPUT: Final = "model_speed_case"
-
-BENCH_SPEED_OUTPUT: Final = f"needs.models.outputs.{BENCH_SPEED_INPUT}"
-
-#: A module that imports `idhazh`, for the install-order checks. Any of them will do.
-IDHAZH_IMPORTER: Final = "backend/utilities/runtime_sweep.py"
-
-BENCH_SPEED_SKIP_STEP: Final = "Say what a bypassed speed case cost this dossier"
-
-BENCH_SUMMARY_STEP: Final = "Put the speed readings in the run summary"
-
-BENCH_PAGE_STEP: Final = "Write the bench run page"
-
-BENCH_CACHE_KEY: Final = (
-    "bench-${{ needs.models.outputs.candidate_cache_key }}-${{ env.LLAMA_CPP_BUILD }}"
-)
-
-BENCH_ARTIFACTS: Final = {
-    BENCH_RAW_JOB: "bench-raw",
-    BENCH_SERVER_JOB: "bench-server-${{ inputs.runtime_candidate }}",
-}
-
-
-#: Ninety days, and the number is here rather than only in the file so moving it
-#: is a decision somebody writes down. The sweep used to keep seven, which is
-#: shorter than the gap between benching a model and adopting it - and an
-#: expired artifact is a five-hour job run a second time for numbers that were
-#: already measured.
-BENCH_RETENTION_DAYS: Final = 90
-
-
-#: What the bench builds instead of editing the committed config, and the step
-#: that builds it.
-BENCH_CANDIDATE_CONFIG: Final = "backend/var/candidate-config"
-
-BENCH_CONFIG_STEP: Final = "Build the candidate config"
-
-#: The shared trial root for a bench. It leaves `trial_case_dirname` unset, so
-#: its files stay here rather than under a pipeline-test case child.
-#:
-#: Owner decision, 2026-09-16. A bench is dispatched ad hoc, many times a day,
-#: against unmerged branches; a bench row in the ledger the console reads would
-#: mean every panel filtering by job for ever. The cost of the split is a join
-#: whenever somebody asks what machines GitHub has given us across both, and
-#: that is paid once, there, rather than on every read.
-BENCH_TRIAL_STATE: Final = "pipeline-tests"
-
-BENCH_LEDGER_ROOT: Final = f"state/{BENCH_TRIAL_STATE}"
-
-#: The flag that puts a stage on the trial root, and the step that plans the
-#: corpus. `cli` moves the state root from `run.trial_state_dirname`, which only
-#: the scratch copy carries; a case-specific config may append a separate slug.
-#: A stage invoked without this flag loads the committed config and writes where
-#: the console reads. The bench's own `plan`
-#: did exactly that until 2026-09-17: it appended to the production seen ledger,
-#: so a dispatch marked real addresses seen and the next production day skipped
-#: those stories without saying so.
-BENCH_CONFIG_FLAG: Final = "--config"
-
-BENCH_CORPUS_STEP: Final = "Build the fixed bench corpus"
-
-BENCH_FINGERPRINT_STEP: Final = "What machine this bench drew"
-
-#: The one composite action in this repository. The step above was byte-identical
-#: in two workflows apart from the job it read the models file from, and a step
-#: duplicated across two files is a step that drifts the day one of them is
-#: edited - which has happened twice in these two.
+#: The composite action that creates isolated model configs for pipeline tests.
 CANDIDATE_CONFIG_ACTION: Final = "candidate-config"
-
-BENCH_EMIT_STEP: Final = "Emit the dossier body"
-
-
-#: Row #13a's case. Its own target because retaking three token counts is minutes
-#: and the bench is hours, and nobody should have to spend the second to get the
-#: first. It shares the bench's weights cache key, so the bytes are paid for once.
-BUDGETS_JOB: Final = "budgets"
-
-BUDGETS_EMIT_STEP: Final = "Retake the budgets a vocabulary sizes"
 
 # Every job that stands up llama-server, and the log that job writes. Both must
 # name the host, the binary and the weights: a shard's throughput is decided by
@@ -545,15 +364,8 @@ PROBE_URL_ENV: Final = "MODEL_SERVER_PROBE"
 
 PROBE_URL_VALUE: Final = "http://127.0.0.1:8080"
 
-#: The starters that are not steps. `measure.yml`'s runtime case starts a server
-#: too, but it does it inside a module rather than inside a heredoc - so the
-#: Oracle reads the module. It is held here, beside the steps, because the thing
-#: that must never happen is a server started by a second spelling of the flag
-#: list, and where that spelling lives does not change the rule.
-SERVER_STARTER_MODULES: Final = (
-    "backend/utilities/runtime_sweep.py",
-    MODEL_RUNTIME_MODULE,
-)
+#: The module starter that has to use the shared server argument builder.
+SERVER_STARTER_MODULES: Final = (MODEL_RUNTIME_MODULE,)
 
 #: What a step runs instead of rendering the flag list itself. A step that
 #: reaches `server_argv` through this is still a starter, and `_server_starters`
@@ -573,9 +385,7 @@ SAMPLE_MEMORY_STEP: Final = "Sample memory"
 
 MEMORY_SUMMARY_STEP: Final = "What memory this shard used"
 
-#: The sampler itself, which stopped being a shell script on 2026-09-23. It
-#: shares its `/proc` read with `runtime_sweep.py`, which is why it is a module
-#: rather than a second reader of the same two kernel rows.
+#: The sampler itself, which stopped being a shell script on 2026-09-23.
 MEMORY_SAMPLER_MODULE: Final = "backend/utilities/memory_sampler.py"
 
 #: The two calls the work job makes. The launch is a foreground parent that
@@ -606,16 +416,13 @@ METRICS_SERIES: Final = ("llamacpp:n_busy_slots_per_decode", "llamacpp:n_tokens_
 # of only greppable in YAML.
 #
 # Keyed by a label rather than by a job, because a label names one commit step
-# wherever it lives: `bench` is a job of another workflow. Until 2026-09-28 the
-# assemble job committed twice - the day, then the closed-day fold - and the
-# fold moved to the gardener, which no longer runs it.
+# wherever it lives. Until 2026-09-28 the assemble job committed twice - the
+# day, then the closed-day fold - and the fold moved to the gardener.
 COMMIT_PROGRAM: Final = REPO_ROOT / "backend" / "utilities" / "digest_publish.py"
 
 COMMIT_PROGRAM_CALL: Final = ("python", "backend/utilities/digest_publish.py")
 
-# Which workflow each label's step lives in. `bench` is dispatched by hand, many
-# times a day, and since 2026-09-17 it pushes the machine it drew.
-#
+# Which workflow each label's step lives in.
 # The council's own commit step is deliberately absent. Every label here stages
 # paths spelled in the workflow file, which is what lets a test read them, split
 # them and run the script over a real repository. The council stages what its
@@ -626,21 +433,18 @@ COMMIT_WORKFLOWS: Final = {
     "plan": "digest.yml",
     "work": "digest.yml",
     "assemble": "digest.yml",
-    "bench": "measure.yml",
 }
 
 COMMIT_JOBS: Final = {
     "plan": "plan",
     "work": "work",
     "assemble": "assemble",
-    "bench": BENCH_SERVER_JOB,
 }
 
 COMMIT_STEPS: Final = {
     "plan": "Commit what the plan saw",
     "work": "Commit what this shard measured",
     "assemble": "Commit the day",
-    "bench": "Commit the machine this bench drew",
 }
 
 #: The step that gives this job a current state root to read. `actions/checkout`
@@ -748,11 +552,6 @@ FINGERPRINT_COMMAND: Final = "python backend/utilities/digest_publish.py run fin
 FINGERPRINT_JOB_FLAG: Final = "--job"
 
 FINGERPRINT_JOBS: Final = {"plan": "plan", "work": "work", "assemble": "assemble"}
-
-# The bench draws a machine too, and it says so in its own words because its row
-# goes somewhere else. `measure.yml` is dispatched by hand against unmerged
-# branches, so its rows live under the trial root.
-FINGERPRINT_BENCH_JOB: Final = "runtime"
 
 # The two-row fixture the reader is driven over: one `work` row and one
 # `visuals` row, sharing a date, a run and a shard index. Fixed in size, and it
@@ -981,7 +780,7 @@ def _stages_a_state_path(workflow: dict[str, object]) -> bool:
     for body in _run_bodies(workflow):
         if re.search(
             r"(?:digest_publish\.py (?:plan|work|assemble)|"
-            r"record_publish\.py land (?:measure|validate)|"
+            r"record_publish\.py land backfill|"
             r"council_publish\.py|gardener_publish\.py|pipeline_test_publish\.py)",
             body,
         ):
@@ -1662,9 +1461,7 @@ def _shared_download_jobs(
 
     Computed rather than listed, from the two questions that together settle it:
     does the job download a `.gguf` at all, and is its fetch step one call to a
-    shared thing rather than a download written by hand. `measure.yml`'s four
-    inline jobs answer yes then no, so they fall out - which is why every rule
-    scoped to this set says nothing about them.
+    shared thing rather than a download written by hand.
 
     A step that calls the shared download through a composite action counts:
     `_steps` resolves the action in place, so an extraction does not empty this.
@@ -1885,18 +1682,13 @@ def _substitute(text: str) -> str:
 def _commit_call(label: str) -> tuple[list[str], dict[str, str]]:
     """The paths and the strings one commit step hands the shared program.
 
-    The call is read from the one logical line of the step that makes it, because
-    a step may guard it: the bench stages its folder only when its probe wrote one.
+    The call is read from the one logical line of the step that makes it.
     """
     workflow = _load_workflows()[COMMIT_WORKFLOWS[label]]
     job_name = COMMIT_JOBS[label]
     step = _step(workflow, job_name, "name", COMMIT_STEPS[label])
     script = _script(step, f"job {job_name} commit step {label}")
-    program = (
-        ("python", "backend/utilities/record_publish.py")
-        if label == "bench"
-        else COMMIT_PROGRAM_CALL
-    )
+    program = COMMIT_PROGRAM_CALL
     calls = [
         words
         for line in _logical_shell_lines(script)
@@ -1910,12 +1702,8 @@ def _commit_call(label: str) -> tuple[list[str], dict[str, str]]:
 
 def _publication_scopes(label: str) -> list[str]:
     from utilities.digest_publish import permissions
-    from utilities.record_publish import POLICIES
 
     argv, _ = _commit_call(label)
-    if label == "bench":
-        assert argv[:2] == ["land", "measure"]
-        return list(POLICIES["measure"][1])
     assert argv[0] == label
     return list(permissions(label, date=SUBSTITUTED_DATE))
 

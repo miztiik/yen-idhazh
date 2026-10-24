@@ -12,9 +12,8 @@ different claim from no reading. It also ends the whole class of defect the old
 reader was written against: a key is a key wherever it sits on the line, so no
 column can move.
 
-The `/proc` read is shared with `runtime_sweep.py`, which has sampled a server
-the same way since before this was a script. `read_status` is that one read, and
-the dict it hands back is a bench payload's shape rather than this module's.
+The `/proc` read is isolated in `read_status`; both the live sampler and its
+summary use the same process fields.
 
 **Both marks, for python as well as for llama-server.** llama-server is not the
 whole job: the stage that reads the feeds, extracts the text and scores the
@@ -117,10 +116,8 @@ ARGV_FIELDS: Final = slice(1, 4)
 def read_status(pid: int, *, proc_root: Path = PROC) -> dict[str, str]:
     """The process's resident set, as the kernel reports it this second.
 
-    `runtime_sweep.py` calls this too and keeps what it returns, so the values
-    carry the kernel's own `kB` suffix: `measure_llm.py` parses them back out of
-    a committed bench summary, which makes this dict a payload shape rather than
-    a convenience.
+    The values keep the kernel's own `kB` suffix so a saved sample never loses
+    the unit the kernel reported.
 
     Nothing at all when the read does not land. Checking that the file is there
     first cannot make the read safe, and that check was the defect: the kernel

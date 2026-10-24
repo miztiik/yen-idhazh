@@ -1,6 +1,6 @@
 # How the query door answers a panel
 
-**Last Updated**: 2026-10-23
+**Last Updated**: 2026-10-24
 
 The query door is the one module a console panel calls to read a committed
 ledger: `slice()` for rows and `ledgerReach()` for how far a ledger reaches, both
@@ -375,7 +375,8 @@ not the current compact-only output. The whole built site
 weighed 160,958,761 bytes, or 153.5 MB, beside the 1,073,741,824-byte Pages cap.
 That leaves 870.5 MB before GitHub Pages refuses the deploy. The compact ledger
 files under `build/state/compact/` weighed 15,809,007 bytes, or 15.1 MB, in all:
-`candidate-models` 87,319 bytes, `counterfactual-scores` 828,742 bytes,
+the now-removed `candidate-models` ledger 87,319 bytes,
+`counterfactual-scores` 828,742 bytes,
 `host-fingerprint` 357,233 bytes, `item-health` 4,349,116 bytes, `published`
 947,535 bytes, `seen` 4,560,565 bytes and `summary-quality-evals` 4,678,487
 bytes. The raw-day tier added these listings and writer files:

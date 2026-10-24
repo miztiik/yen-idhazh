@@ -130,7 +130,7 @@ def test_partial_collector_fetches_only_named_inputs_and_matches_full_output(
     assert git(full, "rev-parse", "HEAD").strip() == base
     before_patterns = (sparse / ".git" / "info" / "sparse-checkout").read_bytes()
     monkeypatch.setenv("GIT_NO_LAZY_FETCH", "1")
-    remote = Repository(origin)
+    remote = Repository(origin, git_dir=origin)
     blobs = {
         path: git(origin, "rev-parse", base + ":" + path).strip()
         for path in files
@@ -170,8 +170,9 @@ def test_partial_collector_fetches_only_named_inputs_and_matches_full_output(
     assert collect(full, monkeypatch) == 0
     for path, content in sparse_outputs.items():
         assert (full / path).read_bytes() == content
-        entry = Repository(full_origin).entry("main", path)
-        assert entry is not None and Repository(full_origin).blob(entry.oid) == content
+        entry = Repository(full_origin, git_dir=full_origin).entry("main", path)
+        assert entry is not None
+        assert Repository(full_origin, git_dir=full_origin).blob(entry.oid) == content
     receipts = [
         PublicationReceipt.read(path)
         for path in (sparse / "backend" / "var" / "council" / "publication").iterdir()
@@ -250,7 +251,7 @@ def test_undeclared_read_cannot_fetch_and_completed_sibling_still_lands(
     monkeypatch.setenv("GIT_NO_LAZY_FETCH", "1")
     assert not blob_available(sparse, oid)
     assert not (sparse / FORBIDDEN).exists()
-    remote = Repository(origin)
+    remote = Repository(origin, git_dir=origin)
     assert remote.entry("main", "state/results/first-judge/" + DATE + ".txt") is None
     output_path = "state/results/second-judge/" + DATE + ".txt"
     entry = remote.entry("main", output_path)
