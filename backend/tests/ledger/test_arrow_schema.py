@@ -14,7 +14,7 @@ from typing import Annotated, Any, ClassVar, Literal, cast
 from uuid import UUID
 
 import pytest
-from conftest import REPO_ROOT
+from conftest import CONTRACT_FIXTURES_DIR, read_text
 from pydantic import Field
 
 from idhazh.contracts.base import (
@@ -506,11 +506,26 @@ def test_recursive_arrow_schema_keeps_nested_nullability() -> None:
     )
 
 
-def test_ledger_engines_and_door_have_no_run_plan_special_case() -> None:
-    paths = [
-        REPO_ROOT / "backend" / "idhazh" / "ledger" / name
-        for name in ("arrow_schema.py", "parquet.py", "json_lines.py", "persist.py")
-    ]
+def test_run_plan_values_round_trip_through_each_generic_ledger_engine(
+    tmp_path: Path,
+) -> None:
+    """Both engines write and validate the real nested contract values."""
+    from idhazh.contracts.file_envelope import Compression
+    from idhazh.ledger import json_lines, parquet
 
-    for path in paths:
-        assert "RunPlan" not in path.read_text(encoding="utf-8"), path
+    row = RunPlan.from_json(read_text(CONTRACT_FIXTURES_DIR / "run-plan" / "one-day.json"))
+    cells = row.model_dump(mode="json")
+    envelope = {b"test": b"generic-engine"}
+
+    parquet_rows = parquet.read(
+        parquet.render(
+            columns_of(RunPlan),
+            [cells],
+            envelope=envelope,
+            compression=Compression.NONE,
+        )
+    )[1]
+    json_line_rows = json_lines.read(json_lines.render([cells], envelope=envelope))[1]
+
+    assert [RunPlan.model_validate(cells) for cells in parquet_rows] == [row]
+    assert [RunPlan.model_validate(cells) for cells in json_line_rows] == [row]

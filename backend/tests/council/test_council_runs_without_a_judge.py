@@ -7,13 +7,13 @@ runs against tenants this test wrote, with no judge anywhere in the call.
 
 from __future__ import annotations
 
+import json
 import time
 from collections.abc import Iterator
 from pathlib import Path
 from typing import Final
 
 import pytest
-from conftest import CONFIG_DIR
 
 from idhazh import config, ledger
 from idhazh.contracts.council_run_record import (
@@ -26,7 +26,7 @@ from idhazh.contracts.ledger_name import LedgerName
 from idhazh.council import night_plan, registry, run_identity, session
 
 from . import _imports
-from ._config import write_declarations
+from ._config import copy_config, write_declarations
 from ._imports import imported_at_import_time, module_file, static_routes
 from ._tenants import a_belated_venue, a_venue, forget, written
 
@@ -231,21 +231,30 @@ def venue(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[Path]:
     forget(A_VENUE)
 
 
-def _council(root: Path, *slugs: str, repair_dates: int = 1) -> CouncilConfig:
-    """The committed council block with a tenant list this test decides.
-
-    The knobs are the repository's own, so a night here is bounded by the clock
-    a real night is bounded by. Only the guest list and how many older nights
-    ride along are this test's.
-    """
-    committed = config.load_council(CONFIG_DIR)
-    council = committed.model_copy(
-        update={"judge_names": tuple(slugs), "repair_dates_a_night": repair_dates}
-    )
-    target = root / "config"
-    target.mkdir(exist_ok=True)
+def _council(
+    root: Path,
+    *slugs: str,
+    repair_dates: int = 1,
+    first_night: str | None = None,
+    repair_window_nights: int | None = None,
+    shards: int | None = None,
+) -> CouncilConfig:
+    """Load this test's registered tenants and any authored planning controls."""
+    target = copy_config(root)
     write_declarations(target, tuple(slugs))
-    council.bind_declarations(config.load_judge_declarations(target, council))
+    path = target / "llm_council.json"
+    raw = json.loads(path.read_text(encoding="utf-8"))
+    raw["judge_names"] = list(slugs)
+    raw["repair_dates_a_night"] = repair_dates
+    for name, value in (
+        ("first_night", first_night),
+        ("repair_window_nights", repair_window_nights),
+        ("shards", shards),
+    ):
+        if value is not None:
+            raw[name] = value
+    path.write_text(json.dumps(raw, indent=2), encoding="utf-8", newline="\n")
+    council = config.load_council(target)
     return council
 
 
@@ -291,24 +300,38 @@ def test_two_tenants_union_their_nights_and_keep_their_own_width(venue: Path) ->
     reads newest first, and that each tenant is sized by its own `shard_count`
     rather than by whichever one the venue asked first.
     """
-    both = ("2026-09-22", "2026-09-23")
-    a_belated_venue(venue, package=A_VENUE, slug=A_SLUG, behind_on=both, shard_count=2)
+    a_belated_venue(
+        venue, package=A_VENUE, slug=A_SLUG, behind_on=("2026-09-25",), shard_count=2
+    )
     a_belated_venue(
         venue,
         package=A_VENUE,
         slug=ANOTHER_SLUG,
-        behind_on=("2026-09-23", "2026-09-21"),
+        behind_on=("2026-09-25", "2026-09-24", "2026-09-23"),
         shard_count=3,
     )
-    council = _council(venue, A_SLUG, ANOTHER_SLUG, repair_dates=3)
+    council = _council(
+        venue,
+        A_SLUG,
+        ANOTHER_SLUG,
+        repair_dates=3,
+        first_night="2026-09-24",
+        repair_window_nights=6,
+        shards=5,
+    )
+    assert (council.first_night, council.repair_window_nights, council.shards) == (
+        "2026-09-24",
+        6,
+        5,
+    )
 
     hosted = registry.tenants(council.running())
     planned = night_plan.plan_the_night(council, tonight=TONIGHT, hosted=hosted)
 
     assert [host.judge_id for host in hosted] == [A_SLUG, ANOTHER_SLUG]
     assert {judge.tenant: judge.dates for judge in planned.judges} == {
-        A_SLUG: (TONIGHT, "2026-09-23", "2026-09-22"),
-        ANOTHER_SLUG: (TONIGHT, "2026-09-23", "2026-09-21"),
+        A_SLUG: (TONIGHT, "2026-09-25"),
+        ANOTHER_SLUG: (TONIGHT, "2026-09-25", "2026-09-24"),
     }
     assert [session.shard_width(council, host) for host in hosted] == [2, 3]
 
@@ -327,7 +350,7 @@ def test_the_venue_runs_a_shard_under_its_own_clock_and_files_the_row(venue: Pat
         slugs={A_SLUG: (2, ("state/a-judgeless-ledger",))},
         poisoned_neighbour="a-broken-unrequested-tenant",
     )
-    council = _council(venue, A_SLUG)
+    council = _council(venue, A_SLUG, shards=3)
     state_root = venue / "state"
     run_id = run_identity.council_run_id(opened_on=TONIGHT, platform_run_id=A_PLATFORM_RUN)
     opened = time.monotonic()

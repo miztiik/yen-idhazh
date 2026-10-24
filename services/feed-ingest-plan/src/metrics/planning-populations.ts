@@ -1,8 +1,8 @@
 /** Which complete recorded planning attempt supplies one day's measured populations? */
 import { isDeepStrictEqual } from "node:util";
 import {
-  ArticleAssessmentRecordSchema, CONTRACT_VERSION, CandidateRejectionRecordSchema, CandidateRejectionContract,
-  EditorialSelectionRowSchema,
+  ArticleAssessmentRecordSchema, CandidateRejectionRecordSchema, CandidateRejectionContract,
+  EditorialSelectionContract, EditorialSelectionRowSchema,
 } from "@idhazh/common-contracts";
 import type { LedgerRowContract } from "@idhazh/ledger-file-writer";
 import type { SourceRunRecord } from "@idhazh/common-contracts";
@@ -45,7 +45,7 @@ export async function readPlanningHistory(input: NamedPlanningHistory): Promise<
   const [assessments, diversity, selections, dispatches, rejections] = await Promise.all([
     read("article-assessments", ArticleAssessmentContract),
     read("diversity", DiversityMetricContract),
-    read("editorial-selections", { schema: EditorialSelectionRowSchema, schemaVersion: CONTRACT_VERSION }),
+    read("editorial-selections", EditorialSelectionContract),
     read("dispatches", DispatchContract), read("rejections", CandidateRejectionContract),
   ]);
   return { sources, ledgers: { "article-assessments": assessments, diversity, "editorial-selections": selections, dispatches, rejections } };

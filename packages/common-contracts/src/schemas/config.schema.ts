@@ -29,6 +29,9 @@ export const FeedSoftCapsSchema = z.strictObject({
 });
 export const FeedCurateConfigSchema = FeedCurationPolicySchema.extend({
   article_limit: PositiveCountSchema.nullable(),
+  source_reliability_penalty_enabled: z.boolean().default(true).describe(
+    "Apply measured source reliability separately from article quality. Remove this switch and its disabled path when isolated selection becomes the sole planner.",
+  ),
   soft_caps: FeedSoftCapsSchema,
   exploration_slot_share: z.number().finite().min(0).max(1),
 });

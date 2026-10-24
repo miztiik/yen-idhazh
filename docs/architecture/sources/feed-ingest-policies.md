@@ -1,6 +1,6 @@
 # Feed ingest planning policies
 
-**Last Updated**: 2026-10-23
+**Last Updated**: 2026-10-24
 
 Which settings does the isolated feed planner apply to a candidate?
 The operator edits `config/feed-ingest-plan.json`. This does not change the
@@ -77,12 +77,15 @@ Known headline matches fill `candidate.labels.lenses` and `entities`, with
 empty list. No original headline or no supplied vocabulary is unknown, not a
 negative observation. Assigned desk, event types and event cluster remain
 unknown; a headline match is not a later full-article tag or classifier verdict.
-Publisher, parent domain, operational history, primary evidence and prior
-coverage also remain unknown unless their existing evidence owner supplies them.
+Publisher, parent domain, primary evidence and prior coverage remain unknown
+unless their existing evidence owner supplies them. The runner supplies
+operational history from the [native feed-history reader](planner-feed-history.md);
+it does not infer source history from headline labels.
 
 These lists now reach the existing MMR lens and entity repetition penalties.
 MMR selects the next article after subtracting configured overlap penalties.
-Its formula, coefficients, source allowances, quotas and caps are unchanged.
+Those coefficients, source allowances, quotas and caps are unchanged. The
+independent reliability term is defined in [curation](feed-curation.md).
 Replacing unknown lists with real matching lists can change selection order:
 an article repeating a previously selected headline theme or entity can lose
 to a different article under the same coefficients. The existing recorded
@@ -136,6 +139,15 @@ order, and exploration share apply to the whole selection. A null article limit
 means no additional run-wide cap. Partition settings, storage prefixes and
 compression, and metrics windows are not candidate policies.
 
+`curate.source_reliability_penalty_enabled` defaults to true for the isolated
+planner. False removes the reliability term from carrier choice, source
+normalization and greedy ranking without dropping its measured history.
+It is global, not a vertical patch. The only numeric controls remain
+`collect.reliability_floor` and `collect.reliability_window_days` in
+`config/idhazh.json`; their native meanings do not change.
+Remove the switch and disabled path when isolated selection becomes the sole
+planner. The removal condition is also on its native and TypeScript declarations.
+
 `workflow_reporting.enabled` defaults to true and controls only the external
 reporting adapter. It must not disable planning, events, metrics, or ledger
 writes. Its removal condition is recorded beside the key in configuration and
@@ -150,6 +162,10 @@ Changing one vertical cannot assign contradictory global limits to a shared
 selection. Adding a taxonomy vertical and its planning patch needs configuration
 edits only; a new algorithm still needs code. No label-specific branches or
 expression language are used.
+
+The source-reliability switch and its enabled default follow the owner's
+[2026-10-24 A1 approval](feed-curation.md#design-rationale). It controls one
+separate operational term, not a renamed quality weight or a source cap.
 
 The bounded policy tests compare exact resolved values under single-field
 changes, preserve other verticals, and check run precedence and inheritance.

@@ -10,28 +10,32 @@ measure bar widths out of a rendered SVG, because a spec holding the right
 figures only proves the compiler agreed with itself. There is no SVG to measure
 now, so the published marks are compared against the element table directly -
 the same question one step earlier, and the browser's half of it is
-`frontend/tests/item-visual.spec.ts`. And a determinism test used to assert that
-one spec rendered to identical bytes twice. It passed for the wrong reason: its
+`frontend/tests/item-visual.spec.ts`. And a repeatability test used to assert
+that one spec rendered to identical bytes twice. It passed for the wrong reason: its
 inline spec carried no title, so it emitted no clip path, and the renderer's
 clip-path counter was process-global - three renders of a titled plan in one
 process gave three different byte strings. That test is not ported. What
-replaced it is a property the data can actually carry: compiling one plan twice
-gives one document.
+replaced it is same-process repeatability: compiling one plan twice gives one
+document. It does not claim independence from the process hash seed.
 """
 
 from __future__ import annotations
 
+import builtins
 import json
 import logging
+import re
 from decimal import Decimal
 from pathlib import Path
 from typing import Final
 
 import pytest
 from conftest import CONFIG_DIR, CONTRACT_FIXTURES_DIR, FIXTURES_DIR, read_text
+from pydantic import TypeAdapter, ValidationError
 
 from idhazh import telemetry
 from idhazh.contracts.app_config import AppConfig
+from idhazh.contracts.base import ItemId
 from idhazh.contracts.digest_day import DigestDay
 from idhazh.contracts.element import ElementTable
 from idhazh.contracts.item_health import ItemStage
@@ -99,21 +103,29 @@ class TestCompiledBar:
     """
 
     def test_every_bar_carries_the_figure_the_article_states(self) -> None:
-        """The oracle: the published length of a bar is the element's own number.
-
-        A bar built from another story's figure, a channel read in the wrong
-        order, or a mark whose length came from anywhere but the table fails
-        here. It is an equality rather than a ratio because the compiler
-        publishes the article's own characters: a drawing scales them and the
-        data may not.
-        """
+        """The plan controls bar order, and each bar keeps its article's figure."""
         table = ElementTable.read(BAR_TABLE)
         plan = VisualPlan.read(BAR_PLAN)
+        encodings = plan.encodings.model_dump(mode="json")
+        reversed_plan = VisualPlan.model_validate(
+            plan.model_dump(mode="json")
+            | {
+                "encodings": encodings
+                | {
+                    "category": list(reversed(plan.encodings.category)),
+                    "quantity": list(reversed(plan.encodings.quantity)),
+                }
+            }
+        )
         stated = {element.element_id: element for element in table.elements}
-        wanted = [Decimal(str(stated[cited].value)) for cited in plan.encodings.quantity]
-        named = [stated[cited].span_excerpt for cited in plan.encodings.category]
+        wanted = [
+            Decimal(str(stated[cited].value)) for cited in reversed_plan.encodings.quantity
+        ]
+        named = [
+            stated[cited].span_excerpt for cited in reversed_plan.encodings.category
+        ]
 
-        names, figures = compiled_bars(table, plan)
+        names, figures = compiled_bars(table, reversed_plan)
 
         assert names == named
         assert figures == wanted
@@ -177,21 +189,31 @@ class TestCompiledBar:
         compiled = compile_bar(plan, table, visuals=committed_visuals())
 
         stated = {element.element_id: element for element in table.elements}
-        for cited in plan.encodings.quantity:
-            assert f"{Decimal(str(stated[cited].value)):,f}" in compiled.alt_text
+        numbers = [
+            Decimal(number.replace(",", ""))
+            for number in re.findall(
+                r"(?<![\w,])[+-]?\d+(?:,\d{3})*(?:\.\d+)?(?![\w,])",
+                compiled.alt_text,
+            )
+        ]
+        expected = [
+            Decimal(str(stated[cited].value))
+            for cited in plan.encodings.quantity
+        ]
+        assert numbers == expected
         for cited in plan.encodings.category:
             assert stated[cited].span_excerpt in compiled.alt_text
 
     def test_compiling_one_plan_twice_gives_one_document(self) -> None:
-        """What replaced the renderer's determinism test, and it can fail.
+        """Repeated compilation in one process must keep the data unchanged.
 
         The old one rendered an untitled spec twice in one process and compared
         bytes. It could not see the defect it was named for: Vega's clip-path
         counter was process-global, so a titled plan's bytes depended on where
         its item sat in the render order, and an untitled spec emits no clip
-        path at all. This one is about the data, which is where determinism
-        moved - and a compile that reached for a clock, a counter or a set
-        iteration order would fail it.
+        path at all. This one catches a clock or counter that changes between
+        calls. It does not test whether output is independent of the process hash
+        seed.
         """
         table = ElementTable.read(BAR_TABLE)
         plan = VisualPlan.read(BAR_PLAN)
@@ -202,8 +224,8 @@ class TestCompiledBar:
         assert once.data.to_json() == twice.data.to_json()
         assert once.alt_text == twice.alt_text
 
-    def test_a_plan_that_asks_for_no_picture_compiles_to_none(self) -> None:
-        with pytest.raises(CompileError):
+    def test_a_plan_that_asks_for_no_picture_is_refused_with_its_reason(self) -> None:
+        with pytest.raises(CompileError, match="this plan asks for no picture"):
             compile_bar(
                 VisualPlan.read(PLAN_FIXTURES / "declines.json"),
                 ElementTable.read(BAR_TABLE),
@@ -255,11 +277,34 @@ class TestPublishedData:
         title - `title` and `caption` are the model's authored strings, and a
         compiler that smuggled one in would put an authored string on the wire.
         """
-        document = self._compiled().to_json()
+        plan = VisualPlan.model_validate(
+            VisualPlan.read(BAR_PLAN).model_dump(mode="json")
+            | {
+                "title": "Authored plan heading 8391",
+                "caption": "Authored plan caption 2746",
+            }
+        )
+        compiled = compile_bar(
+            plan,
+            ElementTable.read(BAR_TABLE),
+            visuals=committed_visuals(),
+        ).data
+        document = compiled.to_json()
 
-        assert self._compiled().type is VisualType.BAR
-        assert self._compiled().renderer_version == RENDERER_VERSION
-        for drawn in ("width", "height", "background", "fontSize", "colour", "color", "title"):
+        assert compiled.type is VisualType.BAR
+        assert compiled.renderer_version == RENDERER_VERSION
+        for drawn in (
+            "width",
+            "height",
+            "background",
+            "fontSize",
+            "colour",
+            "color",
+            "title",
+            "caption",
+            "Authored plan heading 8391",
+            "Authored plan caption 2746",
+        ):
             assert drawn not in document, f"the published data carries {drawn}, which is not data"
 
     def test_every_published_mark_states_where_its_figure_came_from(self) -> None:
@@ -469,7 +514,10 @@ class TestRenderPlannedVisual:
             "model_id": "qwen3-4b",
         }
         assert envelope["data"]["visual_state"] == VisualState.RENDER_FAILED.value
-        assert envelope["data"]["error_type"]
+        error_type = envelope["data"]["error_type"]
+        error_class = getattr(builtins, error_type, None)
+        assert isinstance(error_class, type)
+        assert issubclass(error_class, OSError)
         # `failure_detail` is an `UntrustedLine` by type. A typed exception name
         # and a closed enum value are what may leave the process (Guardrail #11),
         # and this is the assertion that notices when prose starts to.
@@ -524,6 +572,10 @@ class TestAssetPaths:
         }
         assert f"{DAY}/digest.json" not in named
         assert f"{DAY}/run.json" not in named
+        item_ids = TypeAdapter(ItemId)
+        for reserved in ("digest", "run"):
+            with pytest.raises(ValidationError):
+                item_ids.validate_python(reserved)
 
     def test_two_items_can_never_share_a_path(self) -> None:
         """The whole point of naming from identity rather than from a counter.
@@ -540,13 +592,16 @@ class TestAssetPaths:
         paths = {asset_relpath("2026-08-22", item_id) for item_id in ids}
         assert len(paths) == len(ids)
 
-    def test_the_path_depends_on_nothing_a_process_can_observe(self, tmp_path: Path) -> None:
+    def test_the_path_depends_on_nothing_a_process_can_observe(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """A second run, a second shard and an empty checkout all agree.
 
         The old counter was seeded by reading the day's directory, so what a
         process saw on disk decided what it wrote. Two runs saw different
         directories and wrote one path.
         """
+        monkeypatch.chdir(tmp_path)
         folder = tmp_path / "digest" / "2026" / "08" / "22"
         folder.mkdir(parents=True)
         for name in ("india-0000000001.json", "ai-0000000009.json"):
@@ -650,4 +705,4 @@ class TestWriteChartsFromDecisions:
         with pytest.raises(ValueError, match=refusal):
             write_charts_from_decisions(day, [decision], public_root=tmp_path)
 
-        assert not (tmp_path / asset_relpath(day.date, CHARTED_ITEM)).exists()
+        assert not (tmp_path / "digest").exists()

@@ -93,6 +93,14 @@ test("recorded operational evidence keeps its attempts and window separate from 
     },
   ]));
   try {
+    await expect(runFeedPlan({ partition_strategy: "none" }, recorded.inputs, recorded.runtime))
+      .rejects.toThrow("supplied and native evidence disagree");
+    recorded.runtime.evidence = new Map([...recorded.runtime.evidence!].map(([id, evidence]) => [id, {
+      ...evidence, operational: {
+        success_fraction: 1, attempted: 1,
+        window_days: recorded.inputs.clock_config.collect.reliability_window_days,
+      },
+    }]));
     const result = await runFeedPlan({ partition_strategy: "none" }, recorded.inputs, recorded.runtime);
     const [summary] = deriveSourceRunSummaries(result, reconcileStageMembership(result));
     expect(summary).toMatchObject({
@@ -100,10 +108,13 @@ test("recorded operational evidence keeps its attempts and window separate from 
       history_window_days: recorded.inputs.clock_config.collect.reliability_window_days,
     });
     for (const measurement of result.evidence.curation.quality) {
-      expect(measurement.operational).toEqual({ success_fraction: 0.5, attempted: 4, window_days: 7 });
+      expect(measurement.operational).toEqual({
+        success_fraction: 1, attempted: 1, window_days: recorded.inputs.clock_config.collect.reliability_window_days,
+      });
       expect(measurement.base_article_score).toBe(measurement.components.authority + measurement.components.recency);
       expect(measurement.article.informative_verdict).toBeNull();
     }
+    expect(result.evidence.curation.rows.every(row => row.ratings.source_reliability?.value === 0)).toBe(true);
     const membership = reconcileStageMembership(result);
     const article = result.evidence.curation.input[1]!;
     result.evidence.curation.input[1] = {

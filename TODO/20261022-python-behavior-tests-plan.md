@@ -79,12 +79,14 @@ Table D - PR outcomes
 | D21 | 21 | Prove ledger dates and named-plan reads | 1 | T | DONE | prove-ledger-date-selection | [#1675](https://github.com/miztiik/yen-idhazh/pull/1675), merged at `31a689f073d602e75870f7fa48da72d3043f6c13` | - |
 | D22 | 22 | Configured council planning and collection job deadlines | 1 | U | IN-FLIGHT | configure-council-job-deadlines | - | - |
 | D23 | 23 | Independent qualification and planning controls | 1 | V | IN-FLIGHT | prove-planning-controls-independently | [#1683](https://github.com/miztiik/yen-idhazh/pull/1683) | - |
-| D24 | 24 | Independent council test controls | 17 | W | IN-FLIGHT | prove-council-controls-independently | - | - |
+| D24 | 24 | Independent council test controls | 17 | W | IN-FLIGHT | prove-council-controls-independently | [#1688](https://github.com/miztiik/yen-idhazh/pull/1688) | - |
 | D25 | 25 | Concrete remaining gardener and ledger safety proofs | 24 | X | IN-FLIGHT | strengthen-gardener-safety-proofs | - | - |
-| D26 | 26 | Prove time boundaries without stand-ins | 21, 25 | Y | IN-FLIGHT | prove-time-boundaries-without-stand-ins | - | - |
+| D26 | 26 | Prove time boundaries without stand-ins | 21, 25 | Y | IN-FLIGHT | prove-time-boundaries-without-stand-ins | [#1679](https://github.com/miztiik/yen-idhazh/pull/1679) | - |
 | D27 | 27 | Explicit offline gardener collection controls | 17, 26 | Z | IN-FLIGHT | control-gardener-host-collection | - | - |
 | D28 | 28 | Independent prefix normalization arithmetic | 1, 27 | AA | IN-FLIGHT | prove-vector-arithmetic | - | - |
 | D29 | 29 | Populated registry values and mandatory real CSV reader | 1, 28 | AB | IN-FLIGHT | close-contract-proof-gaps | - | - |
+| D30 | 30 | Native tagging-term acceptance and refusal | 1, 29 | AC | IN-FLIGHT | validate-tagging-terms | - | - |
+| D31 | 31 | Bind declared UI defaults to their consumers | 1, 17, 30 | AD | IN-FLIGHT | bind-ui-default-consumers | - | - |
 
 The canary implementation for Row 3 is delivered separately from its suite-wide
 review obligation. Rows 5 and 6 carry additional changes found by that review.
@@ -1352,24 +1354,41 @@ counts use the untouched archive and the completed branch instead.
   subject floor. Snapshot the caller's populated list and model values before
   selection. Keep score-versus-input ordering, public-day preservation,
   eligibility, provenance, true reasons and historical reads. Exercise the
-  12/13 wording edge with valid test-owned counts.
+  12/13 wording edge with valid test-owned counts. Compose real rank output
+  with lead selection to prove the committed carriage step beats a qualifying
+  shared-subject term. Give the neutral comparison a strict native rank
+  advantage so the zero-weight control proves that subject term is active
+  without relying on tie order.
 - **Visual behavior:** Reverse both channels in a valid plan and derive the
-  expected marks from that plan and its table. Compare complete alt-text
-  number tokens to the source values. Keep published-data, provenance,
-  portability, output-failure and identity checks. Require the named no-picture
+  expected marks from that plan and its table. Compare signed alt-text numeric
+  values as `Decimal` values with independent values from the element table.
+  Keep published-data, provenance, portability, output-failure and identity
+  checks. Require the named no-picture
   refusal, assert authored title and caption do not enter data, validate the
   reserved item names through `ItemId`, set the test directory as the real
   working directory, and prove a rejected write leaves no output tree.
 - **Evidence at freeze:** Against `c10fd2f03e90cad07fdd400cc55a72ef9042d2d8`,
   the two modules collected 70 cases across 66 test functions. The new
-  freshness and weighted-signal cases add two functions; the count boundary
-  adds one case; one test name is corrected. No behavior test is removed.
-  The exact collected ids and source hashes are in the worker report.
-  `npm run test:changed -- --list` selected exactly these two backend modules.
-  The selected gate is queued on the shared gate lock; its result and the
-  disposable production-fault proofs are pending and are not represented as
-  passes. Fault copies must use the copied code and fail at the intended
-  assertions.
+  freshness, weighted-signal and rank-to-lead composition cases add three
+  functions; the count boundary adds one case; one test name is corrected. No
+  behavior test is removed. The exact collected ids and source hashes are in
+  the worker report. `npm run test:changed -- --list` selected exactly these
+  two backend modules. The first selected run reported 72 passes and one
+  failure because the freshness comparison shared a publication id and was
+  capped; the test now gives each story a distinct id. At freeze, the final
+  selected gate and copied-production fault proofs were pending.
+- **Post-freeze evidence:** The selected gate on
+  `1d7b57d88e7dd09c3a1fedf939cf3fb67f734163` passed whitespace, Ruff, mypy
+  (832 source files) and 74 tests. Its record is
+  `backend/var/checks/2929ab1d06597361872200f1a749454f9490f70614ff8beaf1d404b18da6e5a5.json`.
+  After the alt-text sign correction, its focused test passed and a copied
+  `chart.py` sign-flip failed at the independent Decimal comparison, with
+  controls passing before and after and the source hash restored. The receipt
+  is in the worker report. The six remaining copied-production faults then
+  failed at their intended assertions with controls passing before and after
+  and copied source hashes restored. Their receipt is
+  `row20-fault-proofs-selected.json` in the worker session files. Unchanged
+  tests and fault proofs were not rerun for the subsequent plan-only merge.
 - **Plan integration:** Verified and imported the complete frozen Row 19
   predecessor, 102,543 bytes, SHA-256
   `094f4dce4c63088201bc1120bbe9f58d5b69a837938c074962ee3bebf77eeaa7`.
@@ -1680,10 +1699,12 @@ Table F - Controls, expected behavior and rejected faults
   final proof receipt. The independent source diff is `row24-source-diff.patch`,
   13,324 bytes, SHA-256
   `eda228338a5dce3d2bb06db238111d70a0c1cc24c497ac13519b6e21ef7f8f2a`.
-  Row 17 is the source dependency and has not yet merged, so no Row 24 PR head
-  exists. After its merge, verify the GitHub merge receipt and equivalent
-  source changes, merge current `main` normally into this branch, then open the
-  Row 24 phase PR. Do not merge the Row 24 PR.
+  Row 17 merged through [#1682](https://github.com/miztiik/yen-idhazh/pull/1682)
+  at `e3433f078fc74c82dbfa7729c3876204c3958550`; its required source is present
+  on `main`. Current `main` was integrated by normal merge commit
+  `243d036aa1f5191806e62d0a4a244bd3427e2a6d`. The authorized Row 24 phase PR
+  is [#1688](https://github.com/miztiik/yen-idhazh/pull/1688); it remains open
+  for review and required checks.
 - **Dependencies:** Row 17; Row 23 is the required exact plan predecessor, not
   a gate dependency.
 
@@ -1705,13 +1726,17 @@ Table F - Controls, expected behavior and rejected faults
 
 Table G - Finding identity and exact source hashes
 
-| ID | Finding and disposition | Original -> survivor pytest identifier | Original function SHA-256 | Row 25 function SHA-256 |
+The function hashes below identify the source at the first frozen Row 25
+release. Post-freeze review corrections and current file hashes are recorded
+in the final evidence below; the immutable release artifact is unchanged.
+
+| ID | Finding and disposition | Original -> survivor pytest identifier | Original function SHA-256 | Frozen Row 25 function SHA-256 |
 | --- | --- | --- | --- | --- |
 | G1 | S1 - REWRITE | new -> `test_schedule.py::test_non_utc_instants_use_the_utc_day_at_the_eligibility_boundary`; new -> `test_non_utc_instants_use_the_utc_month_at_the_eligibility_boundary` | - | `bc88b797bea0f4db18cb83c4ad2069973a6c6c7b25be853705e38bd11818fa77`; `95284130e40736c6bada5cef581c0230c9cb97296ac8449eaaba17f3e5956869` |
-| G2 | R1 - REWRITE and rename | `test_report.py::test_no_sentence_a_task_can_be_told_says_a_member_is_gone` -> `test_guidance_and_recovery_notes_make_no_completed_removal_claim` | `fd4fb35a48e0be1b3633de93d93f9724c798f81f7dd69cf3a7cbd274d49b234d` | `f1e289edbf8b62ec47d77aecafd899db030890ae29b6f1613b37695bc38954a8` |
+| G2 | R1 - REWRITE and rename | `test_report.py::test_no_sentence_a_task_can_be_told_says_a_member_is_gone` -> `test_fixed_guidance_avoids_explicit_completed_removal_forms` | `fd4fb35a48e0be1b3633de93d93f9724c798f81f7dd69cf3a7cbd274d49b234d` | `f1e289edbf8b62ec47d77aecafd899db030890ae29b6f1613b37695bc38954a8` |
 | G3 | R2 - REWRITE | `test_report.py::test_every_word_a_record_or_a_line_can_hold_has_a_sentence_a_person_reads` -> same | `20b6214c71d3f3a5327c1f801a8b9f5fd58c41dfabc033f4880c80b7ff450c2b` | `fd2d01317fae7563ce906dcf6b8860d7cdfa6b099caa6d85916d1fbbd5e97723` |
 | G4 | E1 - REWRITE | `test_error_cause.py::test_a_403_is_unavailable_only_when_headers_prove_exhaustion` -> same | `c3f7cddd2aacc57df8c30ee02f5f1f67bbea24090c16affd229b9e69ea7e30d9` | `39e2d1823404341389686db489e89142f642db49c20f0471354fcf6c327ac6f6` |
-| G5 | D1 - REWRITE | `test_day_removal.py::test_a_day_that_is_not_a_utc_day_is_refused_before_a_file_is_read` -> same | `8f9a1a30a261b507aa38caaa4c501802cf084dfba660a9e310a7a4527d078de1` | `37f6693439929bcac816a4a14a073149898ede5aa70833170e6d9124eb9bd04c` |
+| G5 | D1 - REWRITE | `test_day_removal.py::test_a_day_that_is_not_a_utc_day_is_refused_before_a_file_is_read` -> `test_an_invalid_utc_day_is_refused_before_a_selected_index_is_read` | `8f9a1a30a261b507aa38caaa4c501802cf084dfba660a9e310a7a4527d078de1` | `37f6693439929bcac816a4a14a073149898ede5aa70833170e6d9124eb9bd04c` |
 | G6 | L1 - REWRITE | `test_lifecycle.py::test_every_checked_route_writes_into_an_active_family`; `test_every_checked_route_writes_nothing_into_a_paused_family_and_says_so_once` -> same | `61c790f03b837784082345dbffb9910825a3bce1be5c3eb925d75388a9777d3f`; `0d62f054f49cc2a410150c6b11639ba02bfa27006afaabf82d4701045a5deb2f` | `9ca489ae10fa4d60fae0d0560f2c58e9ec089b4f7185742d4a6f2c1cc9c3037f`; `5b61bc4aac178b6a64e2f12ecbeae5494630f4bcc442855de9ccb737f5d52e8b` |
 | G7 | A1 - REWRITE and rename | `test_arrow_schema.py::test_ledger_engines_and_door_have_no_run_plan_special_case` -> `test_run_plan_values_round_trip_through_each_generic_ledger_engine` | `27164426e4b9a151e7e15dff6e070965c6afdcfb7acfa8b7b8d33cf5f7fb05b2` | `6628fffcffd7cf9de9c4fe8c151f7da63d4e9ddf2330d78bfd2fae30d96736dd` |
 | G8 | V2 - RENAME | `test_visual_pruning.py::test_a_name_inside_the_dated_tree_that_is_not_a_date_is_a_fault` -> `test_a_year_level_sibling_does_not_change_a_named_day_visual_list` | `e358047a842a553a08ee5055bdeeaa4424511a65c8bf24912a612813c17cb025` | `fcc5524760dab22eed04a702b14503446ea3385e628ad4886148e765d9e05416` |
@@ -1727,7 +1752,7 @@ Table H - Independent controls and expected behavior
 | H2 | R1 | Check guidance and recovery notes separately with a narrow completed-removal-claim pattern. A dry, failed or deferred outcome cannot state that a member, file, day or period has already been removed. Neutral next-step guidance remains allowed. |
 | H3 | R2 | Retain exact key-set coverage for every `TaskOutcome`, `GardenerFault` and `RecoveryNote`; require every associated sentence value to be a nonblank string. |
 | H4 | E1 | Build real standard-library `HTTPError` responses with canonical, lowercase and mixed-case 403 headers. Assert exact `ErrorCause`; do not parse header values or use a successful fake HTTP client. |
-| H5 | D1 | Use a regular file as the state root with invalid UTC-day strings. The invalid-day `ValueError` must win; attempting the state-directory read first produces a distinct filesystem error. Keep valid-day missing-index refusals. |
+| H5 | D1 | Put malformed content at the actual selected daily compact-index path for `CENSUS`. A valid-day control must read and refuse that exact index. Each of the three invalid UTC-day forms must instead raise the day-format `ValueError` before that index is read. Keep valid-day missing-index refusals. |
 | H6 | L1 | Redirect the actual trace sink root to test-owned state, explicitly enable tracing, open a real deterministic span, and assert the persisted JSON record. The paused-family case still expects its one warning and no file. Other lifecycle routes and their paused controls remain. |
 | H7 | A1 | Read the named `RunPlan` contract fixture, pass nested values through the generic parquet and JSON-lines render/read engines, and validate the recovered rows against the same contract. Do not claim that the ledger door accepts `RunPlan`. |
 | H8 | V2 | Add a non-date file beside, not inside, the named year/day tree. The exact visual list for the named day remains unchanged. Keep malformed selected-path refusals; do not assert that an unselected sibling must fault. |
@@ -1748,6 +1773,24 @@ Table H - Independent controls and expected behavior
   Added only D25 and this section. A5, D3 and every earlier row section remain
   intact. This full Row 25 successor is frozen and released independently of
   gates and delivery.
+- **Post-freeze review and main integration:** The immutable Row 25 artifact
+  remains 137,147 bytes with SHA-256
+  `01b4131df8482f86ec00f350a98ad157691dbee642fee71ad1c013a2a825c7d7`.
+  Source review corrections are committed through `d2430f9b2`; they clarify
+  the explicit report wording check, put a real Git member after the long
+  absent pathspecs, prove the selected-index read boundary with a malformed
+  index and valid-day control, and preserve portable typing and trace-root
+  setup. The original artifact is not regenerated. Current `origin/main`
+  `6c88f140702840e4a94339b8ac2df8e988319905` is integrated normally. This
+  integration preserves its single complete row sections and corrected Row 24
+  selection cap from the 128,439-byte release with SHA-256
+  `ccd00f55421c6e0ab687a1fc33fc04be11bcad5ffc0a4879d8af9c7850ae316c`.
+- **Final evidence:** The final changed-file selector passed Ruff, mypy over
+  834 source files, and 212 selected pytest cases. Nine copied-production
+  faults failed at their intended behavior tests; every copied source file was
+  restored to its pre-fault SHA-256. The per-fault targets, control set and
+  restoration hashes are in the session artifact
+  `row25-fault-proof-receipts.md`. These results do not claim full-suite CI.
 - **Delivery:** Open one coherent phase PR when the source and evidence are
   ready. Do not merge it. Row 26 consumes this exact frozen successor.
 - **Dependencies:** Row 24 is the required exact plan predecessor and row
@@ -1803,6 +1846,36 @@ Table I - Independent controls and expected faults
   Do not merge the Row 26 PR.
 - **Dependencies:** Row 21 owns the source prerequisite; Row 25 is the
   exact full-plan predecessor. Neither plan freeze waits for gates.
+
+- **Final local evidence:** After normal main integration at
+  `6f9a5d18d`, the three named modules collected and passed 67 cases.
+  All 61 original cases remain, accounting separately for Row 12's
+  main-delivered tokenizer-refusal rename; Row 26 adds six date cases.
+  Six copied production faults failed their intended assertions: lower
+  attempt settlement, local-day conversion, ignored operator date, removed
+  resolver call, naive callsite clock and local callsite clock. Every copied
+  module's import location was checked, each restored control passed, and
+  production source hashes matched after restoration. No collection failure
+  counts as a fault proof.
+  Removing an unregistered test marker then passed all six date cases with
+  no warnings; import spacing was normalized afterward. Ruff passed.
+  Mypy passed the initially changed three Python files and the binding
+  correction separately. The shared selector classified the utility as
+  unknown/shared and selected broad coverage; this row ran the focused
+  selection above and leaves the full suite to CI.
+- **Verified prerequisite and integration:** GitHub confirms Row 21 merged
+  at `31a689f073d602e75870f7fa48da72d3043f6c13` on
+  `2026-10-24T10:21:52Z`. Its `test_ledger.py` blob
+  `2312aab2e7fc587c7dd9a3be9ccf21bdb0e994de` matches the released source.
+  The normal merge retains every complete current-main Row 1-21 section
+  and its receipts, plus the complete later Row 22-26 sections and A5.
+  The historical 141,434-byte Row 26 freeze with SHA-256
+  `d969aaf615469d8b84e3298d861332428346aa9f5d706bea0a96d83acb54c833`
+  remains unchanged; this final evidence is not a replacement freeze.
+- **Phase delivery:** [#1679](https://github.com/miztiik/yen-idhazh/pull/1679)
+  is open against `main`. It is not merged; full-suite CI remains the
+  merge-candidate gate. The frozen Row 26 successor has already been
+  released to Row 27 independently of these delivery receipts.
 
 ## 28 - Row #27 - Explicit offline gardener collection controls
 
@@ -1865,6 +1938,35 @@ Table I - Independent controls and expected faults
   `test_runner.py` SHA-256
   `ddf22cc620c300434686a0a81f2154801d5e89dd33122de6f961f324bb88375b`.
   The source-writing slot is released independently of gates and plan handoff.
+- **Post-freeze wording correction:** Coordinator-authorized level-0 commit
+  `598e9ff49` additionally changes `backend/tests/test_silicon.py`. Rename
+  `test_the_committed_config_reads_bandwidth_on_the_bench_and_nowhere_else`
+  to `test_the_committed_config_requests_no_bandwidth_jobs` and correct only
+  its docstring: the approved empty job list disables bandwidth everywhere.
+  AST comparison confirms the exact `assert named == ()` body and every other
+  module statement remain unchanged. Ruff and whitespace checks pass. No
+  placement case, helper, default or policy changes; no unchanged silicon
+  suite rerun. The released immutable full successor remains historical.
+- **Post-freeze local results:** The bounded run of the 14 named gardener
+  modules passed all 215 cases with no failures, errors or skips. The JUnit
+  receipt is `backend/var/row27-gardener-users.xml` in the retained worktree.
+  Row 17 supplied its unchanged real placement proof receipt; the consumed
+  production `silicon.py` blob
+  `3c04fb46085421176d1750b479856ba56eb0d809` and original test module blob
+  `6501c6d18c517fd1698e02bc97b0cbc14b2a3ce9` match the Row 27 inputs.
+  Config-off, caller-off and collection-suppression faults were each detected,
+  and that runner restored its production source byte-for-byte. Reuse this
+  receipt without rerunning the unchanged fingerprint suite. Row 17 PR
+  [#1682](https://github.com/miztiik/yen-idhazh/pull/1682) is open, not merged,
+  at this receipt. No CI pass is claimed here.
+- **Delivery integration:** Row 17 PR
+  [#1682](https://github.com/miztiik/yen-idhazh/pull/1682) merged at
+  `e3433f078fc74c82dbfa7729c3876204c3958550`. Merge that current main normally;
+  keep its complete canonical rows 1 through 29, corrected Row 24 repair cap
+  and all newer receipts. Reject duplicate row headings and outcome IDs before
+  indexing them. The two gardener sources retain their frozen hashes; reuse
+  the accepted local results rather than rerun unchanged checks. Open the
+  authorized Row 27 phase PR without merging it.
 - **Plan integration:** Imported the exact released Row 26 full predecessor,
   141,434 bytes, SHA-256
   `d969aaf615469d8b84e3298d861332428346aa9f5d706bea0a96d83acb54c833`.
@@ -2084,6 +2186,184 @@ Table I - Independent controls and expected faults
   CI-receipt-only commit. Keep worktree, branch and evidence artifacts.
 - **Dependencies:** Row 1 supplies semantic test policy; Row 28 is the exact
   full-plan predecessor, not a production dependency.
+
+## 31 - Row #30 - Native tagging-term acceptance and refusal
+
+- **Intent and scope:** Resolve supplemental103/104 in
+  `backend/tests/test_tag.py` and `docs/concepts/taxonomy.md` only, plus this
+  serialized plan append. No production, accepted language, policy, dependency,
+  payload or publication change. Keep supplemental101/102's distinct committed
+  active-entry and entity-alias effectiveness checks.
+- **Fixed baseline:** Commit
+  `e7f46b2317852ea5d3f212f83ea86ac51edc05ed` carries 21 test functions and
+  21 collected cases in the tag module. Original source is 11,142 bytes,
+  SHA-256 `daac8ea824136e4ad36ef23f5d4b216d362881283075117461aa817ab062a109`.
+  The archived baseline receipt lists every original identifier.
+- **Identifier accounting:** All identifiers use prefix
+  `backend/tests/test_tag.py::`. Remove
+  `test_the_committed_terms_are_all_matchable` in favor of
+  `test_keyword_models_accept_curated_phrases` and
+  `test_keyword_models_refuse_a_punctuation_first_term`.
+  Remove `test_no_committed_term_is_short_enough_to_match_inside_a_word`
+  in favor of `test_keyword_models_refuse_a_one_character_word`.
+  Each replacement is collected once for `[lens]` and once for `[event]`.
+  Rename
+  `test_the_tagger_can_only_ever_emit_an_id_the_committed_file_carries`
+  to `test_the_tagger_can_only_ever_emit_an_id_the_vocabulary_carries`;
+  preserve its actual hostile text and closed-vocabulary assertions.
+  Retain the other 18 identifiers. Expected final accounting is 22 functions
+  and 25 collected cases: 21 original cases minus two removed scans, plus six
+  native-model cases, with one rename and no dropped safety responsibility.
+- **Native refusal:** Construct the actual `LensDef` and `EventDef`, not a
+  library-only `TypeAdapter` and not a copied constraint. Both accept two-letter
+  words and phrases containing the existing permitted space, apostrophe,
+  slash, ampersand, period and hyphen. The two-character punctuation-first
+  input `--` isolates the pattern; the one-character alphanumeric input `a`
+  isolates minimum length. Each refusal must identify `keywords[0]` and its
+  own validation error kind. Primary category C2; secondary C5 and C6.
+- **Controlled matcher inputs:** Native `Taxonomy` and `Watchlist` fixtures
+  carry known lenses, events, entities and aliases. No current configuration
+  is read at module import. Only the two retained committed-config guards
+  load current config inside their test bodies. Whole-word matching,
+  case/punctuation folding, phrase order, sorting, absent documents, hostile
+  text, retired lens/entity tombstones, actual Article-to-tag composition,
+  alias matching, failed articles, payload preservation, repeatability and
+  the six named prompt-file checks remain distinct responsibilities.
+- **Owning documentation:** Explain why native refusal and controlled matcher
+  behavior are separate from committed-config effectiveness in the existing
+  taxonomy design rationale. The page stays whole because this paragraph
+  explains the same curated-term boundary, not another subsystem.
+- **Frozen source:** Tag module is 13,686 bytes, SHA-256
+  `5093905178de89ef8f6d41d01a6bed128e3c56e83f04e1ca7c490006b06bf3f7`.
+  Taxonomy page is 22,722 bytes, SHA-256
+  `2ff73108c9a16a8664b6fe0bbb2a412194c59396d5a2c98a32ba054f166af907`.
+  Release the source-writing slot with these hashes before expensive checks.
+- **Required real faults and controls:** In one disposable archived-base copy,
+  import its own actual contracts and overlay only the changed tag test.
+  First remove the actual `MatchTerm` pattern while retaining minimum length:
+  both punctuation-refusal cases must fail because the native models accept
+  the formerly invalid input. Restore exact production bytes. Then relax only
+  the actual minimum length to one: both short-word refusal cases must fail
+  for that reason. Restore exact production bytes and run all 25 cases as the
+  control. Both actual faults produced exactly the intended two
+  `DID NOT RAISE` failures. The restored full control passed all 25 cases.
+  Original and restored actual taxonomy source SHA-256:
+  `8d05f1209ba6a2fb5faffb005ea9ae8e9930c43e9813bdd79a2aad253c9a093a`.
+  The independent immutable full30 records these proofs as PENDING at freeze;
+  this current integration records the subsequent completed evidence.
+- **Gate state:** The shared selector names only `test_tag.py` and no build.
+  All 25 affected cases pass in the working checkout, changed-file Ruff and
+  whitespace checks pass. Changed-file mypy passes with no issues in the one
+  changed source file. Use the documented
+  shared lock only for pytest, not Ruff/mypy. No redundant full local
+  backend/frontend run. Full merge-candidate CI is authoritative and PENDING;
+  no browser check is required for this test/doc change. The independent
+  immutable full30 retains the truthful pending-at-freeze gate record.
+- **Immutable integration:** Verified and imported exact released Row 29,
+  160,945 bytes, SHA-256
+  `84dcb99543de018d2dd38b9ccf6e3a436f94f2c8d55dff51f881c5ee3b982d14`.
+  Append only D30 and this complete section before See also. Deleting only
+  those additions must reconstruct every predecessor byte, including A5,
+  D3 IN-FLIGHT, the single D11 and all earlier complete sections and receipts.
+  Freeze the independent full30 artifact and release it immediately to the
+  coordinator and Row 31 without waiting on gates, Row 29 CI or merge.
+- **Delivery:** After real focused proofs and gates, integrate current main
+  normally and preserve newer canonical plan receipts. Open the authorized
+  phase PR without merging. Report fixed baseline/final identifiers, mapping,
+  source hashes, actual fault/control evidence, immutable handoff and exact
+  PR-head receipts to the coordinator. Do not rewrite historical frozen
+  artifacts or add a CI-receipt-only commit. Keep this worktree and evidence.
+- **Current-main integration:** Normal merges retain the canonical plan from
+  `cb4eaa747eca52888319affa901329324f60f9c4`, including its newer complete
+  phase sections and receipts. Before this own-row gate update, deleting only
+  appended D23-D30 and their eight complete sections reconstructs that exact
+  main plan byte-for-byte. Every phase appears once. Tag test and taxonomy
+  page hashes remain identical to the released source; the independent
+  immutable full30 remains unchanged.
+- **Dependencies:** Row 1 supplies semantic test policy. Exact full Row 29 is
+  the plan predecessor only; there is no production/source dependency.
+
+## 2 - Row #31 - Bind declared UI defaults to their consumers
+
+- **Scope:** Resolve supplemental findings 5, 58 and 60 individually. This is
+  a test-only binding repair, not a theme feature. No production validator,
+  payload, configuration value, model default, frontend behavior, dependency,
+  editor policy, mock or network change.
+- **Files:** `backend/tests/contracts/test_app_config.py`,
+  `backend/tests/test_appearance_config.py`,
+  `docs/how-to/run-the-gates.md`, and this serialized plan update.
+- **Original/final mapping:** Delete only
+  `test_the_seed_covers_what_a_reading_surface_draws_before_a_reader_acts`.
+  Its inequality is false: the actual home shell carries the prefix UNION
+  the leading stories. Existing survivor:
+  `frontend/tests/day-seam.spec.ts`, describe `the home page anchors its leads`,
+  case `every lead is in the seed, however far down the day it sits`.
+  That bounded fixture places leads at positions 25 and 39 with a prefix of
+  15 items; omitting the actual homeShell keep list fails the lead inclusion
+  assertions. No frontend case or browser matrix is added.
+- **Appearance formatting:** Rename
+  `test_the_committed_file_is_lf_and_ascii` to
+  `test_the_committed_file_is_ascii`. Preserve its ASCII refusal under
+  CLAUDE.md section 5. Remove only its current-file carriage-return assertion:
+  `.gitattributes` owns checkout line endings. Remove the false claim that
+  appearance-file bytes contribute to the run digest. Legal JSON whitespace
+  edits must not fail these checks.
+- **Default binding:** Keep
+  `test_the_default_theme_is_the_one_root_carries`, replacing independent
+  dark literals with agreement against the actual tokens.css :root selector
+  group. Bind native UI/appearance defaults, both committed config declarations,
+  app.html initial/storage-refusal choices, and theme.ts absent-storage,
+  absent-choice and storage-refusal fallbacks. Missing declarations fail by
+  name. Use bounded declaration matches following existing binding-test
+  practice, not a custom CSS/TypeScript parser or a new dependency.
+  The theme_default field does not currently drive first paint; do not claim
+  that declaration agreement proves runtime configurability.
+- **Preservation:** Every other configuration guard and historical/safety
+  responsibility remains. In particular, preserve the raw subject/carriage
+  inequality and the actual Row 17 strict host-placement cases unchanged.
+  Primary categories: C10 for the removed false relation, C4 for formatting,
+  and C5 for consumer/default agreement.
+- **Owning documentation:** Add only neutral testing guidance explaining
+  declaration agreement versus runtime configurability. The existing gate page
+  stays whole: the paragraph clarifies what a binding check certifies, within
+  the existing local-check guidance, rather than adding a separate procedure.
+- **Frozen source:** Commit `435c9d955` contains only the three owned source/doc
+  paths. SHA-256: app-config test
+  `5b77d13c89ddfe90c71adad5ed575d43e05cc36790d54f65d6391bfca615a9c9`;
+  appearance test
+  `d832d63e730e6b5c5d459f6ac843f1f8d2fdbca3cb0b1797c72d6796c30c064e`;
+  gate guide
+  `3f7fc0e37e9316ca3152d2c24ebde7fd476a1ef304c38ea1f17b3c3050a1bb04`.
+  Source slot released before expensive checks.
+- **Required faults and controls:** In a disposable copy, independently change
+  the actual CSS root theme, actual app.html fallback, actual theme.ts fallback,
+  and committed theme declaration; each disagreement must fail the binding.
+  Insert non-ASCII into otherwise valid appearance JSON and require the
+  retained ASCII refusal. Legal whitespace-only JSON edits must pass.
+  Restore original bytes and record hashes and passing controls.
+  These proofs are PENDING at freeze; no passing result is claimed.
+- **Gate state at freeze:** Shared `--list` inspected. Inherited Row 17 source
+  selects broad groups; full exact-head CI remains authoritative and PENDING.
+  Only the two affected Python files receive local pytest, Ruff and mypy.
+  Focused pytest is queued behind the documented machine lock. No redundant
+  full local backend/frontend suite and no new published-site smoke obligation.
+- **Immutable integration:** Import exact released full30, 166,646 bytes,
+  SHA-256
+  `9ab4621b497f06a2c7e89bce69320c985110d6c8eafbe23db1d9823b8260c039`.
+  Append only D31 and this complete section before See also. Reverse removal
+  must reconstruct exact30, preserving A5, D3 IN-FLIGHT, the single D11,
+  every earlier section and all earlier receipts. Freeze independent full31
+  and release immediately without waiting for gates or merges.
+- **Delivery:** After Row 17 merges, integrate current main normally, preserve
+  newer canonical receipts, finish focused proofs, and open the authorized phase
+  PR. Do not merge it. Report exact source/case accounting, fault/restoration
+  evidence, immutable artifact and PR-head receipts to the coordinator. Do not
+  rewrite historical artifacts or add a CI-receipt-only commit.
+- **Dependencies:** Actual Row 17 supplies the owned app-config test base.
+  Row 30 is the immutable full-plan predecessor only. Row 1 supplies the
+  semantic test policy.
+
+
 
 ## See also
 

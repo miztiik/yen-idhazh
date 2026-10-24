@@ -90,7 +90,7 @@ def test_a_cell_carries_the_tenant_the_date_the_shard_and_that_tenants_width(
 ) -> None:
     """Four values, on the cell, because only the cell knows which tenant it is."""
     a_venue(venue, package=A_VENUE, slugs={"a-paper-tenant": (2, ("state/paper",))})
-    config_root = _config_registering(venue, slugs=("a-paper-tenant",))
+    config_root = _config_registering(venue, slugs=("a-paper-tenant",), shards=3)
 
     emitted = _emitted(capsys, config_root=config_root, dates=(A_DATE,))
 
@@ -151,15 +151,23 @@ def test_a_second_date_adds_cells_rather_than_a_third_axis(
     tenant's own work is split.
     """
     a_venue(venue, package=A_VENUE, slugs={"a-paper-tenant": (2, ())})
-    config_root = _config_registering(venue, slugs=("a-paper-tenant",))
+    config_root = _config_registering(venue, slugs=("a-paper-tenant",), shards=3)
 
     emitted = _emitted(capsys, config_root=config_root, dates=(A_DATE, ANOTHER_DATE))
     cells = json.loads(emitted["matrix"])
 
     assert json.loads(emitted["dates"]) == [A_DATE, ANOTHER_DATE]
-    assert len(cells) == 4
-    assert sorted({cell["date"] for cell in cells}) == sorted((A_DATE, ANOTHER_DATE))
-    assert {cell["shards"] for cell in cells} == {2}
+    assert cells == [
+        {
+            "tenant": "a-paper-tenant",
+            "date": date,
+            "shard": shard,
+            "shards": 2,
+            "runs_model": False,
+        }
+        for date in (A_DATE, ANOTHER_DATE)
+        for shard in range(2)
+    ]
 
 
 def test_the_wave_is_the_cell_count_under_the_platforms_own_ceiling(

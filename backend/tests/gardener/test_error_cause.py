@@ -80,6 +80,16 @@ def test_each_answer_github_gives_means_one_cause(status: int, cause: ErrorCause
             id="rate-limit-exhausted",
         ),
         pytest.param(
+            {"x-ratelimit-remaining": "0"},
+            ErrorCause.API_UNAVAILABLE,
+            id="lowercase-rate-limit-header",
+        ),
+        pytest.param(
+            {"rEtRy-AfTeR": "not parsed"},
+            ErrorCause.API_UNAVAILABLE,
+            id="mixed-case-retry-header",
+        ),
+        pytest.param(
             {"Retry-After": "not parsed"},
             ErrorCause.API_UNAVAILABLE,
             id="retry-after-present",

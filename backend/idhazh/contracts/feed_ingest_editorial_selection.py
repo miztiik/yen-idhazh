@@ -1,6 +1,6 @@
 """Which articles did the editor select, before assigning workers?"""
 
-from typing import ClassVar, Literal, Self
+from typing import Any, ClassVar, Literal, Self
 
 from pydantic import model_validator
 
@@ -30,12 +30,17 @@ class EditorialSelectionRow(Contract):
     __schema_stem__: ClassVar[str] = "feed-ingest-editorial-selection"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-10-24",
+            change="Record a separate measured source-reliability ranking penalty.",
+            why="Delivery history changes priority without changing article quality.",
+        ),
+        ChangelogEntry(
             version="2026-10-20",
             change="Declare unsharded editorial selections.",
             why="Ranking can be replayed without rescoring or copying article text.",
         ),
     )
-    version: Literal["2026-10-20"] = "2026-10-20"
+    version: Literal["2026-10-24"] = "2026-10-24"
     date: DateStamp
     correlation_id: NonEmpty
     candidate_id: Sha256
@@ -49,6 +54,16 @@ class EditorialSelectionRow(Contract):
     estimated_work: NonNegative
     ratings: ScoreEvidence
     policy: PolicyIdentity
+
+    @model_validator(mode="before")
+    @classmethod
+    def migrate_previous_version(cls, value: Any) -> Any:
+        if isinstance(value, dict) and value.get("version") == "2026-10-20":
+            ratings = value.get("ratings")
+            if isinstance(ratings, dict) and ratings.get("source_reliability") is not None:
+                raise ValueError("source reliability requires the declared score contract version")
+            return {**value, "version": "2026-10-24"}
+        return value
 
     @model_validator(mode="after")
     def validate_url_key(self) -> Self:

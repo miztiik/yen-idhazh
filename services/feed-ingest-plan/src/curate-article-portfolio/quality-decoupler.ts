@@ -1,6 +1,7 @@
 /** Which measured article components contribute before set-dependent penalties? */
 import { ArticleAssessmentRecordSchema } from "@idhazh/common-contracts";
-import type { PortfolioArticle } from "./portfolio-input";
+import type { SourceReliabilityPenalty } from "@idhazh/common-contracts";
+import type { PortfolioArticle, ReliabilityControls } from "./portfolio-input";
 
 export function measureArticle(article: PortfolioArticle) {
   const { candidate, policy, freshness, evidence } = article;
@@ -54,8 +55,23 @@ export function recordAssessment(article: PortfolioArticle, observedAt: string) 
   });
 }
 
-export function compareArticle(left: PortfolioArticle, right: PortfolioArticle): number {
-  const difference = measureArticle(right).base_article_score - measureArticle(left).base_article_score;
+export function measurePriority(article: PortfolioArticle, controls: ReliabilityControls) {
+  const measured = measureArticle(article);
+  const history = article.evidence.operational;
+  const factor = history === null ? null : Math.max(controls.reliability_floor, history.success_fraction);
+  const reliability: SourceReliabilityPenalty = {
+    ...controls, source_authority_score: measured.components.authority,
+    history, production_factor: factor,
+    value: factor === null ? null : controls.enabled ? measured.components.authority * (1 - factor) : 0,
+  };
+  return {
+    base_article_score: measured.base_article_score, source_reliability: reliability,
+    priority_score: measured.base_article_score - (reliability.value ?? 0),
+  };
+}
+
+export function compareArticle(left: PortfolioArticle, right: PortfolioArticle, controls: ReliabilityControls): number {
+  const difference = measurePriority(right, controls).priority_score - measurePriority(left, controls).priority_score;
   if (difference !== 0) return difference;
   return left.candidate.candidate_id < right.candidate.candidate_id ? -1
     : left.candidate.candidate_id > right.candidate.candidate_id ? 1 : 0;

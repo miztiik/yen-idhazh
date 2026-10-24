@@ -1,6 +1,6 @@
 # Contracts and Schemas
 
-**Last Updated**: 2026-10-23
+**Last Updated**: 2026-10-24
 
 The persisted-shape subsystem: where the models live, how a schema is obtained from one, the small hand copy the frontend carries, and the tests that stop the two drifting apart. This is the operational home of Guardrail #3 (contracts before logic) and `CLAUDE.md` sections 1a and 11.
 
@@ -35,6 +35,12 @@ The migration and its compatibility checks are owned by
 [../sources/source-classification.md](../sources/source-classification.md).
 
 The ledger layer reads a field annotation as a recursive tree: scalar (`string`, `int64`, `float64`, `bool`), list (`list[T]` and `tuple[T, ...]`), or struct (nested Pydantic model). A closed set of unions and wrapped aliases is reduced before the conversion, and unsupported shapes fail with the full nested field path. `backend/idhazh/ledger/arrow_schema.py` is the single entry point; `backend/idhazh/ledger/parquet.py` renders that tree to Arrow; `backend/idhazh/ledger/json_lines.py` stays format-generic and never adds contract-specific branches.
+
+The published-column gate compares current files exactly. For older file
+stamps, its recursive type check permits missing nullable struct fields,
+including structs inside lists. Existing nested field order, types, nullability
+and list element types must still agree; missing required nested fields fail.
+This is a metadata check, not a row migration or a reason to rewrite old files.
 
 ## What the frontend carries
 
@@ -96,15 +102,15 @@ The CI backend gate installs the locked package and runs these checks before
 pytest, which executes the Python-to-Zod bindings. It does not skip a binding
 when Bun or the package is absent.
 
-The seven shared feed planning contracts are stamped `2026-10-20`, except the
-audit contracts, which are stamped `2026-10-22` after
-their stored meanings changed: harvested content, dispatches, terminal
-rejections, source-run observations, article assessments, diversity readings,
-and unsharded editorial selections.
+The shared feed planning contracts have independent stamps. Harvested content
+and terminal rejections use `2026-10-23`; source-run observations use
+`2026-10-22T20:30`; diversity readings use `2026-10-22`. Article assessments,
+unsharded editorial selections and dispatches use `2026-10-24` for their nested
+source-reliability score evidence.
 Their models live in `backend/idhazh/contracts/feed_ingest_*.py`.
 These declarations do not enable a producer, register a ledger, or change the
 production planner.
-Planner events are independently stamped `2026-10-22T20:30` in their TypeScript
+Planner events are independently stamped `2026-10-24` in their TypeScript
 schema. Native tests cover current fixture validation, UUID versions, typed
 payloads, forbidden article text, identity propagation and event ordering.
 
@@ -140,6 +146,24 @@ reasons under an earlier version. Physical and logical digests retain the old
 schema's exact fields before migration; new evidence is not stripped to satisfy
 an old logical commitment. The existing native event fixture verifies migration
 from `2026-10-22T12:20`.
+
+Score revision `2026-10-24` adds nullable `source_reliability` to `ScoreEvidence`,
+declared in `feed_ingest_candidate.py` and copied in `source.schema.ts`. It
+records the enabled state, source-authority contribution, configured floor,
+measured fraction, attempted-read denominator, window, factor and separate
+penalty. The native and TypeScript validators enforce the factor and penalty
+calculation. The unchanged base article score is not an operational product.
+The exact selection rule is owned by [curation](../sources/feed-curation.md).
+
+Old selections, assessments, dispatches and events migrate with null new score
+evidence. They do not acquire today's history or a claimed zero measurement.
+Historical logical encoders omit only fields their recorded schema lacked.
+In particular, `2026-10-23` assessments retain extraction quality and
+`2026-10-23` dispatches retain headline observations and their original nested
+selection stamp. A nonnull new reliability record cannot be encoded under an
+old stamp, even when its penalty is zero or disabled. Rejection and source-run
+stamps, old exclusion details, physical receipts and logical commitments are
+not restamped for this score change.
 
 Candidates keep source, original vertical, assigned desk, lenses, content event
 types, event cluster, and entities separate. Null labels mean unknown;
@@ -599,6 +623,19 @@ The whole-day count lives in `digest.json`: `items.length` and
 an earlier run's plan look larger than it was.
 
 ## Design rationale
+
+Owner approval, kumarsnaveen_microsoft, 2026-10-24, A1: evolve only score-bearing
+selection, assessment, dispatch and event contracts for the
+[separate reliability penalty](../sources/feed-curation.md#design-rationale).
+Python changes remain declarations, migrations and compatibility bindings;
+the production Python ranking implementation is unchanged.
+
+Owner approval, kumarsnaveen_microsoft, 2026-10-24, compatibility-gate A1:
+extend the published-column validator and existing cases for nullable nested
+additions in older schemas. This narrowly extends the declaration-only Python
+scope to the compatibility gate. Current-schema and existing-type checks stay
+strict; no production planner change, local Python run or historical rewrite
+is authorized.
 
 Owner ruling, kumarsnaveen, 2026-10-22: remove the Python planner event model
 and its comparison checks because no Python production reader consumes it.

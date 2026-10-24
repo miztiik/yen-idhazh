@@ -3,8 +3,9 @@ import { expect, test } from "bun:test";
 import { mkdir, rm, stat, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { createHash } from "node:crypto";
-import { CONTRACT_VERSION, CandidateRejectionContract, EditorialSelectionRowSchema,
-  PLANNER_EXCLUSIONS_VERSION, PreviousHarvestDiagnosticsSchema } from "@idhazh/common-contracts";
+import { CONTRACT_VERSION, CandidateRejectionContract, EditorialSelectionContract,
+  PLANNER_EXCLUSIONS_VERSION, PLANNING_OBSERVATIONS_VERSION, EXTRACTION_QUALITY_VERSION,
+  PreviousHarvestDiagnosticsSchema } from "@idhazh/common-contracts";
 import type { LedgerCompletionEvidence } from "@idhazh/common-contracts";
 import { describeObjectSchema, digestRows, persistLedger } from "@idhazh/ledger-file-writer";
 import type { LedgerRowContract, StoredLedgerRow } from "@idhazh/ledger-file-writer";
@@ -19,7 +20,7 @@ import { source } from "./harvest-recordings";
 
 const contracts: Record<keyof AttemptHistory["ledgers"] | "source-runs", LedgerRowContract<object>> = {
   "article-assessments": ArticleAssessmentContract, diversity: DiversityMetricContract,
-  "editorial-selections": { schema: EditorialSelectionRowSchema, schemaVersion: CONTRACT_VERSION },
+  "editorial-selections": EditorialSelectionContract,
   dispatches: DispatchContract, rejections: CandidateRejectionContract,
   "source-runs": SourceRunContract,
 };
@@ -43,10 +44,13 @@ test("logical proof survives native daily, monthly and yearly files with no orig
             const diagnostics = "details" in current ? current.details.diagnostics : current.diagnostics;
             const originalDiagnostics = diagnostics === null ? null : PreviousHarvestDiagnosticsSchema.parse(
               Object.fromEntries(Object.entries(diagnostics).filter(([key]) => key !== "quality")));
+            const score = "score_evidence" in current ? current.score_evidence : null;
+            const originalScore = score === null ? null : Object.fromEntries(
+              Object.entries(score).filter(([key]) => key !== "source_reliability"));
             return { ...held, row: legacy.schema.parse({
               ...current, version: PLANNER_EXCLUSIONS_VERSION,
               ...("details" in current ? { details: { ...current.details, diagnostics: originalDiagnostics } }
-                : { diagnostics: originalDiagnostics }),
+                : { diagnostics: originalDiagnostics, score_evidence: originalScore }),
             }) };
           });
           if (!zero) expect(oldRows.some(held => {
@@ -196,18 +200,24 @@ test("recorded rejection commitments retain their original schema stamp after mi
     const assessments = history.ledgers["article-assessments"].rows;
     expect(() => commitLogicalRecords("article-assessments", assessments, selected, "2026-10-22"))
       .toThrow("cannot omit measured diagnostics");
-    const historicalAssessments = assessments.map(held => ({
-      ...held, row: { ...ArticleAssessmentContract.schema.parse(held.row), diagnostics: null },
-    }));
+    const historicalAssessments = assessments.map(held => {
+      const row = ArticleAssessmentContract.schema.parse(held.row);
+      return { ...held, row: { ...row, diagnostics: null,
+        score_evidence: row.score_evidence === null ? null : { ...row.score_evidence, source_reliability: null },
+      } };
+    });
     expect(commitLogicalRecords("article-assessments", historicalAssessments, selected, "2026-10-22")
       .commitment.row_schema_version).toBe("2026-10-22");
-    for (const version of ["2026-10-20", "2026-10-22"]) {
+    for (const version of [CONTRACT_VERSION, "2026-10-22", PLANNING_OBSERVATIONS_VERSION]) {
       const legacy = DispatchContract.legacyVersions![version]!;
       const dispatches = history.ledgers.dispatches.rows.map(held => {
         const current = DispatchContract.schema.parse(held.row);
         const { planning_observations: _observations, ...content } = current.content;
+        const { source_reliability: _reliability, ...ratings } = current.selection.ratings;
         const original = legacy.schema.parse({
-          ...current, version, content: { ...content, version: CONTRACT_VERSION },
+          ...current, version,
+          content: version === PLANNING_OBSERVATIONS_VERSION ? current.content : { ...content, version: CONTRACT_VERSION },
+          selection: { ...current.selection, version: CONTRACT_VERSION, ratings },
         });
         return { ...held, row: original };
       });
@@ -227,10 +237,49 @@ test("recorded rejection commitments retain their original schema stamp after mi
       for (const record of records) expected.update(`${JSON.stringify(record)}\n`);
       expect(proof.content_sha256).toBe(expected.digest("hex"));
       expect(proof.row_schema_version).toBe(version);
+      if (version === PLANNING_OBSERVATIONS_VERSION) {
+        expect(migratedDispatches.map(held => DispatchContract.schema.parse(held.row).content))
+          .toEqual(history.ledgers.dispatches.rows.map(held => DispatchContract.schema.parse(held.row).content));
+      }
       expect(() => commitLogicalRecords("dispatches", history.ledgers.dispatches.rows, selected, version))
-        .toThrow("cannot omit planning observations");
+        .toThrow(version === PLANNING_OBSERVATIONS_VERSION
+          ? "cannot omit source reliability evidence" : "cannot omit planning observations");
     }
     expect(() => commitLogicalRecords("article-assessments", assessments, selected, PLANNER_EXCLUSIONS_VERSION))
       .toThrow("cannot omit measured extraction quality");
+    expect(() => commitLogicalRecords("article-assessments", assessments, selected, EXTRACTION_QUALITY_VERSION))
+      .toThrow("cannot omit source reliability evidence");
+    expect(() => commitLogicalRecords("editorial-selections", history.ledgers["editorial-selections"].rows, selected, CONTRACT_VERSION))
+      .toThrow("cannot omit source reliability evidence");
+    for (const ledger of ["editorial-selections", "article-assessments"] as const) {
+      const contract = ledger === "editorial-selections" ? EditorialSelectionContract : ArticleAssessmentContract;
+      const version = ledger === "editorial-selections" ? CONTRACT_VERSION : EXTRACTION_QUALITY_VERSION;
+      const legacy = ledger === "editorial-selections"
+        ? EditorialSelectionContract.legacyVersions[CONTRACT_VERSION]
+        : ArticleAssessmentContract.legacyVersions[EXTRACTION_QUALITY_VERSION];
+      const original = history.ledgers[ledger].rows.map(held => {
+        const row = contract.schema.parse(held.row);
+        const scores = "ratings" in row ? row.ratings : row.score_evidence;
+        const oldScores = scores === null ? null : Object.fromEntries(
+          Object.entries(scores).filter(([key]) => key !== "source_reliability"));
+        return { ...held, row: legacy.schema.parse({
+          ...row, version, ...("ratings" in row ? { ratings: oldScores } : { score_evidence: oldScores }),
+        }) };
+      });
+      const fields = describeObjectSchema(legacy.schema).fields;
+      const records = original.map(held => [
+        JSON.stringify(PLANNING_RECORD_KEYS[ledger].map(key => Reflect.get(held.row, key))),
+        digestRows([held.row as Record<string, unknown>], fields),
+      ]).sort(([a], [b]) => a! < b! ? -1 : a! > b! ? 1 : 0);
+      const expected = createHash("sha256").update(`${JSON.stringify([
+        "2026-10-22", ledger, version, selected.date, selected.run_id, selected.attempt, selected.correlation_id,
+      ])}\n`);
+      for (const record of records) expected.update(`${JSON.stringify(record)}\n`);
+      const migrated = original.map(held => ({ ...held, row: legacy.migrate(held.row) }));
+      expect(commitLogicalRecords(ledger, migrated, selected, version).commitment.content_sha256)
+        .toBe(expected.digest("hex"));
+      expect(commitLogicalRecords(ledger, [...migrated].reverse(), selected, version).commitment.content_sha256)
+        .toBe(commitLogicalRecords(ledger, migrated, selected, version).commitment.content_sha256);
+    }
   } finally { await fixture.close(); }
 });

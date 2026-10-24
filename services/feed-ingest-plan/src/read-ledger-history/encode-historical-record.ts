@@ -2,11 +2,13 @@
 import {
   ArticleAssessmentContract, CandidateRejectionContract, CONTRACT_VERSION,
   FEED_INGEST_AUDIT_VERSION, HARVEST_DIAGNOSTICS_VERSION, PLANNER_EXCLUSIONS_VERSION,
-  FeedIngestDispatchSchema,
+  EXTRACTION_QUALITY_VERSION, PLANNING_OBSERVATIONS_VERSION,
+  EditorialSelectionRowSchema, FeedIngestDispatchSchema,
 } from "@idhazh/common-contracts";
-import type { HarvestDiagnostics, LedgerCompletionEvidence } from "@idhazh/common-contracts";
+import type { HarvestDiagnostics, LedgerCompletionEvidence, ScoreEvidence } from "@idhazh/common-contracts";
 
 function encodeDiagnostics(diagnostics: HarvestDiagnostics | null, version: string) {
+  if (version === EXTRACTION_QUALITY_VERSION) return diagnostics;
   if (version === CONTRACT_VERSION || version === FEED_INGEST_AUDIT_VERSION) {
     if (diagnostics !== null) throw new Error("Historical proof cannot omit measured diagnostics");
     return undefined;
@@ -20,14 +22,36 @@ function encodeDiagnostics(diagnostics: HarvestDiagnostics | null, version: stri
   return original;
 }
 
+function encodeScores(scores: ScoreEvidence | null) {
+  if (scores === null) return null;
+  const { source_reliability, ...original } = scores;
+  if (source_reliability !== null) throw new Error("Historical proof cannot omit source reliability evidence");
+  return original;
+}
+
 export function encodeHistoricalRecord(
   ledger: LedgerCompletionEvidence["ledger"], row: object, version: string,
 ): object {
   if (ledger === "dispatches") {
     const current = FeedIngestDispatchSchema.parse(row);
+    if (version === PLANNING_OBSERVATIONS_VERSION) {
+      return { ...current, version,
+        selection: encodeHistoricalRecord("editorial-selections", current.selection, CONTRACT_VERSION),
+      };
+    }
+    if (version !== CONTRACT_VERSION && version !== FEED_INGEST_AUDIT_VERSION) {
+      throw new Error(`Historical dispatch encoding is not declared for ${version}`);
+    }
     const { planning_observations, ...content } = current.content;
     if (planning_observations !== null) throw new Error("Historical dispatch proof cannot omit planning observations");
-    return { ...current, version, content: { ...content, version: CONTRACT_VERSION } };
+    return { ...current, version, content: { ...content, version: CONTRACT_VERSION },
+      selection: encodeHistoricalRecord("editorial-selections", current.selection, CONTRACT_VERSION),
+    };
+  }
+  if (ledger === "editorial-selections") {
+    if (version !== CONTRACT_VERSION) throw new Error(`Historical selection encoding is not declared for ${version}`);
+    const current = EditorialSelectionRowSchema.parse(row);
+    return { ...current, version, ratings: encodeScores(current.ratings) };
   }
   if (ledger === "rejections") {
     const current = CandidateRejectionContract.schema.parse(row);
@@ -46,7 +70,7 @@ export function encodeHistoricalRecord(
   if (ledger === "article-assessments") {
     const { diagnostics, ...current } = ArticleAssessmentContract.schema.parse(row);
     const originalDiagnostics = encodeDiagnostics(diagnostics, version);
-    const encoded = { ...current, version,
+    const encoded = { ...current, version, score_evidence: encodeScores(current.score_evidence),
       ...(originalDiagnostics === undefined ? {} : { diagnostics: originalDiagnostics }),
     };
     if (version === CONTRACT_VERSION) {
