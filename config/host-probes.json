@@ -18,7 +18,7 @@
     "counters": {
       "enabled": false,
       "events": ["LLC-loads:u", "LLC-load-misses:u"],
-      "max_duration_ms": 30000
+      "max_duration_ms": 21600000
     },
     "latency": {
       "enabled": false,

@@ -5,10 +5,13 @@
 The TypeScript host probe separates last-level-cache event counts from a
 controlled working-set latency curve. Neither is the existing memory-copy
 benchmark. No cache result changes a host-fingerprint row or a Python contract.
+L3 means the third-level cache; the last-level cache is called LLC and is not
+necessarily L3 on every processor.
 
-**Status: in progress.** The bounded native-tool adapters are implemented.
-Task API integration and actual Linux runner evidence remain to be verified.
-Counter availability is not evidence that any counter was measured.
+**Status: in progress.** Native latency and honest hardware refusals have real
+Linux evidence. Final shared-main integration and hosted acceptance of the
+combined API remain pending. Counter availability is not evidence that a
+counter was measured.
 
 ## Instruments and interpretation
 
@@ -29,14 +32,16 @@ impossible. No hit rate is inferred from unrelated events.
 
 The target is pinned by PID and start identity, not moved to another CPU.
 The scope is its existing threads, without inherited descendant counters.
+Threads created after attachment are not included.
 Work elsewhere in that process is included. Control acknowledgements bound
 the actual observation interval; the counter's running time is also retained.
 Exit, PID reuse and a different owner produce explicit unavailable results.
 Only the probe's own perf subprocess can be stopped; the target is never
 signalled.
 
-`multichase` runs one native dependent random pointer chain at each configured
-working set. Chain construction writes the pointers before timing. The tool
+`multichase` reads an address, then uses it to find the next address in a
+randomized order. This dependent pointer chain runs at each configured working
+set. Chain construction writes the pointers before timing. The tool
 pins its own benchmark thread to its first allowed CPU, drops its initial
 500 millisecond warm-up sample, and reports nanoseconds per load.
 The adapter retains the actual working set, stride, reported native page size,
@@ -49,6 +54,8 @@ This is a cache-working-set latency curve, not a direct L3 hit latency.
 Translation, prefetch, processor frequency, scheduling and memory placement
 can affect it. The proof pairs it with the existing fingerprint's CPU,
 capacity and L3 context, rather than collecting another hardware identity.
+The standalone response names its kernel and architecture. Pair it with the
+existing collector's hardware row from the same machine when comparing hosts.
 It records whether the largest measured working set exceeds the reported L3.
 
 ## Controls and bounds
@@ -64,11 +71,39 @@ count and working-set bytes. Requests do not supply programs, commands, event
 expressions, paths or tool arguments. Events come from a closed validated list;
 numeric PIDs must identify an owned process before perf starts.
 Cancellation, output overflow, timeout and shutdown close owned subprocesses.
+The default counter ceiling matches the task API's six-hour safety expiry.
+If an operator selects a shorter ceiling, `completion: "duration_limit"`
+and the measured interval identify partial coverage, not full-task counts.
 
 The default curve spans 4 KiB through 1 GiB, using a 64 byte stride and at most
 256 KiB of translation locality. It takes two measured samples per point after
 the tool's discarded warm-up. The total latency deadline is 30 seconds.
 This allocation is separate from the copy benchmark and task CPU windows.
+
+## Operator HTTP commands
+
+The existing [task API](host-probe-api.md) owns counter start, stop, automatic
+closure and handle retention. There is no second PID router. With the task
+instrument and `cache_probe.counters.enabled` on, start returns a separate
+`cache_counters` object: either `started`, or an explicit instrument result.
+Work starts only after that reply. Stop returns the final `cache_counters`
+beside the unchanged CPU/RAM `profile`. Repeated stops return the same bytes.
+A hardware refusal does not stop CPU/RAM profiling or invent cache counts.
+An ended start request does not own the counter's later lifetime; its task
+handle does.
+
+`POST /api/2026-10-24/cache/latency` accepts only the JSON body `{}`.
+It uses `Content-Type: application/json` and rejects browser origins, as the
+task commands do. All benchmark choices come from committed configuration.
+The reply is `CacheLatencySchema`, including its calendar version, status,
+reason, method and actual readings. This separate request does not start a
+CPU/RAM task profile.
+
+The shared `max_request_body_bytes` bounds both commands. Latency bodies, and
+task-command bodies when cache counters are enabled, also use
+`cache_probe.lifecycle_timeout_ms` as their read deadline. The native-tool
+deadline is separate. One shared `max_concurrent` limit covers counters and
+latency; occupied capacity gives a typed `concurrency_limit` refusal.
 
 Missing tools, denied performance monitoring, unsupported events, malformed
 output and unusable affinity are typed unavailable reasons. Missing
@@ -101,6 +136,13 @@ pending on an operator-controlled Linux host that already exposes the
 hardware performance-monitoring unit and permits these user-space events for
 an owned PID. No permission change is part of this feature.
 
+The [current native reading](benchmarks/cache-working-set-latency.md) names
+the machine, method and limits. The CI resource proof wrote
+`resource-proof.json`; its validated counter refusal and latency result are
+copied into the two named recordings under `tests/fixtures/host-probes/`.
+Those fixtures test parsing and missing-value behavior without contacting
+the network or claiming a live measurement.
+
 ## Design rationale
 
 The mature native tools own event access and pointer-chase execution.
@@ -113,6 +155,7 @@ event counts and a controlled latency curve answer different questions.
 ## See also
 
 - [host-metrics.md](host-metrics.md) - existing CPU, memory and hardware context.
+- [host-probe-api.md](host-probe-api.md) - the shared task lifetime and PID commands.
 - [../how-to/run-feed-ingest-plan-test.md#resource-proof](../how-to/run-feed-ingest-plan-test.md#resource-proof) - isolated proof boundaries.
 - [../../config/host-cache-tools.json](../../config/host-cache-tools.json) - optional Linux tool dependencies.
 - [perf stat](https://man7.org/linux/man-pages/man1/perf-stat.1.html) - event, control and output semantics.

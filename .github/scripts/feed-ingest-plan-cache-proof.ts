@@ -1,14 +1,16 @@
 /** Prove default-off cache probes and real unprivileged Linux instrument results without claiming L3 hits. */
-import { createHash } from "node:crypto";
 import { z } from "../../services/host-probes/node_modules/zod";
+import { ProbeConfigSchema } from "../../services/host-probes/src/config";
 import type { ProbeConfig } from "../../services/host-probes/src/config";
 import { CacheProbeConfigSchema } from "../../services/host-probes/src/cache-probe/cache-config";
-import { CacheCountersSchema, CacheLatencySchema } from "../../services/host-probes/src/cache-probe/cache-schema";
+import { CacheCountersSchema, CacheCountersStartSchema, CacheLatencySchema } from "../../services/host-probes/src/cache-probe/cache-schema";
 import { startCacheCounters } from "../../services/host-probes/src/cache-probe/cache-counters";
 import { measureWorkingSetLatency } from "../../services/host-probes/src/cache-probe/working-set-latency";
 import { readProcessIdentity } from "../../services/host-probes/src/task-profile/process-stat";
 import { OwnedProcessSchema } from "../../services/host-probes/src/task-profile/profile-schema";
 import { startBoundedTool } from "../../services/host-probes/src/cache-probe/bounded-tool";
+import { CACHE_LATENCY_PATH, serveSamples } from "../../services/host-probes/src/api/server";
+import { verifyTaskProfileHttp } from "./host-task-profile-proof";
 
 export const CacheProofSchema = z.strictObject({
   scope: z.literal("unprivileged_linux_cache_instruments"),
@@ -17,6 +19,10 @@ export const CacheProofSchema = z.strictObject({
   counters_measurement: z.enum(["pending", "measured", "partial_pending_supported_events", "pending_permitted_pmu_host"]),
   default_off: z.strictObject({ counters: CacheCountersSchema, latency: CacheLatencySchema }),
   counters: CacheCountersSchema.nullable(),
+  task_api: z.strictObject({
+    target: OwnedProcessSchema, handle: z.uuid(), expires_at: z.iso.datetime(),
+    initial: CacheCountersStartSchema, target_alive_at_stop: z.literal(true), repeat_stop_identical: z.literal(true),
+  }).nullable().default(null),
   latency: CacheLatencySchema.nullable(),
   cancellation: z.strictObject({
     owned_benchmark: OwnedProcessSchema, reason: z.literal("cancelled"),
@@ -30,15 +36,16 @@ export const CacheProofSchema = z.strictObject({
   }),
 });
 export async function verifyLiveCacheProfiling(
+  identity: { run_id: string; correlation_id: string },
   config: ProbeConfig, hardware: { l3_cache_bytes: number | null }, installation: unknown,
   report: (proof: z.infer<typeof CacheProofSchema>) => Promise<void>,
 ) {
   if (process.platform !== "linux" || process.geteuid?.() === 0) {
     throw new Error("Cache proof requires an unprivileged Linux operator, not a permission change");
   }
-  const identity = readProcessIdentity(process.pid, config.max_proc_bytes, {});
-  if (identity.reason !== null) throw new Error("Cache proof cannot pin its own controlled Bun target");
-  const target = { pid: identity.value.pid, start_ticks: identity.value.start_ticks };
+  const operator = readProcessIdentity(process.pid, config.max_proc_bytes, {});
+  if (operator.reason !== null) throw new Error("Cache proof cannot pin its own controlled Bun operator");
+  const target = { pid: operator.value.pid, start_ticks: operator.value.start_ticks };
   const off = CacheProbeConfigSchema.parse({
     ...config.cache_probe, counters: { ...config.cache_probe.counters, enabled: false },
     latency: { ...config.cache_probe.latency, enabled: false },
@@ -53,7 +60,7 @@ export async function verifyLiveCacheProfiling(
   }
   const proof = CacheProofSchema.parse({
     scope: "unprivileged_linux_cache_instruments", status: "running", stage: "counters",
-    counters_measurement: "pending", default_off, counters: null, latency: null, cancellation: null,
+    counters_measurement: "pending", default_off, counters: null, task_api: null, latency: null, cancellation: null,
     beyond_recorded_llc: null, tool_install: installation,
   });
   await report(proof);
@@ -61,12 +68,16 @@ export async function verifyLiveCacheProfiling(
     ...config.cache_probe, counters: { ...config.cache_probe.counters, enabled: true },
     latency: { ...config.cache_probe.latency, enabled: true },
   });
-  const capture = await startCacheCounters(enabled, target, config.max_proc_bytes);
-  if (capture.initial === null) {
-    const started = performance.now();
-    while (performance.now() - started < config.sample_interval_ms) createHash("sha256").update("owned-cache-proof").digest();
+  const task = await verifyTaskProfileHttp(identity, ProbeConfigSchema.parse({ ...config, cache_probe: enabled }));
+  const counters = task.cache_counters;
+  if (counters === null || task.cache_counters_start === null
+    || counters.target.pid !== task.target.pid || counters.target.start_ticks !== task.target.start_ticks) {
+    throw new Error("Task HTTP cache counters did not retain the actual controlled PID");
   }
-  const counters = await capture.close();
+  proof.task_api = {
+    target: task.target, handle: task.handle, expires_at: task.expires_at, initial: task.cache_counters_start,
+    target_alive_at_stop: task.target_alive_at_stop, repeat_stop_identical: task.repeat_stop_identical,
+  };
   proof.counters = counters;
   const permittedRefusal = ["permission_denied", "event_unsupported", "not_counted"].includes(counters.reason ?? "");
   proof.counters_measurement = counters.status === "measured"
@@ -106,7 +117,23 @@ export async function verifyLiveCacheProfiling(
   };
   proof.stage = "latency";
   await report(proof);
-  const latency = await measureWorkingSetLatency(enabled, config.max_proc_bytes);
+  let listener: ReturnType<typeof serveSamples> | undefined;
+  let latency: z.infer<typeof CacheLatencySchema>;
+  try {
+    listener = serveSamples(ProbeConfigSchema.parse({
+      ...config, task_profile: { ...config.task_profile, enabled: false }, cache_probe: {
+        ...enabled, counters: { ...enabled.counters, enabled: false },
+      },
+    }));
+    const response = await fetch(new URL(CACHE_LATENCY_PATH, listener.url), {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: "{}",
+      signal: AbortSignal.timeout(enabled.latency.timeout_ms), timeout: false,
+    });
+    if (response.status !== 200 || response.headers.get("cache-control") !== "no-store") {
+      throw new Error("Cache latency HTTP endpoint did not return an uncached result");
+    }
+    latency = CacheLatencySchema.parse(await response.json());
+  } finally { await listener?.stop(true); }
   proof.latency = latency;
   if (latency.status !== "measured" || latency.points.length !== enabled.latency.working_set_bytes.length) {
     proof.status = "failed";

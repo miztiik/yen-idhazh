@@ -86,7 +86,7 @@ export async function verifyLiveHostProfiling(
     proof.stage = "cache";
     await persist();
     if (!process.env.RUNNER_TEMP) throw new Error("Cache proof requires the declared optional tool installation");
-    proof.cache = await verifyLiveCacheProfiling(await loadProbeConfig(), proof.copy.on!,
+    proof.cache = await verifyLiveCacheProfiling(identity, await loadProbeConfig(), proof.copy.on!,
       await Bun.file(join(process.env.RUNNER_TEMP, "host-cache-tool-install.json")).json(),
       async cache => { proof.cache = cache; await persist(); });
     proof.stage = "complete";

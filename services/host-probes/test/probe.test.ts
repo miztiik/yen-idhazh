@@ -9,7 +9,7 @@ import { fileURLToPath } from "node:url";
 import { parseCpuCounters, calculateCpuPercentages } from "../src/probe/cpu-sampler";
 import { parseMemoryInfo, parseVmstat } from "../src/probe/memory-probe";
 import { sampleHost } from "../src/probe/sample-host";
-import { createSampleHandler, SAMPLE_PATH, START_TASK_PROFILE_PATH, STOP_TASK_PROFILE_PATH } from "../src/api/server";
+import { createSampleHandler, SAMPLE_PATH, START_TASK_PROFILE_PATH, STOP_TASK_PROFILE_PATH, CACHE_LATENCY_PATH } from "../src/api/server";
 import { loadConfig, ProbeConfigSchema } from "../src/config";
 import { profileTask, startTaskProfile } from "../src/task-profile/task-profiler";
 import { TaskProfileSchema } from "../src/task-profile/profile-schema";
@@ -25,6 +25,7 @@ import { measureWorkingSetLatency } from "../src/cache-probe/working-set-latency
 import { classifyPerfFailure, parsePerfCounters } from "../src/cache-probe/perf-output";
 import { CacheProbeController } from "../src/cache-probe/cache-controller";
 import { parseMultichaseOutput } from "../src/cache-probe/latency-output";
+import { CacheCountersSchema, CacheLatencySchema } from "../src/cache-probe/cache-schema";
 import { StartTaskProfileResponseSchema, StopTaskProfileResponseSchema } from "../src/api/task-command-schema";
 
 const fixtureRoot = new URL("../../../tests/fixtures/", import.meta.url);
@@ -100,6 +101,31 @@ test("recorded Linux CPU interval and memory satisfy the Row 5 oracle", async ()
     expect(calculateProcessCpu(opening.value.cpu, closing.value.cpu, interval.elapsed_ms, clock)).toEqual({
       value: { cpu_time_ms: interval.cpu_time_ms, percent_one_core: interval.percent_one_core }, reason: null,
     });
+  }
+  const latency = CacheLatencySchema.parse(JSON.parse(await fixture("host-probes/cache-working-set-latency.json")));
+  const counters = CacheCountersSchema.parse(JSON.parse(await fixture("host-probes/cache-counters-unavailable.json")));
+  expect(latency.measurement_obtained).toBe(true);
+  expect(counters.measurement_obtained).toBe(false);
+  expect(counters.reason).toBe("permission_denied");
+  expect(counters.events.every(event => event.count === null)).toBe(true);
+  // Replay the native display format from recorded numbers; do not manufacture latency readings.
+  const display = (value: number) => value.toFixed(value < 100 ? 3 : 1);
+  for (const point of latency.points) {
+    const text = [
+      "nr_threads = 1", `page_size = ${point.page_size_bytes} bytes`, `total_memory = ${point.working_set_bytes}`,
+      `stride = ${point.stride_bytes}`, `tlb_locality = ${point.tlb_locality_bytes}`, "chase = simple",
+      "samples (one column per thread, one row per sample):",
+      ...point.sample_nanoseconds_per_load.map(value => `${display(value)}  avg=${display(value)}`),
+      display(point.nanoseconds_per_load),
+    ].join("\n");
+    const expected = { ...point, samples: point.sample_nanoseconds_per_load.length };
+    expect(parseMultichaseOutput(text, expected)).toEqual({
+      nanoseconds_per_load: point.nanoseconds_per_load,
+      sample_nanoseconds_per_load: point.sample_nanoseconds_per_load, page_size_bytes: point.page_size_bytes,
+    });
+    expect(() => parseMultichaseOutput(`${text}\nNaN`, expected)).toThrow();
+    expect(() => parseMultichaseOutput(text, { ...expected, working_set_bytes: point.working_set_bytes + point.stride_bytes })).toThrow();
+    expect(() => parseMultichaseOutput(text.replace("chase = simple", "chase = parallel2"), expected)).toThrow();
   }
 });
 
@@ -312,7 +338,31 @@ test("the real HTTP handler uses the sampler without external network", async ()
   expect(sample.unavailable.cpu).toBe("unsupported_platform");
   expect((await handler(new Request(`http://localhost${SAMPLE_PATH}`, { method: "POST" }))).status).toBe(405);
   expect((await handler(new Request("http://localhost/not-a-route"))).status).toBe(404);
+  const offLatency = await handler(command(CACHE_LATENCY_PATH, {}));
+  expect(offLatency.headers.get("Cache-Control")).toBe("no-store");
+  expect(CacheLatencySchema.parse(await offLatency.json()).status).toBe("disabled");
+  expect((await handler(command(CACHE_LATENCY_PATH, { program: "not-an-option" }))).status).toBe(400);
+  expect((await handler(new Request(`http://localhost${CACHE_LATENCY_PATH}`))).status).toBe(405);
   await handler.close();
+  const unsupported = createSampleHandler({
+    ...config, cache_probe: { ...config.cache_probe, latency: { ...config.cache_probe.latency, enabled: true } },
+  }, { platform: "unsupported" });
+  expect(CacheLatencySchema.parse(await (await unsupported(command(CACHE_LATENCY_PATH, {}))).json()).reason).toBe("unsupported_platform");
+  await unsupported.close();
+  const bounded = createSampleHandler({
+    ...config, cache_probe: { ...config.cache_probe, lifecycle_timeout_ms: 5 },
+  }, { platform: "unsupported" });
+  let cancelledBody = false;
+  const stalled = new Request(`http://localhost${CACHE_LATENCY_PATH}`, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: new ReadableStream<Uint8Array>({
+      start(controller) { controller.enqueue(new TextEncoder().encode("{")); },
+      cancel() { cancelledBody = true; },
+    }),
+  });
+  expect((await bounded(stalled)).status).toBe(400);
+  expect(cancelledBody).toBe(true);
+  await bounded.close();
   const directory = await procDirectory();
   await rm(join(directory, "stat"));
   await mkdir(join(directory, "stat"));
@@ -366,6 +416,7 @@ test("HTTP sampling returns fixture memory and exposes a stopped CPU clock", asy
   await handler.close();
   const config = await loadConfig();
   config.task_profile = { ...config.task_profile, enabled: true, memory_enabled: false, max_profile_handles: 1 };
+  config.cache_probe.counters.enabled = true;
   const profiles: TaskProfile[] = [];
   const profilesHandler = createSampleHandler(config, { platform: "linux", procRoot: directory }, profile => { profiles.push(profile); });
   const input = { identity: taskIdentity(), target: { pid: 4242, start_ticks: "12345" } };
@@ -381,6 +432,8 @@ test("HTTP sampling returns fixture memory and exposes a stopped CPU clock", asy
     const started = StartTaskProfileResponseSchema.parse(await competing.find(result => result.status === 200)!.json());
     if (started.status !== "started") throw new Error("Enabled HTTP task profile did not start");
     expect(started.target).toEqual(input.target);
+    expect(started.cache_counters?.status).toBe("unavailable");
+    if (started.cache_counters?.status === "unavailable") expect(started.cache_counters.reason).toBe("target_not_owned");
     expect(Date.parse(started.expires_at)).toBeGreaterThan(Date.now());
     const stopping = await Promise.all([
       profilesHandler(command(STOP_TASK_PROFILE_PATH, { handle: started.handle, outcome: "success" })),
@@ -393,6 +446,7 @@ test("HTTP sampling returns fixture memory and exposes a stopped CPU clock", asy
     if (stopped.status !== "stopped") throw new Error("Enabled HTTP task profile did not stop");
     expect(stopped.end_reason).toBe("explicit_stop");
     expect(stopped.profile.outcome).toBe("success");
+    expect(stopped.cache_counters?.reason).toBe("target_not_owned");
     expect(stopped.profile.processes.worker.closing.pid).toBe(input.target.pid);
     expect(stopped.profile.processes.worker.closing.start_ticks).toBe(input.target.start_ticks);
     expect(stopped.profile.processes.worker.closing.unavailable["memory_kb.rss"]).toBe("configured_off");

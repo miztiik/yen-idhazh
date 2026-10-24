@@ -80,6 +80,14 @@ export const CacheCountersSchema = z.strictObject({
   }
 });
 export type CacheCounters = z.infer<typeof CacheCountersSchema>;
+export const CacheCountersStartSchema = z.union([
+  CacheCountersSchema,
+  z.strictObject({
+    version: z.literal(CACHE_API_VERSION), kind: z.literal("last_level_cache_counters"),
+    status: z.literal("started"), measurement_obtained: z.literal(false),
+    target: OwnedProcessSchema, events: z.array(CacheEventSchema).min(1).max(CacheEventSchema.options.length),
+  }),
+]);
 export const CacheLatencyPointSchema = z.strictObject({
   working_set_bytes: count.positive(),
   stride_bytes: count.positive(),

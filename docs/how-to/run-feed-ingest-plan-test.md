@@ -309,6 +309,11 @@ It retains real native working-set latency readings and exact perf event
 results or a typed hardware/permission refusal. A refusal leaves counter
 measurement pending on a permitted host; it is not a passing hit/miss reading.
 Optional Linux tool installation records its actual time and binary bytes.
+The counter proof reuses the controlled external-PID task API journey.
+The latency curve uses its own real HTTP command after that task closes;
+it is not CPU profiling of the caller. Default-off, unsupported, malformed
+output, scheduling percentages and body deadlines stay in the existing named
+TypeScript cases, using the bounded native recordings where readings matter.
 Its artifact uses the existing ignored
 `test-results/host-probes/resource-proof.json` test-report path; the isolated
 workflow keeps its proof in the temporary evidence root.

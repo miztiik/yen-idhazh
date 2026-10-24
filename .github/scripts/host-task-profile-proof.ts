@@ -3,6 +3,8 @@ import { randomUUID } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { z } from "../../services/host-probes/node_modules/zod";
 import { loadConfig, ProbeConfigSchema } from "../../services/host-probes/src/config";
+import type { ProbeConfig } from "../../services/host-probes/src/config";
+import { CacheCountersSchema, CacheCountersStartSchema } from "../../services/host-probes/src/cache-probe/cache-schema";
 import { serveSamples, START_TASK_PROFILE_PATH, STOP_TASK_PROFILE_PATH } from "../../services/host-probes/src/api/server";
 import {
   StartTaskProfileResponseSchema, StopTaskProfileResponseSchema,
@@ -28,16 +30,18 @@ export const TaskProfileProofSchema = z.strictObject({
   scope: z.literal("controlled_cpu_task"), handle: z.uuid(), expires_at: z.iso.datetime(),
   target: OwnedProcessSchema, server: OwnedProcessSchema, target_alive_at_stop: z.literal(true),
   work: WorkResultSchema, profile: TaskProfileSchema,
+  cache_counters_start: CacheCountersStartSchema.nullable(),
+  cache_counters: CacheCountersSchema.nullable(), repeat_stop_identical: z.literal(true),
 });
 
-export async function verifyTaskProfileHttp(identity: { run_id: string; correlation_id: string }) {
+export async function verifyTaskProfileHttp(identity: { run_id: string; correlation_id: string }, settings?: ProbeConfig) {
   if (process.platform !== "linux") throw new Error("Live PID CPU proof requires Linux");
   const controls = ControlsSchema.parse(await Bun.file(
     new URL("../../tests/fixtures/host-probes/controlled-task.json", import.meta.url),
   ).json());
-  const defaults = await loadConfig();
+  const defaults = settings ?? await loadConfig();
   const config = ProbeConfigSchema.parse({ ...defaults, task_profile: {
-    ...defaults.task_profile, enabled: true, memory_enabled: true,
+    ...defaults.task_profile, enabled: true, memory_enabled: true, machine_memory_enabled: true,
   } });
   if (config.task_profile.poll_interval_ms !== MILLISECONDS_PER_SECOND) {
     throw new Error("Controlled task proof requires the configured one-second polling cadence");
@@ -101,7 +105,8 @@ export async function verifyTaskProfileHttp(identity: { run_id: string; correlat
     const work = WorkResultSchema.parse(worked.message);
     const stoppedResponse = await post(STOP_TASK_PROFILE_PATH, { handle: started.handle, outcome: "success" });
     if (stoppedResponse.status !== 200) throw new Error("Actual task profile HTTP stop failed");
-    const stopped = StopTaskProfileResponseSchema.parse(await stoppedResponse.json());
+    const stoppedBytes = await stoppedResponse.text();
+    const stopped = StopTaskProfileResponseSchema.parse(JSON.parse(stoppedBytes));
     if (stopped.status !== "stopped") throw new Error("Enabled task CPU proof did not return its profile");
     const profile = stopped.profile;
     const worker = profile.processes.worker;
@@ -127,9 +132,14 @@ export async function verifyTaskProfileHttp(identity: { run_id: string; correlat
     if (readPinnedProcess(target, config.max_proc_bytes, {}).reason !== null) {
       throw new Error("Controlled target must remain alive through the HTTP closing observation");
     }
+    const repeated = await post(STOP_TASK_PROFILE_PATH, { handle: started.handle, outcome: "error" });
+    if (repeated.status !== 200 || await repeated.text() !== stoppedBytes) {
+      throw new Error("Repeated task and cache stop did not preserve the original response");
+    }
     return TaskProfileProofSchema.parse({
       scope: "controlled_cpu_task", handle: started.handle, expires_at: started.expires_at,
       target, server: serverPin, target_alive_at_stop: true, work, profile,
+      cache_counters_start: started.cache_counters, cache_counters: stopped.cache_counters, repeat_stop_identical: true,
     });
   } finally {
     clearTimeout(timeout);

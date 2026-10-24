@@ -1,0 +1,99 @@
+{
+  "version": "2026-10-24",
+  "kind": "cache_working_set_latency",
+  "status": "measured",
+  "reason": null,
+  "measurement_obtained": true,
+  "host": { "platform": "linux", "arch": "x64", "release": "7.0.0-1017-azure" },
+  "interval": {
+    "started_at": "2026-10-24T10:01:28.377Z",
+    "finished_at": "2026-10-24T10:01:40.010Z",
+    "elapsed_ms": 11632.542797
+  },
+  "tool": "multichase",
+  "method": "single_dependent_random_pointer_chain",
+  "prefault": "chain_construction",
+  "warmup_samples_discarded": 1,
+  "sample_period_ms": 500,
+  "statistic": "mean_of_tool_samples",
+  "interpretation": "working_set_curve_not_direct_l3_hit_latency",
+  "points": [
+    {
+      "working_set_bytes": 4096,
+      "stride_bytes": 64,
+      "tlb_locality_bytes": 4096,
+      "page_size_bytes": 4096,
+      "nanoseconds_per_load": 1.257,
+      "sample_nanoseconds_per_load": [1.246, 1.267],
+      "benchmark": { "pid": 3323, "start_ticks": "23020" },
+      "allowed_cpu": 0,
+      "interval": { "started_at": "2026-10-24T10:01:28.377Z", "finished_at": "2026-10-24T10:01:29.881Z", "elapsed_ms": 1504.0031479999998 }
+    },
+    {
+      "working_set_bytes": 32768,
+      "stride_bytes": 64,
+      "tlb_locality_bytes": 32768,
+      "page_size_bytes": 4096,
+      "nanoseconds_per_load": 1.343,
+      "sample_nanoseconds_per_load": [1.348, 1.338],
+      "benchmark": { "pid": 3325, "start_ticks": "23171" },
+      "allowed_cpu": 0,
+      "interval": { "started_at": "2026-10-24T10:01:29.881Z", "finished_at": "2026-10-24T10:01:31.384Z", "elapsed_ms": 1502.7423540000004 }
+    },
+    {
+      "working_set_bytes": 262144,
+      "stride_bytes": 64,
+      "tlb_locality_bytes": 262144,
+      "page_size_bytes": 4096,
+      "nanoseconds_per_load": 4.34,
+      "sample_nanoseconds_per_load": [4.343, 4.336],
+      "benchmark": { "pid": 3327, "start_ticks": "23321" },
+      "allowed_cpu": 0,
+      "interval": { "started_at": "2026-10-24T10:01:31.384Z", "finished_at": "2026-10-24T10:01:32.887Z", "elapsed_ms": 1502.7563719999998 }
+    },
+    {
+      "working_set_bytes": 2097152,
+      "stride_bytes": 64,
+      "tlb_locality_bytes": 262144,
+      "page_size_bytes": 4096,
+      "nanoseconds_per_load": 11.711,
+      "sample_nanoseconds_per_load": [11.718, 11.703],
+      "benchmark": { "pid": 3329, "start_ticks": "23471" },
+      "allowed_cpu": 0,
+      "interval": { "started_at": "2026-10-24T10:01:32.887Z", "finished_at": "2026-10-24T10:01:34.392Z", "elapsed_ms": 1504.9874449999998 }
+    },
+    {
+      "working_set_bytes": 16777216,
+      "stride_bytes": 64,
+      "tlb_locality_bytes": 262144,
+      "page_size_bytes": 4096,
+      "nanoseconds_per_load": 59,
+      "sample_nanoseconds_per_load": [67.379, 50.62],
+      "benchmark": { "pid": 3331, "start_ticks": "23622" },
+      "allowed_cpu": 0,
+      "interval": { "started_at": "2026-10-24T10:01:34.392Z", "finished_at": "2026-10-24T10:01:35.910Z", "elapsed_ms": 1518.361257999999 }
+    },
+    {
+      "working_set_bytes": 134217728,
+      "stride_bytes": 64,
+      "tlb_locality_bytes": 262144,
+      "page_size_bytes": 4096,
+      "nanoseconds_per_load": 77.361,
+      "sample_nanoseconds_per_load": [77.008, 77.714],
+      "benchmark": { "pid": 3333, "start_ticks": "23774" },
+      "allowed_cpu": 0,
+      "interval": { "started_at": "2026-10-24T10:01:35.910Z", "finished_at": "2026-10-24T10:01:37.538Z", "elapsed_ms": 1627.9706640000004 }
+    },
+    {
+      "working_set_bytes": 1073741824,
+      "stride_bytes": 64,
+      "tlb_locality_bytes": 262144,
+      "page_size_bytes": 4096,
+      "nanoseconds_per_load": 77.019,
+      "sample_nanoseconds_per_load": [76.872, 77.165],
+      "benchmark": { "pid": 3335, "start_ticks": "23936" },
+      "allowed_cpu": 0,
+      "interval": { "started_at": "2026-10-24T10:01:37.538Z", "finished_at": "2026-10-24T10:01:40.010Z", "elapsed_ms": 2471.683666000001 }
+    }
+  ]
+}
