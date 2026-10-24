@@ -14,6 +14,7 @@ import { createExecutionOutputs, createSeenDayInputs, writeGitHubOutputs } from 
 import { formatExecutionReport, readExecutionReport, writePlannerReport } from "../feed-ingest-plan-report";
 import { formatResourceReport } from "../feed-ingest-plan-resource-report";
 import { recordProfileEvidence } from "./feed-ingest-plan-profile-recording";
+import { ResourceProofSchema } from "../feed-ingest-plan-profile-schema";
 import type { ProgressRecord } from "../../../services/feed-ingest-plan/src/logging/progress-logger";
 import { readSeenEvidence, requiredSeenDays } from "../../../services/feed-ingest-plan/src/read-ledger-history/read-seen-evidence";
 import { utcTimestamp } from "../../../services/feed-ingest-plan/src/harvest-feeds/harvest-types";
@@ -161,6 +162,52 @@ test("actual CLI planning proof and all native files survive both real report mo
     const resourceInput = { response: summary, gitSha: identity.git_sha, machineMemoryEnabled: false, ...evidence };
     const evidenceBefore = JSON.stringify(evidence);
     const resourceReport = formatResourceReport(resourceInput);
+    const cacheEvidence = ResourceProofSchema.parse(await Bun.file(
+      new URL("../../../tests/fixtures/host-probes/cache-resource-proof.json", import.meta.url),
+    ).json());
+    Object.assign(cacheEvidence, identity);
+    if (cacheEvidence.task_profile === null || cacheEvidence.cache?.latency === null || cacheEvidence.cache === null) {
+      throw new Error("Recorded cache report fixture must contain its actual task and latency evidence");
+    }
+    // Only attempt labels change; hardware, counters, timings and latency readings stay recorded.
+    cacheEvidence.task_profile.profile.identity.run_id = identity.run_id;
+    cacheEvidence.task_profile.profile.identity.correlation_id = identity.correlation_id;
+    const cacheInput = { ...resourceInput, resourceProof: cacheEvidence };
+    const cacheReport = formatResourceReport(cacheInput);
+    const withoutCache = formatResourceReport({ ...cacheInput, resourceProof: { ...cacheEvidence, cache: null } });
+    expect(cacheReport.annotations.slice(0, -1)).toEqual([...withoutCache.annotations]);
+    expect(cacheReport.summary.split("## Table L -")[0]!.trim()).toBe(withoutCache.summary.trim());
+    const cacheSection = cacheReport.summary.split("## Table L -")[1]!;
+    const cacheHtml = Bun.markdown.html(cacheSection);
+    expect(cacheHtml.match(/<table>/g)).toHaveLength(1);
+    expect(cacheHtml.match(/<th>/g)).toHaveLength(3);
+    expect(cacheHtml.match(/<td>/g)).toHaveLength(15);
+    expect(cacheHtml).toContain("permission denied");
+    expect(cacheHtml).toContain("count null, not zero");
+    expect(cacheHtml).toContain("1.246 ns/load");
+    expect(cacheHtml).toContain("NOT direct L3-hit latency");
+    expect(cacheHtml).toContain("perf-build Python executions 0");
+    expect(cacheReport.annotations.at(-1)).toContain("Actual hardware counters were not measured");
+    for (const status of ["disabled", "unavailable"] as const) {
+      const selected = structuredClone(cacheEvidence);
+      const off = selected.cache!.default_off.latency;
+      selected.cache!.latency = status === "disabled" ? off : { ...off, status, reason: "tool_missing" };
+      const rendered = Bun.markdown.html(formatResourceReport({ ...cacheInput, resourceProof: selected }).summary);
+      expect(rendered).toContain(status === "disabled" ? "disabled (configured off)" : "unavailable (tool missing)");
+      expect(rendered).toContain("no latency reading");
+    }
+    for (const tamper of ["target", "handle", "result", "task-result", "initial", "host", "python"] as const) {
+      const foreign = structuredClone(cacheEvidence);
+      const cache = foreign.cache!;
+      if (tamper === "target") cache.task_api!.target.pid++;
+      if (tamper === "handle") cache.task_api!.handle = "b0d6a594-059f-46e1-bd6d-682452627e53";
+      if (tamper === "result") cache.counters!.events[0]!.reason = "tool_missing";
+      if (tamper === "task-result") foreign.task_profile!.cache_counters!.target.pid++;
+      if (tamper === "initial") cache.task_api!.initial.target.pid++;
+      if (tamper === "host") cache.latency!.host!.release = "another-kernel";
+      if (tamper === "python") Object.assign(cache.tool_install, { python_execution_count: 1 });
+      expect(() => formatResourceReport({ ...cacheInput, resourceProof: foreign })).toThrow();
+    }
     expect(JSON.stringify(evidence)).toBe(evidenceBefore);
     expect(resourceReport.summary).toContain("partial window");
     expect(resourceReport.summary).toContain("Preserved; no new profile");
@@ -266,10 +313,23 @@ test("actual CLI planning proof and all native files survive both real report mo
       ...recordedReport, annotate: line => cliOutput.push(line) });
     expect(await readFile(cliSummary, "utf8")).toContain(resourceReport.summary);
     for (const notice of resourceReport.annotations) expect(cliOutput).toContain(notice);
+    await writeFile(join(reportDirectory, "resource-proof.json"), JSON.stringify(cacheEvidence));
+    const visibleCacheReport = await readExecutionReport(reportDirectory, {
+      gitSha: identity.git_sha, runNumber: summary.run_id.split("-").at(-1)!, runAttempt: String(identity.attempt),
+      machineMemoryEnabled: false,
+    });
+    const cacheSummary = join(reportDirectory, "cache-summary.md");
+    const cacheNotices: string[] = [];
+    await writePlannerReport({
+      enabled: true, events: fixture.events, summaryPath: cacheSummary, ...visibleCacheReport,
+      annotate: line => cacheNotices.push(line),
+    });
+    expect(Bun.markdown.html(await readFile(cacheSummary, "utf8"))).toContain("Separate optional cache measurements");
+    expect(cacheNotices).toContain(cacheReport.annotations.at(-1)!);
     const reviewDirectory = new URL("../../../test-results/host-probes/", import.meta.url);
     await mkdir(reviewDirectory, { recursive: true });
-    await writeFile(new URL("resource-report.md", reviewDirectory), fullReport.summary);
-    await writeFile(new URL("resource-report.html", reviewDirectory), Bun.markdown.html(fullReport.summary));
+    await writeFile(new URL("resource-report.md", reviewDirectory), cacheReport.summary);
+    await writeFile(new URL("resource-report.html", reviewDirectory), Bun.markdown.html(cacheReport.summary));
     expect(executionSummary).toContain("SOURCE&#95;INACTIVE | 1/2 configured sources");
     const activeSource = summary.source_records?.find(row => row.fetch_status === "success");
     const inactiveSource = summary.source_records?.find(row => row.fetch_status === "not_requested");
