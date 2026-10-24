@@ -60,6 +60,34 @@ def test_declared_contract(module: str, name: str) -> None:
     assert contract in idhazh.contracts.CONTRACTS
     assert contract.schema_version() == contract.model_fields["version"].default
     assert contract.json_schema()["additionalProperties"] is False
+    publisher_snapshot = {"publisher_id": "recorded-publication"}
+    publisher_source = {"source": publisher_snapshot}
+    previous_identity_cases = {
+        ("feed_ingest_candidate", "FeedIngestCandidate"): ("2026-10-23", publisher_source),
+        ("feed_ingest_article_assessment", "ArticleAssessmentRecord"): ("2026-10-24", publisher_source),
+        ("feed_ingest_editorial_selection", "EditorialSelectionRow"): ("2026-10-24", publisher_source),
+        ("feed_ingest_dispatch", "FeedIngestDispatch"): (
+            "2026-10-24", {"content": publisher_source},
+        ),
+        ("feed_ingest_source_run", "SourceRunRecord"): ("2026-10-22T20:30", publisher_source),
+        ("planner_stage", "ParsedFeedBatch"): (
+            "2026-10-24", {"candidates": [{"source": publisher_snapshot}]},
+        ),
+        ("planner_stage", "SelectedFeedBatch"): (
+            "2026-10-24", {"selections": [{"source": publisher_snapshot}]},
+        ),
+        ("planner_stage", "PartitionedFeedBatch"): (
+            "2026-10-24",
+            {"dispatches": [{"content": publisher_source, "selection": publisher_source}]},
+        ),
+    }
+    previous = previous_identity_cases.get((module, name))
+    if previous is not None:
+        version, nested = previous
+        with pytest.raises(
+            ValidationError, match="curated publisher identity requires its declared contract version"
+        ):
+            contract.model_validate({"version": version, **nested})
 
 
 def test_typescript_provenance_is_declared() -> None:
@@ -206,6 +234,13 @@ def test_typescript_envelope_fields_and_footer_keys(typescript_schemas: dict[str
     from idhazh.contracts import file_envelope
     from idhazh.contracts.feed_health import FeedHealthRow
     from idhazh.contracts.publication_inventory import PublicationEntry, PublicationInventory
+
+    with pytest.raises(
+        ValidationError, match="curated publisher identity requires its declared contract version"
+    ):
+        FeedHealthRow.model_validate({
+            "version": "2026-10-23T18:50", "publisher_id": "recorded-publication",
+        })
 
     for contract in (
         file_envelope.FileEnvelope,

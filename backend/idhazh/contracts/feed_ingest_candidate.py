@@ -29,6 +29,7 @@ Finite = Annotated[float, Field(allow_inf_nan=False)]
 Count = Annotated[StrictInt, Field(ge=0)]
 PositiveCount = Annotated[StrictInt, Field(gt=0)]
 NonEmpty = Annotated[str, StringConstraints(min_length=1)]
+PUBLISHER_IDENTITY_VERSION = "2026-10-24T20:04"
 PlanningStage = Literal[
     "harvest-feeds",
     "screen-article-candidates",
@@ -36,6 +37,16 @@ PlanningStage = Literal[
     "partition-article-shards",
     "seal-article-ledger",
 ]
+
+
+def reject_legacy_publisher_identity(value: Any, snapshots: list[Any]) -> None:
+    if (
+        not isinstance(value, dict)
+        or value.get("version", PUBLISHER_IDENTITY_VERSION) == PUBLISHER_IDENTITY_VERSION
+    ):
+        return
+    if any(isinstance(snapshot, dict) and "publisher_id" in snapshot for snapshot in snapshots):
+        raise ValueError("curated publisher identity requires its declared contract version")
 
 
 def derive_candidate_id(run_id: str, source_id: str, entry_ordinal: int) -> str:
@@ -243,6 +254,7 @@ class FeedIngestCandidate(Contract):
     @classmethod
     def migrate_previous_version(cls, value: Any) -> Any:
         if isinstance(value, dict) and value.get("version") in {"2026-10-20", "2026-10-23"}:
+            reject_legacy_publisher_identity(value, [value.get("source")])
             return {**value, "version": "2026-10-24T20:04"}
         return value
 

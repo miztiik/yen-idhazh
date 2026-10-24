@@ -21,6 +21,7 @@ from idhazh.contracts.feed_ingest_candidate import (
     NonEmpty,
     PlanningStage,
     PolicyIdentity,
+    reject_legacy_publisher_identity,
     ScoreEvidence,
     SourceSnapshot,
 )
@@ -114,6 +115,8 @@ class ArticleAssessmentRecord(Contract):
     @model_validator(mode="before")
     @classmethod
     def migrate_previous_timing(cls, value: Any) -> Any:
+        if isinstance(value, dict):
+            reject_legacy_publisher_identity(value, [value.get("source")])
         if isinstance(value, dict) and value.get("version") == "2026-10-24":
             return {**value, "version": "2026-10-24T20:04"}
         if isinstance(value, dict) and value.get("version") in {

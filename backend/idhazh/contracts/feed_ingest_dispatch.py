@@ -5,7 +5,12 @@ from typing import Any, ClassVar, Literal, Self
 from pydantic import model_validator
 
 from idhazh.contracts.base import ChangelogEntry, Contract, Model
-from idhazh.contracts.feed_ingest_candidate import Count, FeedIngestCandidate, PositiveCount
+from idhazh.contracts.feed_ingest_candidate import (
+    Count,
+    FeedIngestCandidate,
+    PositiveCount,
+    reject_legacy_publisher_identity,
+)
 from idhazh.contracts.feed_ingest_editorial_selection import EditorialSelectionRow
 
 
@@ -67,7 +72,13 @@ class FeedIngestDispatch(Contract):
         if isinstance(value, dict) and value.get("version") in (
             "2026-10-20", "2026-10-22", "2026-10-23", "2026-10-24"
         ):
+            content = value.get("content")
             selection = value.get("selection")
+            snapshots = [
+                content.get("source") if isinstance(content, dict) else None,
+                selection.get("source") if isinstance(selection, dict) else None,
+            ]
+            reject_legacy_publisher_identity(value, snapshots)
             expected_selection_version = "2026-10-24" if value.get("version") == "2026-10-24" else "2026-10-20"
             if isinstance(selection, dict) and selection.get("version", "2026-10-20") != expected_selection_version:
                 raise ValueError("historical dispatch requires its original selection version")

@@ -211,6 +211,19 @@ class FeedHealthRow(Contract):
     )
     publisher_id: Slug | None = None
 
+    @model_validator(mode="before")
+    @classmethod
+    def reject_unversioned_publisher_identity(cls, value: Any) -> Any:
+        if (
+            isinstance(value, dict)
+            and value.get("version", cls.schema_version()) != cls.schema_version()
+            and "publisher_id" in value
+        ):
+            raise ValueError(
+                "curated publisher identity requires its declared contract version"
+            )
+        return value
+
     @model_validator(mode="after")
     def _precision_matches_the_declared_shape(self) -> Self:
         if "." in self.checked_at and self.version < "2026-10-23T18:50":

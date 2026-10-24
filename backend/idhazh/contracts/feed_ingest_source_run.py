@@ -18,7 +18,7 @@ from idhazh.contracts.base import (
     Slug,
     Timestamp,
 )
-from idhazh.contracts.feed_ingest_candidate import SourceSnapshot
+from idhazh.contracts.feed_ingest_candidate import SourceSnapshot, reject_legacy_publisher_identity
 from idhazh.contracts.feed_ingest_rejection import DropReason, RejectionStage
 from idhazh.contracts.taxonomy import LifecycleStatus
 
@@ -159,6 +159,7 @@ class SourceRunRecord(Contract):
         if isinstance(value, dict) and value.get("version") in {
             "2026-10-20", "2026-10-22", "2026-10-22T10:05", "2026-10-22T18:15", "2026-10-22T20:30"
         }:
+            reject_legacy_publisher_identity(value, [value.get("source")])
             legacy_reasons = {"ALREADY_PUBLISHED", "SETTLED_FAILURE", "BLOCKED_URL_MARKER"}
             drop_reasons = value.get("drop_reasons", [])
             uses_new_reason = value.get("last_failure_reason") in legacy_reasons or (

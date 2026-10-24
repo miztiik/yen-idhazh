@@ -23,6 +23,7 @@ from idhazh.contracts.feed_ingest_candidate import (
     NonNegative,
     OperationalHistory,
     PositiveCount,
+    reject_legacy_publisher_identity,
 )
 from idhazh.contracts.feed_ingest_diagnostics import FetchFailure, HarvestDiagnostics
 from idhazh.contracts.feed_ingest_dispatch import FeedIngestDispatch
@@ -232,6 +233,12 @@ class ParsedFeedBatch(Contract):
     @classmethod
     def migrate_previous_version(cls, value: Any) -> Any:
         if isinstance(value, dict) and value.get("version") == "2026-10-24":
+            candidates = value.get("candidates")
+            reject_legacy_publisher_identity(value, [
+                candidate.get("source")
+                for candidate in candidates
+                if isinstance(candidate, dict)
+            ] if isinstance(candidates, list) else [])
             return {**value, "version": "2026-10-24T20:04"}
         return value
 
@@ -291,6 +298,12 @@ class SelectedFeedBatch(Contract):
     @classmethod
     def migrate_previous_version(cls, value: Any) -> Any:
         if isinstance(value, dict) and value.get("version") == "2026-10-24":
+            selections = value.get("selections")
+            reject_legacy_publisher_identity(value, [
+                selection.get("source")
+                for selection in selections
+                if isinstance(selection, dict)
+            ] if isinstance(selections, list) else [])
             return {**value, "version": "2026-10-24T20:04"}
         return value
 
@@ -350,6 +363,18 @@ class PartitionedFeedBatch(Contract):
     @classmethod
     def migrate_previous_version(cls, value: Any) -> Any:
         if isinstance(value, dict) and value.get("version") == "2026-10-24":
+            dispatches = value.get("dispatches")
+            snapshots = []
+            if isinstance(dispatches, list):
+                for dispatch in dispatches:
+                    if not isinstance(dispatch, dict):
+                        continue
+                    content, selection = dispatch.get("content"), dispatch.get("selection")
+                    snapshots.extend([
+                        content.get("source") if isinstance(content, dict) else None,
+                        selection.get("source") if isinstance(selection, dict) else None,
+                    ])
+            reject_legacy_publisher_identity(value, snapshots)
             return {**value, "version": "2026-10-24T20:04"}
         return value
 
