@@ -1143,11 +1143,13 @@ counts use the untouched archive and the completed branch instead.
   runner restores the source after each fault.
 - **Local gates:** The six focused config, silicon and council tests passed
   after the nullable-clock assertion, before the main merge. Ruff and
-  whitespace checks passed. Mypy found that timestamp could be absent; the
-  test now requires its presence before parsing it, but the type-check rerun
-  has not returned. Independent fault proofs and the refreshed shared selector
-  remain pending. CI on the merge candidate is authoritative. No published
-  site behavior changed.
+  whitespace checks passed. Mypy passed on the eight affected source and test
+  files. Three production-fault proofs passed: ignoring configured false,
+  ignoring caller false, and disabling local collection when placement is off.
+  The fault runner restored `silicon.py` byte-for-byte. The shared selector
+  list was preserved; its run was stopped while waiting for all five seats and
+  grants no test certification. CI on the merge candidate is authoritative.
+  No published site behavior changed.
 - **Plan integration:** Verified and imported the complete frozen Row 16
   predecessor, 89,674 bytes, SHA-256
   `9b79f8297e884665f4a77f0f0b6faedc6de97bac39a9a860e18fcda4019563be`.
