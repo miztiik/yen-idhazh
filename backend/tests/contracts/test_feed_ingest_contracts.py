@@ -64,8 +64,12 @@ def test_declared_contract(module: str, name: str) -> None:
     publisher_source = {"source": publisher_snapshot}
     previous_identity_cases = {
         ("feed_ingest_candidate", "FeedIngestCandidate"): ("2026-10-23", publisher_source),
-        ("feed_ingest_article_assessment", "ArticleAssessmentRecord"): ("2026-10-24", publisher_source),
-        ("feed_ingest_editorial_selection", "EditorialSelectionRow"): ("2026-10-24", publisher_source),
+        ("feed_ingest_article_assessment", "ArticleAssessmentRecord"): (
+            "2026-10-24", publisher_source,
+        ),
+        ("feed_ingest_editorial_selection", "EditorialSelectionRow"): (
+            "2026-10-24", publisher_source,
+        ),
         ("feed_ingest_dispatch", "FeedIngestDispatch"): (
             "2026-10-24", {"content": publisher_source},
         ),
@@ -85,7 +89,8 @@ def test_declared_contract(module: str, name: str) -> None:
     if previous is not None:
         version, nested = previous
         with pytest.raises(
-            ValidationError, match="curated publisher identity requires its declared contract version"
+            ValidationError,
+            match="curated publisher identity requires its declared contract version",
         ):
             contract.model_validate({"version": version, **nested})
 
@@ -236,7 +241,8 @@ def test_typescript_envelope_fields_and_footer_keys(typescript_schemas: dict[str
     from idhazh.contracts.publication_inventory import PublicationEntry, PublicationInventory
 
     with pytest.raises(
-        ValidationError, match="curated publisher identity requires its declared contract version"
+        ValidationError,
+        match="curated publisher identity requires its declared contract version",
     ):
         FeedHealthRow.model_validate({
             "version": "2026-10-23T18:50", "publisher_id": "recorded-publication",

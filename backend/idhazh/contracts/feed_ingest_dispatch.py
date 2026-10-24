@@ -79,8 +79,13 @@ class FeedIngestDispatch(Contract):
                 selection.get("source") if isinstance(selection, dict) else None,
             ]
             reject_legacy_publisher_identity(value, snapshots)
-            expected_selection_version = "2026-10-24" if value.get("version") == "2026-10-24" else "2026-10-20"
-            if isinstance(selection, dict) and selection.get("version", "2026-10-20") != expected_selection_version:
+            expected_selection_version = (
+                "2026-10-24" if value.get("version") == "2026-10-24" else "2026-10-20"
+            )
+            if (
+                isinstance(selection, dict)
+                and selection.get("version", "2026-10-20") != expected_selection_version
+            ):
                 raise ValueError("historical dispatch requires its original selection version")
             return {**value, "version": "2026-10-24T20:04"}
         return value

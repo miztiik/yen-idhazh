@@ -20,7 +20,15 @@ from typing import ClassVar, Self
 
 from pydantic import Field, model_validator
 
-from idhazh.contracts.base import ChangelogEntry, Contract, DateStamp, Model, Slug, Url, records_json
+from idhazh.contracts.base import (
+    ChangelogEntry,
+    Contract,
+    DateStamp,
+    Model,
+    Slug,
+    Url,
+    records_json,
+)
 from idhazh.contracts.taxonomy import (
     Lifecycled,
     LifecycleStatus,
@@ -83,10 +91,15 @@ class PublisherDef(Model):
         if self.status is not LifecycleStatus.RETIRED and has_retirement_fields:
             raise ValueError("retirement fields are only meaningful on a retired publisher")
         if self.retirement_reason is not None and (
-            not self.retirement_reason.strip() or self.retirement_reason != self.retirement_reason.lower()
+            not self.retirement_reason.strip()
+            or self.retirement_reason != self.retirement_reason.lower()
         ):
             raise ValueError("publisher retirement_reason must be nonempty lowercase text")
-        if self.retired_on is not None and self.added_on is not None and self.retired_on < self.added_on:
+        if (
+            self.retired_on is not None
+            and self.added_on is not None
+            and self.retired_on < self.added_on
+        ):
             raise ValueError("retired_on cannot precede added_on")
         return self
 

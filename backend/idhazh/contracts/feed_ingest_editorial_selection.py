@@ -67,7 +67,11 @@ class EditorialSelectionRow(Contract):
         if isinstance(value, dict) and value.get("version") in {"2026-10-20", "2026-10-24"}:
             reject_legacy_publisher_identity(value, [value.get("source")])
             ratings = value.get("ratings")
-            if value.get("version") == "2026-10-20" and isinstance(ratings, dict) and ratings.get("source_reliability") is not None:
+            if (
+                value.get("version") == "2026-10-20"
+                and isinstance(ratings, dict)
+                and ratings.get("source_reliability") is not None
+            ):
                 raise ValueError("source reliability requires the declared score contract version")
             return {**value, "version": "2026-10-24T20:04"}
         return value
