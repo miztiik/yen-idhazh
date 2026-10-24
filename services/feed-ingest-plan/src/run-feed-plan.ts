@@ -99,7 +99,6 @@ export async function runFeedPlan(raw: unknown, inputs: PlanInputs, runtime: Pla
     settledFailureDays: inputs.settings.inputs.settled_failure_days,
     }),
     published_window_days: inputs.clock_config.collect.published_window_days,
-    blocked_url_markers: inputs.clock_config.collect.blocked_url_markers,
   };
   const feedHistory = await readFeedHistory({
     root: inputs.root, now: context.captured_at, run_id: context.run_id,

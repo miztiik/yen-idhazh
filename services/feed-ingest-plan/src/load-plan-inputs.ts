@@ -1,7 +1,7 @@
 /** Which named authored files supply one validated planner invocation? */
 import { resolve } from "node:path";
 import { z } from "zod";
-import { ItemHealthFailureCodeSchema, NonNegativeSchema, NonEmptySchema } from "@idhazh/common-contracts";
+import { ItemHealthFailureCodeSchema, NonNegativeSchema } from "@idhazh/common-contracts";
 import { readHarvestInputs } from "./harvest-feeds/load-harvest-inputs";
 import { ServiceSettingsSchema } from "./config/service-settings";
 import { FeedHistoryPolicySchema } from "./read-ledger-history/read-feed-history";
@@ -26,7 +26,6 @@ const ExtractionSettingsSchema = z.object({
     max_future_hours: NonNegativeSchema, seen_window_days: z.int().nonnegative(),
     published_window_days: z.int().nonnegative(),
     settled_failure_codes: z.array(ItemHealthFailureCodeSchema),
-    blocked_url_markers: z.array(NonEmptySchema),
   }),
 });
 

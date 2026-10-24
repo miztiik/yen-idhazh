@@ -129,6 +129,15 @@ export async function readSafety() {
     sanitizer_version: z.string(),
     sanitizer: z.array(z.object({ input: z.string(), expected: z.string() })),
     unsafe_targets: z.array(z.string()),
+    url_exclusions: z.array(z.object({
+      host: z.string(), path_prefix: z.string(), include_subdomains: z.boolean(),
+    })),
+    url_exclusion_cases: z.array(z.object({
+      name: z.string(), url: z.string(),
+      rules: z.array(z.object({ host: z.string(), path_prefix: z.string(), include_subdomains: z.boolean() })).optional(),
+      expected: z.boolean(),
+    })),
+    invalid_url_exclusions: z.array(z.unknown()),
     robots: z.array(z.object({
       name: z.string(), body: z.string(), allowed: z.array(z.string()), denied: z.array(z.string()),
     })),
