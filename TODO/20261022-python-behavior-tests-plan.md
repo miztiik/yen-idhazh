@@ -1305,8 +1305,9 @@ counts use the untouched archive and the completed branch instead.
   eligibility, provenance, true reasons and historical reads. Exercise the
   12/13 wording edge with valid test-owned counts. Compose real rank output
   with lead selection to prove the committed carriage step beats a qualifying
-  shared-subject term, while a zero-weight control proves that subject term is
-  active.
+  shared-subject term. Give the neutral comparison a strict native rank
+  advantage so the zero-weight control proves that subject term is active
+  without relying on tie order.
 - **Visual behavior:** Reverse both channels in a valid plan and derive the
   expected marks from that plan and its table. Compare complete alt-text
   number tokens to the source values. Keep published-data, provenance,

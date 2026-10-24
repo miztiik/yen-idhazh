@@ -418,7 +418,7 @@ def test_the_weights_bind_and_the_top_story_is_not_the_top_rank_score() -> None:
 
 
 def test_rank_carriage_outranks_a_qualifying_shared_subject_in_the_block() -> None:
-    """The committed rank step must beat the smaller subject term in the real path."""
+    """The committed carriage step beats a smaller subject term in the real path."""
     configured = load()
     app = configured.app
     ui = app.ui
@@ -430,6 +430,7 @@ def test_rank_carriage_outranks_a_qualifying_shared_subject_in_the_block() -> No
         url: str,
         title: str,
         source_ids: list[str],
+        feed_weight: float,
     ) -> tuple[DigestItem, PlannedItem]:
         candidates = [
             Candidate(
@@ -442,7 +443,7 @@ def test_rank_carriage_outranks_a_qualifying_shared_subject_in_the_block() -> No
                 source_form=SourceForm.ARTICLE,
                 title=title,
                 published_at=NOW,
-                weight=1.0,
+                weight=feed_weight,
             )
             for source_id in source_ids
         ]
@@ -475,6 +476,7 @@ def test_rank_carriage_outranks_a_qualifying_shared_subject_in_the_block() -> No
         url="https://extra.example.test/report",
         title="A new chip order",
         source_ids=["extra-feed-a", "extra-feed-b"],
+        feed_weight=0.9,
     )
     subject_entries = [
         planned_story(
@@ -483,6 +485,7 @@ def test_rank_carriage_outranks_a_qualifying_shared_subject_in_the_block() -> No
             url=f"https://subject.example.test/report-{index}",
             title=f"Nvidia reports an update {index}",
             source_ids=[f"subject-feed-{index}"],
+            feed_weight=0.9,
         )
         for index in range(ui.lead_cluster_floor)
     ]
@@ -494,6 +497,7 @@ def test_rank_carriage_outranks_a_qualifying_shared_subject_in_the_block() -> No
         url="https://neutral.example.test/report",
         title="A report on business conditions",
         source_ids=["neutral-feed"],
+        feed_weight=1.0,
     )
     items = [extra, *subjects, neutral]
 
@@ -542,7 +546,8 @@ def test_rank_carriage_outranks_a_qualifying_shared_subject_in_the_block() -> No
         getattr(extra_ranked, term) == getattr(subject_ranks[0], term)
         for term in equal_terms
     )
-    assert all(ranked.rank_score == neutral_ranked.rank_score for ranked in subject_ranks)
+    assert all(ranked.rank_score == subject_ranks[0].rank_score for ranked in subject_ranks)
+    assert all(neutral_ranked.rank_score > ranked.rank_score for ranked in subject_ranks)
 
     cluster = next(
         entry
