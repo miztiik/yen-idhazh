@@ -859,7 +859,7 @@ counts use the untouched archive and the completed branch instead.
   `backend/tests/test_data_wrangler.py`, `backend/tests/test_derived_values.py`,
   `backend/tests/test_drift.py`, `backend/tests/test_elements.py`,
   `backend/tests/test_entity_gap.py`, `backend/tests/test_evals.py` and
-  `backend/utilities/drift_report.py`, plus
+  `backend/utilities/drift_report.py`, `docs/reference/github-actions.md` and
   `TODO/20261022-python-behavior-tests-plan.md` for this evidence correction.
 - **Changes and acceptance proof:**
   - Refuse a nonpositive pool multiple at the existing validation boundary;
