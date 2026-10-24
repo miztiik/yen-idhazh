@@ -1,0 +1,58 @@
+{
+  "feeds": [
+    {
+      "id": "zeta-lab",
+      "vertical": "research",
+      "title": "Zeta \"lab\", abstracts",
+      "url": "https://example.test/zeta.xml",
+      "tier": 7,
+      "kind": "research-note",
+      "form": "abstract",
+      "weight": 0.35,
+      "status": "draft",
+      "retired_on": null
+    },
+    {
+      "id": "alpha-desk",
+      "vertical": "energy",
+      "title": "Alpha desk",
+      "url": "https://example.test/alpha.xml",
+      "tier": 3,
+      "kind": "reporting",
+      "form": "article",
+      "weight": 1.0,
+      "status": "active",
+      "retired_on": null
+    }
+  ],
+  "salience": [
+    {
+      "id": "zeta-votes",
+      "title": "Zeta front page",
+      "url": "https://example.test/votes-z.xml",
+      "status": "draft",
+      "retired_on": null
+    },
+    {
+      "id": "alpha-votes",
+      "title": "Alpha front page",
+      "url": "https://example.test/votes-a.xml",
+      "status": "active",
+      "retired_on": null
+    }
+  ],
+  "retired": [
+    {
+      "id": "old-desk",
+      "vertical": "energy",
+      "title": "Old desk",
+      "url": "https://example.test/old.xml",
+      "tier": 9,
+      "kind": "announcement",
+      "form": "article",
+      "weight": 0.15,
+      "status": "retired",
+      "retired_on": "2026-09-15"
+    }
+  ]
+}

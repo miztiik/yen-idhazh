@@ -1262,14 +1262,24 @@ def test_no_placeholder_survives_into_a_rendered_prompt() -> None:
 
 
 def test_a_recorded_brief_uses_the_brief_band_even_when_the_source_is_longer() -> None:
+    ask = SummarizeConfig(
+        bands=[
+            SummaryBand(min_source_words=0, target_words_min=43, target_words_max=57),
+            SummaryBand(min_source_words=100, target_words_min=83, target_words_max=109),
+        ]
+    )
     source = article().model_copy(update={"brief": True, "word_count": 190})
     payload = build_request(
-        source, model_id="m", sampling=a_sampling(), markers=built_envelope()
+        source,
+        model_id="m",
+        sampling=a_sampling(),
+        markers=built_envelope(),
+        prompt_config=ask,
     )
     system = payload["messages"][0]["content"]
 
-    assert "30 to 45 words" in system
-    assert "50 to 90 words" not in system
+    assert "43 to 57 words" in system
+    assert "83 to 109 words" not in system
 
 
 def test_a_cut_long_read_is_still_asked_for_a_long_read_summary() -> None:

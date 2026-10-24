@@ -492,7 +492,7 @@ def test_a_matrix_with_no_cells_never_reaches_the_strategy_evaluator() -> None:
     )
     assert (
         _normalize_condition(_job(_judges(), "save_council_results")["if"], "the saving job")
-        == "always()"
+        == "always() && needs.job_bounds.result == 'success'"
     )
 
 
@@ -566,7 +566,7 @@ def test_a_dead_unit_does_not_cancel_its_siblings() -> None:
     # The harness reads the file as text, so a YAML boolean arrives as the word
     # somebody wrote. Comparing to the word is what this file can actually see.
     assert str(strategy["fail-fast"]).lower() == "false"
-    assert collect["needs"] == ["draw", "judge"]
+    assert collect["needs"] == ["job_bounds", "draw", "judge"]
 
 
 def test_a_unit_that_stops_early_still_ships_what_it_did() -> None:
@@ -665,6 +665,7 @@ def test_each_job_holds_only_the_permissions_its_steps_use() -> None:
     """Only the collecting job can write; judge code has a read-only token."""
     workflow = _judges()
     expected = {
+        "job_bounds": {"contents": "read"},
         "draw": {"contents": "read"},
         "judge": {"contents": "read", "actions": "read"},
         "save_council_results": {"contents": "write", "actions": "read"},

@@ -539,9 +539,15 @@ def test_both_parsers_read_a_folded_shard_to_the_same_cells(tmp_path: Path) -> N
     """
     node = shutil.which("node")
     if node is None:
-        pytest.skip("node is not on PATH")
-    if not _BROWSER_PARSER.exists():
-        pytest.skip("the published bundle's parser is not in this checkout")
+        pytest.fail(
+            "node is required on PATH for the Python/browser CSV reader contract; "
+            "use the Node requirement in docs/how-to/run-the-gates.md"
+        )
+    if not _BROWSER_PARSER.is_file():
+        pytest.fail(
+            "required browser CSV reader is missing: frontend/src/lib/charts/series.ts; "
+            "restore the reader before running the contract gate"
+        )
 
     column = field_column(ItemHealthRow.model_fields["cpu_model"])
     expected = [fit_cell(raw, column=column, absent=ABSENT) for raw in HOSTILE.values()]
