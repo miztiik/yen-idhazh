@@ -448,18 +448,6 @@ def compare_step() -> dict[str, object]:
     raise AssertionError(f"drift.yml no longer has a {COMPARE_STEP!r} step")
 
 
-def review_program() -> str:
-    """The exact bytes the step runs, read from the module it calls.
-
-    Read rather than copied. A second copy would pass its own tests forever
-    while the shipped one exited 0 on an empty window.
-    """
-    script = compare_step()["run"]
-    assert isinstance(script, str)
-    assert REVIEW_MODULE in script, "the review step no longer calls the module this drives"
-    return read_text(REPO_ROOT / REVIEW_MODULE)
-
-
 def scheduled_windows() -> dict[str, str]:
     """What a scheduled run puts in the environment: every `|| 'N'` default.
 
@@ -521,7 +509,9 @@ def file_rows(directory: Path, filed: list[EvalRow]) -> None:
         )
 
 
-def ledger(directory: Path, *, recent: int, baseline: int) -> None:
+def ledger(
+    directory: Path, *, recent: int, baseline: int, today: datetime.date | None = None
+) -> None:
     """A ledger holding two windows of identical, healthy rows, and one row older than both.
 
     Identical on both sides on purpose: the second half of this row's oracle is
@@ -529,7 +519,7 @@ def ledger(directory: Path, *, recent: int, baseline: int) -> None:
     movement in it could not tell a pass from a lucky threshold. The older row
     is what makes an empty window an empty window rather than an absent ledger.
     """
-    today = datetime.datetime.now(datetime.UTC).date()
+    today = today or datetime.datetime.now(datetime.UTC).date()
     windows = scheduled_windows()
     older = int(windows["RECENT_DAYS"]) + int(windows["BASELINE_DAYS"]) + 1
     file_rows(
@@ -567,18 +557,38 @@ def review(directory: Path) -> subprocess.CompletedProcess[str]:
     )
 
 
-def enough() -> int:
-    config = AppConfig.from_json(read_text(CONFIG_DIR / "idhazh.json")).drift
-    return max(config.min_window_rows, config.min_domain_rows)
+def test_the_review_reports_a_test_owned_recent_window_shortfall(tmp_path: Path) -> None:
+    today = datetime.date(2026, 8, 21)
+    required = 7
+    ledger(tmp_path, recent=required - 1, baseline=required, today=today)
+    scheduled = scheduled_windows()
+    windows = read_windows(
+        tmp_path / "state",
+        today=today,
+        recent_days=int(scheduled["RECENT_DAYS"]),
+        baseline_days=int(scheduled["BASELINE_DAYS"]),
+    )
+    drift_config = DriftConfig.model_validate(
+        {
+            **DriftConfig().model_dump(mode="json"),
+            "min_window_rows": required,
+            "min_domain_rows": 2,
+        }
+    )
+
+    text, status = report(windows, config=drift_config)
+
+    assert status == 1
+    assert (
+        f"the recent window holds {required - 1} of the {required} rows "
+        "a comparison needs"
+    ) in text
 
 
-def test_the_review_reads_its_floor_from_config() -> None:
-    """Guardrail #6. The shipped program asks config, and carries no number of its own."""
-    program = review_program()
+def configured_floor() -> int:
+    drift = AppConfig.from_json(read_text(CONFIG_DIR / "idhazh.json")).drift
+    return max(drift.min_window_rows, drift.min_domain_rows)
 
-    assert "config = load().app.drift" in program
-    assert "from idhazh.config import load" in program
-    assert enough() >= 1
 
 #: What the review prints when neither window holds a row, so there is no day to read.
 NO_DAY: Final = (
@@ -609,7 +619,11 @@ def test_the_review_fails_when_it_compared_nothing(
     One empty side is named by the side. With both sides empty the windows hold
     no day at all, and the review says that instead.
     """
-    ledger(tmp_path, recent=enough() * recent, baseline=enough() * baseline)
+    ledger(
+        tmp_path,
+        recent=configured_floor() * recent,
+        baseline=configured_floor() * baseline,
+    )
     result = review(tmp_path)
 
     assert result.returncode != 0, result.stdout
@@ -626,7 +640,7 @@ def test_the_review_fails_when_it_compared_nothing(
 
 def test_a_populated_pair_of_windows_with_no_drift_still_passes(tmp_path: Path) -> None:
     """The other half of the oracle: the fix must not turn healthy into broken."""
-    ledger(tmp_path, recent=enough(), baseline=enough())
+    ledger(tmp_path, recent=configured_floor(), baseline=configured_floor())
     result = review(tmp_path)
 
     assert result.returncode == 0, result.stdout + result.stderr
@@ -652,7 +666,7 @@ def test_the_review_still_fires_on_real_drift(tmp_path: Path) -> None:
                 today - datetime.timedelta(days=age), f"{HEALTHY}/{age}/{index}", words=words
             )
             for age, words in ((1, 150), (14, 1200))
-            for index in range(enough())
+            for index in range(configured_floor())
         ],
     )
 
@@ -701,7 +715,7 @@ def test_full_windows_with_only_sparse_domains_are_not_a_clean_review(tmp_path: 
         [
             measured(when, f"https://domain-{index}.example/{when}", hhem=0.9, words=100)
             for when in ("2026-09-05", "2026-08-20")
-            for index in range(enough())
+            for index in range(configured_floor())
         ],
     )
     windows = read_windows(

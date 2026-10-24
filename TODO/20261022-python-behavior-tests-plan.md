@@ -65,7 +65,10 @@ Table D - PR outcomes
 | D7 | 7 | Config reader values and accurate migration test names | 1 | F | DONE | config-reader-behavior-proofs | [#1653](https://github.com/miztiik/yen-idhazh/pull/1653) | - |
 | D8 | 8 | Workflow checks retain independent failure evidence | 1 | G | DONE | workflow-behavior-proofs | [#1656](https://github.com/miztiik/yen-idhazh/pull/1656), merged at `43bdd37d671275af2f904590f7ca69498cc74a91` | - |
 | D9 | 9 | Remove the unused watchlist entry limit | 1 | H | DONE | remove-unused-watchlist-limit | [#1657](https://github.com/miztiik/yen-idhazh/pull/1657), merged at `f479997fec70f4f57b13a6d3a649b5d92a4fd5f7` | - |
-| D10 | 10 | Independent historical reader proofs | 1 | I | IN-FLIGHT | independent-historical-reader-proofs | [#1659](https://github.com/miztiik/yen-idhazh/pull/1659) | - |
+| D10 | 10 | Independent historical reader proofs | 1 | I | DONE | independent-historical-reader-proofs | [#1659](https://github.com/miztiik/yen-idhazh/pull/1659), merged 2026-10-24 UTC at `f0449de3db08c710e5b2292a03910da157bcb498` | - |
+| D11 | 11 | Contract tests prove authored and constructed behavior | 1 | J | IN-FLIGHT | config-refusal-selection-proofs | - | - |
+| D12 | 12 | Explicit controls and measurement behavior | 1 | K | IN-FLIGHT | explicit-control-behavior-proofs | [#1661](https://github.com/miztiik/yen-idhazh/pull/1661) | - |
+| D13 | 13 | Extraction and metric behavior | 1 | L | IN-FLIGHT | row13-test-proofs | - | - |
 
 The canary implementation for Row 3 is delivered separately from its suite-wide
 review obligation. Rows 5 and 6 carry additional changes found by that review.
@@ -634,9 +637,253 @@ counts use the untouched archive and the completed branch instead.
   Row 9's frozen full successor as the input. All prior row text and the exact
   owner ruling in A5 remain; D3 remains open. Rows 5, 8 and 9 have their verified
   merge receipts above. Plan-only integration does not repeat unchanged gates.
-- **Delivery:** Implementation commit `90c58a26c` is in open PR
-  [#1659](https://github.com/miztiik/yen-idhazh/pull/1659). This phase is
-  delivered for review, not merged. The suite-wide Row 3 review remains open.
+- **Delivery:** Implementation commit `90c58a26c` is in PR
+  [#1659](https://github.com/miztiik/yen-idhazh/pull/1659), merged 2026-10-24
+  UTC at `f0449de3db08c710e5b2292a03910da157bcb498`. The suite-wide Row 3
+  review remains open.
+
+## 12 - Row #11 - Contract tests prove authored and constructed behavior
+
+- **Scope:** Replace assertions tied to current committed values with bounded
+  authored or constructed inputs in seven contract-test modules. Preserve the
+  contract behavior, historical acceptance, path rules and reader bindings.
+- **Files touched:**
+  - `backend/tests/contracts/test_retention_knobs.py`
+  - `backend/tests/contracts/test_model_registry.py`
+  - `backend/tests/contracts/test_ledger_registry.py`
+  - `backend/tests/contracts/test_taxonomy_and_prompts.py`
+  - `backend/tests/contracts/test_sources_and_marks.py`
+  - `backend/tests/contracts/test_ledger_index.py`
+  - `backend/tests/contracts/test_source_classification_binding.py`
+- **Changes and acceptance proof:**
+  - Compare the loaded rest threshold with the file value, keep the tuned
+    threshold and real `after_failures` caller, and remove only the committed
+    literal. Construct a finite published window one day beyond the authored
+    first-sight window; require the loaded value and relation, not `730`.
+    Keep named retired-key refusals and both the moved key and successor file
+    in the prune refusal.
+  - Hash the copied model-file bytes independently with SHA-256, then prove
+    unchanged stability and changed-byte sensitivity. Remove the stale-teacher
+    premise while retaining its named destination error. Keep
+    `declared_for == sha256` for every file in the bounded `MODEL_FILES` list.
+  - Construct a nonalphabetical mixed-consent registry with an independent
+    expected order. Explicitly enable consent when proving paused and retired
+    family behavior. Construct every grain's valid stem/suffix pair and both
+    refused edits instead of scanning committed registry entries.
+  - Require missing definitions to be refused for active verticals, lenses
+    and events, and keep the prompt-block proof that all active definitions
+    appear while draft and retired entries do not. Use the bounded
+    `definitions-a` taxonomy to prove a published retired lens still reads
+    while its tombstone stops new matching.
+  - Require the compact-index decoded model to equal the object written, not
+    only to serialize to stable text. Compare TypeScript field types with the
+    live Python JSON Schema using the TypeScript compiler API, require an
+    invalid property name in the refusal, and test omitted defaults beside
+    separately authored source kind and entity tier values.
+- **Gates:** Run the shared changed-test selector over the seven backend
+  modules and the frontend type-binding logic test, with Ruff and mypy.
+  In disposable archive copies, fault each preserved behavior and record its
+  full failing pytest or frontend test identifier below. The frontend change
+  adds only a contract test and selector inventory entry; no production,
+  config, committed data, persisted shape, emitted-byte or acceptance change.
+- **Dependencies:** Row 1. Serialize edits to this shared plan.
+- **Proof record:** Disposable archive faults each failed the named case; no
+  temporary fault changed this worktree.
+  - Hard-coding the plan caller failed
+    `backend/tests/contracts/test_retention_knobs.py::test_the_rest_rule_reads_the_knob_the_committed_config_spells`.
+    Aliasing the published window to the first-sight field failed
+    `backend/tests/contracts/test_retention_knobs.py::test_the_published_window_is_unbounded_or_outlives_the_first_sight_store`.
+    Truncating the prune successor path failed both
+    `backend/tests/contracts/test_retention_knobs.py::test_a_prune_number_left_in_finetune_is_sent_to_the_squash_declaration[prune_every_days]`
+    and
+    `backend/tests/contracts/test_retention_knobs.py::test_a_prune_number_left_in_finetune_is_sent_to_the_squash_declaration[prune_keep_days]`.
+    Replacing the named retired-key refusal with a generic error failed all
+    six cases of
+    `backend/tests/contracts/test_retention_knobs.py::test_a_config_still_spelling_a_retired_knob_is_refused_by_name`:
+    `[models-visual_planner]`,
+    `backend/tests/contracts/test_retention_knobs.py::test_a_config_still_spelling_a_retired_knob_is_refused_by_name[models-route]`,
+    `backend/tests/contracts/test_retention_knobs.py::test_a_config_still_spelling_a_retired_knob_is_refused_by_name[run-two_calls_per_item]`,
+    `backend/tests/contracts/test_retention_knobs.py::test_a_config_still_spelling_a_retired_knob_is_refused_by_name[run-visual_planner_budget_minutes]`,
+    `backend/tests/contracts/test_retention_knobs.py::test_a_config_still_spelling_a_retired_knob_is_refused_by_name[run-route_budget_minutes]`
+    and
+    `backend/tests/contracts/test_retention_knobs.py::test_a_config_still_spelling_a_retired_knob_is_refused_by_name[finetune-student]`.
+  - Normalizing model-file bytes failed
+    `backend/tests/contracts/test_model_registry.py::test_the_model_file_bytes_are_digested_with_the_rest_of_the_config`.
+    A stale pairing in an inactive named model file failed
+    `backend/tests/contracts/test_model_registry.py::test_every_model_file_loads_and_not_only_the_one_the_pointer_names`.
+    Repointing the stale teacher to the wrong destination failed
+    `backend/tests/contracts/test_model_registry.py::test_the_teacher_names_the_slot_the_model_file_declares`.
+  - Reversing registry family order failed
+    `backend/tests/contracts/test_ledger_registry.py::test_explorer_catalog_derives_eligible_names_from_registry_order`.
+    Tying explicit consent to family status failed both
+    `backend/tests/contracts/test_ledger_registry.py::test_explorer_consent_is_independent_of_family_lifecycle[paused]`
+    and
+    `backend/tests/contracts/test_ledger_registry.py::test_explorer_consent_is_independent_of_family_lifecycle[retired]`.
+    Removing the flat stem failed
+    `backend/tests/contracts/test_ledger_registry.py::test_a_grain_accepts_its_path_fields_and_refuses_the_other_shapes[flat-score-distribution-.json]`;
+    requiring a tree suffix failed the same test's
+    `[tree-None-None]` case.
+  - Removing active-definition validation failed all three constructed cases
+    `backend/tests/contracts/test_taxonomy_and_prompts.py::test_an_offered_entry_without_a_definition_is_refused[verticals]`,
+    `backend/tests/contracts/test_taxonomy_and_prompts.py::test_an_offered_entry_without_a_definition_is_refused[lenses]`
+    and
+    `backend/tests/contracts/test_taxonomy_and_prompts.py::test_an_offered_entry_without_a_definition_is_refused[events]`.
+    Omitting an active event and admitting a draft
+    each failed
+    `backend/tests/contracts/test_taxonomy_and_prompts.py::test_a_draft_or_retired_entry_reaches_no_prompt`.
+    Making a retired lens matchable failed
+    `backend/tests/contracts/test_sources_and_marks.py::test_a_published_item_carrying_a_retired_lens_still_reads`.
+  -   Omitting compact-index state from a stable writer, with an empty entry in
+  the disposable input, passed text idempotence but failed object equality in
+  `backend/tests/contracts/test_ledger_index.py::test_a_compact_index_writes_one_entry_a_line_and_reads_back_what_it_wrote`.
+  The TypeScript binding now parses the interface with the compiler API and
+  compares it with the live Python JSON Schema; its post-change fault proof
+  is pending. Accepting unknown properties failed
+  `backend/tests/contracts/test_source_classification_binding.py::test_invalid_registry_refuses_loading_by_name[invalid-property-invented_rule]`.
+  Overwriting the authored source kind and entity tier each failed
+  `backend/tests/contracts/test_source_classification_binding.py::test_configured_defaults_apply_only_to_authored_config`.
+- **Gate record:** Pending the final shared-selector run and post-change
+  TypeScript binding fault proof. The earlier 226-case backend-only record
+  predates this frontend test and does not certify the current change.
+- **Plan integration:** The serialized slot is released. Row 5 and Row 9
+  delivery receipts, Row 10's verified head and the exact owner ruling in A5
+  are retained. D3 remains open; Row 10 is not a dependency.
+- **Delivery:** Test and plan changes are committed in `62968e83a`; the
+  current-main merge is `6a2179890`. The phase pull request is pending.
+
+## 13 - Row #12 - Explicit controls and measurement behavior
+
+- **Scope:** Nine test modules choose their own control inputs and check
+  independent values. Preserve actual collection, ledger bytes, failure
+  reporting, timing arithmetic, fresh-clone defaults and policy bounds.
+- **Files:** `test_host_telemetry_control.py`, `test_job_machine.py`,
+  `test_ledger_families.py`, `test_memory_profiling_control.py`,
+  `test_memory_sampler.py`, `test_item_records.py`, `test_labels.py`,
+  `test_measure_budgets.py`, `test_reference_dataset.py` under `backend/tests/`.
+  Also `silicon.py` and `task_telemetry.py` under
+  `backend/idhazh/telemetry/`, and `docs/reference/host-metrics.md`.
+- **Explicit inputs:** Host and memory controls use copied test settings.
+  Inherit/on/off resolves independently to false/true/false against a disabled
+  copied memory default. The labelling sitting writes its own operator roster
+  while preserving the committed-ledger byte check. Supplied registry entries
+  each determine the expected name, lifecycle and UTC onboarding date.
+- **Independent values:** Choose `Q5_K_S` and expect `q5_k_s`; calculate the
+  rendered-prompt and extracted-text digests with hashlib. Count each supplied
+  label bucket independently of the production selector. Identify the supplied
+  short source row by URL. Parse real calendar stamps, allowing the documented
+  minute/second same-day suffix. Require serialized measurement spread `0.0`
+  and the actual imported `TokenizerMeasured` instance.
+- **Actual refusal:** A copied model config changes both `sha256` and
+  `declared_for`; the real stale-check command must exit 1. Preserve swapped
+  digest/site evidence. A real unsupported urllib scheme reaches the transport
+  error handler without a socket; require exit 2, stderr, empty stdout and no
+  requested reading/page file.
+- **Structural acquisition:** Coordinator consulted Fowler and authorized
+  forwarding existing keyword-only `ask_placement=True` through
+  `task_telemetry.record` and `silicon.file_machine_row` into `read_row`, never
+  the elapsed-time writer. Production defaults are unchanged. Tests pass false,
+  retain actual local collection and ledger writes, and restore a scoped
+  `sys.setprofile` guard that refuses entry to the actual placement reader.
+  Either missing forwarding hop fails before external metadata access.
+- **Preserved evidence:** Keep count six, domain counts `[2, 4]`, labelling
+  policy limits six and ten, attempt 2 against environment attempt 9, 60-second
+  arithmetic, work-failure and instrumentation diagnostics. Remove only the
+  truthy-digest loop, committed-roster nonemptiness, current-tree measurement
+  freshness premise and source-text spelling of the imported record type.
+  Named digest survivors are
+  `test_a_successful_extraction_keeps_its_paragraph_break_and_its_provenance`
+  and `test_the_saved_text_is_the_whole_article_and_keeps_its_paragraphs`.
+- **Failure proofs:** 22 minimal disposable production faults each fail at the
+  intended assertion, with unchanged and restored controls passing; original
+  source hashes verified. Fourteen controlled cases also pass when copied
+  committed host/fingerprint/memory defaults are disabled and the roster is
+  empty. No mock, added skip, changed acceptance rule or configuration knob.
+- **Collection:** Exact base `3d6d4b9f6a4ea4e7681576531963e27f11e64332` and
+  final implementation each collect 7,218 cases. No function or parameter case
+  is removed. Two renames: `test_the_committed_config_names_a_labeller` becomes
+  `test_the_committed_labelling_knobs_hold_their_documented_values`, and
+  `test_read_refuses_rather_than_guessing_when_no_server_answers` becomes
+  `test_read_refuses_without_output_when_tokenizer_transport_fails`.
+- **Gates:** Shared selector expands to full backend. Lint passes; mypy passes
+  on 834 source files. Local pytest: 4 failed, 7,207 passed, 7 existing skips.
+  Both sparse-publication Git-safety failures and the absent Windows hardware
+  fingerprint reproduce on the exact unchanged base. The fourth failure still
+  lacks a Bun local package after two frozen restore attempts fail with EPERM.
+  No Git safety setting, manifest or lockfile changes. Final helper tests:
+  15 passed and 2 existing POSIX skips; final helper type checks pass. Linux CI
+  must establish complete-suite success on the merge candidate.
+- **Separate finding:** Existing `date.today()` in `measure_budgets.py` is not
+  changed. Keep both cold-start measurement tests: stored spread is zero, while
+  one repeat makes comparison unavailable. Keep recorded loopback integration.
+- **Plan integration:** Row 11 released the serialized slot at
+  `26ac9f90cda08456c1f861c26285a2129924804c`. Its frozen plan is preserved
+  exactly before this section is added, without importing its implementation.
+  Current main was merged without rewriting history. Plan-only integration
+  does not repeat unchanged application gates. D3 remains open.
+- **Delivery:** Implementation `32c85d883` is delivered in open PR
+  [#1661](https://github.com/miztiik/yen-idhazh/pull/1661), not merged by this
+  worker. D12 remains IN-FLIGHT pending required Linux CI and merge.
+- **Dependencies:** Row 1. Shared-plan editing remains serialized.
+
+## 14 - Row #13 - Extraction and metric behavior
+
+- **Scope:** Replace checks tied to current corpus, fixture or output counts
+  with behavior proofs driven by independent test inputs, without changing
+  production behavior or acceptance rules.
+- **Files touched:** `backend/tests/test_corpus.py`,
+  `backend/tests/test_data_wrangler.py`, `backend/tests/test_derived_values.py`,
+  `backend/tests/test_drift.py`, `backend/tests/test_elements.py`,
+  `backend/tests/test_entity_gap.py` and `backend/tests/test_evals.py`.
+- **Changes and acceptance proof:**
+  - Refuse a nonpositive pool multiple at the existing validation boundary;
+    retain the committed-config loader proof. Give the data-wrangler row cap
+    and floor tests their own valid settings, and derive printed counts,
+    refusals and shortfalls from those settings.
+  - Keep successful committed-plan resolution and add a missing-element
+    refusal. Use a test-owned histogram bin count and require the real resolver
+    to return that number of bins.
+  - Review drift with a test-owned ledger whose recent window is one row short
+    of its independently chosen floor while the baseline has enough rows.
+    Check the reported shortfall, not source text or current defaults.
+  - Replace fixed element totals with nonempty quantity and date conditions.
+    Keep `ElementTable` overlap acceptance and prove the producer's real
+    settlement keeps the date over a conflicting quantity. Remove the bounded
+    span-drift sweep only after both named consumer and writer survivors fail
+    the production fault; retain the independent SHA-256 oracle.
+  - Derive entity-gap denominators from the supplied registry. Derive
+    evaluation source lengths from `article.text.split()` for current and
+    historical payloads, preserving unknown-source behavior for old cut
+    payloads.
+  - Choose a test-owned cap and bands so the original word count is above a
+    higher band while the post-cut count falls below it. Preserve the
+    independent 2,500-token history proof and safety bounds; do not change
+    truncation policy.
+- **Gates:** Against base
+  `0ed955f54fc4b51e8a362574161a2e71df693514`, the initial bounded collection
+  contained 244 cases across the seven modules; the final collection contains
+  244. The final identifier disposition is five renames, one added missing-link
+  case and one removed bounded span-drift sweep; no other identifier changed.
+  The shared selector chose the seven changed modules. Whitespace and Ruff
+  passed, mypy passed over 834 source files, and all 244 pytest cases passed.
+  Record: `backend/var/checks/df85b2ab916049084e39bd0b3425b033fb75e127c6e5c9814a3097f144f70958.json`.
+  That run used the initial base above. A post-merge rerun on
+  `f0449de3db08c710e5b2292a03910da157bcb498` is in progress; upstream changed
+  none of the seven Row 13 test files.
+- **Negative proofs:** Seventeen disposable production faults failed at their
+  intended tests. Named unchanged controls passed, including committed config,
+  independent element hashing, committed-plan resolution and the truncation
+  safety bound. Span-drift faults failed both named survivors. All injected
+  source and config edits were restored byte-for-byte; the disposable
+  worktree was removed. Final test hashes matched the proof record.
+- **Plan integration:** The coordinator released the slot and named frozen
+  predecessor `fc2711237a90f4b009e1d3cabf1bad2b77b69582` as the source. Rows 11
+  and 12 and all earlier plan text are preserved; D10 now records its verified
+  merge on 2026-10-24 UTC. A5 is unchanged, D3 remains open, and D12 remains
+  IN-FLIGHT. No Row 17 setting or unrelated main-branch plan edit was imported.
+- **Delivery:** Row 13 is delivered for review in its own phase PR. The suite-
+  wide Row 3 review remains open. No production, persisted-contract, config,
+  fixture, frontend or dependency changes.
+- **Dependencies:** Row 1. Serialized plan editing is released for Row 14.
 
 ## See also
 
