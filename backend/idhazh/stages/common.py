@@ -28,25 +28,19 @@ from idhazh import (
     extract,
     fetch,
     ledger,
-    summarize,
     tag,
     telemetry,
 )
-from idhazh.contracts.article import Article, ArticleStatus
-from idhazh.contracts.base import derive_url_key
+from idhazh.contracts.article import Article
 from idhazh.contracts.digest_day import DigestDay
 from idhazh.contracts.feed_health import (
     RobotsOutcome,
 )
 from idhazh.contracts.item_health import FailureCode, ItemHealthRow, ItemStage
-from idhazh.contracts.knobs.extract import ExtractConfig
 from idhazh.contracts.ledger_name import LedgerName
-from idhazh.contracts.qualification import (
-    CanaryObservation,
-)
 from idhazh.contracts.run_manifest import RunManifest
 from idhazh.contracts.run_plan import PlannedItem, RunPlan
-from idhazh.contracts.summary import Summary, SummaryStatus
+from idhazh.contracts.summary import Summary
 from idhazh.contracts.visual_decision import PAYLOAD_SUFFIX
 from idhazh.evals import evidence
 from idhazh.fingerprint import (
@@ -56,26 +50,17 @@ from idhazh.llm.server import (
     Completion,
     TurnMarkers,
     answer_span,
-    derive_turn_markers,
     is_context_exceeded,
     one_reply,
     post,
-    request_timeout_seconds,
     thinking_span,
 )
-from idhazh.sanitize import SANITIZER_VERSION, sanitize
 from idhazh.telemetry.record import recorded_row
 
 LOG: Final = logging.getLogger("idhazh")
 
 
 VAR_ROOT: Final = config.REPO_ROOT / "backend" / "var" / "run"
-
-
-VALIDATION_ROOT: Final = config.REPO_ROOT / "backend" / "var" / "validation"
-
-
-QUALIFICATION_ROOT: Final = config.REPO_ROOT / "backend" / "var" / "qualification"
 
 
 #: A sibling of `VAR_ROOT` rather than a child, because the run never reads it
@@ -93,10 +78,6 @@ EVIDENCE_ROOT: Final = config.REPO_ROOT / evidence.EVIDENCE_ROOT_RELPATH
 CAPTURES_DIRNAME: Final = "captures"
 
 
-#: The planted attacks, run live against a candidate before it is adopted.
-CANARY_DIR: Final = config.REPO_ROOT / "tests" / "fixtures" / "canaries"
-
-
 PUBLIC_ROOT: Path = config.REPO_ROOT / "frontend" / "public" / "digest"
 
 
@@ -112,9 +93,9 @@ STATE_ROOT: Path = config.REPO_ROOT / ledger.STATE_DIRNAME
 def state_root_of(settings: config.Settings, *, base: Path) -> Path:
     """Where a run under these settings files its ledgers.
 
-    A trial run - a bench, a qualification, a pipeline test - takes production's
-    code path and must not be readable as a production day, so its state root
-    moves under `run.trial_state_dirname`, with an optional case child.
+    A pipeline test takes production's code path and must not be readable as a
+    production day, so its state root moves under `run.trial_state_dirname`,
+    with an optional case child.
     """
     dirname = settings.app.run.trial_state_dirname
     if dirname is None:
@@ -465,164 +446,6 @@ def _ask_the_model(
             span.set(telemetry.AttrKey.HIT_THE_BUDGET, completion.hit_the_budget)
             span.set(telemetry.AttrKey.REASONED, completion.reasoned)
     return completion, no_reply
-
-
-def _canary_article(
-    payload: dict[str, object], *, extract_config: ExtractConfig, fetched_at: str
-) -> Article:
-    """One planted attack, shaped like the article `extract` would have built.
-
-    The raw text is handed on unsanitized on purpose: `user_turn` fences and
-    sanitizes what it is given, so this exercises the boundary instead of
-    stepping around it (Guardrail #11). Every count is taken from the sanitized body
-    all the same, because those are the words the model is shown, and because a
-    count of the raw text can exceed the count of the body it survives into -
-    which the payload refuses. The earlier version counted the raw text and
-    hardcoded `brief=False`, so a 41-word canary took the long prompt band no
-    page of that length is ever given.
-    """
-    url = str(payload["source_url"])
-    raw = str(payload["raw_text"])
-    body = sanitize(raw)
-    seen, truncated, cut_at = extract.truncate_to_tokens(body, extract_config.truncation_cap_tokens)
-    words = len(seen.split())
-    source_words = len(body.split())
-    # `extract` reads four shape signals here, and two of them cannot apply. One
-    # compares an item against its siblings from the same host, and a canary has
-    # none. The other compares an extraction against the length the page states,
-    # and a canary is raw text with no page behind it to state one.
-    signal: FailureCode | None = None
-    if extract.is_not_prose(body, extract_config):
-        signal = FailureCode.NOT_PROSE
-    elif source_words < extract_config.min_source_words:
-        signal = FailureCode.TOO_SHORT
-    return Article(
-        version=Article.schema_version(),
-        item_id="canary-01",
-        url_key=derive_url_key(url),
-        source_url=url,
-        canonical_url=url,
-        source_id="canary",
-        tier=1,
-        vertical="canary",
-        rank_score=0.0,
-        title=str(payload["raw_title"]),
-        text=raw,
-        word_count=words,
-        source_word_count=source_words,
-        token_count=extract.approx_tokens(words),
-        brief=source_words < extract_config.min_source_words or signal is not None,
-        truncated=truncated,
-        truncated_at_tokens=cut_at,
-        fetched_at=fetched_at,
-        status=ArticleStatus.OK,
-        failure_code=signal,
-        extractor_version=extract.EXTRACTOR_VERSION,
-        sanitizer_version=SANITIZER_VERSION,
-    )
-
-
-def _one_call(
-    article: Article, settings: config.Settings, *, endpoint: str
-) -> tuple[Summary, Completion | None, float]:
-    """One live inference call, timed, with the reply kept for the gates.
-
-    The chat route, so the model's own template writes the prompt and the
-    runtime owns the split between thinking and answer. That is why this path
-    runs one decode where the digest's runs two: there is no prompt of ours to
-    stop at a marker and continue under a grammar.
-    """
-    sampling = settings.models.summarizer.sampling
-    markers = derive_turn_markers(
-        endpoint,
-        entry=settings.models.summarizer,
-        timeout=request_timeout_seconds(settings.models.summarizer),
-    )
-    model_id = settings.models.summarizer.id
-    payload = summarize.build_request(
-        article,
-        model_id=model_id,
-        sampling=sampling,
-        markers=markers,
-        prompt_config=settings.app.summarize,
-    )
-    started = time.monotonic()
-    completion: Completion | None
-    no_reply = FailureCode.MODEL_UNREACHABLE
-    try:
-        completion = post(
-            payload,
-            endpoint=endpoint,
-            timeout=request_timeout_seconds(settings.models.summarizer),
-            reasoning_delimiters=markers.reasoning_delimiters,
-        )
-    except HTTPError as error:
-        body = error.read().decode("utf-8", errors="replace")
-        completion = None
-        no_reply = (
-            FailureCode.CONTEXT_EXCEEDED if is_context_exceeded(body) else FailureCode.MODEL_REFUSED
-        )
-    except TimeoutError:
-        completion = None
-        no_reply = FailureCode.MODEL_TIMED_OUT
-    except OSError:
-        completion = None
-    seconds = time.monotonic() - started
-    summary = summarize.to_summary(
-        article,
-        completion,
-        model_id=model_id,
-        generated_at=assemble.utc_now(),
-        prompt_config=settings.app.summarize,
-        evaluation=settings.app.evaluation,
-        no_reply=no_reply,
-        thinking=markers.thinks,
-    )
-    return summary, completion, seconds
-
-
-def _run_canaries(settings: config.Settings, *, endpoint: str) -> list[CanaryObservation]:
-    """Every planted attack, through the live candidate.
-
-    The unit suite proves these against recorded completions. It cannot prove
-    that a model nobody has served before honours this chat template, so the
-    attacks run again on real calls before the model is adopted.
-    """
-    observations: list[CanaryObservation] = []
-    names = settings.app.evaluation.canary_files
-    if not names:
-        raise ValueError("config/idhazh.json evaluation.canary_files must name at least one canary")
-    for name in names:
-        path = CANARY_DIR / f"{name}.json"
-        payload = json.loads(path.read_text(encoding="utf-8"))
-        article = _canary_article(
-            payload, extract_config=settings.app.extract, fetched_at=assemble.utc_now()
-        )
-        summary, completion, _ = _one_call(article, settings, endpoint=endpoint)
-        reply = " ".join([summary.title or "", summary.summary or ""])
-        cleaned = sanitize(str(payload["raw_text"]))
-        raw = completion.content if completion else ""
-        observations.append(
-            CanaryObservation(
-                name=str(payload["name"]),
-                replied=summary.status is SummaryStatus.OK and bool(summary.summary),
-                # The summary already classified why it failed and said it in
-                # words. Dropping them here is what left a run recording only
-                # `replied: false`, with nothing to read but the canary's name.
-                failure_code=summary.failure_code.value if summary.failure_code else None,
-                failure_detail=summary.failure_detail,
-                markers_present=[m for m in payload["must_not_survive"] if str(m) in reply],
-                facts_missing=[f for f in payload["must_survive"] if str(f) not in cleaned],
-                forbidden_keys_present=[k for k in payload["forbidden_output"] if str(k) in raw],
-            )
-        )
-        LOG.info(
-            "canary run name=%s replied=%s failure_code=%s",
-            payload["name"],
-            observations[-1].replied,
-            observations[-1].failure_code,
-        )
-    return observations
 
 
 class _ItemPayload(NamedTuple):

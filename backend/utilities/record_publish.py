@@ -1,4 +1,4 @@
-"""How do measurement, qualification and backfill publish their exact completed records?"""
+"""How does vector backfill publish its exact completed records?"""
 
 from __future__ import annotations
 
@@ -24,12 +24,6 @@ from utilities.publish_to_repo import publish
 from utilities.push_retry import DEFAULT_CONFIG, load_retry
 
 POLICIES = {
-    "measure": (ServerJob.RUNTIME, ("state/raw/pipeline-tests/host-fingerprint",), "fingerprint"),
-    "validate": (
-        ServerJob.DECIDE,
-        ("state/raw/pipeline-tests/candidate-models",),
-        "qualify-decide",
-    ),
     "backfill": (
         ServerJob.OPERATOR,
         (
@@ -44,8 +38,6 @@ POLICIES = {
 
 def capture(client: str, args: list[str]) -> int:
     job, _, verb = POLICIES[client]
-    if client == "measure":
-        job = measure_job(_flag(args, "--job", job.value))
     if args[0] != verb:
         raise ValueError("record client was not given its declared producer")
     date = _flag(args, "--date", datetime.now(UTC).date().isoformat())
@@ -65,13 +57,6 @@ def capture(client: str, args: list[str]) -> int:
             publication_evidence.save(config.REPO_ROOT, identity, client, writes)
 
 
-def measure_job(value: str) -> ServerJob:
-    job = ServerJob(value)
-    if job not in {ServerJob.RUNTIME, ServerJob.COLLECT}:
-        raise ValueError("measurement publication requires runtime or collect job identity")
-    return job
-
-
 def land(
     client: str,
     *,
@@ -79,10 +64,6 @@ def land(
     identity: WriterIdentity | None = None,
 ) -> int:
     job, scopes, _ = POLICIES[client]
-    if client == "measure" and identity is not None:
-        if identity.job is None:
-            raise ValueError("measurement publication requires a legacy job identity")
-        job = measure_job(str(identity.job))
     receipt = PublicationReceipt.read(
         repo / publication_evidence.ROOT / str(job) / f"{client}-0.json"
     )
@@ -154,7 +135,6 @@ def _land(client: str, args: list[str]) -> int:
     parser.add_argument("--date", required=True)
     parser.add_argument("--execution", required=True)
     parser.add_argument("--commit", required=True)
-    parser.add_argument("--job", default=POLICIES[client][0].value)
     parsed = parser.parse_args(args)
     return land(
         client,
@@ -162,7 +142,7 @@ def _land(client: str, args: list[str]) -> int:
         identity=WriterIdentity(
             run_id=f"{parsed.date}-{parsed.execution}",
             attempt=run_context.run_attempt(),
-            job=measure_job(parsed.job) if client == "measure" else POLICIES[client][0],
+            job=POLICIES[client][0],
             shard=0,
             producer="utilities.record_publish",
             git_sha=parsed.commit,

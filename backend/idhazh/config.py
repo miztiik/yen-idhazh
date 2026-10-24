@@ -94,8 +94,8 @@ def refuse_a_model_nothing_could_run(models_file: str, models: ModelsConfig) -> 
 
     **The window is required**, because this project computes on it and a
     default of ours beside a default of the server's is two answers for one
-    value. It is real arithmetic in `idhazh.classify.dag` and
-    `idhazh.evals.qualify`, and the published site reads it at build time. The
+    value. It is real arithmetic in `idhazh.classify.dag`, and the published
+    site reads it at build time. The
     per-request timeout is required too and the entry itself enforces that, so a
     string there raises naming the key rather than inside a request mid-item.
 

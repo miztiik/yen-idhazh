@@ -38,7 +38,6 @@ from idhazh.contracts.knobs.collect import UNBOUNDED_WINDOW
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.seen import PublishedRow, SeenRow
 from idhazh.contracts.story_similarity_pair import StorySimilarityPair
-from idhazh.contracts.validation_row import ValidationRow
 from idhazh.contracts.visual_prune import VisualPruneRow
 from idhazh.ledger import filenames, ledger_files
 from idhazh.ledger.persist import _rendered
@@ -947,62 +946,18 @@ def test_a_re_judged_pair_keeps_its_row_and_a_repeated_attempt_does_not(
     assert sorted(row.judged_by_run_id or "" for row in kept) == ["", f"{DATE}-7"]
 
 
-def test_a_repeated_fingerprint_and_candidate_verdict_are_settled_when_a_reader_asks(
-    tmp_path: Path,
-) -> None:
-    """The settlement these two ledgers used to get after a merge, taken at read time.
-
-    A job runs on one machine, so two rows under one `(date, run_id, job, shard)`
-    are one machine written down twice - and counting a machine twice is what
-    would make the fleet distribution lie. Nothing rewrites a file to fix that
-    any more: each writer owns its own file, so two of them are two attempts and
-    the reader keeps the later one.
-
-    Both ledgers at once, because the rule is the same for both: nothing settled
-    them after a merge once each writer got a file of its own. Both now write
-    Parquet through the ledger writer.
-    """
+def test_a_repeated_fingerprint_is_settled_when_a_reader_asks(tmp_path: Path) -> None:
+    """A second attempt at one machine replaces its earlier row."""
     state = tmp_path / "state"
-    candidate = ValidationRow.model_validate(
-        {
-            "date": DATE,
-            "run_id": RUN_ID,
-            "model_id": "candidate-fixture",
-            "is_incumbent": False,
-            "selected": False,
-            "leaderboard_hhem": 0.8,
-            "measured_hhem": 0.7,
-            "articles": 1,
-            "commit_sha": "aaaaaaa",
-            "runner": "fixture",
-            "verdict": "confirmed",
-            "detail": "recorded evaluation",
-        }
-    )
     for attempt, cpu in enumerate(("first", "second"), start=1):
         assert seed_host_fingerprint(state, [fingerprint_row(cpu=cpu)], attempt=attempt) == 1
-        ledger.persist(
-            state,
-            [candidate.model_copy(update={"articles": 16 * attempt})],
-            ledger=LedgerName.CANDIDATE_MODELS,
-            covers=DATE,
-            identity=writer_identity(RUN_ID, attempt=attempt, job=ServerJob.WORK),
-        )
 
     machines = ledger.load_days(
         state, LedgerName.HOST_FINGERPRINT, [DATE], model=HostFingerprintRow
     )
-    candidates = ledger.load_days(
-        state,
-        LedgerName.CANDIDATE_MODELS,
-        [DATE],
-        model=ValidationRow,
-    )
 
     assert len(machines) == 1, "one machine, written down twice, is one machine"
     assert machines[0].cpu_model == "second"
-    assert len(candidates) == 1, "a second attempt replaces a verdict, it does not add one"
-    assert candidates[0].articles == 32
 
 
 # --- One feed, one run, one result ------------------------------------------

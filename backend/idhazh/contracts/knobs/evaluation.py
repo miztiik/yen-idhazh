@@ -56,14 +56,6 @@ class EvaluationConfig(Model):
         ),
     )
     spot_checks_per_week: int = Field(default=10, ge=0)
-    canary_files: list[Slug] = Field(
-        default_factory=list,
-        description=(
-            "The exact planted-attack fixture names used by the live qualification gate. "
-            "Each name opens one file under tests/fixtures/canaries; adding a fixture does "
-            "not silently widen a model run."
-        ),
-    )
     labellers: list[Slug] = Field(
         default_factory=list,
         description=(
@@ -92,69 +84,6 @@ class EvaluationConfig(Model):
             "A draw over one day is a draw over one day's sources. It is the only "
             "collection requirement: a draw is one pool at one scorer, and the figure "
             "read off it is reported rather than withheld."
-        ),
-    )
-    golden_set_size: int = Field(default=20, ge=1)
-    validation_articles: int = Field(
-        default=20,
-        ge=1,
-        description="Golden articles a candidate must be scored on before its mean counts.",
-    )
-    validation_drop_max: float = Field(
-        default=0.10,
-        ge=0.0,
-        le=1.0,
-        description=(
-            "How far below its leaderboard number the incumbent may land before the "
-            "ranking stops being a usable prior and the challengers get scored too."
-        ),
-    )
-    validation_switch_margin: float = Field(
-        default=0.05,
-        ge=0.0,
-        le=1.0,
-        description=(
-            "How much better a challenger must be on our own corpus to change the pick. "
-            "A number, because 'materially diverges' is an argument waiting to happen."
-        ),
-    )
-    qualification_pool_multiple: int = Field(
-        default=6,
-        ge=1,
-        description=(
-            "Articles a qualification shard extracts for every one it replays. A floor "
-            "on the choice the stratified selection gets, never a cap on the walk: a "
-            "shard that has not yet been offered every length tier keeps going through "
-            "its slice. Raising it buys fetch seconds, never model minutes, because the "
-            "model still sees corpus_per_shard articles - one address measured 2.1 s on "
-            "2026-08-26 over 150 of them, against 330 minutes for the job."
-        ),
-    )
-    qualification_min_per_band: int = Field(
-        default=3,
-        ge=0,
-        description=(
-            "Articles a qualification corpus aims at in each summarize band. It "
-            "describes the measuring stick rather than the candidate, so a corpus "
-            "short of it is reported on the verdict and blocks nothing - the gate "
-            "that refuses a thin run is scored_denominator, which counts what was "
-            "actually scored."
-        ),
-    )
-    qualification_min_over_cap: int = Field(
-        default=2,
-        ge=0,
-        description=(
-            "Articles the corpus aims at that are long enough to be truncated. They "
-            "are the only ones that exercise the cap at all."
-        ),
-    )
-    qualification_min_brief: int = Field(
-        default=2,
-        ge=0,
-        description=(
-            "Articles the corpus aims at that take the brief prompt, which is a "
-            "different prompt - a corpus without one says nothing about that path."
         ),
     )
 

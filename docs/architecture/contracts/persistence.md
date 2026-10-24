@@ -280,7 +280,6 @@ Every ledger whose rows a later run settles files through the door. The table sa
 | summary-quality-evals, the eval ledger | `evals.writer.file_measurements`, called by the same two stages, through `ledger.persist`; a read keeps one row per measurement a day ([evaluation.md](../../concepts/evaluation.md#the-ledger)) | the same two | the day its `date` names |
 | host-fingerprint, the machine record | `telemetry.silicon`: `idhazh fingerprint` files the job's row when the job starts, and `idhazh job-clock` files it again with the job-end cells under the same writer, so the later file replaces the first | the same two | the day its `date` names |
 | counterfactual scores | `stages.plan`, through `ledger.persist` | nothing yet | the day its `date` names |
-| candidate-model verdicts | `stages.decide` and `stages.qualify_decide`, through `ledger.persist` | nothing yet | the day its `date` names |
 | seen addresses | `ledger.append_seen`, called by the plan stage | `ledger.load_seen` | the day the plan stage ran for, because the row has no `date` field |
 | published items | `ledger.append_published`, called by the assemble stage | `ledger.load_published`, one month at a time when it reads every published day | the digest day it is given, because the row has no `date` field |
 | feed health | `stages.plan`, through `ledger.persist` | `ledger.load_health`, and the Voices page through `feedHealthRows` in `frontend/src/lib/server/ledger-rows.ts` | the day its `date` names |

@@ -15,8 +15,6 @@ All schedules and run dates are UTC. Every workflow supports manual dispatch.
 | `llm-council.yml` | `LLM-COUNCIL` | `0 22 * * *` | Model judges' verdicts |
 | `pages.yml` | `Pages publication` | Passing `CI` run on a push to `main`; completed `Content refresh` run | Static site |
 | `drift.yml` | `Drift review` | `0 8 * * 0` | Quality drift review |
-| `validate.yml` | `Model validation` | none | Candidate quality verdict |
-| `measure.yml` | `Measurements` | none | Runtime, corpus and budget measurements |
 | `idhazh-gardener.yml` | `Idhazh Gardener` | `40 0 * * *` | Retention and history maintenance |
 | `backfill.yml` | `Vector backfill` | none | Repair closed days' vectors |
 | `idhazh-pipeline-tests.yaml` | `Pipeline tests` | none | Check a model with real articles |
@@ -87,20 +85,6 @@ All other scopes are disabled by each job's declared block. See the
 [council's permission boundary](../architecture/publishing/llm-council.md#design-rationale-nobody-has-to-notice-a-dead-night)
 for the reason and its check.
 
-## Candidate runs
-
-Select a candidate through `candidate_models_file`, not copied model fields.
-Use the shared candidate-config and model-server actions where their contracts fit.
-Every candidate stage must read its scratch config, including planning and verdict
-writing, so it cannot alter production's seen records or published data.
-Prompts are shipped code, never dispatch text, paths or overrides.
-
-Validation writes verdicts under `state/raw/pipeline-tests/` (tier-first,
-compacted under `state/compact/pipeline-tests/`). Measurements commits
-only the `runtime` job's host record there; other measurement outputs are artifacts.
-Keep write permissions on the jobs that need them. Do not treat expiring artifacts
-as durable records; their retention is declared by each upload step.
-
 ## Pipeline tests
 
 Draw one replayable article plan for all enabled cases in `config/pipeline-tests.json`.
@@ -118,8 +102,7 @@ downloaded rows and config-derived paths before staging them. Gather only the pl
 named UTC day from each declared ledger, not a trial root's accumulated history.
 Every runner names the checked-out commit in its ledger identity, so the commit
 job rejects a result made from a different code version.
-Never write reader-facing payloads. Use
-[model evaluation](../how-to/evaluate-new-summarizer-model.md) for adoption decisions.
+Never write reader-facing payloads.
 
 ## Vector backfill
 
@@ -142,9 +125,6 @@ and [weight rules](site-weight.md).
   pushes with a lease on the tip it read, so git refuses the push if another run
   pushed meanwhile; it then squashes again on the new tip, up to `push_attempts`
   pushes in all. A quiet cron window cannot replace that lease.
-- A skipped speed case must not skip the remaining measurement jobs. A failed one
-  still blocks dependent runtime work. Label missing results; do not emit a complete
-  model dossier from partial evidence. Skipping also moves the weight download cost.
 - Share blocks that must agree, but keep different article-selection rules separate.
   Use approved external action versions; local actions use the checked-out commit.
 
@@ -156,4 +136,4 @@ and [weight rules](site-weight.md).
 - [../architecture/publishing/idhazh-gardener.md](../architecture/publishing/idhazh-gardener.md) - maintenance tasks and history rewrites.
 - [../architecture/publishing/llm-council.md](../architecture/publishing/llm-council.md) - the nightly model judges.
 - [../how-to/analyze-a-pipeline-artifact.md](../how-to/analyze-a-pipeline-artifact.md) - inspect a run's artifacts.
-- [../how-to/run-the-pipeline.md](../how-to/run-the-pipeline.md) - run production stages locally.
+- [../how-to/run-the-pipeline.md](../how-to/run-the-pipeline.md) - production stages and where they run.
