@@ -23,7 +23,8 @@ from itertools import pairwise
 from typing import Any, Final
 
 import pytest
-from conftest import FIXTURES_DIR, collect_config, read_text
+from support.config import collect_config
+from support.paths import FIXTURES_DIR, read_text
 
 from idhazh.config import REPO_ROOT, load
 from idhazh.contracts.base import ITEM_ID_PATTERN, derive_url_key

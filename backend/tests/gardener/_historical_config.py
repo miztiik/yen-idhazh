@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from typing import Final
 
-from conftest import FIXTURES_DIR
+from support.paths import FIXTURES_DIR
 
 # Recorded from c8251c596, before the owner approved finite yearly retention. The
 # retention declarations stay as they were then.

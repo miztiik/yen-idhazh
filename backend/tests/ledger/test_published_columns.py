@@ -5,8 +5,9 @@ from __future__ import annotations
 from dataclasses import replace
 from pathlib import Path
 
-from conftest import CONTRACT_FIXTURES_DIR, read_text, writer_identity
 from pytest import CaptureFixture, mark
+from support.ledger import writer_identity
+from support.paths import CONTRACT_FIXTURES_DIR, read_text
 
 from idhazh import ledger
 from idhazh.contracts.base import ServerJob

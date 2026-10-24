@@ -7,8 +7,8 @@ from datetime import date, timedelta
 from typing import Final
 
 import pytest
-from conftest import CONFIG_DIR, read_text
 from pydantic import ValidationError
+from support.paths import CONFIG_DIR, read_text
 
 from idhazh import config
 from idhazh.contracts.app_config import AppConfig

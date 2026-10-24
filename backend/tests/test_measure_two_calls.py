@@ -21,7 +21,7 @@ from pathlib import Path
 from typing import Any, Final
 
 import pytest
-from conftest import CONFIG_DIR, CONTRACT_FIXTURES_DIR
+from support.paths import CONFIG_DIR, CONTRACT_FIXTURES_DIR
 
 from idhazh import config, summarize
 from idhazh.contracts.article import Article

@@ -15,8 +15,9 @@ from typing import Any, ClassVar, Self
 
 import pytest
 import yaml  # type: ignore[import-untyped]
-from conftest import REPO_ROOT, SEED_COMMIT, read_text
 from pydantic import Field
+from support.ledger import SEED_COMMIT
+from support.paths import REPO_ROOT, read_text
 
 from idhazh import ledger
 from idhazh.contracts.base import ChangelogEntry, Contract, DateStamp, RunId, ServerJob

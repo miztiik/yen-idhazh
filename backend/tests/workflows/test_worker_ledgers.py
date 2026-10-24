@@ -7,8 +7,9 @@ import subprocess
 from pathlib import Path
 
 import pytest
-from conftest import REPO_ROOT, writer_identity
 from retention._trees import health_row
+from support.ledger import writer_identity
+from support.paths import REPO_ROOT
 
 from idhazh import ledger, telemetry
 from idhazh.contracts.base import ServerJob

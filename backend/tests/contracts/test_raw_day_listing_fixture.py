@@ -5,7 +5,7 @@ from __future__ import annotations
 from hashlib import sha256
 
 import pytest
-from conftest import REPO_ROOT
+from support.paths import REPO_ROOT
 
 from idhazh.contracts.ledger_index import RawDayIndex
 

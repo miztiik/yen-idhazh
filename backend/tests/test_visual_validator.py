@@ -21,8 +21,8 @@ from pathlib import Path
 from typing import Any, Final
 
 import pytest
-from conftest import CONFIG_DIR, FIXTURES_DIR, read_text
 from pydantic import ValidationError
+from support.paths import CONFIG_DIR, FIXTURES_DIR, read_text
 
 from idhazh.contracts.app_config import AppConfig
 from idhazh.contracts.element import ElementKind, ElementTable

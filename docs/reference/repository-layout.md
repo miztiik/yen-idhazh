@@ -1,6 +1,6 @@
 # Repository Layout
 
-**Last Updated**: 2026-10-23
+**Last Updated**: 2026-10-24
 
 Every top-level directory, what it holds, who writes it, and whether a reader
 ever sees it. Read this before adding a directory, or when deciding where a new
@@ -45,6 +45,14 @@ question, and the four answers do not mix.
 | `notebooks/` | Committed notebooks a person runs off this machine, on hardware the runner does not have. Instructions only - never weights, never a token, and nothing in CI runs them (Guardrail #2) | a person | no |
 | `docs/` | The canonical knowledge. Agent memory | a person | no |
 | `TODO/` | Active plan-docs. Working material, never authoritative | a person | no |
+
+`backend/tests/conftest.py` owns pytest lifecycle isolation and shared contract
+fixtures. Tests import reusable helpers directly from `backend/tests/support/`:
+paths, model settings and recordings, prompt builders, recorded HTTP replies,
+refill articles, and ledger writers. Fixture files stay under `tests/fixtures/`
+and are read inside tests, not during collection. Active-model helpers read the
+validated `config/idhazh.json` pointer; historical model cases are explicitly
+named in `backend/tests/contracts/_model_cases.py`.
 
 ## The uncommitted map
 

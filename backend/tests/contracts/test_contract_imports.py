@@ -7,7 +7,7 @@ import inspect
 from pathlib import Path
 
 import pytest
-from conftest import read_text
+from support.paths import read_text
 
 from idhazh.contracts import CONTRACTS
 from idhazh.contracts.base import Contract

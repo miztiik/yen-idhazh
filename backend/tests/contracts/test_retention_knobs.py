@@ -10,8 +10,8 @@ from datetime import date, timedelta
 from types import ModuleType
 
 import pytest
-from conftest import CONFIG_DIR, REPO_ROOT, read_text
 from pydantic import ValidationError
+from support.paths import CONFIG_DIR, REPO_ROOT, read_text
 
 from idhazh import cli, config, month_partition
 from idhazh.contracts.app_config import AppConfig

@@ -9,7 +9,7 @@ from pathlib import Path
 from types import FrameType
 
 import pytest
-from conftest import SEED_COMMIT
+from support.ledger import SEED_COMMIT
 
 from idhazh import config, ledger
 from idhazh.contracts.base import ServerJob

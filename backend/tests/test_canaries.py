@@ -24,17 +24,11 @@ from typing import Any, Final, Literal
 
 import pytest
 import test_spans as spans
-from conftest import (
-    CONFIG_DIR,
-    CONTRACT_FIXTURES_DIR,
-    FIXTURES_DIR,
-    LABEL_REPLIES,
-    SUMMARIZE_AND_PLAN_REPLIES,
-    RecordedEndpoint,
-    read_text,
-)
 from contracts._fixtures import copy_config
 from pydantic import ValidationError
+from support.paths import CONFIG_DIR, CONTRACT_FIXTURES_DIR, FIXTURES_DIR, read_text
+from support.prompts import LABEL_REPLIES, SUMMARIZE_AND_PLAN_REPLIES
+from support.server import RecordedEndpoint
 
 from idhazh import cli, config, extract, telemetry
 from idhazh.contracts.article import Article, ArticleStatus, TitleSource

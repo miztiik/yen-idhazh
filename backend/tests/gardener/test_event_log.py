@@ -29,8 +29,8 @@ from datetime import UTC, datetime
 from typing import Any, Final
 
 import pytest
-from conftest import CONFIG_DIR, REPO_ROOT
 from pydantic import BaseModel
+from support.paths import CONFIG_DIR, REPO_ROOT
 
 from idhazh import event_lines
 from idhazh.contracts import gardener_events

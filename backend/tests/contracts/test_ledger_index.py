@@ -26,9 +26,9 @@ import json
 from typing import Any
 
 import pytest
-from conftest import CONTRACT_FIXTURES_DIR, read_text
 from pydantic import ValidationError
 from pydantic_core import ErrorDetails
+from support.paths import CONTRACT_FIXTURES_DIR, read_text
 
 from idhazh.contracts.base import Contract
 from idhazh.contracts.file_envelope import FileEnvelope

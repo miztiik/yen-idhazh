@@ -11,7 +11,8 @@ from pathlib import Path
 from typing import Final
 
 import pytest
-from conftest import CONTRACT_FIXTURES_DIR, SEED_COMMIT, read_text
+from support.ledger import SEED_COMMIT
+from support.paths import CONTRACT_FIXTURES_DIR, read_text
 from test_same_story import block, item, unit
 from test_similarity_fit import a_written_row
 

@@ -6,8 +6,8 @@ import json
 from pathlib import Path
 
 import pytest
-from conftest import CONFIG_DIR
 from gardener._garden import an_origin, git, on_origin, quiet_git, write
+from support.paths import CONFIG_DIR
 
 from idhazh.contracts.base import ServerJob
 from idhazh.contracts.file_envelope import WriterIdentity

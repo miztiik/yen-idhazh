@@ -6,9 +6,9 @@ from datetime import date, timedelta
 from pathlib import Path
 
 import pytest
-from conftest import CONFIG_DIR
 from gardener._garden import an_origin, git, quiet_git, write
 from retention._trees import health_row
+from support.paths import CONFIG_DIR
 
 from idhazh import completed_writes, config, ledger
 from idhazh.contracts.base import ServerJob

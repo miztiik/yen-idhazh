@@ -7,7 +7,7 @@ from datetime import date
 from pathlib import Path
 from typing import Any
 
-from conftest import FIXTURES_DIR
+from support.paths import FIXTURES_DIR
 
 from idhazh import ledger
 from idhazh.contracts.base import ServerJob

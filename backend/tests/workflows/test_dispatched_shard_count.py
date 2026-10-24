@@ -6,8 +6,9 @@ from collections import Counter
 from pathlib import Path
 
 import pytest
-from conftest import CONFIG_DIR, SEED_COMMIT
 from pipeline._builders import isolate_ledgers, plan
+from support.ledger import SEED_COMMIT
+from support.paths import CONFIG_DIR
 
 from idhazh import assemble, cli, config, ledger
 from idhazh.contracts.ledger_name import LedgerName

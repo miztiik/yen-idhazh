@@ -16,7 +16,8 @@ import json
 from pathlib import Path
 
 import pytest
-from conftest import SEED_COMMIT, read_text
+from support.ledger import SEED_COMMIT
+from support.paths import read_text
 
 from idhazh import cli, ledger
 from idhazh.contracts.base import ServerJob

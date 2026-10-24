@@ -21,7 +21,8 @@ from pathlib import Path
 from typing import Final
 
 import pytest
-from conftest import CONFIG_DIR, SEED_COMMIT, read_text
+from support.ledger import SEED_COMMIT
+from support.paths import CONFIG_DIR, read_text
 
 from idhazh import config, ledger
 from idhazh.contracts.base import Contract, ServerJob

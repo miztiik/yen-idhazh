@@ -4,8 +4,8 @@ import json
 from pathlib import Path
 
 import pytest
-from conftest import FIXTURES_DIR
 from pydantic import TypeAdapter, ValidationError
+from support.paths import FIXTURES_DIR
 
 from idhazh.contracts.app_config import AppConfig
 from idhazh.contracts.article import Article

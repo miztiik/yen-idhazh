@@ -27,7 +27,8 @@ from pathlib import Path
 from typing import Final
 
 import pytest
-from conftest import CONFIG_DIR, SEED_COMMIT, seed_publication_inventory
+from support.ledger import SEED_COMMIT, seed_publication_inventory
+from support.paths import CONFIG_DIR
 
 from idhazh import assemble, cli, config, ledger
 from idhazh.contracts.base import ServerJob

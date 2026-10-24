@@ -13,7 +13,7 @@ from datetime import date, timedelta
 from pathlib import Path
 from typing import Any, Final
 
-from conftest import CONTRACT_FIXTURES_DIR, read_text
+from support.paths import CONTRACT_FIXTURES_DIR, read_text
 
 from idhazh import ledger
 from idhazh.contracts.base import ServerJob

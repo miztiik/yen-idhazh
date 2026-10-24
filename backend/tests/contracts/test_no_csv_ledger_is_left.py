@@ -11,7 +11,7 @@ from __future__ import annotations
 from typing import Final
 
 import pytest
-from conftest import CONFIG_DIR, REPO_ROOT, read_text
+from support.paths import CONFIG_DIR, REPO_ROOT, read_text
 
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.ledgers import Grain, LedgersConfig

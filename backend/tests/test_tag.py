@@ -8,8 +8,8 @@ comes out of extract carrying its tags.
 from __future__ import annotations
 
 import pytest
-from conftest import CONFIG_DIR, REPO_ROOT
 from pydantic import ValidationError
+from support.paths import CONFIG_DIR, REPO_ROOT
 
 from idhazh import config, tag
 from idhazh.contracts.article import Article, ArticleStatus

@@ -7,8 +7,8 @@ import json
 from pathlib import Path
 
 import pytest
-from conftest import CONFIG_DIR
 from pydantic import ValidationError
+from support.paths import CONFIG_DIR
 
 from idhazh import config
 from idhazh.contracts.knobs.council import CouncilConfig

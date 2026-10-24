@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from conftest import CONFIG_DIR
+from support.paths import CONFIG_DIR
 
 from idhazh import assemble, config
 from idhazh.contracts.article import Article

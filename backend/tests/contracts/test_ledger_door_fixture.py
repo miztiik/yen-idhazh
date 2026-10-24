@@ -25,7 +25,7 @@ from typing import Final
 
 import pyarrow.parquet
 import pytest
-from conftest import REPO_ROOT
+from support.paths import REPO_ROOT
 
 from idhazh.contracts.file_envelope import Period, Tier
 from idhazh.contracts.host_fingerprint import HostFingerprintRow

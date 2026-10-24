@@ -39,7 +39,6 @@ from pathlib import Path
 from typing import Final
 
 import pytest
-from conftest import CONTRACT_FIXTURES_DIR, read_text, seed_item_health
 from gardener.tasks._marks import marks_on_disk
 from ledger._every_tier import (
     CENSUS,
@@ -47,6 +46,8 @@ from ledger._every_tier import (
     RAW_DAYS,
     a_census_in_every_tier,
 )
+from support.ledger import seed_item_health
+from support.paths import CONTRACT_FIXTURES_DIR, read_text
 
 from idhazh import atomic_write, config, day_partition, ledger
 from idhazh.contracts.base import ServerJob

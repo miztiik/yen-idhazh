@@ -3,7 +3,7 @@
 from pathlib import Path
 
 import pytest
-from conftest import REPO_ROOT
+from support.paths import REPO_ROOT
 
 from idhazh.contracts.base import ServerJob
 from idhazh.contracts.file_envelope import WriterIdentity

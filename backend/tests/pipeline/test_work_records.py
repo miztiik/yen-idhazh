@@ -18,8 +18,8 @@ from dataclasses import replace
 from pathlib import Path
 from typing import Any, Final
 
-from conftest import FIXTURES_DIR
 from pytest import LogCaptureFixture, MonkeyPatch
+from support.paths import FIXTURES_DIR
 
 from idhazh.contracts.item_health import ItemHealthRow
 from idhazh.contracts.run_plan import RunPlan

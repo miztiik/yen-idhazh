@@ -24,8 +24,8 @@ from itertools import count
 from pathlib import Path
 from typing import Any, Final
 
-from conftest import CONFIG_DIR, FIXTURES_DIR, read_text
 from pytest import LogCaptureFixture, MonkeyPatch
+from support.paths import CONFIG_DIR, FIXTURES_DIR, read_text
 
 from idhazh import config
 from idhazh.contracts.base import ServerJob

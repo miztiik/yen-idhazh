@@ -17,7 +17,7 @@ import sys
 from pathlib import Path
 
 import pytest
-from conftest import record_fixture_day
+from support.ledger import record_fixture_day
 
 from idhazh.cli import main
 from idhazh.contracts.ledger_name import LedgerName

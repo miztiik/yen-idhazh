@@ -23,7 +23,8 @@ import json
 from pathlib import Path
 
 import pytest
-from conftest import CONTRACT_FIXTURES_DIR, read_text, seed_scores
+from support.ledger import seed_scores
+from support.paths import CONTRACT_FIXTURES_DIR, read_text
 
 from idhazh.contracts.base import derive_text_digest
 from idhazh.contracts.eval_row import EvalRow

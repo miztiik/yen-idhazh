@@ -37,7 +37,7 @@ from pathlib import Path
 from typing import Final
 
 import pytest
-from conftest import REPO_ROOT, read_text
+from support.paths import REPO_ROOT, read_text
 
 from idhazh.contracts.host_fingerprint import COLUMN_READERS as HOST_READERS
 from idhazh.contracts.host_fingerprint import UNREAD_CELLS as HOST_UNREAD

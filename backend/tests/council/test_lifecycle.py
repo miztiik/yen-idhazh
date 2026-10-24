@@ -8,7 +8,7 @@ from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
-from conftest import CONFIG_DIR
+from support.paths import CONFIG_DIR
 
 from idhazh import config, ledger
 from idhazh.contracts.council_run_record import CouncilRunRecord

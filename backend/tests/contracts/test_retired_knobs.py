@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import pytest
-from conftest import CONFIG_DIR
 from pydantic import ValidationError
+from support.paths import CONFIG_DIR
 
 from idhazh.contracts.app_config import AppConfig
 from idhazh.contracts.knobs.collect import SUPERSEDED_COLLECT_NAMES, CollectConfig

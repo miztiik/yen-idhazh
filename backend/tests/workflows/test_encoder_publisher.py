@@ -10,8 +10,8 @@ from pathlib import Path
 
 import pytest
 import yaml  # type: ignore[import-untyped]
-from conftest import REPO_ROOT
 from gardener._garden import an_origin, git, quiet_git, write
+from support.paths import REPO_ROOT
 
 from idhazh.contracts.base import ServerJob
 from idhazh.contracts.file_envelope import WriterIdentity

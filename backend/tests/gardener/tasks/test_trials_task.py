@@ -12,8 +12,8 @@ from pathlib import Path
 from typing import Final
 
 import pytest
-from conftest import seed_item_health
 from retention._trees import health_row
+from support.ledger import seed_item_health
 
 from idhazh import ledger
 from idhazh.contracts.item_health import ItemStage

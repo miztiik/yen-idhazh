@@ -20,8 +20,9 @@ from pathlib import Path
 from typing import Final
 
 import pytest
-from conftest import SEED_COMMIT, read_text
 from gardener.tasks._task import run_task
+from support.ledger import SEED_COMMIT
+from support.paths import read_text
 from test_same_story import at, block, item, unit
 from test_similarity_selection import MANIFEST_FIXTURE
 

@@ -35,7 +35,8 @@ from pathlib import Path
 from typing import Any, Final
 
 import pytest
-from conftest import CONFIG_DIR, CONTRACT_FIXTURES_DIR, read_text, seed_scores
+from support.ledger import seed_scores
+from support.paths import CONFIG_DIR, CONTRACT_FIXTURES_DIR, read_text
 
 from idhazh import ledger, month_partition
 from idhazh.contracts.base import ServerJob

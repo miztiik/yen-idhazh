@@ -6,8 +6,8 @@ import shutil
 from pathlib import Path
 
 import pytest
-from conftest import CONFIG_DIR
 from council._config import copy_config
+from support.paths import CONFIG_DIR
 
 from idhazh import cli, config
 from idhazh.contracts.app_config import AppConfig

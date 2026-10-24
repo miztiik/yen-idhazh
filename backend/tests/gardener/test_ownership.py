@@ -5,8 +5,8 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-from conftest import CONFIG_DIR, FIXTURES_DIR
 from pydantic import TypeAdapter, ValidationError
+from support.paths import CONFIG_DIR, FIXTURES_DIR
 
 from idhazh.contracts.knobs.gardener import TaskPolicy
 from idhazh.contracts.ledger_name import LedgerName

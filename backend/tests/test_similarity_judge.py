@@ -26,15 +26,9 @@ from pathlib import Path
 from typing import Any, Final
 
 import pytest
-from conftest import (
-    CONFIG_DIR,
-    CONTRACT_FIXTURES_DIR,
-    FIXTURES_DIR,
-    INCUMBENT_MODEL,
-    _rendered_by_the_template,
-    committed_markers,
-    read_text,
-)
+from support.models import committed_markers
+from support.paths import CONFIG_DIR, CONTRACT_FIXTURES_DIR, FIXTURES_DIR, read_text
+from support.server import render_template_response
 
 from idhazh import assemble, atomic_write, config
 from idhazh.contracts.base import derive_text_digest, derive_url_key
@@ -64,6 +58,7 @@ VOCABULARIES: Final = FIXTURES_DIR / "llm"
 #: real file from `config/models/` rather than an entry written here: the channel
 #: a test opens is the one an operator would open.
 THINKING_ENTRY_FILE: Final = "qwen3.5-9b-q4km-thinking.json"
+PLAIN_ENTRY_FILE: Final = "qwen3.5-9b-q4km.json"
 
 #: What a page writes when it wants to be merged with something it is not. It
 #: sits inside a summary, which is where it would really arrive: the summariser
@@ -108,7 +103,7 @@ class JudgeServer:
                     # The route a judging shard reads its turn markers off before
                     # its first pair. It draws on no recorded reply: those are
                     # verdicts, and a template render is not one.
-                    self._answer(_rendered_by_the_template(asked))
+                    self._answer(render_template_response(asked))
                     return
                 with arrival:
                     sent.append({"path": self.path, **asked})
@@ -236,7 +231,7 @@ def _settings_judging_behind_a_thinking_span() -> config.Settings:
     """
     settings = _settings()
     thinking = ModelsConfig.from_json(read_text(CONFIG_DIR / "models" / THINKING_ENTRY_FILE))
-    plain = ModelsConfig.from_json(read_text(CONFIG_DIR / "models" / INCUMBENT_MODEL))
+    plain = ModelsConfig.from_json(read_text(CONFIG_DIR / "models" / PLAIN_ENTRY_FILE))
     models = ModelsConfig.model_validate(
         plain.model_dump(mode="json")
         | {"judge": thinking.summarizer.model_dump(mode="json")}
