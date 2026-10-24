@@ -92,6 +92,13 @@ Apply `--measure` once to the block holding title and summary, at the prose size
 
 Draw against the actual content width in CSS pixels. Do not shrink a wide drawing until its labels are unreadable. Reserve the figure's dimensions to avoid layout shifts; choose a simpler layout when the available width cannot hold its labels.
 
+Every SVG text string on a reader chart must resolve to at least `--text-xs`,
+with one drawn unit equal to one CSS pixel. The reader browser gate checks
+this on the canary day at 390 CSS pixels, including the figure's content width,
+mark readings and stable geometry after navigation and reload. Narrow and wide
+geometry checks stay in the logic tier. This floor does not govern console
+charts or repeat the visual validator's mark-count limits.
+
 ### Every fact a drawing shows is reachable without a pointer
 
 The accessible description and visible marks come from the same drawing data. An item chart is one tab stop whose name includes every bar, its value and the unit. Do not require a keyboard user to tab through every mark in a long story stream. Compare the complete pointer-visible and keyboard-accessible fact sets in tests.

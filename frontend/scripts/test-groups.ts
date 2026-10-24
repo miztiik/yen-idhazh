@@ -50,7 +50,7 @@ const FILES: Record<FrontendGroup, readonly string[]> = {
 		'telemetry-header', 'telemetry-hold', 'throughput-window', 'time-split', 'tokens',
 		'topics', 'verdict-split', 'vocabulary', 'weights'
 	],
-	reader: ['payload-state', 'reading-page'],
+	reader: ['payload-state', 'reading-page', 'visual-legibility'],
 	offline: ['service-worker'],
 	console: [
 		'console-data-explorer-still', 'console-machine-journey', 'console-model-builder', 'console-model-ledgers',
