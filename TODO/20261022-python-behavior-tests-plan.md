@@ -825,8 +825,10 @@ counts use the untouched archive and the completed branch instead.
   `26ac9f90cda08456c1f861c26285a2129924804c`. Its frozen plan is preserved
   exactly before this section is added, without importing its implementation.
   Current main, including Row 10 at `f0449de3db08c710e5b2292a03910da157bcb498`,
-  was merged without rewriting history. Plan-only integration
-  does not repeat unchanged application gates. D3 remains open.
+  was merged without rewriting history. Latest main through
+  `c10fd2f03e90cad07fdd400cc55a72ef9042d2d8` was then merged at `9c6d7a199`;
+  that update adds only state records. Plan-only integration does not repeat
+  unchanged application gates. D3 remains open.
 - **Delivery:** Implementation `32c85d883` is delivered in open PR
   [#1661](https://github.com/miztiik/yen-idhazh/pull/1661), not merged by this
   worker. D12 remains IN-FLIGHT pending required Linux CI and merge.
