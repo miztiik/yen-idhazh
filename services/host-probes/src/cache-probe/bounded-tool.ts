@@ -7,7 +7,7 @@ export type ToolOutput = {
   stdout: string; stderr: string;
 };
 export function startBoundedTool(
-  program: "perf" | "multichase", args: readonly string[],
+  program: "perf" | "multichase" | "taskset", args: readonly string[],
   bounds: { max_output_bytes: number; timeout_ms: number }, signal?: AbortSignal,
 ) {
   const child = spawn(program, args, {
@@ -21,6 +21,8 @@ export function startBoundedTool(
   const observers = new Set<(chunk: string) => void>();
   let started: (pid: number | null) => void;
   const ready = new Promise<number | null>(resolve => { started = resolve; });
+  let markStdout: (value: boolean) => void;
+  const stdoutStarted = new Promise<boolean>(resolve => { markStdout = resolve; });
   const stop = (cause: CacheReason, force = true) => {
     reason ??= cause;
     if (active) child.kill(force ? "SIGKILL" : "SIGINT");
@@ -35,6 +37,7 @@ export function startBoundedTool(
     const text = chunk.toString("utf8");
     if (stream === "stdout") {
       stdout += text;
+      markStdout(true);
       for (const observe of observers) observe(text);
     } else stderr += text;
   };
@@ -54,6 +57,7 @@ export function startBoundedTool(
     child.once("close", (code, signal) => {
       active = false;
       clearTimeout(timer);
+      markStdout(false);
       resolve({ code, signal, reason, stdout, stderr });
     });
   }).finally(() => {
@@ -61,7 +65,7 @@ export function startBoundedTool(
     observers.clear();
   });
   return {
-    ready, finished,
+    ready, stdoutStarted, finished,
     get running() { return active; },
     interrupt() { if (active) child.kill("SIGINT"); },
     cancel(cause: CacheReason = "cancelled") { stop(cause); },

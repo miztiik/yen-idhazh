@@ -26,6 +26,7 @@ import { classifyPerfFailure, parsePerfCounters } from "../src/cache-probe/perf-
 import { CacheProbeController } from "../src/cache-probe/cache-controller";
 import { parseMultichaseOutput } from "../src/cache-probe/latency-output";
 import { CacheCountersSchema, CacheLatencySchema } from "../src/cache-probe/cache-schema";
+import { readProcFile } from "../src/probe/proc-reader";
 import { StartTaskProfileResponseSchema, StopTaskProfileResponseSchema } from "../src/api/task-command-schema";
 
 const fixtureRoot = new URL("../../../tests/fixtures/", import.meta.url);
@@ -633,6 +634,65 @@ test("missing and oversized proc files are explicit while valid siblings survive
   await expect(startTaskProfile({ config: enabled, context, report: () => {} }, {
     pipeline_name: "error", task_name: "error", run_id: "error", request_id: randomUUID(), correlation_id: randomUUID(),
   })).rejects.toThrow("collector");
+  if (process.platform === "linux") {
+    const root = await procDirectory();
+    let ready: () => void;
+    let fail: (error: Error) => void;
+    const opening = new Promise<void>((resolve, reject) => { ready = resolve; fail = reject; });
+    let closing = false;
+    const child = Bun.spawn({
+      cmd: [process.execPath, fileURLToPath(new URL("host-probes/controlled-task.ts", fixtureRoot))],
+      stdin: "ignore", stdout: "ignore", stderr: "inherit", serialization: "json",
+      ipc(raw: unknown) {
+        if (typeof raw === "object" && raw !== null && "type" in raw && raw.type === "ready"
+          && "pid" in raw && raw.pid === child.pid) ready();
+        else fail(new Error("Controlled cleanup target returned invalid readiness"));
+      },
+      onExit() { if (!closing) fail(new Error("Controlled cleanup target exited before shutdown")); },
+    });
+    const timeout = setTimeout(() => fail(new Error("Controlled cleanup target startup timed out")), config.task_profile.lifecycle_timeout_ms);
+    try {
+      await opening;
+      clearTimeout(timeout);
+      const pin = readProcessIdentity(child.pid, config.max_proc_bytes, {});
+      if (pin.reason !== null) throw new Error("Controlled cleanup target has no actual process pin");
+      const target = { pid: pin.value.pid, start_ticks: pin.value.start_ticks };
+      await mkdir(join(root, String(target.pid)), { recursive: true });
+      for (const field of ["stat", "status"] as const) {
+        const actual = readProcFile(`${target.pid}/${field}`, config.max_proc_bytes, {});
+        if (actual.reason !== null) throw new Error("Controlled cleanup target has no actual proc input");
+        await Bun.write(join(root, String(target.pid), field), actual.value);
+      }
+      await rm(join(root, String(process.pid), "status"));
+      await mkdir(join(root, String(process.pid), "status"));
+      const shared = new CacheProbeController({
+        ...cacheEnabled, max_concurrent: 2,
+      }, config.max_proc_bytes, { platform: "linux", procRoot: root });
+      let counterSettled = false;
+      const counter = shared.startCounters(target).then(session => session.settled).then(result => {
+        counterSettled = true;
+        return result;
+      });
+      const failedLatency = shared.measureLatency();
+      const outcomes = Promise.allSettled([counter, failedLatency]);
+      try {
+        await expect(shared.shutdown()).rejects.toBeInstanceOf(AggregateError);
+        expect(counterSettled).toBe(true);
+        const results = await outcomes;
+        expect(results[0]!.status).toBe("fulfilled");
+        expect(results[1]!.status).toBe("rejected");
+        expect(readProcessIdentity(target.pid, config.max_proc_bytes, {}).value?.start_ticks).toBe(target.start_ticks);
+      } finally { await outcomes; }
+    } finally {
+      clearTimeout(timeout);
+      closing = true;
+      const cleanup = setTimeout(() => child.kill(), config.task_profile.lifecycle_timeout_ms);
+      try {
+        if (child.exitCode === null) child.send({ command: "close" });
+        expect(await child.exited).toBe(0);
+      } finally { clearTimeout(cleanup); }
+    }
+  }
 });
 
 test("configuration rejects unknown fields, missing fields and invalid controls by name", async () => {

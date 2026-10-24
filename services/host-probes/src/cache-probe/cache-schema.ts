@@ -1,7 +1,7 @@
 /** Which transient cache results distinguish real measurements from unavailable instruments? */
 import { z } from "zod";
 import { OwnedProcessSchema } from "../task-profile/profile-schema";
-import { CacheEventSchema } from "./cache-config";
+import { CacheEventSchema, MULTICHASE_SAMPLE_MS, MULTICHASE_WARMUP_SAMPLES } from "./cache-config";
 export { CacheEventSchema } from "./cache-config";
 
 // Calendar versions, event aliases and units identify external protocols, not tuning controls.
@@ -110,8 +110,8 @@ export const CacheLatencySchema = z.strictObject({
   tool: z.literal("multichase"),
   method: z.literal("single_dependent_random_pointer_chain"),
   prefault: z.literal("chain_construction"),
-  warmup_samples_discarded: z.literal(1),
-  sample_period_ms: z.literal(500),
+  warmup_samples_discarded: z.literal(MULTICHASE_WARMUP_SAMPLES),
+  sample_period_ms: z.literal(MULTICHASE_SAMPLE_MS),
   statistic: z.literal("mean_of_tool_samples"),
   interpretation: z.literal("working_set_curve_not_direct_l3_hit_latency"),
   points: z.array(CacheLatencyPointSchema),

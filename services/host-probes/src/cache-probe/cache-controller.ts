@@ -47,8 +47,9 @@ export class CacheProbeController {
   }
 
   async shutdown(): Promise<void> {
+    const pending = [...this.operations];
     this.cancellation.abort();
-    const results = await Promise.allSettled(this.operations);
+    const results = await Promise.allSettled(pending);
     const errors = results.filter(result => result.status === "rejected").map(result => result.reason);
     if (errors.length) throw new AggregateError(errors, "Cache probe service cleanup failed");
   }

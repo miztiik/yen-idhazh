@@ -11,11 +11,12 @@ import { OwnedProcessSchema } from "../../services/host-probes/src/task-profile/
 import { startBoundedTool } from "../../services/host-probes/src/cache-probe/bounded-tool";
 import { CACHE_LATENCY_PATH, serveSamples } from "../../services/host-probes/src/api/server";
 import { verifyTaskProfileHttp } from "./host-task-profile-proof";
+import { CacheAffinityProofSchema, verifyCacheAffinity } from "./host-cache-affinity-proof";
 
 export const CacheProofSchema = z.strictObject({
   scope: z.literal("unprivileged_linux_cache_instruments"),
   status: z.enum(["running", "complete", "failed"]),
-  stage: z.enum(["counters", "cancellation", "latency", "complete"]),
+  stage: z.enum(["counters", "cancellation", "latency", "affinity", "complete"]),
   counters_measurement: z.enum(["pending", "measured", "partial_pending_supported_events", "pending_permitted_pmu_host"]),
   default_off: z.strictObject({ counters: CacheCountersSchema, latency: CacheLatencySchema }),
   counters: CacheCountersSchema.nullable(),
@@ -24,6 +25,7 @@ export const CacheProofSchema = z.strictObject({
     initial: CacheCountersStartSchema, target_alive_at_stop: z.literal(true), repeat_stop_identical: z.literal(true),
   }).nullable().default(null),
   latency: CacheLatencySchema.nullable(),
+  affinity: CacheAffinityProofSchema.nullable().default(null),
   cancellation: z.strictObject({
     owned_benchmark: OwnedProcessSchema, reason: z.literal("cancelled"),
     benchmark_exited: z.literal(true), target_preserved: z.literal(true),
@@ -31,7 +33,17 @@ export const CacheProofSchema = z.strictObject({
   beyond_recorded_llc: z.boolean().nullable(),
   tool_install: z.strictObject({
     source_revision: z.string().regex(/^[a-f0-9]{40}$/),
-    perf_package: z.string().regex(/^[a-z0-9.-]+$/), perf_version: z.string().regex(/^perf version [0-9a-zA-Z.+_-]+$/),
+    perf_source_revision: z.string().regex(/^[a-f0-9]{40}$/),
+    perf_version: z.string().regex(/^perf version [0-9a-zA-Z.+_-]+$/),
+    perf_fetch_seconds: z.int().nonnegative(), perf_build_seconds: z.int().nonnegative(),
+    multichase_build_seconds: z.int().nonnegative(), python_execution_count: z.literal(0),
+    perf_elf_libraries: z.array(z.string().regex(/^[a-zA-Z0-9_.+-]+$/))
+      .refine(libraries => libraries.every(name => !/python/i.test(name))),
+    perf_runtime_libraries: z.array(z.string().regex(/^[a-zA-Z0-9_.+-]+$/))
+      .refine(libraries => libraries.every(name => !/python/i.test(name))),
+    added_os_packages: z.array(z.strictObject({
+      name: z.string().regex(/^[a-z0-9.+:-]+$/), version: z.string().min(1), installed_kib: z.int().nonnegative(),
+    })).refine(packages => packages.every(pkg => !/^(python[0-9]|libpython)/.test(pkg.name))),
     install_seconds: z.int().nonnegative(), multichase_binary_bytes: z.int().positive(), perf_binary_bytes: z.int().positive(),
   }),
 });
@@ -60,7 +72,7 @@ export async function verifyLiveCacheProfiling(
   }
   const proof = CacheProofSchema.parse({
     scope: "unprivileged_linux_cache_instruments", status: "running", stage: "counters",
-    counters_measurement: "pending", default_off, counters: null, task_api: null, latency: null, cancellation: null,
+    counters_measurement: "pending", default_off, counters: null, task_api: null, latency: null, affinity: null, cancellation: null,
     beyond_recorded_llc: null, tool_install: installation,
   });
   await report(proof);
@@ -142,6 +154,10 @@ export async function verifyLiveCacheProfiling(
   }
   proof.beyond_recorded_llc = hardware.l3_cache_bytes === null ? null
     : latency.points.at(-1)!.working_set_bytes > hardware.l3_cache_bytes;
+  proof.stage = "affinity";
+  await report(proof);
+  proof.affinity = await verifyCacheAffinity(config);
+  await report(proof);
   proof.status = "complete";
   proof.stage = "complete";
   await report(proof);

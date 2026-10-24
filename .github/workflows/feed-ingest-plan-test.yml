@@ -66,6 +66,7 @@ jobs:
             /.github/scripts/feed-ingest-plan-profile-proof.ts
             /.github/scripts/feed-ingest-plan-cache-proof.ts
             /.github/scripts/host-task-profile-proof.ts
+            /.github/scripts/host-cache-affinity-proof.ts
             /.github/scripts/install-host-cache-tools.sh
             /.github/scripts/feed-ingest-plan-profile-schema.ts
             /.github/scripts/feed-ingest-plan-resource-report.ts

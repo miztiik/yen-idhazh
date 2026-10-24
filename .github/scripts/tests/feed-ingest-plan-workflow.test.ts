@@ -96,6 +96,14 @@ test("offers independent machine RAM control and commits only genuine planner an
   const cacheInstall = gateSteps.map(record).find(step => step.name === "Install optional Linux cache instruments");
   expect(cacheInstall?.run).toBe("bash .github/scripts/install-host-cache-tools.sh");
   expect(cacheInstall?.["continue-on-error"]).not.toBe(true);
+  const cacheTools = JSON.parse(await readFile(join(root, "config", "host-cache-tools.json"), "utf8"));
+  expect(cacheTools.perf.revision).toMatch(/^[a-f0-9]{40}$/);
+  expect(cacheTools.packages).not.toContain("linux-perf");
+  expect(cacheTools.packages.every((name: string) => !/^(python[0-9]|libpython)/.test(name))).toBe(true);
+  for (const option of ["NO_LIBPYTHON=1", "NO_JEVENTS=1", "PYTHON=/usr/bin/false", "PYTHON_CONFIG=/usr/bin/false"]) {
+    expect(cacheTools.perf.make_options).toContain(option);
+  }
+  expect(gateSteps.indexOf(cacheInstall)).toBeLessThan(gateSteps.indexOf(probes));
   const resourceUpload = gateSteps.map(record).find(step => step.name === "Preserve TypeScript resource proof");
   expect(record(resourceUpload?.with).path).toBe("test-results/host-probes/resource-proof.json");
   expect(preflight?.if).toBe("needs.scope.outputs.code == 'true'");

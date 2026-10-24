@@ -4,6 +4,7 @@ import { readProcFile } from "../probe/proc-reader";
 import type { ProbeContext } from "../probe/proc-reader";
 import { readProcessIdentity } from "../task-profile/process-stat";
 import type { CacheProbeConfig } from "./cache-config";
+import { MULTICHASE_SAMPLE_MS, MULTICHASE_WARMUP_SAMPLES } from "./cache-config";
 import { CACHE_API_VERSION, CacheLatencySchema } from "./cache-schema";
 import type { CacheLatency, CacheReason } from "./cache-schema";
 import { startBoundedTool } from "./bounded-tool";
@@ -15,7 +16,7 @@ export function refuseCacheLatency(reason: CacheReason): CacheLatency {
     status: reason === "configured_off" ? "disabled" : "unavailable", reason,
     measurement_obtained: false, host: null, interval: null, tool: "multichase",
     method: "single_dependent_random_pointer_chain", prefault: "chain_construction",
-    warmup_samples_discarded: 1, sample_period_ms: 500, statistic: "mean_of_tool_samples",
+    warmup_samples_discarded: MULTICHASE_WARMUP_SAMPLES, sample_period_ms: MULTICHASE_SAMPLE_MS, statistic: "mean_of_tool_samples",
     interpretation: "working_set_curve_not_direct_l3_hit_latency", points: [],
   });
 }
@@ -34,6 +35,8 @@ export async function measureWorkingSetLatency(
   const firstAllowed = status.reason === null ? /^Cpus_allowed_list:\s*(\d+)(?:[-,]\d+)*\s*$/m.exec(status.value)?.[1] : undefined;
   const allowed_cpu = Number(firstAllowed);
   if (!Number.isSafeInteger(allowed_cpu) || allowed_cpu < 0) return unavailable("affinity_unavailable");
+  const nativeProgram = Bun.which("multichase");
+  if (nativeProgram === null || Bun.which("taskset") === null) return unavailable("tool_missing");
   result.host = { platform: "linux", arch: arch(), release: release() };
   const started_at = new Date().toISOString(), started = performance.now();
   for (const working_set_bytes of config.latency.working_set_bytes) {
@@ -42,14 +45,25 @@ export async function measureWorkingSetLatency(
     if (signal?.aborted) return unavailable("cancelled");
     const tlb_locality_bytes = Math.min(config.latency.tlb_locality_bytes, working_set_bytes);
     const pointStartedAt = new Date().toISOString(), pointStarted = performance.now();
-    const tool = startBoundedTool("multichase", [
+    const tool = startBoundedTool("taskset", [
+      "--cpu-list", String(allowed_cpu), nativeProgram,
       "-c", "simple", "-t", "1", "-m", String(working_set_bytes),
       "-s", String(config.latency.stride_bytes), "-T", String(tlb_locality_bytes),
       "-n", String(config.latency.samples), "-F", "0", "-a", "-v",
     ], { max_output_bytes: config.max_output_bytes, timeout_ms: remaining }, signal);
     const pid = await tool.ready;
+    if (pid === null || !await tool.stdoutStarted) {
+      const output = await tool.finished;
+      return unavailable(output.reason ?? "tool_failed");
+    }
     let identity: ReturnType<typeof readProcessIdentity> | null;
-    try { identity = pid === null ? null : readProcessIdentity(pid, maxProcBytes, context); }
+    let observedCpu: number | undefined;
+    try {
+      identity = readProcessIdentity(pid, maxProcBytes, context);
+      const affinity = readProcFile(`${pid}/status`, maxProcBytes, context);
+      const singleton = affinity.reason === null ? /^Cpus_allowed_list:\s*(\d+)\s*$/m.exec(affinity.value)?.[1] : undefined;
+      observedCpu = singleton === undefined ? undefined : Number(singleton);
+    }
     catch (error) {
       tool.cancel("invalid_target");
       await tool.finished;
@@ -60,6 +74,11 @@ export async function measureWorkingSetLatency(
       const output = await tool.finished;
       return unavailable(output.reason ?? "invalid_target");
     }
+    if (observedCpu !== allowed_cpu) {
+      tool.cancel("affinity_unavailable");
+      await tool.finished;
+      return unavailable("affinity_unavailable");
+    }
     const output = await tool.finished;
     if (output.reason) return unavailable(output.reason);
     if (output.code !== 0 || output.stderr.trim() !== "") return unavailable("tool_failed");
@@ -69,7 +88,7 @@ export async function measureWorkingSetLatency(
       });
       result.points.push({
         ...reading, working_set_bytes, stride_bytes: config.latency.stride_bytes, tlb_locality_bytes,
-        benchmark: { pid: identity.value.pid, start_ticks: identity.value.start_ticks }, allowed_cpu,
+        benchmark: { pid: identity.value.pid, start_ticks: identity.value.start_ticks }, allowed_cpu: observedCpu,
         interval: { started_at: pointStartedAt, finished_at: new Date().toISOString(), elapsed_ms: performance.now() - pointStarted },
       });
     } catch { return unavailable("invalid_output"); }

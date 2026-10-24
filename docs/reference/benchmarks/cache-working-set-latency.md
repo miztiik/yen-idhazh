@@ -6,6 +6,13 @@ Which cache-related numbers were actually obtained, and which remain unknown?
 The native random pointer chain produced a working-set latency curve.
 Linux refused the hardware counters. This is not a direct L3 hit latency.
 
+This first reading used the distribution's perf package. Inspection later
+found a CPython extension in that package, so the package installation is not
+accepted under the no-Python boundary. The native latency readings remain real,
+but final acceptance requires fresh evidence from the official no-Python perf
+build and verified child affinity. The setup below is historical evidence,
+not the final compliant dependency claim.
+
 ## Machine and method
 
 The existing CI resource proof wrote `resource-proof.json` in

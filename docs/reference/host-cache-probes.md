@@ -42,7 +42,10 @@ signalled.
 `multichase` reads an address, then uses it to find the next address in a
 randomized order. This dependent pointer chain runs at each configured working
 set. Chain construction writes the pointers before timing. The tool
-pins its own benchmark thread to its first allowed CPU, drops its initial
+inherits one allowed CPU selected through the native `taskset` command. The
+adapter verifies the owned child's actual single-CPU mask after native output
+begins; it does not report the parent's mask as an observation of the child.
+The tool pins its benchmark thread within that inherited mask, drops its initial
 500 millisecond warm-up sample, and reports nanoseconds per load.
 The adapter retains the actual working set, stride, reported native page size,
 translation-locality range, individual readings, mean, benchmark PID/start
@@ -119,14 +122,26 @@ Linux workflow install only the declared optional tools in
 `config/host-cache-tools.json`. The isolated workflow remains manual and has
 no new input.
 
-`perf` comes from Ubuntu's `linux-perf` package, with the older generic tools
-package as a declared alternative when the separate package is absent.
-Ubuntu's native perf package can link a system Python shared library; this
-adds no Python project package or interpreter invocation, and changes no
-production Python runtime. `multichase` is Apache-2.0 software built at the
-committed upstream revision with GCC, make and Perl.
+`perf` is built from a pinned official Linux source revision, not installed
+from the distribution's perf package. `NO_LIBPYTHON=1` disables its Python
+support and `NO_JEVENTS=1` omits Python-generated vendor event tables.
+The two requested LLC aliases remain native builtins. Both Python tool
+variables name the system's failure command, so an unexpected invocation
+cannot silently use an interpreter. The build's execution trace must show
+zero Python executions, and the resulting ELF library list must not contain
+libpython. Only the native executable is installed, never a Python extension.
+The initial distribution package was rejected after inspection found its
+CPython extension; linking alone was not its full cost.
+
+`multichase` is Apache-2.0 software built at the committed upstream revision
+with GCC, make and Perl. Flex and bison build perf's native parsers; strace
+verifies its build executions; binutils verifies ELF dependencies; util-linux
+provides taskset. These are optional CI/measurement dependencies, not default
+service or browser dependencies.
 The installation records elapsed seconds and the actual perf and multichase
-binary byte counts. It adds no Python package, default npm dependency,
+binary byte counts, added OS packages and perf's actual ELF dependencies.
+Before the fresh runner reading, the source-build time of one to three minutes
+is an estimate, not a passing reading. It adds no Python package, default npm dependency,
 browser asset or committed binary. Missing or failed installation fails the
 proof rather than fabricating an instrument.
 

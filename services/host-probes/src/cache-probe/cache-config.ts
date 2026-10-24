@@ -5,7 +5,9 @@ import { constants } from "node:buffer";
 // Node/Bun timers and pointer alignment are runtime and native-tool protocol limits.
 const MAX_TIMER_MS = 2 ** 31 - 1;
 const POINTER_BYTES = 8;
+// The pinned native tool fixes its sample period and discards its first sample.
 export const MULTICHASE_SAMPLE_MS = 500;
+export const MULTICHASE_WARMUP_SAMPLES = 1;
 export const CacheEventSchema = z.enum(["LLC-loads:u", "LLC-load-misses:u"]);
 export const CacheProbeConfigSchema = z.strictObject({
   max_output_bytes: z.int().positive().max(constants.MAX_LENGTH - 1),
@@ -37,7 +39,7 @@ export const CacheProbeConfigSchema = z.strictObject({
       || bytes % value.stride_bytes !== 0 || (index > 0 && bytes <= sets[index - 1]!))) {
       context.addIssue({ code: "custom", path: ["working_set_bytes"], message: "working sets must increase, align with stride and fit the byte bound" });
     }
-    if ((value.samples + 1) * MULTICHASE_SAMPLE_MS * value.working_set_bytes.length >= value.timeout_ms) {
+    if ((value.samples + MULTICHASE_WARMUP_SAMPLES) * MULTICHASE_SAMPLE_MS * value.working_set_bytes.length >= value.timeout_ms) {
       context.addIssue({ code: "custom", path: ["timeout_ms"], message: "timeout must allow measured samples and each tool warm-up" });
     }
   }),
