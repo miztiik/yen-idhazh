@@ -32,11 +32,6 @@ from utilities.measure_llm import (
     within_spread,
 )
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-#: The page this emitter fills. One committed file, read once, so the check
-#: costs the same whatever the archive does (Guardrail #12).
-INCUMBENT_DOSSIER = REPO_ROOT / "docs" / "reference" / "models" / "qwen3.5-9b-q4km.md"
-
 
 def test_model_refs_are_validated_before_they_become_paths_or_urls() -> None:
     refs = parse_model_refs(
@@ -368,17 +363,8 @@ def _page(
     )
 
 
-def test_the_emitted_body_is_the_shape_of_the_page_it_fills() -> None:
-    """Every heading the emitter writes is a heading the committed dossier carries.
-
-    The point of the case is that adopting a model is a paste rather than a
-    transcription, and a body whose headings do not match the page it replaces
-    is a transcription with extra steps.
-    """
-    committed = INCUMBENT_DOSSIER.read_text(encoding="utf-8").splitlines()
-    headings = {line.strip() for line in committed if line.startswith("#")}
-    assert set(DOSSIER_SECTIONS) <= headings, "the emitter writes a heading the page does not have"
-
+def test_the_emitted_report_contains_recorded_identity_and_available_readings() -> None:
+    """The report contains observed fields and omits empty measurement sections."""
     body = render_dossier(_page())
 
     assert body.splitlines()[0].startswith("# ")
@@ -393,7 +379,7 @@ def test_the_emitted_body_is_the_shape_of_the_page_it_fills() -> None:
     assert "56db501e7" in body and "AMD EPYC 9V74 80-Core Processor" in body
 
 
-def test_each_half_of_the_page_names_the_machine_that_half_drew() -> None:
+def test_each_report_section_names_the_machine_that_measured_it() -> None:
     """`llama-bench` and the server case are separate jobs, placed separately.
 
     One processor stamped on the whole page reads as one machine, so a
@@ -410,7 +396,7 @@ def test_each_half_of_the_page_names_the_machine_that_half_drew() -> None:
 def test_the_emitter_invents_no_number() -> None:
     """Two renders of two different reading sets share no number in any reading row.
 
-    A hardcoded figure would appear in both. This is the check that a page
+    A hardcoded figure would appear in both. This checks that a report
     "already filled in" is filled in from the measurement and not from the
     emitter's own memory of what the last model read.
     """
@@ -439,8 +425,8 @@ def test_the_emitter_invents_no_number() -> None:
     assert not shared, f"the emitter prints these whatever it measured: {sorted(shared)}"
 
 
-def test_the_emitter_refuses_a_page_with_a_blank_in_it() -> None:
-    """A page that invented a number would be worse than a page that refused."""
+def test_the_emitter_refuses_a_missing_measurement_field() -> None:
+    """A report that invented a number would be worse than a refusal."""
     page = _page()
     page.identity.pop("quantisation")
     page.context.pop("llama_commit")
@@ -449,12 +435,11 @@ def test_the_emitter_refuses_a_page_with_a_blank_in_it() -> None:
         render_dossier(page)
 
 
-def test_a_reading_inside_the_two_spreads_reproduces_the_page() -> None:
+def test_a_reading_inside_the_two_spreads_reproduces_the_reference() -> None:
     """The tolerance is both spreads added, not either alone.
 
-    A run that lands inside its own noise and inside the page's noise has not
-    disagreed with the page, and holding it to one spread would fail the bench
-    on noise the page itself already declared.
+    A run inside its own noise and the reference noise has not disagreed with
+    the reference, and holding it to one spread would fail on noise it declares.
     """
     observed = Reading(THROUGHPUT_SECTION, "Decode, 250 tokens", 6.01, 0.11, "tok/s", 3)
     declared = Reading(THROUGHPUT_SECTION, "Decode, 250 tokens", 6.15, 0.05, "tok/s", 3)
@@ -468,7 +453,7 @@ def test_a_reading_outside_the_two_spreads_names_both_numbers() -> None:
     declared = Reading(THROUGHPUT_SECTION, "Decode, 250 tokens", 6.44, 0.20, "tok/s", 3)
 
     assert within_spread("decode_250", observed, declared) == (
-        "decode_250: the bench read 6.01 +/- 0.11 tok/s and the page declares "
+        "decode_250: the bench read 6.01 +/- 0.11 tok/s and the reference says "
         "6.44 +/- 0.2 tok/s; they are 0.43 tok/s apart and the two spreads allow 0.31"
     )
 
@@ -491,7 +476,9 @@ def test_a_quantity_only_one_side_read_is_a_failure_and_not_a_pass() -> None:
 
     failures, _ = compare_readings(observed, declared)
 
-    assert failures == ["summarize_median: the bench read it and the page declares nothing"]
+    assert failures == [
+        "summarize_median: the bench read it and the reference declares nothing"
+    ]
 
 
 def test_readings_survive_the_round_trip_through_the_artifact(tmp_path: Path) -> None:

@@ -138,41 +138,6 @@ class RunConfig(Model):
             "root is refused, and a configured case is appended only below that root."
         ),
     )
-    qualification_repeats: int = Field(
-        default=2,
-        ge=2,
-        le=10,
-        description=(
-            "How many times a qualification shard replays each item. Two is the floor, "
-            "by owner decision on 2026-10-24; it was three until then. At two replays, "
-            "two agreeing answers can be luck, so the wording spread diagnostic reports "
-            "how far the sampler moved and no gate reads it. One replay is refused, "
-            "because it cannot show any spread at all. It "
-            "used to be a dispatch input an operator typed per run, where `1` was legal "
-            "and nothing downstream could refuse it. Ten is the ceiling because that is "
-            "past any determinism question; a run that wants more edits this field. "
-            "`idhazh qualify --repeats` overrides it for one invocation and is refused "
-            "on the same floor."
-        ),
-    )
-    # Remove this knob once one qualification has cleared `decide` on the production
-    # path; the losing branch goes with it, and `_one_call` stays because the
-    # injection canaries are the one caller that wants a single call.
-    qualify_on_the_production_path: bool = Field(
-        default=True,
-        description=(
-            "Whether `idhazh qualify` summarizes the way the digest does. True is the "
-            "digest's own path: the article is labelled and then summarized, in two "
-            "adjacent calls. False is the qualification's own single call, which is "
-            "what it did until 2026-09-15 and what every shard before that date "
-            "measured. True by default because a gate that clears a call path nothing "
-            "publishes has cleared nothing, and the switch exists so a run that goes "
-            "wrong on it can be put back without a code change. Moving it moves every "
-            "per-item number in a shard, so `QualificationShard.calls_per_item` records "
-            "which side produced one."
-        ),
-    )
-
     @model_validator(mode="after")
     def _a_trial_case_requires_a_trial_root(self) -> Self:
         """A case slug is meaningful only below an explicitly named trial root."""

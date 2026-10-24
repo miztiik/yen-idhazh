@@ -499,8 +499,8 @@ def refuse_a_server_that_died_at_startup(
     is a boundary rather than a preference: no module under `backend/idhazh/`
     may import `subprocess` at all, because that package is what handles fetched
     web text (Guardrail #11). Answering this needs a process handle, so the
-    answer lives outside the package that may not hold one. `runtime_sweep.py`
-    imports it from here, which is why it is public.
+    answer lives outside the package that may not hold one. The workflow calls
+    this utility directly, so the process check stays here.
     """
     try:
         server.wait(timeout=START_GRACE_SECONDS)

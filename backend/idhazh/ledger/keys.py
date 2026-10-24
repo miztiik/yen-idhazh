@@ -39,7 +39,6 @@ from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.run_plan import RunPlan
 from idhazh.contracts.run_shards import RunShards
 from idhazh.contracts.seen import PublishedRow, SeenRow
-from idhazh.contracts.validation_row import ValidationRow
 from idhazh.contracts.visual_prune import VisualPruneRow
 
 #: The column the door files a dated row under, read out of the row's own cells.
@@ -223,15 +222,6 @@ FEED_INGEST_DIVERSITY_KEY: Final = (
 OBSERVATION_KEY: Final = ("url_key", "output_digest", "scorer_version")
 
 
-#: What makes two validation rows the same record. One candidate, judged once,
-#: by one execution. `run_id` is in the key because two dispatches of one model
-#: on one day are two verdicts about two trees, and the committed ledger held
-#: exactly that pair - drop it and the settlement would keep whichever was filed
-#: first. `model_id` is in it because a dispatch judges one candidate and the
-#: golden set judges several, so a date and a run alone would collapse them.
-VALIDATION_KEY: Final = ("date", "run_id", "model_id")
-
-
 #: What makes two first-sight rows the same record. One address, first seen by
 #: one run. The plan stage files an address once, in the run that first sees it,
 #: so a second row holding both cells is that sighting written twice, cell for
@@ -370,7 +360,6 @@ _DOOR_SHAPES: Final[dict[LedgerName, _DoorShape]] = {
     LedgerName.SUMMARY_QUALITY_EVALS: _DoorShape(OBSERVATION_KEY, EvalRow),
     LedgerName.HOST_FINGERPRINT: _DoorShape(HOST_FINGERPRINT_KEY, HostFingerprintRow),
     LedgerName.COUNTERFACTUAL_SCORES: _DoorShape(COUNTERFACTUAL_SCORE_KEY, CounterfactualScoreRow),
-    LedgerName.CANDIDATE_MODELS: _DoorShape(VALIDATION_KEY, ValidationRow),
     LedgerName.FEED_HEALTH: _DoorShape(FEED_HEALTH_KEY, FeedHealthRow),
     LedgerName.SEEN: _DoorShape(SEEN_KEY, SeenRow),
     LedgerName.PUBLISHED: _DoorShape(PUBLISHED_KEY, PublishedRow),

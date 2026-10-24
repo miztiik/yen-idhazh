@@ -154,15 +154,6 @@ REGISTRY: Final[dict[LedgerName, LedgerStaging]] = {
         symbol="idhazh.evals.writer.file_measurements",
         job_labels=frozenset({"work", "assemble"}),
     ),
-    LedgerName.CANDIDATE_MODELS: LedgerStaging(
-        writer=(
-            "idhazh.stages.qualify_decide.stage_qualify_decide, under "
-            "`python -m idhazh qualify-decide`. The verb does not run inside a "
-            "`digest.yml` commit job"
-        ),
-        symbol="idhazh.stages.qualify_decide.stage_qualify_decide",
-        job_labels=frozenset(),
-    ),
     LedgerName.ITEM_HEALTH_SUMMARY: LedgerStaging(
         writer=(
             "idhazh.gardener.tasks.telemetry_aggregate.run, the gardener's monthly "

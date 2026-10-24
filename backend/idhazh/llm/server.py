@@ -1063,9 +1063,9 @@ def _origin_of(endpoint: str) -> str:
 def _note_origin(origin: str) -> None:
     """Say once which server this run is talking to.
 
-    Keyed on the origin rather than the endpoint: the qualification process
-    posts to the chat route and to the rendered-completion route on one server,
-    and an endpoint key would write the identical line twice.
+    Keyed on the origin rather than the endpoint: one run can post to both the
+    chat route and the rendered-completion route on one server, and an endpoint
+    key would write the identical line twice.
 
     The cache is process-global, so a test that asserts "once" calls
     `_note_origin.cache_clear()` first.

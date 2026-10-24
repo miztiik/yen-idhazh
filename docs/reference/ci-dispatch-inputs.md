@@ -55,22 +55,15 @@ evidence in the file.
 The named inputs:
 
 - **Enumerated** - `backfill.commit`,
- `digest.faithfulness`, `digest.shards`, `measure.target`,
- `measure.runtime_candidate`, `measure.model_speed_case`,
+ `digest.faithfulness`, `digest.shards`,
  `idhazh-gardener.force`.
-- **Read by name** - `backfill.days`, `measure.runtime_repeats`, `measure.runtime_threads`,
- `measure.runtime_threads_batch`, `measure.runtime_corpus_items`,
- `measure.runtime_corpus_offset`, and
- `candidate_models_file` on
- `measure.yml`, `validate.yml` and `idhazh-pipeline-tests.yaml`. That one
- becomes a file path, so the step resolves it and proves it sits inside
- `config/` rather than matching its spelling, then asserts every field it
- republishes is one bare word.
+- **Read by name** - `backfill.days`, `candidate_models_file` on
+ `idhazh-pipeline-tests.yaml`. That value becomes a
+ file path, so the step resolves it and proves it sits inside `config/` rather
+ than matching its spelling, then asserts every field it republishes is one
+ bare word.
 - **Matched** - `digest.date`, `digest.article_limit`, `llm-council.date`,
- `drift.recent_days`, `drift.baseline_days`,
- `measure.corpus_links`, `measure.threads`, `measure.budget_samples`,
- `validate.shards`, `validate.articles_per_shard`,
- `validate.job_budget_minutes`.
+ `drift.recent_days`, `drift.baseline_days`.
 
 **`digest.article_limit` makes a short test run of the full pipeline.** Blank,
 which is what every scheduled run passes, plans the full day exactly as before.
@@ -83,19 +76,10 @@ passes it to `idhazh plan --article-limit`. The stories it does plan are
 published like any other run's, so a test run on today's date adds to today's
 digest.
 
-**`candidate_models_file` is the same field on all three, and that is the point.**
-Every fact about a candidate - the repository, the commit, the filename, the
-digest, the byte count, the alias, the quantisation - is already written in
-`config/models/<name>.json`. A form that asked for them again would let one
-workflow measure one set of bytes while another pointed at a different set, with
-every gate green. Empty means the configured model on all three, so a dispatch
-that types nothing runs what the committed config already names.
-
-`validate.yml` shapes its four numbers in one step of the `plan` job, which is
-the job every other job needs, so "before its first use" is anywhere after that
-step - the qualify matrix, the job bound and the gate all read them later. The
-byte check reads the size the candidate's own entry declares, not a number the
-form carried.
+**`candidate_models_file` selects a model configuration for pipeline tests.**
+The repository, commit, filename, digest, byte count, alias and quantisation
+come from that file under `config/models/`; the workflow validates its path and
+does not accept copied model fields.
 
 `drift.yml` was the other one worth fixing. Its two window sizes were pasted
 into a Python program inside the step, so a value that is not a number was a

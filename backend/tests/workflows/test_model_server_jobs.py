@@ -17,7 +17,7 @@ from pytest import MonkeyPatch
 from idhazh.contracts.app_config import AppConfig
 from idhazh.contracts.base import canonical_json
 from idhazh.telemetry import silicon
-from utilities import candidate_pointer, model_refs, model_runtime, pipeline_test_case_config
+from utilities import model_refs, model_runtime, pipeline_test_case_config
 
 from ._harness import (
     ACTIONS_DIR,
@@ -77,14 +77,12 @@ LOG_SUMMARY_STEP: Final = "Prompt cache log summary"
 #: the action.
 LAUNCH_ROOTS: Final = (
     ("digest.yml", "work", "Start the model", "config"),
-    ("validate.yml", "qualify", "Start the candidate", "backend/var/candidate-config"),
     (
         "idhazh-pipeline-tests.yaml",
         "test-case",
         "Start the model",
         "backend/var/test-cases/${{ matrix.test_case }}/config",
     ),
-    ("measure.yml", "budgets", "Start the tokenizer", "backend/var/candidate-config"),
 )
 
 #: The variable those five steps used to be handed the model path in. Named
@@ -99,8 +97,7 @@ def test_every_job_that_starts_a_server_reaches_the_one_argv_builder() -> None:
     existed for one reason: `digest.yml` started its server before
     `pip install -e .` ran, so the package was not importable yet. The install
     moved one step earlier and the copy went. While it existed the two halves
-    drifted, and the case that drifted was the one nobody diffed - `validate.yml`
-    qualified a candidate on a server the daily run does not run.
+    drifted, and the case that drifted was the one nobody diffed.
 
     The install ordering is the whole reason, so it is asserted here rather than
     left as a comment: a job that installs after it starts is a job that needs a
@@ -517,20 +514,12 @@ def test_the_refusal_runs_before_the_server_is_built(
     with pytest.raises(FileNotFoundError):
         model_runtime.start_server(agreeing, "llama-server")
 
-    # Both starters read the port back out of the address rather than holding
-    # one. The launcher is how every workflow starts a production server; the
-    # sweep is the one that does not go through it, because it sweeps a setting
-    # over per-candidate config roots and holds the process object to sample its
-    # memory. Neither can the launcher do, so it keeps its own start sequence -
-    # and the rule that the port has one home did not move with it.
-    for module in (
-        START_SERVER_MODULE,
-        REPO_ROOT / "backend" / "utilities" / "runtime_sweep.py",
-    ):
-        assert "port_of_base_url(" in read_text(module), (
-            f"{module.name} must read the port back out of model_server.base_url "
-            "rather than hold one"
-        )
+    # The launcher reads the port from the configured endpoint, rather than
+    # keeping a second value.
+    assert "port_of_base_url(" in read_text(START_SERVER_MODULE), (
+        f"{START_SERVER_MODULE.name} must read the port back out of model_server.base_url "
+        "rather than hold one"
+    )
 
 
 def _launched_stem(script: str) -> str:
@@ -630,27 +619,17 @@ def _uncommented(text: str) -> str:
 def _the_launch_roots(tmp_path: Path) -> dict[str, list[Path]]:
     """The config roots a server is started from, built the way the jobs build them.
 
-    Two of the four do not exist in this repository at all: a job cuts them at
-    run time, one from `config/` and one per test case from that copy. Reading
-    them off disk would check nothing, so the real builders are driven here
-    instead - which is also what makes a builder that starts moving the weights
-    file turn this red. The per-test-case root is one name in the workflow and
-    one folder per declared test case on a runner, so every folder is checked.
+    The per-test-case roots are cut at run time, one folder per declared test
+    case, so every folder is checked.
     """
     committed = CONFIG_DIR
-    scratch = tmp_path / "candidate-config"
-    _copy_config(scratch)
-    pointer = _published(model_refs.trial_rows(committed, "", prefix=""))["models_file"]
-    candidate_pointer.point_at(pointer, scratch=scratch)
-
     test_cases = tmp_path / "test-cases"
     pipeline_test_case_config.main(
-        ["--config-root", str(scratch), "--test-cases-root", str(test_cases)]
+        ["--config-root", str(committed), "--test-cases-root", str(test_cases)]
     )
 
     return {
         "config": [committed],
-        "backend/var/candidate-config": [scratch],
         "backend/var/test-cases/${{ matrix.test_case }}/config": sorted(
             test_cases.glob("*/config")
         ),

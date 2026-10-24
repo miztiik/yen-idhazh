@@ -1,10 +1,10 @@
-"""Bench one candidate model and emit the dossier page body its numbers fill.
+"""Bench a model candidate and emit a standalone report of its runtime readings.
 
 Three verbs. `bench` downloads exact GGUF files and runs one local llama-bench
 build over them. `emit` folds that case together with the server case's runtime
-sweep and writes the model dossier's body, numbers already in place. `compare`
-reads two emitted reading sets and says whether the second reproduces the first
-inside the spread each one declares.
+sweep and writes a report with the measured values. `compare` reads two emitted
+reading sets and says whether the second reproduces the first inside the spread
+each one declares.
 """
 
 from __future__ import annotations
@@ -338,14 +338,11 @@ def bench_rows(stdout: bytes) -> list[dict[str, Any]]:
     return [row for row in cast(list[object], payload) if isinstance(row, dict)]
 
 
-# --- the page the bench fills -----------------------------------------------
+# --- report shape ------------------------------------------------------------
 
-#: The headings a bench reading may print under, in the order the model dossier
-#: prints them. Closed-world: a reading that names anything else has no place on
-#: the page, and a heading the committed dossier does not carry fails the test
-#: that reads it. The rows INSIDE a section are open, because the prompt lengths
-#: are a config value and a closed list of them would be a second spelling of
-#: `--prompt-tokens` (Guardrail #6).
+#: The report sections that can hold a bench reading. The rows inside a section
+#: are open, because prompt lengths come from `--prompt-tokens` and a closed list
+#: would be a second spelling of that input (Guardrail #6).
 CACHE_SECTION: Final = "## On disk, and what it costs the cache"
 THROUGHPUT_SECTION: Final = "## Prefill and decode"
 MEMORY_SECTION: Final = "## Memory"
@@ -359,9 +356,8 @@ DOSSIER_SECTIONS: Final = (
     ITEM_SECTION,
 )
 
-#: What the Identity table says, and the order it says it in. Every one of these
-#: must arrive; the emitter refuses to render a page with a blank in it rather
-#: than print a row a reader would have to go and fill in by hand.
+#: What the Identity table says, and the order it says it in. The emitter refuses
+#: to render a report with a blank in it rather than print an incomplete row.
 IDENTITY_FIELDS: Final = (
     ("id", "Configuration id"),
     ("repo", "Repository"),
@@ -371,7 +367,7 @@ IDENTITY_FIELDS: Final = (
     ("sha256", "SHA-256"),
     ("bytes", "Bytes"),
 )
-#: What every number on the page was measured against. A reading with no
+#: What every number in the report was measured against. A reading with no
 #: hardware and no date is not a measurement (Guardrail #10), so these are
 #: required exactly as hard as the identity is.
 CONTEXT_FIELDS: Final = (
@@ -447,7 +443,7 @@ class BenchReadings:
 
     def as_json(self) -> dict[str, Any]:
         # Identity and context are a lookup and are sorted. The readings are not:
-        # their order is the order the page prints them in, prefill before
+        # their order is the order the report prints them in, prefill before
         # decode and median before longest, and sorting by key would shuffle
         # that into alphabetical nonsense on the way through the artifact.
         return {
@@ -690,11 +686,10 @@ def _reading_row(reading: Reading) -> tuple[str, str, str]:
 
 
 def render_dossier(readings: BenchReadings) -> str:
-    """The dossier body, numbers already in it, ready to paste.
+    """Render the standalone report with its measured values.
 
-    Every value on the page came in through `readings`. Nothing here supplies a
-    default for a missing one: a page that invented a number would be worse than
-    a page that refused to render.
+    Every value came in through `readings`. Missing fields stop the report rather
+    than producing a success-shaped output with invented values.
     """
     missing = [name for name, _ in IDENTITY_FIELDS if not readings.identity.get(name)]
     missing += [name for name in CONTEXT_FIELDS if not readings.context.get(name)]
@@ -708,7 +703,7 @@ def render_dossier(readings: BenchReadings) -> str:
         }
     )
     if unplaceable:
-        raise ValueError(f"no dossier heading holds: {', '.join(unplaceable)}")
+        raise ValueError(f"no report section holds: {', '.join(unplaceable)}")
     if not readings.readings:
         raise ValueError("the bench recorded no readings at all")
 
@@ -719,9 +714,9 @@ def render_dossier(readings: BenchReadings) -> str:
         "",
         f"**Last Updated**: {day}",
         "",
-        "**Status: measured, not adopted.** Every number below was read by one "
-        f"dispatch of the bench on {day}. Nothing here says the model is good enough "
-        "to publish with - that is the qualification case, and it runs separately.",
+        "**Status: measured, not evaluated for quality.** Every number below was "
+        f"read by one standalone measurement on {day}. The readings describe runtime "
+        "behavior only.",
         "",
         "## Identity",
         "",
@@ -777,12 +772,10 @@ def render_dossier(readings: BenchReadings) -> str:
     lines.extend(
         [
             "",
-            "## What this page still owes",
+            "## What this measurement does not show",
             "",
-            "The bench reads throughput, memory and wall-clock. It does not grade a "
-            "summary and it does not decide whether this model publishes. Paste the "
-            "qualification verdict and the licence row in from the validation case "
-            "before this page stands for an adopted model.",
+            "This report measures throughput, memory and wall-clock. It does not "
+            "grade summaries or decide whether the model is suitable for publication.",
             "",
         ]
     )
@@ -790,16 +783,16 @@ def render_dossier(readings: BenchReadings) -> str:
 
 
 def within_spread(name: str, observed: Reading, declared: Reading) -> str | None:
-    """Does one reading reproduce another? `None` when it does, the reason when not.
+    """Does one reading reproduce a reference reading? `None` when it does.
 
     The tolerance is the two spreads added rather than either one alone: a run
-    that lands inside its own noise and inside the page's noise has not
-    disagreed with the page.
+    that lands inside its own noise and the reference noise has not disagreed
+    with the reference.
     """
     if observed.unit != declared.unit:
         return (
             f"{name}: the bench read {format_number(observed.value)} {observed.unit} and "
-            f"the page declares {format_number(declared.value)} {declared.unit}; "
+            f"the reference says {format_number(declared.value)} {declared.unit}; "
             "two units are not one reading"
         )
     tolerance = observed.spread + declared.spread
@@ -808,7 +801,7 @@ def within_spread(name: str, observed: Reading, declared: Reading) -> str | None
         return None
     return (
         f"{name}: the bench read {format_number(observed.value)} +/- "
-        f"{format_number(observed.spread)} {observed.unit} and the page declares "
+        f"{format_number(observed.spread)} {observed.unit} and the reference says "
         f"{format_number(declared.value)} +/- {format_number(declared.spread)} "
         f"{declared.unit}; they are {format_number(gap)} {observed.unit} apart and the "
         f"two spreads allow {format_number(tolerance)}"
@@ -829,10 +822,10 @@ def compare_readings(
         left = observed.readings.get(name)
         right = declared.readings.get(name)
         if left is None:
-            failures.append(f"{name}: the page declares it and the bench did not read it")
+            failures.append(f"{name}: the reference declares it and the bench did not read it")
             continue
         if right is None:
-            failures.append(f"{name}: the bench read it and the page declares nothing")
+            failures.append(f"{name}: the bench read it and the reference declares nothing")
             continue
         if left.repeats < 2 or right.repeats < 2:
             abstained.append(
@@ -895,7 +888,7 @@ def parse_args() -> argparse.Namespace:
     bench.add_argument("--quantisation", default="", help="The quantisation these bytes carry")
     bench.add_argument("--readings", type=Path, default=Path("backend/var/bench/raw-case.json"))
 
-    emit = verbs.add_parser("emit", help="Write the dossier body the two cases fill")
+    emit = verbs.add_parser("emit", help="Write a report from the two measurement cases")
     emit.add_argument("--raw", type=Path, required=True, help="The raw case's readings")
     emit.add_argument(
         "--server", type=Path, required=True, help="The server case's runtime summary"
@@ -904,7 +897,7 @@ def parse_args() -> argparse.Namespace:
         "--corpus",
         required=True,
         help=(
-            "What the server case replayed, as the page should read it - for example "
+            "What the server case replayed, as the report should state it - for example "
             "'3 articles'. Required rather than defaulted: it is the size of the corpus "
             "a reading was taken over, and a default would be a second spelling of "
             "`bench.corpus_items` that could disagree with it (Guardrail #6)."
@@ -1071,7 +1064,7 @@ def run_emit(args: argparse.Namespace) -> int:
         # What the timing was taken over, which is not always what was asked
         # for. The bench refetches every repeat, and a repeat whose article a
         # publisher edited mid-job is dropped from the median rather than
-        # failing the run - so the page says the number it was really given
+        # failing the run - so the report says the number it was really given
         # (CLAUDE.md Guardrail #10).
         context={
             "server_repeats": str(summary.get("repeats_timed") or summary.get("repeats") or ""),

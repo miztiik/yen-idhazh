@@ -26,12 +26,11 @@ Read from the repository API on 2026-08-25.
 | `merge_commit_message` | `PR_TITLE` | Neither merge-commit setting reads a branch commit body, so that path was never affected. |
 
 **`main` is not a protected branch, and protecting it would break
-publication.** `digest.yml` and `validate.yml` push their state commits straight
-to `main` - the eval ledger, the seen-URL ledger, feed health, the digest
-payload. A branch-protection rule makes those pushes fail, and a scheduled run
-that cannot commit has done its work for nothing. Protecting `main` is possible,
-but only after the direct pushes in those two workflows are redesigned or
-explicitly exempted.
+publication.** `digest.yml` pushes its state commits straight to `main` - the
+eval ledger, the seen-URL ledger, feed health, and the digest payload. A
+branch-protection rule makes those pushes fail, and a scheduled run that cannot
+commit has done its work for nothing. Protecting `main` is possible, but only
+after those direct pushes are redesigned or explicitly exempted.
 
 **`allow_auto_merge` was turned on on 2026-08-31, and on its own it buys
 nothing. Measured, not assumed.** The setting was off on the argument that
@@ -49,7 +48,7 @@ care about.
 
 **What would make it work, and what that costs.** A repository ruleset on `main`
 requiring the `gates` and `site` checks, with `github-actions[bot]` on its
-bypass list. The bypass is load-bearing: `digest.yml` and `validate.yml` push
+bypass list. The bypass is load-bearing: `digest.yml` pushes
 state commits straight to `main` with the job's own token - the eval ledger, the
 seen-URL ledger, feed health, the digest payload - and a ruleset that forgets it
 stops the digest publishing that night. The setting stays on because it is free
@@ -90,9 +89,7 @@ Verified 2026-08-20.
  shard of several items instead of fanning out one job per item: the weights
  restore is the largest fixed cost, and every extra job pays it again. It is
  also why a workflow that runs a few times a month earns no cache of its own -
- the entry is cold on every dispatch - unless the reader is a sibling job in
- the same run, which is what `validate.yml` `qualify` and `measure.yml`'s bench
- both rely on.
+ the entry is cold on every dispatch -  unless the reader is a sibling job in the same run.
 - **The 10 GB cache limit is ours; the eviction is GitHub's.** 10 GB is the
  default, a repository administrator can raise it - to 10 TB on a user-owned
  repository - and storage above 10 GB is billed only where it has been raised.

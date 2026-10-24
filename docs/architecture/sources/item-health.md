@@ -614,7 +614,7 @@ The remaining nine can count against the source:
 The contract carries this as data on the enum side, not as prose only, because a
 later source-health reader uses it.
 
-`model_unreachable` records nothing answering at our local model server's
+`model_unreachable` records nothing answering at the job's model server
 address - the process is gone, the port is closed, the connection was refused.
 It is infrastructure failure. It never counts against a source.
 

@@ -158,22 +158,6 @@ answer is no, `summarizeConfig` should throw rather than guess, and the
 defaults go with it - a value pinned to the file it stands in for is a
 consolation prize next to not needing the copy.
 
-## What shape a qualification corpus has to come out
-
-`evaluation.qualification_pool_multiple` sizes how wide a qualification shard
-casts before it selects. It is a floor and not a cap: a shard whose slice has not
-yet offered every length tier keeps walking. Raising it buys fetch seconds and
-never model minutes, because the model still sees `articles_per_shard` articles.
-
-`evaluation.qualification_min_per_band`, `qualification_min_over_cap` and
-`qualification_min_brief` say what shape that corpus should come out. They
-describe the measuring stick rather than the candidate, so a run that falls short
-records the shortfall on its verdict and keeps going - the gate that refuses a
-run with too little evidence is `scored_denominator`, which counts what was
-actually scored. They were literals in `evals/qualify.py` until 2026-09-18, the
-only qualification thresholds that were not config, and the only ones that could
-end a run before it wrote anything down.
-
 ## See also
 
 - [../config.md](../config.md) - what a knob is, and what is not one.

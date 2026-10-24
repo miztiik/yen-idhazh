@@ -44,10 +44,9 @@ STATE: Final = Path("state")
 #: Computed from `5a9c6f32f:backend/idhazh/ledger/__init__.py` by calling those
 #: functions, so a row here is the old answer rather than a reading of it.
 #:
-#: Two rows are not the old answer, and the difference is only their first
-#: segment. `candidate-models` was `validation` and `item-health-summary` was
-#: `telemetry-aggregate`, renamed to say what they hold while neither had a
-#: single committed file - so the old addresses held nothing to move.
+#: One row is not the old answer: `item-health-summary` was
+#: `telemetry-aggregate`, renamed to say what it holds while it had no
+#: single committed file - so the old address held nothing to move.
 #:
 #: Two folders are not the old module's answer either, because it built no
 #: folder for a ledger filed by month or by stamp. Each is the folder its callers
@@ -75,11 +74,6 @@ AT_THE_BASE: Final[dict[str, tuple[str | None, str | None, str | None]]] = {
         "state/scores/2026/09/18",
         "state/scores/2026/09/18",
         "state/scores",
-    ),
-    "CANDIDATE_MODELS": (
-        "state/candidate-models/2026/09/18",
-        "state/candidate-models/2026/09/18",
-        "state/candidate-models",
     ),
     "ITEM_HEALTH_SUMMARY": (
         "state/item-health-summary/2026-09.csv",
@@ -510,18 +504,19 @@ def test_the_claimed_roots_differ_from_the_base_only_by_the_names_given() -> Non
     gardener's own ledger, which files under the two roots and is claimed like
     every family. The last two are not families at all: they are the roots the
     ledger door files under, claimed so the sweep never reads them as a trial
-    run's trees.
+    run's trees. The retired candidate-models family stays claimed so its
+    historical rows survive.
     """
     assert ledger.claimed_roots() - CLAIMED_AT_THE_BASE == {
         "feed-ingest-plan",
         "feed-retirements",
-        "candidate-models",
         "council-run-records",
         "item-health-summary",
         "summary-quality-evals",
         "traces",
         "day-metrics",
         "digest-fragments",
+        "candidate-models",
         "gardener",
         "raw",
         "run-plan",

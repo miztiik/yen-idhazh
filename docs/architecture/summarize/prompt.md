@@ -117,7 +117,7 @@ Reasoning is declared by the model's closing marker. On the explicit-completion 
 
 Discard reasoning before the reply reaches a persisted payload, reader surface or later article-level continuation. With no declared marker, reject unexpected reasoning. Check both inline thinking blocks and a separate reasoning channel, and inspect every inline block rather than only the first.
 
-The chat-template path lets the runtime manage its reasoning split. It must still satisfy the same no-leakage check. Use current [qualification rules](../../concepts/qualification.md) and [evaluation policy](../../concepts/evaluation.md) to assess quality; a protocol change does not establish a quality gain.
+The chat-template path lets the runtime manage its reasoning split. It must still satisfy the same no-leakage check. Assess published summaries with the [evaluation policy](../../concepts/evaluation.md); a protocol change does not establish a quality gain.
 
 ## Model compatibility is mechanical
 
@@ -168,5 +168,4 @@ A stable prefix reduces repeated reading without treating prompt wording as a co
 - [throughput.md](throughput.md) - request scheduling and rates.
 - [../sources/trust-boundary.md](../sources/trust-boundary.md) - untrusted input controls.
 - [../../concepts/config/summary-length.md](../../concepts/config/summary-length.md) - length configuration.
-- [../../concepts/qualification.md](../../concepts/qualification.md) - candidate verification.
 - [../../reference/pipeline-cost.md](../../reference/pipeline-cost.md) - budget measurements.

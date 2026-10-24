@@ -4,8 +4,7 @@
 # the production code - the real fetcher, the real extractor, the real prompts,
 # the real two calls, the real model server - over a few drawn articles. Name
 # nothing and it runs the configured model. It is a check that a model walks the
-# path, not a benchmark: measuring and tuning a server is `measure.yml`'s job, and
-# how good a model's summaries are is `validate.yml`'s.
+# path: this checks stage execution, not server performance or summary quality.
 #
 # Four jobs. `plan` draws the articles once and lists the runners the enabled
 # test cases need. `test-case` is one job per runner, each with its own model
@@ -32,8 +31,8 @@
 # other job keeps `contents: read`. What the runners produced - the article
 # text included - leaves only as an artifact.
 #
-# The faithfulness scorer is skipped. It is a second model download, and
-# whether a summary is faithful is the qualification's question, not this one's.
+# The faithfulness scorer is skipped. It would add a second model download to a
+# workflow that checks execution rather than summary quality.
 name: Pipeline tests
 
 # Dispatch only, and it asks for ONE thing: which model to run the test cases

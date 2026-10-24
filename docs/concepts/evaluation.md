@@ -10,7 +10,6 @@ How a published summary is judged, and how the judgement is kept honest. This pa
 | --- | --- |
 | this page | how is a published summary judged, and how is the judgement kept honest |
 | [summary-metrics.md](summary-metrics.md) | what does one number about one summary mean, and what can it not see |
-| [qualification.md](qualification.md) | how is a candidate model judged before it may be adopted |
 
 **Whether archive search finds the right story is a different instrument and lives in [search-quality.md](search-quality.md).** The two share no data, no metric and no config knob, and a person arrives holding one question or the other.
 
@@ -205,9 +204,7 @@ see. **The mark-down wins, and it is not close.**
 **Measured 2026-08-29** over the 117 (premise, summary) pairs the 2026-08-28
 production run scored, each pair scored twice and nothing else varied - once at
 today's `900/150/anchored` geometry, once at a 1,923-word window that holds every
-premise whole. Taken by `backend/utilities/grader_length_bias.py`; the figures,
-the hardware and the spread are in
-[Current quality-verification requirements](qualification.md).
+premise whole. Taken by `backend/utilities/grader_length_bias.py`.
 
 | Windows the article takes today | Items | Today's score minus the whole-article score |
 | --- | ---: | ---: |
@@ -788,8 +785,7 @@ faithfulness score, rather than comparing two different measured subsets.
 non-article text**. Shorter sources with steady faithfulness warrant inspection;
 they do not prove that extraction failed. Short news and video introductions
 can be valid. Removing player notices also makes an extraction shorter while
-improving it. See the [Current qualification requirements](qualification.md)
-for the sample counts and the confirmed extraction defect.
+improving it.
 
 ### Current drift implementation gap
 
@@ -949,8 +945,8 @@ like a rate that was measured.
 the denominator; the seen and published ledgers, because they are what
 stops a repeat; the feed-health ledger, because quarantine fires at
 `collect.availability_strikes_before_rest` consecutive failures and a missing row
-moves that count; and the canary suite, because a canary that runs sometimes is
-not a canary.
+moves that count; and the fixed injection fixtures, because a boundary
+regression must fail the build.
 
 ## The ledger
 
@@ -1039,9 +1035,7 @@ reading that list.
 
 - [summary-metrics.md](summary-metrics.md) - what each column on the eval row means, and what it cannot see. Arrive there holding a column name.
 - [../architecture/publishing/autotune-summary-quality.md](../architecture/publishing/autotune-summary-quality.md) - the design of record for the other three axes and the loop that would move these thresholds without a person.
-- [qualification.md](qualification.md) - the gates a candidate model clears before it may serve, and what a run that judged one proves.
 - [search-quality.md](search-quality.md) - the other instrument: whether archive search finds the right story.
-- [../how-to/evaluate-new-summarizer-model.md](../how-to/evaluate-new-summarizer-model.md) - the controlled procedure for testing and adopting a challenger.
 - [pipeline-loop.md](pipeline-loop.md) - where the Evaluate stage sits.
 - [digest.md](digest.md) - how a confidence band reaches a reader.
 - [config/summary-length.md](config/summary-length.md) - the band thresholds and retry budget.

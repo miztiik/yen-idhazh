@@ -43,8 +43,8 @@ def test_a_door_ledgers_segments_land_before_its_own_prefix() -> None:
         )
 
 
-def test_a_bench_level_door_ledger_takes_one_segment() -> None:
-    """`host-fingerprint` and `candidate-models` trial runs have no case: one segment."""
+def test_a_pipeline_test_host_record_takes_one_segment() -> None:
+    """The host record sits directly under the pipeline-test trial root."""
     with use_registry(overlay_registry(("pipeline-tests",))):
         assert raw_root(STATE, LedgerName.HOST_FINGERPRINT) == STATE / "raw" / "pipeline-tests" / "host-fingerprint"
 

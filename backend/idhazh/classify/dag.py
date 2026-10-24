@@ -217,13 +217,9 @@ def fits_the_window(
 ) -> bool:
     """Whether this article's whole sequence fits, asked before the label call is sent.
 
-    **`summarize.fits_context` is the other one and it is not this one.** That
-    function sizes the single call the qualification harness sends: one system
-    turn, one article, one reply. This one sizes the two-call path the digest
-    runs. Two paths render different prompts, so one derivation would be wrong
-    about one of them, and the wrong one would be wrong in the expensive
-    direction - the two-call sequence is 2.8 times the single call's, because
-    the label call's reply is paid twice and the candidate menu is paid once.
+    This is the budget for the two-call path used by the digest. It includes
+    both derived reply budgets, because the label reply is paid twice and the
+    candidate menu is paid once.
 
     **Refusing here costs the item and admitting it costs the picture.** An
     article that does not fit is not clipped or degraded: it lands as
