@@ -45,6 +45,11 @@ _EXPLICIT_REMOVAL_FORM = re.compile(
     re.IGNORECASE,
 )
 
+
+def _is_nonblank_text(value: object) -> bool:
+    return isinstance(value, str) and bool(value.strip())
+
+
 #: The fault each stop that has one carries, unless a case names another.
 NATURAL_FAULT = {
     StopReason.FAILED: GardenerFault.RAISED,
@@ -219,11 +224,9 @@ def test_every_word_a_record_or_a_line_can_hold_has_a_sentence_a_person_reads() 
     assert set(report.WHY) == set(GardenerFault)
     assert set(report.NOTED) == set(RecoveryNote)
     assert set(report.NEXT) == set(TaskOutcome)
-    assert all(isinstance(sentence, str) and sentence.strip() for sentence in report.WHY.values())
-    assert all(
-        isinstance(sentence, str) and sentence.strip() for sentence in report.NOTED.values()
-    )
-    assert all(isinstance(sentence, str) and sentence.strip() for sentence in report.NEXT.values())
+    assert all(_is_nonblank_text(sentence) for sentence in report.WHY.values())
+    assert all(_is_nonblank_text(sentence) for sentence in report.NOTED.values())
+    assert all(_is_nonblank_text(sentence) for sentence in report.NEXT.values())
 
 
 def test_a_finished_task_says_what_its_pass_did_and_names_its_error_by_type_alone() -> None:

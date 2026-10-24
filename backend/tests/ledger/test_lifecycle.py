@@ -36,7 +36,7 @@ from idhazh.contracts.seen import PublishedRow, SeenRow
 from idhazh.contracts.visual_prune import VisualPruneRow
 from idhazh.council import metrics_sink
 from idhazh.ledger import lifecycle, paths
-from idhazh.stages import score_merge_line_holdout, work
+from idhazh.stages import common, score_merge_line_holdout, work
 from idhazh.telemetry import FileSink, source_health
 from idhazh.telemetry.publish import day_metrics
 from idhazh.telemetry.spans import AttrKey, SpanName, Tracer
@@ -260,7 +260,7 @@ def test_every_checked_route_writes_into_an_active_family(
     _, _, write = ROUTES[route]
     state = tmp_path / "state"
     if route == "trace_sink":
-        monkeypatch.setattr(work.common, "STATE_ROOT", state)
+        monkeypatch.setattr(common, "STATE_ROOT", state)
 
     assert write(state), f"{route} wrote nothing into an active family"
 
@@ -278,7 +278,7 @@ def test_every_checked_route_writes_nothing_into_a_paused_family_and_says_so_onc
     _pause(monkeypatch, family)
     state = tmp_path / "state"
     if route == "trace_sink":
-        monkeypatch.setattr(work.common, "STATE_ROOT", state)
+        monkeypatch.setattr(common, "STATE_ROOT", state)
 
     with caplog.at_level(logging.WARNING, logger="idhazh"):
         wrote = write(state)

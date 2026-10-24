@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import os
+import sys
 from pathlib import Path
 from typing import Any, Final
 
@@ -94,7 +95,10 @@ def test_named_members_survive_pathspec_batches_larger_than_the_process_limit(
         folders = "/".join("x" * 240 for _ in range(12))
         return f"state/old-days/2026/09/01/run-{item:08d}/{folders}"
 
-    argument_limit = 32_767 if os.name == "nt" else os.sysconf("SC_ARG_MAX")
+    if sys.platform == "win32":
+        argument_limit = 32_767
+    else:
+        argument_limit = os.sysconf("SC_ARG_MAX")
     paths = [first]
     used = sum(len(path) + 1 for path in paths)
     for item in range(argument_limit // (len(long_path(0)) + 1) + 1):

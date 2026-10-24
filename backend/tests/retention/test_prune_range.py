@@ -32,6 +32,7 @@ import hashlib
 import os
 import shutil
 import signal
+import sys
 from collections.abc import Callable, Iterable, Iterator, Mapping
 from datetime import date as date_type
 from datetime import timedelta
@@ -799,7 +800,7 @@ def test_a_pass_on_the_door_that_fails_part_way_names_what_changed_and_is_run_ag
     assert len(planned.removed) == 2, "the selected range must begin with exactly two raw deletes"
     assert planned.rewritten, "the selected compact day must be rewritten after the deletes"
 
-    if os.name == "nt":
+    if sys.platform == "win32":
         from contextlib import contextmanager
         from ctypes import WinDLL, WinError, get_last_error
         from ctypes.wintypes import BOOL, DWORD, HANDLE, LPCWSTR, LPVOID
