@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Annotated, ClassVar, Literal, Self
+from typing import Annotated, Any, ClassVar, Literal, Self
 
 from pydantic import UUID4, Field, StrictInt, model_validator
 
@@ -38,7 +38,7 @@ Positive = Annotated[float, Field(gt=0, allow_inf_nan=False)]
 NonEmptyList = Annotated[list[NonEmpty], Field(min_length=1)]
 
 
-def _remove_optional_default(schema: dict[str, object]) -> None:
+def _remove_optional_default(schema: dict[str, Any]) -> None:
     schema.pop("default", None)
 
 
