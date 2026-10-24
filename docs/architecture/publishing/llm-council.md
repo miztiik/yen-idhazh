@@ -1,6 +1,6 @@
 # The LLM-COUNCIL, and why judging has its own clock
 
-**Last Updated**: 2026-10-23
+**Last Updated**: 2026-10-24
 
 The room a model verdict is taken in. `LLM-COUNCIL` is a workflow of its own -
 [../../../.github/workflows/llm-council.yml](../../../.github/workflows/llm-council.yml) -
@@ -27,6 +27,37 @@ by 45 minutes, and a bound has to survive a bad night rather than an average one
 comfortably.** That is the argument for the split rather than against it: sizing
 the shape off the median means the first busy day crosses the ceiling and writes
 nothing at all.
+
+### Design rationale: planning and collection keep separate total deadlines
+
+The repository-authored `config/llm_council_job_timeouts.json` sets
+`planning_timeout_minutes` and `collection_timeout_minutes`. Both default to
+30 minutes for the entire job, including checkout and installation, not just
+the application step. The judging shard still reads its separate 200-minute
+deadline from `config/llm_council.json`; it is not the planning or collection
+budget.
+
+The `job_bounds` prerequisite checks out the workflow revision and runs the
+standard-library-only `backend/utilities/shard_bound.py` with stock runner
+`python3`. It refuses missing keys and values other than positive integers
+before publishing the two job outputs. Planning and collection depend directly
+on that job and decode their respective output with `fromJSON` at job scope.
+No backend installation, model or tenant loading is needed to read these
+Actions settings. This repository-authored configuration is not a persisted
+pipeline payload and needs no schema version or migration.
+
+Collection still runs after planning or judging fails or is cancelled, provided
+the prerequisite succeeded. If budget validation fails, the run is red and
+collection does not start with an absent deadline; no work was planned.
+The prerequisite has no custom timeout and inherits the Actions 6-hour ceiling,
+at which GitHub kills the job. This costs one additional runner startup and
+checkout on the path before planning, with no new CI job or dependency.
+
+This is the structural production follow-on authorized by kumarsnaveen on
+2026-10-24 while completing the behavior-test review: the two existing
+30-minute job deadlines become independently configurable without weakening
+them to step deadlines. The page stays whole because these settings govern the
+same workflow clock described here.
 
 ## Three verbs, and all three are the council's own
 
