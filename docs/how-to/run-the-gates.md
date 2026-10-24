@@ -136,6 +136,11 @@ they read; they never depend on an earlier site or canary build.
 The selector job and the backend test job declare the same Node version,
 because the workflow tests execute that TypeScript selector. The backend job
 does not install frontend packages for it; the selector uses Node's built-ins.
+Full and `-m contract` backend runs also require Node on PATH for the real
+Python/browser CSV reader comparison in `test_cell_shapes.py`. Use the Node
+requirement at the start of this page. The test fails, rather than skips, if
+Node or the required reader `frontend/src/lib/charts/series.ts` is missing.
+It needs no frontend package installation.
 
 **A pull request runs the operator console's specs only when the change is the
 console's own, or the harness that chooses.** The console is a page one

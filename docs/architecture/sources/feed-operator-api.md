@@ -113,11 +113,17 @@ No history walk, empty-day fabrication or receipt restamping occurs.
 
 The separate [whole-task instrument](../../reference/host-metrics.md#whole-task-typescript-samples)
 can profile actual fetch and parse work. The ordinary listener loads
-`config/host-probes.json`; both new task switches default off. Embedded callers
+`config/host-probes.json`; the task instrument, PID RAM and machine RAM switches
+all default off. PID RAM and machine RAM are independent when the instrument
+is enabled. The canonical poll requests one observation each second throughout
+actual work, not a one-second profiling cutoff. Embedded callers
 can pass `PlanRuntime.task_profiling` with validated controls and a report
 callback. An absent callback configuration leaves profiling out. The ordinary
 listener writes enabled profiles as structured stderr records, never into the
 HTTP response, fetched artifact or SQLite record.
+The host probe's HTTP API still exposes only its standalone `GET /sample`
+route under the dated API prefix; task start/stop HTTP controls are follow-up
+work, not part of these embedded wrappers.
 
 Fetch starts measurement only after the active source and operator URL pass
 validation. Parse starts only after its completed fetch, configuration,
