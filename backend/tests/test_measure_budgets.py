@@ -16,12 +16,12 @@ from __future__ import annotations
 
 import json
 import math
-import shutil
 from pathlib import Path
 from typing import Any, Final
 
 import pytest
 from conftest import CONFIG_DIR, FIXTURES_DIR, REPO_ROOT, read_text
+from council._config import copy_config
 from pydantic import ValidationError
 
 from idhazh import config
@@ -475,8 +475,7 @@ def test_check_exits_non_zero_while_a_reading_is_stale(
     committed tree since row #13b nothing is stale and the interesting case is
     the one that fires.
     """
-    root = tmp_path / "config"
-    shutil.copytree(CONFIG_DIR, root)
+    root = copy_config(tmp_path)
     settings = config.load(root)
     settings.models.summarizer.sha256 = "0" * 64
     settings.models.summarizer.declared_for = "0" * 64

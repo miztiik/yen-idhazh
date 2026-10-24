@@ -65,7 +65,7 @@ Table D - PR outcomes
 | D7 | 7 | Config reader values and accurate migration test names | 1 | F | DONE | config-reader-behavior-proofs | [#1653](https://github.com/miztiik/yen-idhazh/pull/1653) | - |
 | D8 | 8 | Workflow checks retain independent failure evidence | 1 | G | DONE | workflow-behavior-proofs | [#1656](https://github.com/miztiik/yen-idhazh/pull/1656), merged at `43bdd37d671275af2f904590f7ca69498cc74a91` | - |
 | D9 | 9 | Remove the unused watchlist entry limit | 1 | H | DONE | remove-unused-watchlist-limit | [#1657](https://github.com/miztiik/yen-idhazh/pull/1657), merged at `f479997fec70f4f57b13a6d3a649b5d92a4fd5f7` | - |
-| D10 | 10 | Independent historical reader proofs | 1 | I | IN-FLIGHT | independent-historical-reader-proofs | [#1659](https://github.com/miztiik/yen-idhazh/pull/1659) | - |
+| D10 | 10 | Independent historical reader proofs | 1 | I | DONE | independent-historical-reader-proofs | [#1659](https://github.com/miztiik/yen-idhazh/pull/1659), merged at `f0449de3db08c710e5b2292a03910da157bcb498` | - |
 | D11 | 11 | Contract tests prove authored and constructed behavior | 1 | J | IN-FLIGHT | config-refusal-selection-proofs | - | - |
 | D12 | 12 | Explicit controls and measurement behavior | 1 | K | IN-FLIGHT | explicit-control-behavior-proofs | [#1661](https://github.com/miztiik/yen-idhazh/pull/1661) | - |
 
@@ -636,9 +636,10 @@ counts use the untouched archive and the completed branch instead.
   Row 9's frozen full successor as the input. All prior row text and the exact
   owner ruling in A5 remain; D3 remains open. Rows 5, 8 and 9 have their verified
   merge receipts above. Plan-only integration does not repeat unchanged gates.
-- **Delivery:** Implementation commit `90c58a26c` is in open PR
-  [#1659](https://github.com/miztiik/yen-idhazh/pull/1659). This phase is
-  delivered for review, not merged. The suite-wide Row 3 review remains open.
+- **Delivery:** Implementation commit `90c58a26c` was delivered in
+  [#1659](https://github.com/miztiik/yen-idhazh/pull/1659), merged at
+  `f0449de3db08c710e5b2292a03910da157bcb498`. The suite-wide Row 3 review
+  remains open.
 
 ## 12 - Row #11 - Contract tests prove authored and constructed behavior
 
@@ -796,6 +797,13 @@ counts use the untouched archive and the completed branch instead.
   source hashes verified. Fourteen controlled cases also pass when copied
   committed host/fingerprint/memory defaults are disabled and the roster is
   empty. No mock, added skip, changed acceptance rule or configuration knob.
+- **Bounded-input correction:** Replace both copied-tree config reads with the
+  named-input `council._config.copy_config` helper. The memory-loader case also
+  copies only `idhazh_gardener.json` and the declaration files named by its
+  `task_names`. The two affected modules pass 42 cases; Ruff and mypy pass.
+  Re-run disposable stale-exit, memory-inherit, memory-override and memory-YAML
+  faults against the corrected tests; every intended failure and restored
+  control passes. Hashes and logs are in the Row12 session evidence.
 - **Collection:** Exact base `3d6d4b9f6a4ea4e7681576531963e27f11e64332` and
   final implementation each collect 7,218 cases. No function or parameter case
   is removed. Two renames: `test_the_committed_config_names_a_labeller` becomes
@@ -816,7 +824,8 @@ counts use the untouched archive and the completed branch instead.
 - **Plan integration:** Row 11 released the serialized slot at
   `26ac9f90cda08456c1f861c26285a2129924804c`. Its frozen plan is preserved
   exactly before this section is added, without importing its implementation.
-  Current main was merged without rewriting history. Plan-only integration
+  Current main, including Row 10 at `f0449de3db08c710e5b2292a03910da157bcb498`,
+  was merged without rewriting history. Plan-only integration
   does not repeat unchanged application gates. D3 remains open.
 - **Delivery:** Implementation `32c85d883` is delivered in open PR
   [#1661](https://github.com/miztiik/yen-idhazh/pull/1661), not merged by this
