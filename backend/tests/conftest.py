@@ -39,17 +39,22 @@ from idhazh.elements import element_table
 from idhazh.evals import writer as eval_writer
 from idhazh.extract import to_article_with_source
 from idhazh.fetch import FetchResult
-from idhazh.llm.server import TurnMarkers, server_argv
+from idhazh.llm.server import TurnMarkers, server_argv, turn_markers_from_renderings
 from idhazh.stages import common
 from idhazh.stages import plan as plan_stage
 from idhazh.telemetry import silicon
-from utilities.capture_request_bodies import RENDERINGS, markers_for
 
 REPO_ROOT: Final = Path(__file__).resolve().parents[2]
 CONFIG_DIR: Final = REPO_ROOT / "config"
 STATE_DIR: Final = REPO_ROOT / "state"
 FIXTURES_DIR: Final = REPO_ROOT / "tests" / "fixtures"
 CONTRACT_FIXTURES_DIR: Final = FIXTURES_DIR / "contracts"
+DERIVED_TURN_MARKERS = FIXTURES_DIR / "llm" / "derived-turn-markers.json"
+
+
+def committed_renderings(model_file: str) -> dict[str, Any]:
+    """Read the one model entry from the recorded turn-envelope fixture."""
+    return json.loads(read_text(DERIVED_TURN_MARKERS))["entries"][model_file]
 
 
 def collect_config(**values: Any) -> CollectConfig:
@@ -489,7 +494,7 @@ def _rendered_by_the_template(body: dict[str, Any]) -> bytes:
     It draws on no recorded completion. Those bytes are replies a model wrote,
     and a template render is not one.
     """
-    recorded = json.loads(RENDERINGS.read_text(encoding="utf-8"))["entries"][INCUMBENT_MODEL]
+    recorded = committed_renderings(INCUMBENT_MODEL)
     asked_to_think = any((body.get("chat_template_kwargs") or {}).values())
     if len(body.get("messages") or []) > 2:
         rendering = "history"
@@ -629,7 +634,15 @@ def committed_markers(model_file: str = INCUMBENT_MODEL) -> TurnMarkers:
     renderings under `tests/fixtures/llm/` stand in for one and the production
     parser reads them exactly as it reads a live reply.
     """
-    return markers_for(model_file)
+    recorded = committed_renderings(model_file)
+    return turn_markers_from_renderings(
+        model_id=str(recorded["model_id"]),
+        plain=str(recorded["plain"]),
+        thinking=str(recorded["thinking"]),
+        history=str(recorded["history"]),
+        thinking_close=recorded["thinking_close"],
+        thinking_kwarg=recorded["thinking_kwarg"],
+    )
 
 
 def label_payload(article: Article) -> dict[str, Any]:
