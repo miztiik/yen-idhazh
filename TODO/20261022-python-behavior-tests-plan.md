@@ -1549,8 +1549,16 @@ Table F - Controls, expected behavior and rejected faults
   newest owed date. The corrected `test_selection.py` selector passed all 43
   cases. The other six modules passed all 73 cases in the first selector, so
   the combined result is 116 passing cases without repeating unchanged tests.
-  No fault demonstration is claimed. Row 17's publication and settle proofs
-  remain its responsibility unless their consumed hashes and results are supplied.
+  Eight copied-production faults rejected all eleven findings at their named
+  assertions: tenant width for E1-E3; the venue clock for E4; inactive lifecycle
+  execution for E5; the first-night floor for E6; local machine collection for
+  the unchanged E7 and E9; a shared repair cap for E8; invented model cost for
+  E10; and stale attempts for E11. E5 covers both `runs_model` values. Each
+  fault loaded one temporary copy of its named production module. Every
+  production source hash matched before and after; the E10 and E11 original
+  tests also passed after the copied faults were removed. Per-fault source and
+  mutation hashes, assertion names and test identifiers are in the session
+  artifact `row24-fault-proof-results.json`. No production source changed.
 - **Plan integration:** Imported the exact released Row 23 predecessor,
   118,619 bytes, SHA-256
   `78f4022d614719552f6bb0f4f5e0033bebf4a20bc2219324f0a85938b45d52d5`.
@@ -1562,10 +1570,15 @@ Table F - Controls, expected behavior and rejected faults
   it does not replace the frozen release or any downstream predecessor. The
   exact old and new text, source hashes and named gate evidence are recorded
   in the session artifact `row24-correction.md`.
-- **Delivery:** Row 17 is the source dependency and has not yet merged. After
-  its merge, verify the GitHub merge receipt and equivalent source changes,
-  merge current `main` normally into this branch, then open the Row 24 phase
-  PR. Do not merge the Row 24 PR.
+- **Delivery:** Source commit `3e82f5263f0540fa69faf1142a84815fc0e9be99`
+  contains the seven council test files. This plan section now carries the
+  final proof receipt. The independent source diff is `row24-source-diff.patch`,
+  13,324 bytes, SHA-256
+  `eda228338a5dce3d2bb06db238111d70a0c1cc24c497ac13519b6e21ef7f8f2a`.
+  Row 17 is the source dependency and has not yet merged, so no Row 24 PR head
+  exists. After its merge, verify the GitHub merge receipt and equivalent
+  source changes, merge current `main` normally into this branch, then open the
+  Row 24 phase PR. Do not merge the Row 24 PR.
 - **Dependencies:** Row 17; Row 23 is the required exact plan predecessor, not
   a gate dependency.
 
