@@ -882,12 +882,16 @@ counts use the untouched archive and the completed branch instead.
 ## 14 - Row #13 - Extraction and metric behavior
 
 - **Scope:** Replace checks tied to current corpus, fixture or output counts
-  with behavior proofs driven by independent test inputs, without changing
-  production behavior or acceptance rules.
+  with behavior proofs driven by independent test inputs. Add a validated
+  config root to the shipped drift-report CLI so its configured behavior is
+  tested through the actual command. Preserve production thresholds and
+  acceptance rules.
 - **Files touched:** `backend/tests/test_corpus.py`,
   `backend/tests/test_data_wrangler.py`, `backend/tests/test_derived_values.py`,
   `backend/tests/test_drift.py`, `backend/tests/test_elements.py`,
-  `backend/tests/test_entity_gap.py` and `backend/tests/test_evals.py`.
+  `backend/tests/test_entity_gap.py`, `backend/tests/test_evals.py`,
+  `backend/utilities/drift_report.py`, `docs/reference/github-actions.md` and
+  this plan for its Row 13 evidence correction.
 - **Changes and acceptance proof:**
   - Refuse a nonpositive pool multiple at the existing validation boundary;
     retain the committed-config loader proof. Give the data-wrangler row cap
@@ -896,8 +900,10 @@ counts use the untouched archive and the completed branch instead.
   - Keep successful committed-plan resolution and add a missing-element
     refusal. Use a test-owned histogram bin count and require the real resolver
     to return that number of bins.
-  - Review drift with a test-owned ledger whose recent window is one row short
-    of its independently chosen floor while the baseline has enough rows.
+  - Review drift through the shipped CLI with a test-owned config root and
+    populated ledger windows. Twenty rows pass the committed floor but fail
+    the validated nondefault floor of 21. The CLI accepts `--config`, defaults
+    to `DEFAULT_CONFIG_DIR` and passes that root to the real config loader.
     Check the reported shortfall, not source text or current defaults.
   - Replace fixed element totals with nonempty quantity and date conditions.
     Keep `ElementTable` overlap acceptance and prove the producer's real
@@ -917,26 +923,43 @@ counts use the untouched archive and the completed branch instead.
   contained 244 cases across the seven modules; the final collection contains
   244. The final identifier disposition is five renames, one added missing-link
   case and one removed bounded span-drift sweep; no other identifier changed.
-  The shared selector chose the seven changed modules. Whitespace and Ruff
-  passed, mypy passed over 834 source files, and all 244 pytest cases passed.
+  Whitespace and Ruff passed, mypy passed over 834 source files, and all 244
+  pytest cases passed. The stable post-merge selector on
+  `f0449de3db08c710e5b2292a03910da157bcb498` passed Ruff, mypy over 834 source
+  files and all 244 selected tests; record:
+  `backend/var/checks/3b541520238458854a16e86dd8f2d82f5abbbd69ff4ace392779c5ef701d7073.json`.
+  The focused CLI config-floor test and Ruff passed. Exact-head CI run
+  `40082666626` passed all five jobs on `3de8c29dfbdb983b1034c0a12840ce76538148e7`.
+  No broad local backend selector was repeated for the correction; exact-head
+  CI supplies backend and type coverage.
   Record: `backend/var/checks/df85b2ab916049084e39bd0b3425b033fb75e127c6e5c9814a3097f144f70958.json`.
-  That run used the initial base above. A post-merge rerun on
-  `f0449de3db08c710e5b2292a03910da157bcb498` is in progress; upstream changed
-  none of the seven Row 13 test files.
-- **Negative proofs:** Seventeen disposable production faults failed at their
-  intended tests. Named unchanged controls passed, including committed config,
-  independent element hashing, committed-plan resolution and the truncation
-  safety bound. Span-drift faults failed both named survivors. All injected
-  source and config edits were restored byte-for-byte; the disposable
-  worktree was removed. Final test hashes matched the proof record.
+  The initial collection record used the original base above.
+- **Negative proofs:** Reuse the 16 original non-drift fault proofs because
+  their consumed source and test inputs are unchanged. The committed-config
+  refusal proof set `qualification_pool_multiple` to zero; the named config
+  validation test refused it. Two drift production faults failed the named
+  CLI config-floor test: ignoring `--config`, and replacing the loaded report
+  floor with its default. Both restored controls passed. For the CLI, the
+  original and restored source SHA-256 is
+  `5b27ed9409a021a6df171c7e6a5a7591ba35ac5e67e62ab320037089da8f35cc`;
+  the faulted hash is
+  `a51d1d87222ae6ea588fa9b3d65ef9ef411d2c4db79ff0960839f5f8632a53cf`.
+  For the report, the original and restored source SHA-256 is
+  `6d5367f97db07d87c1d0cf5f3d2e6869a5aa8c328bbbaf9b48bc9c1135f1bf60`;
+  the faulted hash is
+  `b6e89ae1b7daf389583d14841126262438e32322715272891f8718193839acbe`.
+  Both disposable worktrees were removed.
 - **Plan integration:** The coordinator released the slot and named frozen
   predecessor `fc2711237a90f4b009e1d3cabf1bad2b77b69582` as the source. Rows 11
-  and 12 and all earlier plan text are preserved; D10 now records its verified
-  merge on 2026-10-24 UTC. A5 is unchanged, D3 remains open, and D12 remains
-  IN-FLIGHT. No Row 17 setting or unrelated main-branch plan edit was imported.
-- **Delivery:** Row 13 is delivered for review in its own phase PR. The suite-
-  wide Row 3 review remains open. No production, persisted-contract, config,
-  fixture, frontend or dependency changes.
+  and 12 and all earlier plan text are preserved; D10 records its verified
+  merge on 2026-10-24 UTC. Latest main through Row 19 was merged normally at
+  `e7f46b2317852ea5d3f212f83ea86ac51edc05ed`; all main sections through Row 19
+  remain. A5 is unchanged and D3 remains IN-FLIGHT. No Row 17 setting was
+  imported.
+- **Delivery:** Implementation and documentation correction are delivered in
+  [#1670](https://github.com/miztiik/yen-idhazh/pull/1670), with source commit
+  `3de8c29dfbdb983b1034c0a12840ce76538148e7`; the worker does not merge it.
+  The suite-wide Row 3 review remains open.
 - **Dependencies:** Row 1. Serialized plan editing is released for Row 14.
 
 ## 15 - Row #14 - Grouping and dataset behavior
@@ -1296,8 +1319,10 @@ counts use the untouched archive and the completed branch instead.
 - **Plan integration:** Verified and imported the complete frozen Row 18
   predecessor, 98,435 bytes, SHA-256
   `a4fe543dbb4f46aba16c0511cbfc1a8da4c10a2ce35a2155735a3776ebc654f3`.
-  Added only D19 and this section. All earlier evidence, A5 exceptions,
-  D3 IN-FLIGHT and Row 18's pending Row 22 prerequisite remain unchanged.
+  Added only D19 and this section. PR #1674 merged at
+  `e7f46b2317852ea5d3f212f83ea86ac51edc05ed`; D19 is DONE. All earlier
+  evidence, A5 exceptions, D3 IN-FLIGHT and Row 18's pending Row 22
+  prerequisite remain unchanged.
   The complete frozen successor releases the serialized editor to Row 20
   independently of remaining gates, push or CI.
 - **Delivery:** One coherent phase PR for coordinator review and merge.
