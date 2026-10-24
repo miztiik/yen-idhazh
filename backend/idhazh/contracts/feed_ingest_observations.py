@@ -2,7 +2,7 @@
 
 from typing import Annotated, ClassVar, Literal, Self
 
-from pydantic import Field, StrictInt, UUID5, model_validator
+from pydantic import UUID5, Field, StrictInt, model_validator
 
 from idhazh.contracts.base import ChangelogEntry, Contract, RunId, Sha256, Slug, Timestamp
 from idhazh.contracts.feed_ingest_candidate import Count, NonEmpty, PositiveCount
@@ -25,7 +25,10 @@ class DocumentObservationRecord(Contract):
         ChangelogEntry(
             version="2026-10-24",
             change="Declare per-operation observations with scoped request accounting.",
-            why="Later feedback must retain actual work and partial failures without a duplicate event contract.",
+            why=(
+                "Later feedback must retain actual work and partial failures "
+                "without a duplicate event contract."
+            ),
         ),
     )
 

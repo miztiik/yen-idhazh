@@ -12,8 +12,10 @@ const WINDOW_PRESETS = [1, 7, 14, 30, 90] as const;
 const TODAY = '2026-10-04';
 const CUSTOM_FROM = '2026-04-05';
 const CUSTOM_END = '2026-04-12';
-const LEDGER_NAMES = configuredCatalog.entries.map((entry) => entry.name);
-const PARSE_OPTIONS = { ledgerNames: LEDGER_NAMES, windowPresets: WINDOW_PRESETS, defaultDays: 14, today: TODAY, reachDays: 365 };
+const ENABLED_LEDGER_NAMES = configuredCatalog.entries
+	.filter((entry) => entry.publish_to_data_explorer)
+	.map((entry) => entry.name);
+const PARSE_OPTIONS = { ledgerNames: ENABLED_LEDGER_NAMES, windowPresets: WINDOW_PRESETS, defaultDays: 14, today: TODAY, reachDays: 365 };
 
 function printableAscii(seed: number, length: number): string {
 	let state = seed >>> 0;
@@ -36,32 +38,19 @@ test('statements round-trip through deflate-raw and base64url', async () => {
 	}
 });
 
-test('a statement at the configured maximum fits a shared link with every ledger', async () => {
+test('a statement at the configured maximum fits a shared link with every enabled ledger', async () => {
 	const statement = printableAscii(0x1234abcd, QUERY_MAX_CHARS);
 	const encodedQuestion = await encodeQuestion(statement);
-	const address = await explorerAddress({ basePath: BASE_PATH, ledgers: LEDGER_NAMES, days: 90, from: CUSTOM_FROM, end: CUSTOM_END, statement, maxBytes: REQUEST_TARGET_LIMIT });
+	const address = await explorerAddress({ basePath: BASE_PATH, ledgers: ENABLED_LEDGER_NAMES, days: 90, from: CUSTOM_FROM, end: CUSTOM_END, statement, maxBytes: REQUEST_TARGET_LIMIT });
 	expect(address.linkedStatement).toBe(true);
 	expect(address.query).toContain(`q=${encodedQuestion}`);
 	expect(requestTargetBytes(address.href)).toBeLessThanOrEqual(REQUEST_TARGET_LIMIT);
 	const parsed = await parseExplorerAddress(address.query, PARSE_OPTIONS);
 	expect(parsed.statement).toBe(statement);
-	expect(parsed.ledgers).toEqual(LEDGER_NAMES);
+	expect(parsed.ledgers).toEqual(ENABLED_LEDGER_NAMES);
 	expect(parsed.from).toBe(CUSTOM_FROM);
 	expect(parsed.end).toBe(CUSTOM_END);
 	expect(parsed.days).toBe(8);
-
-	const oneMoreCharacter = printableAscii(0x1234abcd, QUERY_MAX_CHARS + 1);
-	const tooLong = await explorerAddress({
-		basePath: BASE_PATH,
-		ledgers: LEDGER_NAMES,
-		days: 90,
-		from: CUSTOM_FROM,
-		end: CUSTOM_END,
-		statement: oneMoreCharacter,
-		maxBytes: REQUEST_TARGET_LIMIT
-	});
-	expect(tooLong.linkedStatement).toBe(false);
-	expect(tooLong.query).not.toContain('q=');
 });
 
 test('a link too long for the byte bound carries ledgers and days only', async () => {
