@@ -92,14 +92,9 @@ def committed_app_config() -> AppConfig:
     )
 
 
-def test_the_committed_file_is_lf_and_ascii() -> None:
-    """`.gitattributes` pins `config/*.json` to LF, and section 5 pins ASCII.
-
-    A config file whose bytes shift with the checkout changes the hash the run
-    manifest records for it.
-    """
+def test_the_committed_file_is_ascii() -> None:
+    """Section 5 requires ASCII; checkout line endings belong to `.gitattributes`."""
     raw = APPEARANCE_PATH.read_bytes()
-    assert b"\r" not in raw, "config/appearance.json must be LF"
     assert all(byte < 128 for byte in raw), "config/appearance.json must be ASCII"
 
 
@@ -394,13 +389,38 @@ def test_the_retired_fill_floor_is_not_a_console_knob(
 
 
 def test_the_default_theme_is_the_one_root_carries() -> None:
-    """A fresh clone is served dark, because `:root` in tokens.css is dark.
+    """Declared defaults agree with the CSS base and both first-paint scripts.
 
-    The knob and the first painted frame have to name the same theme. If this
-    ever says `light` again, a page paints dark and the config says otherwise.
+    The config field does not drive first paint. This checks agreement, not
+    runtime configurability or the reader's stored choice.
     """
-    assert AppearanceConfig.model_validate({}).digest.theme_default is ThemeChoice.DARK
-    assert committed_app_config().ui.theme_default is ThemeChoice.DARK
+    tokens = (REPO_ROOT / "frontend" / "src" / "styles" / "tokens.css").read_text(
+        encoding="utf-8"
+    )
+    base = re.search(r"^:root\s*,\s*\[data-theme=['\"](\w+)['\"]\]\s*\{", tokens, re.MULTILINE)
+    assert base is not None, "tokens.css no longer names the theme sharing the :root group"
+    theme = ThemeChoice(base.group(1))
+    appearance = AppearanceConfig.model_validate_json(APPEARANCE_PATH.read_text(encoding="utf-8"))
+    for name, declared in {
+        "appearance default": AppearanceConfig.model_validate({}).digest.theme_default,
+        "UI default": UiConfig().theme_default,
+        "config/appearance.json": appearance.digest.theme_default,
+        "config/idhazh.json": committed_app_config().ui.theme_default,
+    }.items():
+        assert declared is theme, f"{name} disagrees with the CSS base theme"
+
+    app = (REPO_ROOT / "frontend" / "src" / "app.html").read_text(encoding="utf-8")
+    reader = (REPO_ROOT / "frontend" / "src" / "lib" / "theme.ts").read_text(encoding="utf-8")
+    for name, source, pattern in (
+        ("app.html initial choice", app, r"var\s+choice\s*=\s*'(\w+)'"),
+        ("app.html storage refusal", app, r"catch\s*\([^)]*\)\s*\{\s*choice\s*=\s*'(\w+)'"),
+        ("theme.ts absent storage", reader, r"if\s*\(typeof localStorage[^;]+return\s*'(\w+)'"),
+        ("theme.ts absent choice", reader, r"return localStorage\.getItem[^;]+:\s*'(\w+)'"),
+        ("theme.ts storage refusal", reader, r"return typeof document[^;]+:\s*'(\w+)'"),
+    ):
+        fallback = re.search(pattern, source)
+        assert fallback is not None, f"{name} no longer declares its fallback"
+        assert fallback.group(1) == theme.value, f"{name} disagrees with the CSS base theme"
 
 
 def test_system_is_no_longer_a_theme_anyone_can_choose() -> None:

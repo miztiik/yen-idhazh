@@ -1037,22 +1037,6 @@ def test_the_wait_worth_a_sentence_is_a_knob_the_frontend_agrees_with() -> None:
     assert int(mirrored.group(1)) == UiConfig().payload_slow_ms
 
 
-def test_the_seed_covers_what_a_reading_surface_draws_before_a_reader_acts() -> None:
-    """The seed is what a document holds once the rest of the day arrives by fetch.
-
-    Every lead is an anchor into the stream, so a document that carries fewer
-    stories than the leading block holds is a block whose links scroll to
-    nothing. That is the floor, and it is not the whole answer: the leads are
-    chosen across the WHOLE day, so a lead can sit at position 300 of the
-    published order and outside any prefix. Whichever row moves the item list
-    to a browser fetch owns that, and this is the number it starts from.
-    """
-    ui = AppConfig.from_json(read_text(CONFIG_DIR / "idhazh.json")).ui
-    assert ui.shell_seed_items >= ui.leading_stories, (
-        f"a {ui.shell_seed_items}-story seed cannot hold {ui.leading_stories} leads"
-    )
-
-
 def test_a_shared_subject_is_worth_less_than_a_second_feed_carrying_the_story() -> None:
     """Decision 3's ceiling, derived rather than spelled.
 

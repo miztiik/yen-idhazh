@@ -81,11 +81,12 @@ Table D - PR outcomes
 | D23 | 23 | Independent qualification and planning controls | 1 | V | IN-FLIGHT | prove-planning-controls-independently | [#1683](https://github.com/miztiik/yen-idhazh/pull/1683) | - |
 | D24 | 24 | Independent council test controls | 17 | W | IN-FLIGHT | prove-council-controls-independently | - | - |
 | D25 | 25 | Concrete remaining gardener and ledger safety proofs | 24 | X | IN-FLIGHT | strengthen-gardener-safety-proofs | - | - |
-| D26 | 26 | Prove time boundaries without stand-ins | 21, 25 | Y | IN-FLIGHT | prove-time-boundaries-without-stand-ins | - | - |
+| D26 | 26 | Prove time boundaries without stand-ins | 21, 25 | Y | IN-FLIGHT | prove-time-boundaries-without-stand-ins | [#1679](https://github.com/miztiik/yen-idhazh/pull/1679) | - |
 | D27 | 27 | Explicit offline gardener collection controls | 17, 26 | Z | IN-FLIGHT | control-gardener-host-collection | - | - |
 | D28 | 28 | Independent prefix normalization arithmetic | 1, 27 | AA | IN-FLIGHT | prove-vector-arithmetic | - | - |
 | D29 | 29 | Populated registry values and mandatory real CSV reader | 1, 28 | AB | IN-FLIGHT | close-contract-proof-gaps | - | - |
 | D30 | 30 | Native tagging-term acceptance and refusal | 1, 29 | AC | IN-FLIGHT | validate-tagging-terms | - | - |
+| D31 | 31 | Bind declared UI defaults to their consumers | 1, 17, 30 | AD | IN-FLIGHT | bind-ui-default-consumers | - | - |
 
 The canary implementation for Row 3 is delivered separately from its suite-wide
 review obligation. Rows 5 and 6 carry additional changes found by that review.
@@ -1805,6 +1806,36 @@ Table I - Independent controls and expected faults
 - **Dependencies:** Row 21 owns the source prerequisite; Row 25 is the
   exact full-plan predecessor. Neither plan freeze waits for gates.
 
+- **Final local evidence:** After normal main integration at
+  `6f9a5d18d`, the three named modules collected and passed 67 cases.
+  All 61 original cases remain, accounting separately for Row 12's
+  main-delivered tokenizer-refusal rename; Row 26 adds six date cases.
+  Six copied production faults failed their intended assertions: lower
+  attempt settlement, local-day conversion, ignored operator date, removed
+  resolver call, naive callsite clock and local callsite clock. Every copied
+  module's import location was checked, each restored control passed, and
+  production source hashes matched after restoration. No collection failure
+  counts as a fault proof.
+  Removing an unregistered test marker then passed all six date cases with
+  no warnings; import spacing was normalized afterward. Ruff passed.
+  Mypy passed the initially changed three Python files and the binding
+  correction separately. The shared selector classified the utility as
+  unknown/shared and selected broad coverage; this row ran the focused
+  selection above and leaves the full suite to CI.
+- **Verified prerequisite and integration:** GitHub confirms Row 21 merged
+  at `31a689f073d602e75870f7fa48da72d3043f6c13` on
+  `2026-10-24T10:21:52Z`. Its `test_ledger.py` blob
+  `2312aab2e7fc587c7dd9a3be9ccf21bdb0e994de` matches the released source.
+  The normal merge retains every complete current-main Row 1-21 section
+  and its receipts, plus the complete later Row 22-26 sections and A5.
+  The historical 141,434-byte Row 26 freeze with SHA-256
+  `d969aaf615469d8b84e3298d861332428346aa9f5d706bea0a96d83acb54c833`
+  remains unchanged; this final evidence is not a replacement freeze.
+- **Phase delivery:** [#1679](https://github.com/miztiik/yen-idhazh/pull/1679)
+  is open against `main`. It is not merged; full-suite CI remains the
+  merge-candidate gate. The frozen Row 26 successor has already been
+  released to Row 27 independently of these delivery receipts.
+
 ## 28 - Row #27 - Explicit offline gardener collection controls
 
 - **Scope:** Change only `backend/tests/gardener/_garden.py` and
@@ -2181,6 +2212,88 @@ Table I - Independent controls and expected faults
   immutable full30 remains unchanged.
 - **Dependencies:** Row 1 supplies semantic test policy. Exact full Row 29 is
   the plan predecessor only; there is no production/source dependency.
+
+## 2 - Row #31 - Bind declared UI defaults to their consumers
+
+- **Scope:** Resolve supplemental findings 5, 58 and 60 individually. This is
+  a test-only binding repair, not a theme feature. No production validator,
+  payload, configuration value, model default, frontend behavior, dependency,
+  editor policy, mock or network change.
+- **Files:** `backend/tests/contracts/test_app_config.py`,
+  `backend/tests/test_appearance_config.py`,
+  `docs/how-to/run-the-gates.md`, and this serialized plan update.
+- **Original/final mapping:** Delete only
+  `test_the_seed_covers_what_a_reading_surface_draws_before_a_reader_acts`.
+  Its inequality is false: the actual home shell carries the prefix UNION
+  the leading stories. Existing survivor:
+  `frontend/tests/day-seam.spec.ts`, describe `the home page anchors its leads`,
+  case `every lead is in the seed, however far down the day it sits`.
+  That bounded fixture places leads at positions 25 and 39 with a prefix of
+  15 items; omitting the actual homeShell keep list fails the lead inclusion
+  assertions. No frontend case or browser matrix is added.
+- **Appearance formatting:** Rename
+  `test_the_committed_file_is_lf_and_ascii` to
+  `test_the_committed_file_is_ascii`. Preserve its ASCII refusal under
+  CLAUDE.md section 5. Remove only its current-file carriage-return assertion:
+  `.gitattributes` owns checkout line endings. Remove the false claim that
+  appearance-file bytes contribute to the run digest. Legal JSON whitespace
+  edits must not fail these checks.
+- **Default binding:** Keep
+  `test_the_default_theme_is_the_one_root_carries`, replacing independent
+  dark literals with agreement against the actual tokens.css :root selector
+  group. Bind native UI/appearance defaults, both committed config declarations,
+  app.html initial/storage-refusal choices, and theme.ts absent-storage,
+  absent-choice and storage-refusal fallbacks. Missing declarations fail by
+  name. Use bounded declaration matches following existing binding-test
+  practice, not a custom CSS/TypeScript parser or a new dependency.
+  The theme_default field does not currently drive first paint; do not claim
+  that declaration agreement proves runtime configurability.
+- **Preservation:** Every other configuration guard and historical/safety
+  responsibility remains. In particular, preserve the raw subject/carriage
+  inequality and the actual Row 17 strict host-placement cases unchanged.
+  Primary categories: C10 for the removed false relation, C4 for formatting,
+  and C5 for consumer/default agreement.
+- **Owning documentation:** Add only neutral testing guidance explaining
+  declaration agreement versus runtime configurability. The existing gate page
+  stays whole: the paragraph clarifies what a binding check certifies, within
+  the existing local-check guidance, rather than adding a separate procedure.
+- **Frozen source:** Commit `435c9d955` contains only the three owned source/doc
+  paths. SHA-256: app-config test
+  `5b77d13c89ddfe90c71adad5ed575d43e05cc36790d54f65d6391bfca615a9c9`;
+  appearance test
+  `d832d63e730e6b5c5d459f6ac843f1f8d2fdbca3cb0b1797c72d6796c30c064e`;
+  gate guide
+  `3f7fc0e37e9316ca3152d2c24ebde7fd476a1ef304c38ea1f17b3c3050a1bb04`.
+  Source slot released before expensive checks.
+- **Required faults and controls:** In a disposable copy, independently change
+  the actual CSS root theme, actual app.html fallback, actual theme.ts fallback,
+  and committed theme declaration; each disagreement must fail the binding.
+  Insert non-ASCII into otherwise valid appearance JSON and require the
+  retained ASCII refusal. Legal whitespace-only JSON edits must pass.
+  Restore original bytes and record hashes and passing controls.
+  These proofs are PENDING at freeze; no passing result is claimed.
+- **Gate state at freeze:** Shared `--list` inspected. Inherited Row 17 source
+  selects broad groups; full exact-head CI remains authoritative and PENDING.
+  Only the two affected Python files receive local pytest, Ruff and mypy.
+  Focused pytest is queued behind the documented machine lock. No redundant
+  full local backend/frontend suite and no new published-site smoke obligation.
+- **Immutable integration:** Import exact released full30, 166,646 bytes,
+  SHA-256
+  `9ab4621b497f06a2c7e89bce69320c985110d6c8eafbe23db1d9823b8260c039`.
+  Append only D31 and this complete section before See also. Reverse removal
+  must reconstruct exact30, preserving A5, D3 IN-FLIGHT, the single D11,
+  every earlier section and all earlier receipts. Freeze independent full31
+  and release immediately without waiting for gates or merges.
+- **Delivery:** After Row 17 merges, integrate current main normally, preserve
+  newer canonical receipts, finish focused proofs, and open the authorized phase
+  PR. Do not merge it. Report exact source/case accounting, fault/restoration
+  evidence, immutable artifact and PR-head receipts to the coordinator. Do not
+  rewrite historical artifacts or add a CI-receipt-only commit.
+- **Dependencies:** Actual Row 17 supplies the owned app-config test base.
+  Row 30 is the immutable full-plan predecessor only. Row 1 supplies the
+  semantic test policy.
+
+
 
 ## See also
 

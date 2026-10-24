@@ -45,7 +45,7 @@ import urllib.error
 import urllib.request
 from collections.abc import Iterable, Sequence
 from dataclasses import asdict, dataclass
-from datetime import date
+from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import Any, Final, Protocol
 
@@ -542,6 +542,13 @@ def render_check(stale: Sequence[Unreached], configured: str) -> str:
 # --- The verbs ---------------------------------------------------------------
 
 
+def resolve_measurement_date(taken_on: date | None, *, now: datetime) -> date:
+    """Keep the operator's date, or use the UTC day of an aware measurement instant."""
+    if now.utcoffset() is None:
+        raise ValueError("the measurement instant must include a UTC offset")
+    return taken_on if taken_on is not None else now.astimezone(UTC).date()
+
+
 def run_check(args: argparse.Namespace) -> int:
     configured = config.load(args.config).models.summarizer.sha256
     if configured is None:
@@ -564,7 +571,7 @@ def run_read(args: argparse.Namespace) -> int:
     stamp = {
         "subject": subject,
         "runner": args.runner,
-        "taken_on": (args.taken_on or date.today()).isoformat(),
+        "taken_on": resolve_measurement_date(args.taken_on, now=datetime.now(UTC)).isoformat(),
     }
     tokenizer = Tokenizer(base=args.base, timeout=args.timeout)
     try:
