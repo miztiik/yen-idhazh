@@ -603,6 +603,7 @@ def file_machine_row(
     pipeline_name: PipelineName | None = None,
     task_name: TaskName | None = None,
     attempt: int | None = None,
+    ask_placement: bool = True,
 ) -> tuple[HostFingerprintRow | None, list[Path]]:
     """Record what machine this job drew, and say where the row landed.
 
@@ -630,6 +631,7 @@ def file_machine_row(
         shard=shard,
         probe_floor_mib=knobs.host_fingerprint_bandwidth_floor_mib if reads_bandwidth else 0,
         probe_cache_multiple=knobs.host_fingerprint_bandwidth_cache_multiple,
+        ask_placement=ask_placement,
     )
     landed = ledger.persist(
         state_root,

@@ -63,7 +63,14 @@ def test_each_family_prints_its_status_its_day_and_what_it_holds(tmp_path: Path)
     first = lines.index(f"day-metrics: paused, onboarded {AN_ONBOARDING} UTC")
     assert lines[first + 1] == f"  {A_DESCRIPTION}"
     assert lines[first + 2] == "  - day-metrics: 0 files"
-    assert any(line.startswith("content-similarity-judge: active, onboarded ") for line in lines)
+    registry = json.loads(
+        (tmp_path / "config" / paths.REGISTRY_FILENAME).read_text(encoding="utf-8")
+    )
+    for family in registry["families"]:
+        assert (
+            f"{family['name']}: {family['lifecycle_status']}, "
+            f"onboarded {family['onboarded']} UTC"
+        ) in lines
 
 
 def test_each_ledger_counts_the_files_under_its_own_address(tmp_path: Path) -> None:

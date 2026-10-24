@@ -9,6 +9,7 @@ present rather than waited for.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 from pathlib import Path
@@ -152,6 +153,7 @@ def test_every_cell_the_stage_hands_over_arrives_on_the_row() -> None:
     from utilities import build_canary_day
 
     settings = config.load(CONFIG_DIR)
+    settings.models.summarizer.quantisation = "Q5_K_S"
     canary = build_canary_day.canaries(FIXTURES_DIR / "canaries")[0]
     article = build_canary_day.article_for(0, canary, build_canary_day.SCORED[0])
     handed: dict[str, object] = {
@@ -182,13 +184,13 @@ def test_every_cell_the_stage_hands_over_arrives_on_the_row() -> None:
     ]
     assert lost == [], f"the row dropped a cell it was handed: {lost}"
     # `model_quantisation` is the one cell that cannot arrive as it was handed:
-    # the config spells it `Q4_K_M` and the column takes a lowercase token, so
+    # the test sets it to `Q5_K_S` and the column takes a lowercase token, so
     # the column folds it on the way in. That is the column working rather than
     # a cell lost - and naming it here is what keeps a second one from joining
     # it unnoticed.
     changed = [name for name, given in handed.items() if getattr(row, name) != given]
     assert changed == ["model_quantisation"]
-    assert row.model_quantisation == str(handed["model_quantisation"]).lower()
+    assert row.model_quantisation == "q5_k_s"
     assert len(handed) > 40, "the stage hands over more than a handful, and this proves it"
 
 
@@ -447,7 +449,7 @@ def test_the_capture_records_its_digest_with_both_flags_off(tmp_path: Path) -> N
     assert written == []
     assert kept.captured is False
     assert kept.prompt_chars == len("the rendered prompt")
-    assert len(kept.prompt_sha256) == 64
+    assert kept.prompt_sha256 == hashlib.sha256(b"the rendered prompt").hexdigest()
 
 
 def test_a_captured_call_keeps_only_the_half_its_flag_allows(tmp_path: Path) -> None:

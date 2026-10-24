@@ -1,7 +1,8 @@
 /** Do bounded Linux inputs produce honest interval CPU and memory readings? */
 import { afterEach, expect, test } from "bun:test";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, rm } from "node:fs/promises";
 import { copyFileSync } from "node:fs";
+import { createHash, randomUUID } from "node:crypto";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -10,6 +11,12 @@ import { parseMemoryInfo, parseVmstat } from "../src/probe/memory-probe";
 import { sampleHost } from "../src/probe/sample-host";
 import { createSampleHandler, SAMPLE_PATH } from "../src/api/server";
 import { loadConfig, ProbeConfigSchema } from "../src/config";
+import { profileTask, startTaskProfile } from "../src/task-profile/task-profiler";
+import { TaskProfileSchema } from "../src/task-profile/profile-schema";
+import type { TaskProfile } from "../src/task-profile/profile-schema";
+import { readProcessIdentity, readProcessMemory } from "../src/task-profile/process-memory";
+import { TaskCollector } from "../src/task-profile/task-collector";
+import { CollectorInputSchema } from "../src/task-profile/profile-schema";
 
 const fixtureRoot = new URL("../../../tests/fixtures/", import.meta.url);
 const temporaryDirectories: string[] = [];
@@ -26,6 +33,12 @@ async function procDirectory(): Promise<string> {
     Bun.write(join(directory, "meminfo"), await fixture("host-probes/meminfo.txt")),
     Bun.write(join(directory, "vmstat"), await fixture("host-probes/vmstat.txt")),
   ]);
+  const processInput = JSON.parse(await fixture("host-probes/process-inputs.json"));
+  for (const pid of [process.pid, processInput.pid]) {
+    await mkdir(join(directory, String(pid)), { recursive: true });
+    await Bun.write(join(directory, String(pid), "stat"), processInput.stat.replace("4242 ", `${pid} `));
+    await Bun.write(join(directory, String(pid), "status"), processInput.status);
+  }
   return directory;
 }
 
@@ -89,6 +102,7 @@ test("periodic file sampling uses closing minus opening counters and closes with
   for (const sample_interval_ms of [100, 200]) {
     const config = { ...(await loadConfig()), sample_interval_ms };
     await Bun.write(join(directory, "stat"), await fixture("runtime/2026-08-30-probe-proc-stat-at-start.txt"));
+    const observedAt = performance.now();
     const pending = sampleHost(config, { platform: "linux", procRoot: directory });
     const update = (async () => {
       await Bun.sleep(25);
@@ -98,7 +112,8 @@ test("periodic file sampling uses closing minus opening counters and closes with
       );
     })();
     const [sample] = await Promise.all([pending, update]);
-    expect(sample.interval_ms).toBeGreaterThanOrEqual(config.sample_interval_ms);
+    expect(sample.interval_ms).toBeGreaterThan(0);
+    expect(sample.interval_ms).toBeLessThanOrEqual(performance.now() - observedAt);
     expect(sample.cpu?.user).toBeCloseTo(53 / 7991 * 100, 10);
     expect(sample.memory_kb.available).toBe(8192000);
     expect(sample.vmstat?.pgmajfault).toBe(42);
@@ -110,6 +125,88 @@ test("periodic file sampling uses closing minus opening counters and closes with
   );
   expect(unchanged.cpu).toBeNull();
   expect(unchanged.unavailable.cpu).toBe("no_ticks");
+
+  const config = await loadConfig();
+  config.task_profile = { ...config.task_profile, enabled: true, memory_enabled: true, machine_memory_enabled: true,
+    cpu_window_ms: 30, poll_interval_ms: 10, max_retained_samples: 8 };
+  const reports: TaskProfile[] = [];
+  const options = {
+    config, context: { platform: "linux", procRoot: directory },
+    server: { pid: 4242, start_ticks: "12345" },
+    report: (profile: TaskProfile) => { reports.push(profile); },
+  };
+  const identity = { pipeline_name: "recorded-work", task_name: "cpu-bound-work",
+    run_id: "recorded-run", correlation_id: randomUUID(), request_id: randomUUID() };
+  await Bun.write(join(directory, "stat"), await fixture("runtime/2026-08-30-probe-proc-stat-at-start.txt"));
+  const watcher = await startTaskProfile(options, identity);
+  if (watcher === null) throw new Error("Enabled task sampler did not start");
+  copyFileSync(fileURLToPath(new URL("runtime/2026-08-30-probe-proc-stat-at-end.txt", fixtureRoot)), join(directory, "stat"));
+  const processInput = JSON.parse(await fixture("host-probes/process-inputs.json"));
+  await Bun.write(join(directory, String(process.pid), "status"), processInput.closing_status);
+  const blockedAt = performance.now();
+  // Real bounded CPU work prevents this event loop from running a sampling timer.
+  while (performance.now() - blockedAt < 200) createHash("sha256").update(processInput.status).digest();
+  const closing = watcher.close("success");
+  expect(watcher.close("error")).toBe(closing);
+  const profile = TaskProfileSchema.parse(await closing);
+  expect(reports).toEqual([profile]);
+  expect(profile.elapsed_ms).toBeGreaterThanOrEqual(200);
+  expect(profile.periodic_sample_count).toBeGreaterThan(1);
+  expect(profile.sample_count).toBe(profile.periodic_sample_count + 2);
+  expect(profile.samples.length).toBeLessThanOrEqual(profile.config.max_retained_samples);
+  expect(profile.cpu.value?.user).toBeCloseTo(53 / 7991 * 100, 10);
+  expect(profile.processes.worker.closing.pid).toBe(process.pid);
+  expect(profile.processes.worker.closing.memory_kb).toEqual({ rss: 700, hwm_lifetime: 900, anon: 500 });
+  expect(profile.processes.worker.sampled_rss_max_kb).toBe(700);
+  expect(profile.processes.worker.major_faults_delta).toBe(0);
+  expect(profile.processes.server.closing.memory_kb.rss).toBe(600);
+  expect(profile.machine_available_min_kb).toBe(8192000);
+  expect(profile.machine_major_faults_delta).toBe(0);
+  expect(profile.samples.some(sample => sample.cpu_window.full_window)).toBe(true);
+  expect(profile.samples.every(sample => sample.observed_at.endsWith("Z"))).toBe(true);
+  const collectorInput = CollectorInputSchema.parse({
+    identity, config: config.task_profile, max_proc_bytes: config.max_proc_bytes,
+    worker_pid: process.pid, server: options.server, context: options.context,
+  });
+  const bounded = new TaskCollector(collectorInput);
+  for (let index = 0; index < config.task_profile.max_retained_samples * 2; index++) bounded.poll();
+  const retained = bounded.close("success");
+  expect(retained.sample_count).toBeGreaterThan(config.task_profile.max_retained_samples);
+  expect(retained.samples).toHaveLength(config.task_profile.max_retained_samples);
+  expect(bounded.close("error")).toBe(retained);
+  const machineOnly = new TaskCollector(CollectorInputSchema.parse({
+    ...collectorInput, config: { ...collectorInput.config, memory_enabled: false },
+  })).close("success");
+  expect(machineOnly.machine_available_min_kb).toBe(8192000);
+  expect(machineOnly.processes.worker.closing.unavailable["memory_kb.rss"]).toBe("configured_off");
+  await Bun.write(join(directory, "stat"), await fixture("runtime/2026-08-30-probe-proc-stat-at-start.txt"));
+  const reset = new TaskCollector(CollectorInputSchema.parse({
+    ...collectorInput, config: {
+      ...collectorInput.config, cpu_window_ms: collectorInput.config.lifecycle_timeout_ms,
+      max_retained_samples: Math.ceil(collectorInput.config.lifecycle_timeout_ms / collectorInput.config.poll_interval_ms) + 2,
+    },
+  }));
+  await Bun.write(join(directory, "stat"), "cpu 1 0 0 1 0 0 0 0\n");
+  reset.poll();
+  await Bun.write(join(directory, "stat"), await fixture("runtime/2026-08-30-probe-proc-stat-at-end.txt"));
+  const resetProfile = reset.close("success");
+  expect(resetProfile.cpu.reason).toBe("counter_reset");
+  expect(resetProfile.samples.at(-1)?.cpu_window.cpu.reason).toBe("counter_reset");
+  await expect(profileTask(options, identity, () => { throw new Error("actual task failed"); }))
+    .rejects.toThrow("actual task failed");
+  expect(reports.at(-1)?.outcome).toBe("error");
+  const abort = new AbortController();
+  await expect(profileTask(options, identity, () => {
+    abort.abort(new Error("task cancelled"));
+    abort.signal.throwIfAborted();
+  }, { signal: abort.signal })).rejects.toThrow("task cancelled");
+  expect(reports.at(-1)?.outcome).toBe("cancelled");
+  await expect(profileTask({ ...options, report: () => { throw new Error("report failed"); } },
+    identity, () => { throw new Error("actual task failed"); })).rejects.toThrow(AggregateError);
+  const quick = await startTaskProfile(options, identity);
+  const partial = await quick!.close("success");
+  expect(partial.samples[0]?.cpu_window.full_window).toBe(false);
+  expect(partial.samples.at(-1)?.phase).toBe("closing");
 });
 
 test("the real HTTP handler uses the sampler without external network", async () => {
@@ -154,12 +251,75 @@ test("missing and oversized proc files are explicit while valid siblings survive
   const missingMemory = await sampleHost(config, { platform: "linux", procRoot: directory });
   expect(missingMemory.memory_kb).toEqual({ total: null, free: null, available: null });
   expect(missingMemory.unavailable["memory_kb.total"]).toBe("missing_file");
+  const context = { platform: "linux", procRoot: directory };
+  const owned = { pid: 4242, start_ticks: "12345" };
+  expect(readProcessIdentity(owned.pid, config.max_proc_bytes, context).value).toMatchObject(owned);
+  expect(readProcessMemory(owned, config.max_proc_bytes, context).memory_kb.rss).toBe(600);
+  expect(readProcessMemory({ ...owned, start_ticks: "1" }, config.max_proc_bytes, context).unavailable.major_faults).toBe("pid_reused");
+  await Bun.write(join(directory, "4242", "status"), "VmRSS:\tbad kB\nVmHWM:\t900 kB\n");
+  const missing = readProcessMemory(owned, config.max_proc_bytes, context);
+  expect(missing.memory_kb).toEqual({ rss: null, hwm_lifetime: 900, anon: null });
+  expect(missing.unavailable).toEqual({ "memory_kb.rss": "invalid_data", "memory_kb.anon": "missing_field" });
+  await rm(join(directory, "4242", "stat"));
+  expect(readProcessMemory(owned, config.max_proc_bytes, context).unavailable.major_faults).toBe("process_exited");
+  const processInput = JSON.parse(await fixture("host-probes/process-inputs.json"));
+  await Bun.write(join(directory, "4242", "stat"), processInput.stat.replace(") R ", ") Z "));
+  expect(readProcessMemory(owned, config.max_proc_bytes, context).unavailable.major_faults).toBe("process_exited");
+  const identity = { pipeline_name: "off", task_name: "off", run_id: "off", request_id: randomUUID(), correlation_id: randomUUID() };
+  await Bun.write(join(directory, "stat"), await fixture("runtime/2026-08-30-probe-proc-stat-at-start.txt"));
+  await mkdir(join(directory, "meminfo"));
+  await rm(join(directory, "vmstat"));
+  await mkdir(join(directory, "vmstat"));
+  let processOnly: TaskProfile | undefined;
+  await profileTask({
+    config: { ...config, task_profile: { ...config.task_profile, enabled: true, memory_enabled: true, machine_memory_enabled: false } },
+    context, report: profile => { processOnly = profile; },
+  }, identity, () => {
+    copyFileSync(fileURLToPath(new URL("runtime/2026-08-30-probe-proc-stat-at-end.txt", fixtureRoot)), join(directory, "stat"));
+    return "Actual CPU and PID RAM without machine reads";
+  });
+  expect(processOnly?.cpu.value?.user).toBeCloseTo(53 / 7991 * 100, 10);
+  expect(processOnly?.processes.worker.closing.memory_kb.rss).toBe(600);
+  expect(processOnly?.processes.worker.sampled_rss_max_kb).toBe(600);
+  expect(processOnly?.machine_available_min_kb).toBeNull();
+  expect(processOnly?.machine_major_faults_delta).toBeNull();
+  expect(processOnly?.samples.at(-1)?.unavailable["memory_kb.total"]).toBe("configured_off");
+  expect(processOnly?.samples.at(-1)?.unavailable.vmstat_major_faults).toBe("configured_off");
+  await rm(join(directory, String(process.pid), "stat"));
+  await mkdir(join(directory, String(process.pid), "stat"));
+  let cpuOnly: TaskProfile | undefined;
+  await profileTask({
+    config: { ...config, task_profile: { ...config.task_profile, enabled: true, memory_enabled: false } },
+    context, report: profile => { cpuOnly = profile; },
+  }, identity, () => "CPU-only work");
+  expect(cpuOnly?.processes.worker.closing.unavailable["memory_kb.rss"]).toBe("configured_off");
+  expect(cpuOnly?.samples.at(-1)?.unavailable["memory_kb.total"]).toBe("configured_off");
+  // Unexpected I/O errors would fail collection; whole off must not read even this input.
+  await rm(join(directory, "stat"));
+  await mkdir(join(directory, "stat"));
+  let reported = false;
+  expect(await profileTask({ config, context, report: () => { reported = true; } }, identity, () => "actual work")).toBe("actual work");
+  expect(reported).toBe(false);
+  const enabled = { ...config, task_profile: { ...config.task_profile, enabled: true } };
+  await expect(startTaskProfile({ config: enabled, context, report: () => {} }, {
+    pipeline_name: "error", task_name: "error", run_id: "error", request_id: randomUUID(), correlation_id: randomUUID(),
+  })).rejects.toThrow("collector");
 });
 
-test("configuration rejects unknown fields, missing fields and invalid controls by name", () => {
+test("configuration rejects unknown fields, missing fields and invalid controls by name", async () => {
   expect(ProbeConfigSchema.safeParse({}).success).toBe(false);
-  const config = { sample_interval_ms: 1, listen_host: "127.0.0.1", listen_port: 3005, max_proc_bytes: 1024 };
+  const config = { ...(await loadConfig()), sample_interval_ms: 1, listen_host: "127.0.0.1", listen_port: 3005, max_proc_bytes: 1024 };
   expect(ProbeConfigSchema.safeParse(config).success).toBe(true);
+  expect(config.task_profile.enabled).toBe(false);
+  expect(config.task_profile.memory_enabled).toBe(false);
+  expect(config.task_profile.machine_memory_enabled).toBe(false);
+  expect(config.task_profile.poll_interval_ms).toBe(1000);
+  for (const [field, value] of [
+    ["memory_enabled", "true"], ["machine_memory_enabled", "true"],
+    ["cpu_window_ms", 0], ["poll_interval_ms", 0], ["max_retained_samples", 1], ["lifecycle_timeout_ms", 0],
+  ] as const) expect(ProbeConfigSchema.safeParse({
+    ...config, task_profile: { ...config.task_profile, [field]: value },
+  }).success).toBe(false);
   for (const sample_interval_ms of [0, -1, 0.5, NaN, Infinity, "1"]) {
     const result = ProbeConfigSchema.safeParse({ ...config, sample_interval_ms });
     expect(result.success).toBe(false);

@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+from collections import Counter
 from pathlib import Path
 
 import pytest
@@ -671,23 +672,35 @@ def test_harvesting_the_same_day_twice_does_not_move_the_row_count(
 def test_the_census_is_recounted_from_the_window_never_incremented(
     tmp_path: Path, app: AppConfig, article: Article
 ) -> None:
-    """An incremented counter and the file it counts drift, and only one is true."""
+    """Census values must come from saved rows, not from prior metadata."""
+    item = scored(article, "titled", "high")
+    assert item.row is not None
+    expected_models = dict(Counter([item.summary.model_id]))
+    expected_verticals = dict(Counter([item.article.vertical]))
+    expected_date = item.row.date
     meta = corpus.harvest(
         tmp_path,
-        [scored(article, "titled", "high")],
+        [item],
         date=DATE,
         finetune=app.finetune,
         prompt_config=app.summarize,
         evaluation=app.evaluation,
     )
+    rows = corpus.read_rows(tmp_path)
 
-    assert meta.rows == len(corpus.read_rows(tmp_path))
-    assert meta.verticals == {article.vertical: 1}
-    assert meta.models == {"qwen3-8b-q4-k-m": 1}
+    assert rows
+    assert meta.rows == len(rows)
+    assert meta.verticals == expected_verticals
+    assert meta.models == expected_models
     # The row carries its eval row's date, not the harvest argument.
-    assert meta.first_date == meta.last_date == corpus.read_rows(tmp_path)[0].date
+    assert meta.first_date == meta.last_date == expected_date
     assert meta.harvested_date == DATE
     assert meta.prompt_digest is not None
+    stale = meta.model_copy(
+        update={"models": {item.summary.model_id: len(rows) + 1}}
+    )
+    recounted = corpus.census(rows, previous=stale, prompt_digest=meta.prompt_digest)
+    assert recounted.models == expected_models
 
 
 def test_a_write_leaves_no_half_written_file_behind(tmp_path: Path) -> None:

@@ -4,14 +4,16 @@ import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises"
 import { dirname, join } from "node:path";
 import { tmpdir } from "node:os";
 import { createHash } from "node:crypto";
-import { readFeedIngestDispatch, RawDayIndexSchema } from "../../../packages/common-contracts/src/index";
+import { readFeedIngestDispatch, RawDayIndexSchema, SourceRunRecordSchema } from "../../../packages/common-contracts/src/index";
 import { persistLedger } from "../../../packages/ledger-file-writer/src/index";
 import { runFeedPlan, summarizePlan } from "../../../services/feed-ingest-plan/src/run-feed-plan";
 import { recordedPlan } from "../../../services/feed-ingest-plan/test/plan-recordings";
 import { source } from "../../../services/feed-ingest-plan/test/harvest-recordings";
 import { verifyLedgerReceipt, verifyParquetFiles, verifyPlanningCompletion, verifyRecordedCompatibility } from "../feed-ingest-plan-verification";
 import { createExecutionOutputs, createSeenDayInputs, writeGitHubOutputs } from "../feed-ingest-plan-outputs";
-import { formatExecutionReport, writePlannerReport } from "../feed-ingest-plan-report";
+import { formatExecutionReport, readExecutionReport, writePlannerReport } from "../feed-ingest-plan-report";
+import { formatResourceReport } from "../feed-ingest-plan-resource-report";
+import { recordProfileEvidence } from "./feed-ingest-plan-profile-recording";
 import type { ProgressRecord } from "../../../services/feed-ingest-plan/src/logging/progress-logger";
 import { readSeenEvidence, requiredSeenDays } from "../../../services/feed-ingest-plan/src/read-ledger-history/read-seen-evidence";
 import { utcTimestamp } from "../../../services/feed-ingest-plan/src/harvest-feeds/harvest-types";
@@ -150,7 +152,165 @@ test("actual CLI planning proof and all native files survive both real report mo
     const executionSummary = formatExecutionReport({
       response: summary, host, progress, historyStagingMs: null,
     });
+    const identity = { git_sha: fixture.runtime.git_sha, run_id: summary.run_id,
+      attempt: summary.planning_completion!.attempt, correlation_id: summary.correlation_id };
+    const sourceId = summary.source_records!.find(source => source.fetch_status === "success")!.source_id;
+    const evidence = await recordProfileEvidence(fixture.directory, identity, sourceId, {
+      machineMemoryEnabled: false, cpuWindowMs: 1000,
+    });
+    const resourceInput = { response: summary, gitSha: identity.git_sha, machineMemoryEnabled: false, ...evidence };
+    const evidenceBefore = JSON.stringify(evidence);
+    const resourceReport = formatResourceReport(resourceInput);
+    expect(JSON.stringify(evidence)).toBe(evidenceBefore);
+    expect(resourceReport.summary).toContain("partial window");
+    expect(resourceReport.summary).toContain("Preserved; no new profile");
+    expect(resourceReport.summary).toContain("RSS 600 kB; sampled max 600 kB");
+    expect(resourceReport.summary).toContain("Disabled; no task meminfo/vmstat reads");
+    expect(resourceReport.summary).toContain("not PID CPU or task-exclusive usage");
+    expect(resourceReport.summary).toContain("not exact task peaks");
+    expect(resourceReport.summary).toContain("configured off");
+    expect(Bun.markdown.html(resourceReport.summary)).toContain("cache-derived buffer");
+    expect(resourceReport.summary).toContain(`${evidence.resourceProof.copy!.on!.l3_cache_bytes} bytes`);
+    expect(resourceReport.annotations).toHaveLength(5);
+    expect(resourceReport.annotations.every(line => line.startsWith("::notice title=") && !line.includes("\n"))).toBe(true);
+    for (const [letter, columns, count] of [["H", 7, 4], ["I", 4, 4], ["J", 3, 7]] as const) {
+      const section = resourceReport.summary.split(`## Table ${letter} -`)[1]?.split("\n## ")[0];
+      if (section === undefined) throw new Error(`Missing resource table ${letter}`);
+      const html = Bun.markdown.html(section);
+      expect(html.match(/<table>/g)).toHaveLength(1);
+      expect(html.match(/<th>/g)).toHaveLength(columns);
+      expect(html.match(/<td>/g)).toHaveLength(columns * count);
+    }
+    const ids = [...resourceReport.summary.matchAll(/^\| ([A-Z]\d+) \|/gm)].map(match => match[1]);
+    expect(new Set(ids).size).toBe(ids.length);
+    const fullEvidence = await recordProfileEvidence(fixture.directory, identity, sourceId, {
+      machineMemoryEnabled: true, cpuWindowMs: 1, resourceProof: evidence.resourceProof,
+    });
+    const fullReport = formatResourceReport({ ...resourceInput, ...fullEvidence, machineMemoryEnabled: true });
+    expect(fullReport.summary).toContain("full window recorded");
+    expect(fullReport.summary).toContain("total 16384256 kB");
+    expect(fullReport.summary).toContain("sampled min available 8192000 kB");
+    expect(fullEvidence.stageProof.documents.every(document =>
+      document.profiling!.profiles.every(profile => profile.full_window_count > 0))).toBe(true);
+    const unchangedCounters = await recordProfileEvidence(fixture.directory, identity, sourceId, {
+      machineMemoryEnabled: false, cpuWindowMs: 1, withTicks: false, resourceProof: evidence.resourceProof,
+    });
+    expect(Bun.markdown.html(formatResourceReport({ ...resourceInput, ...unchangedCounters }).summary)).toContain("Unavailable (no ticks)");
+    expect(formatResourceReport({ ...resourceInput, ...unchangedCounters }).summary).toContain("no measured full window");
+    for (const machineMemoryEnabled of [false, true]) {
+      const absent = formatResourceReport({ response: summary, machineMemoryEnabled });
+      expect(absent.summary).toContain("| H1 | Task profiles | Not recorded | Unavailable");
+      expect(absent.summary).toContain("resource-proof.json absent");
+      expect(absent.summary).toContain(`Whole-machine task RAM: **${machineMemoryEnabled ? "enabled" : "disabled"}**`);
+      expect(absent.summary).not.toContain("0 total");
+    }
+    for (const change of [
+      { run_id: `${summary.date}-999` }, { attempt: identity.attempt + 1 },
+      { correlation_id: "b0d6a594-059f-46e1-bd6d-682452627e53" }, { git_sha: "b".repeat(40) },
+    ]) {
+      expect(() => formatResourceReport({ ...resourceInput,
+        resourceProof: { ...evidence.resourceProof, ...change } })).toThrow("Resource evidence differs");
+      expect(() => formatResourceReport({ ...resourceInput,
+        stageProof: { ...evidence.stageProof, ...change } })).toThrow("Resource evidence differs");
+    }
+    expect(() => formatResourceReport({ ...resourceInput, runNumber: "foreign" })).toThrow("completed planning attempt");
+    expect(() => formatResourceReport({ ...resourceInput, runAttempt: String(identity.attempt + 1) })).toThrow("completed planning attempt");
+    expect(() => formatResourceReport({ ...resourceInput, machineMemoryEnabled: true })).toThrow("workflow input");
+    for (const tamper of ["request", "count", "cpu", "replay", "journal", "disabled-machine"] as const) {
+      const stageProof = structuredClone(evidence.stageProof);
+      const document = stageProof.documents[0]!;
+      const profile = document.profiling!.profiles[0]!;
+      if (tamper === "request") profile.identity.request_id = "b0d6a594-059f-46e1-bd6d-682452627e53";
+      if (tamper === "count") document.profiling!.after_checks_count = 3;
+      if (tamper === "cpu" && profile.cpu.value !== null) profile.cpu.value.user = -1;
+      if (tamper === "replay") document.calls.find(call => call.stage === "fetch_replay_after_restart")!.response_sha256 = "b".repeat(64);
+      if (tamper === "journal") document.journal_records_sha256!.after_checks = "b".repeat(64);
+      if (tamper === "disabled-machine") profile.machine_available_min_kb = 1;
+      expect(() => formatResourceReport({ ...resourceInput, stageProof })).toThrow();
+    }
+    const unsafeResource = structuredClone(evidence.resourceProof);
+    unsafeResource.host.release = "bad | <script>\r\n::error title=injected::run";
+    const escapedResource = formatResourceReport({ ...resourceInput, resourceProof: unsafeResource });
+    expect(escapedResource.summary).not.toContain("<script>");
+    expect(escapedResource.summary).toContain("&#124;");
+    expect(escapedResource.annotations.join("\n")).not.toContain("injected");
+    const reportDirectory = join(fixture.directory, "report-inputs");
+    await mkdir(reportDirectory);
+    for (const [name, value] of Object.entries({
+      "response.json": summary, "events.json": fixture.events, "host.json": host,
+      "history-staging-ms.json": null, "stage-api-proof.json": evidence.stageProof, "resource-proof.json": evidence.resourceProof,
+    })) await writeFile(join(reportDirectory, name), JSON.stringify(value));
+    await writeFile(join(reportDirectory, "progress.jsonl"), progress.map(entry => JSON.stringify(entry)).join("\n"));
+    const cliSummary = join(reportDirectory, "summary.md");
+    const recordedReport = await readExecutionReport(reportDirectory, { gitSha: identity.git_sha,
+      runNumber: summary.run_id.split("-").at(-1)!, runAttempt: String(identity.attempt), machineMemoryEnabled: false,
+    });
+    const cliOutput: string[] = [];
+    await writePlannerReport({ enabled: true, events: fixture.events, summaryPath: cliSummary,
+      ...recordedReport, annotate: line => cliOutput.push(line) });
+    expect(await readFile(cliSummary, "utf8")).toContain(resourceReport.summary);
+    for (const notice of resourceReport.annotations) expect(cliOutput).toContain(notice);
+    const reviewDirectory = new URL("../../../test-results/host-probes/", import.meta.url);
+    await mkdir(reviewDirectory, { recursive: true });
+    await writeFile(new URL("resource-report.md", reviewDirectory), fullReport.summary);
+    await writeFile(new URL("resource-report.html", reviewDirectory), Bun.markdown.html(fullReport.summary));
     expect(executionSummary).toContain("SOURCE&#95;INACTIVE | 1/2 configured sources");
+    const activeSource = summary.source_records?.find(row => row.fetch_status === "success");
+    const inactiveSource = summary.source_records?.find(row => row.fetch_status === "not_requested");
+    if (activeSource === undefined || inactiveSource === undefined) throw new Error("Report fixture requires fetched and inactive sources");
+    const refusalSources = [
+      { ...activeSource, parsed_count: 20, drop_reasons: [
+        { subject: "article", stage: "curate-article-portfolio", reason: "SOURCE_QUOTA_EXCEEDED", count: 3 },
+        { subject: "article", stage: "screen-article-candidates", reason: "STUB_CONTENT", count: 4 },
+        { subject: "article", stage: "harvest-feeds", reason: "FETCH_FAILED_HTTP", count: 4 },
+        { subject: "article", stage: "screen-article-candidates", reason: "DUPLICATE_CANONICAL_URL", count: 1 },
+        { subject: "article", stage: "curate-article-portfolio", reason: "DUPLICATE_CANONICAL_URL", count: 1 },
+        { subject: "article", stage: "screen-article-candidates", reason: "PAYWALL_OR_BLOCKED", count: 2 },
+        { subject: "article", stage: "harvest-feeds", reason: "EXTRACT_EMPTY", count: 2 },
+      ] },
+      { ...activeSource, source_id: "second-news", source: { ...activeSource.source, source_id: "second-news" },
+        parsed_count: 10, drop_reasons: [
+          { subject: "article", stage: "harvest-feeds", reason: "FETCH_FAILED_HTTP", count: 1 },
+          { subject: "article", stage: "screen-article-candidates", reason: "DUPLICATE_CANONICAL_URL", count: 1 },
+          { subject: "article", stage: "curate-article-portfolio", reason: "MMR_PORTFOLIO_CUTOFF", count: 1 },
+        ] },
+      inactiveSource,
+      ...["failed-one", "failed-two"].map(sourceId => ({
+        ...activeSource, source_id: sourceId, source: { ...activeSource.source, source_id: sourceId },
+        fetch_status: "http_failure", parse_status: "not_attempted", parsed_count: null, parse_duration_ms: null,
+        last_failure_at: activeSource.observed_at, last_failure_reason: "FETCH_FAILED_HTTP",
+        drop_reasons: [{ subject: "feed", stage: "harvest-feeds", reason: "FETCH_FAILED_HTTP", count: 1 }],
+      })),
+    ].map(row => SourceRunRecordSchema.parse({ ...row, expected_source_count: 5 }));
+    const refusalInput = { response: { ...summary, source_records: refusalSources }, host, progress, historyStagingMs: null };
+    const groupedReport = formatExecutionReport(refusalInput);
+    const refusalRows = groupedReport.match(/^\| D\d+ \|.*$/gm);
+    if (refusalRows === null) throw new Error("Report fixture requires refusal rows");
+    expect(refusalRows.map(row => row.split("|").slice(2, -1).map(cell => cell.trim()))).toEqual([
+      ["feed", "harvest feeds", "FETCH&#95;FAILED&#95;HTTP", "2/5 configured sources"],
+      ["feed", "harvest feeds", "SOURCE&#95;INACTIVE", "1/5 configured sources"],
+      ["article", "harvest feeds", "FETCH&#95;FAILED&#95;HTTP", "5/30 observed parsed entries"],
+      ["article", "harvest feeds", "EXTRACT&#95;EMPTY", "2/30 observed parsed entries"],
+      ["article", "screen article candidates", "STUB&#95;CONTENT", "4/30 observed parsed entries"],
+      ["article", "screen article candidates", "DUPLICATE&#95;CANONICAL&#95;URL", "2/30 observed parsed entries"],
+      ["article", "screen article candidates", "PAYWALL&#95;OR&#95;BLOCKED", "2/30 observed parsed entries"],
+      ["article", "curate article portfolio", "SOURCE&#95;QUOTA&#95;EXCEEDED", "3/30 observed parsed entries"],
+      ["article", "curate article portfolio", "DUPLICATE&#95;CANONICAL&#95;URL", "1/30 observed parsed entries"],
+      ["article", "curate article portfolio", "MMR&#95;PORTFOLIO&#95;CUTOFF", "1/30 observed parsed entries"],
+    ]);
+    const refusalMarkdown = groupedReport.split("## Table D - Refusals\n")[1]?.split("## Table E -")[0];
+    if (refusalMarkdown === undefined) throw new Error("Report fixture requires Table D");
+    const refusalHtml = Bun.markdown.html(refusalMarkdown);
+    expect(refusalHtml).toContain("<table>");
+    expect(refusalHtml.match(/<th>/g)).toHaveLength(5);
+    expect(refusalHtml.match(/<td>/g)).toHaveLength(refusalRows.length * 5);
+    expect(groupedReport).toContain("| C1 | Offered feed entries | 30 articles; 2/5 sources measured |");
+    expect(groupedReport).toContain("| C8 | Feed fetch failures | 2/4 attempted feeds |");
+    const reversedReport = formatExecutionReport({
+      ...refusalInput, response: { ...refusalInput.response, source_records: refusalSources.toReversed()
+        .map(row => ({ ...row, drop_reasons: row.drop_reasons.toReversed() })) },
+    });
+    expect(reversedReport.match(/^\| D\d+ \|.*$/gm)).toEqual(refusalRows);
     for (const response of [
       { ...summary, correlation_id: "another-correlation" },
       { ...summary, planning_completion: { ...summary.planning_completion!, attempt: summary.planning_completion!.attempt + 1 } },
@@ -206,10 +366,13 @@ test("actual CLI planning proof and all native files survive both real report mo
     const seenPaths = summary.files.seen.files.map(file => file.path);
     const seenBefore = await readSeenEvidence(fixture.inputs.outputRoot, seenPaths);
     for (const enabled of [false, true]) {
-      await writePlannerReport({ enabled, events: fixture.events, summaryPath, executionSummary, annotate: line => annotations.push(line) });
+      await writePlannerReport({ enabled, events: fixture.events, summaryPath, executionSummary, resourceReport,
+        annotate: line => annotations.push(line) });
       if (enabled) {
         expect(annotations.length).toBeGreaterThan(0);
         expect((await readFile(summaryPath, "utf8")).length).toBeGreaterThan(0);
+        expect(await readFile(summaryPath, "utf8")).toContain(resourceReport.summary);
+        for (const notice of resourceReport.annotations) expect(annotations).toContain(notice);
       } else {
         expect(annotations).toEqual([]);
         await expect(stat(summaryPath)).rejects.toMatchObject({ code: "ENOENT" });

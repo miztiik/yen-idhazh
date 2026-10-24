@@ -1,6 +1,6 @@
 # Plan 66 - Feed ingest plan engine
 
-**Last Updated**: 2026-10-23
+**Last Updated**: 2026-10-24
 **Level**: 5 (source-kind/tier and persisted-contract migration requires owner approval before execution; the later planner implementation follows the approved contracts)
 
 Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delegates a row where delegation pays; keep parallel N = 4 rows in flight, refilling a slot as soon as a worker returns and never waiting on a merge; consult a persona only where two answers would lead to different code; AUTO-merge on green gates; honor the ESCALATE triggers in section 0.
@@ -1934,6 +1934,26 @@ published bytes, dependency group, mock or substitute journey.
 | 2 | Publish only metadata without declaring another shape | Hides real columns despite the all-ledger request and creates an undeclared consumer contract | Owner-approved projection contract, producer, enrollment, retention, and tests; not needed for the current request | Owner's full-ledger intent; Guardrail #3 |
 
 ---
+
+## 20. Owner-expanded follow-up work
+
+Owner request, 2026-10-24, kumarsnaveen: retain the sixteen historical DONE
+rows and their acceptance evidence. Track the expanded work below separately.
+Those earlier results do not close these follow-ups or approve production
+planner/worker replacement. CPU collection remains active for the whole task;
+one-second polling is a cadence, never a profiling cutoff.
+
+### Table U - Expanded delivery phases
+
+| Id | Status | Focused PR phase | Required completion evidence |
+| --- | --- | --- | --- |
+| U1 | IN-FLIGHT | Resource report, independent whole-machine RAM checkbox and one-second task polling | One focused PR adds actual CPU/PID RAM/optional machine RAM to completion summaries and safe notices, retains copy OFF/ON separately, and binds the default-false workflow input to collection. Recorded checks prove independent controls, identity refusal, truthful partial windows and disabled reporting. Coordinator review, all five CI checks, hosted checkbox-ON verification and bounded OFF proof remain required. |
+| U2 | IN-FLIGHT | PID CPU and task-scoped host-probe HTTP start/stop | Child `5bfd52a3-9cfc-4d56-93b8-e9f4cf2a4365`, branch `task-scoped-host-profiling`, owns independent counter work; final integration depends on U1's config split. Add guarded process CPU without relabelling aggregate host CPU; expose real whole-task collection through the host-probe API with owned lifecycle, cleanup and integration tests. The current HTTP sample route is not this capability. |
+| U3 | IN-FLIGHT | L3 latency and hardware cache hit/miss support | Child `6a57ff1e-bdfc-4248-86f8-cd5b17c8bde2` owns optional counter adapters and controlled cache-latency tools; final routing follows U2. Distinguish latency, cache events and existing copy bandwidth. Prove actual runner capability, keeping denied or unsupported hardware measurements explicitly unavailable. L3 size or copy throughput alone does not close this row. |
+| U4 | IN-FLIGHT | Separate recorded source-reliability penalty | Owner approved this first selection improvement and its default-true switch; Apply source reliability child `6a51cd25-3e27-44d2-b837-4d0af537a117` owns its focused PR. Preserve TypeScript's set-aware MMR selection, meaning selection balances value against similarity, rather than promising identical Python selections. Record the separate reliability penalty and prove its effect with bounded integration cases; no Python runtime change. |
+| U5 | PENDING | Remaining selection improvements from the Python path | Parent reviews day-wide concentration limits and selection bonuses independently, retaining useful TypeScript selection behavior. Each approved change needs its own declared effect and integration evidence; U4 does not approve a source-authority formula or close these decisions. |
+| U6 | OPEN | Phase 2 genuine publication and lead-observer integration/testing | Integrate actual publication and lead observations with the planner's recorded identities and test the complete flow against genuine output. Generated full-audit fixtures prove the observer boundary only; they do not complete this phase or certify live publication. |
+| U7 | PENDING - NOT APPROVED | Production planner and worker cutover | Requires separate owner approval and a staged integration/test plan for real producer and consumer paths. Neither this report PR, the historical DONE rows nor generated audit fixtures authorize cutover or completion of the original plan's broader intent. |
 
 ## See also
 

@@ -8,6 +8,7 @@ import os
 import subprocess
 import sys
 import time
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Final
 
@@ -31,6 +32,8 @@ def test_off_controls_create_no_sampler_or_artifacts(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, control: str
 ) -> None:
     app = config.load(CONFIG_DIR).app
+    app.observability.host_telemetry_enabled = True
+    app.observability.memory_profiling_enabled = True
     if control == "master-off":
         app.observability.host_telemetry_enabled = False
     root = tmp_path / "config"
@@ -152,7 +155,7 @@ def test_the_count_and_the_roll_call_come_off_one_walk(tmp_path: Path) -> None:
     """
     root = _a_proc_tree(tmp_path)
 
-    record, rows = memory_sampler.sample_once(100, proc_root=root, cgroup_paths=(), now="ts")
+    record, rows = memory_sampler.sample_once(100, proc_root=root, cgroup_paths=())
 
     assert record["python_procs"] == len(rows) == 2, rows
     assert [row["pid"] for row in rows] == [200, 300]
@@ -166,6 +169,9 @@ def test_the_count_and_the_roll_call_come_off_one_walk(tmp_path: Path) -> None:
     assert record["mem_available_kb"] == 12_000_000
     assert record["committed_as_kb"] == 9_000_000
     assert all(row["ts"] == record["ts"] for row in rows)
+    instant = datetime.fromisoformat(record["ts"])
+    assert instant.tzinfo is UTC
+    assert instant.strftime("%Y-%m-%dT%H:%M:%SZ") == record["ts"]
 
 
 def test_the_roll_call_carries_three_argv_fields_and_never_the_whole_line(
@@ -244,9 +250,19 @@ def _wrote(tmp_path: Path, name: str, records: list[dict[str, Any]]) -> None:
     )
 
 
+def _enabled_config(tmp_path: Path) -> Path:
+    app = config.load(CONFIG_DIR).app
+    app.observability.host_telemetry_enabled = True
+    app.observability.memory_profiling_enabled = True
+    root = tmp_path / "config"
+    root.mkdir(exist_ok=True)
+    (root / "idhazh.json").write_text(app.to_json(), encoding="utf-8")
+    return root
+
+
 def _ran(tmp_path: Path, *argv: str) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
-        [sys.executable, str(MODULE), *argv, "--config-root", str(CONFIG_DIR)],
+        [sys.executable, str(MODULE), *argv, "--config-root", str(_enabled_config(tmp_path))],
         cwd=tmp_path,
         capture_output=True,
         text=True,
@@ -388,12 +404,13 @@ def test_the_pid_file_names_the_loop_and_not_the_process_that_launched_it(
     Nothing here waits on a clock. The target is a process that has already been
     reaped, so the loop writes its first line and stops.
     """
+    root = _enabled_config(tmp_path)
     reaped = subprocess.Popen([sys.executable, "-c", ""])
     reaped.wait()
 
     launcher = subprocess.Popen(
         [sys.executable, str(MODULE), "start-sampler", "--pid", str(reaped.pid),
-         "--config-root", str(CONFIG_DIR)],
+         "--config-root", str(root)],
         cwd=tmp_path,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
@@ -463,7 +480,10 @@ def test_the_loop_outlives_the_parent_and_stops_when_its_target_does(tmp_path: P
             time.sleep(0.1)
         written = samples.read_text(encoding="utf-8").splitlines()
         assert len(written) >= 2, written
-        assert json.loads(written[0])["ts"], written[0]
+        timestamp = json.loads(written[0])["ts"]
+        instant = datetime.fromisoformat(timestamp)
+        assert instant.tzinfo is UTC
+        assert instant.strftime("%Y-%m-%dT%H:%M:%SZ") == timestamp
     finally:
         target.terminate()
         target.wait()
