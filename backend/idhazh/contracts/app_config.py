@@ -131,11 +131,6 @@ class AppConfig(Contract):
             why="Each route's console file owns its panel order and judged list.",
         ),
         ChangelogEntry(
-            version="2026-10-08",
-            change="similarity.holdout_reach_days added, additive.",
-            why="The hand marks moved onto the ledger door, and their read needs a bound.",
-        ),
-        ChangelogEntry(
             version="2026-09-28",
             change="Earlier changes are in this file's git history.",
             why="A changelog says what moved lately; git is the archive.",
