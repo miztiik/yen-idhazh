@@ -15,7 +15,7 @@ import {
   EXTRACTION_QUALITY_VERSION,
   PreviousHarvestDiagnosticsSchema,
   ArticleAssessmentContract, EditorialSelectionContract, SourceReliabilityPenaltySchema,
-  PUBLISHER_IDENTITY_VERSION, FEED_HISTORY_EVENT_VERSION, CONTRACT_VERSION,
+  PUBLISHER_IDENTITY_VERSION, PUBLISHER_EXPOSURE_VERSION, PublisherExposurePenaltySchema, FEED_HISTORY_EVENT_VERSION, CONTRACT_VERSION,
   ParsedFeedBatchSchema, SelectedFeedBatchSchema, PartitionedFeedBatchSchema,
   PlannerHarvestObservationSchema, PlannerSeenEvidenceSchema, PlannerSeenRowSchema,
   PlannerStageContextSchema, PlannerStageRequestSchema, StageReferenceRequestSchema,
@@ -314,7 +314,7 @@ describe("planning audit contracts", () => {
     }).success).toBe(true);
     expect(SourceReliabilityPenaltySchema.safeParse({ ...reliability, enabled: false, value: 0 }).success).toBe(true);
     const oldSelection = EditorialSelectionContract.legacyVersions[CONTRACT_VERSION];
-    const { source_reliability: _reliability, ...previousRatings } = selection().ratings;
+    const { source_reliability: _reliability, publisher_exposure: _exposure, ...previousRatings } = selection().ratings;
     const currentSelection = selection();
     const { publisher_id: _publisherId, ...previousSource } = currentSelection.source;
     const original = oldSelection.schema.parse({
@@ -328,6 +328,30 @@ describe("planning audit contracts", () => {
     }).toEqual(original);
     expect(oldSelection.schema.safeParse({
       ...original, ratings: { ...original.ratings, source_reliability: reliability },
+    }).success).toBe(false);
+    const exposure = PublisherExposurePenaltySchema.parse({
+      day, publisher_id: "recorded-publisher", history_status: "available",
+      published_today: 2, selected_so_far: 1, planned_slots: 2, coefficient: 0.25, exposure: 1, value: 0.25,
+    });
+    const scores = { ...currentSelection.ratings, publisher_exposure: exposure, source: { available: false, value: null } };
+    expect(EditorialSelectionContract.schema.safeParse({ ...currentSelection, ratings: scores }).success).toBe(true);
+    expect(EditorialSelectionContract.schema.safeParse({
+      ...currentSelection, ratings: { ...scores, source: { available: true, value: 0 } },
+    }).success).toBe(false);
+    for (const change of [
+      { published_today: null }, { history_status: "unavailable" }, { exposure: 1.5 },
+      { value: 0.5 }, { planned_slots: 0 }, { selected_so_far: -1 },
+      { publisher_id: null }, { coefficient: -1 },
+    ]) expect(PublisherExposurePenaltySchema.safeParse({ ...exposure, ...change }).success).toBe(false);
+    const publisherLegacy = EditorialSelectionContract.legacyVersions[PUBLISHER_IDENTITY_VERSION];
+    const prior = publisherLegacy.schema.parse({
+      ...currentSelection, version: PUBLISHER_IDENTITY_VERSION,
+      ratings: { ...previousRatings, source_reliability: reliability },
+    });
+    expect(publisherLegacy.migrate(prior).ratings.publisher_exposure).toBeNull();
+    expect(publisherLegacy.migrate(prior).ratings.source).toEqual(prior.ratings.source);
+    expect(publisherLegacy.schema.safeParse({
+      ...prior, ratings: { ...prior.ratings, publisher_exposure: exposure },
     }).success).toBe(false);
   });
 
@@ -359,7 +383,7 @@ describe("planning audit contracts", () => {
     expect(record.payload.assessment.diagnostics).toBeNull();
     expect(record.payload.assessment.version).toBe(ArticleAssessmentContract.schemaVersion);
     expect(record.payload.assessment).toEqual({
-      ...fixture.payload.assessment, version: PUBLISHER_IDENTITY_VERSION,
+      ...fixture.payload.assessment, version: PUBLISHER_EXPOSURE_VERSION,
       source: { ...fixture.payload.assessment.source, publisher_id: null }, diagnostics: null,
     });
     expect(readFeedIngestEvent(JSON.parse(JSON.stringify(record)))).toEqual(record);
@@ -385,6 +409,9 @@ describe("planning audit contracts", () => {
     expect(schema.version).toBe(record.version);
     expect(schema.changelog).toEqual([{
       version: record.version,
+      change: "Replace feed crowding with recorded soft publisher exposure.",
+    }, {
+      version: PUBLISHER_IDENTITY_VERSION,
       change: "Record curated publisher identity in source snapshots.",
     }, {
       version: "2026-10-24",
@@ -392,9 +419,6 @@ describe("planning audit contracts", () => {
     }, {
       version: FEED_HISTORY_EVENT_VERSION,
       change: "Record native feed rest, retirement, reliability and daily publication evidence.",
-    }, {
-      version: "2026-10-23",
-      change: "Retain measured extraction quality and implementation fingerprints.",
     }, {
       version: "2026-10-22T20:30",
       change: "Earlier changes are in git.",
@@ -420,7 +444,7 @@ describe("planning audit contracts", () => {
       } } };
       const migrated = readFeedIngestEvent(previous);
       expect(migrated.payload).toMatchObject({ assessment: {
-        version: PUBLISHER_IDENTITY_VERSION, diagnostics: { extract_ms: 2, quality: null },
+        version: PUBLISHER_EXPOSURE_VERSION, diagnostics: { extract_ms: 2, quality: null },
       } });
       expect(readFeedIngestEvent(JSON.parse(JSON.stringify(migrated)))).toEqual(migrated);
     }
@@ -489,11 +513,11 @@ describe("planning audit contracts", () => {
     expect(SelectedFeedBatchSchema.parse({
       batch_id: batchId, config_sha256: digest, parsed_batch_id: batchId,
       context, selections: [], rejections: [],
-    }).version).toBe(PUBLISHER_IDENTITY_VERSION);
+    }).version).toBe(PUBLISHER_EXPOSURE_VERSION);
     expect(PartitionedFeedBatchSchema.parse({
       batch_id: batchId, config_sha256: digest, selection_batch_id: batchId,
       context, strategy: "none", dispatch_count: 1, work: [0], dispatches: [],
-    }).version).toBe(PUBLISHER_IDENTITY_VERSION);
+    }).version).toBe(PUBLISHER_EXPOSURE_VERSION);
     expect(ParsedFeedBatchSchema.safeParse({
       ...parsed, observations: { [digest]: { candidate_id: digest } },
     }).success).toBe(false);

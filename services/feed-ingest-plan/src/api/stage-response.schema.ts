@@ -2,7 +2,7 @@
 import { z } from "zod";
 import {
   CandidateRejectionRecordSchema, EditorialSelectionRowSchema, FeedIngestDispatchSchema,
-  CountSchema, NonEmptySchema, NonNegativeSchema, PositiveCountSchema,
+  CountSchema, DateStampSchema, NonEmptySchema, NonNegativeSchema, PositiveCountSchema,
   RequestIdSchema, RunIdSchema, Sha256Schema,
 } from "@idhazh/common-contracts";
 import { RelativePathSchema } from "../config/service-settings";
@@ -24,6 +24,9 @@ export const SelectionResponseSchema = z.strictObject({
   run_id: RunIdSchema, correlation_id: RequestIdSchema,
   selections: z.array(EditorialSelectionRowSchema),
   exclusions: z.array(CandidateRejectionRecordSchema),
+  publisher_history: z.strictObject({
+    day: DateStampSchema, availability: z.enum(["available", "unavailable"]), gaps: z.array(NonEmptySchema),
+  }),
   files: z.strictObject({
     screening_rejections: StageWriteResultSchema,
     selections: StageWriteResultSchema, rejections: StageWriteResultSchema,

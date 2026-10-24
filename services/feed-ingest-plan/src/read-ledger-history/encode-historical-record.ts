@@ -3,7 +3,7 @@ import {
   ArticleAssessmentContract, CandidateRejectionContract, CONTRACT_VERSION,
   FEED_INGEST_AUDIT_VERSION, HARVEST_DIAGNOSTICS_VERSION, PLANNER_EXCLUSIONS_VERSION,
   EXTRACTION_QUALITY_VERSION, PLANNING_OBSERVATIONS_VERSION, PUBLISHER_IDENTITY_VERSION,
-  SOURCE_RELIABILITY_VERSION,
+  SOURCE_RELIABILITY_VERSION, PUBLISHER_EXPOSURE_VERSION,
   EditorialSelectionRowSchema, FeedIngestDispatchSchema,
 } from "@idhazh/common-contracts";
 import type { HarvestDiagnostics, LedgerCompletionEvidence, ScoreEvidence } from "@idhazh/common-contracts";
@@ -34,8 +34,13 @@ function encodeSource<T extends { publisher_id: string | null }>(source: T, vers
 
 function encodeScores(scores: ScoreEvidence | null, version: string) {
   if (scores === null) return null;
-  if (version === PUBLISHER_IDENTITY_VERSION || version === SOURCE_RELIABILITY_VERSION) return scores;
-  const { source_reliability, ...original } = scores;
+  if (version === PUBLISHER_EXPOSURE_VERSION) return scores;
+  const { publisher_exposure, ...previous } = scores;
+  if (version !== PUBLISHER_IDENTITY_VERSION && version !== SOURCE_RELIABILITY_VERSION
+    && scores.source_reliability !== null) throw new Error("Historical proof cannot omit source reliability evidence");
+  if (publisher_exposure !== null) throw new Error("Historical proof cannot omit publisher exposure evidence");
+  if (version === PUBLISHER_IDENTITY_VERSION || version === SOURCE_RELIABILITY_VERSION) return previous;
+  const { source_reliability, ...original } = previous;
   if (source_reliability !== null) throw new Error("Historical proof cannot omit source reliability evidence");
   return original;
 }
@@ -63,7 +68,11 @@ export function encodeHistoricalRecord(
 ): object {
   if (ledger === "dispatches") {
     const current = FeedIngestDispatchSchema.parse(row);
-    if (version === PUBLISHER_IDENTITY_VERSION) return current;
+    if (version === PUBLISHER_EXPOSURE_VERSION) return current;
+    if (version === PUBLISHER_IDENTITY_VERSION) return {
+      ...current, version,
+      selection: encodeHistoricalRecord("editorial-selections", current.selection, version),
+    };
     if (version === PLANNING_OBSERVATIONS_VERSION) {
       return { ...current, version,
         content: encodeCandidate(current.content, version),
@@ -84,9 +93,9 @@ export function encodeHistoricalRecord(
     };
   }
   if (ledger === "editorial-selections") {
-    if (version === PUBLISHER_IDENTITY_VERSION) return EditorialSelectionRowSchema.parse(row);
+    if (version === PUBLISHER_EXPOSURE_VERSION) return EditorialSelectionRowSchema.parse(row);
     if (version !== CONTRACT_VERSION && version !== FEED_INGEST_AUDIT_VERSION
-      && version !== SOURCE_RELIABILITY_VERSION) {
+      && version !== SOURCE_RELIABILITY_VERSION && version !== PUBLISHER_IDENTITY_VERSION) {
       throw new Error(`Historical selection encoding is not declared for ${version}`);
     }
     const current = EditorialSelectionRowSchema.parse(row);
@@ -110,9 +119,9 @@ export function encodeHistoricalRecord(
     } };
   }
   if (ledger === "article-assessments") {
-    if (version === PUBLISHER_IDENTITY_VERSION) return ArticleAssessmentContract.schema.parse(row);
+    if (version === PUBLISHER_EXPOSURE_VERSION) return ArticleAssessmentContract.schema.parse(row);
     const { diagnostics, ...current } = ArticleAssessmentContract.schema.parse(row);
-    const originalDiagnostics = encodeDiagnostics(diagnostics, version);
+    const originalDiagnostics = version === PUBLISHER_IDENTITY_VERSION ? diagnostics : encodeDiagnostics(diagnostics, version);
     const encoded = {
       ...current, version, source: encodeSource(current.source, version),
       score_evidence: encodeScores(current.score_evidence, version),

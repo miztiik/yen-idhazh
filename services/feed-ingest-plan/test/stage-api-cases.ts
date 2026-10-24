@@ -33,6 +33,9 @@ async function verifySavedStageFlow() {
     });
     expect(selectedResponse.status).toBe(200);
     const selected = SelectionResponseSchema.parse(await selectedResponse.json());
+    expect(selected.publisher_history).toEqual({
+      day: plan.context.date, availability: "unavailable", gaps: ["publication_history_unavailable"],
+    });
     expect(selected.selections).toEqual(plan.evidence.curation.rows);
     expect(selected.exclusions).toEqual([
       ...plan.evidence.harvest.rejections, ...plan.evidence.screening.rejections, ...plan.evidence.curation.rejections,

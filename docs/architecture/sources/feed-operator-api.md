@@ -169,7 +169,11 @@ it does not issue HTTP requests to its own listener.
    complete saved batch, without article lists, caller paths or a separate
    input-count limit. It returns the new selected `batch_id`, `parsed_batch_id`,
    run and correlation IDs, existing selection rows, typed `exclusions`, and
-   the selection/rejection write results. It does not fetch or call a model.
+   the selection/rejection write results. `publisher_history` records the UTC
+   day, availability and named evidence gaps, including for an empty selection.
+   The [publisher preference](feed-curation.md#publisher-exposure-adjustment)
+   uses confirmed recorded identities and keeps missing publication history
+   explicit. It does not fetch or call a model.
 4. `/partition-articles` accepts `{"batch_id": "<selected-batch UUID>"}` with
    optional `strategy` and `shards`. Strategies are `bin-pack`, `round-robin`
    and `none`; omitted controls use the committed partition configuration.
