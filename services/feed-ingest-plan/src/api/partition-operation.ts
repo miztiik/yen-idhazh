@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import { isDeepStrictEqual } from "node:util";
 import {
   ParsedFeedBatchSchema, SelectedFeedBatchSchema, PartitionedFeedBatchSchema,
-  PartitionArticlesRequestSchema,
+  PartitionArticlesRequestSchema, readParsedFeedBatch, readSelectedFeedBatch,
 } from "@idhazh/common-contracts";
 import type { PlanInputs } from "../load-plan-inputs";
 import type { PlanRuntime } from "../run-feed-plan";
@@ -25,9 +25,9 @@ export async function executePartition(raw: unknown, inputs: PlanInputs, runtime
     if (!(error instanceof Error)) throw error;
     throw new PlanError("INVALID_REQUEST", error.message, "shards");
   }
-  const selected = await readStageBatch(inputs.outputRoot, "selected", request.batch_id, SelectedFeedBatchSchema);
+  const selected = await readStageBatch(inputs.outputRoot, "selected", request.batch_id, SelectedFeedBatchSchema, readSelectedFeedBatch);
   requireStageConfiguration(selected, inputs, runtime);
-  const parsed = await readStageBatch(inputs.outputRoot, "parsed", selected.parsed_batch_id, ParsedFeedBatchSchema);
+  const parsed = await readStageBatch(inputs.outputRoot, "parsed", selected.parsed_batch_id, ParsedFeedBatchSchema, readParsedFeedBatch);
   requireStageConfiguration(parsed, inputs, runtime);
   if (!isDeepStrictEqual(parsed.context, selected.context)) {
     throw new PlanError("ARTIFACT_INVALID", "Saved selection context differs from its parsed batch", "batch_id");

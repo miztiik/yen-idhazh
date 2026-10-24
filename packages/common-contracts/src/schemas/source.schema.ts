@@ -4,14 +4,18 @@ import { CountSchema, FiniteSchema, NonEmptySchema, NonNegativeSchema, PositiveC
 
 export const SourceKindSchema = SlugSchema;
 export const SourceTierSchema = PositiveCountSchema;
+export const PublisherIdSchema = SlugSchema;
 export const SourceFormSchema = z.enum(["article", "abstract"]);
 export const LifecycleStatusSchema = z.enum(["draft", "active", "retired"]);
 export const SourceSnapshotSchema = z.strictObject({
-  source_id: SlugSchema, feed_url: UrlSchema, title: NonEmptySchema,
+  source_id: SlugSchema, publisher_id: PublisherIdSchema.nullable().default(null),
+  feed_url: UrlSchema, title: NonEmptySchema,
   vertical: SlugSchema, kind: SourceKindSchema, tier: SourceTierSchema,
   form: SourceFormSchema, status: LifecycleStatusSchema,
   weight: FiniteSchema.min(0).max(1), applied_tier_weight: FiniteSchema.min(0).max(1),
 });
+const { publisher_id: _publisherId, ...previousSourceSnapshotFields } = SourceSnapshotSchema.shape;
+export const PreviousSourceSnapshotSchema = z.strictObject(previousSourceSnapshotFields);
 export const ArticleLabelsSchema = z.strictObject({
   assigned_desk: SlugSchema.nullable(), lenses: z.array(SlugSchema).nullable(),
   event_types: z.array(SlugSchema).nullable(), event_cluster_id: NonEmptySchema.nullable(),

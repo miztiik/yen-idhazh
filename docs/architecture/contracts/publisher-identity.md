@@ -4,10 +4,11 @@
 
 How is a publisher ID created once, then kept stable as names and feeds change?
 
-**Status**: Naming rules, catalog location and the simple config shape are
-approved, as are lifecycle meanings and legacy unknown-value behavior. Feed
-assignments, compatible-reader implementation, API and runtime behavior remain
-work to deliver. I Feed remains a design proposal, not a deployed engine.
+**Status**: The catalog and persisted identity readers are implemented. No
+current feed mapping had publisher-owned evidence in this review, so the live
+registry is empty and all configured feeds remain unknown. Publisher exposure
+behavior remains a separate phase. I Feed remains a design proposal, not a
+deployed engine.
 
 ## The identity being named
 
@@ -21,16 +22,16 @@ despite common ownership.
 name is separate and can change. Several feeds can explicitly reference one
 publisher ID; their `source_id` values still identify separate feeds.
 
-The owner-maintained [source catalog](../../../config/sources.json) currently
-declares feeds, not a publisher registry or `publisher_id` references.
+The owner-maintained [source catalog](../../../config/sources.json) declares
+the publisher registry beside feed references. Its current registry is empty;
+no feed has a confirmed `publisher_id`.
 Existing story grouping uses the recorded `source_name` masthead through
 `outlet_of`, as the masthead rule describes. That text key is not an immutable
 publisher ID. This contract does not replace it or change story grouping.
 
 ## Creation and review
 
-Apply this procedure when catalog implementation is approved, not as permission
-to assign IDs to today's feeds:
+Apply this procedure when adding a publisher or assigning a feed:
 
 1. Check the owner-controlled source catalog and its existing publisher IDs.
    Use feed metadata only to find possible matches; confirm the editorial
@@ -55,15 +56,24 @@ to assign IDs to today's feeds:
    [primitives.ts](../../../packages/common-contracts/src/schemas/primitives.ts).
    Resolve a failed check before recording the ID; do not silently normalize
    invalid input.
-6. Record the reviewed ID and display name in the owner-controlled source
-   catalog, then bind feeds by explicit `publisher_id`. The registry will live
-   beside its feed references in
-   [`config/sources.json`](../../../config/sources.json). Publisher entries use
-   `id` and `display_name`; each feed's `publisher_id` is nullable, with
-   missing meaning unknown. The reviewed catalog change and its Git history
-   record the decision; there is no extra provenance field. Adding or changing
-   these values must not need per-publisher code edits. This page does not
-   assign any feed.
+6. Record only the reviewed ID and display name in the publisher registry, then
+   bind feeds by explicit `publisher_id`. The registry lives beside feed
+   references in [`config/sources.json`](../../../config/sources.json), and
+   each feed's `publisher_id` is nullable, with missing meaning unknown.
+   Lifecycle belongs to feed entries, not publisher entries: `added_on` is the
+   UTC date a feed first entered the catalog; a new feed records that date, and
+   a new retirement records `retired_on` and an open lowercase
+   `retirement_reason`. Missing legacy lifecycle values stay unknown. The same
+   missing fields can describe either
+   a legacy feed or an incomplete new edit, so runtime validation cannot tell
+   those cases apart. New feed and retirement edits must include their dates and
+   the retirement reason, as applicable, in curated edit review; that is an
+   editorial requirement, not a runtime guarantee. Do not invent unknown dates.
+   The reviewed catalog change and its Git history
+   record publisher-mapping decisions; there is no extra provenance field.
+   Adding or changing these values must not need per-publisher code edits. No
+   current feed is assigned because this review found no supporting
+   publisher-owned evidence.
 
 Fetch, parse and later runtime stages read the recorded reference. They never
 regenerate a publisher ID from a URL, title, article text or changed display
@@ -110,14 +120,18 @@ unknown feed as a different publisher.
 
 ## Validation ownership
 
-When implemented, TypeScript's `PublisherIdSchema` must alias `SlugSchema`,
-not introduce another regular expression. No such alias is added by this page.
-Catalog validation must refuse duplicate publisher definitions and nonnull
-feed references to an undefined publisher. Several feeds referencing one
-defined publisher are legal. Missing legacy IDs remain explicitly unknown.
-Legacy configuration without `publishers` reads as an empty registry; missing
-feed `publisher_id`, `added_on` or legacy `retirement_reason` remains unknown.
-Keep that reader path while the catalog is migrated.
+TypeScript's `PublisherIdSchema` aliases `SlugSchema`. Catalog validation
+refuses duplicate publisher definitions and nonnull feed references to an
+undefined publisher. Several feeds may reference one defined publisher.
+Legacy configuration without `publishers` reads as an empty registry. Missing
+feed IDs and lifecycle values remain unknown; readers do not fill them from the
+current catalog. New retirement reasons are open lowercase text, not a closed
+vocabulary.
+
+Publisher definitions contain only `id` and `display_name`; lifecycle belongs
+to feed entries. Readers check recorded lifecycle fields for consistency, but
+curated review establishes whether a new feed or retirement supplied all
+required values.
 
 Syntax validation cannot prove that two feeds share a newsroom, that a name
 change preserves identity, or that an old reservation was not reused. Catalog
@@ -127,9 +141,9 @@ historical-read meanings as well as the scalar spelling.
 Owner-authored catalog configuration uses reader-native validation of the
 fields its readers compute on, under `CLAUDE.md` Guardrail #3. It does not need
 a second persisted-payload schema just because it is configuration.
-If a publisher ID is later added to a shared persisted payload read by Python,
-the Pydantic model remains authoritative, with its small TypeScript copy,
-version/changelog, compatible reads and named binding tests. Follow
+Publisher identity is carried by the Pydantic-owned shared snapshot and the
+TypeScript copy, with versioned compatible readers and the named binding tests.
+Follow
 [the schema contract](schemas.md#what-holds-the-copy-in-step), including
 `backend/tests/contracts/test_feed_ingest_contracts.py`.
 The planner-only TypeScript event exception stays narrow; approval of a
@@ -159,10 +173,9 @@ soft, not hard caps or a reason to block selection when history is missing.
 The existing [source-reliability penalty](../sources/feed-curation.md#inputs-and-independent-evidence)
 measures operational delivery, not article quality.
 
-The owner approved the API name `/select-articles`, not an implemented route.
-How it accepts a typed parsed batch or server-owned local references, and what
-it returns, still need confirmation. Publisher-group mappings, policy
-coefficients and runtime implementation remain next-phase decisions.
+Publisher identity is recorded through the existing planning and audit flow; it
+does not change article selection. Publisher exposure rules and their runtime
+behavior remain a separate phase.
 
 ## Manual acceptance checklist
 

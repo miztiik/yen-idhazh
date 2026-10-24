@@ -31,6 +31,7 @@ export async function writeStageBatch<T extends { batch_id: string }>(
 
 export async function readStageBatch<T extends { batch_id: string }>(
   outputRoot: string, stage: BatchStage, batchId: string, schema: z.ZodType<T>,
+  read: (raw: unknown) => T = raw => schema.parse(raw),
 ): Promise<T> {
   const path = batchPath(outputRoot, stage, batchId);
   let content: string;
@@ -43,7 +44,7 @@ export async function readStageBatch<T extends { batch_id: string }>(
     throw error;
   }
   try {
-    const batch = schema.parse(JSON.parse(content));
+    const batch = read(JSON.parse(content));
     if (batch.batch_id !== batchId) {
       throw new PlanError("ARTIFACT_INVALID", "Stored batch identity differs from the requested identity", "batch_id");
     }

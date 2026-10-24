@@ -26,12 +26,14 @@ export function namedPlanningFiles(summary: ReturnType<typeof summarizePlan>, ro
   };
 }
 
-export async function recordedPlan(sources: ConfiguredSource[] = [source()]) {
+export async function recordedPlan(
+  sources: ConfiguredSource[] = [source()], publishers: unknown = [],
+) {
   const root = fileURLToPath(new URL("../../../", import.meta.url));
   const directory = await mkdtemp(join(tmpdir(), "feed-plan-"));
   try {
     const [loaded, harvest, recordings] = await Promise.all([
-      loadPlanInputs(root), inputs(sources), readRecordings(),
+      loadPlanInputs(root), inputs(sources, { publishers }), readRecordings(),
     ]);
     const transport = new RecordedTransport(recordings);
     harvest.config.triage.min_words_article = 100;

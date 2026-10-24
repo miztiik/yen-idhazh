@@ -2,6 +2,7 @@
 import { randomUUID } from "node:crypto";
 import {
   ParsedFeedBatchSchema, SelectedFeedBatchSchema, StageReferenceRequestSchema,
+  readParsedFeedBatch,
 } from "@idhazh/common-contracts";
 import type { PlanInputs } from "../load-plan-inputs";
 import type { PlanRuntime } from "../run-feed-plan";
@@ -24,7 +25,7 @@ export async function executeSelection(
   raw: unknown, inputs: PlanInputs, runtime: PlanRuntime, onScreened?: (result: ScreeningResult) => void,
 ) {
   const request = StageReferenceRequestSchema.parse(raw);
-  const parsed = await readStageBatch(inputs.outputRoot, "parsed", request.batch_id, ParsedFeedBatchSchema);
+  const parsed = await readStageBatch(inputs.outputRoot, "parsed", request.batch_id, ParsedFeedBatchSchema, readParsedFeedBatch);
   requireStageConfiguration(parsed, inputs, runtime);
   const result = await selectArticles(parsed, inputs, onScreened);
   const batch = await writeStageBatch(inputs.outputRoot, "selected", SelectedFeedBatchSchema, {

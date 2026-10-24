@@ -1,11 +1,15 @@
 /** Which complete feed-planning snapshots may cross from one stage to the next? */
 import { z } from "zod";
-import { FeedIngestCandidateSchema } from "./candidate.schema";
-import { FeedIngestDispatchSchema } from "./dispatch.schema";
+import { FeedIngestCandidateSchema, PreviousFeedIngestCandidateSchema, readFeedIngestCandidate } from "./candidate.schema";
+import {
+  FeedIngestDispatchSchema, PreviousReliableFeedIngestDispatchSchema, readFeedIngestDispatch,
+} from "./dispatch.schema";
 import { WriterIdentitySchema } from "./envelope.schema";
 import { CandidateRejectionRecordSchema } from "./rejection.schema";
 import { HarvestDiagnosticsSchema } from "./harvest-diagnostics.schema";
-import { EditorialSelectionRowSchema } from "./editorial-selection.schema";
+import {
+  EditorialSelectionContract, EditorialSelectionRowSchema, PreviousReliableEditorialSelectionSchema,
+} from "./editorial-selection.schema";
 import { OperationalHistorySchema } from "./source.schema";
 import {
   DateStampSchema, NonEmptySchema, NonNegativeSchema, PositiveCountSchema,
@@ -13,7 +17,7 @@ import {
   TimestampSchema, reject,
 } from "./primitives";
 import { RecordedInstantSchema } from "./recorded-instant.schema";
-import { PLANNER_STAGE_VERSION } from "../version";
+import { PLANNER_STAGE_VERSION, SOURCE_RELIABILITY_VERSION } from "../version";
 
 export const PlannerStageContextSchema = z.strictObject({
   now: TimestampSchema.refine(value => {
@@ -253,3 +257,54 @@ export const PartitionArticlesRequestSchema = z.strictObject({
   shards: PositiveCountSchema.optional(),
 });
 export type PartitionArticlesRequest = z.infer<typeof PartitionArticlesRequestSchema>;
+
+const PreviousPlannerStageVersion = z.literal("2026-10-24");
+export const PreviousParsedFeedBatchSchema = z.strictObject({
+  ...ParsedFeedBatchSchema.shape,
+  version: PreviousPlannerStageVersion,
+  candidates: z.array(PreviousFeedIngestCandidateSchema),
+});
+export const PreviousSelectedFeedBatchSchema = z.strictObject({
+  ...SelectedFeedBatchSchema.shape,
+  version: PreviousPlannerStageVersion,
+  selections: z.array(PreviousReliableEditorialSelectionSchema),
+});
+export const PreviousPartitionedFeedBatchSchema = z.strictObject({
+  ...PartitionedFeedBatchSchema.shape,
+  version: PreviousPlannerStageVersion,
+  dispatches: z.array(PreviousReliableFeedIngestDispatchSchema),
+});
+
+export function readParsedFeedBatch(raw: unknown): ParsedFeedBatch {
+  if (typeof raw === "object" && raw !== null && "version" in raw && raw.version === "2026-10-24") {
+    const previous = PreviousParsedFeedBatchSchema.parse(raw);
+    return ParsedFeedBatchSchema.parse({
+      ...previous, version: PLANNER_STAGE_VERSION,
+      candidates: previous.candidates.map(readFeedIngestCandidate),
+    });
+  }
+  return ParsedFeedBatchSchema.parse(raw);
+}
+
+export function readSelectedFeedBatch(raw: unknown): SelectedFeedBatch {
+  if (typeof raw === "object" && raw !== null && "version" in raw && raw.version === "2026-10-24") {
+    const previous = PreviousSelectedFeedBatchSchema.parse(raw);
+    return SelectedFeedBatchSchema.parse({
+      ...previous, version: PLANNER_STAGE_VERSION,
+      selections: previous.selections.map(row =>
+        EditorialSelectionContract.legacyVersions[SOURCE_RELIABILITY_VERSION].migrate(row)),
+    });
+  }
+  return SelectedFeedBatchSchema.parse(raw);
+}
+
+export function readPartitionedFeedBatch(raw: unknown): PartitionedFeedBatch {
+  if (typeof raw === "object" && raw !== null && "version" in raw && raw.version === "2026-10-24") {
+    const previous = PreviousPartitionedFeedBatchSchema.parse(raw);
+    return PartitionedFeedBatchSchema.parse({
+      ...previous, version: PLANNER_STAGE_VERSION,
+      dispatches: previous.dispatches.map(readFeedIngestDispatch),
+    });
+  }
+  return PartitionedFeedBatchSchema.parse(raw);
+}

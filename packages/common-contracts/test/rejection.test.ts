@@ -12,11 +12,10 @@ import {
   WriterIdentitySchema, deriveCandidateId, deriveUrlKey, validateEnvelopeContainer,
   readFeedIngestEvent, HarvestDiagnosticsSchema, PLANNER_EXCLUSIONS_VERSION,
   FetchAttemptSchema, OPERATION_VERSION, PLANNER_OPERATION_VERSION, RecordedInstantSchema, TimestampSchema,
-  PLANNING_OBSERVATIONS_VERSION,
   EXTRACTION_QUALITY_VERSION,
   PreviousHarvestDiagnosticsSchema,
   ArticleAssessmentContract, EditorialSelectionContract, SourceReliabilityPenaltySchema,
-  SOURCE_RELIABILITY_VERSION, FEED_HISTORY_EVENT_VERSION, CONTRACT_VERSION,
+  PUBLISHER_IDENTITY_VERSION, FEED_HISTORY_EVENT_VERSION, CONTRACT_VERSION,
   ParsedFeedBatchSchema, SelectedFeedBatchSchema, PartitionedFeedBatchSchema,
   PlannerHarvestObservationSchema, PlannerSeenEvidenceSchema, PlannerSeenRowSchema,
   PlannerStageContextSchema, PlannerStageRequestSchema, StageReferenceRequestSchema,
@@ -316,10 +315,17 @@ describe("planning audit contracts", () => {
     expect(SourceReliabilityPenaltySchema.safeParse({ ...reliability, enabled: false, value: 0 }).success).toBe(true);
     const oldSelection = EditorialSelectionContract.legacyVersions[CONTRACT_VERSION];
     const { source_reliability: _reliability, ...previousRatings } = selection().ratings;
-    const original = oldSelection.schema.parse({ ...selection(), version: CONTRACT_VERSION, ratings: previousRatings });
+    const currentSelection = selection();
+    const { publisher_id: _publisherId, ...previousSource } = currentSelection.source;
+    const original = oldSelection.schema.parse({
+      ...currentSelection, source: previousSource, version: CONTRACT_VERSION, ratings: previousRatings,
+    });
     const migrated = oldSelection.migrate(original);
     expect(migrated.ratings.source_reliability).toBeNull();
-    expect({ ...migrated, version: original.version, ratings: previousRatings }).toEqual(original);
+    const { publisher_id: _migratedPublisherId, ...migratedSource } = migrated.source;
+    expect({
+      ...migrated, source: migratedSource, version: original.version, ratings: previousRatings,
+    }).toEqual(original);
     expect(oldSelection.schema.safeParse({
       ...original, ratings: { ...original.ratings, source_reliability: reliability },
     }).success).toBe(false);
@@ -353,7 +359,8 @@ describe("planning audit contracts", () => {
     expect(record.payload.assessment.diagnostics).toBeNull();
     expect(record.payload.assessment.version).toBe(ArticleAssessmentContract.schemaVersion);
     expect(record.payload.assessment).toEqual({
-      ...fixture.payload.assessment, version: SOURCE_RELIABILITY_VERSION, diagnostics: null,
+      ...fixture.payload.assessment, version: PUBLISHER_IDENTITY_VERSION,
+      source: { ...fixture.payload.assessment.source, publisher_id: null }, diagnostics: null,
     });
     expect(readFeedIngestEvent(JSON.parse(JSON.stringify(record)))).toEqual(record);
     const prior = {
@@ -378,6 +385,9 @@ describe("planning audit contracts", () => {
     expect(schema.version).toBe(record.version);
     expect(schema.changelog).toEqual([{
       version: record.version,
+      change: "Record curated publisher identity in source snapshots.",
+    }, {
+      version: "2026-10-24",
       change: "Record separate source-reliability penalties on portfolio decisions.",
     }, {
       version: FEED_HISTORY_EVENT_VERSION,
@@ -386,18 +396,16 @@ describe("planning audit contracts", () => {
       version: "2026-10-23",
       change: "Retain measured extraction quality and implementation fingerprints.",
     }, {
-      version: PLANNER_EXCLUSIONS_VERSION,
-      change: "Record pre-fetch planner exclusions with their measured ledger evidence.",
-    }, {
-      version: fixture.version,
-      change: "Older changes are in git.",
+      version: "2026-10-22T20:30",
+      change: "Earlier changes are in git.",
     }]);
     expect(schema.additionalProperties).toBe(false);
+    const { publisher_id: _publisherId, ...previousSource } = source;
     const historicalFeed = {
       ...event(), version: PLANNER_EXCLUSIONS_VERSION,
       audit_event_type: "feed_outcome", source_id: source.source_id,
       payload: {
-        kind: "feed_outcome", source, fetch_status: "success", parse_status: "empty",
+        kind: "feed_outcome", source: previousSource, fetch_status: "success", parse_status: "empty",
         parsed_count: 0, harvested_count: 0, fetch_duration_ms: 1, parse_duration_ms: 1,
         rejection_reason: "FEED_EMPTY", diagnostics: null,
       },
@@ -412,7 +420,7 @@ describe("planning audit contracts", () => {
       } } };
       const migrated = readFeedIngestEvent(previous);
       expect(migrated.payload).toMatchObject({ assessment: {
-        version: SOURCE_RELIABILITY_VERSION, diagnostics: { extract_ms: 2, quality: null },
+        version: PUBLISHER_IDENTITY_VERSION, diagnostics: { extract_ms: 2, quality: null },
       } });
       expect(readFeedIngestEvent(JSON.parse(JSON.stringify(migrated)))).toEqual(migrated);
     }
@@ -425,7 +433,7 @@ describe("planning audit contracts", () => {
       expect(schemas[name]?.additionalProperties).toBe(false);
     }
     const version = schemas.FeedIngestCandidate?.properties?.version;
-    expect(version).toMatchObject({ const: PLANNING_OBSERVATIONS_VERSION, default: PLANNING_OBSERVATIONS_VERSION });
+    expect(version).toMatchObject({ const: PUBLISHER_IDENTITY_VERSION, default: PUBLISHER_IDENTITY_VERSION });
     expect(schemas.FeedIngestCandidate?.required).not.toContain("version");
     for (const [name, path] of [
       ["FetchedDocument", "fetched-document/refused.json"],
@@ -477,15 +485,15 @@ describe("planning audit contracts", () => {
     expect(PlannerStageContextSchema.parse(context).captured_at).toBe(context.captured_at);
     expect(PlannerStageRequestSchema.parse({})).toEqual({});
     expect(PlannerStageRequestSchema.safeParse({ article_limit: null }).success).toBe(false);
-    expect(ParsedFeedBatchSchema.parse(parsed).version).toBe("2026-10-24");
+    expect(ParsedFeedBatchSchema.parse(parsed).version).toBe(PUBLISHER_IDENTITY_VERSION);
     expect(SelectedFeedBatchSchema.parse({
       batch_id: batchId, config_sha256: digest, parsed_batch_id: batchId,
       context, selections: [], rejections: [],
-    }).version).toBe("2026-10-24");
+    }).version).toBe(PUBLISHER_IDENTITY_VERSION);
     expect(PartitionedFeedBatchSchema.parse({
       batch_id: batchId, config_sha256: digest, selection_batch_id: batchId,
       context, strategy: "none", dispatch_count: 1, work: [0], dispatches: [],
-    }).version).toBe("2026-10-24");
+    }).version).toBe(PUBLISHER_IDENTITY_VERSION);
     expect(ParsedFeedBatchSchema.safeParse({
       ...parsed, observations: { [digest]: { candidate_id: digest } },
     }).success).toBe(false);

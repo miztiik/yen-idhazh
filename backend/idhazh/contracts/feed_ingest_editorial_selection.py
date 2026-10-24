@@ -21,6 +21,7 @@ from idhazh.contracts.feed_ingest_candidate import (
     PositiveCount,
     ScoreEvidence,
     SourceSnapshot,
+    reject_legacy_publisher_identity,
 )
 
 
@@ -29,6 +30,11 @@ class EditorialSelectionRow(Contract):
 
     __schema_stem__: ClassVar[str] = "feed-ingest-editorial-selection"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-10-24T20:04",
+            change="Record curated publisher identity in source snapshots.",
+            why="New selections preserve reviewed identity without rewriting history.",
+        ),
         ChangelogEntry(
             version="2026-10-24",
             change="Record a separate measured source-reliability ranking penalty.",
@@ -40,7 +46,7 @@ class EditorialSelectionRow(Contract):
             why="Ranking can be replayed without rescoring or copying article text.",
         ),
     )
-    version: Literal["2026-10-24"] = "2026-10-24"
+    version: Literal["2026-10-24T20:04"] = "2026-10-24T20:04"
     date: DateStamp
     correlation_id: NonEmpty
     candidate_id: Sha256
@@ -58,11 +64,16 @@ class EditorialSelectionRow(Contract):
     @model_validator(mode="before")
     @classmethod
     def migrate_previous_version(cls, value: Any) -> Any:
-        if isinstance(value, dict) and value.get("version") == "2026-10-20":
+        if isinstance(value, dict) and value.get("version") in {"2026-10-20", "2026-10-24"}:
+            reject_legacy_publisher_identity(value, [value.get("source")])
             ratings = value.get("ratings")
-            if isinstance(ratings, dict) and ratings.get("source_reliability") is not None:
+            if (
+                value.get("version") == "2026-10-20"
+                and isinstance(ratings, dict)
+                and ratings.get("source_reliability") is not None
+            ):
                 raise ValueError("source reliability requires the declared score contract version")
-            return {**value, "version": "2026-10-24"}
+            return {**value, "version": "2026-10-24T20:04"}
         return value
 
     @model_validator(mode="after")

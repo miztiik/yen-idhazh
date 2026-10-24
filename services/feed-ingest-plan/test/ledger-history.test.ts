@@ -193,6 +193,16 @@ test("recorded audit rows migrate through native Parquet without invented eviden
       version: EditorialSelectionContract.schemaVersion, ratings: { source_reliability: null },
     });
     expect(migrated.get("source-runs")).toMatchObject({ date: day, run_id: run });
+    const sourceRun = SourceRunRecordSchema.parse(migrated.get("source-runs"));
+    const previousSourceRun = SourceRunContract.legacyVersions![PLANNER_EXCLUSIONS_VERSION]!;
+    const { publisher_id: _publisherId, ...legacySnapshot } = sourceRun.source;
+    const previousRun = previousSourceRun.schema.parse({
+      ...sourceRun, version: PLANNER_EXCLUSIONS_VERSION, source: legacySnapshot,
+    });
+    expect(previousSourceRun.migrate(previousRun).source.publisher_id).toBeNull();
+    expect(previousSourceRun.schema.safeParse({
+      ...sourceRun, version: PLANNER_EXCLUSIONS_VERSION,
+    }).success).toBe(false);
     const originalSource = await Bun.file(new URL(
       "../../../tests/fixtures/contracts/feed-ingest-source-run/one-observation.json", import.meta.url,
     )).json();
@@ -205,7 +215,10 @@ test("recorded audit rows migrate through native Parquet without invented eviden
       expect(sourceHistory.rows[0]!.row).toMatchObject({ version: SourceRunContract.schemaVersion });
       expect(sourceHistory.rows[0]!.row.completion_evidence?.every(entry => entry.logical === null)).toBe(true);
     }
-    const { diagnostics: _diagnostics, ...previousAssessment } = ArticleAssessmentRecordSchema.parse(migrated.get("article-assessments"));
+    const { diagnostics: _diagnostics, ...currentAssessment } = ArticleAssessmentRecordSchema.parse(migrated.get("article-assessments"));
+    expect(currentAssessment.source.publisher_id).toBeNull();
+    const { publisher_id: _previousPublisherId, ...previousSource } = currentAssessment.source;
+    const previousAssessment = { ...currentAssessment, source: previousSource };
     const assessmentSchema = ArticleAssessmentContract.legacyVersions["2026-10-22"].schema;
     const assessmentFile = await writeRows(root, "article-assessments", day, assessmentSchema,
       [assessmentSchema.parse({ ...previousAssessment, version: "2026-10-22" })], writer(run), "2026-10-22");
