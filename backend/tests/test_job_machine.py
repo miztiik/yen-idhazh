@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+import sys
+from collections.abc import Iterator
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from types import FrameType
 
 import pytest
 from conftest import SEED_COMMIT
@@ -12,13 +15,25 @@ from idhazh import config, ledger
 from idhazh.contracts.base import ServerJob
 from idhazh.contracts.host_fingerprint import HostFingerprintRow
 from idhazh.contracts.ledger_name import LedgerName
-from idhazh.telemetry import task_telemetry
+from idhazh.telemetry import silicon, task_telemetry
 
 DAY = "2026-09-27"
 RUN = f"{DAY}-18012345678"
 START = datetime(2026, 9, 27, 0, 40, tzinfo=UTC)
 
 
+@pytest.fixture(autouse=True)
+def refuse_external_placement() -> Iterator[None]:
+    def guard(frame: FrameType, event: str, argument: object) -> None:
+        if event == "call" and frame.f_code is silicon.placement.__code__:
+            raise AssertionError("job instrumentation must not request external host placement")
+
+    previous = sys.getprofile()
+    sys.setprofile(guard)
+    try:
+        yield
+    finally:
+        sys.setprofile(previous)
 
 
 @pytest.mark.parametrize("fails", [False, True], ids=["success", "failed-work"])
@@ -28,6 +43,8 @@ def test_both_halves_name_one_attempt_and_clock_the_work(
     monkeypatch.setenv("GITHUB_RUN_ATTEMPT", "9")
     settings = config.load()
     settings.app.observability.host_fingerprint_bandwidth_floor_mib = 0
+    settings.app.observability.host_telemetry_enabled = True
+    settings.app.observability.host_fingerprint = True
     written: list[Path] = []
 
     def work() -> None:
@@ -43,6 +60,7 @@ def test_both_halves_name_one_attempt_and_clock_the_work(
             attempt=2,
             started_at=START,
             clock=lambda: START + timedelta(seconds=60),
+            ask_placement=False,
         ) as paths:
             written.extend(paths)
             if fails:
@@ -74,6 +92,7 @@ def test_both_halves_name_one_attempt_and_clock_the_work(
 
 def test_disabled_recording_writes_neither_half(tmp_path: Path) -> None:
     settings = config.load()
+    settings.app.observability.host_telemetry_enabled = True
     settings.app.observability.host_fingerprint = False
     with task_telemetry.record(
         date=DAY,
@@ -82,6 +101,7 @@ def test_disabled_recording_writes_neither_half(tmp_path: Path) -> None:
         state_root=tmp_path,
         commit_sha=SEED_COMMIT,
         job=ServerJob.RUN_TASKS,
+        ask_placement=False,
     ) as written:
         assert written == []
     assert written == [] and not ledger.raw_root(tmp_path, LedgerName.HOST_FINGERPRINT).exists()
@@ -92,6 +112,8 @@ def test_instrument_io_failure_is_reported_without_losing_the_work(
 ) -> None:
     settings = config.load()
     settings.app.observability.host_fingerprint_bandwidth_floor_mib = 0
+    settings.app.observability.host_telemetry_enabled = True
+    settings.app.observability.host_fingerprint = True
     blocked = tmp_path / "not-a-directory"
     blocked.write_text("blocked", encoding="ascii")
     with task_telemetry.record(
@@ -101,6 +123,7 @@ def test_instrument_io_failure_is_reported_without_losing_the_work(
         state_root=blocked,
         commit_sha=SEED_COMMIT,
         job=ServerJob.RUN_TASKS,
+        ask_placement=False,
     ) as written:
         assert written == []
     assert written == []

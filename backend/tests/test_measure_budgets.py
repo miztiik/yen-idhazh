@@ -21,14 +21,17 @@ from typing import Any, Final
 
 import pytest
 from conftest import CONFIG_DIR, FIXTURES_DIR, REPO_ROOT, read_text
+from council._config import copy_config
 from pydantic import ValidationError
 
 from idhazh import config
+from idhazh import measured as measured_module
 from idhazh.contracts.app_config import AppConfig
 from idhazh.contracts.taxonomy import LifecycleStatus
 from idhazh.contracts.visual import PlanEncodings
 from idhazh.measured import (
     SIZED_BY_A_READING_HERE,
+    TokenizerMeasured,
     readings_awaiting_a_retake,
 )
 from idhazh.sanitize import FENCE_CLOSE, FENCE_OPEN
@@ -388,7 +391,7 @@ def test_every_reading_states_a_spread_rather_than_omitting_it(
     }, "a reading here that no site is sized by is a reading nobody will paste"
     for reading in readings:
         assert reading.spread == 0.0
-        assert "spread" in reading.as_json()
+        assert reading.as_json()["spread"] == 0.0
         assert reading.subject == STAMP["subject"]
         assert reading.runner == STAMP["runner"]
         assert reading.taken_on == STAMP["taken_on"]
@@ -438,12 +441,6 @@ def test_the_check_names_every_stale_site_and_both_digests() -> None:
     no entry names instead. Asserting the committed state would have made this
     test a clock: green only while somebody had not done the work.
     """
-    configured = config.load(CONFIG_DIR).models.summarizer.sha256
-    assert configured is not None
-    assert readings_awaiting_a_retake(configured_sha256=configured) == (), (
-        "row #13b retook all three; a stale one here means a reading moved without its subject"
-    )
-
     swapped = "0" * 64
     stale = readings_awaiting_a_retake(configured_sha256=swapped)
     assert len(stale) == len(SIZED_BY_A_READING_HERE) == 3
@@ -467,7 +464,9 @@ def test_the_check_says_so_when_nothing_is_stale() -> None:
     assert "Every constant sized by a reading names the configured weights" in said
 
 
-def test_check_exits_non_zero_while_a_reading_is_stale(capsys: pytest.CaptureFixture[str]) -> None:
+def test_check_exits_non_zero_while_a_reading_is_stale(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
     """An operator surface rather than a test, so the loudest thing it can do is exit 1.
 
     It is not a pytest case and no workflow runs it, so a red exit code costs no
@@ -476,8 +475,15 @@ def test_check_exits_non_zero_while_a_reading_is_stale(capsys: pytest.CaptureFix
     committed tree since row #13b nothing is stale and the interesting case is
     the one that fires.
     """
-    assert main(["check", "--config", str(CONFIG_DIR)]) == 0
-    assert "names the configured weights" in capsys.readouterr().out
+    root = copy_config(tmp_path)
+    settings = config.load(root)
+    settings.models.summarizer.sha256 = "0" * 64
+    settings.models.summarizer.declared_for = "0" * 64
+    config.models_path(root, settings.app).write_text(
+        settings.models.to_json(), encoding="utf-8", newline="\n"
+    )
+    assert main(["check", "--config", str(root)]) == 1
+    assert "no longer runs" in capsys.readouterr().out
 
     swapped = SIZED_BY_A_READING_HERE[0].reading.subject.replace("0", "1", 1)
     assert "no longer runs" in render_check(
@@ -485,36 +491,45 @@ def test_check_exits_non_zero_while_a_reading_is_stale(capsys: pytest.CaptureFix
     )
 
 
-def test_read_refuses_rather_than_guessing_when_no_server_answers(
-    capsys: pytest.CaptureFixture[str],
+def test_read_refuses_without_output_when_tokenizer_transport_fails(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str],
 ) -> None:
-    """The port is one nothing listens on, so this opens no connection anybody keeps."""
+    """The real URL opener refuses an unsupported scheme without opening a socket."""
+    readings = tmp_path / "readings.json"
+    page = tmp_path / "reading.txt"
     code = main(
         [
             "read",
             "--base",
-            "http://127.0.0.1:1",
+            "unavailable://tokenizer",
             "--runner",
             "a box with no weights on it",
             "--samples",
             "1",
+            "--readings",
+            str(readings),
+            "--page",
+            str(page),
         ]
     )
 
     assert code == 2
-    assert "did not answer /tokenize" in capsys.readouterr().err
+    output = capsys.readouterr()
+    assert "unavailable://tokenizer did not answer /tokenize" in output.err
+    assert "unknown url type: unavailable" in output.err
+    assert output.out == ""
+    assert not readings.exists()
+    assert not page.exists()
 
 
 def test_every_site_the_check_names_still_declares_its_constant() -> None:
     """A list of what to retake is worth nothing once a rename has made it a lie."""
-    measured = read_text(REPO_ROOT / "backend" / "idhazh" / "measured.py")
     for site in SIZED_BY_A_READING_HERE:
         module = REPO_ROOT / site.module
-        assert module.is_file(), f"{site.module} has moved and the list now points at nothing"
         assert site.constant in read_text(module), (
             f"{site.module} no longer declares {site.constant}"
         )
-        assert f"\n{site.reading_name}: Final = TokenizerMeasured(" in measured, (
+        assert isinstance(getattr(measured_module, site.reading_name, None), TokenizerMeasured), (
             f"{site.reading_name} is the heading the reader prints over three lines to "
             "paste, and measured.py no longer declares a record by that name"
         )
