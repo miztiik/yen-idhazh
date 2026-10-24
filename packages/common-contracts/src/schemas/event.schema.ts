@@ -1,14 +1,14 @@
 /** Which typed observation crosses a planning stage boundary? */
 import { z } from "zod";
 import { isDeepStrictEqual } from "node:util";
-import { ArticleAssessmentContract, ArticleAssessmentRecordSchema, PreviousArticleAssessmentSchema, PreviousDiagnosticArticleAssessmentSchema, PreviousExclusionArticleAssessmentSchema } from "./article-assessment.schema";
-import { ArticleLabelsSchema, PolicyIdentitySchema, ScoreEvidenceSchema, SourceSnapshotSchema } from "./source.schema";
+import { ArticleAssessmentContract, ArticleAssessmentRecordSchema, PreviousArticleAssessmentSchema, PreviousDiagnosticArticleAssessmentSchema, PreviousExclusionArticleAssessmentSchema, PreviousQualityArticleAssessmentSchema } from "./article-assessment.schema";
+import { ArticleLabelsSchema, PolicyIdentitySchema, PreviousScoreEvidenceSchema, ScoreEvidenceSchema, SourceSnapshotSchema } from "./source.schema";
 import {
   DropReasonSchema, PreviousDiagnosticDropReasonSchema, PreviousPreDiagnosticsDropReasonSchema,
 } from "./rejection.schema";
 import { FetchStatusSchema, ParseStatusSchema } from "./source-run.schema";
 import { CountSchema, DateStampSchema, PlanningStageSchema, PositiveCountSchema, RunIdSchema, Sha256Schema, SlugSchema, TimestampSchema, reject } from "./primitives";
-import { EXTRACTION_QUALITY_VERSION, FEED_INGEST_EVENT_VERSION, HARVEST_DIAGNOSTICS_VERSION, PLANNER_EXCLUSIONS_VERSION } from "../version";
+import { EXTRACTION_QUALITY_VERSION, FEED_HISTORY_EVENT_VERSION, FEED_INGEST_EVENT_VERSION, HARVEST_DIAGNOSTICS_VERSION, PLANNER_EXCLUSIONS_VERSION } from "../version";
 import { HarvestDiagnosticsSchema, PreviousHarvestDiagnosticsSchema } from "./harvest-diagnostics.schema";
 
 export const FeedOutcomePayloadSchema = z.strictObject({
@@ -89,6 +89,9 @@ export const FeedIngestEventSchema = z.strictObject({
   $id: "feed-ingest-event", version: FEED_INGEST_EVENT_VERSION,
   changelog: [{
     version: FEED_INGEST_EVENT_VERSION,
+    change: "Record separate source-reliability penalties on portfolio decisions.",
+  }, {
+    version: FEED_HISTORY_EVENT_VERSION,
     change: "Record native feed rest, retirement, reliability and daily publication evidence.",
   }, {
     version: EXTRACTION_QUALITY_VERSION,
@@ -96,9 +99,6 @@ export const FeedIngestEventSchema = z.strictObject({
   }, {
     version: PLANNER_EXCLUSIONS_VERSION,
     change: "Record pre-fetch planner exclusions with their measured ledger evidence.",
-  }, {
-    version: HARVEST_DIAGNOSTICS_VERSION,
-    change: "Retain measured fetch and extraction diagnostics on feed and article decisions.",
   }, {
     version: "2026-10-22T12:20",
     change: "Older changes are in git.",
@@ -111,6 +111,9 @@ export type CandidateDecisionPayload = z.infer<typeof CandidateDecisionPayloadSc
 export type PortfolioChoicePayload = z.infer<typeof PortfolioChoicePayloadSchema>;
 export type StageCompletionPayload = z.infer<typeof StageCompletionPayloadSchema>;
 
+const PreviousPortfolioChoicePayloadSchema = z.strictObject({
+  ...PortfolioChoicePayloadSchema.shape, scores: PreviousScoreEvidenceSchema,
+});
 const PreviousEventSchema = z.strictObject({
   ...FeedIngestEventSchema.shape,
   version: z.literal("2026-10-22T12:20"),
@@ -119,7 +122,7 @@ const PreviousEventSchema = z.strictObject({
       rejection_reason: PreviousPreDiagnosticsDropReasonSchema.nullable(),
     }),
     CandidateDecisionPayloadSchema.extend({ assessment: PreviousArticleAssessmentSchema }),
-    PortfolioChoicePayloadSchema, StageCompletionPayloadSchema,
+    PreviousPortfolioChoicePayloadSchema, StageCompletionPayloadSchema,
   ]),
 });
 const PreviousDiagnosticEventSchema = z.strictObject({
@@ -131,7 +134,7 @@ const PreviousDiagnosticEventSchema = z.strictObject({
       diagnostics: PreviousHarvestDiagnosticsSchema.nullable().default(null),
     }),
     CandidateDecisionPayloadSchema.extend({ assessment: PreviousDiagnosticArticleAssessmentSchema }),
-    PortfolioChoicePayloadSchema, StageCompletionPayloadSchema,
+    PreviousPortfolioChoicePayloadSchema, StageCompletionPayloadSchema,
   ]),
 });
 const PreviousExclusionEventSchema = z.strictObject({
@@ -140,7 +143,7 @@ const PreviousExclusionEventSchema = z.strictObject({
   payload: z.discriminatedUnion("kind", [
     FeedOutcomePayloadSchema.omit({ history: true }).extend({ diagnostics: PreviousHarvestDiagnosticsSchema.nullable().default(null) }),
     CandidateDecisionPayloadSchema.extend({ assessment: PreviousExclusionArticleAssessmentSchema }),
-    PortfolioChoicePayloadSchema, StageCompletionPayloadSchema,
+    PreviousPortfolioChoicePayloadSchema, StageCompletionPayloadSchema,
   ]),
 });
 const PreviousQualityEventSchema = z.strictObject({
@@ -148,34 +151,32 @@ const PreviousQualityEventSchema = z.strictObject({
   version: z.literal(EXTRACTION_QUALITY_VERSION),
   payload: z.discriminatedUnion("kind", [
     FeedOutcomePayloadSchema.omit({ history: true }),
-    CandidateDecisionPayloadSchema, PortfolioChoicePayloadSchema, StageCompletionPayloadSchema,
+    CandidateDecisionPayloadSchema.extend({ assessment: PreviousQualityArticleAssessmentSchema }),
+    PreviousPortfolioChoicePayloadSchema, StageCompletionPayloadSchema,
+  ]),
+});
+const PreviousHistoryEventSchema = z.strictObject({
+  ...FeedIngestEventSchema.shape, version: z.literal(FEED_HISTORY_EVENT_VERSION),
+  payload: z.discriminatedUnion("kind", [
+    FeedOutcomePayloadSchema,
+    CandidateDecisionPayloadSchema.extend({ assessment: PreviousQualityArticleAssessmentSchema }),
+    PreviousPortfolioChoicePayloadSchema, StageCompletionPayloadSchema,
   ]),
 });
 
 export function readFeedIngestEvent(input: unknown): FeedIngestEvent {
-  if (input && typeof input === "object" && "version" in input && input.version === "2026-10-22T12:20") {
-    const previous = PreviousEventSchema.parse(input);
-    const payload = previous.payload.kind === "candidate_decision" ? {
-      ...previous.payload, assessment: { ...previous.payload.assessment, version: ArticleAssessmentContract.schemaVersion },
-    } : previous.payload;
-    return FeedIngestEventSchema.parse({ ...previous, payload, version: FEED_INGEST_EVENT_VERSION });
-  }
-  if (input && typeof input === "object" && "version" in input && input.version === HARVEST_DIAGNOSTICS_VERSION) {
-    const previous = PreviousDiagnosticEventSchema.parse(input);
-    const payload = previous.payload.kind === "candidate_decision" ? {
-      ...previous.payload, assessment: { ...previous.payload.assessment, version: ArticleAssessmentContract.schemaVersion },
-    } : previous.payload;
-    return FeedIngestEventSchema.parse({ ...previous, payload, version: FEED_INGEST_EVENT_VERSION });
-  }
-  if (input && typeof input === "object" && "version" in input && input.version === PLANNER_EXCLUSIONS_VERSION) {
-    const previous = PreviousExclusionEventSchema.parse(input);
-    const payload = previous.payload.kind === "candidate_decision" ? {
-      ...previous.payload, assessment: { ...previous.payload.assessment, version: ArticleAssessmentContract.schemaVersion },
-    } : previous.payload;
-    return FeedIngestEventSchema.parse({ ...previous, payload, version: FEED_INGEST_EVENT_VERSION });
-  }
-  if (input && typeof input === "object" && "version" in input && input.version === EXTRACTION_QUALITY_VERSION) {
-    return FeedIngestEventSchema.parse({ ...PreviousQualityEventSchema.parse(input), version: FEED_INGEST_EVENT_VERSION });
+  if (input && typeof input === "object" && "version" in input) {
+    const schema = [
+      PreviousEventSchema, PreviousDiagnosticEventSchema, PreviousExclusionEventSchema,
+      PreviousQualityEventSchema, PreviousHistoryEventSchema,
+    ].find(schema => schema.shape.version.value === input.version);
+    if (schema !== undefined) {
+      const previous = schema.parse(input);
+      const payload = previous.payload.kind === "candidate_decision" ? {
+        ...previous.payload, assessment: { ...previous.payload.assessment, version: ArticleAssessmentContract.schemaVersion },
+      } : previous.payload;
+      return FeedIngestEventSchema.parse({ ...previous, payload, version: FEED_INGEST_EVENT_VERSION });
+    }
   }
   return FeedIngestEventSchema.parse(input);
 }

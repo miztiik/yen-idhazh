@@ -1,6 +1,6 @@
 # Which history and source authority the TypeScript planner uses
 
-**Last Updated**: 2026-10-23
+**Last Updated**: 2026-10-24
 
 The TypeScript planner reads native feed-health files for temporary rest and
 measured reliability. Permanent retirement comes only from the existing source
@@ -88,7 +88,7 @@ Receipts remain observations, not proof that unavailable external history was
 empty. A process restart needs the existing native input inventory or exact
 caller-supplied receipts.
 
-## Evidence does not change ranking policy
+## Measured reliability and its selection consumer
 
 The current persisted feed read joins reliability after the health write.
 Events carry the actual productive count, evidence-bearing attempts, fraction,
@@ -96,9 +96,10 @@ represented-day bounds, requested cover and native floor factor. Rest and
 permission refusals stay outside that denominator. No evidence-bearing read
 means unavailable reliability, not invented success.
 
-The native floor factor is evidence, not a multiplier added to the approved
-TypeScript portfolio formula. Source-run summaries receive the measured
-fraction, attempts and window even when a source supplies no eligible article.
+The native floor factor feeds the separately recorded
+[source-reliability penalty](feed-curation.md). It is not multiplied into
+article quality. Source-run summaries receive the same measured fraction,
+attempts and window even when a source supplies no eligible article.
 
 Daily publication evidence reads only the captured UTC day's successful native
 item-health rows and counts each URL once. Failed attempts do not count.
@@ -124,6 +125,11 @@ existing check/request clock fields and their readers without adding a column
 or using packaging as observation order. The narrow Python time-capture and
 reader changes follow the [recorded-instant contract](../contracts/recorded-instants.md).
 
-Portfolio scores, diversity penalties and quotas remain unchanged. Applying a
-reliability multiplier or daily source ceiling would change selection policy,
-not merely provide evidence, and still needs a separate owner decision.
+The selection consumer follows the separate
+[2026-10-24 A1 approval](feed-curation.md#design-rationale). This history reader
+adds no score weight, daily source ceiling or retirement authority.
+
+## See also
+
+- [Planning policies](feed-ingest-policies.md) - the isolated selection switch.
+- [Recorded instants](../contracts/recorded-instants.md) - observation time and uncertainty.

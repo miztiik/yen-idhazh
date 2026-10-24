@@ -14,7 +14,7 @@ import { loadPlanningConfig, resolvePolicy } from "../src/config/resolve-policy"
 import type { PlanningConfig } from "../src/config/resolve-policy";
 import { curateArticles, persistPortfolio } from "../src/curate-article-portfolio/editorial-selection";
 import type { CurationPersistence } from "../src/curate-article-portfolio/editorial-selection";
-import type { ArticleEvidence, OpportunityEvidence, PortfolioArticle } from "../src/curate-article-portfolio/portfolio-input";
+import type { ArticleEvidence, OperationalEvidence, OpportunityEvidence, PortfolioArticle } from "../src/curate-article-portfolio/portfolio-input";
 import { compareStory } from "../src/curate-article-portfolio/story-evidence";
 import type { StoryComparison } from "../src/curate-article-portfolio/story-evidence";
 import { groupCarriers } from "../src/curate-article-portfolio/carrier-cluster";
@@ -31,6 +31,11 @@ type CandidateCase = {
 };
 type Fixture = {
   observed_at: string; run_id: string; correlation_id: string; policy_version: string; config_sha256: string;
+  reliability_floor: number;
+  reliability_cases: {
+    name: string; enabled: boolean; floor: number; alpha: OperationalEvidence | null; gamma: OperationalEvidence | null;
+    winner: string; alpha_penalty: number | null; gamma_penalty: number | null;
+  }[];
   candidates: CandidateCase[];
   expected: { baseline: string[]; each_saturation_coefficient_one: string[]; base_scores: Record<string, number>; selected_ranks: number[] };
   story_pairs: { left: string; right: string; expected: StoryComparison["method"] }[];
@@ -108,7 +113,7 @@ function article(spec: CandidateCase, fixture: Fixture, planning: PlanningConfig
 function run(planning: PlanningConfig, fixture: Fixture, specs = fixture.candidates, opportunity = noOpportunity) {
   return curateArticles({
     articles: specs.map(spec => article(spec, fixture, planning)),
-    planning, opportunity, observed_at: fixture.observed_at,
+    planning, opportunity, observed_at: fixture.observed_at, reliability_floor: fixture.reliability_floor,
   });
 }
 
@@ -130,7 +135,7 @@ test("fixed real stage selects exact identities, ranks, components and preserves
       }),
     };
   });
-  const result = curateArticles({ articles, planning, opportunity: noOpportunity, observed_at: fixture.observed_at });
+  const result = curateArticles({ articles, planning, opportunity: noOpportunity, observed_at: fixture.observed_at, reliability_floor: fixture.reliability_floor });
   expect(names(result)).toEqual(fixture.expected.baseline);
   expect(result.rows.map(row => row.editorial_rank)).toEqual(fixture.expected.selected_ranks);
   expect(result.trace.map(step => step.selected_before.length)).toEqual([0, 1]);
@@ -236,6 +241,7 @@ test("known-empty labels differ from unavailable labels and overlap is counted o
         } },
       })),
       planning: wired.evidence.harvest.inputs, observed_at: wired.context.now,
+      reliability_floor: recorded.inputs.clock_config.collect.reliability_floor,
       opportunity: curation.opportunity,
     });
     expect(curation.rows[0]!.candidate_id).toBe(unavailable.rows[0]!.candidate_id);
@@ -274,7 +280,7 @@ test("kind relabel changes no allowance, viability, or authority; zero disables 
 test("flooding duplicates cannot buy allowance or displace another qualifying source", async () => {
   const { fixture, planning } = await inputs({ article_limit: null, base_source_allowance: 1 });
   const articles = fixture.candidates.map(spec => article(spec, fixture, planning));
-  const baseline = curateArticles({ articles, planning, observed_at: fixture.observed_at, opportunity: noOpportunity });
+  const baseline = curateArticles({ articles, planning, observed_at: fixture.observed_at, opportunity: noOpportunity, reliability_floor: fixture.reliability_floor });
   const original = articles[0]!;
   const copies = Array.from({ length: 20 }, (_, index) => ({
     ...structuredClone(original),
@@ -285,6 +291,7 @@ test("flooding duplicates cannot buy allowance or displace another qualifying so
   }));
   const flood = curateArticles({
     articles: [...articles, ...copies], planning, observed_at: fixture.observed_at, opportunity: noOpportunity,
+    reliability_floor: fixture.reliability_floor,
   });
   expect(names(flood)).toEqual(names(baseline));
   expect(flood.rows.map(row => row.source_id).sort()).toEqual(["alpha", "gamma"]);
@@ -293,6 +300,47 @@ test("flooding duplicates cannot buy allowance or displace another qualifying so
   const quota = flood.rejections.find(r => r.drop_reason === "SOURCE_QUOTA_EXCEEDED")!;
   expect(quota.details.limit).toBe(1);
   expect(quota.details.observed_value).toBe(2);
+  const configured = loadPlanningConfig({
+    ...planning.config, curate: { ...planning.config.curate, source_authority_weight: 1 },
+  }, planning.taxonomy);
+  const carriers = fixture.candidates.map(spec => {
+    const offered = article({
+      ...spec, published_at: fixture.observed_at,
+      cluster: spec.name === "middle" ? "separate-occurrence" : "shared-occurrence",
+    }, fixture, configured);
+    return { ...offered, evidence: { ...offered.evidence, operational: {
+      success_fraction: spec.source === "alpha" ? 0 : 0.75, attempted: 4, window_days: 7,
+    } } };
+  });
+  const enabled = curateArticles({
+    articles: carriers, planning: configured, observed_at: fixture.observed_at,
+    opportunity: noOpportunity, reliability_floor: fixture.reliability_floor,
+  });
+  const disabled = curateArticles({
+    articles: carriers, planning: loadPlanningConfig({
+      ...configured.config, curate: { ...configured.config.curate, source_reliability_penalty_enabled: false },
+    }, configured.taxonomy), observed_at: fixture.observed_at,
+    opportunity: noOpportunity, reliability_floor: fixture.reliability_floor,
+  });
+  expect(names(disabled)).toEqual(["first"]);
+  expect(names(enabled)).toEqual(["alternative", "middle"]);
+  expect(disabled.normalization.rejected.map(row => row.article.candidate.candidate_id))
+    .toEqual([carriers[1]!.candidate.candidate_id]);
+  expect(enabled.normalization.rejected).toEqual([]);
+  expect(enabled.carriers.suppressed[0]!.representative.candidate.source_id).toBe("gamma");
+  expect(enabled.rows.map(row => row.ratings.source_reliability?.value)).toEqual([0.25, 0.5]);
+  const duplicateCarriers = copies.map(copy => ({
+    ...copy, policy: carriers[0]!.policy, freshness: carriers[0]!.freshness,
+    candidate: { ...copy.candidate, policy: carriers[0]!.candidate.policy },
+    evidence: carriers[0]!.evidence,
+  }));
+  const repeated = curateArticles({
+    articles: [...carriers, ...duplicateCarriers], planning: configured, observed_at: fixture.observed_at,
+    opportunity: noOpportunity, reliability_floor: fixture.reliability_floor,
+  });
+  expect(repeated.rows).toEqual(enabled.rows);
+  expect(repeated.normalization.admitted.map(row => row.candidate.candidate_id))
+    .toEqual(enabled.normalization.admitted.map(row => row.candidate.candidate_id));
 });
 
 test("each bonus needs a distinct witness and is granted at most once", async () => {
@@ -308,7 +356,7 @@ test("each bonus needs a distinct witness and is granted at most once", async ()
     return { ...a, evidence: { ...a.evidence, primary_evidence: { ids: [`record-${spec.ordinal}`], origin: "recorded-primary-document" } } };
   });
   const result = curateArticles({
-    articles, planning, observed_at: fixture.observed_at,
+    articles, planning, observed_at: fixture.observed_at, reliability_floor: fixture.reliability_floor,
     opportunity: { covered_event_clusters: [], underrepresented_verticals: ["ai"], origin: "bounded-history" },
   });
   const allowance = result.normalization.allowances.get("alpha")!;
@@ -316,10 +364,10 @@ test("each bonus needs a distinct witness and is granted at most once", async ()
   expect(allowance.witnesses.map(w => w.kind)).toEqual(["uncovered_event_cluster", "underrepresented_vertical", "unique_evidence"]);
   expect(new Set(allowance.witnesses.map(w => w.url_key)).size).toBe(3);
   expect(result.rows).toHaveLength(4);
-  const missing = curateArticles({ articles, planning, observed_at: fixture.observed_at, opportunity: noOpportunity });
+  const missing = curateArticles({ articles, planning, observed_at: fixture.observed_at, opportunity: noOpportunity, reliability_floor: fixture.reliability_floor });
   expect(missing.normalization.allowances.get("alpha")!.allowance).toBe(2);
   const alone = curateArticles({
-    articles: articles.slice(0, 1), planning, observed_at: fixture.observed_at,
+    articles: articles.slice(0, 1), planning, observed_at: fixture.observed_at, reliability_floor: fixture.reliability_floor,
     opportunity: { covered_event_clusters: [], underrepresented_verticals: ["ai"], origin: "bounded-history" },
   });
   expect(alone.normalization.allowances.get("alpha")!.witnesses).toHaveLength(1);
@@ -361,7 +409,7 @@ test("exploration reserves configured slots only for viable unseen sources", asy
   const invalid = article(fixture.candidates[2]!, fixture, planning);
   invalid.candidate.word_count = 0;
   expect(() => curateArticles({
-    articles: [invalid], planning, observed_at: fixture.observed_at, opportunity: noOpportunity,
+    articles: [invalid], planning, observed_at: fixture.observed_at, opportunity: noOpportunity, reliability_floor: fixture.reliability_floor,
   })).toThrow("viability");
 });
 
@@ -378,14 +426,15 @@ test("carrier evidence never invents vectors, mastheads, occurrence labels, or v
     expect(compared.semantic_similarity).toBeNull();
   }
   const a = article(fixture.candidates[0]!, fixture, planning);
+  const controls = { enabled: planning.config.curate.source_reliability_penalty_enabled, reliability_floor: fixture.reliability_floor };
   let b = article({ ...fixture.candidates[2]!, cluster: "shared-occurrence" }, fixture, planning);
   b = { ...b, evidence: { ...b.evidence, publisher: null } };
   expect(compareStory(a, b).matches).toBeNull();
-  expect(groupCarriers([a, b]).representatives).toHaveLength(2);
+  expect(groupCarriers([a, b], controls).representatives).toHaveLength(2);
   b = { ...b, evidence: { ...b.evidence, publisher: { value: "One News", origin: "recorded" } } };
-  expect(groupCarriers([a, b]).representatives).toHaveLength(2);
+  expect(groupCarriers([a, b], controls).representatives).toHaveLength(2);
   b = { ...b, evidence: { ...b.evidence, publisher: { value: "Two News", origin: "recorded" } } };
-  const grouped = groupCarriers([a, b]);
+  const grouped = groupCarriers([a, b], controls);
   expect(grouped.groups[0]!.outlets).toEqual(["One News", "Two News"]);
   expect(grouped.suppressed[0]!.representative.candidate.candidate_id).toBe(a.candidate.candidate_id);
   expect(grouped.suppressed[0]!.reason).toBe("REPLACED_BY_CARRIER");
@@ -401,7 +450,9 @@ test("all-pairs figure veto prevents A-B-C chaining despite a shared recorded cl
   expect(compareStory(a!, b!).matches).toBe(true);
   expect(compareStory(b!, c!).matches).toBe(true);
   expect(compareStory(a!, c!).matches).toBe(false);
-  const result = groupCarriers([a!, b!, c!]);
+  const result = groupCarriers([a!, b!, c!], {
+    enabled: planning.config.curate.source_reliability_penalty_enabled, reliability_floor: fixture.reliability_floor,
+  });
   expect(result.groups.map(group => group.members.length).sort()).toEqual([1, 2]);
   for (const group of result.groups) {
     for (const left of group.members) for (const right of group.members) {
@@ -424,7 +475,7 @@ test("unknown timing stays unknown; first-seen keeps its own basis and timestamp
         recency_bonus: policy.triage.recency_weight * 0.5 ** (Math.max(0, ageHours) / policy.triage.recency_half_life_hours),
       } : { timing_at: null, timing_source: timing, age_hours: null, recency_bonus: 0 },
     };
-    const result = curateArticles({ articles: [changed], planning, observed_at: fixture.observed_at, opportunity: noOpportunity });
+    const result = curateArticles({ articles: [changed], planning, observed_at: fixture.observed_at, opportunity: noOpportunity, reliability_floor: fixture.reliability_floor });
     expect(result.assessments[0]!.timing_basis).toBe(timing === "first_seen" ? "first_seen" : "unavailable");
     expect(result.assessments[0]!.timing_at).toBe(timing === "first_seen" ? firstSeenAt : null);
     expect(result.quality[0]!.article.timing.timing_source).toBe(timing);
@@ -434,7 +485,7 @@ test("unknown timing stays unknown; first-seen keeps its own basis and timestamp
 test("admitted future timing preserves its signed observation and floors only the recency age", async () => {
   const { fixture, planning } = await inputs();
   const future = article({ ...fixture.candidates[0]!, published_at: "2026-10-21T13:00:00Z" }, fixture, planning);
-  const result = curateArticles({ articles: [future], planning, observed_at: fixture.observed_at, opportunity: noOpportunity });
+  const result = curateArticles({ articles: [future], planning, observed_at: fixture.observed_at, opportunity: noOpportunity, reliability_floor: fixture.reliability_floor });
   expect(result.quality[0]!.article.timing.age_hours).toBe(-1);
   expect(result.quality[0]!.components.recency).toBe(1);
   expect(result.assessments[0]!.age_hours).toBe(-1);
@@ -450,13 +501,61 @@ test("operational history, length, byline and kind never become model verdicts o
     evidence: { ...original.evidence, operational: { success_fraction: 1, attempted: 100, window_days: 30 } },
     candidate: { ...original.candidate, word_count: 600, author: "Recorded Writer" },
   };
-  const a = curateArticles({ articles: [original], planning, observed_at: fixture.observed_at, opportunity: noOpportunity });
-  const b = curateArticles({ articles: [changed], planning, observed_at: fixture.observed_at, opportunity: noOpportunity });
+  const a = curateArticles({ articles: [original], planning, observed_at: fixture.observed_at, opportunity: noOpportunity, reliability_floor: fixture.reliability_floor });
+  const b = curateArticles({ articles: [changed], planning, observed_at: fixture.observed_at, opportunity: noOpportunity, reliability_floor: fixture.reliability_floor });
   expect(a.rows[0]!.ratings.base_article_score).toBe(3);
-  expect(b.rows[0]!.ratings).toEqual(a.rows[0]!.ratings);
+  expect(b.rows[0]!.ratings.base_article_score).toBe(3);
+  expect(a.rows[0]!.ratings.source_reliability?.value).toBe(1);
+  expect(b.rows[0]!.ratings.source_reliability?.value).toBe(0);
+  expect(a.rows[0]!.ratings.marginal_score).toBe(2);
+  expect(b.rows[0]!.ratings.marginal_score).toBe(3);
   expect(b.quality[0]!.components).toEqual({ recency: 1, authority: 2 });
   expect(b.assessments[0]!.informative_verdict).toBeNull();
   expect(b.assessments[0]!.suitability_verdict).toBeNull();
+  for (const recorded of fixture.reliability_cases) {
+    const configured = loadPlanningConfig({
+      ...planning.config, curate: {
+        ...planning.config.curate, article_limit: 1, source_authority_weight: 1,
+        source_reliability_penalty_enabled: recorded.enabled,
+      },
+    }, planning.taxonomy);
+    const articles = [fixture.candidates[0]!, fixture.candidates[2]!].map(spec => {
+      const offered = article({ ...spec, published_at: fixture.observed_at }, fixture, configured);
+      return { ...offered, evidence: { ...offered.evidence,
+        operational: spec.source === "alpha" ? recorded.alpha : recorded.gamma,
+      } };
+    });
+    const before = structuredClone(articles);
+    const result = curateArticles({
+      articles, planning: configured, observed_at: fixture.observed_at,
+      opportunity: noOpportunity, reliability_floor: recorded.floor,
+    });
+    expect(result.rows[0]!.source_id, recorded.name).toBe(recorded.winner);
+    expect(articles, recorded.name).toEqual(before);
+    for (const entry of result.trace[0]!.evaluated) {
+      const offered = articles.find(article => article.candidate.candidate_id === entry.candidate_id)!;
+      const history = offered.evidence.operational;
+      const penalty = offered.candidate.source_id === "alpha" ? recorded.alpha_penalty : recorded.gamma_penalty;
+      expect(entry.scores.base_article_score, recorded.name).toBe(2);
+      expect(entry.scores.marginal_score, recorded.name).toBe(2 - (penalty ?? 0));
+      expect(entry.scores.source_reliability, recorded.name).toEqual({
+        enabled: recorded.enabled, source_authority_score: 1, reliability_floor: recorded.floor,
+        history, production_factor: history === null ? null : Math.max(recorded.floor, history.success_fraction),
+        value: penalty,
+      });
+    }
+    expect(result.assessments.every(row => row.score_evidence !== null
+      && row.score_evidence.source_reliability !== null), recorded.name).toBe(true);
+    expect(result.rows[0]!.ratings).toEqual(result.choices[0]!.scores);
+    expect(result.quality.map(row => row.components), recorded.name).toEqual([
+      { recency: 1, authority: 1 }, { recency: 1, authority: 1 },
+    ]);
+  }
+  const sibling = article(fixture.candidates[1]!, fixture, planning);
+  expect(() => curateArticles({
+    articles: [original, { ...sibling, evidence: { ...sibling.evidence, operational: null } }],
+    planning, observed_at: fixture.observed_at, opportunity: noOpportunity, reliability_floor: fixture.reliability_floor,
+  })).toThrow("inconsistent per-source evidence");
 });
 
 test("stable ties, null article limit and source authority patches use the actual stage", async () => {
@@ -484,7 +583,7 @@ test("run freshness overrides remain separate from the unchanged harvested polic
     ...original,
     policy: resolvePolicy(planning, original.candidate.vertical, { freshness_hours: 6 }),
   };
-  const result = curateArticles({ articles: [changed], planning, observed_at: fixture.observed_at, opportunity: noOpportunity });
+  const result = curateArticles({ articles: [changed], planning, observed_at: fixture.observed_at, opportunity: noOpportunity, reliability_floor: fixture.reliability_floor });
   expect(result.selected[0]!.candidate.policy.max_age_hours).toBe(72);
   expect(result.rows[0]!.policy.max_age_hours).toBe(6);
 });
@@ -516,7 +615,7 @@ test("real screening results compose into exact curation without losing harveste
         ...admitted,
         evidence: originals.find(original => original.candidate.candidate_id === admitted.candidate.candidate_id)!.evidence,
       })),
-      planning, opportunity: noOpportunity, observed_at: fixture.observed_at,
+      planning, opportunity: noOpportunity, observed_at: fixture.observed_at, reliability_floor: fixture.reliability_floor,
     });
     expect(names(result)).toEqual(fixture.expected.baseline);
     expect(result.rows.map(row => row.editorial_rank)).toEqual([1, 2]);
@@ -555,7 +654,7 @@ test("real screening and curation retain independent stage dates and policies in
       expect(screened.admitted, scenario.name).toHaveLength(1);
       const result = curateArticles({
         articles: screened.admitted.map(admitted => ({ ...admitted, evidence: original.evidence })),
-        planning, opportunity: noOpportunity, observed_at: scenario.observedAt,
+        planning, opportunity: noOpportunity, observed_at: scenario.observedAt, reliability_floor: fixture.reliability_floor,
       });
       const content = result.selected[0]!.candidate;
       const selection = result.rows[0]!;
