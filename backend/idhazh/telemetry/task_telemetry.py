@@ -38,6 +38,7 @@ def record(
     attempt: int | None = None,
     started_at: datetime | None = None,
     clock: Callable[[], datetime] = utc_now,
+    ask_placement: bool = True,
 ) -> Iterator[list[Path]]:
     """Yield exact files for a generic task, including its clock on work failure."""
     if (pipeline_name is None) != (task_name is None):
@@ -62,6 +63,7 @@ def record(
             task_name=task_name,
             shard=shard,
             attempt=attempt,
+            ask_placement=ask_placement,
         )
         written.extend(paths)
     except OSError as error:

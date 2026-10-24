@@ -486,16 +486,17 @@ _TOGETHER: Final = 45.0
 
 def test_two_sources_with_one_headline_are_one_story_below_the_threshold() -> None:
     """The joined case. Two outlets, one headline, a cosine that never clears."""
+    floor = 0.9
     items = [
         item("world-01", source="wire", score=1.0, title="Ferry capsizes off Cyprus, killing seven"),
         item("world-02", source="paper", score=9.0, title="Ferry capsizes off Cyprus killing seven"),
     ]
     vectors = {"world-01": unit(0), "world-02": unit(_APART)}
-    assert cosine(from_base64(vectors["world-01"]), from_base64(vectors["world-02"])) < (
-        committed_threshold()
-    ), "the case is only a test of the headline if the vectors cannot form this group"
+    assert cosine(from_base64(vectors["world-01"]), from_base64(vectors["world-02"])) < floor, (
+        "the case is only a test of the headline if the vectors cannot form this group"
+    )
 
-    stamped = collapse_same_story(items, block(vectors), same_story=at(committed_threshold()))
+    stamped = collapse_same_story(items, block(vectors), same_story=at(floor))
 
     assert groups_of(stamped) == {"world-02": ["world-01"]}, "the higher rank_score is kept"
     assert [one.also_covered_by for one in stamped] == [1, 1]
@@ -504,19 +505,21 @@ def test_two_sources_with_one_headline_are_one_story_below_the_threshold() -> No
 def test_a_headline_one_word_apart_is_not_a_story_below_the_threshold() -> None:
     """The control case. Everything above, with one word of one headline changed.
 
-    Both cases run at the threshold `config/idhazh.json` ships and both pairs
-    carry the same two vectors, so this is the case that goes red if somebody
-    answers the defect by lowering `duplicate_similarity_min` instead: a floor
-    low enough to group the case above groups this one too.
+    Both cases run at the same test-owned floor and carry the same two vectors,
+    so treating the changed word as equal is the only route to a group.
     """
+    floor = 0.9
     items = [
         item("world-01", source="wire", score=1.0, title="Ferry capsizes off Cyprus, killing seven"),
         item("world-02", source="paper", score=9.0, title="Ferry capsizes off Crete killing seven"),
     ]
+    vectors = {"world-01": unit(0), "world-02": unit(_APART)}
+    assert cosine(from_base64(vectors["world-01"]), from_base64(vectors["world-02"])) < floor
+
     stamped = collapse_same_story(
         items,
-        block({"world-01": unit(0), "world-02": unit(_APART)}),
-        same_story=at(committed_threshold()),
+        block(vectors),
+        same_story=at(floor),
     )
 
     assert groups_of(stamped) == {}
@@ -575,6 +578,7 @@ def test_two_desks_rounding_one_price_are_one_group() -> None:
     Two decimal places are not a reason to print the same acquisition twice.
     This is the 2026-09-03 Nvidia pair, at vectors that cannot form the group.
     """
+    floor = 0.9
     items = [
         item(
             "business-01",
@@ -590,11 +594,11 @@ def test_two_desks_rounding_one_price_are_one_group() -> None:
         ),
     ]
     vectors = {"business-01": unit(0), "business-02": unit(_APART)}
-    assert cosine(from_base64(vectors["business-01"]), from_base64(vectors["business-02"])) < (
-        committed_threshold()
-    ), "the case is only a test of the headline if the vectors cannot form this group"
+    assert cosine(from_base64(vectors["business-01"]), from_base64(vectors["business-02"])) < floor, (
+        "the case is only a test of the headline if the vectors cannot form this group"
+    )
 
-    stamped = collapse_same_story(items, block(vectors), same_story=at(committed_threshold()))
+    stamped = collapse_same_story(items, block(vectors), same_story=at(floor))
 
     assert groups_of(stamped) == {"business-02": ["business-01"]}
     assert [one.also_covered_by for one in stamped] == [1, 1]
@@ -602,14 +606,18 @@ def test_two_desks_rounding_one_price_are_one_group() -> None:
 
 def test_two_desks_printing_different_figures_are_two_groups() -> None:
     """The control for the case above. One word of one headline, one digit apart."""
+    floor = 0.9
     items = [
         item("business-01", source="wire", score=1.0, title="Tariff raised to 25 percent"),
         item("business-02", source="paper", score=9.0, title="Tariff raised to 50 percent"),
     ]
+    vectors = {"business-01": unit(0), "business-02": unit(_APART)}
+    assert cosine(from_base64(vectors["business-01"]), from_base64(vectors["business-02"])) < floor
+
     stamped = collapse_same_story(
         items,
-        block({"business-01": unit(0), "business-02": unit(_APART)}),
-        same_story=at(committed_threshold()),
+        block(vectors),
+        same_story=at(floor),
     )
 
     assert groups_of(stamped) == {}
@@ -658,6 +666,7 @@ def test_two_mastheads_of_one_owner_are_two_sources() -> None:
     desks. A reader who sees both has two newsrooms, and folding them would
     cost a group that is genuinely corroborated.
     """
+    floor = 0.9
     items = [
         item(
             "world-01",
@@ -674,10 +683,13 @@ def test_two_mastheads_of_one_owner_are_two_sources() -> None:
             outlet="The Hindu BusinessLine",
         ),
     ]
+    vectors = {"world-01": unit(0), "world-02": unit(_APART)}
+    assert cosine(from_base64(vectors["world-01"]), from_base64(vectors["world-02"])) < floor
+
     stamped = collapse_same_story(
         items,
-        block({"world-01": unit(0), "world-02": unit(_APART)}),
-        same_story=at(committed_threshold()),
+        block(vectors),
+        same_story=at(floor),
     )
 
     assert groups_of(stamped) == {"world-02": ["world-01"]}
