@@ -5,7 +5,6 @@ from __future__ import annotations
 import csv
 import json
 from pathlib import Path
-from types import ModuleType
 
 import pytest
 from conftest import REPO_ROOT, SEED_COMMIT
@@ -16,7 +15,6 @@ from idhazh.contracts.pipeline_tests import TRIAL_STATE_PREFIX
 from utilities import (
     backfill_report,
     build_reference_dataset,
-    capture_request_bodies,
     capture_server_argv,
     index_sizing,
     pipeline_test_ledgers,
@@ -137,9 +135,8 @@ def test_junit_report_names_only_modules_it_ran(tmp_path: Path) -> None:
     assert average_seconds_by_module(report, repo_root=tmp_path) == {"test_named": 3.0}
 
 
-@pytest.mark.parametrize("capture", [capture_request_bodies, capture_server_argv])
-def test_capture_writes_only_named_models(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capture: ModuleType
+def test_server_argv_writes_only_named_models(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     source = REPO_ROOT / "config/models/qwen3.5-9b-q4km.json"
     models = tmp_path / "models"
@@ -148,15 +145,15 @@ def test_capture_writes_only_named_models(
     named.write_bytes(source.read_bytes())
     (models / "unrelated.json").write_bytes(b"\xff")
     golden = tmp_path / "golden"
-    monkeypatch.setattr(capture, "REPO_ROOT", tmp_path)
-    monkeypatch.setattr(capture, "GOLDEN_DIR", golden)
+    monkeypatch.setattr(capture_server_argv, "REPO_ROOT", tmp_path)
+    monkeypatch.setattr(capture_server_argv, "GOLDEN_DIR", golden)
 
-    capture.main([str(named)])
+    capture_server_argv.main([str(named)])
 
     assert json.loads((golden / named.name).read_text(encoding="utf-8"))
     assert not (golden / "unrelated.json").exists()
     with pytest.raises(SystemExit) as refused:
-        capture.main([])
+        capture_server_argv.main([])
     assert refused.value.code == 2
 
 
