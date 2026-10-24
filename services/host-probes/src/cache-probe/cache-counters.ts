@@ -12,30 +12,37 @@ import { validateCounterTarget } from "./owned-target";
 
 export type CounterSession = {
   initial: CacheCounters | null;
+  settled: Promise<CacheCounters>;
   close: (cancelled?: boolean) => Promise<CacheCounters>;
 };
+export function refuseCacheCounters(config: CacheProbeConfig, target: OwnedProcess, reason: CacheReason): CacheCounters {
+  return CacheCountersSchema.parse({
+    version: CACHE_API_VERSION, kind: "last_level_cache_counters",
+    status: reason === "configured_off" ? "disabled" : "unavailable",
+    reason, measurement_obtained: false, target, host: null, interval: null,
+    completion: null, scope: "existing_pid_threads_user_space_without_descendants",
+    scaled: false, enabled_time_precision: "derived_from_running_percent_rounded_to_0.01_percent",
+    events: config.counters.events.map(event => unavailableCounter(event, reason)),
+  });
+}
+export function stoppedCounterSession(result: CacheCounters): CounterSession {
+  return { initial: result, settled: Promise.resolve(result), close: async () => result };
+}
 export async function startCacheCounters(
   config: CacheProbeConfig, rawTarget: OwnedProcess, maxProcBytes: number,
   context: ProbeContext = {}, signal?: AbortSignal,
 ): Promise<CounterSession> {
   const target = OwnedProcessSchema.parse(rawTarget);
-  const base: CacheCounters = {
-    version: CACHE_API_VERSION, kind: "last_level_cache_counters", status: "disabled",
-    reason: "configured_off", measurement_obtained: false, target, host: null, interval: null,
-    completion: null, scope: "existing_pid_threads_user_space_without_descendants",
-    scaled: false, enabled_time_precision: "derived_from_running_percent_rounded_to_0.01_percent",
-    events: config.counters.events.map(event => unavailableCounter(event, "configured_off")),
-  };
+  const base = refuseCacheCounters(config, target, "configured_off");
   const unavailable = (reason: CacheReason): CacheCounters => CacheCountersSchema.parse({
     ...base, status: reason === "configured_off" ? "disabled" : "unavailable", reason,
     measurement_obtained: false, events: config.counters.events.map(event => unavailableCounter(event, reason)),
   });
-  const stopped = (result: CacheCounters): CounterSession => ({ initial: result, close: async () => result });
-  if (!config.counters.enabled) return stopped(unavailable("configured_off"));
-  if ((context.platform ?? process.platform) !== "linux") return stopped(unavailable("unsupported_platform"));
-  if (signal?.aborted) return stopped(unavailable("cancelled"));
+  if (!config.counters.enabled) return stoppedCounterSession(unavailable("configured_off"));
+  if ((context.platform ?? process.platform) !== "linux") return stoppedCounterSession(unavailable("unsupported_platform"));
+  if (signal?.aborted) return stoppedCounterSession(unavailable("cancelled"));
   const refusal = validateCounterTarget(target, maxProcBytes, context);
-  if (refusal) return stopped(unavailable(refusal));
+  if (refusal) return stoppedCounterSession(unavailable(refusal));
   base.host = { platform: "linux", arch: arch(), release: release() };
   const tool = startBoundedTool("perf", [
     "stat", "--no-big-num", "--no-scale", "--no-inherit", "--no-metric-only",
@@ -56,17 +63,20 @@ export async function startCacheCounters(
   if (!await tool.control("enable", config.lifecycle_timeout_ms)) {
     if (tool.running) tool.cancel("timeout");
     const output = await exited;
-    return stopped(unavailable(output.reason ?? classifyPerfFailure(output.stderr)));
+    return stoppedCounterSession(unavailable(output.reason ?? classifyPerfFailure(output.stderr)));
   }
   const afterStart = validateCounterTarget(target, maxProcBytes, context);
   if (afterStart) {
     tool.cancel(afterStart);
     await exited;
-    return stopped(unavailable(afterStart));
+    return stoppedCounterSession(unavailable(afterStart));
   }
   let closing: Promise<CacheCounters> | undefined;
-  return {
+  let settle: (value: CacheCounters | PromiseLike<CacheCounters>) => void;
+  const settled = new Promise<CacheCounters>(resolve => { settle = resolve; });
+  const session: CounterSession = {
     initial: null,
+    settled,
     close(cancelled = false) {
       closing ??= (async () => {
         let completion: CacheCounters["completion"] = "duration_limit";
@@ -96,7 +106,10 @@ export async function startCacheCounters(
           });
         } catch { return unavailable("invalid_output"); }
       })();
+      settle(closing);
       return closing;
     },
   };
+  void exited.then(() => { session.close(signal?.aborted); });
+  return session;
 }

@@ -9,16 +9,20 @@ import type { CacheLatency, CacheReason } from "./cache-schema";
 import { startBoundedTool } from "./bounded-tool";
 import { parseMultichaseOutput } from "./latency-output";
 
-export async function measureWorkingSetLatency(
-  config: CacheProbeConfig, maxProcBytes: number, context: ProbeContext = {}, signal?: AbortSignal,
-): Promise<CacheLatency> {
-  const result: CacheLatency = {
-    version: CACHE_API_VERSION, kind: "cache_working_set_latency", status: "disabled", reason: "configured_off",
+export function refuseCacheLatency(reason: CacheReason): CacheLatency {
+  return CacheLatencySchema.parse({
+    version: CACHE_API_VERSION, kind: "cache_working_set_latency",
+    status: reason === "configured_off" ? "disabled" : "unavailable", reason,
     measurement_obtained: false, host: null, interval: null, tool: "multichase",
     method: "single_dependent_random_pointer_chain", prefault: "chain_construction",
     warmup_samples_discarded: 1, sample_period_ms: 500, statistic: "mean_of_tool_samples",
     interpretation: "working_set_curve_not_direct_l3_hit_latency", points: [],
-  };
+  });
+}
+export async function measureWorkingSetLatency(
+  config: CacheProbeConfig, maxProcBytes: number, context: ProbeContext = {}, signal?: AbortSignal,
+): Promise<CacheLatency> {
+  const result = refuseCacheLatency("configured_off");
   const unavailable = (reason: CacheReason): CacheLatency => CacheLatencySchema.parse({
     ...result, status: reason === "configured_off" ? "disabled" : "unavailable", reason,
     measurement_obtained: false, points: [],

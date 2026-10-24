@@ -20,6 +20,8 @@ import { CollectorInputSchema } from "../src/task-profile/profile-schema";
 import { startCacheCounters } from "../src/cache-probe/cache-counters";
 import { measureWorkingSetLatency } from "../src/cache-probe/working-set-latency";
 import { classifyPerfFailure, parsePerfCounters } from "../src/cache-probe/perf-output";
+import { CacheProbeController } from "../src/cache-probe/cache-controller";
+import { parseMultichaseOutput } from "../src/cache-probe/latency-output";
 
 const fixtureRoot = new URL("../../../tests/fixtures/", import.meta.url);
 const temporaryDirectories: string[] = [];
@@ -97,6 +99,9 @@ test("missing, malformed, reset and unchanged counters do not invent utilization
     "1;;LLC-loads:u;1;101.00", "9007199254740992;;LLC-loads:u;1;100.00"]) {
     expect(() => parsePerfCounters(text, ["LLC-loads:u"])).toThrow();
   }
+  expect(() => parseMultichaseOutput("", {
+    working_set_bytes: 4096, stride_bytes: 64, tlb_locality_bytes: 4096, samples: 2,
+  })).toThrow();
 });
 
 test("memory fields stay independently unavailable instead of becoming zero", () => {
@@ -259,6 +264,14 @@ test("missing and oversized proc files are explicit while valid siblings survive
   const context = { platform: "linux", procRoot: directory };
   const owned = { pid: 4242, start_ticks: "12345" };
   expect(readProcessIdentity(owned.pid, config.max_proc_bytes, context).value).toMatchObject(owned);
+  const cacheEnabled = {
+    ...config.cache_probe, counters: { ...config.cache_probe.counters, enabled: true },
+    latency: { ...config.cache_probe.latency, enabled: true },
+  };
+  expect((await (await startCacheCounters(cacheEnabled, { ...owned, start_ticks: "1" }, config.max_proc_bytes, context)).close()).reason)
+    .toBe("pid_reused");
+  expect((await (await startCacheCounters(cacheEnabled, owned, config.max_proc_bytes, context)).close()).reason)
+    .toBe("target_not_owned");
   expect(readProcessMemory(owned, config.max_proc_bytes, context).memory_kb.rss).toBe(600);
   expect(readProcessMemory({ ...owned, start_ticks: "1" }, config.max_proc_bytes, context).unavailable.major_faults).toBe("pid_reused");
   await Bun.write(join(directory, "4242", "status"), "VmRSS:\tbad kB\nVmHWM:\t900 kB\n");
@@ -293,14 +306,17 @@ test("missing and oversized proc files are explicit while valid siblings survive
   expect(counters.initial?.status).toBe("disabled");
   expect((await counters.close()).measurement_obtained).toBe(false);
   expect((await measureWorkingSetLatency(config.cache_probe, config.max_proc_bytes, context)).status).toBe("disabled");
-  const cacheEnabled = {
-    ...config.cache_probe, counters: { ...config.cache_probe.counters, enabled: true },
-    latency: { ...config.cache_probe.latency, enabled: true },
-  };
   expect((await (await startCacheCounters(cacheEnabled, target, config.max_proc_bytes, { platform: "unsupported" })).close()).reason)
     .toBe("unsupported_platform");
   expect((await measureWorkingSetLatency(cacheEnabled, config.max_proc_bytes, { platform: "unsupported" })).reason)
     .toBe("unsupported_platform");
+  const controller = new CacheProbeController(cacheEnabled, config.max_proc_bytes, { platform: "unsupported" });
+  const pending = controller.startCounters(target);
+  expect((await controller.measureLatency()).reason).toBe("concurrency_limit");
+  expect((await (await pending).settled).reason).toBe("unsupported_platform");
+  await controller.shutdown();
+  expect((await (await controller.startCounters(target)).close()).reason).toBe("cancelled");
+  expect((await controller.measureLatency()).reason).toBe("cancelled");
   const enabled = { ...config, task_profile: { ...config.task_profile, enabled: true } };
   await expect(startTaskProfile({ config: enabled, context, report: () => {} }, {
     pipeline_name: "error", task_name: "error", run_id: "error", request_id: randomUUID(), correlation_id: randomUUID(),

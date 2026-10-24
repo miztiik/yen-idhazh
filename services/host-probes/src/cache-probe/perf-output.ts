@@ -11,6 +11,7 @@ export function unavailableCounter(event: CacheEvent, reason: CacheReason): Cach
 }
 
 export function classifyPerfFailure(output: string): CacheReason {
+  if (/perf not found for kernel|you may need to install.*linux-tools/i.test(output)) return "tool_missing";
   if (/permission|access to performance monitoring|perf_event_paranoid|operation not permitted/i.test(output)) return "permission_denied";
   if (/not supported|no such device|cannot find pmu|event syntax error|unknown tracepoint/i.test(output)) return "event_unsupported";
   return "tool_failed";

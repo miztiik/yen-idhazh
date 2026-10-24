@@ -61,9 +61,10 @@ export async function verifyLiveCacheProfiling(
   }
   const counters = await capture.close();
   proof.counters = counters;
-  proof.counters_measurement = counters.status === "measured" ? "measured" : "pending_permitted_pmu_host";
+  const permittedRefusal = ["permission_denied", "event_unsupported", "not_counted"].includes(counters.reason ?? "");
+  proof.counters_measurement = counters.status === "measured" ? "measured" : permittedRefusal ? "pending_permitted_pmu_host" : "pending";
   await report(proof);
-  if (counters.status !== "measured" && !["permission_denied", "event_unsupported", "not_counted"].includes(counters.reason ?? "")) {
+  if (counters.status !== "measured" && !permittedRefusal) {
     proof.status = "failed";
     await report(proof);
     throw new Error(`Cache counter capability failed explicitly: ${counters.reason}`);
