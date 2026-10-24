@@ -16,7 +16,7 @@ from typing import Any
 
 import pytest
 from pydantic import BaseModel, ValidationError
-from support.models import a_sampling, a_server, committed_markers
+from support.models import a_server, committed_markers
 from support.paths import CONFIG_DIR, FIXTURES_DIR, REPO_ROOT, read_text
 from support.prompts import LABEL_REPLIES, SUMMARIZE_AND_PLAN_REPLIES, a_table, label_payload
 from support.server import RecordedEndpoint
@@ -1406,7 +1406,7 @@ def build_label_with_derived_budget(article: Article) -> dict[str, Any]:
         a_table(article),
         model_id="m",
         server=a_server(),
-        sampling=a_sampling(),
+        sampling={},
         markers=committed_markers(),
     )
 

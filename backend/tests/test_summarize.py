@@ -345,7 +345,7 @@ def three_bodies(sampling: dict[str, Any], *, only: str | None = None) -> Any:
 
 
 def test_the_chat_route_defaults_to_8192_output_tokens_on_either_envelope() -> None:
-    sampling = a_sampling()
+    sampling: dict[str, Any] = {}
     quiet = request_payload(
         model_id="m",
         system="s",
@@ -375,7 +375,7 @@ def test_rendered_routes_default_to_8192_tokens_without_a_caller_budget() -> Non
         user="u",
         output_schema=output_schema(),
         server=a_server(),
-        sampling=a_sampling(),
+        sampling={},
         markers=built_envelope(),
     )
     grammar = grammar_completion_payload(
@@ -384,7 +384,7 @@ def test_rendered_routes_default_to_8192_tokens_without_a_caller_budget() -> Non
         user="u",
         grammar='root ::= "yes"',
         server=a_server(),
-        sampling=a_sampling(),
+        sampling={},
         markers=built_envelope(),
         first_token_alternatives=3,
     )
@@ -1210,7 +1210,7 @@ def test_runtime_sweep_flags_are_emitted_only_when_configured() -> None:
         binary=Path("bin/llama-server"),
         weights=Path("models/w.gguf"),
         model=ModelRef(id="m", repo="r", file="w.gguf", quantisation="Q4_K_M"),
-        server=a_server(**flags),
+        server=flags,
         port=8181,
     )
 
@@ -1818,7 +1818,7 @@ class TestTwoSpansOnOneCall:
             user="U",
             output_schema=output_schema(),
             server=a_server(),
-            sampling=a_sampling(),
+            sampling={},
             markers=self.markers(),
             max_answer_tokens=ANSWER_BUDGET,
         )
