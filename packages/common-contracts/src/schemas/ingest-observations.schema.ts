@@ -10,6 +10,8 @@ export const DocumentObservationRecordSchema = z.strictObject({
   version: z.literal(DOCUMENT_OBSERVATION_VERSION).default(DOCUMENT_OBSERVATION_VERSION),
   event_id: z.uuid({ version: "v5" }),
   caused_by_event_id: z.uuid({ version: "v5" }).nullable(),
+  corrects_event_id: z.uuid({ version: "v5" }).nullable(),
+  correction_revision: PositiveCountSchema.nullable(),
   observed_run_id: RunIdSchema.nullable(),
   observed_attempt: PositiveCountSchema.nullable(),
   correlation_id: NonEmptySchema.nullable(),
@@ -17,6 +19,7 @@ export const DocumentObservationRecordSchema = z.strictObject({
   publisher_id: SlugSchema.nullable(),
   article_id: Sha256Schema.nullable(),
   candidate_id: Sha256Schema.nullable(),
+  document_kind: z.enum(["feed", "article"]),
   operation: z.enum(["fetch", "parse", "attempt"]),
   outcome: z.enum(["success", "empty", "failed", "not_attempted", "unavailable"]),
   occurred_at: TimestampSchema,
@@ -37,11 +40,25 @@ export const DocumentObservationRecordSchema = z.strictObject({
   if (value.event_id === value.caused_by_event_id) {
     ctx.addIssue({ code: "custom", message: "an observation cannot cause itself" });
   }
+  if (value.event_id === value.corrects_event_id) {
+    ctx.addIssue({ code: "custom", message: "an observation cannot correct itself" });
+  }
+  if ((value.corrects_event_id === null) !== (value.correction_revision === null)) {
+    ctx.addIssue({ code: "custom", message: "a correction records both its target event and positive revision" });
+  }
   if (value.observed_attempt !== null && value.observed_run_id === null) {
     ctx.addIssue({ code: "custom", message: "an observed run attempt requires its run identity" });
   }
   if (value.publisher_id !== null && value.source_id === null) {
     ctx.addIssue({ code: "custom", message: "a publisher identity requires its source identity" });
+  }
+  if (value.candidate_id !== null && (
+    value.document_kind !== "article" || value.observed_run_id === null || value.source_id === null
+  )) {
+    ctx.addIssue({
+      code: "custom",
+      message: "an article opportunity requires its article kind, run and source identity",
+    });
   }
   if (value.outcome === "failed") {
     if (value.attribution === null) {
@@ -72,7 +89,8 @@ export const DocumentObservationRecordSchema = z.strictObject({
 }).meta({
   version: DOCUMENT_OBSERVATION_VERSION,
   changelog: [
-    { version: DOCUMENT_OBSERVATION_VERSION, change: "Declare per-operation observations with scoped request accounting." },
+    { version: DOCUMENT_OBSERVATION_VERSION, change: "Retain document scope and correction lineage." },
+    { version: "2026-10-24", change: "Declare per-operation observations with scoped request accounting." },
   ],
 });
 export type DocumentObservationRecord = z.infer<typeof DocumentObservationRecordSchema>;

@@ -11,6 +11,7 @@ from idhazh.contracts.feed_ingest_diagnostics import ExtractionFailure, FetchFai
 HttpStatus = Annotated[StrictInt, Field(ge=100, le=599)]
 RequestPhase = Literal["validation", "robots", "target"]
 RequestCoverage = Literal["complete", "partial", "unknown"]
+DocumentKind = Literal["feed", "article"]
 OperationOutcome = Literal["success", "empty", "failed", "not_attempted", "unavailable"]
 Attribution = Literal["source", "pipeline", "unresolved"]
 FailureCode = FetchFailure | ExtractionFailure | Literal["malformed-feed"]
@@ -19,9 +20,17 @@ FailureCode = FetchFailure | ExtractionFailure | Literal["malformed-feed"]
 class DocumentObservationRecord(Contract):
     """One immutable operation fact, distinct from its event stream and summary."""
 
-    version: Literal["2026-10-24"] = "2026-10-24"
+    version: Literal["2026-10-24T23:08"] = "2026-10-24T23:08"
     __schema_stem__: ClassVar[str] = "feed-ingest-document-observation"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-10-24T23:08",
+            change="Retain document scope and correction lineage.",
+            why=(
+                "Feedback must distinguish feed work from article opportunities "
+                "and replace corrected events."
+            ),
+        ),
         ChangelogEntry(
             version="2026-10-24",
             change="Declare per-operation observations with scoped request accounting.",
@@ -34,6 +43,8 @@ class DocumentObservationRecord(Contract):
 
     event_id: UUID5
     caused_by_event_id: UUID5 | None
+    corrects_event_id: UUID5 | None
+    correction_revision: PositiveCount | None
     observed_run_id: RunId | None
     observed_attempt: PositiveCount | None
     correlation_id: NonEmpty | None
@@ -41,6 +52,7 @@ class DocumentObservationRecord(Contract):
     publisher_id: Slug | None
     article_id: Sha256 | None
     candidate_id: Sha256 | None
+    document_kind: DocumentKind
     operation: Literal["fetch", "parse", "attempt"]
     outcome: OperationOutcome
     occurred_at: Timestamp
@@ -58,10 +70,18 @@ class DocumentObservationRecord(Contract):
     def validate_observation(self) -> Self:
         if self.event_id == self.caused_by_event_id:
             raise ValueError("an observation cannot cause itself")
+        if self.event_id == self.corrects_event_id:
+            raise ValueError("an observation cannot correct itself")
+        if (self.corrects_event_id is None) != (self.correction_revision is None):
+            raise ValueError("a correction records both its target event and positive revision")
         if self.observed_attempt is not None and self.observed_run_id is None:
             raise ValueError("an observed run attempt requires its run identity")
         if self.publisher_id is not None and self.source_id is None:
             raise ValueError("a publisher identity requires its source identity")
+        if self.candidate_id is not None and (
+            self.document_kind != "article" or self.observed_run_id is None or self.source_id is None
+        ):
+            raise ValueError("an article opportunity requires its article kind, run and source identity")
         if self.outcome == "failed":
             if self.attribution is None:
                 raise ValueError("a failed operation records its attribution status")

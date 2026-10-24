@@ -11,7 +11,9 @@ import {
   PLANNER_EXCLUSIONS_VERSION, EXTRACTION_QUALITY_VERSION, PreviousHarvestDiagnosticsSchema,
 } from "@idhazh/common-contracts";
 import type { LedgerCompletionEvidence } from "@idhazh/common-contracts";
-import { appendIdentityColumns, describeObjectSchema, digestRows, persistLedger } from "@idhazh/ledger-file-writer";
+import {
+  appendIdentityColumns, createUuidV5, describeObjectSchema, digestRows, persistLedger,
+} from "@idhazh/ledger-file-writer";
 import type { LedgerRowContract, PersistLedgerResult, StoredLedgerRow } from "@idhazh/ledger-file-writer";
 import { Int64, tableFromIPC, vectorFromArray } from "apache-arrow";
 import initializeParquet, { Table as WasmTable, WriterPropertiesBuilder, readMetadata, readParquet, writeParquet } from "parquet-wasm/esm";
@@ -146,7 +148,8 @@ test("native raw and daily reads preserve original writer identity instead of th
       "../../../tests/fixtures/contracts/feed-ingest-document-observation/refused-fetch.json", import.meta.url,
     )).json());
     const attemptObservation = {
-      ...observation, operation: "attempt" as const, request_phase: "target" as const,
+      ...observation, event_id: createUuidV5(observation.event_id, "attempt:1"),
+      operation: "attempt" as const, request_phase: "target" as const,
       request_sequence: 0, retry: 0, request_coverage: "complete" as const, dispatched_request_count: 0,
     };
     expect(DocumentObservationRecordSchema.parse(attemptObservation).dispatched_request_count).toBe(0);
@@ -156,18 +159,52 @@ test("native raw and daily reads preserve original writer identity instead of th
     expect(() => DocumentObservationRecordSchema.parse({
       ...attemptObservation, request_coverage: "unknown", dispatched_request_count: 0,
     })).toThrow("unknown request coverage");
+    const feedObservation = { ...observation, document_kind: "feed" as const };
+    const partialFeedAttempt = DocumentObservationRecordSchema.parse({
+      ...attemptObservation, document_kind: "feed", request_phase: "robots", request_coverage: "partial",
+      dispatched_request_count: 1,
+    });
+    expect(partialFeedAttempt).toMatchObject({
+      document_kind: "feed", outcome: "failed", request_phase: "robots",
+      request_coverage: "partial", dispatched_request_count: 1,
+    });
+    expect(() => DocumentObservationRecordSchema.parse({
+      ...feedObservation, candidate_id: "a".repeat(64),
+    })).toThrow("article opportunity requires its article kind");
+    expect(() => DocumentObservationRecordSchema.parse({
+      ...observation, candidate_id: "a".repeat(64), observed_run_id: null,
+    })).toThrow("article opportunity requires its article kind");
+    const correctedObservation = DocumentObservationRecordSchema.parse({
+      ...observation, event_id: createUuidV5(observation.event_id, "correction:1"),
+      corrects_event_id: observation.event_id, correction_revision: 1,
+      occurred_at: "2026-10-21T12:01:00Z",
+    });
+    expect(correctedObservation).toMatchObject({
+      corrects_event_id: observation.event_id, correction_revision: 1,
+    });
+    expect(() => DocumentObservationRecordSchema.parse({
+      ...observation, corrects_event_id: observation.event_id, correction_revision: 1,
+    })).toThrow("cannot correct itself");
+    expect(() => DocumentObservationRecordSchema.parse({
+      ...correctedObservation, correction_revision: null,
+    })).toThrow("both its target event and positive revision");
     const observationWriter = writer(observation.observed_run_id!);
     const observationRawWritten = await writeRows(
       root, "document-observations", input.fixture.date, DocumentObservationRecordSchema,
-      [observation], observationWriter, DOCUMENT_OBSERVATION_VERSION,
+      [observation, correctedObservation], observationWriter, DOCUMENT_OBSERVATION_VERSION,
     );
     const observationRaw = await readWritten(
       root, "document-observations", input.fixture.date, DocumentObservationContract, observationRawWritten,
     );
     expect(observationRaw.tier).toBe("raw");
-    expect(observationRaw.rows[0]!.row).toMatchObject({
-      event_id: observation.event_id, occurred_at: observation.occurred_at,
-      request_coverage: null, dispatched_request_count: null,
+    expect(observationRaw.rows).toHaveLength(2);
+    expect(observationRaw.rows.map(held => held.row.event_id).sort()).toEqual(
+      [observation.event_id, correctedObservation.event_id].sort(),
+    );
+    const rawCorrection = observationRaw.rows.find(held => held.row.event_id === correctedObservation.event_id);
+    expect(rawCorrection?.row).toMatchObject({
+      occurred_at: "2026-10-21T12:01:00Z",
+      corrects_event_id: observation.event_id, correction_revision: 1,
     });
     const observationCompact = await persistLedger({
       ledger: "document-observations", registryEntry: registration("document-observations"),
@@ -192,7 +229,12 @@ test("native raw and daily reads preserve original writer identity instead of th
       indexes: { daily: observationIndexPath },
     });
     expect(observationDaily.tier).toBe("daily");
-    expect(observationDaily.rows.map(held => held.row)).toEqual([observation]);
+    expect(observationDaily.rows.map(held => held.row)).toEqual(observationRaw.rows.map(held => held.row));
+    const compactCorrection = observationDaily.rows.find(held => held.row.event_id === correctedObservation.event_id);
+    expect(compactCorrection?.row).toMatchObject({
+      occurred_at: "2026-10-21T12:01:00Z",
+      corrects_event_id: observation.event_id, correction_revision: 1,
+    });
     expect(observationDaily.rows[0]!.identity.unit_id).toBe(observationRaw.rows[0]!.identity.unit_id);
   } finally { await rm(root, { recursive: true, force: true }); }
 });
