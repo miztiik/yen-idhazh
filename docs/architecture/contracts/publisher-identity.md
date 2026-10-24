@@ -143,9 +143,9 @@ There is no new semantic deduplication, qualitative assessment or story
 classification here. Factual verification and semantic claims of novelty or new
 developments are excluded; exact URL newness within a bounded seen window is
 allowed and does not establish story novelty. Existing story handling is
-unchanged. Day-aware publisher
-preferences remain soft choices among comparably strong alternatives, not hard
-caps or a reason to block selection when history is missing.
+unchanged. Day-aware publisher preferences use recorded publisher exposure and
+existing numeric priority; no article-quality comparison is made. They remain
+soft, not hard caps or a reason to block selection when history is missing.
 The existing [source-reliability penalty](../sources/feed-curation.md#inputs-and-independent-evidence)
 measures operational delivery, not article quality.
 
