@@ -1,6 +1,6 @@
 # What the pipeline records about the machine it ran on
 
-**Last Updated**: 2026-10-21
+**Last Updated**: 2026-10-23
 
 Every host-fingerprint field, what it means and which readings are optional.
 The hardware fingerprint is reusable by any pipeline. Callers name their
@@ -247,6 +247,63 @@ API data, not a persisted contract or a replacement for host-fingerprint rows.
 authored bounded memory/vmstat fixtures, real temporary-file interval changes,
 the HTTP request handler and the CLI. No test contacts the network. Windows
 fixture results do not certify live Linux collection.
+
+## Whole-task TypeScript samples
+
+A task wrapper measures actual work on a separate Bun worker thread, in
+`services/host-probes/src/task-profile/task-profiler.ts`.
+The thread takes an opening observation before
+work, polls until work settles, then takes a closing observation and stops.
+Synchronous JavaScript parsing cannot block its polling loop. Repeated closes
+return the same result and report it once. Task failures and cancellation still
+close the instrument. A cancelled caller does not detach unfinished work: the
+wrapper closes when that work settles. Unexpected collector or report failures
+are errors, not successful measurements.
+
+`config/host-probes.json` owns the independent task controls. Both
+`task_profile.enabled` and `task_profile.memory_enabled` default to false.
+Their declaring schema states their retirement conditions. Whole off starts no
+thread and reads no host or process file; memory off reads CPU only.
+`cpu_window_ms` defaults to 1000 milliseconds and `poll_interval_ms` to 100
+milliseconds. Neither ends the task measurement. The former sets the rolling
+CPU window; the latter requests the polling cadence. Actual intervals can be
+longer when collection or scheduling is slow.
+`max_retained_samples` defaults to 128 observations and must hold the window's
+polls plus two endpoints. Both raw CPU history and returned observations stay
+bounded. Whole-task counts, extrema and endpoint differences survive eviction.
+`lifecycle_timeout_ms` defaults to 10000 milliseconds for starting or stopping
+the collector, not for limiting task duration.
+
+CPU remains host-wide, including other work on the machine. Whole-task shares
+use opening and closing counters. Each rolling sample reports its actual
+interval and whether it spans the configured window; a short task can have no
+full window, or no elapsed CPU ticks. Busy extrema mean user plus system
+percentages across measured rolling windows. No wait is added to a task to
+manufacture a reading. Observation instants use the real UTC clock and elapsed
+time uses a monotonic clock, independent of a caller's frozen planning clock.
+
+With memory enabled, machine total, free and available RAM use the existing
+probe. The result also contains sampled minimum available RAM and the endpoint
+difference in machine major page faults. Process RAM names the actual calling
+PID. An optional additional server requires an operator-supplied PID and its
+kernel start ticks; there is no process search. Start ticks are checked before
+and after each status read. Exit, PID reuse and missing fields have explicit
+reasons and null values. RSS is resident RAM; anonymous RSS is resident
+anonymous memory. `hwm_lifetime` is Linux's process-lifetime high-water mark,
+not a task peak. `sampled_rss_max_kb` is only the largest observed RSS, not an
+exact peak. Process readings include all its threads, collector overhead and
+other work in that process; they are not task-exclusive allocations.
+
+Profiles are locally validated transient metadata, separate from hardware
+rows and request journals. They retain pipeline, task, run, correlation and
+request identity, but no article text or paths. The
+[operator API](../architecture/sources/feed-operator-api.md#optional-task-profiles)
+defines the actual fetch/parse boundaries. The
+[isolated checks](../how-to/run-feed-ingest-plan-test.md#resource-proof)
+separate recorded CPU-bound work, live document work, the real RAM HTTP
+endpoint and the existing optional copy benchmark. Copying measures median
+read-plus-write throughput with two cache-sized buffers; it does not measure
+L3 hit or miss counts and runs outside fetch/parse CPU windows.
 
 ## Controls and precedence
 

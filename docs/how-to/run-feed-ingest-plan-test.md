@@ -252,6 +252,42 @@ the independent Bun selector. Subprocesses have fixed timeouts and missing Bun
 fails rather than skips. This case is not part of the Python-free isolated
 workflow. [Gate commands](run-the-gates.md) own its installation and test cost.
 
+## Resource proof
+
+The isolated workflow explicitly enables the default-off whole-task CPU and
+RAM controls only for its separate fetch/parse listener. Each document's
+`stage-api-proof.json` entry contains validated profiles for exactly its two
+actual work calls. Their request, run and correlation identities must match.
+Restart replay and conflicts must leave the profile count at two as well as
+preserving the original response bytes and journal digest. No raw article
+body, parser response or journal enters these profiles.
+
+A fast live parse may have only a partial CPU window or no elapsed CPU ticks.
+That is recorded, not padded with a wait or reported as a full window.
+The existing offline API case also parses a bounded generated document from
+the named recording, while an independent worker polls through synchronous
+work. Its `recorded_parse_profile` log is recorded-work evidence, not a live
+network measurement. The workflow runs these existing named cases on Linux;
+Windows results do not certify Linux process RAM.
+
+After all document profiles close, the separate resource step starts the real
+RAM sample HTTP listener and calls its sample route over loopback. It requires
+actual CPU and machine total, free and available RAM readings. It then calls
+the existing host collector with copy unselected and explicitly selected for
+`isolated-copy-proof`. The test records the real hardware context, L3 size if
+available, derived buffer size, repeat count and median read-plus-write rate.
+It allocates two buffers and measures memory-copy throughput, not L3 hit/miss
+counts. Copy work never overlaps fetch/parse CPU measurement.
+
+`resource-proof.json` contains only validated safe metadata in the existing
+temporary evidence root. Completion requires `resource_proof_complete: true`.
+Main CI also runs this same RAM HTTP/copy proof without fetching live feeds
+or publishing data, and retains the `typescript-resource-proof` artifact.
+Neither path writes another host ledger or changes shared defaults. See
+[measurement semantics and controls](../reference/host-metrics.md#whole-task-typescript-samples).
+The integrated live-feed and selected-article proof still needs the
+coordinator-owned manual dispatch after review.
+
 ## Inputs and isolated evidence
 
 The initial sparse checkout names configuration, relevant service and package
