@@ -261,11 +261,7 @@ def test_a_displayed_value_is_an_element_or_a_derived_value_and_never_both_or_ne
 
 
 def test_every_displayed_value_of_a_committed_plan_resolves() -> None:
-    """The oracle's first half, walked over the two committed plans that draw.
-
-    Zero values with neither, and every one of them reaching an element the
-    article's own table holds - which is what `trusted_data_ratio` reports.
-    """
+    """Each planned value reaches its element table and the trust ratio agrees."""
     for plan_stem, table_stem in (("passes", "wind"), ("units-convert", "tonnes-and-kilotonnes")):
         table = load_table(table_stem)
         values = resolve(load_plan(plan_stem), table)
@@ -273,6 +269,32 @@ def test_every_displayed_value_of_a_committed_plan_resolves() -> None:
         unresolved = [one for one in values if one.element_id is None and one.derived is None]
         assert unresolved == [], f"{plan_stem} draws a value that resolves to nothing"
         assert trusted_data_ratio(values, table) == 1.0
+
+
+def test_a_missing_element_reference_refuses_resolution() -> None:
+    payload = plan_payload("passes")
+    existing = payload["element_ids"][0]
+    missing = "quantity-999998-999999"
+
+    def replace_reference(values: list[str]) -> list[str]:
+        return [missing if value == existing else value for value in values]
+
+    payload["element_ids"] = replace_reference(payload["element_ids"])
+    payload["labels"] = replace_reference(payload["labels"])
+    payload["annotations"] = replace_reference(payload["annotations"])
+    payload["encodings"] = {
+        role: replace_reference(values) for role, values in payload["encodings"].items()
+    }
+    plan = VisualPlan.model_validate(payload)
+
+    resolution = resolve_displayed_values(
+        plan, load_table("wind"), visuals=committed_visuals()
+    )
+
+    assert resolution.refusal is not None
+    assert resolution.refusal.check is ResolverCheck.ELEMENT_EXISTS
+    assert missing in resolution.refusal.detail
+    assert resolution.values == []
 
 
 def test_a_mixed_but_commensurable_channel_is_drawable_and_each_converted_mark_carries_its_chain(
@@ -402,9 +424,15 @@ def test_a_histogram_resolves_to_bin_counts_and_the_bins_come_from_config() -> N
     """
     table = load_table("wind")
     plan = built_plan(VisualType.HISTOGRAM, bins=list(WIND_QUANTITIES))
-    assert validate_plan(plan, table, visuals=committed_visuals()) == []
-    values = resolve(plan, table)
-    assert len(values) == committed_visuals().histogram_bins
+    visuals_payload = committed_visuals().model_dump(mode="json")
+    visuals_payload["min_chart_points"] = 2
+    visuals_payload["histogram_bins"] = 2
+    visuals = VisualsConfig.model_validate(visuals_payload)
+    assert validate_plan(plan, table, visuals=visuals) == []
+    resolution = resolve_displayed_values(plan, table, visuals=visuals)
+    assert resolution.refusal is None
+    values = resolution.values
+    assert len(values) == 2
     assert all(one.derived is not None for one in values)
     counted = [Decimal(one.derived.value) for one in values if one.derived is not None]
     assert sum(counted) == Decimal(4), "every value falls in exactly one bin"

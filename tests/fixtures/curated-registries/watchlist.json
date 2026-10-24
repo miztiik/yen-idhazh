@@ -1,0 +1,57 @@
+{
+  "entities": [
+    {
+      "id": "zeta-lab",
+      "display_name": "Zeta \"lab\", research",
+      "kind": "organisation",
+      "aliases": ["Zeta Research", "Zeta Lab"],
+      "cik": "0000123456",
+      "status": "retired",
+      "retired_on": "2026-09-15",
+      "feeds": [
+        {
+          "id": "zeta-news",
+          "title": "Zeta newsroom",
+          "url": "https://example.test/zeta-news.xml",
+          "tier": 7,
+          "status": "draft",
+          "retired_on": null
+        },
+        {
+          "id": "alpha-news",
+          "title": "Alpha archive",
+          "url": "https://example.test/alpha-news.xml",
+          "tier": 3,
+          "status": "retired",
+          "retired_on": "2026-09-14"
+        }
+      ]
+    },
+    {
+      "id": "alpha-story",
+      "display_name": "Alpha running story",
+      "kind": "subject",
+      "aliases": ["storage prices", "battery costs"],
+      "cik": null,
+      "status": "draft",
+      "retired_on": null,
+      "feeds": [
+        {
+          "id": "story-news",
+          "title": "Story updates",
+          "url": "https://example.test/story.xml",
+          "tier": 9,
+          "status": "active",
+          "retired_on": null
+        }
+      ]
+    }
+  ],
+  "edgar": {
+    "enabled": true,
+    "contact_email": "operator@example.test",
+    "requests_per_second": 4,
+    "submissions_url_template": "https://example.test/submissions/{cik}.json",
+    "company_tickers_url": "https://example.test/tickers.json"
+  }
+}

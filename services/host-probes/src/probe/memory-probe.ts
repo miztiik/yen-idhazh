@@ -12,11 +12,16 @@ export function parseMemoryInfo(text: string): {
   value: MemoryKb;
   unavailable: Partial<Record<MemoryName, UnavailableReason>>;
 } {
-  const value: MemoryKb = { total: null, free: null, available: null };
-  const unavailable: Partial<Record<MemoryName, UnavailableReason>> = {};
+  return parseMemoryFields(text, MEMORY_FIELDS);
+}
+
+export function parseMemoryFields<Name extends string>(text: string, fields: Record<Name, string>) {
+  const value = {} as Record<Name, number | null>;
+  const unavailable: Partial<Record<Name, UnavailableReason>> = {};
   const lines = text.split(/\r?\n/);
-  for (const name of Object.keys(MEMORY_FIELDS) as MemoryName[]) {
-    const matches = lines.filter((line) => line.startsWith(`${MEMORY_FIELDS[name]}:`));
+  for (const name of Object.keys(fields) as Name[]) {
+    value[name] = null;
+    const matches = lines.filter((line) => line.startsWith(`${fields[name]}:`));
     const match = matches.length === 1 ? matches[0]?.match(/^\w+:\s+(\d+)\s+kB\s*$/) : null;
     const number = match?.[1] === undefined ? NaN : Number(match[1]);
     if (!Number.isSafeInteger(number) || number < 0) {

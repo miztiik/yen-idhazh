@@ -310,6 +310,13 @@ def stage_score(args: argparse.Namespace) -> None:
         _score(args, memory_profiling_enabled=memory)
 
 
+def resolve_encoder_thread_count(
+    requested: int, available_processors: int | None
+) -> int:
+    """Choose the requested count, detected processor count, or one."""
+    return requested or available_processors or 1
+
+
 def _score(args: argparse.Namespace, *, memory_profiling_enabled: bool) -> None:
     """Encode in batches, writing the reading after every one.
 
@@ -387,10 +394,12 @@ def _score(args: argparse.Namespace, *, memory_profiling_enabled: bool) -> None:
     #
     # Zero in the settings means take the machine's own count, so a bigger
     # runner is used without anybody editing a number.
-    asked = settings["encode"]["threads"] or os.cpu_count() or 1
+    requested = settings["encode"]["threads"]
+    processors_available = os.cpu_count()
+    asked = resolve_encoder_thread_count(requested, processors_available)
     torch.set_num_threads(int(asked))
     reading.threads_used = int(torch.get_num_threads())
-    reading.processors_available = os.cpu_count() or 1
+    reading.processors_available = processors_available or 1
     save()
     print(f"{chosen['slug']}: asked for {asked} threads, using "
           f"{reading.threads_used} of {reading.processors_available} "

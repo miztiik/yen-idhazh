@@ -179,6 +179,7 @@ def test_a_compact_index_writes_one_entry_a_line_and_reads_back_what_it_wrote() 
     entry_lines = [line for line in text.splitlines() if line.strip().startswith('{"')]
     assert len(entry_lines) == len(index.entries)
     assert CompactIndex.from_json(text).to_json() == text
+    assert CompactIndex.from_json(text) == index
 
 
 def test_a_daily_index_refuses_an_entry_that_covers_a_month_by_ledger_and_period() -> None:

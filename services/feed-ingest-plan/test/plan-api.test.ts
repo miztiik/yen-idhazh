@@ -28,6 +28,9 @@ import { parseDocument } from "../src/harvest-feeds/parse-document";
 import { redactProofResponse, requireExactReplay, requireReadableArticle, selectVerifiedArticle } from "../../../.github/scripts/feed-ingest-plan-http-proof";
 import { FeedHealthContract, PLANNER_OPERATION_VERSION } from "@idhazh/common-contracts";
 import { loadHarvestInputs } from "../src/harvest-feeds/load-harvest-inputs";
+import { loadConfig as loadProbeConfig } from "../../host-probes/src/config";
+import { TaskProfileSchema } from "../../host-probes/src/task-profile/profile-schema";
+import type { TaskProfile } from "../../host-probes/src/task-profile/profile-schema";
 
 test("health is explicit; disabled, malformed, oversized and unknown controls cannot fetch", async () => {
   const inputs = await loadPlanInputs(fileURLToPath(new URL("../../../", import.meta.url)));
@@ -87,6 +90,10 @@ test("health is explicit; disabled, malformed, oversized and unknown controls ca
     source({ id: "retired-in-feeds", status: "retired", retired_on: "2026-10-20" }),
   ]);
   try {
+    const profiles: TaskProfile[] = [];
+    const config = await loadProbeConfig();
+    config.task_profile.enabled = true;
+    authority.runtime.task_profiling = { config, report: profile => { profiles.push(profile); } };
     const retired = source({ id: "curated-retired", status: "retired", retired_on: "2026-10-20" });
     const rawSources = { feeds: authority.inputs.harvest.sources, retired: [retired] };
     const before = JSON.stringify(rawSources);
@@ -109,6 +116,7 @@ test("health is explicit; disabled, malformed, oversized and unknown controls ca
       expect((await result.json()).issues[0].field).toBe("source_id");
     }
     expect(authority.transport.requests).toHaveLength(0);
+    expect(profiles).toHaveLength(0);
     expect(JSON.stringify(rawSources)).toBe(before);
     expect(() => loadHarvestInputs({ ...rawInputs,
       sources: { ...rawSources, retired: [{ ...retired, retired_on: null }] } })).toThrow();
@@ -120,6 +128,9 @@ test("health is explicit; disabled, malformed, oversized and unknown controls ca
 test("actual API and awaited CLI compose the same recorded plan and disclose the same audit limit", async () => {
   const api = await recordedPlan();
   const cli = await recordedPlan();
+  const profiles: TaskProfile[] = [];
+  const probeConfig = await loadProbeConfig();
+  api.runtime.task_profiling = { config: probeConfig, report: profile => { profiles.push(TaskProfileSchema.parse(profile)); } };
   try {
     const app = createPlanApp(api.inputs, api.runtime);
     const key = randomUUID();
@@ -230,6 +241,9 @@ test("actual API and awaited CLI compose the same recorded plan and disclose the
       expect(selected.sources).toEqual(summary.source_records!);
       expect(summary.planning_completion!.completion_evidence).toHaveLength(5);
     }
+    expect(profiles).toHaveLength(0);
+    probeConfig.task_profile = { ...probeConfig.task_profile, enabled: true, memory_enabled: true,
+      cpu_window_ms: 20, poll_interval_ms: 5 };
     const post = (route: string, value: unknown, app = restarted) => app.request(`/api/2026-10-20/${route}`, {
       method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(value),
     });
@@ -241,6 +255,10 @@ test("actual API and awaited CLI compose the same recorded plan and disclose the
     const fetchedResponse = await post("fetch", fetchRequest);
     expect(fetchedResponse.status).toBe(200);
     const fetched = await fetchedResponse.json();
+    expect(profiles).toHaveLength(1);
+    expect(profiles[0]?.identity).toMatchObject({
+      task_name: "fetch", request_id: fetchRequest.request_id, correlation_id, run_id: fetched.observation.run_id,
+    });
     expect(fetched).not.toHaveProperty("body");
     expect(fetched.observation.operation).toBe("fetch");
     expect(fetched.article_id).toBe(fetched.observation.article_id);
@@ -251,6 +269,7 @@ test("actual API and awaited CLI compose the same recorded plan and disclose the
     const newApp = createPlanApp(api.inputs, api.runtime);
     expect(await (await post("fetch", fetchRequest, newApp)).json()).toEqual(fetched);
     expect(api.transport.requests).toHaveLength(afterFetch);
+    expect(profiles).toHaveLength(1);
     const parseRequest = {
       request_id: randomUUID(), fetch_request_id: fetchRequest.request_id,
       article_id: fetched.article_id, correlation_id,
@@ -259,6 +278,15 @@ test("actual API and awaited CLI compose the same recorded plan and disclose the
     expect(parsedResponse.status).toBe(200);
     const privateParseBytes = Buffer.from(await parsedResponse.arrayBuffer());
     const parsed = JSON.parse(privateParseBytes.toString("utf8"));
+    expect(profiles).toHaveLength(2);
+    expect(profiles[1]?.identity).toMatchObject({
+      task_name: "parse", request_id: parseRequest.request_id, correlation_id, run_id: fetched.observation.run_id,
+    });
+    expect(profiles[1]?.processes.worker.closing.pid).toBe(process.pid);
+    expect(profiles[1]?.config.machine_memory_enabled).toBe(false);
+    expect(profiles[1]?.machine_available_min_kb).toBeNull();
+    expect(profiles[1]?.samples.at(-1)?.unavailable["memory_kb.total"]).toBe("configured_off");
+    expect(profiles[1]?.started_at).not.toBe(api.runtime.clock!().toISOString());
     expect(parsed.failure).toBeNull();
     expect(parsed.parsed.article_text.length).toBeGreaterThan(0);
     const shared = await parseDocument("article", api.transport.recordings.bodies.article,
@@ -289,6 +317,13 @@ test("actual API and awaited CLI compose the same recorded plan and disclose the
     expect(parsed.observation.event_id).not.toBe(fetched.observation.event_id);
     const privateReplayBytes = Buffer.from(await (await post("parse", parseRequest, createPlanApp(api.inputs, api.runtime))).arrayBuffer());
     requireExactReplay(privateParseBytes, privateReplayBytes);
+    probeConfig.task_profile.machine_memory_enabled = true;
+    requireExactReplay(privateParseBytes, Buffer.from(await (await post("parse", parseRequest)).arrayBuffer()));
+    expect(await (await post("fetch", fetchRequest)).json()).toEqual(fetched);
+    probeConfig.task_profile.enabled = false;
+    requireExactReplay(privateParseBytes, Buffer.from(await (await post("parse", parseRequest)).arrayBuffer()));
+    probeConfig.task_profile.enabled = true;
+    expect(profiles).toHaveLength(2);
     const redacted = redactProofResponse("parse", "article", privateParseBytes, 200);
     const redactedReplay = redactProofResponse("parse", "article", privateReplayBytes, 200);
     expect(redacted.response_json).toBeNull();
@@ -330,6 +365,7 @@ test("actual API and awaited CLI compose the same recorded plan and disclose the
     expect((await post("fetch", fetchRequest)).status).toBe(409);
     expect((await post("parse", { ...parseRequest, request_id: randomUUID() })).status).toBe(409);
     api.inputs.harvest.config_sha256 = original;
+    expect(profiles).toHaveLength(2);
     const feedRequest = { request_id: randomUUID(), correlation_id, source_id: "recorded-news", kind: "feed" };
     const feed = await (await post("fetch", feedRequest)).json();
     const entries = await (await post("parse", {
@@ -364,9 +400,41 @@ test("actual API and awaited CLI compose the same recorded plan and disclose the
     const failedFetchRequest = { ...fetchRequest, request_id: randomUUID(), url: "https://news.example/not-found" };
     const failedFetch = await (await post("fetch", failedFetchRequest)).json();
     expect(failedFetch.failure).toBe("http");
+    expect(profiles.at(-1)?.outcome).toBe("error");
+    const afterFailedFetch = profiles.length;
     expect((await post("parse", {
       ...parseRequest, request_id: randomUUID(), fetch_request_id: failedFetchRequest.request_id, article_id: failedFetch.article_id,
     })).status).toBe(409);
+    expect(profiles).toHaveLength(afterFailedFetch);
+    const rootlessRequest = { ...fetchRequest, request_id: randomUUID(), url: "https://news.example/rootless" };
+    const rootless = await (await post("fetch", rootlessRequest)).json();
+    const rootlessParsed = await (await post("parse", {
+      ...parseRequest, request_id: randomUUID(), fetch_request_id: rootlessRequest.request_id, article_id: rootless.article_id,
+    })).json();
+    expect(rootlessParsed.failure).toBe("missing-document-root");
+    expect(profiles.at(-1)?.outcome).toBe("error");
+    // A bounded recorded document exercises actual synchronous parsing, not a padded live operation.
+    const paragraph = api.transport.recordings.bodies.article.match(/<p>[\s\S]*?<\/p>/)![0];
+    const repeats = Math.min(1024, Math.floor(api.inputs.harvest.extraction.max_body_bytes / (2 * paragraph.length)));
+    api.transport.recordings.bodies.article = `<html><body><article>${paragraph.repeat(repeats)}</article></body></html>`;
+    const boundedRequest = { ...fetchRequest, request_id: randomUUID() };
+    const bounded = await (await post("fetch", boundedRequest)).json();
+    const boundedParse = await post("parse", {
+      ...parseRequest, request_id: randomUUID(), fetch_request_id: boundedRequest.request_id, article_id: bounded.article_id,
+    });
+    expect(boundedParse.status).toBe(200);
+    expect((await boundedParse.json()).failure).toBeNull();
+    const measured = profiles.at(-1)!;
+    expect(measured.identity.task_name).toBe("parse");
+    expect(measured.periodic_sample_count).toBeGreaterThan(0);
+    expect(measured.samples.some(sample => sample.phase === "poll")).toBe(true);
+    if (process.platform === "linux") {
+      expect(measured.cpu.reason).toBeNull();
+      expect(measured.processes.worker.closing.memory_kb.rss).toBeGreaterThan(0);
+      expect(measured.full_window_count).toBeGreaterThan(0);
+      expect(measured.machine_available_min_kb).toBeGreaterThan(0);
+    }
+    console.error(JSON.stringify({ event: "recorded_parse_profile", platform: process.platform, arch: process.arch, profile: measured }));
   } finally { await Promise.all([api.close(), cli.close()]); }
 }, 30000);
 
