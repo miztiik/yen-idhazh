@@ -490,8 +490,8 @@ ungrouped. The trial selects up to 100 distinct articles per group, fewer when
 fewer are eligible. This caps articles selected for the trial, not HTTP
 requests: retries and redirects can produce more requests. It does not cap
 the complete parsed-batch input, telemetry for other work or normal production
-selection. A2 does not authorize a separate persisted disposition contract or
-a freshness exception.
+selection. Persist each considered trial entry's disposition: selected,
+excluded by the group cap, unknown age or future publication time.
 
 The current harvester parses feed entries before article requests. Its age
 calculation is reusable, but the observation and registered Parquet path is
@@ -505,14 +505,15 @@ TypeScript-owned; the Parquet rows are its separate persisted projection.
 Only then add the age-group selector at
 `services/feed-ingest-plan/src/harvest-feeds/harvest-pool.ts`, before
 `harvestArticle`, with config declared in the native Zod config schema and
-focused tests. Unknown and future ages do not enter a group. Continue recording
-all actual work through the same observation and Parquet path. Do not add an
-HTTP or selection API field, another ranking system, a second pipeline, a
-separate persisted disposition contract or a freshness exception without
-owner approval. The earlier config-only estimate omitted this telemetry
-dependency; do not claim the full change is small until the approved
-prerequisite is built. The groups are global trial policy, not per-source
-catalog data; this approval does not add a `sources.json` runtime field.
+focused tests. Persist each considered entry's disposition with the trial
+observations; keep unknown and future ages outside the groups. Continue
+recording all actual work through the same observation and Parquet path. Do
+not add an HTTP or selection API field, another ranking system or a second
+pipeline. A worker identified additional disposition-contract, native-binding,
+writer and readback work, plus a trial-only 24-36-hour harvest path. Total-cost
+acceptance awaits the owner's decision; the earlier config-only estimate
+omitted the approved telemetry dependency. Configuration placement remains
+unsettled.
 
 Owner ruling, kumarsnaveen_microsoft, 2026-10-24 UTC: approve A2 only if it is
 not too much of a configuration or coding change. The approved trial groups
@@ -524,10 +525,9 @@ applies only to bounded trial measurement, not ordinary selection or a cap on
 captured work. Unknown and future ages remain ungrouped, never assigned an
 invented age. The 25-article proposal is withdrawn. Implementation remains
 conditional on confirming total cost after the approved telemetry path is
-delivered; no further approval is needed for that telemetry. No separate
-disposition payload or 36-hour preflight exception is approved here. The age
-groups describe global trial behavior, not per-source catalog identity or
-lifecycle; no `sources.json` runtime field is added by this decision.
+delivered; no further approval is needed for that telemetry. Saving each
+considered entry's disposition remains part of the trial. Total-cost
+acceptance remains open. Configuration placement remains unsettled.
 
 **Owner rulings, kumarsnaveen_microsoft, 2026-10-25 UTC:** Approve C2-C5 as
 the restriction and recovery policy above. Three consecutive confirmed
