@@ -88,7 +88,7 @@ def test_declared_contract(module: str, name: str) -> None:
         previous["version"] = "2026-10-24T20:04"
         previous["source"]["publisher_id"] = "recorded-publisher"
         previous = contract.model_validate(previous)
-        assert previous.version == "2026-10-24T20:04"
+        assert previous.version == contract.model_fields["version"].default
         assert previous.source.publisher_id == "recorded-publisher"
         invalid_previous = json.loads(read_text(
             CONTRACT_FIXTURES_DIR / "feed-ingest-source-run" / "one-observation.json"

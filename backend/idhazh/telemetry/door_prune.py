@@ -21,8 +21,8 @@ day of the range a ceiling left.
    file, so no index has a hole;
 3. it rewrites each index that names a rebuilt file, in the bytes the
    compaction writes an index in. The rebuilt file's entry takes the file's
-   new row count and size and keeps every other field as it was, so the days
-   it records lost and the files it counts set aside outlive the prune.
+   new row count, size and exact-byte digest, and keeps its other fields, so
+   the days it records lost and the files it counts set aside outlive the prune.
 
 Deletes first, so a day the pass has not finished still holds a row in a
 compact file, or its index still says it does, and the same command takes it
@@ -55,6 +55,7 @@ Every day is a UTC day (CLAUDE.md section 2).
 
 from __future__ import annotations
 
+import hashlib
 from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import date, timedelta
@@ -125,7 +126,11 @@ def _changes(
             expired_through[found.period] = index.expired_through
         named = entries[found.period]
         named[found.covers] = named[found.covers].model_copy(
-            update={"rows": built.rows, "bytes": len(built.data)}
+            update={
+                "rows": built.rows,
+                "bytes": len(built.data),
+                "file_sha256": hashlib.sha256(built.data).hexdigest(),
+            }
         )
     indexes: list[_Change] = []
     for period, named in entries.items():

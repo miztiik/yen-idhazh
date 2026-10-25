@@ -404,10 +404,8 @@ Each day records `available` or `gap`, a stable gap reason, its last successful
 input identity and the corresponding native rows. Reasons include missing,
 lost, unreadable, set-aside and index-identity-unavailable. A compact entry
 without `file_sha256` has no cheap pre-read identity; that input remains a gap
-until compaction writes its exact Parquet-byte digest. A missing index can gain
-that digest only when a bounded rebuild reads and adopts the named file, which
-adds a full local file read; an existing older entry is not assumed to have
-one. A gap may retain the last
+until the file is rewritten and its exact Parquet-byte digest is recorded. A
+gap may retain the last
 known contribution, but it is never an empty-day result or current evidence;
 retained rows never make a gapped component complete or qualified. The saved
 per-source results separately name lifecycle and request availability.

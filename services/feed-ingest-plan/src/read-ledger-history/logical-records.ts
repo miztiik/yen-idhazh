@@ -25,6 +25,7 @@ export const PLANNING_RECORD_KEYS = {
   rejections: rejectionKeys, "ingest-rejections": rejectionKeys,
   "article-assessments": ["date", "candidate_id", "stage"],
   "source-runs": ["date", "source_id", "observation_phase"],
+  "feed-runs": ["date", "source_id", "observation_phase"],
   diversity: diversityKeys, "article-selection-diversity": diversityKeys,
 } as const;
 const contracts: Record<Ledger, LedgerRowContract<object>> = {

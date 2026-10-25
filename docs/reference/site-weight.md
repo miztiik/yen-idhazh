@@ -23,6 +23,7 @@ Table A - Configured bounds
 | A5 | `page_weight.payload_ceilings_bytes`, `telemetry/` | 1,100,000 compressed bytes | Bound each file under this build-relative prefix, not their combined size. |
 | A6 | `page_weight.cold_console_load_bytes` | 2,300,000 compressed bytes | Bound the payload total for a cold console opening: two telemetry month shards at the 14-day default window, the band, and 98,000 bytes of room. |
 | A7 | `page_weight.payload_ceilings_bytes`, `state/compact/<ledger>/index/`, each emitted prefix | 2,200 compressed bytes | Bound each emitted compact-index file on its own. |
+| A8 | `page_weight.payload_ceilings_bytes`, `config/ledgers.json` | 3,700 compressed bytes | Bound the ledger registry fetched by the data explorer. |
 
 These are limits, not measurements of the current site. Measure the completed
 build before reporting its size or remaining capacity. Use the commands in

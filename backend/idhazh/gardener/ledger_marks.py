@@ -32,20 +32,16 @@ paths before any step runs (`tasks/_absent_indexes.py`).
 restored from an older commit can lose an entry while the period's own file is
 still at its named path. Before a pass records a period `empty` or `lost`, it
 asks `adopt` for that path: a file there becomes the period's `packed` entry,
-its bytes from the listing, its rows and envelope from its footer, and its
-exact-byte SHA-256 from the fetched file. A file whose envelope names another
-ledger, period or day is refused by name and never adopted, because adopting it
-would put another period's rows under this one. The fetch obeys the shard's
-download budget, and the footer and digest are read locally. Calculating the
-digest adds a full-file read but no download. Past the budget, `adopt` raises
-`OverBudgetError` and the step stops at the period for a later wake. Older
-indexes keep their missing digest until a bounded rebuild reads and adopts the
-corresponding file.
+its bytes from the listing and its rows and envelope from its footer. A file
+whose envelope names another ledger, period or day is refused by name and
+never adopted, because adopting it would put another period's rows under this
+one. Reading the footer downloads files beside it, and that counts against
+the shard's download budget as a step's own periods do: past it, `adopt`
+raises `OverBudgetError` and the step stops at the period for a later wake.
 """
 
 from __future__ import annotations
 
-import hashlib
 from collections.abc import Collection, Iterator, Mapping
 from dataclasses import dataclass
 from pathlib import Path
@@ -199,6 +195,5 @@ def adopt(
             covers=covers,
             rows=footer.rows,
             bytes=listing.size_of(found),
-            file_sha256=file_sha256,
         ),
     )

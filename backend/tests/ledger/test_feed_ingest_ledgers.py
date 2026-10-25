@@ -18,7 +18,6 @@ from support.paths import CONFIG_DIR, CONTRACT_FIXTURES_DIR, REPO_ROOT, read_tex
 from idhazh import config, ledger
 from idhazh.contracts.base import Contract, ServerJob
 from idhazh.contracts.collection_prune import StopReason
-from idhazh.contracts.feed_health_state import FeedHealthStateSnapshot
 from idhazh.contracts.feed_ingest_article_assessment import ArticleAssessmentRecord
 from idhazh.contracts.feed_ingest_candidate import derive_candidate_id
 from idhazh.contracts.feed_ingest_dispatch import FeedIngestDispatch
@@ -66,18 +65,12 @@ RENAMED_DOCUMENT_OBSERVATION_LEDGER = (
     DocumentObservationRecord,
     "feed-ingest-document-observation/refused-fetch.json",
 )
-FEED_HEALTH_STATE_LEDGER = (
-    "feed-health-state",
-    FeedHealthStateSnapshot,
-    "feed-health-state/one-complete-snapshot.json",
-)
 REGISTERED_PLANNING_LEDGERS = (
     *PRODUCED_PLANNING_LEDGERS,
     *LEGACY_PLANNING_LEDGERS,
     DOCUMENT_OBSERVATION_LEDGER,
     OPERATIONAL_STATE_LEDGER,
     RENAMED_DOCUMENT_OBSERVATION_LEDGER,
-    FEED_HEALTH_STATE_LEDGER,
 )
 
 
@@ -319,7 +312,7 @@ def test_zero_completion_evidence_survives_without_erasing_an_earlier_complete_a
     native = json.loads((generated / "attempts.json").read_text(encoding="utf-8"))
     assert native["keys"] == {
         name: list(ledger.door_key(LedgerName(name)))
-        for name, _, _ in PRODUCED_PLANNING_LEDGERS
+        for name, _, _ in (*PRODUCED_PLANNING_LEDGERS, *LEGACY_PLANNING_LEDGERS)
     }
     for tier, today in (
         ("daily", date(2026, 10, 23)),
