@@ -390,15 +390,23 @@ TypeScript binding are in place. Row 10 will persist it through the shared
 ledger writer and read it through the registered raw/compact path. Do not
 create a JSON state file or another unregistered persistence path.
 
-The checkpoint is `state_revision`, `evidence_cutoff_utc`,
-`window_start` and `window_end`; do not add settled event IDs. Recompute the
-configured named UTC days and select the latest compatible operational state
-through the registered ledger index, not a repository walk.
+**Owner ruling, kumarsnaveen_microsoft, 2026-10-25 UTC:** select A1,
+recalculate changed days only. Inspect registered day indexes for the
+configured windows. When a day's input files or contents change, reread that
+day and replace its saved contribution; reuse unchanged days. Compaction may
+refresh a changed day. Declare validated day-input fingerprints and retained
+contributions, including how cross-day causal settlement is handled. Late or
+out-of-order commits and corrections must not be missed or counted twice.
+Report corrections outside the retained window without applying them.
 
-Recompute the active configured window from named ledger periods, then publish
-the derived per-source operational state. Report corrections outside the
-configured window; do not use them in that window's score. Event replay and correction identity details remain to be declared. An older correction does
-not rewrite expired score evidence or clear a restriction.
+Read named ledger periods through the registered index, not a repository walk.
+
+Compute article-request score evidence from named periods in the configured
+closed-UTC-day window. Maintain the separate represented-day lifecycle by
+rereading changed days and replacing their saved contributions; do not move a
+full 31-day recomputation behind the API. Report corrections outside the score
+window without using them in its score. An older correction does not rewrite
+expired score evidence or clear a restriction.
 
 Do not serialize fetch, parse, planning or selection, and do not add
 selection idempotency. Keep each run's raw observation files immutable and
@@ -454,6 +462,84 @@ nullable `state_revision` and nullable `window_start`/`window_end`. For
 not be verified. Fallback state retains its original revision and date range.
 No age threshold is proposed; the status records what the reader used without
 claiming it is current.
+
+## Approved feed-health state migration
+
+**Owner ruling, kumarsnaveen_microsoft, 2026-10-25 UTC:** adopt these ledger
+names within the existing `feed-ingest-plan` family:
+
+- Keep `article-assessments` and `editorial-selections`.
+- Rename `dispatches` to `article-dispatches`.
+- Rename `diversity` to `article-selection-diversity`.
+- Rename `document-observations` to `ingest-observations` for both feed and
+  article operations.
+- Rename `operational-state` to `feed-health-state`.
+- Rename `rejections` to `ingest-rejections`.
+- Rename `source-runs` to `feed-runs`.
+
+The raw and compact paths are
+`state/{raw,compact}/feed-ingest-plan/<ledger-name>/`. `feed-health-state`
+is one ledger, not separate observation and state ledgers, and remains inside
+the existing family. This is a migration, not a runtime change in this docs
+phase. Preserve old reads before writing renamed records, and ensure an
+observation available under both names is counted only once. Do not remove
+legacy data as part of the rename.
+
+The approved implementation phases are:
+
+1. **Contract and configuration:** design the full
+   `POST /api/<existingversion>/feed-health-state` request, response and error
+   contract. Keep two configurable windows distinct: a lifecycle inventory
+   default of 31 represented days, and the existing article-request score
+   default of seven closed UTC days. Do not encode 31 as a magic constant or
+   add another request-weight cap; the approved request weight remains one
+   third. Before writers, settle bounded behavior for late/out-of-order
+   commits, corrections, window rollover and retained identity across the
+   configured represented-day inventory by inspecting registered day indexes.
+   Check indexed identities before Parquet data reads and reuse unchanged
+   cached identities. When an identity changes, reread that day and validate
+   its immutable input identity before replacing its saved contribution.
+   Reuse existing native settlement for raw, compact and attempt records
+   rather than adding a duplicate-resolution rule. Declare validated
+   day-input fingerprints and retained contributions,
+   including cross-day causal settlement. Late/out-of-order
+   commits and corrections must not be missed or double-counted; corrections
+   outside the retained window are reported but not applied. The API must
+   identify the saved selection batch being settled using that selected
+   output's `batch_id`; it is distinct from tracing context. Exact payload
+   fields and configuration placement remain to be designed. The Pydantic
+   contract owns persisted payloads; its TypeScript binding and compatible
+   read migrations are part of this phase. This does not migrate Python
+   production producers or consumers.
+2. **Ledger rename:** update names, registrations, TypeScript raw/compact
+   readers and writers, native Pydantic contracts, TypeScript bindings,
+   compatible read migrations, compaction configuration, manifests,
+   verifiers, explorer labels and docs. Keep compatible old reads before new
+   writes and prevent old/new double counting using existing native
+   settlement. Leave Python production producers and consumers on their
+   existing legacy paths for the deferred migration.
+3. **Incremental TypeScript state:** update feed-health state after selection
+   while partitioning proceeds independently, then have the next planner read
+   the saved state. Inspect registered day indexes; reread and replace saved
+   contributions only for changed days, and reuse unchanged days. Handle new
+   observations, late commits, corrections and configured inventory expiry
+   without a full-window recomputation behind the API. Keep the configured
+   closed-UTC-day request-score rules unchanged.
+4. **Remove redundant TypeScript reads and writes** only after the replacement
+   covers current behavior.
+
+Selection records the state revision it read but does not update state.
+`/plan` invokes the shared update after selection while partitioning proceeds;
+the explicit operator API invokes the same shared TypeScript operation.
+Access evidence comes from recorded robots permission, not source-catalog
+status.
+
+Python migration to shared contracts and state, console migration to the
+TypeScript-derived ledgers at build time, and retirement of the legacy
+`feed-health` ledger and `frontend/public/source-health.json` are separate
+deferred work. Retirement waits until the named Python and console consumers
+are migrated and coverage is verified. The current Python runtime and legacy
+files remain unchanged.
 
 ## D5 approved access policy; conditional trial and open polling
 
