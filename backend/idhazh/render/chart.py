@@ -102,8 +102,8 @@ def compile_chart(
 
     Bar and dot pair categories and optional series labels with quantities.
     Slope pairs two time labels with consecutive quantity pairs and one entity
-    or series label per line. Other source channels are never compiled by
-    approximation.
+    or series label per line. The validator refuses other source channels
+    rather than approximating them.
     """
     if plan.decision is not PlanDecision.VISUAL:
         raise CompileError("this plan asks for no picture, so there is nothing to compile")
@@ -122,15 +122,6 @@ def compile_chart(
         if visual_type in (VisualType.BAR, VisualType.DOT)
         else {EncodingRole.TIME, EncodingRole.QUANTITY, EncodingRole.SERIES, EncodingRole.ENTITY}
     )
-    unsupported = [
-        role.value
-        for role in EncodingRole
-        if role not in allowed and getattr(plan.encodings, role.value)
-    ]
-    if unsupported:
-        raise CompileError(
-            f"{visual_type.value} cannot draw source channels: {', '.join(unsupported)}"
-        )
     channels = {
         role: [value for value in resolved.values if value.role is role] if role in allowed else []
         for role in EncodingRole

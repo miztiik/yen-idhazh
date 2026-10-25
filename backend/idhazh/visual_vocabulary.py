@@ -184,19 +184,19 @@ _P = VisualPurpose
 #: An edge can rescue a validator refusal or a type whose compiler is not built.
 #: Config selects requests; this table only names purpose-preserving replacements.
 #:
-#: **Three types that look like they want an edge have none, each for its own
-#: reason.** `line` -> `bar` is in the source document with the condition "if
-#: the time axis is safely categorical", and nothing in this build can decide
-#: that - a condition nobody can evaluate is a condition nobody should encode.
-#: `slope` -> `bar` destroys the before-and-after pairing the slope exists to
-#: show, so it is not an edge at all. And `flow` is the diagram family, whose
-#: only fallback is `none`.
+#: **Types that look like they want an edge have none, each for its own reason.**
+#: A `dot` is preferred for ranking because position on a common scale compares
+#: items better than length from zero. `line` -> `bar` is in the source document
+#: with the condition "if the time axis is safely categorical", and nothing in
+#: this build can decide that - a condition nobody can evaluate is a condition
+#: nobody should encode. `slope` -> `bar` destroys the before-and-after pairing
+#: the slope exists to show, so it is not an edge at all. And `flow` is the
+#: diagram family, whose only fallback is `none`.
 #:
 #: The target of every edge is a type with a role rule, because a target the
 #: validator refuses by name rescues nothing: "any chart -> `table` at depth 2"
 #: is in the source document and `table` has no rule, so it is not here.
 DOWNGRADE_EDGES: Final[dict[VisualType, tuple[DowngradeEdge, ...]]] = {
-    _T.DOT: (DowngradeEdge(_T.BAR, frozenset({_P.COMPARISON})),),
     # Drops the size channel and keeps the two measured axes the relationship is.
     _T.BUBBLE: (DowngradeEdge(_T.SCATTER, frozenset({_P.RELATIONSHIP})),),
     # The parts of a declared whole, stacked in one bar instead of swept round a

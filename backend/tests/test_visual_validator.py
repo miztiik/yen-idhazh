@@ -540,6 +540,9 @@ class TestTheDowngradeAllowList:
         assert VisualType.FLOW not in DOWNGRADE_EDGES
         assert VisualType.STACKED_BAR not in DOWNGRADE_EDGES
 
+    def test_a_dot_is_not_downgraded_to_a_length_mark(self) -> None:
+        assert VisualType.DOT not in DOWNGRADE_EDGES
+
     def test_the_edge_table_has_a_stamp_of_its_own(self) -> None:
         """Folded into the plan vocabulary's, adding an edge would re-plan every
         item carrying an older stamp - a model call apiece."""
