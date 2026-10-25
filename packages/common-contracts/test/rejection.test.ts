@@ -16,11 +16,12 @@ import {
   PreviousHarvestDiagnosticsSchema,
   ArticleAssessmentContract, EditorialSelectionContract, SourceReliabilityPenaltySchema,
   PUBLISHER_IDENTITY_VERSION, PublisherExposurePenaltySchema, FEED_HISTORY_EVENT_VERSION, CONTRACT_VERSION,
-  SOURCE_OPERATIONAL_SCORE_VERSION,
+  SOURCE_OPERATIONAL_SCORE_VERSION, FEED_HEALTH_STATE_VERSION, readSelectedFeedBatch,
   ParsedFeedBatchSchema, SelectedFeedBatchSchema, PartitionedFeedBatchSchema,
   PlannerHarvestObservationSchema, PlannerSeenEvidenceSchema, PlannerSeenRowSchema,
   PlannerStageContextSchema, PlannerStageRequestSchema, StageReferenceRequestSchema,
-  PartitionArticlesRequestSchema, OperationalStateReadSchema,
+  PartitionArticlesRequestSchema, OperationalStateReadSchema, SelectionStateCaptureSchema,
+  FeedHealthStateSnapshotSchema, FeedHealthStateHeadIndexSchema,
 } from "../src/index";
 import { plannerStageSchemas, runtimeSchemas, schemas } from "./schema-binding";
 
@@ -288,16 +289,58 @@ describe("planning audit contracts", () => {
     expect(SourceRunRecordSchema.safeParse({ ...row, fetch_status: "not_requested" }).success).toBe(false);
   });
 
-  test("does not turn unassessed or missing measurements into evidence", () => {
+  test("does not turn unassessed or missing measurements into evidence", async () => {
     const staleOperationalState = OperationalStateReadSchema.parse({
-      status: "stale_fallback", state_revision: 4, window_days: 7,
-      window_start: "2026-10-14", window_end: "2026-10-20",
+      status: "stale_fallback", state_revision: 4,
+      lifecycle_window_days: 31, lifecycle_window_start: "2026-09-20", lifecycle_window_end: "2026-10-20",
+      request_window_days: 7, request_window_start: "2026-10-14", request_window_end: "2026-10-20",
     });
     expect(staleOperationalState).toMatchObject({
-      status: "stale_fallback", state_revision: 4, window_start: "2026-10-14", window_end: "2026-10-20",
+      status: "stale_fallback", state_revision: 4,
+      lifecycle_window_start: "2026-09-20", request_window_start: "2026-10-14",
     });
     expect(OperationalStateReadSchema.safeParse({
       ...staleOperationalState, status: "unavailable",
+    }).success).toBe(false);
+    const unavailableOperationalState = OperationalStateReadSchema.parse({
+      status: "unavailable", state_revision: null, notices: ["restrictions_unverified"],
+      lifecycle_window_days: 31, lifecycle_window_start: null, lifecycle_window_end: null,
+      request_window_days: 7, request_window_start: null, request_window_end: null,
+    });
+    expect(unavailableOperationalState.notices).toEqual(["restrictions_unverified"]);
+    expect(SelectionStateCaptureSchema.parse({ capture_status: "not_recorded" })).toEqual({
+      capture_status: "not_recorded", selection_started_at_utc: null, state: null,
+    });
+    const snapshot = FeedHealthStateSnapshotSchema.parse(await Bun.file(new URL(
+      "../../../tests/fixtures/contracts/feed-health-state/one-complete-snapshot.json", import.meta.url,
+    )).json());
+    expect(snapshot.request_days[0]!.rows).toHaveLength(3);
+    expect(FeedHealthStateSnapshotSchema.safeParse({
+      ...snapshot,
+      lifecycle_days: [{
+        ...snapshot.lifecycle_days[0]!,
+        read_status: "gap", gap_reason: "missing", input_identity: null, rows: [],
+      }],
+    }).success).toBe(true);
+    expect(FeedHealthStateSnapshotSchema.safeParse({
+      ...snapshot, request_days: [],
+    }).success).toBe(false);
+    const headIndex = FeedHealthStateHeadIndexSchema.parse(await Bun.file(new URL(
+      "../../../tests/fixtures/contracts/feed-health-state-head-index/two-snapshots.json", import.meta.url,
+    )).json());
+    expect(headIndex.latest.state_revision).toBe(4);
+    expect(FeedHealthStateHeadIndexSchema.safeParse({
+      ...headIndex, previous: { ...headIndex.latest, snapshot_role: "previous" },
+    }).success).toBe(false);
+    expect(FeedHealthStateHeadIndexSchema.safeParse({
+      ...headIndex,
+      previous: {
+        ...headIndex.previous!,
+        path: headIndex.latest.path,
+        file_id: headIndex.latest.file_id,
+        state_revision: 3,
+        parent_revision: 2,
+      },
     }).success).toBe(false);
     const row = assessment();
     expect(ArticleAssessmentRecordSchema.safeParse({ ...row, informative_verdict_status: "assessed" }).success).toBe(false);
@@ -474,7 +517,9 @@ describe("planning audit contracts", () => {
     expect(Object.keys(schemas)).toHaveLength(Object.keys(runtimeSchemas).length);
     for (const [name, schema] of Object.entries(runtimeSchemas)) {
       expect(schemas[name]).toEqual(z.toJSONSchema(schema, { io: "input" }));
-      expect(schemas[name]?.additionalProperties).toBe(false);
+      const output = schemas[name];
+      const branches = output?.oneOf ?? output?.anyOf ?? [output];
+      expect(branches.every(branch => branch?.additionalProperties === false)).toBe(true);
     }
     const version = schemas.FeedIngestCandidate?.properties?.version;
     expect(version).toMatchObject({ const: PUBLISHER_IDENTITY_VERSION, default: PUBLISHER_IDENTITY_VERSION });
@@ -530,10 +575,24 @@ describe("planning audit contracts", () => {
     expect(PlannerStageRequestSchema.parse({})).toEqual({});
     expect(PlannerStageRequestSchema.safeParse({ article_limit: null }).success).toBe(false);
     expect(ParsedFeedBatchSchema.parse(parsed).version).toBe(PUBLISHER_IDENTITY_VERSION);
-    expect(SelectedFeedBatchSchema.parse({
+    const selected = SelectedFeedBatchSchema.parse({
+      version: FEED_HEALTH_STATE_VERSION,
       batch_id: batchId, config_sha256: digest, parsed_batch_id: batchId,
-      context, selections: [], rejections: [],
-    }).version).toBe(SOURCE_OPERATIONAL_SCORE_VERSION);
+      context, selection_state: {
+        capture_status: "captured", selection_started_at_utc: context.now,
+        state: {
+          status: "unavailable", state_revision: null, notices: ["restrictions_unverified"],
+          lifecycle_window_days: 31, lifecycle_window_start: null, lifecycle_window_end: null,
+          request_window_days: 7, request_window_start: null, request_window_end: null,
+        },
+      },
+      selections: [], rejections: [],
+    });
+    expect(selected.version).toBe(FEED_HEALTH_STATE_VERSION);
+    const legacySelection = await Bun.file(new URL(
+      "../../../tests/fixtures/contracts/selected-feed-batch/empty.json", import.meta.url,
+    )).json();
+    expect(readSelectedFeedBatch(legacySelection).selection_state.capture_status).toBe("not_recorded");
     expect(PartitionedFeedBatchSchema.parse({
       batch_id: batchId, config_sha256: digest, selection_batch_id: batchId,
       context, strategy: "none", dispatch_count: 1, work: [0], dispatches: [],

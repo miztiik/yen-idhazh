@@ -22,6 +22,11 @@ import {
   PreflightFreshnessSchema, StageReferenceRequestSchema, PartitionArticlesRequestSchema,
   DocumentObservationRecordSchema,
   FeedIngestOperationalStateRowSchema, OperationalStateReadSchema,
+  SelectionStateCaptureSchema, FeedHealthStateSnapshotSchema,
+  FeedHealthStateHeadIndexSchema, FeedHealthStateSnapshotReferenceSchema,
+  FeedHealthStateIndexIdentitySchema, FeedHealthStateFileIdentitySchema,
+  FeedHealthStateInputIdentitySchema, FeedHealthStateLifecycleDaySchema,
+  FeedHealthStateRequestDaySchema,
   SourceOperationalEvidenceSchema,
 } from "../src/index";
 
@@ -55,6 +60,15 @@ export const runtimeSchemas = {
   DocumentObservationRecord: DocumentObservationRecordSchema,
   FeedIngestOperationalStateRow: FeedIngestOperationalStateRowSchema,
   OperationalStateRead: OperationalStateReadSchema,
+  SelectionStateCapture: SelectionStateCaptureSchema,
+  FeedHealthStateSnapshot: FeedHealthStateSnapshotSchema,
+  FeedHealthStateHeadIndex: FeedHealthStateHeadIndexSchema,
+  FeedHealthStateSnapshotReference: FeedHealthStateSnapshotReferenceSchema,
+  FeedHealthStateIndexIdentity: FeedHealthStateIndexIdentitySchema,
+  FeedHealthStateFileIdentity: FeedHealthStateFileIdentitySchema,
+  FeedHealthStateInputIdentity: FeedHealthStateInputIdentitySchema,
+  FeedHealthStateLifecycleDay: FeedHealthStateLifecycleDaySchema,
+  FeedHealthStateRequestDay: FeedHealthStateRequestDaySchema,
 } satisfies Record<string, z.ZodType>;
 
 export const schemas = Object.fromEntries(

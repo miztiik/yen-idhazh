@@ -1,12 +1,14 @@
 /** Which durable native feed receipts must one listener retain between planning requests? */
 import type { PlanInputs } from "../load-plan-inputs";
-import { HEALTH_RECORDED_DAYS } from "../read-ledger-history/read-feed-history";
 import { OwnFeedReceiptSchema } from "../read-ledger-history/own-feed-receipts";
 import type { FeedWriteReceipt, OwnFeedReceipt } from "../read-ledger-history/own-feed-receipts";
 
 export function retainFeedReceipts(inputs: PlanInputs, initial: readonly OwnFeedReceipt[] = []) {
   const health = new Map<string, Set<string>>();
-  const retainedDays = Math.max(HEALTH_RECORDED_DAYS, inputs.clock_config.collect.reliability_window_days);
+  const retainedDays = Math.max(
+    inputs.harvest.config.feedback.lifecycle_window_days,
+    inputs.clock_config.collect.reliability_window_days,
+  );
   const add = (raw: OwnFeedReceipt) => {
     const receipt = OwnFeedReceiptSchema.parse(raw);
     const paths = health.get(receipt.day) ?? new Set<string>();

@@ -86,11 +86,18 @@ export async function verifyHealthOrderCompaction() {
       root: fixture.directory, now: "2026-10-24T00:00:00.000Z", run_id: "2026-10-24-99",
       sources, policy: { ...fixture.inputs.clock_config.collect,
         availability_strikes_before_rest: recording.threshold },
+      lifecycle_window_days: fixture.inputs.harvest.config.feedback.lifecycle_window_days,
       health: fixture.inputs.registrations.feed_health,
     };
     const rawPaths = rawFiles.map(file => `state/${file.path}`);
     const before = await readFeedHistory({ ...input, health_days: [{ day, raw_files: rawPaths }] });
     for (const test of cases) expect(before.sources.get(test.id)!.lifecycle).toBe(test.expected);
+    const configuredWindow = await readFeedHistory({
+      ...input, lifecycle_window_days: 1, health_days: [{ day, raw_files: rawPaths }],
+    });
+    expect(configuredWindow.history.health).toMatchObject({
+      required_recorded_days: 1, represented_days: [day], availability: "available",
+    });
     const signature = (rows: readonly StoredLedgerRow<FeedHealthRow>[]) =>
       JSON.stringify(rows.toSorted((a, b) => `${a.row.feed_id}:${a.row.run_id}`.localeCompare(`${b.row.feed_id}:${b.row.run_id}`)));
     const originalSignature = signature(originals);

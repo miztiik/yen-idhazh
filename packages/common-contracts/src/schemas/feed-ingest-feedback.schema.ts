@@ -54,18 +54,58 @@ export type FeedIngestOperationalStateRow = z.infer<typeof FeedIngestOperational
 export const OperationalStateReadSchema = z.strictObject({
   status: z.enum(["current", "stale_fallback", "unavailable"]),
   state_revision: PositiveCountSchema.nullable(),
-  window_days: PositiveCountSchema,
-  window_start: DateStampSchema.nullable(), window_end: DateStampSchema.nullable(),
+  notices: z.array(z.literal("restrictions_unverified")).default([]),
+  lifecycle_window_days: PositiveCountSchema,
+  lifecycle_window_start: DateStampSchema.nullable(),
+  lifecycle_window_end: DateStampSchema.nullable(),
+  request_window_days: PositiveCountSchema,
+  request_window_start: DateStampSchema.nullable(),
+  request_window_end: DateStampSchema.nullable(),
 }).superRefine((value, ctx) => {
+  const expectedNotices = value.status === "unavailable" ? ["restrictions_unverified"] : [];
+  if (JSON.stringify(value.notices) !== JSON.stringify(expectedNotices)) {
+    reject(ctx, "an unavailable state has the neutral restrictions warning only");
+  }
   if (value.status === "unavailable") {
-    if ([value.state_revision, value.window_start, value.window_end].some(item => item !== null)) {
+    if ([
+      value.state_revision,
+      value.lifecycle_window_start,
+      value.lifecycle_window_end,
+      value.request_window_start,
+      value.request_window_end,
+    ].some(item => item !== null)) {
       reject(ctx, "unavailable state has no saved revision or window");
     }
-  } else if (value.state_revision === null || value.window_start === null || value.window_end === null) {
+  } else if (value.state_revision === null || [
+    value.lifecycle_window_start,
+    value.lifecycle_window_end,
+    value.request_window_start,
+    value.request_window_end,
+  ].some(item => item === null)) {
     reject(ctx, "a saved state reading retains its revision and original window");
   }
-  if (value.window_start !== null && value.window_end !== null && value.window_start > value.window_end) {
-    reject(ctx, "operational state window starts after it ends");
+  const windows: [string | null, string | null][] = [
+    [value.lifecycle_window_start, value.lifecycle_window_end],
+    [value.request_window_start, value.request_window_end],
+  ];
+  for (const [start, end] of windows) {
+    if (start !== null && end !== null && start > end) {
+      reject(ctx, "operational state window starts after it ends");
+    }
   }
 });
 export type OperationalStateRead = z.infer<typeof OperationalStateReadSchema>;
+
+export const SelectionStateCaptureSchema = z.discriminatedUnion("capture_status", [
+  z.strictObject({
+    capture_status: z.literal("captured"),
+    selection_started_at_utc: TimestampSchema,
+    state: OperationalStateReadSchema,
+  }),
+  z.strictObject({
+    capture_status: z.literal("not_recorded"),
+    selection_started_at_utc: TimestampSchema.nullable().default(null),
+    state: OperationalStateReadSchema.nullable().default(null),
+  }),
+]);
+export type SelectionStateCapture = z.infer<typeof SelectionStateCaptureSchema>;

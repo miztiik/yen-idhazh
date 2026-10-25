@@ -17,7 +17,11 @@ import {
   TimestampSchema, reject,
 } from "./primitives";
 import { RecordedInstantSchema } from "./recorded-instant.schema";
-import { PLANNER_STAGE_VERSION, PUBLISHER_EXPOSURE_VERSION, PUBLISHER_IDENTITY_VERSION, SOURCE_OPERATIONAL_SCORE_VERSION, SOURCE_RELIABILITY_VERSION } from "../version";
+import { SelectionStateCaptureSchema } from "./feed-ingest-feedback.schema";
+import {
+  FEED_HEALTH_STATE_VERSION, PLANNER_STAGE_VERSION, PUBLISHER_EXPOSURE_VERSION,
+  PUBLISHER_IDENTITY_VERSION, SOURCE_OPERATIONAL_SCORE_VERSION, SOURCE_RELIABILITY_VERSION,
+} from "../version";
 
 export const PlannerStageContextSchema = z.strictObject({
   now: TimestampSchema.refine(value => {
@@ -169,11 +173,12 @@ export const ParsedFeedBatchSchema = z.strictObject({
 export type ParsedFeedBatch = z.infer<typeof ParsedFeedBatchSchema>;
 
 export const SelectedFeedBatchSchema = z.strictObject({
-  version: z.literal(SOURCE_OPERATIONAL_SCORE_VERSION).default(SOURCE_OPERATIONAL_SCORE_VERSION),
+  version: z.literal(FEED_HEALTH_STATE_VERSION).default(FEED_HEALTH_STATE_VERSION),
   batch_id: z.uuid({ version: "v4" }),
   config_sha256: Sha256Schema,
   parsed_batch_id: z.uuid({ version: "v4" }),
   context: PlannerStageContextSchema,
+  selection_state: SelectionStateCaptureSchema,
   selections: z.array(EditorialSelectionRowSchema),
   rejections: z.array(CandidateRejectionRecordSchema),
 }).superRefine((value, ctx) => {
@@ -264,10 +269,22 @@ export const PreviousParsedFeedBatchSchema = z.strictObject({
   version: PreviousPlannerStageVersion,
   candidates: z.array(PreviousFeedIngestCandidateSchema),
 });
+const SelectedFeedBatchPreviousFields = {
+  batch_id: SelectedFeedBatchSchema.shape.batch_id,
+  config_sha256: SelectedFeedBatchSchema.shape.config_sha256,
+  parsed_batch_id: SelectedFeedBatchSchema.shape.parsed_batch_id,
+  context: SelectedFeedBatchSchema.shape.context,
+  selections: SelectedFeedBatchSchema.shape.selections,
+  rejections: SelectedFeedBatchSchema.shape.rejections,
+};
 export const PreviousSelectedFeedBatchSchema = z.strictObject({
-  ...SelectedFeedBatchSchema.shape,
+  ...SelectedFeedBatchPreviousFields,
   version: PreviousPlannerStageVersion,
   selections: z.array(PreviousReliableEditorialSelectionSchema),
+});
+export const PreviousOperationalSelectedFeedBatchSchema = z.strictObject({
+  ...SelectedFeedBatchPreviousFields,
+  version: z.literal(SOURCE_OPERATIONAL_SCORE_VERSION),
 });
 export const PreviousPartitionedFeedBatchSchema = z.strictObject({
   ...PartitionedFeedBatchSchema.shape,
@@ -275,7 +292,7 @@ export const PreviousPartitionedFeedBatchSchema = z.strictObject({
   dispatches: z.array(PreviousReliableFeedIngestDispatchSchema),
 });
 export const PreviousExposureSelectedFeedBatchSchema = z.strictObject({
-  ...SelectedFeedBatchSchema.shape,
+  ...SelectedFeedBatchPreviousFields,
   version: z.literal(PUBLISHER_EXPOSURE_VERSION),
   selections: z.array(PreviousExposureEditorialSelectionSchema),
 });
@@ -297,13 +314,23 @@ export function readParsedFeedBatch(raw: unknown): ParsedFeedBatch {
 }
 
 export function readSelectedFeedBatch(raw: unknown): SelectedFeedBatch {
+  if (typeof raw === "object" && raw !== null && "version" in raw && raw.version === FEED_HEALTH_STATE_VERSION) {
+    return SelectedFeedBatchSchema.parse(raw);
+  }
+  const unrecordedState = { capture_status: "not_recorded" as const };
+  if (typeof raw === "object" && raw !== null && "version" in raw && raw.version === SOURCE_OPERATIONAL_SCORE_VERSION) {
+    const previous = PreviousOperationalSelectedFeedBatchSchema.parse(raw);
+    return SelectedFeedBatchSchema.parse({
+      ...previous, version: FEED_HEALTH_STATE_VERSION, selection_state: unrecordedState,
+    });
+  }
   if (typeof raw === "object" && raw !== null && "version" in raw && raw.version === PUBLISHER_IDENTITY_VERSION) {
     const previous = z.strictObject({
-      ...SelectedFeedBatchSchema.shape, version: z.literal(PUBLISHER_IDENTITY_VERSION),
+      ...SelectedFeedBatchPreviousFields, version: z.literal(PUBLISHER_IDENTITY_VERSION),
       selections: z.array(PreviousPublisherEditorialSelectionSchema),
     }).parse(raw);
     return SelectedFeedBatchSchema.parse({
-      ...previous, version: SOURCE_OPERATIONAL_SCORE_VERSION,
+      ...previous, version: FEED_HEALTH_STATE_VERSION, selection_state: unrecordedState,
       selections: previous.selections.map(row =>
         EditorialSelectionContract.legacyVersions[PUBLISHER_IDENTITY_VERSION].migrate(row)),
     });
@@ -311,7 +338,7 @@ export function readSelectedFeedBatch(raw: unknown): SelectedFeedBatch {
   if (typeof raw === "object" && raw !== null && "version" in raw && raw.version === PUBLISHER_EXPOSURE_VERSION) {
     const previous = PreviousExposureSelectedFeedBatchSchema.parse(raw);
     return SelectedFeedBatchSchema.parse({
-      ...previous, version: SOURCE_OPERATIONAL_SCORE_VERSION,
+      ...previous, version: FEED_HEALTH_STATE_VERSION, selection_state: unrecordedState,
       selections: previous.selections.map(row =>
         EditorialSelectionContract.legacyVersions[PUBLISHER_EXPOSURE_VERSION].migrate(row)),
     });
@@ -319,7 +346,7 @@ export function readSelectedFeedBatch(raw: unknown): SelectedFeedBatch {
   if (typeof raw === "object" && raw !== null && "version" in raw && raw.version === "2026-10-24") {
     const previous = PreviousSelectedFeedBatchSchema.parse(raw);
     return SelectedFeedBatchSchema.parse({
-      ...previous, version: SOURCE_OPERATIONAL_SCORE_VERSION,
+      ...previous, version: FEED_HEALTH_STATE_VERSION, selection_state: unrecordedState,
       selections: previous.selections.map(row =>
         EditorialSelectionContract.legacyVersions[SOURCE_RELIABILITY_VERSION].migrate(row)),
     });

@@ -44,6 +44,7 @@ export function createPlanApp(inputs: PlanInputs, runtime: PlanRuntime) {
         throw new PlanError("INVALID_RUN_CONTEXT", "listener run clock moved backwards", "now");
       }
       lastRunAt = now.getTime();
+      const selectionClock = runtime.selection_clock ?? runtime.clock;
       const required = new Set(requiredSeenDays(
         now.toISOString().replace(/\.\d{3}Z$/, "Z"), inputs.clock_config.collect.seen_window_days,
       ));
@@ -54,6 +55,7 @@ export function createPlanApp(inputs: PlanInputs, runtime: PlanRuntime) {
         day.day >= firstRequired || acceptedDays.get(day.day) !== JSON.stringify(day));
       const result = await runFeedPlan(request, inputs, {
         ...runtime, ...captured, clock: () => now,
+        ...(selectionClock === undefined ? {} : { selection_clock: selectionClock }),
         seen_days: seenDays,
         seen_receipts: [...ownFiles].map(([day, files]) => ({ day, files: [...files] })),
         feed_history_receipts: feedReceipts.read(),

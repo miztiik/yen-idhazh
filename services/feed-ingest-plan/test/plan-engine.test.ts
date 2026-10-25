@@ -7,11 +7,12 @@ import {
   FeedIngestEventSchema,
   CandidateRejectionContract,
   EditorialSelectionContract,
-  deriveCandidateId, deriveUrlKey,
+  SelectedFeedBatchSchema, deriveCandidateId, deriveUrlKey,
   FeedHealthContract, SOURCE_RELIABILITY_VERSION, readFeedIngestEvent,
 } from "@idhazh/common-contracts";
 import { persistLedger } from "@idhazh/ledger-file-writer";
 import { runFeedPlan, summarizePlan } from "../src/run-feed-plan";
+import { readStageBatch } from "../src/api/stage-store";
 import { loadPlanInputs } from "../src/load-plan-inputs";
 import { readLedgerParquet } from "../src/read-ledger-history/read-parquet";
 import { readLedgerDay } from "../src/read-ledger-history/read-period";
@@ -73,7 +74,7 @@ async function seenWindow(recorded: Awaited<ReturnType<typeof recordedPlan>>, kn
   return { index, entries, local };
 }
 
-test("real composition shares one clock and override and reads native dispatches with exact choices", async () => {
+test("real composition separates run and selection clocks and reads native dispatches with exact choices", async () => {
   const publisherId = "recorded-publication";
   const recorded = await recordedPlan([
     source({ publisher_id: publisherId }),
@@ -122,9 +123,12 @@ test("real composition shares one clock and override and reads native dispatches
     const result = await runFeedPlan({
       freshness_hours: 18, article_limit: 1, partition_strategy: "none",
     }, recorded.inputs, recorded.runtime);
-    expect(clocks).toBe(1);
+    expect(clocks).toBe(2);
     expect(result.status).toBe("dispatches_persisted_audit_pending");
     expect(result.context.date).toBe("2026-10-21");
+    const selected = await readStageBatch(recorded.inputs.outputRoot, "selected",
+      result.batches.selection_batch_id, SelectedFeedBatchSchema);
+    expect(selected.selection_state.selection_started_at_utc).toBe("2026-10-22T00:00:01Z");
     expect(result.evidence.publisher_publication.gaps).toEqual(["invalid_publication_history"]);
     expect(result.context.writer.shard).toBe(0);
     expect(result.request.shards).toBe(1);
@@ -400,7 +404,8 @@ test("real composition shares one clock and override and reads native dispatches
       const read = (health_days = parity.inputs.settings.inputs.feed_health_days) => readFeedHistory({
         root: parity.directory, now: held.context.now, run_id: held.context.run_id,
         sources: parity.inputs.harvest.sources.map(source => sourceSnapshot(parity.inputs.harvest, source)),
-        policy, health: parity.inputs.registrations.feed_health, health_days,
+        policy, lifecycle_window_days: parity.inputs.harvest.config.feedback.lifecycle_window_days,
+        health: parity.inputs.registrations.feed_health, health_days,
       });
       const sleepOnly = healthRows.filter(row => row.feed_id === "sleeping");
       const skips = Array.from({ length: threshold }, (_, index) => FeedHealthContract.schema.parse({

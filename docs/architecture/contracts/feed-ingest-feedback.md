@@ -303,9 +303,10 @@ historical records:
 - A configurable rolling window of closed UTC days, defaulting to seven.
 - At least 20 distinct measured article opportunities for a component.
 - At least 80 percent coverage of attempted opportunities for that component.
-- Equal one-third weights for CPU, memory and requests.
+- Fixed one-third shares for CPU and private memory; request weight defaults to
+  one third and is the only configurable component weight, with no separate cap.
 - Requests are the only eligible component until CPU and private memory have
-  source-attributable evidence; do not renormalize the equal weights.
+  source-attributable evidence; do not renormalize unavailable components.
 - Unqualified evidence has no impact and does not fall back to RSS reliability.
 
 Below either evidence requirement, preserve readings as unqualified and do not
@@ -322,146 +323,180 @@ value pretends to be measured evidence.
 
 ## D4 approved state behavior and implementation details
 
-Reuse the existing registered ledger writer for observations and derived
-operational state. Concurrent invocations remain allowed.
+**Owner ruling, kumarsnaveen_microsoft, 2026-10-25 UTC:** keep two positive,
+validated settings in `feedback` in `config/feed-ingest-plan.json`.
+`lifecycle_window_days` defaults to 31 represented UTC days and preserves the
+existing represented-day membership and known-empty rules.
+`window_days` defaults to seven closed UTC days for request scoring and excludes
+the current day. These windows are independent and distinct from
+`metrics.rolling_window_days`. Neither window is a source constant.
 
-**Owner ruling, kumarsnaveen_microsoft, 2026-10-24 UTC:** make the evidence window
-configurable, defaulting to seven closed UTC days; read registered data under
-both `state/raw/` and `state/compact/`; allow concurrent runs; and design for
-graceful failure. Exclude the current UTC day. The window rolls forward each
-UTC day; it is not a frozen set of seven dates.
+Keep the request evidence policy at 20 measured article opportunities and 80
+percent measured coverage. CPU and private-memory retain fixed one-third shares
+without renormalization; unavailable values remain unavailable. `request_weight`
+is the only configured component weight, defaults to one third and has no
+additional upper cap. No RSS fallback, quality claim or source-catalog change
+follows from the score.
 
-Propose `feedback.window_days` in `config/feed-ingest-plan.json` as the
-positive-integer setting, default `7`. This is distinct from
-`metrics.rolling_window_days`, which serves publication metrics. Compute the
-named date range once per run from the UTC clock and this setting.
+### Saved snapshot contract
 
-Raw observations are written once as native, registered Parquet under
-`state/raw/{ledger}/`. The gardener compacts them to
-`state/compact/{ledger}/`; readers use the existing indexes and period
-precedence so a date is counted once. The derived per-source operational state is a declared, registered raw/compact
-Parquet ledger payload, not a growing JSON sidecar or input to the digest-feed
-summarizer. Its Pydantic row model, TypeScript reader schema, ledger
-registration and compaction task are in place. Row 10 still owns the state
-writer and next-allocation reader.
+`FeedHealthStateSnapshot` is the one complete persisted payload in the
+`feed-health-state` ledger. Its Pydantic model is
+`backend/idhazh/contracts/feed_health_state.py`; its strict TypeScript binding
+is `packages/common-contracts/src/schemas/feed-health-state.schema.ts`. Each
+snapshot carries its `latest` or `previous` slot, revision and parent, actual
+write time, selected batch UUID, selection-start UTC time, code revision,
+policy version and feedback-policy digest.
 
-Yes, read both roots through the registered ledger reader and compact indexes.
-For each date, use the compact period when an index names it; otherwise use
-that date's raw files. Follow the existing period precedence so a date comes
-from exactly one source. Do not append raw re-run files to compact rows when
-the index already names that date; this avoids counting the same observations
-twice.
+Each snapshot is one complete row in a native Parquet file under
+`state/raw/feed-ingest-plan/feed-health-state/<YYYY>/<MM>/<DD>/`. Its UUIDv8
+file identity, row digest, byte count and one-row count are checked before the
+row is accepted. The fixed `FeedHealthStateHeadIndex` at
+`state/raw/feed-ingest-plan/feed-health-state/head/index.json` contains only
+the `latest` and optional `previous` file references, revisions and checked
+file identities. It is a lookup index, not a JSON state sidecar: lifecycle
+rows, request evidence and policy state exist only in the Parquet snapshots.
+The existing raw writer stores each snapshot as one ordinary native Parquet
+row; it does not mix state rows with observations or add a roster to every
+observation. The head index is a new bounded metadata shape, not the existing
+per-day `RawDayIndex` or compact index format. Row 24 must publish and validate
+it atomically with the snapshot and ordinary raw-day index.
 
-### Table B - Declared operational-state fields
+On a successful update, the new snapshot, its raw-day index, the rotated head
+index and any completed immutable observation files from that run are published
+in one repository commit through the existing TypeScript commit adapter's
+bounded fresh-base preparation. `latest` becomes the new revision and
+`previous` becomes the former valid `latest`; the head names no more than two
+snapshots. A refused or failed publication leaves the committed head and
+snapshots unchanged and retains prepared artifacts for diagnosis. Retries
+rebuild only derived state from named completed inputs; they do not repeat
+fetch, parse, selection or partition work. Old snapshots no longer reachable
+from the head remain subject to ordinary compaction and yearly pruning.
 
-| Id | Field | Declared type or status |
-| --- | --- | --- |
-| B1 | `state_revision` | Positive integer, advanced per committed operational-state payload |
-| B2 | `parent_revision` | Nullable positive integer naming the state revision used as its base |
-| B3 | `written_at_utc`, `evidence_cutoff_utc` | UTC instants |
-| B4 | `window_days` | Positive integer copied from configured setting |
-| B5 | `window_start`, `window_end` | UTC dates; the closed days selected by `window_days` |
-| B6 | `code_revision`, `policy_version` | Writer revision and policy version used |
-| B7 | `source_id` and request evidence | One ledger row per source, with nullable evidence dates and request counts, measured opportunity counts, coverage and qualification |
-| B8 | D5 control fields | Separate policy state; approved rules are inactive until its contract and enforcement are implemented |
+Each snapshot retains two independent named inputs:
 
-**Owner ruling, kumarsnaveen_microsoft, 2026-10-24 UTC:** Preserve immutable
-per-run observations. If another run saves first, recalculate only the
-derived per-source operational state from the newer records. A failed save
-leaves the old state intact and reports failure. An already-running selection
-keeps the state revision it read. Report corrections outside the configured
-evidence window, but do not use them in that window's score.
+- `lifecycle_days` contains the configured represented-day membership and the
+  validated `feed-health` rows needed to preserve lifecycle evidence.
+- `request_days` contains every closed UTC date in the request-score window and
+  the `document-observations` rows needed to settle article opportunities.
 
-The row contract preserves measured request totals, source-supported waste,
-distinct and measured opportunities, evidence dates, coverage, qualification
-status and policy version. It does not add CPU or memory amounts: those remain
-unavailable until attributable.
+Each day records `available` or `gap`, a stable gap reason, its last successful
+input identity and the corresponding native rows. A gap may retain the last
+known contribution, but it is never an empty-day result. Feed-health rows keep
+their native represented date. Document observations keep their actual
+`occurred_at`, cause and correction identities; the containing index day never
+becomes an invented root day or correction target day.
 
-Restriction state is not part of the approved D3/D4 operational telemetry
-payload. The D5 restriction and recovery policy below is approved, but its
-state fields and runtime behavior are not yet implemented; do not activate
-restrictions until that policy contract and implementation exist. Existing
-robots, trust and access-safety rules remain unchanged.
+An input identity records each exact relative POSIX index path, native ledger,
+index kind and SHA-256 of the index bytes, plus each validated Parquet path,
+native ledger and tier, compact period where applicable, UUIDv8 file ID,
+envelope digest, byte count and row count. Lifecycle inputs name `feed-health`;
+request inputs accept the current `document-observations` ledger and its
+approved `ingest-observations` successor during migration. The fingerprint is
+the SHA-256 of canonical JSON for the ledger, input day, sorted index identities
+and file metadata available in those indexes. This identity is checked before
+opening Parquet. Raw index bytes and names (plus optional sizes), and compact
+index periods, row counts and byte sizes are the current cheap identity source.
+An unchanged fingerprint reuses the saved contribution; an unreadable changed
+input leaves the last good contribution in place, marks a gap and is retried. A
+changed input is reread and its Parquet envelope, schema, file identity, size
+and row digest are validated before replacing that day's contribution. Raw and
+compact files are immutable at their UUID paths; changing bytes without
+changing the named index is an integrity breach, not a detectable cheap-index
+change. If the actual caller has the exact committed Git blob identity, it may
+strengthen this check without enumerating repository paths.
 
-Keep operational state separate from the curated source catalog: it cannot
-retire a source or publisher. The Pydantic model is declared under
-`backend/idhazh/contracts/`; its registered Parquet ledger contract and
-TypeScript binding are in place. Row 10 will persist it through the shared
-ledger writer and read it through the registered raw/compact path. Do not
-create a JSON state file or another unregistered persistence path.
+An unchanged compact index must not hide a later raw residual. The shared
+reader change in Row 24 must inspect the named raw index even when a compact
+period covers that day, distinguish raw file IDs already represented by the
+compact rows from newly indexed files, and feed the combined evidence through
+the existing attempt and correction settlement. Its bounded regression uses
+one compact day plus its named raw index, proves that a late raw file is seen
+once, and proves that an absorbed file is not counted twice. Compaction changes
+the named identity and refreshes only that day.
 
-**Owner ruling, kumarsnaveen_microsoft, 2026-10-25 UTC:** select A1,
-recalculate changed days only. Inspect registered day indexes for the
-configured windows. When a day's input files or contents change, reread that
-day and replace its saved contribution; reuse unchanged days. Compaction may
-refresh a changed day. Declare validated day-input fingerprints and retained
-contributions, including how cross-day causal settlement is handled. Late or
-out-of-order commits and corrections must not be missed or counted twice.
-Report corrections outside the retained window without applying them.
+Request scoring reuses `settleIngestObservations` and
+`rollupIngestOutcomes`. It joins attempts to their fetch and parses to the fetch
+they name, retains cross-day causal facts, selects the highest valid correction
+revision, and groups denominators by the existing `(observed_run_id, source_id,
+candidate_id)` identity. Occurrence dates keep their existing meaning. A
+missing named ancestor makes the opportunity unknown; there is no search beyond
+the configured named inputs. Corrections outside the score window are reported
+but not applied. A current-day observation is provisional and is not counted
+again as a closed-day denominator.
 
-Read named ledger periods through the registered index, not a repository walk.
+Lifecycle evidence continues to use the current endpoint identity: the
+SHA-256 of the configured feed URL. The source registry's active or retired
+status is not robots permission. Access evidence comes only from the recorded
+robots check; an unknown or absent check does not grant permission.
 
-Compute article-request score evidence from named periods in the configured
-closed-UTC-day window. Maintain the separate represented-day lifecycle by
-rereading changed days and replacing their saved contributions; do not move a
-full 31-day recomputation behind the API. Report corrections outside the score
-window without using them in its score. An older correction does not rewrite
-expired score evidence or clear a restriction.
+The ledger head names exactly the latest and previous complete Parquet
+snapshots in the existing `feed-ingest-plan` family. There is no unbounded
+history scan, new top-level state family or yearly-pruning exception. The head
+index has a fixed path and exact latest/previous references; it is not derived
+by sorting commits, UUIDs or file timestamps. Snapshot validity is independent
+of its dates: there is no hidden age limit. Each snapshot contains its own
+original windows and bounded day contributions. If `latest` is unreadable, a
+valid `previous` is used as `stale_fallback` with its original dates and no
+expiry. If neither is valid, the read is `unavailable`, the score adjustment is
+null and its only notice is `restrictions_unverified`. This neutral notice does
+not change source access or fall back to RSS reliability. No empty state is
+written over a valid snapshot.
 
-Do not serialize fetch, parse, planning or selection, and do not add
-selection idempotency. Keep each run's raw observation files immutable and
-uniquely named; regenerate only the replaceable per-source operational-state
-Parquet payload from the latest committed state and registered ledger inputs.
+The immutable selected batch adds `selection_state`. New selections capture a
+separate `selection_started_at_utc` and the exact state status, revision and
+both window ranges they read, even when selection is empty. The ordinary batch
+clock continues to govern age policy. Old selected batches migrate to
+`capture_status: not_recorded`; they are not falsely described as a state read.
+The state update endpoint refuses an unrecorded selection. Selection itself
+does not update state.
 
-Reuse the shared publisher's existing recovery pattern
-([committing completed output](../publishing/committing.md)): prepare derived
-output again from named inputs on a fresh `main`, while retaining completed
-immutable observations. Reuse that pattern, not a global lock or a custom Git
-retry loop. The conflict is narrow: two runs may
-read revision R and both compute derived state. Once one lands, Git rejects
-the other's stale candidate. Rebuilding on the new tip incorporates newer
-records; replaying stale state could overwrite newer state. This race does
-not justify holding fetch, parse or selection.
+### Update and failure contract
 
-This TypeScript flow cannot call the shared Python publisher as a local step.
-Its existing publisher retries the same immutable files, so extend that
-publication adapter with a bounded prepare callback: on a stale base, reuse
-the existing push-retry policy and rebuild only the derived per-source
-operational-state payload from the fresh committed state and named raw/compact
-inputs. Preserve immutable observations. This is a scoped adapter extension
-and concurrency tests, not a new commit engine or retry loop. Stale state
-must never be replayed over newer state.
+The explicit route is `POST /api/2026-10-20/feed-health-state`, enabled only
+under the existing operator `settings.enabled` flag. Its strict body is
+`{"batch_id":"<selected batch UUIDv4>"}`. The ID is generated by the server
+when it writes the selected batch. A correlation ID is not a batch reference.
+Callers cannot provide a URL, path, score, clock or other identity.
 
-Settlement does not queue or hold other runs. If publication is refused or
-retries are exhausted, leave the previously committed operational state unchanged,
-retain the run artifacts, report the save failure and do not stop the entire
-planner run. Missing or unreadable state is not empty history and must not
-clear known restrictions.
+The typed response contains that `batch_id`, the exact `selection_state`
+captured in its selected batch and an `update` result. Returning that capture
+does not claim the new state changed the completed selection's score.
+`update.status` is
+`saved`, `unchanged`, `save_failed` or `unavailable`. It carries the committed
+`state_revision`, an `attempted_revision`, the actual `parent_revision`,
+distinct `changed_days` and closed diagnostic codes. A successful save names
+the new revision and its parent; the first saved revision is 1 with no parent
+and each later saved revision follows its actual parent by one. An unchanged
+result names the current revision and no changed days. A failed save names the
+attempted next revision and leaves the committed revision equal to the parent.
+An unavailable result has no revision. These four outcomes use HTTP 200.
+Terminal publish refusal or exhausted retries is a typed `save_failed`
+response, not HTTP 409. Completed immutable observations and prepared
+artifacts remain available, and stale derived state is never replayed over a
+newer base.
 
-A run that already read the previous operational state may finish with that
-view; any separately approved future policy governs later allocations.
-Preventing already-running allocations from using an older view would require
-a separate per-source reservation rule, which is not included in this
-proposal.
+The API accepts only a saved selected batch, then calls the shared TypeScript
+operation; `/plan` will call that same operation after selection while
+partitioning proceeds. Neither caller uses a self-HTTP request. The captured
+window uses `selection_started_at_utc`, not the older planning-batch clock or
+the update's later write time. This contract phase does not implement the
+updater, state writer, publication retry callback or new route.
 
-The next allocation reads the latest usable operational state with its code,
-revision and original UTC window. If the current state is unreadable, use the
-last valid saved state when one exists and label it `stale_fallback`; preserve
-its original window and do not invent an expiry time. Apply its saved
-qualified score adjustment as the best available state, but do not call it
-current. D5 restrictions remain inactive until their policy state contract and
-runtime implementation exist. If no state is readable, continue selection
-without an operational adjustment and emit `restrictions_unverified`; never
-write empty history over saved state. Existing robots, trust and access-safety
-checks do not change.
+Errors follow the current listener boundary: malformed JSON is HTTP 400
+`INVALID_REQUEST`; valid JSON outside the strict request schema is HTTP 400
+`INVALID_INPUT`; 404 `ARTIFACT_NOT_FOUND` means the selected batch is absent;
+409 `REQUEST_CONFLICT` means its configuration differs or it predates captured
+selection state; 413 `BODY_TOO_LARGE` is the configured listener limit; and
+503 `PLANNER_DISABLED` follows the existing false-by-default service setting.
+Damaged selected batches return HTTP 500 `ARTIFACT_INVALID`; known native index
+or Parquet integrity failures return HTTP 500 `STATE_INPUT_INVALID`.
+Unexpected programming exceptions remain HTTP 500 `PLAN_FAILED`; they are not
+converted to a successful unavailable result.
 
-The proposed read result carries `state_status: current|stale_fallback|unavailable`,
-nullable `state_revision` and nullable `window_start`/`window_end`. For
-`unavailable`, the score adjustment is null and the result includes the
-`restrictions_unverified` notice, whose meaning is that restrictions could
-not be verified. Fallback state retains its original revision and date range.
-No age threshold is proposed; the status records what the reader used without
-claiming it is current.
+Restriction state remains outside this contract. The approved D5 policy is
+inactive until its separate state and enforcement phase. This state does not
+change the current feed-lifecycle behavior before Row 24 replaces its reader.
 
 ## Approved feed-health state migration
 
@@ -487,30 +522,21 @@ legacy data as part of the rename.
 
 The approved implementation phases are:
 
-1. **Contract and configuration:** design the full
-   `POST /api/<existingversion>/feed-health-state` request, response and error
-   contract. Keep two configurable windows distinct: a lifecycle inventory
-   default of 31 represented days, and the existing article-request score
-   default of seven closed UTC days. Do not encode 31 as a magic constant or
-   add another request-weight cap; the approved request weight remains one
-   third. Before writers, settle bounded behavior for late/out-of-order
-   commits, corrections, window rollover and retained identity across the
-   configured represented-day inventory by inspecting registered day indexes.
-   Check indexed identities before Parquet data reads and reuse unchanged
-   cached identities. When an identity changes, reread that day and validate
-   its immutable input identity before replacing its saved contribution.
-   Reuse existing native settlement for raw, compact and attempt records
-   rather than adding a duplicate-resolution rule. Declare validated
-   day-input fingerprints and retained contributions,
-   including cross-day causal settlement. Late/out-of-order
-   commits and corrections must not be missed or double-counted; corrections
-   outside the retained window are reported but not applied. The API must
-   identify the saved selection batch being settled using that selected
-   output's `batch_id`; it is distinct from tracing context. Exact payload
-   fields and configuration placement remain to be designed. The Pydantic
-   contract owns persisted payloads; its TypeScript binding and compatible
-   read migrations are part of this phase. This does not migrate Python
-   production producers or consumers.
+1. **Contract and configuration:** this phase declares the Pydantic
+   `FeedHealthStateSnapshot` and bounded `FeedHealthStateHeadIndex`, their
+   strict TypeScript copies, selected-batch capture and migration, and the
+   validated `feedback.lifecycle_window_days` and `feedback.request_weight`
+   settings. It specifies `POST /api/2026-10-20/feed-health-state`, its exact
+   selected-batch request, typed response and listener errors. Lifecycle
+   evidence uses 31 represented UTC days by default; request scoring uses
+   seven closed UTC days by default. Changed-day fingerprints use registered
+   input-index identities before Parquet reads, and changed inputs are reread
+   and fully validated before replacing saved contributions. Cross-day
+   settlement uses the existing native observation rules; corrections beyond
+   the named window are reported but not applied. The fixed head index is the
+   proposed bounded latest/previous lookup protocol and needs review before its
+   writer is built. Contract acceptance is the gate; this phase does not add
+   the updater, Parquet state writer, API route or Python runtime migration.
 2. **Ledger rename:** update names, registrations, TypeScript raw/compact
    readers and writers, native Pydantic contracts, TypeScript bindings,
    compatible read migrations, compaction configuration, manifests,
@@ -678,9 +704,12 @@ source_operational_penalty = source_authority_contribution * operational_penalty
 priority_score = base_article_score - source_operational_penalty
 ```
 
-Use the existing equal-thirds, capped component calculation for
-`operational_penalty`. It replaces the RSS reliability term; it does not add a
-second penalty or an inverse-yield term. If evidence is not qualified, record
+CPU and private-memory shares remain fixed at one third. `request_weight` is the
+only configurable component weight and defaults to one third; it has no
+separate upper cap. Do not renormalize unavailable components. The saved
+`operational_penalty` remains bounded by its existing `[0,1]` contract. This
+replaces the RSS reliability term; it does not add a second penalty or an
+inverse-yield term. If evidence is not qualified, record
 `operational_penalty = null` and apply zero score change. Do not fall back to
 RSS reliability. Preserve RSS observations as historical evidence only.
 
@@ -722,9 +751,10 @@ does not make the saved score row TypeScript-only.
 - If only requests have supported evidence, CPU and memory stay `null`; their
   missing values do not increase the request weight.
 - If requests are the only supported component and all their measured work is
-  waste, the penalty is one third; unavailable CPU and memory do not add to it.
+  waste, the penalty is `min(1, request_weight)`; with the default weight it is
+  one third. Unavailable CPU and memory do not add to it.
 - If all three components later have qualified, fully wasted evidence, the
-  penalty is 1 and the operational part of priority is reduced to zero.
+  penalty is `min(1, 2/3 + request_weight)`.
 - An unknown historical publisher remains unknown rather than inheriting
   today's feed mapping.
 

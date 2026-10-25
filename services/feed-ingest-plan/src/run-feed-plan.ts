@@ -39,6 +39,7 @@ export type PlanRuntime = {
   run_number?: string;
   correlation_id?: string;
   clock?: () => Date;
+  selection_clock?: () => Date;
   captured_at?: string;
   observation_clock?: () => Date;
   on_document_observations_persisted?: (files: readonly PersistedLedgerFile[]) => void;
@@ -110,6 +111,7 @@ export async function runFeedPlan(raw: unknown, inputs: PlanInputs, runtime: Pla
     root: inputs.root, now: context.captured_at, run_id: context.run_id,
     sources: harvestInputs.sources.map(source => sourceSnapshot(harvestInputs, source)),
     policy: inputs.clock_config.collect,
+    lifecycle_window_days: harvestInputs.config.feedback.lifecycle_window_days,
     health: inputs.registrations.feed_health,
     health_days: inputs.settings.inputs.feed_health_days,
     own_receipts: runtime.feed_history_receipts ?? [], receipt_root: inputs.outputRoot,

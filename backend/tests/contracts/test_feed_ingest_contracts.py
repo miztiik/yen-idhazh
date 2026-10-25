@@ -31,6 +31,8 @@ CONTRACT_NAMES = (
     ("planner_stage", "PartitionedFeedBatch"),
     ("feed_ingest_observations", "DocumentObservationRecord"),
     ("feed_ingest_feedback", "FeedIngestOperationalStateRow"),
+    ("feed_health_state", "FeedHealthStateSnapshot"),
+    ("feed_health_state", "FeedHealthStateHeadIndex"),
 )
 
 MODEL_NAMES = (
@@ -38,6 +40,13 @@ MODEL_NAMES = (
     ("feed_ingest_candidate", "SourceOperationalEvidence"),
     ("feed_ingest_candidate", "PublisherExposurePenalty"),
     ("feed_ingest_feedback", "OperationalStateRead"),
+    ("feed_ingest_feedback", "SelectionStateCapture"),
+    ("feed_health_state", "FeedHealthStateInputIdentity"),
+    ("feed_health_state", "FeedHealthStateLifecycleDay"),
+    ("feed_health_state", "FeedHealthStateRequestDay"),
+    ("feed_health_state", "FeedHealthStateIndexIdentity"),
+    ("feed_health_state", "FeedHealthStateFileIdentity"),
+    ("feed_health_state", "FeedHealthStateSnapshotReference"),
     ("planner_stage", "PlannerStageContext"),
     ("planner_stage", "PlannerStageRequest"),
     ("planner_stage", "RecordedIdentity"),
@@ -118,6 +127,21 @@ def test_declared_contract(module: str, name: str) -> None:
                 observation.model_dump(mode="json")
                 | {"corrects_event_id": observation.event_id, "correction_revision": 1}
             )
+    if name == "FeedHealthStateSnapshot":
+        snapshot = contract.from_json(read_text(
+            CONTRACT_FIXTURES_DIR / "feed-health-state" / "one-complete-snapshot.json"
+        ))
+        with pytest.raises(ValidationError, match="every closed UTC day exactly once"):
+            contract.model_validate(snapshot.model_dump(mode="json") | {"request_days": []})
+    if name == "FeedHealthStateHeadIndex":
+        head = contract.from_json(read_text(
+            CONTRACT_FIXTURES_DIR / "feed-health-state-head-index" / "two-snapshots.json"
+        ))
+        duplicate = head.latest.model_dump(mode="json") | {
+            "snapshot_role": "previous", "state_revision": 3, "parent_revision": 2,
+        }
+        with pytest.raises(ValidationError, match="independent files"):
+            contract.model_validate(head.model_dump(mode="json") | {"previous": duplicate})
     publisher_snapshot: dict[str, object] = {"publisher_id": "recorded-publication"}
     publisher_source: dict[str, object] = {"source": publisher_snapshot}
     previous_identity_cases: dict[tuple[str, str], tuple[str, dict[str, object]]] = {

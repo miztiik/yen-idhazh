@@ -14,7 +14,11 @@ export function estimateOperationalFeedback(
     availability: evidence.availability,
     minimum_measured_opportunities: policy.minimum_measured_opportunities,
     minimum_measured_coverage: policy.minimum_measured_coverage,
-    component_weights: policy.component_weights,
+    component_weights: {
+      cpu: 1 / 3,
+      private_memory: 1 / 3,
+      requests: policy.request_weight,
+    },
     sources: evidence.sources.map(source => estimateSource(source, policy)),
   };
 }
@@ -42,7 +46,7 @@ function estimateSource(source: SourceEvidence, policy: FeedIngestConfig["feedba
     measured_target_requests: requests,
     measured_source_wasted_requests: wastedRequests,
     request_waste_ratio: wasteRatio,
-    request_component_weight: policy.component_weights.requests,
-    request_component_penalty: wasteRatio === null ? null : wasteRatio * policy.component_weights.requests,
+    request_component_weight: policy.request_weight,
+    request_component_penalty: wasteRatio === null ? null : wasteRatio * policy.request_weight,
   };
 }
