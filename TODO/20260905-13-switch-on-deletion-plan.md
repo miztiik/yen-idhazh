@@ -3,7 +3,7 @@
 **Last Updated**: 2026-10-25
 **Level**: 4 (structural: the first configuration in this repository that deletes committed files on a schedule)
 
-**Chain**: previous work delivered in [the chart contract](../docs/architecture/publishing/where-a-drawing-becomes-pixels.md) | next [`20260905-14-sufficiency-bar-plan.md`](20260905-14-sufficiency-bar-plan.md).
+**Chain**: previous work delivered in [the chart contract](../docs/architecture/publishing/where-a-drawing-becomes-pixels.md) | next [`20260905-15-chart-vocabulary-plan.md`](20260905-15-chart-vocabulary-plan.md).
 **Reference**: [`20260902-visual-planner-pseudo-plan.md`](20260902-visual-planner-pseudo-plan.md) - O8, O9, section 9 whole, rows 59, 61, 62, E3, E4.
 
 Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delegates a row where delegation pays; keep parallel N = 4 rows in flight, refilling a slot as soon as a worker returns and never waiting on a merge; consult a persona only where two answers would lead to different code; honor the ESCALATE triggers in section 0. Row 3 PR authorized by kumarsnaveen on 2026-10-25; production-run evidence remains required before DONE.
@@ -140,5 +140,4 @@ its publisher targets `main` and its history job can rewrite history.
 
 - [`20260902-visual-planner-pseudo-plan.md`](20260902-visual-planner-pseudo-plan.md) - the decision record this group executes.
 - [The chart contract](../docs/architecture/publishing/where-a-drawing-becomes-pixels.md) - the delivered renderer prerequisite.
-- [`20260905-14-sufficiency-bar-plan.md`](20260905-14-sufficiency-bar-plan.md) - the next plan.
 - [Site weight](../docs/reference/site-weight.md) - the capacity check and its reporting.
