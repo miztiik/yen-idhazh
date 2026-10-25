@@ -30,6 +30,7 @@ import type { PlanningMetricsResult, PublicationMetricsResult, PublicationRecord
 import { createProgressLogger } from "./logging/progress-logger";
 import type { ProgressRecord } from "./logging/progress-logger";
 import type { TaskProfiling } from "../../host-probes/src/task-profile/task-profiler";
+import { createIngestObservations } from "./ingest-observations";
 
 export type PlanRuntime = {
   git_sha: string;
@@ -37,6 +38,8 @@ export type PlanRuntime = {
   correlation_id?: string;
   clock?: () => Date;
   captured_at?: string;
+  observation_clock?: () => Date;
+  on_document_observations_persisted?: (files: readonly PersistedLedgerFile[]) => void;
   boundary?: NonNullable<Parameters<typeof harvestFeeds>[3]>;
   log?: (event: FeedIngestEvent) => void;
   progress?: (record: ProgressRecord) => void;
@@ -62,6 +65,7 @@ export async function runFeedPlan(raw: unknown, inputs: PlanInputs, runtime: Pla
     inputs.registrations.dispatches, inputs.registrations.seen,
     inputs.registrations.published, inputs.registrations.item_health,
     inputs.registrations.feed_health,
+    inputs.registrations.document_observations,
   ]) {
     if (entry.lifecycle_status !== "active") throw new PlanError("LEDGER_INACTIVE", `Required ledger ${entry.name} is not active`, entry.name);
   }
@@ -114,12 +118,18 @@ export async function runFeedPlan(raw: unknown, inputs: PlanInputs, runtime: Pla
   });
   progress("HISTORY_READ_COMPLETED");
   logger.startStep();
+  const observations = createIngestObservations({
+    writer: context.writer, outputRoot: inputs.outputRoot,
+    registration: inputs.registrations.document_observations, settings: inputs.ledgerSettings,
+    ...(runtime.on_document_observations_persisted === undefined ? {} : { on_persisted: runtime.on_document_observations_persisted }),
+  });
   const harvest = await harvestFeeds(harvestInputs, {
     writer: context.writer, correlation_id: context.correlation_id,
     max_future_hours: inputs.clock_config.collect.max_future_hours,
     exclusions: exclusionEvidence,
     feed_history: feedHistory.sources,
     overrides, clock: () => new Date(context.now), progress,
+    observations, observation_clock: runtime.observation_clock ?? (() => new Date()),
     log: record => progress(record.subject === "feed" ? "FEED_REJECTED" : "ARTICLE_REJECTED", {
       source_id: record.source_id, ...(record.candidate_id === null ? {} : { candidate_id: record.candidate_id }),
       drop_reason: record.drop_reason,
@@ -227,6 +237,7 @@ export async function runFeedPlan(raw: unknown, inputs: PlanInputs, runtime: Pla
       dispatches,
       seen: seen.sealing,
       feed_health: feedFiles.health,
+      document_observations: observations.result(),
     },
     evidence: { harvest, screening, curation, seen, exclusions: exclusionEvidence, partition,
       feed_history: feedHistory, daily_publication: dailyPublication,

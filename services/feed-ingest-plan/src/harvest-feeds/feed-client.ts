@@ -7,10 +7,19 @@ import { fetchRejection, recordRejection } from "./record-rejection";
 import { fetchDiagnostics } from "./fetch-diagnostics";
 import { parseDocument } from "./parse-document";
 import { canonicalizeUrl } from "./url-cleaner";
-import { emitDocumentObservations } from "./document-observation";
-import { utcTimestamp } from "./harvest-types";
+import { documentWork, describeFeedParse } from "./document-work";
 
 export { parseFeed } from "./parse-feed";
+
+export function feedDocumentWork(source: SourceSnapshot, context: HarvestContext) {
+  return documentWork(context, {
+    run_id: context.writer.run_id, correlation_id: context.correlation_id,
+    article_id: canonicalizeUrl(source.feed_url).url_key, source_id: source.source_id,
+  }, `${context.writer.run_id}\n${source.source_id}\nfeed`, {
+    document_kind: "feed", source_id: source.source_id, publisher_id: source.publisher_id,
+    candidate_id: null, observed_run_id: context.writer.run_id, observed_attempt: context.writer.attempt,
+  });
+}
 
 export async function readFeed(
   source: SourceSnapshot, fetcher: PermittedFetcher, context: HarvestContext, timeout_ms: number,
@@ -23,21 +32,18 @@ export async function readFeed(
     diagnostics: null,
     history: null,
   };
+  const work = feedDocumentWork(source, context);
   if (source.status !== "active") {
+    await work.skip();
     outcome.rejection_reason = "SOURCE_INACTIVE";
     return { entries: [], rejection: recordRejection(source, context, "SOURCE_INACTIVE"), outcome: FeedOutcomePayloadSchema.parse(outcome) };
   }
   const fetchStarted = performance.now();
-  const identity = {
-    run_id: context.writer.run_id, correlation_id: context.correlation_id,
-    article_id: canonicalizeUrl(source.feed_url).url_key, source_id: source.source_id,
-  };
-  const key = `${context.writer.run_id}\n${source.source_id}\nfeed`;
-  const response = await fetcher.fetch(source.feed_url);
-  const fetched = emitDocumentObservations(context, identity, key, "fetch", null, utcTimestamp(context.clock), response.attempts);
+  const { fetched: response, observation: fetched } = await work.fetch(fetcher, source.feed_url);
   outcome.fetch_duration_ms = Math.round(performance.now() - fetchStarted);
   outcome.diagnostics = fetchDiagnostics(response, outcome.fetch_duration_ms);
   if (response.body === null) {
+    await work.skipParse(fetched.event_id);
     const { reason, details } = fetchRejection(response, timeout_ms, outcome.diagnostics);
     outcome.fetch_status = response.failure === "timeout" ? "timeout"
       : response.failure === "http" ? "http_failure" : "network_failure";
@@ -46,9 +52,9 @@ export async function readFeed(
   }
   outcome.fetch_status = "success";
   const parseStarted = performance.now();
-  let entries: FeedEntry[];
-  try { entries = await parseDocument("feed", response.body, source.feed_url); }
-  catch {
+  const body = response.body;
+  const parsed = await work.parse(() => parseDocument("feed", body, source.feed_url), fetched.event_id, describeFeedParse);
+  if (parsed.parsed === null) {
     outcome.parse_duration_ms = Math.round(performance.now() - parseStarted);
     outcome.parse_status = "failure";
     outcome.rejection_reason = "FEED_PARSE_FAILED";
@@ -58,9 +64,8 @@ export async function readFeed(
         http_status: response.http_status, diagnostics: outcome.diagnostics,
       }), outcome: FeedOutcomePayloadSchema.parse(outcome),
     };
-  } finally {
-    emitDocumentObservations(context, identity, key, "parse", fetched.event_id, utcTimestamp(context.clock));
   }
+  const entries = parsed.parsed;
   outcome.parse_duration_ms = Math.round(performance.now() - parseStarted);
   outcome.parse_status = entries.length ? "success" : "empty";
   outcome.parsed_count = entries.length;

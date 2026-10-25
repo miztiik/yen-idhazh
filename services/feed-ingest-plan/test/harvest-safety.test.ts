@@ -7,7 +7,12 @@ import { createPermittedFetcher, crawlerProduct, parseRobots, robotsPermits } fr
 import { mapPool } from "../src/harvest-feeds/harvest-pool";
 import { matchUrlExclusion } from "../src/harvest-feeds/url-exclusions";
 import { fetchDiagnostics } from "../src/harvest-feeds/fetch-diagnostics";
-import { RecordedTransport, inputs, readRecordings, readSafety, source } from "./harvest-recordings";
+import { RecordedTransport, context, destination, inputs, readRecordings, readSafety, source } from "./harvest-recordings";
+import { harvestFeeds } from "../src/harvest-feeds/harvest-pool";
+import { recordHarvestObservations, readObservationFiles } from "./observation-recordings";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 test("recorded sanitizer vectors match sanitizer-3, keep prose and are idempotent", async () => {
   const fixture = await readSafety();
@@ -100,6 +105,36 @@ test("permanent statuses do not retry; transient statuses use existing retry con
   expect((await fetcher.fetch("https://news.example/retry")).http_status).toBe(200);
   expect(transport.requests.filter(request => request.url.pathname === "/not-found")).toHaveLength(1);
   expect(transport.requests.filter(request => request.url.pathname === "/retry")).toHaveLength(2);
+  for (const interruption of ["attempt-and-outcome", "outcome"] as const) {
+    const directory = await mkdtemp(join(tmpdir(), "interrupted-fetch-facts-"));
+    try {
+      const interruptedContext = context();
+      const recorder = await recordHarvestObservations(directory, interruptedContext);
+      const interruptedTransport = new RecordedTransport(await readRecordings());
+      // The caller fails after dispatch, including while reporting the failed fetch.
+      interruptedContext.progress = (event, details) => {
+        if (event === "DOCUMENT_FETCHED" || (interruption === "attempt-and-outcome" && details?.fetch_attempt?.phase === "target")) {
+          throw new Error("progress destination interrupted");
+        }
+      };
+      await expect(harvestFeeds(await inputs(), interruptedContext, destination(directory), {
+        transport: interruptedTransport, resolve: interruptedTransport.resolve,
+      })).rejects.toThrow("completed work is retained");
+      const facts = (await readObservationFiles(directory, recorder.result().files)).map(held => held.row);
+      expect(interruptedTransport.requests).toHaveLength(2);
+      expect(facts.filter(row => row.operation === "attempt")
+        .reduce((count, row) => count + row.dispatched_request_count!, 0)).toBe(2);
+      expect(facts.find(row => row.request_phase === "target")).toMatchObject({
+        outcome: "success", http_status: 200, dispatched_request_count: 1, occurred_at: "2026-10-21T23:59:59Z",
+      });
+      expect(facts.find(row => row.operation === "fetch")).toMatchObject({
+        outcome: interruption === "attempt-and-outcome" ? "failed" : "success",
+        attribution: interruption === "attempt-and-outcome" ? "unresolved" : null, failure_code: null,
+      });
+      expect(facts.filter(row => row.operation === "attempt")
+        .every(row => facts.some(fetch => fetch.operation === "fetch" && fetch.event_id === row.caused_by_event_id))).toBe(true);
+    } finally { await rm(directory, { recursive: true, force: true }); }
+  }
   expect(fetchDiagnostics(await fetcher.fetch("https://missing.example/story"), 0)).toMatchObject({
     fetch_failure: "dns", error_code: "ENOTFOUND", failure_code: "network_error",
   });
@@ -181,6 +216,14 @@ test("pool concurrency changes with configuration and results retain offered ord
     expect(peak).toBe(concurrency);
   }
   await expect(mapPool([1], 0, async value => value)).rejects.toThrow();
+  const completed: number[] = [];
+  await expect(mapPool([0, 1, 2], 2, async value => {
+    if (value === 0) throw new Error("recorded pool failure");
+    await Bun.sleep(1);
+    completed.push(value);
+    return value;
+  })).rejects.toThrow("completed work is retained");
+  expect(completed).toEqual([1, 2]);
 });
 
 test("recorded robots HTTP and transport outcomes apply the absence-versus-unknown rule", async () => {

@@ -10,6 +10,7 @@ import type { FeedIngestEvent } from "@idhazh/common-contracts";
 import type { PlanRuntime } from "../src/run-feed-plan";
 import type { summarizePlan } from "../src/run-feed-plan";
 import type { NamedPlanningHistory } from "../src/metrics/planning-populations";
+import type { PersistedLedgerFile } from "@idhazh/ledger-file-writer";
 
 export function namedPlanningFiles(summary: ReturnType<typeof summarizePlan>, root: string): NamedPlanningHistory {
   if (summary.metrics === undefined || summary.files.source_runs === undefined) throw new Error("Missing actual planner files");
@@ -38,6 +39,7 @@ export async function recordedPlan(
     const transport = new RecordedTransport(recordings);
     harvest.config.triage.min_words_article = 100;
     const events: FeedIngestEvent[] = [];
+    const observation_files: PersistedLedgerFile[] = [];
     const context = {
       ...loaded, root: directory, outputRoot: join(directory, "state"),
       settings: { ...loaded.settings, enabled: true },
@@ -47,10 +49,12 @@ export async function recordedPlan(
       git_sha: "a".repeat(40), run_number: "700",
       correlation_id: "7cef34e3-dd9f-40ce-9a56-4d01ff5115cc", progress: () => {},
       clock: () => new Date("2026-10-21T23:59:59.999Z"),
+      observation_clock: () => new Date("2026-10-21T23:59:59.000Z"),
+      on_document_observations_persisted: files => { observation_files.push(...files); },
       boundary: { transport, resolve: transport.resolve }, log: event => { events.push(event); },
     };
     return {
-      inputs: context, runtime, transport, events, directory,
+      inputs: context, runtime, transport, events, directory, observation_files,
       close: () => rm(directory, { recursive: true, force: true }),
     };
   } catch (error) {

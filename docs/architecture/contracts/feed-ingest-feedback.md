@@ -2,9 +2,10 @@
 
 How do measured feed and article costs affect the next planner selection?
 
-**Last Updated**: 2026-10-24
+**Last Updated**: 2026-10-25
 
-**Status**: Contract proposal; no feedback score or state writer is deployed.
+**Status**: Per-operation observation capture is implemented. Feedback scores,
+derived operational state and its next-run consumer remain unimplemented.
 The user approved separate hardware and request measures, automatic score use
 after evidence qualifies, replacement of RSS reliability in the isolated
 TypeScript planner, the configurable evidence settings below,
@@ -42,10 +43,9 @@ include operation, outcome, UTC occurrence time, duration, supported cause
 and actual dispatched-request accounting. Reuse the writer's `git_sha` for
 pipeline revision rather than adding another revision field.
 
-The current planner observations and fetch-attempt records are fact sources,
-but there is no complete persisted Parquet record of actual plan fetch and
-parse work. A source-run aggregate is not enough where it loses per-operation
-facts. The new Parquet projection must preserve individual operations,
+The planner observations and fetch-attempt records are the fact sources.
+A source-run aggregate is not enough where it loses per-operation
+facts. The Parquet projection preserves individual operations,
 including partial and unsuccessful work, before a later plan stage can fail.
 It does not add another planner event contract. These records do not provide
 article-attributed CPU or private-memory cost. Host CPU and process RSS in
@@ -60,8 +60,8 @@ attempt rows retain their phase, sequence, retry, duration and known request
 count. Nullable `observed_run_id` and `observed_attempt` retain fact-source
 identity separately from the Parquet writer's required run identity. Unknown
 request coverage remains null rather than becoming a zero.
-This declaration does not emit observations or expose the ledger to the data
-explorer; producer wiring remains in Row 4.
+The fetch, parse and full-plan paths write these observations through
+`@idhazh/ledger-file-writer`. Explorer exposure remains separate.
 
 Record the approved `source`, `pipeline` or `unresolved` attribution and
 supported failure cause on operation observations; exact field names and types
@@ -92,9 +92,10 @@ distinguishes `validation`, `robots` and `target`; keep those scopes distinct.
 Count actual dispatched article-target requests, including retries and
 redirects once each. Do not count API validation, robots or feed polls as
 article requests, or copy feed-poll and robots costs onto articles. The
-feed-client path does not yet retain every dispatched attempt; wire that
-producer rather than infer a count from a successful response. Preserve
-unknown request coverage until each relevant dispatch is recorded.
+permitted fetcher counts dispatch at the transport call, after address
+validation. Each completed attempt retains its actual count and completion
+time. Validation attempts have known zero dispatches; a failed transport call
+after dispatch still counts. A successful response is not a request counter.
 
 Use `(run_id, source_id, candidate_id)` as the article-opportunity key.
 Retries and correction records do not add article support. An observation
@@ -144,6 +145,48 @@ The correction identity, publisher mapping, full component schema and detailed
 per-operation bindings are implementation details to declare and test before
 writer changes. They do not need another owner vote unless they change the
 approved attribution or scoring meaning.
+
+### Completed-unit persistence
+
+`services/feed-ingest-plan/src/ingest-observations.ts` writes immutable native
+files under `state/raw/feed-ingest-plan/document-observations/`, partitioned by
+each fact's UTC occurrence date. The shared fetch and parse units call it from
+`/fetch`, `/parse` and `/plan`. A completed fetch saves its ordered attempt
+rows and outcome together; each parse saves its own outcome before later
+planning. Fetch exceptions flush completed attempts and a failed outcome too.
+A hard process kill can lose an unfinished unit's unexported facts; missing
+facts do not establish zero requests or complete coverage.
+
+Attempt capture does not wait for Parquet I/O inside the HTTP deadline.
+The writer's task identity derives from the operation and its trusted event ID,
+not a URL, article text or a source-supplied filename. Concurrent units therefore
+have distinct immutable write identities without a run lock. Pool failure
+waits for already-running siblings to finish and retain their completed files.
+No fetch or selection restarts because an observation save failed.
+
+Plan facts retain the real run, attempt and offered-entry identity. Standalone
+fetch/parse receipts have a journal run identity for replay, but no originating
+planner run, attempt or offered entry. Their observation rows keep those three
+fields null. Configured source and publisher identities remain curated; optional
+salience-feed work has no source or publisher assignment. Reused robots and
+feed responses add no dispatched-request rows. Parsing those bytes again is
+separate actual parse work.
+
+Failed outcomes currently use unresolved attribution, with an existing typed
+failure code when known. They make no source-blame or waste claim. CPU and
+private-memory costs remain unavailable. Early refusals record not-attempted
+work, not fabricated requests or extraction.
+
+A failed native save is logged with the affected event IDs and fails the
+invocation. Other completed files remain intact. Standalone APIs first retain
+the completed factual receipt, then report the save error; replay returns that
+receipt without new network, parse or observation work. Replay does not repair
+a failed telemetry save or claim that it succeeded. Plan summaries name the
+actual observation files. The isolated workflow verifies these native files
+and includes them in its exact commit manifest. It also retains verified
+body-free observation files from its private document checks before removing
+private article bodies. A later failure leaves completed native files in the
+workflow evidence; it does not authorize a live run or a partial commit.
 
 ## Proposed score
 

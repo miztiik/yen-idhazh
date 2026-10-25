@@ -98,7 +98,7 @@ tracing context. The existing default-off service flag gates the new routes.
 | E1 | 1 | Approve runtime contracts and activation policy | - | A | IN-FLIGHT | feed-ingest-feedback-selection | - | - |
 | E2 | 2 | Land compatible shared readers before writers | 1 | B | IN-FLIGHT | document-observation-contracts | [#1712](https://github.com/miztiik/yen-idhazh/pull/1712) | - |
 | E3 | 3 | Implement curated publisher catalog references | 2 | C | DONE | publisher-catalog-support | [#1704](https://github.com/miztiik/yen-idhazh/pull/1704) | - |
-| E4 | 4 | Wire common fetch and parse observations | 2 (publisher IDs from 3 remain nullable until available) | D | PENDING | - | - | - |
+| E4 | 4 | Wire common fetch and parse observations | 2 (observation contract slice landed; other Row 2 contracts remain open) | D | IN-REVIEW | persist-ingestion-observations | - | - |
 | E5 | 5 | Classify failure and work attribution | 4 | E | PENDING | - | - | - |
 | E6 | 6 | Aggregate article delivery and request costs | 5 | F | PENDING | - | - | - |
 | E7 | 7 | Compute supported operational estimates | 6 | G | PENDING | - | - | - |
@@ -130,11 +130,11 @@ trial to Row 11 after the telemetry prerequisites in Rows 2, 4, 5 and 6. It
 does not require Row 10's score consumer. Other D5 rules do not gate these
 rows and must not restrict ordinary fetching.
 
-Row 2 delivered publisher-identity support through PR #1704 and currently
-delivers the registered per-operation observation contract, its TypeScript
-reader binding, and raw/compact fixture compatibility through PR #1712. This
-phase does not emit observations or declare derived operational state or score
-traces; those remain separate Row 2 work before the row can close.
+Row 2 delivered publisher-identity support through PR #1704 and the registered
+per-operation observation contract, its TypeScript reader binding, and
+raw/compact fixture compatibility through merged PR #1712. Its derived
+operational-state and score-trace contracts remain open. The Row 4 producer
+phase builds on that landed slice without closing the rest of Row 2.
 
 ## 2. Shared implementation boundaries
 
@@ -332,6 +332,17 @@ deferred.
 | N1 | Infer all mappings from feed prefixes, titles or domains | Valid spelling does not prove one newsroom, and wrong grouping corrupts exposure. | Human review of the disputed identities and explicit reconciliation of recorded meaning. | Owner's curated-identity decision. |
 
 ## 6. Row #4 - Wire common fetch and parse observations
+
+The producer phase wires real standalone fetch/parse and plan harvest work
+into the registered native writer. Completed fetches save ordered attempt
+facts and outcomes; parse units save before later planning. Handled fetch
+exceptions retain completed attempts, while hard process kills do not prove
+export coverage. Standalone replay does not repeat actual work, including
+after a surfaced telemetry-save failure. Exact hosted output manifests include
+the new native files. Attribution remains unresolved until Row 5; this phase
+adds no waste aggregation, score, derived-state consumer, restriction or live
+dispatch. The complete parsed-batch snapshot already retains candidates and
+rejections through the existing stage API path; this phase does not replace it.
 
 - **Scope:** Capture approved actual-work facts in the shared units used by both standalone APIs and `/plan`. Write one complete server-owned parse-batch output per correlation ID for Row 8.
 - **Level:** 3.

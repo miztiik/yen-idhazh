@@ -10,6 +10,7 @@ import type { LedgerRegistration, LedgerSettings, PersistLedgerResult } from "@i
 import type { HarvestInputs } from "./load-harvest-inputs";
 import type { ProgressDetails, ProgressEventType } from "../logging/progress-logger";
 import type { SourceHistoryEvidence } from "../read-ledger-history/read-feed-history";
+import type { IngestObservations } from "../ingest-observations";
 
 export { FetchFailureSchema } from "@idhazh/common-contracts";
 export type FetchFailure = z.infer<typeof FetchFailureSchema>;
@@ -54,6 +55,8 @@ export type HarvestContext = {
   };
   overrides?: { freshness_hours?: number };
   clock?: () => Date;
+  observation_clock?: () => Date;
+  observations?: IngestObservations;
   log?: (record: z.infer<typeof CandidateRejectionRecordSchema>) => void;
   progress?: (event: ProgressEventType, details?: ProgressDetails) => void;
 };
