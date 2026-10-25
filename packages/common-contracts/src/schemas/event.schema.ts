@@ -95,7 +95,7 @@ export const FeedIngestEventSchema = z.strictObject({
   $id: "feed-ingest-event", version: FEED_INGEST_EVENT_VERSION,
   changelog: [{
     version: FEED_INGEST_EVENT_VERSION,
-    change: "Replace feed crowding with recorded soft publisher exposure.",
+    change: "Carry the current article-assessment schema in planner events.",
   }, {
     version: PUBLISHER_IDENTITY_VERSION,
     change: "Record curated publisher identity in source snapshots.",

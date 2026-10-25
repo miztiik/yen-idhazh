@@ -6,10 +6,13 @@ from pydantic import model_validator
 
 from idhazh.contracts.base import ChangelogEntry, Contract, Model
 from idhazh.contracts.feed_ingest_candidate import (
+    PUBLISHER_EXPOSURE_VERSION,
+    SOURCE_OPERATIONAL_SCORE_VERSION,
     Count,
     FeedIngestCandidate,
     PositiveCount,
     reject_legacy_publisher_identity,
+    reject_legacy_source_operational,
 )
 from idhazh.contracts.feed_ingest_editorial_selection import EditorialSelectionRow
 
@@ -36,6 +39,11 @@ class FeedIngestDispatch(Contract):
     __schema_stem__: ClassVar[str] = "feed-ingest-dispatch"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-10-25",
+            change="Carry the saved request-estimate trace in selections.",
+            why="Dispatch preserves operational evidence with the unchanged rank.",
+        ),
+        ChangelogEntry(
             version="2026-10-24T23:00",
             change="Carry selections with separately recorded publisher exposure.",
             why="Dispatch preserves the selected day counts and evidence gaps.",
@@ -52,16 +60,11 @@ class FeedIngestDispatch(Contract):
         ),
         ChangelogEntry(
             version="2026-10-23",
-            change="Carry candidate headline matches and salience observations.",
-            why="Dispatch retains the planning evidence without changing selection scores.",
-        ),
-        ChangelogEntry(
-            version="2026-10-20",
             change="Earlier changes are available in git history.",
             why="Worker allocation must preserve selection and content identity.",
         ),
     )
-    version: Literal["2026-10-24T23:00"] = "2026-10-24T23:00"
+    version: Literal["2026-10-25"] = "2026-10-25"
     content: FeedIngestCandidate
     selection: EditorialSelectionRow
     partition: PartitionAssignment
@@ -70,7 +73,8 @@ class FeedIngestDispatch(Contract):
     @classmethod
     def migrate_previous_version(cls, value: Any) -> Any:
         if isinstance(value, dict) and value.get("version") in (
-            "2026-10-20", "2026-10-22", "2026-10-23", "2026-10-24", "2026-10-24T20:04"
+            "2026-10-20", "2026-10-22", "2026-10-23", "2026-10-24",
+            "2026-10-24T20:04", PUBLISHER_EXPOSURE_VERSION,
         ):
             content = value.get("content")
             selection = value.get("selection")
@@ -81,7 +85,7 @@ class FeedIngestDispatch(Contract):
             reject_legacy_publisher_identity(value, snapshots)
             expected_selection_version = (
                 value["version"] if value.get("version") in {
-                    "2026-10-24", "2026-10-24T20:04"
+                    "2026-10-24", "2026-10-24T20:04", PUBLISHER_EXPOSURE_VERSION
                 } else "2026-10-20"
             )
             if (
@@ -89,7 +93,11 @@ class FeedIngestDispatch(Contract):
                 and selection.get("version", "2026-10-20") != expected_selection_version
             ):
                 raise ValueError("historical dispatch requires its original selection version")
-            return {**value, "version": "2026-10-24T23:00"}
+            reject_legacy_source_operational(
+                value,
+                selection.get("ratings") if isinstance(selection, dict) else None,
+            )
+            return {**value, "version": SOURCE_OPERATIONAL_SCORE_VERSION}
         return value
 
     @model_validator(mode="after")

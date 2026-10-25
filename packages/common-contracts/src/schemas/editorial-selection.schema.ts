@@ -2,13 +2,13 @@
 import { z } from "zod";
 import {
   ArticleLabelsSchema, PolicyIdentitySchema, PreviousScoreEvidenceSchema, PreviousSourceSnapshotSchema,
-  PreviousPublisherScoreEvidenceSchema, ScoreEvidenceSchema, SourceSnapshotSchema,
+  PreviousOperationalScoreEvidenceSchema, PreviousPublisherScoreEvidenceSchema, ScoreEvidenceSchema, SourceSnapshotSchema,
 } from "./source.schema";
 import { DateStampSchema, NonEmptySchema, NonNegativeSchema, PositiveCountSchema, Sha256Schema, SlugSchema, UrlSchema, checkUrlIdentity, reject } from "./primitives";
-import { CONTRACT_VERSION, PUBLISHER_EXPOSURE_VERSION, PUBLISHER_IDENTITY_VERSION, SOURCE_RELIABILITY_VERSION } from "../version";
+import { CONTRACT_VERSION, PUBLISHER_EXPOSURE_VERSION, PUBLISHER_IDENTITY_VERSION, SOURCE_OPERATIONAL_SCORE_VERSION, SOURCE_RELIABILITY_VERSION } from "../version";
 
 export const EditorialSelectionRowSchema = z.strictObject({
-  version: z.literal(PUBLISHER_EXPOSURE_VERSION).default(PUBLISHER_EXPOSURE_VERSION),
+  version: z.literal(SOURCE_OPERATIONAL_SCORE_VERSION).default(SOURCE_OPERATIONAL_SCORE_VERSION),
   date: DateStampSchema, correlation_id: NonEmptySchema,
   candidate_id: Sha256Schema, source_id: SlugSchema, vertical: SlugSchema,
   source: SourceSnapshotSchema, canonical_url: UrlSchema, url_key: Sha256Schema,
@@ -29,29 +29,39 @@ export const PreviousReliableEditorialSelectionSchema = z.strictObject({
   ...previousSelectionFields, source: PreviousSourceSnapshotSchema, version: z.literal(SOURCE_RELIABILITY_VERSION),
   ratings: PreviousPublisherScoreEvidenceSchema,
 });
+export const PreviousExposureEditorialSelectionSchema = z.strictObject({
+  ...previousSelectionFields, version: z.literal(PUBLISHER_EXPOSURE_VERSION),
+  ratings: PreviousOperationalScoreEvidenceSchema,
+});
 export const PreviousPublisherEditorialSelectionSchema = z.strictObject({
   ...previousSelectionFields, version: z.literal(PUBLISHER_IDENTITY_VERSION),
   ratings: PreviousPublisherScoreEvidenceSchema,
 });
 export const EditorialSelectionContract = {
-  schema: EditorialSelectionRowSchema, schemaVersion: PUBLISHER_EXPOSURE_VERSION,
+  schema: EditorialSelectionRowSchema, schemaVersion: SOURCE_OPERATIONAL_SCORE_VERSION,
   legacyVersions: {
+    [PUBLISHER_EXPOSURE_VERSION]: {
+      schema: PreviousExposureEditorialSelectionSchema,
+      migrate: (row: object): EditorialSelectionRow => EditorialSelectionRowSchema.parse({
+        ...PreviousExposureEditorialSelectionSchema.parse(row), version: SOURCE_OPERATIONAL_SCORE_VERSION,
+      }),
+    },
     [PUBLISHER_IDENTITY_VERSION]: {
       schema: PreviousPublisherEditorialSelectionSchema,
       migrate: (row: object): EditorialSelectionRow => EditorialSelectionRowSchema.parse({
-        ...PreviousPublisherEditorialSelectionSchema.parse(row), version: PUBLISHER_EXPOSURE_VERSION,
+        ...PreviousPublisherEditorialSelectionSchema.parse(row), version: SOURCE_OPERATIONAL_SCORE_VERSION,
       }),
     },
     [CONTRACT_VERSION]: {
       schema: PreviousEditorialSelectionSchema,
       migrate: (row: object): EditorialSelectionRow => EditorialSelectionRowSchema.parse({
-        ...PreviousEditorialSelectionSchema.parse(row), version: PUBLISHER_EXPOSURE_VERSION,
+        ...PreviousEditorialSelectionSchema.parse(row), version: SOURCE_OPERATIONAL_SCORE_VERSION,
       }),
     },
     [SOURCE_RELIABILITY_VERSION]: {
       schema: PreviousReliableEditorialSelectionSchema,
       migrate: (row: object): EditorialSelectionRow => EditorialSelectionRowSchema.parse({
-        ...PreviousReliableEditorialSelectionSchema.parse(row), version: PUBLISHER_EXPOSURE_VERSION,
+        ...PreviousReliableEditorialSelectionSchema.parse(row), version: SOURCE_OPERATIONAL_SCORE_VERSION,
       }),
     },
   },

@@ -13,6 +13,7 @@ import { readExclusionEvidence } from "./read-ledger-history/read-exclusion-evid
 import { readFeedHistory, observeFeedReliability } from "./read-ledger-history/read-feed-history";
 import { readDailyPublication } from "./read-ledger-history/read-daily-publication";
 import { readIngestEvidence } from "./read-ledger-history/read-ingest-evidence";
+import { estimateOperationalFeedback } from "./estimate-operational-feedback";
 import { recordFeedHealth } from "./read-ledger-history/record-feed-health";
 import type { OwnFeedReceipt, FeedWriteReceipt } from "./read-ledger-history/own-feed-receipts";
 import type { OwnSeenReceipt } from "./read-ledger-history/read-seen-evidence";
@@ -123,6 +124,9 @@ export async function runFeedPlan(raw: unknown, inputs: PlanInputs, runtime: Pla
     registration: inputs.registrations.document_observations,
     days: inputs.settings.inputs.document_observation_days,
   });
+  const operationalFeedback = estimateOperationalFeedback(
+    articleEvidence, harvestInputs.config.feedback,
+  );
   progress("HISTORY_READ_COMPLETED");
   logger.startStep();
   const observations = createIngestObservations({
@@ -248,7 +252,8 @@ export async function runFeedPlan(raw: unknown, inputs: PlanInputs, runtime: Pla
     },
     evidence: { harvest, screening, curation, seen, exclusions: exclusionEvidence, partition,
       feed_history: feedHistory, daily_publication: dailyPublication,
-      publisher_publication: selection.publisher_publication, article_evidence: articleEvidence },
+      publisher_publication: selection.publisher_publication, article_evidence: articleEvidence,
+      operational_feedback: operationalFeedback },
   };
 }
 export type FeedPlanResult = Awaited<ReturnType<typeof runFeedPlan>>;
@@ -302,6 +307,7 @@ export function summarizePlan(result: FeedPlanResult & { metrics?: PlanningMetri
       },
     },
     article_evidence: result.evidence.article_evidence,
+    operational_feedback: result.evidence.operational_feedback,
     editorial_inputs: {
       headline_consumer: "existing_mmr_lens_entity_penalties",
       bonus_consumer: null,

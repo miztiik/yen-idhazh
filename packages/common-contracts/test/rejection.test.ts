@@ -15,11 +15,12 @@ import {
   EXTRACTION_QUALITY_VERSION,
   PreviousHarvestDiagnosticsSchema,
   ArticleAssessmentContract, EditorialSelectionContract, SourceReliabilityPenaltySchema,
-  PUBLISHER_IDENTITY_VERSION, PUBLISHER_EXPOSURE_VERSION, PublisherExposurePenaltySchema, FEED_HISTORY_EVENT_VERSION, CONTRACT_VERSION,
+  PUBLISHER_IDENTITY_VERSION, PublisherExposurePenaltySchema, FEED_HISTORY_EVENT_VERSION, CONTRACT_VERSION,
+  SOURCE_OPERATIONAL_SCORE_VERSION,
   ParsedFeedBatchSchema, SelectedFeedBatchSchema, PartitionedFeedBatchSchema,
   PlannerHarvestObservationSchema, PlannerSeenEvidenceSchema, PlannerSeenRowSchema,
   PlannerStageContextSchema, PlannerStageRequestSchema, StageReferenceRequestSchema,
-  PartitionArticlesRequestSchema,
+  PartitionArticlesRequestSchema, OperationalStateReadSchema,
 } from "../src/index";
 import { plannerStageSchemas, runtimeSchemas, schemas } from "./schema-binding";
 
@@ -288,6 +289,16 @@ describe("planning audit contracts", () => {
   });
 
   test("does not turn unassessed or missing measurements into evidence", () => {
+    const staleOperationalState = OperationalStateReadSchema.parse({
+      status: "stale_fallback", state_revision: 4, window_days: 7,
+      window_start: "2026-10-14", window_end: "2026-10-20",
+    });
+    expect(staleOperationalState).toMatchObject({
+      status: "stale_fallback", state_revision: 4, window_start: "2026-10-14", window_end: "2026-10-20",
+    });
+    expect(OperationalStateReadSchema.safeParse({
+      ...staleOperationalState, status: "unavailable",
+    }).success).toBe(false);
     const row = assessment();
     expect(ArticleAssessmentRecordSchema.safeParse({ ...row, informative_verdict_status: "assessed" }).success).toBe(false);
     expect(ArticleAssessmentRecordSchema.safeParse({ ...row, score_evidence_status: "assessed" }).success).toBe(false);
@@ -314,7 +325,10 @@ describe("planning audit contracts", () => {
     }).success).toBe(true);
     expect(SourceReliabilityPenaltySchema.safeParse({ ...reliability, enabled: false, value: 0 }).success).toBe(true);
     const oldSelection = EditorialSelectionContract.legacyVersions[CONTRACT_VERSION];
-    const { source_reliability: _reliability, publisher_exposure: _exposure, ...previousRatings } = selection().ratings;
+    const {
+      source_reliability: _reliability, source_operational: _sourceOperational,
+      publisher_exposure: _exposure, ...previousRatings
+    } = selection().ratings;
     const currentSelection = selection();
     const { publisher_id: _publisherId, ...previousSource } = currentSelection.source;
     const original = oldSelection.schema.parse({
@@ -322,9 +336,15 @@ describe("planning audit contracts", () => {
     });
     const migrated = oldSelection.migrate(original);
     expect(migrated.ratings.source_reliability).toBeNull();
+    const {
+      source_reliability: _migratedReliability,
+      source_operational: _migratedOperational,
+      publisher_exposure: _migratedExposure,
+      ...migratedRatings
+    } = migrated.ratings;
     const { publisher_id: _migratedPublisherId, ...migratedSource } = migrated.source;
     expect({
-      ...migrated, source: migratedSource, version: original.version, ratings: previousRatings,
+      ...migrated, source: migratedSource, version: original.version, ratings: migratedRatings,
     }).toEqual(original);
     expect(oldSelection.schema.safeParse({
       ...original, ratings: { ...original.ratings, source_reliability: reliability },
@@ -383,7 +403,7 @@ describe("planning audit contracts", () => {
     expect(record.payload.assessment.diagnostics).toBeNull();
     expect(record.payload.assessment.version).toBe(ArticleAssessmentContract.schemaVersion);
     expect(record.payload.assessment).toEqual({
-      ...fixture.payload.assessment, version: PUBLISHER_EXPOSURE_VERSION,
+      ...fixture.payload.assessment, version: SOURCE_OPERATIONAL_SCORE_VERSION,
       source: { ...fixture.payload.assessment.source, publisher_id: null }, diagnostics: null,
     });
     expect(readFeedIngestEvent(JSON.parse(JSON.stringify(record)))).toEqual(record);
@@ -409,7 +429,7 @@ describe("planning audit contracts", () => {
     expect(schema.version).toBe(record.version);
     expect(schema.changelog).toEqual([{
       version: record.version,
-      change: "Replace feed crowding with recorded soft publisher exposure.",
+      change: "Carry the current article-assessment schema in planner events.",
     }, {
       version: PUBLISHER_IDENTITY_VERSION,
       change: "Record curated publisher identity in source snapshots.",
@@ -444,7 +464,7 @@ describe("planning audit contracts", () => {
       } } };
       const migrated = readFeedIngestEvent(previous);
       expect(migrated.payload).toMatchObject({ assessment: {
-        version: PUBLISHER_EXPOSURE_VERSION, diagnostics: { extract_ms: 2, quality: null },
+        version: SOURCE_OPERATIONAL_SCORE_VERSION, diagnostics: { extract_ms: 2, quality: null },
       } });
       expect(readFeedIngestEvent(JSON.parse(JSON.stringify(migrated)))).toEqual(migrated);
     }
@@ -513,11 +533,11 @@ describe("planning audit contracts", () => {
     expect(SelectedFeedBatchSchema.parse({
       batch_id: batchId, config_sha256: digest, parsed_batch_id: batchId,
       context, selections: [], rejections: [],
-    }).version).toBe(PUBLISHER_EXPOSURE_VERSION);
+    }).version).toBe(SOURCE_OPERATIONAL_SCORE_VERSION);
     expect(PartitionedFeedBatchSchema.parse({
       batch_id: batchId, config_sha256: digest, selection_batch_id: batchId,
       context, strategy: "none", dispatch_count: 1, work: [0], dispatches: [],
-    }).version).toBe(PUBLISHER_EXPOSURE_VERSION);
+    }).version).toBe(SOURCE_OPERATIONAL_SCORE_VERSION);
     expect(ParsedFeedBatchSchema.safeParse({
       ...parsed, observations: { [digest]: { candidate_id: digest } },
     }).success).toBe(false);

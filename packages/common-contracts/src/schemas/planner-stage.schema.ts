@@ -2,13 +2,13 @@
 import { z } from "zod";
 import { FeedIngestCandidateSchema, PreviousFeedIngestCandidateSchema, readFeedIngestCandidate } from "./candidate.schema";
 import {
-  FeedIngestDispatchSchema, PreviousPublisherFeedIngestDispatchSchema, PreviousReliableFeedIngestDispatchSchema, readFeedIngestDispatch,
+  FeedIngestDispatchSchema, PreviousExposureFeedIngestDispatchSchema, PreviousPublisherFeedIngestDispatchSchema, PreviousReliableFeedIngestDispatchSchema, readFeedIngestDispatch,
 } from "./dispatch.schema";
 import { WriterIdentitySchema } from "./envelope.schema";
 import { CandidateRejectionRecordSchema } from "./rejection.schema";
 import { HarvestDiagnosticsSchema } from "./harvest-diagnostics.schema";
 import {
-  EditorialSelectionContract, EditorialSelectionRowSchema, PreviousPublisherEditorialSelectionSchema, PreviousReliableEditorialSelectionSchema,
+  EditorialSelectionContract, EditorialSelectionRowSchema, PreviousExposureEditorialSelectionSchema, PreviousPublisherEditorialSelectionSchema, PreviousReliableEditorialSelectionSchema,
 } from "./editorial-selection.schema";
 import { OperationalHistorySchema } from "./source.schema";
 import {
@@ -17,7 +17,7 @@ import {
   TimestampSchema, reject,
 } from "./primitives";
 import { RecordedInstantSchema } from "./recorded-instant.schema";
-import { PLANNER_STAGE_VERSION, PUBLISHER_EXPOSURE_VERSION, PUBLISHER_IDENTITY_VERSION, SOURCE_RELIABILITY_VERSION } from "../version";
+import { PLANNER_STAGE_VERSION, PUBLISHER_EXPOSURE_VERSION, PUBLISHER_IDENTITY_VERSION, SOURCE_OPERATIONAL_SCORE_VERSION, SOURCE_RELIABILITY_VERSION } from "../version";
 
 export const PlannerStageContextSchema = z.strictObject({
   now: TimestampSchema.refine(value => {
@@ -169,7 +169,7 @@ export const ParsedFeedBatchSchema = z.strictObject({
 export type ParsedFeedBatch = z.infer<typeof ParsedFeedBatchSchema>;
 
 export const SelectedFeedBatchSchema = z.strictObject({
-  version: z.literal(PUBLISHER_EXPOSURE_VERSION).default(PUBLISHER_EXPOSURE_VERSION),
+  version: z.literal(SOURCE_OPERATIONAL_SCORE_VERSION).default(SOURCE_OPERATIONAL_SCORE_VERSION),
   batch_id: z.uuid({ version: "v4" }),
   config_sha256: Sha256Schema,
   parsed_batch_id: z.uuid({ version: "v4" }),
@@ -205,7 +205,7 @@ export const SelectedFeedBatchSchema = z.strictObject({
 export type SelectedFeedBatch = z.infer<typeof SelectedFeedBatchSchema>;
 
 export const PartitionedFeedBatchSchema = z.strictObject({
-  version: z.literal(PUBLISHER_EXPOSURE_VERSION).default(PUBLISHER_EXPOSURE_VERSION),
+  version: z.literal(SOURCE_OPERATIONAL_SCORE_VERSION).default(SOURCE_OPERATIONAL_SCORE_VERSION),
   batch_id: z.uuid({ version: "v4" }),
   config_sha256: Sha256Schema,
   selection_batch_id: z.uuid({ version: "v4" }),
@@ -274,6 +274,16 @@ export const PreviousPartitionedFeedBatchSchema = z.strictObject({
   version: PreviousPlannerStageVersion,
   dispatches: z.array(PreviousReliableFeedIngestDispatchSchema),
 });
+export const PreviousExposureSelectedFeedBatchSchema = z.strictObject({
+  ...SelectedFeedBatchSchema.shape,
+  version: z.literal(PUBLISHER_EXPOSURE_VERSION),
+  selections: z.array(PreviousExposureEditorialSelectionSchema),
+});
+export const PreviousExposurePartitionedFeedBatchSchema = z.strictObject({
+  ...PartitionedFeedBatchSchema.shape,
+  version: z.literal(PUBLISHER_EXPOSURE_VERSION),
+  dispatches: z.array(PreviousExposureFeedIngestDispatchSchema),
+});
 
 export function readParsedFeedBatch(raw: unknown): ParsedFeedBatch {
   if (typeof raw === "object" && raw !== null && "version" in raw && raw.version === "2026-10-24") {
@@ -293,15 +303,23 @@ export function readSelectedFeedBatch(raw: unknown): SelectedFeedBatch {
       selections: z.array(PreviousPublisherEditorialSelectionSchema),
     }).parse(raw);
     return SelectedFeedBatchSchema.parse({
-      ...previous, version: PUBLISHER_EXPOSURE_VERSION,
+      ...previous, version: SOURCE_OPERATIONAL_SCORE_VERSION,
       selections: previous.selections.map(row =>
         EditorialSelectionContract.legacyVersions[PUBLISHER_IDENTITY_VERSION].migrate(row)),
+    });
+  }
+  if (typeof raw === "object" && raw !== null && "version" in raw && raw.version === PUBLISHER_EXPOSURE_VERSION) {
+    const previous = PreviousExposureSelectedFeedBatchSchema.parse(raw);
+    return SelectedFeedBatchSchema.parse({
+      ...previous, version: SOURCE_OPERATIONAL_SCORE_VERSION,
+      selections: previous.selections.map(row =>
+        EditorialSelectionContract.legacyVersions[PUBLISHER_EXPOSURE_VERSION].migrate(row)),
     });
   }
   if (typeof raw === "object" && raw !== null && "version" in raw && raw.version === "2026-10-24") {
     const previous = PreviousSelectedFeedBatchSchema.parse(raw);
     return SelectedFeedBatchSchema.parse({
-      ...previous, version: PUBLISHER_EXPOSURE_VERSION,
+      ...previous, version: SOURCE_OPERATIONAL_SCORE_VERSION,
       selections: previous.selections.map(row =>
         EditorialSelectionContract.legacyVersions[SOURCE_RELIABILITY_VERSION].migrate(row)),
     });
@@ -316,13 +334,20 @@ export function readPartitionedFeedBatch(raw: unknown): PartitionedFeedBatch {
       dispatches: z.array(PreviousPublisherFeedIngestDispatchSchema),
     }).parse(raw);
     return PartitionedFeedBatchSchema.parse({
-      ...previous, version: PUBLISHER_EXPOSURE_VERSION, dispatches: previous.dispatches.map(readFeedIngestDispatch),
+      ...previous, version: SOURCE_OPERATIONAL_SCORE_VERSION, dispatches: previous.dispatches.map(readFeedIngestDispatch),
+    });
+  }
+  if (typeof raw === "object" && raw !== null && "version" in raw && raw.version === PUBLISHER_EXPOSURE_VERSION) {
+    const previous = PreviousExposurePartitionedFeedBatchSchema.parse(raw);
+    return PartitionedFeedBatchSchema.parse({
+      ...previous, version: SOURCE_OPERATIONAL_SCORE_VERSION,
+      dispatches: previous.dispatches.map(readFeedIngestDispatch),
     });
   }
   if (typeof raw === "object" && raw !== null && "version" in raw && raw.version === "2026-10-24") {
     const previous = PreviousPartitionedFeedBatchSchema.parse(raw);
     return PartitionedFeedBatchSchema.parse({
-      ...previous, version: PUBLISHER_EXPOSURE_VERSION,
+      ...previous, version: SOURCE_OPERATIONAL_SCORE_VERSION,
       dispatches: previous.dispatches.map(readFeedIngestDispatch),
     });
   }

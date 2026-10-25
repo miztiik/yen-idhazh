@@ -30,11 +30,14 @@ CONTRACT_NAMES = (
     ("planner_stage", "SelectedFeedBatch"),
     ("planner_stage", "PartitionedFeedBatch"),
     ("feed_ingest_observations", "DocumentObservationRecord"),
+    ("feed_ingest_feedback", "FeedIngestOperationalStateRow"),
 )
 
 MODEL_NAMES = (
     ("feed_ingest_candidate", "SourceSnapshot"),
+    ("feed_ingest_candidate", "SourceOperationalEvidence"),
     ("feed_ingest_candidate", "PublisherExposurePenalty"),
+    ("feed_ingest_feedback", "OperationalStateRead"),
     ("planner_stage", "PlannerStageContext"),
     ("planner_stage", "PlannerStageRequest"),
     ("planner_stage", "RecordedIdentity"),
