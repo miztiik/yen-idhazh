@@ -135,9 +135,9 @@ class FeedHealthStateLifecycleDay(Model):
             raise ValueError("an unreadable lifecycle day records its gap reason")
         if any(row.date != self.input_day for row in self.rows):
             raise ValueError("feed-health rows retain their native represented day")
-        if self.input_identity is not None and any(
-            item.ledger != "feed-health"
-            for item in (*self.input_identity.indexes, *self.input_identity.files)
+        if self.input_identity is not None and (
+            any(item.ledger != "feed-health" for item in self.input_identity.indexes)
+            or any(item.ledger != "feed-health" for item in self.input_identity.files)
         ):
             raise ValueError("lifecycle evidence names only the feed-health ledger")
         return self
@@ -159,9 +159,15 @@ class FeedHealthStateRequestDay(Model):
                 raise ValueError("an available request day has a verified identity and no gap")
         elif self.gap_reason is None:
             raise ValueError("an unreadable request day records its gap reason")
-        if self.input_identity is not None and any(
-            item.ledger not in {"document-observations", "ingest-observations"}
-            for item in (*self.input_identity.indexes, *self.input_identity.files)
+        if self.input_identity is not None and (
+            any(
+                item.ledger not in {"document-observations", "ingest-observations"}
+                for item in self.input_identity.indexes
+            )
+            or any(
+                item.ledger not in {"document-observations", "ingest-observations"}
+                for item in self.input_identity.files
+            )
         ):
             raise ValueError("request evidence names only current or migrated observation ledgers")
         if any(row.occurred_at[:10] != self.input_day for row in self.rows):
