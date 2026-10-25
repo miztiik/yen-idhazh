@@ -29,7 +29,7 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | 1 | Existing mark limits bound visual complexity | - | A | COLLAPSED | - | - | - |
 | 2 | Every fact is reachable without a mouse | - | A | DONE | p14-r2 | #696 | - |
-| 3 | The browser shell is stable across loads and navigation | 1, 2 | B | PENDING | - | - | - |
+| 3 | The browser shell is stable across loads and navigation | 1, 2 | B | DONE | p14-r3 | - | - |
 | 4 | Motion is shared, finite and reduced-motion safe | 3 | C | PENDING | - | - | - |
 
 ---

@@ -90,7 +90,9 @@ one pixel on screen and there is no scale factor between what a token says and w
 sees. Measured on the canary day, both cases on one developer machine back to back with
 `BUILD_VERSION` pinned, 2026-09-14, at 360, 390 and 1440 CSS px in both themes. **After, the
 scale is 1.000 at all three widths and every drawn string resolves at 12.0 CSS px**, which is
-`--text-xs` at its own size. Before, the same drawing laid itself out 720 units wide whatever
+`--text-xs` at its own size. The browser identity check repeats the real shell at 390 and 1440
+CSS px across archive navigation and reload; geometry, SVG text, accessible names, focus and
+complete facts must stay identical for the same data at the same measured width. Before, the same drawing laid itself out 720 units wide whatever
 the card gave it, so the browser squeezed or stretched it: **0.350 at 360 px, 0.392 at 390 px
 and 1.233 at 1440 px**. A string set at 12 therefore reached the reader at **4.2, 4.7 and
 14.8 CSS px** - 65 percent under the token on a small phone, and 23 percent over it on a
