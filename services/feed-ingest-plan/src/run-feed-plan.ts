@@ -208,7 +208,7 @@ export async function runFeedPlan(raw: unknown, inputs: PlanInputs, runtime: Pla
     );
     complete("screen-article-candidates", harvest.candidates.length, screening.admitted.length, screening.rejections.length);
     logger.startStep();
-  });
+  }, context.now);
   const operationalStateWrite = await writeOperationalState({
     evidence: articleEvidence, now: context.now, writer: context.writer,
     policy: harvestInputs.config.feedback, inputs, saved: selection.operational_state,

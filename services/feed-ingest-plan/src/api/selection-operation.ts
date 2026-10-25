@@ -23,11 +23,14 @@ export function requireStageConfiguration(
 
 export async function executeSelection(
   raw: unknown, inputs: PlanInputs, runtime: PlanRuntime, onScreened?: (result: ScreeningResult) => void,
+  selectionNow?: string,
 ) {
   const request = StageReferenceRequestSchema.parse(raw);
   const parsed = await readStageBatch(inputs.outputRoot, "parsed", request.batch_id, ParsedFeedBatchSchema, readParsedFeedBatch);
   requireStageConfiguration(parsed, inputs, runtime);
-  const selectedAt = runtime.clock?.() ?? new Date();
+  const selectedAt = selectionNow === undefined
+    ? runtime.clock?.() ?? new Date()
+    : new Date(selectionNow);
   if (!Number.isFinite(selectedAt.getTime())) {
     throw new PlanError("INVALID_RUN_CONTEXT", "selection clock must be a valid UTC instant", "now");
   }
