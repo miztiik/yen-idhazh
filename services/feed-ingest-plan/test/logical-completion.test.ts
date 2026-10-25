@@ -276,14 +276,14 @@ test("recorded rejection commitments retain their original schema stamp after mi
       }
       expect(() => commitLogicalRecords("dispatches", history.ledgers.dispatches.rows, selected, version))
         .toThrow(version === PLANNING_OBSERVATIONS_VERSION
-          ? "cannot omit source reliability evidence" : "cannot omit planning observations");
+          ? "cannot omit source operational evidence" : "cannot omit planning observations");
     }
     expect(() => commitLogicalRecords("article-assessments", assessments, selected, PLANNER_EXCLUSIONS_VERSION))
       .toThrow("cannot omit measured extraction quality");
     expect(() => commitLogicalRecords("article-assessments", assessments, selected, EXTRACTION_QUALITY_VERSION))
-      .toThrow("cannot omit source reliability evidence");
+      .toThrow("cannot omit source operational evidence");
     expect(() => commitLogicalRecords("editorial-selections", history.ledgers["editorial-selections"].rows, selected, CONTRACT_VERSION))
-      .toThrow("cannot omit source reliability evidence");
+      .toThrow("cannot omit source operational evidence");
     for (const ledger of ["editorial-selections", "article-assessments"] as const) {
       const contract = ledger === "editorial-selections" ? EditorialSelectionContract : ArticleAssessmentContract;
       const version = ledger === "editorial-selections" ? CONTRACT_VERSION : EXTRACTION_QUALITY_VERSION;

@@ -215,7 +215,12 @@ test("real composition shares one clock and override and reads native dispatches
     expect(rows[0]!.selection.source.publisher_id).toBe(publisherId);
     expect(rows[0]!.partition).toEqual({ strategy: "none", worker_assignment: 0, dispatch_count: 1 });
     expect(rows[0]!.selection.policy).toEqual(rows[0]!.content.policy);
-    expect(rows[0]!.selection.ratings.source_operational).toBeNull();
+    expect(rows[0]!.selection.ratings).toMatchObject({
+      source_reliability: null,
+      source_operational: {
+        status: "unavailable", state_status: "unavailable", operational_penalty: null,
+      },
+    });
     expect(summarizePlan(result)).toMatchObject({
       audited_complete: false, dispatch_count: 1, status: "dispatches_persisted_audit_pending",
       planning_complete: false, planning_completion: null, source_records: null,
@@ -295,7 +300,7 @@ test("real composition shares one clock and override and reads native dispatches
       reliability.inputs.harvest.config.curate.source_reliability_penalty_enabled = true;
       const enabled = await runFeedPlan({ article_limit: 1, partition_strategy: "none" }, reliability.inputs, reliability.runtime);
       expect(disabled.evidence.curation.rows[0]!.candidate_id).toBe(deriveCandidateId(enabled.context.run_id, "gamma", 2));
-      expect(enabled.evidence.curation.rows[0]!.candidate_id).toBe(deriveCandidateId(enabled.context.run_id, "alpha", 2));
+      expect(enabled.evidence.curation.rows[0]!.candidate_id).toBe(deriveCandidateId(enabled.context.run_id, "gamma", 2));
       expect(enabled.evidence.curation.quality.map(row => row.components))
         .toEqual(disabled.evidence.curation.quality.map(row => row.components));
       expect(enabled.evidence.feed_history.history.reliability.availability).toBe("unavailable");
@@ -309,7 +314,8 @@ test("real composition shares one clock and override and reads native dispatches
           attempted: 5, window_days: reliability.inputs.clock_config.collect.reliability_window_days,
         });
       }
-      expect(enabled.evidence.curation.carriers.groups.every(group => group.representative.candidate.source_id === "alpha")).toBe(true);
+      expect(enabled.evidence.curation.carriers.groups.map(group => group.representative.candidate.candidate_id))
+        .toEqual(disabled.evidence.curation.carriers.groups.map(group => group.representative.candidate.candidate_id));
       const audit = await recordPlanningMetrics(enabled, reliability.inputs);
       expect(audit.planning_completion.status).toBe("complete");
       expect(audit.source_records.find(row => row.source_id === "gamma")).toMatchObject({
@@ -319,9 +325,11 @@ test("real composition shares one clock and override and reads native dispatches
       const dispatch = await readLedgerParquet(join(reliability.inputs.outputRoot, enabled.files.dispatches.files[0]!.path),
         "dispatches", DispatchContract);
       expect(dispatch.rows[0]!.row.selection.ratings).toEqual(enabled.evidence.curation.rows[0]!.ratings);
-      expect(dispatch.rows[0]!.row.selection.ratings.source_reliability).toMatchObject({
-        enabled: true, history: { success_fraction: 1, attempted: 5 },
-        production_factor: 1, value: 0,
+      expect(dispatch.rows[0]!.row.selection.ratings).toMatchObject({
+        source_reliability: null,
+        source_operational: {
+          status: "unavailable", state_status: "unavailable", operational_penalty: null,
+        },
       });
     } finally { await reliability.close(); }
     const parity = await recordedPlan([

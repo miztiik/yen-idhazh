@@ -114,7 +114,9 @@ test("recorded operational evidence keeps its attempts and window separate from 
       expect(measurement.base_article_score).toBe(measurement.components.authority + measurement.components.recency);
       expect(measurement.article.informative_verdict).toBeNull();
     }
-    expect(result.evidence.curation.rows.every(row => row.ratings.source_reliability?.value === 0)).toBe(true);
+    expect(result.evidence.curation.rows.every(row => row.ratings.source_reliability === null
+      && row.ratings.source_operational?.status === "unavailable"
+      && row.ratings.source_operational.operational_penalty === null)).toBe(true);
     const membership = reconcileStageMembership(result);
     const article = result.evidence.curation.input[1]!;
     result.evidence.curation.input[1] = {

@@ -120,10 +120,11 @@ test("real harvest through partition seals representable raw source completion o
     expect(result.events.some(event => JSON.stringify(event).includes("plan_complete"))).toBe(false);
     for (const row of batch.assessments) {
       if (row.score_evidence === null) continue;
-      expect(row.score_evidence.source_reliability).toMatchObject({
-        enabled: true, history: { success_fraction: 1, attempted: 1 },
-        reliability_floor: recorded.inputs.clock_config.collect.reliability_floor,
-        production_factor: 1, value: 0,
+      expect(row.score_evidence).toMatchObject({
+        source_reliability: null,
+        source_operational: {
+          status: "unavailable", state_status: "unavailable", operational_penalty: null,
+        },
       });
     }
     const controls = structuredClone(result);
