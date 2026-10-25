@@ -9,7 +9,7 @@ Run it from the repository root:
     python backend/utilities/item_health_provenance.py --source <file> --ledger <file>
 
 **What it settles.** Every column of `ItemHealthRow.csv_columns()` is printed
-exactly once, under exactly one of the eight groups below, and the run exits 1
+exactly once, under exactly one of the nine groups below, and the run exits 1
 when the groups do not partition that list - so a column minted without a group
 cannot pass unnoticed, and the pasted table cannot drift into holding a column
 twice or dropping one.
@@ -60,7 +60,7 @@ class Group(NamedTuple):
     columns: tuple[str, ...]
 
 
-#: **The eight questions this row grew by.** It reached 123 columns one
+#: **The questions this row grew by.** It gained columns one
 #: question at a time, and a reader meeting the flat list cannot see that.
 #: Which question a column serves is editorial - nothing in the contract says
 #: it - so the membership is declared here and checked against
@@ -179,6 +179,12 @@ GROUPS: Final[tuple[Group, ...]] = (
             "label_budget_tokens",
             "summary_budget_tokens",
         ),
+    ),
+    Group(
+        "The visual outcome",
+        "What visual form was requested, what was delivered, how far it stepped "
+        "down, and how many marks it carried.",
+        ("planned_type", "rendered_type", "downgrade_depth", "marks"),
     ),
     Group(
         "The item clock",
