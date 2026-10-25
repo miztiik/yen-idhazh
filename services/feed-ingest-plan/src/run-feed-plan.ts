@@ -12,6 +12,7 @@ import { readSeenEvidence, rememberFirstSight } from "./read-ledger-history/read
 import { readExclusionEvidence } from "./read-ledger-history/read-exclusion-evidence";
 import { readFeedHistory, observeFeedReliability } from "./read-ledger-history/read-feed-history";
 import { readDailyPublication } from "./read-ledger-history/read-daily-publication";
+import { readIngestEvidence } from "./read-ledger-history/read-ingest-evidence";
 import { recordFeedHealth } from "./read-ledger-history/record-feed-health";
 import type { OwnFeedReceipt, FeedWriteReceipt } from "./read-ledger-history/own-feed-receipts";
 import type { OwnSeenReceipt } from "./read-ledger-history/read-seen-evidence";
@@ -115,6 +116,12 @@ export async function runFeedPlan(raw: unknown, inputs: PlanInputs, runtime: Pla
   const dailyPublication = await readDailyPublication({
     root: inputs.root, day: context.date, registration: inputs.registrations.item_health,
     days: inputs.settings.inputs.settled_failure_days,
+  });
+  const articleEvidence = await readIngestEvidence({
+    root: inputs.root, now: context.now,
+    window_days: harvestInputs.config.feedback.window_days,
+    registration: inputs.registrations.document_observations,
+    days: inputs.settings.inputs.document_observation_days,
   });
   progress("HISTORY_READ_COMPLETED");
   logger.startStep();
@@ -241,7 +248,7 @@ export async function runFeedPlan(raw: unknown, inputs: PlanInputs, runtime: Pla
     },
     evidence: { harvest, screening, curation, seen, exclusions: exclusionEvidence, partition,
       feed_history: feedHistory, daily_publication: dailyPublication,
-      publisher_publication: selection.publisher_publication },
+      publisher_publication: selection.publisher_publication, article_evidence: articleEvidence },
   };
 }
 export type FeedPlanResult = Awaited<ReturnType<typeof runFeedPlan>>;
@@ -294,6 +301,7 @@ export function summarizePlan(result: FeedPlanResult & { metrics?: PlanningMetri
         history: result.evidence.publisher_publication.history,
       },
     },
+    article_evidence: result.evidence.article_evidence,
     editorial_inputs: {
       headline_consumer: "existing_mmr_lens_entity_penalties",
       bonus_consumer: null,

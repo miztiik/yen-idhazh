@@ -195,7 +195,8 @@ test("offers independent machine RAM control and commits only genuine planner an
   expect(plan.run!.indexOf("await verifyPlanningCompletion(")).toBeLessThan(plan.run!.indexOf("await writeGitHubOutputs("));
   expect(plan.run).toContain("stageConfiguredDays(\"published\"");
   expect(plan.run).toContain("stageConfiguredDays(\"item-health\"");
-  expect(plan.run).toContain("inputs: { ...inputs.settings.inputs, seen_days, published_days, settled_failure_days, feed_health_days }");
+  expect(plan.run).toContain("stageConfiguredDays(\"document-observations\"");
+  expect(plan.run).toContain("inputs: { ...inputs.settings.inputs, seen_days, published_days, settled_failure_days, feed_health_days, document_observation_days }");
   expect(plan.run).not.toContain("feed-ingest-plan-report");
   const reporting = steps.find(step => step.name === "Optional GitHub report")!;
   expect(reporting.if).toContain("workflow_reporting == 'true'");
