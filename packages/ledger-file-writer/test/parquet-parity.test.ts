@@ -706,6 +706,7 @@ describe("ledger Parquet readback", () => {
       expect(columns.filter(([name]) => !name.startsWith("content.planning_observations")
         && !name.startsWith("selection.ratings.source_reliability")
         && !name.startsWith("selection.ratings.publisher_exposure")
+        && !name.startsWith("selection.ratings.source_operational")
         && name !== "content.source.publisher_id" && name !== "selection.source.publisher_id"))
         .toEqual(recordedSchema.columns);
       expect(columns).toContainEqual(["content.source.publisher_id", "Utf8", true]);
