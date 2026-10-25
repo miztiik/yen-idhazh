@@ -3,7 +3,7 @@ import { FeedOutcomePayloadSchema, WriterIdentitySchema, NonEmptySchema, Positiv
 import type { HarvestContext, HarvestResult, OfferedArticle, RejectionDestination } from "./harvest-types";
 import type { HarvestInputs } from "./load-harvest-inputs";
 import { harvestPolicy, sourceSnapshot } from "./load-harvest-inputs";
-import { readFeed } from "./feed-client";
+import { feedDocumentWork, readFeed } from "./feed-client";
 import { harvestArticle } from "./harvest-article";
 import { persistHarvestRejections } from "./record-rejection";
 import { createPermittedFetcher } from "./robots-policy";
@@ -20,7 +20,7 @@ export async function mapPool<T, R>(items: readonly T[], concurrency: number, ex
   PositiveCountSchema.parse(concurrency);
   const output: R[] = new Array(items.length);
   let next = 0;
-  await Promise.all(Array.from({ length: Math.min(concurrency, items.length) }, async () => {
+  const workers = await Promise.allSettled(Array.from({ length: Math.min(concurrency, items.length) }, async () => {
     for (;;) {
       const index = next++;
       if (index >= items.length) return;
@@ -29,6 +29,8 @@ export async function mapPool<T, R>(items: readonly T[], concurrency: number, ex
       output[index] = await execute(item);
     }
   }));
+  const failures = workers.flatMap(worker => worker.status === "rejected" ? [worker.reason] : []);
+  if (failures.length) throw new AggregateError(failures, "harvest pool failed; completed work is retained");
   return output;
 }
 
@@ -40,17 +42,19 @@ export async function harvestFeeds(
   NonEmptySchema.parse(context.correlation_id);
   NonNegativeSchema.parse(context.max_future_hours);
   context.progress?.("FEED_DISCOVERY_STARTED", { input_count: inputs.sources.length });
-  const fetcher = createPermittedFetcher(inputs.config.harvest, inputs.extraction, boundary);
+  const fetcher = createPermittedFetcher(inputs.config.harvest, inputs.extraction, boundary, context.observation_clock);
   const responses = new Map<string, ReturnType<typeof fetcher.fetch>>();
-  const feedFetcher = { fetch: (url: string) => {
+  const feedFetcher: Pick<typeof fetcher, "fetch"> = { fetch: (url, emit) => {
     let result = responses.get(url);
-    if (result === undefined) { result = fetcher.fetch(url); responses.set(url, result); }
+    if (result === undefined) { result = fetcher.fetch(url, emit); responses.set(url, result); }
     return result;
   } };
   const feeds = await mapPool(inputs.sources, inputs.config.harvest.concurrency, async configured => {
     const source = sourceSnapshot(inputs, configured);
     const history = context.feed_history?.get(source.source_id);
     if (source.status === "active" && history?.lifecycle === "resting") {
+      await feedDocumentWork(source, context).skip();
+      context.observations?.assertSaved();
       return {
         offered: [], rejection: null,
         outcome: FeedOutcomePayloadSchema.parse({
@@ -63,6 +67,7 @@ export async function harvestFeeds(
     context.progress?.("FEED_FETCH_STARTED", { source_id: source.source_id });
     const started = performance.now();
     const result = await readFeed(source, feedFetcher, context, inputs.config.harvest.fetch_timeout_ms);
+    context.observations?.assertSaved();
     context.progress?.("FEED_FETCH_COMPLETED", {
       source_id: source.source_id, fetch_status: result.outcome.fetch_status,
       parse_status: result.outcome.parse_status, output_count: result.entries.length,
@@ -78,12 +83,13 @@ export async function harvestFeeds(
     return { offered, rejection: result.rejection, outcome: result.outcome };
   });
   const salience = await mapPool(inputs.salience ?? [], inputs.config.harvest.concurrency,
-    feed => readSalienceFeed(feed, feedFetcher));
+    feed => readSalienceFeed(feed, feedFetcher, context));
   const articles = await mapPool(feeds.flatMap(feed => feed.offered), inputs.config.harvest.concurrency,
     async offered => {
       context.progress?.("ARTICLE_HARVEST_STARTED", { source_id: offered.source.source_id });
       const started = performance.now();
       const result = await harvestArticle(offered, inputs, fetcher, context, salience);
+      context.observations?.assertSaved();
       context.progress?.("ARTICLE_HARVEST_COMPLETED", {
         source_id: offered.source.source_id, candidate_id: result.observation.candidate_id,
         output_count: result.candidate === null ? 0 : 1, drop_reason: result.rejection?.drop_reason ?? null,

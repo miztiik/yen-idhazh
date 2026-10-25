@@ -159,7 +159,8 @@ test("offers independent machine RAM control and commits only genuine planner an
   expect(plan.run).toContain("await verifyLiveDocumentHttp({ ...inputs, settings }");
   expect(plan.run).toContain("summary, machineMemoryEnabled)");
   expect(plan.run).toContain("WorkflowMachineMemorySchema.parse(process.env.PROFILE_MACHINE_MEMORY)");
-  expect(plan.run).toContain('await writeGitHubOutputs(GITHUB_OUTPUT, { stage_api_complete: "true" })');
+  expect(plan.run).toContain('stage_api_complete: "true"');
+  expect(plan.run).toContain("...documentObservations.files.map(file => file.path)");
   expect(plan.run!.indexOf("await verifyPlanningCompletion(")).toBeLessThan(plan.run!.indexOf("await verifyLiveDocumentHttp("));
   const httpProof = await readFile(join(root, ".github", "scripts", "feed-ingest-plan-http-proof.ts"), "utf8");
   expect(httpProof).toContain('mkdtemp(join(runnerTemp, "feed-stage-api-private-"))');

@@ -331,6 +331,8 @@ jobs:
             await writeFile(join(artifactRoot, "response.json"), JSON.stringify(summary));
             await verifyParquetFiles(join(artifactRoot, "state"), "dispatches", summary.files.dispatches, inputs.registrations.dispatches);
             await verifyParquetFiles(join(artifactRoot, "state"), "feed-health", summary.files.feed_health, inputs.registrations.feed_health);
+            await verifyParquetFiles(join(artifactRoot, "state"), "document-observations",
+              summary.files.document_observations, inputs.registrations.document_observations);
             for (const files of [summary.files.harvest_rejections, summary.files.screening_rejections, summary.files.curation_rejections]) {
               await verifyParquetFiles(join(artifactRoot, "state"), "rejections", files, inputs.registrations.rejections);
             }
@@ -344,14 +346,23 @@ jobs:
             await verifyParquetFiles(join(artifactRoot, "state"), "source-runs", summary.files.source_runs,
               inputs.registrations.source_runs, summary.source_records);
             await verifyPlanningCompletion(join(artifactRoot, "state"), summary);
+            const outputs = createExecutionOutputs(summary, inputs.registrations);
             await writeGitHubOutputs(GITHUB_OUTPUT, {
-              ...createExecutionOutputs(summary, inputs.registrations),
+              ...outputs,
               workflow_reporting: String(inputs.harvest.config.workflow_reporting.enabled),
             });
-            await verifyLiveDocumentHttp({ ...inputs, settings }, {
+            const documentObservations = await verifyLiveDocumentHttp({ ...inputs, settings }, {
               git_sha, clock: () => captured, run_number: GITHUB_RUN_ID,
             }, progressRecords, RUNNER_TEMP, artifactRoot, summary, machineMemoryEnabled);
-            await writeGitHubOutputs(GITHUB_OUTPUT, { stage_api_complete: "true" });
+            await writeGitHubOutputs(GITHUB_OUTPUT, {
+              stage_api_complete: "true",
+              document_observation_files: JSON.stringify([
+                ...summary.files.document_observations.files, ...documentObservations.files,
+              ].map(file => file.path)),
+              current_run_files: JSON.stringify([
+                ...JSON.parse(outputs.current_run_files!), ...documentObservations.files.map(file => file.path),
+              ]),
+            });
           } catch (error) {
             console.error(JSON.stringify(describePlanError(error, root)));
             process.exitCode = 1;

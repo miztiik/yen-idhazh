@@ -5,7 +5,7 @@ import type { HarvestContext, OfferedArticle, HarvestArticleResult } from "./har
 import { HarvestArticleResultSchema, utcTimestamp } from "./harvest-types";
 import type { HarvestInputs } from "./load-harvest-inputs";
 import type { PermittedFetcher } from "./robots-policy";
-import { ArticleExtractionError, extractArticle } from "./dom-extractor";
+import { extractArticle } from "./dom-extractor";
 import { canonicalizeUrl } from "./url-cleaner";
 import { matchUrlExclusion, urlExclusionMarker } from "./url-exclusions";
 import { fetchRejection, recordRejection } from "./record-rejection";
@@ -13,7 +13,7 @@ import { calculateFreshness } from "../screen-article-candidates/freshness-decay
 import { resolvePolicy } from "../config/resolve-policy";
 import { fetchDiagnostics } from "./fetch-diagnostics";
 import { parseDocument } from "./parse-document";
-import { emitDocumentObservations } from "./document-observation";
+import { documentWork, describeArticleParse } from "./document-work";
 import { matchHeadline } from "./headline-matches";
 import { observeSalience } from "./salience-votes";
 import type { SalienceReading } from "./salience-votes";
@@ -38,6 +38,14 @@ export async function harvestArticle(
     title: entry.title ? [...entry.title].slice(0, FEED_TITLE_MAX_CHARS).join("").trim() : null,
     categories: entry.categories,
   };
+  const eventIdentity = {
+    run_id: context.writer.run_id, correlation_id: context.correlation_id,
+    article_id: identity?.url_key ?? null, source_id: source.source_id,
+  };
+  const work = documentWork(context, eventIdentity, candidate_id, {
+    document_kind: "article", source_id: source.source_id, publisher_id: source.publisher_id,
+    candidate_id, observed_run_id: context.writer.run_id, observed_attempt: context.writer.attempt,
+  });
   const headline = matchHeadline(article.title, inputs);
   const observation = {
     candidate_id, http_status: null, robots: null, fetch_failure: null,
@@ -46,12 +54,14 @@ export async function harvestArticle(
     diagnostics: null,
   } satisfies HarvestArticleResult["observation"];
   if (!identity || !entry.link) {
+    await work.skip();
     return HarvestArticleResultSchema.parse({
       candidate: null, rejection: recordRejection(source, context, "MISSING_REQUIRED_FIELDS", {}, article), observation,
     });
   }
   const blockedRule = matchUrlExclusion(identity.canonical_url, inputs.config.harvest.url_exclusions);
   if (blockedRule !== undefined) {
+    await work.skip();
     return HarvestArticleResultSchema.parse({
       candidate: null,
       rejection: recordRejection(source, context, "BLOCKED_URL_MARKER", {
@@ -62,6 +72,7 @@ export async function harvestArticle(
   }
   const publishedOn = context.exclusions?.published_on.get(identity.url_key);
   if (publishedOn !== undefined) {
+    await work.skip();
     return HarvestArticleResultSchema.parse({
       candidate: null,
       rejection: recordRejection(source, context, "ALREADY_PUBLISHED", {
@@ -73,6 +84,7 @@ export async function harvestArticle(
   }
   const failureCode = context.exclusions?.settled_failure_codes.get(identity.url_key);
   if (failureCode !== undefined) {
+    await work.skip();
     return HarvestArticleResultSchema.parse({
       candidate: null,
       rejection: recordRejection(source, context, "SETTLED_FAILURE", {
@@ -86,6 +98,7 @@ export async function harvestArticle(
     const freshness = calculateFreshness(entry, undefined, observation.observed_at, context.max_future_hours, effectivePolicy);
     if (freshness.timing_source === "published_at" && freshness.age_hours !== null
       && freshness.age_hours > effectivePolicy.triage.max_age_hours) {
+      await work.skip();
       return HarvestArticleResultSchema.parse({
         candidate: null,
         rejection: recordRejection(source, context, "STALE_MAX_AGE_EXCEEDED", {
@@ -96,12 +109,7 @@ export async function harvestArticle(
     }
   }
   const fetchStarted = performance.now();
-  const fetched = await fetcher.fetch(entry.link);
-  const eventIdentity = {
-    run_id: context.writer.run_id, correlation_id: context.correlation_id,
-    article_id: identity.url_key, source_id: source.source_id,
-  };
-  const fetchedEvent = emitDocumentObservations(context, eventIdentity, candidate_id, "fetch", null, utcTimestamp(context.clock), fetched.attempts);
+  const { fetched, observation: fetchedEvent } = await work.fetch(fetcher, entry.link);
   let diagnostics = fetchDiagnostics(fetched, Math.round(performance.now() - fetchStarted));
   const fetched_at = utcTimestamp(context.clock);
   const fetchedObservation = {
@@ -110,6 +118,7 @@ export async function harvestArticle(
     diagnostics,
   };
   if (fetched.body === null) {
+    await work.skipParse(fetchedEvent.event_id);
     const failure = fetchRejection(fetched, inputs.config.harvest.fetch_timeout_ms, diagnostics);
     return HarvestArticleResultSchema.parse({
       candidate: null,
@@ -119,13 +128,16 @@ export async function harvestArticle(
   }
   let extracted: ReturnType<typeof extractArticle>;
   const extractStarted = performance.now();
-  try { extracted = await parseDocument("article", fetched.body, entry.link, inputs.extraction, source.form); }
-  catch (error) {
-    if (!(error instanceof ArticleExtractionError)) throw error;
-    emitDocumentObservations(context, eventIdentity, candidate_id, "parse", fetchedEvent.event_id, utcTimestamp(context.clock));
+  const body = fetched.body;
+  const link = entry.link;
+  const parsed = await work.parse(
+    () => parseDocument("article", body, link, inputs.extraction, source.form), fetchedEvent.event_id, describeArticleParse,
+  );
+  if (parsed.parsed === null) {
     diagnostics = {
       ...diagnostics, extract_ms: Math.round(performance.now() - extractStarted),
-      extraction_failure: error.reason, failure_code: "unknown", stopped_stage: "extract", detail: error.reason,
+      extraction_failure: parsed.failure === "malformed-feed" ? null : parsed.failure,
+      failure_code: "unknown", stopped_stage: "extract", detail: parsed.failure,
     };
     return HarvestArticleResultSchema.parse({
       candidate: null,
@@ -135,8 +147,8 @@ export async function harvestArticle(
       observation: { ...fetchedObservation, extraction: "failed", diagnostics },
     });
   }
+  extracted = parsed.parsed;
   const extract_ms = Math.round(performance.now() - extractStarted);
-  emitDocumentObservations(context, eventIdentity, candidate_id, "parse", fetchedEvent.event_id, utcTimestamp(context.clock));
   const pageTitle = extracted.page_title && [...extracted.page_title].length <= PAGE_TITLE_MAX_CHARS ? extracted.page_title : null;
   article.title ??= pageTitle;
   const extraction = extracted.article_text ? "success" : "empty";

@@ -1,15 +1,16 @@
 /** Execute fetch and parse requests against identity-checked durable documents. */
 import { z } from "zod";
+import { WriterIdentitySchema } from "@idhazh/common-contracts";
 import type { PlanInputs } from "../load-plan-inputs";
 import type { PlanRuntime } from "../run-feed-plan";
 import { resolveRunContext } from "../resolve-run-context";
 import { createPermittedFetcher } from "../harvest-feeds/robots-policy";
 import { canonicalizeUrl } from "../harvest-feeds/url-cleaner";
 import { validateTargetName } from "../harvest-feeds/safe-target";
-import { ArticleExtractionError } from "../harvest-feeds/dom-extractor";
 import { parseDocument } from "../harvest-feeds/parse-document";
-import { FeedParseError } from "../harvest-feeds/parse-feed";
-import { observeDocument } from "../harvest-feeds/document-observation";
+import { documentWork, describeArticleParse, describeFeedParse } from "../harvest-feeds/document-work";
+import { createIngestObservations } from "../ingest-observations";
+import type { IngestObservations } from "../ingest-observations";
 import { PlanError } from "./plan-request";
 import { FetchRequestSchema, FetchedDocumentSchema, ParseRequestSchema, PlannerOperationSchema } from "./operation-contracts";
 import type { FetchedDocument, PlannerOperation } from "./operation-contracts";
@@ -70,6 +71,7 @@ export async function executeDocumentOperation(
   const request = operation === "fetch" ? FetchRequestSchema.parse(raw) : ParseRequestSchema.parse(raw);
   if (!inputs.settings.enabled) throw new PlanError("PLANNER_DISABLED", "Planner is disabled by service settings", "enabled");
   const store = await openOperationStore(inputs.outputRoot);
+  let observations: IngestObservations | undefined;
   try {
     let runId: string | undefined;
     if ("fetch_request_id" in request) {
@@ -77,7 +79,16 @@ export async function executeDocumentOperation(
       if (fetched !== null) runId = fetched.run_id;
     }
     const proposed = prepareOperation(operation, request.request_id, request, request.correlation_id, inputs, runtime, runId);
-    return (await store.execute(proposed, async record => {
+    const completed = await store.execute(proposed, async record => {
+      observations = createIngestObservations({
+        writer: WriterIdentitySchema.parse({
+          run_id: record.run_id, attempt: inputs.settings.run.attempt, job: null,
+          pipeline_name: "feed-ingest-plan", task_name: operation, shard: 0,
+          producer: inputs.settings.run.producer, git_sha: runtime.git_sha,
+        }),
+        outputRoot: inputs.outputRoot, registration: inputs.registrations.document_observations, settings: inputs.ledgerSettings,
+        ...(runtime.on_document_observations_persisted === undefined ? {} : { on_persisted: runtime.on_document_observations_persisted }),
+      });
       const taskIdentity = {
         pipeline_name: "feed-ingest-plan", task_name: operation, run_id: record.run_id,
         correlation_id: record.correlation_id, request_id: record.request_id,
@@ -90,15 +101,20 @@ export async function executeDocumentOperation(
         try { validateTargetName(url); }
         catch { throw new PlanError("INVALID_REQUEST", "Fetch requires a public HTTP URL without credentials", "url"); }
         const identity = canonicalizeUrl(url);
-        const fetched = await profileTask(runtime.task_profiling, taskIdentity, () => createPermittedFetcher(
-          inputs.harvest.config.harvest, inputs.harvest.extraction, runtime.boundary,
-        ).fetch(url), { ...controls, outcome: result => result.failure === null ? "success" : "error" });
         const eventIdentity = {
           run_id: record.run_id, correlation_id: record.correlation_id,
           article_id: identity.url_key, source_id: request.source_id,
         };
-        const occurred_at = (runtime.clock?.() ?? new Date()).toISOString().replace(/\.\d{3}Z$/, "Z");
-        const observation = observeDocument(eventIdentity, record.request_id, "fetch", request.caused_by_event_id ?? null, occurred_at);
+        const work = documentWork({
+          observations, observation_clock: runtime.observation_clock ?? (() => new Date()),
+        }, eventIdentity, record.request_id, {
+          document_kind: request.kind, source_id: source.id, publisher_id: source.publisher_id,
+          observed_run_id: null, observed_attempt: null, candidate_id: null,
+        });
+        const { fetched, observation, attempt_observations } = await profileTask(runtime.task_profiling, taskIdentity, () => work.fetch(
+          createPermittedFetcher(inputs.harvest.config.harvest, inputs.harvest.extraction, runtime.boundary, runtime.observation_clock),
+          url, request.caused_by_event_id ?? null,
+        ), { ...controls, outcome: result => result.fetched.failure === null ? "success" : "error" });
         const attempts = fetched.attempts ?? [];
         const artifact = FetchedDocumentSchema.parse({
           ...fetched, kind: request.kind, canonical_url: identity.canonical_url,
@@ -106,8 +122,7 @@ export async function executeDocumentOperation(
           error_code: fetched.error_code ?? null, robots_failure: fetched.robots_failure ?? null,
           robots_http_status: fetched.robots_http_status ?? null,
           body_sha256: fetched.body === null ? null : sha256(fetched.body), attempts, observation,
-          attempt_observations: attempts.map(attempt =>
-            observeDocument(eventIdentity, `${record.request_id}\n${attempt.sequence}`, "attempt", observation.event_id, occurred_at)),
+          attempt_observations,
         });
         const { body, ...receipt } = artifact;
         return {
@@ -128,26 +143,26 @@ export async function executeDocumentOperation(
       const source = inputs.harvest.sources.find(source => source.id === artifact.source_id);
       if (!source) throw new PlanError("ARTIFACT_INVALID", "Fetched source is absent from current configuration", "source_id");
       const body = artifact.body;
-      const { parsed, failure } = await profileTask(runtime.task_profiling, taskIdentity, async () => {
-        try {
-          const parsed = artifact.kind === "feed"
-            ? await parseDocument("feed", body, artifact.canonical_url)
-            : await parseDocument("article", body, artifact.canonical_url, inputs.harvest.extraction, source.form);
-          return { parsed, failure: null };
-        } catch (error) {
-          if (error instanceof ArticleExtractionError) return { parsed: null, failure: error.reason };
-          if (error instanceof FeedParseError) return { parsed: null, failure: "malformed-feed" };
-          throw error;
-        }
-      }, { ...controls, outcome: result => result.failure === null ? "success" : "error" });
-      const observation = observeDocument({
+      const work = documentWork({
+        observations, observation_clock: runtime.observation_clock ?? (() => new Date()),
+      }, {
         run_id: fetchedRecord.run_id, correlation_id: fetchedRecord.correlation_id,
         article_id: artifact.article_id, source_id: artifact.source_id,
-      }, record.request_id, "parse", artifact.observation.event_id,
-      (runtime.clock?.() ?? new Date()).toISOString().replace(/\.\d{3}Z$/, "Z"));
+      }, record.request_id, {
+        document_kind: artifact.kind, source_id: source.id, publisher_id: source.publisher_id,
+        observed_run_id: null, observed_attempt: null, candidate_id: null,
+      });
+      const { parsed, failure, observation } = await profileTask(runtime.task_profiling, taskIdentity, async () => {
+        return artifact.kind === "feed"
+          ? work.parse(() => parseDocument("feed", body, artifact.canonical_url), artifact.observation.event_id, describeFeedParse)
+          : work.parse(() => parseDocument("article", body, artifact.canonical_url, inputs.harvest.extraction, source.form),
+            artifact.observation.event_id, describeArticleParse);
+      }, { ...controls, outcome: result => result.failure === null ? "success" : "error" });
       return { artifact: null, response_json: JSON.stringify(z.json().parse({
         fetch_request_id: request.fetch_request_id, observation, kind: artifact.kind, parsed, failure,
       })) };
-    })).response_json!;
+    });
+    observations?.assertSaved();
+    return completed.response_json!;
   } finally { store.close(); }
 }

@@ -30,6 +30,7 @@ import type { ProgressDetails } from "../src/logging/progress-logger";
 import { matchHeadline } from "../src/harvest-feeds/headline-matches";
 import { observeSalience } from "../src/harvest-feeds/salience-votes";
 import { PlanningObservationsSchema } from "@idhazh/common-contracts";
+import { recordHarvestObservations, readObservationFiles } from "./observation-recordings";
 
 let wasmInitialization: ReturnType<typeof initializeWasm> | undefined;
 
@@ -174,7 +175,17 @@ test("public harvest returns validated full text, provenance and actual observat
     const logged: unknown[] = [];
     const runContext = context(record => logged.push(record));
     const observations = collectDocumentObservations(runContext);
+    const recorder = await recordHarvestObservations(root, runContext);
     const result = await harvestFeeds(loaded, runContext, destination(root), { transport, resolve: transport.resolve });
+    const facts = await readObservationFiles(root, recorder.result().files);
+    const actualRequests = facts.filter(({ row }) => row.operation === "attempt");
+    expect(actualRequests.reduce((count, { row }) => count + row.dispatched_request_count!, 0)).toBe(transport.requests.length);
+    expect(facts.filter(({ row }) => row.source_id === "recorded-news" || row.source_id === "recorded-atom")
+      .every(({ row }) => row.publisher_id === "recorded-publication")).toBe(true);
+    expect(facts.some(({ row }) => row.source_id === null && row.document_kind === "feed")).toBe(true);
+    expect(facts.filter(({ row }) => row.source_id === null)
+      .every(({ row }) => row.publisher_id === null && row.candidate_id === null)).toBe(true);
+    expect(facts.some(({ row }) => row.source_id === "retired-source" && row.outcome === "not_attempted")).toBe(true);
     expectFeedParseObservations(observations, loaded.sources, ["recorded-news", "recorded-atom"]);
     expect(result.candidates).toHaveLength(4);
     expect(result.rejections.map(row => row.drop_reason)).toEqual(["SOURCE_INACTIVE", "MISSING_REQUIRED_FIELDS"]);
@@ -394,7 +405,22 @@ test("inactive, empty, malformed, HTTP, timeout and address failures are distinc
     ] });
     const runContext = context();
     const observations = collectDocumentObservations(runContext);
+    const recorder = await recordHarvestObservations(root, runContext);
     const result = await harvestFeeds(loaded, runContext, destination(root), { transport, resolve: transport.resolve });
+    const facts = (await readObservationFiles(root, recorder.result().files)).map(held => held.row);
+    expect(facts.find(row => row.source_id === "empty" && row.operation === "parse")?.outcome).toBe("empty");
+    expect(facts.find(row => row.source_id === "malformed" && row.operation === "parse")).toMatchObject({
+      outcome: "failed", failure_code: "malformed-feed", attribution: "unresolved",
+    });
+    expect(facts.find(row => row.source_id === "inward" && row.operation === "attempt")).toMatchObject({
+      request_phase: "validation", dispatched_request_count: 0, request_coverage: "complete",
+    });
+    expect(facts.filter(row => row.source_id === "http" && row.operation === "attempt" && row.request_phase === "target"))
+      .toMatchObject([{ dispatched_request_count: 1, outcome: "failed", attribution: "unresolved", failure_code: "http" }]);
+    expect(facts.find(row => row.source_id === "timeout" && row.operation === "attempt" && row.request_phase === "target"))
+      .toMatchObject({ dispatched_request_count: 1, failure_code: "timeout" });
+    expect(facts.filter(row => row.operation === "attempt")
+      .reduce((count, row) => count + row.dispatched_request_count!, 0)).toBe(transport.requests.length);
     expectFeedParseObservations(observations, loaded.sources, ["empty", "malformed"]);
     expect(result.candidates).toEqual([]);
     expect(result.salience).toEqual([
