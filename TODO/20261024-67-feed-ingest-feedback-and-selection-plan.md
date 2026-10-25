@@ -141,10 +141,10 @@ Table E now tracks 28 delivery rows. Rows 22-25 are the owner's approved
 feed-health migration sequence; rows 26-28 are explicit deferred work. Row 22
 is complete: PR #1732 was accepted at head
 `a271f2cdbd825fd628068f40216ca73121e42b37` and merged as
-`37530845d7eaefd1d37c6469e0beb9ccfa1e8e28`. Row 23 remains pending until its
-Row 23's draft PR #1737 is open; its final-head checks and coordinator review
-remain outstanding. Rows 24-25 remain pending, and Row 10 remains paused.
-Those later phases are not part of Row 23.
+`37530845d7eaefd1d37c6469e0beb9ccfa1e8e28`. Row 23's draft PR #1737 is open,
+but its final-head checks and coordinator review are outstanding; it remains
+pending. Rows 24-25 remain pending, and Row 10 remains paused. Those later
+phases are not part of Row 23.
 
 The approved D3/D4 implementation sequence is Row 2 -> Row 4 -> Row 5 ->
 Row 6 -> Row 7 -> Row 10. Row 2 lands compatible readers and contracts; Row 4
