@@ -96,8 +96,8 @@ tracing context. The existing default-off service flag gates the new routes.
 | Id | # | Row title | Depends-on | Parallel-group | Status | Worktree | PR | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | E1 | 1 | Approve runtime contracts and activation policy | - | A | IN-FLIGHT | feed-ingest-feedback-selection | - | - |
-| E2 | 2 | Land compatible shared readers before writers | 1 | B | IN-FLIGHT | publisher-catalog-support | [#1704](https://github.com/miztiik/yen-idhazh/pull/1704) | - |
-| E3 | 3 | Implement curated publisher catalog references | 2 | C | IN-FLIGHT | publisher-catalog-support | [#1704](https://github.com/miztiik/yen-idhazh/pull/1704) | - |
+| E2 | 2 | Land compatible shared readers before writers | 1 | B | IN-FLIGHT | document-observation-contracts | [#1712](https://github.com/miztiik/yen-idhazh/pull/1712) | - |
+| E3 | 3 | Implement curated publisher catalog references | 2 | C | DONE | publisher-catalog-support | [#1704](https://github.com/miztiik/yen-idhazh/pull/1704) | - |
 | E4 | 4 | Wire common fetch and parse observations | 2 (publisher IDs from 3 remain nullable until available) | D | PENDING | - | - | - |
 | E5 | 5 | Classify failure and work attribution | 4 | E | PENDING | - | - | - |
 | E6 | 6 | Aggregate article delivery and request costs | 5 | F | PENDING | - | - | - |
@@ -129,6 +129,12 @@ do not block recording observations. A2 adds only a conditional, bounded
 trial to Row 11 after the telemetry prerequisites in Rows 2, 4, 5 and 6. It
 does not require Row 10's score consumer. Other D5 rules do not gate these
 rows and must not restrict ordinary fetching.
+
+Row 2 delivered publisher-identity support through PR #1704 and currently
+delivers the registered per-operation observation contract, its TypeScript
+reader binding, and raw/compact fixture compatibility through PR #1712. This
+phase does not emit observations or declare derived operational state or score
+traces; those remain separate Row 2 work before the row can close.
 
 ## 2. Shared implementation boundaries
 
@@ -234,7 +240,9 @@ deferred.
 
 ## 4. Row #2 - Land compatible shared readers before writers
 
-- **Scope:** Implement only approved native declarations, bound copies, migrations and compatible readers needed by later rows. The new stage-snapshot subset is declared with its first real reader/writer in the authorized Row 8 API phase; this row retains the broader publisher and feedback contracts. This PR phase delivers the publisher-identity subset only: the shared source snapshot field, its native declaration, versioned historical readers and binding checks. The saved-batch APIs were delivered separately; their readers change here only to migrate old saved batches without inventing identity. Per-operation observations and other feedback contracts remain open.
+- **Scope:** Implement only approved native declarations, bound copies, migrations and compatible readers needed by later rows. The new stage-snapshot subset is declared with its first real reader/writer in the authorized Row 8 API phase; this row retains the broader publisher and feedback contracts.
+  The publisher-identity subset (shared source snapshot field, native declaration, versioned historical readers and binding checks) landed in PR #1704. Saved-batch APIs were delivered separately; their readers migrate old saved batches without inventing identity.
+  This PR phase delivers the registered per-operation observation contract, its TypeScript reader binding and raw/compact fixture compatibility. It does not emit observations or declare derived operational state or score traces; other Row 2 work remains before the row can close.
 - **Level:** 5; the approved Row 1 field/type table is mandatory.
 - **Files touched:**
   - `backend/idhazh/contracts/feed_ingest_candidate.py`

@@ -489,6 +489,7 @@ test("runs the native compatibility verifier in a named-input copy with no backe
       "schemas/primitives", "schemas/rejection.schema", "schemas/source-run.schema",
       "schemas/source.schema", "schemas/telemetry.schema", "schemas/host-fingerprint.schema",
       "schemas/harvest-diagnostics.schema", "schemas/item-health-failure.schema", "schemas/feed-health.schema",
+      "schemas/ingest-observations.schema",
       "schemas/planner-operation.schema", "schemas/recorded-instant.schema", "observation-order",
       "schemas/planner-stage.schema",
       "schemas/publication-input.schema",

@@ -6,11 +6,14 @@ import { tmpdir } from "node:os";
 import { basename, dirname, join } from "node:path";
 import {
   ArticleAssessmentRecordSchema, CandidateRejectionContract, CONTRACT_VERSION,
-  EditorialSelectionContract, EditorialSelectionRowSchema, SourceRunRecordSchema,
+  DocumentObservationRecordSchema, EditorialSelectionContract, EditorialSelectionRowSchema, SourceRunRecordSchema,
+  DOCUMENT_OBSERVATION_VERSION,
   PLANNER_EXCLUSIONS_VERSION, EXTRACTION_QUALITY_VERSION, PreviousHarvestDiagnosticsSchema,
 } from "@idhazh/common-contracts";
 import type { LedgerCompletionEvidence } from "@idhazh/common-contracts";
-import { appendIdentityColumns, describeObjectSchema, digestRows, persistLedger } from "@idhazh/ledger-file-writer";
+import {
+  appendIdentityColumns, createUuidV5, describeObjectSchema, digestRows, persistLedger,
+} from "@idhazh/ledger-file-writer";
 import type { LedgerRowContract, PersistLedgerResult, StoredLedgerRow } from "@idhazh/ledger-file-writer";
 import { Int64, tableFromIPC, vectorFromArray } from "apache-arrow";
 import initializeParquet, { Table as WasmTable, WriterPropertiesBuilder, readMetadata, readParquet, writeParquet } from "parquet-wasm/esm";
@@ -29,7 +32,8 @@ import { readHistoricalSelections } from "../src/partition-article-shards/read-e
 import { partitionArticles, persistDispatches } from "../src/partition-article-shards/shard-packer";
 import { fixtureInput, readWritten, registration, settings, writer, writeRows } from "./partition-fixtures";
 import {
-  ArticleAssessmentContract, DiversityMetricContract, DispatchContract, SourceRunContract, legacyAuditSchemas,
+  ArticleAssessmentContract, DiversityMetricContract, DispatchContract, DocumentObservationContract,
+  SourceRunContract, legacyAuditSchemas,
 } from "../src/metrics/audit-contracts";
 
 const selectionContract = EditorialSelectionContract;
@@ -144,6 +148,99 @@ test("native raw and daily reads preserve original writer identity instead of th
     expect(current.rows[0]!.identity.attempt).toBe(1);
     expect(current.rows[0]!.identity.shard).toBe(0);
     expect(current.rows[0]!.identity.unit_id).toBe(original.identity.unit_id);
+
+    const observation = DocumentObservationRecordSchema.parse(await Bun.file(new URL(
+      "../../../tests/fixtures/contracts/feed-ingest-document-observation/refused-fetch.json", import.meta.url,
+    )).json());
+    const attemptObservation = {
+      ...observation, event_id: createUuidV5(observation.event_id, "attempt:1"),
+      operation: "attempt" as const, request_phase: "target" as const,
+      request_sequence: 0, retry: 0, request_coverage: "complete" as const, dispatched_request_count: 0,
+    };
+    expect(DocumentObservationRecordSchema.parse(attemptObservation).dispatched_request_count).toBe(0);
+    expect(DocumentObservationRecordSchema.parse({
+      ...attemptObservation, request_coverage: "unknown", dispatched_request_count: null,
+    }).dispatched_request_count).toBeNull();
+    expect(() => DocumentObservationRecordSchema.parse({
+      ...attemptObservation, request_coverage: "unknown", dispatched_request_count: 0,
+    })).toThrow("unknown request coverage");
+    const feedObservation = { ...observation, document_kind: "feed" as const };
+    const partialFeedAttempt = DocumentObservationRecordSchema.parse({
+      ...attemptObservation, document_kind: "feed", request_phase: "robots", request_coverage: "partial",
+      dispatched_request_count: 1,
+    });
+    expect(partialFeedAttempt).toMatchObject({
+      document_kind: "feed", outcome: "failed", request_phase: "robots",
+      request_coverage: "partial", dispatched_request_count: 1,
+    });
+    expect(() => DocumentObservationRecordSchema.parse({
+      ...feedObservation, candidate_id: "a".repeat(64),
+    })).toThrow("article opportunity requires its article kind");
+    expect(() => DocumentObservationRecordSchema.parse({
+      ...observation, candidate_id: "a".repeat(64), observed_run_id: null,
+    })).toThrow("article opportunity requires its article kind");
+    const correctedObservation = DocumentObservationRecordSchema.parse({
+      ...observation, event_id: createUuidV5(observation.event_id, "correction:1"),
+      corrects_event_id: observation.event_id, correction_revision: 1,
+      occurred_at: "2026-10-21T12:01:00Z",
+    });
+    expect(correctedObservation).toMatchObject({
+      corrects_event_id: observation.event_id, correction_revision: 1,
+    });
+    expect(() => DocumentObservationRecordSchema.parse({
+      ...observation, corrects_event_id: observation.event_id, correction_revision: 1,
+    })).toThrow("cannot correct itself");
+    expect(() => DocumentObservationRecordSchema.parse({
+      ...correctedObservation, correction_revision: null,
+    })).toThrow("both its target event and positive revision");
+    const observationWriter = writer(observation.observed_run_id!);
+    const observationRawWritten = await writeRows(
+      root, "document-observations", input.fixture.date, DocumentObservationRecordSchema,
+      [observation, correctedObservation], observationWriter, DOCUMENT_OBSERVATION_VERSION,
+    );
+    const observationRaw = await readWritten(
+      root, "document-observations", input.fixture.date, DocumentObservationContract, observationRawWritten,
+    );
+    expect(observationRaw.tier).toBe("raw");
+    expect(observationRaw.rows).toHaveLength(2);
+    expect(observationRaw.rows.map(held => held.row.event_id).sort()).toEqual(
+      [observation.event_id, correctedObservation.event_id].sort(),
+    );
+    const rawCorrection = observationRaw.rows.find(held => held.row.event_id === correctedObservation.event_id);
+    expect(rawCorrection?.row).toMatchObject({
+      occurred_at: "2026-10-21T12:01:00Z",
+      corrects_event_id: observation.event_id, correction_revision: 1,
+    });
+    const observationCompact = await persistLedger({
+      ledger: "document-observations", registryEntry: registration("document-observations"),
+      outputRoot: root, writerContext: { ...writer(observation.observed_run_id!, 9, 6), producer: "tests.compactor" },
+      ledgerSettings: settings, rowContract: DocumentObservationContract,
+      period: { tier: "compact", period: "daily", covers: input.fixture.date, builtFrom: 1 },
+      rows: observationRaw.rows,
+    });
+    const observationFile = observationCompact.files[0]!;
+    const observationPath = join(root, observationFile.path);
+    const observationIndexPath = join(root, "compact", "feed-ingest-plan", "document-observations", "index", "daily.json");
+    await mkdir(dirname(observationIndexPath), { recursive: true });
+    await writeFile(observationIndexPath, JSON.stringify({
+      version: "2026-10-07", ledger: "document-observations", period: "daily",
+      entries: [{
+        covers: input.fixture.date, rows: observationFile.row_count,
+        bytes: (await stat(observationPath)).size, state: "packed",
+      }],
+    }));
+    const observationDaily = await readLedgerDay({
+      ledger: "document-observations", day: input.fixture.date, contract: DocumentObservationContract,
+      indexes: { daily: observationIndexPath },
+    });
+    expect(observationDaily.tier).toBe("daily");
+    expect(observationDaily.rows.map(held => held.row)).toEqual(observationRaw.rows.map(held => held.row));
+    const compactCorrection = observationDaily.rows.find(held => held.row.event_id === correctedObservation.event_id);
+    expect(compactCorrection?.row).toMatchObject({
+      occurred_at: "2026-10-21T12:01:00Z",
+      corrects_event_id: observation.event_id, correction_revision: 1,
+    });
+    expect(observationDaily.rows[0]!.identity.unit_id).toBe(observationRaw.rows[0]!.identity.unit_id);
   } finally { await rm(root, { recursive: true, force: true }); }
 });
 

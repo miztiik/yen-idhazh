@@ -8,6 +8,7 @@ import shutil
 import subprocess
 from pathlib import Path
 from typing import Any, cast
+from uuid import NAMESPACE_URL, uuid5
 
 import pytest
 from pydantic import ValidationError
@@ -28,6 +29,7 @@ CONTRACT_NAMES = (
     ("planner_stage", "ParsedFeedBatch"),
     ("planner_stage", "SelectedFeedBatch"),
     ("planner_stage", "PartitionedFeedBatch"),
+    ("feed_ingest_observations", "DocumentObservationRecord"),
 )
 
 MODEL_NAMES = (
@@ -61,6 +63,58 @@ def test_declared_contract(module: str, name: str) -> None:
     assert contract in idhazh.contracts.CONTRACTS
     assert contract.schema_version() == contract.model_fields["version"].default
     assert contract.json_schema()["additionalProperties"] is False
+    if name == "DocumentObservationRecord":
+        observation = contract.from_json(
+            read_text(CONTRACT_FIXTURES_DIR / "feed-ingest-document-observation" / "refused-fetch.json")
+        )
+        attempt = observation.model_dump(mode="json") | {
+            "event_id": str(uuid5(NAMESPACE_URL, f"{observation.event_id}:attempt")),
+            "operation": "attempt",
+            "request_phase": "target",
+            "request_sequence": 0,
+            "retry": 0,
+            "request_coverage": "complete",
+            "dispatched_request_count": 0,
+        }
+        assert contract.model_validate(attempt).dispatched_request_count == 0
+        partial = attempt | {
+            "document_kind": "feed",
+            "request_phase": "robots",
+            "request_coverage": "partial",
+            "dispatched_request_count": 1,
+        }
+        partial_result = contract.model_validate(partial)
+        assert (partial_result.outcome, partial_result.attribution, partial_result.request_coverage) == (
+            "failed", "unresolved", "partial",
+        )
+        assert partial_result.dispatched_request_count == 1
+        unknown = attempt | {"request_coverage": "unknown", "dispatched_request_count": None}
+        assert contract.model_validate(unknown).dispatched_request_count is None
+        with pytest.raises(ValidationError, match="unknown request coverage"):
+            contract.model_validate(unknown | {"dispatched_request_count": 0})
+        feed_observation = observation.model_dump(mode="json") | {"document_kind": "feed"}
+        assert contract.model_validate(feed_observation).article_id == observation.article_id
+        with pytest.raises(ValidationError, match="article opportunity requires its article kind"):
+            contract.model_validate(feed_observation | {"candidate_id": "a" * 64})
+        with pytest.raises(ValidationError, match="article opportunity requires its article kind"):
+            contract.model_validate(
+                observation.model_dump(mode="json")
+                | {"candidate_id": "a" * 64, "observed_run_id": None}
+            )
+        corrected = observation.model_dump(mode="json") | {
+            "event_id": str(uuid5(NAMESPACE_URL, str(observation.event_id))),
+            "corrects_event_id": observation.event_id,
+            "correction_revision": 1,
+            "occurred_at": "2026-10-21T12:01:00Z",
+        }
+        assert contract.model_validate(corrected).corrects_event_id == observation.event_id
+        with pytest.raises(ValidationError, match="both its target event and positive revision"):
+            contract.model_validate(corrected | {"correction_revision": None})
+        with pytest.raises(ValidationError, match="cannot correct itself"):
+            contract.model_validate(
+                observation.model_dump(mode="json")
+                | {"corrects_event_id": observation.event_id, "correction_revision": 1}
+            )
     publisher_snapshot: dict[str, object] = {"publisher_id": "recorded-publication"}
     publisher_source: dict[str, object] = {"source": publisher_snapshot}
     previous_identity_cases: dict[tuple[str, str], tuple[str, dict[str, object]]] = {

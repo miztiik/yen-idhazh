@@ -2,20 +2,25 @@
 import { z } from "zod";
 import {
   DiversityMetricRowSchema,
+  DocumentObservationRecordSchema,
   DropReasonCountSchema,
   FEED_INGEST_AUDIT_VERSION,
   FeedIngestDispatchSchema,
   LegacyArticleAssessmentSchema,
   SourceRunRecordSchema,
-  LedgerCompletionEvidenceSchema, SOURCE_RUN_VERSION,
-  PLANNING_OBSERVATIONS_VERSION, SOURCE_RELIABILITY_VERSION,
+  LedgerCompletionEvidenceSchema,
+  SOURCE_RUN_VERSION,
+  PLANNING_OBSERVATIONS_VERSION,
+  SOURCE_RELIABILITY_VERSION,
   PLANNER_EXCLUSIONS_VERSION,
+  DOCUMENT_OBSERVATION_VERSION,
   PreviousFeedIngestDispatchSchema, PreviousObservedFeedIngestDispatchSchema,
   PreviousReliableFeedIngestDispatchSchema, readFeedIngestDispatch,
   PreviousSourceSnapshotSchema, PUBLISHER_IDENTITY_VERSION, PUBLISHER_EXPOSURE_VERSION,
   PreviousPublisherFeedIngestDispatchSchema,
 } from "@idhazh/common-contracts";
 import type {
+  DocumentObservationRecord,
   DiversityMetricRow,
   FeedIngestDispatch,
   SourceRunRecord,
@@ -86,6 +91,10 @@ export const DiversityMetricContract: LedgerRowContract<DiversityMetricRow> = {
   schema: DiversityMetricRowSchema,
   schemaVersion: FEED_INGEST_AUDIT_VERSION,
   legacyVersions: { [PREVIOUS_VERSION]: { schema: LegacyDiversityMetricSchema, migrate: migrateDiversity } },
+};
+export const DocumentObservationContract: LedgerRowContract<DocumentObservationRecord> = {
+  schema: DocumentObservationRecordSchema,
+  schemaVersion: DOCUMENT_OBSERVATION_VERSION,
 };
 export const SourceRunContract: LedgerRowContract<SourceRunRecord> = {
   schema: SourceRunRecordSchema,

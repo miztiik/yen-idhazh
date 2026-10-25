@@ -53,6 +53,14 @@
           "prefix": ["feed-ingest-plan", "diversity"],
           "stem": null,
           "suffix": null
+        },
+        {
+          "name": "document-observations",
+          "publish_to_data_explorer": false,
+          "grain": "raw-and-compact",
+          "prefix": ["feed-ingest-plan", "document-observations"],
+          "stem": null,
+          "suffix": null
         }
       ]
     },
