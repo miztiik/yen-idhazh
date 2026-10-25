@@ -239,6 +239,7 @@ class CompactEntry(Model):
             "no rows. Empty on a daily entry, where a lost day is an entry of its own."
         ),
     )
+
     set_aside: int = Field(
         default=0,
         ge=0,
@@ -247,6 +248,12 @@ class CompactEntry(Model):
             "they could not be read or were too large. The period holds every other row."
         ),
     )
+
+    @model_validator(mode="after")
+    def _a_file_digest_names_a_packed_period(self) -> Self:
+        if self.state != EntryState.PACKED and self.file_sha256 is not None:
+            raise ValueError("an entry with no file has no file digest")
+        return self
 
     @property
     def names_file(self) -> bool:
@@ -354,12 +361,7 @@ class CompactIndex(Contract):
                     f"{where} marks {entry.covers!r} {entry.state.value} with rows {entry.rows} "
                     f"and bytes {entry.bytes}, and an entry with no file counts neither"
                 )
-            if entry.state is not EntryState.PACKED and entry.file_sha256 is not None:
-                raise ValueError(
-                    f"{where} marks {entry.covers!r} {entry.state.value} with a file digest, "
-                    "and an entry with no file has no digest"
-                )
-            if entry.state is EntryState.LOST and self.period is not Period.DAILY:
+            if entry.state == EntryState.LOST and self.period is not Period.DAILY:
                 raise ValueError(
                     f"{where} marks {entry.covers!r} lost, and only a day is lost: a month or a "
                     "year lists the days it lost in lost_days"

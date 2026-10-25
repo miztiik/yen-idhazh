@@ -16,7 +16,7 @@ import {
   PreviousHarvestDiagnosticsSchema,
   ArticleAssessmentContract, EditorialSelectionContract, SourceReliabilityPenaltySchema,
   PUBLISHER_IDENTITY_VERSION, PublisherExposurePenaltySchema, FEED_HISTORY_EVENT_VERSION, CONTRACT_VERSION,
-  SOURCE_OPERATIONAL_SCORE_VERSION, FEED_HEALTH_STATE_VERSION, readSelectedFeedBatch,
+  SOURCE_OPERATIONAL_SCORE_VERSION, SELECTED_FEED_BATCH_VERSION, readSelectedFeedBatch,
   ParsedFeedBatchSchema, SelectedFeedBatchSchema, PartitionedFeedBatchSchema,
   PlannerHarvestObservationSchema, PlannerSeenEvidenceSchema, PlannerSeenRowSchema,
   PlannerStageContextSchema, PlannerStageRequestSchema, StageReferenceRequestSchema,
@@ -649,7 +649,7 @@ describe("planning audit contracts", () => {
     expect(PlannerStageRequestSchema.safeParse({ article_limit: null }).success).toBe(false);
     expect(ParsedFeedBatchSchema.parse(parsed).version).toBe(PUBLISHER_IDENTITY_VERSION);
     const selected = SelectedFeedBatchSchema.parse({
-      version: FEED_HEALTH_STATE_VERSION,
+      version: SELECTED_FEED_BATCH_VERSION,
       batch_id: batchId, config_sha256: digest, parsed_batch_id: batchId,
       context, selection_state: {
         capture_status: "captured", selection_started_at_utc: context.now,
@@ -662,7 +662,7 @@ describe("planning audit contracts", () => {
       },
       selections: [], rejections: [],
     });
-    expect(selected.version).toBe(FEED_HEALTH_STATE_VERSION);
+    expect(selected.version).toBe(SELECTED_FEED_BATCH_VERSION);
     const legacySelection = await Bun.file(new URL(
       "../../../tests/fixtures/contracts/selected-feed-batch/empty.json", import.meta.url,
     )).json();
