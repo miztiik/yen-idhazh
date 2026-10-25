@@ -610,10 +610,20 @@ def test_a_file_whose_every_row_goes_stays_as_an_empty_file_its_index_names(
     assert month is not None and day is not None, "an emptied period lost its file"
     assert ledger.load([month, day], model=ItemHealthRow) == []
     entries = indexes(state)
-    assert CompactEntry(covers="2026-01", rows=0, bytes=month.stat().st_size) in entries[
+    assert CompactEntry(
+        covers="2026-01",
+        rows=0,
+        bytes=month.stat().st_size,
+        file_sha256=hashlib.sha256(month.read_bytes()).hexdigest(),
+    ) in entries[
         Period.MONTHLY
     ]
-    assert CompactEntry(covers="2026-02-10", rows=0, bytes=day.stat().st_size) in entries[
+    assert CompactEntry(
+        covers="2026-02-10",
+        rows=0,
+        bytes=day.stat().st_size,
+        file_sha256=hashlib.sha256(day.read_bytes()).hexdigest(),
+    ) in entries[
         Period.DAILY
     ]
     assert ledger.list_ledger_files(state, CENSUS).holes == ()

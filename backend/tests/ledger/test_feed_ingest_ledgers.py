@@ -18,6 +18,7 @@ from support.paths import CONFIG_DIR, CONTRACT_FIXTURES_DIR, REPO_ROOT, read_tex
 from idhazh import config, ledger
 from idhazh.contracts.base import Contract, ServerJob
 from idhazh.contracts.collection_prune import StopReason
+from idhazh.contracts.feed_health_state import FeedHealthStateSnapshot
 from idhazh.contracts.feed_ingest_article_assessment import ArticleAssessmentRecord
 from idhazh.contracts.feed_ingest_candidate import derive_candidate_id
 from idhazh.contracts.feed_ingest_dispatch import FeedIngestDispatch
@@ -37,11 +38,17 @@ from idhazh.ledger.persist import StoredRow
 pytestmark = pytest.mark.contract
 
 PRODUCED_PLANNING_LEDGERS = (
-    ("dispatches", FeedIngestDispatch, "feed-ingest-dispatch/one-article.json"),
+    ("article-dispatches", FeedIngestDispatch, "feed-ingest-dispatch/one-article.json"),
     ("editorial-selections", EditorialSelectionRow, "feed-ingest-editorial-selection/one-article.json"),
+    ("ingest-rejections", CandidateRejectionRecord, "feed-ingest-rejection/empty-feed.json"),
+    ("feed-runs", SourceRunRecord, "feed-ingest-source-run/one-observation.json"),
+    ("article-assessments", ArticleAssessmentRecord, "feed-ingest-article-assessment/one-observation.json"),
+    ("article-selection-diversity", DiversityMetricRow, "feed-ingest-diversity/one-observation.json"),
+)
+LEGACY_PLANNING_LEDGERS = (
+    ("dispatches", FeedIngestDispatch, "feed-ingest-dispatch/one-article.json"),
     ("rejections", CandidateRejectionRecord, "feed-ingest-rejection/empty-feed.json"),
     ("source-runs", SourceRunRecord, "feed-ingest-source-run/one-observation.json"),
-    ("article-assessments", ArticleAssessmentRecord, "feed-ingest-article-assessment/one-observation.json"),
     ("diversity", DiversityMetricRow, "feed-ingest-diversity/one-observation.json"),
 )
 DOCUMENT_OBSERVATION_LEDGER = (
@@ -54,8 +61,23 @@ OPERATIONAL_STATE_LEDGER = (
     FeedIngestOperationalStateRow,
     "feed-ingest-operational-state/qualified.json",
 )
+RENAMED_DOCUMENT_OBSERVATION_LEDGER = (
+    "ingest-observations",
+    DocumentObservationRecord,
+    "feed-ingest-document-observation/refused-fetch.json",
+)
+FEED_HEALTH_STATE_LEDGER = (
+    "feed-health-state",
+    FeedHealthStateSnapshot,
+    "feed-health-state/one-complete-snapshot.json",
+)
 REGISTERED_PLANNING_LEDGERS = (
-    *PRODUCED_PLANNING_LEDGERS, DOCUMENT_OBSERVATION_LEDGER, OPERATIONAL_STATE_LEDGER,
+    *PRODUCED_PLANNING_LEDGERS,
+    *LEGACY_PLANNING_LEDGERS,
+    DOCUMENT_OBSERVATION_LEDGER,
+    OPERATIONAL_STATE_LEDGER,
+    RENAMED_DOCUMENT_OBSERVATION_LEDGER,
+    FEED_HEALTH_STATE_LEDGER,
 )
 
 

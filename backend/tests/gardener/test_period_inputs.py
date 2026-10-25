@@ -6,6 +6,7 @@ from datetime import date
 from pathlib import Path, PurePosixPath
 
 from idhazh import config, ledger
+from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.knobs.gardener import CompactionPolicy, RetentionPolicy
 from idhazh.gardener.period_inputs import paths_for_task, scheduled_range
 
@@ -55,13 +56,21 @@ def test_every_compaction_names_its_ledger_s_marks_and_nothing_else(tmp_path: Pa
         compact = f"state/compact/{'/'.join(ledger.door_folders(policy.ledger))}"
         assert scheduled_range(name, policy, today) is None, name
         for period_range in (None, ("2026-08", "2026-08")):
-            assert _named(
-                tmp_path, paths_for_task(tmp_path, name, policy, period_range, today=today)
-            ) == [
+            expected = [
                 f"{compact}/index/daily.json",
                 f"{compact}/index/monthly.json",
                 f"{compact}/index/yearly.json",
-            ], (name, period_range)
+            ]
+            if policy.ledger is LedgerName.FEED_INGEST_PLAN_FEED_HEALTH_STATE:
+                expected.extend(
+                    (
+                        "state/metadata/feed-ingest-plan/feed-health-state/head/index-a.json",
+                        "state/metadata/feed-ingest-plan/feed-health-state/head/index-b.json",
+                    )
+                )
+            assert _named(
+                tmp_path, paths_for_task(tmp_path, name, policy, period_range, today=today)
+            ) == expected, (name, period_range)
 
 
 def test_a_trial_compaction_lists_only_its_declared_root_indexes(tmp_path: Path) -> None:

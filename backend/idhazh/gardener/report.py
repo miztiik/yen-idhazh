@@ -65,6 +65,10 @@ WHY: Final[Mapping[GardenerFault, str]] = {
         "a packed file it would settle a re-run or a late file into cannot be read or is not "
         "there; restore it from git history"
     ),
+    GardenerFault.HEAD_INDEX_UNAVAILABLE: (
+        "no valid feed-health head copy is available, or the two valid copies disagree; "
+        "restore or align them"
+    ),
 }
 
 #: What a person reads for each recovery note, beside the period or member it names.

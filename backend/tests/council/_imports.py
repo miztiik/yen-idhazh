@@ -25,6 +25,7 @@ MODULE_NAMES = (
     "idhazh.contracts.element",
     "idhazh.contracts.eval_row",
     "idhazh.contracts.feed_health",
+    "idhazh.contracts.feed_health_state",
     "idhazh.contracts.feed_ingest_article_assessment",
     "idhazh.contracts.feed_ingest_candidate",
     "idhazh.contracts.feed_ingest_diagnostics",

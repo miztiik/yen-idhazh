@@ -272,7 +272,6 @@ def test_a_compact_day_holds_exactly_what_settling_its_raw_files_gives_in_the_sa
         feed_root,
         date(2026, 12, 31),
         task="compact-feed-ingest-plan-feed-health-state",
-        monthly_window=ONE_MONTH,
     )
     assert feed_run.fault is not GardenerFault.HEAD_INDEX_UNAVAILABLE
     assert not set(feed_run.taken).intersection(reference.path for reference in protected)
@@ -293,7 +292,6 @@ def test_a_compact_day_holds_exactly_what_settling_its_raw_files_gives_in_the_sa
         disagreeing_root,
         date(2026, 12, 31),
         task="compact-feed-ingest-plan-feed-health-state",
-        monthly_window=ONE_MONTH,
     )
     assert (disagreement.stopped_because, disagreement.fault) == (
         StopReason.DEFERRED,
@@ -308,7 +306,6 @@ def test_a_compact_day_holds_exactly_what_settling_its_raw_files_gives_in_the_sa
         missing_head_root,
         date(2026, 12, 31),
         task="compact-feed-ingest-plan-feed-health-state",
-        monthly_window=ONE_MONTH,
     )
     assert (unavailable.stopped_because, unavailable.fault) == (
         StopReason.DEFERRED,

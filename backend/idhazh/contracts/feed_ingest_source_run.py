@@ -126,7 +126,7 @@ class SourceRunRecord(Contract):
             why="The contract changelog keeps its four newest changes and one history pointer.",
         ),
     )
-    version: Literal["2026-10-25T15:28"] = SOURCE_RUN_VERSION
+    version: Literal["2026-10-24T20:04", "2026-10-25T15:28"] = SOURCE_RUN_VERSION
 
     date: DateStamp
     correlation_id: str = Field(min_length=1)
@@ -196,7 +196,7 @@ class SourceRunRecord(Contract):
                     "planner exclusions require the declared source-run "
                     "contract version"
                 )
-            return {**value, "version": SOURCE_RUN_VERSION}
+            return {**value, "version": PUBLISHER_IDENTITY_VERSION}
         return value
 
     @model_validator(mode="after")

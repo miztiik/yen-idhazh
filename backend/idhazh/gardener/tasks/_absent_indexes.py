@@ -7,10 +7,10 @@ packed before would drop out of every read. So before any step runs, the pass
 rebuilds each absent index from the files of a bounded list of periods,
 coarsest period first, and adopts each file it finds as a step adopts its own
 file (`ledger_marks.adopt`): a `packed` entry, its bytes from the listing and
-its rows from its footer, logged with the recovery note `index-rebuilt` and the
-period. A period with no file adds nothing. The marks are worked out again
-after each period, because the next one's periods start where the coarser
-rebuild left them.
+its rows from its footer and exact-byte SHA-256 from the fetched file, logged with
+the recovery note `index-rebuilt` and the period. A period with no file adds
+nothing. The marks are worked out again after each period, because the next
+one's periods start where the coarser rebuild left them.
 
 **Finite yearly expiry cannot recover a missing yearly index from files.**
 Its expired_through value would be lost. An established compact tree with
