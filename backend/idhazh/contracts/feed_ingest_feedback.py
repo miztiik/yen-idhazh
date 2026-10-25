@@ -77,6 +77,7 @@ class FeedIngestOperationalStateRow(Contract):
             raise ValueError("measured request totals and waste are available together")
         if (
             self.measured_target_requests is not None
+            and self.measured_source_wasted_requests is not None
             and self.measured_source_wasted_requests > self.measured_target_requests
         ):
             raise ValueError("wasted requests cannot exceed total requests")

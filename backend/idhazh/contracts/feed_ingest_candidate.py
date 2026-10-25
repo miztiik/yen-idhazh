@@ -202,7 +202,11 @@ class SourceOperationalEvidence(Model):
     def validate_operational_evidence(self) -> Self:
         if (self.total_requests is None) != (self.wasted_requests is None):
             raise ValueError("request totals and waste are available together")
-        if self.total_requests is not None and self.wasted_requests > self.total_requests:
+        if (
+            self.total_requests is not None
+            and self.wasted_requests is not None
+            and self.wasted_requests > self.total_requests
+        ):
             raise ValueError("wasted requests cannot exceed total requests")
         if self.observed_measured_opportunities > self.observed_attempted_opportunities:
             raise ValueError("measured opportunities cannot exceed attempted opportunities")
