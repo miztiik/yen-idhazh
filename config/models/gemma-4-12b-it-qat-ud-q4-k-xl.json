@@ -1,0 +1,60 @@
+{
+  "summarizer": {
+    "arch": "gemma4",
+    "byte_count": 6716356800,
+    "companion_files": [
+      {
+        "byte_count": 253708800,
+        "file": "mtp-gemma-4-12B-it-Q4_0.gguf",
+        "flag": "--spec-draft-model",
+        "repo": "unsloth/gemma-4-12B-it-qat-GGUF",
+        "revision": "980b060c40a8539ac159e0501a3e0f66a6365af3",
+        "sha256": "fcb35dea42c71333db904cee11baac525c9ef872818ee3753f6cb156f3c6f4f6"
+      }
+    ],
+    "declared_for": "90fd44e29e0d7cffeb0fd00dc73cfdab9ed0b0e95306ecf7821ea634c940c370",
+    "file": "gemma-4-12B-it-qat-UD-Q4_K_XL.gguf",
+    "hf_base_repo": "google/gemma-4-12B-it-qat-q4_0-unquantized",
+    "id": "gemma-4-12b-it-qat-ud-q4-k-xl",
+    "quantisation": "UD-Q4_K_XL",
+    "repo": "unsloth/gemma-4-12B-it-qat-GGUF",
+    "request_timeout_minutes": 22.1,
+    "revision": "980b060c40a8539ac159e0501a3e0f66a6365af3",
+    "sampling": {
+      "temperature": 0.2,
+      "top_p": 1.0,
+      "top_k": 40,
+      "min_p": 0.05,
+      "max_tokens": 4096,
+      "typical_p": 1.0,
+      "repeat_penalty": 1.0,
+      "repeat_last_n": 64,
+      "presence_penalty": 0.0,
+      "frequency_penalty": 0.0,
+      "dry_multiplier": 0.0,
+      "xtc_probability": 0.0,
+      "mirostat": 0,
+      "seed": 0
+    },
+    "server": {
+      "--batch-size": 512,
+      "--ctx-size": 65536,
+      "--metrics": null,
+      "--spec-draft-n-max": 2,
+      "--spec-draft-n-min": 0,
+      "--spec-draft-p-min": 0.0,
+      "--spec-type": "draft-mtp",
+      "--threads": 4,
+      "--ubatch-size": 512,
+      "--flash-attn": "on",
+      "--log-verbosity": 4,
+      "--parallel": 1
+    },
+    "sha256": "90fd44e29e0d7cffeb0fd00dc73cfdab9ed0b0e95306ecf7821ea634c940c370",
+    "thinking_close": "<channel|>",
+    "thinking_kwarg": "enable_thinking",
+    "chat_template_kwargs": {},
+    "reasoning_delimiters": null
+  },
+  "version": "2026-10-25"
+}

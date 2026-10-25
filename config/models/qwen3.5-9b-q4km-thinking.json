@@ -15,6 +15,7 @@
       "top_p": 1.0,
       "top_k": 40,
       "min_p": 0.05,
+      "max_tokens": 4096,
       "typical_p": 1.0,
       "repeat_penalty": 1.0,
       "repeat_last_n": 64,
@@ -31,9 +32,9 @@
       "--metrics": null,
       "--threads": 4,
       "--ubatch-size": 512,
-      "-fa": "on",
-      "-lv": 4,
-      "-np": 1
+      "--flash-attn": "on",
+      "--log-verbosity": 4,
+      "--parallel": 1
     },
     "sha256": "03b74727a860a56338e042c4420bb3f04b2fec5734175f4cb9fa853daf52b7e8",
     "thinking_close": "\n</think>\n\n",
