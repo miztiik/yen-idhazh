@@ -96,16 +96,17 @@ export const OperationalStateReadSchema = z.strictObject({
 });
 export type OperationalStateRead = z.infer<typeof OperationalStateReadSchema>;
 
-export const SelectionStateCaptureSchema = z.discriminatedUnion("capture_status", [
-  z.strictObject({
-    capture_status: z.literal("captured"),
-    selection_started_at_utc: TimestampSchema,
-    state: OperationalStateReadSchema,
-  }),
-  z.strictObject({
-    capture_status: z.literal("not_recorded"),
-    selection_started_at_utc: TimestampSchema.nullable().default(null),
-    state: OperationalStateReadSchema.nullable().default(null),
-  }),
-]);
+export const SelectionStateCaptureSchema = z.strictObject({
+  capture_status: z.enum(["captured", "not_recorded"]),
+  selection_started_at_utc: TimestampSchema.nullable().default(null),
+  state: OperationalStateReadSchema.nullable().default(null),
+}).superRefine((value, ctx) => {
+  if (value.capture_status === "captured") {
+    if (value.selection_started_at_utc === null || value.state === null) {
+      reject(ctx, "a captured selection state records its clock and state");
+    }
+  } else if (value.selection_started_at_utc !== null || value.state !== null) {
+    reject(ctx, "an unrecorded legacy selection has no captured clock or state");
+  }
+});
 export type SelectionStateCapture = z.infer<typeof SelectionStateCaptureSchema>;

@@ -251,10 +251,7 @@ class FeedHealthStateSnapshot(Contract):
         ChangelogEntry(
             version="2026-10-25T11:21",
             change="Declare bounded lifecycle and causal request evidence snapshots.",
-            why=(
-                "A selection needs a complete, versioned state read "
-                "without replaying ledger history."
-            ),
+            why="A selection reuses a versioned state read without replaying ledger history.",
         ),
     )
 

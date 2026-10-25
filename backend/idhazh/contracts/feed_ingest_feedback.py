@@ -100,7 +100,9 @@ class OperationalStateRead(Model):
 
     status: Literal["current", "stale_fallback", "unavailable"]
     state_revision: PositiveCount | None
-    notices: list[Literal["restrictions_unverified"]] = Field(default_factory=list)
+    notices: list[Literal["restrictions_unverified"]] = Field(
+        default_factory=list, json_schema_extra={"default": []},
+    )
     lifecycle_window_days: PositiveCount
     lifecycle_window_start: DateStamp | None
     lifecycle_window_end: DateStamp | None

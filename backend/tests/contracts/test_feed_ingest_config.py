@@ -22,7 +22,7 @@ MODEL_NAMES = (
     "VerticalPolicyOverride", "PlanningRunOverrides", "EffectiveFeedPolicy",
     "FeedUrlExclusion", "FeedHarvestConfig", "FeedTriageConfig", "FeedSoftCaps", "FeedCurateConfig",
     "FeedPartitionConfig", "FeedSealConfig", "FeedWorkflowReportingConfig",
-    "FeedMetricsConfig", "FeedOperationalComponentWeights", "FeedFeedbackConfig",
+    "FeedMetricsConfig", "FeedFeedbackConfig",
     "FeedIngestConfig", "PlanningTaxonomy",
 )
 
@@ -135,13 +135,14 @@ def test_python_authored_config_and_config_only_vertical_extension() -> None:
     assert config.triage.recency_half_life_hours == payload["triage"]["recency_half_life_hours"]
     assert config.workflow_reporting.enabled
     assert config.curate.article_limit == payload["curate"]["article_limit"]
+    assert config.feedback.lifecycle_window_days == 31
     assert config.feedback.window_days == 7
     assert config.feedback.minimum_measured_opportunities == 20
     assert config.feedback.minimum_measured_coverage == 0.8
-    assert config.feedback.component_weights.requests == 1 / 3
+    assert config.feedback.request_weight == 1 / 3
     assert feed_ingest.FeedIngestConfig.model_validate(
         {key: value for key, value in payload.items() if key != "feedback"}
-    ).feedback.window_days == 7
+    ).feedback.lifecycle_window_days == 31
     assert config.curate.source_reliability_penalty_enabled
     previous = dict(payload["curate"])
     previous.pop("source_reliability_penalty_enabled")
