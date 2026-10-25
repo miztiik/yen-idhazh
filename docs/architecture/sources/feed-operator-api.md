@@ -289,13 +289,21 @@ remains tracing context and cannot stand in for it.
 
 The planner and API must call shared TypeScript operations, not call their own
 HTTP endpoints. State update begins after selection and can run alongside
-partitioning; the next planner run reads the saved state. The API contract must cover late and out-of-order commits, corrections,
-concurrency and expiry of the configured represented-day inventory before a
-writer is added. Inspect registered day indexes; when a day's input changes,
-reread that day and replace its saved contribution, while reusing unchanged
-days. Declare validated day-input fingerprints and retained contributions,
-including cross-day causal settlement. Corrections outside the retained
-window are reported, not applied. The owner approved changed-day replacement.
+partitioning; the next planner run reads the saved state. An independent
+selection records the state revision it read but does not update state.
+`/plan` invokes the shared update after selection, while the explicit operator
+route invokes the same operation. The API contract must cover late and
+out-of-order commits, corrections, concurrency and expiry of the configured
+represented-day inventory before a writer is added. Check registered day
+index identities before Parquet data reads and reuse unchanged cached
+identities. When an identity changes, reread that day and validate its
+immutable input identity before replacing its saved contribution. Reuse
+existing native settlement for raw, compact and attempt records rather than
+adding a duplicate-resolution rule. Declare validated day-input fingerprints and
+retained contributions, including cross-day causal settlement. Corrections
+outside the retained window are reported, not applied. The owner approved
+changed-day replacement. Access evidence comes from recorded robots
+permission, not source-catalog status.
 
 Keep two configured windows distinct: the represented-day lifecycle window
 defaults to 31 days, while the article-request score uses its existing

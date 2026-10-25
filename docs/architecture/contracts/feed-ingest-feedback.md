@@ -495,29 +495,44 @@ The approved implementation phases are:
    add another request-weight cap; the approved request weight remains one
    third. Before writers, settle bounded behavior for late/out-of-order
    commits, corrections, window rollover and retained identity across the
-   31-day inventory by inspecting registered day indexes. When day inputs
-   change, reread only those days and replace their saved contributions;
-   reuse unchanged days. Declare validated day-input fingerprints and retained
-   contributions, including cross-day causal settlement. Late/out-of-order
+   configured represented-day inventory by inspecting registered day indexes.
+   Check indexed identities before Parquet data reads and reuse unchanged
+   cached identities. When an identity changes, reread that day and validate
+   its immutable input identity before replacing its saved contribution.
+   Reuse existing native settlement for raw, compact and attempt records
+   rather than adding a duplicate-resolution rule. Declare validated
+   day-input fingerprints and retained contributions,
+   including cross-day causal settlement. Late/out-of-order
    commits and corrections must not be missed or double-counted; corrections
    outside the retained window are reported but not applied. The API must
    identify the saved selection batch being settled using that selected
    output's `batch_id`; it is distinct from tracing context. Exact payload
-   fields and configuration placement remain to be designed.
+   fields and configuration placement remain to be designed. The Pydantic
+   contract owns persisted payloads; its TypeScript binding and compatible
+   read migrations are part of this phase. This does not migrate Python
+   production producers or consumers.
 2. **Ledger rename:** update names, registrations, TypeScript raw/compact
-   readers and writers, compaction configuration, manifests, verifiers,
-   explorer labels and docs. Keep compatible old reads before new writes and
-   prevent old/new double counting. Leave Python producers and consumers on
-   their existing legacy paths for the deferred migration.
+   readers and writers, native Pydantic contracts, TypeScript bindings,
+   compatible read migrations, compaction configuration, manifests,
+   verifiers, explorer labels and docs. Keep compatible old reads before new
+   writes and prevent old/new double counting using existing native
+   settlement. Leave Python production producers and consumers on their
+   existing legacy paths for the deferred migration.
 3. **Incremental TypeScript state:** update feed-health state after selection
    while partitioning proceeds independently, then have the next planner read
    the saved state. Inspect registered day indexes; reread and replace saved
    contributions only for changed days, and reuse unchanged days. Handle new
-   observations, late commits, corrections and window expiry without a full
-   31-day recomputation behind the API. Keep the configured seven-closed-day
-   request-score rules unchanged.
+   observations, late commits, corrections and configured inventory expiry
+   without a full-window recomputation behind the API. Keep the configured
+   closed-UTC-day request-score rules unchanged.
 4. **Remove redundant TypeScript reads and writes** only after the replacement
    covers current behavior.
+
+Selection records the state revision it read but does not update state.
+`/plan` invokes the shared update after selection while partitioning proceeds;
+the explicit operator API invokes the same shared TypeScript operation.
+Access evidence comes from recorded robots permission, not source-catalog
+status.
 
 Python migration to shared contracts and state, console migration to the
 TypeScript-derived ledgers at build time, and retirement of the legacy
