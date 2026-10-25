@@ -29,6 +29,8 @@ from idhazh.contracts.digest_day import (
     DigestVisual,
 )
 from idhazh.contracts.review_queue import ReviewPopulation, ReviewQueue
+from idhazh.contracts.visual import EncodingRole, VisualType
+from idhazh.contracts.visual_data import RENDERER_VERSION, VisualData
 from idhazh.contracts.visual_decision import (
     PAYLOAD_SUFFIX,
     NoneReason,
@@ -41,24 +43,39 @@ from utilities import review_queue
 pytestmark = pytest.mark.visual
 
 DATE: Final = "2026-08-21"
-#: One published visual, as the day directory holds it. Three bars the sheet
-#: draws itself: nothing renders an SVG any more, so the reviewer reads the
-#: comparison off marks this file states rather than off a picture.
-DRAWING: Final = (
-    '{"version":"2026-09-13T20:00","item_id":"ai-01","type":"bar",'
-    '"renderer_version":"2026-09-13",'
-    '"marks":['
-    '{"mark_id":"m0","text":"Denmark","value":null,"unit":null,'
-    '"element_id":"wind-1-0","derived":null},'
-    '{"mark_id":"m1","text":"Norway","value":null,"unit":null,'
-    '"element_id":"wind-1-1","derived":null},'
-    '{"mark_id":"m2","text":null,"value":"12","unit":"gw",'
-    '"element_id":"wind-1-2","derived":null},'
-    '{"mark_id":"m3","text":null,"value":"6","unit":"gw",'
-    '"element_id":"wind-1-3","derived":null}],'
-    '"encoding":{"category":["m0","m1"],"quantity":["m2","m3"],"quantity_x":[],'
-    '"time":[],"series":[],"size":[],"bins":[],"entity":[],"event_label":[]}}'
-)
+
+
+def _drawing(item_id: str) -> str:
+    """Build two bars through the current published chart contract."""
+    encoding = {role.value: [] for role in EncodingRole}
+    encoding[EncodingRole.CATEGORY.value] = ["m0", "m1"]
+    encoding[EncodingRole.QUANTITY.value] = ["m2", "m3"]
+    return VisualData.model_validate(
+        {
+            "version": VisualData.schema_version(),
+            "item_id": item_id,
+            "type": VisualType.BAR,
+            "renderer_version": RENDERER_VERSION,
+            "title": None,
+            "caption": None,
+            "emphasized_mark_id": encoding[EncodingRole.QUANTITY.value][0],
+            "marks": [
+                {
+                    "mark_id": f"m{index}",
+                    "text": text,
+                    "value": value,
+                    "unit": "gw" if value is not None else None,
+                    "source_text": None,
+                    "element_id": f"wind-1-{index}",
+                    "derived": None,
+                }
+                for index, (text, value) in enumerate(
+                    [("Denmark", None), ("Norway", None), (None, "12"), (None, "6")]
+                )
+            ],
+            "encoding": encoding,
+        }
+    ).to_json()
 
 
 def _decision(item_id: str, **changes: object) -> VisualDecision:
@@ -134,7 +151,6 @@ def build_a_day(
     decisions: dict[str, VisualDecision],
     titles: dict[str, str] | None = None,
     unpublished: str | None = None,
-    drawing: str = DRAWING,
 ) -> tuple[Path, Path]:
     """Write one published day and the run payloads behind it. Returns both roots.
 
@@ -194,7 +210,7 @@ def build_a_day(
         )
         if decision.data_path is not None:
             (digest_root.parent / decision.data_path).write_text(
-                drawing, encoding="utf-8", newline="\n"
+                _drawing(item_id), encoding="utf-8", newline="\n"
             )
     return digest_root, run_root
 
@@ -283,7 +299,7 @@ def test_the_tree_carries_its_own_copy_of_every_drawing_it_names(tmp_path: Path)
     for row in drawn:
         assert row.asset_relpath is not None
         copied = out_dir / row.asset_relpath
-        assert copied.read_text(encoding="utf-8") == DRAWING
+        assert copied.read_text(encoding="utf-8") == _drawing(row.item_id)
     assert json.loads((out_dir / "queue.json").read_text(encoding="utf-8"))["date"] == DATE
 
 
