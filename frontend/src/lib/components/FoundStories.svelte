@@ -26,12 +26,14 @@
 	import type { SearchOutcome } from '$lib/assist/search';
 	import type { DayForPage } from '$lib/payload/types';
 	import type { NumberFormatConfig } from '$lib/number-format';
+	import type { StoryChartGeometryConfig } from '$lib/server/config';
 
 	let {
 		found,
 		days,
 		verticalNames,
 		numberFormat,
+		storyChartGeometry,
 		onClear
 	}: {
 		found: SearchOutcome;
@@ -40,6 +42,7 @@
 		days: Record<string, DayForPage | null>;
 		verticalNames: Record<string, string>;
 		numberFormat: NumberFormatConfig;
+		storyChartGeometry: StoryChartGeometryConfig;
 		/** Put the day back. The field's next keystroke does this too. */
 		onClear: () => void;
 	} = $props();
@@ -62,6 +65,7 @@
 					<DigestItemView
 						{item}
 						{numberFormat}
+						{storyChartGeometry}
 						verticalName={verticalNames[item.vertical] ?? item.vertical}
 						level={3}
 						showVertical={false}

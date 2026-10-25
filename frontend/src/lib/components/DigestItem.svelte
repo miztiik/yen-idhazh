@@ -32,6 +32,7 @@
 	import Icon from '$lib/icons/Icon.svelte';
 	import type { DigestCoverage, DigestItem } from '$lib/payload/types';
 	import type { NumberFormatConfig } from '$lib/number-format';
+	import type { StoryChartGeometryConfig } from '$lib/server/config';
 	import { shownLenses } from '$lib/payload/lenses';
 	import ItemMeta from './ItemMeta.svelte';
 	import ItemVisual from './ItemVisual.svelte';
@@ -41,6 +42,7 @@
 	let {
 		item,
 		numberFormat,
+		storyChartGeometry,
 		verticalName,
 		level = 2,
 		showVertical = true,
@@ -54,6 +56,7 @@
 	}: {
 		item: DigestItem;
 		numberFormat: NumberFormatConfig;
+		storyChartGeometry: StoryChartGeometryConfig;
 		verticalName: string;
 		/** 2 on a flat list, 3 under a topic heading. A skipped level breaks
 		 * heading-to-heading navigation. */
@@ -220,7 +223,7 @@
 			{/if}
 		</div>
 
-		<ItemVisual visual={item.visual} {numberFormat} />
+		<ItemVisual visual={item.visual} {numberFormat} {storyChartGeometry} />
 	</div>
 
 	<div class="item-rail">

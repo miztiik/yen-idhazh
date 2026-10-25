@@ -62,17 +62,16 @@ keeps the asset already committed for that item and rebuilds the derived day
 ([one-visual-one-file-and-the-race-between-two-runs.md](one-visual-one-file-and-the-race-between-two-runs.md)).
 
 **What the reading page now carries, measured rather than estimated** (Guardrail #8). Two d3
-modules reach a reader and no others: `d3-scale` gives the bar its band scale - the
-per-category slot, step, padding and rounding arithmetic that decides where each mark sits -
-and `d3-array` supplies the `range` and `InternMap` that band scale is built on. Both were
-already installed for the operator console's chart frame, so this added no install time, and
-both are now exact-pinned: a caret range lets a patch bump move pixels with no diff to review.
-`d3-selection`, `d3-axis` and `d3-shape` are **not installed**, which is the control rather
-than a preference - a package that is not in the lockfile cannot be imported onto a reading
-page. Nothing here joins, enters or exits, so `d3-selection` would buy a join engine and use
-only its append path; `d3-axis` writes a 10px axis font, which is below `--text-xs` at every
-root size this site uses, so it would be imported in order to be undone; and `d3-shape` has no
-rect generator, so it waits for the row that draws a path (Carmack, 2026-09-13).
+modules reach a reader and no others: `d3-scale` places bar rows, maps dot values onto one
+shared scale, and places slope values between two labelled columns; `d3-array` supplies the
+`range` and `InternMap` that those scales use. Both were already installed for the operator
+console's chart frame, so this row adds no dependency or install step. `d3-selection`,
+`d3-axis` and `d3-shape` are **not installed**, which is the control rather than a preference -
+a package that is not in the lockfile cannot be imported onto a reading page. Nothing here
+joins, enters or exits, so `d3-selection` would buy a join engine and use only its append path;
+`d3-axis` writes a 10px axis font, which is below `--text-xs` at every root size this site uses,
+so it would be imported in order to be undone; and `d3-shape` waits for a row that draws a path
+(Carmack, 2026-09-13).
 
 Measured on the development box (Windows 11, 8 vCPU, node 24.12.0), 2026-09-13, control build
 at `origin/main` against this branch, same machine and same toolchain: the reading route's
@@ -104,8 +103,8 @@ logic tests. The width comes from
 `frontend/src/lib/visual/width.ts`, which measures the figure's content box and is one watcher
 for every chart on the page rather than one each (Guardrail #12).
 
-**The name sits above its bar rather than beside it, and that is what makes one layout work at
-every width** (row #2, 2026-09-14). A name column has to hold the longest name the compiler
+**The bar name sits above its bar rather than beside it, and that is what keeps the bar
+horizontal at narrow widths** (row #2, 2026-09-14). A name column has to hold the longest name the compiler
 allows - `MARK_NAME_MAX` is 40 of the article's own characters, about 250 CSS pixels at
 `--text-xs` - and a 360 px phone has roughly 300 pixels of card to spend. Side by side, a
 column that fits the names leaves nothing for the bars and a column that fits the bars cuts
@@ -115,6 +114,13 @@ bar has all of it but the sixteenth reserved for the figure that sits beside it 
 comparison the chart exists to make gets every pixel left once the number it compares has
 somewhere to stand. What a reader gives up is the tidy left-hand column of names a desktop had
 room for, and one text line of height per bar.
+
+The bar, dot and slope share this measured-width drawing path and the bounded
+`chart.story_geometry` settings in `config/appearance.json`. A dot ranks values
+by position on one common scale. A slope joins paired values between two
+labelled time columns, without an axis; its units remain visible and in the
+accessible description. The 2026-09-13 bundle measurement above predates these
+two forms and is not a measurement of their added code.
 
 **What this ruling does NOT change, because each has been read as following from it.** The
 pages stay prerendered; prerendering a route and prerendering a chart are different acts and
@@ -187,20 +193,19 @@ and nobody gets a chart whose data means something other than what the picture s
 
 ## The degrade rule, stated once
 
-**A visual that cannot be drawn leaves the story shorter, and costs nothing else.** Four things
-degrade, and every one of them degrades to the same place.
+**A story without a published chart stays compact.** A current `data_path` means the chart is
+expected; if that file cannot be fetched or its data is refused, the story stays intact and has
+no chart.
 
 | What went wrong | What the reader gets |
 | --- | --- |
-| The day predates this file, so `data_path` is absent | The story, with no chart. Absent reads as no data carried. |
-| The drawing was published and the data write failed | The story, with no chart. `data_path` stays null; nothing half-written is pointed at. |
-| The file does not fetch, or is not a `visual-data` document | The story, with no chart. |
-| The document names a renderer or a type this page does not know, or its channels do not pair | The story, with no chart, and a console line naming the file. |
+| The day predates this file, or the data write failed, so `data_path` is absent or null | The story, with no chart or notice. Both mean no data path was carried. |
+| The published file cannot be fetched or read | The story, with no chart or notice, and a console line naming the file. |
+| The path or document fails current validation | The story, with no chart or notice, and a console line naming the file. |
 
-**It refuses rather than guesses, and refusing is free.** A degrade path that draws something
-approximate is how a wrong chart reaches a reader, and the product is trust. 94.7 percent of stories
-already have no visual, so a story without one is the ordinary shape of the page rather than a hole
-in it - there is no placeholder to design and no layout to hold open.
+**It refuses rather than guesses.** A degrade path that draws something approximate is how a wrong
+chart reaches a reader, and the product is trust. When a chart cannot be drawn, the story remains
+without a picture or an added state.
 
 `refusedVisualData` in `frontend/src/lib/payload/drawing.ts` is where that check lives, and
 `frontend/src/lib/visual/bar.ts` is what draws once it has passed. The split is not decoration:
@@ -311,6 +316,11 @@ Framing changes no values, mark count, channel order or provenance. The flat
 mark pool stays intact; the emphasized id points to its measured member, not a
 second copy. The existing compiler and degrade path own the new check, so the
 page does not make a second editorial choice.
+
+A current chart path is evidence that its marks were published. If that file
+cannot be fetched or its contents are refused, the story remains intact without
+a chart or added notice and absent values are never treated as zero. An absent
+or null path remains the same chartless payload older days already carry.
 
 ## Rejected alternatives
 

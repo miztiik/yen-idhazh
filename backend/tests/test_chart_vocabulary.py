@@ -162,59 +162,65 @@ def test_mixed_requests_preserve_types_source_figures_and_metric_denominators(
 
     counted = count_visual_outcomes(outcomes)
     assert counted.measured_requests == len(fixture["cases"])
-    assert counted.requested_types["dot"] == 2
-    assert counted.wasted_decode_rate == 5 / 6
+    assert counted.requested_types["dot"] == 1
+    assert counted.requested_types["comparison"] == 1
+    assert counted.wasted_decode_rate == 2 / 3
     legacy = ItemHealthRow.read(CONTRACT_FIXTURES_DIR / "item-health-row/published.json")
     assert count_visual_outcomes([*outcomes, legacy]) == counted
     assert count_visual_outcomes([legacy]).wasted_decode_rate is None
 
 
-def test_selected_names_and_grouped_evidence_cannot_bypass_safe_replacement(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+def test_selected_names_limit_rendering_and_dot_keeps_grouped_evidence(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     isolate_ledgers(tmp_path, monkeypatch)
     population = {VisualType.BAR: (4,)}
-    knobs = settings(downgrade_enabled=True, type_selection_enabled=True, enabled_types=["dot"])
-    assert draw(knobs, population=population, type="dot").rendered_type is None
-    assert draw(knobs, population=population).rendered_type is None
+    knobs = settings(downgrade_enabled=True, type_selection_enabled=True, enabled_types=["bar"])
+    disabled = draw(knobs, population=population, type="dot")
+    assert disabled.planned_type is VisualType.DOT and disabled.rendered_type is None
+    assert draw(knobs, population=population).rendered_type is VisualType.BAR
     _, requested, _ = inputs()
-    grouped = requested.encodings.model_dump(mode="json") | {
-        "series": requested.encodings.category
-    }
-    assert draw(
+    grouped = requested.encodings.model_dump(mode="json") | {"series": requested.encodings.category}
+    grouped_dot = draw(
         settings(downgrade_enabled=True), population=population, type="dot", encodings=grouped
-    ).rendered_type is None
+    )
+    assert grouped_dot.rendered_type is VisualType.DOT
 
 
 def test_enabled_fallback_requires_real_input_and_cold_start_records_refusal(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     isolate_ledgers(tmp_path, monkeypatch)
-    off = draw(settings(), type="dot")
-    assert off.planned_type is VisualType.DOT and off.rendered_type is None
+    off = draw(settings(), type="comparison")
+    assert off.planned_type is VisualType.COMPARISON and off.rendered_type is None
     assert off.rationale and "switched off" in off.rationale
     knobs = settings(downgrade_enabled=True)
     with pytest.raises(ValueError, match="population"):
-        draw(knobs, type="dot")
+        draw(knobs, type="comparison")
     population = load_visual_population(
         common.STATE_ROOT, on="2026-08-21", visuals=knobs.app.visuals
     )
-    refused = draw(knobs, population=population, type="dot")
-    assert refused.planned_type is VisualType.DOT
+    refused = draw(knobs, population=population, type="comparison")
+    assert refused.planned_type is VisualType.COMPARISON
     assert refused.rendered_type is None
     assert refused.rationale and "floor" in refused.rationale
 
 
 def test_a_failed_write_keeps_the_request_and_selected_depth_without_claiming_delivery(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     isolate_ledgers(tmp_path, monkeypatch)
     summary, _, _ = inputs()
     occupied = tmp_path / "public" / asset_relpath("2026-08-21", summary.item_id)
     occupied.mkdir(parents=True)
-    decision = draw(settings(downgrade_enabled=True), population={VisualType.BAR: (4,)}, type="dot")
+    decision = draw(
+        settings(downgrade_enabled=True), population={VisualType.BAR: (4,)}, type="comparison"
+    )
     assert decision.visual_state is VisualState.RENDER_FAILED
-    assert decision.planned_type is VisualType.DOT
+    assert decision.planned_type is VisualType.COMPARISON
     assert decision.downgrade_depth == 1
     assert decision.rendered_type is None and decision.marks is None
     assert decision.failure_detail
@@ -222,7 +228,9 @@ def test_a_failed_write_keeps_the_request_and_selected_depth_without_claiming_de
 
 
 def test_real_shard_projects_outcomes_before_sealing_and_reuses_its_starting_population(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
 ) -> None:
     isolate_ledgers(tmp_path, monkeypatch)
     run_plan = fixture_plan(item_count=2)
@@ -235,11 +243,13 @@ def test_real_shard_projects_outcomes_before_sealing_and_reuses_its_starting_pop
     seed_item_health(common.STATE_ROOT, history.date, [history])
     reply = json.loads(DRAWS_SUMMARIZE_AND_PLAN.read_bytes())
     content = json.loads(reply["choices"][0]["message"]["content"])
-    content["visual"]["type"] = "dot"
+    content["visual"]["type"] = "comparison"
     reply["choices"][0]["message"]["content"] = json.dumps(content)
     knobs = settings(
-        downgrade_enabled=True, downgrade_max_samples_per_type=1,
-        type_selection_enabled=True, enabled_types=["bar", "dot"],
+        downgrade_enabled=True,
+        downgrade_max_samples_per_type=1,
+        type_selection_enabled=True,
+        enabled_types=["bar", "comparison"],
     )
     appended = False
 
@@ -256,16 +266,24 @@ def test_real_shard_projects_outcomes_before_sealing_and_reuses_its_starting_pop
 
     caplog.set_level(logging.INFO, logger="idhazh")
     with RecordedEndpoint(200, DRAWS_LABEL.read_bytes(), json.dumps(reply).encode()) as server:
-        stage_work(run_plan, settings=knobs, scorer=None, fetcher=fetch, model_endpoint=server.endpoint)
-        assert server.sent[-1]["json_schema"]["$defs"]["VisualType"]["enum"] == ["bar", "dot"]
+        stage_work(
+            run_plan, settings=knobs, scorer=None, fetcher=fetch, model_endpoint=server.endpoint
+        )
+        assert server.sent[-1]["json_schema"]["$defs"]["VisualType"]["enum"] == [
+            "bar",
+            "comparison",
+        ]
     assert stage_record(run_plan, settings=knobs, commit_sha="a" * 40)[0] == len(run_plan.items)
     rows = ledger.load_days(
         common.STATE_ROOT, LedgerName.ITEM_HEALTH, [run_plan.date], model=ItemHealthRow
     )
     assert {row.item_id for row in rows} == {item.item_id for item in run_plan.items}
     assert all(
-        row.planned_type is VisualType.DOT and row.rendered_type is VisualType.BAR
-        and row.downgrade_depth == 1 and row.marks == 4 for row in rows
+        row.planned_type is VisualType.COMPARISON
+        and row.rendered_type is VisualType.BAR
+        and row.downgrade_depth == 1
+        and row.marks == 4
+        for row in rows
     )
     assert load_visual_population(
         common.STATE_ROOT, on=run_plan.date, visuals=knobs.app.visuals
@@ -275,6 +293,7 @@ def test_real_shard_projects_outcomes_before_sealing_and_reuses_its_starting_pop
         if line.startswith("{") and json.loads(line).get("name") == "shard.done"
     )
     assert report["visual_outcomes"] == {
-        "requested_types": {"dot": len(rows)}, "measured_requests": len(rows),
+        "requested_types": {"comparison": len(rows)},
+        "measured_requests": len(rows),
         "wasted_decode_rate": 1.0,
     }

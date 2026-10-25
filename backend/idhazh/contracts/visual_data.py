@@ -60,7 +60,7 @@ from idhazh.contracts.visual import (
 #: committed SVG is a fixed record of what a reader saw on a given day, and a
 #: spec plus drawing code can be redrawn differently by a later change with
 #: nothing in the payload to show it moved. This field is what shows it.
-RENDERER_VERSION: Final = "2026-10-24"
+RENDERER_VERSION: Final = "2026-10-25"
 
 #: How a mark is addressed inside its own file. Local to one visual and never an
 #: identity anything outside it holds, so it is short and positional rather than
@@ -213,6 +213,11 @@ class VisualData(Contract):
 
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-10-25",
+            change="Compile and draw bar, dot and slope charts with their source channels.",
+            why="The reader needs the full declared position-and-length vocabulary.",
+        ),
+        ChangelogEntry(
             version="2026-10-24",
             change="Publish safe framing, one emphasized mark and original computed inputs.",
             why="Framing and reading priority travel with the figures they explain.",
@@ -285,4 +290,70 @@ class VisualData(Contract):
             raise ValueError("the emphasized mark must be a displayed quantity")
         if self.renderer_version != RENDERER_VERSION:
             raise ValueError("the renderer version is not current")
+        channels = self.encoding
+        by_id = {mark.mark_id: mark for mark in self.marks}
+        if self.type in (VisualType.BAR, VisualType.DOT):
+            if not channels.category or len(channels.category) != len(channels.quantity):
+                raise ValueError("bar and dot charts pair one category with each quantity")
+            if channels.series and len(channels.series) != len(channels.quantity):
+                raise ValueError("bar and dot charts pair one series label with each quantity")
+            if any(
+                (
+                    channels.quantity_x,
+                    channels.time,
+                    channels.entity,
+                    channels.size,
+                    channels.bins,
+                    channels.event_label,
+                )
+            ):
+                raise ValueError(
+                    "bar and dot charts draw only category, quantity and series channels"
+                )
+        elif self.type is VisualType.SLOPE:
+            pair_count = len(channels.quantity) // 2
+            if len(channels.time) != 2 or len(channels.quantity) < 4 or len(channels.quantity) % 2:
+                raise ValueError("a slope chart pairs at least two quantities across two times")
+            if not channels.entity and not channels.series:
+                raise ValueError("a slope chart needs an entity or series label for each line")
+            if channels.entity and len(channels.entity) != pair_count:
+                raise ValueError("a slope chart has one entity label for each pair of quantities")
+            if channels.series and len(channels.series) != pair_count:
+                raise ValueError("a slope chart has one series label for each pair of quantities")
+            if any(
+                (
+                    channels.category,
+                    channels.quantity_x,
+                    channels.size,
+                    channels.bins,
+                    channels.event_label,
+                )
+            ):
+                raise ValueError(
+                    "a slope chart carries only time, quantity, entity and series channels"
+                )
+            held_time = [by_id[mark_id].text for mark_id in channels.time]
+            if held_time[0] == held_time[1]:
+                raise ValueError("a slope chart needs two distinct time labels")
+            if (
+                not channels.entity
+                and len({by_id[mark_id].text for mark_id in channels.series}) != pair_count
+            ):
+                raise ValueError(
+                    "a slope chart needs distinct series labels when entity labels are absent"
+                )
+        else:
+            raise ValueError(f"{self.type.value} has no current story-chart data shape")
+
+        text_channels = channels.category + channels.time + channels.series + channels.entity
+        if any(
+            not (by_id[mark_id].text or "").strip() or by_id[mark_id].value is not None
+            for mark_id in text_channels
+        ):
+            raise ValueError("every drawn category, time, series and entity mark needs text")
+        if any(
+            by_id[mark_id].value is None or by_id[mark_id].text is not None
+            for mark_id in channels.quantity
+        ):
+            raise ValueError("every quantity mark carries a value and no text")
         return self

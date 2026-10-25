@@ -358,8 +358,36 @@ class ThemeConfig(Model):
         return self
 
 
+class StoryChartGeometryConfig(Model):
+    """Bounded geometry shared by the browser-drawn story charts."""
+
+    row_height_px: int = Field(default=44, ge=32, le=64)
+    row_padding_share: float = Field(default=0.16, gt=0.0, le=0.4)
+    bar_height_share: float = Field(default=0.42, gt=0.0, le=0.8)
+    axis_band_px: int = Field(default=26, ge=16, le=64)
+    axis_line_width_px: float = Field(default=1.0, gt=0.0, le=3.0)
+    axis_label_offset_px: int = Field(default=16, ge=8, le=32)
+    mark_outline_width_px: float = Field(
+        default=1.0,
+        gt=0.0,
+        le=3.0,
+        description="Outline width for chart marks, in CSS pixels.",
+    )
+    value_gutter_share: float = Field(default=0.16, gt=0.0, le=0.4)
+    value_gap_px: int = Field(default=8, ge=2, le=24)
+    bar_corner_radius_px: int = Field(default=3, ge=0, le=12)
+    dot_radius_px: float = Field(default=4.0, ge=2.0, le=10.0)
+    dot_category_label_share: float = Field(default=0.22, gt=0.0, le=0.5)
+    slope_header_band_px: int = Field(default=32, ge=20, le=64)
+    slope_footer_band_px: int = Field(default=28, ge=16, le=64)
+    slope_min_height_px: int = Field(default=128, ge=80, le=320)
+    slope_column_share: float = Field(default=0.3, ge=0.25, le=0.45)
+    slope_line_width_px: float = Field(default=2.0, gt=0.0, le=5.0)
+    slope_highlight_line_width_px: float = Field(default=3.0, gt=0.0, le=6.0)
+
+
 class ChartConfig(Model):
-    """How a chart is drawn, and what it does when a pointer reaches it."""
+    """How console charts and story chart geometry are configured."""
 
     height_px: int = Field(
         default=220,
@@ -436,6 +464,7 @@ class ChartConfig(Model):
             "validator would, and a validator that cannot fire is worse than none."
         ),
     )
+    story_geometry: StoryChartGeometryConfig = Field(default_factory=StoryChartGeometryConfig)
 
 
 class IconsConfig(Model):
@@ -504,6 +533,11 @@ class AppearanceConfig(Contract):
     __schema_stem__: ClassVar[str] = "appearance-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-10-25",
+            change="Bounded browser geometry added for story charts.",
+            why="Story charts use measured reader width and stay separate from console dimensions.",
+        ),
+        ChangelogEntry(
             version="2026-10-10",
             change="console.tile_min_px added for readable daily tiles.",
             why="A tile keeps room inside its borders instead of becoming a stripe.",
@@ -517,11 +551,6 @@ class AppearanceConfig(Contract):
             version="2026-10-04",
             change="Data explorer fetch-ceiling reading and held-byte total recorded.",
             why="A refused run still leaves fetched files in the page keeper.",
-        ),
-        ChangelogEntry(
-            version="2026-10-03T12:00",
-            change="icons.stroke_px added; icon strokes are fixed in screen pixels.",
-            why="One icon line weight keeps every glyph aligned with text at every size.",
         ),
         ChangelogEntry(
             version="2026-09-30",
