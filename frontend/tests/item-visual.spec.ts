@@ -29,6 +29,28 @@ test.describe('what may not be drawn', () => {
         expect(refusedVisualData(data), 'a clean document was refused, so every case below is vacuous').toBeNull();
         expect(drawBars(data, 600, formatNumber).bars.length, 'a clean document drew no bar').toBeGreaterThan(0);
     });
+    test('narrow and wide drawings keep every mark inside the measured width without changing their readings', () => {
+        const data = compiled();
+        const narrow = drawBars(data, 360, formatNumber);
+        for (const room of [360, 1440]) {
+            const drawing = drawBars(data, room, formatNumber);
+            expect(drawing.width).toBe(room);
+            expect(drawing.height).toBe(narrow.height);
+            expect(statedBars(drawing)).toBe(statedBars(narrow));
+            expect(drawing.bars.map(({ name, stated, displayed, label, y, height }) =>
+                ({ name, stated, displayed, label, y, height })
+            )).toEqual(narrow.bars.map(({ name, stated, displayed, label, y, height }) =>
+                ({ name, stated, displayed, label, y, height })
+            ));
+            for (const bar of drawing.bars) {
+                expect(bar.width).toBeGreaterThanOrEqual(0);
+                expect(bar.figure).toBeGreaterThan(bar.width);
+                expect(bar.figure).toBeLessThan(drawing.width);
+            }
+            const fractional = drawBars(data, room + 0.75, formatNumber);
+            expect(fractional).toEqual(drawing);
+        }
+    });
     test('digest and console display the same configured SI figure and retain the article wording', () => {
         for (const value of [1_000, 12_345, 1_234_567, 2_400_000, 8_900_000_000, 7_800_000_000_000]) {
             const drawing = drawBars(compiled([value, 20, 30, 40]), 600, formatNumber);
