@@ -177,6 +177,67 @@ test('reader labels clear the text floor without scaling, and every mark survive
 	expect(errors).toEqual([]);
 });
 
+test('a failed chart load is named and can be retried without marking chartless stories', async ({ page }) => {
+	const errors: string[] = [];
+	const failedVisualRequests: string[] = [];
+	page.on('pageerror', (error) => errors.push(String(error)));
+
+	const date = newestDate();
+	const day = payloadOf(newestDate()) as unknown as DigestDay;
+	const chartStory = day.items.filter((item) =>
+		item.visual?.state === 'rendered' && typeof item.visual.data_path === 'string'
+	).at(-1);
+	const chartlessStory = day.items.find((item) => item.visual === null);
+	if (!chartStory?.visual || typeof chartStory.visual.data_path !== 'string') {
+		throw new Error('the canary day has no published chart to fail');
+	}
+	if (!chartlessStory) throw new Error('the canary day has no intentionally chartless story');
+
+	const chartPath = chartStory.visual.data_path;
+	page.on('requestfailed', (request) => {
+		if (request.url().endsWith(`/${chartPath}`)) failedVisualRequests.push(request.url());
+	});
+	await page.goto(`/${date}/`);
+	await dayReady(page);
+	const story = page.locator('article.item').and(page.locator(`[id="${chartStory.item_id}"]`));
+	await story.scrollIntoViewIfNeeded();
+	await expect(story.getByRole('img')).toBeVisible();
+
+	await page.locator('a[href="/archive/"]').first().click();
+	await expect(page).toHaveURL(/\/archive\/$/);
+	const session = await page.context().newCDPSession(page);
+	await session.send('Network.clearBrowserCache');
+	await session.detach();
+	await page.context().setOffline(true);
+	await page.locator(`a[href="/${date}/"]`).first().click();
+	await page.waitForURL(`**/${date}/`);
+	await dayReady(page);
+	const returningStory = page.locator('article.item').and(
+		page.locator(`[id="${chartStory.item_id}"]`)
+	);
+	await returningStory.scrollIntoViewIfNeeded();
+	const unavailable = returningStory.locator('[data-visual-state="unavailable"]');
+	await expect(unavailable).toHaveAttribute('role', 'status');
+	await expect(unavailable).toContainText('Chart unavailable.');
+	await expect(unavailable.getByRole('button', { name: 'Try again' })).toBeVisible();
+	await expect.poll(() => failedVisualRequests.length).toBeGreaterThan(0);
+
+	const chartless = page.locator('article.item').and(
+		page.locator(`[id="${chartlessStory.item_id}"]`)
+	);
+	await expect(chartless.locator('figure, [data-visual-state="unavailable"]')).toHaveCount(0);
+
+	await page.context().setOffline(false);
+	const retryResponse = page.waitForResponse((response) =>
+		response.url().endsWith(`/${chartPath}`) && response.request().method() === 'GET'
+	);
+	await unavailable.getByRole('button', { name: 'Try again' }).click();
+	expect((await retryResponse).status()).toBe(200);
+	await expect(returningStory.getByRole('img')).toBeVisible();
+	await expect(unavailable).toHaveCount(0);
+	expect(errors).toEqual([]);
+});
+
 test('the reader surface stays still as it loads and gains no page animation under reduced motion', async ({ page }) => {
 	const date = newestDate();
 	const day = payloadOf(date) as unknown as DigestDay;

@@ -50,9 +50,10 @@
 	 * and the story cannot shift as it is read; that is the promise the `viewBox`
 	 * used to keep by holding an aspect ratio.
 	 *
-	 * **Marks that do not arrive cost the story its picture and nothing else.**
-	 * No broken-image glyph, no grey box, no skeleton: the story is shorter,
-	 * which is the shape two stories in three already have.
+	 * A published drawing that does not arrive leaves the story intact and says
+	 * so in one short status, with a retry when another fetch may help. No broken
+	 * image glyph, grey box or skeleton. A story whose payload carries no chart
+	 * file stays compact and gets no failure notice.
 	 */
 	import { base } from '$app/paths';
 	import { navigating } from '$app/state';
@@ -63,6 +64,10 @@
 	import type { StoryChartGeometryConfig } from '$lib/server/config';
 	import { drawVisual, statedDrawing, type Drawing } from '$lib/visual/bar';
 	import { whenWide } from '$lib/visual/width';
+
+	type VisualReadResult =
+		| { state: 'ready'; data: VisualData }
+		| { state: 'unavailable'; retryable: boolean };
 
 	let {
 		visual,
@@ -85,20 +90,25 @@
 		visual?.state === 'rendered' && visual.data_path ? visual.data_path : null
 	);
 
-	/** What the fetch brought back, or null while it has not run or did not work. */
-	let arrived = $state<VisualData | null>(null);
+	/** The result for the current path, or null while its request has not settled. */
+	let loaded = $state<{ file: string; result: VisualReadResult } | null>(null);
 	let near = $state(false);
-	let settledFile: string | null = null;
+	let settled = $state<{ file: string; attempt: number } | null>(null);
+	let pending = $state<{ file: string; attempt: number } | null>(null);
+	let attempt = $state(0);
 	/** How much room the card gives the drawing, or 0 before it has been measured. */
 	let room = $state(0);
+	const currentLoad = $derived(loaded?.file === wanted ? loaded.result : null);
 	const drawing = $derived<Drawing | null>(
-		arrived && room > 0 ? drawVisual(arrived, room, formatNumber, storyChartGeometry) : null
+		currentLoad?.state === 'ready' && room > 0
+			? drawVisual(currentLoad.data, room, formatNumber, storyChartGeometry)
+			: null
 	);
 	/** Every figure the bars are drawn at, in one sentence, for a reader who is
 	 * not looking at them. It is the whole of what the tab stop below announces. */
 	const stated = $derived(drawing ? statedDrawing(drawing) : '');
 
-	/** The marks that file holds, or null when there is nothing safe to draw.
+	/** Read one published path and distinguish a retryable fetch failure from refusal.
 	 *
 	 * **It refuses rather than guesses, and refusing is free.** A degrade path
 	 * that draws something approximate is how a wrong chart reaches a reader, and
@@ -114,29 +124,37 @@
 	 * are still checked here. The origin comes from our config and can never come
 	 * from a payload.
 	 */
-	async function read(file: string, signal: AbortSignal): Promise<VisualData | null> {
+	async function read(
+		file: string,
+		signal: AbortSignal,
+		retry: boolean
+	): Promise<VisualReadResult | null> {
 		if (!publishedVisualData(file)) {
 			console.warn(`[digest] ${file}: not a published visual path, so it is not drawn`);
-			return null;
+			return { state: 'unavailable', retryable: false };
 		}
 		try {
-			const response = await fetch(`${__ASSET_BASE_URL__ || base}/${file}`, { signal });
+			// A retry must not reuse a cached 404 after the publisher replaces the file.
+			const response = await fetch(`${__ASSET_BASE_URL__ || base}/${file}`, {
+				signal,
+				...(retry ? { cache: 'reload' } : {})
+			});
 			if (!response.ok) {
 				console.warn(`[digest] ${file}: not available (${response.status}), so it is not drawn`);
-				return null;
+				return { state: 'unavailable', retryable: true };
 			}
 			const data: unknown = await response.json();
 			if (!isVisualData(data)) {
 				console.warn(`[digest] ${file}: ${refusedVisualData(data)}, so it is not drawn`);
-				return null;
+				return { state: 'unavailable', retryable: false };
 			}
-			return data;
+			return { state: 'ready', data };
 		} catch (error) {
 			// A story the reader scrolled away from cancelled its own request. That
 			// is the page working, so it says nothing.
 			if (signal.aborted) return null;
 			console.warn(`[digest] ${file} could not be read, so it is not drawn`, error);
-			return null;
+			return { state: 'unavailable', retryable: true };
 		}
 	}
 
@@ -162,16 +180,29 @@
 	 */
 	$effect(() => {
 		const file = wanted;
-		if (!near || !file || navigating.to !== null || settledFile === file) return;
+		const currentAttempt = attempt;
+		if (
+			!near || !file || navigating.to !== null ||
+			(settled?.file === file && settled.attempt === currentAttempt)
+		) return;
 		const request = new AbortController();
-		void read(file, request.signal).then((data) => {
-			if (!request.signal.aborted) {
-				settledFile = file;
-				arrived = data;
+		pending = { file, attempt: currentAttempt };
+		void read(file, request.signal, currentAttempt > 0).then((data) => {
+			if (!request.signal.aborted && data !== null) {
+				settled = { file, attempt: currentAttempt };
+				loaded = { file, result: data };
+				pending = null;
 			}
 		});
-		return () => request.abort();
+		return () => {
+			request.abort();
+			if (pending?.file === file && pending.attempt === currentAttempt) pending = null;
+		};
 	});
+
+	function retry() {
+		if (wanted) attempt += 1;
+	}
 
 	function askWhenNear(node: Element): { destroy: () => void } {
 		const forget = whenNear(node, () => { near = true; });
@@ -194,7 +225,7 @@
 	}
 </script>
 
-{#if arrived}
+{#if currentLoad?.state === 'ready'}
 	<!-- The figure takes the focus, not the marks inside it: `role="img"` replaces
 	     its whole subtree with one name, so a bar given its own tab stop would be
 	     a stop announcing nothing. It is not a control and it is still focusable,
@@ -330,6 +361,20 @@
 			{/if}
 		{/if}
 	</figure>
+{:else if currentLoad?.state === 'unavailable'}
+	<p class="visual-unavailable" role="status" data-visual-state="unavailable">
+		<span>Chart unavailable.</span>
+		{#if currentLoad.retryable}
+			<button
+				type="button"
+				class="visual-retry"
+				disabled={pending?.file === wanted && pending.attempt === attempt}
+				onclick={retry}
+			>
+				{pending?.file === wanted && pending.attempt === attempt ? 'Trying again' : 'Try again'}
+			</button>
+		{/if}
+	</p>
 {:else if wanted}
 	<!-- Where the drawing will go, and nothing a reader can see: no box, no
 	     border, no height. It exists so the fetch can wait until the story is
@@ -351,6 +396,43 @@
 		display: block;
 		height: auto;
 		max-width: 100%;
+	}
+
+	.visual-unavailable {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: var(--space-2);
+		margin-block: var(--space-4);
+		font-size: var(--text-xs);
+		line-height: var(--leading-sm);
+		color: var(--color-text-secondary);
+	}
+
+	.visual-retry {
+		display: inline-flex;
+		align-items: center;
+		min-height: var(--space-6);
+		padding-inline: var(--space-2);
+		border: 1px solid var(--color-accent);
+		border-radius: var(--radius-sm);
+		background: transparent;
+		font: inherit;
+		color: var(--color-accent);
+		cursor: pointer;
+	}
+
+	.visual-retry:hover {
+		background: var(--tint-accent);
+	}
+
+	.visual-retry:focus-visible {
+		outline: 2px solid var(--color-focus);
+		outline-offset: 2px;
+	}
+
+	.visual-retry:disabled {
+		cursor: wait;
 	}
 
 	/* Type on the card, read the way the reader note above it is read. The chart
