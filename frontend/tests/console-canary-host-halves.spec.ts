@@ -12,6 +12,7 @@ import type { Row, SliceResult } from '../src/lib/data/slice-shapes';
 import { consoleConfig } from '../src/lib/server/config';
 import { sliceFromDisk } from '../src/lib/server/ledger-disk';
 import { backendPython } from './support/backend-python';
+import { numberFormat } from './support/number-format';
 
 const REPO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 let canary: string;
@@ -162,7 +163,7 @@ test('16 native records settle to 15 jobs and Hardware keeps both halves of work
 	})), { stops: knobs.machine_colour_stops, floor: knobs.machine_colour_floor_share });
 	const view = fleetView(jobs, {
 		ramp, start: proof.from, end: proof.through, windowDays: 41,
-		minRows: knobs.fleet_min_rows, topKinds: knobs.fleet_top_kinds, recording: true
+		minRows: knobs.fleet_min_rows, topKinds: knobs.fleet_top_kinds, numberFormat, recording: true
 	});
 	expect(view.placements).toBe(15);
 	const lines = view.lines.flat().filter((line) => line.runId === `${proof.through}-2` &&

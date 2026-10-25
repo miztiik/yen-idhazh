@@ -12,11 +12,12 @@ improvement has yet been measured.
 Plan 67's D3 observation scope and D4 settlement behavior are owner-approved.
 The observation and operational-state contracts have compatible readers, and
 the isolated TypeScript planner now saves per-source operational state and uses
-qualified requests-first evidence in the next selection. This closes only the
-approved D3/D4/D8 slice; it does not deploy the broader adaptive model
-described below or establish that the score improves editorial outcomes. The
-separate D5 failure-pause/recovery policy is approved but not implemented or
-activated here. Other admission and polling controls remain unapproved.
+qualified requests-first evidence in the next selection in PR #1720, which is
+not yet merged. This closes only the approved D3/D4/D8 slice; it does not
+deploy the broader adaptive model described below or establish that the score
+improves editorial outcomes. D5 restriction and recovery thresholds are
+approved but inactive pending Row 12's policy-state contract and
+implementation. Other admission and polling controls remain unapproved.
 Recommendations below do not activate those controls; see the
 [feedback contract](../contracts/feed-ingest-feedback.md).
 
@@ -594,8 +595,9 @@ For confirmed paywalls, stop ordinary work on the evidenced scope promptly.
 Do not infer a whole-publisher restriction from one paid article, or infer a
 paywall from HTTP 403 alone. Periodic permitted access probes can test recovery
 without generating summaries. Decay toward a neutral score does not clear an
-unresolved restriction. Transition thresholds, durations, scope escalation,
-recovery sample requirements and human/automatic authority remain configurable.
+unresolved restriction. The approved pause and recovery thresholds are recorded
+in the [feedback contract](../contracts/feed-ingest-feedback.md); scope
+escalation and human/automatic authority remain open.
 
 Use a fixed global hygiene budget and a bounded due queue in GitHub Actions.
 Reuse production observations first. Re-evaluation and recovery need not wait

@@ -19,6 +19,8 @@
  * group drives every function here with written-down values, so the arithmetic
  * is checked without a day off the archive (Guardrail #12).
  */
+import { formatNumber, type NumberFormatConfig } from '../number-format';
+
 
 /** What the score was computed under. The weight comes from the newest fitted
  * row where one exists, and from `config/idhazh.json` where none does. */
@@ -238,8 +240,8 @@ export function holdoutTone(
  * `-0.0007 BELOW`, which reads as a double negative and a typo. The absolute
  * value goes in the figure and the word carries the direction.
  */
-export function marginDistance(margin: number): string {
-	return Math.abs(margin).toFixed(4);
+export function marginDistance(margin: number, numberFormat: NumberFormatConfig): string {
+	return formatNumber(Math.abs(margin), numberFormat, { si: false });
 }
 
 /** The sentence under the panel, one per state. */
@@ -247,7 +249,8 @@ export function holdoutNote(
 	margin: HoldoutMargin,
 	state: HoldoutState,
 	marked: number,
-	applied: number
+	applied: number,
+	numberFormat: NumberFormatConfig
 ): string {
 	switch (state) {
 		case 'no-marks':
@@ -260,18 +263,18 @@ export function holdoutNote(
 		case 'violation': {
 			const count = margin.violations;
 			return (
-				`The line is ${marginDistance(margin.margin ?? 0)} BELOW a pair a person marked ` +
+				`The line is ${marginDistance(margin.margin ?? 0, numberFormat)} BELOW a pair a person marked ` +
 				`as two stories, so it would merge them. ${count} hand-marked ` +
 				`${count === 1 ? 'pair is' : 'pairs are'} on the wrong side of it.`
 			);
 		}
 		default:
 			return (
-				`The line sits ${marginDistance(margin.margin ?? 0)} above the closest pair a ` +
+				`The line sits ${marginDistance(margin.margin ?? 0, numberFormat)} above the closest pair a ` +
 				'person marked as two stories. No hand-marked pair is on the wrong side of it.' +
 				// The line is in the sentence because the margin alone says how much
 				// room there is and not where the room starts.
-				` The line is at ${applied.toFixed(4)}.`
+				` The line is at ${formatNumber(applied, numberFormat, { si: false })}.`
 			);
 	}
 }
@@ -313,7 +316,7 @@ export interface ScoredHoldout {
  * tree where nobody has run it says so rather than printing four zeros - which
  * would read as a line that merged nothing.
  */
-export function scoredNote(scored: ScoredHoldout | null): string {
+export function scoredNote(scored: ScoredHoldout | null, numberFormat: NumberFormatConfig): string {
 	if (scored === null) {
 		return (
 			'No committed holdout score was returned in the loaded window. ' +
@@ -327,7 +330,7 @@ export function scoredNote(scored: ScoredHoldout | null): string {
 			? ''
 			: ` ${scored.pairsUnresolved} could not be scored: the day they name is no longer published.`;
 	return (
-		`Scored on ${scored.date} at a line of ${scored.appliedLine.toFixed(4)}, against marks by ` +
+		`Scored on ${scored.date} at a line of ${formatNumber(scored.appliedLine, numberFormat, { si: false })}, against marks by ` +
 		`${scored.labeller}. It joined ${wrong} of the ${scored.labelledTwoStoryPairs} pairs marked ` +
 		`as two stories, and left ${missed} pairs marked as one story apart.${unresolved}`
 	);
@@ -339,8 +342,13 @@ export function scoredNote(scored: ScoredHoldout | null): string {
  * that room can go, and it can go in one night - which is the whole reason the
  * margin is worth printing rather than the margin itself.
  */
-export function reachNote(reach: HoldoutReach, maxDownStep: number, apart: number): string {
-	const fall = `One day's legal fall is up to ${maxDownStep.toFixed(3)}`;
+export function reachNote(
+	reach: HoldoutReach,
+	maxDownStep: number,
+	apart: number,
+	numberFormat: NumberFormatConfig
+): string {
+	const fall = `One day's legal fall is up to ${formatNumber(maxDownStep, numberFormat, { si: false })}`;
 	const more = reach.tomorrow - reach.today;
 	if (more === 0 && reach.dayAfter === reach.today) {
 		return `${fall}, and no further mark is inside the next two days' reach.`;
@@ -386,7 +394,11 @@ export function belowLine(scores: readonly number[], applied: number): number {
 }
 
 /** The pairs read as one story, in one sentence. */
-export function agreedNote(scores: readonly number[], applied: number): string {
+export function agreedNote(
+	scores: readonly number[],
+	applied: number,
+	numberFormat: NumberFormatConfig
+): string {
 	const at = scoreRange(scores);
 	if (at === null) {
 		return 'No scored pair marked as one story was returned, so there is no second population to draw.';
@@ -394,7 +406,7 @@ export function agreedNote(scores: readonly number[], applied: number): string {
 	const below = belowLine(scores, applied);
 	return (
 		`${scores.length} ${scores.length === 1 ? 'pair was' : 'pairs were'} read as one story, ` +
-		`running ${at.min.toFixed(4)} to ${at.max.toFixed(4)}. ${below} of them ` +
+		`running ${formatNumber(at.min, numberFormat, { si: false })} to ${formatNumber(at.max, numberFormat, { si: false })}. ${below} of them ` +
 		`${below === 1 ? 'scores' : 'score'} below the line, so the reader would see those ` +
 		'stories twice.'
 	);

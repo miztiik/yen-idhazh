@@ -3,7 +3,7 @@ import { expect, test } from '@playwright/test';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { render } from 'svelte/server';
+import { renderConfigured as render } from './support/server-render';
 import { serverCompiler, type Rewrite } from './support/server-render';
 import { judgeNothings, type Nothing, type PanelReading } from './support/panel-gates';
 

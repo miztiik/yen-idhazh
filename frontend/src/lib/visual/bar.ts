@@ -27,6 +27,7 @@
 
 import { scaleBand } from 'd3-scale';
 import type { VisualData, VisualMark } from '$lib/payload/types';
+import type { NumberFormatter } from '$lib/number-format';
 
 /** How tall one bar's row is: the name on the line above, the bar under it.
  *
@@ -57,10 +58,14 @@ const FIGURE_GAP = 8;
 
 /** One bar, placed. Every number here is a CSS pixel on the reader's screen. */
 export interface Bar {
+	emphasized: boolean;
+	sourceText: string | null;
 	/** The element's own characters, cut and sanitized by the compiler. */
 	name: string;
 	/** The figure as the article states it, which is what a reader reads. */
 	stated: string;
+	/** The same quantity in the configured display notation. */
+	displayed: string;
 	/** Where the name sits, on the line above the bar and with the width to itself. */
 	label: number;
 	y: number;
@@ -73,6 +78,8 @@ export interface Bar {
 
 /** A whole chart, placed. */
 export interface Drawing {
+	title: string | null;
+	caption: string | null;
 	/** The room the caller measured, which every mark below is placed inside. */
 	width: number;
 	height: number;
@@ -121,7 +128,7 @@ function figureOf(mark: VisualMark): number {
  * Throws where the data does not fit - see the module note: `refusedVisualData`
  * is the check, and this is the code that trusts it.
  */
-export function drawBars(data: VisualData, room: number): Drawing {
+export function drawBars(data: VisualData, room: number, formatNumber: NumberFormatter): Drawing {
 	const held = new Map(data.marks.map((mark) => [mark.mark_id, mark]));
 	const mark = (id: string): VisualMark => {
 		const found = held.get(id);
@@ -155,8 +162,11 @@ export function drawBars(data: VisualData, room: number): Drawing {
 		const height = Math.round(band.bandwidth() * BAR_SHARE);
 		const drawn = Math.round(share * span);
 		return {
+			emphasized: figures[index].mark_id === data.emphasized_mark_id,
+			sourceText: figures[index].source_text,
 			name: named.text ?? '',
 			stated: figures[index].value ?? '',
+			displayed: formatNumber(value, { si: true }),
 			// The name has the line above the bar to itself, centred in the room the
 			// bar leaves, so a long name never meets the figure beside the bar.
 			label: top + (band.bandwidth() - height) / 2,
@@ -168,6 +178,8 @@ export function drawBars(data: VisualData, room: number): Drawing {
 	});
 
 	return {
+		title: data.title,
+		caption: data.caption,
 		width,
 		height: names.length * ROW_HEIGHT + AXIS_BAND,
 		baseline: names.length * ROW_HEIGHT,
@@ -201,6 +213,10 @@ export function drawBars(data: VisualData, room: number): Drawing {
  */
 export function statedBars(drawing: Drawing): string {
 	const tail = drawing.unit ? ` ${drawing.unit}` : '';
-	const facts = drawing.bars.map((bar) => `${bar.name} ${bar.stated}${tail}`);
-	return `Bar chart. ${facts.join('; ')}.`;
+	const facts = drawing.bars.map((bar) =>
+		`${bar.name} ${bar.stated}${tail}${bar.emphasized ? ' (highlighted)' : ''}` +
+		(bar.sourceText ? ` (source: ${bar.sourceText})` : '')
+	);
+	return [drawing.title, `Bar chart. ${facts.join('; ')}.`, drawing.caption]
+		.filter(Boolean).join(' ');
 }

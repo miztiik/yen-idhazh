@@ -18,6 +18,7 @@ import { scaleLog } from 'd3-scale';
 import type { Frame } from '../frame';
 import { tooFewSentence } from '../../console/waiting';
 import { valueAxis, type ValueAxis } from './axis';
+import type { NumberFormatConfig } from '../../number-format';
 
 export interface DistributionRule {
 	at: number;
@@ -34,6 +35,7 @@ export interface DistributionOptions {
 	rules?: readonly DistributionRule[];
 	scale: 'linear' | 'log';
 	domain?: [number, number];
+	number_format: NumberFormatConfig;
 }
 
 export type LegacyDistributionOptions = Omit<DistributionOptions, 'scale' | 'domain'> & { scale?: never; domain?: never };
@@ -78,10 +80,12 @@ function finiteOf(values: readonly number[]): number[] {
 /** Why there is no distribution, in words, or null where there is one. */
 export function distributionShortfall(
 	values: readonly number[],
-	opts: Pick<DistributionOptions, 'minValues'>
+	opts: Pick<DistributionOptions, 'minValues' | 'number_format'>
 ): string | null {
 	const have = finiteOf(values).length;
-	return have > 0 && have < opts.minValues ? tooFewSentence(have, opts.minValues, 'readings') : null;
+	return have > 0 && have < opts.minValues
+		? tooFewSentence(have, opts.minValues, 'readings', opts.number_format)
+		: null;
 }
 
 /** The distribution, or null where there are fewer readings than its floor. */
@@ -99,7 +103,8 @@ export function distribution(values: readonly number[], opts: DistributionOption
 	}
 	let x = valueAxis(all, box, {
 		along: 'x',
-		ticks: opts.valueTicks
+		ticks: opts.valueTicks,
+		number_format: opts.number_format
 	});
 	if (opts.scale === 'log' && all.some((value) => value <= 0)) throw new Error('A log distribution needs positive readings and rules.');
 	const domain: [number, number] = opts.domain ?? (opts.scale === 'log'
@@ -117,7 +122,12 @@ export function distribution(values: readonly number[], opts: DistributionOption
 		x = { domain, along: 'x', scale: (value) => scale(value), ticks };
 	} else if (opts.domain !== undefined) {
 		const scale = (value: number) => box.left + (value - domain[0]) / (domain[1] - domain[0]) * box.innerWidth;
-		const axis = valueAxis(domain, box, { along: 'x', ticks: opts.valueTicks, zero: false });
+		const axis = valueAxis(domain, box, {
+			along: 'x',
+			ticks: opts.valueTicks,
+			zero: false,
+			number_format: opts.number_format
+		});
 		x = { ...axis, domain, scale, ticks: axis.ticks.filter((tick) => tick.value >= domain[0] && tick.value <= domain[1]).map((tick) => ({ ...tick, at: scale(tick.value) })) };
 	}
 	const edges = x.ticks.map((tick) => tick.value);
@@ -127,9 +137,13 @@ export function distribution(values: readonly number[], opts: DistributionOption
 	const y = valueAxis(
 		binned.map((group) => group.length),
 		box,
-		{ along: 'y', ticks: opts.valueTicks }
+		{ along: 'y', ticks: opts.valueTicks, number_format: opts.number_format }
 	);
-	const share = valueAxis([0, 100], box, { along: 'y', ticks: opts.valueTicks });
+	const share = valueAxis([0, 100], box, {
+		along: 'y',
+		ticks: opts.valueTicks,
+		number_format: opts.number_format
+	});
 
 	let below = 0;
 	const bins = binned.map((group) => {

@@ -2,19 +2,19 @@ import { expect, test } from '@playwright/test';
 import { readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { render } from 'svelte/server';
+import { renderConfigured as render } from './support/server-render';
 
 import { chartNotes, chooseChart, chooseDateSeriesDays, countChartNotes, openingType, resolveRoles, type ChosenRoles, type ExplorerChartType, type ExplorerShapeBounds } from '../src/lib/console/explorer/shape';
 import { AT_MOST_SENTENCE, CHART_KINDS, MOST_ROLES, SERIES_TOKENS, chartKind, pillFace, pillName, roleOptions } from '../src/lib/console/explorer/chart-roles';
 import { roleRowLines, roleSlotsPerLine } from '../src/lib/console/explorer/role-row';
-import { tooFewSentence } from '../src/lib/console/waiting';
+import { tooFewSentence } from './support/number-format';
 import { iconsConfig } from '../src/lib/server/config';
 import type { Column, Row } from '../src/lib/data/slice-shapes';
 import { inZone } from './support/in-zone';
 import { serverCompiler } from './support/server-render';
 import { partsOfOne } from '../src/lib/charts/d3/partsOfOne';
 import { tileStrip } from '../src/lib/charts/d3/tileStrip';
-import { flow } from '../src/lib/charts/d3/flow';
+import { flow } from './support/number-format';
 import { frame } from '../src/lib/charts/frame';
 import { readTruthValue } from '../src/lib/console/explorer/shape';
 

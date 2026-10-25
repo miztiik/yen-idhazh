@@ -22,9 +22,8 @@ import { publicFiles } from './publication';
 import { dayKey, monthsInWindow, toDay, type TimeWindow } from '../charts/viewport';
 import { deskOf, orderByTime } from '../day-shape';
 import { settled } from '../feed-health';
-import { publishedVisual, refusedDrawing } from '../payload/drawing';
 import { dropVectors, coverageOf } from '../payload/project';
-import type { DigestDay, DigestItem, SeededVisual } from '$lib/payload/types';
+import type { DigestDay, DigestItem } from '$lib/payload/types';
 import { feedHealthRows } from './ledger-rows';
 
 /** The build runs from `frontend/`, so the repo root is one level up. */
@@ -290,54 +289,12 @@ export interface DayShellSplit {
 	root?: string;
 }
 
-/** The drawing itself, or null when there is nothing safe to inline.
- *
- * Null is a designed state and not an error: the story keeps its `path`, so the
- * browser asks for the same file and runs the same refusal from
- * [../payload/drawing.ts](../payload/drawing.ts) over the answer. A file this
- * build refuses is a file that build refuses too, so the reader gets a shorter
- * story rather than a drawing nobody checked. Degrade, do not fail
- * (`CLAUDE.md` section 1a).
- */
-function inlineSvg(root: string, path: string): string | null {
-	if (!publishedVisual(path)) {
-		console.warn(`[digest] ${path}: not a published visual path, so it is not drawn`);
-		return null;
-	}
-	// `..` off the digest root rather than a switch of its own, the way
-	// `INDEX_ROOT` is derived: a canary build then reads the canary's own
-	// drawings and can never reach the published tree.
-	const file = join(root, '..', path);
-	if (!existsSync(file)) return null;
-	const markup = readFileSync(file, 'utf8');
-	const refused = refusedDrawing(markup);
-	if (refused !== null) {
-		console.warn(`[digest] ${path}: ${refused}, so it is not drawn`);
-		return null;
-	}
-	return markup;
-}
-
-/** One story with its drawing in hand, for the stories the document carries. */
-function withDrawing(item: DigestItem, root: string): DigestItem {
-	if (item.visual?.state !== 'rendered' || !item.visual.path) return item;
-	const markup = inlineSvg(root, item.visual.path);
-	if (markup === null) return item;
-	const visual: SeededVisual = { ...item.visual, markup };
-	return { ...item, visual };
-}
-
 /** The day, in the two halves a reading route loads.
  *
  * Null for the same reason `loadDay` is null: the date was never published, or
  * its payload cannot be read. Both are designed states, not errors.
  *
- * **The seed carries its drawings and the rest does not**, which is the whole
- * reason the split is the right place to read them. A day has published 621
- * stories and the drawings average 12.7 KB each, so a document holding every
- * one of them would be about a megabyte of markup on the surface a phone loads
- * first. Measured 2026-09-05 over the 15 committed days: a seed holds 0.87
- * drawings on average and 3 at most, which is 11.8 KB of markup a day.
+ * Both halves carry chart data pointers, never SVG markup.
  */
 export function dayShell(
 	date: string,
@@ -369,7 +326,7 @@ export function dayShell(
 	const seeded = (item: DigestItem): boolean => head.has(item.item_id) || kept.has(item.item_id);
 	return {
 		facts: { ...day, items: [] },
-		seed: items.filter(seeded).map((item) => withDrawing(item, root)),
+		seed: items.filter(seeded),
 		rest: items.filter((item) => !seeded(item))
 	};
 }

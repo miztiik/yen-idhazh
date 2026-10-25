@@ -41,6 +41,7 @@
 	import { boundaryDates, firstOfDay, inSpan, runTicks, MARK_PAD } from './run-axis';
 	import { countDays, nameSpan } from '$lib/console/span-words';
 	import type { ChartConfig } from '$lib/server/config';
+	import { formatNumber } from '$lib/number-format';
 
 	let {
 		rows,
@@ -90,7 +91,7 @@
 	// shared domain no longer rebuild on a drag.
 	const tailDates = $derived(firstOfDay(tailRuns));
 	const tailData = $derived(
-		latencyColumns(tailRuns, {
+		latencyColumns(tailRuns, chart.number_format, {
 			lines: tailRuns.map((run) =>
 				tailBoundaries.has(run.date)
 					? [modelRuleRow(namesMovedShort(movedOn.get(run.date) ?? []))]
@@ -200,7 +201,7 @@
 			data-model-rule-from={tailRuns[0]?.date ?? ''} data-model-rule-to={tailRuns.at(-1)?.date ?? ''}>
 		<p class="lede" data-lede>
 			{slowestTenth === null ? 'No slowest-tenth reading was recorded.'
-				: `${(slowestTenth / 1000).toFixed(1)} seconds at the slowest tenth of the newest measured run.`}
+				: `${formatNumber(slowestTenth / 1000, chart.number_format, { si: false })} seconds at the slowest tenth of the newest measured run.`}
 		</p>
 		<p data-comparison="The slowest articles against the middle one">The slowest articles against the middle one.</p>
 		{#if tailRuns.length === 0}
@@ -269,7 +270,7 @@
 								font-size="10"
 								data-latency-top={tailY.domain[1]}
 							>
-								{tailY.domain[1].toFixed(0)}s
+								{formatNumber(tailY.domain[1], chart.number_format, { exact: true, si: false })}s
 							</text>
 							<text
 								x={box.left}
@@ -415,9 +416,9 @@
 			{#if spread !== null}
 				<p class="reads" data-latency-spread={spread.times.toFixed(2)}>
 					On {spread.run.runId}, the newest run drawn, the slowest articles took
-					<strong>{spread.times.toFixed(1)} times as long</strong>
-					as the middle one: {seconds(spread.slowest / 1000)} against
-					{seconds(spread.middle / 1000)}. That is how wide the spread is today; the plots above
+					<strong>{formatNumber(spread.times, chart.number_format, { si: false })} times as long</strong>
+					as the middle one: {seconds(spread.slowest / 1000, chart.number_format)} against
+					{seconds(spread.middle / 1000, chart.number_format)}. That is how wide the spread is today; the plots above
 					are whether it is widening.
 				</p>
 			{/if}
@@ -427,7 +428,7 @@
 					<li data-latency-run={run.runId}>
 						{run.runId}, {run.items} items:
 						{PERCENTILES.map(
-							(percentile, at) => `p${percentile} ${((run.ms[at] ?? 0) / 1000).toFixed(1)}s`
+							(percentile, at) => `p${percentile} ${formatNumber((run.ms[at] ?? 0) / 1000, chart.number_format, { si: false })}s`
 						).join(', ')}.
 					</li>
 				{/each}

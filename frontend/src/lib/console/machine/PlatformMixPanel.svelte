@@ -35,6 +35,7 @@
 	import type { Row } from '$lib/data/ledger';
 	import { longDate } from '$lib/format';
 	import type { ChartConfig, ConsoleConfig } from '$lib/server/config';
+	import { formatNumber } from '$lib/number-format';
 	import { tick } from 'svelte';
 
 	let {
@@ -91,6 +92,7 @@
 			windowDays,
 			minRows: knobs.fleet_min_rows,
 			topKinds: knobs.fleet_top_kinds,
+			numberFormat: chart.number_format,
 			recording,
 			lost
 		})
@@ -108,7 +110,8 @@
 					density: chart.tick_density,
 					valueTicks: VALUE_TICKS,
 					padding: PADDING,
-					rule: { declined: 'which machine the platform hands a job does not depend on any model setting' }
+					rule: { declined: 'which machine the platform hands a job does not depend on any model setting' },
+					number_format: chart.number_format
 				})
 			: null
 	);
@@ -176,7 +179,9 @@
 	}
 
 	function stepText(low: number, high: number): string {
-		return low.toFixed(1) === high.toFixed(1) ? low.toFixed(1) : `${low.toFixed(1)} to ${high.toFixed(1)}`;
+		const lowText = formatNumber(low, chart.number_format, { si: false });
+		const highText = formatNumber(high, chart.number_format, { si: false });
+		return lowText === highText ? lowText : `${lowText} to ${highText}`;
 	}
 </script>
 
@@ -321,7 +326,7 @@
 										{:else}
 											<td class="number seconds">{Math.round(line.seconds)}<span class="narrow-word" aria-hidden="true">{' seconds'}</span></td>
 										{/if}
-										<td class="number speed">{line.rate === null ? 'no speed reading' : rateWords(line.rate)}</td>
+										<td class="number speed">{line.rate === null ? 'no speed reading' : rateWords(line.rate, chart.number_format)}</td>
 									</tr>
 								{/each}
 							</tbody>

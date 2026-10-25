@@ -1,6 +1,7 @@
 {
   "entries": [
-    {"bytes": 2012587,"covers": "2026-10-22","lost_days": [],"rows": 18096,"set_aside": 0,"state": "packed"}
+    {"bytes": 2012587,"covers": "2026-10-22","lost_days": [],"rows": 18096,"set_aside": 0,"state": "packed"},
+    {"bytes": 2784013,"covers": "2026-10-23","lost_days": [],"rows": 33402,"set_aside": 0,"state": "packed"}
   ],
   "ledger": "rejections",
   "period": "daily",

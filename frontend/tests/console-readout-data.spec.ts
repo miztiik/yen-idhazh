@@ -2,7 +2,7 @@
 import { expect, test } from '@playwright/test';
 import { readoutOf } from '../src/lib/charts/readout';
 import { frame } from '../src/lib/charts/frame';
-import { dateSeries } from '../src/lib/charts/d3/dateSeries';
+import { dateSeries, formatNumber, numberFormat } from './support/number-format';
 import { clocksChart } from '../src/lib/charts/machine';
 
 test.describe('the strip is the key', () => {
@@ -19,17 +19,31 @@ test.describe('the strip is the key', () => {
 		]);
 	});
 
+	test('dated readouts share the configured precision with their axes', () => {
+		const values = [5_953, 0.0030226000000000003];
+		for (const value of values) {
+			const geometry = dateSeries([{
+				label: 'Measured', token: '--chart-1',
+				points: [{ date: '2026-09-01', value }]
+			}], {
+				frame: frame(600, 240), density: 6, valueTicks: 4, padding: 0.2,
+				rule: { changes: [], note: null }
+			});
+			expect(geometry?.readout.series[0].values).toEqual([formatNumber(value)]);
+		}
+	});
+
 	test('the native clock ranking retains both independently read instruments beside the gap', () => {
 		const pairs = [
 			{ label: 'shard 0', ledger: 12.5, server: 12.4, gapPct: 0.8, agrees: true },
 			{ label: 'shard 1', ledger: 9.5, server: 9.9, gapPct: 4.0, agrees: true }
 		];
-		const geometry = clocksChart(pairs, 5);
+		const geometry = clocksChart(pairs, 5, numberFormat);
 		expect(geometry?.rows.map((row) => [row.label, row.value])).toEqual([['shard 1', 4], ['shard 0', 0.8]]);
 		expect(geometry?.rules.map((rule) => rule.at)).toEqual([5]);
 		expect(geometry?.rows.map((row) => row.row.context)).toEqual([
-			'item ledger 9.50; server 9.90 tokens a second',
-			'item ledger 12.50; server 12.40 tokens a second'
+			`item ledger ${formatNumber(9.5)}; server ${formatNumber(9.9)} tokens a second`,
+			`item ledger ${formatNumber(12.5)}; server ${formatNumber(12.4)} tokens a second`
 		]);
 	});
 

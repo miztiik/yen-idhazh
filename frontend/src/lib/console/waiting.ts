@@ -1,7 +1,8 @@
 /** What a native console panel, route or written question says while it has no answer. */
 import { shortDate } from '$lib/format';
-import { megabytes } from '$lib/assist/session';
 import { grouped } from '$lib/charts/series';
+import { formatNumber } from '../number-format';
+import type { NumberFormatConfig } from '../number-format';
 import { nameSpan } from '$lib/console/span-words';
 import type { AskRefusal } from '$lib/data/ledger';
 import { isDay } from '$lib/data/slice-shapes';
@@ -68,21 +69,31 @@ export function quietSentence(days: number, widen: number | null): string {
 		: `${read} The ${widen}-day window reaches back to months that do.`;
 }
 
-export function tooFewSentence(have: number, floor: number, noun: string, place = 'in this window'): string {
+export function tooFewSentence(
+	have: number,
+	floor: number,
+	noun: string,
+	numberFormat: NumberFormatConfig,
+	place = 'in this window'
+): string {
 	const are = have === 1 ? 'is' : 'are';
-	return `Only ${grouped(have)} of the ${grouped(floor)} ${noun} this chart needs ${are} ${place}, so it is not drawn.`;
+	return `Only ${grouped(have, numberFormat)} of the ${grouped(floor, numberFormat)} ${noun} this chart needs ${are} ${place}, so it is not drawn.`;
 }
 
-function mb(bytes: number): string {
-	return `${megabytes(bytes)} MB`;
+function mb(bytes: number, numberFormat: NumberFormatConfig): string {
+	return `${formatNumber(bytes / 1024 / 1024, numberFormat, { si: false })} MB`;
 }
 
-export function refusedSentence(because: AskRefusal): string {
-	if (because.kind === 'statements') return `Run one statement at a time. This has ${because.count}.`;
+function fileCount(count: number, numberFormat: NumberFormatConfig): string {
+	return `${formatNumber(count, numberFormat, { exact: true })} ${count === 1 ? 'file' : 'files'}`;
+}
+
+export function refusedSentence(because: AskRefusal, numberFormat: NumberFormatConfig): string {
+	if (because.kind === 'statements') return `Run one statement at a time. This has ${formatNumber(because.count, numberFormat, { exact: true })}.`;
 	if (because.kind === 'not-read-only') return `Only questions run here: start with SELECT, WITH, DESCRIBE, SUMMARIZE or EXPLAIN. This starts with ${because.word}.`;
-	if (because.kind === 'too-long') return `This question is ${because.chars} characters long; the most this page runs is ${because.max}.`;
-	if (because.kind === 'over-ceiling') return `These days would fetch ${mb(because.bytes)} from ${because.files} files, and one question may fetch ${mb(because.max)}. Pick fewer days or fewer ledgers.`;
-	if (because.kind === 'too-many-files') return `These days need ${because.files} files; one question permits ${because.max}. Pick fewer days or fewer ledgers.`;
+	if (because.kind === 'too-long') return `This question is ${formatNumber(because.chars, numberFormat, { exact: true })} characters long; the most this page runs is ${formatNumber(because.max, numberFormat, { exact: true })}.`;
+	if (because.kind === 'over-ceiling') return `These days would fetch ${mb(because.bytes, numberFormat)} from ${fileCount(because.files, numberFormat)}, and one question may fetch ${mb(because.max, numberFormat)}. Pick fewer days or fewer ledgers.`;
+	if (because.kind === 'too-many-files') return `These days need ${fileCount(because.files, numberFormat)}; one question permits ${fileCount(because.max, numberFormat)}. Pick fewer days or fewer ledgers.`;
 	if (because.kind === 'ledger-not-enabled') return `${because.ledger} is not enabled for the Data explorer. Refresh the ledger list and choose an enabled ledger.`;
 	return 'The engine could not run this:';
 }

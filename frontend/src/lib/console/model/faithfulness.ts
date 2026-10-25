@@ -1,12 +1,18 @@
 import type { Row } from '../../data/ledger';
+import type { NumberFormatConfig } from '../../number-format';
 import { evalDays, matchFloor, matchRules, widerNote } from '../eval-instruments';
 import { textRows } from './rows';
 
-export function faithfulness(rows: readonly Row[], thresholds: { high: number; low: number }, axis: { step: number; floorMax: number }) {
+export function faithfulness(
+	rows: readonly Row[],
+	thresholds: { high: number; low: number },
+	axis: { step: number; floorMax: number },
+	numberFormat: NumberFormatConfig
+) {
 	const days = evalDays(textRows(rows));
 	const floor = matchFloor(days, thresholds, axis);
 	return {
-		days, floor, rules: matchRules(thresholds, floor), wider: widerNote(days, days.length),
+		days, floor, rules: matchRules(thresholds, floor), wider: widerNote(days, days.length, numberFormat),
 		series: [{
 			label: 'median faithfulness', token: '--chart-1' as const,
 			points: days.map((day) => ({

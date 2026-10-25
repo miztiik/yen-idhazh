@@ -1,7 +1,8 @@
 /** The private drawing counts conserve their losses through the actual native layout. */
 import { expect, test } from '@playwright/test';
 import { frame } from '../src/lib/charts/frame';
-import { flow, type FlowGeometry } from '../src/lib/charts/d3/flow';
+import { type FlowGeometry } from '../src/lib/charts/d3/flow';
+import { flow } from './support/number-format';
 import { chartFlow, type FlowDay } from '../src/lib/console/pipelines/drawing-flow';
 
 const DAYS = [

@@ -13,6 +13,8 @@
 	import EmptyState from './EmptyState.svelte';
 	import type { EmptyDrawing } from './empty';
 	import { pointerReadout, readoutMarks, readoutOf } from '$lib/charts/readout';
+	import { formatNumber } from '$lib/number-format';
+	import { useNumberFormat } from '$lib/number-format-context';
 
 	let {
 		geometry,
@@ -34,16 +36,17 @@
 
 	/** A tick mark's length, the same as the reserved frame draws. */
 	const TICK = 4;
+	const numberFormat = useNumberFormat();
 	/** The curve is a reading drawn over marks, so it is thinner than a series
 	 * line and still clear of the bars' edges. */
 	const CURVE = 1.5;
 	let selected = $state<number | null>(null);
 	const readout = $derived(geometry === null ? null : readoutOf({
 		type: 'distribution',
-		columns: geometry.bins.map((bin) => `${bin.x0} to ${bin.x1}`),
+		columns: geometry.bins.map((bin) => `${formatNumber(bin.x0, numberFormat)} to ${formatNumber(bin.x1, numberFormat)}`),
 		series: [
-			{ label: 'Rows', swatch: 'var(--chart-1)', values: geometry.bins.map((bin) => bin.count), format: String },
-			{ label: 'At or below', swatch: null, values: geometry.bins.map((bin) => bin.share), format: (value) => `${value.toFixed(1)}%` }
+			{ label: 'Rows', swatch: 'var(--chart-1)', values: geometry.bins.map((bin) => bin.count), format: (value) => formatNumber(value, numberFormat, { exact: true }) },
+			{ label: 'At or below', swatch: null, values: geometry.bins.map((bin) => bin.share), format: (value) => `${formatNumber(value * 100, numberFormat, { si: false })}%` }
 		],
 		notMeasured: 'No readings in this bin.',
 		resting: geometry.bins.reduce((best, bin, index, bins) => bin.count > bins[best].count ? index : best, 0)
@@ -96,7 +99,7 @@
 		{/each}
 
 		{#each geometry.bins as bin (bin.x0)}
-			<rect x={bin.left} y={bin.top} width={bin.width} height={bin.height} fill="var(--chart-1)" aria-label={`${bin.x0} to ${bin.x1}: ${bin.count} rows, ${bin.share.toFixed(1)}% at or below`} />
+			<rect x={bin.left} y={bin.top} width={bin.width} height={bin.height} fill="var(--chart-1)" aria-label={`${formatNumber(bin.x0, numberFormat)} to ${formatNumber(bin.x1, numberFormat)}: ${formatNumber(bin.count, numberFormat, { exact: true })} rows, ${formatNumber(bin.share * 100, numberFormat, { si: false })}% at or below`} />
 		{/each}
 		<path d={geometry.cumulative} fill="none" stroke="var(--color-text)" stroke-width={CURVE} />
 

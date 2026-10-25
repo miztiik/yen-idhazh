@@ -267,21 +267,13 @@ class TestPublishedData:
             visuals=committed_visuals(),
         ).data
 
-    def test_the_published_data_carries_the_shape_and_none_of_the_geometry(self) -> None:
-        """The plan may not carry geometry, a literal value or authored text.
-
-        Publishing the compiled result must not become the hole one gets through
-        (owner, 2026-09-13). So the check is against the serialised document:
-        none of the words a drawing uses to say how wide, how tall, what colour
-        or what font appears anywhere in it, and neither does the plan's own
-        title - `title` and `caption` are the model's authored strings, and a
-        compiler that smuggled one in would put an authored string on the wire.
-        """
+    def test_the_published_data_carries_safe_framing_and_none_of_the_geometry(self) -> None:
+        """Framing is sanitized data; appearance is still not model-authored."""
         plan = VisualPlan.model_validate(
             VisualPlan.read(BAR_PLAN).model_dump(mode="json")
             | {
-                "title": "Authored plan heading 8391",
-                "caption": "Authored plan caption 2746",
+                "title": "<|system|>Offshore wind",
+                "caption": "Article figures.\u200b",
             }
         )
         compiled = compile_bar(
@@ -293,6 +285,8 @@ class TestPublishedData:
 
         assert compiled.type is VisualType.BAR
         assert compiled.renderer_version == RENDERER_VERSION
+        assert compiled.title == "Offshore wind"
+        assert compiled.caption == "Article figures."
         for drawn in (
             "width",
             "height",
@@ -300,12 +294,55 @@ class TestPublishedData:
             "fontSize",
             "colour",
             "color",
-            "title",
-            "caption",
-            "Authored plan heading 8391",
-            "Authored plan caption 2746",
         ):
             assert drawn not in document, f"the published data carries {drawn}, which is not data"
+
+    @pytest.mark.parametrize("field", ["title", "caption"])
+    def test_absent_or_sanitized_empty_framing_stays_absent(self, field: str) -> None:
+        for text in ((None, "\u200b") if field == "caption" else ("\u200b",)):
+            plan = VisualPlan.model_validate(
+                VisualPlan.read(BAR_PLAN).model_dump(mode="json") | {field: text}
+            )
+            data = compile_bar(plan, ElementTable.read(BAR_TABLE), visuals=committed_visuals()).data
+            assert getattr(data, field) is None
+
+    @pytest.mark.parametrize("selected", ["category", "quantity", "both"])
+    def test_annotations_resolve_to_one_bar_even_when_both_channels_name_it(
+        self, selected: str
+    ) -> None:
+        plan = VisualPlan.read(BAR_PLAN)
+        ids = {
+            "category": [plan.encodings.category[1]],
+            "quantity": [plan.encodings.quantity[1]],
+            "both": [plan.encodings.category[1], plan.encodings.quantity[1]],
+        }[selected]
+        plan = VisualPlan.model_validate(plan.model_dump(mode="json") | {"annotations": ids})
+        data = compile_bar(plan, ElementTable.read(BAR_TABLE), visuals=committed_visuals()).data
+        assert data.emphasized_mark_id == data.encoding.quantity[1]
+
+    @pytest.mark.parametrize("count", [0, 2])
+    def test_no_or_multiple_selected_bars_are_explicitly_refused(self, count: int) -> None:
+        plan = VisualPlan.read(BAR_PLAN)
+        plan = VisualPlan.model_validate(
+            plan.model_dump(mode="json") | {"annotations": plan.encodings.quantity[:count]}
+        )
+        with pytest.raises(CompileError, match=f"select {count} distinct bars"):
+            compile_bar(plan, ElementTable.read(BAR_TABLE), visuals=committed_visuals())
+
+    def test_a_converted_input_selects_its_bar_and_preserves_the_source_figure(self) -> None:
+        plan = VisualPlan.read(PLAN_FIXTURES / "units-convert.json")
+        plan = VisualPlan.model_validate(
+            plan.model_dump(mode="json")
+            | {"annotations": [plan.encodings.category[1], plan.encodings.quantity[1]]}
+        )
+        table = ElementTable.read(TABLE_FIXTURES / "tonnes-and-kilotonnes.json")
+        data = compile_bar(plan, table, visuals=committed_visuals()).data
+        mark = next(mark for mark in data.marks if mark.mark_id == data.emphasized_mark_id)
+        assert data.emphasized_mark_id == data.encoding.quantity[1]
+        assert mark.derived is not None
+        original = next(element for element in table.elements if element.element_id == plan.encodings.quantity[1])
+        assert mark.source_text == original.span_excerpt
+        assert mark.value != original.value
 
     def test_every_published_mark_states_where_its_figure_came_from(self) -> None:
         """A drawn number with no provenance is the thing this subsystem refuses."""
@@ -400,6 +437,21 @@ class TestRenderPlannedVisual:
         published = VisualData.read(tmp_path / MARKS)
         assert published.item_id == ElementTable.read(BAR_TABLE).item_id
         assert len(published.encoding.category) == len(published.encoding.quantity) == 4
+        assert published.caption == VisualPlan.read(BAR_PLAN).caption
+        assert published.emphasized_mark_id in published.encoding.quantity
+
+    def test_missing_priority_keeps_the_item_without_a_chart(self, tmp_path: Path) -> None:
+        plan = VisualPlan.model_validate(
+            VisualPlan.read(BAR_PLAN).model_dump(mode="json") | {"annotations": []}
+        )
+        result = render_planned_visual(
+            self._nothing_yet(), plan, ElementTable.read(BAR_TABLE),
+            public_root=tmp_path, relpath=MARKS, visuals=committed_visuals(),
+        )
+        assert result.kind is VisualKind.NONE
+        assert result.spec is None
+        assert result.rationale == "annotations select 0 distinct bars; exactly one is required"
+        assert not (tmp_path / MARKS).exists()
 
     def test_the_decision_s_spec_is_the_document_that_was_published(self, tmp_path: Path) -> None:
         """One resolution, one document. Two would be two things that can disagree."""

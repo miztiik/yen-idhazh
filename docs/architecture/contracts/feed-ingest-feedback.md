@@ -7,7 +7,8 @@ How do measured feed and article costs affect the next planner selection?
 **Status**: Per-operation capture, supported failure attribution, bounded
 article/request aggregation and a report-only requests-first estimate are
 implemented. The registered operational-state writer and bounded raw/compact
-reader now feed both `/plan` and saved-batch `/select-articles`. Qualified
+reader feed both `/plan` and saved-batch `/select-articles` in PR #1720, which
+is not yet merged. Qualified
 requests-first evidence replaces RSS reliability on source authority only;
 unqualified or unavailable evidence is neutral. Fresh-base publication
 recomputes only derived state and retains immutable observations.
@@ -16,10 +17,10 @@ after evidence qualifies, replacement of RSS reliability in the isolated
 TypeScript planner, the configurable evidence settings below,
 requests-first eligibility, and counting only supported source-side failures
 as waste. D3/D4 approvals recorded below define the initial observations and
-per-source operational state. The rolling closed-UTC-day window is
-configurable with a seven-day default. The separate D5 failure-pause/recovery
-policy is approved but is not implemented or activated in this phase. Other
-D5 admission and polling rules remain unapproved.
+per-source operational state. The rolling closed-UTC-day window is configurable with a seven-day default.
+The D5 restriction and recovery thresholds are approved but inactive until
+their Row 12 policy-state contract and implementation; adaptive polling and
+review policy remain open.
 
 ## Scope
 
@@ -365,7 +366,7 @@ twice.
 | B5 | `window_start`, `window_end` | UTC dates; the closed days selected by `window_days` |
 | B6 | `code_revision`, `policy_version` | Writer revision and policy version used |
 | B7 | `source_id` and request evidence | One ledger row per source, with nullable evidence dates and request counts, measured opportunity counts, coverage and qualification |
-| B8 | D5 control fields | Approved separately; not implemented or activated in this state or score trace |
+| B8 | D5 control fields | Separate policy state; approved rules remain inactive until the Row 12 contract and enforcement are implemented |
 
 **Owner ruling, kumarsnaveen_microsoft, 2026-10-24 UTC:** Preserve immutable
 per-run observations. If another run saves first, recalculate only the
@@ -379,9 +380,10 @@ distinct and measured opportunities, evidence dates, coverage, qualification
 status and policy version. It does not add CPU or memory amounts: those remain
 unavailable until attributable.
 
-Restriction state is not part of this D3/D4 operational telemetry payload.
-The separately approved D5 failure-pause and recovery policy remains
-unimplemented and inactive in this phase. Its later implementation must not
+Restriction state is not part of the approved D3/D4 operational telemetry
+payload. The D5 restriction and recovery policy below is approved, but its
+state fields and runtime behavior are not yet implemented; do not activate
+restrictions until the Row 12 policy contract and implementation exist. Do not
 add restriction fields to the D3/D4 state or score trace. Existing robots,
 trust and access-safety rules remain unchanged.
 
@@ -459,11 +461,11 @@ incomplete or incompatible, use the previous complete snapshot when valid and
 label it `stale_fallback`; preserve its original window and do not invent an
 expiry time. Apply its saved
 qualified score adjustment as the best available state, but do not call it
-current. The separately approved D5 failure-pause/recovery policy is not
-implemented or activated here. If no state is readable, continue selection
-without an operational adjustment and emit `restrictions_unverified`; never write empty
-history over saved state. Existing robots, trust and access-safety checks do
-not change.
+current. D5 restrictions remain inactive until the Row 12 policy-state
+contract and runtime implementation exist. If no state is readable, continue
+selection without an operational adjustment and emit
+`restrictions_unverified`; never write empty history over saved state.
+Existing robots, trust and access-safety checks do not change.
 
 The proposed read result carries `state_status: current|stale_fallback|unavailable`,
 nullable `state_revision` and nullable `window_start`/`window_end`. For
@@ -473,37 +475,33 @@ not be verified. Fallback state retains its original revision and date range.
 No age threshold is proposed; the status records what the reader used without
 claiming it is current.
 
-## D5 proposal: bounded controls and operational review
+## D5 approved access policy; conditional trial and open polling
 
-These values are estimates for owner review, not measured limits. They do not
-cap ordinary configured feed fetching. Add no separate score-enable flag:
-automatic score use after qualification is already approved. Keep any
-existing API development flag separate from feedback policy. This proposal
-does not add selection idempotency, conditional HTTP or semantic assessment.
+The approved control thresholds below are policy estimates, not measurements,
+and are not active runtime behavior. They do not cap ordinary configured
+fetching. Restriction fields and enforcement still need their Row 12 contract
+and implementation. Recovery restores trial access only; it does not change
+curated catalog membership or permanently activate a source. Keep any
+existing API development flag separate from feedback policy. No selection
+idempotency, conditional HTTP or semantic assessment is added.
 
-### Table C - Proposed controls and conditional trial
+### Table C - D5 policy decisions and open trial/polling work
 
-The separate D5 failure-pause/recovery approval does not implement or activate
-those controls in this contract. The estimates below are not substituted for
-that approved policy.
-
-| Id | Setting | Proposed type and value | Effect |
+| Id | Setting | Policy value or status | Effect |
 | --- | --- | --- | --- |
-| C1 | `age_group_article_cap` | Up to 100 distinct eligible articles per age group for the bounded trial; fewer if fewer are available | A2 remains conditional on total config/code cost. It depends on approved telemetry Rows 2, 4, 5 and 6; this is not a proven standalone small change. At most 500 distinct articles can be selected across the five groups; retries and redirects can make actual HTTP request totals higher. It does not cap all-work telemetry, ordinary fetches, selection inputs or the existing 100-item selected-output limit. Report unknown and future ages separately. |
-| C2 | `restriction_failures` | 3 consecutive known source-attributed failures for one source and endpoint/feed scope, within the configured window | A known success at that scope resets the streak; unknown, pipeline and unresolved outcomes neither assert failure nor reset it. Article refusal restricts only that article. |
-| C3 | `restriction_pause_hours` | Integer, 24 | Pause ends by making a recovery probe due; elapsed time alone does not restore ordinary work. |
-| C4 | `recovery_successes` | 3 distinct successful opportunities across at least 2 UTC dates, with at least 80 percent known outcomes | Restore trial access only after observed recovery. |
-| C5 | `special_probe_budget` | 20 opportunities per planner run, at most 1 per source | Recovery first, then stable source ID. Does not cap ordinary fetches. |
-| C6 | `maximum_poll_gap_hours` | Integer, 24 | Proposed freshness ceiling only; it does not define adaptive polling cadence. |
+| C1 | `age_group_article_cap` | Up to 100 distinct eligible articles per age group for the bounded trial; fewer if fewer are available | A2 remains conditional on total config/code cost after telemetry Rows 2, 4, 5 and 6. At most 500 distinct articles can be selected across the five groups; retries and redirects can make actual HTTP request totals higher. This does not cap all-work telemetry, ordinary fetches, selection inputs or the existing 100-item selected-output limit. |
+| C2 | `restriction_failures` | **Approved 2026-10-25 UTC:** 3 consecutive confirmed source-side failures for the same source and evidenced endpoint/feed scope, within the configured window | Pause only that endpoint/feed scope. An article refusal affects only that article and cannot by itself widen the pause. A known success at the scope resets the streak; unknown and pipeline outcomes neither count as failure nor reset it. |
+| C3 | `restriction_pause_hours` | **Approved 2026-10-25 UTC:** 24 hours | When the pause ends, a check becomes due for the next permitted planner run. Elapsed time alone does not restore ordinary work. |
+| C4 | `recovery_successes` | **Approved 2026-10-25 UTC:** 3 consecutive successful recovery checks across at least 2 UTC dates, with at least 80 percent known outcomes | A confirmed source-side failure resets recovery progress and starts a new 24-hour pause. Unknown and pipeline outcomes are neither successes nor resets. Successful recovery restores trial access only. |
+| C5 | `special_probe_budget` | **Approved 2026-10-25 UTC:** at most 20 recovery-check opportunities per planner run and at most 1 per source | Select oldest due checks first; ties use stable source ID, then endpoint identity. This limits checks, not HTTP requests; retries and redirects can exceed 20 requests. It does not cap ordinary feed or article work. |
+| C6 | `maximum_poll_gap_hours` | Integer, 24 | Unapproved ceiling only; it does not define adaptive polling cadence. |
 
-Apart from A2's conditional trial decision, these are unapproved proposals,
-not approved limits. The earlier 25-article value is withdrawn; it was an
-unapproved trial-budget suggestion, not an observation or ordinary-work cap.
-Record all actual fetch, parse and technical-check work, regardless of the
-trial's age-group cap. In particular, the consecutive failure rule avoids
-restricting a high-volume source for scattered failures; the threshold and
-window still need approval. A 20-item probe allowance is separate from the
-score's 20-opportunity support floor. Permanent retirement remains curated.
+The owner-approved C2-C5 values are estimates, not measured thresholds. No
+restriction or recovery action is active until Row 12 declares the policy
+state and implements it. The prior 25-article trial suggestion remains
+withdrawn. Capture all actual fetch, parse and technical-check work regardless
+of trial selection. The score's 20-opportunity support floor is not the
+20-check run budget. Permanent retirement remains curated.
 
 For A2, use exact non-overlapping age groups: `[0,2)`, `[2,6)`, `[6,12)`,
 `[12,24)`, and `[24,36]` hours. Use the existing captured observation clock
@@ -512,7 +510,8 @@ ungrouped. The trial selects up to 100 distinct articles per group, fewer when
 fewer are eligible. This caps articles selected for the trial, not HTTP
 requests: retries and redirects can produce more requests. It does not cap
 the complete parsed-batch input, telemetry for other work or normal production
-selection.
+selection. Persist each considered trial entry's disposition: selected,
+excluded by the group cap, unknown age or future publication time.
 
 The current harvester parses feed entries before article requests. Its age
 calculation is reusable, but the observation and registered Parquet path is
@@ -526,13 +525,15 @@ TypeScript-owned; the Parquet rows are its separate persisted projection.
 Only then add the age-group selector at
 `services/feed-ingest-plan/src/harvest-feeds/harvest-pool.ts`, before
 `harvestArticle`, with config declared in the native Zod config schema and
-focused tests. Record each considered entry's trial disposition, including
-selected, excluded by the group cap, unknown age and future publication time;
-unknown and future ages do not enter a group. Continue recording all actual
-work through the same observation and Parquet path. Do not add an HTTP or
-selection API field, another ranking system, a second pipeline or new age
-semantics. The earlier config-only estimate omitted this telemetry dependency;
-do not claim the full change is small until the approved prerequisite is built.
+focused tests. Persist each considered entry's disposition with the trial
+observations; keep unknown and future ages outside the groups. Continue
+recording all actual work through the same observation and Parquet path. Do
+not add an HTTP or selection API field, another ranking system or a second
+pipeline. A worker identified additional disposition-contract, native-binding,
+writer and readback work, plus a trial-only 24-36-hour harvest path. Total-cost
+acceptance awaits the owner's decision; the earlier config-only estimate
+omitted the approved telemetry dependency. Configuration placement remains
+unsettled.
 
 Owner ruling, kumarsnaveen_microsoft, 2026-10-24 UTC: approve A2 only if it is
 not too much of a configuration or coding change. The approved trial groups
@@ -544,7 +545,27 @@ applies only to bounded trial measurement, not ordinary selection or a cap on
 captured work. Unknown and future ages remain ungrouped, never assigned an
 invented age. The 25-article proposal is withdrawn. Implementation remains
 conditional on confirming total cost after the approved telemetry path is
-delivered; no further approval is needed for that telemetry.
+delivered; no further approval is needed for that telemetry. Saving each
+considered entry's disposition remains part of the trial. Total-cost
+acceptance remains open. Configuration placement remains unsettled.
+
+**Owner rulings, kumarsnaveen_microsoft, 2026-10-25 UTC:** Approve C2-C5 as
+the restriction and recovery policy above. Three consecutive confirmed
+source-side failures for the same source and evidenced endpoint/feed scope
+within the configured window pause that scope. A known success at the scope
+resets the failure streak; unknown and pipeline outcomes neither count as
+failure nor reset it. An article refusal affects only that article. A
+24-hour pause makes a check due for the next permitted planner run, but time
+alone does not restore ordinary work. Recovery requires three consecutive
+successful checks across at least two UTC dates and at least 80 percent known
+outcomes. A confirmed source-side failure resets recovery progress and starts
+a new 24-hour pause; unknown and pipeline outcomes neither count as success
+nor reset progress. Each run may schedule up to 20 recovery-check
+opportunities, at most one per source, oldest due first; ties use stable
+source ID and endpoint identity. This is not an HTTP-request budget or an
+ordinary-work cap. Recovery permits trial access only; it does not change
+catalog membership. These policy choices do not activate behavior before the
+Row 12 state contract and implementation are delivered.
 
 Adaptive polling cadence remains unresolved. I Feed names new eligible
 discoveries per completed permitted poll as the evidence and requires due
@@ -653,14 +674,16 @@ deferred to Rows 17/18.
 ## Remaining contract work
 
 - D3/D4/D8: the approved request evidence, registered state publication,
-  compatible state reading and selection score are implemented in Row 10.
-  These behaviors need no further owner decision unless a later change alters
-  concurrency, immutable observations, failure handling, stale reads or late
-  corrections.
-- D5 failure-pause/recovery policy is approved separately but is not
-  implemented or activated in this phase. Other D5 admission and polling
-  rules remain unapproved. A2's trial configuration placement and total
-  implementation cost remain unsettled.
+  compatible state reading and selection score are implemented in Row 10's
+  open PR #1720. Local focused tests, TypeScript checks and schema binding
+  pass; merge-candidate CI remains pending. These behaviors need no further
+  owner decision unless a later change alters concurrency, immutable
+  observations, failure handling, stale reads or late corrections.
+- D5: the C2-C5 restriction/recovery rules are approved but inactive pending
+  Row 12's policy-state contract and implementation. Adaptive polling formula
+  and review cadence, caller and authority remain unapproved. A2's trial
+  remains conditional on total implementation cost and configuration
+  placement.
 
 Only D5 behavior or a proposed change to an approved meaning needs another
 owner decision. Native field names, bindings and D8 trace types are

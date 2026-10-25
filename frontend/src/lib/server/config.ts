@@ -24,9 +24,16 @@ import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { routeConsolesFrom, type RouteConsoles } from '../console/route-console';
 import { REPO_ROOT } from './payload';
+import type { NumberFormatConfig } from '../number-format';
 
 export { routeConsolesFrom } from '../console/route-console';
 export type { ConsoleDefine } from '../console/route-console';
+
+const NUMBER_FORMAT_DEFAULTS: NumberFormatConfig = {
+	locale: 'en-GB',
+	si_prefix_from: 1000,
+	significant_digits: 3
+};
 
 export interface UiConfig {
 	sections: string[];
@@ -72,6 +79,7 @@ export interface UiConfig {
 	tagline: string;
 	read_mark_days: number;
 	archive_page_size: number;
+	number_format: NumberFormatConfig;
 }
 
 /** What the console needs to say whether a run went well. */
@@ -192,6 +200,7 @@ export interface SummarizeConfig {
  */
 export interface VisualsConfig {
 	min_chart_points: number;
+	number_format: NumberFormatConfig;
 }
 
 /** The band the merge line may move in, and the clamps that shape how it moves.
@@ -460,6 +469,7 @@ export interface ChartConfig {
 	palette: 'categorical' | 'sequential';
 	tick_density: number;
 	sparkline_height_px: number;
+	number_format: NumberFormatConfig;
 }
 
 export interface IconsConfig {
@@ -492,7 +502,8 @@ const DEFAULTS: UiConfig = {
 	site_title: 'yen-idhazh',
 	tagline: 'A daily digest that checks its own work.',
 	read_mark_days: 14,
-	archive_page_size: 25
+	archive_page_size: 25,
+	number_format: NUMBER_FORMAT_DEFAULTS
 };
 
 const RUN_DEFAULTS: RunConfig = {
@@ -500,7 +511,10 @@ const RUN_DEFAULTS: RunConfig = {
 	safety_ceiling_per_run: 80,
 	shard_timeout_minutes: 200
 };
-const VISUALS_DEFAULTS: VisualsConfig = { min_chart_points: 3 };
+const VISUALS_DEFAULTS: VisualsConfig = {
+	min_chart_points: 3,
+	number_format: NUMBER_FORMAT_DEFAULTS
+};
 // The same values `SimilarityThresholdConfig` declares in the contract, so a
 // checkout with no config file draws the axis the pipeline would have fitted
 // against rather than an axis this file invented.
@@ -691,7 +705,8 @@ const CHART_DEFAULTS: ChartConfig = {
 	readout_max_share: 1,
 	palette: 'categorical',
 	tick_density: 6,
-	sparkline_height_px: 36
+	sparkline_height_px: 36,
+	number_format: NUMBER_FORMAT_DEFAULTS
 };
 const ICONS_DEFAULTS: IconsConfig = {
 	size_px: 16,
@@ -715,7 +730,9 @@ interface RawConfig {
 	assist?: Partial<AssistConfig>;
 	evaluation?: Partial<EvaluationConfig>;
 	observability?: Partial<ObservabilityConfig>;
-	visuals?: Partial<VisualsConfig>;
+	visuals?: Partial<Omit<VisualsConfig, 'number_format'>> & {
+		number_format?: Partial<NumberFormatConfig>;
+	};
 	/** The one `ledger` knob the site reads. */
 	ledger?: LedgerBlock;
 	/** Where the merge line's own block sits. Nested under `same_story` rather
@@ -886,11 +903,15 @@ export function mergeLayers<T extends object>(
 	return { ...defaults, ...(legacy ?? {}), ...(current ?? {}) };
 }
 
-export function uiConfig(): UiConfig {
+export function numberFormatConfig(): NumberFormatConfig {
+	return { ...NUMBER_FORMAT_DEFAULTS, ...(raw().visuals?.number_format ?? {}) };
+}
+
+export function uiConfig(): UiConfig & { number_format: NumberFormatConfig } {
 	const ui = mergeLayers(DEFAULTS, raw().ui, appearance().digest) as DigestBlock;
 	// These share the block and must not ride along - see BUILD_ONLY_KEYS.
 	for (const key of BUILD_ONLY_KEYS) delete ui[key];
-	return ui as UiConfig;
+	return { ...ui as UiConfig, number_format: numberFormatConfig() };
 }
 
 /** How many of a day's stories a prerendered document carries.
@@ -1041,7 +1062,10 @@ export function holdoutReachDays(): number {
  * prose and set in config drifts apart the first time the config moves.
  */
 export function visualsConfig(): VisualsConfig {
-	return { min_chart_points: raw().visuals?.min_chart_points ?? VISUALS_DEFAULTS.min_chart_points };
+	return {
+		min_chart_points: raw().visuals?.min_chart_points ?? VISUALS_DEFAULTS.min_chart_points,
+		number_format: numberFormatConfig()
+	};
 }
 
 /** Where the query engine downloads its add-ons; `''` leaves the engine's built-in address.
@@ -1168,7 +1192,7 @@ export function themeConfig(): ThemeConfig {
 }
 
 export function chartConfig(): ChartConfig {
-	return { ...CHART_DEFAULTS, ...(appearance().chart ?? {}) };
+	return { ...CHART_DEFAULTS, ...(appearance().chart ?? {}), number_format: numberFormatConfig() };
 }
 
 export function iconsConfig(): IconsConfig {

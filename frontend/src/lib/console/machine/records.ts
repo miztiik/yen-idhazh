@@ -10,6 +10,7 @@ import type { SeriesInput } from '../../charts/d3/dateSeries';
 import * as queries from '../queries/machine';
 import type { PanelQuery } from '../queries/window';
 import { newestRunRows } from '../queries/shared';
+import { formatNumber, type NumberFormatConfig } from '../../number-format';
 
 export const PANEL_QUERIES: Readonly<Record<string, readonly PanelQuery[]>> = {
 	'two-clocks': [queries.twoClocksQuery, queries.twoClocksHostsQuery, queries.platformMixQuery, queries.runShardsQuery],
@@ -139,7 +140,10 @@ export function slowerMachines(rows: readonly Row[]) {
 	return { reference, typical, reading: list('read'), writing: list('write'), withoutReference };
 }
 
-export function slowestArticles(rows: readonly Row[]): { run: string | null; rows: RankedInput[]; unmeasured: number } {
+export function slowestArticles(
+	rows: readonly Row[],
+	numberFormat: NumberFormatConfig
+): { run: string | null; rows: RankedInput[]; unmeasured: number } {
 	const selected = newestRunRows(rows);
 	const run = selected.length ? String(selected[0].run_id) : null;
 	const ready = selected.flatMap((row): RankedInput[] => {
@@ -157,8 +161,8 @@ export function slowestArticles(rows: readonly Row[]): { run: string | null; row
 		return [{
 			label: `${row.item_id ?? 'unnamed article'} · ${row.source_id ?? 'source not recorded'}`,
 			value: elapsed / 1000,
-			context: [wait === null ? 'queue wait not recorded' : `waited ${(wait / 1000).toFixed(1)} s first`,
-				gap === null ? 'stage gap not recorded' : gap < 0 ? `stages overlapped by ${(-gap / 1000).toFixed(1)} s` : ''].filter(Boolean).join('; '),
+			context: [wait === null ? 'queue wait not recorded' : `waited ${formatNumber(wait / 1000, numberFormat, { si: false })} s first`,
+				gap === null ? 'stage gap not recorded' : gap < 0 ? `stages overlapped by ${formatNumber(-gap / 1000, numberFormat, { si: false })} s` : ''].filter(Boolean).join('; '),
 			...(complete && gap !== null && gap >= 0 ? { segments: [
 				...clocks.map(([label, key, token]) => ({ label, value: finiteCell(row[key])! / 1000, token })),
 				...(gap > 0 ? [{ label: 'Other', value: gap / 1000, token: '--chart-8' }] : [])

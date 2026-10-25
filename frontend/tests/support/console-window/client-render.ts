@@ -7,6 +7,7 @@ import { resolve } from 'node:path';
 import { build } from 'esbuild';
 import { compile, preprocess } from 'svelte/compiler';
 import { vitePreprocess } from '@sveltejs/vite-plugin-svelte';
+import { numberFormatConfig } from '../../../src/lib/server/config';
 
 declare global {
 	interface Window {
@@ -21,7 +22,18 @@ const kit: {
 } = svelteConfig.kit;
 const result = await build({
 	stdin: {
-		contents: `import { mount } from 'svelte';\n${components.map(([name,file]) => `import ${name} from '${file}';`).join('\n')}\nconst components = { ${components.map(([name])=>name).join(', ')} };\nexport function draw(name, props) { mount(components[name], { target: document.querySelector('main'), props }); }`,
+		contents: `import { mount } from 'svelte';
+import { NUMBER_FORMAT_CONTEXT } from './src/lib/number-format-context';
+${components.map(([name,file]) => `import ${name} from '${file}';`).join('\n')}
+const components = { ${components.map(([name])=>name).join(', ')} };
+const numberFormat = ${JSON.stringify(numberFormatConfig())};
+export function draw(name, props) {
+	mount(components[name], {
+		target: document.querySelector('main'),
+		props,
+		context: new Map([[NUMBER_FORMAT_CONTEXT, numberFormat]])
+	});
+}`,
 		resolveDir: process.cwd()
 	},
 	bundle: true,

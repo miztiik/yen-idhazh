@@ -21,6 +21,7 @@ import {
 	type HoldoutMark,
 	type ScoreWeights
 } from '../src/lib/console/holdout';
+import { formatNumber, numberFormat } from './support/number-format';
 
 const WEIGHTS: ScoreWeights = { cosineWeight: 1, fittedOn: '2026-09-18' };
 
@@ -68,8 +69,8 @@ test('a negative margin prints as a distance and never as a minus sign', () => {
 	// The raw value renders `-0.0007 BELOW`, which reads as a double negative
 	// and a typo. The word carries the direction and the figure carries the size.
 	const outcome = holdoutMargin(0.94, [mark(0.9407)]);
-	const figure = marginDistance(outcome.margin ?? 0);
-	const note = holdoutNote(outcome, holdoutState(outcome, true), 200, 0.94);
+	const figure = marginDistance(outcome.margin ?? 0, numberFormat);
+	const note = holdoutNote(outcome, holdoutState(outcome, true), 200, 0.94, numberFormat);
 
 	expect(outcome.margin).toBeLessThan(0);
 	expect(figure).toBe('0.0007');
@@ -86,10 +87,10 @@ test('the four states say four different things', () => {
 	const over = holdoutMargin(0.94, [mark(0.9407)]);
 
 	const said = [
-		holdoutNote(none, holdoutState(none, true), 0, 0.94),
-		holdoutNote(clear, holdoutState(clear, false), 1, 0.94),
-		holdoutNote(clear, holdoutState(clear, true), 1, 0.94),
-		holdoutNote(over, holdoutState(over, true), 1, 0.94)
+		holdoutNote(none, holdoutState(none, true), 0, 0.94, numberFormat),
+		holdoutNote(clear, holdoutState(clear, false), 1, 0.94, numberFormat),
+		holdoutNote(clear, holdoutState(clear, true), 1, 0.94, numberFormat),
+		holdoutNote(over, holdoutState(over, true), 1, 0.94, numberFormat)
 	];
 
 	expect(new Set(said).size).toBe(4);
@@ -107,7 +108,7 @@ test('a violation is reported before the day has ever fitted a line', () => {
 	const over = holdoutMargin(0.94, [mark(0.9407)]);
 
 	expect(holdoutState(over, false)).toBe('violation');
-	expect(holdoutNote(over, holdoutState(over, false), 1, 0.94)).toContain('would merge them');
+	expect(holdoutNote(over, holdoutState(over, false), 1, 0.94, numberFormat)).toContain('would merge them');
 });
 
 test('the violation count is the marks at or above the line, not all of them', () => {
@@ -161,7 +162,7 @@ test('a tree nobody has scored says so, and never prints four zeros', () => {
 	// THE BITE. A person types the verb that writes the committed row, so a tree
 	// where nobody has run it has none. Four zeros would read as a line that
 	// merged nothing rather than as a reading nobody took.
-	const said = scoredNote(null);
+	const said = scoredNote(null, numberFormat);
 
 	expect(said).toBe('No committed holdout score was returned in the loaded window. Run idhazh score-merge-line-holdout to write that reading down.');
 	expect(said).toContain('score-merge-line-holdout');
@@ -181,10 +182,10 @@ test('the committed row is printed with the population each count came from', ()
 		apartAndTwoStories: 3,
 		pairsUnresolved: 0,
 		labelledTwoStoryPairs: 4
-	});
+	}, numberFormat);
 
 	expect(said).toContain('2026-09-21');
-	expect(said).toContain('0.9400');
+	expect(said).toContain(formatNumber(0.94, { si: false }));
 	expect(said).toContain('claude-opus-4.6');
 	expect(said).toContain('joined 1 of the 4 pairs marked as two stories');
 	expect(said).toContain('left 117 pairs marked as one story apart');
@@ -204,7 +205,7 @@ test('pairs the tree could not score are named rather than left out', () => {
 		apartAndTwoStories: 1,
 		pairsUnresolved: 98,
 		labelledTwoStoryPairs: 4
-	});
+	}, numberFormat);
 
 	expect(said).toContain('98 could not be scored');
 	expect(said).toContain('no longer published');
