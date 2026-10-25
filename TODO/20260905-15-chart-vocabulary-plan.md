@@ -3,7 +3,7 @@
 **Last Updated**: 2026-09-05
 **Level**: 3 (the type vocabulary in config, and one compiler template per type)
 
-**Chain**: previous [`20260905-14-sufficiency-bar-plan.md`](20260905-14-sufficiency-bar-plan.md) | next [`20260905-16-composition-vocabulary-plan.md`](20260905-16-composition-vocabulary-plan.md).
+**Chain**: previous work delivered in the [chart contract](../docs/architecture/publishing/where-a-drawing-becomes-pixels.md) | next [`20260905-16-composition-vocabulary-plan.md`](20260905-16-composition-vocabulary-plan.md).
 **Reference**: [`20260902-visual-planner-pseudo-plan.md`](20260902-visual-planner-pseudo-plan.md) - O13, rows 38, 39, 41, 48, 49, sections 7.2, 12.8 X1, 12.12 G26.
 
 Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delegates a row where delegation pays; keep parallel N = 4 rows in flight, refilling a slot as soon as a worker returns and never waiting on a merge; consult a persona only where two answers would lead to different code; AUTO-merge on green gates; honor the ESCALATE triggers in section 0. AUTHOR-AND-STOP until the user authorizes.
@@ -181,5 +181,4 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 ## See also
 
 - [`20260902-visual-planner-pseudo-plan.md`](20260902-visual-planner-pseudo-plan.md) - the decision record this group executes.
-- [`20260905-14-sufficiency-bar-plan.md`](20260905-14-sufficiency-bar-plan.md) - the previous plan.
 - [`20260905-16-composition-vocabulary-plan.md`](20260905-16-composition-vocabulary-plan.md) - the next plan.
