@@ -146,6 +146,11 @@ Judge useful first-screen content and access to facts, not total page height. A 
 
 Use `fadeIn` for arriving content, `shimmer` for the console's reserved loading box, and `toastIn` for a notice. Animate transform, opacity or paint-only properties, not layout.
 
+Reader chart shells stay static. The browser test inventories running animations on
+the shared reader page, before and after loading its item stream and after navigation;
+it also repeats the check with reduced motion. It must not gain one animation per
+reader visual or chart type.
+
 Reduced motion removes movement and shimmer gradients; setting a duration to zero is insufficient if it leaves an interaction transform or a frozen bright band. Do not remove transforms that position an element rather than animate it.
 
 Do not use spinners. Keep existing reading content available while more arrives; show a slow or failed fetch as a concise state with retry. Console panels reserve their own room and may use a loading skeleton. Show progress numbers only when a real measurement supplies them.
