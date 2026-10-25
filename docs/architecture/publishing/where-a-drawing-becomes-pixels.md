@@ -163,13 +163,15 @@ further up against the 1 GB site cap.
 ## The contract, and the one field the day payload gains
 
 `VisualData` in `backend/idhazh/contracts/visual_data.py` is the shape of that file.
-Three parts.
+The data and framing travel together.
 
 | Part | What it is |
 | --- | --- |
 | `item_id`, `type` | Which story, and which of the declarable forms. A new type costs an enum member, never a new document format. |
 | `marks` | **A flat pool, not a list of rows.** Each mark carries what it says (`text`), what it measures (`value` with its `unit`), and where that came from - `element_id` for a slice of the article, or `derived` for a chain through the four-function allow-list. Exactly one of the two, checked. |
 | `encoding` | Which marks fill which channel, by id, mirroring `PlanEncodings` role for role. Every role is a key and an unused one is empty. |
+| `title`, `caption` | Nullable, sanitized plan prose. The browser writes text nodes, never markup. |
+| `emphasized_mark_id` | Exactly one measured mark, resolved from the plan's selected elements. Its bar has a distinct fill, a dashed outline and a stronger name. |
 
 **The pool is flat because a row is a geometry decision.** A bar is a name and a length, a scatter
 point is two measured axes, a histogram bar is a bin - shape them into rows here and this contract
@@ -190,7 +192,7 @@ second place, the two disagreed on 2026-09-05T18:00, and what disagreeing looks 
 seat is a page drawing yesterday's numbers under today's rules. A version in one place can be wrong.
 A version in two places can be *inconsistent*, and nothing downstream can tell which one to believe.
 
-The reader's page holds the set of renderers it knows and refuses anything else. That is what lets
+The reader's page accepts only the current renderer and refuses anything else. That is what lets
 the shape move at all: a later build publishes a later stamp, an older cached page does not draw it,
 and nobody gets a chart whose data means something other than what the picture says.
 
@@ -264,14 +266,14 @@ that order. Re-ranking them here would be the compiler deciding what the compari
 plan into bars because bars are what we have would publish a picture nobody planned, so every other
 member of the vocabulary raises `CompileError` naming itself. The rest of the types are plan 12's.
 
-**The alt text is assembled from the same figures the marks carry**, so the sentence and the
-picture cannot disagree. That is the reason `alt_text` is not a field the model may write - and
-since 2026-09-13 it is also the whole of what a reader with JavaScript off receives.
+**The browser's accessible name includes every original figure, the title, the caption and
+which bar is highlighted.** Converted figures also carry their original source text in
+`VisualMark.source_text`. The compiler's shorter alt text remains on the decision, but is
+not the browser's complete description. Without JavaScript no chart is drawn.
 
-**No `title` and no `caption` reach the wire.** The plan carries both and the published marks carry
-neither, because publishing the compiled result must not become the hole an authored string gets
-through. The drawn title the old renderer put above the bars is therefore gone, and plan 12 row #5
-is the row that gives a caption a home.
+The compiler sanitizes the plan's title and caption before publishing them. Absent or
+sanitized-empty framing stays null and takes no space. No framing becomes markup, a path
+or a URL. Appearance stays with the site's tokens.
 
 **A plan this build cannot compile leaves the item decided to nothing, and that is the contract's
 ruling rather than a shortcut.** `render_failed` means marks were compiled and their file did not
@@ -295,6 +297,31 @@ reads back the marks the backend oracle compiled. Driven from the canary and nev
 The hand-written one carries the case a compiled plan cannot - bars with no unit on their axis - and
 a third story is planned with no file, which is what keeps a visual that is not a published chart on
 the day.
+
+## Design rationale
+
+Owner ruling, kumarsnaveen, 2026-10-24 UTC: replace the chart payload and renderer
+without backward compatibility. The renderer stamp is `2026-10-24`; the page
+has one reader, not two styles. This supersedes the earlier no-bump policy.
+Older incompatible chart data is refused and those stories remain without
+charts; their text remains. The old SVG read, inlining and markup checks are
+removed. No historical corpus is deleted or rewritten. This is the named
+exception to `CLAUDE.md` section 11, not a general migration policy.
+
+Owner ruling, kumarsnaveen, 2026-10-24 UTC: omit a chart unless the plan selects
+exactly one distinct displayed bar. Resolve every annotation through category,
+quantity or a derived quantity's source inputs, then deduplicate references
+to the same bar. Zero selected bars, several distinct selected bars or a
+reference with no displayed bar explicitly refuse compilation. Story text
+still publishes. No largest-value or first-bar fallback invents a priority.
+The general plan vocabulary remains zero to four element references; the
+current bar compiler requires one resolved bar. This may reduce chart count
+for otherwise valid plans, which the owner accepted instead of invented emphasis.
+
+Framing changes no values, mark count, channel order or provenance. The flat
+mark pool stays intact; the emphasized id points to its measured member, not a
+second copy. The existing compiler and degrade path own the new check, so the
+page does not make a second editorial choice.
 
 ## Rejected alternatives
 

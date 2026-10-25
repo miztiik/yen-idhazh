@@ -267,6 +267,12 @@ Every such payload is declared before logic is written, under the native contrac
 - **A changelog entry is one line. Five entries at most: the four newest changes, then one pointer saying the rest is in git.** `change` says what moved. Neither carries a measurement, a date, an incident, a plan row or a person's name - a reading belongs in the instrument log (Guardrail #10) and a rationale belongs in the living doc it impacts (Guardrail #4). **An entry that will not fit one line is the test:** either the reason is worth a `## Design rationale` section in `docs/`, and goes there with one line left here pointing at it, or it was never worth keeping. Older entries are deleted, not archived - git is the archive, and a pointer to the file's history beats a hash that rots.
 - A breaking change - a removed field, a retype, a shifted meaning - ships its read-side migration in the same commit. **A payload written by yesterday's run that today's build cannot read is a contract break and a release blocker.**
 
+**Chart exception (kumarsnaveen, 2026-10-24 UTC):** The chart payload and browser
+renderer move forward together without migration or compatibility readers.
+Only the current renderer is accepted. Older incompatible chart data is
+refused; those stories retain their text and have no chart. No historical
+corpus is deleted. Schema stamps and changelogs still apply.
+
 What the base model enforces, how a same-day revision extends the stamp, which surfaces this covers, and the one model that pins a published key while its Python name moves: [`docs/architecture/contracts/schemas.md`](docs/architecture/contracts/schemas.md).
 
 ## 12. Published-Site Verification (Browser Smoke)

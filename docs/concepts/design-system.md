@@ -103,6 +103,15 @@ charts or repeat the visual validator's mark-count limits.
 
 The accessible description and visible marks come from the same drawing data. An item chart is one tab stop whose name includes every bar, its value and the unit. Do not require a keyboard user to tab through every mark in a long story stream. Compare the complete pointer-visible and keyboard-accessible fact sets in tests.
 
+A chart shows its title above the marks and its optional caption below them.
+Both are untrusted text, never markup. Exactly one selected bar takes the
+second chart token, a dashed outline and a stronger name; colour is not its
+only cue. Neither emphasis nor framing changes the values or their order.
+The accessible name includes the framing, the highlighted bar and original
+source figures for converted values. Missing framing takes no reserved space.
+The [chart contract](../architecture/publishing/where-a-drawing-becomes-pixels.md#design-rationale)
+owns the dated owner rulings and the cost of refusing old or ambiguous charts.
+
 ### A control that needs a script is not left on the page without one
 
 Hide or disable script-dependent controls until they can act. Provide a truthful no-script state, and retain working navigation and native disclosure where available. Do not promise that fetched charts exist without JavaScript or leave an input that accepts typing but does nothing.

@@ -35,7 +35,7 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 | 2 | The drawing takes the width it is given | 1b | C | DONE #716 | p12-r2 | #716 | worker |
 | 3 | Numbers a reader can say out loud | 1b | C | IN-FLIGHT | shared-number-formatting | - | worker |
 | 4 | The smallest reader label stays readable | 2, 3 | D | DONE | reader-label-readability | - | worker |
-| 5 | A caption, and one mark that lands first | 4 | E | PENDING | - | - | - |
+| 5 | A caption, and one mark that lands first | 4 | E | DONE | chart-captions-and-emphasis | - | worker |
 
 **Row #1 became rows #1a and #1b on 2026-09-13, and the plan gained a group.** The owner ruled
 that the reader's browser draws the chart and the pipeline never does
@@ -215,7 +215,7 @@ deletion plus a drawing over data already on the wire.
 - **Files touched:** `frontend/src/lib/components/ItemVisual.svelte`, `frontend/src/lib/visual/bar.ts`, `backend/idhazh/contracts/visual_data.py` (new optional fields, version stamp, changelog), `backend/idhazh/render/chart.py` (publishes them from the plan), `frontend/src/lib/payload/types.ts` (hand copy), `frontend/src/lib/payload/drawing.ts` (shape check), `backend/tests/test_render.py`, `backend/tests/contracts/`, `tests/fixtures/contracts/visual-data/`, `frontend/tests/visual-legibility.spec.ts` (the annotation assertion joins the row #4 case), `docs/concepts/design-system.md`
 - **Acceptance gates:** as row 4.
 - **Oracle:** Every published visual on the canary day's page has exactly one annotated mark whose computed style differs from its siblings in at least one channel, asserted in one browser case.
-- **Open before dispatch (owner decision, Level 5):** Bumping `RENDERER_VERSION` either makes older drawings refused, because `drawing.ts` accepts one version, or draws them in two styles on one page if both versions are accepted. Row #1b's decision 6 forbids both. Recommendation: no bump. Make `title`, `caption` and the annotation optional; a day without them draws as it does now, and the oracle applies to days compiled after this row.
+- **Settled by owner, kumarsnaveen, 2026-10-24 UTC:** Replace the chart payload and renderer without backward compatibility. Older incompatible charts are refused; story text remains. Resolve and deduplicate annotation references to displayed bars; omit a chart unless exactly one distinct bar is selected. No invented emphasis or compatibility reader. The canonical ruling and cost are in [where a drawing becomes pixels](../docs/architecture/publishing/where-a-drawing-becomes-pixels.md#design-rationale), with the migration exception in `CLAUDE.md` section 11.
 
 ### Decisions
 

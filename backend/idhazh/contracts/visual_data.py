@@ -8,13 +8,8 @@ the compiler turns plan plus elements into the data and its shape, and this is
 that data - the last thing the pipeline writes and the first thing the drawing
 code reads.
 
-**It carries the data and its shape, and nothing else.** No geometry, no
-authored prose, no colour, no width. `VisualPlan` refuses all four on the way in
-and publishing the compiled result must not become the hole one gets through
-(owner, 2026-09-13). What travels is what the compiler cut or derived from Tier
-1 elements, so the strictest thing that can be said about a drawn figure is
-still true after it is published: the article wrote it, or the four-function
-allow-list computed it from figures the article wrote.
+It carries data, safe plan framing and one emphasized measured mark, never
+geometry, colours or markup. Titles and captions remain untrusted text.
 
 **Marks are a flat pool and the encoding names which of them fill which
 channel.** That is what makes a new visual type cost an enum member rather than
@@ -47,7 +42,13 @@ from idhazh.contracts.base import (
 )
 from idhazh.contracts.derived import DerivedNumber, DerivedUnit, DerivedValue
 from idhazh.contracts.element import ElementId
-from idhazh.contracts.visual import MAX_IDS_PER_ROLE, EncodingRole, VisualType
+from idhazh.contracts.visual import (
+    MAX_IDS_PER_ROLE,
+    EncodingRole,
+    PlanCaption,
+    PlanTitle,
+    VisualType,
+)
 
 #: The date-stamp of the drawing contract: the compiler that writes this data
 #: and the code that turns it into pixels, together. It is stamped by code and
@@ -59,7 +60,7 @@ from idhazh.contracts.visual import MAX_IDS_PER_ROLE, EncodingRole, VisualType
 #: committed SVG is a fixed record of what a reader saw on a given day, and a
 #: spec plus drawing code can be redrawn differently by a later change with
 #: nothing in the payload to show it moved. This field is what shows it.
-RENDERER_VERSION: Final = "2026-09-13"
+RENDERER_VERSION: Final = "2026-10-24"
 
 #: How a mark is addressed inside its own file. Local to one visual and never an
 #: identity anything outside it holds, so it is short and positional rather than
@@ -114,6 +115,9 @@ class VisualMark(Model):
             "What `value` measures. Null on a naming mark, and null on a count, which "
             "measures nothing."
         )
+    )
+    source_text: UntrustedLine | None = Field(
+        description="Original source figures when arithmetic changes the displayed value."
     )
     element_id: ElementId | None = Field(
         description="The Tier 1 element this mark was cut from. Null on a derived mark."
@@ -209,6 +213,11 @@ class VisualData(Contract):
 
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-10-24",
+            change="Publish safe framing, one emphasized mark and original computed inputs.",
+            why="Framing and reading priority travel with the figures they explain.",
+        ),
+        ChangelogEntry(
             version="2026-09-13T20:00",
             change="Initial shape: the marks with their values and provenance, the encoding.",
             why="The reader's browser draws the chart, so it needs the marks rather than an SVG.",
@@ -231,6 +240,11 @@ class VisualData(Contract):
             "page refuses a version it does not know, so a later change that would move "
             "pixels cannot redraw an older day without saying so."
         )
+    )
+    title: PlanTitle | None = Field(description="Sanitized plan heading, as untrusted text.")
+    caption: PlanCaption | None = Field(description="Sanitized plan framing, as untrusted text.")
+    emphasized_mark_id: MarkId = Field(
+        description="The single measured mark the reader should notice first."
     )
     marks: list[VisualMark] = Field(
         min_length=1,
@@ -267,4 +281,8 @@ class VisualData(Contract):
         idle = sorted(held - set(drawn))
         if idle:
             raise ValueError(f"a mark no channel draws: {idle}")
+        if self.emphasized_mark_id not in self.encoding.quantity:
+            raise ValueError("the emphasized mark must be a displayed quantity")
+        if self.renderer_version != RENDERER_VERSION:
+            raise ValueError("the renderer version is not current")
         return self

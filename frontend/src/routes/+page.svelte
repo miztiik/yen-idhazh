@@ -35,18 +35,8 @@
 	let arrived = $state<DayForPage | null>(null);
 	let reported = $state<DayStatus>('loading');
 
-	/** The seed until the fetch lands, the whole day after it - **with the seed's
-	 * drawings kept**.
-	 *
-	 * A served day carries `visual.path` and never `visual.markup`: the markup is
-	 * read off disk at build time and inlined into the document, and `DAY_FIELDS`
-	 * does not publish it. So replacing the seed with the fetched day outright
-	 * drops the drawings the reader already has on screen, and the browser fetches
-	 * every one of them again - measured on the canary, three SVG requests for
-	 * three pictures already in the document.
-	 *
-	 * The seed's facts are the day's facts either way, so nothing the header says
-	 * moves across the seam. */
+	/** Keep seeded story identities when the rest arrives, so mounted charts
+	 * retain their fetched data rather than requesting it again. */
 	const day = $derived.by(() => {
 		if (arrived === null) return data.day;
 		const seeded = new Map((data.day?.items ?? []).map((item) => [item.item_id, item]));

@@ -35,6 +35,7 @@ from idhazh.contracts.visual_decision import (
     VisualState,
 )
 from idhazh.render.chart import CompileError, compile_bar
+from idhazh.sanitize import sanitize
 
 LOG: Final = logging.getLogger("idhazh")
 
@@ -212,8 +213,10 @@ def render_planned_visual(
         raise ValueError("a planned visual starts as an item decided to nothing")
     try:
         compiled = compile_bar(plan, table, visuals=visuals)
-    except CompileError:
-        return decision
+    except CompileError as error:
+        return VisualDecision.model_validate(
+            decision.model_dump(mode="json") | {"rationale": sanitize(str(error))}
+        )
     planned = VisualDecision.model_validate(
         decision.model_dump(mode="json")
         | {

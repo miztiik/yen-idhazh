@@ -58,6 +58,8 @@ const FIGURE_GAP = 8;
 
 /** One bar, placed. Every number here is a CSS pixel on the reader's screen. */
 export interface Bar {
+	emphasized: boolean;
+	sourceText: string | null;
 	/** The element's own characters, cut and sanitized by the compiler. */
 	name: string;
 	/** The figure as the article states it, which is what a reader reads. */
@@ -76,6 +78,8 @@ export interface Bar {
 
 /** A whole chart, placed. */
 export interface Drawing {
+	title: string | null;
+	caption: string | null;
 	/** The room the caller measured, which every mark below is placed inside. */
 	width: number;
 	height: number;
@@ -158,6 +162,8 @@ export function drawBars(data: VisualData, room: number, formatNumber: NumberFor
 		const height = Math.round(band.bandwidth() * BAR_SHARE);
 		const drawn = Math.round(share * span);
 		return {
+			emphasized: figures[index].mark_id === data.emphasized_mark_id,
+			sourceText: figures[index].source_text,
 			name: named.text ?? '',
 			stated: figures[index].value ?? '',
 			displayed: formatNumber(value, { si: true }),
@@ -172,6 +178,8 @@ export function drawBars(data: VisualData, room: number, formatNumber: NumberFor
 	});
 
 	return {
+		title: data.title,
+		caption: data.caption,
 		width,
 		height: names.length * ROW_HEIGHT + AXIS_BAND,
 		baseline: names.length * ROW_HEIGHT,
@@ -205,6 +213,10 @@ export function drawBars(data: VisualData, room: number, formatNumber: NumberFor
  */
 export function statedBars(drawing: Drawing): string {
 	const tail = drawing.unit ? ` ${drawing.unit}` : '';
-	const facts = drawing.bars.map((bar) => `${bar.name} ${bar.stated}${tail}`);
-	return `Bar chart. ${facts.join('; ')}.`;
+	const facts = drawing.bars.map((bar) =>
+		`${bar.name} ${bar.stated}${tail}${bar.emphasized ? ' (highlighted)' : ''}` +
+		(bar.sourceText ? ` (source: ${bar.sourceText})` : '')
+	);
+	return [drawing.title, `Bar chart. ${facts.join('; ')}.`, drawing.caption]
+		.filter(Boolean).join(' ');
 }
