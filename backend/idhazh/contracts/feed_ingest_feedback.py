@@ -13,6 +13,7 @@ from idhazh.contracts.base import (
     Sha256,
     Slug,
     Timestamp,
+    canonical_json,
 )
 from idhazh.contracts.feed_ingest_candidate import NonEmpty
 
@@ -65,6 +66,11 @@ class FeedIngestOperationalStateRow(Contract):
 
     @model_validator(mode="after")
     def validate_state(self) -> Self:
+        if self.version == "2026-10-25" and (
+            "snapshot_source_ids" in self.model_fields_set
+            or "snapshot_sha256" in self.model_fields_set
+        ):
+            raise ValueError("historical operational state has no snapshot completeness fields")
         if (self.snapshot_source_ids is None) != (self.snapshot_sha256 is None):
             raise ValueError("snapshot source roster and digest are available together")
         if self.snapshot_source_ids is not None and (
@@ -108,6 +114,13 @@ class FeedIngestOperationalStateRow(Contract):
         elif self.request_waste_ratio is not None or self.operational_penalty is not None:
             raise ValueError("unqualified state has no request estimate or score adjustment")
         return self
+
+    def to_json(self) -> str:
+        data = self.model_dump(mode="json")
+        if self.version == "2026-10-25":
+            data.pop("snapshot_source_ids")
+            data.pop("snapshot_sha256")
+        return canonical_json(data)
 
 
 class OperationalStateRead(Model):
