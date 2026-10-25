@@ -1,6 +1,6 @@
 # The model boundary
 
-**Last Updated**: 2026-09-21
+**Last Updated**: 2026-10-24
 
 How the summarizer stays generic while the model behind it changes. This page
 owns the shape of the boundary - what crosses it, which side each fact lives
@@ -61,29 +61,13 @@ flowchart LR
   ENTRY -.->|declares| M1
   ENTRY -.->|declares| O2
 
-  subgraph meas["Performance measurement - manual dispatch, never a merge gate"]
-    direction TB
-    B1["case 1 - llama-bench<br/><i>raw prefill and decode, no server</i>"]
-    B2["case 2 - llama-server + real work<br/><i>samples drawn from corpus/holdout.txt</i>"]
-    B1 --> B2
-  end
-
-  REC["docs/reference/models/&lt;slug&gt;.md<br/><i>one current reading of each quantity</i>"]
-
-  ENTRY -.-> B1
-  M2 -.->|"tokens a second, resident set"| B2
-  OUT -.->|"seconds an item"| B2
-  B2 -.->|"a person transcribes"| REC
-
   style shim_in fill:#eef2ff,stroke:#4c6ef5
   style shim_out fill:#eef2ff,stroke:#4c6ef5
-  style meas fill:#fff4e6,stroke:#f08c00
   style ENTRY fill:#ebfbee,stroke:#2f9e44
 ```
 
 Dotted lines carry no data at run time. They are declarations - the entry
-saying what the shims must do - and measurement taps, which only exist during a
-dispatched benchmark.
+saying what the shims must do.
 
 ## Which side each fact lives on
 
@@ -95,14 +79,15 @@ design.
 | How a turn opens and closes | Envelope, per model | Different between model families; nothing this project wrote decides it |
 | How an assistant reply opens | Envelope, per model | A generation prompt ends with more than a role header, and what it ends with is the model's |
 | Whether a system role exists, and where its text goes when it does not | Envelope, per model | A turn topology. The bytes do not change; their address does. `turns.system_role` is a closed choice of two, and `turns.system_joiner` is what separates the two blocks when they share a turn |
-| Which template keyword turns reasoning off | Envelope, per model | It is a variable name belonging to that model's template. `turns.thinking_kwarg` carries it, and null means the template reads none |
+| Which template keyword turns reasoning off | Envelope, per model | `thinking_kwarg` explicitly names the switch or is null. A template can always reason without a switch; `thinking_close` still selects the separate reasoning span |
+| Additional template variables | Envelope, per model | `chat_template_kwargs` is sent unchanged during derivation and chat requests, so the template that was checked is the template that runs |
+| Legacy inline reasoning delimiters | Envelope, per model | `reasoning_delimiters` is an explicit nullable pair. No parser chooses syntax from a model name |
 | The window, the batch sizes, the budgets | Envelope, per model | Measured against those weights, and pinned to their digest |
 | **Which architecture the weights carry** | Envelope, per model | `arch` is the `general.architecture` key written inside the GGUF - `qwen35` for the configured weights, `gemma4` for a Gemma 4 entry. Required with no default: an entry that inherits the incumbent's architecture is claiming something nobody checked. Case 4 reads the key back out of the file the server was pointed at, a few kilobytes of header rather than a second download, and refuses when the two disagree - the one case where the digest, the alias and the filename all agree and only the words get worse |
 | **Which weights the settings were set for** | Envelope, per model | `declared_for` holds the entry's own `sha256`, and load refuses a mismatch. The failure it stops is five strings edited in place - repo, file, revision, digest and id - with the settings underneath them untouched. Not hypothetical: the summarizer moved from the 8B to the 9B on 2026-08-27 and the settings block did not move with it. The markers need no such pin since 2026-09-21, because the server derives them from the template the weights carry |
 | **Which control tokens the sanitizer strips** | **Content, global** | A forged turn is written in whatever syntax the attacker picks, so a pattern that knew only the model in use is a pattern an attacker walks around. See below |
 | **The instructions** | **Content, global** | See below |
 | **The output schema** | **Content, global** | It is the one control that survives an injection, and a per-model control is a per-model hole |
-| **Every gate threshold** | **Content, global** | A gate never moves to let a candidate through |
 
 ### Why the control tokens are global and the refusal is not
 
@@ -134,37 +119,15 @@ of dialogue out of an article.
 
 ### Why the instructions never become per-model
 
-Three reasons, and the first is mechanical.
-
-**The run stamp would go blind.** `prose_changed_alone` reports nothing
-whenever the model digest moved. Per-model wording means a prompt edit made
-*because* the new model needed it is permanently invisible - hidden inside the
-swap that carried it. The one alarm that survives a model change stops working
-on exactly the day it is needed.
-
-**Qualification would stop measuring one thing.** The ten gates compare two
-models on one frozen corpus. Different words on each side measures two changes
-and reports one number.
-
-**A candidate could be fitted to the gates.** A model that needs different
-instructions to score well is a model that failed, not a model that needs a
-file. Keeping the words fixed is what makes the comparison honest.
+The run stamp would go blind. `prose_changed_alone` reports nothing whenever
+the model digest moved. Per-model wording means a prompt edit made *because*
+the new model needed it is permanently invisible - hidden inside the swap that
+carried it. The one alarm that survives a model change stops working on exactly
+the day it is needed.
 
 A model with no system role is the case that looks like an exception and is
 not. The same bytes go to a different address: `turns.system_role` says which
 address, and `backend/idhazh/prompts/*.txt` is untouched either way.
-
-**The two stamps disagree about whether they can see that, and the difference
-is the reason the envelope is declared rather than inferred.** The digest run's
-`prompt_sha256` renders both turns through the envelope, so a placement change
-moves it exactly as a reworded instruction would - measured 2026-09-14: the
-same two turns render 28 bytes shorter under the fold and the digest moves. The
-qualification run's stamp does not. `stages/qualify.py` hands `build_inputs`
-the content-only digest from `summarize.prompt_inputs`, which takes no envelope
-and carries no turn marker, so nothing on `turns` can move it - and the ten
-gates are what adopt a model. A candidate compared through a digest that is
-blind to how its turns were written needs the envelope stated on the entry and
-checked against the running server, which is case 1 of the start-up proof.
 
 ## Two shapes, and which one a run writes down
 
@@ -199,9 +162,8 @@ template at server start and written nowhere, and the two that cannot be -
 
 The envelope reached the entry on 2026-09-13. Before that it was one global
 file, `backend/idhazh/prompts/turn_markers.json`, with no model key - so a
-model whose turns differ was a source edit, and one process holding two
-candidates would have rendered both with the first one's markers. The lookup is
-keyed by the entry now. Config load checked that path for a returning file
+model whose turns differ was a source edit. The lookup is keyed by the entry
+now. Config load checked that path for a returning file
 until 2026-09-21; the check went because nothing can recreate the file, and a
 guard against an event with no mechanism is nine lines nobody can trigger.
 
@@ -230,6 +192,20 @@ reply into our schema, and a grammar is a runtime control that behaves
 identically on any model. So only two things on the way out are model-shaped:
 which envelope the runtime wrapped the reply in, and whether a reasoning block
 is present and has to be dropped before anything reads it.
+
+`parse_completion` separates reasoning once, before a label, summary or recovery
+parser reads the answer. It reads the runtime's `reasoning_content` channel and
+only parses an inline prefix when the selected entry declares its delimiters.
+The transient `reasoning` and `inline_reasoning` fields remain distinct, so
+existing runtime-channel flags and inline-word counts keep their meanings.
+Delimiter text inside a JSON answer stays content. An unclosed prefix supplies
+no answer and cannot become a published summary. Separate reasoning spans keep
+their existing answer-only continuation and combined cost accounting.
+
+The artifact analyzer does not load today's model to explain an old response.
+For a historical inline reply, pass that response's pair with
+`--reasoning-delimiters '<opening>' '<closing>'`; the raw response and its
+recorded model identity stay unchanged.
 
 The envelope is also where the runtime says why the decode stopped, and the two
 routes spell that differently: the chat route writes `finish_reason`, the
@@ -348,107 +324,15 @@ bookkeeping states the property the bookkeeping is *for* - here, that the prefix
 was not re-read - and never a number the runtime is free to choose. Anything
 finer is a second implementation of the runtime, kept in a docstring, drifting.
 
-## The lifecycle of a model
-
-```mermaid
-flowchart LR
-  C["a candidate<br/><i>repo at a pinned commit, file, expected digest</i>"]
-  B["benchmark<br/><i>does it fit?</i>"]
-  Q["qualify<br/><i>is it good?</i>"]
-  AD["adopt<br/><i>one line in config/idhazh.json</i>"]
-  RV["revert<br/><i>the same line, back</i>"]
-  X["rejected<br/><i>the dossier records why</i>"]
-
-  C --> B
-  B -->|"fits"| Q
-  B -->|"does not fit"| X
-  Q -->|"ten gates pass, a person decides"| AD
-  Q -->|"any gate fails"| X
-  AD -.->|"quality drops in the archive"| RV
-
-  style AD fill:#ebfbee,stroke:#2f9e44
-  style X fill:#fff5f5,stroke:#e03131
-```
-
-The benchmark is cheap and answers whether a model fits the runner. The
-qualification is expensive and answers whether its summaries are good. They are
-not chained, because chaining spends the expensive one on candidates already
-dead.
-
-Reverting costs one line because adopting never modified the previous model's
-file. Its weights cache key is its own digest, so that cache is still valid.
-
-**A file the pointer does not name is still a file it can name**, so every entry
-under `config/models/` is loaded and checked by
-`backend/tests/contracts/test_model_registry.py` rather than only the active
-one. Before that, an alternative sat unvalidated until the day somebody switched
-to it - and that day is a pipeline run.
-
-**A second set of weights that drafts ahead of the first is not offered.** It
-was until 2026-09-21, as `models.summarizer.draft`, and the mechanism's whole
-claim is that it cannot change a word: the target verifies every drafted token
-and rejects any it would not itself have produced. Two paired dispatches refused
-that claim on nine articles of nine - each case reproduced its own summaries
-byte-identically across its repeats, so the difference was the head rather than
-the sampler. A speed-up that rewrites the summary is a model change, priced on
-quality, and nobody had a reading that said it was a better model. So the field,
-the five `--spec-*` flags and the second download went together, and a run
-record that names a head still reads through the migration on `ModelRef`.
-
-## The two measurement cases
-
-Both are manual dispatch. Neither gates a merge: the fastest and slowest shard
-of one run differ by up to 4.35 times on prefill, so a merge gate on a
-throughput number is a gate on the runner lottery.
-
-### Case 1 - llama-bench
-
-Raw prefill and decode rates at several prompt lengths, against a pinned
-runtime build verified by digest. No server, no pipeline, no prompt.
-
-It answers one question well: how fast does this model move tokens on this
-class of machine. It cannot answer seconds per item, and it never observes a
-resident set, because it never starts the server the pipeline talks to.
-
-### Case 2 - llama-server with real samples
-
-The server starts through the same argv builder production uses, at the
-candidate's declared window, and real pipeline work runs against it.
-
-**The samples come from `corpus/holdout.txt`**, which lists item digests held
-out of training. Holdout rows are the only honest source: benchmarking a
-fine-tuned model on rows it was trained on measures memorisation rather than
-summarization. The rows themselves are in `corpus/corpus.jsonl`, and
-`corpus/corpus.meta.json` records how many models contributed - a count worth
-reading before training, because a swap makes the corpus mixed-teacher.
-
-What case 2 records that case 1 cannot:
-
-| Quantity | Why the server is needed |
-| --- | --- |
-| Seconds an item | The whole two-call sequence, not a token rate |
-| Peak resident set | `llama-bench` never starts the process whose memory matters |
-| Model load time, cold and warm | The first day after a swap is cold on every shard at once |
-| Prompt-cache hit between calls | Only observable on the real call sequence |
-| Output digests | Determinism, by replaying the same rows |
-
-Case 2 never scores quality. The ten gates judge quality and they live
-elsewhere; a scorer inside a bench becomes the thing that selects, and the
-alarm stops being able to detect drift.
-
-### Where a reading lands
-
-A dispatched run uploads an artifact, and an artifact is deleted on a retention
-clock - so a decision taken weeks later cannot cite one. The run therefore
-emits the body of a model page, numbers filled in, and a person commits it to
-`docs/reference/models/<slug>.md`. That page carries one current reading of
-each quantity rather than a log of runs, and links to the benchmark records
-behind it.
-
-CI does not commit that page. Doc routing is reviewed in a pull request, and
-every commit CI makes lands in the range the scheduled prune has to rewrite.
-
 ## Design rationale
+
+**Tests describe behavior, not the selected model.** Generic tests supply
+explicit turn markers, reasoning keywords and server flags. A new valid model
+filename needs no fixture entry.
+Recorded protocol responses keep the runtime and weights provenance captured
+with them; current production settings must not change their inputs. Runtime
+marker derivation and sanitizer refusals remain covered with fixed inputs,
+including markers the boundary cannot safely accept.
 
 **One complete file per model, never a merge.** A layered shape - global
 defaults with per-model overrides - makes the same swap a one-line edit, so the
@@ -518,13 +402,11 @@ a complete-looking one with a file missing - which llama-server reports at load
 rather than at fetch, on a different machine, hours later.
 
 **What is refused is an entry declaring two companions to a surface that can
-publish one.** The measurement jobs still republish a single companion's four
-refs for their own inline downloads, and that projection names the count and the
-files rather than truncating in silence.
+publish one.**
 
 **This page describes the boundary rather than tracking work**, so it changes
-when the shape changes. [Swap the Summarizer
-Model](../../how-to/evaluate-new-summarizer-model.md) is the procedure.
+when the shape changes. The model file and its settings are described in
+[model-file.md](../../concepts/config/model-file.md).
 
 ## See also
 
@@ -533,6 +415,5 @@ Model](../../how-to/evaluate-new-summarizer-model.md) is the procedure.
 - [../contracts/schemas.md](../contracts/schemas.md) - how a persisted shape is declared, versioned and migrated.
 - [../contracts/determinism.md](../contracts/determinism.md) - what the run stamp records, and what it cannot see.
 - [../../concepts/config/model-file.md](../../concepts/config/model-file.md) - the runtime settings and turn markers declared for one set of weights.
-- [../../how-to/evaluate-new-summarizer-model.md](../../how-to/evaluate-new-summarizer-model.md) - the runbook for benchmarking, adopting and reverting.
 - [../../how-to/fine-tune-a-model.md](../../how-to/fine-tune-a-model.md) - the training corpus, and what a base swap does to an adapter.
 - [../../reference/pipeline-cost.md](../../reference/pipeline-cost.md) - the instrument log.

@@ -2,18 +2,30 @@
 import { z } from "zod";
 import {
   DiversityMetricRowSchema,
+  DocumentObservationRecordSchema,
   DropReasonCountSchema,
   FEED_INGEST_AUDIT_VERSION,
   FeedIngestDispatchSchema,
+  FeedIngestOperationalStateRowSchema,
   LegacyArticleAssessmentSchema,
   SourceRunRecordSchema,
-  LedgerCompletionEvidenceSchema, SOURCE_RUN_VERSION,
-  PLANNING_OBSERVATIONS_VERSION, SOURCE_RELIABILITY_VERSION,
-  PreviousFeedIngestDispatchSchema, PreviousObservedFeedIngestDispatchSchema, readFeedIngestDispatch,
+  LedgerCompletionEvidenceSchema,
+  SOURCE_RUN_VERSION,
+  PLANNING_OBSERVATIONS_VERSION,
+  SOURCE_RELIABILITY_VERSION,
+  PLANNER_EXCLUSIONS_VERSION,
+  DOCUMENT_OBSERVATION_VERSION,
+  PreviousFeedIngestDispatchSchema, PreviousObservedFeedIngestDispatchSchema,
+  PreviousReliableFeedIngestDispatchSchema, readFeedIngestDispatch,
+  PreviousSourceSnapshotSchema, PUBLISHER_IDENTITY_VERSION, PUBLISHER_EXPOSURE_VERSION,
+  PreviousExposureFeedIngestDispatchSchema, PreviousPublisherFeedIngestDispatchSchema,
+  FEED_OPERATIONAL_STATE_VERSION, SOURCE_OPERATIONAL_SCORE_VERSION,
 } from "@idhazh/common-contracts";
 import type {
+  DocumentObservationRecord,
   DiversityMetricRow,
   FeedIngestDispatch,
+  FeedIngestOperationalStateRow,
   SourceRunRecord,
 } from "@idhazh/common-contracts";
 import type { LedgerRowContract } from "@idhazh/ledger-file-writer";
@@ -37,6 +49,7 @@ const PreviousDropReasonCountSchema = DropReasonCountSchema.extend({
 });
 const previousSourceRunFields = {
   ...sourceRunFields,
+  source: PreviousSourceSnapshotSchema,
   drop_reasons: z.array(PreviousDropReasonCountSchema),
   last_failure_reason: PreviousDropReasonCountSchema.shape.reason.nullable(),
 };
@@ -51,6 +64,11 @@ const LegacySourceRunSchema = z.strictObject({
 });
 const PreviousSourceRunSchema = LegacySourceRunSchema.extend({ version: z.literal("2026-10-22") });
 const PreviousDiagnosticSourceRunSchema = LegacySourceRunSchema.extend({ version: z.literal("2026-10-22T18:15") });
+const PreviousExclusionSourceRunSchema = z.strictObject({
+  ...sourceRunFields,
+  source: PreviousSourceSnapshotSchema,
+  version: z.literal(PLANNER_EXCLUSIONS_VERSION),
+});
 const PreviousLogicalSourceRunSchema = z.strictObject({
   ...previousSourceRunFields, version: z.literal("2026-10-22T10:05"),
 });
@@ -77,6 +95,14 @@ export const DiversityMetricContract: LedgerRowContract<DiversityMetricRow> = {
   schemaVersion: FEED_INGEST_AUDIT_VERSION,
   legacyVersions: { [PREVIOUS_VERSION]: { schema: LegacyDiversityMetricSchema, migrate: migrateDiversity } },
 };
+export const DocumentObservationContract: LedgerRowContract<DocumentObservationRecord> = {
+  schema: DocumentObservationRecordSchema,
+  schemaVersion: DOCUMENT_OBSERVATION_VERSION,
+};
+export const OperationalStateContract: LedgerRowContract<FeedIngestOperationalStateRow> = {
+  schema: FeedIngestOperationalStateRowSchema,
+  schemaVersion: FEED_OPERATIONAL_STATE_VERSION,
+};
 export const SourceRunContract: LedgerRowContract<SourceRunRecord> = {
   schema: SourceRunRecordSchema,
   schemaVersion: SOURCE_RUN_VERSION,
@@ -84,16 +110,26 @@ export const SourceRunContract: LedgerRowContract<SourceRunRecord> = {
     [PREVIOUS_VERSION]: { schema: LegacySourceRunSchema, migrate: migrateSourceRun },
     "2026-10-22": { schema: PreviousSourceRunSchema, migrate: migrateSourceRun },
     "2026-10-22T18:15": { schema: PreviousDiagnosticSourceRunSchema, migrate: migrateSourceRun },
+    [PLANNER_EXCLUSIONS_VERSION]: { schema: PreviousExclusionSourceRunSchema, migrate: migrateSourceRun },
     "2026-10-22T10:05": { schema: PreviousLogicalSourceRunSchema, migrate: migrateSourceRun },
   },
 };
 export const DispatchContract: LedgerRowContract<FeedIngestDispatch> = {
   schema: FeedIngestDispatchSchema,
-  schemaVersion: SOURCE_RELIABILITY_VERSION,
+  schemaVersion: SOURCE_OPERATIONAL_SCORE_VERSION,
   legacyVersions: {
+    [PUBLISHER_IDENTITY_VERSION]: { schema: PreviousPublisherFeedIngestDispatchSchema, migrate: migrateDispatch },
+    [PUBLISHER_EXPOSURE_VERSION]: {
+      schema: PreviousExposureFeedIngestDispatchSchema,
+      migrate: migrateDispatch,
+    },
     [PREVIOUS_VERSION]: { schema: LegacyDispatchSchema, migrate: migrateDispatch },
     [FEED_INGEST_AUDIT_VERSION]: { schema: PreviousDispatchSchema, migrate: migrateDispatch },
     [PLANNING_OBSERVATIONS_VERSION]: { schema: PreviousObservedFeedIngestDispatchSchema, migrate: migrateDispatch },
+    [SOURCE_RELIABILITY_VERSION]: {
+      schema: PreviousReliableFeedIngestDispatchSchema,
+      migrate: migrateDispatch,
+    },
   },
 };
 

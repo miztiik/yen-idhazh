@@ -60,10 +60,6 @@ from idhazh import (
 from idhazh.command_logging import configure_command_logging
 from idhazh.contracts.base import WORK_JOB, ServerJob
 from idhazh.contracts.knobs.observability import ObservabilityConfig
-from idhazh.contracts.knobs.run import RunConfig
-from idhazh.contracts.qualification import (
-    CandidateIdentity,
-)
 from idhazh.contracts.run_plan import RunPlan
 from idhazh.council import run_identity as council_identity
 from idhazh.council import session as council_session
@@ -71,10 +67,6 @@ from idhazh.embed import Embedder
 from idhazh.evals import sampling
 from idhazh.evals.hhem import (
     HhemScorer,
-)
-from idhazh.fingerprint import (
-    file_digest,
-    runtime_build,
 )
 from idhazh.gardener import cli as gardener_cli
 from idhazh.ledger import published_columns
@@ -86,15 +78,10 @@ from idhazh.stages import (
 from idhazh.stages import (
     backfill_vectors,
     common,
-    decide,
     harvest,
-    qualify,
-    qualify_canaries,
-    qualify_decide,
     record,
     score_merge_line_holdout,
     site_weight,
-    validate,
     work,
 )
 from idhazh.stages import (
@@ -207,11 +194,6 @@ STAGES: Final[tuple[str, ...]] = (
     "assemble",
     "harvest",
     "run",
-    "validate",
-    "decide",
-    "qualify",
-    "qualify-canaries",
-    "qualify-decide",
     "backfill-vectors",
     "derived-paths",
     "site-weight",
@@ -226,51 +208,6 @@ STAGES: Final[tuple[str, ...]] = (
     telemetry_cli.VERB,
     gardener_cli.VERB,
 )
-
-
-def qualification_repeats(override: int | None, *, run: RunConfig) -> int:
-    """How many times this invocation replays each frozen item.
-
-    The override goes back through `RunConfig`, so the CLI and config use
-    the same bounds without a second range check.
-    """
-    if override is None:
-        return run.qualification_repeats
-    amended = {**run.model_dump(), "qualification_repeats": override}
-    return RunConfig.model_validate(amended).qualification_repeats
-
-
-def _candidate_identity(settings: config.Settings, args: argparse.Namespace) -> CandidateIdentity:
-    """Which bytes are about to run, read off the disk rather than off config.
-
-    Config states an expectation and the file states a fact. The identity gate
-    exists because those two can disagree - a mirror can serve a same-named file
-    with different bytes - so the digest here is taken from the file the runtime
-    will open (Guardrail #10).
-
-    Every expectation comes from the entry, so a dispatch that named them
-    separately could not drift from the file it was qualifying. A `byte_count`
-    the entry does not declare falls back to the observed size, which makes that
-    one comparison inert rather than false - the digest is the check either way.
-    """
-    model = settings.models.summarizer
-    weights = args.weights or (config.REPO_ROOT / "backend" / "models" / model.file)
-    if not weights.exists():
-        raise SystemExit(f"the candidate weights are not on disk: {model.file}")
-    if not model.sha256:
-        raise SystemExit(f"{model.id} declares no sha256, so nothing can verify what ran")
-    return CandidateIdentity(
-        model_id=model.id,
-        repo=model.repo,
-        revision=model.revision or "revision-not-recorded",
-        file=model.file,
-        quantisation=model.quantisation,
-        sha256_expected=model.sha256,
-        sha256_observed=file_digest(weights),
-        bytes_expected=model.byte_count or weights.stat().st_size,
-        bytes_observed=weights.stat().st_size,
-        runtime_build=runtime_build(base_url=settings.app.model_server.base_url),
-    )
 
 
 def _scorer(enabled: bool) -> object | None:
@@ -440,12 +377,6 @@ def _main(argv: Sequence[str] | None = None) -> int:
         ),
     )
     parser.add_argument(
-        "--leaderboard",
-        type=float,
-        default=0.0,
-        help="The published faithfulness score for the model being validated. A prior only.",
-    )
-    parser.add_argument(
         "--runner",
         default="local",
         help="Where the run happened. A laptop number is not a gate.",
@@ -468,33 +399,6 @@ def _main(argv: Sequence[str] | None = None) -> int:
             "Plan at most this many stories for the whole run, best first. For a "
             "short test run; unset plans the full day. Shard count is separate."
         ),
-    )
-    parser.add_argument(
-        "--repeats",
-        type=int,
-        default=None,
-        help=(
-            "Override run.qualification_repeats for this invocation. "
-            "`wording_spread` reads the replays. Uses the config field's bounds."
-        ),
-    )
-    parser.add_argument(
-        "--corpus-per-shard",
-        type=int,
-        default=10,
-        help="How many frozen articles one qualification shard replays.",
-    )
-    parser.add_argument(
-        "--weights",
-        type=Path,
-        default=None,
-        help="The GGUF the runtime opened. Its bytes are digested, not the config's claim.",
-    )
-    parser.add_argument(
-        "--job-budget-minutes",
-        type=float,
-        default=330.0,
-        help="The dispatch's own per-job bound. The budget gate is measured against it.",
     )
     parser.add_argument(
         "--counters-file",
@@ -852,45 +756,6 @@ def _dispatch(
     # robots.txt once across all three stages rather than once per stage.
     read_url = common.live_fetcher(settings)
 
-    if args.stage == "validate":
-        validate.stage_validate(
-            settings=settings,
-            plan=_planned(date, args.execution),
-            leaderboard=args.leaderboard,
-            scorer=_scorer(not args.no_faithfulness),
-            fetcher=read_url,
-        )
-        return 0
-
-    if args.stage == "decide":
-        return decide.stage_decide(
-            settings=settings,
-            date=date,
-            run_id=plan_stage._run_id(date, args.execution),
-            commit_sha=args.commit,
-            runner=args.runner,
-        )
-
-    if args.stage == "qualify":
-        qualify.stage_qualify(
-            settings=settings,
-            plan=_planned(date, args.execution),
-            date=date,
-            shard=args.shard,
-            shards=args.shards,
-            repeats=qualification_repeats(args.repeats, run=settings.app.run),
-            corpus_per_shard=args.corpus_per_shard,
-            candidate=_candidate_identity(settings, args),
-            scorer=_scorer(not args.no_faithfulness),
-            commit_sha=args.commit,
-            runner=args.runner,
-            fetcher=read_url,
-        )
-        return 0
-
-    if args.stage == "qualify-canaries":
-        return qualify_canaries.stage_qualify_canaries(settings=settings, date=date)
-
     if args.stage == "backfill-vectors":
         return backfill_vectors.stage_backfill_vectors(
             root=common.PUBLIC_ROOT,
@@ -898,16 +763,6 @@ def _dispatch(
             today=min(date, _today()),
             dates=args.day,
             embedder=Embedder(config.REPO_ROOT, settings.app.assist),
-        )
-
-    if args.stage == "qualify-decide":
-        return qualify_decide.stage_qualify_decide(
-            settings=settings,
-            date=date,
-            run_id=plan_stage._run_id(date, args.execution),
-            commit_sha=args.commit,
-            job_budget_minutes=args.job_budget_minutes,
-            runner=args.runner,
         )
 
     if args.stage == "shards":

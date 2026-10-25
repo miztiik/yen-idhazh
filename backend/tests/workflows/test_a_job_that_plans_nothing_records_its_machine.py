@@ -1,10 +1,9 @@
 """Can a workflow that writes no run plan still record the machine its job drew?
 
-`digest.yml` and `measure.yml` both open with a stage that files a run plan, so
-until this was asked the probe could read one back and nobody noticed. The
-gardener's wakes and the council's nights draw their own runners and plan
-nothing, and the probe is worth exactly as much to them: a gardener task that
-takes twice as long this month is a question about the machine first.
+The digest opens with a stage that files a run plan. The gardener's wakes and
+the council's nights draw their own runners and plan nothing, and the probe is
+worth exactly as much to them: a gardener task that takes twice as long this
+month is a question about the machine first.
 
 A workflow that mints its own run name rather than computing one is here too,
 because a machine row under a second address answers nothing the night asked.
@@ -132,7 +131,7 @@ def test_the_job_clock_closes_that_row_without_a_plan_either(
     (row,) = ledger.load_days(
         common.STATE_ROOT, LedgerName.HOST_FINGERPRINT, [WAKE_DAY], model=HostFingerprintRow
     )
-    assert row.fingerprint is not None, "the clock carries the machine the probe measured"
+    assert row.measured_at is not None, "the clock carries the probe's reading"
     assert row.job_seconds is not None, "the clock filled the cell only it can know"
     assert len({held.envelope.unit_id for held in _raw(common.STATE_ROOT)}) == 1, (
         "one job, one writer, one work unit - however many verbs filed for it"

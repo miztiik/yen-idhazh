@@ -1,14 +1,17 @@
 /** Which measured evidence decided a candidate at one planning stage? */
 import { z } from "zod";
-import { ArticleLabelsSchema, PolicyIdentitySchema, PreviousScoreEvidenceSchema, ScoreEvidenceSchema, SourceFormSchema, SourceSnapshotSchema } from "./source.schema";
+import {
+  ArticleLabelsSchema, PolicyIdentitySchema, PreviousScoreEvidenceSchema, PreviousSourceSnapshotSchema,
+  PreviousOperationalScoreEvidenceSchema, PreviousPublisherScoreEvidenceSchema, ScoreEvidenceSchema, SourceFormSchema, SourceSnapshotSchema,
+} from "./source.schema";
 import { DropReasonSchema, REASON_STAGES } from "./rejection.schema";
 import { CountSchema, DateStampSchema, FiniteSchema, NonEmptySchema, PlanningStageSchema, PositiveCountSchema, PositiveSchema, Sha256Schema, SlugSchema, TimestampSchema, UrlSchema, deriveUrlKey, reject } from "./primitives";
-import { CONTRACT_VERSION, EXTRACTION_QUALITY_VERSION, FEED_INGEST_AUDIT_VERSION, HARVEST_DIAGNOSTICS_VERSION, PLANNER_EXCLUSIONS_VERSION, SOURCE_RELIABILITY_VERSION } from "../version";
+import { CONTRACT_VERSION, EXTRACTION_QUALITY_VERSION, FEED_INGEST_AUDIT_VERSION, HARVEST_DIAGNOSTICS_VERSION, PLANNER_EXCLUSIONS_VERSION, PUBLISHER_EXPOSURE_VERSION, PUBLISHER_IDENTITY_VERSION, SOURCE_OPERATIONAL_SCORE_VERSION, SOURCE_RELIABILITY_VERSION } from "../version";
 import { HarvestDiagnosticsSchema, PreviousHarvestDiagnosticsSchema } from "./harvest-diagnostics.schema";
 
 export const VerdictStatusSchema = z.enum(["not_assessed", "assessed"]);
 export const ArticleAssessmentRecordSchema = z.strictObject({
-  version: z.literal(SOURCE_RELIABILITY_VERSION).default(SOURCE_RELIABILITY_VERSION), date: DateStampSchema, correlation_id: NonEmptySchema,
+  version: z.literal(SOURCE_OPERATIONAL_SCORE_VERSION).default(SOURCE_OPERATIONAL_SCORE_VERSION), date: DateStampSchema, correlation_id: NonEmptySchema,
   diagnostics: HarvestDiagnosticsSchema.nullable().default(null),
   candidate_id: Sha256Schema, source_id: SlugSchema, source: SourceSnapshotSchema, labels: ArticleLabelsSchema,
   canonical_url: UrlSchema.nullable(), url_key: Sha256Schema.nullable(),
@@ -62,24 +65,40 @@ export type ArticleAssessmentRecord = z.infer<typeof ArticleAssessmentRecordSche
 
 const { diagnostics: _diagnostics, ...previousFields } = ArticleAssessmentRecordSchema.shape;
 export const PreviousArticleAssessmentSchema = z.strictObject({
-  ...previousFields, version: z.literal(FEED_INGEST_AUDIT_VERSION),
+  ...previousFields, source: PreviousSourceSnapshotSchema, version: z.literal(FEED_INGEST_AUDIT_VERSION),
   score_evidence: PreviousScoreEvidenceSchema.nullable(),
   reason: DropReasonSchema.exclude(["EXTRACT_FAILED", "EXTRACT_EMPTY", "ALREADY_PUBLISHED", "SETTLED_FAILURE", "BLOCKED_URL_MARKER"]).nullable(),
 });
 export const PreviousDiagnosticArticleAssessmentSchema = z.strictObject({
-  ...ArticleAssessmentRecordSchema.shape, version: z.literal(HARVEST_DIAGNOSTICS_VERSION),
+  ...ArticleAssessmentRecordSchema.shape, source: PreviousSourceSnapshotSchema,
+  version: z.literal(HARVEST_DIAGNOSTICS_VERSION),
   score_evidence: PreviousScoreEvidenceSchema.nullable(),
   diagnostics: PreviousHarvestDiagnosticsSchema.nullable().default(null),
   reason: DropReasonSchema.exclude(["ALREADY_PUBLISHED", "SETTLED_FAILURE", "BLOCKED_URL_MARKER"]).nullable(),
 });
 export const PreviousExclusionArticleAssessmentSchema = z.strictObject({
-  ...ArticleAssessmentRecordSchema.shape, version: z.literal(PLANNER_EXCLUSIONS_VERSION),
+  ...ArticleAssessmentRecordSchema.shape, source: PreviousSourceSnapshotSchema,
+  version: z.literal(PLANNER_EXCLUSIONS_VERSION),
   score_evidence: PreviousScoreEvidenceSchema.nullable(),
   diagnostics: PreviousHarvestDiagnosticsSchema.nullable().default(null),
 });
 export const PreviousQualityArticleAssessmentSchema = z.strictObject({
-  ...ArticleAssessmentRecordSchema.shape, version: z.literal(EXTRACTION_QUALITY_VERSION),
+  ...ArticleAssessmentRecordSchema.shape, source: PreviousSourceSnapshotSchema,
+  version: z.literal(EXTRACTION_QUALITY_VERSION),
   score_evidence: PreviousScoreEvidenceSchema.nullable(),
+});
+export const PreviousReliableArticleAssessmentSchema = z.strictObject({
+  ...ArticleAssessmentRecordSchema.shape, source: PreviousSourceSnapshotSchema,
+  version: z.literal(SOURCE_RELIABILITY_VERSION),
+  score_evidence: PreviousPublisherScoreEvidenceSchema.nullable(),
+});
+export const PreviousPublisherArticleAssessmentSchema = z.strictObject({
+  ...ArticleAssessmentRecordSchema.shape, version: z.literal(PUBLISHER_IDENTITY_VERSION),
+  score_evidence: PreviousPublisherScoreEvidenceSchema.nullable(),
+});
+export const PreviousExposureArticleAssessmentSchema = z.strictObject({
+  ...ArticleAssessmentRecordSchema.shape, version: z.literal(PUBLISHER_EXPOSURE_VERSION),
+  score_evidence: PreviousOperationalScoreEvidenceSchema.nullable(),
 });
 const { timing_at: _timingAt, timing_basis: _timingBasis, ...legacyFields } = PreviousArticleAssessmentSchema.shape;
 export const LegacyArticleAssessmentSchema = z.strictObject({
@@ -93,38 +112,56 @@ export const LegacyArticleAssessmentSchema = z.strictObject({
 export function migrateArticleAssessment(row: object): ArticleAssessmentRecord {
   const { effective_published_at, publication_clock, ...rest } = LegacyArticleAssessmentSchema.parse(row);
   return ArticleAssessmentRecordSchema.parse({
-    ...rest, version: SOURCE_RELIABILITY_VERSION,
+    ...rest, version: SOURCE_OPERATIONAL_SCORE_VERSION,
     timing_at: effective_published_at, timing_basis: publication_clock,
   });
 }
 
 export const ArticleAssessmentContract = {
   schema: ArticleAssessmentRecordSchema,
-  schemaVersion: SOURCE_RELIABILITY_VERSION,
+  schemaVersion: SOURCE_OPERATIONAL_SCORE_VERSION,
   legacyVersions: {
+    [PUBLISHER_EXPOSURE_VERSION]: {
+      schema: PreviousExposureArticleAssessmentSchema,
+      migrate: (row: object): ArticleAssessmentRecord => ArticleAssessmentRecordSchema.parse({
+        ...PreviousExposureArticleAssessmentSchema.parse(row), version: SOURCE_OPERATIONAL_SCORE_VERSION,
+      }),
+    },
+    [PUBLISHER_IDENTITY_VERSION]: {
+      schema: PreviousPublisherArticleAssessmentSchema,
+      migrate: (row: object): ArticleAssessmentRecord => ArticleAssessmentRecordSchema.parse({
+        ...PreviousPublisherArticleAssessmentSchema.parse(row), version: SOURCE_OPERATIONAL_SCORE_VERSION,
+      }),
+    },
+    [SOURCE_RELIABILITY_VERSION]: {
+      schema: PreviousReliableArticleAssessmentSchema,
+      migrate: (row: object): ArticleAssessmentRecord => ArticleAssessmentRecordSchema.parse({
+        ...PreviousReliableArticleAssessmentSchema.parse(row), version: SOURCE_OPERATIONAL_SCORE_VERSION,
+      }),
+    },
     [EXTRACTION_QUALITY_VERSION]: {
       schema: PreviousQualityArticleAssessmentSchema,
       migrate: (row: object): ArticleAssessmentRecord => ArticleAssessmentRecordSchema.parse({
-        ...PreviousQualityArticleAssessmentSchema.parse(row), version: SOURCE_RELIABILITY_VERSION,
+        ...PreviousQualityArticleAssessmentSchema.parse(row), version: SOURCE_OPERATIONAL_SCORE_VERSION,
       }),
     },
     [PLANNER_EXCLUSIONS_VERSION]: {
       schema: PreviousExclusionArticleAssessmentSchema,
       migrate: (row: object): ArticleAssessmentRecord => ArticleAssessmentRecordSchema.parse({
-        ...PreviousExclusionArticleAssessmentSchema.parse(row), version: SOURCE_RELIABILITY_VERSION,
+        ...PreviousExclusionArticleAssessmentSchema.parse(row), version: SOURCE_OPERATIONAL_SCORE_VERSION,
       }),
     },
     [CONTRACT_VERSION]: { schema: LegacyArticleAssessmentSchema, migrate: migrateArticleAssessment },
     [FEED_INGEST_AUDIT_VERSION]: {
       schema: PreviousArticleAssessmentSchema,
       migrate: (row: object): ArticleAssessmentRecord => ArticleAssessmentRecordSchema.parse({
-        ...PreviousArticleAssessmentSchema.parse(row), version: SOURCE_RELIABILITY_VERSION,
+        ...PreviousArticleAssessmentSchema.parse(row), version: SOURCE_OPERATIONAL_SCORE_VERSION,
       }),
     },
     [HARVEST_DIAGNOSTICS_VERSION]: {
       schema: PreviousDiagnosticArticleAssessmentSchema,
       migrate: (row: object): ArticleAssessmentRecord => ArticleAssessmentRecordSchema.parse({
-        ...PreviousDiagnosticArticleAssessmentSchema.parse(row), version: SOURCE_RELIABILITY_VERSION,
+        ...PreviousDiagnosticArticleAssessmentSchema.parse(row), version: SOURCE_OPERATIONAL_SCORE_VERSION,
       }),
     },
   },

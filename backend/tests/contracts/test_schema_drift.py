@@ -52,7 +52,29 @@ def test_fixture_round_trips_without_losing_values(path: Path) -> None:
     record = load(path)
     once = record.to_json()
     if record.version == original["version"]:
-        assert json.loads(once) == original
+        expected = original
+        if contract.__schema_stem__ == "sources":
+            expected = {
+                **original,
+                "publishers": [],
+                "feeds": [
+                    {
+                        **feed, "added_on": None, "publisher_id": None,
+                        "retirement_reason": None,
+                    }
+                    for feed in original["feeds"]
+                ],
+                "retired": [
+                    {
+                        **feed, "added_on": None, "publisher_id": None,
+                        "retirement_reason": None,
+                    }
+                    for feed in original["retired"]
+                ],
+            }
+        elif "publisher_id" in contract.model_fields and "publisher_id" not in original:
+            expected = {**original, "publisher_id": None}
+        assert json.loads(once) == expected
     else:
         assert original["version"] < record.version
         assert record.version == contract.schema_version()

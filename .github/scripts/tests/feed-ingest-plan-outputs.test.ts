@@ -143,6 +143,9 @@ test("actual CLI planning proof and all native files survive both real report mo
     if (!("files" in summary) || summary.metrics === undefined) throw new Error("Actual CLI omitted metric evidence");
     const metrics = summary.metrics;
     const outputs = createExecutionOutputs(summary, fixture.inputs.registrations);
+    await verifyParquetFiles(fixture.inputs.outputRoot, "document-observations", summary.files.document_observations,
+      fixture.inputs.registrations.document_observations);
+    expect(JSON.parse(outputs.document_observation_files!)).toEqual(summary.files.document_observations.files.map(file => file.path));
     const hostFixture = await Bun.file(new URL("../../../tests/fixtures/ledger-file-writer/host-fingerprint-row.json", import.meta.url)).json();
     const host = {
       row: { ...hostFixture, date: summary.date, run_id: summary.run_id },

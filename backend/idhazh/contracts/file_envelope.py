@@ -132,6 +132,7 @@ _OPTIONAL_KEYS: Final = frozenset(
 )
 _ENVELOPE_VERSIONS: Final = frozenset(
     {
+        "2026-10-24",
         "2026-10-20",
         "2026-10-14",
         "2026-09-25",
@@ -321,6 +322,11 @@ class FileEnvelope(Contract):
     __schema_stem__: ClassVar[str] = "file-envelope"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-10-24",
+            change="Remove the candidate-model ledger from the shared vocabulary.",
+            why="No writer or reader remains for this ledger.",
+        ),
+        ChangelogEntry(
             version="2026-10-20",
             change="Read the shared TypeScript Parquet writer provenance.",
             why="Compatible readers precede files emitted by the shared TypeScript writer.",
@@ -334,11 +340,6 @@ class FileEnvelope(Contract):
             version="2026-10-12",
             change="Add generic pipeline and task writer identity.",
             why="Shared telemetry must not require a closed workflow-job list.",
-        ),
-        ChangelogEntry(
-            version="2026-10-10",
-            change="Read corrected host history with its recorded file envelope.",
-            why="Previously published host rows remain readable after collector retirement.",
         ),
         ChangelogEntry(
             version="2026-10-01",

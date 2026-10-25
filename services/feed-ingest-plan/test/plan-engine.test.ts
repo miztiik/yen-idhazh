@@ -5,13 +5,17 @@ import { existsSync } from "node:fs";
 import { dirname, join, relative } from "node:path";
 import {
   FeedIngestEventSchema,
-  CandidateRejectionContract, deriveCandidateId, deriveUrlKey,
-  FeedHealthContract,
+  CandidateRejectionContract,
+  EditorialSelectionContract,
+  deriveCandidateId, deriveUrlKey,
+  FeedHealthContract, SOURCE_RELIABILITY_VERSION, readFeedIngestEvent,
 } from "@idhazh/common-contracts";
 import { persistLedger } from "@idhazh/ledger-file-writer";
 import { runFeedPlan, summarizePlan } from "../src/run-feed-plan";
 import { loadPlanInputs } from "../src/load-plan-inputs";
 import { readLedgerParquet } from "../src/read-ledger-history/read-parquet";
+import { readLedgerDay } from "../src/read-ledger-history/read-period";
+import { PublishedRowSchema, PUBLISHED_ROW_SCHEMA_VERSION } from "../src/metrics/publication-evidence";
 import { DispatchContract } from "../src/metrics/audit-contracts";
 import { readSeenEvidence, requiredSeenDays } from "../src/read-ledger-history/read-seen-evidence";
 import { SeenRowSchema } from "../src/screen-article-candidates/seen-evidence";
@@ -70,10 +74,12 @@ async function seenWindow(recorded: Awaited<ReturnType<typeof recordedPlan>>, kn
 }
 
 test("real composition shares one clock and override and reads native dispatches with exact choices", async () => {
+  const publisherId = "recorded-publication";
   const recorded = await recordedPlan([
-    source(), source({ id: "resting-news", status: "draft" }),
-    source({ id: "empty-news", url: "https://news.example/empty.xml" }),
-  ]);
+    source({ publisher_id: publisherId }),
+    source({ id: "resting-news", status: "draft", publisher_id: publisherId }),
+    source({ id: "empty-news", url: "https://news.example/empty.xml", publisher_id: publisherId }),
+  ], [{ id: publisherId, display_name: "Recorded Publication" }]);
   let clocks = 0;
   recorded.runtime.clock = () => new Date(++clocks === 1 ? "2026-10-21T23:59:59.999Z" : "2026-10-22T00:00:01Z");
   const configuredLimit = recorded.inputs.harvest.config.curate.article_limit;
@@ -88,18 +94,51 @@ test("real composition shares one clock and override and reads native dispatches
   </channel></rss>`;
   recorded.transport.recordings.responses[innocentUrl] = [{ status: 200, fixture: "article" }];
   try {
+    const day = "2026-10-21";
+    const publication = await persistLedger({
+      ledger: "published", registryEntry: recorded.inputs.registrations.published,
+      outputRoot: recorded.inputs.outputRoot, ledgerSettings: recorded.inputs.ledgerSettings,
+      rowContract: { schema: PublishedRowSchema, schemaVersion: PUBLISHED_ROW_SCHEMA_VERSION },
+      period: { tier: "raw", covers: day },
+      writerContext: { run_id: `${day}-1`, attempt: 1, job: "work", pipeline_name: null,
+        task_name: null, shard: 0, producer: "tests.publication", git_sha: "a".repeat(40) },
+      rows: [{ version: PUBLISHED_ROW_SCHEMA_VERSION, published_on: day,
+        url_key: deriveUrlKey("https://news.example/historical-publication"), item_id: "recorded-item-01" }],
+    });
+    recorded.inputs.settings.inputs.published_days = [{
+      day, raw_files: publication.files.map(file => `state/${file.path}`),
+    }];
+    const selectionIndex = join(recorded.inputs.outputRoot, "raw",
+      ...recorded.inputs.registrations.selections.prefix, ...day.split("-"), "index.json");
+    await mkdir(dirname(selectionIndex), { recursive: true });
+    await writeFile(selectionIndex, JSON.stringify({
+      version: "2026-10-03", ledger: "editorial-selections", date: day, files: [], bytes: [],
+      content_sha256: "0".repeat(64), listed_at: `${day}T23:59:59Z`,
+    }));
+    await expect(readLedgerDay({
+      ledger: "editorial-selections", day, contract: EditorialSelectionContract,
+      rawIndex: selectionIndex,
+    })).rejects.toThrow("filename digest");
     const result = await runFeedPlan({
       freshness_hours: 18, article_limit: 1, partition_strategy: "none",
     }, recorded.inputs, recorded.runtime);
     expect(clocks).toBe(1);
     expect(result.status).toBe("dispatches_persisted_audit_pending");
     expect(result.context.date).toBe("2026-10-21");
+    expect(result.evidence.publisher_publication.gaps).toEqual(["invalid_publication_history"]);
     expect(result.context.writer.shard).toBe(0);
     expect(result.request.shards).toBe(1);
     expect(result.evidence.curation.rows.map(row => row.candidate_id)).toEqual([
       deriveCandidateId("2026-10-21-700", "recorded-news", 2),
     ]);
+    expect(result.evidence.curation.rows[0]!.ratings.publisher_exposure).toMatchObject({
+      publisher_id: publisherId, history_status: "unavailable",
+      published_today: null, selected_so_far: 0, planned_slots: 1, value: 0,
+    });
+    expect(result.evidence.curation.rows[0]!.ratings.source).toEqual({ available: false, value: null });
     expect(result.evidence.harvest.feed_outcomes).toHaveLength(3);
+    expect(result.evidence.harvest.feed_outcomes.map(row => row.source.publisher_id))
+      .toEqual([publisherId, publisherId, publisherId]);
     expect(result.evidence.harvest.feed_outcomes.find(row => row.source.source_id === "resting-news"))
       .toMatchObject({ fetch_status: "not_requested", parsed_count: null, harvested_count: null });
     expect(result.evidence.harvest.feed_outcomes.find(row => row.source.source_id === "empty-news"))
@@ -137,6 +176,18 @@ test("real composition shares one clock and override and reads native dispatches
     });
     expect(new Set(events.map(event => event.event_id)).size).toBe(events.length);
     expect(events.filter(event => event.payload.kind === "feed_outcome")).toHaveLength(3);
+    expect(events.flatMap(event => event.payload.kind === "feed_outcome" ? [event.payload.source.publisher_id] : []))
+      .toEqual([publisherId, publisherId, publisherId]);
+    const feedEvent = events.find(event => event.payload.kind === "feed_outcome");
+    if (!feedEvent || feedEvent.payload.kind !== "feed_outcome") throw new Error("feed outcome event was not emitted");
+    const { publisher_id: _publisherId, ...legacyEventSource } = feedEvent.payload.source;
+    expect(readFeedIngestEvent({
+      ...feedEvent, version: SOURCE_RELIABILITY_VERSION,
+      payload: { ...feedEvent.payload, source: legacyEventSource },
+    }).payload).toMatchObject({ kind: "feed_outcome", source: { publisher_id: null } });
+    expect(() => readFeedIngestEvent({
+      ...feedEvent, version: SOURCE_RELIABILITY_VERSION,
+    })).toThrow();
     const harvestDecisions = events.filter(event => event.stage === "harvest-feeds" && event.payload.kind === "candidate_decision");
     expect(harvestDecisions).toHaveLength(3);
     const screenDecisions = events.filter(event => event.stage === "screen-article-candidates" && event.payload.kind === "candidate_decision");
@@ -160,11 +211,24 @@ test("real composition shares one clock and override and reads native dispatches
     }
     expect(rows).toEqual(result.evidence.partition.dispatches);
     expect(rows[0]!.content.article_text).toBe(result.evidence.curation.selected[0]!.candidate.article_text);
+    expect(rows[0]!.content.source.publisher_id).toBe(publisherId);
+    expect(rows[0]!.selection.source.publisher_id).toBe(publisherId);
     expect(rows[0]!.partition).toEqual({ strategy: "none", worker_assignment: 0, dispatch_count: 1 });
     expect(rows[0]!.selection.policy).toEqual(rows[0]!.content.policy);
+    expect(rows[0]!.selection.ratings.source_operational).toBeNull();
     expect(summarizePlan(result)).toMatchObject({
       audited_complete: false, dispatch_count: 1, status: "dispatches_persisted_audit_pending",
       planning_complete: false, planning_completion: null, source_records: null,
+      article_evidence: {
+        window: { start: "2026-10-14", end: "2026-10-20", days: 7 },
+        availability: "unavailable", sources: [],
+      },
+      operational_feedback: {
+        window: { start: "2026-10-14", end: "2026-10-20", days: 7 },
+        availability: "unavailable",
+        component_weights: { cpu: 1 / 3, private_memory: 1 / 3, requests: 1 / 3 },
+        sources: [],
+      },
     });
     expect(recorded.inputs.harvest.config.curate.article_limit).toBe(configuredLimit);
     expect(recorded.inputs.harvest.config.triage.max_age_hours).toBe(24);
@@ -179,8 +243,10 @@ test("real composition shares one clock and override and reads native dispatches
       outcome: "ok", items: 0, target_attempted: true,
     });
     expect(nativeHealth.rows.find(held => held.row.feed_id === "recorded-news")!.row.items).toBe(2);
+    expect(nativeHealth.rows.every(held => held.row.publisher_id === publisherId)).toBe(true);
     const planningAudit = await recordPlanningMetrics(result, recorded.inputs);
     expect(planningAudit.planning_completion.status).toBe("complete");
+    expect(planningAudit.source_records.every(row => row.source.publisher_id === publisherId)).toBe(true);
     const nativeRejections = await readLedgerParquet(
       join(recorded.inputs.outputRoot, result.files.harvest_rejections.files[0]!.path),
       "rejections", CandidateRejectionContract,

@@ -2,14 +2,15 @@
 
 A raw ledger is many small files under `state/raw/<ledger>/<YYYY>/<MM>/<DD>/`,
 one per writer per day, each written once by the door in `ledger/persist.py`.
-Two attempts at one work unit leave two files carrying one `unit_id`, and only
-the higher attempt is current: GitHub re-runs a failed job into the same run id,
-so the re-run replaces its first try rather than adding to it. The door writes
-both files and removes neither, and it says that choosing between them is a
-reader's job. This module is that job, done once, so no reader invents its own
-version of it: `settle_rows` keeps one file's rows per unit - the last file of
-its highest attempt - and then the first row per key, and both the ledger's
-reader and the compaction call it.
+For most ledgers, two attempts at one work unit leave two files carrying one
+`unit_id`, and only the higher attempt is current: GitHub re-runs a failed job
+into the same run id, so the re-run replaces its first try rather than adding
+to it. Planning records and document observations preserve every run/attempt,
+because a partial attempt cannot replace previously recorded facts. The door
+writes both files and removes neither, and it says that choosing between them
+is a reader's job. This module is that job, done once, so no reader invents its
+own version of it: `settle_rows` keeps rows per unit and key according to the
+ledger's rule, and both the ledger's reader and compaction call it.
 
 **Oldest first, and the order is written down rather than inherited.** Files
 sort by the day they cover, then by the instant they were written, then by
@@ -54,14 +55,16 @@ from idhazh.ledger.persist import StoredRow, load_stored, read_envelope
 
 logger = logging.getLogger(__name__)
 
-# These ledgers need complete-attempt selection across their related files.
-_PLANNING_LEDGERS = frozenset({
+# These ledgers preserve each run and attempt before settling duplicate row keys.
+_ATTEMPT_PRESERVING_LEDGERS = frozenset({
     LedgerName.FEED_INGEST_PLAN_DISPATCHES,
     LedgerName.FEED_INGEST_PLAN_EDITORIAL_SELECTIONS,
     LedgerName.FEED_INGEST_PLAN_REJECTIONS,
     LedgerName.FEED_INGEST_PLAN_SOURCE_RUNS,
     LedgerName.FEED_INGEST_PLAN_ARTICLE_ASSESSMENTS,
     LedgerName.FEED_INGEST_PLAN_DIVERSITY,
+    LedgerName.FEED_INGEST_PLAN_DOCUMENT_OBSERVATIONS,
+    LedgerName.FEED_INGEST_PLAN_OPERATIONAL_STATE,
 })
 
 
@@ -273,19 +276,23 @@ def settle_rows[C: Contract](
     kept or dropped whole, and a cell only the dropped row filled is named in a
     warning.
 
-    The six feed planning ledgers retain every original run and attempt instead:
-    related source-run completion evidence, not a partial file, selects a whole
-    attempt later. Only their declared row keys may use nested attribute paths.
+    Feed planning rows retain every original run and attempt instead: related
+    source-run completion evidence, not a partial file, selects a whole attempt
+    later. Document observations also retain every attempt because each row is
+    an immutable operation fact. Only their declared row keys may use nested
+    attribute paths.
     """
     # Count corrections must not inherit the first-wins rule of run-plan,
     # whose business key is also (date, run_id).
     ledgers = {held.identity.ledger for rows in files for held in rows}
-    if ledgers & _PLANNING_LEDGERS:
+    if ledgers & _ATTEMPT_PRESERVING_LEDGERS:
         if len(ledgers) != 1:
-            raise ValueError("planning settlement requires rows from only one ledger")
+            raise ValueError("attempt-preserving settlement requires rows from only one ledger")
         which = next(iter(ledgers))
         if key != door_key(which):
-            raise ValueError(f"planning settlement requires the declared key for {which.value}")
+            raise ValueError(
+                f"attempt-preserving settlement requires the declared key for {which.value}"
+            )
         return _settle_planning_rows(files, key)
     if LedgerName.RUN_SHARDS in ledgers:
         if ledgers != {LedgerName.RUN_SHARDS}:

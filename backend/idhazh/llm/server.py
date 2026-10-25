@@ -29,6 +29,7 @@ import json
 import logging
 from collections.abc import Mapping
 from dataclasses import dataclass, replace
+from dataclasses import field as dataclass_field
 from enum import StrEnum
 from functools import cache
 from pathlib import Path
@@ -41,6 +42,7 @@ from urllib.parse import urlsplit, urlunsplit
 from idhazh.contracts.base import derive_text_digest
 from idhazh.contracts.knobs.model_server import resolve_base_url
 from idhazh.contracts.knobs.models import CompanionFile, ModelEntry, ModelRef
+from idhazh.llm.reasoning import split_reasoning
 from idhazh.sanitize import why_a_forged_turn_would_survive
 
 LOG: Final = logging.getLogger("idhazh")
@@ -194,6 +196,14 @@ class TurnMarkers:
     #: as the one key of `chat_template_kwargs`. `None` is a template that reads
     #: no keywords, and then a request carries none.
     thinking_kwarg: str | None = None
+    chat_template_kwargs: Mapping[str, Any] = dataclass_field(default_factory=dict)
+    reasoning_delimiters: tuple[str, str] | None = None
+
+    def template_kwargs(self) -> dict[str, Any]:
+        """The same selected template variables used to derive these markers."""
+        return template_kwargs(
+            self.chat_template_kwargs, keyword=self.thinking_kwarg, thinking=self.thinks
+        )
 
     def turn(self, role: str, content: str) -> str:
         """One whole turn. `substitute` rather than `safe_substitute`: a renamed
@@ -336,6 +346,7 @@ class Completion:
 
     content: str
     reasoning: str = ""
+    inline_reasoning: str = ""
     prompt_tokens: int = 0
     completion_tokens: int = 0
     #: Why the decode stopped, as the server said it. None where the reply named
@@ -371,17 +382,8 @@ class Completion:
 
     @property
     def reasoned(self) -> bool:
-        """The runtime split a reasoning channel out of the content channel.
-
-        Newer llama.cpp builds move thinking into `message.reasoning_content`
-        rather than leaving `<think>` inline, so reading only `content` makes a
-        reasoning model look compliant. On the build in ggml-org/llama.cpp issue
-        27134 it empties `content` outright for any template whose generation
-        prompt ends in a closing think tag - which is exactly what Qwen3 renders
-        under `enable_thinking: false`. No workflow pins a llama.cpp build, so
-        this arrives without a commit of ours.
-        """
-        return bool(self.reasoning.strip())
+        """The response carried reasoning, in a runtime channel or a declared prefix."""
+        return bool(self.reasoning.strip() or self.inline_reasoning.strip())
 
 
 #: Our name for a value, and the key the model file spells it under. These are
@@ -530,8 +532,7 @@ def server_argv(
             argv.append(str(value))
     for companion in model.companion_files:
         if companion.flag is not None:
-            # POSIX separators: the runner is Linux, and this argument is
-            # captured into a committed golden (`CLAUDE.md` section 2).
+            # Arguments recorded outside the process use POSIX separators.
             argv += [companion.flag, companion_path(weights, companion).as_posix()]
     return argv
 
@@ -541,7 +542,8 @@ def server_argv(
 CHAT_DISABLERS: Final[frozenset[str]] = frozenset({"json_schema", "grammar", "n_predict"})
 
 
-def request_payload(    *,
+def request_payload(
+    *,
     model_id: str,
     system: str,
     user: str,
@@ -583,11 +585,8 @@ def request_payload(    *,
             "json_schema": {"name": schema_name, "strict": True, "schema": output_schema},
         },
     }
-    # A null keyword is a template that reads none, so the key is absent rather
-    # than carrying a name no template answers to; the entry refuses that pair
-    # with a closing marker declared.
-    if markers.thinking_kwarg is not None:
-        payload["chat_template_kwargs"] = {markers.thinking_kwarg: markers.thinks}
+    if kwargs := markers.template_kwargs():
+        payload["chat_template_kwargs"] = kwargs
     return with_sampling(
         payload, {"max_tokens": DEFAULT_MAX_TOKENS, **sampling}, CHAT_DISABLERS
     )
@@ -956,7 +955,21 @@ def _first_token_choices(payload: Mapping[str, Any], *, at: int) -> tuple[TokenC
     return tuple(sorted(choices, key=lambda choice: choice.logprob, reverse=True))
 
 
-def parse_completion(body: str, *, answer_at: int = 0) -> Completion:
+def _response_text(value: object, *, name: str) -> str:
+    """A missing text channel is empty; a channel of another type is invalid."""
+    if value is None:
+        return ""
+    if not isinstance(value, str):
+        raise ValueError(f"the runtime returned {name} that is not a string or null")
+    return value
+
+
+def parse_completion(
+    body: str,
+    *,
+    answer_at: int = 0,
+    reasoning_delimiters: tuple[str, str] | None = None,
+) -> Completion:
     """Read the envelope. Nothing here trusts the content yet.
 
     Two envelopes, because the server answers two routes and each names its
@@ -970,11 +983,9 @@ def parse_completion(body: str, *, answer_at: int = 0) -> Completion:
     caller whose span writes something in front of the answer names the offset
     rather than having one guessed here.
 
-    `reasoning` stays empty on the rendered-completion route, and that is a
-    property rather than a gap: the split `Completion.reasoned` exists to catch
-    is the chat template moving a think block into `reasoning_content`, and a
-    route with no template applies none. Anything the model writes inline
-    arrives in `content`, where each caller's own cleaner already removes it.
+    Runtime reasoning is read from its own channel. Inline compatibility is
+    enabled only by the selected entry's explicit delimiter pair, never by a
+    model name. Both forms leave only the answer in `content`.
 
     **A reply that named no reason for stopping carries none.** Both routes used
     to read an absence as `stop`, which is the one reading that cannot be told
@@ -988,6 +999,8 @@ def parse_completion(body: str, *, answer_at: int = 0) -> Completion:
     reply.
     """
     payload = json.loads(body)
+    if not isinstance(payload, dict):
+        raise ValueError("the runtime returned a response that is not an object")
     # llama.cpp reports prefill and decode separately; a runtime that does not
     # leaves the rates absent rather than blending them into one wrong number.
     timings = payload.get("timings") or {}
@@ -1004,9 +1017,16 @@ def parse_completion(body: str, *, answer_at: int = 0) -> Completion:
             raise ValueError("the runtime returned no choices")
         usage = payload.get("usage") or {}
         message = choices[0].get("message", {})
+        if not isinstance(message, dict):
+            raise ValueError("the runtime returned a choice without a message object")
+        content, inline = split_reasoning(
+            _response_text(message.get("content"), name="message.content"),
+            delimiters=reasoning_delimiters,
+        )
         return Completion(
-            content=message.get("content") or "",
-            reasoning=message.get("reasoning_content") or "",
+            content=content,
+            reasoning=_response_text(message.get("reasoning_content"), name="reasoning_content"),
+            inline_reasoning=inline or "",
             prompt_tokens=int(usage.get("prompt_tokens", 0)),
             completion_tokens=int(usage.get("completion_tokens", 0)),
             finish_reason=choices[0].get("finish_reason"),
@@ -1021,8 +1041,13 @@ def parse_completion(body: str, *, answer_at: int = 0) -> Completion:
     if "content" not in payload:
         raise ValueError("the runtime returned neither a choice nor a completion")
     stop_type = payload.get("stop_type")
+    content, inline = split_reasoning(
+        _response_text(payload.get("content"), name="content"),
+        delimiters=reasoning_delimiters,
+    )
     return Completion(
-        content=payload.get("content") or "",
+        content=content,
+        inline_reasoning=inline or "",
         prompt_tokens=int(payload.get("tokens_evaluated", 0)),
         completion_tokens=int(payload.get("tokens_predicted", 0)),
         finish_reason=None if stop_type is None else _STOP_TYPES.get(stop_type, str(stop_type)),
@@ -1052,9 +1077,9 @@ def _origin_of(endpoint: str) -> str:
 def _note_origin(origin: str) -> None:
     """Say once which server this run is talking to.
 
-    Keyed on the origin rather than the endpoint: the qualification process
-    posts to the chat route and to the rendered-completion route on one server,
-    and an endpoint key would write the identical line twice.
+    Keyed on the origin rather than the endpoint: one run can post to both the
+    chat route and the rendered-completion route on one server, and an endpoint
+    key would write the identical line twice.
 
     The cache is process-global, so a test that asserts "once" calls
     `_note_origin.cache_clear()` first.
@@ -1068,6 +1093,7 @@ def post(
     endpoint: str,
     timeout: float,
     answer_at: int = 0,
+    reasoning_delimiters: tuple[str, str] | None = None,
 ) -> Completion:
     """The only place an item is sent for summarizing.
 
@@ -1089,7 +1115,11 @@ def post(
         method="POST",
     )
     with request.urlopen(outbound, timeout=timeout) as response:
-        return parse_completion(response.read().decode("utf-8"), answer_at=answer_at)
+        return parse_completion(
+            response.read().decode("utf-8"),
+            answer_at=answer_at,
+            reasoning_delimiters=reasoning_delimiters,
+        )
 
 
 def _sibling(endpoint: str, path: str) -> str:
@@ -1294,6 +1324,13 @@ def _ask(url: str, payload: Mapping[str, Any] | None, *, timeout: float) -> Any:
         ) from unreachable
 
 
+def template_kwargs(
+    values: Mapping[str, Any], *, keyword: str | None, thinking: bool
+) -> dict[str, Any]:
+    """Combine selected template inputs with the entry's explicit reasoning switch."""
+    return dict(values) | ({keyword: thinking} if keyword is not None else {})
+
+
 def _rendered_by_the_server(
     endpoint: str,
     conversation: list[dict[str, str]],
@@ -1301,6 +1338,7 @@ def _rendered_by_the_server(
     keyword: str | None,
     thinking: bool,
     timeout: float,
+    template_values: Mapping[str, Any],
 ) -> str:
     """One rendering the model's own template made, asked for as a real call asks.
 
@@ -1308,11 +1346,12 @@ def _rendered_by_the_server(
     name in somebody else's Jinja source, so spelling it in this file would send
     one model's variable to every model.
     """
+    kwargs = template_kwargs(template_values, keyword=keyword, thinking=thinking)
     body = _ask(
         apply_template_url(endpoint),
         {
             "messages": conversation,
-            **({"chat_template_kwargs": {keyword: thinking}} if keyword is not None else {}),
+            **({"chat_template_kwargs": kwargs} if kwargs else {}),
         },
         timeout=timeout,
     )
@@ -1461,6 +1500,8 @@ def turn_markers_from_renderings(
     history: str,
     thinking_close: str | None,
     thinking_kwarg: str | None,
+    chat_template_kwargs: Mapping[str, Any] | None = None,
+    reasoning_delimiters: tuple[str, str] | None = None,
 ) -> TurnMarkers:
     """The markers a model's own template writes, read back off three of its renderings.
 
@@ -1562,6 +1603,8 @@ def turn_markers_from_renderings(
         system_joiner=joiner,
         thinking_close=thinking_close,
         thinking_kwarg=thinking_kwarg,
+        chat_template_kwargs=dict(chat_template_kwargs or {}),
+        reasoning_delimiters=reasoning_delimiters,
     )
     _the_boundary_can_hold(markers, model_id=model_id)
     return markers
@@ -1570,7 +1613,7 @@ def turn_markers_from_renderings(
 #: One derivation per server and per entry, because a bench holding two entries
 #: on two servers would otherwise render the second model's prompts with the
 #: first model's markers, and the grammar would accept every reply.
-_DERIVED: Final[dict[tuple[str, str, str | None, str | None], TurnMarkers]] = {}
+_DERIVED: Final[dict[tuple[str, str], TurnMarkers]] = {}
 
 
 def derive_turn_markers(
@@ -1590,9 +1633,7 @@ def derive_turn_markers(
     prompt never contains, and the name of the template variable that turns
     reasoning on, which is an input to the render rather than an output of it.
     """
-    held = _DERIVED.get(
-        key := (endpoint, entry.id, entry.thinking_close, entry.thinking_kwarg)
-    )
+    held = _DERIVED.get(key := (endpoint, entry.model_dump_json()))
     if held is not None:
         return held
     two_turns = [
@@ -1600,14 +1641,18 @@ def derive_turn_markers(
         {"role": "user", "content": PROBE_USER},
     ]
     plain = _rendered_by_the_server(
-        endpoint, two_turns, keyword=entry.thinking_kwarg, thinking=False, timeout=timeout
+        endpoint,
+        two_turns,
+        keyword=entry.thinking_kwarg,
+        thinking=False,
+        timeout=timeout,
+        template_values=entry.chat_template_kwargs,
     )
     derived = turn_markers_from_renderings(
         model_id=entry.id,
         plain=plain,
         # A template that reads no keyword renders one way whatever it is asked,
-        # so the second call would repeat the first. The entry refuses a null
-        # keyword beside a closing marker, so nothing here needs both openings.
+        # so the second call would repeat the first.
         thinking=(
             _rendered_by_the_server(
                 endpoint,
@@ -1615,6 +1660,7 @@ def derive_turn_markers(
                 keyword=entry.thinking_kwarg,
                 thinking=True,
                 timeout=timeout,
+                template_values=entry.chat_template_kwargs,
             )
             if entry.thinking_kwarg is not None
             else plain
@@ -1629,9 +1675,12 @@ def derive_turn_markers(
             keyword=entry.thinking_kwarg,
             thinking=False,
             timeout=timeout,
+            template_values=entry.chat_template_kwargs,
         ),
         thinking_close=entry.thinking_close,
         thinking_kwarg=entry.thinking_kwarg,
+        chat_template_kwargs=entry.chat_template_kwargs,
+        reasoning_delimiters=entry.reasoning_delimiters,
     )
     _DERIVED[key] = derived
     return derived
@@ -1708,5 +1757,6 @@ def prove_the_entry(
         ),
         endpoint=completion_url(endpoint),
         timeout=timeout,
+        reasoning_delimiters=model.reasoning_delimiters,
     )
     decoding_still_constrains(reply=reply.content, only=only)

@@ -51,7 +51,9 @@
     },
     "sha256": "df0fd4ee07072c607c29a0a1cb4f98918426cca12f45a2776bdd6ee6d09a4de3",
     "thinking_close": "<channel|>",
-    "thinking_kwarg": "enable_thinking"
+    "thinking_kwarg": "enable_thinking",
+    "chat_template_kwargs": {},
+    "reasoning_delimiters": null
   },
   "version": "2026-09-23"
 }

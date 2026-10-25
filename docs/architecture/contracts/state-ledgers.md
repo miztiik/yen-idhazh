@@ -1,6 +1,6 @@
 # The ledgers under state/
 
-**Last Updated**: 2026-10-23
+**Last Updated**: 2026-10-25
 
 `state/` is the only memory this pipeline has. Every run starts on a fresh machine with a fresh checkout, so anything one run needs to tell the next is committed (CLAUDE.md Guardrail #1). This page says what each committed ledger answers and why it files at the grain it does.
 
@@ -29,6 +29,7 @@ A window lets the reader name the files it wants and skip the rest. Without one 
 | `state/raw/run-plan/<YYYY>/<MM>/<DD>/<file_id>.parquet` | What plan did the day hand to its later stages? One row per plan execution | raw and compact | the named UTC day |
 | `state/raw/run-shards/<YYYY>/<MM>/<DD>/<file_id>.parquet` | How many shards did the manifest record for this run? Only date, run identity and nullable count | raw and compact | the widest console window |
 | `state/raw/council-run-records/<YYYY>/<MM>/<DD>/<file_id>.parquet` | Which step ran for each hosted judge, how it ended and what it cost | raw and compact | the judged UTC day |
+| `state/raw/feed-ingest-plan/operational-state/<YYYY>/<MM>/<DD>/<file_id>.parquet` | Which qualified per-source request estimate was derived from the named evidence window and policy revision? | raw and compact | the configured evidence window |
 
 The seen ledger has no published mirror at all, so unlike the two health ledgers there is no second grain anywhere near it.
 
@@ -50,6 +51,13 @@ the reader settles rows by `unit_id`. A raised unit files `outcome=failed` and
 no fault. Exception details are not persisted. The
 [council's recording rule](../publishing/llm-council.md#the-venue-keeps-its-own-record-of-every-unit-it-ran)
 owns collection, recording failures and isolated trials.
+
+The operational-state ledger has a versioned Pydantic row contract, a bound
+TypeScript schema and a scheduled compaction task. The row preserves its
+revision lineage, UTC evidence window, policy version, measured request counts,
+coverage, qualification and request penalty. The report-only estimate does
+not write this ledger or alter selection. Row 10 owns the writer and the
+next-allocation reader; until then, no operational state is persisted.
 
 The run-shards ledger publishes `RunRecord.shards` exactly. Assemble files the
 counts after its final manifest write. An absent count stays null; observed

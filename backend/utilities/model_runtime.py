@@ -1,6 +1,6 @@
 """What does a runner need to serve the model its config names, and is it here and correct?
 
-Five verbs, one program. They were four shell scripts and a fifth module, and
+Six verbs, one program. They were four shell scripts and a fifth module, and
 every one of the boundaries between them invented a format so the next one
 could read it: the pin was shell variables two scripts sourced, and the server
 command line was written NUL-joined to a file four workflow blocks read back
@@ -499,8 +499,8 @@ def refuse_a_server_that_died_at_startup(
     is a boundary rather than a preference: no module under `backend/idhazh/`
     may import `subprocess` at all, because that package is what handles fetched
     web text (Guardrail #11). Answering this needs a process handle, so the
-    answer lives outside the package that may not hold one. `runtime_sweep.py`
-    imports it from here, which is why it is public.
+    answer lives outside the package that may not hold one. The workflow calls
+    this utility directly, so the process check stays here.
     """
     try:
         server.wait(timeout=START_GRACE_SECONDS)
@@ -583,6 +583,56 @@ def start_server(config_root: Path, name: str) -> None:
     _say(f"{name} is up as pid {server.pid}")
 
 
+def describe_request(config_root: Path, *, prove_runtime: bool = False) -> None:
+    """Export the validated request declaration for the independent TypeScript callers."""
+    from idhazh import config
+    from idhazh.contracts.knobs.model_server import resolve_base_url
+    from idhazh.llm.server import (
+        CHAT_DISABLERS,
+        DEFAULT_MAX_TOKENS,
+        prove_the_entry,
+        request_timeout_seconds,
+        resolve_endpoint,
+        template_kwargs,
+        with_sampling,
+    )
+
+    settings = config.load(config_root)
+    entry = settings.models.summarizer
+    if prove_runtime:
+        from idhazh.summarize import output_schema
+
+        prove_the_entry(
+            model=entry,
+            output_schema=output_schema(settings.app.summarize),
+            endpoint=resolve_endpoint(settings.app.model_server.base_url),
+            timeout=request_timeout_seconds(entry),
+        )
+    body: dict[str, object] = {"model": entry.id, "stream": False}
+    kwargs = template_kwargs(
+        entry.chat_template_kwargs, keyword=entry.thinking_kwarg, thinking=entry.thinks
+    )
+    if kwargs:
+        body["chat_template_kwargs"] = kwargs
+    request = with_sampling(
+        body,
+        {"max_tokens": DEFAULT_MAX_TOKENS, **entry.sampling},
+        CHAT_DISABLERS,
+    )
+    _say(
+        json.dumps(
+            {
+                "base_url": resolve_base_url(settings.app.model_server.base_url),
+                "request": request,
+                "reasoning_delimiters": entry.reasoning_delimiters,
+                "timeout_seconds": request_timeout_seconds(entry),
+                "repo": entry.repo,
+                "file": entry.file,
+            }
+        )
+    )
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     verbs = parser.add_subparsers(dest="verb", required=True)
@@ -601,6 +651,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     verbs.add_parser("install-runtime", help="Put the pinned llama.cpp build on this runner.")
     rooted("download-model-files", "Fetch every file the model declares.")
     rooted("verify-model-files", "Check every declared file against what the entry records.")
+    describe = rooted("describe-request", "Export the selected validated request settings as JSON.")
+    describe.add_argument(
+        "--prove-runtime",
+        action="store_true",
+        help="Require the running model's template and constrained decoder to pass startup checks.",
+    )
     start = rooted("start-server", "Start llama-server and prove it survived the start.")
     start.add_argument(
         "--name",
@@ -614,6 +670,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         "install-runtime": install_runtime,
         "download-model-files": lambda: download_model_files(args.config_root),
         "verify-model-files": lambda: verify_model_files(args.config_root),
+        "describe-request": lambda: describe_request(
+            args.config_root, prove_runtime=args.prove_runtime
+        ),
         "start-server": lambda: start_server(args.config_root, args.name),
     }
     ran[args.verb]()

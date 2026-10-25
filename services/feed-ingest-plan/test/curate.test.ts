@@ -25,13 +25,17 @@ import { runFeedPlan, summarizePlan } from "../src/run-feed-plan";
 
 type CandidateCase = {
   name: string; source: string; ordinal: number; vertical: string; kind: string;
-  domain: string; publisher: string; title: string; published_at: string;
+  domain: string; publisher: string; publisher_id: string | null; title: string; published_at: string;
   desk: string | null; lenses: string[] | null; event_types: string[] | null;
   cluster: string | null; entities: string[] | null;
 };
 type Fixture = {
   observed_at: string; run_id: string; correlation_id: string; policy_version: string; config_sha256: string;
   reliability_floor: number;
+  publisher_exposure_cases: {
+    name: string; availability: "available" | "unavailable"; published: number;
+    coefficient: number; first_penalty: number;
+  }[];
   reliability_cases: {
     name: string; enabled: boolean; floor: number; alpha: OperationalEvidence | null; gamma: OperationalEvidence | null;
     winner: string; alpha_penalty: number | null; gamma_penalty: number | null;
@@ -80,7 +84,8 @@ function article(spec: CandidateCase, fixture: Fixture, planning: PlanningConfig
     run_id: fixture.run_id, candidate_id: deriveCandidateId(fixture.run_id, spec.source, spec.ordinal),
     entry_ordinal: spec.ordinal, source_id: spec.source, vertical: spec.vertical,
     source: {
-      source_id: spec.source, feed_url: `https://${spec.domain}/feed`, title: `${spec.source} feed title, not a masthead`,
+      source_id: spec.source, publisher_id: spec.publisher_id,
+      feed_url: `https://${spec.domain}/feed`, title: `${spec.source} feed title, not a masthead`,
       vertical: spec.vertical, kind: spec.kind, tier: 1, form: "article", status: "active",
       weight: 1, applied_tier_weight: 1,
     },
@@ -159,7 +164,7 @@ test("fixed real stage selects exact identities, ranks, components and preserves
 
 test("every saturation coefficient substitutes independently at each actual choice", async () => {
   const original = await inputs();
-  const dimensions = ["source", "source_kind", "domain", "vertical", "desk", "lens", "event_type", "event_cluster", "entity"] as const;
+  const dimensions = ["source_kind", "domain", "vertical", "desk", "lens", "event_type", "event_cluster", "entity"] as const;
   for (const dimension of dimensions) {
     const key = `lambda_${dimension}` as keyof Knobs["mmr_weights"];
     const planning = loadPlanningConfig({
@@ -176,6 +181,51 @@ test("every saturation coefficient substitutes independently at each actual choi
     expect(result.rows[1]!.ratings[dimension].value).toBe(0);
     expect(result.rows[0]!.ratings[dimension].value).toBe(0);
   }
+  const { fixture, planning } = await inputs();
+  const specs = structuredClone(fixture.candidates);
+  specs[1]!.source = "beta";
+  for (const recorded of fixture.publisher_exposure_cases) {
+    planning.config.curate.mmr_weights.lambda_source = recorded.coefficient;
+    const articles = specs.map(spec => article(spec, fixture, planning));
+    const before = structuredClone(articles);
+    const result = curateArticles({
+      articles, planning, observed_at: fixture.observed_at,
+      opportunity: noOpportunity, reliability_floor: fixture.reliability_floor,
+      publication_history: {
+        day: fixture.observed_at.slice(0, 10), availability: recorded.availability,
+        counts: new Map([["one-news", recorded.published]]),
+      },
+    });
+    expect(result.rows).toHaveLength(2);
+    expect(articles).toEqual(before);
+    const first = result.trace[0]!.evaluated.find(entry => entry.candidate_id === articles[0]!.candidate.candidate_id)!;
+    expect(first.scores.publisher_exposure).toMatchObject({
+      publisher_id: "one-news", history_status: recorded.availability,
+      published_today: recorded.availability === "available" ? recorded.published : null,
+      selected_so_far: 0, planned_slots: 2, coefficient: recorded.coefficient, value: recorded.first_penalty,
+    });
+    expect(first.scores.source).toEqual({ available: false, value: null });
+    expect(first.scores.base_article_score).toBe(1);
+    expect(first.scores.marginal_score).toBe(1 - recorded.first_penalty);
+    if (recorded.name === "unequal known publication") expect(names(result)[0]).toBe("alternative");
+    if (recorded.name === "known empty day" || recorded.availability === "unavailable") {
+      const sibling = result.trace[1]!.evaluated.find(entry => entry.candidate_id === articles[1]!.candidate.candidate_id)!;
+      expect(sibling.scores.publisher_exposure).toMatchObject({
+        publisher_id: "one-news", selected_so_far: 1, planned_slots: 2, value: recorded.coefficient / 2,
+      });
+    }
+    expect(result.rows[0]!.ratings).toEqual(result.choices[0]!.scores);
+    expect(result.assessments.find(row => row.candidate_id === result.rows[0]!.candidate_id)!.score_evidence)
+      .toEqual(result.rows[0]!.ratings);
+  }
+  const unknown = curateArticles({
+    articles: specs.map(spec => article({ ...spec, publisher_id: null }, fixture, planning)),
+    planning, observed_at: fixture.observed_at, opportunity: noOpportunity, reliability_floor: fixture.reliability_floor,
+  });
+  expect(unknown.trace.flatMap(step => step.evaluated).every(entry =>
+    entry.scores.publisher_exposure?.publisher_id === null
+    && entry.scores.publisher_exposure.selected_so_far === 0
+    && entry.scores.publisher_exposure.value === null)).toBe(true);
 });
 
 test("coverage uses recorded occurrence coverage, not entity or event-type overlap", async () => {

@@ -63,9 +63,9 @@ class LedgerStaging:
 
 
 #: Every `LedgerName`, and the two facts above for each. Declared by hand
-#: (Guardrail #3) rather than derived, so a ledger joins this table in the
-#: same commit that gives it a writer - never before, and never silently
-#: after.
+#: (Guardrail #3) rather than derived, so a ledger joins this table with its
+#: contract and reader registration. A planned writer may follow in a later
+#: phase, but the staging entry is never added silently after the ledger.
 REGISTRY: Final[dict[LedgerName, LedgerStaging]] = {
     LedgerName.FEED_INGEST_PLAN_DISPATCHES: LedgerStaging(
         writer=(
@@ -115,6 +115,22 @@ REGISTRY: Final[dict[LedgerName, LedgerStaging]] = {
         symbol=None,
         job_labels=frozenset(),
     ),
+    LedgerName.FEED_INGEST_PLAN_DOCUMENT_OBSERVATIONS: LedgerStaging(
+        writer=(
+            "planned TypeScript feed-ingest-plan observation writer "
+            "through packages/ledger-file-writer; no writer exists yet"
+        ),
+        symbol=None,
+        job_labels=frozenset(),
+    ),
+    LedgerName.FEED_INGEST_PLAN_OPERATIONAL_STATE: LedgerStaging(
+        writer=(
+            "planned TypeScript feed-ingest-plan operational-state writer "
+            "through packages/ledger-file-writer; no writer exists yet"
+        ),
+        symbol=None,
+        job_labels=frozenset(),
+    ),
     LedgerName.RUN_SHARDS: LedgerStaging(
         writer="idhazh.telemetry.run_shards.record, after assemble writes run.json",
         symbol="idhazh.telemetry.run_shards.record",
@@ -153,15 +169,6 @@ REGISTRY: Final[dict[LedgerName, LedgerStaging]] = {
         ),
         symbol="idhazh.evals.writer.file_measurements",
         job_labels=frozenset({"work", "assemble"}),
-    ),
-    LedgerName.CANDIDATE_MODELS: LedgerStaging(
-        writer=(
-            "idhazh.stages.decide.stage_decide and idhazh.stages.qualify_decide."
-            "stage_qualify_decide, under `python -m idhazh decide` / `qualify-decide`. "
-            "Neither verb runs inside a `digest.yml` commit job"
-        ),
-        symbol="idhazh.stages.decide.stage_decide",
-        job_labels=frozenset(),
     ),
     LedgerName.ITEM_HEALTH_SUMMARY: LedgerStaging(
         writer=(

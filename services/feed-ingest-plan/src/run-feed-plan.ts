@@ -12,6 +12,8 @@ import { readSeenEvidence, rememberFirstSight } from "./read-ledger-history/read
 import { readExclusionEvidence } from "./read-ledger-history/read-exclusion-evidence";
 import { readFeedHistory, observeFeedReliability } from "./read-ledger-history/read-feed-history";
 import { readDailyPublication } from "./read-ledger-history/read-daily-publication";
+import { readIngestEvidence } from "./read-ledger-history/read-ingest-evidence";
+import { estimateOperationalFeedback } from "./estimate-operational-feedback";
 import { recordFeedHealth } from "./read-ledger-history/record-feed-health";
 import type { OwnFeedReceipt, FeedWriteReceipt } from "./read-ledger-history/own-feed-receipts";
 import type { OwnSeenReceipt } from "./read-ledger-history/read-seen-evidence";
@@ -30,6 +32,7 @@ import type { PlanningMetricsResult, PublicationMetricsResult, PublicationRecord
 import { createProgressLogger } from "./logging/progress-logger";
 import type { ProgressRecord } from "./logging/progress-logger";
 import type { TaskProfiling } from "../../host-probes/src/task-profile/task-profiler";
+import { createIngestObservations } from "./ingest-observations";
 
 export type PlanRuntime = {
   git_sha: string;
@@ -37,6 +40,8 @@ export type PlanRuntime = {
   correlation_id?: string;
   clock?: () => Date;
   captured_at?: string;
+  observation_clock?: () => Date;
+  on_document_observations_persisted?: (files: readonly PersistedLedgerFile[]) => void;
   boundary?: NonNullable<Parameters<typeof harvestFeeds>[3]>;
   log?: (event: FeedIngestEvent) => void;
   progress?: (record: ProgressRecord) => void;
@@ -62,6 +67,7 @@ export async function runFeedPlan(raw: unknown, inputs: PlanInputs, runtime: Pla
     inputs.registrations.dispatches, inputs.registrations.seen,
     inputs.registrations.published, inputs.registrations.item_health,
     inputs.registrations.feed_health,
+    inputs.registrations.document_observations,
   ]) {
     if (entry.lifecycle_status !== "active") throw new PlanError("LEDGER_INACTIVE", `Required ledger ${entry.name} is not active`, entry.name);
   }
@@ -112,14 +118,29 @@ export async function runFeedPlan(raw: unknown, inputs: PlanInputs, runtime: Pla
     root: inputs.root, day: context.date, registration: inputs.registrations.item_health,
     days: inputs.settings.inputs.settled_failure_days,
   });
+  const articleEvidence = await readIngestEvidence({
+    root: inputs.root, now: context.now,
+    window_days: harvestInputs.config.feedback.window_days,
+    registration: inputs.registrations.document_observations,
+    days: inputs.settings.inputs.document_observation_days,
+  });
+  const operationalFeedback = estimateOperationalFeedback(
+    articleEvidence, harvestInputs.config.feedback,
+  );
   progress("HISTORY_READ_COMPLETED");
   logger.startStep();
+  const observations = createIngestObservations({
+    writer: context.writer, outputRoot: inputs.outputRoot,
+    registration: inputs.registrations.document_observations, settings: inputs.ledgerSettings,
+    ...(runtime.on_document_observations_persisted === undefined ? {} : { on_persisted: runtime.on_document_observations_persisted }),
+  });
   const harvest = await harvestFeeds(harvestInputs, {
     writer: context.writer, correlation_id: context.correlation_id,
     max_future_hours: inputs.clock_config.collect.max_future_hours,
     exclusions: exclusionEvidence,
     feed_history: feedHistory.sources,
     overrides, clock: () => new Date(context.now), progress,
+    observations, observation_clock: runtime.observation_clock ?? (() => new Date()),
     log: record => progress(record.subject === "feed" ? "FEED_REJECTED" : "ARTICLE_REJECTED", {
       source_id: record.source_id, ...(record.candidate_id === null ? {} : { candidate_id: record.candidate_id }),
       drop_reason: record.drop_reason,
@@ -227,8 +248,12 @@ export async function runFeedPlan(raw: unknown, inputs: PlanInputs, runtime: Pla
       dispatches,
       seen: seen.sealing,
       feed_health: feedFiles.health,
+      document_observations: observations.result(),
     },
-    evidence: { harvest, screening, curation, seen, exclusions: exclusionEvidence, partition, feed_history: feedHistory, daily_publication: dailyPublication },
+    evidence: { harvest, screening, curation, seen, exclusions: exclusionEvidence, partition,
+      feed_history: feedHistory, daily_publication: dailyPublication,
+      publisher_publication: selection.publisher_publication, article_evidence: articleEvidence,
+      operational_feedback: operationalFeedback },
   };
 }
 export type FeedPlanResult = Awaited<ReturnType<typeof runFeedPlan>>;
@@ -274,7 +299,15 @@ export function summarizePlan(result: FeedPlanResult & { metrics?: PlanningMetri
     feed_history: {
       ...result.evidence.feed_history.history,
       daily_publication: result.evidence.daily_publication.history,
+      publisher_publication: {
+        day: result.evidence.publisher_publication.day,
+        availability: result.evidence.publisher_publication.availability,
+        gaps: result.evidence.publisher_publication.gaps,
+        history: result.evidence.publisher_publication.history,
+      },
     },
+    article_evidence: result.evidence.article_evidence,
+    operational_feedback: result.evidence.operational_feedback,
     editorial_inputs: {
       headline_consumer: "existing_mmr_lens_entity_penalties",
       bonus_consumer: null,

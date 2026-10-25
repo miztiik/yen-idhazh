@@ -94,12 +94,10 @@ its health check asserts the server serves the configured alias and loaded the
 configured filename. That gate is what lets the config value stand in for the
 observed one. `/props` names the file the server opened; it does not digest it,
 and digesting five gigabytes in every shard is a cost nobody has measured against
-the gate it would replace. The qualification path does digest the file it is
-about to run (`_candidate_identity`), so the observation exists and production
-has not adopted it. When `model_server.base_url` is not loopback the run cannot
-see which build answered either, so `runtime_build` records `build-not-recorded`
-rather than this machine's; reconciling the record against the server's own
-`/props` is not done.
+the check it would replace. When `model_server.base_url` is not loopback the run
+cannot see which build answered either, so `runtime_build` records
+`build-not-recorded` rather than this machine's; reconciling the record against
+the server's own `/props` is not done.
 
 **A build recorded for a server on another machine would be borrowed, so it is
 not recorded at all.** Every other field of the manifest is read from the process
@@ -184,16 +182,9 @@ there is nothing to reconcile.
 metrics and the run record, the console reads it, and a row carrying it is kept
 out of the training corpus. The build does not fail.
 
-**A production run never sets it.** Setting it needs two decodes of one prompt to
-compare, and a run summarizes each item once. Repeats happen in qualification,
-which is where both the gate and the diagnostic live.
-
-**The gate is gone and the column is not.** There is no determinism gate at any
-temperature: a summarizer is not asked to say a thing the same way twice, so
-`wording_spread` is what a qualification run records - how many distinct wordings
-each item drew, against its own denominator - and it blocks nothing.
-`determinism_violation` survives as a column because the days already committed
-carry it and the console still reads them.
+**A production run never sets it.** A run summarizes each item once, so it
+cannot compare two outputs for one prompt. `determinism_violation` remains in
+the persisted row because committed days and the console still use the field.
 
 A gate that failed the build would fire across runner CPU classes for reasons
 unrelated to any regression, and a flaky gate gets switched off within a month -
@@ -257,6 +248,6 @@ the record lie (Guardrail #10).
 - [schemas.md](schemas.md) - how these shapes are authored, versioned and generated.
 - [../../concepts/pipeline-loop.md](../../concepts/pipeline-loop.md) - the run, which measures every item it produces because nothing skips.
 - [../../concepts/evaluation.md](../../concepts/evaluation.md) - what an eval row measures, and why an empty re-run must not write one.
-- [../../how-to/evaluate-new-summarizer-model.md](../../how-to/evaluate-new-summarizer-model.md) - the identity and replay requirements for a model change.
+- [../../concepts/config/model-file.md](../../concepts/config/model-file.md) - model identity and runtime settings.
 - [../../reference/pipeline-cost.md](../../reference/pipeline-cost.md) - where a measured number carries its hardware and date.
 - [../../../CLAUDE.md](../../../CLAUDE.md) - Guardrail #10, section 11.

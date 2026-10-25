@@ -1,6 +1,6 @@
 # Isolated feed harvesting
 
-**Last Updated**: 2026-10-23
+**Last Updated**: 2026-10-25
 
 How the TypeScript planner turns configured RSS/Atom entries into sanitized
 article candidates and records refusals. This path is separate from production
@@ -52,6 +52,11 @@ transient serializable data, not an added persisted candidate field.
 The shared [failure diagnostics](feed-failure-diagnostics.md) retain exact
 fetch causes, extraction causes, safe error codes, warnings and measured
 operation times through rejections, assessments and structured events.
+The full planner also supplies the registered
+[operation-observation writer](../contracts/feed-ingest-feedback.md#completed-unit-persistence).
+It saves each completed fetch and parse before later planning can fail.
+Embedded harvest callers supply that writer through `context.observations`;
+without it, the public harvest function retains its transient progress behavior.
 
 Build a screening observation record by selecting the successful `articles`
 and indexing their complete observations by `candidate_id`. Rejected entries
@@ -97,6 +102,10 @@ The first attempt has zero retry time. These are per-read retry measurements,
 not an invented sum of whole-run elapsed time.
 Older attempt records without those measurements read as null, never as a
 claim that their waits took zero time.
+Actual dispatch counts are captured at the transport boundary, separately from
+DNS validation. Observation export occurs after the fetch deadline has stopped;
+handled fetch exceptions export completed attempts as well. On a pool error,
+already-running siblings finish before the caller receives failure.
 
 Source snapshots retain source ID, feed URL, title, vertical, kind, tier,
 form, lifecycle status, source weight and the applied registry tier weight.

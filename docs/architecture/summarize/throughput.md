@@ -45,16 +45,13 @@ prices nothing; it only decides where the thought gets cut. Every committed
 entry had already left it null, so the field went with the answer cap beside it
 rather than waiting for a reading nobody was going to take.
 
-**So the cost of a span is unmeasured, and that is the honest statement.** What
-is measured is the rate: **6.01 +/- 0.11 tokens a second** (2026-08-23,
-`ubuntu-latest`, EPYC 9V74, llama.cpp build b10598, three repeats). What is not
-measured is how many tokens these weights spend before closing the block, and
-that is a property of the weights rather than of a knob. Against the 900-token
-answer worst case of 149.8 seconds, every 100 tokens of thinking is **16.6
-seconds**, so the whole question is the token count. **What settles it**: one
-qualification setup with `thinking_close` declared, reading the thinking span's
-completion tokens off the dispatch log the two-call path already writes. The
-digest's own path makes two calls an item, so an item pays two spans.
+**The cost of a span is unmeasured.** The measured rate is **6.01 +/- 0.11
+tokens a second** (2026-08-23, `ubuntu-latest`, EPYC 9V74, llama.cpp build
+b10598, three repeats). The number of tokens these weights spend before closing
+the block is not measured and belongs to the weights rather than a knob. Against
+the 900-token answer worst case of 149.8 seconds, every 100 tokens of thinking
+is **16.6 seconds**. The pipeline makes two calls per item, so an item pays two
+spans.
 
 **The risk the null cap carries, named.** With no cap, a model that never writes
 its closing marker decodes to `n_ctx` - and the answer span's prompt is the

@@ -1,6 +1,6 @@
 # Intelligent F.E.E.D - I Feed
 
-**Last Updated**: 2026-10-24
+**Last Updated**: 2026-10-25
 
 **Status: design proposal and guidelines, not deployed behavior.**
 F.E.E.D expands to Feed Evaluation & Execution Decider. Intelligent F.E.E.D -
@@ -9,10 +9,15 @@ I Feed is the project name for this design. The owner supplied the intent on
 methods can change as we learn. No scoring values have been calibrated, and no
 improvement has yet been measured.
 
-Plan 67's D3 observation scope and D4 settlement behavior are owner-approved;
-their native payloads and writers are not deployed. D5 admission,
-restriction/recovery and polling controls remain unapproved. Recommendations
-below do not activate those controls; see the [feedback contract](../contracts/feed-ingest-feedback.md).
+Plan 67's D3 observation scope and D4 settlement behavior are owner-approved.
+The observation and operational-state contracts have compatible readers, and
+the planner reports a requests-first estimate from measured evidence. The
+derived-state writer and next-selection consumer are not deployed, so this
+estimate does not change ranking. D5 restriction and recovery thresholds are
+approved but inactive pending their policy-state contract and implementation;
+adaptive polling and operational review remain open. Recommendations below do
+not activate those controls; see the
+[feedback contract](../contracts/feed-ingest-feedback.md).
 
 **A feed earns its place.** Being on our list gives it a chance to prove useful.
 It does not guarantee requests, model time or space in the digest. A dependable
@@ -159,6 +164,13 @@ them or claim that the new plan used them. They enter the next available update.
 Read state through its versioned contract without silently replacing the run's
 pinned code or policy. An incompatible state revision needs an explicit
 migration or declared degraded mode, not a fresh score with restrictions lost.
+
+The current planner implements only a report-only requests-first estimate. It
+requires at least 20 distinct measured opportunities, at least 80 percent
+measured coverage and a known positive request denominator. These are
+provisional config defaults, not calibrated limits. CPU and private-memory
+evidence are unavailable, their equal one-third weights are not reassigned,
+and no estimate is saved or applied to selection in this phase.
 
 Runs may proceed concurrently. Keep per-run observations immutable. If
 another update lands first, rebuild only derived state from newer committed
@@ -581,8 +593,9 @@ For confirmed paywalls, stop ordinary work on the evidenced scope promptly.
 Do not infer a whole-publisher restriction from one paid article, or infer a
 paywall from HTTP 403 alone. Periodic permitted access probes can test recovery
 without generating summaries. Decay toward a neutral score does not clear an
-unresolved restriction. Transition thresholds, durations, scope escalation,
-recovery sample requirements and human/automatic authority remain configurable.
+unresolved restriction. The approved pause and recovery thresholds are recorded
+in the [feedback contract](../contracts/feed-ingest-feedback.md); scope
+escalation and human/automatic authority remain open.
 
 Use a fixed global hygiene budget and a bounded due queue in GitHub Actions.
 Reuse production observations first. Re-evaluation and recovery need not wait
@@ -609,7 +622,7 @@ are five responsibilities, not a requirement for five new files or a framework.
 
 | Responsibility | Contents and ownership |
 | --- | --- |
-| Source catalog | Stable feed identity and [immutable curated publisher IDs](../contracts/publisher-identity.md), endpoints, provenance, starting assumptions, `added_on`, `retired_on` and typed `retirement_reason`. The publisher-ID page approves the naming rules, location and simple config shape; feed assignments and runtime use remain open. No `retirement_note` or substitute notes field. Preserve unknown legacy values. |
+| Source catalog | Stable feed identity and [immutable curated publisher IDs](../contracts/publisher-identity.md), endpoints, provenance, starting assumptions, `added_on`, `retired_on` and open lowercase `retirement_reason`. The publisher-ID page defines naming, location and config shape. Live assignments remain unknown pending publisher-owned evidence; reviewed IDs are carried through planning and observation records. No `retirement_note` or substitute notes field. Preserve unknown legacy values. |
 | I Feed policy | Formula and objective revisions; signal directions, units, valid domains and normalizers; component/method weights; priors; decay; quotas/floors; taxonomy adaptation; transitions; assessment and hygiene budgets. Parameters declare ranges and step bounds. Each action can be observe-only, recommend, or delegated execution. |
 | Evidence and assessments | Reuse measured ledgers. Link assessor outputs to underlying event IDs, with event/assessment/arrival times, method and rubric revisions, context, pool/selection/assessment probabilities, exposure, attribution and raw costs. Distinguish observation, assessment and prediction. Multiple ratings do not create multiple outcomes. |
 | Derived state | Component estimates and support, composite, effective priority, topic distributions, restrictions, due probes and update checkpoints. Pipeline-owned state is distinct from human-edited policy and catalog. |
@@ -624,8 +637,12 @@ need an explicit reconciliation procedure rather than two conflicting answers.
 Owner ruling, kumarsnaveen_microsoft, 2026-10-24 UTC: set `added_on` to the
 UTC date a feed first enters the catalog. Leave absent legacy dates and
 retirement reasons unknown; do not infer them. A newly retired feed has
-`retired_on` and a lower-case slug `retirement_reason`; an existing retired
-entry may keep its missing reason as unknown. Keep reason values open in config
+`retired_on` and an open lowercase `retirement_reason`; an existing retired
+entry may keep its missing reason as unknown. Runtime readers preserve missing
+legacy values and validate recorded fields, but cannot identify an incomplete
+new edit from those same bytes. A new feed requires `added_on`; a new
+retirement requires `retired_on` and `retirement_reason` in curated edit review.
+Do not invent an unknown first-entry date. Keep reason values open in config
 so adding one does not require a code edit. These values remain in
 `config/sources.json`; source additions and changes must not need
 per-source code edits.
@@ -918,7 +935,7 @@ writing them as a plan earlier states decisions nobody made.
 | [probe_feeds.py](../../../backend/utilities/probe_feeds.py) | Improve the admission report. Preserve production fetch/extraction behavior; replace the any-one-success admission interpretation. |
 | [source_health.py](../../../backend/idhazh/telemetry/publish/source_health.py) and [item health](item-health.md) | Reuse source-outcome definitions carefully. The public view's maturity is global, not each feed's history, and the public JSON is not planner control state. |
 | [stages/plan.py](../../../backend/idhazh/stages/plan.py) and [rank.py](../../../backend/idhazh/rank.py) | Put temporary article-access decisions before spending the next article slot. Check the owning path when implementation starts; do not use a later warning as the control. |
-| [sources.py](../../../backend/idhazh/contracts/sources.py) | Define the feed-specific catalog changes and migration first. Keep `added_on`, `retired_on` and a typed `retirement_reason`; no `retirement_note`. |
+| [sources.py](../../../backend/idhazh/contracts/sources.py) | Define feed-specific catalog fields and compatible reads. Keep `added_on`, `retired_on` and an open lowercase `retirement_reason`; no `retirement_note`. |
 | [discover.py](../../../backend/idhazh/discover.py) | Fix host/path matching separately from identity-changing query cleanup. There is no `/news/` allowlist to remove. |
 | [test_discover.py](../../../backend/tests/test_discover.py) and [test_publish_source_health.py](../../../backend/tests/test_publish_source_health.py) | Extend bounded fixtures for the touched behavior. Add a focused report test when its contract is defined. |
 

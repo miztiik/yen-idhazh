@@ -51,6 +51,12 @@ CHANGED_ON_PURPOSE: Final[dict[str, tuple[Any, Any]]] = {
 DAYS_A_PICTURE_MONTH: Final = 30
 
 
+def _recorded_tasks() -> dict[str, TaskPolicy]:
+    """Read old task declarations without requiring today's ledger registry."""
+    gardener = config._gardener_config(PRE_YEARLY_CONFIG)
+    return config._declarations(PRE_YEARLY_CONFIG, gardener.task_names)
+
+
 def _days(window: Window) -> int:
     assert isinstance(window, DaysWindow), f"{window} is not a window of days"
     return window.value
@@ -71,7 +77,7 @@ def _series(policy: TaskPolicy, name: str) -> Window:
 
 def test_every_window_left_the_app_config_with_the_value_it_had() -> None:
     frozen: dict[str, Any] = json.loads(WINDOWS.read_text(encoding="utf-8"))
-    tasks = config.load_gardener(PRE_YEARLY_CONFIG).tasks
+    tasks = _recorded_tasks()
     app = AppConfig.from_json(read_text(CONFIG_DIR / "idhazh.json"))
     folded, scores, machine, health, pictures = (
         tasks["telemetry-aggregate"],
@@ -128,7 +134,7 @@ def test_the_three_windows_that_stayed_still_read_what_they_did() -> None:
 
 def test_the_recorded_config_still_keeps_yearly_expiry_disabled() -> None:
     """An unrelated config migration must not replace the historical retention policy."""
-    tasks = config.load_gardener(PRE_YEARLY_CONFIG).tasks
+    tasks = _recorded_tasks()
     compactions = {
         name: policy for name, policy in tasks.items() if isinstance(policy, CompactionPolicy)
     }

@@ -16,7 +16,7 @@ import { readLedgerParquet } from "../../services/feed-ingest-plan/src/read-ledg
 import { SeenRowSchema } from "../../services/feed-ingest-plan/src/screen-article-candidates/seen-evidence";
 import type { summarizePlan } from "../../services/feed-ingest-plan/src/run-feed-plan";
 import {
-  ArticleAssessmentContract, DiversityMetricContract, DispatchContract, SourceRunContract, legacyAuditSchemas,
+  ArticleAssessmentContract, DiversityMetricContract, DispatchContract, SourceRunContract, DocumentObservationContract, legacyAuditSchemas,
 } from "../../services/feed-ingest-plan/src/metrics/audit-contracts";
 
 export function validateLedgerFilePath(
@@ -35,7 +35,7 @@ export function validateLedgerFilePath(
 }
 
 export async function verifyParquetFiles(
-  root: string, ledger: "dispatches" | "rejections" | "article-assessments" | "diversity" | "source-runs" | "feed-health", written: PersistLedgerResult,
+  root: string, ledger: "dispatches" | "rejections" | "article-assessments" | "diversity" | "source-runs" | "feed-health" | "document-observations", written: PersistLedgerResult,
   registration: LedgerRegistration, expectedRows?: readonly object[],
 ) {
   if (registration.name !== ledger) throw new Error("registration.name differs from the requested ledger");
@@ -76,7 +76,9 @@ export async function verifyParquetFiles(
             ? await readLedgerParquet(actualPath, ledger, DiversityMetricContract)
             : ledger === "feed-health"
               ? await readLedgerParquet(actualPath, ledger, FeedHealthContract)
-              : await readLedgerParquet(actualPath, ledger, SourceRunContract);
+              : ledger === "document-observations"
+                ? await readLedgerParquet(actualPath, ledger, DocumentObservationContract)
+                : await readLedgerParquet(actualPath, ledger, SourceRunContract);
     if (actual.envelope.tier !== "raw" || actual.envelope.file_id !== file.file_id
       || actual.envelope.unit_id !== file.unit_id || actual.envelope.covers !== file.covers
       || actual.envelope.content_sha256 !== file.content_sha256 || actual.rows.length !== file.row_count) {

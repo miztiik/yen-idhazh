@@ -36,7 +36,6 @@ from idhazh.contracts.item_health import ItemHealthRow
 from idhazh.contracts.run_plan import RunPlan
 from idhazh.contracts.seen import PublishedRow, SeenRow
 from idhazh.contracts.story_similarity_pair import StorySimilarityPair
-from idhazh.contracts.validation_row import ValidationRow
 from idhazh.contracts.visual_prune import VisualPruneRow
 from idhazh.ledger.arrow_schema import (
     Column,
@@ -292,7 +291,6 @@ def test_a_story_similarity_pair_round_trips_through_a_parquet_file(tmp_path: Pa
         EvalRow,
         HostFingerprintRow,
         CounterfactualScoreRow,
-        ValidationRow,
         FeedHealthRow,
         SeenRow,
         PublishedRow,

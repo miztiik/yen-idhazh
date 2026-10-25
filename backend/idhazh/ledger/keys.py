@@ -29,6 +29,8 @@ from idhazh.contracts.feed_ingest_article_assessment import ArticleAssessmentRec
 from idhazh.contracts.feed_ingest_dispatch import FeedIngestDispatch
 from idhazh.contracts.feed_ingest_diversity import DiversityMetricRow
 from idhazh.contracts.feed_ingest_editorial_selection import EditorialSelectionRow
+from idhazh.contracts.feed_ingest_feedback import FeedIngestOperationalStateRow
+from idhazh.contracts.feed_ingest_observations import DocumentObservationRecord
 from idhazh.contracts.feed_ingest_rejection import CandidateRejectionRecord
 from idhazh.contracts.feed_ingest_source_run import SourceRunRecord
 from idhazh.contracts.feed_retirement import FeedRetirementRow
@@ -39,7 +41,6 @@ from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.run_plan import RunPlan
 from idhazh.contracts.run_shards import RunShards
 from idhazh.contracts.seen import PublishedRow, SeenRow
-from idhazh.contracts.validation_row import ValidationRow
 from idhazh.contracts.visual_prune import VisualPruneRow
 
 #: The column the door files a dated row under, read out of the row's own cells.
@@ -211,6 +212,7 @@ FEED_INGEST_DIVERSITY_KEY: Final = (
     "date", "metric", "basis", "unit", "dimension", "dimension_value", "stage",
     "window_days", "window_start", "window_end", "top_k",
 )
+FEED_INGEST_OPERATIONAL_STATE_KEY: Final = ("state_revision", "source_id")
 
 
 #: What makes two eval rows the same measurement. The address says which article,
@@ -221,15 +223,6 @@ FEED_INGEST_DIVERSITY_KEY: Final = (
 #: per measurement each day, and a read of the whole ledger keeps the first row
 #: across every day.
 OBSERVATION_KEY: Final = ("url_key", "output_digest", "scorer_version")
-
-
-#: What makes two validation rows the same record. One candidate, judged once,
-#: by one execution. `run_id` is in the key because two dispatches of one model
-#: on one day are two verdicts about two trees, and the committed ledger held
-#: exactly that pair - drop it and the settlement would keep whichever was filed
-#: first. `model_id` is in it because a dispatch judges one candidate and the
-#: golden set judges several, so a date and a run alone would collapse them.
-VALIDATION_KEY: Final = ("date", "run_id", "model_id")
 
 
 #: What makes two first-sight rows the same record. One address, first seen by
@@ -362,6 +355,12 @@ _DOOR_SHAPES: Final[dict[LedgerName, _DoorShape]] = {
     LedgerName.FEED_INGEST_PLAN_DIVERSITY: _DoorShape(
         FEED_INGEST_DIVERSITY_KEY, DiversityMetricRow
     ),
+    LedgerName.FEED_INGEST_PLAN_DOCUMENT_OBSERVATIONS: _DoorShape(
+        ("event_id",), DocumentObservationRecord
+    ),
+    LedgerName.FEED_INGEST_PLAN_OPERATIONAL_STATE: _DoorShape(
+        FEED_INGEST_OPERATIONAL_STATE_KEY, FeedIngestOperationalStateRow
+    ),
     LedgerName.GARDENER: _DoorShape(COLLECTION_PRUNE_KEY, CollectionPruneRow),
     LedgerName.VISUAL_PRUNES: _DoorShape(VISUAL_PRUNE_KEY, VisualPruneRow),
     LedgerName.FEED_RETIREMENTS: _DoorShape(FEED_RETIREMENT_KEY, FeedRetirementRow),
@@ -370,7 +369,6 @@ _DOOR_SHAPES: Final[dict[LedgerName, _DoorShape]] = {
     LedgerName.SUMMARY_QUALITY_EVALS: _DoorShape(OBSERVATION_KEY, EvalRow),
     LedgerName.HOST_FINGERPRINT: _DoorShape(HOST_FINGERPRINT_KEY, HostFingerprintRow),
     LedgerName.COUNTERFACTUAL_SCORES: _DoorShape(COUNTERFACTUAL_SCORE_KEY, CounterfactualScoreRow),
-    LedgerName.CANDIDATE_MODELS: _DoorShape(VALIDATION_KEY, ValidationRow),
     LedgerName.FEED_HEALTH: _DoorShape(FEED_HEALTH_KEY, FeedHealthRow),
     LedgerName.SEEN: _DoorShape(SEEN_KEY, SeenRow),
     LedgerName.PUBLISHED: _DoorShape(PUBLISHED_KEY, PublishedRow),

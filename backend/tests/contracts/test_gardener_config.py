@@ -97,7 +97,7 @@ MONTHS = {"unit": "months", "value": 14}
 PACKED_LIVE: Final = ("compact-host-fingerprint", "compact-item-health")
 
 RETENTION_LEDGERS: Final = (
-    "candidate-models", "council-run-records", "counterfactual-scores", "feed-health",
+    "council-run-records", "counterfactual-scores", "feed-health",
     "feed-retirements", "gardener", "host-fingerprint", "item-health",
     "item-health-summary", "published", "run-plan", "seen", "summary-quality-evals",
     "run-shards",
@@ -110,6 +110,8 @@ MOVED_LEDGER_TASKS: Final = (
     "compact-feed-ingest-plan-source-runs",
     "compact-feed-ingest-plan-article-assessments",
     "compact-feed-ingest-plan-diversity",
+    "compact-feed-ingest-plan-document-observations",
+    "compact-feed-ingest-plan-operational-state",
     "compact-content-similarity-judge-merge-line-holdout-scores",
     "compact-content-similarity-judge-scored-pairs",
     "compact-content-similarity-judge-metrics",
@@ -193,7 +195,6 @@ def test_trial_compactions_keep_only_their_declared_roots_and_the_trial_window()
             ],
         ),
         "compact-trial-host-fingerprint": ("host-fingerprint", ["state/pipeline-tests"]),
-        "compact-trial-candidate-models": ("candidate-models", ["state/pipeline-tests"]),
     }
     for name, (ledger_name, roots) in expected.items():
         policy = tasks[name]

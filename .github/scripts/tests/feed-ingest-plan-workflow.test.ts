@@ -159,7 +159,8 @@ test("offers independent machine RAM control and commits only genuine planner an
   expect(plan.run).toContain("await verifyLiveDocumentHttp({ ...inputs, settings }");
   expect(plan.run).toContain("summary, machineMemoryEnabled)");
   expect(plan.run).toContain("WorkflowMachineMemorySchema.parse(process.env.PROFILE_MACHINE_MEMORY)");
-  expect(plan.run).toContain('await writeGitHubOutputs(GITHUB_OUTPUT, { stage_api_complete: "true" })');
+  expect(plan.run).toContain('stage_api_complete: "true"');
+  expect(plan.run).toContain("...documentObservations.files.map(file => file.path)");
   expect(plan.run!.indexOf("await verifyPlanningCompletion(")).toBeLessThan(plan.run!.indexOf("await verifyLiveDocumentHttp("));
   const httpProof = await readFile(join(root, ".github", "scripts", "feed-ingest-plan-http-proof.ts"), "utf8");
   expect(httpProof).toContain('mkdtemp(join(runnerTemp, "feed-stage-api-private-"))');
@@ -194,7 +195,8 @@ test("offers independent machine RAM control and commits only genuine planner an
   expect(plan.run!.indexOf("await verifyPlanningCompletion(")).toBeLessThan(plan.run!.indexOf("await writeGitHubOutputs("));
   expect(plan.run).toContain("stageConfiguredDays(\"published\"");
   expect(plan.run).toContain("stageConfiguredDays(\"item-health\"");
-  expect(plan.run).toContain("inputs: { ...inputs.settings.inputs, seen_days, published_days, settled_failure_days, feed_health_days }");
+  expect(plan.run).toContain("stageConfiguredDays(\"document-observations\"");
+  expect(plan.run).toContain("inputs: { ...inputs.settings.inputs, seen_days, published_days, settled_failure_days, feed_health_days, document_observation_days }");
   expect(plan.run).not.toContain("feed-ingest-plan-report");
   const reporting = steps.find(step => step.name === "Optional GitHub report")!;
   expect(reporting.if).toContain("workflow_reporting == 'true'");
@@ -433,26 +435,43 @@ test("strict-checks adapters, tests and the actual inline program in one compile
   const { steps } = await workflow();
   const directory = await mkdtemp(join(root, ".row12-typecheck-"));
   try {
+    const checkout = steps.find(step => step.uses?.startsWith("actions/checkout@"))!;
+    const selection = checkout.with?.["sparse-checkout"];
+    if (typeof selection !== "string") throw new Error("Expected named sparse checkout inputs");
+    const adapters: string[] = [];
+    for (const entry of selection.trim().split("\n").map(value => value.trim())) {
+      if (!/^\/[\w./-]+$/.test(entry) || entry.split("/").includes("..")) {
+        throw new Error(`Expected a literal rooted sparse checkout input: ${entry}`);
+      }
+      const path = entry.slice(1);
+      const target = join(directory, ...path.split("/"));
+      await mkdir(dirname(target), { recursive: true });
+      if (entry.endsWith("/")) {
+        await symlink(join(root, ...path.split("/")), target, "junction");
+      } else {
+        await copyFile(join(root, ...path.split("/")), target);
+        if (path.startsWith(".github/scripts/") && path.endsWith(".ts")) adapters.push(target);
+      }
+    }
+    const inline = join(directory, "inline");
+    await mkdir(inline);
     const generated: string[] = [];
     for (const [index, step] of steps.entries()) {
       if (!step.run?.startsWith("bun run - <<'TS'")) continue;
       const script = step.run;
       const code = script.slice(script.indexOf("\n") + 1, script.lastIndexOf("\nTS"));
-      const path = join(directory, `workflow-${index}.ts`);
+      const path = join(inline, `workflow-${index}.ts`);
       await writeFile(path, code.replaceAll('from "./', 'from "../'), "utf8");
       generated.push(path);
     }
-    const service = join(root, "services", "feed-ingest-plan");
+    const service = join(directory, "services", "feed-ingest-plan");
     const child = Bun.spawn([
       "bun", "run", "tsc", "--noEmit", "--target", "ESNext", "--module", "ESNext",
       "--moduleResolution", "Bundler", "--strict", "--noUncheckedIndexedAccess",
       "--exactOptionalPropertyTypes", "--noFallthroughCasesInSwitch", "--noUnusedLocals",
       "--noUnusedParameters", "--verbatimModuleSyntax", "--skipLibCheck",
       "--types", "bun", "--typeRoots", join(service, "node_modules", "@types"), ...generated,
-      ...["feed-ingest-plan-outputs.ts", "feed-ingest-plan-feed-history.ts", "feed-ingest-plan-report.ts", "feed-ingest-plan-commit.ts", "feed-ingest-plan-verification.ts", "feed-ingest-plan-audit-fixture.ts",
-        "feed-ingest-plan-http-proof.ts", "feed-ingest-plan-profile-proof.ts",
-        "tests/feed-ingest-plan-outputs.test.ts", "tests/feed-ingest-plan-report.test.ts",
-        "tests/feed-ingest-plan-workflow.test.ts"].map(path => join(root, ".github", "scripts", ...path.split("/"))),
+      ...adapters,
     ], { cwd: service, stdout: "pipe", stderr: "pipe" });
     const [output, errors] = await Promise.all([new Response(child.stdout).text(), new Response(child.stderr).text()]);
     expect({ exit: await child.exited, output, errors }).toEqual({ exit: 0, output: "", errors: "" });
@@ -468,10 +487,12 @@ test("runs the native compatibility verifier in a named-input copy with no backe
       "index", "version", "schemas/article-assessment.schema", "schemas/candidate.schema",
       "schemas/config.schema", "schemas/dispatch.schema", "schemas/diversity.schema",
       "schemas/editorial-selection.schema", "schemas/envelope.schema", "schemas/event.schema",
-      "schemas/ledger-index.schema", "schemas/partition.schema", "schemas/policy.schema",
+      "schemas/feed-ingest-feedback.schema", "schemas/ledger-index.schema", "schemas/partition.schema",
+      "schemas/policy.schema",
       "schemas/primitives", "schemas/rejection.schema", "schemas/source-run.schema",
       "schemas/source.schema", "schemas/telemetry.schema", "schemas/host-fingerprint.schema",
       "schemas/harvest-diagnostics.schema", "schemas/item-health-failure.schema", "schemas/feed-health.schema",
+      "schemas/ingest-observations.schema",
       "schemas/planner-operation.schema", "schemas/recorded-instant.schema", "observation-order",
       "schemas/planner-stage.schema",
       "schemas/publication-input.schema",
@@ -487,6 +508,7 @@ test("runs the native compatibility verifier in a named-input copy with no backe
       ...common, ...writer, "packages/common-contracts/package.json", "packages/ledger-file-writer/package.json",
       ".github/scripts/feed-ingest-plan-verification.ts",
       "services/feed-ingest-plan/src/read-ledger-history/read-parquet.ts",
+      "services/feed-ingest-plan/src/read-ledger-history/ledger-history-error.ts",
       "services/feed-ingest-plan/src/metrics/audit-contracts.ts",
       "tests/fixtures/ledger-file-writer/feed-ingest-dispatch-row.json",
       "tests/fixtures/ledger-file-writer/legacy-seen-day.parquet",

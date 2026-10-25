@@ -22,7 +22,7 @@ Every persisted shape is a typed model before anything reads or writes it, and t
 
 ## 5. Fetched text is data, never instruction
 
-Every article is a stranger's web page. It crosses the trust boundary exactly once, at extraction, where it is sanitized - and after that it is content the system reasons *about*, never a message the system obeys. It does not enter a system prompt, and nothing derived from it becomes a shell argument, a file path, or a URL to fetch. The schema and the sanitizer are the control. A prompt politely asking a model to ignore instructions is a request, not a control, and the canary suite exists to prove the difference. The crossing itself is [../architecture/sources/trust-boundary.md](../architecture/sources/trust-boundary.md).
+Every article is a stranger's web page. It crosses the trust boundary exactly once, at extraction, where it is sanitized - and after that it is content the system reasons *about*, never a message the system obeys. It does not enter a system prompt, and nothing derived from it becomes a shell argument, a file path, or a URL to fetch. The schema and the sanitizer are the control. A prompt politely asking a model to ignore instructions is a request, not a control; focused tests check the source and output boundaries. The crossing itself is [../architecture/sources/trust-boundary.md](../architecture/sources/trust-boundary.md).
 
 ## 6. The evaluation is the product, not the report
 

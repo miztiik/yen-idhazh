@@ -53,8 +53,7 @@ sized on the average is a budget that fails on a hard night.
 
 ## The four shards did not agree
 
-Each shard drew its own runner, and the machine a runner gives you is a lottery
-([what processor a run draws](the-processor-lottery.md)).
+Each shard drew its own runner, and the machine a runner gives you can vary.
 
 | Shard | Pairs | Fastest | Average | Slowest |
 | --- | --- | --- | --- | --- |
@@ -112,6 +111,5 @@ A re-run replaces this page rather than adding a second one.
 
 ## See also
 
-- [what processor a run draws, and what it does to a reading](the-processor-lottery.md) - why two shards of one night disagree by 13.2 percent.
 - [pipeline-cost.md](../pipeline-cost.md) - the 9.85 tokens a second reading the old derived figure came from.
 - [autotune-content-similarity.md](../../architecture/publishing/autotune-content-similarity.md) - what the judge is for, and what the pair budget buys.

@@ -8,6 +8,7 @@ import shutil
 import subprocess
 from pathlib import Path
 from typing import Any, cast
+from uuid import NAMESPACE_URL, uuid5
 
 import pytest
 from pydantic import ValidationError
@@ -28,9 +29,15 @@ CONTRACT_NAMES = (
     ("planner_stage", "ParsedFeedBatch"),
     ("planner_stage", "SelectedFeedBatch"),
     ("planner_stage", "PartitionedFeedBatch"),
+    ("feed_ingest_observations", "DocumentObservationRecord"),
+    ("feed_ingest_feedback", "FeedIngestOperationalStateRow"),
 )
 
 MODEL_NAMES = (
+    ("feed_ingest_candidate", "SourceSnapshot"),
+    ("feed_ingest_candidate", "SourceOperationalEvidence"),
+    ("feed_ingest_candidate", "PublisherExposurePenalty"),
+    ("feed_ingest_feedback", "OperationalStateRead"),
     ("planner_stage", "PlannerStageContext"),
     ("planner_stage", "PlannerStageRequest"),
     ("planner_stage", "RecordedIdentity"),
@@ -59,6 +66,91 @@ def test_declared_contract(module: str, name: str) -> None:
     assert contract in idhazh.contracts.CONTRACTS
     assert contract.schema_version() == contract.model_fields["version"].default
     assert contract.json_schema()["additionalProperties"] is False
+    if name == "DocumentObservationRecord":
+        observation = contract.from_json(
+            read_text(CONTRACT_FIXTURES_DIR / "feed-ingest-document-observation" / "refused-fetch.json")
+        )
+        attempt = observation.model_dump(mode="json") | {
+            "event_id": str(uuid5(NAMESPACE_URL, f"{observation.event_id}:attempt")),
+            "operation": "attempt",
+            "request_phase": "target",
+            "request_sequence": 0,
+            "retry": 0,
+            "request_coverage": "complete",
+            "dispatched_request_count": 0,
+        }
+        assert contract.model_validate(attempt).dispatched_request_count == 0
+        partial = attempt | {
+            "document_kind": "feed",
+            "request_phase": "robots",
+            "request_coverage": "partial",
+            "dispatched_request_count": 1,
+        }
+        partial_result = contract.model_validate(partial)
+        assert (partial_result.outcome, partial_result.attribution, partial_result.request_coverage) == (
+            "failed", "unresolved", "partial",
+        )
+        assert partial_result.dispatched_request_count == 1
+        unknown = attempt | {"request_coverage": "unknown", "dispatched_request_count": None}
+        assert contract.model_validate(unknown).dispatched_request_count is None
+        with pytest.raises(ValidationError, match="unknown request coverage"):
+            contract.model_validate(unknown | {"dispatched_request_count": 0})
+        feed_observation = observation.model_dump(mode="json") | {"document_kind": "feed"}
+        assert contract.model_validate(feed_observation).article_id == observation.article_id
+        with pytest.raises(ValidationError, match="article opportunity requires its article kind"):
+            contract.model_validate(feed_observation | {"candidate_id": "a" * 64})
+        with pytest.raises(ValidationError, match="article opportunity requires its article kind"):
+            contract.model_validate(
+                observation.model_dump(mode="json")
+                | {"candidate_id": "a" * 64, "observed_run_id": None}
+            )
+        corrected = observation.model_dump(mode="json") | {
+            "event_id": str(uuid5(NAMESPACE_URL, str(observation.event_id))),
+            "corrects_event_id": observation.event_id,
+            "correction_revision": 1,
+            "occurred_at": "2026-10-21T12:01:00Z",
+        }
+        assert contract.model_validate(corrected).corrects_event_id == observation.event_id
+        with pytest.raises(ValidationError, match="both its target event and positive revision"):
+            contract.model_validate(corrected | {"correction_revision": None})
+        with pytest.raises(ValidationError, match="cannot correct itself"):
+            contract.model_validate(
+                observation.model_dump(mode="json")
+                | {"corrects_event_id": observation.event_id, "correction_revision": 1}
+            )
+    publisher_snapshot: dict[str, object] = {"publisher_id": "recorded-publication"}
+    publisher_source: dict[str, object] = {"source": publisher_snapshot}
+    previous_identity_cases: dict[tuple[str, str], tuple[str, dict[str, object]]] = {
+        ("feed_ingest_candidate", "FeedIngestCandidate"): ("2026-10-23", publisher_source),
+        ("feed_ingest_article_assessment", "ArticleAssessmentRecord"): (
+            "2026-10-24", publisher_source,
+        ),
+        ("feed_ingest_editorial_selection", "EditorialSelectionRow"): (
+            "2026-10-24", publisher_source,
+        ),
+        ("feed_ingest_dispatch", "FeedIngestDispatch"): (
+            "2026-10-24", {"content": publisher_source},
+        ),
+        ("feed_ingest_source_run", "SourceRunRecord"): ("2026-10-22T20:30", publisher_source),
+        ("planner_stage", "ParsedFeedBatch"): (
+            "2026-10-24", {"candidates": [{"source": publisher_snapshot}]},
+        ),
+        ("planner_stage", "SelectedFeedBatch"): (
+            "2026-10-24", {"selections": [{"source": publisher_snapshot}]},
+        ),
+        ("planner_stage", "PartitionedFeedBatch"): (
+            "2026-10-24",
+            {"dispatches": [{"content": publisher_source, "selection": publisher_source}]},
+        ),
+    }
+    previous = previous_identity_cases.get((module, name))
+    if previous is not None:
+        version, nested = previous
+        with pytest.raises(
+            ValidationError,
+            match="curated publisher identity requires its declared contract version",
+        ):
+            contract.model_validate({"version": version, **nested})
 
 
 def test_typescript_provenance_is_declared() -> None:
@@ -206,6 +298,14 @@ def test_typescript_envelope_fields_and_footer_keys(typescript_schemas: dict[str
     from idhazh.contracts.feed_health import FeedHealthRow
     from idhazh.contracts.publication_inventory import PublicationEntry, PublicationInventory
 
+    with pytest.raises(
+        ValidationError,
+        match="curated publisher identity requires its declared contract version",
+    ):
+        FeedHealthRow.model_validate({
+            "version": "2026-10-23T18:50", "publisher_id": "recorded-publication",
+        })
+
     for contract in (
         file_envelope.FileEnvelope,
         file_envelope.WriterIdentity,
@@ -220,6 +320,12 @@ def test_typescript_envelope_fields_and_footer_keys(typescript_schemas: dict[str
         theirs = typescript_schemas[contract.__name__]
         assert normalized_shape(theirs, theirs) == normalized_shape(ours, ours)
     assert typescript_schemas["__footer_keys"] == list(file_envelope._KEYS)
+    envelope_versions = typescript_schemas["__envelope_versions"]
+    assert len(envelope_versions) == len(set(envelope_versions))
+    assert set(envelope_versions) == set(file_envelope._ENVELOPE_VERSIONS)
+    assert typescript_schemas["__file_envelope_version"] == (
+        file_envelope.FileEnvelope.schema_version()
+    )
     assert typescript_schemas["__row_identity_column_versions"] == dict(
         file_envelope.RowIdentity.__column_versions__
     )
@@ -241,6 +347,48 @@ def test_typescript_envelope_fields_and_footer_keys(typescript_schemas: dict[str
         ) == normalized_shape(
             {key: value for key, value in ours.items() if key != "default"}, native
         )
+
+
+def test_recorded_pair_projection_binds_native_fields_vocabularies_and_identity_format() -> None:
+    from idhazh.contracts.base import SLUG_PATTERN
+    from idhazh.contracts.story_similarity_pair import StorySimilarityPair
+
+    bun = shutil.which("bun")
+    assert bun, "Install Bun to run the publication evidence binding gate"
+    completed = subprocess.run(
+        [
+            bun,
+            "--eval",
+            'import { z } from "zod";'
+            'import { RecordedEventPairSchema } from "./src/metrics/publication-evidence";'
+            "process.stdout.write(JSON.stringify(z.toJSONSchema(RecordedEventPairSchema)));",
+        ],
+        cwd=REPO_ROOT / "services" / "feed-ingest-plan",
+        text=True,
+        capture_output=True,
+        check=True,
+    )
+    projection = json.loads(completed.stdout)
+    native = StorySimilarityPair.json_schema()
+    fixture = json.loads(
+        read_text(REPO_ROOT / "tests" / "fixtures" / "feed-ingest-plan" / "publication-evidence.json")
+    )
+    assert list(projection["properties"]) == fixture["bindings"]["RecordedEventPair"]["fields"]
+    for name, field in projection["properties"].items():
+        source = native["properties"][name]
+        assert normalized_shape(
+            {key: value for key, value in field.items() if key != "default"}, projection
+        ) == normalized_shape(
+            {key: value for key, value in source.items() if key != "default"}, native
+        ), name
+    for name in ("scorer_model", "judge_model"):
+        for schema in (native, projection):
+            field = schema["properties"][name]
+            text = next(
+                branch for branch in field.get("anyOf", [field]) if branch.get("type") == "string"
+            )
+            assert text["pattern"] == SLUG_PATTERN
+            assert "enum" not in text and "const" not in text
 
 
 def rejection_payload() -> dict[str, Any]:
@@ -324,7 +472,11 @@ def test_candidate_identity_precedes_article_validation() -> None:
 
 
 def test_dispatch_keeps_selection_and_content_identity() -> None:
-    from idhazh.contracts.feed_ingest_candidate import SourceReliabilityPenalty
+    from idhazh.contracts.feed_ingest_candidate import (
+        PublisherExposurePenalty,
+        ScoreEvidence,
+        SourceReliabilityPenalty,
+    )
     from idhazh.contracts.feed_ingest_dispatch import FeedIngestDispatch
     from idhazh.contracts.feed_ingest_planning_observations import PlanningObservations
 
@@ -334,6 +486,30 @@ def test_dispatch_keeps_selection_and_content_identity() -> None:
     row = FeedIngestDispatch.model_validate(payload)
     assert row.partition.dispatch_count == 1
     assert row.selection.ratings.source_reliability is None
+    assert row.selection.ratings.publisher_exposure is None
+    exposure = {
+        "day": row.selection.date, "publisher_id": "recorded-publisher",
+        "history_status": "available", "published_today": 2, "selected_so_far": 1,
+        "planned_slots": 2, "coefficient": 0.25, "exposure": 1, "value": 0.25,
+    }
+    assert PublisherExposurePenalty.model_validate(exposure).value == 0.25
+    scores = row.selection.ratings.model_dump() | {
+        "publisher_exposure": exposure, "source": {"available": False, "value": None},
+    }
+    assert ScoreEvidence.model_validate(scores).publisher_exposure is not None
+    with pytest.raises(ValidationError, match="replaces feed crowding"):
+        ScoreEvidence.model_validate(scores | {"source": {"available": True, "value": 0}})
+    for exposure_change in (
+        {"published_today": None}, {"history_status": "unavailable"},
+        {"exposure": 1.5}, {"value": 0.5}, {"planned_slots": 0},
+        {"selected_so_far": -1}, {"publisher_id": None}, {"coefficient": -1},
+    ):
+        with pytest.raises(ValidationError):
+            PublisherExposurePenalty.model_validate(exposure | exposure_change)
+    historical_exposure = json.loads(json.dumps(payload))
+    historical_exposure["selection"]["ratings"]["publisher_exposure"] = exposure
+    with pytest.raises(ValidationError, match="publisher exposure requires"):
+        FeedIngestDispatch.model_validate(historical_exposure)
     for partial_feed in (False, True):
         observations = {
             "feed_headline": None,

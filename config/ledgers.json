@@ -53,6 +53,22 @@
           "prefix": ["feed-ingest-plan", "diversity"],
           "stem": null,
           "suffix": null
+        },
+        {
+          "name": "document-observations",
+          "publish_to_data_explorer": false,
+          "grain": "raw-and-compact",
+          "prefix": ["feed-ingest-plan", "document-observations"],
+          "stem": null,
+          "suffix": null
+        },
+        {
+          "name": "operational-state",
+          "publish_to_data_explorer": false,
+          "grain": "raw-and-compact",
+          "prefix": ["feed-ingest-plan", "operational-state"],
+          "stem": null,
+          "suffix": null
         }
       ]
     },
@@ -147,22 +163,6 @@
           "publish_to_data_explorer": true,
           "grain": "raw-and-compact",
           "prefix": ["summary-quality-evals"],
-          "stem": null,
-          "suffix": null
-        }
-      ]
-    },
-    {
-      "name": "candidate-models",
-      "lifecycle_status": "active",
-      "description": "The verdict on each candidate model, filed on the day it was measured.",
-      "onboarded": "2026-09-27",
-      "ledgers": [
-        {
-          "name": "candidate-models",
-          "publish_to_data_explorer": true,
-          "grain": "raw-and-compact",
-          "prefix": ["candidate-models"],
           "stem": null,
           "suffix": null
         }

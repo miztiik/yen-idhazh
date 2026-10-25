@@ -54,6 +54,8 @@ from idhazh.contracts.feed_ingest_candidate import FeedIngestCandidate
 from idhazh.contracts.feed_ingest_dispatch import FeedIngestDispatch
 from idhazh.contracts.feed_ingest_diversity import DiversityMetricRow
 from idhazh.contracts.feed_ingest_editorial_selection import EditorialSelectionRow
+from idhazh.contracts.feed_ingest_feedback import FeedIngestOperationalStateRow
+from idhazh.contracts.feed_ingest_observations import DocumentObservationRecord
 from idhazh.contracts.feed_ingest_rejection import CandidateRejectionRecord
 from idhazh.contracts.feed_ingest_source_run import SourceRunRecord
 from idhazh.contracts.feed_retirement import FeedRetirementRow
@@ -78,11 +80,6 @@ from idhazh.contracts.planner_stage import (
 )
 from idhazh.contracts.publication_inventory import PublicationInventory
 from idhazh.contracts.publication_receipt import PublicationReceipt
-from idhazh.contracts.qualification import (
-    QualificationReport,
-    QualificationSamples,
-    QualificationShard,
-)
 from idhazh.contracts.reference_dataset import (
     ReferenceCollectionMetadata,
     ReferenceDatasetLocalConfig,
@@ -128,7 +125,6 @@ from idhazh.contracts.taxonomy import (
     Taxonomy,
     VerticalDef,
 )
-from idhazh.contracts.validation_row import ValidationRow, ValidationVerdict
 from idhazh.contracts.visual import VisualPlan
 from idhazh.contracts.visual_data import VisualData
 from idhazh.contracts.visual_decision import VisualDecision, VisualKind, VisualState
@@ -155,6 +151,8 @@ CONTRACTS: Final[tuple[type[Contract], ...]] = (
     EditorialSelectionRow,
     FeedIngestCandidate,
     FeedIngestDispatch,
+    FeedIngestOperationalStateRow,
+    DocumentObservationRecord,
     SourceRunRecord,
     AppConfig,
     AppearanceConfig,
@@ -191,9 +189,6 @@ CONTRACTS: Final[tuple[type[Contract], ...]] = (
     PinnedEncoderCandidate,
     PublicationInventory,
     PublicationReceipt,
-    QualificationReport,
-    QualificationSamples,
-    QualificationShard,
     RawDayIndex,
     ReferenceCollectionMetadata,
     ReferenceDatasetLocalConfig,
@@ -216,7 +211,6 @@ CONTRACTS: Final[tuple[type[Contract], ...]] = (
     StorySimilarityPair,
     Summary,
     Taxonomy,
-    ValidationRow,
     VisualAggregateRow,
     VisualAttemptRow,
     VisualData,
@@ -248,6 +242,7 @@ __all__ = [
     "DigestViewVisual",
     "DigestVisual",
     "DiversityMetricRow",
+    "DocumentObservationRecord",
     "EdgarPolicy",
     "EditorialSelectionRow",
     "EntityDef",
@@ -257,6 +252,7 @@ __all__ = [
     "FeedDef",
     "FeedIngestCandidate",
     "FeedIngestDispatch",
+    "FeedIngestOperationalStateRow",
     "FetchedDocument",
     "FileEnvelope",
     "LedgerName",
@@ -291,7 +287,6 @@ __all__ = [
     "Summary",
     "SummaryStatus",
     "Taxonomy",
-    "ValidationRow",
     "ValidationVerdict",
     "VerticalCount",
     "VerticalDef",

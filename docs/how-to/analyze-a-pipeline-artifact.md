@@ -11,13 +11,10 @@ turns one item's calls into a markdown document. Read that document, not the
 capture files: one capture is a single JSON object holding a 15,000-character
 prompt on one line, so a text editor shows a wall.
 
-**Two workflows write captures.** `digest.yml` writes one per call per item, for
-90 days. `validate.yml` writes one per call per item **per repeat**, for 30 days,
-because a qualification reads each article several times - so its captures sit in
-`repeat-1/`, `repeat-2/` and so on under the artifact. The analyzer walks the
-tree, so pointing it at the downloaded directory finds all of them. On the pair,
-the second prompt replays the first call's reply, so two repeats of one article
-do not share a prompt and neither copy is redundant.
+`digest.yml` writes one capture per model call per item, for 90 days. The
+analyzer reads the downloaded artifact directory and groups the calls for each
+item. On the pair, the second prompt replays the first call's reply, so its
+capture is not redundant.
 
 ## When to run it
 
@@ -30,8 +27,8 @@ do not share a prompt and neither copy is redundant.
 
 | Input | Where it comes from | Needed |
 | :--- | :--- | :--- |
-| A run id | `gh run list --workflow digest.yml`, or `--workflow validate.yml` for a qualification | Always |
-| The `captures-<shard>` artifact | `gh run download`. 90 days from a digest run, 30 from a qualification | Always |
+| A run id | `gh run list --workflow digest.yml` | Always |
+| The `captures-<shard>` artifact | `gh run download`; kept for 90 days | Always |
 | The run's UTC day | `YYYY-MM-DD`, the day the run published. The analyzer reads that day's rows from the item-health ledger under `--state`, default `state` | Only for a capture written before 2026-09-15 |
 
 ## Steps

@@ -81,8 +81,8 @@ flowchart TD
 Text fetched from the open web is **data, never instruction**. It crosses the
 boundary once, at extraction, and is sanitised there. The controls are the
 sanitizer, the fence and the pinned output shape - not a prompt asking a model to
-behave. Eight injection canaries assert this on every build, five at the pipeline
-and three on the published page.
+behave. Backend tests check the sanitizer and reject address-bearing model
+output; the published canary day checks the reader-facing path.
 
 See [`sources/trust-boundary.md`](sources/trust-boundary.md).
 

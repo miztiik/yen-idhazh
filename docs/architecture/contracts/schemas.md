@@ -34,6 +34,18 @@ tier identifiers. Historical readers do not require current registry membership.
 The migration and its compatibility checks are owned by
 [../sources/source-classification.md](../sources/source-classification.md).
 
+Saved similarity model identities use `Slug`, the same lowercase letters,
+digits and single separating hyphens accepted for configured model IDs.
+`StorySimilarityPair`, `StorySimilarityDistribution`,
+`FittedSimilarityThreshold`, `ContentSimilarityJudgeMetrics` and
+`MergeLineHoldoutScore` advance to `2026-10-24T19:49`. Readers validate the recorded
+spelling, never membership in today's selected model file. Existing JSON,
+CSV and Parquet strings, versions and provenance remain unchanged on read;
+no archive rewrite, second write format or migration is needed.
+Fixed judge software identities and verdict vocabularies remain closed.
+The owner-directed reversal of the former closed model lists is recorded in
+[similarity's design rationale](../publishing/autotune-content-similarity.md#design-rationale).
+
 The ledger layer reads a field annotation as a recursive tree: scalar (`string`, `int64`, `float64`, `bool`), list (`list[T]` and `tuple[T, ...]`), or struct (nested Pydantic model). A closed set of unions and wrapped aliases is reduced before the conversion, and unsupported shapes fail with the full nested field path. `backend/idhazh/ledger/arrow_schema.py` is the single entry point; `backend/idhazh/ledger/parquet.py` renders that tree to Arrow; `backend/idhazh/ledger/json_lines.py` stays format-generic and never adds contract-specific branches.
 
 The published-column gate compares current files exactly. For older file
@@ -102,15 +114,32 @@ The CI backend gate installs the locked package and runs these checks before
 pytest, which executes the Python-to-Zod bindings. It does not skip a binding
 when Bun or the package is absent.
 
+The publication observer's `RecordedEventPairSchema` is a read projection of
+the Python-owned pair, not a writer contract. The same binding module checks
+its actual runtime field types, closed vocabularies and model identity patterns
+against Python. Its bounded fixture names the projected fields, not an allowed
+model list. Historical example IDs in that fixture remain recorded evidence.
+Install the locked `services/feed-ingest-plan` dependencies before running this
+binding locally; the CI backend gate already does so.
+
 The shared feed planning contracts have independent stamps. Harvested content
 and terminal rejections use `2026-10-23`; source-run observations use
 `2026-10-22T20:30`; diversity readings use `2026-10-22`. Article assessments,
 unsharded editorial selections and dispatches use `2026-10-24` for their nested
 source-reliability score evidence.
 Their models live in `backend/idhazh/contracts/feed_ingest_*.py`.
+Selections, article assessments, dispatches, selected batches and partitioned
+batches now use `2026-10-24T23:00` for nullable publisher-exposure evidence.
+The native Python declarations and strict TypeScript copies migrate prior
+versions without reinterpreting their `source` feed-crowding term. Historical
+exposure remains null, not an invented publication count; old physical schemas
+and logical commitments retain their original encoding. Current scores cannot
+charge both terms. The formula and bounded publication join live in
+[editorial selection](../sources/feed-curation.md#publisher-exposure-adjustment).
+Candidate, source-run, parsed-batch and rejection stamps are unchanged.
 These declarations do not enable a producer, register a ledger, or change the
 production planner.
-Planner events are independently stamped `2026-10-24` in their TypeScript
+Planner events are independently stamped `2026-10-24T23:00` in their TypeScript
 schema. Native tests cover current fixture validation, UUID versions, typed
 payloads, forbidden article text, identity propagation and event ordering.
 
@@ -262,7 +291,6 @@ The shapes, and where each one lives once written:
 | `CouncilRunRecord` | `council-run-record` | one row of `state/raw/council-run-records/<YYYY>/<MM>/<DD>/`, later packed under `state/compact/council-run-records/` - which council step ran for one tenant, how it ended, how long it took, and what it cost. A missing part row against `work_part_count` shows a part that did not report |
 | `ContentSimilarityJudgeMetrics` | `content-similarity-judge-metrics` | one row of `state/raw/content-similarity-judge/metrics/<YYYY>/<MM>/<DD>/`, in the raw file the council's save job files through the ledger door under the judged date, packed later under `state/compact/content-similarity-judge/metrics/` - what one part of that judge's night, `work_part_index`, dealt, read, agreed and lost, plus its two rates and its clocks |
 | `MergeLineHoldoutScore` | `content-similarity-judge-merge-line-holdout-score` | one row under `state/raw/content-similarity-judge/merge-line-holdout-scores/<YYYY>/<MM>/<DD>/`, packed under `state/compact/content-similarity-judge/merge-line-holdout-scores/` - the line in force, the four cells it scored against the hand-marked holdout, and what the line was made of. No model runs in it, so it carries no call stamp |
-| `ValidationRow` | `validation-row` | one row of `state/<run.trial_state_dirname>/raw/candidate-models/<YYYY>/<MM>/<DD>/`, in the raw file the gates file through the ledger door. A matching `compact-trial-candidate-models` declaration packs named trial roots without changing production retention |
 | `RunManifest` | `run-manifest` | `.../<DD>/run.json`, append-only per date |
 | `DigestDay` | `digest-day` | `.../<DD>/digest.json` and each `run-<N>.json` |
 | `SearchIndex` | `search-index` | `frontend/public/assist/index/<YYYY-MM>.json`, with its vectors in a sibling `.bin` |

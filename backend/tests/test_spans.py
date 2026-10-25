@@ -18,8 +18,8 @@ Two sentinels, because one of them alone would be a weaker test:
   there so the test measures the structural control - that no code path reads
   article text into an attribute - and not the regex.
 
-The same sweep runs over all six committed injection canaries in
-`backend/tests/test_canaries.py`, which owns those fixtures.
+The same sweep runs over the six committed injection canaries named in
+`backend/tests/support/canaries.py`.
 
 No mocks and no network (Guardrail #7): the fetcher reads a page this file builds,
 and the model is a loopback HTTP server replying with a committed completion.
@@ -121,7 +121,7 @@ class RecordedCompletionEndpoint:
     It cycles the bodies it was given, so one item's two calls each get the reply
     their own decoder can read.
 
-    `/apply-template` is answered off the recorded renderings and takes nothing
+    `/apply-template` renders explicit protocol inputs and takes nothing
     from that cycle. The stage reads its turn markers there before its first
     item, so a server that answered it with a completion would hand a reply to a
     render and shift every item's body one place down the cycle.

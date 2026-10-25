@@ -1,6 +1,6 @@
 # Feed planning diversity readings
 
-**Last Updated**: 2026-10-22
+**Last Updated**: 2026-10-24
 
 Which population and denominator does each available feed planning reading use?
 
@@ -117,6 +117,14 @@ rule and unchanged ASCII headline-figure veto constrain positive decisions.
 Every member of an event group must match every other member; pair chains alone
 cannot merge events. Group names exist only inside this bounded calculation.
 No matching policy, model call or new stored event identity is introduced.
+
+Model IDs use the saved pair contract's slug format, not a list of currently
+configured weights. A valid unfamiliar or retired ID alone cannot make a
+reading unavailable. IDs remain part of the complete matcher stamp, so two
+different recorded encoders or judges still cannot be combined.
+The [schema binding](../architecture/contracts/schemas.md#what-holds-the-copy-in-step)
+checks the actual Python and TypeScript identity formats and closed
+vocabularies; historical examples retain their recorded IDs.
 
 ## Durable per-run and rolling readings
 

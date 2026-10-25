@@ -167,6 +167,7 @@ def test_the_feed_health_ledger_columns_are_defined_once() -> None:
         "robots_checked_at",
         "robots_status",
         "target_attempted",
+        "publisher_id",
     )
 
 

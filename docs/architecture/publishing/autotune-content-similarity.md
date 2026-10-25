@@ -1,6 +1,6 @@
 # Autotuning the similarity line that groups one story
 
-**Last Updated**: 2026-10-12
+**Last Updated**: 2026-10-24
 
 A day runs the same story from more than one of our feeds. This page owns the
 line that decides when two items are one story, how that line fits itself once a
@@ -556,6 +556,19 @@ Two passes read the finished day inside `assemble.build_day`, and both were writ
 
 ## Design rationale
 
+**Saved model identities are open; recorded instruments must still agree.**
+Owner ruling, kumarsnaveen, 2026-10-24: a valid new model configuration must not
+require edits to saved-data model lists. This reverses the former policy that
+an encoder or judge swap required a similarity schema edit. The five saved
+similarity contracts now check the same slug spelling as model configuration.
+Historical readers never load today's selected model file to decide whether
+an older identity is allowed. They retain each recorded ID and its provenance;
+the live writer still records the entry used for the call and the encoder used
+for its vectors. Complete stamps, decoder evidence and rejection of mixed
+instruments remain required. The string wire type is unchanged, so old files
+remain readable without rewriting the archive. Contract and cross-language
+checks are defined in [the schema guide](../contracts/schemas.md).
+
 **The line falls fast and rises slow, and the next reader must not reverse it.**
 The house rule is to err on the side of publishing less: if two feeds give
 near-identical coverage that is the feed's fault, and one of them is dropped
@@ -645,7 +658,7 @@ the slot width and by nothing that accumulates.
 **The shards are CI jobs, not processes on one runner.** The runner is 2 physical
 cores behind 4 logical CPUs, and one `llama-server` on the configured weights
 peaks near the runner's whole memory
-([../../reference/models/qwen3.5-9b-q4km.md](../../reference/models/qwen3.5-9b-q4km.md)).
+([../../concepts/config/model-file.md](../../concepts/config/model-file.md)).
 A second server on one runner does not fit at all, never mind four. The shards also
 commit nothing: one job downloads every shard's verdicts and makes one push, so
 there is no merge driver to trust, no union stacking to census afterwards, and no

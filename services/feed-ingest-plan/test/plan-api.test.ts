@@ -32,6 +32,7 @@ import { loadConfig as loadProbeConfig } from "../../host-probes/src/config";
 import { TaskProfileSchema } from "../../host-probes/src/task-profile/profile-schema";
 import type { TaskProfile } from "../../host-probes/src/task-profile/profile-schema";
 import { verifyStageApis } from "./stage-api-cases";
+import { readObservationFiles } from "./observation-recordings";
 
 test("health is explicit; disabled, malformed, oversized and unknown controls cannot fetch", async () => {
   const inputs = await loadPlanInputs(fileURLToPath(new URL("../../../", import.meta.url)));
@@ -142,6 +143,20 @@ test("actual API and awaited CLI compose the same recorded plan and disclose the
     });
     expect(response.status).toBe(200);
     const apiResult = await response.json();
+    const planFacts = await readObservationFiles(api.inputs.outputRoot, apiResult.files.document_observations.files);
+    expect(planFacts.length).toBeGreaterThan(0);
+    expect(api.observation_files).toEqual(apiResult.files.document_observations.files);
+    const requests = planFacts.filter(({ row }) => row.operation === "attempt");
+    expect(requests.reduce((count, { row }) => count + row.dispatched_request_count!, 0)).toBe(api.transport.requests.length);
+    expect(requests.filter(({ row }) => row.request_phase === "validation")
+      .every(({ row }) => row.dispatched_request_count === 0)).toBe(true);
+    expect(planFacts.every(({ row, identity }) =>
+      row.observed_run_id === apiResult.run_id && row.observed_attempt === identity.attempt
+      && row.occurred_at === "2026-10-21T23:59:59Z")).toBe(true);
+    expect(planFacts.filter(({ row }) => row.document_kind === "feed").every(({ row }) => row.candidate_id === null)).toBe(true);
+    expect(planFacts.some(({ row }) => row.document_kind === "article" && row.candidate_id !== null)).toBe(true);
+    expect(new Set(planFacts.map(({ row }) => row.event_id)).size).toBe(planFacts.length);
+    const observationFilesBeforeReplay = [...api.observation_files];
     const capturedHealth = await readLedgerParquet(join(api.inputs.outputRoot, apiResult.files.feed_health.files[0].path),
       "feed-health", FeedHealthContract);
     expect(capturedHealth.rows.every(({ row }) => row.checked_at === "2026-10-21T23:59:59.999Z")).toBe(true);
@@ -195,6 +210,7 @@ test("actual API and awaited CLI compose the same recorded plan and disclose the
     expect(apiResult.files.dispatches.status).toBe("written");
     expect(cliResult.files.dispatches.status).toBe("written");
     expect(api.transport.requests.length).toBeGreaterThan(0);
+    expect(api.observation_files.slice(0, observationFilesBeforeReplay.length)).toEqual(observationFilesBeforeReplay);
     expect(cli.transport.requests.map(request => request.url.href)).toEqual(api.transport.requests.map(request => request.url.href));
     expect(apiResult).not.toHaveProperty("article_text");
     expect(JSON.stringify(apiResult)).not.toContain(api.directory);
@@ -285,6 +301,15 @@ test("actual API and awaited CLI compose the same recorded plan and disclose the
       task_name: "parse", request_id: parseRequest.request_id, correlation_id, run_id: fetched.observation.run_id,
     });
     expect(profiles[1]?.processes.worker.closing.pid).toBe(process.pid);
+    const standaloneFiles = api.observation_files.slice(observationFilesBeforeReplay.length);
+    const standaloneFacts = await readObservationFiles(api.inputs.outputRoot, standaloneFiles);
+    expect(standaloneFacts.some(({ row }) => row.event_id === fetched.observation.event_id)).toBe(true);
+    expect(standaloneFacts.some(({ row }) => row.event_id === parsed.observation.event_id
+      && row.caused_by_event_id === fetched.observation.event_id)).toBe(true);
+    expect(standaloneFacts.every(({ row }) =>
+      row.observed_run_id === null && row.observed_attempt === null && row.candidate_id === null
+      && row.source_id === "recorded-news" && row.publisher_id === null)).toBe(true);
+    const standaloneFileCount = api.observation_files.length;
     expect(profiles[1]?.config.machine_memory_enabled).toBe(false);
     expect(profiles[1]?.machine_available_min_kb).toBeNull();
     expect(profiles[1]?.samples.at(-1)?.unavailable["memory_kb.total"]).toBe("configured_off");
@@ -353,6 +378,7 @@ test("actual API and awaited CLI compose the same recorded plan and disclose the
     });
     expect(() => redactProofResponse("parse", "feed", privateParseBytes, 200)).toThrow("document parse");
     expect(api.transport.requests).toHaveLength(afterFetch);
+    expect(api.observation_files).toHaveLength(standaloneFileCount);
     for (const changed of [
       { ...fetchRequest, url: "https://news.example/not-found" },
       { ...fetchRequest, correlation_id: randomUUID() },
@@ -402,6 +428,10 @@ test("actual API and awaited CLI compose the same recorded plan and disclose the
     const failedFetchRequest = { ...fetchRequest, request_id: randomUUID(), url: "https://news.example/not-found" };
     const failedFetch = await (await post("fetch", failedFetchRequest)).json();
     expect(failedFetch.failure).toBe("http");
+    const failedFacts = await readObservationFiles(api.inputs.outputRoot, api.observation_files);
+    expect(failedFacts.find(({ row }) => row.event_id === failedFetch.observation.event_id)?.row).toMatchObject({
+      outcome: "failed", failure_code: "http", attribution: "source", http_status: 404,
+    });
     expect(profiles.at(-1)?.outcome).toBe("error");
     const afterFailedFetch = profiles.length;
     expect((await post("parse", {
@@ -414,7 +444,39 @@ test("actual API and awaited CLI compose the same recorded plan and disclose the
       ...parseRequest, request_id: randomUUID(), fetch_request_id: rootlessRequest.request_id, article_id: rootless.article_id,
     })).json();
     expect(rootlessParsed.failure).toBe("missing-document-root");
+    const parseFacts = await readObservationFiles(api.inputs.outputRoot, api.observation_files);
+    expect(parseFacts.find(({ row }) => row.event_id === rootlessParsed.observation.event_id)?.row).toMatchObject({
+      operation: "parse", outcome: "failed", failure_code: "missing-document-root", attribution: "unresolved",
+      caused_by_event_id: rootless.observation.event_id,
+    });
     expect(profiles.at(-1)?.outcome).toBe("error");
+    const originalRetries = api.inputs.harvest.extraction.max_retries;
+    api.inputs.harvest.extraction.max_retries = 1;
+    for (const [url, targetRequests, expectedFailure] of [
+      ["https://news.example/safe-redirect", 2, null],
+      ["https://news.example/retry", 2, null],
+      ["https://news.example/denied", 0, "robots-denied"],
+      ["https://inward.example/feed.xml", 0, "unsafe-target"],
+    ] as const) {
+      const fileCount = api.observation_files.length;
+      const requestCount = api.transport.requests.length;
+      const receipt = await (await post("fetch", { ...fetchRequest, request_id: randomUUID(), url })).json();
+      expect(receipt.failure).toBe(expectedFailure);
+      const rows = (await readObservationFiles(api.inputs.outputRoot, api.observation_files.slice(fileCount))).map(held => held.row);
+      const attempts = rows.filter(row => row.operation === "attempt");
+      expect(attempts.reduce((count, row) => count + row.dispatched_request_count!, 0))
+        .toBe(api.transport.requests.length - requestCount);
+      expect(attempts.filter(row => row.request_phase === "target")
+        .reduce((count, row) => count + row.dispatched_request_count!, 0)).toBe(targetRequests);
+      expect(attempts.every(row => row.request_coverage === "complete")).toBe(true);
+      expect(attempts.every(row => row.caused_by_event_id === receipt.observation.event_id)).toBe(true);
+      expect(rows.every(row => row.document_kind === "article" && row.candidate_id === null)).toBe(true);
+      if (url.endsWith("/retry")) expect(attempts.filter(row => row.request_phase === "target").map(row => row.retry)).toEqual([0, 1]);
+      if (url.includes("inward.example")) expect(attempts).toMatchObject([{
+        request_phase: "validation", dispatched_request_count: 0, failure_code: "unsafe-target",
+      }]);
+    }
+    api.inputs.harvest.extraction.max_retries = originalRetries;
     // A bounded recorded document exercises actual synchronous parsing, not a padded live operation.
     const paragraph = api.transport.recordings.bodies.article.match(/<p>[\s\S]*?<\/p>/)![0];
     const repeats = Math.min(1024, Math.floor(api.inputs.harvest.extraction.max_body_bytes / (2 * paragraph.length)));
@@ -458,6 +520,10 @@ test("a required source write failure returns an API error, not proven planning 
     expect(failed).not.toHaveProperty("planning_completion");
     expect(existsSync(join(raw, "article-assessments"))).toBe(true);
     expect(existsSync(join(raw, "diversity"))).toBe(true);
+    const retained = await readObservationFiles(recorded.inputs.outputRoot, recorded.observation_files);
+    expect(retained.some(({ row }) => row.operation === "fetch" && row.outcome === "success")).toBe(true);
+    expect(retained.some(({ row }) => row.operation === "parse" && row.outcome === "success")).toBe(true);
+    const filesBeforeReplay = [...recorded.observation_files];
     const requests = recorded.transport.requests.length;
     const stopped = await createPlanApp(recorded.inputs, recorded.runtime).request("/api/2026-10-20/plan", {
       method: "POST", headers: { "Content-Type": "application/json", "Idempotency-Key": requestKey }, body: "{}",
@@ -465,6 +531,31 @@ test("a required source write failure returns an API error, not proven planning 
     expect(stopped.status).toBe(409);
     expect((await stopped.json()).code).toBe("REQUEST_INCOMPLETE");
     expect(recorded.transport.requests).toHaveLength(requests);
+    expect(recorded.observation_files).toEqual(filesBeforeReplay);
+    await expect(readObservationFiles(recorded.inputs.outputRoot, filesBeforeReplay)).resolves.toEqual(retained);
+    const refusing = await recordedPlan();
+    try {
+      const nativeRoot = join(refusing.inputs.outputRoot, "raw", "feed-ingest-plan");
+      await mkdir(nativeRoot, { recursive: true });
+      const blocker = join(nativeRoot, "document-observations");
+      await writeFile(blocker, "Observation saves must report this failure.");
+      const fetchRequest = {
+        request_id: randomUUID(), correlation_id: randomUUID(), source_id: "recorded-news", kind: "feed",
+      };
+      const postFetch = () => createPlanApp(refusing.inputs, refusing.runtime).request("/api/2026-10-20/fetch", {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(fetchRequest),
+      });
+      const unsaved = await postFetch();
+      expect(unsaved.status).toBe(500);
+      expect((await unsaved.json()).issues[0].message).toContain("document-observations save failed");
+      const dispatched = refusing.transport.requests.length;
+      expect(dispatched).toBeGreaterThan(0);
+      await unlink(blocker);
+      // A telemetry save failure does not invalidate the completed factual receipt.
+      expect((await postFetch()).status).toBe(200);
+      expect(refusing.transport.requests).toHaveLength(dispatched);
+      expect(refusing.observation_files).toHaveLength(0);
+    } finally { await refusing.close(); }
   } finally { await recorded.close(); }
 }, 30000);
 

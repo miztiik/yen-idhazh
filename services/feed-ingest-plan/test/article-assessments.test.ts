@@ -60,6 +60,7 @@ test("an undated article uses its recorded current first sight, not its fetch ti
     const result = await runFeedPlan({ partition_strategy: "none" }, recorded.inputs, recorded.runtime);
     const rows = translateArticleAssessments(result, recorded.inputs);
     const rootless = rows.find(row => row.reason === "EXTRACT_FAILED")!;
+    expect(rootless.extraction_outcome).toBe("failed");
     expect(rootless.diagnostics).toMatchObject({
       stopped_stage: "extract", extraction_failure: "missing-document-root", http_status: 200,
     });

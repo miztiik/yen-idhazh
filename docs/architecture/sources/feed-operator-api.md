@@ -1,6 +1,6 @@
 # Feed planning operator APIs
 
-**Last Updated**: 2026-10-24
+**Last Updated**: 2026-10-25
 
 How do local operator requests fetch, parse, select, partition and persist
 content? These are local build-time APIs, not site services.
@@ -60,6 +60,11 @@ its existing audit and progress IDs retain their own separate namespaces.
 Each actual feed parse emits exactly one parse observation, including empty
 and malformed feeds. A refused fetch does not claim a parse attempt.
 All recorded instant strings use UTC with `Z`.
+The shared units persist these facts through the registered
+[operation-observation writer](../contracts/feed-ingest-feedback.md#completed-unit-persistence).
+Native facts keep their actual completion clock rather than the run's captured
+start. Standalone rows do not turn the journal's replay identity into a
+planner run, attempt or article opportunity.
 
 ## Durable replay and interrupted requests
 
@@ -87,6 +92,9 @@ restart without fetching, parsing or writing more ledgers. One write
 transaction owns work at a time across processes. Concurrent callers receive
 HTTP 409 `REQUEST_BUSY` and retry the same key; they do not start duplicate
 work. SQLite recovers an interrupted transaction on reopen.
+An observation-save failure reports HTTP 500 after retaining the completed
+fetch or parse receipt. Replaying that receipt does not repeat actual work or
+repair the failed save; a receipt is not proof of observation persistence.
 After the captured-identity commit, the next write lock re-reads and validates
 the request before doing work. If another process completed it between locks,
 the second caller returns that completed response instead of repeating work.
@@ -169,7 +177,11 @@ it does not issue HTTP requests to its own listener.
    complete saved batch, without article lists, caller paths or a separate
    input-count limit. It returns the new selected `batch_id`, `parsed_batch_id`,
    run and correlation IDs, existing selection rows, typed `exclusions`, and
-   the selection/rejection write results. It does not fetch or call a model.
+   the selection/rejection write results. `publisher_history` records the UTC
+   day, availability and named evidence gaps, including for an empty selection.
+   The [publisher preference](feed-curation.md#publisher-exposure-adjustment)
+   uses confirmed recorded identities and keeps missing publication history
+   explicit. It does not fetch or call a model.
 4. `/partition-articles` accepts `{"batch_id": "<selected-batch UUID>"}` with
    optional `strategy` and `shards`. Strategies are `bin-pack`, `round-robin`
    and `none`; omitted controls use the committed partition configuration.

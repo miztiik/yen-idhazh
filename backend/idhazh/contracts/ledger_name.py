@@ -17,7 +17,9 @@ class LedgerName(StrEnum):
 
     One name for one ledger, so the directory a writer fills, the directory a
     reader walks and the word an operator types cannot be spelled three ways. A
-    ledger joins this set in the change that gives it a writer, never before one.
+    A ledger joins this set with its row contract and reader registration, before
+    its writer emits rows. The reader can then accept the declared shape before
+    any producer starts writing it.
 
     **A value is the ledger's own name, never a filename.** Where the ledger is a
     directory the value is that directory. Where it is a single file the value is
@@ -46,7 +48,6 @@ class LedgerName(StrEnum):
     ITEM_HEALTH = "item-health"
     HOST_FINGERPRINT = "host-fingerprint"
     SUMMARY_QUALITY_EVALS = "summary-quality-evals"
-    CANDIDATE_MODELS = "candidate-models"
     ITEM_HEALTH_SUMMARY = "item-health-summary"
     PUBLISHED = "published"
     FEED_RETIREMENTS = "feed-retirements"
@@ -72,3 +73,5 @@ class LedgerName(StrEnum):
     FEED_INGEST_PLAN_SOURCE_RUNS = "source-runs"
     FEED_INGEST_PLAN_ARTICLE_ASSESSMENTS = "article-assessments"
     FEED_INGEST_PLAN_DIVERSITY = "diversity"
+    FEED_INGEST_PLAN_DOCUMENT_OBSERVATIONS = "document-observations"
+    FEED_INGEST_PLAN_OPERATIONAL_STATE = "operational-state"

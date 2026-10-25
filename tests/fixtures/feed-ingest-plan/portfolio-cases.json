@@ -5,6 +5,13 @@
   "policy_version": "portfolio-recorded-1",
   "config_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
   "reliability_floor": 0.5,
+  "publisher_exposure_cases": [
+    { "name": "known empty day", "availability": "available", "published": 0, "coefficient": 0.25, "first_penalty": 0 },
+    { "name": "unequal known publication", "availability": "available", "published": 2, "coefficient": 1, "first_penalty": 1 },
+    { "name": "saturated day remains soft", "availability": "available", "published": 20, "coefficient": 0.25, "first_penalty": 0.25 },
+    { "name": "unavailable ignores partial publication counts", "availability": "unavailable", "published": 20, "coefficient": 0.25, "first_penalty": 0 },
+    { "name": "zero coefficient removes only exposure effect", "availability": "available", "published": 2, "coefficient": 0, "first_penalty": 0 }
+  ],
   "reliability_cases": [
     {
       "name": "failed reads reduce only source authority", "enabled": true, "floor": 0.5,
@@ -63,21 +70,21 @@
   "candidates": [
     {
       "name": "first", "source": "alpha", "ordinal": 0, "vertical": "ai",
-      "kind": "reporting", "domain": "one.example", "publisher": "One News",
+      "kind": "reporting", "domain": "one.example", "publisher": "One News", "publisher_id": "one-news",
       "title": "First distinct article", "published_at": "2026-10-21T12:00:00Z",
       "desk": "ai", "lenses": ["shared", "second"], "event_types": ["release", "meeting"],
       "cluster": "shared-occurrence", "entities": ["one", "two"]
     },
     {
       "name": "middle", "source": "alpha", "ordinal": 1, "vertical": "ai",
-      "kind": "reporting", "domain": "one.example", "publisher": "One News",
+      "kind": "reporting", "domain": "one.example", "publisher": "One News", "publisher_id": "one-news",
       "title": "Second distinct article", "published_at": "2026-10-20T18:00:00Z",
       "desk": "ai", "lenses": ["shared", "second"], "event_types": ["release", "meeting"],
       "cluster": "shared-occurrence", "entities": ["one", "two"]
     },
     {
       "name": "alternative", "source": "gamma", "ordinal": 0, "vertical": "energy",
-      "kind": "research", "domain": "two.example", "publisher": "Two News",
+      "kind": "research", "domain": "two.example", "publisher": "Two News", "publisher_id": "two-news",
       "title": "Another distinct article", "published_at": "2026-10-20T00:00:00Z",
       "desk": "energy", "lenses": ["different"], "event_types": ["acquisition"],
       "cluster": "different-occurrence", "entities": ["three"]
