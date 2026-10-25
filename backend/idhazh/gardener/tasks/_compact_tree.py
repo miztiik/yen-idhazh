@@ -210,6 +210,8 @@ class CompactTree:
     raw_days: list[str]
     #: How many raw day folders the pass listed, before any step set a day aside.
     listed: int = 0
+    #: Raw snapshots named by the valid feed-health head; no compaction step may remove them.
+    protected_raw_files: frozenset[Path] = frozenset()
     #: The periods whose index the pass found on disk.
     indexed: frozenset[Period] = frozenset()
     expired_through: str | None = None
@@ -241,7 +243,14 @@ class CompactTree:
         self.work_out_marks()
 
     @classmethod
-    def read(cls, state_dir: Path, ledger_name: LedgerName, listing: FileListing) -> CompactTree:
+    def read(
+        cls,
+        state_dir: Path,
+        ledger_name: LedgerName,
+        listing: FileListing,
+        *,
+        protected_raw_files: frozenset[Path] = frozenset(),
+    ) -> CompactTree:
         """The three indexes and the raw day folder names, read once, and the marks they give."""
         marks = ledger_marks.read_marks(state_dir, ledger_name, listing)
         # A wake names no raw folder: each step names the raw folders it reads.
@@ -254,6 +263,7 @@ class CompactTree:
             state_dir=state_dir,
             ledger=ledger_name,
             listing=listing,
+            protected_raw_files=protected_raw_files,
             daily=dict(marks.entries[Period.DAILY]),
             monthly=dict(marks.entries[Period.MONTHLY]),
             yearly=dict(marks.entries[Period.YEARLY]),
@@ -442,20 +452,23 @@ class CompactTree:
         refused for manual action, because there is no file to move aside.
         """
         folder = ledger.read_day_folder(self.state_dir, self.ledger, day)
-        for path, _why in folder.unreadable:
-            if not path.is_file():
+        unreadable = [
+            path for path, _why in folder.unreadable if path not in self.protected_raw_files
+        ]
+        for path in unreadable:
+            if path not in self.protected_raw_files and not path.is_file():
                 raise error_cause.ManualActionError(
                     f"{path.name} in the raw folder of {day} is not a file, so it cannot be "
                     "moved aside"
                 )
-        unreadable = [path for path, _why in folder.unreadable]
+        files = [held for held in folder.files if held.path not in self.protected_raw_files]
         taken: list[tuple[Path, list[StoredRow[C]]]] = []
-        for held in folder.files[:most]:
+        for held in files[:most]:
             try:
                 taken.append((held.path, self.load(held.path, model=model)))
             except ValueError:
                 unreadable.append(held.path)
-        return RawDay(taken=taken, unreadable=unreadable, carried=len(folder.files[most:]))
+        return RawDay(taken=taken, unreadable=unreadable, carried=len(files[most:]))
 
     def set_aside(self, path: Path) -> None:
         """Move one file the pass cannot read to the ledger's set-aside folder.
@@ -525,6 +538,8 @@ class CompactTree:
 
     def _drop(self, path: Path, size: int) -> None:
         """Decide to delete one file that frees `size` bytes, unless this pass wrote it."""
+        if path in self.protected_raw_files:
+            raise ValueError(f"{path.name} is still named by the feed-health head")
         if any(change.path == path and change.data is not None for change in self.changes):
             raise ValueError(f"{path.name} was written earlier in this pass and may not be deleted")
         self.changes.append(Change(path=path, data=None, size=size))

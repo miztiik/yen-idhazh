@@ -193,13 +193,14 @@ test("offers independent machine RAM control and commits only genuine planner an
   expect(plan.run).toContain("verifyParquetFiles(");
   expect(plan.run).toContain("summary.metrics.files[key]");
   expect(plan.run).toContain("verifyLedgerReceipt(");
-  expect(plan.run).toContain('verifyParquetFiles(join(artifactRoot, "state"), "source-runs"');
+  expect(plan.run).toContain('verifyParquetFiles(join(artifactRoot, "state"), "feed-runs"');
   expect(plan.run).toContain('await verifyPlanningCompletion(join(artifactRoot, "state"), summary)');
   expect(plan.run!.indexOf("await verifyPlanningCompletion(")).toBeLessThan(plan.run!.indexOf("await writeGitHubOutputs("));
   expect(plan.run).toContain("stageConfiguredDays(\"published\"");
   expect(plan.run).toContain("stageConfiguredDays(\"item-health\"");
   expect(plan.run).toContain("stageConfiguredDays(\"document-observations\"");
-  expect(plan.run).toContain("inputs: { ...inputs.settings.inputs, seen_days, published_days, settled_failure_days, feed_health_days, document_observation_days }");
+  expect(plan.run).toContain("stageConfiguredDays(\"ingest-observations\"");
+  expect(plan.run).toContain("inputs: { ...inputs.settings.inputs, seen_days, published_days, settled_failure_days, feed_health_days, document_observation_days, ingest_observation_days }");
   expect(plan.run).not.toContain("feed-ingest-plan-report");
   const reporting = steps.find(step => step.name === "Optional GitHub report")!;
   expect(reporting.if).toContain("workflow_reporting == 'true'");
@@ -481,7 +482,7 @@ test("strict-checks adapters, tests and the actual inline program in one compile
   } finally {
     await rm(directory, { recursive: true, force: true });
   }
-});
+}, 20000);
 
 test("runs the native compatibility verifier in a named-input copy with no backend directory", async () => {
   const directory = await mkdtemp(join(tmpdir(), "feed-verifier-isolated-"));

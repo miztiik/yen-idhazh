@@ -1,5 +1,6 @@
 /** Do one named Parquet file's schema, rows, digest and original identities agree? */
 import { readFile } from "node:fs/promises";
+import { createHash } from "node:crypto";
 import { basename } from "node:path";
 import { DataType, tableFromIPC } from "apache-arrow";
 import type { Field } from "apache-arrow";
@@ -21,6 +22,7 @@ export type ReadLedgerFile<T extends object> = Readonly<{
   envelope: FileEnvelope;
   rows: readonly StoredLedgerRow<T>[];
   bytes: number;
+  file_sha256: string;
 }>;
 export type LedgerRowProjectionContract<T extends object> = Readonly<{
   schema: z.ZodType<T>;
@@ -228,5 +230,8 @@ export async function readLedgerParquet<T extends object>(
       : contract.schema.parse(legacy === undefined ? storedRow : legacy.migrate(storedRow!));
     return { identity, row };
   });
-  return { envelope, rows, bytes: bytes.byteLength };
+  return {
+    envelope, rows, bytes: bytes.byteLength,
+    file_sha256: createHash("sha256").update(bytes).digest("hex"),
+  };
 }

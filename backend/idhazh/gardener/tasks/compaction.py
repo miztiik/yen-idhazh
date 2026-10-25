@@ -27,10 +27,13 @@ them, and the wake's day (`_compaction_periods`), and logged once as
 its periods, found in one named folder a year (`_absent_indexes`). A range a person
 names, or the first and last month a migration packs, limits that choice. A
 scheduled wake names no range, and its listing holds nothing of the ledger but
-its marks until a step names what it chose. A day step with no mark first has
-the months it looks back over named, because its first day is a raw day. Step 2
-chooses nothing of its own: it takes the raw days past the keep line in the
-months step 1 drops and in those a first day run looked back over.
+its marks until a step names what it chose. Feed-health compaction also names
+its two fixed head copies first: one valid copy names the snapshots it must
+preserve, and two valid copies must agree. With no valid copy or disagreement,
+the whole pass defers without changing the ledger. A day step with no mark
+first has the months it looks back over named, because its first day is a raw
+day. Step 2 chooses nothing of its own: it takes the raw days past the keep
+line in the months step 1 drops and in those a first day run looked back over.
 
 **The monthly window has a switch of its own.** Steps 3 to 5 delete only files
 whose rows they have just written into a coarser file; the window's drops in
@@ -86,11 +89,69 @@ compaction reads no clock: every age is counted from the wake's UTC day.
 
 from __future__ import annotations
 
-from idhazh.contracts.knobs.gardener import TaskKind
+import logging
+from pathlib import Path
+
+from idhazh.contracts.gardener_events import LoggedText
+from idhazh.contracts.knobs.gardener import CompactionPolicy, TaskKind
+from idhazh.contracts.ledger_name import LedgerName
+from idhazh.gardener import event_log
 from idhazh.gardener.context import TaskContext
 from idhazh.gardener.one_at_a_time import Pass
 
 KIND = TaskKind.COMPACTION
+
+_FEED_HEALTH_HEAD_DIRECTORY = (
+    "state/metadata/feed-ingest-plan/feed-health-state/head"
+)
+_FEED_HEALTH_HEAD_NAMES = ("index-a.json", "index-b.json")
+
+
+def _feed_health_head(
+    context: TaskContext, policy: CompactionPolicy
+) -> tuple[frozenset[Path] | None, int]:
+    """Use one valid head copy, defer conflicting valid copies and retain its snapshots."""
+    from idhazh.contracts.feed_health_state import FeedHealthStateHeadIndex
+
+    if policy.ledger is not LedgerName.FEED_INGEST_PLAN_FEED_HEALTH_STATE:
+        return frozenset(), 0
+    head_paths = [
+        context.repo_root / _FEED_HEALTH_HEAD_DIRECTORY / name
+        for name in _FEED_HEALTH_HEAD_NAMES
+    ]
+    present = [path for path in head_paths if context.listing.holds(path)]
+    context.listing.fetch_within_budget(beside=present)
+    valid: list[FeedHealthStateHeadIndex] = []
+    for path in present:
+        try:
+            valid.append(FeedHealthStateHeadIndex.model_validate_json(path.read_bytes()))
+        except ValueError:
+            event_log.emit(
+                LoggedText(
+                    logger=__name__,
+                    message=(
+                        "feed-health head copy failed validation "
+                        f"path={path.relative_to(context.repo_root).as_posix()}"
+                    ),
+                ),
+                level=logging.WARNING,
+            )
+            continue
+    if not valid:
+        event_log.emit(
+            LoggedText(logger=__name__, message="feed-health head has no valid copy"),
+            level=logging.WARNING,
+        )
+        return None, len(present)
+    if len(valid) == 2 and valid[0] != valid[1]:
+        event_log.emit(
+            LoggedText(logger=__name__, message="feed-health head copies disagree"),
+            level=logging.WARNING,
+        )
+        return None, len(present)
+    head = valid[0]
+    references = [head.latest, *([] if head.previous is None else [head.previous])]
+    return frozenset(context.repo_root / reference.path for reference in references), len(present)
 
 
 def run(context: TaskContext) -> Pass:
@@ -100,13 +161,11 @@ def run(context: TaskContext) -> Pass:
     anything outside it.
     """
     from datetime import UTC, datetime, time
-    from pathlib import Path
 
     from idhazh import ledger, month_partition
     from idhazh.contracts.collection_prune import StopReason
     from idhazh.contracts.file_envelope import Period, WriterIdentity
-    from idhazh.contracts.knobs.gardener import CompactionPolicy
-    from idhazh.gardener import event_log
+    from idhazh.contracts.gardener_fault import GardenerFault
     from idhazh.gardener.file_listing import OverBudgetError
     from idhazh.gardener.tasks import (
         _absent_indexes,
@@ -142,7 +201,49 @@ def run(context: TaskContext) -> Pass:
         return path.relative_to(context.repo_root).as_posix()
 
     try:
-        tree = CompactTree.read(context.state_dir, policy.ledger, context.listing)
+        protected_raw_files, head_files_seen = _feed_health_head(context, policy)
+    except OverBudgetError as spent:
+        marks = ledger.compact_index_path(context.state_dir, policy.ledger, Period.DAILY).parent
+        held = stop_over_budget(policy.ledger, shown(marks), spent)
+        return Pass(
+            collection=policy.ledger.value,
+            since=None if date_range is None else date_range[0],
+            until=until,
+            ceiling=None,
+            dry_run=policy.dry_run,
+            seen=0,
+            selected=0,
+            taken=(),
+            written=(),
+            bytes_freed=0,
+            stopped_because=held.because,
+            resume_from=held.resume_from,
+            fault=held.fault,
+        )
+    if protected_raw_files is None:
+        return Pass(
+            collection=policy.ledger.value,
+            since=None if date_range is None else date_range[0],
+            until=until,
+            ceiling=None,
+            dry_run=policy.dry_run,
+            seen=head_files_seen,
+            selected=0,
+            taken=(),
+            written=(),
+            bytes_freed=0,
+            stopped_because=StopReason.DEFERRED,
+            resume_from=_FEED_HEALTH_HEAD_DIRECTORY,
+            fault=GardenerFault.HEAD_INDEX_UNAVAILABLE,
+        )
+
+    try:
+        tree = CompactTree.read(
+            context.state_dir,
+            policy.ledger,
+            context.listing,
+            protected_raw_files=protected_raw_files,
+        )
         read = tree.entries_now()
         _absent_indexes.rebuild(
             tree,

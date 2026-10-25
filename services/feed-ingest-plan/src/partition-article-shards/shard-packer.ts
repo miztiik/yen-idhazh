@@ -43,7 +43,7 @@ export async function persistDispatches(
     registration: LedgerRegistration; date: string; correlation_id: string;
   }>,
 ) {
-  if (context.registration.name !== "dispatches" || context.ledgerSettings.format !== "parquet") {
+  if (context.registration.name !== "article-dispatches" || context.ledgerSettings.format !== "parquet") {
     throw new Error("Dispatch persistence requires its registered Parquet ledger");
   }
   if (context.writerContext.run_id.slice(0, 10) !== context.date
@@ -52,7 +52,7 @@ export async function persistDispatches(
     throw new Error("Dispatch writer differs from the selection planning context");
   }
   const stored = await persistLedger({
-    ledger: "dispatches", registryEntry: context.registration, outputRoot: context.outputRoot,
+    ledger: "article-dispatches", registryEntry: context.registration, outputRoot: context.outputRoot,
     writerContext: context.writerContext, ledgerSettings: context.ledgerSettings,
     period: { tier: "raw", covers: context.date },
     rowContract: DispatchContract,

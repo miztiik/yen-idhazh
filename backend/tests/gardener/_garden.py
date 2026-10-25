@@ -50,6 +50,7 @@ COMMITTED_DECLARATIONS: Final = (
     "compact-council-run-records.json",
     "compact-counterfactual-scores.json",
     "compact-feed-health.json",
+    "compact-feed-ingest-plan-feed-health-state.json",
     "compact-feed-retirements.json",
     "compact-gardener.json",
     "compact-host-fingerprint.json",

@@ -122,8 +122,8 @@ export function destination(outputRoot: string): RejectionDestination {
   return {
     outputRoot,
     registryEntry: {
-      name: "rejections", family: "feed-ingest-plan", grain: "raw-and-compact",
-      lifecycle_status: "active", prefix: ["feed-ingest-plan", "rejections"],
+      name: "ingest-rejections", family: "feed-ingest-plan", grain: "raw-and-compact",
+      lifecycle_status: "active", prefix: ["feed-ingest-plan", "ingest-rejections"],
     },
     ledgerSettings: { format: "parquet", compression_raw: "snappy", compression_compact: "zstd" },
   };

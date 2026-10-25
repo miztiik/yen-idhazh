@@ -13,21 +13,27 @@ import { encodeHistoricalRecord } from "./encode-historical-record";
 
 type Ledger = LedgerCompletionEvidence["ledger"];
 // These are the production settlement keys in backend/idhazh/ledger/keys.py.
+const dispatchKeys = ["content.date", "content.candidate_id"] as const;
+const rejectionKeys = ["date", "source_id", "subject", "candidate_id", "stage"] as const;
+const diversityKeys = [
+  "date", "metric", "basis", "unit", "dimension", "dimension_value", "stage",
+  "window_days", "window_start", "window_end", "top_k",
+] as const;
 export const PLANNING_RECORD_KEYS = {
-  dispatches: ["content.date", "content.candidate_id"],
+  dispatches: dispatchKeys, "article-dispatches": dispatchKeys,
   "editorial-selections": ["date", "candidate_id"],
-  rejections: ["date", "source_id", "subject", "candidate_id", "stage"],
+  rejections: rejectionKeys, "ingest-rejections": rejectionKeys,
   "article-assessments": ["date", "candidate_id", "stage"],
   "source-runs": ["date", "source_id", "observation_phase"],
-  diversity: ["date", "metric", "basis", "unit", "dimension", "dimension_value", "stage",
-    "window_days", "window_start", "window_end", "top_k"],
+  diversity: diversityKeys, "article-selection-diversity": diversityKeys,
 } as const;
 const contracts: Record<Ledger, LedgerRowContract<object>> = {
-  dispatches: DispatchContract,
+  dispatches: DispatchContract, "article-dispatches": DispatchContract,
   "editorial-selections": EditorialSelectionContract,
-  rejections: CandidateRejectionContract,
+  rejections: CandidateRejectionContract, "ingest-rejections": CandidateRejectionContract,
   "article-assessments": ArticleAssessmentContract,
   diversity: { schema: DiversityMetricRowSchema, schemaVersion: FEED_INGEST_AUDIT_VERSION },
+  "article-selection-diversity": { schema: DiversityMetricRowSchema, schemaVersion: FEED_INGEST_AUDIT_VERSION },
 };
 export type AttemptIdentity = Readonly<{ date: string; run_id: string; attempt: number; correlation_id: string }>;
 function at(row: object, path: string): unknown {
@@ -56,8 +62,9 @@ export function commitLogicalRecords(
       throw new Error(`${ledger}: logical record belongs to another attempt`);
     }
     const row = contract.schema.parse(held.row);
-    const correlation = at(row, ledger === "dispatches" ? "selection.correlation_id" : "correlation_id");
-    const date = at(row, ledger === "dispatches" ? "selection.date" : "date");
+    const dispatch = ledger === "dispatches" || ledger === "article-dispatches";
+    const correlation = at(row, dispatch ? "selection.correlation_id" : "correlation_id");
+    const date = at(row, dispatch ? "selection.date" : "date");
     if (correlation !== attempt.correlation_id || date !== attempt.date) {
       throw new Error(`${ledger}: logical record belongs to another correlation or date`);
     }

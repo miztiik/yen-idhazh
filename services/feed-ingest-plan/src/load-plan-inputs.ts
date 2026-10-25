@@ -51,18 +51,25 @@ export async function loadPlanInputs(root: string, settingsPath = "config/feed-i
     return { ...entry, grain: z.literal("raw-and-compact").parse(entry.grain) };
   }
   const selected = {
-    rejections: registration("rejections"), selections: registration("editorial-selections"),
-    dispatches: registration("dispatches"),
+    rejections: registration("ingest-rejections"), selections: registration("editorial-selections"),
+    dispatches: registration("article-dispatches"),
     seen: registration("seen"), assessments: registration("article-assessments"),
-    diversity: registration("diversity"),
+    diversity: registration("article-selection-diversity"),
     published: registration("published"), item_health: registration("item-health"),
     feed_health: registration("feed-health"),
-    document_observations: registration("document-observations"),
+    document_observations: registration("ingest-observations"),
+    feed_health_state: registration("feed-health-state"),
     source_runs: z.object({
-      name: z.literal("source-runs"), family: z.literal("feed-ingest-plan"),
+      name: z.literal("feed-runs"), family: z.literal("feed-ingest-plan"),
       grain: z.literal("raw-and-compact"), lifecycle_status: z.literal("active"),
-      prefix: z.tuple([z.literal("feed-ingest-plan"), z.literal("source-runs")]),
-    }).parse(registration("source-runs")),
+      prefix: z.tuple([z.literal("feed-ingest-plan"), z.literal("feed-runs")]),
+    }).parse(registration("feed-runs")),
+  };
+  const legacy_registrations = {
+    dispatches: registration("dispatches"), diversity: registration("diversity"),
+    document_observations: registration("document-observations"),
+    operational_state: registration("operational-state"), rejections: registration("rejections"),
+    source_runs: registration("source-runs"),
   };
   for (const [entry, prefix] of [
     [selected.rejections, harvest.config.seal.rejections_prefix],
@@ -75,7 +82,7 @@ export async function loadPlanInputs(root: string, settingsPath = "config/feed-i
   }
   return {
     root, settings, harvest, clock_config: { collect: extraction.collect },
-    ledgerSettings: extraction.ledger, registrations: selected,
+    ledgerSettings: extraction.ledger, registrations: selected, legacy_registrations,
     outputRoot: resolve(root, paths.output_root),
   };
 }

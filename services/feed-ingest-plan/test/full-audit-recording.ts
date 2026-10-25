@@ -50,13 +50,18 @@ export async function generatePublicationInput(
     planning_days: days.map(day => {
       const empty = paths(day, []);
       return day === date ? {
-        sources: paths(day, [metrics.files.source_runs]), ledgers: {
-          "article-assessments": paths(day, [metrics.files.assessments]), diversity: paths(day, [metrics.files.diversity]),
-          "editorial-selections": paths(day, [plan.files.selections]), dispatches: paths(day, [plan.files.dispatches]),
-          rejections: paths(day, [plan.files.harvest_rejections, plan.files.screening_rejections, plan.files.curation_rejections]),
+        sources: empty, feed_runs: paths(day, [metrics.files.source_runs]), ledgers: {
+          "article-assessments": paths(day, [metrics.files.assessments]), diversity: empty,
+          "editorial-selections": paths(day, [plan.files.selections]), dispatches: empty, rejections: empty,
+        }, renamed: {
+          "article-selection-diversity": paths(day, [metrics.files.diversity]),
+          "article-dispatches": paths(day, [plan.files.dispatches]),
+          "ingest-rejections": paths(day, [plan.files.harvest_rejections, plan.files.screening_rejections,
+            plan.files.curation_rejections]),
         },
-      } : { sources: empty, ledgers: { "article-assessments": empty, diversity: empty,
-        "editorial-selections": empty, dispatches: empty, rejections: empty } };
+      } : { sources: empty, feed_runs: empty, ledgers: { "article-assessments": empty, diversity: empty,
+        "editorial-selections": empty, dispatches: empty, rejections: empty },
+        renamed: { "article-selection-diversity": empty, "article-dispatches": empty, "ingest-rejections": empty } };
     }),
     publication_days: days.map(day => ({
       published: { ...paths(day, day === date ? [published] : [], root), schema_version: PUBLISHED_ROW_SCHEMA_VERSION },

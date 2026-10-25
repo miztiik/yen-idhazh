@@ -1,6 +1,6 @@
 # Feed planning audit recording
 
-**Last Updated**: 2026-10-24
+**Last Updated**: 2026-10-25
 
 Which observations can the isolated feed planner record without claiming that
 an incomplete attempt is complete?
@@ -10,8 +10,10 @@ an incomplete attempt is complete?
 `services/feed-ingest-plan/src/metrics/metrics-recorder.ts` exports
 `recordPlanningMetrics(result, inputs, registrations)`. Its inputs are the
 actual `FeedPlanResult`, the `PlanInputs` used by that run, and the registered
-`article-assessments`, `diversity` and `source-runs` destinations. The runner owns integration
-and exposes planning completion separately from full audit completion.
+`article-assessments`, `article-selection-diversity` and `feed-runs`
+destinations. The runner owns integration and exposes planning completion
+separately from full audit completion. Readers still accept legacy `diversity`
+and `source-runs` records.
 When the third argument is omitted, it uses `inputs.registrations`.
 
 The recorder first checks every configured concentration count and every
@@ -63,7 +65,7 @@ come from the actual feed outcomes. Operational success fractions retain their
 recorded attempts and window; absent history stays null. Publication and lead
 counts stay null. Internal summaries have no completion phase or file evidence.
 Only after all five required ledgers pass native verification are complete source
-records derived from them and written to `source-runs`.
+records derived from them and written to `feed-runs`.
 
 Before writing, the recorder checks the reliability switch and floor against
 the original configuration, matches each article's operational history to the
@@ -86,7 +88,8 @@ Before writing, the recorder validates both complete proposed row batches,
 their configuration and active registrations. It reads the named required
 rejection, selection and dispatch files through the native TypeScript Parquet
 reader and checks their writer identities, digests and actual rows. It writes
-assessments and diversity through the shared public `persistLedger` API, then
+assessments and article-selection-diversity through the shared public
+`persistLedger` API, then
 reads each new file back through the same reader.
 
 The result retains status `assessment_diversity_recorded_audit_pending` and
@@ -105,8 +108,9 @@ failure remain incomplete-attempt artifacts; they do not establish completion.
 
 The recorder verifies actual harvest, screening and curation rejection files
 separately, then combines their counts and file commitments into one existing
-`rejections` receipt. Together with actual assessment, diversity, selection and
-dispatch receipts, these are the five required ledger commitments.
+`ingest-rejections` receipt. Together with actual assessment,
+article-selection-diversity, editorial-selection and article-dispatches
+receipts, these are the five required ledger commitments.
 
 Each source record receives the configured source count, those commitments and
 the existing `plan_complete` phase. The complete source batch is written last and
@@ -189,9 +193,9 @@ recorder's pending internal source summaries into completion records.
 
 `recordPublicationMetrics(input)` in the same recorder accepts a named run,
 correlation, UTC observation instant, the recorded configuration hash and metric
-settings, a writer, ledger settings and active diversity/source-run registrations.
+settings, a writer, ledger settings and active article-selection-diversity/feed-runs registrations.
 `publication_days` names each day's native published files, digest and validated
-settled health projection. `planning_days` names its source-run files and all five
+settled health projection. `planning_days` names its feed-runs files and all five
 completion ledgers. Missing named days remain missing; an explicit empty raw-file
 list means known-empty. Extra or repeated dates are refused before any write.
 
@@ -204,7 +208,7 @@ lists. Optional `event_pairs` contains existing recorded similarity decisions.
 Titles and outlet names come only from the matching named digest items, not
 caller-supplied event-item projections.
 
-The full proposed diversity batch and any source observations validate before
+The full proposed article-selection-diversity batch and any source observations validate before
 writes. Actual files are written through `persistLedger` and read back natively,
 including writer identities, digests, row counts and ordered rows.
 The result returns those files, readings, source observations, history coverage

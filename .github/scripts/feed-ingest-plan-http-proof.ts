@@ -129,7 +129,7 @@ export async function selectVerifiedArticle(inputs: PlanInputs, summary: ReturnT
     || summary.planning_completion.correlation_id !== summary.correlation_id) {
     throw new ProofUnavailable("INVALID_PLANNING_COMPLETION");
   }
-  const verified = await verifyParquetFiles(stateRoot, "dispatches", summary.files.dispatches, inputs.registrations.dispatches);
+  const verified = await verifyParquetFiles(stateRoot, "article-dispatches", summary.files.dispatches, inputs.registrations.dispatches);
   const candidates = new Set(summary.selected_candidate_ids);
   if (candidates.size !== summary.selected_candidate_ids.length || verified.row_count !== candidates.size) {
     throw new ProofUnavailable("DISPATCH_MEMBERSHIP_MISMATCH");
@@ -139,7 +139,7 @@ export async function selectVerifiedArticle(inputs: PlanInputs, summary: ReturnT
     selection: { candidate_id: string; run_id: string; correlation_id: string; file_id: string; content_sha256: string };
   } = null;
   for (const file of summary.files.dispatches.files) {
-    const native = await readLedgerParquet(join(stateRoot, ...file.path.split("/")), "dispatches", nativeDispatchContract);
+    const native = await readLedgerParquet(join(stateRoot, ...file.path.split("/")), "article-dispatches", nativeDispatchContract);
     for (const { row: dispatch, identity } of native.rows) {
       const { content, selection } = dispatch;
       if (content.run_id !== summary.run_id || identity.run_id !== summary.run_id
@@ -437,7 +437,7 @@ export async function verifyLiveDocumentHttp(
         cleanupStage = "retain_document_observations";
         if (privateRoot && observations.length) {
           const written: PersistLedgerResult = { status: "written", files: observations };
-          await verifyParquetFiles(privateRoot, "document-observations", written, inputs.registrations.document_observations);
+          await verifyParquetFiles(privateRoot, "ingest-observations", written, inputs.registrations.document_observations);
           for (const file of observations) {
             const target = join(artifactRoot, "state", ...file.path.split("/"));
             await mkdir(dirname(target), { recursive: true });

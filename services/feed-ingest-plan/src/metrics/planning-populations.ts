@@ -27,28 +27,62 @@ export type PlanningDay = Readonly<{
   runs: readonly PlanningPopulation[]; findings: readonly AttemptFinding[];
 }>;
 type CompletionLedger = keyof AttemptHistory["ledgers"];
+type RenamedCompletionLedger = "article-dispatches" | "article-selection-diversity" | "ingest-rejections";
+type LegacyCompletionLedger = Exclude<CompletionLedger, RenamedCompletionLedger>;
 type NamedPaths = Omit<NamedDayInput<object>, "ledger" | "contract" | "fileCache">;
 export type NamedPlanningHistory = Readonly<{
-  sources: NamedPaths; ledgers: Readonly<Record<CompletionLedger, NamedPaths>>;
+  sources: NamedPaths; feed_runs?: NamedPaths;
+  ledgers: Readonly<Record<LegacyCompletionLedger, NamedPaths>>;
+  renamed?: Readonly<Partial<Record<RenamedCompletionLedger, NamedPaths>>>;
 }>;
 
 export async function readPlanningHistory(input: NamedPlanningHistory): Promise<AttemptHistory> {
-  const sources = await readLedgerDay<SourceRunRecord>({
-    ...input.sources, ledger: "source-runs",
-    contract: SourceRunContract,
-  });
-  const read = async <T extends object>(ledger: CompletionLedger, contract: LedgerRowContract<T>) => {
-    const named = input.ledgers[ledger];
-    if (named.day !== sources.day) throw new Error("Named planning ledgers belong to different UTC days");
-    return readLedgerDay<T>({ ...named, ledger, contract });
-  };
-  const [assessments, diversity, selections, dispatches, rejections] = await Promise.all([
-    read("article-assessments", ArticleAssessmentContract),
-    read("diversity", DiversityMetricContract),
-    read("editorial-selections", EditorialSelectionContract),
-    read("dispatches", DispatchContract), read("rejections", CandidateRejectionContract),
+  const [legacySources, feedRuns] = await Promise.all([
+    readLedgerDay<SourceRunRecord>({
+      ...input.sources, ledger: "source-runs",
+      contract: SourceRunContract,
+    }),
+    readLedgerDay<SourceRunRecord>({
+      ...(input.feed_runs ?? { day: input.sources.day }), ledger: "feed-runs",
+      contract: SourceRunContract,
+    }),
   ]);
-  return { sources, ledgers: { "article-assessments": assessments, diversity, "editorial-selections": selections, dispatches, rejections } };
+  const sourceRows = [...legacySources.rows, ...feedRuns.rows];
+  const sources = {
+    ledger: "feed-runs" as const, day: legacySources.day,
+    status: sourceRows.length > 0 ? "rows" as const
+      : legacySources.status === "lost" || feedRuns.status === "lost" ? "lost" as const
+        : legacySources.status === "empty" || feedRuns.status === "empty" ? "empty" as const : "missing" as const,
+    tier: feedRuns.tier ?? legacySources.tier,
+    rows: sourceRows, files: [...legacySources.files, ...feedRuns.files],
+    notices: [...legacySources.notices, ...feedRuns.notices],
+  };
+  const read = async <T extends object>(ledger: CompletionLedger, named: NamedPaths, contract: LedgerRowContract<T>) => {
+    if (named.day !== sources.day) throw new Error("Named planning ledgers belong to different UTC days");
+    return readLedgerDay<T>({
+      ...named, ledger, contract,
+    });
+  };
+  const missing = (day: string): NamedPaths => ({ day });
+  const [assessments, diversity, selections, dispatches, rejections, articleSelectionDiversity,
+    articleDispatches, ingestRejections] = await Promise.all([
+    read("article-assessments", input.ledgers["article-assessments"], ArticleAssessmentContract),
+    read("diversity", input.ledgers.diversity, DiversityMetricContract),
+    read("editorial-selections", input.ledgers["editorial-selections"], EditorialSelectionContract),
+    read("dispatches", input.ledgers.dispatches, DispatchContract),
+    read("rejections", input.ledgers.rejections, CandidateRejectionContract),
+    read("article-selection-diversity", input.renamed?.["article-selection-diversity"] ?? missing(sources.day), DiversityMetricContract),
+    read("article-dispatches", input.renamed?.["article-dispatches"] ?? missing(sources.day), DispatchContract),
+    read("ingest-rejections", input.renamed?.["ingest-rejections"] ?? missing(sources.day), CandidateRejectionContract),
+  ]);
+  return {
+    sources,
+    ledgers: {
+      "article-assessments": assessments, diversity, "article-selection-diversity": articleSelectionDiversity,
+      "editorial-selections": selections, dispatches, "article-dispatches": articleDispatches,
+      rejections, "ingest-rejections": ingestRejections,
+    },
+  };
 }
 
 export function derivePlanningPopulation(attempt: ProvenAttempt): PlanningPopulation {
@@ -59,7 +93,9 @@ export function derivePlanningPopulation(attempt: ProvenAttempt): PlanningPopula
     if (row.date !== attempt.date || row.correlation_id !== attempt.correlation_id
       || !isDeepStrictEqual(sources.get(row.source_id)?.source, row.source)) throw new Error("Historical assessment differs from its proven source attempt");
   }
-  const rejected = uniqueRecorded(attempt.rows.rejections.map(held => CandidateRejectionRecordSchema.parse(held.row)),
+  const rejected = uniqueRecorded([
+    ...attempt.rows.rejections, ...attempt.rows["ingest-rejections"],
+  ].map(held => CandidateRejectionRecordSchema.parse(held.row)),
     row => JSON.stringify([row.stage, row.subject, row.candidate_id ?? row.source_id, row.drop_reason]), isDeepStrictEqual);
   for (const row of rejected) {
     if (row.date !== attempt.date || row.correlation_id !== attempt.correlation_id
@@ -141,7 +177,14 @@ export function settlePlanningDay(history: AttemptHistory): PlanningDay {
   if (status === "missing" || status === "lost") return { day, status, runs: [], findings: [] };
   if (history.sources.notices.some(notice => notice.startsWith("files-set-aside:"))) return { day, status: "missing", runs: [], findings: [] };
   if (status === "empty") return {
-    day, status: Object.values(history.ledgers).some(ledger => ledger.status !== "empty") ? "missing" : "empty",
+    day, status: [
+      ["article-assessments"], ["editorial-selections"],
+      ["diversity", "article-selection-diversity"], ["dispatches", "article-dispatches"],
+      ["rejections", "ingest-rejections"],
+    ].some(group => group.some(name => history.ledgers[name as CompletionLedger].status === "rows"
+      || history.ledgers[name as CompletionLedger].status === "lost")
+      || group.every(name => history.ledgers[name as CompletionLedger].status === "missing"))
+      ? "missing" : "empty",
     runs: [], findings: [],
   };
   if (history.sources.rows.length === 0) throw new Error("Nonempty planning day has no source observations");

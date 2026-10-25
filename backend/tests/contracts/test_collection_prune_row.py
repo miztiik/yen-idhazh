@@ -258,17 +258,21 @@ def test_a_row_from_before_the_fault_word_reads_as_one_that_named_none() -> None
     assert (failed.stopped_because, failed.fault) == (StopReason.FAILED, None)
 
 
-def test_manual_action_is_an_additive_contract_change() -> None:
+def test_new_faults_are_additive_contract_changes() -> None:
     changelog = CollectionPruneRow.json_schema()["changelog"]
 
-    assert CollectionPruneRow.schema_version() == "2026-10-09"
+    assert CollectionPruneRow.schema_version() == "2026-10-25"
+    assert stop_for(GardenerFault.HEAD_INDEX_UNAVAILABLE) is StopReason.DEFERRED
+    assert a_row(stopped_because="deferred", fault="head-index-unavailable").fault is (
+        GardenerFault.HEAD_INDEX_UNAVAILABLE
+    )
     assert changelog[0]["change"] == (
-        "manual-action added as a failed fault; older rows read unchanged."
+        "head-index-unavailable defers feed-health pruning; older rows read unchanged."
     )
     assert [entry["version"] for entry in changelog] == [
+        "2026-10-25",
         "2026-10-09",
         "2026-10-07",
-        "2026-10-04",
         "2026-10-03T18:00",
         "2026-09-17",
     ]

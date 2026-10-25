@@ -17,7 +17,21 @@ export const CompletedFileSchema = z.strictObject({
 }).superRefine((value, ctx) => {
   if (value.file_id[14] !== "8") reject(ctx, "file_id must be a version 8 UUID");
 });
-export const CompletionLedgerSchema = z.enum(["article-assessments", "diversity", "editorial-selections", "dispatches", "rejections"]);
+export const CompletionLedgerSchema = z.enum([
+  "article-assessments", "diversity", "article-selection-diversity",
+  "editorial-selections", "dispatches", "article-dispatches",
+  "rejections", "ingest-rejections",
+]);
+export const PreviousCompletionLedgerSchema = z.enum([
+  "article-assessments", "diversity", "editorial-selections", "dispatches", "rejections",
+]);
+const CompletionLedgerGroups = [
+  ["article-assessments"],
+  ["diversity", "article-selection-diversity"],
+  ["editorial-selections"],
+  ["dispatches", "article-dispatches"],
+  ["rejections", "ingest-rejections"],
+] as const;
 export const LogicalLedgerCommitmentSchema = z.strictObject({
   version: z.literal("2026-10-22").default("2026-10-22"),
   row_schema_version: SchemaVersionSchema, row_count: CountSchema, content_sha256: Sha256Schema,
@@ -31,6 +45,11 @@ export const LedgerCompletionEvidenceSchema = z.strictObject({
   if (new Set(value.files.map(file => file.file_id)).size !== value.files.length) reject(ctx, "ledger file identities must be distinct");
   if (value.logical !== null && value.logical.row_count > value.row_count) reject(ctx, "unique logical rows cannot exceed written rows");
 });
+export const PreviousLedgerCompletionEvidenceSchema = z.strictObject({
+  ...LedgerCompletionEvidenceSchema.shape,
+  ledger: PreviousCompletionLedgerSchema,
+});
+export const PreviousCompletionEvidenceSchema = z.array(PreviousLedgerCompletionEvidenceSchema).nullable();
 export const SourceRunRecordSchema = z.strictObject({
   version: z.literal(SOURCE_RUN_VERSION).default(SOURCE_RUN_VERSION), date: DateStampSchema, correlation_id: NonEmptySchema,
   run_id: RunIdSchema, attempt: PositiveCountSchema, source_id: SlugSchema,
@@ -75,7 +94,9 @@ export const SourceRunRecordSchema = z.strictObject({
   if (value.completion_evidence !== null) {
     const ledgers = value.completion_evidence.map(evidence => evidence.ledger);
     if (new Set(ledgers).size !== ledgers.length) reject(ctx, "completion evidence has one entry per ledger");
-    if (ledgers.length !== CompletionLedgerSchema.options.length || CompletionLedgerSchema.options.some(ledger => !ledgers.includes(ledger))) reject(ctx, "completion evidence covers every required planning ledger");
+    if (CompletionLedgerGroups.some(group => group.filter(ledger => ledgers.includes(ledger)).length !== 1)) {
+      reject(ctx, "completion evidence covers each required planning ledger once");
+    }
   }
 });
 export type SourceRunRecord = z.infer<typeof SourceRunRecordSchema>;

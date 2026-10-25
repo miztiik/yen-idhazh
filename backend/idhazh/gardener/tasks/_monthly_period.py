@@ -76,6 +76,7 @@ own end, so every wake of one UTC day gets the same answer (CLAUDE.md section 2)
 from __future__ import annotations
 
 import logging
+import hashlib
 from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Final
@@ -350,6 +351,7 @@ def _close[C: Contract](
             covers=month,
             rows=len(rows),
             bytes=len(built.data),
+            file_sha256=hashlib.sha256(built.data).hexdigest(),
             lost_days=lost_days,
             set_aside=set_aside,
         )

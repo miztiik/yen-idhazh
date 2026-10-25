@@ -23,7 +23,7 @@ export async function sealRejections(
   }
   const result = await persistLedger({
     ...context,
-    ledger: "rejections",
+    ledger: "ingest-rejections",
     period: { tier: "raw", covers: date },
     rowContract: CandidateRejectionContract,
     rows: validated,

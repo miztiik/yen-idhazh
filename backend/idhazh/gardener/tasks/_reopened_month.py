@@ -37,6 +37,7 @@ decided.
 
 from __future__ import annotations
 
+import hashlib
 from typing import Final
 
 from idhazh import ledger
@@ -149,6 +150,7 @@ def reopen[C: Contract](
             covers=month,
             rows=len(rows),
             bytes=len(built.data),
+            file_sha256=hashlib.sha256(built.data).hexdigest(),
             lost_days=[day for day in entry.lost_days if day not in answered],
             set_aside=entry.set_aside + moved,
         )

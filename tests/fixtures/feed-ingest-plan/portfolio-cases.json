@@ -105,7 +105,7 @@
     "row_schema_version": "2026-10-24",
     "candidate_first": "2abf9cb422a726f33a6f4a80295c8e2efa7ab9d3691114b9d7d328e83334d07a",
     "selection_unit_id": "fd2713f9-a8d3-5a9e-af1d-f81f8d50c1d8",
-    "rejection_unit_id": "71f34820-62ad-5876-899c-bd53e451d073",
+    "rejection_unit_id": "6906a55b-fb88-569e-8ed2-d878fd6321ee",
     "selection_scalar_types": {
       "candidate_id": "Utf8",
       "editorial_rank": "Int64",

@@ -32,6 +32,7 @@ import { ITEM_HEALTH_ROW_SCHEMA_VERSION } from "../src/read-ledger-history/item-
 import { resolveHealthInventory } from "../src/read-ledger-history/read-health-inventory";
 import { selectCompleteAttempt } from "../src/read-ledger-history/complete-attempt";
 import type { AttemptHistory } from "../src/read-ledger-history/complete-attempt";
+import type { LedgerDay } from "../src/read-ledger-history/read-period";
 import { readHistoricalSelections } from "../src/partition-article-shards/read-editorial-selection";
 import { partitionArticles, persistDispatches } from "../src/partition-article-shards/shard-packer";
 import { fixtureInput, readWritten, registration, settings, writer, writeRows } from "./partition-fixtures";
@@ -42,6 +43,10 @@ import {
 
 const selectionContract = EditorialSelectionContract;
 beforeAll(async () => { await initializeParquet(); });
+const missingLedger = (ledger: LedgerDay<object>["ledger"], day: string): LedgerDay<object> =>
+  ({ ledger, day, status: "missing", tier: null, rows: [], files: [], notices: [] });
+const emptyLedger = (ledger: LedgerDay<object>["ledger"], day: string): LedgerDay<object> =>
+  ({ ledger, day, status: "empty", tier: "raw", rows: [], files: [], notices: [] });
 function evidence(ledger: LedgerCompletionEvidence["ledger"], written: PersistLedgerResult): LedgerCompletionEvidence {
   if (written.status === "skipped") throw new Error("Fixture completion ledger was skipped");
   return {
@@ -58,7 +63,7 @@ async function completeHistory(root: string, observedAt?: string) {
   });
   const dispatch = await persistDispatches(packed, {
     outputRoot: root, writerContext: writer(input.fixture.run_id), ledgerSettings: settings,
-    registration: registration("dispatches"), date: input.fixture.date,
+    registration: registration("article-dispatches"), date: input.fixture.date,
     correlation_id: input.fixture.correlation_id,
   });
   const assessments = await writeRows(root, "article-assessments", input.fixture.date,
@@ -66,8 +71,9 @@ async function completeHistory(root: string, observedAt?: string) {
     ArticleAssessmentContract.schemaVersion);
   const empty: PersistLedgerResult = { status: "empty", files: [] };
   const completion = [
-    evidence("editorial-selections", input.persisted.selections), evidence("dispatches", dispatch),
-    evidence("article-assessments", assessments), evidence("rejections", empty), evidence("diversity", empty),
+    evidence("editorial-selections", input.persisted.selections), evidence("article-dispatches", dispatch),
+    evidence("article-assessments", assessments), evidence("ingest-rejections", input.persisted.rejections),
+    evidence("article-selection-diversity", empty),
   ];
   const source = (attempt = 1, zero = false) => SourceRunRecordSchema.parse({
     date: input.fixture.date, correlation_id: input.fixture.correlation_id, run_id: input.fixture.run_id,
@@ -80,16 +86,19 @@ async function completeHistory(root: string, observedAt?: string) {
     observed_at: observedAt ?? input.fixture.observed_at, expected_source_count: 1,
     completion_evidence: zero ? completion.map(item => ({ ...item, row_count: 0, files: [] })) : completion,
   });
-  const sourceWritten = await writeRows(root, "source-runs", input.fixture.date,
+  const sourceWritten = await writeRows(root, "feed-runs", input.fixture.date,
     SourceRunRecordSchema, [source()], writer(input.fixture.run_id), SourceRunContract.schemaVersion);
-  const sources = await readWritten(root, "source-runs", input.fixture.date,
+  const sources = await readWritten(root, "feed-runs", input.fixture.date,
     SourceRunContract, sourceWritten);
   const ledgers: AttemptHistory["ledgers"] = {
     "editorial-selections": await readWritten(root, "editorial-selections", input.fixture.date, selectionContract, input.persisted.selections),
-    dispatches: await readWritten(root, "dispatches", input.fixture.date, DispatchContract, dispatch),
+    dispatches: missingLedger("dispatches", input.fixture.date),
     "article-assessments": await readWritten(root, "article-assessments", input.fixture.date, ArticleAssessmentContract, assessments),
-    rejections: await readWritten(root, "rejections", input.fixture.date, CandidateRejectionContract, empty),
-    diversity: await readWritten(root, "diversity", input.fixture.date, DiversityMetricContract, empty),
+    rejections: missingLedger("rejections", input.fixture.date),
+    diversity: missingLedger("diversity", input.fixture.date),
+    "article-dispatches": await readWritten(root, "article-dispatches", input.fixture.date, DispatchContract, dispatch),
+    "ingest-rejections": await readWritten(root, "ingest-rejections", input.fixture.date, CandidateRejectionContract, input.persisted.rejections),
+    "article-selection-diversity": emptyLedger("article-selection-diversity", input.fixture.date),
   };
   return { input, source, sourceWritten, history: { sources, ledgers }, packed };
 }
@@ -392,8 +401,10 @@ test("native raw and daily reads preserve original writer identity instead of th
       DocumentObservationRecordSchema, cohortFacts, observationWriter, DOCUMENT_OBSERVATION_VERSION);
     const cohortRead = await readIngestEvidence({
       root: join(root, "cohort"), now: "2026-10-22T00:00:00Z", window_days: 1,
-      registration: registration("document-observations"),
-      days: [{ day: input.fixture.date, raw_files: cohortWritten.files.map(file => file.path) }],
+      registration: registration("ingest-observations"),
+      legacy_registration: registration("document-observations"),
+      days: [],
+      legacy_days: [{ day: input.fixture.date, raw_files: cohortWritten.files.map(file => file.path) }],
     });
     const cohort = cohortRead.sources[0]!;
     expect(cohort).toMatchObject({
@@ -472,14 +483,16 @@ test("native raw and daily reads preserve original writer identity instead of th
     });
 
     const evidenceRoot = join(root, "request-evidence");
-    const nativeFacts = await writeRows(evidenceRoot, "document-observations", input.fixture.date,
+    const nativeFacts = await writeRows(evidenceRoot, "ingest-observations", input.fixture.date,
       DocumentObservationRecordSchema, requestFacts, observationWriter, DOCUMENT_OBSERVATION_VERSION);
     const replayFacts = await writeRows(evidenceRoot, "document-observations", input.fixture.date,
       DocumentObservationRecordSchema, requestFacts, { ...observationWriter, attempt: 2 }, DOCUMENT_OBSERVATION_VERSION);
     const evidenceInput = {
       root: evidenceRoot, now: "2026-10-22T00:00:00Z", window_days: 1,
-      registration: registration("document-observations"),
-      days: [{ day: input.fixture.date, raw_files: [...nativeFacts.files, ...replayFacts.files].map(file => file.path) }],
+      registration: registration("ingest-observations"),
+      legacy_registration: registration("document-observations"),
+      days: [{ day: input.fixture.date, raw_files: nativeFacts.files.map(file => file.path) }],
+      legacy_days: [{ day: input.fixture.date, raw_files: replayFacts.files.map(file => file.path) }],
     };
     const rawEvidence = await readIngestEvidence(evidenceInput);
     expect(rawEvidence).toMatchObject({
@@ -487,19 +500,19 @@ test("native raw and daily reads preserve original writer identity instead of th
       publishers: [{ publisher_id: "recorded-publisher", observed_attempted_opportunities: 2 }],
     });
     expect(rawEvidence.history.days[0]!.files).toHaveLength(2);
-    const nativeDay = await readWritten(evidenceRoot, "document-observations", input.fixture.date, DocumentObservationContract, nativeFacts);
+    const nativeDay = await readWritten(evidenceRoot, "ingest-observations", input.fixture.date, DocumentObservationContract, nativeFacts);
     const packedFacts = await persistLedger({
-      ledger: "document-observations", registryEntry: registration("document-observations"),
+      ledger: "ingest-observations", registryEntry: registration("ingest-observations"),
       outputRoot: evidenceRoot, writerContext: { ...observationWriter, attempt: 9, producer: "tests.compactor" },
       ledgerSettings: settings, rowContract: DocumentObservationContract,
       period: { tier: "compact", period: "daily", covers: input.fixture.date, builtFrom: 1 },
       rows: nativeDay.rows,
     });
     const packedFile = packedFacts.files[0]!;
-    const packedIndex = join("compact", "feed-ingest-plan", "document-observations", "index", "daily.json");
+    const packedIndex = join("compact", "feed-ingest-plan", "ingest-observations", "index", "daily.json");
     await mkdir(dirname(join(evidenceRoot, packedIndex)), { recursive: true });
     await writeFile(join(evidenceRoot, packedIndex), JSON.stringify({
-      version: "2026-10-07", ledger: "document-observations", period: "daily",
+      version: "2026-10-07", ledger: "ingest-observations", period: "daily",
       entries: [{ covers: input.fixture.date, rows: packedFile.row_count,
         bytes: (await stat(join(evidenceRoot, packedFile.path))).size, state: "packed" }],
     }));
@@ -507,8 +520,8 @@ test("native raw and daily reads preserve original writer identity instead of th
       ...evidenceInput, days: [{ ...evidenceInput.days[0]!, indexes: { daily: packedIndex.replaceAll("\\", "/") } }],
     });
     expect(compactEvidence.sources).toEqual(rawEvidence.sources);
-    expect(compactEvidence.history.days[0]!.files).toHaveLength(1);
-    const missingEvidence = await readIngestEvidence({ ...evidenceInput, days: [] });
+    expect(compactEvidence.history.days[0]!.files).toHaveLength(2);
+    const missingEvidence = await readIngestEvidence({ ...evidenceInput, days: [], legacy_days: [] });
     expect(missingEvidence).toMatchObject({ availability: "unavailable", sources: [] });
     expect(closedObservationDays("2026-11-01T00:00:00Z", 2)).toEqual(["2026-10-30", "2026-10-31"]);
   } finally { await rm(root, { recursive: true, force: true }); }
@@ -702,7 +715,7 @@ test("native monthly and yearly precedence reads only the requested day's origin
 test("named empty, lost, expired and missing periods never fall through to leftover raw files", async () => {
   const root = await mkdtemp(join(tmpdir(), "history-states-"));
   try {
-    const input = await fixtureInput(root, { count: 1 });
+    const input = await fixtureInput(root, { count: 2 });
     const indexPath = join(root, "compact", "feed-ingest-plan", "editorial-selections", "index", "daily.json");
     await mkdir(dirname(indexPath), { recursive: true });
     const read = () => readLedgerDay({
@@ -716,8 +729,68 @@ test("named empty, lost, expired and missing periods never fall through to lefto
       expect(held.status).toBe(state);
       expect(held.files).toEqual([]);
     }
+    const sourceRows = await readWritten(root, "editorial-selections", input.fixture.date,
+      selectionContract, input.persisted.selections);
+    const packedRaw = await writeRows(root, "editorial-selections", input.fixture.date,
+      EditorialSelectionRowSchema, [sourceRows.rows[0]!.row], writer(input.fixture.run_id, 1, 0), selectionContract.schemaVersion);
+    const retainedRaw = await writeRows(root, "editorial-selections", input.fixture.date,
+      EditorialSelectionRowSchema, [sourceRows.rows[1]!.row], writer(input.fixture.run_id, 1, 1), selectionContract.schemaVersion);
+    const packedRows = await readWritten(root, "editorial-selections", input.fixture.date, selectionContract, packedRaw);
+    const retainedRows = await readWritten(root, "editorial-selections", input.fixture.date, selectionContract, retainedRaw);
+    const compact = await compactSelections(root, input, packedRows.rows, "daily");
+    const retainedFile = retainedRaw.files[0]!;
+    const retainedPath = join(root, retainedFile.path);
+    const retainedReference = {
+      path: retainedPath, file_id: retainedFile.file_id, content_sha256: retainedFile.content_sha256,
+      bytes: (await stat(retainedPath)).size, row_count: retainedFile.row_count,
+    };
+    const packedWithRetained = await readLedgerDay({
+      ledger: "editorial-selections", day: input.fixture.date, contract: selectionContract,
+      indexes: { daily: compact.indexPath }, preservedRawFiles: [retainedReference],
+    });
+    expect(packedWithRetained.status).toBe("rows");
+    expect(packedWithRetained.tier).toBe("daily");
+    expect(packedWithRetained.files.map(file => file.envelope.tier)).toEqual(["compact", "raw"]);
+    expect(new Set(packedWithRetained.rows.map(row => row.identity.unit_id))).toEqual(new Set([
+      packedRows.rows[0]!.identity.unit_id, retainedRows.rows[0]!.identity.unit_id,
+    ]));
+    const packedFile = packedRaw.files[0]!;
+    const packedPath = join(root, packedFile.path);
+    await expect(readLedgerDay({
+      ledger: "editorial-selections", day: input.fixture.date, contract: selectionContract,
+      indexes: { daily: compact.indexPath },
+      preservedRawFiles: [{
+        path: packedPath, file_id: packedFile.file_id, content_sha256: packedFile.content_sha256,
+        bytes: (await stat(packedPath)).size, row_count: packedFile.row_count,
+      }],
+    })).rejects.toThrow("already represented in the compact file");
+    await expect(readLedgerDay({
+      ledger: "editorial-selections", day: input.fixture.date, contract: selectionContract,
+      indexes: { daily: compact.indexPath },
+      preservedRawFiles: [{ ...retainedReference, content_sha256: "0".repeat(64) }],
+    })).rejects.toThrow("Preserved raw snapshot differs from its head reference");
+
+    await writeFile(indexPath, JSON.stringify({
+      version: "2026-10-07", ledger: "editorial-selections", period: "daily",
+      entries: [{ covers: input.fixture.date, rows: 0, bytes: 0, state: "empty" }],
+    }));
+    await rm(compact.path);
+    const retainedFromEmpty = await readLedgerDay({
+      ledger: "editorial-selections", day: input.fixture.date, contract: selectionContract,
+      indexes: { daily: indexPath }, preservedRawFiles: [retainedReference],
+    });
+    expect(retainedFromEmpty.status).toBe("rows");
+    expect(retainedFromEmpty.tier).toBe("raw");
+    expect(retainedFromEmpty.rows).toEqual(retainedRows.rows);
+
     await writeFile(indexPath, JSON.stringify({ ...base, entries: [{ covers: input.fixture.date, rows: 1, bytes: 100, state: "packed" }] }));
     expect((await read()).status).toBe("missing");
+    const missingPacked = await readLedgerDay({
+      ledger: "editorial-selections", day: input.fixture.date, contract: selectionContract,
+      indexes: { daily: compact.indexPath }, preservedRawFiles: [retainedReference],
+    });
+    expect(missingPacked.status).toBe("missing");
+    expect(missingPacked.files).toEqual([]);
     await rm(indexPath);
     expect((await read()).notices).toContain("index-missing:daily");
     expect((await read()).status).toBe("rows");
@@ -726,6 +799,13 @@ test("named empty, lost, expired and missing periods never fall through to lefto
     await writeFile(expired, JSON.stringify({ ...base, period: "yearly", expired_through: "2026", entries: [] }));
     expect((await readLedgerDay({ ledger: "editorial-selections", day: input.fixture.date, contract: selectionContract,
       indexes: { yearly: expired }, rawFiles: input.persisted.selections.files.map(file => join(root, file.path)) })).status).toBe("missing");
+    const retainedPastExpiry = await readLedgerDay({
+      ledger: "editorial-selections", day: input.fixture.date, contract: selectionContract,
+      indexes: { yearly: expired }, preservedRawFiles: [retainedReference],
+    });
+    expect(retainedPastExpiry.status).toBe("rows");
+    expect(retainedPastExpiry.tier).toBe("raw");
+    expect(retainedPastExpiry.rows).toEqual(retainedRows.rows);
     const nativeRaw = `raw/feed-health/${input.fixture.date.replaceAll("-", "/")}/${basename(input.persisted.selections.files[0]!.path)}`;
     for (const state of ["empty", "lost"] as const) {
       const discovery = resolveHealthInventory({
@@ -897,7 +977,7 @@ test("native digest tampering, wrong ledger, schema, index counts and raw identi
     const compact = await compactSelections(root, input, raw.rows, "daily");
     await writeFile(compact.indexPath, JSON.stringify({ ...compact.index, entries: [{ ...compact.index.entries[0], rows: 2 }] }));
     await expect(readLedgerDay({ ledger: "editorial-selections", day: input.fixture.date, contract: selectionContract,
-      indexes: { daily: compact.indexPath } })).rejects.toThrow("row count or byte size");
+      indexes: { daily: compact.indexPath } })).rejects.toThrow("row count, byte size or file digest");
     await writeFile(compact.indexPath, JSON.stringify({ ...compact.index, entries: [{ ...compact.index.entries[0], state: "empty", rows: 0, bytes: 0 }] }));
     await expect(readLedgerDay({ ledger: "editorial-selections", day: input.fixture.date, contract: selectionContract,
       indexes: { daily: compact.indexPath } })).rejects.toThrow("declares no file");
@@ -933,19 +1013,20 @@ test("complete original files beat a newer partial retry and replay exact origin
   try {
     const { input, source, sourceWritten, history, packed } = await completeHistory(root);
     const complete = selectCompleteAttempt(history);
+    expect(complete.findings).toEqual([]);
     expect(complete.selected?.attempt).toBe(1);
     expect(readHistoricalSelections(complete.selected!).map(article => article.content)).toEqual(packed.dispatches.map(row => row.content));
-    const partial = await writeRows(root, "source-runs", input.fixture.date, SourceRunRecordSchema,
+    const partial = await writeRows(root, "feed-runs", input.fixture.date, SourceRunRecordSchema,
       [{ ...source(2), expected_source_count: 2 }], writer(input.fixture.run_id, 2), SourceRunContract.schemaVersion);
-    const sources = await readWritten(root, "source-runs", input.fixture.date,
+    const sources = await readWritten(root, "feed-runs", input.fixture.date,
       SourceRunContract,
       { status: "written", files: [...sourceWritten.files, ...partial.files] });
     const resolution = selectCompleteAttempt({ ...history, sources });
     expect(resolution.selected?.attempt).toBe(1);
     expect(resolution.findings.find(finding => finding.attempt === 2)?.status).toBe("incomplete");
-    const zero = await writeRows(root, "source-runs", input.fixture.date, SourceRunRecordSchema,
+    const zero = await writeRows(root, "feed-runs", input.fixture.date, SourceRunRecordSchema,
       [source(3, true)], writer(input.fixture.run_id, 3), SourceRunContract.schemaVersion);
-    const zeroSources = await readWritten(root, "source-runs", input.fixture.date,
+    const zeroSources = await readWritten(root, "feed-runs", input.fixture.date,
       SourceRunContract,
       { status: "written", files: [...sourceWritten.files, ...partial.files, ...zero.files] });
     const empty = selectCompleteAttempt({ ...history, sources: zeroSources });

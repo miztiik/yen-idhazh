@@ -28,6 +28,9 @@ export type NamedDayInput<T extends object> = Readonly<{
   indexes?: Readonly<Partial<Record<Period, string>>>;
   rawFiles?: readonly string[];
   rawIndex?: string;
+  preservedRawFiles?: readonly Readonly<{
+    path: string; file_id: string; content_sha256: string; bytes: number; row_count: number;
+  }>[];
   fileCache?: Map<string, Promise<ReadLedgerFile<T>>>;
 }>;
 
@@ -61,6 +64,36 @@ async function readFile<T extends object>(input: NamedDayInput<T>, path: string)
   }
   return pending;
 }
+async function readPreservedRawFiles<T extends object>(
+  input: NamedDayInput<T>, day: string, notices: string[],
+): Promise<readonly ReadLedgerFile<T>[] | undefined> {
+  const references = input.preservedRawFiles ?? [];
+  if (new Set(references.map(reference => reference.path)).size !== references.length
+    || new Set(references.map(reference => reference.file_id)).size !== references.length) {
+    throw new LedgerHistoryReadError("Preserved raw snapshot references must name distinct files");
+  }
+  const files: ReadLedgerFile<T>[] = [];
+  for (const reference of references) {
+    let file: ReadLedgerFile<T>;
+    try {
+      file = await readFile(input, reference.path);
+    } catch (error) {
+      if (!missing(error)) throw error;
+      notices.push(`preserved-file-missing:${basename(reference.path)}`);
+      return undefined;
+    }
+    if (file.envelope.tier !== "raw" || file.envelope.covers !== day) {
+      throw new LedgerHistoryReadError("Preserved raw snapshot belongs to another day or tier");
+    }
+    if (file.envelope.file_id !== reference.file_id
+      || file.envelope.content_sha256 !== reference.content_sha256
+      || file.bytes !== reference.bytes || file.rows.length !== reference.row_count) {
+      throw new LedgerHistoryReadError("Preserved raw snapshot differs from its head reference");
+    }
+    files.push(file);
+  }
+  return files;
+}
 export async function readLedgerDay<T extends object>(input: NamedDayInput<T>): Promise<LedgerDay<T>> {
   const day = DateStampSchema.parse(input.day);
   if (new Date(`${day}T00:00:00Z`).toISOString().slice(0, 10) !== day) throw new Error("Requested UTC day is not a calendar date");
@@ -92,7 +125,7 @@ export async function readLedgerDay<T extends object>(input: NamedDayInput<T>): 
     rows: files.flatMap(file => file.rows.filter(held => held.identity.covers === day)),
   });
   const verifySourcePartition = (files: readonly ReadLedgerFile<T>[]) => {
-    if (ledger !== "source-runs") return;
+    if (ledger !== "source-runs" && ledger !== "feed-runs") return;
     for (const file of files) for (const held of file.rows) {
       if (held.identity.covers !== day) continue;
       const partitionDay = sourceRunPartitionDay(held.row);
@@ -102,6 +135,12 @@ export async function readLedgerDay<T extends object>(input: NamedDayInput<T>): 
   };
   if (expired) {
     notices.push("period-expired");
+    const preserved = await readPreservedRawFiles(input, day, notices);
+    if (preserved === undefined) return result("missing", "raw");
+    if (preserved.length > 0) {
+      verifySourcePartition(preserved);
+      return result(preserved.some(file => file.rows.some(row => row.identity.covers === day)) ? "rows" : "empty", "raw", preserved);
+    }
     return result("missing", "yearly");
   }
   if (matches.length > 1) notices.push(`overlapping-periods:${matches.map(match => match.period).join(",")}`);
@@ -118,11 +157,21 @@ export async function readLedgerDay<T extends object>(input: NamedDayInput<T>): 
         await stat(filePath);
       } catch (error) {
         if (!missing(error)) throw error;
-        return result(entry.state, period);
+        const preserved = await readPreservedRawFiles(input, day, notices);
+        if (preserved === undefined) return result("missing", "raw");
+        verifySourcePartition(preserved);
+        const status = entry.state === "lost" ? "lost"
+          : preserved.some(file => file.rows.some(row => row.identity.covers === day)) ? "rows" : "empty";
+        return result(status, preserved.length > 0 ? "raw" : period, preserved);
       }
       throw new LedgerHistoryReadError("Compact index declares no file but its named file exists");
     }
-    if (entry.lost_days.includes(day)) return result("lost", period);
+    if (entry.lost_days.includes(day)) {
+      const preserved = await readPreservedRawFiles(input, day, notices);
+      if (preserved === undefined) return result("missing", "raw");
+      verifySourcePartition(preserved);
+      return result("lost", preserved.length > 0 ? "raw" : period, preserved);
+    }
     if (entry.set_aside > 0) notices.push(`files-set-aside:${entry.set_aside}`);
     let file: ReadLedgerFile<T>;
     try {
@@ -135,10 +184,30 @@ export async function readLedgerDay<T extends object>(input: NamedDayInput<T>): 
     if (file.envelope.tier !== "compact" || file.envelope.period !== period || file.envelope.covers !== entry.covers) {
       throw new LedgerHistoryReadError("Indexed compact file belongs to another period");
     }
-    if (file.bytes !== entry.bytes || file.rows.length !== entry.rows) throw new LedgerHistoryReadError("Compact index row count or byte size differs from its file");
-    verifySourcePartition([file]);
-    const held = result("rows", period, [file]);
+    if (file.bytes !== entry.bytes || file.rows.length !== entry.rows
+      || (entry.file_sha256 !== undefined && entry.file_sha256 !== null
+        && file.file_sha256 !== entry.file_sha256)) {
+      throw new LedgerHistoryReadError("Compact index row count, byte size or file digest differs from its file");
+    }
+    const preserved = await readPreservedRawFiles(input, day, notices);
+    if (preserved === undefined) return result("missing", "raw");
+    const compactIdentities = new Set(file.rows.map(row => JSON.stringify(row.identity)));
+    if (preserved.some(raw => raw.rows.some(row => compactIdentities.has(JSON.stringify(row.identity))))) {
+      throw new LedgerHistoryReadError("Preserved raw snapshot is already represented in the compact file");
+    }
+    const files = [file, ...preserved];
+    verifySourcePartition(files);
+    const held = result("rows", period, files);
     return { ...held, status: held.rows.length === 0 ? "empty" : "rows" };
+  }
+  if (input.preservedRawFiles !== undefined && input.preservedRawFiles.length > 0) {
+    if (input.rawFiles !== undefined || input.rawIndex !== undefined) {
+      throw new LedgerHistoryReadError("Name preserved snapshots or ordinary raw files, not both");
+    }
+    const preserved = await readPreservedRawFiles(input, day, notices);
+    if (preserved === undefined) return result("missing", "raw");
+    verifySourcePartition(preserved);
+    return result(preserved.some(file => file.rows.some(row => row.identity.covers === day)) ? "rows" : "empty", "raw", preserved);
   }
   let rawFiles = input.rawFiles;
   let sizes: number[] | null = null;

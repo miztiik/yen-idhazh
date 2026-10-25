@@ -31,7 +31,7 @@ import {
 async function auditFiles(output: string) {
   const directory = join(output, "raw", "feed-ingest-plan");
   const entries = await readdir(directory, { recursive: true });
-  return entries.filter(path => /^(article-assessments|diversity|source-runs)([/\\]|$)/.test(path.toString()));
+  return entries.filter(path => /^(article-assessments|article-selection-diversity|feed-runs)([/\\]|$)/.test(path.toString()));
 }
 
 test("hand-computable distributions preserve zeros, signed loss and exact concentration counts", () => {
@@ -72,7 +72,7 @@ test("real harvest through partition seals representable raw source completion o
     expect(audit.receipts.diversity.row_count).toBe(batch.diversity.length);
     async function verify<T extends object>(
       key: "assessments" | "diversity", schema: z.ZodType<T>,
-      ledger: "article-assessments" | "diversity", expected: readonly T[],
+      ledger: "article-assessments" | "article-selection-diversity", expected: readonly T[],
     ) {
       const files = audit.files[key].files;
       expect(files.length).toBe(1);
@@ -89,7 +89,7 @@ test("real harvest through partition seals representable raw source completion o
       });
     }
     await verify("assessments", ArticleAssessmentRecordSchema, "article-assessments", batch.assessments);
-    await verify("diversity", DiversityMetricRowSchema, "diversity", batch.diversity);
+    await verify("diversity", DiversityMetricRowSchema, "article-selection-diversity", batch.diversity);
     const selected = batch.diversity.filter(row => row.basis === "selected");
     expect(selected.find(row => row.metric === "source_gini")!.source_count).toBe(3);
     expect(selected.find(row => row.metric === "top_source_concentration" && row.top_k === 1)).toMatchObject({
@@ -103,7 +103,7 @@ test("real harvest through partition seals representable raw source completion o
       expect(row.item_count).toBeNull();
     }
     expect(audit.evidence.trace).toEqual(result.evidence.curation.trace);
-    expect((await auditFiles(recorded.inputs.outputRoot)).some(path => path.toString().startsWith("source-runs"))).toBe(true);
+    expect((await auditFiles(recorded.inputs.outputRoot)).some(path => path.toString().startsWith("feed-runs"))).toBe(true);
     expect(audit.planning_completion).toMatchObject({
       status: "complete", run_id: result.context.run_id, attempt: result.context.writer.attempt, source_count: 4,
     });
@@ -114,7 +114,7 @@ test("real harvest through partition seals representable raw source completion o
       ...result.files.harvest_rejections.files, ...result.files.screening_rejections.files, ...result.files.curation_rejections.files,
     ].map(({ file_id, content_sha256, row_count }) => ({ file_id, content_sha256, row_count })));
     const sources = await readLedgerParquet(join(recorded.inputs.outputRoot, audit.files.source_runs.files[0]!.path),
-      "source-runs", SourceRunContract);
+      "feed-runs", SourceRunContract);
     expect(sources.rows.map(row => row.row)).toEqual(audit.source_records);
     expect(audit.source_records.every(row => row.observation_phase === "plan_complete" && row.published_count === null && row.lead_count === null)).toBe(true);
     expect(result.events.some(event => JSON.stringify(event).includes("plan_complete"))).toBe(false);
@@ -178,7 +178,7 @@ test("configured concentration counts and signed future ages survive native audi
       if (mode === "top_k") {
         const diversityFile = audit.files.diversity.files[0]!;
         const diversity = await readLedgerParquet(join(recorded.inputs.outputRoot, diversityFile.path),
-          "diversity", DiversityMetricContract);
+          "article-selection-diversity", DiversityMetricContract);
         expect(diversity.rows.some(held => held.row.metric === "top_source_concentration" && held.row.top_k === 3)).toBe(true);
       } else {
         expect(assessments.rows.some(held => held.row.age_hours !== null && held.row.age_hours < 0)).toBe(true);
@@ -249,11 +249,11 @@ test("paused registry and a real obstructed write cannot return completion; part
     })).rejects.toThrow();
     expect(await auditFiles(recorded.inputs.outputRoot)).toEqual([]);
     await mkdir(join(recorded.inputs.outputRoot, "raw", "feed-ingest-plan"), { recursive: true });
-    await writeFile(join(recorded.inputs.outputRoot, "raw", "feed-ingest-plan", "diversity"), "A real file blocks the directory.");
+    await writeFile(join(recorded.inputs.outputRoot, "raw", "feed-ingest-plan", "article-selection-diversity"), "A real file blocks the directory.");
     await expect(recordPlanningMetrics(result, recorded.inputs, entries)).rejects.toThrow();
     const files = await auditFiles(recorded.inputs.outputRoot);
     expect(files.some(path => path.toString().startsWith("article-assessments"))).toBe(true);
-    expect(files.some(path => path.toString().startsWith("source-runs"))).toBe(false);
+    expect(files.some(path => path.toString().startsWith("feed-runs"))).toBe(false);
     expect(result.status).toBe("dispatches_persisted_audit_pending");
   } finally { await recorded.close(); }
 }, 30000);
@@ -328,10 +328,15 @@ async function observedPublication(hasPublication = true) {
       day, rawFiles: files.flatMap(result => result.files.map(file => join(recorded.inputs.outputRoot, file.path))),
     });
     const planning = {
-      sources: paths([sources]), ledgers: {
-        "article-assessments": paths([audit.files.assessments]), diversity: paths([audit.files.diversity]),
-        "editorial-selections": paths([result.files.selections]), dispatches: paths([result.files.dispatches]),
-        rejections: paths([result.files.harvest_rejections, result.files.screening_rejections, result.files.curation_rejections]),
+      sources: { day: date }, feed_runs: paths([sources]), ledgers: {
+        "article-assessments": paths([audit.files.assessments]), diversity: { day: date },
+        "editorial-selections": paths([result.files.selections]), dispatches: { day: date },
+        rejections: { day: date },
+      }, renamed: {
+        "article-selection-diversity": paths([audit.files.diversity]),
+        "article-dispatches": paths([result.files.dispatches]),
+        "ingest-rejections": paths([result.files.harvest_rejections, result.files.screening_rejections,
+          result.files.curation_rejections]),
       },
     };
     const prior = "2026-10-20";
@@ -342,14 +347,15 @@ async function observedPublication(hasPublication = true) {
       config: { ...result.evidence.harvest.config.metrics, rolling_window_days: 1, overlap_windows_days: [1] },
       writer: { ...result.context.writer, producer: "tests.publication-observer" },
       outputRoot: join(recorded.directory, "observer"), ledgerSettings: recorded.inputs.ledgerSettings,
-      registrations: { diversity: recorded.inputs.registrations.diversity, sources: registration("source-runs") },
+      registrations: { diversity: recorded.inputs.registrations.diversity, sources: registration("feed-runs") },
       publication_days: [
         { published: { ...paths([], prior), schema_version: PUBLISHED_ROW_SCHEMA_VERSION }, health: { day: prior, status: "empty", rows: [] }, digest_path: null },
         { published: { ...paths([published]), schema_version: PUBLISHED_ROW_SCHEMA_VERSION }, health: { day: date, status: health.length === 0 ? "empty" : "rows", rows: health }, digest_path: digestPath },
       ],
       planning_days: [
-        { sources: emptyPaths, ledgers: { "article-assessments": emptyPaths, diversity: emptyPaths,
-          "editorial-selections": emptyPaths, dispatches: emptyPaths, rejections: emptyPaths } }, planning,
+        { sources: emptyPaths, feed_runs: emptyPaths, ledgers: { "article-assessments": emptyPaths,
+          diversity: emptyPaths, "editorial-selections": emptyPaths, dispatches: emptyPaths, rejections: emptyPaths } },
+        planning,
       ], event_pairs: [],
     };
     return { recorded, result, audit, digest, digestPath, input, planning };
@@ -385,16 +391,16 @@ test("actual native publication completes the audit with a closed complete evide
     expect(written.source_observations.reduce((sum, source) => sum + source.lead_count!, 0)).toBe(1);
     expect(written.source_observations.find(row => row.source_id === fixture.result.evidence.harvest.inputs.sources[0]!.id)!.source.kind).toBe("reporting");
     const [nativeMetrics, nativeSources] = await Promise.all([
-      readLedgerParquet(join(fixture.input.outputRoot, written.files.diversity.files[0]!.path), "diversity",
+      readLedgerParquet(join(fixture.input.outputRoot, written.files.diversity.files[0]!.path), "article-selection-diversity",
         DiversityMetricContract),
-      readLedgerParquet(join(fixture.input.outputRoot, written.files.sources!.files[0]!.path), "source-runs",
+      readLedgerParquet(join(fixture.input.outputRoot, written.files.sources!.files[0]!.path), "feed-runs",
         SourceRunContract),
     ]);
     expect(nativeMetrics.rows.map(held => held.row)).toEqual(written.rows);
     expect(nativeSources.rows.map(held => held.row)).toEqual(written.source_observations);
     expect(nativeSources.rows.every(held => held.identity.covers === "2026-10-22")).toBe(true);
     const observerDay = await readLedgerDay({
-      ledger: "source-runs", day: "2026-10-22", contract: SourceRunContract,
+      ledger: "feed-runs", day: "2026-10-22", contract: SourceRunContract,
       rawFiles: written.files.sources!.files.map(file => join(fixture.input.outputRoot, file.path)),
     });
     expect(observerDay.rows.map(held => held.row)).toEqual(written.source_observations);
@@ -402,8 +408,8 @@ test("actual native publication completes the audit with a closed complete evide
       && held.row.observed_at === "2026-10-22T00:00:00Z"
       && held.identity.covers === "2026-10-22")).toBe(true);
     const backdated = await persistLedger({
-      ledger: "source-runs", outputRoot: fixture.input.outputRoot,
-      registryEntry: registration("source-runs"),
+      ledger: "feed-runs", outputRoot: fixture.input.outputRoot,
+      registryEntry: registration("feed-runs"),
       writerContext: { ...fixture.input.writer, producer: "tests.wrong-source-day" },
       ledgerSettings: fixture.input.ledgerSettings,
       period: { tier: "raw", covers: "2026-10-21" }, partition_date: "2026-10-21",
@@ -411,7 +417,7 @@ test("actual native publication completes the audit with a closed complete evide
     });
     if (backdated.status !== "written") throw new Error("Expected the malformed partition fixture to be written");
     await expect(readLedgerDay({
-      ledger: "source-runs", day: "2026-10-21", contract: SourceRunContract,
+      ledger: "feed-runs", day: "2026-10-21", contract: SourceRunContract,
       rawFiles: backdated.files.map(file => join(fixture.input.outputRoot, file.path)),
     })).rejects.toThrow("Source-run partition differs from its observation phase");
     expect(settlePlanningDay(await readPlanningHistory(fixture.planning)).runs).toHaveLength(1);
@@ -459,12 +465,17 @@ test("two actual runs retain changed source snapshots while rolling instances an
     });
     const first = fixture.planning;
     const history = {
-      sources: append(first.sources, [audit.files.source_runs]), ledgers: {
+      sources: first.sources, feed_runs: append(first.feed_runs!, [audit.files.source_runs]), ledgers: {
         "article-assessments": append(first.ledgers["article-assessments"], [audit.files.assessments]),
-        diversity: append(first.ledgers.diversity, [audit.files.diversity]),
+        diversity: first.ledgers.diversity,
         "editorial-selections": append(first.ledgers["editorial-selections"], [second.files.selections]),
-        dispatches: append(first.ledgers.dispatches, [second.files.dispatches]),
-        rejections: append(first.ledgers.rejections, [second.files.harvest_rejections, second.files.screening_rejections, second.files.curation_rejections]),
+        dispatches: first.ledgers.dispatches, rejections: first.ledgers.rejections,
+      }, renamed: {
+        "article-selection-diversity": append(first.renamed!["article-selection-diversity"]!, [audit.files.diversity]),
+        "article-dispatches": append(first.renamed!["article-dispatches"]!, [second.files.dispatches]),
+        "ingest-rejections": append(first.renamed!["ingest-rejections"]!, [
+          second.files.harvest_rejections, second.files.screening_rejections, second.files.curation_rejections,
+        ]),
       },
     };
     const observed = await recordPublicationMetrics({
@@ -488,12 +499,12 @@ test("a real obstructed source write cannot return the completed five-ledger att
   const recorded = await recordedPlan();
   try {
     const result = await runFeedPlan({ partition_strategy: "none" }, recorded.inputs, recorded.runtime);
-    await writeFile(join(recorded.inputs.outputRoot, "raw", "feed-ingest-plan", "source-runs"), "obstruction");
+    await writeFile(join(recorded.inputs.outputRoot, "raw", "feed-ingest-plan", "feed-runs"), "obstruction");
     await expect(recordPlanningMetrics(result, recorded.inputs)).rejects.toThrow();
     const files = await auditFiles(recorded.inputs.outputRoot);
     expect(files.some(path => path.toString().startsWith("article-assessments"))).toBe(true);
-    expect(files.some(path => path.toString().startsWith("diversity"))).toBe(true);
-    expect(files.some(path => /^source-runs[/\\]/.test(path.toString()))).toBe(false);
+    expect(files.some(path => path.toString().startsWith("article-selection-diversity"))).toBe(true);
+    expect(files.some(path => /^feed-runs[/\\]/.test(path.toString()))).toBe(false);
   } finally { await recorded.close(); }
 }, 30000);
 
@@ -622,7 +633,7 @@ test("missing native planning proof stays unavailable while independently record
   try {
     const incomplete = {
       ...fixture.planning,
-      sources: { ...fixture.planning.sources, rawFiles: [join(fixture.recorded.directory, "absent.parquet")] },
+      feed_runs: { ...fixture.planning.feed_runs!, rawFiles: [join(fixture.recorded.directory, "absent.parquet")] },
     };
     const written = await recordPublicationMetrics({ ...fixture.input, as_of: "2026-10-22T00:00:00Z", through: "2026-10-21",
       planning_days: [incomplete] });

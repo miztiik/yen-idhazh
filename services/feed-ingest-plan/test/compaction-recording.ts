@@ -40,10 +40,15 @@ if (mode === "produce") {
   const named = (ledger: string) => ({
     day: first.date, indexes: { [tier!]: join(root, "state", "compact", "feed-ingest-plan", ledger, "index", `${tier}.json`) },
   });
+  const missing = { day: first.date };
   const input: NamedPlanningHistory = {
-    sources: named("source-runs"), ledgers: {
-      "article-assessments": named("article-assessments"), diversity: named("diversity"),
-      "editorial-selections": named("editorial-selections"), dispatches: named("dispatches"), rejections: named("rejections"),
+    sources: missing, feed_runs: named("feed-runs"), ledgers: {
+      "article-assessments": named("article-assessments"), diversity: missing,
+      "editorial-selections": named("editorial-selections"), dispatches: missing, rejections: missing,
+    }, renamed: {
+      "article-selection-diversity": named("article-selection-diversity"),
+      "article-dispatches": named("article-dispatches"),
+      "ingest-rejections": named("ingest-rejections"),
     },
   };
   const history = await readPlanningHistory(input);

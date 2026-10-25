@@ -35,7 +35,9 @@ export function validateLedgerFilePath(
 }
 
 export async function verifyParquetFiles(
-  root: string, ledger: "dispatches" | "rejections" | "article-assessments" | "diversity" | "source-runs" | "feed-health" | "document-observations", written: PersistLedgerResult,
+  root: string, ledger: "dispatches" | "article-dispatches" | "rejections" | "ingest-rejections"
+    | "article-assessments" | "diversity" | "article-selection-diversity" | "source-runs" | "feed-runs"
+    | "feed-health" | "document-observations" | "ingest-observations", written: PersistLedgerResult,
   registration: LedgerRegistration, expectedRows?: readonly object[],
 ) {
   if (registration.name !== ledger) throw new Error("registration.name differs from the requested ledger");
@@ -66,17 +68,17 @@ export async function verifyParquetFiles(
     if (isAbsolute(local) || local === ".." || local.startsWith(`..\\`) || local.startsWith("../")) {
       throw new Error(`${ledger}.files.path escapes its output root`);
     }
-    const actual = ledger === "dispatches"
+    const actual = ledger === "dispatches" || ledger === "article-dispatches"
       ? await readLedgerParquet(actualPath, ledger, DispatchContract)
-      : ledger === "rejections"
+      : ledger === "rejections" || ledger === "ingest-rejections"
         ? await readLedgerParquet(actualPath, ledger, CandidateRejectionContract)
         : ledger === "article-assessments"
           ? await readLedgerParquet(actualPath, ledger, ArticleAssessmentContract)
-          : ledger === "diversity"
+          : ledger === "diversity" || ledger === "article-selection-diversity"
             ? await readLedgerParquet(actualPath, ledger, DiversityMetricContract)
             : ledger === "feed-health"
               ? await readLedgerParquet(actualPath, ledger, FeedHealthContract)
-              : ledger === "document-observations"
+              : ledger === "document-observations" || ledger === "ingest-observations"
                 ? await readLedgerParquet(actualPath, ledger, DocumentObservationContract)
                 : await readLedgerParquet(actualPath, ledger, SourceRunContract);
     if (actual.envelope.tier !== "raw" || actual.envelope.file_id !== file.file_id
@@ -127,10 +129,14 @@ export async function verifyPlanningCompletion(root: string, summary: ReturnType
     })),
   });
   const history = await readPlanningHistory({
-    sources: named([summary.files.source_runs]), ledgers: {
-      "article-assessments": named([metrics.files.assessments]), diversity: named([metrics.files.diversity]),
-      "editorial-selections": named([summary.files.selections]), dispatches: named([summary.files.dispatches]),
-      rejections: named([summary.files.harvest_rejections, summary.files.screening_rejections, summary.files.curation_rejections]),
+    sources: { day: summary.date }, feed_runs: named([summary.files.source_runs]), ledgers: {
+      "article-assessments": named([metrics.files.assessments]), diversity: { day: summary.date },
+      "editorial-selections": named([summary.files.selections]), dispatches: { day: summary.date },
+      rejections: { day: summary.date },
+    }, renamed: {
+      "article-selection-diversity": named([metrics.files.diversity]),
+      "article-dispatches": named([summary.files.dispatches]),
+      "ingest-rejections": named([summary.files.harvest_rejections, summary.files.screening_rejections, summary.files.curation_rejections]),
     },
   });
   const selected = selectCompleteAttempt(history, summary.run_id).selected;

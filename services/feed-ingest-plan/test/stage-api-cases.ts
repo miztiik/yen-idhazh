@@ -125,7 +125,7 @@ async function verifySavedStageFlow() {
     expect(persisted.files.status).toBe("written");
     const actual = [];
     for (const receipt of persisted.files.files) {
-      const file = await readLedgerParquet(join(fixture.inputs.outputRoot, receipt.path), "dispatches", DispatchContract);
+      const file = await readLedgerParquet(join(fixture.inputs.outputRoot, receipt.path), "article-dispatches", DispatchContract);
       expect(file.envelope.content_sha256).toBe(receipt.content_sha256);
       expect(file.rows.length).toBe(receipt.row_count);
       actual.push(...file.rows.map(row => row.row));

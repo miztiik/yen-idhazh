@@ -33,6 +33,7 @@ from idhazh.contracts.feed_ingest_feedback import FeedIngestOperationalStateRow
 from idhazh.contracts.feed_ingest_observations import DocumentObservationRecord
 from idhazh.contracts.feed_ingest_rejection import CandidateRejectionRecord
 from idhazh.contracts.feed_ingest_source_run import SourceRunRecord
+from idhazh.contracts.feed_health_state import FeedHealthStateSnapshot
 from idhazh.contracts.feed_retirement import FeedRetirementRow
 from idhazh.contracts.host_fingerprint import HostFingerprintRow
 from idhazh.contracts.item_health import ItemHealthRow
@@ -340,13 +341,22 @@ _DOOR_SHAPES: Final[dict[LedgerName, _DoorShape]] = {
     LedgerName.FEED_INGEST_PLAN_DISPATCHES: _DoorShape(
         FEED_INGEST_DISPATCH_KEY, FeedIngestDispatch
     ),
+    LedgerName.FEED_INGEST_PLAN_ARTICLE_DISPATCHES: _DoorShape(
+        FEED_INGEST_DISPATCH_KEY, FeedIngestDispatch
+    ),
     LedgerName.FEED_INGEST_PLAN_EDITORIAL_SELECTIONS: _DoorShape(
         FEED_INGEST_SELECTION_KEY, EditorialSelectionRow
     ),
     LedgerName.FEED_INGEST_PLAN_REJECTIONS: _DoorShape(
         FEED_INGEST_REJECTION_KEY, CandidateRejectionRecord
     ),
+    LedgerName.FEED_INGEST_PLAN_INGEST_REJECTIONS: _DoorShape(
+        FEED_INGEST_REJECTION_KEY, CandidateRejectionRecord
+    ),
     LedgerName.FEED_INGEST_PLAN_SOURCE_RUNS: _DoorShape(
+        FEED_INGEST_SOURCE_RUN_KEY, SourceRunRecord
+    ),
+    LedgerName.FEED_INGEST_PLAN_FEED_RUNS: _DoorShape(
         FEED_INGEST_SOURCE_RUN_KEY, SourceRunRecord
     ),
     LedgerName.FEED_INGEST_PLAN_ARTICLE_ASSESSMENTS: _DoorShape(
@@ -355,11 +365,20 @@ _DOOR_SHAPES: Final[dict[LedgerName, _DoorShape]] = {
     LedgerName.FEED_INGEST_PLAN_DIVERSITY: _DoorShape(
         FEED_INGEST_DIVERSITY_KEY, DiversityMetricRow
     ),
+    LedgerName.FEED_INGEST_PLAN_ARTICLE_SELECTION_DIVERSITY: _DoorShape(
+        FEED_INGEST_DIVERSITY_KEY, DiversityMetricRow
+    ),
     LedgerName.FEED_INGEST_PLAN_DOCUMENT_OBSERVATIONS: _DoorShape(
+        ("event_id",), DocumentObservationRecord
+    ),
+    LedgerName.FEED_INGEST_PLAN_INGEST_OBSERVATIONS: _DoorShape(
         ("event_id",), DocumentObservationRecord
     ),
     LedgerName.FEED_INGEST_PLAN_OPERATIONAL_STATE: _DoorShape(
         FEED_INGEST_OPERATIONAL_STATE_KEY, FeedIngestOperationalStateRow
+    ),
+    LedgerName.FEED_INGEST_PLAN_FEED_HEALTH_STATE: _DoorShape(
+        ("state_revision",), FeedHealthStateSnapshot
     ),
     LedgerName.GARDENER: _DoorShape(COLLECTION_PRUNE_KEY, CollectionPruneRow),
     LedgerName.VISUAL_PRUNES: _DoorShape(VISUAL_PRUNE_KEY, VisualPruneRow),

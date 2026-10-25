@@ -7,6 +7,7 @@ import type { PersistLedgerResult } from "@idhazh/ledger-file-writer";
 import type { CurationResult } from "../curate-article-portfolio/editorial-selection";
 import { readLedgerParquet } from "../read-ledger-history/read-parquet";
 import type { ProvenAttempt } from "../read-ledger-history/complete-attempt";
+import { uniqueRecorded } from "../metrics/fingerprint-dedup";
 import { preparePartitionInput } from "./partition-input";
 import { DispatchContract } from "../metrics/audit-contracts";
 
@@ -44,7 +45,9 @@ export async function readCurrentSelections(input: Readonly<{
 
 export function readHistoricalSelections(attempt: ProvenAttempt) {
   const selections = attempt.rows["editorial-selections"].map(held => EditorialSelectionRowSchema.parse(held.row));
-  const dispatches = attempt.rows.dispatches.map(held => DispatchContract.schema.parse(held.row));
+  const dispatches = uniqueRecorded([
+    ...attempt.rows.dispatches, ...attempt.rows["article-dispatches"],
+  ].map(held => DispatchContract.schema.parse(held.row)), row => row.selection.candidate_id, isDeepStrictEqual);
   if (selections.length !== dispatches.length) throw new Error("Historical selections and dispatches differ in count");
   const byId = new Map(dispatches.map(dispatch => [dispatch.selection.candidate_id, dispatch]));
   if (byId.size !== dispatches.length || selections.some(selection =>

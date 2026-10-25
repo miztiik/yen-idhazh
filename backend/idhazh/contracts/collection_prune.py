@@ -130,6 +130,7 @@ def stop_for(fault: GardenerFault) -> StopReason:
             | GardenerFault.RANGE_STARTS_LATE
             | GardenerFault.NO_MONTH_TO_REOPEN
             | GardenerFault.PACKED_FILE_UNREADABLE
+            | GardenerFault.HEAD_INDEX_UNAVAILABLE
         ):
             return StopReason.DEFERRED
     assert_never(fault)
@@ -153,6 +154,11 @@ class CollectionPruneRow(Contract):
     __schema_stem__: ClassVar[str] = "collection-prune-row"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-10-25",
+            change="head-index-unavailable defers feed-health pruning; older rows read unchanged.",
+            why="Without a valid bounded head, compaction cannot tell which snapshots are live.",
+        ),
+        ChangelogEntry(
             version="2026-10-09",
             change="manual-action added as a failed fault; older rows read unchanged.",
             why="A recognized refusal is red without being mislabeled as a code defect.",
@@ -161,11 +167,6 @@ class CollectionPruneRow(Contract):
             version="2026-10-07",
             change="fault, recovered and the deferred stop added; older rows read with none.",
             why="A row says why a pass stopped and what it recovered instead of stopping.",
-        ),
-        ChangelogEntry(
-            version="2026-10-04",
-            change="handled_through added; a dry walk's resume_from is where a live pass resumes.",
-            why="A collection task resumes the day after it, so no wake reads a day twice.",
         ),
         ChangelogEntry(
             version="2026-10-03T18:00",

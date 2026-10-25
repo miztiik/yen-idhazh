@@ -98,7 +98,7 @@ test("the awaited entrypoint records positive configured counts, signed ages and
         inputs: recorded.inputs, runtime: recorded.runtime, output: value => { printed.push(value); },
       });
       expect(printed).toHaveLength(1);
-      for (const ledger of ["article-assessments", "diversity", "source-runs"]) {
+      for (const ledger of ["article-assessments", "article-selection-diversity", "feed-runs"]) {
         expect(existsSync(join(recorded.inputs.outputRoot, "raw", "feed-ingest-plan", ledger))).toBe(true);
       }
       expect(recorded.events.some(event => event.stage === "seal-article-ledger")).toBe(true);
@@ -112,12 +112,12 @@ test("a real required source write failure cannot print a successful CLI summary
   try {
     const raw = join(recorded.inputs.outputRoot, "raw", "feed-ingest-plan");
     await mkdir(raw, { recursive: true });
-    await writeFile(join(raw, "source-runs"), "A file cannot hold source output.");
+    await writeFile(join(raw, "feed-runs"), "A file cannot hold source output.");
     await expect(main(["--cli"], {
       inputs: recorded.inputs, runtime: recorded.runtime, output: value => { printed.push(value); },
     })).rejects.toThrow();
     expect(printed).toEqual([]);
     expect(existsSync(join(raw, "article-assessments"))).toBe(true);
-    expect(existsSync(join(raw, "diversity"))).toBe(true);
+    expect(existsSync(join(raw, "article-selection-diversity"))).toBe(true);
   } finally { await recorded.close(); }
 }, 30000);

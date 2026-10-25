@@ -18,11 +18,17 @@ export function namedPlanningFiles(summary: ReturnType<typeof summarizePlan>, ro
     day: summary.date, rawFiles: files.flatMap(result => result.files.map(file => join(root, ...file.path.split("/")))),
   });
   return {
-    sources: named([summary.files.source_runs]),
+    sources: named([]), feed_runs: named([summary.files.source_runs]),
     ledgers: {
-      "article-assessments": named([summary.metrics.files.assessments]), diversity: named([summary.metrics.files.diversity]),
-      "editorial-selections": named([summary.files.selections]), dispatches: named([summary.files.dispatches]),
-      rejections: named([summary.files.harvest_rejections, summary.files.screening_rejections, summary.files.curation_rejections]),
+      "article-assessments": named([summary.metrics.files.assessments]), diversity: named([]),
+      "editorial-selections": named([summary.files.selections]), dispatches: named([]),
+      rejections: named([]),
+    },
+    renamed: {
+      "article-selection-diversity": named([summary.metrics.files.diversity]),
+      "article-dispatches": named([summary.files.dispatches]),
+      "ingest-rejections": named([summary.files.harvest_rejections, summary.files.screening_rejections,
+        summary.files.curation_rejections]),
     },
   };
 }

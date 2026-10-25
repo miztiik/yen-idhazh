@@ -58,13 +58,19 @@ ENVELOPE_NAMED_FIELDS: Final[Mapping[LedgerName, frozenset[str]]] = {
     LedgerName.CONTENT_SIMILARITY_JUDGE_METRICS: frozenset({"run_id"}),
     LedgerName.CONTENT_SIMILARITY_JUDGE_FITTED_THRESHOLDS: frozenset({"run_id"}),
     LedgerName.FEED_INGEST_PLAN_DISPATCHES: frozenset(),
+    LedgerName.FEED_INGEST_PLAN_ARTICLE_DISPATCHES: frozenset(),
     LedgerName.FEED_INGEST_PLAN_EDITORIAL_SELECTIONS: frozenset(),
     LedgerName.FEED_INGEST_PLAN_REJECTIONS: frozenset(),
+    LedgerName.FEED_INGEST_PLAN_INGEST_REJECTIONS: frozenset(),
     LedgerName.FEED_INGEST_PLAN_SOURCE_RUNS: frozenset({"run_id", "attempt"}),
+    LedgerName.FEED_INGEST_PLAN_FEED_RUNS: frozenset({"run_id", "attempt"}),
     LedgerName.FEED_INGEST_PLAN_ARTICLE_ASSESSMENTS: frozenset(),
     LedgerName.FEED_INGEST_PLAN_DIVERSITY: frozenset({"run_id"}),
+    LedgerName.FEED_INGEST_PLAN_ARTICLE_SELECTION_DIVERSITY: frozenset({"run_id"}),
     LedgerName.FEED_INGEST_PLAN_DOCUMENT_OBSERVATIONS: frozenset(),
+    LedgerName.FEED_INGEST_PLAN_INGEST_OBSERVATIONS: frozenset(),
     LedgerName.FEED_INGEST_PLAN_OPERATIONAL_STATE: frozenset(),
+    LedgerName.FEED_INGEST_PLAN_FEED_HEALTH_STATE: frozenset(),
 }
 
 

@@ -177,12 +177,19 @@ jobs:
             const settledRequired = requiredSeenDays(now, 0);
             const settled_failure_days = completeHistoryDayInputs(inputs.registrations.item_health.prefix,
               settledRequired, inputs.settings.inputs.settled_failure_days, "settled_failure_days");
-            const document_observation_days = completeHistoryDayInputs(inputs.registrations.document_observations.prefix,
-              closedObservationDays(now, inputs.harvest.config.feedback.window_days),
+            const observation_days = closedObservationDays(now, inputs.harvest.config.feedback.window_days);
+            const document_observation_days = completeHistoryDayInputs(inputs.legacy_registrations.document_observations.prefix,
+              observation_days,
               inputs.settings.inputs.document_observation_days, "document_observation_days");
+            const ingest_observation_days = completeHistoryDayInputs(inputs.registrations.document_observations.prefix,
+              observation_days, inputs.settings.inputs.ingest_observation_days, "ingest_observation_days");
             const registry: { families: { ledgers: { name: string; prefix: string[] }[] }[] } =
               await Bun.file(inputs.settings.inputs.registrations).json();
-            const ledgers = ["source-runs", "article-assessments", "diversity", "editorial-selections", "dispatches", "rejections"] as const;
+            const ledgers = [
+              "source-runs", "feed-runs", "article-assessments", "diversity", "article-selection-diversity",
+              "editorial-selections", "dispatches", "article-dispatches", "rejections", "ingest-rejections",
+              "document-observations", "ingest-observations", "operational-state", "feed-health-state",
+            ] as const;
             const inventory = new Set<string>();
             const cache = new Map<string, Promise<unknown | undefined>>();
             async function readCommitted(path: string): Promise<unknown | undefined> {
@@ -264,7 +271,8 @@ jobs:
             }
             await stageConfiguredDays("published", inputs.registrations.published.prefix, published_days);
             await stageConfiguredDays("item-health", inputs.registrations.item_health.prefix, settled_failure_days);
-            await stageConfiguredDays("document-observations", inputs.registrations.document_observations.prefix, document_observation_days);
+            await stageConfiguredDays("document-observations", inputs.legacy_registrations.document_observations.prefix, document_observation_days);
+            await stageConfiguredDays("ingest-observations", inputs.registrations.document_observations.prefix, ingest_observation_days);
             const feedInventory = await stageFeedHistory({
               ledger: "feed-health", prefix: inputs.registrations.feed_health.prefix, now,
               health_window_days: Math.max(
@@ -289,7 +297,7 @@ jobs:
               throw new Error("workflow: runner directory, output path, run identity and attempt are required");
             }
             const settings = ServiceSettingsSchema.parse({ ...inputs.settings, enabled: true,
-              inputs: { ...inputs.settings.inputs, seen_days, published_days, settled_failure_days, feed_health_days, document_observation_days },
+              inputs: { ...inputs.settings.inputs, seen_days, published_days, settled_failure_days, feed_health_days, document_observation_days, ingest_observation_days },
               run: { ...inputs.settings.run, attempt: Number(GITHUB_RUN_ATTEMPT) } });
             const artifactRoot = join(RUNNER_TEMP, "feed-ingest-plan");
             await mkdir(artifactRoot, { recursive: true });
@@ -336,21 +344,21 @@ jobs:
             }
             await writeFile(join(artifactRoot, "events.json"), JSON.stringify(events));
             await writeFile(join(artifactRoot, "response.json"), JSON.stringify(summary));
-            await verifyParquetFiles(join(artifactRoot, "state"), "dispatches", summary.files.dispatches, inputs.registrations.dispatches);
+            await verifyParquetFiles(join(artifactRoot, "state"), "article-dispatches", summary.files.dispatches, inputs.registrations.dispatches);
             await verifyParquetFiles(join(artifactRoot, "state"), "feed-health", summary.files.feed_health, inputs.registrations.feed_health);
-            await verifyParquetFiles(join(artifactRoot, "state"), "document-observations",
+            await verifyParquetFiles(join(artifactRoot, "state"), "ingest-observations",
               summary.files.document_observations, inputs.registrations.document_observations);
             for (const files of [summary.files.harvest_rejections, summary.files.screening_rejections, summary.files.curation_rejections]) {
-              await verifyParquetFiles(join(artifactRoot, "state"), "rejections", files, inputs.registrations.rejections);
+              await verifyParquetFiles(join(artifactRoot, "state"), "ingest-rejections", files, inputs.registrations.rejections);
             }
-            for (const [key, ledger] of [["assessments", "article-assessments"], ["diversity", "diversity"]] as const) {
+            for (const [key, ledger] of [["assessments", "article-assessments"], ["diversity", "article-selection-diversity"]] as const) {
               await verifyParquetFiles(join(artifactRoot, "state"), ledger, summary.metrics.files[key], inputs.registrations[key]);
               verifyLedgerReceipt(ledger, summary.metrics.files[key], summary.metrics.receipts[key]);
             }
             if (summary.files.source_runs === undefined || summary.source_records === null) {
               throw new Error("workflow: actual planning source evidence is absent");
             }
-            await verifyParquetFiles(join(artifactRoot, "state"), "source-runs", summary.files.source_runs,
+            await verifyParquetFiles(join(artifactRoot, "state"), "feed-runs", summary.files.source_runs,
               inputs.registrations.source_runs, summary.source_records);
             await verifyPlanningCompletion(join(artifactRoot, "state"), summary);
             const outputs = createExecutionOutputs(summary, inputs.registrations);

@@ -208,7 +208,7 @@ test("real composition separates run and selection clocks and reads native dispa
     const rows = [];
     for (const file of result.files.dispatches.files) {
       expect(file.path).not.toMatch(/^[A-Za-z]:|\\/);
-      const native = await readLedgerParquet(join(recorded.inputs.outputRoot, file.path), "dispatches", DispatchContract);
+      const native = await readLedgerParquet(join(recorded.inputs.outputRoot, file.path), "article-dispatches", DispatchContract);
       rows.push(...native.rows.map(held => held.row));
       expect(native.envelope.identity.shard).toBe(0);
       expect(native.envelope.identity.git_sha).toBe(recorded.runtime.git_sha);
@@ -253,7 +253,7 @@ test("real composition separates run and selection clocks and reads native dispa
     expect(planningAudit.source_records.every(row => row.source.publisher_id === publisherId)).toBe(true);
     const nativeRejections = await readLedgerParquet(
       join(recorded.inputs.outputRoot, result.files.harvest_rejections.files[0]!.path),
-      "rejections", CandidateRejectionContract,
+      "ingest-rejections", CandidateRejectionContract,
     );
     if (blocked === undefined || blocked.rejection === null) throw new Error("Missing actual blocked rejection");
     expect(nativeRejections.rows.map(held => held.row)).toContainEqual(blocked.rejection);
@@ -321,7 +321,7 @@ test("real composition separates run and selection clocks and reads native dispa
         history_window_days: reliability.inputs.clock_config.collect.reliability_window_days,
       });
       const dispatch = await readLedgerParquet(join(reliability.inputs.outputRoot, enabled.files.dispatches.files[0]!.path),
-        "dispatches", DispatchContract);
+        "article-dispatches", DispatchContract);
       expect(dispatch.rows[0]!.row.selection.ratings).toEqual(enabled.evidence.curation.rows[0]!.ratings);
       expect(dispatch.rows[0]!.row.selection.ratings.source_reliability).toMatchObject({
         enabled: true, history: { success_fraction: 1, attempted: 5 },
@@ -549,7 +549,7 @@ test("invalid controls, disabled runs, inactive ledgers and unavailable named hi
     await expect(runFeedPlan({}, recorded.inputs, recorded.runtime)).rejects.toThrow("disabled");
     recorded.inputs.settings.enabled = true;
     recorded.inputs.registrations.dispatches.lifecycle_status = "paused";
-    await expect(runFeedPlan({}, recorded.inputs, recorded.runtime)).rejects.toThrow("dispatches");
+    await expect(runFeedPlan({}, recorded.inputs, recorded.runtime)).rejects.toThrow("article-dispatches");
     recorded.inputs.registrations.dispatches.lifecycle_status = "active";
     recorded.inputs.settings.inputs.seen_files = ["state/raw/seen/missing.parquet"];
     await expect(runFeedPlan({}, recorded.inputs, recorded.runtime)).rejects.toThrow();
@@ -561,7 +561,7 @@ test("invalid controls, disabled runs, inactive ledgers and unavailable named hi
 test("real dispatch persistence failure leaves earlier files but emits no storage completion", async () => {
   const recorded = await recordedPlan();
   try {
-    const blocker = join(recorded.inputs.outputRoot, "raw", "feed-ingest-plan", "dispatches");
+    const blocker = join(recorded.inputs.outputRoot, "raw", "feed-ingest-plan", "article-dispatches");
     await mkdir(join(recorded.inputs.outputRoot, "raw", "feed-ingest-plan"), { recursive: true });
     await writeFile(blocker, "A file cannot be a ledger directory.");
     await expect(runFeedPlan({}, recorded.inputs, recorded.runtime)).rejects.toThrow();
@@ -587,14 +587,14 @@ test("named input loader works from a generated configuration root without any b
     const loaded = await loadPlanInputs(recorded.directory);
     expect(loaded.harvest.config.version).toBe("2026-10-20");
     expect(loaded.registrations.source_runs).toEqual({
-      name: "source-runs", family: "feed-ingest-plan", grain: "raw-and-compact",
-      lifecycle_status: "active", prefix: ["feed-ingest-plan", "source-runs"],
+      name: "feed-runs", family: "feed-ingest-plan", grain: "raw-and-compact",
+      lifecycle_status: "active", prefix: ["feed-ingest-plan", "feed-runs"],
     });
     expect(existsSync(join(recorded.directory, "backend"))).toBe(false);
     const registryPath = join(recorded.directory, paths.registrations);
     const registry = await Bun.file(registryPath).json();
     const familyIndex = registry.families.findIndex((family: { name: string }) => family.name === "feed-ingest-plan");
-    const ledgerIndex = registry.families[familyIndex].ledgers.findIndex((ledger: { name: string }) => ledger.name === "source-runs");
+    const ledgerIndex = registry.families[familyIndex].ledgers.findIndex((ledger: { name: string }) => ledger.name === "feed-runs");
     for (const invalid of ["paused", "retired", "family", "prefix", "grain", "missing", "duplicate"] as const) {
       const changed = structuredClone(registry);
       const family = changed.families[familyIndex];

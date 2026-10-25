@@ -55,7 +55,7 @@ export function createExecutionOutputs(summary: PlanSummary, registrations: Regi
   if (summary.request.shards !== count || summary.request.partition_strategy !== summary.strategy) {
     throw new Error("request differs from the resolved worker count or strategy");
   }
-  if (registrations.dispatches.name !== "dispatches" || registrations.rejections.name !== "rejections"
+  if (registrations.dispatches.name !== "article-dispatches" || registrations.rejections.name !== "ingest-rejections"
     || registrations.selections.name !== "editorial-selections" || registrations.seen.name !== "seen") {
     throw new Error("registrations name the wrong ledgers");
   }
@@ -88,7 +88,7 @@ export function createExecutionOutputs(summary: PlanSummary, registrations: Regi
     if (summary.metrics.audited_complete !== false || summary.metrics.status !== "assessment_diversity_recorded_audit_pending") {
       throw new Error("metrics.status cannot claim complete audit");
     }
-    for (const [key, ledger] of [["assessments", "article-assessments"], ["diversity", "diversity"]] as const) {
+    for (const [key, ledger] of [["assessments", "article-assessments"], ["diversity", "article-selection-diversity"]] as const) {
       if (registrations[key].name !== ledger) throw new Error(`registrations.${key} names the wrong ledger`);
       const files = summary.metrics.files[key];
       const filePaths = paths(files, registrations[key]);
@@ -98,7 +98,7 @@ export function createExecutionOutputs(summary: PlanSummary, registrations: Regi
     }
     metrics.metrics_status = summary.metrics.status;
     if (!summary.planning_complete || summary.planning_completion === null || summary.files.source_runs === undefined
-      || registrations.source_runs.name !== "source-runs" || summary.source_records === null
+      || registrations.source_runs.name !== "feed-runs" || summary.source_records === null
       || summary.planning_completion.source_count !== summary.source_records.length) {
       throw new Error("planning_completion requires actual source-run evidence");
     }
@@ -113,8 +113,8 @@ export function createExecutionOutputs(summary: PlanSummary, registrations: Regi
     };
     for (const [key, ledger, files] of [
       ["selections", "editorial-selections", summary.files.selections],
-      ["dispatches", "dispatches", summary.files.dispatches],
-      ["rejections", "rejections", rejectionResult],
+      ["dispatches", "article-dispatches", summary.files.dispatches],
+      ["rejections", "ingest-rejections", rejectionResult],
     ] as const) verifyLedgerReceipt(ledger, files, summary.metrics.receipts[key]);
   }
   const all = [...dispatches, ...selections, ...rejections, ...seen, ...health, ...observations, ...metricPaths];

@@ -191,6 +191,9 @@ def paths_for_task(
                 paths.update(
                     ledger_marks.name_marks(repo_root / ledger.STATE_DIRNAME, policy.ledger)
                 )
+        if policy.ledger is LedgerName.FEED_INGEST_PLAN_FEED_HEALTH_STATE:
+            head = repo_root / "state/metadata/feed-ingest-plan/feed-health-state/head"
+            paths.update((head / "index-a.json", head / "index-b.json"))
         return tuple(sorted(paths))
     if period_range is None:
         return ()

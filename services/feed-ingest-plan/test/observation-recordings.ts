@@ -22,7 +22,7 @@ export async function recordHarvestObservations(outputRoot: string, context: Har
 
 export async function readObservationFiles(root: string, files: readonly PersistedLedgerFile[]) {
   const saved = await Promise.all(files.map(async file => {
-    const actual = await readLedgerParquet(join(root, ...file.path.split("/")), "document-observations", DocumentObservationContract);
+    const actual = await readLedgerParquet(join(root, ...file.path.split("/")), "ingest-observations", DocumentObservationContract);
     expect(actual.envelope).toMatchObject({
       tier: "raw", content_sha256: file.content_sha256, file_id: file.file_id, unit_id: file.unit_id,
       row_schema_version: DocumentObservationContract.schemaVersion,

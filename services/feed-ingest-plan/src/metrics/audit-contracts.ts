@@ -10,6 +10,8 @@ import {
   LegacyArticleAssessmentSchema,
   SourceRunRecordSchema,
   LedgerCompletionEvidenceSchema,
+  PreviousCompletionEvidenceSchema,
+  PreviousCompletionLedgerSchema,
   SOURCE_RUN_VERSION,
   PLANNING_OBSERVATIONS_VERSION,
   SOURCE_RELIABILITY_VERSION,
@@ -52,21 +54,26 @@ const previousSourceRunFields = {
   source: PreviousSourceSnapshotSchema,
   drop_reasons: z.array(PreviousDropReasonCountSchema),
   last_failure_reason: PreviousDropReasonCountSchema.shape.reason.nullable(),
+  completion_evidence: PreviousCompletionEvidenceSchema.default(null),
 };
 const LegacySourceRunSchema = z.strictObject({
   ...previousSourceRunFields,
   version: previousVersion,
   completion_evidence: z.array(z.strictObject({
-    ledger: LedgerCompletionEvidenceSchema.shape.ledger,
+    ledger: PreviousCompletionLedgerSchema,
     row_count: LedgerCompletionEvidenceSchema.shape.row_count,
     files: LedgerCompletionEvidenceSchema.shape.files,
   })).nullable().default(null),
 });
 const PreviousSourceRunSchema = LegacySourceRunSchema.extend({ version: z.literal("2026-10-22") });
 const PreviousDiagnosticSourceRunSchema = LegacySourceRunSchema.extend({ version: z.literal("2026-10-22T18:15") });
+const PreviousPublisherIdentitySourceRunSchema = z.strictObject({
+  ...previousSourceRunFields, version: z.literal(PUBLISHER_IDENTITY_VERSION),
+});
 const PreviousExclusionSourceRunSchema = z.strictObject({
   ...sourceRunFields,
   source: PreviousSourceSnapshotSchema,
+  completion_evidence: PreviousCompletionEvidenceSchema.default(null),
   version: z.literal(PLANNER_EXCLUSIONS_VERSION),
 });
 const PreviousLogicalSourceRunSchema = z.strictObject({
@@ -112,6 +119,7 @@ export const SourceRunContract: LedgerRowContract<SourceRunRecord> = {
     "2026-10-22T18:15": { schema: PreviousDiagnosticSourceRunSchema, migrate: migrateSourceRun },
     [PLANNER_EXCLUSIONS_VERSION]: { schema: PreviousExclusionSourceRunSchema, migrate: migrateSourceRun },
     "2026-10-22T10:05": { schema: PreviousLogicalSourceRunSchema, migrate: migrateSourceRun },
+    [PUBLISHER_IDENTITY_VERSION]: { schema: PreviousPublisherIdentitySourceRunSchema, migrate: migrateSourceRun },
   },
 };
 export const DispatchContract: LedgerRowContract<FeedIngestDispatch> = {

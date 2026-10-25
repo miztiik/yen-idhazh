@@ -111,7 +111,7 @@ export async function persistPortfolio(result: CurationResult, context: Curation
   if (context.ledgerSettings.format !== "parquet") throw new Error("Curation requires Parquet ledger storage");
   if (context.writerContext.shard !== 0) throw new Error("Unsharded curation requires writer provenance shard 0");
   if (context.registrations.selections.name !== "editorial-selections"
-    || context.registrations.rejections.name !== "rejections") throw new Error("Wrong curation ledger registration");
+    || context.registrations.rejections.name !== "ingest-rejections") throw new Error("Wrong curation ledger registration");
   for (const article of result.input) {
     if (article.candidate.run_id !== context.writerContext.run_id) throw new Error("Writer run differs from curated candidate run");
   }
@@ -121,7 +121,7 @@ export async function persistPortfolio(result: CurationResult, context: Curation
     ledgerSettings: context.ledgerSettings, period: { tier: "raw" as const, covers: context.date },
   };
   const rejections = requireDurable(await persistLedger({
-    ...common, ledger: "rejections", registryEntry: context.registrations.rejections,
+    ...common, ledger: "ingest-rejections", registryEntry: context.registrations.rejections,
     rowContract: CandidateRejectionContract,
     rows: result.rejections,
   }));

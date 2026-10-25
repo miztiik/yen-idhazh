@@ -30,7 +30,8 @@ export function selectCompleteAttempt(history: AttemptHistory, runId?: string): 
     const observationDay = row.observed_at.slice(0, 10);
     if (row.date !== row.run_id.slice(0, 10)
       || held.identity.covers !== (row.observation_phase === "plan_complete" ? row.date : observationDay)
-      || held.identity.ledger !== "source-runs" || held.identity.run_id !== row.run_id
+      || (held.identity.ledger !== "source-runs" && held.identity.ledger !== "feed-runs")
+      || held.identity.run_id !== row.run_id
       || held.identity.attempt !== row.attempt) throw new Error("Source completion row differs from its original identity");
     if (row.observation_phase !== "plan_complete" || (runId !== undefined && row.run_id !== runId)) continue;
     const key = `${row.run_id}/${row.attempt}`;
@@ -65,7 +66,9 @@ export function selectCompleteAttempt(history: AttemptHistory, runId?: string): 
     }
     if (sources.size !== first.expected_source_count || first.expected_source_count === 0) reason = "Expected source outcomes are incomplete";
     const rows: Record<CompletionLedger, StoredLedgerRow<object>[]> = {
-      "editorial-selections": [], dispatches: [], rejections: [], "article-assessments": [], diversity: [],
+      "article-assessments": [], diversity: [], "article-selection-diversity": [],
+      "editorial-selections": [], dispatches: [], "article-dispatches": [],
+      rejections: [], "ingest-rejections": [],
     };
     for (const evidence of first.completion_evidence!) {
       const day = history.ledgers[evidence.ledger];
@@ -118,8 +121,9 @@ export function selectCompleteAttempt(history: AttemptHistory, runId?: string): 
       }
     }
     const selectedCount = [...sources.values()].reduce((count, row) => count + (row.selected_count ?? 0), 0);
+    const dispatchCount = rows.dispatches.length + rows["article-dispatches"].length;
     if ([...sources.values()].some(row => row.selected_count === null)
-      || selectedCount !== rows["editorial-selections"].length || selectedCount !== rows.dispatches.length) {
+      || selectedCount !== rows["editorial-selections"].length || selectedCount !== dispatchCount) {
       reason ??= "Selected source counts do not reconcile with selections and dispatches";
     }
     if (reason !== null) {

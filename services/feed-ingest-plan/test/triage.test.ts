@@ -69,7 +69,7 @@ async function withLedger(action: (ledger: RejectionLedgerContext, data: Awaited
       task_name: "screen-article-candidates", shard: 0, producer: "tests.feed-screening", git_sha: "b".repeat(40),
     }),
     registryEntry: {
-      name: "rejections", family: "feed-ingest-plan", grain: "raw-and-compact",
+      name: "ingest-rejections", family: "feed-ingest-plan", grain: "raw-and-compact",
       lifecycle_status: "active", prefix: data.input.planning.config.seal.rejections_prefix,
     },
     ledgerSettings: {
@@ -313,7 +313,7 @@ test("real shared writer Parquet preserves rejection details, identity and UTC r
     expect(result.sealing.status).toBe("written");
     const file = result.sealing.files[0];
     if (!file) throw new Error("expected a sealed rejection file");
-    expect(file.path).toMatch(/^raw\/feed-ingest-plan\/rejections\/2026\/10\/21\/[a-f0-9-]+\.parquet$/);
+    expect(file.path).toMatch(/^raw\/feed-ingest-plan\/ingest-rejections\/2026\/10\/21\/[a-f0-9-]+\.parquet$/);
     const bytes = await readFile(join(ledger.outputRoot, ...file.path.split("/")));
     await initializeWasm();
     const metadata = readMetadata(bytes);
@@ -323,7 +323,7 @@ test("real shared writer Parquet preserves rejection details, identity and UTC r
     footer.free();
     metadata.free();
     expect(values.get("writer")).toBe("idhazh_typescript.ledger.parquet");
-    expect(values.get("ledger")).toBe("rejections");
+    expect(values.get("ledger")).toBe("ingest-rejections");
     expect(values.get("covers")).toBe("2026-10-21");
     const table = tableFromIPC(readParquet(bytes).intoIPCStream());
     const stored = table.toArray().map(row => z.record(z.string(), z.unknown()).parse(normalizeArrow(row)));
@@ -337,7 +337,7 @@ test("real shared writer Parquet preserves rejection details, identity and UTC r
       const identity = RowIdentitySchema.parse(Object.fromEntries(
         Object.entries(row).filter(([key]) => identityFields.has(key)),
       ));
-      expect(identity).toMatchObject({ ledger: "rejections", covers: "2026-10-21", run_id: input.run.run_id, unit_id: file.unit_id });
+      expect(identity).toMatchObject({ ledger: "ingest-rejections", covers: "2026-10-21", run_id: input.run.run_id, unit_id: file.unit_id });
     }
     expect(result.rejections[0]).toMatchObject({
       candidate_id: candidate.candidate_id, url_key: candidate.url_key, canonical_url: candidate.canonical_url,
@@ -393,7 +393,7 @@ test("failed, invalid or paused rejection writes cannot report successful sealin
       ...ledger, ledgerSettings: { ...ledger.ledgerSettings, format: "json" },
     })).rejects.toThrow("Parquet");
     await expect(screenArticleCandidates(input, {
-      ...ledger, registryEntry: { ...ledger.registryEntry, prefix: ["feed-ingest-plan", "dispatches"] },
+      ...ledger, registryEntry: { ...ledger.registryEntry, prefix: ["feed-ingest-plan", "rejections"] },
     })).rejects.toThrow("registryEntry.prefix");
     await expect(screenArticleCandidates(input, {
       ...ledger, writerContext: { ...ledger.writerContext, run_id: "2026-10-21-999" },

@@ -12,6 +12,7 @@ import { classifyPublicationHistoryError } from "./classify-publication-history-
 import { LedgerHistoryReadError } from "./ledger-history-error";
 import { writeJsonLine } from "../logging/structured-logger";
 import type { ReadLedgerFile } from "./read-parquet";
+import type { LedgerDay } from "./read-period";
 
 export function closedObservationDays(now: string, windowDays: number): string[] {
   const today = TimestampSchema.parse(now).slice(0, 10);
@@ -21,7 +22,8 @@ export function closedObservationDays(now: string, windowDays: number): string[]
 
 export async function readIngestEvidence(input: Readonly<{
   root: string; now: string; window_days: number; registration: LedgerRegistration;
-  days: readonly SeenDayInput[];
+  legacy_registration: LedgerRegistration;
+  days: readonly SeenDayInput[]; legacy_days: readonly SeenDayInput[];
 }>) {
   const dates = closedObservationDays(input.now, input.window_days);
   const configured = new Map<string, SeenDayInput>();
@@ -30,27 +32,63 @@ export async function readIngestEvidence(input: Readonly<{
     if (configured.has(day.day)) throw new Error("Document observation inputs repeat a UTC day");
     configured.set(day.day, day);
   }
-  if (input.registration.name !== "document-observations" || input.registration.family !== "feed-ingest-plan") {
-    throw new Error("Article evidence requires the registered document-observations ledger");
+  const legacyConfigured = new Map<string, SeenDayInput>();
+  for (const day of input.legacy_days) {
+    if (!dates.includes(day.day)) continue;
+    if (legacyConfigured.has(day.day)) throw new Error("Legacy document observation inputs repeat a UTC day");
+    legacyConfigured.set(day.day, day);
   }
-  const days = [];
+  if (input.registration.name !== "ingest-observations" || input.registration.family !== "feed-ingest-plan"
+    || input.legacy_registration.name !== "document-observations"
+    || input.legacy_registration.family !== "feed-ingest-plan") {
+    throw new Error("Article evidence requires both registered observation ledgers");
+  }
+  const days: LedgerDay<DocumentObservationRecord>[] = [];
   const gaps: { day: string; diagnostic: string }[] = [];
   const fileCache = new Map<string, Promise<ReadLedgerFile<DocumentObservationRecord>>>();
   for (const date of dates) {
-    try {
-      const held = await readNamedDays(input.root, input.registration,
-        [configured.get(date) ?? defaultDayInput(input.registration.prefix, date)], DocumentObservationContract, fileCache);
-      for (const day of held) {
+    const aliases = [
+      {
+        registration: input.legacy_registration,
+        day: legacyConfigured.get(date) ?? defaultDayInput(input.legacy_registration.prefix, date),
+      },
+      {
+        registration: input.registration,
+        day: configured.get(date) ?? defaultDayInput(input.registration.prefix, date),
+      },
+    ];
+    const held = [];
+    const diagnostics: string[] = [];
+    for (const alias of aliases) {
+      try {
+        const [day] = await readNamedDays(input.root, alias.registration,
+          [alias.day], DocumentObservationContract, fileCache);
+        if (day === undefined) throw new Error("Named observation day was not returned");
         if (day.rows.some(({ row }) => row.occurred_at.slice(0, 10) !== date)) {
           throw new LedgerHistoryReadError("Document observation differs from its UTC day partition");
         }
-        days.push(day);
+        if (day.status === "lost" || day.notices.some(notice =>
+          notice === "period-expired" || notice.startsWith("files-set-aside:"))) {
+          diagnostics.push(`${alias.registration.name}:history-unavailable`);
+        }
+        held.push(day);
+      } catch (error) {
+        const diagnostic = classifyPublicationHistoryError(error);
+        if (diagnostic === null) throw error;
+        diagnostics.push(`${alias.registration.name}:${diagnostic}`);
       }
-    } catch (error) {
-      const diagnostic = classifyPublicationHistoryError(error);
-      if (diagnostic === null) throw error;
-      gaps.push({ day: date, diagnostic });
     }
+    const rows = held.flatMap(day => day.rows);
+    const notices = held.flatMap(day => day.notices);
+    const status = held.some(day => day.status === "lost") ? "lost"
+      : rows.length > 0 ? "rows"
+        : held.some(day => day.status === "empty") ? "empty" : "missing";
+    days.push({
+      ledger: "ingest-observations", day: date, status,
+      tier: held.find(day => day.status === "rows" || day.status === "empty")?.tier ?? null,
+      rows, files: held.flatMap(day => day.files), notices,
+    });
+    if (diagnostics.length > 0) gaps.push({ day: date, diagnostic: diagnostics.join(";") });
   }
   let rows: readonly DocumentObservationRecord[] = [];
   let notices: ReturnType<typeof settleIngestObservations>["notices"] = [];

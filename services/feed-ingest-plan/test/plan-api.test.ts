@@ -225,26 +225,30 @@ test("actual API and awaited CLI compose the same recorded plan and disclose the
       const assessment = metrics.files.assessments.files[0]!;
       const diversity = metrics.files.diversity.files[0]!;
       const assessed = await readLedgerParquet(join(recorded.inputs.outputRoot, assessment.path), "article-assessments", ArticleAssessmentContract);
-      const measured = await readLedgerParquet(join(recorded.inputs.outputRoot, diversity.path), "diversity", DiversityMetricContract);
+      const measured = await readLedgerParquet(join(recorded.inputs.outputRoot, diversity.path), "article-selection-diversity", DiversityMetricContract);
       expect(assessed.rows.length).toBe(metrics.receipts.assessments.row_count);
       expect(measured.rows.length).toBe(metrics.receipts.diversity.row_count);
       expect(metrics.receipts.assessments.files[0]!.content_sha256).toBe(assessed.envelope.content_sha256);
       expect(metrics.receipts.diversity.files[0]!.content_sha256).toBe(measured.envelope.content_sha256);
       const sourceFile = summary.files.source_runs!.files[0]!;
-      const sources = await readLedgerParquet(join(recorded.inputs.outputRoot, sourceFile.path), "source-runs", SourceRunContract);
+      const sources = await readLedgerParquet(join(recorded.inputs.outputRoot, sourceFile.path), "feed-runs", SourceRunContract);
       expect(sources.rows.map(row => row.row)).toEqual(summary.source_records!);
       expect(sources.envelope.content_sha256).toBe(sourceFile.content_sha256);
       const paths = (files: readonly { path: string }[]) => ({
         day: summary.date, rawFiles: files.map(file => join(recorded.inputs.outputRoot, file.path)),
       });
       const history = await readPlanningHistory({
-        sources: paths(summary.files.source_runs!.files),
+        sources: { day: summary.date }, feed_runs: paths(summary.files.source_runs!.files),
         ledgers: {
           "article-assessments": paths(metrics.files.assessments.files),
-          diversity: paths(metrics.files.diversity.files),
+          diversity: { day: summary.date },
           "editorial-selections": paths(summary.files.selections.files),
-          dispatches: paths(summary.files.dispatches.files),
-          rejections: paths([
+          dispatches: { day: summary.date },
+          rejections: { day: summary.date },
+        }, renamed: {
+          "article-selection-diversity": paths(metrics.files.diversity.files),
+          "article-dispatches": paths(summary.files.dispatches.files),
+          "ingest-rejections": paths([
             ...summary.files.harvest_rejections.files, ...summary.files.screening_rejections.files,
             ...summary.files.curation_rejections.files,
           ]),
@@ -507,7 +511,7 @@ test("a required source write failure returns an API error, not proven planning 
   try {
     const raw = join(recorded.inputs.outputRoot, "raw", "feed-ingest-plan");
     await mkdir(raw, { recursive: true });
-    await writeFile(join(raw, "source-runs"), "A file cannot hold source records.");
+    await writeFile(join(raw, "feed-runs"), "A file cannot hold source records.");
     const app = createPlanApp(recorded.inputs, recorded.runtime);
     const requestKey = randomUUID();
     const response = await app.request("/api/2026-10-20/plan", {
@@ -519,7 +523,7 @@ test("a required source write failure returns an API error, not proven planning 
     expect(failed).not.toHaveProperty("planning_complete");
     expect(failed).not.toHaveProperty("planning_completion");
     expect(existsSync(join(raw, "article-assessments"))).toBe(true);
-    expect(existsSync(join(raw, "diversity"))).toBe(true);
+    expect(existsSync(join(raw, "article-selection-diversity"))).toBe(true);
     const retained = await readObservationFiles(recorded.inputs.outputRoot, recorded.observation_files);
     expect(retained.some(({ row }) => row.operation === "fetch" && row.outcome === "success")).toBe(true);
     expect(retained.some(({ row }) => row.operation === "parse" && row.outcome === "success")).toBe(true);
@@ -537,7 +541,7 @@ test("a required source write failure returns an API error, not proven planning 
     try {
       const nativeRoot = join(refusing.inputs.outputRoot, "raw", "feed-ingest-plan");
       await mkdir(nativeRoot, { recursive: true });
-      const blocker = join(nativeRoot, "document-observations");
+      const blocker = join(nativeRoot, "ingest-observations");
       await writeFile(blocker, "Observation saves must report this failure.");
       const fetchRequest = {
         request_id: randomUUID(), correlation_id: randomUUID(), source_id: "recorded-news", kind: "feed",
@@ -547,7 +551,7 @@ test("a required source write failure returns an API error, not proven planning 
       });
       const unsaved = await postFetch();
       expect(unsaved.status).toBe(500);
-      expect((await unsaved.json()).issues[0].message).toContain("document-observations save failed");
+      expect((await unsaved.json()).issues[0].message).toContain("ingest-observations save failed");
       const dispatched = refusing.transport.requests.length;
       expect(dispatched).toBeGreaterThan(0);
       await unlink(blocker);
@@ -627,7 +631,7 @@ test("one listener retains durable seen receipts from an output root outside the
     expect(file.rows.every(row => row.row.first_seen_at === "2026-10-21T12:00:00Z")).toBe(true);
     expect(new Set(file.rows.map(row => row.row.first_seen_run)).size).toBe(1);
     expect(existsSync(join(recorded.inputs.outputRoot, "raw", "feed-ingest-plan", "article-assessments"))).toBe(true);
-    expect(existsSync(join(recorded.inputs.outputRoot, "raw", "feed-ingest-plan", "diversity"))).toBe(true);
+    expect(existsSync(join(recorded.inputs.outputRoot, "raw", "feed-ingest-plan", "article-selection-diversity"))).toBe(true);
     const fetched = recorded.transport.requests.length;
     recorded.runtime.clock = () => new Date("2026-10-21T11:59:59Z");
     const backwards = await post();
@@ -658,7 +662,7 @@ test("a later dispatch failure does not lose already durable first sight from th
     recorded.runtime.clock = () => new Date(`2026-10-21T12:0${clocks++}:00Z`);
     recorded.runtime.on_seen_persisted = receipt => { receipts.push(receipt); };
     recorded.runtime.on_feed_history_persisted = receipt => { feedReceipts.push(receipt); };
-    const blocked = join(recorded.inputs.outputRoot, "raw", "feed-ingest-plan", "dispatches");
+    const blocked = join(recorded.inputs.outputRoot, "raw", "feed-ingest-plan", "article-dispatches");
     await mkdir(join(recorded.inputs.outputRoot, "raw", "feed-ingest-plan"), { recursive: true });
     await writeFile(blocked, "A file cannot hold dispatches.");
     const app = createPlanApp(recorded.inputs, recorded.runtime);

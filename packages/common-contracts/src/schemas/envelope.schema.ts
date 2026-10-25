@@ -8,8 +8,9 @@ export const LedgerNameSchema = z.enum([
   "counterfactual-scores", "scored-pairs", "fitted-thresholds", "holdout-pairs", "score-distribution",
   "archive", "metrics", "merge-line-holdout-scores", "traces", "day-metrics", "digest-fragments",
   "gardener", "run-plan", "run-shards", "council-run-records",
-  "editorial-selections", "dispatches", "rejections", "source-runs", "article-assessments", "diversity",
-  "document-observations", "operational-state",
+  "editorial-selections", "dispatches", "article-dispatches", "rejections", "ingest-rejections",
+  "source-runs", "feed-runs", "article-assessments", "diversity", "article-selection-diversity",
+  "document-observations", "ingest-observations", "operational-state", "feed-health-state",
 ]);
 export const TierSchema = z.enum(["raw", "compact"]);
 export const PeriodSchema = z.enum(["daily", "monthly", "yearly"]);

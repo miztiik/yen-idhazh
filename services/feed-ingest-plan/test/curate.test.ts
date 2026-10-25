@@ -753,7 +753,7 @@ async function persistenceContext(root: string, fixture: Fixture): Promise<Curat
       task_name: "curate-article-portfolio", shard: 0, producer: "portfolio-fixture", git_sha: "a".repeat(40),
     }),
     ledgerSettings: { format: "parquet", compression_raw: "snappy", compression_compact: "zstd" },
-    registrations: { selections: registration("editorial-selections"), rejections: registration("rejections") },
+    registrations: { selections: registration("editorial-selections"), rejections: registration("ingest-rejections") },
     date: fixture.observed_at.slice(0, 10),
   };
 }
@@ -767,7 +767,7 @@ test("actual unsharded selection and rejection Parquet read back exact rows and 
     await initializeParquet();
     for (const [ledger, stored, expectedRows] of [
       ["editorial-selections", persisted.selections, result.rows],
-      ["rejections", persisted.rejections, result.rejections],
+      ["ingest-rejections", persisted.rejections, result.rejections],
     ] as const) {
       expect(stored.status).toBe("written");
       expect(stored.files).toHaveLength(1);

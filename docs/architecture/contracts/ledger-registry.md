@@ -1,6 +1,6 @@
 # The ledger registry
 
-**Last Updated**: 2026-10-24
+**Last Updated**: 2026-10-25
 
 A ledger is a committed file or folder under `state/` that one run writes so that a later run can read it. A ledger exists in code only when it is registered, and registering it takes two edits. The first is one member of `LedgerName`, the ledger's one name in code. The second is one entry in `config/ledgers.json`, which puts the ledger in a family - one top-level folder under `state/` - and says where its files sit. When the code loads, it checks that the two edits agree, and the build stops if they do not.
 
@@ -120,26 +120,49 @@ The fitted merge line's row contract is `FittedSimilarityThreshold`, whose `run_
 
 ### Feed planning evidence
 
-The `feed-ingest-plan` family holds six separate row ledgers:
-`editorial-selections`, `dispatches`, `rejections`, `source-runs`,
-`article-assessments`, and `diversity`. Each has a declared row contract and
-settlement key in `ledger/keys.py`. Dispatch identity stays under
-`content.date` and `content.candidate_id`; settlement reads only these trusted,
-declared attribute paths, never a path supplied by article text.
+The `feed-ingest-plan` family now registers eight target row ledgers:
+`article-assessments`, `article-dispatches`, `article-selection-diversity`,
+`editorial-selections`, `feed-health-state`, `feed-runs`,
+`ingest-observations`, and `ingest-rejections`. Current TypeScript writers use
+the five renamed evidence ledgers and keep the two unchanged ledgers.
+`feed-health-state` is registered for complete snapshots; its writer remains
+deferred to Row 24. The six previous names remain registered so old files and
+unchanged consumers retain their paths. These are separate ledger names, not
+aliases: every Parquet envelope keeps the name under which its rows were
+written.
+
+| Previous name | Current TypeScript name |
+| --- | --- |
+| `dispatches` | `article-dispatches` |
+| `diversity` | `article-selection-diversity` |
+| `document-observations` | `ingest-observations` |
+| `rejections` | `ingest-rejections` |
+| `source-runs` | `feed-runs` |
+
+`operational-state` remains a legacy per-source request-estimate ledger.
+`feed-health-state` is the complete lifecycle and request snapshot contract;
+old request-estimate rows are not reinterpreted as complete snapshots.
+Planning readers accept the old and current names and settle matching evidence
+once. Each ledger has a declared row contract and settlement key in
+`ledger/keys.py`. Dispatch identity stays under `content.date` and
+`content.candidate_id`; settlement reads only these trusted, declared
+attribute paths, never a path supplied by article text.
 
 Each row keeps its original run and attempt through daily, monthly and yearly
 packing. Settlement removes duplicates only within that run and attempt using
 the declared row key. It does not discard an older attempt when a newer attempt
-has fewer rows: source-run completion evidence later selects one complete
-attempt across all six ledgers. An explicitly empty completion has zero rows
+has fewer rows: `feed-runs` completion evidence selects one complete attempt
+across the required ledger groups. An explicitly empty completion has zero rows
 and no file references; absence of an output file alone proves no completion.
-Existing ledgers retain their existing settlement rules.
+Legacy source-run rows retain the ledger names in their original completion
+evidence. The TypeScript readers recognize both name sets without counting a
+matching old and new record twice.
 
-The planned TypeScript adapters in `services/feed-ingest-plan` will write
-through `packages/ledger-file-writer`. Their staging entries name these planned
-writers, with no production digest commit labels. The browser vocabulary and
-nested folder bindings are registered here; static publication and TypeScript
-byte-writing compatibility are separate delivery steps.
+The TypeScript adapters in `services/feed-ingest-plan` write through
+`packages/ledger-file-writer`. Their staging entries name these writers, with
+no production digest commit labels. The browser vocabulary and nested folder
+bindings come from the registered catalog; no compiled frontend name or folder
+list is needed.
 
 The TypeScript file-envelope vocabulary must name the same ledgers as Python.
 The council's import test reads only a named dependency list; registration adds
@@ -376,10 +399,11 @@ The frontend's query-door readers accept a name only when their bound catalog re
 **Planning attempts settle together, not file by file.** A partial retry can
 contain fewer articles than the previous complete attempt. Discarding older
 rows during packing would remove the only complete answer before the later
-reader can verify completion. The six planning ledgers therefore keep each
-attempt until that reader selects one. The `document-observations` ledger also
-keeps every attempt: a partial retry cannot replace earlier immutable operation
-facts, and the later feedback reader needs both.
+reader can verify completion. The planning ledgers therefore keep each attempt until that reader selects
+one. The `ingest-observations` ledger also keeps every attempt: a partial retry
+cannot replace earlier immutable operation facts, and the later feedback
+reader needs both. Legacy `document-observations` rows remain readable and
+matching events are settled once.
 
 **The candidate-model ledger and its files are removed, not retired.** Owner
 ruling, 2026-10-24. No writer or reader remains for its verdict rows. The owner

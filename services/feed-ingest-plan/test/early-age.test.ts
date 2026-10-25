@@ -126,7 +126,7 @@ test("preflight uses the configured age override, strict boundary and future tol
     expect(result.first_sight_candidates.map(row => row.url_key)).not.toContain(deriveUrlKey(blockedUrl));
     expect(result.feed_outcomes[0]).toMatchObject({ parsed_count: 9, harvested_count: 5 });
     const written = result.rejection_files.files[0]!;
-    const persisted = (await readLedgerParquet(join(root, written.path), "rejections", CandidateRejectionContract)).rows;
+    const persisted = (await readLedgerParquet(join(root, written.path), "ingest-rejections", CandidateRejectionContract)).rows;
     expect(persisted.map(row => row.row.drop_reason).sort()).toEqual([
       "ALREADY_PUBLISHED", "BLOCKED_URL_MARKER", "SETTLED_FAILURE", "STALE_MAX_AGE_EXCEEDED",
     ]);
@@ -169,7 +169,7 @@ test("real planning records early losses once and reproduces freshness loss from
     expect(assessments.every(row => "extraction_outcome" in row && row.extraction_outcome === "not_attempted"
       && "timing_basis" in row && row.timing_basis === "published_at"
       && "extracted_word_count" in row && row.extracted_word_count === null)).toBe(true);
-    const loss = attempt.rows.diversity.map(row => row.row).find(row =>
+    const loss = attempt.rows["article-selection-diversity"].map(row => row.row).find(row =>
       "metric" in row && row.metric === "lost_diversity_by_stage" && "stage" in row && row.stage === "freshness");
     expect(loss).toMatchObject({ before_value: 2, after_value: 1, value: 1, item_count: 2 });
   } finally { await fixture.close(); }

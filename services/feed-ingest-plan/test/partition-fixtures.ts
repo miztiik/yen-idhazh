@@ -75,7 +75,7 @@ export async function fixtureInput(root: string, options: { count?: number; fres
     run: { now: fixture.observed_at, run_id: context.run_id, correlation_id: context.correlation_id, overrides },
   }, {
     outputRoot: root, writerContext: writer(fixture.run_id),
-    registryEntry: registration("rejections"), ledgerSettings: settings,
+    registryEntry: registration("ingest-rejections"), ledgerSettings: settings,
   });
   const curation = curateArticles({
     articles: screening.admitted.map(article => ({
@@ -89,7 +89,7 @@ export async function fixtureInput(root: string, options: { count?: number; fres
   });
   const persisted = await persistPortfolio(curation, {
     outputRoot: root, writerContext: writer(fixture.run_id), ledgerSettings: settings, date: fixture.date,
-    registrations: { selections: registration("editorial-selections"), rejections: registration("rejections") },
+    registrations: { selections: registration("editorial-selections"), rejections: registration("ingest-rejections") },
   });
   return { fixture, context, planning, candidates, screening, curation, persisted };
 }

@@ -27,6 +27,7 @@ Nothing here reads the committed `state/` or a clock the test did not set
 
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 import shutil
@@ -42,6 +43,7 @@ from idhazh import ledger, month_partition
 from idhazh.contracts.base import ServerJob
 from idhazh.contracts.collection_prune import CollectionPruneRow, StopReason
 from idhazh.contracts.eval_row import EvalRow
+from idhazh.contracts.feed_health_state import FeedHealthStateHeadIndex
 from idhazh.contracts.file_envelope import Period, WriterIdentity
 from idhazh.contracts.gardener_events import (
     CompactionStep,
@@ -223,7 +225,17 @@ def test_a_compact_day_holds_exactly_what_settling_its_raw_files_gives_in_the_sa
         settled = ledger.load_current_rows(
             state(before), VISUALS, model=VisualPruneRow, key=ledger.VISUAL_PRUNE_KEY, days={day}
         )
-        assert compact_rows(root, Period.DAILY, day) == settled
+        packed = ledger.compact_file(state(root), VISUALS, Period.DAILY, day)
+        assert packed is not None
+        assert ledger.load([packed], model=VisualPruneRow) == settled
+        entry = next(
+            item
+            for item in CompactIndex.read(
+                ledger.compact_index_path(state(root), VISUALS, Period.DAILY)
+            ).entries
+            if item.covers == day
+        )
+        assert entry.file_sha256 == hashlib.sha256(packed.read_bytes()).hexdigest()
     assert [row.payload_bytes_before for row in compact_rows(root, Period.DAILY, "2026-09-20")] == [
         150,
         200,
@@ -231,6 +243,74 @@ def test_a_compact_day_holds_exactly_what_settling_its_raw_files_gives_in_the_sa
     assert ledger.list_raw_files(state(root), VISUALS) == []
     assert outcome.stopped_because is StopReason.EXHAUSTED and disjoint(outcome)
     verify_health_order_compaction(tmp_path / "health-order")
+
+    head = FeedHealthStateHeadIndex.from_json(
+        read_text(CONTRACT_FIXTURES_DIR / "feed-health-state-head-index" / "two-snapshots.json")
+    )
+    head_directory = "state/metadata/feed-ingest-plan/feed-health-state/head"
+    protected = [head.latest, *([] if head.previous is None else [head.previous])]
+
+    def seed_feed_health(
+        checkout: Path, index_a: str, index_b: str
+    ) -> None:
+        for reference in protected:
+            snapshot = checkout / reference.path
+            snapshot.parent.mkdir(parents=True, exist_ok=True)
+            snapshot.write_bytes(b"snapshot bytes remain under the head")
+        directory = checkout / head_directory
+        directory.mkdir(parents=True, exist_ok=True)
+        (directory / "index-a.json").write_text(index_a, encoding="ascii")
+        (directory / "index-b.json").write_text(index_b, encoding="ascii")
+
+    feed_root = tmp_path / "feed-health"
+    seed_feed_health(feed_root, head.model_dump_json(), "{invalid")
+    feed_run = compact(
+        feed_root,
+        date(2026, 12, 31),
+        task="compact-feed-ingest-plan-feed-health-state",
+        monthly_window=ONE_MONTH,
+    )
+    assert feed_run.fault is not GardenerFault.HEAD_INDEX_UNAVAILABLE
+    assert not set(feed_run.taken).intersection(reference.path for reference in protected)
+    for reference in protected:
+        assert (feed_root / reference.path).read_bytes() == b"snapshot bytes remain under the head"
+
+    changed_head = head.model_copy(
+        update={
+            "latest": head.latest.model_copy(
+                update={"content_sha256": "c" * 64}
+            )
+        }
+    )
+    disagreeing_root = tmp_path / "disagreeing-feed-health"
+    seed_feed_health(disagreeing_root, head.model_dump_json(), changed_head.model_dump_json())
+    before = files_under(disagreeing_root)
+    disagreement = compact(
+        disagreeing_root,
+        date(2026, 12, 31),
+        task="compact-feed-ingest-plan-feed-health-state",
+        monthly_window=ONE_MONTH,
+    )
+    assert (disagreement.stopped_because, disagreement.fault) == (
+        StopReason.DEFERRED,
+        GardenerFault.HEAD_INDEX_UNAVAILABLE,
+    )
+    assert files_under(disagreeing_root) == before
+
+    missing_head_root = tmp_path / "missing-feed-health-head"
+    seed_feed_health(missing_head_root, "{invalid", "{also invalid")
+    before = files_under(missing_head_root)
+    unavailable = compact(
+        missing_head_root,
+        date(2026, 12, 31),
+        task="compact-feed-ingest-plan-feed-health-state",
+        monthly_window=ONE_MONTH,
+    )
+    assert (unavailable.stopped_because, unavailable.fault) == (
+        StopReason.DEFERRED,
+        GardenerFault.HEAD_INDEX_UNAVAILABLE,
+    )
+    assert files_under(missing_head_root) == before
 
 
 def test_a_raw_day_folder_entry_that_is_not_a_file_needs_manual_action(

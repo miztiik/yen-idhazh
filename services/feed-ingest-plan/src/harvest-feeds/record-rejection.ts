@@ -47,7 +47,7 @@ export async function persistHarvestRejections(
 ) {
   if (destination.ledgerSettings.format !== "parquet") throw new Error("harvest rejections require Parquet");
   const result = await persistLedger({
-    ledger: "rejections",
+    ledger: "ingest-rejections",
     rowContract: CandidateRejectionContract,
     rows, ...destination, writerContext: context.writer,
     period: { tier: "raw", covers: context.writer.run_id.slice(0, 10) },

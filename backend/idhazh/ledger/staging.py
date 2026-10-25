@@ -69,65 +69,87 @@ class LedgerStaging:
 REGISTRY: Final[dict[LedgerName, LedgerStaging]] = {
     LedgerName.FEED_INGEST_PLAN_DISPATCHES: LedgerStaging(
         writer=(
-            "planned TypeScript services/feed-ingest-plan seal-article-ledger adapter "
-            "through packages/ledger-file-writer; no writer exists yet"
+            "legacy feed-ingest-plan dispatch path; new TypeScript rows use article-dispatches"
         ),
         symbol=None,
         job_labels=frozenset(),
     ),
     LedgerName.FEED_INGEST_PLAN_EDITORIAL_SELECTIONS: LedgerStaging(
         writer=(
-            "planned TypeScript services/feed-ingest-plan seal-article-ledger adapter "
-            "through packages/ledger-file-writer; no writer exists yet"
+            "services/feed-ingest-plan recordPlanningMetrics through packages/ledger-file-writer"
         ),
         symbol=None,
         job_labels=frozenset(),
     ),
     LedgerName.FEED_INGEST_PLAN_REJECTIONS: LedgerStaging(
         writer=(
-            "planned TypeScript services/feed-ingest-plan seal-article-ledger adapter "
-            "through packages/ledger-file-writer; no writer exists yet"
+            "legacy feed-ingest-plan rejection path; new TypeScript rows use ingest-rejections"
         ),
         symbol=None,
         job_labels=frozenset(),
     ),
     LedgerName.FEED_INGEST_PLAN_SOURCE_RUNS: LedgerStaging(
         writer=(
-            "planned TypeScript services/feed-ingest-plan audit adapter "
-            "through packages/ledger-file-writer; no writer exists yet"
+            "legacy feed-ingest-plan source-run path; new TypeScript rows use feed-runs"
         ),
         symbol=None,
         job_labels=frozenset(),
     ),
     LedgerName.FEED_INGEST_PLAN_ARTICLE_ASSESSMENTS: LedgerStaging(
         writer=(
-            "planned TypeScript services/feed-ingest-plan audit adapter "
-            "through packages/ledger-file-writer; no writer exists yet"
+            "services/feed-ingest-plan recordPlanningMetrics through packages/ledger-file-writer"
         ),
         symbol=None,
         job_labels=frozenset(),
     ),
     LedgerName.FEED_INGEST_PLAN_DIVERSITY: LedgerStaging(
         writer=(
-            "planned TypeScript services/feed-ingest-plan audit adapter "
-            "through packages/ledger-file-writer; no writer exists yet"
+            "legacy feed-ingest-plan diversity path; new TypeScript rows use article-selection-diversity"
         ),
         symbol=None,
         job_labels=frozenset(),
     ),
     LedgerName.FEED_INGEST_PLAN_DOCUMENT_OBSERVATIONS: LedgerStaging(
         writer=(
-            "planned TypeScript feed-ingest-plan observation writer "
-            "through packages/ledger-file-writer; no writer exists yet"
+            "legacy feed-ingest-plan observation path; new TypeScript rows use ingest-observations"
         ),
         symbol=None,
         job_labels=frozenset(),
     ),
     LedgerName.FEED_INGEST_PLAN_OPERATIONAL_STATE: LedgerStaging(
         writer=(
-            "planned TypeScript feed-ingest-plan operational-state writer "
-            "through packages/ledger-file-writer; no writer exists yet"
+            "legacy per-source request estimates; complete feed-health snapshots use feed-health-state"
         ),
+        symbol=None,
+        job_labels=frozenset(),
+    ),
+    LedgerName.FEED_INGEST_PLAN_ARTICLE_DISPATCHES: LedgerStaging(
+        writer="services/feed-ingest-plan partition-article-shards through packages/ledger-file-writer",
+        symbol=None,
+        job_labels=frozenset(),
+    ),
+    LedgerName.FEED_INGEST_PLAN_INGEST_REJECTIONS: LedgerStaging(
+        writer="services/feed-ingest-plan rejection stages through packages/ledger-file-writer",
+        symbol=None,
+        job_labels=frozenset(),
+    ),
+    LedgerName.FEED_INGEST_PLAN_FEED_RUNS: LedgerStaging(
+        writer="services/feed-ingest-plan recordPlanningMetrics through packages/ledger-file-writer",
+        symbol=None,
+        job_labels=frozenset(),
+    ),
+    LedgerName.FEED_INGEST_PLAN_ARTICLE_SELECTION_DIVERSITY: LedgerStaging(
+        writer="services/feed-ingest-plan recordPlanningMetrics through packages/ledger-file-writer",
+        symbol=None,
+        job_labels=frozenset(),
+    ),
+    LedgerName.FEED_INGEST_PLAN_INGEST_OBSERVATIONS: LedgerStaging(
+        writer="services/feed-ingest-plan createIngestObservations through packages/ledger-file-writer",
+        symbol=None,
+        job_labels=frozenset(),
+    ),
+    LedgerName.FEED_INGEST_PLAN_FEED_HEALTH_STATE: LedgerStaging(
+        writer="Future complete feed-health state writer through packages/ledger-file-writer; no writer exists yet",
         symbol=None,
         job_labels=frozenset(),
     ),

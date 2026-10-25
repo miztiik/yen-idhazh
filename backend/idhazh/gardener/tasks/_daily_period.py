@@ -71,16 +71,18 @@ first day that does not fit ends the step at `ceiling`, for a later wake, or
 **Raw days past the keep line are past the ledger's reach**, and are dropped
 by their listed paths: those in the months the drop step takes, and those a
 first run looked back over and did not take. Nothing of them is fetched or
-opened, so a file that cannot be read goes with its day. A window that only
-reports keeps them instead and names their files for the record. The step takes
-such a day like any other while its month is open, as a first run that starts
-before the line does. In a month already closed it leaves the day alone, live
-or not: the drop steps own it, and a re-open would write a month file the
-window deletes.
+opened, so a file that cannot be read goes with its day. The feed-health
+compactor excludes the exact raw paths named by its valid head copies; it does
+not pack or expire those files. A window that only reports keeps other files
+instead and names them for the record. The step takes such a day like any
+other while its month is open, as a first run that starts before the line
+does. In a month already closed it leaves the day alone, live or not: the drop
+steps own it, and a re-open would write a month file the window deletes.
 """
 
 from __future__ import annotations
 
+import hashlib
 from collections.abc import Sequence
 from datetime import date, timedelta
 from pathlib import Path
@@ -116,7 +118,14 @@ def _past_the_line(
     named = set(months)
     root = tree.listing.repo_root
     return [
-        (day, [root / path for path in tree.listing.files_under(tree.raw_day_folder(day))])
+        (
+            day,
+            [
+                root / path
+                for path in tree.listing.files_under(tree.raw_day_folder(day))
+                if root / path not in tree.protected_raw_files
+            ],
+        )
         for day in tree.raw_days
         if day[:7] in named and day[:7] < first_kept
     ]
@@ -290,7 +299,8 @@ def _record[C: Contract](
         tree.delete(existing)
     tree.write(built.path, built.data)
     tree.daily[day] = CompactEntry(
-        covers=day, rows=len(settled), bytes=len(built.data), set_aside=set_aside
+        covers=day, rows=len(settled), bytes=len(built.data),
+        file_sha256=hashlib.sha256(built.data).hexdigest(), set_aside=set_aside
     )
 
 

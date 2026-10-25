@@ -6,7 +6,7 @@ import {
   ArticleAssessmentRecordSchema, ArticleLabelsSchema, CandidateRejectionRecordSchema,
   DiversityMetricRowSchema, EditorialSelectionRowSchema, FeedIngestCandidateSchema,
   FeedIngestDispatchSchema, FeedIngestEventSchema, FileEnvelopeSchema,
-  LedgerCompletionEvidenceSchema, PartitionAssignmentSchema, PenaltyEvidenceSchema,
+  LedgerCompletionEvidenceSchema, PreviousCompletionEvidenceSchema, PartitionAssignmentSchema, PenaltyEvidenceSchema,
   PolicyIdentitySchema, REASON_STAGES, REQUIRED_DETAILS, RejectionDetailsSchema,
   SourceRunRecordSchema, SourceSnapshotSchema, StageCompletionPayloadSchema,
   WriterIdentitySchema, deriveCandidateId, deriveUrlKey, validateEnvelopeContainer,
@@ -282,6 +282,17 @@ describe("planning audit contracts", () => {
 
   test("retains known-empty completion evidence and refuses partial or conflicting totals", () => {
     const row = sourceRun();
+    const renamed = row.completion_evidence!.map(evidence => ({
+      ...evidence,
+      ledger: evidence.ledger === "diversity" ? "article-selection-diversity"
+        : evidence.ledger === "dispatches" ? "article-dispatches"
+          : evidence.ledger === "rejections" ? "ingest-rejections" : evidence.ledger,
+    }));
+    expect(SourceRunRecordSchema.safeParse({ ...row, completion_evidence: renamed }).success).toBe(true);
+    expect(SourceRunRecordSchema.safeParse({ ...row, completion_evidence: [
+      ...renamed, { ...renamed.find(evidence => evidence.ledger === "article-selection-diversity")!, ledger: "diversity" },
+    ] }).success).toBe(false);
+    expect(PreviousCompletionEvidenceSchema.safeParse(renamed).success).toBe(false);
     expect(SourceRunRecordSchema.safeParse({ ...row, completion_evidence: [] }).success).toBe(false);
     expect(SourceRunRecordSchema.safeParse({ ...row, published_count: 0 }).success).toBe(false);
     expect(SourceRunRecordSchema.safeParse({ ...row, history_success_fraction: 0.5 }).success).toBe(false);

@@ -20,12 +20,17 @@ import type { AttemptHistory } from "../src/read-ledger-history/complete-attempt
 import { recordedPlan, namedPlanningFiles } from "./plan-recordings";
 import { source } from "./harvest-recordings";
 
-const contracts: Record<keyof AttemptHistory["ledgers"] | "source-runs", LedgerRowContract<object>> = {
+const contracts: Record<keyof AttemptHistory["ledgers"] | "feed-runs", LedgerRowContract<object>> = {
   "article-assessments": ArticleAssessmentContract, diversity: DiversityMetricContract,
-  "editorial-selections": EditorialSelectionContract,
-  dispatches: DispatchContract, rejections: CandidateRejectionContract,
-  "source-runs": SourceRunContract,
+  "editorial-selections": EditorialSelectionContract, dispatches: DispatchContract,
+  rejections: CandidateRejectionContract, "article-dispatches": DispatchContract,
+  "article-selection-diversity": DiversityMetricContract, "ingest-rejections": CandidateRejectionContract,
+  "feed-runs": SourceRunContract,
 };
+const compactLedgers = [
+  "article-assessments", "article-selection-diversity", "editorial-selections",
+  "article-dispatches", "ingest-rejections", "feed-runs",
+] as const;
 test("logical proof survives native daily, monthly and yearly files with no original raw files", async () => {
   for (const previous of [false, true]) for (const zero of [false, true]) {
     const fixture = await recordedPlan(zero ? [source({ url: "https://news.example/empty.xml" })]
@@ -37,7 +42,7 @@ test("logical proof survives native daily, monthly and yearly files with no orig
       if (previous) {
         const attempt = selectCompleteAttempt(history).selected!;
         const proofs = new Map<string, NonNullable<LedgerCompletionEvidence["logical"]>>();
-        for (const ledger of ["article-assessments", "rejections"] as const) {
+        for (const ledger of ["article-assessments", "ingest-rejections"] as const) {
           const contract = ledger === "article-assessments" ? ArticleAssessmentContract : CandidateRejectionContract;
           const legacy = contract.legacyVersions[PLANNER_EXCLUSIONS_VERSION];
           const fields = describeObjectSchema(legacy.schema).fields;
@@ -97,8 +102,8 @@ test("logical proof survives native daily, monthly and yearly files with no orig
         const named = (ledger: keyof typeof contracts) => ({
           day: summary.date, indexes: { [period]: join(fixture.inputs.outputRoot, "compact", "feed-ingest-plan", ledger, "index", `${period}.json`) },
         });
-        for (const ledger of Object.keys(contracts) as (keyof typeof contracts)[]) {
-          const day = ledger === "source-runs" ? history.sources : history.ledgers[ledger];
+        for (const ledger of compactLedgers) {
+          const day = ledger === "feed-runs" ? history.sources : history.ledgers[ledger];
           const covers = summary.date.slice(0, period === "daily" ? 10 : period === "monthly" ? 7 : 4);
           // This tests the native format, not execution of the production gardener.
           const written = await persistLedger({
@@ -118,19 +123,22 @@ test("logical proof survives native daily, monthly and yearly files with no orig
             entries: [{ covers, rows: day.rows.length, bytes: file === undefined ? 0 : (await stat(join(fixture.inputs.outputRoot, file.path))).size,
               state: file === undefined ? "empty" : "packed" }],
           }));
-          for (const old of day.files) {
-            // Only generated files in this test's named day are removed.
-            if (old.envelope.tier === "raw") {
-              const raw = namedPlanningFiles(summary, fixture.inputs.outputRoot);
-              const paths = ledger === "source-runs" ? raw.sources.rawFiles : raw.ledgers[ledger].rawFiles;
-              for (const path of paths ?? []) await rm(path, { force: true });
-            }
-          }
         }
+        const raw = namedPlanningFiles(summary, fixture.inputs.outputRoot);
+        for (const paths of [
+          raw.sources.rawFiles, raw.feed_runs?.rawFiles,
+          ...Object.values(raw.ledgers).map(input => input.rawFiles),
+          ...Object.values(raw.renamed ?? {}).map(input => input.rawFiles),
+        ]) for (const path of paths ?? []) await rm(path, { force: true });
         history = await readPlanningHistory({
-          sources: named("source-runs"), ledgers: {
-            "article-assessments": named("article-assessments"), diversity: named("diversity"),
-            "editorial-selections": named("editorial-selections"), dispatches: named("dispatches"), rejections: named("rejections"),
+          sources: { day: summary.date }, feed_runs: named("feed-runs"), ledgers: {
+            "article-assessments": named("article-assessments"), diversity: { day: summary.date },
+            "editorial-selections": named("editorial-selections"), dispatches: { day: summary.date },
+            rejections: { day: summary.date },
+          }, renamed: {
+            "article-selection-diversity": named("article-selection-diversity"),
+            "article-dispatches": named("article-dispatches"),
+            "ingest-rejections": named("ingest-rejections"),
           },
         });
         const packed = selectCompleteAttempt(history);
@@ -178,7 +186,7 @@ test("recorded rejection commitments retain their original schema stamp after mi
     if (!("files" in summary)) throw new Error("Missing summary");
     const history = await readPlanningHistory(namedPlanningFiles(summary, fixture.inputs.outputRoot));
     const selected = selectCompleteAttempt(history).selected!;
-    const rows = history.ledgers.rejections.rows;
+    const rows = history.ledgers["ingest-rejections"].rows;
     expect(rows.length).toBeGreaterThan(0);
     const original = rows.map(held => {
       const current = CandidateRejectionContract.schema.parse(held.row);
@@ -191,20 +199,20 @@ test("recorded rejection commitments retain their original schema stamp after mi
     const migrated = original.map(held => ({
       ...held, row: CandidateRejectionContract.legacyVersions[CONTRACT_VERSION].migrate(held.row),
     }));
-    const oldProof = commitLogicalRecords("rejections", migrated, selected, CONTRACT_VERSION).commitment;
+    const oldProof = commitLogicalRecords("ingest-rejections", migrated, selected, CONTRACT_VERSION).commitment;
     const sources = history.sources.rows.map(held => {
       if (held.row.completion_evidence === null) throw new Error("Missing recorded completion");
       return {
         ...held, row: { ...held.row, completion_evidence: held.row.completion_evidence.map(evidence =>
-          evidence.ledger === "rejections" ? { ...evidence, logical: oldProof } : evidence) },
+          evidence.ledger === "ingest-rejections" ? { ...evidence, logical: oldProof } : evidence) },
       };
     });
     const oldHistory = { ...history, sources: { ...history.sources, rows: sources } };
     expect(selectCompleteAttempt(oldHistory).selected?.run_id).toBe(selected.run_id);
-    expect(commitLogicalRecords("rejections", [...migrated].reverse(), selected, CONTRACT_VERSION).commitment).toEqual(oldProof);
-    expect(oldProof).not.toEqual(commitLogicalRecords("rejections", migrated, selected).commitment);
-    expect(() => commitLogicalRecords("rejections", migrated, selected, "2026-10-19")).toThrow("unsupported");
-    expect(commitLogicalRecords("rejections", migrated, selected, "2026-10-22").commitment.row_schema_version).toBe("2026-10-22");
+    expect(commitLogicalRecords("ingest-rejections", [...migrated].reverse(), selected, CONTRACT_VERSION).commitment).toEqual(oldProof);
+    expect(oldProof).not.toEqual(commitLogicalRecords("ingest-rejections", migrated, selected).commitment);
+    expect(() => commitLogicalRecords("ingest-rejections", migrated, selected, "2026-10-19")).toThrow("unsupported");
+    expect(commitLogicalRecords("ingest-rejections", migrated, selected, "2026-10-22").commitment.row_schema_version).toBe("2026-10-22");
     const assessments = history.ledgers["article-assessments"].rows;
     const assessment = ArticleAssessmentContract.schema.parse(assessments[0]!.row);
     const assignedAssessment = ArticleAssessmentContract.schema.parse({
@@ -234,7 +242,7 @@ test("recorded rejection commitments retain their original schema stamp after mi
       .commitment.row_schema_version).toBe("2026-10-22");
     for (const version of [CONTRACT_VERSION, "2026-10-22", PLANNING_OBSERVATIONS_VERSION]) {
       const legacy = DispatchContract.legacyVersions![version]!;
-      const dispatches = history.ledgers.dispatches.rows.map(held => {
+      const dispatches = history.ledgers["article-dispatches"].rows.map(held => {
         const current = DispatchContract.schema.parse(held.row);
         const { planning_observations: _observations, ...content } = current.content;
         const {
@@ -255,7 +263,7 @@ test("recorded rejection commitments retain their original schema stamp after mi
         return { ...held, row: original };
       });
       const migratedDispatches = dispatches.map(held => ({ ...held, row: legacy.migrate(held.row) }));
-      const proof = commitLogicalRecords("dispatches", migratedDispatches, selected, version).commitment;
+      const proof = commitLogicalRecords("article-dispatches", migratedDispatches, selected, version).commitment;
       const fields = describeObjectSchema(legacy.schema).fields;
       const records = dispatches.map(held => {
         const row = held.row as { content: { date: string; candidate_id: string } };
@@ -265,16 +273,16 @@ test("recorded rejection commitments retain their original schema stamp after mi
         ];
       }).sort(([a], [b]) => a! < b! ? -1 : a! > b! ? 1 : 0);
       const expected = createHash("sha256").update(`${JSON.stringify([
-        "2026-10-22", "dispatches", version, selected.date, selected.run_id, selected.attempt, selected.correlation_id,
+        "2026-10-22", "article-dispatches", version, selected.date, selected.run_id, selected.attempt, selected.correlation_id,
       ])}\n`);
       for (const record of records) expected.update(`${JSON.stringify(record)}\n`);
       expect(proof.content_sha256).toBe(expected.digest("hex"));
       expect(proof.row_schema_version).toBe(version);
       if (version === PLANNING_OBSERVATIONS_VERSION) {
         expect(migratedDispatches.map(held => DispatchContract.schema.parse(held.row).content))
-          .toEqual(history.ledgers.dispatches.rows.map(held => DispatchContract.schema.parse(held.row).content));
+          .toEqual(history.ledgers["article-dispatches"].rows.map(held => DispatchContract.schema.parse(held.row).content));
       }
-      expect(() => commitLogicalRecords("dispatches", history.ledgers.dispatches.rows, selected, version))
+      expect(() => commitLogicalRecords("article-dispatches", history.ledgers["article-dispatches"].rows, selected, version))
         .toThrow(version === PLANNING_OBSERVATIONS_VERSION
           ? "cannot omit source reliability evidence" : "cannot omit planning observations");
     }

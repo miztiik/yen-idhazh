@@ -9,9 +9,9 @@ export function createIngestObservations(input: {
   writer: WriterIdentity; outputRoot: string; registration: LedgerRegistration; settings: LedgerSettings;
   on_persisted?: (files: readonly PersistedLedgerFile[]) => void;
 }) {
-  if (input.registration.name !== "document-observations" || input.registration.family !== "feed-ingest-plan"
+  if (input.registration.name !== "ingest-observations" || input.registration.family !== "feed-ingest-plan"
     || input.registration.lifecycle_status !== "active") {
-    throw new Error("document-observations requires its active registered ledger");
+    throw new Error("ingest-observations requires its active registered ledger");
   }
   const files: PersistedLedgerFile[] = [];
   const failures: Error[] = [];
@@ -30,15 +30,15 @@ export function createIngestObservations(input: {
         let written: PersistLedgerResult;
         try {
           written = await persistLedger({
-            ledger: "document-observations", registryEntry: input.registration,
+            ledger: "ingest-observations", registryEntry: input.registration,
             outputRoot: input.outputRoot,
             writerContext: { ...input.writer, task_name: `document-${unit.operation}-${unit.event_id}` },
             ledgerSettings: input.settings,
             rowContract: DocumentObservationContract, period: { tier: "raw", covers }, rows,
           });
-          if (written.status !== "written") throw new Error("document-observations save produced no file");
+          if (written.status !== "written") throw new Error("ingest-observations save produced no file");
         } catch (cause) {
-          const error = new Error("document-observations save failed; completed work and files are retained", { cause });
+          const error = new Error("ingest-observations save failed; completed work and files are retained", { cause });
           failures.push(error);
           process.stderr.write(`${JSON.stringify({
             event: "document_observation_save_failed", event_ids: rows.map(row => row.event_id),
@@ -50,10 +50,10 @@ export function createIngestObservations(input: {
       }
     },
     assertSaved() {
-      if (failures.length) throw new AggregateError(failures, "document-observations save failed; completed work and files are retained");
+      if (failures.length) throw new AggregateError(failures, "ingest-observations save failed; completed work and files are retained");
     },
     result(): PersistLedgerResult {
-      if (failures.length) throw new AggregateError(failures, "document-observations save failed; completed work and files are retained");
+      if (failures.length) throw new AggregateError(failures, "ingest-observations save failed; completed work and files are retained");
       return files.length ? { status: "written", files: [...files] } : { status: "empty", files: [] };
     },
   };

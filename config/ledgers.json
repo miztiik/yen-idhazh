@@ -23,6 +23,14 @@
           "suffix": null
         },
         {
+          "name": "article-dispatches",
+          "publish_to_data_explorer": true,
+          "grain": "raw-and-compact",
+          "prefix": ["feed-ingest-plan", "article-dispatches"],
+          "stem": null,
+          "suffix": null
+        },
+        {
           "name": "rejections",
           "publish_to_data_explorer": true,
           "grain": "raw-and-compact",
@@ -31,10 +39,26 @@
           "suffix": null
         },
         {
+          "name": "ingest-rejections",
+          "publish_to_data_explorer": true,
+          "grain": "raw-and-compact",
+          "prefix": ["feed-ingest-plan", "ingest-rejections"],
+          "stem": null,
+          "suffix": null
+        },
+        {
           "name": "source-runs",
           "publish_to_data_explorer": true,
           "grain": "raw-and-compact",
           "prefix": ["feed-ingest-plan", "source-runs"],
+          "stem": null,
+          "suffix": null
+        },
+        {
+          "name": "feed-runs",
+          "publish_to_data_explorer": true,
+          "grain": "raw-and-compact",
+          "prefix": ["feed-ingest-plan", "feed-runs"],
           "stem": null,
           "suffix": null
         },
@@ -55,6 +79,14 @@
           "suffix": null
         },
         {
+          "name": "article-selection-diversity",
+          "publish_to_data_explorer": true,
+          "grain": "raw-and-compact",
+          "prefix": ["feed-ingest-plan", "article-selection-diversity"],
+          "stem": null,
+          "suffix": null
+        },
+        {
           "name": "document-observations",
           "publish_to_data_explorer": false,
           "grain": "raw-and-compact",
@@ -63,10 +95,26 @@
           "suffix": null
         },
         {
+          "name": "ingest-observations",
+          "publish_to_data_explorer": false,
+          "grain": "raw-and-compact",
+          "prefix": ["feed-ingest-plan", "ingest-observations"],
+          "stem": null,
+          "suffix": null
+        },
+        {
           "name": "operational-state",
           "publish_to_data_explorer": false,
           "grain": "raw-and-compact",
           "prefix": ["feed-ingest-plan", "operational-state"],
+          "stem": null,
+          "suffix": null
+        },
+        {
+          "name": "feed-health-state",
+          "publish_to_data_explorer": false,
+          "grain": "raw-and-compact",
+          "prefix": ["feed-ingest-plan", "feed-health-state"],
           "stem": null,
           "suffix": null
         }

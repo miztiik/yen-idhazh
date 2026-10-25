@@ -66,9 +66,12 @@ class LedgerCompletionEvidence(Model):
     ledger: Literal[
         "article-assessments",
         "diversity",
+        "article-selection-diversity",
         "editorial-selections",
         "dispatches",
+        "article-dispatches",
         "rejections",
+        "ingest-rejections",
     ]
     row_count: Count
     files: list[CompletedFile]
@@ -93,6 +96,11 @@ class SourceRunRecord(Contract):
     __schema_stem__: ClassVar[str] = "feed-ingest-source-run"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-10-25T15:28",
+            change="Accept renamed planning ledger names in completion evidence.",
+            why="Existing file commitments retain their original ledger name.",
+        ),
+        ChangelogEntry(
             version="2026-10-24T20:04",
             change="Record curated publisher identity in source snapshots.",
             why="New observations preserve reviewed identity without rewriting history.",
@@ -108,17 +116,12 @@ class SourceRunRecord(Contract):
             why="Source failure counts must retain the operation that failed.",
         ),
         ChangelogEntry(
-            version="2026-10-22T10:05",
-            change="Commit unique attempt records independently of storage files.",
-            why="Verified planning evidence must survive compaction without inventing old proof.",
-        ),
-        ChangelogEntry(
             version="2026-10-22",
             change="Earlier changes are available in git history.",
             why="The contract changelog keeps its four newest changes and one history pointer.",
         ),
     )
-    version: Literal["2026-10-24T20:04"] = "2026-10-24T20:04"
+    version: Literal["2026-10-25T15:28"] = "2026-10-25T15:28"
 
     date: DateStamp
     correlation_id: str = Field(min_length=1)
@@ -157,7 +160,8 @@ class SourceRunRecord(Contract):
     @classmethod
     def migrate_previous_version(cls, value: Any) -> Any:
         if isinstance(value, dict) and value.get("version") in {
-            "2026-10-20", "2026-10-22", "2026-10-22T10:05", "2026-10-22T18:15", "2026-10-22T20:30"
+            "2026-10-20", "2026-10-22", "2026-10-22T10:05", "2026-10-22T18:15",
+            "2026-10-22T20:30", "2026-10-24T20:04"
         }:
             reject_legacy_publisher_identity(value, [value.get("source")])
             legacy_reasons = {"ALREADY_PUBLISHED", "SETTLED_FAILURE", "BLOCKED_URL_MARKER"}
@@ -239,10 +243,13 @@ class SourceRunRecord(Contract):
                 raise ValueError("completion evidence has one entry per ledger")
             if set(ledgers) != {
                 "article-assessments",
-                "diversity",
                 "editorial-selections",
-                "dispatches",
-                "rejections",
-            }:
-                raise ValueError("completion evidence covers every required planning ledger")
+            } | (
+                {"diversity"} if "diversity" in ledgers else {"article-selection-diversity"}
+            ) | (
+                {"dispatches"} if "dispatches" in ledgers else {"article-dispatches"}
+            ) | (
+                {"rejections"} if "rejections" in ledgers else {"ingest-rejections"}
+            ):
+                raise ValueError("completion evidence covers each required planning ledger once")
         return self

@@ -35,10 +35,10 @@ test("uneven real curated selections have exact greedy assignments and lower spr
       request: { strategy: "bin-pack", shards: 2 } })).toEqual(packed);
     const stored = await persistDispatches(packed, {
       outputRoot: root, writerContext: writer(input.fixture.run_id, 1, 5),
-      ledgerSettings: settings, registration: registration("dispatches"), date: input.fixture.date,
+      ledgerSettings: settings, registration: registration("article-dispatches"), date: input.fixture.date,
       correlation_id: input.fixture.correlation_id,
     });
-    const history = await readWritten(root, "dispatches", input.fixture.date,
+    const history = await readWritten(root, "article-dispatches", input.fixture.date,
       DispatchContract, stored);
     expect(history.rows.map(held => held.row)).toEqual(packed.dispatches);
     expect(history.rows.every(held => held.identity.shard === 5)).toBe(true);
@@ -78,7 +78,7 @@ test("equal work, fewer articles, empty selection and none keep exact selected i
     expect(result.dispatches).toEqual([]);
     expect(await persistDispatches(result, {
       outputRoot: root, writerContext: writer(empty.fixture.run_id), ledgerSettings: settings,
-      registration: registration("dispatches"), date: empty.fixture.date,
+      registration: registration("article-dispatches"), date: empty.fixture.date,
       correlation_id: empty.fixture.correlation_id,
     })).toEqual({ status: "empty", files: [] });
   } finally { await rm(root, { recursive: true, force: true }); }
@@ -162,10 +162,10 @@ test("dispatch retains harvest content and later selection dates and policies in
     });
     const stored = await persistDispatches(result, {
       outputRoot: root, writerContext: writer(input.fixture.run_id), ledgerSettings: settings,
-      registration: registration("dispatches"), date: input.fixture.date,
+      registration: registration("article-dispatches"), date: input.fixture.date,
       correlation_id: input.fixture.correlation_id,
     });
-    const native = await readWritten(root, "dispatches", input.fixture.date, DispatchContract, stored);
+    const native = await readWritten(root, "article-dispatches", input.fixture.date, DispatchContract, stored);
     expect(native.rows[0]!.row).toEqual(dispatch);
   } finally { await rm(root, { recursive: true, force: true }); }
 });

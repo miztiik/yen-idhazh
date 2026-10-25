@@ -24,7 +24,10 @@ import {
   DigestPublicationSchema, PUBLISHED_ROW_SCHEMA_VERSION, PublishedRowSchema,
 } from "../../../services/feed-ingest-plan/src/metrics/publication-evidence";
 import { readLedgerParquet } from "../../../services/feed-ingest-plan/src/read-ledger-history/read-parquet";
-import { DispatchContract } from "../../../services/feed-ingest-plan/src/metrics/audit-contracts";
+import { DispatchContract, DocumentObservationContract } from "../../../services/feed-ingest-plan/src/metrics/audit-contracts";
+import { readIngestEvidence } from "../../../services/feed-ingest-plan/src/read-ledger-history/read-ingest-evidence";
+import { rollupIngestOutcomes } from "../../../services/feed-ingest-plan/src/rollup-ingest-outcomes";
+import { settleIngestObservations } from "../../../services/feed-ingest-plan/src/settle-ingest-observations";
 import { generatePublicationInput } from "../../../services/feed-ingest-plan/test/full-audit-recording";
 import { verifyFullAuditFixture } from "../feed-ingest-plan-audit-fixture";
 
@@ -56,7 +59,7 @@ test("generated publication evidence joins actual main output and writes native 
     const sources = metrics.files.source_runs;
     const first = summary.files.dispatches.files[0];
     if (first === undefined) throw new Error("Generated publication fixture requires a real selected dispatch");
-    const dispatches = await readLedgerParquet(join(fixture.inputs.outputRoot, ...first.path.split("/")), "dispatches",
+    const dispatches = await readLedgerParquet(join(fixture.inputs.outputRoot, ...first.path.split("/")), "article-dispatches",
       DispatchContract);
     const writer = dispatches.envelope.identity;
     const digest = DigestPublicationSchema.parse({
@@ -90,6 +93,7 @@ test("generated publication evidence joins actual main output and writes native 
     // One prior UTC day is a fixed test fixture, not an inferred historical observation.
     const prior = new Date(Date.parse(`${summary.date}T00:00:00Z`) - 86_400_000).toISOString().slice(0, 10);
     const empty = named([], prior);
+    const emptyCurrent = named([], summary.date);
     const outputRoot = join(fixture.directory, "generated-observer-output");
     const observed = await recordPublicationMetrics({
       run_id: summary.run_id, correlation_id: summary.correlation_id, as_of: summary.observed_at,
@@ -108,22 +112,25 @@ test("generated publication evidence joins actual main output and writes native 
           })) } },
       ],
       planning_days: [
-        { sources: empty, ledgers: { "article-assessments": empty, diversity: empty,
+        { sources: empty, feed_runs: empty, ledgers: { "article-assessments": empty, diversity: empty,
           "editorial-selections": empty, dispatches: empty, rejections: empty } },
-        { sources: named([sources]), ledgers: {
-          "article-assessments": named([metrics.files.assessments]), diversity: named([metrics.files.diversity]),
-          "editorial-selections": named([summary.files.selections]), dispatches: named([summary.files.dispatches]),
-          rejections: named([summary.files.harvest_rejections, summary.files.screening_rejections, summary.files.curation_rejections]),
+        { sources: { day: summary.date }, feed_runs: named([sources]), ledgers: {
+          "article-assessments": named([metrics.files.assessments]), diversity: emptyCurrent,
+          "editorial-selections": named([summary.files.selections]), dispatches: emptyCurrent, rejections: emptyCurrent,
+        }, renamed: {
+          "article-selection-diversity": named([metrics.files.diversity]),
+          "article-dispatches": named([summary.files.dispatches]),
+          "ingest-rejections": named([summary.files.harvest_rejections, summary.files.screening_rejections, summary.files.curation_rejections]),
         } },
       ],
       event_pairs: [],
     });
     expect(observed.audited_complete).toBe(false);
     expect(observed.status).toBe("publication_metrics_recorded_audit_pending");
-    await verifyParquetFiles(outputRoot, "diversity", observed.files.diversity, fixture.inputs.registrations.diversity, observed.rows);
-    verifyLedgerReceipt("diversity", observed.files.diversity, observed.receipts.diversity);
+    await verifyParquetFiles(outputRoot, "article-selection-diversity", observed.files.diversity, fixture.inputs.registrations.diversity, observed.rows);
+    verifyLedgerReceipt("article-selection-diversity", observed.files.diversity, observed.receipts.diversity);
     if (observed.files.sources === null) throw new Error("Generated same-day publication omitted real source observations");
-    await verifyParquetFiles(outputRoot, "source-runs", observed.files.sources,
+    await verifyParquetFiles(outputRoot, "feed-runs", observed.files.sources,
       fixture.inputs.registrations.source_runs, observed.source_observations);
     expect(observed.source_observations.reduce((count, row) => count + row.published_count!, 0)).toBe(digest.items.length);
     expect(observed.source_observations.every(row => row.observation_phase === "publication_complete")).toBe(true);
@@ -143,9 +150,35 @@ test("actual CLI planning proof and all native files survive both real report mo
     if (!("files" in summary) || summary.metrics === undefined) throw new Error("Actual CLI omitted metric evidence");
     const metrics = summary.metrics;
     const outputs = createExecutionOutputs(summary, fixture.inputs.registrations);
-    await verifyParquetFiles(fixture.inputs.outputRoot, "document-observations", summary.files.document_observations,
+    await verifyParquetFiles(fixture.inputs.outputRoot, "ingest-observations", summary.files.document_observations,
       fixture.inputs.registrations.document_observations);
     expect(JSON.parse(outputs.document_observation_files!)).toEqual(summary.files.document_observations.files.map(file => file.path));
+    const observationFiles = await Promise.all(summary.files.document_observations.files.map(file =>
+      readLedgerParquet(join(fixture.inputs.outputRoot, ...file.path.split("/")),
+        "ingest-observations", DocumentObservationContract)));
+    if (observationFiles.length === 0) throw new Error("Recorded planner omitted its named observation fixture");
+    const observations = observationFiles.flatMap(file => file.rows.map(held => held.row));
+    const legacyObservations = await persistLedger({
+      ledger: "document-observations", outputRoot: fixture.inputs.outputRoot,
+      registryEntry: fixture.inputs.legacy_registrations.document_observations,
+      writerContext: observationFiles[0]!.envelope.identity,
+      ledgerSettings: fixture.inputs.ledgerSettings, period: { tier: "raw", covers: summary.date },
+      rowContract: DocumentObservationContract, rows: observations,
+    });
+    const nextDay = utcTimestamp(() => new Date(Date.parse(`${summary.date}T00:00:00Z`) + 86_401_000));
+    const merged = await readIngestEvidence({
+      root: fixture.inputs.outputRoot, now: nextDay, window_days: 1,
+      registration: fixture.inputs.registrations.document_observations,
+      legacy_registration: fixture.inputs.legacy_registrations.document_observations,
+      days: [{ day: summary.date, raw_files: summary.files.document_observations.files.map(file => file.path) }],
+      legacy_days: [{ day: summary.date, raw_files: legacyObservations.files.map(file => file.path) }],
+    });
+    const settled = settleIngestObservations(observations, summary.date, summary.date);
+    const expected = rollupIngestOutcomes(settled.rows, true);
+    expect(merged.gaps).toEqual([]);
+    expect(merged.sources).toEqual(expected.sources);
+    expect(merged.publishers).toEqual(expected.publishers);
+    expect(merged.unallocated).toEqual(expected.unallocated);
     const hostFixture = await Bun.file(new URL("../../../tests/fixtures/ledger-file-writer/host-fingerprint-row.json", import.meta.url)).json();
     const host = {
       row: { ...hostFixture, date: summary.date, run_id: summary.run_id },
@@ -425,7 +458,7 @@ test("actual CLI planning proof and all native files survive both real report mo
     const proof = await verifyPlanningCompletion(fixture.inputs.outputRoot, summary);
     expect(proof.sources).toEqual(summary.source_records!);
     if (summary.files.source_runs === undefined || summary.source_records === null) throw new Error("Actual source records absent");
-    await verifyParquetFiles(fixture.inputs.outputRoot, "source-runs", summary.files.source_runs,
+    await verifyParquetFiles(fixture.inputs.outputRoot, "feed-runs", summary.files.source_runs,
       fixture.inputs.registrations.source_runs, summary.source_records);
     expect(JSON.parse(outputs.source_run_files!)).toEqual(summary.files.source_runs.files.map(file => file.path));
     const completion = summary.planning_completion!;
@@ -464,11 +497,11 @@ test("actual CLI planning proof and all native files survive both real report mo
       }
       expect(createExecutionOutputs(summary, fixture.inputs.registrations)).toEqual(outputBefore);
       expect(await verifyPlanningCompletion(fixture.inputs.outputRoot, summary)).toEqual(proof);
-      await verifyParquetFiles(fixture.inputs.outputRoot, "source-runs", summary.files.source_runs,
+      await verifyParquetFiles(fixture.inputs.outputRoot, "feed-runs", summary.files.source_runs,
         fixture.inputs.registrations.source_runs, summary.source_records);
       expect(await readSeenEvidence(fixture.inputs.outputRoot, seenPaths)).toEqual(seenBefore);
     }
-    for (const [key, ledger] of [["assessments", "article-assessments"], ["diversity", "diversity"]] as const) {
+    for (const [key, ledger] of [["assessments", "article-assessments"], ["diversity", "article-selection-diversity"]] as const) {
       const files = summary.metrics.files[key];
       const checked = await verifyParquetFiles(fixture.inputs.outputRoot, ledger, files, fixture.inputs.registrations[key]);
       expect(checked.row_count).toBe(summary.metrics.receipts[key].row_count);
@@ -483,7 +516,7 @@ test("actual CLI planning proof and all native files survive both real report mo
     } }, fixture.inputs.registrations)).toThrow("receipt");
     const file = summary.metrics.files.diversity.files[0]!;
     await rm(join(fixture.inputs.outputRoot, ...file.path.split("/")));
-    await expect(verifyParquetFiles(fixture.inputs.outputRoot, "diversity",
+    await expect(verifyParquetFiles(fixture.inputs.outputRoot, "article-selection-diversity",
       summary.metrics.files.diversity, fixture.inputs.registrations.diversity)).rejects.toMatchObject({ code: "ENOENT" });
   } finally {
     await fixture.close();
@@ -518,7 +551,7 @@ test("uses actual selected identities, worker count and real files without a rep
     expect(outputs.dispatch_count).toBe("2");
     expect(JSON.parse(outputs.matrix!)).toEqual({ include: [{ worker_assignment: 0 }, { worker_assignment: 1 }] });
     expect(JSON.parse(outputs.dispatch_files!)).toEqual(result.files.dispatches.files.map(file => file.path));
-    expect((await verifyParquetFiles(fixture.inputs.outputRoot, "dispatches",
+    expect((await verifyParquetFiles(fixture.inputs.outputRoot, "article-dispatches",
       result.files.dispatches, fixture.inputs.registrations.dispatches)).row_count).toBe(summary.assignments.length);
     const before = JSON.stringify(result.files);
     const summaryPath = join(fixture.directory, "summary.md");
@@ -595,10 +628,10 @@ test("zero dispatches and zero rejections are explicit valid evidence, not missi
     expect(outputs.dispatch_files).toBe("[]");
     expect(outputs.dispatch_count).toBe("1");
     expect(result.files.dispatches.status).toBe("empty");
-    expect((await verifyParquetFiles(fixture.inputs.outputRoot, "dispatches", result.files.dispatches,
+    expect((await verifyParquetFiles(fixture.inputs.outputRoot, "article-dispatches", result.files.dispatches,
       fixture.inputs.registrations.dispatches)).status).toBe("verified_empty");
     expect(result.files.screening_rejections.status).toBe("empty");
-    expect((await verifyParquetFiles(fixture.inputs.outputRoot, "rejections", result.files.screening_rejections,
+    expect((await verifyParquetFiles(fixture.inputs.outputRoot, "ingest-rejections", result.files.screening_rejections,
       fixture.inputs.registrations.rejections)).row_count).toBe(0);
     expect((await verifyParquetFiles(fixture.inputs.outputRoot, "article-assessments", result.metrics.files.assessments,
       fixture.inputs.registrations.assessments)).status).toBe("verified_empty");
@@ -606,9 +639,9 @@ test("zero dispatches and zero rejections are explicit valid evidence, not missi
     expect(outputs.assessments_files).toBe("[]");
     expect(() => verifyLedgerReceipt("article-assessments", { status: "empty", files: [] },
       { ledger: "article-assessments", row_count: 0, files: [] })).not.toThrow();
-    await expect(verifyParquetFiles(fixture.inputs.outputRoot, "dispatches",
+    await expect(verifyParquetFiles(fixture.inputs.outputRoot, "article-dispatches",
       JSON.parse("{}"), fixture.inputs.registrations.dispatches)).rejects.toThrow("absent");
-    await expect(verifyParquetFiles(fixture.inputs.outputRoot, "dispatches",
+    await expect(verifyParquetFiles(fixture.inputs.outputRoot, "article-dispatches",
       { status: "written", files: [] }, fixture.inputs.registrations.dispatches)).rejects.toThrow("status");
   } finally {
     await fixture.close();
@@ -670,7 +703,7 @@ test("report configuration cannot change real-run ledger commitments", async () 
       for (const [index, path] of paths.entries()) {
         expect(await readFile(join(fixture.inputs.outputRoot, ...path.split("/")))).toEqual(before[index]!);
       }
-      await verifyParquetFiles(fixture.inputs.outputRoot, "source-runs", summary.files.source_runs,
+      await verifyParquetFiles(fixture.inputs.outputRoot, "feed-runs", summary.files.source_runs,
         fixture.inputs.registrations.source_runs, summary.source_records);
       await verifyPlanningCompletion(fixture.inputs.outputRoot, summary);
     }

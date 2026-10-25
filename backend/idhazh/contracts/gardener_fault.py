@@ -40,6 +40,8 @@ class GardenerFault(StrEnum):
     #: into cannot be read, or its index names it and it is not there. Every
     #: file is kept, and a person restores the packed file from git history.
     PACKED_FILE_UNREADABLE = "packed-file-unreadable"
+    #: Neither bounded feed-health head copy can safely name the snapshots to retain.
+    HEAD_INDEX_UNAVAILABLE = "head-index-unavailable"
 
 
 class RecoveryNote(StrEnum):

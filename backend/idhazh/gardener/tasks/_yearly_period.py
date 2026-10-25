@@ -61,6 +61,7 @@ section 2).
 
 from __future__ import annotations
 
+import hashlib
 from collections.abc import Iterator, Sequence
 from pathlib import Path
 from typing import Final
@@ -290,6 +291,7 @@ def _pack(tree: CompactTree, year: str, *, identity: WriterIdentity) -> tuple[St
             covers=year,
             rows=built.rows,
             bytes=len(built.data),
+            file_sha256=hashlib.sha256(built.data).hexdigest(),
             lost_days=lost,
             set_aside=set_aside,
         )

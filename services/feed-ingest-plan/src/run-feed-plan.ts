@@ -124,7 +124,9 @@ export async function runFeedPlan(raw: unknown, inputs: PlanInputs, runtime: Pla
     root: inputs.root, now: context.now,
     window_days: harvestInputs.config.feedback.window_days,
     registration: inputs.registrations.document_observations,
-    days: inputs.settings.inputs.document_observation_days,
+    legacy_registration: inputs.legacy_registrations.document_observations,
+    days: inputs.settings.inputs.ingest_observation_days,
+    legacy_days: inputs.settings.inputs.document_observation_days,
   });
   const operationalFeedback = estimateOperationalFeedback(
     articleEvidence, harvestInputs.config.feedback,

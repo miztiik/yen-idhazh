@@ -74,7 +74,7 @@ function encodeCandidate(
 export function encodeHistoricalRecord(
   ledger: LedgerCompletionEvidence["ledger"], row: object, version: string,
 ): object {
-  if (ledger === "dispatches") {
+  if (ledger === "dispatches" || ledger === "article-dispatches") {
     const current = FeedIngestDispatchSchema.parse(row);
     if (version === SOURCE_OPERATIONAL_SCORE_VERSION) return current;
     if (version === PUBLISHER_IDENTITY_VERSION) return {
@@ -117,7 +117,7 @@ export function encodeHistoricalRecord(
       ratings: encodeScores(current.ratings, version),
     };
   }
-  if (ledger === "rejections") {
+  if (ledger === "rejections" || ledger === "ingest-rejections") {
     const current = CandidateRejectionContract.schema.parse(row);
     const { diagnostics, published_on, failure_code, matched_url_marker, ...previous } = current.details;
     const originalDiagnostics = encodeDiagnostics(diagnostics, version);

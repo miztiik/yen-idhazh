@@ -85,8 +85,9 @@ each segment before exposing the entry and refuses unknown names or ambiguous
 prefixes. The pure path helpers take that catalog explicitly and use the same
 prefix for compact files and indexes. The browser does not read raw listings.
 Ordinary panel and disk readers use the configured catalog; the Data explorer
-binds its reader to the catalog fetched for its source. Thus `dispatches` resolves under
-`state/compact/feed-ingest-plan/dispatches/`, while `host-fingerprint` keeps
+binds its reader to the catalog fetched for its source. Thus `article-dispatches`
+resolves under `state/compact/feed-ingest-plan/article-dispatches/`;
+`dispatches` remains registered for legacy data, while `host-fingerprint` keeps
 `state/compact/host-fingerprint/`. Missing-file build warnings name the ledger,
 not its family's folder.
 

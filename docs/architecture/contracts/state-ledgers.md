@@ -64,10 +64,17 @@ The state head is metadata at
 `index-b.json`, not another ledger. The existing ledger writer places each
 snapshot in its normal raw UTC-day folder using the snapshot write date. A
 successful head rotation removes the former previous snapshot in the same
-commit, so ordinary operation retains two files. The compactor protects the
-references in one valid head copy; if two valid copies disagree, or neither
-validates, it defers pruning this ledger rather than guessing. This bounded
-exception does not disable normal yearly pruning for the observation ledgers.
+commit, so ordinary operation retains two files. The compactor reads only the
+two named head copies. One valid copy is enough; if both validate, they must
+agree. It protects only the latest and previous paths named by a valid copy,
+without packing or expiring those raw files. If both valid copies disagree, or
+neither validates, compaction makes no changes and defers with
+`head-index-unavailable`. A missing or invalid copy does not block a matching
+valid copy. A reader may name these exact references beside compact indexes;
+it verifies each referenced file and reads it with any packed rows for that
+day. Ordinary leftover raw files still do not override a named empty, lost or
+missing period. This bounded exception does not disable normal yearly pruning
+for other evidence.
 
 The run-shards ledger publishes `RunRecord.shards` exactly. Assemble files the
 counts after its final manifest write. An absent count stays null; observed

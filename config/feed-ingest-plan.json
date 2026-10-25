@@ -54,8 +54,8 @@
     "max_shards": 8
   },
   "seal": {
-    "dispatches_prefix": ["feed-ingest-plan", "dispatches"],
-    "rejections_prefix": ["feed-ingest-plan", "rejections"],
+    "dispatches_prefix": ["feed-ingest-plan", "article-dispatches"],
+    "rejections_prefix": ["feed-ingest-plan", "ingest-rejections"],
     "compression": "snappy"
   },
   "workflow_reporting": {
