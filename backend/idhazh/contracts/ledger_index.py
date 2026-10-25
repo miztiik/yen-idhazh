@@ -281,16 +281,6 @@ class CompactIndex(Contract):
             why="An empty or lost period is an entry with no file, and the index says which.",
         ),
         ChangelogEntry(
-            version="2026-10-01T16:50",
-            change="Remove the retired aggregate from the ledger vocabulary.",
-            why="Only declared families may reach an index; surviving periods are unchanged.",
-        ),
-        ChangelogEntry(
-            version="2026-10-01",
-            change="ledger may name summary-quality-evals, and scores is refused.",
-            why="The eval ledger is named for what it holds; its files were rewritten.",
-        ),
-        ChangelogEntry(
             version="2026-09-27",
             change="Earlier changes are in this file's git history.",
             why="A changelog says what moved lately; git is the archive.",
