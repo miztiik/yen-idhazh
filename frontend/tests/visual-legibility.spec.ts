@@ -177,7 +177,7 @@ test('reader labels clear the text floor without scaling, and every mark survive
 	expect(errors).toEqual([]);
 });
 
-test('a failed chart load is named and can be retried without marking chartless stories', async ({ page }) => {
+test('a failed chart load leaves only the story text without marking chartless stories', async ({ page }) => {
 	const errors: string[] = [];
 	const failedVisualRequests: string[] = [];
 	page.on('pageerror', (error) => errors.push(String(error)));
@@ -216,25 +216,18 @@ test('a failed chart load is named and can be retried without marking chartless 
 		page.locator(`[id="${chartStory.item_id}"]`)
 	);
 	await returningStory.scrollIntoViewIfNeeded();
-	const unavailable = returningStory.locator('[data-visual-state="unavailable"]');
-	await expect(unavailable).toHaveAttribute('role', 'status');
-	await expect(unavailable).toContainText('Chart unavailable.');
-	await expect(unavailable.getByRole('button', { name: 'Try again' })).toBeVisible();
+	await expect(returningStory.locator('.title')).toBeVisible();
+	await expect(returningStory.locator('.title')).toContainText(chartStory.title);
+	await expect(returningStory.locator('figure, [role="status"]')).toHaveCount(0);
+	await expect(returningStory.getByRole('button', { name: 'Try again' })).toHaveCount(0);
 	await expect.poll(() => failedVisualRequests.length).toBeGreaterThan(0);
 
 	const chartless = page.locator('article.item').and(
 		page.locator(`[id="${chartlessStory.item_id}"]`)
 	);
-	await expect(chartless.locator('figure, [data-visual-state="unavailable"]')).toHaveCount(0);
-
-	await page.context().setOffline(false);
-	const retryResponse = page.waitForResponse((response) =>
-		response.url().endsWith(`/${chartPath}`) && response.request().method() === 'GET'
-	);
-	await unavailable.getByRole('button', { name: 'Try again' }).click();
-	expect((await retryResponse).status()).toBe(200);
-	await expect(returningStory.getByRole('img')).toBeVisible();
-	await expect(unavailable).toHaveCount(0);
+	await expect(chartless.locator('.title')).toBeVisible();
+	await expect(chartless.locator('.title')).toContainText(chartlessStory.title);
+	await expect(chartless.locator('figure, [role="status"]')).toHaveCount(0);
 	expect(errors).toEqual([]);
 });
 

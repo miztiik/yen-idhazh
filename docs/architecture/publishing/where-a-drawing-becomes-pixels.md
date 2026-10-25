@@ -194,19 +194,18 @@ and nobody gets a chart whose data means something other than what the picture s
 ## The degrade rule, stated once
 
 **A story without a published chart stays compact.** A current `data_path` means the chart is
-expected; if that file cannot be fetched or its data is refused, the story stays intact and gets
-one short inline status. A retry appears only when another fetch may help.
+expected; if that file cannot be fetched or its data is refused, the story stays intact and has
+no chart.
 
 | What went wrong | What the reader gets |
 | --- | --- |
 | The day predates this file, or the data write failed, so `data_path` is absent or null | The story, with no chart or notice. Both mean no data path was carried. |
-| The published file cannot be fetched or read | The story, with no chart, an inline `Chart unavailable.` status and a retry. |
-| The path or document fails current validation | The story, with no chart, an inline `Chart unavailable.` status and a console line naming the file. No retry is offered for a deterministic refusal. |
+| The published file cannot be fetched or read | The story, with no chart or notice, and a console line naming the file. |
+| The path or document fails current validation | The story, with no chart or notice, and a console line naming the file. |
 
 **It refuses rather than guesses.** A degrade path that draws something approximate is how a wrong
-chart reaches a reader, and the product is trust. Stories without a published path remain the
-ordinary compact shape of the page; only a path-backed chart can fail visibly, because only that
-path says a drawing was expected.
+chart reaches a reader, and the product is trust. When a chart cannot be drawn, the story remains
+without a picture or an added state.
 
 `refusedVisualData` in `frontend/src/lib/payload/drawing.ts` is where that check lives, and
 `frontend/src/lib/visual/bar.ts` is what draws once it has passed. The split is not decoration:
@@ -319,10 +318,9 @@ second copy. The existing compiler and degrade path own the new check, so the
 page does not make a second editorial choice.
 
 A current chart path is evidence that its marks were published. If that file
-cannot be fetched or its contents are refused, an inline status names the missing
-chart without changing the story or treating absent values as zero. A retry is
-offered only when another fetch may help. An absent or null path remains the
-same chartless payload older days already carry.
+cannot be fetched or its contents are refused, the story remains intact without
+a chart or added notice and absent values are never treated as zero. An absent
+or null path remains the same chartless payload older days already carry.
 
 ## Rejected alternatives
 
