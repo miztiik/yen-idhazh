@@ -1,6 +1,6 @@
 # Visual Planner - Pseudo-Plan and Decision Record
 
-**Last Updated**: 2026-09-27
+**Last Updated**: 2026-10-25
 **Status**: PSEUDO-PLAN. Not execution-ready. Not a plan-doc under `docs/how-to/author-a-plan.md`.
 **Level**: 5 (core design, four persisted contracts, the model pick, the trust boundary)
 **Companion**: [`20260902-yen-idhazh-visual-planning-architecture.md`](20260902-yen-idhazh-visual-planning-architecture.md) - "the proposal" throughout. Section references like `P.3.4.3` mean that document's section 3.4.3; `P.L28` means its litigation row L28; `P.D1` a decision; `P.R7` a risk.
@@ -1819,7 +1819,7 @@ index, not the plan.
 | # | Plan-doc | Delivers, on its own |
 |---|---|---|
 | 11 | One model, two calls (delivered) | One set of weights instead of two, and the cache saving that comes with it |
-| 12 | [Visuals a reader can read](20260905-12-readable-visuals-plan.md) | Inline SVG, both themes resolving, full-width reflow |
+| 12 | [Readable story charts](../docs/architecture/publishing/how-a-story-chart-is-drawn-and-what-refuses-one.md) | Delivered: browser-drawn marks, shared number formatting, readable labels, caption and one selected bar |
 | 13 | [Deletion switched on](20260905-13-switch-on-deletion-plan.md) | Retention that actually deletes, with a visible backlog |
 | 14 | [The rest of the ship-or-not bar](20260905-14-sufficiency-bar-plan.md) | The sufficiency checks as a build gate rather than a habit |
 | 15 | [Charts, plus the two the reader asked for](20260905-15-chart-vocabulary-plan.md) | More ways to say a number, one type per PR |
