@@ -1,8 +1,8 @@
 """Which saved operational estimate records one source's request evidence?"""
 
-from typing import Annotated, ClassVar, Field, Literal, Self
+from typing import Annotated, ClassVar, Literal, Self
 
-from pydantic import StrictInt, model_validator
+from pydantic import Field, StrictInt, model_validator
 
 from idhazh.contracts.base import (
     ChangelogEntry,

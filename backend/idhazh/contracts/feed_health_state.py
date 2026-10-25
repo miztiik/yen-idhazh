@@ -307,7 +307,9 @@ class FeedHealthStateLifecycleResult(Model):
 
     @model_validator(mode="after")
     def validate_lifecycle(self) -> Self:
-        if self.lifecycle == "unknown" and (self.strikes is not None or self.rested_runs is not None):
+        if self.lifecycle == "unknown" and (
+            self.strikes is not None or self.rested_runs is not None
+        ):
             raise ValueError("unknown lifecycle does not claim strike or rest counts")
         return self
 
@@ -568,11 +570,17 @@ class FeedHealthStateSnapshot(Contract):
         if self.request_availability != expected_request_status:
             raise ValueError("request availability matches closed-day evidence")
         if not self.source_inventory_complete:
-            if self.source_inventory_sha256 is not None or self.source_inventory or self.source_results:
+            if (
+                self.source_inventory_sha256 is not None
+                or self.source_inventory
+                or self.source_results
+            ):
                 raise ValueError("an unavailable source roster has no invented members or results")
         else:
             if self.source_inventory_sha256 is None:
-                raise ValueError("a complete source roster has an explicit digest, including when empty")
+                raise ValueError(
+                    "a complete source roster has a digest, including when empty"
+                )
             inventory_ids = [item.source_id for item in self.source_inventory]
             result_ids = [item.source_id for item in self.source_results]
             if inventory_ids != sorted(set(inventory_ids)):
