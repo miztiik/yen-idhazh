@@ -259,7 +259,7 @@ class FeedFeedbackConfig(Model):
         float, Field(strict=True, ge=0, le=1, allow_inf_nan=False)
     ] = 0.8
     component_weights: FeedOperationalComponentWeights = Field(
-        default_factory=FeedOperationalComponentWeights,
+        default_factory=FeedOperationalComponentWeights, json_schema_extra={"default": {}},
     )
 
 
