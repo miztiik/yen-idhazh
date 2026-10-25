@@ -187,7 +187,7 @@ def test_a_compact_index_writes_one_entry_a_line_and_reads_back_what_it_wrote() 
         _sample("compact-index", "a-daily-index") | {"entries": [packed]}
     )
     assert with_digest.entries[0].file_sha256 == "a" * 64
-    empty = _sample("compact-index", "an-empty-day")["entries"][0] | {
+    empty = _sample("compact-index", "an-empty-day")["entries"][1] | {
         "file_sha256": "a" * 64,
     }
     with pytest.raises(ValidationError, match="no file"):
