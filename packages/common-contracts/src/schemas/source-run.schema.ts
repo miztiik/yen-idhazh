@@ -3,7 +3,7 @@ import { z } from "zod";
 import { LifecycleStatusSchema, SourceSnapshotSchema } from "./source.schema";
 import { DropReasonSchema } from "./rejection.schema";
 import { CountSchema, DateStampSchema, FiniteSchema, NonEmptySchema, PositiveCountSchema, RejectionStageSchema, RunIdSchema, Sha256Schema, SlugSchema, TimestampSchema, reject } from "./primitives";
-import { SOURCE_RUN_VERSION } from "../version";
+import { PUBLISHER_IDENTITY_VERSION, SOURCE_RUN_VERSION } from "../version";
 import { SchemaVersionSchema } from "./primitives";
 
 export const FetchStatusSchema = z.enum(["not_requested", "success", "http_failure", "network_failure", "timeout"]);
@@ -51,7 +51,9 @@ export const PreviousLedgerCompletionEvidenceSchema = z.strictObject({
 });
 export const PreviousCompletionEvidenceSchema = z.array(PreviousLedgerCompletionEvidenceSchema).nullable();
 export const SourceRunRecordSchema = z.strictObject({
-  version: z.literal(SOURCE_RUN_VERSION).default(SOURCE_RUN_VERSION), date: DateStampSchema, correlation_id: NonEmptySchema,
+  version: z.union([
+    z.literal(SOURCE_RUN_VERSION), z.literal(PUBLISHER_IDENTITY_VERSION),
+  ]).default(SOURCE_RUN_VERSION), date: DateStampSchema, correlation_id: NonEmptySchema,
   run_id: RunIdSchema, attempt: PositiveCountSchema, source_id: SlugSchema,
   source: SourceSnapshotSchema, status: LifecycleStatusSchema,
   fetch_status: FetchStatusSchema, parse_status: ParseStatusSchema,
@@ -68,6 +70,9 @@ export const SourceRunRecordSchema = z.strictObject({
   expected_source_count: CountSchema.nullable().default(null),
   completion_evidence: z.array(LedgerCompletionEvidenceSchema).nullable().default(null),
 }).superRefine((value, ctx) => {
+  if (value.version === PUBLISHER_IDENTITY_VERSION && value.completion_evidence?.some(
+    evidence => !PreviousCompletionLedgerSchema.safeParse(evidence.ledger).success,
+  )) reject(ctx, "renamed completion ledger names require the current source-run contract version");
   if (value.source_id !== value.source.source_id) reject(ctx, "source_id must match the recorded source snapshot");
   if (value.status !== value.source.status) reject(ctx, "status must match the recorded source lifecycle");
   if (value.date !== value.run_id.slice(0, 10)) reject(ctx, "date must match the original run UTC day");

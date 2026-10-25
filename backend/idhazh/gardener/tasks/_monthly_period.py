@@ -75,8 +75,8 @@ own end, so every wake of one UTC day gets the same answer (CLAUDE.md section 2)
 
 from __future__ import annotations
 
-import logging
 import hashlib
+import logging
 from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Final

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Annotated, Any, ClassVar, Literal, Self
+from typing import Annotated, Any, ClassVar, Final, Literal, Self
 from uuid import UUID
 
 from pydantic import Field, StrictInt, field_validator, model_validator
@@ -18,13 +18,18 @@ from idhazh.contracts.base import (
     Slug,
     Timestamp,
 )
-from idhazh.contracts.feed_ingest_candidate import SourceSnapshot, reject_legacy_publisher_identity
+from idhazh.contracts.feed_ingest_candidate import (
+    PUBLISHER_IDENTITY_VERSION,
+    SourceSnapshot,
+    reject_legacy_publisher_identity,
+)
 from idhazh.contracts.feed_ingest_rejection import DropReason, RejectionStage
 from idhazh.contracts.taxonomy import LifecycleStatus
 
 Count = Annotated[StrictInt, Field(ge=0)]
 PositiveCount = Annotated[StrictInt, Field(gt=0)]
 FiniteFraction = Annotated[float, Field(ge=0, le=1, allow_inf_nan=False)]
+SOURCE_RUN_VERSION: Final = "2026-10-25T15:28"
 
 
 class DropReasonCount(Model):
@@ -121,7 +126,7 @@ class SourceRunRecord(Contract):
             why="The contract changelog keeps its four newest changes and one history pointer.",
         ),
     )
-    version: Literal["2026-10-25T15:28"] = "2026-10-25T15:28"
+    version: Literal[SOURCE_RUN_VERSION] = SOURCE_RUN_VERSION
 
     date: DateStamp
     correlation_id: str = Field(min_length=1)
@@ -161,9 +166,22 @@ class SourceRunRecord(Contract):
     def migrate_previous_version(cls, value: Any) -> Any:
         if isinstance(value, dict) and value.get("version") in {
             "2026-10-20", "2026-10-22", "2026-10-22T10:05", "2026-10-22T18:15",
-            "2026-10-22T20:30", "2026-10-24T20:04"
+            "2026-10-22T20:30", PUBLISHER_IDENTITY_VERSION,
         }:
             reject_legacy_publisher_identity(value, [value.get("source")])
+            completion_evidence = value.get("completion_evidence")
+            if value.get("version") == PUBLISHER_IDENTITY_VERSION and isinstance(
+                completion_evidence, list
+            ) and any(
+                isinstance(item, dict) and item.get("ledger") in {
+                    "article-dispatches", "article-selection-diversity", "ingest-rejections",
+                }
+                for item in completion_evidence
+            ):
+                raise ValueError(
+                    "renamed completion ledger names require the declared "
+                    "source-run contract version"
+                )
             legacy_reasons = {"ALREADY_PUBLISHED", "SETTLED_FAILURE", "BLOCKED_URL_MARKER"}
             drop_reasons = value.get("drop_reasons", [])
             uses_new_reason = value.get("last_failure_reason") in legacy_reasons or (
@@ -178,7 +196,7 @@ class SourceRunRecord(Contract):
                     "planner exclusions require the declared source-run "
                     "contract version"
                 )
-            return {**value, "version": "2026-10-24T20:04"}
+            return {**value, "version": SOURCE_RUN_VERSION}
         return value
 
     @model_validator(mode="after")

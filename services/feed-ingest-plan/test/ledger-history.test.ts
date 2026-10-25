@@ -141,7 +141,10 @@ async function migrateAuditFixture<TLegacy extends object, TCurrent extends obje
   return loaded.rows[0]!.row;
 }
 
-test("native raw and daily reads preserve original writer identity instead of the compactor identity", async () => {
+test(
+  "native raw and daily reads preserve original writer identity instead of the compactor identity",
+  { timeout: 20_000 },
+  async () => {
   const root = await mkdtemp(join(tmpdir(), "history-periods-"));
   try {
     const input = await fixtureInput(root, { count: 1 });

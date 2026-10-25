@@ -282,6 +282,13 @@ describe("planning audit contracts", () => {
 
   test("retains known-empty completion evidence and refuses partial or conflicting totals", () => {
     const row = sourceRun();
+    const previousVersion = SourceRunRecordSchema.safeParse({
+      ...row,
+      version: PUBLISHER_IDENTITY_VERSION,
+      source: { ...row.source, publisher_id: "recorded-publisher" },
+    });
+    expect(previousVersion.success).toBe(true);
+    if (previousVersion.success) expect(previousVersion.data.version).toBe(PUBLISHER_IDENTITY_VERSION);
     const renamed = row.completion_evidence!.map(evidence => ({
       ...evidence,
       ledger: evidence.ledger === "diversity" ? "article-selection-diversity"
@@ -289,6 +296,9 @@ describe("planning audit contracts", () => {
           : evidence.ledger === "rejections" ? "ingest-rejections" : evidence.ledger,
     }));
     expect(SourceRunRecordSchema.safeParse({ ...row, completion_evidence: renamed }).success).toBe(true);
+    expect(SourceRunRecordSchema.safeParse({
+      ...row, version: PUBLISHER_IDENTITY_VERSION, completion_evidence: renamed,
+    }).success).toBe(false);
     expect(SourceRunRecordSchema.safeParse({ ...row, completion_evidence: [
       ...renamed, { ...renamed.find(evidence => evidence.ledger === "article-selection-diversity")!, ledger: "diversity" },
     ] }).success).toBe(false);

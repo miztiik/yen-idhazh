@@ -25,6 +25,7 @@ from idhazh.contracts.council_run_record import CouncilRunRecord
 from idhazh.contracts.counterfactual_score import CounterfactualScoreRow
 from idhazh.contracts.eval_row import EvalRow
 from idhazh.contracts.feed_health import FeedHealthRow, supersedes
+from idhazh.contracts.feed_health_state import FeedHealthStateSnapshot
 from idhazh.contracts.feed_ingest_article_assessment import ArticleAssessmentRecord
 from idhazh.contracts.feed_ingest_dispatch import FeedIngestDispatch
 from idhazh.contracts.feed_ingest_diversity import DiversityMetricRow
@@ -33,7 +34,6 @@ from idhazh.contracts.feed_ingest_feedback import FeedIngestOperationalStateRow
 from idhazh.contracts.feed_ingest_observations import DocumentObservationRecord
 from idhazh.contracts.feed_ingest_rejection import CandidateRejectionRecord
 from idhazh.contracts.feed_ingest_source_run import SourceRunRecord
-from idhazh.contracts.feed_health_state import FeedHealthStateSnapshot
 from idhazh.contracts.feed_retirement import FeedRetirementRow
 from idhazh.contracts.host_fingerprint import HostFingerprintRow
 from idhazh.contracts.item_health import ItemHealthRow

@@ -81,6 +81,32 @@ def test_declared_contract(module: str, name: str) -> None:
     assert contract in idhazh.contracts.CONTRACTS
     assert contract.schema_version() == contract.model_fields["version"].default
     assert contract.json_schema()["additionalProperties"] is False
+    if name == "SourceRunRecord":
+        previous = json.loads(read_text(
+            CONTRACT_FIXTURES_DIR / "feed-ingest-source-run" / "one-observation.json"
+        ))
+        previous["version"] = "2026-10-24T20:04"
+        previous["source"]["publisher_id"] = "recorded-publisher"
+        previous = contract.model_validate(previous)
+        assert previous.version == contract.model_fields["version"].default
+        assert previous.source.publisher_id == "recorded-publisher"
+        invalid_previous = json.loads(read_text(
+            CONTRACT_FIXTURES_DIR / "feed-ingest-source-run" / "one-observation.json"
+        ))
+        invalid_previous["version"] = "2026-10-24T20:04"
+        invalid_previous["completion_evidence"] = [
+            {
+                **entry,
+                "ledger": {
+                    "diversity": "article-selection-diversity",
+                    "dispatches": "article-dispatches",
+                    "rejections": "ingest-rejections",
+                }.get(entry["ledger"], entry["ledger"]),
+            }
+            for entry in invalid_previous["completion_evidence"]
+        ]
+        with pytest.raises(ValidationError, match="renamed completion ledger names"):
+            contract.model_validate(invalid_previous)
     if name == "DocumentObservationRecord":
         observation = contract.from_json(
             read_text(CONTRACT_FIXTURES_DIR / "feed-ingest-document-observation" / "refused-fetch.json")

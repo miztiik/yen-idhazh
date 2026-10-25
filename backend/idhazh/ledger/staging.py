@@ -104,7 +104,8 @@ REGISTRY: Final[dict[LedgerName, LedgerStaging]] = {
     ),
     LedgerName.FEED_INGEST_PLAN_DIVERSITY: LedgerStaging(
         writer=(
-            "legacy feed-ingest-plan diversity path; new TypeScript rows use article-selection-diversity"
+            "legacy feed-ingest-plan diversity path; new TypeScript rows use "
+            "article-selection-diversity"
         ),
         symbol=None,
         job_labels=frozenset(),
@@ -118,13 +119,17 @@ REGISTRY: Final[dict[LedgerName, LedgerStaging]] = {
     ),
     LedgerName.FEED_INGEST_PLAN_OPERATIONAL_STATE: LedgerStaging(
         writer=(
-            "legacy per-source request estimates; complete feed-health snapshots use feed-health-state"
+            "legacy per-source request estimates; complete feed-health snapshots "
+            "use feed-health-state"
         ),
         symbol=None,
         job_labels=frozenset(),
     ),
     LedgerName.FEED_INGEST_PLAN_ARTICLE_DISPATCHES: LedgerStaging(
-        writer="services/feed-ingest-plan partition-article-shards through packages/ledger-file-writer",
+        writer=(
+            "services/feed-ingest-plan partition-article-shards through "
+            "packages/ledger-file-writer"
+        ),
         symbol=None,
         job_labels=frozenset(),
     ),
@@ -134,22 +139,34 @@ REGISTRY: Final[dict[LedgerName, LedgerStaging]] = {
         job_labels=frozenset(),
     ),
     LedgerName.FEED_INGEST_PLAN_FEED_RUNS: LedgerStaging(
-        writer="services/feed-ingest-plan recordPlanningMetrics through packages/ledger-file-writer",
+        writer=(
+            "services/feed-ingest-plan recordPlanningMetrics through "
+            "packages/ledger-file-writer"
+        ),
         symbol=None,
         job_labels=frozenset(),
     ),
     LedgerName.FEED_INGEST_PLAN_ARTICLE_SELECTION_DIVERSITY: LedgerStaging(
-        writer="services/feed-ingest-plan recordPlanningMetrics through packages/ledger-file-writer",
+        writer=(
+            "services/feed-ingest-plan recordPlanningMetrics through "
+            "packages/ledger-file-writer"
+        ),
         symbol=None,
         job_labels=frozenset(),
     ),
     LedgerName.FEED_INGEST_PLAN_INGEST_OBSERVATIONS: LedgerStaging(
-        writer="services/feed-ingest-plan createIngestObservations through packages/ledger-file-writer",
+        writer=(
+            "services/feed-ingest-plan createIngestObservations through "
+            "packages/ledger-file-writer"
+        ),
         symbol=None,
         job_labels=frozenset(),
     ),
     LedgerName.FEED_INGEST_PLAN_FEED_HEALTH_STATE: LedgerStaging(
-        writer="Future complete feed-health state writer through packages/ledger-file-writer; no writer exists yet",
+        writer=(
+            "Future complete feed-health state writer through packages/ledger-file-writer; "
+            "no writer exists yet"
+        ),
         symbol=None,
         job_labels=frozenset(),
     ),
