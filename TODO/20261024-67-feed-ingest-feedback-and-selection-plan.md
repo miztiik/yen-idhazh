@@ -130,7 +130,7 @@ rows.
 | E20 | 20 | Adopt cache delivery and finish the combined hosted proof | - | Z | DONE | potential-fiesta | [#1671](https://github.com/miztiik/yen-idhazh/pull/1671), [#1707](https://github.com/miztiik/yen-idhazh/pull/1707) | 6a57ff1e-bdfc-4248-86f8-cd5b17c8bde2 |
 | E21 | 21 | Review and reuse configured numeric priorities | 9 | O | PENDING | - | - | - |
 | E22 | 22 | Design feed-health API and state contracts | 2 | P | DONE | feed-health-state-contracts | [#1732](https://github.com/miztiik/yen-idhazh/pull/1732) | accepted head `a271f2cdbd825fd628068f40216ca73121e42b37`; merged as `37530845d7eaefd1d37c6469e0beb9ccfa1e8e28` |
-| E23 | 23 | Migrate the feed-planning ledger family | 22 | P | PENDING (approved scope) | - | - | - |
+| E23 | 23 | Migrate the feed-planning ledger family | 22 | P | PENDING (PR open; review required) | feed-ledger-name-migration | [#1737](https://github.com/miztiik/yen-idhazh/pull/1737) | - |
 | E24 | 24 | Incrementally update and read feed-health state | 23 | P | PENDING (approved scope) | - | - | - |
 | E25 | 25 | Remove redundant TypeScript state paths | 24 | P | PENDING (approved scope) | - | - | - |
 | E26 | 26 | Migrate Python producers and consumers | 24 | Q | DEFERRED | - | - | - |
@@ -142,8 +142,9 @@ feed-health migration sequence; rows 26-28 are explicit deferred work. Row 22
 is complete: PR #1732 was accepted at head
 `a271f2cdbd825fd628068f40216ca73121e42b37` and merged as
 `37530845d7eaefd1d37c6469e0beb9ccfa1e8e28`. Row 23 remains pending until its
-own PR exists and is reviewed; Rows 24-25 remain pending, and Row 10 remains
-paused. Those later phases are not part of Row 23.
+Row 23's draft PR #1737 is open; its final-head checks and coordinator review
+remain outstanding. Rows 24-25 remain pending, and Row 10 remains paused.
+Those later phases are not part of Row 23.
 
 The approved D3/D4 implementation sequence is Row 2 -> Row 4 -> Row 5 ->
 Row 6 -> Row 7 -> Row 10. Row 2 lands compatible readers and contracts; Row 4
