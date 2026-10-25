@@ -45,7 +45,8 @@ def input_shape(node: dict[str, Any], root: dict[str, Any]) -> Any:
         assert node["$ref"].startswith("#/"), node["$ref"]
         for name in node["$ref"][2:].split("/"):
             target = target[name]
-        return input_shape(target, root)
+        siblings = {key: value for key, value in node.items() if key != "$ref"}
+        return input_shape(target | siblings, root)
     ignored = {"title", "description", "$schema", "$defs"}
     result = {key: value for key, value in node.items() if key not in ignored}
     if "const" in result:
@@ -108,6 +109,10 @@ def test_python_authored_config_and_config_only_vertical_extension() -> None:
     assert config.triage.recency_half_life_hours == payload["triage"]["recency_half_life_hours"]
     assert config.workflow_reporting.enabled
     assert config.curate.article_limit == payload["curate"]["article_limit"]
+    assert config.feedback.window_days == 7
+    assert feed_ingest.FeedIngestConfig.model_validate(
+        {key: value for key, value in payload.items() if key != "feedback"}
+    ).feedback.window_days == 7
     assert config.curate.source_reliability_penalty_enabled
     previous = dict(payload["curate"])
     previous.pop("source_reliability_penalty_enabled")
