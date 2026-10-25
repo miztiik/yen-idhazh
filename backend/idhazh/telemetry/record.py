@@ -358,6 +358,7 @@ def shard_done(
     items: int,
     failures: Mapping[str, int],
     slowest: Mapping[str, object] | None,
+    visual_outcomes: Mapping[str, object] | None = None,
 ) -> None:
     """Say what the whole shard did: its totals, its failures, its slowest item.
 
@@ -378,6 +379,10 @@ def shard_done(
                 "items": items,
                 "failures": dict(failures),
                 "slowest": dict(slowest) if slowest else None,
+                **(
+                    {"visual_outcomes": dict(visual_outcomes)}
+                    if visual_outcomes is not None else {}
+                ),
             },
         )
     )

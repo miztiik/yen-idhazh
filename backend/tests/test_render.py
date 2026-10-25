@@ -451,6 +451,8 @@ class TestRenderPlannedVisual:
         assert result.kind is VisualKind.NONE
         assert result.spec is None
         assert result.rationale == "annotations select 0 distinct bars; exactly one is required"
+        assert result.planned_type is VisualType.BAR
+        assert result.rendered_type is None and result.marks is None
         assert not (tmp_path / MARKS).exists()
 
     def test_the_decision_s_spec_is_the_document_that_was_published(self, tmp_path: Path) -> None:

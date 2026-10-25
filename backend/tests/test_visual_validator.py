@@ -35,6 +35,7 @@ from idhazh.contracts.visual import (
     VisualType,
 )
 from idhazh.contracts.visual_telemetry import ValidatorCheck
+from idhazh.render.chart import can_compile
 from idhazh.visual_validator import Rejection, validate_plan
 from idhazh.visual_vocabulary import (
     DOWNGRADE_EDGES,
@@ -506,19 +507,17 @@ class TestTheDowngradeAllowList:
                 )
                 assert edge.target not in UNRULED_TYPES
 
-    def test_no_edge_leads_somewhere_that_would_be_refused_identically(self) -> None:
-        """An edge whose target wants the same channels cannot change any outcome.
-
-        `line` to `area` is the shape this refuses: both require a time and a
-        quantity, so a plan refused as one is refused as the other, and listing
-        it would be a rung nobody can stand on.
-        """
+    def test_each_edge_changes_validation_or_compiler_availability(self) -> None:
+        """A valid unbuilt request may recover through a compiler with the same channels."""
         for source, edges in DOWNGRADE_EDGES.items():
             if source not in TYPE_RULES:
                 continue
             for edge in edges:
-                assert TYPE_RULES[edge.target].required != TYPE_RULES[source].required, (
-                    f"{source.value} -> {edge.target.value} asks for the same channels"
+                assert (
+                    TYPE_RULES[edge.target].required != TYPE_RULES[source].required
+                    or can_compile(source) != can_compile(edge.target)
+                ), (
+                    f"{source.value} -> {edge.target.value} changes neither rules nor compiler"
                 )
 
     def test_every_edge_names_the_purposes_it_leaves_standing(self) -> None:
@@ -539,6 +538,7 @@ class TestTheDowngradeAllowList:
         assert VisualType.SLOPE not in DOWNGRADE_EDGES
         assert VisualType.LINE not in DOWNGRADE_EDGES
         assert VisualType.FLOW not in DOWNGRADE_EDGES
+        assert VisualType.STACKED_BAR not in DOWNGRADE_EDGES
 
     def test_the_edge_table_has_a_stamp_of_its_own(self) -> None:
         """Folded into the plan vocabulary's, adding an edge would re-plan every

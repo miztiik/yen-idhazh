@@ -40,6 +40,7 @@ from idhazh.contracts.visual_decision import (
 from idhazh.elements import (
     read_value,
 )
+from idhazh.render.chart import can_compile
 from idhazh.sanitize import sanitize
 from idhazh.visual_validator import Rejection, validate_plan
 from idhazh.visual_vocabulary import (
@@ -198,7 +199,10 @@ def reachable_types(table: ElementTable, *, visuals: VisualsConfig) -> tuple[Vis
         return ()
     drawable = _drawable(table)
     reached: list[VisualType] = []
+    selected = visuals.select_types()
     for visual_type, rules in TYPE_RULES.items():
+        if visual_type not in selected:
+            continue
         fillable = {
             role: [one for one in drawable if one.kind in ROLE_KINDS[role]]
             for role in rules.required
@@ -214,6 +218,8 @@ def reachable_types(table: ElementTable, *, visuals: VisualsConfig) -> tuple[Vis
         width = _widest_agreeing(marks) if rules.marks in VALUE_ROLES else len(marks)
         if width >= floor:
             reached.append(visual_type)
+    if visuals.type_selection_enabled:
+        reached.extend(visual_type for visual_type in selected if visual_type not in TYPE_RULES)
     return tuple(reached)
 
 
@@ -430,11 +436,17 @@ def downgrade(
     candidate that fails does not end the walk - its own targets are what the
     next depth is made of, which is what "falls to the next depth" means.
 
-    `visuals.downgrade_floor_percentiles` is the whole of the switch: its length
-    is how many depths exist and an empty list is the ladder off.
+    The separate activation switch leaves this path off without reading history.
+    The percentile list bounds the permitted replacement depths.
     """
     rungs = visuals.downgrade_floor_percentiles
-    if plan.decision is not PlanDecision.VISUAL or plan.type is None or not rungs:
+    if (
+        not visuals.downgrade_enabled
+        or VisualKind.CHART not in visuals.enabled_kinds
+        or plan.decision is not PlanDecision.VISUAL
+        or plan.type is None
+        or plan.type not in visuals.select_types()
+    ):
         return None
     frontier: list[VisualType] = [plan.type]
     walked: set[VisualType] = {plan.type}
@@ -446,6 +458,13 @@ def downgrade(
                     continue
                 walked.add(edge.target)
                 onward.append(edge.target)
+                if not can_compile(edge.target) or edge.target not in visuals.select_types():
+                    continue
+                if edge.target is VisualType.BAR and any(
+                    role not in {EncodingRole.CATEGORY, EncodingRole.QUANTITY}
+                    for role in plan.encodings.filled()
+                ):
+                    continue
                 candidate = _restyled(plan, edge.target)
                 # A downgrade carries a machine-checkable justification, and the
                 # annotation is it: the mark that makes the weaker form still
@@ -460,5 +479,3 @@ def downgrade(
                 return Downgrade(candidate, depth, (source, edge.target), floor)
         frontier = onward
     return None
-
-

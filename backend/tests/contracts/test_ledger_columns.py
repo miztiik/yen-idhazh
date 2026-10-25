@@ -147,6 +147,10 @@ def test_the_item_health_ledger_columns_are_defined_once() -> None:
         "os_swap_free_bytes",
         "os_swap_total_bytes",
         "os_mem_available_min_bytes",
+        "planned_type",
+        "rendered_type",
+        "downgrade_depth",
+        "marks",
     )
 
 

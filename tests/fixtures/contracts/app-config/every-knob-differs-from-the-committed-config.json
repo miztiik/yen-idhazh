@@ -457,13 +457,20 @@
   "version": "2026-08-26T10:10",
   "visuals": {
     "asset_base_url": "",
+    "downgrade_enabled": true,
     "downgrade_floor_percentiles": [
       25,
       60,
       90
     ],
+    "downgrade_lookback_days": 60,
+    "downgrade_max_samples_per_type": 32,
     "enabled_kinds": [
       "chart"
+    ],
+    "enabled_types": [
+      "dot",
+      "bar"
     ],
     "histogram_bins": 4,
     "lead_words": 120,
@@ -478,6 +485,7 @@
       "si_prefix_from": 10000,
       "significant_digits": 5
     },
-    "request_timeout_minutes": 1.5
+    "request_timeout_minutes": 1.5,
+    "type_selection_enabled": true
   }
 }

@@ -163,7 +163,7 @@ def rebuilt_payloads(inputs: dict[str, Any]) -> tuple[dict[str, Any], dict[str, 
 
 
 def test_both_request_bodies_are_the_bytes_recorded_before_the_code_moved() -> None:
-    """Nothing moves these bytes except a deliberate prompt or bound change.
+    """Nothing moves these bytes except a deliberate prompt, schema or bound change.
 
     It was captured from `visual_planner` in the commit before a line of it
     moved, so a rename that quietly re-rendered a prompt, reordered a message or

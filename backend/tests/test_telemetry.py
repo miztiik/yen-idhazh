@@ -531,14 +531,15 @@ _BY_PATTERN: Final[Mapping[str, str]] = {
 #: A value for each plain column, by its own declared type.
 _BY_TYPE: Final[Mapping[type, object]] = {bool: True, int: 1, float: 1.0, str: "fixture"}
 
-#: Every column no production writer fills today, and the reason each one is
-#: empty. **It is empty, and that is the ratchet at its tightest**: all 119
-#: columns have a producer, so the assertion below reads "no column of this row
-#: is None on the way through" with no exceptions to read past. The last three
-#: left on 2026-09-16, when the slot columns started carrying the item's first
-#: call. A column that arrives with no writer is added here with its reason,
-#: which is the one way to land empty and still pass.
-UNFILLED: Final[Mapping[str, str]] = {}
+#: Columns this fetch-failure fixture cannot carry, and why they are empty.
+#: A failed fetch stops before visual planning, so no requested type, delivered
+#: type, replacement depth or mark count exists on this row.
+UNFILLED: Final[Mapping[str, str]] = {
+    "planned_type": "The item failed before it could request a visual.",
+    "rendered_type": "The item failed before a visual could be delivered.",
+    "downgrade_depth": "The item failed before a visual could be selected.",
+    "marks": "The item failed before a visual could be delivered.",
+}
 
 
 def _a_cell(name: str, annotation: Any) -> Any:

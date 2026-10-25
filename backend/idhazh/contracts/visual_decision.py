@@ -19,6 +19,8 @@ from pydantic import Field, model_validator
 from idhazh.contracts.article import UntrustedLine
 from idhazh.contracts.base import ChangelogEntry, Contract, ItemId, RelPath, Slug, Timestamp, UrlKey
 from idhazh.contracts.chart_evidence import ChartEvidence
+from idhazh.contracts.visual_outcome import validate_visual_outcome
+from idhazh.contracts.visual_type import VisualType
 
 #: What one item's decision is filed as, under `backend/var/run/<date>/items/`.
 #: The writer, the reader and the workflow's upload glob all spell it, and a run
@@ -94,6 +96,11 @@ class VisualDecision(Contract):
     __schema_stem__: ClassVar[str] = "visual-decision"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-10-25",
+            change="Record requested and delivered types, replacement depth and delivered marks.",
+            why="Refusals and replacements must not conceal the original visual request.",
+        ),
+        ChangelogEntry(
             version="2026-10-10",
             change="Added chart_evidence counts and rates for compiled numeric figures.",
             why="Run reports need exact counts from the compiler's single resolution.",
@@ -107,11 +114,6 @@ class VisualDecision(Contract):
             version="2026-09-13T20:00",
             change="Added data_path, where this item's published visual data landed.",
             why="The reader's browser draws the chart, so it needs the marks rather than an SVG.",
-        ),
-        ChangelogEntry(
-            version="2026-09-13",
-            change="NoneReason takes a fifth member, window_exhausted.",
-            why="A reply that runs into the wall of the context window had no name of its own.",
         ),
         ChangelogEntry(
             version="2026-08-21",
@@ -192,6 +194,30 @@ class VisualDecision(Contract):
             "A failed write may retain compiled evidence but is excluded from run totals."
         ),
     )
+    planned_type: VisualType | None = Field(
+        default=None, description="The original typed visual request, including a later refusal."
+    )
+    rendered_type: VisualType | None = Field(
+        default=None, description="The type whose data file was successfully written."
+    )
+    downgrade_depth: int | None = Field(
+        default=None, ge=0,
+        description="Selected replacement depth; zero without replacement, null when unmeasured.",
+    )
+    marks: int | None = Field(
+        default=None, ge=1,
+        description="Delivered mark count, not the flat mark pool; null without delivery.",
+    )
+
+    @model_validator(mode="after")
+    def _visual_outcome_matches_delivery(self) -> Self:
+        validate_visual_outcome(
+            self.planned_type, self.rendered_type, self.downgrade_depth, self.marks
+        )
+        if self.planned_type is not None:
+            if (self.rendered_type is not None) != (self.visual_state is VisualState.RENDERED):
+                raise ValueError("a measured rendered type and rendered state arrive together")
+        return self
 
     @model_validator(mode="after")
     def _a_published_chart_was_drafted_as_one(self) -> Self:

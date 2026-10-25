@@ -217,7 +217,7 @@ function writeItemHealthCanary() {
 		'run_visual_decision',
 		'temperature', 'failed_field', 'failed_rule', 'os_mem_available_bytes',
 		'os_mem_total_bytes', 'os_mem_cached_bytes', 'os_swap_free_bytes', 'os_swap_total_bytes',
-		'os_mem_available_min_bytes'
+		'os_mem_available_min_bytes', 'planned_type', 'rendered_type', 'downgrade_depth', 'marks'
 	];
 	/** What the machine itself had, on the days this fixture gives one.
 	 *

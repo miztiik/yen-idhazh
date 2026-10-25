@@ -75,7 +75,9 @@ from idhazh.contracts.element import (
 )
 from idhazh.contracts.knobs.extract import ElementsConfig
 from idhazh.contracts.knobs.summarize import SummarizeConfig
+from idhazh.contracts.knobs.visuals import VisualsConfig
 from idhazh.contracts.visual import CODE_STAMPED_FIELDS, VisualPlan, widest_json_characters
+from idhazh.contracts.visual_type import VisualType
 from idhazh.elements import NUMBER, SpanDriftError, read_quantity, sentence_starts, settle
 from idhazh.extract import approx_tokens
 from idhazh.llm.server import (
@@ -1187,11 +1189,17 @@ def summarize_and_plan_schema(
     source_words: int | None = None,
     brief: bool = False,
     plan: bool = True,
+    visuals: VisualsConfig | None = None,
 ) -> dict[str, Any]:
-    """Generated from the model, never hand-written (Guardrail #3)."""
-    return summarize_and_plan_model(
+    """Derive the request grammar from the native model and the operator's selection."""
+    schema = summarize_and_plan_model(
         prompt_config, source_words=source_words, brief=brief, plan=plan
     ).model_json_schema()
+    if plan and visuals is not None and visuals.type_selection_enabled:
+        schema["$defs"][VisualType.__name__]["enum"] = [
+            visual_type.value for visual_type in visuals.select_types()
+        ]
+    return schema
 
 
 def summarize_and_plan_user_turn(
@@ -1352,6 +1360,7 @@ def build_summarize_and_plan_request(
     source_words: int | None = None,
     brief: bool = False,
     plan: bool = True,
+    visuals: VisualsConfig | None = None,
 ) -> dict[str, Any]:
     """The summarize-and-plan call's request body, built by extending the label call's prompt.
 
@@ -1386,7 +1395,7 @@ def build_summarize_and_plan_request(
             prompt_config, source_words=source_words, brief=brief, plan=plan
         ),
         output_schema=summarize_and_plan_schema(
-            prompt_config, source_words=source_words, brief=brief, plan=plan
+            prompt_config, source_words=source_words, brief=brief, plan=plan, visuals=visuals
         ),
         markers=markers,
         max_answer_tokens=summarize_and_plan_budget_tokens(prompt_config, plan=plan),
@@ -1397,6 +1406,7 @@ def prompt_inputs(
     prompt_config: SummarizeConfig | None = None,
     *,
     markers: TurnMarkers,
+    visuals: VisualsConfig | None = None,
 ) -> str:
     """What the fingerprint hashes to stand for these two prompts.
 
@@ -1429,7 +1439,12 @@ def prompt_inputs(
     rendered = continued_prompt(
         first, reply="", user=summarize_and_plan_user_turn(ask), markers=markers
     )
-    return rendered + canonical_json(ask.model_dump(mode="json"))
+    selection = (
+        canonical_json([visual_type.value for visual_type in visuals.select_types()])
+        if visuals is not None and visuals.type_selection_enabled
+        else ""
+    )
+    return rendered + canonical_json(ask.model_dump(mode="json")) + selection
 
 
 def parse_summarize_and_plan(

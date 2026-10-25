@@ -1,0 +1,13 @@
+{
+  "date": "2026-08-21",
+  "history_date": "2026-08-20",
+  "history_marks": [3, 4, 5, 8],
+  "cases": [
+    {"name": "direct-bar", "type": "bar", "purpose": "comparison", "rendered_type": "bar", "depth": 0},
+    {"name": "unbuilt-dot", "type": "dot", "purpose": "comparison", "rendered_type": "bar", "depth": 1},
+    {"name": "different-question", "type": "dot", "purpose": "trend", "rendered_type": null, "depth": 0},
+    {"name": "refused-stacked-whole", "type": "stacked_bar", "purpose": "comparison", "rendered_type": null, "depth": 0},
+    {"name": "upstream-parts", "type": "pie", "purpose": "composition", "rendered_type": null, "depth": 0},
+    {"name": "unruled-text", "type": "quotecard", "purpose": "emphasis", "rendered_type": null, "depth": 0}
+  ]
+}
