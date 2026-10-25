@@ -78,9 +78,9 @@
     {"bytes": 691674,"items": 0,"path": "assist/index/2026-08.json","root": "public"},
     {"bytes": 3747840,"items": 0,"path": "assist/index/2026-09.bin","root": "public"},
     {"bytes": 1663315,"items": 0,"path": "assist/index/2026-09.json","root": "public"},
-    {"bytes": 3244416,"items": 0,"path": "assist/index/2026-10.bin","root": "public"},
-    {"bytes": 1436434,"items": 0,"path": "assist/index/2026-10.json","root": "public"},
-    {"bytes": 5030,"items": 0,"path": "console/band.json","root": "public"},
+    {"bytes": 3250560,"items": 0,"path": "assist/index/2026-10.bin","root": "public"},
+    {"bytes": 1439234,"items": 0,"path": "assist/index/2026-10.json","root": "public"},
+    {"bytes": 5090,"items": 0,"path": "console/band.json","root": "public"},
     {"bytes": 11547,"items": 4,"path": "digest/2026/08/21/digest.json","root": "public"},
     {"bytes": 4583,"items": 0,"path": "digest/2026/08/21/run.json","root": "public"},
     {"bytes": 27985,"items": 10,"path": "digest/2026/08/22/digest.json","root": "public"},
@@ -209,8 +209,8 @@
     {"bytes": 49776,"items": 0,"path": "digest/2026/10/23/run.json","root": "public"},
     {"bytes": 760207,"items": 396,"path": "digest/2026/10/24/digest.json","root": "public"},
     {"bytes": 57510,"items": 0,"path": "digest/2026/10/24/run.json","root": "public"},
-    {"bytes": 739459,"items": 378,"path": "digest/2026/10/25/digest.json","root": "public"},
-    {"bytes": 39333,"items": 0,"path": "digest/2026/10/25/run.json","root": "public"},
+    {"bytes": 769474,"items": 394,"path": "digest/2026/10/25/digest.json","root": "public"},
+    {"bytes": 45871,"items": 0,"path": "digest/2026/10/25/run.json","root": "public"},
     {"bytes": 231071,"items": 0,"path": "source-health.json","root": "public"},
     {"bytes": 5985,"items": 0,"path": "compact/run-shards/daily/2026/10/01.parquet","root": "state"},
     {"bytes": 5986,"items": 0,"path": "compact/run-shards/daily/2026/10/02.parquet","root": "state"},
@@ -401,7 +401,7 @@
     {"bytes": 5626,"items": 0,"path": "raw/run-shards/2026/10/11/01a12c0c-ffa5-8f85-9fd8-de8fc15684f8.parquet","root": "state"},
     {"bytes": 5682,"items": 0,"path": "raw/run-shards/2026/10/11/01a12d2f-f6c6-8e13-968b-e5d8f66aa6c4.parquet","root": "state"}
   ],
-  "total_bytes": 65541672,
-  "total_items": 22200,
+  "total_bytes": 65587229,
+  "total_items": 22216,
   "version": "2026-10-03T13:33"
 }
