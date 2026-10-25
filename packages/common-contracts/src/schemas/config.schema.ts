@@ -85,10 +85,12 @@ export const FeedFeedbackConfigSchema = z.strictObject({
   window_days: PositiveCountSchema.default(7),
   minimum_measured_opportunities: PositiveCountSchema.default(20),
   minimum_measured_coverage: z.number().finite().min(0).max(1).default(0.8),
-  component_weights: FeedOperationalComponentWeightsSchema.prefault({}).meta({
+  component_weights: FeedOperationalComponentWeightsSchema.default(
+    FeedOperationalComponentWeightsSchema.parse({}),
+  ).meta({
     default: {}, type: "object", additionalProperties: false,
   }),
-}).meta({ type: "object", additionalProperties: false });
+});
 export const FeedIngestConfigSchema = z.strictObject({
   version: z.literal("2026-10-20"),
   harvest: FeedHarvestConfigSchema,
@@ -99,10 +101,12 @@ export const FeedIngestConfigSchema = z.strictObject({
   seal: FeedSealConfigSchema,
   workflow_reporting: FeedWorkflowReportingConfigSchema,
   metrics: FeedMetricsConfigSchema,
-  feedback: FeedFeedbackConfigSchema.prefault({}).meta({
+  feedback: FeedFeedbackConfigSchema.default(
+    FeedFeedbackConfigSchema.parse({}),
+  ).meta({
     default: {}, type: "object", additionalProperties: false,
   }),
-}).meta({ type: "object", additionalProperties: false });
+});
 
 // Only the taxonomy fields this reader computes on are declared here.
 export const PlanningTaxonomySchema = z.object({
