@@ -535,8 +535,8 @@ body {
 	*,
 	*::before,
 	*::after {
-		animation-duration: 0.01ms !important;
-		transition-duration: 0.01ms !important;
+		animation: none !important;
+		transition: none !important;
 	}
 
 	/* A zeroed duration makes a movement instant. It does not remove it, and a
