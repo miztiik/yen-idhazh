@@ -14,6 +14,7 @@ import { harvestFeeds, loadHarvestInputs } from "@idhazh/feed-ingest-plan/harves
 import { sourceSnapshot } from "../src/harvest-feeds/load-harvest-inputs";
 import { parseFeed } from "../src/harvest-feeds/feed-client";
 import { extractArticle } from "../src/harvest-feeds/dom-extractor";
+import { attributeIngestOutcome } from "../src/attribute-ingest-outcomes";
 import { parseDocument } from "../src/harvest-feeds/parse-document";
 import { EXTRACTOR_VERSION, SANITIZER_FINGERPRINT } from "../src/harvest-feeds/extraction-provenance";
 import { measureExtractionQuality } from "../src/harvest-feeds/extraction-quality";
@@ -408,17 +409,30 @@ test("inactive, empty, malformed, HTTP, timeout and address failures are distinc
     const recorder = await recordHarvestObservations(root, runContext);
     const result = await harvestFeeds(loaded, runContext, destination(root), { transport, resolve: transport.resolve });
     const facts = (await readObservationFiles(root, recorder.result().files)).map(held => held.row);
+    const attributionCases = await Bun.file(new URL(
+      "../../../tests/fixtures/feed-ingest-plan/ingest-outcomes.json", import.meta.url,
+    )).json() as Array<{
+      name: string;
+      evidence: Parameters<typeof attributeIngestOutcome>[0];
+      attribution: ReturnType<typeof attributeIngestOutcome>;
+    }>;
+    for (const item of attributionCases) {
+      expect(attributeIngestOutcome(item.evidence), item.name).toBe(item.attribution);
+    }
     expect(facts.find(row => row.source_id === "empty" && row.operation === "parse")?.outcome).toBe("empty");
     expect(facts.find(row => row.source_id === "malformed" && row.operation === "parse")).toMatchObject({
-      outcome: "failed", failure_code: "malformed-feed", attribution: "unresolved",
+      outcome: "failed", failure_code: "malformed-feed", attribution: "source",
     });
     expect(facts.find(row => row.source_id === "inward" && row.operation === "attempt")).toMatchObject({
       request_phase: "validation", dispatched_request_count: 0, request_coverage: "complete",
+      outcome: "failed", failure_code: "unsafe-target", attribution: "pipeline",
     });
     expect(facts.filter(row => row.source_id === "http" && row.operation === "attempt" && row.request_phase === "target"))
-      .toMatchObject([{ dispatched_request_count: 1, outcome: "failed", attribution: "unresolved", failure_code: "http" }]);
+      .toMatchObject([{ dispatched_request_count: 1, outcome: "failed", attribution: "source", failure_code: "http" }]);
     expect(facts.find(row => row.source_id === "timeout" && row.operation === "attempt" && row.request_phase === "target"))
-      .toMatchObject({ dispatched_request_count: 1, failure_code: "timeout" });
+      .toMatchObject({ dispatched_request_count: 1, outcome: "failed", failure_code: "timeout", attribution: "unresolved" });
+    expect(facts.find(row => row.source_id === "http" && row.operation === "fetch"))
+      .toMatchObject({ outcome: "failed", failure_code: "http", http_status: 404, attribution: "source" });
     expect(facts.filter(row => row.operation === "attempt")
       .reduce((count, row) => count + row.dispatched_request_count!, 0)).toBe(transport.requests.length);
     expectFeedParseObservations(observations, loaded.sources, ["empty", "malformed"]);
@@ -607,7 +621,10 @@ test("rootless extraction, empty content and article request failures do not kil
       { id: "optional-atom", title: "Votes only", url: "https://atom.example/feed.xml", status: "active", retired_on: null },
       { id: "optional-failed", title: "Unavailable votes", url: "https://news.example/malformed.xml", status: "active", retired_on: null },
     ] });
-    const result = await harvestFeeds(loaded, context(), destination(root), { transport, resolve: transport.resolve });
+    const runContext = context();
+    const recorder = await recordHarvestObservations(root, runContext);
+    const result = await harvestFeeds(loaded, runContext, destination(root), { transport, resolve: transport.resolve });
+    const facts = (await readObservationFiles(root, recorder.result().files)).map(held => held.row);
     expect(result.articles).toHaveLength(9);
     expect(result.candidates.map(candidate => candidate.entry_ordinal)).toEqual([4, 5, 6, 7]);
     expect(result.feed_outcomes).toHaveLength(1);
@@ -627,10 +644,18 @@ test("rootless extraction, empty content and article request failures do not kil
       extraction_failure: "missing-document-root", failure_code: "unknown", stopped_stage: "extract",
       detail: "missing-document-root", http_status: 200, fetch_failure: null,
     });
+    expect(facts.find(row => row.document_kind === "article" && row.operation === "parse"
+      && row.failure_code === "missing-document-root")).toMatchObject({
+      outcome: "failed", attribution: "source",
+    });
     expect(result.articles[1]?.observation.extraction).toBe("empty");
     expect(result.articles[1]?.rejection?.drop_reason).toBe("EXTRACT_EMPTY");
     expect(result.articles[1]?.observation.diagnostics).toMatchObject({
       extraction_failure: "empty-content", failure_code: "no_text", stopped_stage: "extract",
+    });
+    expect(facts.find(row => row.document_kind === "article" && row.operation === "parse"
+      && row.failure_code === "empty-content")).toMatchObject({
+      outcome: "failed", attribution: "source",
     });
     expect(result.articles[2]?.rejection?.details.http_status).toBe(404);
     expect(result.articles[3]?.rejection?.details.timeout_ms).toBe(loaded.config.harvest.fetch_timeout_ms);

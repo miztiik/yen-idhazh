@@ -1,0 +1,110 @@
+[
+  {
+    "name": "article target refusal",
+    "evidence": {
+      "document_kind": "article",
+      "operation": "attempt",
+      "outcome": "failed",
+      "failure_code": "http",
+      "http_status": 403,
+      "request_phase": "target"
+    },
+    "attribution": "source"
+  },
+  {
+    "name": "article extraction has no content",
+    "evidence": {
+      "document_kind": "article",
+      "operation": "parse",
+      "outcome": "failed",
+      "failure_code": "empty-content",
+      "http_status": null,
+      "request_phase": null
+    },
+    "attribution": "source"
+  },
+  {
+    "name": "typed malformed feed",
+    "evidence": {
+      "document_kind": "feed",
+      "operation": "parse",
+      "outcome": "failed",
+      "failure_code": "malformed-feed",
+      "http_status": null,
+      "request_phase": null
+    },
+    "attribution": "source"
+  },
+  {
+    "name": "unsafe address rejected by pipeline",
+    "evidence": {
+      "document_kind": "article",
+      "operation": "attempt",
+      "outcome": "failed",
+      "failure_code": "unsafe-target",
+      "http_status": null,
+      "request_phase": "validation"
+    },
+    "attribution": "pipeline"
+  },
+  {
+    "name": "shared extractor depth limit",
+    "evidence": {
+      "document_kind": "article",
+      "operation": "parse",
+      "outcome": "failed",
+      "failure_code": "dom-depth-exceeded",
+      "http_status": null,
+      "request_phase": null
+    },
+    "attribution": "pipeline"
+  },
+  {
+    "name": "article target timeout",
+    "evidence": {
+      "document_kind": "article",
+      "operation": "attempt",
+      "outcome": "failed",
+      "failure_code": "timeout",
+      "http_status": null,
+      "request_phase": "target"
+    },
+    "attribution": "unresolved"
+  },
+  {
+    "name": "article target server error",
+    "evidence": {
+      "document_kind": "article",
+      "operation": "attempt",
+      "outcome": "failed",
+      "failure_code": "http",
+      "http_status": 503,
+      "request_phase": "target"
+    },
+    "attribution": "unresolved"
+  },
+  {
+    "name": "untyped parse exception",
+    "evidence": {
+      "document_kind": "article",
+      "operation": "parse",
+      "outcome": "failed",
+      "failure_code": null,
+      "http_status": null,
+      "request_phase": null
+    },
+    "attribution": "unresolved"
+  },
+  {
+    "name": "usable extraction",
+    "evidence": {
+      "document_kind": "article",
+      "operation": "parse",
+      "outcome": "success",
+      "failure_code": null,
+      "http_status": null,
+      "request_phase": null
+    },
+    "attribution": null
+  }
+]

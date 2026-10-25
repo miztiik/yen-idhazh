@@ -4,7 +4,8 @@ How do measured feed and article costs affect the next planner selection?
 
 **Last Updated**: 2026-10-25
 
-**Status**: Per-operation observation capture is implemented. Feedback scores,
+**Status**: Per-operation capture, supported failure attribution and bounded
+article/request aggregation are implemented. Feedback scores,
 derived operational state and its next-run consumer remain unimplemented.
 The user approved separate hardware and request measures, automatic score use
 after evidence qualifies, replacement of RSS reliability in the isolated
@@ -75,8 +76,8 @@ to the event.
 | Id | Field or measure | Type or status | Source and rule |
 | --- | --- | --- | --- |
 | A1 | `publisher_id` | Nonempty configured ID or null | Record configured ID after Row 3. Keep unknown null; never backfill history. |
-| A2 | `attribution` | Proposed `source`, `pipeline` or `unresolved` value | Preserve the owner-approved distinction; a status code alone does not prove source attribution. |
-| A3 | `failure_code` | Proposed nullable declared code | Preserve supported technical cause; unknown cause remains unresolved. |
+| A2 | `attribution` | Nullable `source`, `pipeline` or `unresolved` value | Failed observations use the [supported producer rules](../sources/feed-failure-diagnostics.md#operation-failure-attribution); a bare status without a typed target refusal is insufficient. |
+| A3 | `failure_code` | Nullable declared code | Preserve supported technical cause; unknown cause remains unresolved. |
 | A4 | `cpu_ms` | Nullable integer, `>= 0` | Proposal only. Eligible only when CPU belongs exclusively to this operation. Overlapping process deltas are not attributable. |
 | A5 | Task-profile process CPU | Existing pinned-process delta; diagnostic only | Not additive across overlapping operations and never eligible for source waste. |
 | A6 | `private_memory` | Unavailable for source scoring until attribution is proved | RSS and sampled maximum are diagnostic; they include retained/shared memory and cannot identify its source. |
@@ -109,8 +110,9 @@ replay key. A correction is a new event with nullable `corrects_event_id` and
 are present for a correction. The row contract checks the pair and requires a
 positive revision. The current reader retains correction events without
 applying them; it also preserves events from every writer attempt, so a partial
-retry cannot erase earlier operation facts. The replay key settles duplicate
-`event_id` rows within the same run and attempt, not across attempts.
+retry cannot erase earlier operation facts. Native reads retain every writer attempt. Aggregation settles identical
+`event_id` rows across attempts once and refuses conflicting copies; writer
+attempts never become additional article support or dispatched requests.
 Contribution aggregation must replace the prior contribution and reject tied
 revisions. Each event retains its UTC time and producer revision. Operation
 costs that cannot be linked to one article stay at their actual feed, run or
@@ -172,10 +174,10 @@ salience-feed work has no source or publisher assignment. Reused robots and
 feed responses add no dispatched-request rows. Parsing those bytes again is
 separate actual parse work.
 
-Failed outcomes currently use unresolved attribution, with an existing typed
-failure code when known. They make no source-blame or waste claim. CPU and
-private-memory costs remain unavailable. Early refusals record not-attempted
-work, not fabricated requests or extraction.
+Failed outcomes use the supported [attribution rules](../sources/feed-failure-diagnostics.md#operation-failure-attribution),
+with their existing typed failure code. Unknown causes remain unresolved.
+CPU and private-memory costs remain unavailable. Early refusals record
+not-attempted work, not fabricated requests or extraction.
 
 A failed native save is logged with the affected event IDs and fails the
 invocation. Other completed files remain intact. Standalone APIs first retain
@@ -187,6 +189,49 @@ and includes them in its exact commit manifest. It also retains verified
 body-free observation files from its private document checks before removing
 private article bodies. A later failure leaves completed native files in the
 workflow evidence; it does not authorize a live run or a partial commit.
+
+### Bounded article and request evidence
+
+`feedback.window_days` in `config/feed-ingest-plan.json` defaults to seven
+closed UTC days; the current UTC day is excluded. The planner reads each named
+day through the registered raw/compact reader, including incomplete runs with
+no final source-run row. Optional `inputs.document_observation_days` in
+`config/feed-ingest-plan-service.json` supplies explicit files or indexes for
+those dates; missing entries use the registered paths. The isolated workflow
+stages this same named window without directory discovery.
+
+The planner returns a typed internal aggregate as `article_evidence` in its
+report. It is not a saved operational-state ledger and does not affect ranking.
+Source totals and explicitly recorded publisher totals keep distinct
+attempted/measured opportunities, evidence instants, request counts and
+coverage. Missing publisher IDs are not inferred. Feed polls, robots,
+validation and work without an originating article identity do not add article
+support. Unallocated observation/request amounts remain separate.
+
+Request rows point to their fetch event; parse rows retain that same cause.
+Only article-target dispatches enter article request totals. A completed
+fetch with contiguous, complete attempt accounting proves request coverage;
+orphan attempts, absent fetch completion and partial counts do not. Recorded
+counts remain visible as lower bounds when coverage is incomplete. A source
+failure marks only requests linked to that failed fetch or failed technical
+extraction as waste. Successful extraction is not reversed by a later model
+failure. Unresolved outcomes retain their requests but do not establish zero
+source waste.
+
+Corrections replace their original contribution rather than add work.
+Conflicting replays, tied revisions, cyclic lineage and changed opportunity
+identity refuse the aggregate. An applied correction retains the original
+operation's time and causal ID. A known out-of-window target is reported and
+excluded. A target absent from the bounded input is reported as unavailable,
+not assumed to be old or fetched by scanning history.
+
+Counts are summed before dividing. Total requests require complete opportunity
+and day coverage; source-wasted totals also require resolved outcomes.
+The request coverage denominator is distinct attempted opportunities, never
+retry count. A zero opportunity denominator gives null coverage. A known
+zero-request opportunity retains zero requests but gives no waste ratio.
+CPU and private memory remain null. Missing, damaged or ambiguous evidence is
+reported without replacing saved state or inventing a successful empty history.
 
 ## Proposed score
 
@@ -559,6 +604,12 @@ cost. Requests, CPU and memory need separate measures because their units and
 attribution differ. This page stays whole because its observations, settlement
 and score form one contract consumed by the next planner; splitting it would
 separate persisted fields from the behavior they govern.
+
+The request aggregate remains internal until the saved-state publisher and
+next selector are implemented. This keeps the registered operation rows as
+the only factual authority and avoids a second persistent rollup with no
+consumer. Replaying all writer attempts by event identity preserves work from
+failed attempts without counting a reserialized event as new work.
 
 ## See also
 

@@ -238,6 +238,10 @@ class FeedMetricsConfig(Model):
     top_source_counts: Annotated[list[PositiveCount], Field(min_length=1)]
 
 
+class FeedFeedbackConfig(Model):
+    window_days: PositiveCount = 7
+
+
 class PlanningVertical(Model):
     model_config = ConfigDict(extra="ignore")
     id: Slug
@@ -267,6 +271,9 @@ class FeedIngestConfig(Model):
     seal: FeedSealConfig
     workflow_reporting: FeedWorkflowReportingConfig
     metrics: FeedMetricsConfig
+    feedback: FeedFeedbackConfig = Field(
+        default_factory=FeedFeedbackConfig, json_schema_extra={"default": {}},
+    )
 
     def validate_verticals(self, taxonomy: PlanningTaxonomy) -> None:
         """Refuse a planning patch that names an unconfigured vertical."""

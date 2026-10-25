@@ -98,9 +98,9 @@ tracing context. The existing default-off service flag gates the new routes.
 | E1 | 1 | Approve runtime contracts and activation policy | - | A | IN-FLIGHT | feed-ingest-feedback-selection | - | - |
 | E2 | 2 | Land compatible shared readers before writers | 1 | B | IN-FLIGHT | document-observation-contracts | [#1712](https://github.com/miztiik/yen-idhazh/pull/1712) | - |
 | E3 | 3 | Implement curated publisher catalog references | 2 | C | DONE | publisher-catalog-support | [#1704](https://github.com/miztiik/yen-idhazh/pull/1704) | - |
-| E4 | 4 | Wire common fetch and parse observations | 2 (observation contract slice landed; other Row 2 contracts remain open) | D | IN-REVIEW | persist-ingestion-observations | - | - |
-| E5 | 5 | Classify failure and work attribution | 4 | E | PENDING | - | - | - |
-| E6 | 6 | Aggregate article delivery and request costs | 5 | F | PENDING | - | - | - |
+| E4 | 4 | Wire common fetch and parse observations | 2 (observation contract slice landed; other Row 2 contracts remain open) | D | DONE | persist-ingestion-observations | [#1717](https://github.com/miztiik/yen-idhazh/pull/1717) | - |
+| E5 | 5 | Classify failure and work attribution | 4 | E | IN-REVIEW | operational-request-evidence | - | failure-attribution |
+| E6 | 6 | Aggregate article delivery and request costs | 5 | F | IN-REVIEW (typed planner report; saved state remains Row 10) | operational-request-evidence | - | - |
 | E7 | 7 | Compute supported operational estimates | 6 | G | PENDING | - | - | - |
 | E8 | 8 | Deliver selection, partition and persistence APIs | - (authorized stage contracts included) | E | DONE | feed-ingest-feedback-selection | - | - |
 | E9 | 9 | Apply the soft publisher-exposure preference | 8 | F | IN-REVIEW (current-run + fallback) | publisher-exposure-preference | [#1714](https://github.com/miztiik/yen-idhazh/pull/1714) | - |
@@ -374,6 +374,13 @@ rejections through the existing stage API path; this phase does not replace it.
 
 ## 7. Row #5 - Classify failure and work attribution
 
+The shared document-work producer now records supported source, pipeline or
+unresolved attribution while preserving each factual cause code. A typed
+target refusal is not a paywall claim or a publisher-wide finding.
+Existing extraction outcomes, not new quality tests, determine technical
+failure. Arbitrary network, timeout, server and unknown failures stay
+unresolved. No CPU or private-memory attribution is claimed.
+
 - **Scope:** Attach supported source, pipeline or unresolved attribution to recorded outcomes and costs without discarding unknown causes.
 - **Level:** 3.
 - **Files touched:**
@@ -399,6 +406,21 @@ rejections through the existing stage API path; this phase does not replace it.
 | R1 | Treat every failed summary or HTTP 403 as source misconduct/paywall | Confuses our failures, access restrictions and confirmed paywalls. | Obtain the missing causal or scoped access evidence first. | Owner's technical-only boundary. |
 
 ## 8. Row #6 - Aggregate article delivery and request costs
+
+The planner reads the configured closed-UTC-day window from registered
+raw/compact observations and returns typed article evidence in its report.
+It does not require a successful final source-run record. Aggregation settles
+replays across writer attempts, replaces corrections and refuses tied
+revisions. Distinct article support, measured request coverage and scoped
+source waste remain separate from retries, feed polls and unlinked work.
+Known totals and lower bounds stay distinct; missing coverage and zero
+opportunity denominators remain unknown.
+
+This increment does not save a second rollup or calculate a score. Row 7
+still owns score qualification/arithmetic; Row 10 owns the registered
+derived-state payload, concurrent publication and next-selector consumer.
+Restrictions, trials, polling, worker integration and live dispatch remain
+outside this increment.
 
 - **Scope:** Produce bounded per-source and, where explicitly known, publisher rollups from actual article opportunities and attributed work.
 - **Level:** 3.

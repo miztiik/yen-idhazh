@@ -22,7 +22,7 @@ MODEL_NAMES = (
     "VerticalPolicyOverride", "PlanningRunOverrides", "EffectiveFeedPolicy",
     "FeedUrlExclusion", "FeedHarvestConfig", "FeedTriageConfig", "FeedSoftCaps", "FeedCurateConfig",
     "FeedPartitionConfig", "FeedSealConfig", "FeedWorkflowReportingConfig",
-    "FeedMetricsConfig", "FeedIngestConfig", "PlanningTaxonomy",
+    "FeedMetricsConfig", "FeedFeedbackConfig", "FeedIngestConfig", "PlanningTaxonomy",
 )
 
 

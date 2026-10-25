@@ -10,6 +10,7 @@ import type { FetchAttemptMeasurement } from "./robots-policy";
 import { ArticleExtractionError } from "./dom-extractor";
 import { FeedParseError } from "./parse-feed";
 import { PlannerObservationSchema } from "../api/operation-contracts";
+import { attributeIngestOutcome } from "../attribute-ingest-outcomes";
 
 type Result = Pick<DocumentObservationRecord, "outcome" | "failure_code">;
 type Scope = Pick<DocumentObservationRecord,
@@ -24,16 +25,19 @@ export function documentWork(context: Context, identity: DocumentIdentity, key: 
     observation: ReturnType<typeof observeDocument>, result: Result, duration_ms: number, http_status: number | null,
     measurement?: FetchAttemptMeasurement, batch?: DocumentObservationRecord[],
   ) {
-    const row = DocumentObservationRecordSchema.parse({
+    const candidate = {
       ...scope, event_id: observation.event_id, caused_by_event_id: observation.caused_by_event_id,
       corrects_event_id: null, correction_revision: null,
       correlation_id: observation.correlation_id, article_id: observation.article_id,
       operation: observation.operation, occurred_at: observation.occurred_at,
-      ...result, attribution: result.outcome === "failed" ? "unresolved" : null, duration_ms, http_status,
+      ...result, duration_ms, http_status,
       request_phase: measurement?.attempt.phase ?? null, request_sequence: measurement?.attempt.sequence ?? null,
       retry: measurement?.attempt.retry ?? null,
       dispatched_request_count: measurement?.dispatched_request_count ?? null,
       request_coverage: measurement?.request_coverage ?? null,
+    };
+    const row = DocumentObservationRecordSchema.parse({
+      ...candidate, attribution: attributeIngestOutcome(candidate),
     });
     if (batch !== undefined) batch.push(row);
     else await context.observations?.save([row]);

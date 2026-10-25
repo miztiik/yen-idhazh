@@ -430,7 +430,7 @@ test("actual API and awaited CLI compose the same recorded plan and disclose the
     expect(failedFetch.failure).toBe("http");
     const failedFacts = await readObservationFiles(api.inputs.outputRoot, api.observation_files);
     expect(failedFacts.find(({ row }) => row.event_id === failedFetch.observation.event_id)?.row).toMatchObject({
-      outcome: "failed", failure_code: "http", attribution: "unresolved", http_status: 404,
+      outcome: "failed", failure_code: "http", attribution: "source", http_status: 404,
     });
     expect(profiles.at(-1)?.outcome).toBe("error");
     const afterFailedFetch = profiles.length;
@@ -446,7 +446,7 @@ test("actual API and awaited CLI compose the same recorded plan and disclose the
     expect(rootlessParsed.failure).toBe("missing-document-root");
     const parseFacts = await readObservationFiles(api.inputs.outputRoot, api.observation_files);
     expect(parseFacts.find(({ row }) => row.event_id === rootlessParsed.observation.event_id)?.row).toMatchObject({
-      operation: "parse", outcome: "failed", failure_code: "missing-document-root", attribution: "unresolved",
+      operation: "parse", outcome: "failed", failure_code: "missing-document-root", attribution: "source",
       caused_by_event_id: rootless.observation.event_id,
     });
     expect(profiles.at(-1)?.outcome).toBe("error");
