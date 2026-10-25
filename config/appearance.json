@@ -12,7 +12,27 @@
     "readout_max_share": 1,
     "sparkline_height_px": 36,
     "tick_density": 6,
-    "width_px": 760
+    "width_px": 760,
+    "story_geometry": {
+      "axis_band_px": 26,
+      "axis_label_offset_px": 16,
+      "axis_line_width_px": 1,
+      "bar_corner_radius_px": 3,
+      "bar_height_share": 0.42,
+      "dot_radius_px": 4,
+      "dot_category_label_share": 0.22,
+      "mark_outline_width_px": 1,
+      "row_height_px": 44,
+      "row_padding_share": 0.16,
+      "slope_column_share": 0.3,
+      "slope_footer_band_px": 28,
+      "slope_header_band_px": 32,
+      "slope_highlight_line_width_px": 3,
+      "slope_line_width_px": 2,
+      "slope_min_height_px": 128,
+      "value_gap_px": 8,
+      "value_gutter_share": 0.16
+    }
   },
   "console": {
     "absent_hatch_degrees": 45,
@@ -224,5 +244,5 @@
     "movement_good_light": "#2f6f5e",
     "surface_tint_alpha": 0.07
   },
-  "version": "2026-10-04"
+  "version": "2026-10-25"
 }

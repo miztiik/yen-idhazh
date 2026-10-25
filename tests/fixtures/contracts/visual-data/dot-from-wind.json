@@ -1,0 +1,94 @@
+{
+  "version": "2026-10-25",
+  "item_id": "energy-4821903756",
+  "type": "dot",
+  "renderer_version": "2026-10-25",
+  "title": "Offshore wind capacity, four countries",
+  "caption": "Dots place each country's figure on one shared scale.",
+  "emphasized_mark_id": "m5",
+  "marks": [
+    {
+      "mark_id": "m0",
+      "text": "Denmark",
+      "value": null,
+      "unit": null,
+      "source_text": null,
+      "element_id": "entity-41-48",
+      "derived": null
+    },
+    {
+      "mark_id": "m1",
+      "text": "Germany",
+      "value": null,
+      "unit": null,
+      "source_text": null,
+      "element_id": "entity-68-75",
+      "derived": null
+    },
+    {
+      "mark_id": "m2",
+      "text": "Norway",
+      "value": null,
+      "unit": null,
+      "source_text": null,
+      "element_id": "entity-86-92",
+      "derived": null
+    },
+    {
+      "mark_id": "m3",
+      "text": "Ireland",
+      "value": null,
+      "unit": null,
+      "source_text": null,
+      "element_id": "entity-104-111",
+      "derived": null
+    },
+    {
+      "mark_id": "m4",
+      "text": null,
+      "value": "1200",
+      "unit": "mw",
+      "source_text": null,
+      "element_id": "quantity-58-66",
+      "derived": null
+    },
+    {
+      "mark_id": "m5",
+      "text": null,
+      "value": "3400",
+      "unit": "mw",
+      "source_text": null,
+      "element_id": "quantity-76-84",
+      "derived": null
+    },
+    {
+      "mark_id": "m6",
+      "text": null,
+      "value": "900",
+      "unit": "mw",
+      "source_text": null,
+      "element_id": "quantity-93-99",
+      "derived": null
+    },
+    {
+      "mark_id": "m7",
+      "text": null,
+      "value": "2100",
+      "unit": "mw",
+      "source_text": null,
+      "element_id": "quantity-112-120",
+      "derived": null
+    }
+  ],
+  "encoding": {
+    "category": ["m0", "m1", "m2", "m3"],
+    "quantity": ["m4", "m5", "m6", "m7"],
+    "quantity_x": [],
+    "time": [],
+    "series": [],
+    "size": [],
+    "bins": [],
+    "entity": [],
+    "event_label": []
+  }
+}

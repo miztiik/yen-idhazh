@@ -80,6 +80,7 @@ export interface UiConfig {
 	read_mark_days: number;
 	archive_page_size: number;
 	number_format: NumberFormatConfig;
+	story_chart_geometry: StoryChartGeometryConfig;
 }
 
 /** What the console needs to say whether a run went well. */
@@ -472,6 +473,28 @@ export interface ChartConfig {
 	number_format: NumberFormatConfig;
 }
 
+/** Bounded geometry for browser-drawn story charts, separate from console sizing. */
+export interface StoryChartGeometryConfig {
+	row_height_px: number;
+	row_padding_share: number;
+	bar_height_share: number;
+	axis_band_px: number;
+	axis_line_width_px: number;
+	axis_label_offset_px: number;
+	mark_outline_width_px: number;
+	value_gutter_share: number;
+	value_gap_px: number;
+	bar_corner_radius_px: number;
+	dot_radius_px: number;
+	dot_category_label_share: number;
+	slope_header_band_px: number;
+	slope_footer_band_px: number;
+	slope_min_height_px: number;
+	slope_column_share: number;
+	slope_line_width_px: number;
+	slope_highlight_line_width_px: number;
+}
+
 export interface IconsConfig {
 	size_px: number;
 	stroke_px: number;
@@ -503,7 +526,27 @@ const DEFAULTS: UiConfig = {
 	tagline: 'A daily digest that checks its own work.',
 	read_mark_days: 14,
 	archive_page_size: 25,
-	number_format: NUMBER_FORMAT_DEFAULTS
+	number_format: NUMBER_FORMAT_DEFAULTS,
+	story_chart_geometry: {
+		row_height_px: 44,
+		row_padding_share: 0.16,
+		bar_height_share: 0.42,
+		axis_band_px: 26,
+		axis_line_width_px: 1,
+		axis_label_offset_px: 16,
+		mark_outline_width_px: 1,
+		value_gutter_share: 0.16,
+		value_gap_px: 8,
+		bar_corner_radius_px: 3,
+		dot_radius_px: 4,
+		dot_category_label_share: 0.22,
+		slope_header_band_px: 32,
+		slope_footer_band_px: 28,
+		slope_min_height_px: 128,
+		slope_column_share: 0.3,
+		slope_line_width_px: 2,
+		slope_highlight_line_width_px: 3
+	}
 };
 
 const RUN_DEFAULTS: RunConfig = {
@@ -813,7 +856,9 @@ interface RawAppearance {
 	assist?: Partial<AssistConfig>;
 	frame?: Partial<FrameConfig>;
 	theme?: Partial<ThemeConfig>;
-	chart?: Partial<ChartConfig>;
+	chart?: Partial<ChartConfig> & {
+		story_geometry?: Partial<StoryChartGeometryConfig>;
+	};
 	icons?: Partial<IconsConfig>;
 	motion?: Partial<MotionConfig>;
 }
@@ -911,7 +956,18 @@ export function uiConfig(): UiConfig & { number_format: NumberFormatConfig } {
 	const ui = mergeLayers(DEFAULTS, raw().ui, appearance().digest) as DigestBlock;
 	// These share the block and must not ride along - see BUILD_ONLY_KEYS.
 	for (const key of BUILD_ONLY_KEYS) delete ui[key];
-	return { ...ui as UiConfig, number_format: numberFormatConfig() };
+	return {
+		...ui as UiConfig,
+		number_format: numberFormatConfig(),
+		story_chart_geometry: storyChartGeometryConfig()
+	};
+}
+
+export function storyChartGeometryConfig(): StoryChartGeometryConfig {
+	return {
+		...DEFAULTS.story_chart_geometry,
+		...(appearance().chart?.story_geometry ?? {})
+	};
 }
 
 /** How many of a day's stories a prerendered document carries.
@@ -1192,7 +1248,9 @@ export function themeConfig(): ThemeConfig {
 }
 
 export function chartConfig(): ChartConfig {
-	return { ...CHART_DEFAULTS, ...(appearance().chart ?? {}), number_format: numberFormatConfig() };
+	const chart = { ...(appearance().chart ?? {}) };
+	delete chart.story_geometry;
+	return { ...CHART_DEFAULTS, ...chart, number_format: numberFormatConfig() };
 }
 
 export function iconsConfig(): IconsConfig {

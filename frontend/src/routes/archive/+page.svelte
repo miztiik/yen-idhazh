@@ -377,6 +377,7 @@
 							<DigestItem
 								{item}
 								numberFormat={data.ui.number_format}
+								storyChartGeometry={data.ui.story_chart_geometry}
 								verticalName={data.verticalNames[item.vertical] ?? item.vertical}
 								level={3}
 								showVertical={false}

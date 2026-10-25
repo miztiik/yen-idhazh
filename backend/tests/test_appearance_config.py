@@ -40,6 +40,7 @@ from idhazh.contracts.appearance_config import (
     FrameConfig,
     IconsConfig,
     MotionConfig,
+    StoryChartGeometryConfig,
     ThemeConfig,
 )
 from idhazh.contracts.knobs.console import ConsoleConfig
@@ -96,6 +97,19 @@ def test_the_committed_file_is_ascii() -> None:
     """Section 5 requires ASCII; checkout line endings belong to `.gitattributes`."""
     raw = APPEARANCE_PATH.read_bytes()
     assert all(byte < 128 for byte in raw), "config/appearance.json must be ASCII"
+
+
+def test_story_chart_geometry_is_bounded_and_committed() -> None:
+    appearance = AppearanceConfig.model_validate_json(APPEARANCE_PATH.read_text(encoding="utf-8"))
+    assert appearance.chart.story_geometry == StoryChartGeometryConfig()
+    for invalid in (
+        {"row_height_px": 24},
+        {"dot_radius_px": 1},
+        {"mark_outline_width_px": 0},
+        {"slope_column_share": 0.1},
+    ):
+        with pytest.raises(ValidationError):
+            StoryChartGeometryConfig.model_validate(invalid)
 
 
 def test_defaults_alone_are_a_valid_document() -> None:

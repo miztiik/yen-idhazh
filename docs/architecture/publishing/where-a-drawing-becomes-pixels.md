@@ -62,17 +62,16 @@ keeps the asset already committed for that item and rebuilds the derived day
 ([one-visual-one-file-and-the-race-between-two-runs.md](one-visual-one-file-and-the-race-between-two-runs.md)).
 
 **What the reading page now carries, measured rather than estimated** (Guardrail #8). Two d3
-modules reach a reader and no others: `d3-scale` gives the bar its band scale - the
-per-category slot, step, padding and rounding arithmetic that decides where each mark sits -
-and `d3-array` supplies the `range` and `InternMap` that band scale is built on. Both were
-already installed for the operator console's chart frame, so this added no install time, and
-both are now exact-pinned: a caret range lets a patch bump move pixels with no diff to review.
-`d3-selection`, `d3-axis` and `d3-shape` are **not installed**, which is the control rather
-than a preference - a package that is not in the lockfile cannot be imported onto a reading
-page. Nothing here joins, enters or exits, so `d3-selection` would buy a join engine and use
-only its append path; `d3-axis` writes a 10px axis font, which is below `--text-xs` at every
-root size this site uses, so it would be imported in order to be undone; and `d3-shape` has no
-rect generator, so it waits for the row that draws a path (Carmack, 2026-09-13).
+modules reach a reader and no others: `d3-scale` places bar rows, maps dot values onto one
+shared scale, and places slope values between two labelled columns; `d3-array` supplies the
+`range` and `InternMap` that those scales use. Both were already installed for the operator
+console's chart frame, so this row adds no dependency or install step. `d3-selection`,
+`d3-axis` and `d3-shape` are **not installed**, which is the control rather than a preference -
+a package that is not in the lockfile cannot be imported onto a reading page. Nothing here
+joins, enters or exits, so `d3-selection` would buy a join engine and use only its append path;
+`d3-axis` writes a 10px axis font, which is below `--text-xs` at every root size this site uses,
+so it would be imported in order to be undone; and `d3-shape` waits for a row that draws a path
+(Carmack, 2026-09-13).
 
 Measured on the development box (Windows 11, 8 vCPU, node 24.12.0), 2026-09-13, control build
 at `origin/main` against this branch, same machine and same toolchain: the reading route's
@@ -104,8 +103,8 @@ logic tests. The width comes from
 `frontend/src/lib/visual/width.ts`, which measures the figure's content box and is one watcher
 for every chart on the page rather than one each (Guardrail #12).
 
-**The name sits above its bar rather than beside it, and that is what makes one layout work at
-every width** (row #2, 2026-09-14). A name column has to hold the longest name the compiler
+**The bar name sits above its bar rather than beside it, and that is what keeps the bar
+horizontal at narrow widths** (row #2, 2026-09-14). A name column has to hold the longest name the compiler
 allows - `MARK_NAME_MAX` is 40 of the article's own characters, about 250 CSS pixels at
 `--text-xs` - and a 360 px phone has roughly 300 pixels of card to spend. Side by side, a
 column that fits the names leaves nothing for the bars and a column that fits the bars cuts
@@ -115,6 +114,13 @@ bar has all of it but the sixteenth reserved for the figure that sits beside it 
 comparison the chart exists to make gets every pixel left once the number it compares has
 somewhere to stand. What a reader gives up is the tidy left-hand column of names a desktop had
 room for, and one text line of height per bar.
+
+The bar, dot and slope share this measured-width drawing path and the bounded
+`chart.story_geometry` settings in `config/appearance.json`. A dot ranks values
+by position on one common scale. A slope joins paired values between two
+labelled time columns, without an axis; its units remain visible and in the
+accessible description. The 2026-09-13 bundle measurement above predates these
+two forms and is not a measurement of their added code.
 
 **What this ruling does NOT change, because each has been read as following from it.** The
 pages stay prerendered; prerendering a route and prerendering a chart are different acts and

@@ -3,12 +3,14 @@ import { expect, test, type Page } from '@playwright/test';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { DigestDay, VisualData } from '../src/lib/payload/types';
-import { drawBars, statedBars } from '../src/lib/visual/bar';
+import { drawVisual, statedDrawing } from '../src/lib/visual/bar';
+import { storyChartGeometryConfig } from '../src/lib/server/config';
 import { dayReady } from './support/day-ready';
 import { formatNumber } from './support/number-format';
 import { CANARY, newestDate, payloadOf } from './support/published';
 
 test.use({ viewport: { width: 390, height: 844 } });
+const geometry = storyChartGeometryConfig();
 
 test('reader labels clear the text floor without scaling, and every mark survives navigation and reload', async ({ page }) => {
 	const errors: string[] = [];
@@ -88,23 +90,25 @@ test('reader labels clear the text floor without scaling, and every mark survive
 			for (const text of measured.text) {
 				expect(text.size, `${id}: ${text.value}`).toBeGreaterThanOrEqual(measured.floor);
 			}
-			const expected = drawBars(data, measured.width, formatNumber);
-			const emphasized = svg.locator('rect.emphasized');
+			const expected = drawVisual(data, measured.width, formatNumber, geometry);
+			const emphasized = svg.locator(
+				'rect.bar.emphasized, circle.dot.emphasized, circle.slope-point.emphasized'
+			);
 			await expect(emphasized).toHaveCount(1);
-			const styles = await svg.locator('rect').evaluateAll((bars) => bars.map((bar) => {
-				const style = getComputedStyle(bar);
+			const styles = await svg.locator('rect.bar, circle.dot, line.slope-line, circle.slope-point').evaluateAll((marks) => marks.map((mark) => {
+				const style = getComputedStyle(mark);
 				return {
-					selected: bar.classList.contains('emphasized'),
+					selected: mark.classList.contains('emphasized'),
 					fill: style.fill,
 					stroke: style.stroke,
-					dashes: style.strokeDasharray
+					dashes: style.strokeDasharray,
+					strokeWidth: mark.getAttribute('stroke-width')
 				};
 			}));
 			const selected = styles.find((style) => style.selected)!;
+			expect(selected.strokeWidth).toBe(String(geometry.mark_outline_width_px));
 			for (const sibling of styles.filter((style) => !style.selected)) {
 				expect(selected.fill).not.toBe(sibling.fill);
-				expect(selected.stroke).not.toBe(sibling.stroke);
-				expect(selected.dashes).not.toBe(sibling.dashes);
 			}
 			const heading = figure.locator('.chart-title');
 			const caption = figure.locator('figcaption');
@@ -112,14 +116,41 @@ test('reader labels clear the text floor without scaling, and every mark survive
 			await expect(caption).toHaveCount(data.caption ? 1 : 0);
 			if (data.title) await expect(heading).toHaveText(data.title);
 			if (data.caption) await expect(caption).toHaveText(data.caption);
-			expect(measured.text.map((text) => text.value)).toEqual([
-				...expected.bars.flatMap((bar) => [bar.name, bar.displayed]),
-				...(expected.unit ? [expected.unit] : [])
-			]);
-			expect(measured.bars).toEqual(expected.bars.map((bar) =>
-				[0, bar.y, bar.width, bar.height]
-			));
-			await expect(figure).toHaveAccessibleName(statedBars(expected));
+			if (expected.type === 'bar') {
+				expect(measured.text.map((text) => text.value)).toEqual([
+					...expected.bars.flatMap((bar) => [bar.name, bar.displayed]),
+					...(expected.unit ? [expected.unit] : [])
+				]);
+				expect(measured.bars).toEqual(expected.bars.map((bar) =>
+					[0, bar.y, bar.width, bar.height]
+				));
+			} else if (expected.type === 'dot') {
+				const dots = await svg.locator('circle.dot').evaluateAll((marks) =>
+					marks.map((dot) => ['cx', 'cy', 'r'].map((key) => Number(dot.getAttribute(key))))
+				);
+				expect(dots).toEqual(expected.dots.map((dot) => [dot.x, dot.y, dot.radius]));
+				expect(measured.text.map((text) => text.value)).toEqual([
+					...expected.dots.flatMap((dot) => [dot.name, dot.displayed]),
+					...(expected.unit ? [expected.unit] : [])
+				]);
+			} else {
+				const lines = await svg.locator('line.slope-line').evaluateAll((marks) =>
+					marks.map((line) => ['x1', 'y1', 'x2', 'y2'].map((key) => Number(line.getAttribute(key))))
+				);
+				expect(lines).toEqual(expected.slopes.map((slope) =>
+					[slope.left.x, slope.left.y, slope.right.x, slope.right.y]
+				));
+				expect(measured.text.map((text) => text.value)).toEqual([
+					expected.leftLabel,
+					expected.rightLabel,
+					...expected.slopes.flatMap((slope) => [
+						slope.left.displayed,
+						slope.right.displayed
+					]),
+					...(expected.unit ? [expected.unit] : [])
+				]);
+			}
+			await expect(figure).toHaveAccessibleName(statedDrawing(expected));
 			await figure.focus();
 			await expect(figure).toBeFocused();
 			snapshots.push(measured);

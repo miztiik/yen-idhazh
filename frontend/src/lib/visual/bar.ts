@@ -1,4 +1,4 @@
-/** Where a bar chart's geometry comes from, and it is the only place it does.
+/** Where story-chart geometry comes from, and it is the only place it does.
  *
  * **The reader's browser draws the chart and the pipeline never draws one**
  * (owner ruling, 2026-09-13,
@@ -25,36 +25,10 @@
  * right way round.
  */
 
-import { scaleBand } from 'd3-scale';
+import { scaleBand, scaleLinear } from 'd3-scale';
 import type { VisualData, VisualMark } from '$lib/payload/types';
 import type { NumberFormatter } from '$lib/number-format';
-
-/** How tall one bar's row is: the name on the line above, the bar under it.
- *
- * Vertical measurements stay in pixels because the drawing's height is a count
- * of bars and never a share of the width - which is what lets the figure be its
- * final height from the frame the marks land in, so a story cannot shift while
- * it is read. The `viewBox` used to make that promise by holding an aspect
- * ratio; a height that does not depend on the width keeps it without one.
- */
-const ROW_HEIGHT = 44;
-/** The share of a row that is space rather than mark. */
-const ROW_PADDING = 0.16;
-/** The share of a row's own band the bar takes, leaving the rest for its name. */
-const BAR_SHARE = 0.42;
-/** Room under the bars for the axis line and the unit it counts. */
-const AXIS_BAND = 26;
-
-/** The share of the width kept for the figure that sits beside the longest bar.
- *
- * A share rather than a pixel count, because it is room inside a box whose
- * width is the reader's screen: a fixed gutter is a third of a 360 px phone and
- * a rounding error on a desktop. The figure is drawn just past its own bar, so
- * a short bar leaves the slack unused - this only bounds the longest one.
- */
-const FIGURE_SHARE = 0.16;
-/** The gap between a bar's end and its figure. */
-const FIGURE_GAP = 8;
+import type { StoryChartGeometryConfig } from '$lib/server/config';
 
 /** One bar, placed. Every number here is a CSS pixel on the reader's screen. */
 export interface Bar {
@@ -77,18 +51,59 @@ export interface Bar {
 }
 
 /** A whole chart, placed. */
-export interface Drawing {
+interface DrawingBase {
 	title: string | null;
 	caption: string | null;
 	/** The room the caller measured, which every mark below is placed inside. */
 	width: number;
 	height: number;
-	/** The baseline the bars sit on. */
+}
+
+export interface BarDrawing extends DrawingBase {
+	type: 'bar';
 	baseline: number;
-	/** What the measured axis counts, or null where the article named no unit. */
 	unit: string | null;
 	bars: Bar[];
 }
+
+export interface Dot {
+	emphasized: boolean;
+	name: string;
+	stated: string;
+	displayed: string;
+	x: number;
+	valueX: number;
+	y: number;
+	radius: number;
+	labelY: number;
+}
+
+export interface DotDrawing extends DrawingBase {
+	type: 'dot';
+	baseline: number;
+	axisEnd: number;
+	unit: string | null;
+	dots: Dot[];
+}
+
+export interface Slope {
+	name: string;
+	color: number;
+	left: { x: number; y: number; stated: string; displayed: string; emphasized: boolean };
+	right: { x: number; y: number; stated: string; displayed: string; emphasized: boolean };
+}
+
+export interface SlopeDrawing extends DrawingBase {
+	type: 'slope';
+	unit: string | null;
+	leftLabel: string;
+	rightLabel: string;
+	leftX: number;
+	rightX: number;
+	slopes: Slope[];
+}
+
+export type Drawing = BarDrawing | DotDrawing | SlopeDrawing;
 
 function figureOf(mark: VisualMark): number {
 	// The compiler pins `value` to the characters the article wrote, so this is
@@ -128,7 +143,12 @@ function figureOf(mark: VisualMark): number {
  * Throws where the data does not fit - see the module note: `refusedVisualData`
  * is the check, and this is the code that trusts it.
  */
-export function drawBars(data: VisualData, room: number, formatNumber: NumberFormatter): Drawing {
+export function drawBars(
+	data: VisualData,
+	room: number,
+	formatNumber: NumberFormatter,
+	geometry: StoryChartGeometryConfig
+): BarDrawing {
 	const held = new Map(data.marks.map((mark) => [mark.mark_id, mark]));
 	const mark = (id: string): VisualMark => {
 		const found = held.get(id);
@@ -143,9 +163,9 @@ export function drawBars(data: VisualData, room: number, formatNumber: NumberFor
 
 	const band = scaleBand<string>()
 		.domain(names.map((_, index) => String(index)))
-		.range([0, names.length * ROW_HEIGHT])
-		.paddingInner(ROW_PADDING)
-		.paddingOuter(ROW_PADDING / 2)
+		.range([0, names.length * geometry.row_height_px])
+		.paddingInner(geometry.row_padding_share)
+		.paddingOuter(geometry.row_padding_share / 2)
 		.round(true);
 
 	const values = figures.map(figureOf);
@@ -153,13 +173,13 @@ export function drawBars(data: VisualData, room: number, formatNumber: NumberFor
 	const width = Math.max(0, Math.floor(room));
 	// What a bar may run to, so the figure beside the longest one has somewhere
 	// to sit inside the width rather than past its right edge.
-	const span = Math.max(0, width - Math.round(width * FIGURE_SHARE));
+	const span = Math.max(0, width - Math.round(width * geometry.value_gutter_share));
 
 	const bars: Bar[] = names.map((named, index) => {
 		const value = values[index];
 		const share = longest > 0 && Number.isFinite(value) && value > 0 ? value / longest : 0;
 		const top = band(String(index)) ?? 0;
-		const height = Math.round(band.bandwidth() * BAR_SHARE);
+		const height = Math.round(band.bandwidth() * geometry.bar_height_share);
 		const drawn = Math.round(share * span);
 		return {
 			emphasized: figures[index].mark_id === data.emphasized_mark_id,
@@ -173,7 +193,7 @@ export function drawBars(data: VisualData, room: number, formatNumber: NumberFor
 			y: top + band.bandwidth() - height,
 			height,
 			width: drawn,
-			figure: drawn + FIGURE_GAP
+			figure: drawn + geometry.value_gap_px
 		};
 	});
 
@@ -181,11 +201,166 @@ export function drawBars(data: VisualData, room: number, formatNumber: NumberFor
 		title: data.title,
 		caption: data.caption,
 		width,
-		height: names.length * ROW_HEIGHT + AXIS_BAND,
-		baseline: names.length * ROW_HEIGHT,
+		type: 'bar',
+		height: names.length * geometry.row_height_px + geometry.axis_band_px,
+		baseline: names.length * geometry.row_height_px,
 		unit: figures[0]?.unit ?? null,
 		bars
 	};
+}
+
+/** Place dots on one shared value scale, with labels kept outside the plot. */
+export function drawDots(
+	data: VisualData,
+	room: number,
+	formatNumber: NumberFormatter,
+	geometry: StoryChartGeometryConfig
+): DotDrawing {
+	const held = new Map(data.marks.map((mark) => [mark.mark_id, mark]));
+	const mark = (id: string): VisualMark => {
+		const found = held.get(id);
+		if (found === undefined) throw new Error(`visual data draws a mark it does not carry: ${id}`);
+		return found;
+	};
+	const names = data.encoding.category.map(mark);
+	const series = data.encoding.series.map(mark);
+	const figures = data.encoding.quantity.map(mark);
+	const values = figures.map(figureOf);
+	const finite = values.filter(Number.isFinite);
+	const minimum = Math.min(...finite);
+	const maximum = Math.max(...finite);
+	const width = Math.max(0, Math.floor(room));
+	const plotStart = geometry.dot_radius_px;
+	const valueX = Math.max(plotStart, width - Math.round(width * geometry.value_gutter_share));
+	const plotEnd = Math.max(plotStart, valueX - geometry.value_gap_px);
+	const scale = scaleLinear()
+		.domain(minimum === maximum ? [minimum - 1, maximum + 1] : [minimum, maximum])
+		.range([plotStart, plotEnd]);
+	const band = scaleBand<string>()
+		.domain(names.map((_, index) => String(index)))
+		.range([0, names.length * geometry.row_height_px])
+		.paddingInner(geometry.row_padding_share)
+		.paddingOuter(geometry.row_padding_share / 2)
+		.round(true);
+	const dots = names.map((name, index): Dot => {
+		const top = band(String(index)) ?? 0;
+		const figure = figures[index];
+		const seriesLabel = series[index]?.text;
+		return {
+			emphasized: figure.mark_id === data.emphasized_mark_id,
+			name: `${name.text ?? ''}${seriesLabel ? ` (${seriesLabel})` : ''}`,
+			stated: figure.value ?? '',
+			displayed: formatNumber(values[index], { si: true }),
+			x: Number.isFinite(values[index]) ? scale(values[index]) : plotStart,
+			valueX,
+			y: top + band.bandwidth() / 2,
+			radius: geometry.dot_radius_px,
+			labelY: top + band.bandwidth() * geometry.dot_category_label_share
+		};
+	});
+	return {
+		type: 'dot',
+		title: data.title,
+		caption: data.caption,
+		width,
+		height: names.length * geometry.row_height_px + geometry.axis_band_px,
+		baseline: names.length * geometry.row_height_px,
+		axisEnd: plotEnd,
+		unit: figures[0]?.unit ?? null,
+		dots
+	};
+}
+
+/** Place paired measurements as two labelled columns and connecting lines. */
+export function drawSlopes(
+	data: VisualData,
+	room: number,
+	formatNumber: NumberFormatter,
+	geometry: StoryChartGeometryConfig
+): SlopeDrawing {
+	const held = new Map(data.marks.map((mark) => [mark.mark_id, mark]));
+	const mark = (id: string): VisualMark => {
+		const found = held.get(id);
+		if (found === undefined) throw new Error(`visual data draws a mark it does not carry: ${id}`);
+		return found;
+	};
+	const quantities = data.encoding.quantity.map(mark);
+	const times = data.encoding.time.map(mark);
+	const entities = data.encoding.entity.map(mark);
+	const series = data.encoding.series.map(mark);
+	const values = quantities.map(figureOf);
+	const finite = values.filter(Number.isFinite);
+	const minimum = Math.min(...finite);
+	const maximum = Math.max(...finite);
+	const count = quantities.length / 2;
+	const width = Math.max(0, Math.floor(room));
+	const height = Math.max(
+		geometry.slope_min_height_px,
+		geometry.slope_header_band_px + count * geometry.row_height_px + geometry.slope_footer_band_px
+	);
+	const top = geometry.slope_header_band_px;
+	const bottom = height - geometry.slope_footer_band_px;
+	const y = scaleLinear()
+		.domain(minimum === maximum ? [minimum - 1, maximum + 1] : [minimum, maximum])
+		.range([bottom, top]);
+	const leftX = Math.round(width * geometry.slope_column_share);
+	const rightX = Math.round(width * (1 - geometry.slope_column_share));
+	const emphasizedIndex = quantities.findIndex((quantity) => quantity.mark_id === data.emphasized_mark_id);
+	const slopes = Array.from({ length: count }, (_, index): Slope => {
+		const left = quantities[index * 2];
+		const right = quantities[index * 2 + 1];
+		const leftValue = values[index * 2];
+		const rightValue = values[index * 2 + 1];
+		return {
+			name: entities[index]?.text ?? series[index]?.text ?? '',
+			color: index + 1,
+			left: {
+				x: leftX,
+				y: Number.isFinite(leftValue) ? y(leftValue) : top,
+				stated: left.value ?? '',
+				displayed: formatNumber(leftValue, { si: true }),
+				emphasized: emphasizedIndex === index * 2
+			},
+			right: {
+				x: rightX,
+				y: Number.isFinite(rightValue) ? y(rightValue) : top,
+				stated: right.value ?? '',
+				displayed: formatNumber(rightValue, { si: true }),
+				emphasized: emphasizedIndex === index * 2 + 1
+			}
+		};
+	});
+	return {
+		type: 'slope',
+		title: data.title,
+		caption: data.caption,
+		width,
+		height,
+		unit: quantities[0]?.unit ?? null,
+		leftLabel: times[0]?.text ?? '',
+		rightLabel: times[1]?.text ?? '',
+		leftX,
+		rightX,
+		slopes
+	};
+}
+
+export function drawVisual(
+	data: VisualData,
+	room: number,
+	formatNumber: NumberFormatter,
+	geometry: StoryChartGeometryConfig
+): Drawing {
+	switch (data.type) {
+		case 'bar':
+			return drawBars(data, room, formatNumber, geometry);
+		case 'dot':
+			return drawDots(data, room, formatNumber, geometry);
+		case 'slope':
+			return drawSlopes(data, room, formatNumber, geometry);
+		default:
+			throw new Error(`visual type is not drawn: ${data.type}`);
+	}
 }
 
 /**
@@ -211,7 +386,7 @@ export function drawBars(data: VisualData, room: number, formatNumber: NumberFor
  * still holds it to the element table; what changed is that the reading page no
  * longer carries it.
  */
-export function statedBars(drawing: Drawing): string {
+export function statedBars(drawing: BarDrawing): string {
 	const tail = drawing.unit ? ` ${drawing.unit}` : '';
 	const facts = drawing.bars.map((bar) =>
 		`${bar.name} ${bar.stated}${tail}${bar.emphasized ? ' (highlighted)' : ''}` +
@@ -219,4 +394,36 @@ export function statedBars(drawing: Drawing): string {
 	);
 	return [drawing.title, `Bar chart. ${facts.join('; ')}.`, drawing.caption]
 		.filter(Boolean).join(' ');
+}
+
+export function statedDots(drawing: DotDrawing): string {
+	const tail = drawing.unit ? ` ${drawing.unit}` : '';
+	const facts = drawing.dots.map((dot) =>
+		`${dot.name} ${dot.stated}${tail}${dot.emphasized ? ' (highlighted)' : ''}`
+	);
+	return [drawing.title, `Dot chart. ${facts.join('; ')}.`, drawing.caption]
+		.filter(Boolean).join(' ');
+}
+
+export function statedSlopes(drawing: SlopeDrawing): string {
+	const tail = drawing.unit ? ` ${drawing.unit}` : '';
+	const facts = drawing.slopes.map((slope) =>
+		`${slope.name}: ${drawing.leftLabel} ${slope.left.stated}${tail}` +
+		`${slope.left.emphasized ? ' (highlighted)' : ''}; ` +
+		`${drawing.rightLabel} ${slope.right.stated}${tail}` +
+		`${slope.right.emphasized ? ' (highlighted)' : ''}`
+	);
+	return [drawing.title, `Slope chart. ${facts.join('; ')}.`, drawing.caption]
+		.filter(Boolean).join(' ');
+}
+
+export function statedDrawing(drawing: Drawing): string {
+	switch (drawing.type) {
+		case 'bar':
+			return statedBars(drawing);
+		case 'dot':
+			return statedDots(drawing);
+		case 'slope':
+			return statedSlopes(drawing);
+	}
 }
