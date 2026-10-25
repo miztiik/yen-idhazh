@@ -1,7 +1,7 @@
 /** Which authored planner settings and vertical references are valid before a run? */
 import { z } from "zod";
 import {
-  NonEmptySchema, PositiveCountSchema, PositiveSchema, SlugSchema, reject,
+  NonEmptySchema, NonNegativeSchema, PositiveCountSchema, PositiveSchema, SlugSchema, reject,
 } from "./primitives";
 import {
   FeedCurationPolicySchema, FeedScreeningPolicySchema, VerticalPolicyOverrideSchema,
@@ -73,23 +73,22 @@ export const FeedMetricsConfigSchema = z.strictObject({
   top_source_counts: z.array(PositiveCountSchema).min(1),
 });
 export const FeedOperationalComponentWeightsSchema = z.strictObject({
-  cpu: z.number().finite().min(0).default(1 / 3),
-  private_memory: z.number().finite().min(0).default(1 / 3),
-  requests: z.number().finite().min(0).default(1 / 3),
+  cpu: NonNegativeSchema.default(1 / 3),
+  private_memory: NonNegativeSchema.default(1 / 3),
+  requests: NonNegativeSchema.default(1 / 3),
 }).superRefine((value, ctx) => {
   if (Math.abs(value.cpu + value.private_memory + value.requests - 1) > 1e-9) {
-    reject(ctx, "operational component weights must sum to one");
+    reject(ctx, "operational component weights must sum to one", ["component_weights"]);
   }
 });
 export const FeedFeedbackConfigSchema = z.strictObject({
+  lifecycle_window_days: PositiveCountSchema.default(31),
   window_days: PositiveCountSchema.default(7),
   minimum_measured_opportunities: PositiveCountSchema.default(20),
   minimum_measured_coverage: z.number().finite().min(0).max(1).default(0.8),
   component_weights: FeedOperationalComponentWeightsSchema.default(
     FeedOperationalComponentWeightsSchema.parse({}),
-  ).meta({
-    default: {}, type: "object", additionalProperties: false,
-  }),
+  ).meta({ default: {}, type: "object", additionalProperties: false }),
 });
 export const FeedIngestConfigSchema = z.strictObject({
   version: z.literal("2026-10-20"),

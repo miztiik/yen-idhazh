@@ -32,6 +32,7 @@ from idhazh.contracts.base import (
     Contract,
     DateStamp,
     RunId,
+    SchemaVersion,
     Sha256,
     Slug,
     Timestamp,
@@ -146,6 +147,7 @@ class FeedHealthRow(Contract):
         ),
     )
 
+    version: SchemaVersion = "2026-10-24T20:04"
     run_id: RunId
     date: DateStamp
     feed_id: Slug

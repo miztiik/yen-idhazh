@@ -253,6 +253,7 @@ class FeedOperationalComponentWeights(Model):
 
 
 class FeedFeedbackConfig(Model):
+    lifecycle_window_days: PositiveCount = 31
     window_days: PositiveCount = 7
     minimum_measured_opportunities: PositiveCount = 20
     minimum_measured_coverage: Annotated[

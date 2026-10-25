@@ -214,6 +214,14 @@ class CompactEntry(Model):
             "parses anything. 0 for an entry with no file."
         ),
     )
+    file_sha256: Sha256 | None = Field(
+        default=None,
+        exclude_if=lambda value: value is None,
+        description=(
+            "SHA-256 of the exact Parquet bytes for a packed file. Older indexes omit it; "
+            "an empty or lost entry has no file digest."
+        ),
+    )
     state: EntryState = Field(
         default=EntryState.PACKED,
         description=(
@@ -231,6 +239,7 @@ class CompactEntry(Model):
             "no rows. Empty on a daily entry, where a lost day is an entry of its own."
         ),
     )
+
     set_aside: int = Field(
         default=0,
         ge=0,
@@ -239,6 +248,12 @@ class CompactEntry(Model):
             "they could not be read or were too large. The period holds every other row."
         ),
     )
+
+    @model_validator(mode="after")
+    def _a_file_digest_names_a_packed_period(self) -> Self:
+        if self.state != EntryState.PACKED and self.file_sha256 is not None:
+            raise ValueError("an entry with no file has no file digest")
+        return self
 
     @property
     def names_file(self) -> bool:
@@ -258,6 +273,11 @@ class CompactIndex(Contract):
     __schema_stem__: ClassVar[str] = "compact-index"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-10-25",
+            change="Packed entries may carry the exact Parquet file digest.",
+            why="A bounded reader can detect changed compact content before opening it.",
+        ),
+        ChangelogEntry(
             version="2026-10-07",
             change="Yearly indexes gain expired_through; omitted marks read as null.",
             why="Expiry progress must survive deletion of every yearly entry.",
@@ -266,16 +286,6 @@ class CompactIndex(Contract):
             version="2026-10-04",
             change="Entries gain state, lost_days and set_aside; absent ones read as packed.",
             why="An empty or lost period is an entry with no file, and the index says which.",
-        ),
-        ChangelogEntry(
-            version="2026-10-01T16:50",
-            change="Remove the retired aggregate from the ledger vocabulary.",
-            why="Only declared families may reach an index; surviving periods are unchanged.",
-        ),
-        ChangelogEntry(
-            version="2026-10-01",
-            change="ledger may name summary-quality-evals, and scores is refused.",
-            why="The eval ledger is named for what it holds; its files were rewritten.",
         ),
         ChangelogEntry(
             version="2026-09-27",
@@ -351,7 +361,7 @@ class CompactIndex(Contract):
                     f"{where} marks {entry.covers!r} {entry.state.value} with rows {entry.rows} "
                     f"and bytes {entry.bytes}, and an entry with no file counts neither"
                 )
-            if entry.state is EntryState.LOST and self.period is not Period.DAILY:
+            if entry.state == EntryState.LOST and self.period is not Period.DAILY:
                 raise ValueError(
                     f"{where} marks {entry.covers!r} lost, and only a day is lost: a month or a "
                     "year lists the days it lost in lost_days"

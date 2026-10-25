@@ -576,6 +576,7 @@ test("one listener retains durable seen receipts from an output root outside the
     recorded.inputs.settings.inputs.seen_days = [{ day: "2026-10-21", raw_files: [] }];
     delete recorded.runtime.run_number;
     recorded.runtime.clock = () => new Date(`2026-10-21T12:00:00.${String(clocks++).padStart(3, "0")}Z`);
+    recorded.runtime.selection_clock = () => new Date("2026-10-21T12:00:00Z");
     recorded.runtime.on_seen_persisted = receipt => { receipts.push(receipt); };
     recorded.runtime.on_feed_history_persisted = receipt => { feedReceipts.push(receipt); };
     const app = createPlanApp(recorded.inputs, recorded.runtime);

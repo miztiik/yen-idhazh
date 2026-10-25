@@ -10,6 +10,9 @@ import { createPlanApp } from "../src/api/server";
 import { runFeedPlan } from "../src/run-feed-plan";
 import { readStageBatch, writeStageBatch } from "../src/api/stage-store";
 import {
+  FeedHealthStateUpdateRequestSchema, FeedHealthStateUpdateResponseSchema,
+} from "../src/api/feed-health-state.schema";
+import {
   SelectionResponseSchema, PartitionResponseSchema, PersistenceResponseSchema, StageErrorResponseSchema,
 } from "../src/api/stage-response.schema";
 import { readLedgerParquet } from "../src/read-ledger-history/read-parquet";
@@ -35,6 +38,64 @@ async function verifySavedStageFlow() {
     const selected = SelectionResponseSchema.parse(await selectedResponse.json());
     expect(selected.publisher_history).toEqual({
       day: plan.context.date, availability: "unavailable", gaps: ["publication_history_unavailable"],
+    });
+    expect(selected.selection_state.capture_status).toBe("captured");
+    expect(typeof selected.selection_state.selection_started_at_utc).toBe("string");
+    expect(selected.selection_state.state).toMatchObject({
+      status: "unavailable",
+      lifecycle_window_days: fixture.inputs.harvest.config.feedback.lifecycle_window_days,
+      request_window_days: fixture.inputs.harvest.config.feedback.window_days,
+    });
+    expect(FeedHealthStateUpdateRequestSchema.parse({ batch_id: selected.batch_id })).toEqual({
+      batch_id: selected.batch_id,
+    });
+    expect(FeedHealthStateUpdateRequestSchema.safeParse({
+      batch_id: selected.batch_id, path: "state/raw/arbitrary.parquet",
+    }).success).toBe(false);
+    const saved = FeedHealthStateUpdateResponseSchema.parse({
+      batch_id: selected.batch_id,
+      selection_state: selected.selection_state,
+      update: {
+        status: "saved", state_revision: 1, attempted_revision: 1,
+        parent_revision: null, changed_days: ["2026-10-24"], diagnostics: [],
+      },
+    });
+    expect(saved.update.status).toBe("saved");
+    expect(FeedHealthStateUpdateResponseSchema.safeParse({
+      batch_id: selected.batch_id,
+      selection_state: selected.selection_state,
+      update: {
+        status: "saved", state_revision: 2, attempted_revision: 2,
+        parent_revision: null, changed_days: [], diagnostics: [],
+      },
+    }).success).toBe(false);
+    expect(FeedHealthStateUpdateResponseSchema.parse({
+      batch_id: selected.batch_id,
+      selection_state: selected.selection_state,
+      update: {
+        status: "unchanged", state_revision: 1, attempted_revision: null,
+        parent_revision: null, changed_days: [], diagnostics: [],
+      },
+    }).update.status).toBe("unchanged");
+    const failedSave = FeedHealthStateUpdateResponseSchema.parse({
+      batch_id: selected.batch_id,
+      selection_state: selected.selection_state,
+      update: {
+        status: "save_failed", state_revision: null, attempted_revision: 1,
+        parent_revision: null, changed_days: ["2026-10-24"], diagnostics: ["retry_exhausted"],
+      },
+    });
+    expect(failedSave.update.status).toBe("save_failed");
+    const unavailableState = FeedHealthStateUpdateResponseSchema.parse({
+      batch_id: selected.batch_id,
+      selection_state: selected.selection_state,
+      update: {
+        status: "unavailable", state_revision: null, attempted_revision: null,
+        parent_revision: null, changed_days: [], diagnostics: ["input_gap"],
+      },
+    });
+    expect(unavailableState.update).toMatchObject({
+      status: "unavailable", diagnostics: ["input_gap"],
     });
     expect(selected.selections).toEqual(plan.evidence.curation.rows);
     expect(selected.exclusions).toEqual([
@@ -115,6 +176,7 @@ async function verifyEmptyStages() {
     const app = createPlanApp(fixture.inputs, fixture.runtime);
     const selected = SelectionResponseSchema.parse(await (await post(app, "select-articles", { batch_id: batch.batch_id })).json());
     expect(selected.selections).toEqual([]);
+    expect(selected.selection_state.capture_status).toBe("captured");
     expect(selected.exclusions).toEqual(original.rejections);
     const partition = PartitionResponseSchema.parse(await (await post(app, "partition-articles", {
       batch_id: selected.batch_id, strategy: "none",

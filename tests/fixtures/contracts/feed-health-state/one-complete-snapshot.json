@@ -1,0 +1,243 @@
+{
+  "version": "2026-10-25T13:50",
+  "state_revision": 1,
+  "parent_revision": null,
+  "written_at_utc": "2026-10-25T01:05:00Z",
+  "selection_batch_id": "70cfe17c-ec6f-42e0-a934-bf4380122eba",
+  "selection_started_at_utc": "2026-10-25T01:00:00Z",
+  "code_revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "policy_version": "2026-10-25",
+  "policy_sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+  "lifecycle_window_days": 1,
+  "lifecycle_availability": "complete",
+  "lifecycle_window_start": "2026-10-24",
+  "lifecycle_window_end": "2026-10-24",
+  "lifecycle_days": [
+    {
+      "input_day": "2026-10-24",
+      "read_status": "available",
+      "gap_reason": null,
+      "input_identity": {
+        "input_day": "2026-10-24",
+        "fingerprint": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "indexes": [
+          {
+            "ledger": "feed-health",
+            "kind": "raw",
+            "path": "state/raw/feed-health/2026/10/24/index.json",
+            "content_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "day_membership_sha256": "3333333333333333333333333333333333333333333333333333333333333333"
+          }
+        ],
+        "files": [
+          {
+            "ledger": "feed-health",
+            "tier": "raw",
+            "period": null,
+            "path": "state/raw/feed-health/2026/10/24/00000000-0000-8000-8000-000000000001.parquet",
+            "file_id": "00000000-0000-8000-8000-000000000001",
+            "content_sha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+            "file_sha256": null,
+            "bytes": 512,
+            "row_count": 1
+          }
+        ]
+      },
+      "observed_fingerprint": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "rows": [
+        {
+          "version": "2026-10-24T20:04",
+          "run_id": "2026-10-24-7",
+          "date": "2026-10-24",
+          "feed_id": "recorded-news",
+          "checked_at": "2026-10-24T12:00:00Z",
+          "outcome": "ok",
+          "status": 200,
+          "items": 1,
+          "detail": null,
+          "endpoint_key": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+          "robots_outcome": "allowed",
+          "robots_checked_at": "2026-10-24T11:59:00Z",
+          "robots_status": 200,
+          "target_attempted": true,
+          "publisher_id": "recorded-publisher"
+        }
+      ]
+    }
+  ],
+  "request_window_days": 1,
+  "request_availability": "complete",
+  "request_window_start": "2026-10-24",
+  "request_window_end": "2026-10-24",
+  "request_days": [
+    {
+      "input_day": "2026-10-24",
+      "read_status": "available",
+      "gap_reason": null,
+      "input_identity": {
+        "input_day": "2026-10-24",
+        "fingerprint": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+        "indexes": [
+          {
+            "ledger": "document-observations",
+            "kind": "raw",
+            "path": "state/raw/feed-ingest-plan/document-observations/2026/10/24/index.json",
+            "content_sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+            "day_membership_sha256": "4444444444444444444444444444444444444444444444444444444444444444"
+          },
+          {
+            "ledger": "document-observations",
+            "kind": "yearly",
+            "path": "state/compact/feed-ingest-plan/document-observations/index/yearly.json",
+            "content_sha256": "5555555555555555555555555555555555555555555555555555555555555555",
+            "day_membership_sha256": "6666666666666666666666666666666666666666666666666666666666666666"
+          }
+        ],
+        "files": [
+          {
+            "ledger": "document-observations",
+            "tier": "raw",
+            "period": null,
+            "path": "state/raw/feed-ingest-plan/document-observations/2026/10/24/00000000-0000-8000-8000-000000000002.parquet",
+            "file_id": "00000000-0000-8000-8000-000000000002",
+            "content_sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+            "file_sha256": null,
+            "bytes": 1024,
+            "row_count": 3
+          },
+          {
+            "ledger": "document-observations",
+            "tier": "compact",
+            "period": "yearly",
+            "path": "state/compact/feed-ingest-plan/document-observations/yearly/2026/2026.parquet",
+            "file_id": "00000000-0000-8000-8000-000000000005",
+            "content_sha256": "7777777777777777777777777777777777777777777777777777777777777777",
+            "file_sha256": "8888888888888888888888888888888888888888888888888888888888888888",
+            "bytes": 4096,
+            "row_count": 12
+          }
+        ]
+      },
+      "observed_fingerprint": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+      "rows": [
+        {
+          "version": "2026-10-24T23:08",
+          "event_id": "01504bcb-60d1-5d4d-b92f-d6f0abee2022",
+          "caused_by_event_id": null,
+          "corrects_event_id": null,
+          "correction_revision": null,
+          "observed_run_id": "2026-10-24-7",
+          "observed_attempt": 1,
+          "correlation_id": "7cef34e3-dd9f-40ce-9a56-4d01ff5115cc",
+          "source_id": "recorded-news",
+          "publisher_id": "recorded-publisher",
+          "article_id": "d5ac862b279674275ef140975760a0e49b3a8aa6121d5dcb999e0b8b445417fb",
+          "candidate_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "document_kind": "article",
+          "operation": "fetch",
+          "outcome": "success",
+          "occurred_at": "2026-10-24T12:00:00Z",
+          "duration_ms": 250,
+          "http_status": 200,
+          "attribution": null,
+          "failure_code": null,
+          "request_phase": null,
+          "request_sequence": null,
+          "retry": null,
+          "dispatched_request_count": null,
+          "request_coverage": null
+        },
+        {
+          "version": "2026-10-24T23:08",
+          "event_id": "11504bcb-60d1-5d4d-b92f-d6f0abee2022",
+          "caused_by_event_id": "01504bcb-60d1-5d4d-b92f-d6f0abee2022",
+          "corrects_event_id": null,
+          "correction_revision": null,
+          "observed_run_id": "2026-10-24-7",
+          "observed_attempt": 1,
+          "correlation_id": "7cef34e3-dd9f-40ce-9a56-4d01ff5115cc",
+          "source_id": "recorded-news",
+          "publisher_id": "recorded-publisher",
+          "article_id": "d5ac862b279674275ef140975760a0e49b3a8aa6121d5dcb999e0b8b445417fb",
+          "candidate_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "document_kind": "article",
+          "operation": "attempt",
+          "outcome": "success",
+          "occurred_at": "2026-10-24T12:00:01Z",
+          "duration_ms": 50,
+          "http_status": 200,
+          "attribution": null,
+          "failure_code": null,
+          "request_phase": "target",
+          "request_sequence": 0,
+          "retry": 0,
+          "dispatched_request_count": 1,
+          "request_coverage": "complete"
+        },
+        {
+          "version": "2026-10-24T23:08",
+          "event_id": "21504bcb-60d1-5d4d-b92f-d6f0abee2022",
+          "caused_by_event_id": "01504bcb-60d1-5d4d-b92f-d6f0abee2022",
+          "corrects_event_id": null,
+          "correction_revision": null,
+          "observed_run_id": "2026-10-24-7",
+          "observed_attempt": 1,
+          "correlation_id": "7cef34e3-dd9f-40ce-9a56-4d01ff5115cc",
+          "source_id": "recorded-news",
+          "publisher_id": "recorded-publisher",
+          "article_id": "d5ac862b279674275ef140975760a0e49b3a8aa6121d5dcb999e0b8b445417fb",
+          "candidate_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "document_kind": "article",
+          "operation": "parse",
+          "outcome": "success",
+          "occurred_at": "2026-10-24T12:00:02Z",
+          "duration_ms": 100,
+          "http_status": null,
+          "attribution": null,
+          "failure_code": null,
+          "request_phase": null,
+          "request_sequence": null,
+          "retry": null,
+          "dispatched_request_count": null,
+          "request_coverage": null
+        }
+      ]
+    }
+  ],
+  "source_inventory_complete": true,
+  "source_inventory_sha256": "729e6ffc64a3ab568958f45c86725ee6266c64994e3a6c5a17b3851f5952360e",
+  "source_inventory": [
+    {
+      "source_id": "recorded-news",
+      "endpoint_key": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+      "publisher_id": "recorded-publisher",
+      "registry_status": "active"
+    }
+  ],
+  "source_results": [
+    {
+      "source_id": "recorded-news",
+      "endpoint_key": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+      "lifecycle": {
+        "input_status": "complete",
+        "lifecycle": "eligible",
+        "strikes": null,
+        "rested_runs": null,
+        "robots_permission": "allowed",
+        "reliability": null
+      },
+      "requests": {
+        "input_status": "complete",
+        "qualification_status": "qualified",
+        "measured_target_requests": 1,
+        "measured_source_wasted_requests": 0,
+        "observed_attempted_opportunities": 1,
+        "observed_measured_opportunities": 1,
+        "measured_coverage": 1.0,
+        "request_waste_ratio": 0.0,
+        "request_component_weight": 0.3333333333333333,
+        "request_component_penalty": 0.0
+      }
+    }
+  ]
+}

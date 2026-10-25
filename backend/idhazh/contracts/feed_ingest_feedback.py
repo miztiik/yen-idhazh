@@ -21,7 +21,7 @@ UnitInterval = Annotated[float, Field(ge=0, le=1, allow_inf_nan=False)]
 
 
 class FeedIngestOperationalStateRow(Contract):
-    """One source's request estimate in a versioned operational-state snapshot."""
+    """One source's request estimate in the legacy operational-state snapshot."""
 
     __schema_stem__: ClassVar[str] = "feed-ingest-operational-state"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
@@ -67,9 +67,7 @@ class FeedIngestOperationalStateRow(Contract):
             and self.evidence_start_utc > self.evidence_end_utc
         ):
             raise ValueError("observed evidence starts after it ends")
-        if (
-            self.measured_target_requests is None
-        ) != (
+        if (self.measured_target_requests is None) != (
             self.measured_source_wasted_requests is None
         ):
             raise ValueError("measured request totals and waste are available together")
@@ -96,27 +94,73 @@ class FeedIngestOperationalStateRow(Contract):
 
 
 class OperationalStateRead(Model):
-    """Which saved revision a consumer used, including the original fallback window."""
+    """Which saved revision a selection captured, including both evidence windows."""
 
     status: Literal["current", "stale_fallback", "unavailable"]
     state_revision: PositiveCount | None
-    window_days: PositiveCount
-    window_start: DateStamp | None
-    window_end: DateStamp | None
+    notices: list[Literal["restrictions_unverified"]] = Field(
+        default_factory=list, json_schema_extra={"default": []},
+    )
+    lifecycle_status: Literal["complete", "partial", "unavailable"]
+    lifecycle_window_days: PositiveCount
+    lifecycle_window_start: DateStamp | None
+    lifecycle_window_end: DateStamp | None
+    request_status: Literal["complete", "partial", "unavailable"]
+    request_window_days: PositiveCount
+    request_window_start: DateStamp | None
+    request_window_end: DateStamp | None
 
     @model_validator(mode="after")
     def validate_read(self) -> Self:
+        expected_notices = ["restrictions_unverified"] if self.status == "unavailable" else []
+        if self.notices != expected_notices:
+            raise ValueError("an unavailable state has the neutral restrictions warning only")
         if self.status == "unavailable":
             if any(value is not None for value in (
-                self.state_revision, self.window_start, self.window_end,
+                self.state_revision,
+                self.lifecycle_window_start,
+                self.lifecycle_window_end,
+                self.request_window_start,
+                self.request_window_end,
             )):
                 raise ValueError("unavailable state has no saved revision or window")
-        elif self.state_revision is None or self.window_start is None or self.window_end is None:
-            raise ValueError("a saved state reading retains its revision and original window")
-        if (
-            self.window_start is not None
-            and self.window_end is not None
-            and self.window_start > self.window_end
-        ):
+            if self.lifecycle_status != "unavailable" or self.request_status != "unavailable":
+                raise ValueError("unavailable state has unavailable evidence components")
+        else:
+            if self.state_revision is None or any(value is None for value in (
+                self.request_window_start, self.request_window_end,
+            )):
+                raise ValueError("a saved state reading retains its revision and request window")
+            if (self.lifecycle_window_start is None) != (self.lifecycle_window_end is None):
+                raise ValueError("lifecycle represented-day bounds are available together")
+            if self.lifecycle_status != "unavailable" and (
+                self.lifecycle_window_start is None or self.lifecycle_window_end is None
+            ):
+                raise ValueError("known lifecycle evidence retains its represented-day bounds")
+            if self.request_status == "unavailable" and any(value is None for value in (
+                self.request_window_start, self.request_window_end,
+            )):
+                raise ValueError("unavailable request evidence still names its configured window")
+        if any(start is not None and end is not None and start > end for start, end in (
+            (self.lifecycle_window_start, self.lifecycle_window_end),
+            (self.request_window_start, self.request_window_end),
+        )):
             raise ValueError("operational state window starts after it ends")
+        return self
+
+
+class SelectionStateCapture(Model):
+    """The state read at selection start, or an explicit legacy absence."""
+
+    capture_status: Literal["captured", "not_recorded"]
+    selection_started_at_utc: Timestamp | None = None
+    state: OperationalStateRead | None = None
+
+    @model_validator(mode="after")
+    def validate_capture(self) -> Self:
+        if self.capture_status == "captured":
+            if self.selection_started_at_utc is None or self.state is None:
+                raise ValueError("a captured selection state records its clock and state")
+        elif self.selection_started_at_utc is not None or self.state is not None:
+            raise ValueError("an unrecorded legacy selection has no captured clock or state")
         return self
