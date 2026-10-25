@@ -145,3 +145,40 @@ test('reader labels clear the text floor without scaling, and every mark survive
 	}
 	expect(errors).toEqual([]);
 });
+
+test('the reader surface stays still as it loads and gains no page animation under reduced motion', async ({ page }) => {
+	const date = newestDate();
+	const day = payloadOf(date) as unknown as DigestDay;
+
+	async function runningAnimations(page: Page) {
+		await dayReady(page);
+		return page.evaluate(() =>
+			document.getAnimations().filter((animation) =>
+				animation.playState === 'running'
+			).length
+		);
+	}
+
+	await page.goto(`/${date}/`);
+	const first = await runningAnimations(page);
+	expect(first).toBe(0);
+	const stories = page.locator('article.item');
+	for (let remaining = day.items.length; remaining > 0; remaining--) {
+		if (await stories.count() === day.items.length) break;
+		const before = await stories.count();
+		await page.locator('[data-pager-scripted]').click();
+		await expect.poll(() => stories.count()).toBeGreaterThan(before);
+	}
+	await expect(stories).toHaveCount(day.items.length);
+	expect(await runningAnimations(page)).toBe(0);
+
+	await page.locator('a[href="/archive/"]').first().click();
+	await expect(page.locator('main')).toBeVisible();
+	await expect(page).toHaveURL(/\/archive\/$/);
+	await page.goBack();
+	expect(await runningAnimations(page)).toBe(0);
+
+	await page.emulateMedia({ reducedMotion: 'reduce' });
+	await page.reload();
+	expect(await runningAnimations(page)).toBe(0);
+});
