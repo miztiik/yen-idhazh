@@ -104,7 +104,7 @@ tracing context. The existing default-off service flag gates the new routes.
 | E7 | 7 | Compute supported operational estimates | 6 | G | IN-REVIEW (report-only request estimate; no ranking change) | operational-score-contracts | [#1719](https://github.com/miztiik/yen-idhazh/pull/1719) | - |
 | E8 | 8 | Deliver selection, partition and persistence APIs | - (authorized stage contracts included) | E | DONE | feed-ingest-feedback-selection | - | - |
 | E9 | 9 | Apply the soft publisher-exposure preference | 8 | F | IN-REVIEW (current-run + fallback) | publisher-exposure-preference | [#1714](https://github.com/miztiik/yen-idhazh/pull/1714) | - |
-| E10 | 10 | Settle feedback and consume it in the next allocation | 7, 8 | H | IN-FLIGHT (local checks; PR pending) | operational-state-feedback | - | - |
+| E10 | 10 | Settle feedback and consume it in the next allocation | 7, 8 | H | IN-REVIEW (CI pending) | operational-state-feedback | [#1720](https://github.com/miztiik/yen-idhazh/pull/1720) | - |
 | E11 | 11 | Report bounded technical admission trials | 2, 4, 5, 6 | I | PENDING | - | - | - |
 | E12 | 12 | Enforce temporary access restrictions and earned recovery | 11 | J | PENDING | - | - | - |
 | E13 | 13 | Apply discovery evidence before feed polling | 12 | K | PENDING | - | - | - |
