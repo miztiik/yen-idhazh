@@ -57,6 +57,14 @@ Its second chart sorts last and loads after the initial shell. Browser tests
 reveal the named fixture's drawings before checking their marks, labels and
 reload stability. They never open a longer committed day for this check.
 
+`frontend/tests/visual-legibility.spec.ts` owns that browser check. It compares
+the marks with the fixture's drawing data, verifies the complete accessible
+description, and checks the text and width rules in the
+[design system](../../concepts/design-system.md#a-charts-column-is-set-by-what-the-chart-was-drawn-at).
+It visits the archive and returns, then reloads the day, to check that the same
+data keeps the same geometry. No reader styling change was needed to meet the
+floor; this gate protects the existing measured-width drawing.
+
 **The same boundary applies one step earlier, now that the data travels.** From 2026-09-13 a rendered visual also publishes its data - the marks, their values and their provenance, and the encoding that says which marks fill which channel ([where-a-drawing-becomes-pixels.md](where-a-drawing-becomes-pixels.md)). `refusedVisualData` in [drawing.ts](../../../frontend/src/lib/payload/drawing.ts) sits beside `refusedDrawing` and answers the questions a shape can answer: this page knows the `renderer_version` the document names, it knows the `type`, every channel names marks the document carries, and the channels of a `bar` pair into bars. **It refuses rather than guesses, and refusing is free** - a degrade path that draws something approximate is how a wrong chart reaches a reader, and a story with no visual is simply shorter, which is already the shape 94.7 percent of stories have. So there is no placeholder to design and no layout to hold open. Nothing here re-decides whether three bars are worth the space: that is an editorial floor, the pipeline holds it, and a second opinion in the drawing code is one nobody could reconcile with the first.
 
 **`renderer_version` is what makes the shape movable at all.** The page holds the set of renderers it knows and refuses anything else, so a later build can publish a later stamp without a cached older page drawing data that means something other than what its picture would say. It is stated in exactly one place, on the document a browser reads. `spec_format` carried the same idea in two places, the two disagreed on 2026-09-05T18:00, and a version in two places cannot be adjudicated by anything downstream.

@@ -34,7 +34,7 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 | 1b | The browser draws the chart, and the pipeline stops rendering | 1a | B | DONE #689 | p12-r1b | #689 | worker |
 | 2 | The drawing takes the width it is given | 1b | C | DONE #716 | p12-r2 | #716 | worker |
 | 3 | Numbers a reader can say out loud | 1b | C | IN-FLIGHT | shared-number-formatting | - | worker |
-| 4 | The smallest reader label stays readable | 2, 3 | D | PENDING | - | - | - |
+| 4 | The smallest reader label stays readable | 2, 3 | D | DONE | reader-label-readability | - | worker |
 | 5 | A caption, and one mark that lands first | 4 | E | PENDING | - | - | - |
 
 **Row #1 became rows #1a and #1b on 2026-09-13, and the plan gained a group.** The owner ruled
