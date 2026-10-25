@@ -36,6 +36,8 @@ from idhazh.contracts.base import (
 from idhazh.contracts.call_cost import COST_FIELDS, CallKind
 from idhazh.contracts.sources import SourceForm
 from idhazh.contracts.taxonomy import SourceTier
+from idhazh.contracts.visual_outcome import validate_visual_outcome
+from idhazh.contracts.visual_type import VisualType
 
 #: The two call slots, named for what each call does rather than for its turn.
 #: Every per-call cell is this prefix plus the quantity, so a reader that pools
@@ -277,6 +279,9 @@ COLUMN_READERS: Final[Mapping[str, tuple[str, ...]]] = MappingProxyType(
             "slot_id",
             "kv_tokens_at_start",
             "prefix_shared_with_previous",
+        ),
+        "backend/idhazh/visual_population.py": (
+            "planned_type", "rendered_type", "downgrade_depth", "marks",
         ),
     }
 )
@@ -617,6 +622,11 @@ class ItemHealthRow(Contract):
     __schema_stem__: ClassVar[str] = "item-health-row"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-10-25",
+            change="Append requested and delivered visual types, replacement depth and marks.",
+            why="The existing item ledger retains visual refusals and fallback evidence.",
+        ),
+        ChangelogEntry(
             version="2026-10-20",
             change="Source classification accepts open kind and numeric tier identifiers.",
             why="Registry membership can change without invalidating recorded payloads.",
@@ -630,11 +640,6 @@ class ItemHealthRow(Contract):
             version="2026-09-29",
             change="job and shard are machine_job and machine_shard.",
             why="The ledger's own job and shard name the writer; these name the machine.",
-        ),
-        ChangelogEntry(
-            version="2026-09-22",
-            change="FailureCode gained contaminated, a fourth signal an ok row may carry.",
-            why="An extraction that returned the publisher's front page is a named outcome.",
         ),
         ChangelogEntry(
             version="2026-09-21",
@@ -1299,6 +1304,26 @@ class ItemHealthRow(Contract):
             "the machine to its limit."
         ),
     )
+    planned_type: VisualType | None = Field(
+        default=None, description="The final visual decision's original typed request."
+    )
+    rendered_type: VisualType | None = Field(
+        default=None, description="The final decision's successfully delivered type."
+    )
+    downgrade_depth: int | None = Field(
+        default=None, ge=0,
+        description="The final decision's selected replacement depth; null when unmeasured.",
+    )
+    marks: int | None = Field(
+        default=None, ge=1, description="The final decision's delivered mark count."
+    )
+
+    @model_validator(mode="after")
+    def _visual_outcome_is_complete(self) -> Self:
+        validate_visual_outcome(
+            self.planned_type, self.rendered_type, self.downgrade_depth, self.marks
+        )
+        return self
 
     @property
     def counts_against_source(self) -> bool:

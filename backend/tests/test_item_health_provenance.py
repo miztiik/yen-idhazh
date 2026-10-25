@@ -1,7 +1,7 @@
 """Does the column report name a real producer, and refuse a word that only looks like one?
 
-`ItemHealthRow` has 123 columns and nine other contracts also have a `date`, so
-the scan's whole job is telling a module that fills a cell from one that uses
+Nine other contracts also have a `date`, so the scan's whole job is telling a
+module that fills a cell from one that uses
 the same word. Every fixture here is a source tree, or census rows filed through
 the ledger door, built under `tmp_path`. Nothing reads `backend/idhazh/` or the
 committed archive, which both grow, so nothing here costs more as they do
@@ -9,8 +9,7 @@ committed archive, which both grow, so nothing here costs more as they do
 never produced.
 
 The one exception is the grouping check, which reads `csv_columns()`. That is a
-contract and not a collection: it is 119 names today and 119 names on a five
-year old clone.
+contract and not a collection, so its size does not grow with the repository.
 """
 
 from __future__ import annotations

@@ -342,12 +342,38 @@
     "tagline": "A daily digest that checks its own work.",
     "theme_default": "dark"
   },
-  "version": "2026-10-24T18:29",
+  "version": "2026-10-25",
   "visuals": {
     "asset_base_url": "",
-    "downgrade_floor_percentiles": [],
+    "downgrade_enabled": false,
+    "downgrade_floor_percentiles": [
+      50,
+      75
+    ],
+    "downgrade_lookback_days": 30,
+    "downgrade_max_samples_per_type": 256,
     "enabled_kinds": [
       "chart"
+    ],
+    "enabled_types": [
+      "bar",
+      "dot",
+      "line",
+      "area",
+      "scatter",
+      "bubble",
+      "slope",
+      "stacked_bar",
+      "pie",
+      "histogram",
+      "timeline",
+      "table",
+      "flow",
+      "comparison",
+      "callout",
+      "quotecard",
+      "whowhat",
+      "keyfacts"
     ],
     "histogram_bins": 3,
     "lead_words": 150,
@@ -362,6 +388,7 @@
       "si_prefix_from": 1000,
       "significant_digits": 3
     },
-    "request_timeout_minutes": 2.0
+    "request_timeout_minutes": 2.0,
+    "type_selection_enabled": false
   }
 }

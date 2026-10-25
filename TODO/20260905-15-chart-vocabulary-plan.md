@@ -6,11 +6,13 @@
 **Chain**: previous work delivered in the [chart contract](../docs/architecture/publishing/where-a-drawing-becomes-pixels.md) | next [`20260905-16-composition-vocabulary-plan.md`](20260905-16-composition-vocabulary-plan.md).
 **Reference**: [`20260902-visual-planner-pseudo-plan.md`](20260902-visual-planner-pseudo-plan.md) - O13, rows 38, 39, 41, 48, 49, sections 7.2, 12.8 X1, 12.12 G26.
 
-Plan reconciliation only. Implementation, commits, pull requests and merging
-are not authorised by this update. Follow the current
-[execution guide](../docs/how-to/execute-a-plan.md) when execution is authorised.
-Persisted-contract design remains consultation-only under CLAUDE.md section 6
-until the owner approves that design.
+kumarsnaveen authorised Row 1 planning and delivery on 2026-10-25 UTC and
+approved its [concrete delivery design](20261025-chart-vocabulary-row1-plan.md),
+including the requested-versus-delivered metric. On 2026-10-25, kumarsnaveen
+authorised execution of the remaining rows. Follow the current
+[execution guide](../docs/how-to/execute-a-plan.md); any further persisted-design
+change beyond the plan's approved scope still requires owner approval under
+CLAUDE.md section 6.
 
 ---
 
@@ -89,14 +91,16 @@ this plan does not restore historical redraw or migration machinery.
 
 | # | Row title | Depends-on | Parallel-group | Status | Worktree | PR | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| 1 | The whole vocabulary is declarable, and an unbuilt type steps down | - | A | PENDING | - | - | - |
+| 1 | The whole vocabulary is declarable, and an unbuilt type steps down | - | A | DONE | chart-vocabulary-plan | - | - |
 | 2 | Position and length: bar, dot, slope | 1 | B | PENDING | - | - | - |
 | 3 | Trend and magnitude: line, area | 2 | C | PENDING | - | - | - |
 | 4 | Relationship: scatter | 3 | D | PENDING | - | - | - |
 | 5 | Parts as bars: stacked_bar, with its own question | 4 | E | PENDING | - | - | - |
 | 6 | The two the reader asked for | 5 | F | PENDING | - | - | - |
 
-All rows stay PENDING. Existing parts are reuse evidence, not completed
+Row 1 is authorised and in flight under the
+[approved delivery design](20261025-chart-vocabulary-row1-plan.md).
+Other rows remain PENDING. Existing parts are reuse evidence, not completed
 end-to-end delivery.
 
 ### Current delivery evidence

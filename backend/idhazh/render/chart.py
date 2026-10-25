@@ -90,6 +90,11 @@ class _Figure(NamedTuple):
     unit: str | None
 
 
+def can_compile(visual_type: VisualType | None) -> bool:
+    """The current compiler capability, not the configurable request vocabulary."""
+    return visual_type is VisualType.BAR
+
+
 def compile_bar(plan: VisualPlan, table: ElementTable, *, visuals: VisualsConfig) -> CompiledChart:
     """One `bar` plan and one article's elements become the data that draws them.
 
@@ -118,7 +123,7 @@ def compile_bar(plan: VisualPlan, table: ElementTable, *, visuals: VisualsConfig
     """
     if plan.decision is not PlanDecision.VISUAL:
         raise CompileError("this plan asks for no picture, so there is nothing to compile")
-    if plan.type is not VisualType.BAR:
+    if not can_compile(plan.type):
         named = plan.type.value if plan.type is not None else "no type"
         raise CompileError(f"this build draws bar and nothing else, and the plan says {named}")
 

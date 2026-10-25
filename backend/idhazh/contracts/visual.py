@@ -154,6 +154,7 @@ from idhazh.contracts.element import (
     ELEMENT_ID_PATTERN,
     ElementId,
 )
+from idhazh.contracts.visual_type import VisualType as VisualType
 
 #: The field this contract may never grow, and the reason it is spelled as a
 #: name rather than left as an absence. Alt text assembled by the compiler is
@@ -260,35 +261,6 @@ class VisualPurpose(StrEnum):
     DETAIL = "detail"
     #: The one figure, statement or short list worth stopping on.
     EMPHASIS = "emphasis"
-
-
-class VisualType(StrEnum):
-    """The full declarable vocabulary of forms a plan may ask for.
-
-    Declarable is not renderable. A type with no compiler template can be named
-    by a plan and is deterministically downgraded to its nearest built
-    neighbour, which is how the planner says which template is worth building
-    next. What may reach a reader is gated elsewhere; what may be named is here.
-    """
-
-    BAR = "bar"
-    DOT = "dot"
-    LINE = "line"
-    AREA = "area"
-    SCATTER = "scatter"
-    BUBBLE = "bubble"
-    SLOPE = "slope"
-    STACKED_BAR = "stacked_bar"
-    PIE = "pie"
-    HISTOGRAM = "histogram"
-    TIMELINE = "timeline"
-    TABLE = "table"
-    FLOW = "flow"
-    COMPARISON = "comparison"
-    CALLOUT = "callout"
-    QUOTECARD = "quotecard"
-    WHOWHAT = "whowhat"
-    KEYFACTS = "keyfacts"
 
 
 class EncodingRole(StrEnum):

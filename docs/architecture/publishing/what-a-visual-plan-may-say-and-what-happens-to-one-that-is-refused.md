@@ -1,6 +1,6 @@
 # What a visual plan may say, and what happens to one that is refused
 
-**Last Updated**: 2026-09-23
+**Last Updated**: 2026-10-25
 
 The shape the model decodes into, the four things it may not carry, the nine
 deterministic checks a plan has to clear, and the ladder a refused plan may step
@@ -144,7 +144,22 @@ a membership passes while three other rules are firing. Each check was also neut
 its own fixture, and all nine left the plan accepted, so every one of them is the sole cause of the
 refusal it is credited with.
 
-### Where the vocabulary lives, and why none of it is in `config/`
+### Config selects requests; code owns correctness
+
+The operator selects names in `visuals.enabled_types` in `config/idhazh.json`.
+Its native `VisualType` enum is declared once in
+`backend/idhazh/contracts/visual_type.py`, and remains importable from
+`contracts/visual.py`. The config rejects unknown or repeated names and an
+empty list. An unruled or unbuilt type remains a valid selection; selection is
+not permission to render.
+
+`visuals.type_selection_enabled` defaults to false. Off preserves the full
+request grammar and existing reachability behavior. On limits the derived
+request grammar, the ruled reachability choices and parsed requests to the
+selected names. A selected unruled type remains reachable because absent
+rules cannot prove it impossible. The native plan schema stays complete.
+Effective selection enters the input fingerprint without changing the cached
+article/system prefix.
 
 `visuals.min_chart_points`, `visuals.max_chart_points` and `visuals.histogram_bins` are knobs and
 are read from `config/` (Guardrail #6). The tables are not knobs, and since 2026-09-09 they are not the
@@ -164,9 +179,9 @@ no schema, and it imports `idhazh.elements`, which a contract may not (`CLAUDE.m
 move changed no behaviour and moved neither stamp - **a date-stamp that changes because a file moved
 is a date-stamp that lies**, which is the same argument that keeps both of them out of `config/`.
 
-- **Which roles a type may fill** is a relation between `VisualType` and `EncodingRole`, two closed
- vocabularies that are both Python enums in `contracts/visual.py`. A JSON file cannot reference
- either, so a copy there is a second spelling that drifts. "A bar has no bins" is also what a bar
+- **Which roles a type may fill** is a relation between the native `VisualType`
+ and `EncodingRole` enums. Config selects names validated by those enums; it
+ does not redefine their correctness rules. "A bar has no bins" is what a bar
  *is* rather than something an operator should be able to edit: a config edit that let a bar draw
  bins would publish a plan no compiler has a template for.
 - **Which units measure the same thing** is arithmetic. A kilotonne is a thousand tonnes whatever
@@ -178,8 +193,9 @@ channels follow from the role names and anybody would write the same table. The 
 `table`, `flow`, `comparison`, `callout`, `quotecard`, `whowhat`, `keyfacts` - are **named as having
 no rule yet**, and a plan naming one is refused by name. Naming them is the point: a type in neither
 set would be waved through by both per-type checks and drawn with nothing having ruled on it.
-Refusing them is also correct rather than a stopgap - declarable is not renderable, `enabled_kinds`
-is `["chart"]`, and a downgrade ladder re-enters this same validator with a nearer neighbour.
+Refusing them is correct: a request must have both validator rules and a
+supported compiler before it may render. A replacement must meet the same
+requirements; otherwise the item keeps its text without a visual.
 
 `PLAN_VOCABULARY_VERSION` is the date-stamp of the role table, and it is not the plan contract's
 `version`, which says when the *shape* last moved. `plan_version_current` compares the two
@@ -228,11 +244,10 @@ a `bubble` loses on the way to a `scatter` is the size *channel*; the elements t
 declared, stay checked by `no_invented_values`, and are simply not drawn. Read the other way - as
 "an element may not leave `element_ids`" - the rule would ban every edge the source document lists.
 
-**Rule 2 needs the edges to carry purposes, because comparing each step's endpoints cannot make a
-chain safe.** `pie` to `stacked_bar` keeps a composition and `stacked_bar` to `bar` does not, so a
-ladder that only asked "does this plan still say `composition`?" would walk a composition into a
-comparison in two moves and record both as legal. Naming the purposes an edge preserves asks every
-step about the one purpose the plan started with.
+**Rule 2 needs the edges to carry purposes.** Each step is asked about the one
+purpose the plan started with. A failed declared-whole check has no onward bar
+edge, so neither a direct stacked request nor an upstream pie request can
+escape that refusal.
 
 ### The static allow-list, and the four edges it refuses
 
@@ -242,15 +257,19 @@ survives" implies and never states.
 
 | From | To | Preserves | What the step gives up |
 | --- | --- | --- | --- |
+| `dot` | `bar` | `comparison` | Position-only marks become lengths for the same magnitude comparison; filled grouping or other undisplayed channels refuse replacement. |
 | `bubble` | `scatter` | `relationship` | The size channel. The two measured axes the relationship is stay. |
 | `pie` | `stacked_bar` | `composition` | The circle. Parts of a declared whole, stacked in one bar. |
-| `stacked_bar` | `bar` | `comparison` | The series split, which is what a stacked bar is refused for when its parts are not exhaustive. |
-| `comparison` | `bar` | `comparison` | Nothing a reader sees - `comparison` has no role rule yet, so this is the "nearest built neighbour" `UNRULED_TYPES` promises. |
+| `comparison` | `bar` | `comparison` | An unruled request can become bars only when its complete channels already state a magnitude comparison. |
 | `whowhat` | `bar` | `comparison` | The grid. A one-attribute comparison grid drawn as the comparison it is. |
 
-**An edge that cannot change an outcome is not on the list.** A target whose required channels equal
-the source's rescues nothing - a plan refused as a `line` is refused identically as an `area` - so
-that pair is absent rather than listed and never fired. A test holds the whole table to that.
+**An edge must change an outcome.** It changes either validation or compiler
+availability: a valid `dot` has no compiler yet and can reach a supported bar.
+The compiler's own capability query also controls which targets may be returned.
+An unsupported intermediate may be traversed but never returned as drawable.
+When selection is active, the replacement must also be selected. The bar
+compiler cannot preserve an extra grouping or other channel, so those
+requests are refused rather than silently dropping facts.
 
 Four refusals are worth naming, because each is a judgement rather than a derivation:
 
@@ -265,15 +284,15 @@ Four refusals are worth naming, because each is a judgement rather than a deriva
 
 ### The floor, what it is a percentile of, and what an empty corpus means
 
-`visuals.downgrade_floor_percentiles` is the ladder as one list: how many rungs it has and how high
+`visuals.downgrade_floor_percentiles` states how many rungs exist and how high
 each one is. Entry *n* is the percentile a downgrade at depth *n+1* must reach, so **the length is
 the deepest permitted downgrade and the depth after it refuses** - `[50, 75]` is the design's own
 ladder, the median at the first step down and the 75th percentile at the second, refuse at the
-third. An empty list is the ladder switched off, which is one knob doing two jobs on purpose: a
-separate on-off flag can disagree with the rungs beside it, and zero rungs is already an unambiguous
-no. It ships empty, because the flag stays off until the whole two-call path works. The rungs must
-rise, and `VisualsConfig` refuses a list that does not - a floor that falls with depth is a ladder
-that gets easier the further down it goes.
+third. `visuals.downgrade_enabled` is the separate default-false switch. Off
+reads no history and attempts no replacement. On requires a nonempty,
+strictly increasing percentile list. Each policy switch declares removal
+after owner-approved permanent activation; its on/off behavior must remain
+covered until then.
 
 **The floor is on the mark count**, which is the quantity the validator's own `enough_data` already
 counts, over elements code extracted. The population is the depth-0 published mark counts for the
@@ -282,12 +301,26 @@ admit more downgrades, so the bar would loosen exactly as quality fell. It is ne
 integer population gives an integer floor and nothing is interpolated into a mark count no published
 visual ever drew.
 
-**A floor that cannot be computed is not cleared.** Waiving it on an empty population would make
-depth 1 publish on the validator alone, which is depth 1 quietly becoming the default path. The
-consequence is stated rather than hidden: `state/visuals/` does not exist yet, so today the
-population is always empty, every depth refuses, and **the ladder behaves exactly as if it were
-off**. What ships now is the mechanism, its edges and three of its four invariants under test; the
-floor case becomes live when the ledger does.
+The worker reads the existing item-health ledger's committed raw and compact
+files through `ledger.load_days` before it starts a shard. It names only the
+previous `visuals.downgrade_lookback_days` UTC dates, excluding the publication
+day; the default is 30 days. Qualifying rows have an OK item outcome, equal
+known requested/delivered types, zero replacement depth and a positive
+delivered mark count. Downgrades, failed deliveries and historical unknowns
+cannot lower the floor.
+
+Keep the newest `visuals.downgrade_max_samples_per_type` qualifying rows per
+type, default 256, ordered by `(date, item_ended_at or "", run_id, item_id)`
+descending. Freeze their mark-count tuples once per shard. Every item uses
+that same snapshot, even if another writer commits newer evidence during the
+shard. Enabled replacement requires the explicit snapshot; a missing argument
+is an error, not an empty population.
+
+**A genuinely empty population refuses replacement.** Do not seed it with
+synthetic counts or infer old outcomes. Ordinary direct bars record evidence
+while the replacement policy is off, so later days can use measured history.
+The [decision path](visuals.md#every-none-says-which-gate-refused-it) owns the
+stored outcome fields and the requested-versus-delivered rate.
 
 **A downgrade with no annotation fails**, at every depth and not only at depth 2. The source
 document states it both ways - a table that puts it at depth 2 and a rule that puts it at depth 1
@@ -348,12 +381,13 @@ binding gate here is integrity or cost, and a plain grey bar chart passes all of
 one - a model call apiece. Adding a downgrade edge must not cost that, and `UNIT_TABLE_VERSION` set
 the precedent for the same reason.
 
-**Why the ladder ships inert rather than waiting for its ledger.** With no depth-0 population every
-floor is uncomputable and every depth refuses, so today the ladder answers exactly as it would with
-the flag off. That is deliberate: the edges, the invariants and the refusals are under test now, at
-no reader-visible cost, and the one case that needs a corpus is the one case that waits. The
-alternative - hold the whole mechanism back until `state/visuals/` lands - would put the edge table
-and the invariance rules into the same commit as the ledger, where a review has to hold both.
+**Selection is not correctness, and activation is not a floor.** Config owns
+which native names may be requested; code owns roles, units, purpose-safe
+edges and compiler capability. The two activation switches default off and
+are independent. The existing item ledger supplies bounded, measured
+history, so no new ledger or fabricated seed is required. A refusal keeps the
+summary, not a forced bar, and stacked parts cannot bypass their declared
+whole. Owner approval: kumarsnaveen, 2026-10-25 UTC.
 
 ## Rejected alternatives
 
@@ -367,7 +401,6 @@ and the invariance rules into the same commit as the ledger, where a review has 
 | A `label` encoding role beside the `labels` field | It asks the model the same question twice inside one reply, and a model that answers it twice can answer it two ways with nothing to settle which. |
 | `confidence` as the ladder's escalating floor | The contract says it gates nothing, and it is the one free number the model writes - so gating it would let the model decide its own publication on its own say-so. `CLAUDE.md` section 1a permits a model verdict to decide publication; it does not make this number worth trusting, and gating it would also destroy it as a diagnostic. |
 | Waive the floor when no depth-0 visuals have been published | Depth 1 would publish on the validator alone, which is depth 1 quietly becoming the default path - the failure the escalating floor exists to prevent. |
-| A separate on-off flag beside the ladder's rungs | Two knobs that can disagree about one thing. Zero rungs is already an unambiguous no, and the rung count is already the maximum depth. |
 | A `line` to `bar` downgrade edge | The source document allows it "if the time axis is safely categorical", and nothing in this build can decide that. A condition nobody can evaluate is a condition nobody should encode. |
 | Any chart to `table` at depth 2 | `table` has no role rule, so the validator refuses it by name. A target that cannot pass rescues nothing, and listing it would be a rung nobody can stand on. |
 | Let the ladder move an element from one channel to another | It re-encodes the claim - the same date now means "a name on the axis" rather than "a point in time" - so the purpose survives in the field and not in the drawing. |

@@ -590,7 +590,7 @@
           "type": "string"
         },
         "VisualType": {
-          "description": "The full declarable vocabulary of forms a plan may ask for.\n\nDeclarable is not renderable. A type with no compiler template can be named\nby a plan and is deterministically downgraded to its nearest built\nneighbour, which is how the planner says which template is worth building\nnext. What may reach a reader is gated elsewhere; what may be named is here.",
+          "description": "The full declarable vocabulary of forms a plan may ask for.\n\nDeclarable is not renderable. A type with no compiler template can be named\nby a plan. Code tries only a supported replacement that preserves purpose\nand source facts and passes target validation; otherwise the item has no\nvisual. Requested and delivered types show which template is worth building\nnext without forcing an unsuitable drawing onto a reader.",
           "enum": [
             "bar",
             "dot",
