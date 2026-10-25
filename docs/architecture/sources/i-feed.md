@@ -13,9 +13,11 @@ Plan 67's D3 observation scope and D4 settlement behavior are owner-approved.
 The observation and operational-state contracts have compatible readers, and
 the planner reports a requests-first estimate from measured evidence. The
 derived-state writer and next-selection consumer are not deployed, so this
-estimate does not change ranking. D5 admission, restriction/recovery and
-polling controls remain unapproved. Recommendations below do not activate
-those controls; see the [feedback contract](../contracts/feed-ingest-feedback.md).
+estimate does not change ranking. D5 restriction and recovery thresholds are
+approved but inactive pending their policy-state contract and implementation;
+adaptive polling and operational review remain open. Recommendations below do
+not activate those controls; see the
+[feedback contract](../contracts/feed-ingest-feedback.md).
 
 **A feed earns its place.** Being on our list gives it a chance to prove useful.
 It does not guarantee requests, model time or space in the digest. A dependable
@@ -591,8 +593,9 @@ For confirmed paywalls, stop ordinary work on the evidenced scope promptly.
 Do not infer a whole-publisher restriction from one paid article, or infer a
 paywall from HTTP 403 alone. Periodic permitted access probes can test recovery
 without generating summaries. Decay toward a neutral score does not clear an
-unresolved restriction. Transition thresholds, durations, scope escalation,
-recovery sample requirements and human/automatic authority remain configurable.
+unresolved restriction. The approved pause and recovery thresholds are recorded
+in the [feedback contract](../contracts/feed-ingest-feedback.md); scope
+escalation and human/automatic authority remain open.
 
 Use a fixed global hygiene budget and a bounded due queue in GitHub Actions.
 Reuse production observations first. Re-evaluation and recovery need not wait
