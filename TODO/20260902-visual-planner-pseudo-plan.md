@@ -1820,7 +1820,7 @@ index, not the plan.
 |---|---|---|
 | 11 | One model, two calls (delivered) | One set of weights instead of two, and the cache saving that comes with it |
 | 12 | [Readable story charts](../docs/architecture/publishing/how-a-story-chart-is-drawn-and-what-refuses-one.md) | Delivered: browser-drawn marks, shared number formatting, readable labels, caption and one selected bar |
-| 13 | [Deletion switched on](20260905-13-switch-on-deletion-plan.md) | Retention that actually deletes, with a visible backlog |
+| 13 | Deletion switched on (delivered) | Retention that actually deletes, with a visible backlog |
 | 14 | The rest of the ship-or-not bar (delivered) | The sufficiency checks as a build gate rather than a habit |
 | 15 | [Charts, plus the two the reader asked for](20260905-15-chart-vocabulary-plan.md) | More ways to say a number, one type per PR |
 | 16 | [Parts of a whole](20260905-16-composition-vocabulary-plan.md) | The composition family |
