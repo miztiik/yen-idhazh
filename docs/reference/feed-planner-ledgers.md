@@ -8,10 +8,11 @@ Which planner data is retained, and where is it stored?
 [Plan 67 simplification review](../../TODO/20261024-67-feed-ingest-feedback-and-selection-plan.md),
 with an approved clean-break delivery direction, not an implemented contract.
 Fields and runtime recommendations remain under review except for the explicit
-confirmed decisions below. Delivery is authorized after the minimal four-ledger
-contracts and storage are delivered. The superseded compatibility and state
-branches remain paused; saving this proposal implements no schema or runtime
-change.
+confirmed decisions below. Execution is authorized: declare and validate the
+minimal four-ledger contracts before logic within the same atomic cutover.
+There is no separate approval or contracts-only PR gate. The superseded
+compatibility and state branches remain paused; saving this proposal implements
+no schema or runtime change.
 
 **Scope**: Simplify the storage and audit portions of
 [Plan 66](../../TODO/20261020-66-feed-ingest-plan.md) and
@@ -28,10 +29,11 @@ change.
 `article_text` for the summarizer. That artifact is not a fifth ledger.
 Committed selected rows never contain `article_text`.
 
-Breaking format changes and removal of old planner-family raw ledgers are
-approved within the [clean-break boundary](#approved-clean-break-delivery).
-Python remains unchanged. This page describes the proposed design, not
-implemented behavior.
+Breaking format changes and removal of old planner-family raw and compact
+ledgers are approved within the
+[clean-break boundary](#approved-clean-break-delivery). New-family shared-ledger
+storage support is in scope; the Python news pipeline remains unchanged. This
+page describes the proposed design, not implemented behavior.
 
 Use section letters and field IDs when reviewing, for example "C20" or "B12-B14".
 Keep IDs stable during iteration; do not reuse a removed field's ID.
@@ -531,9 +533,9 @@ not claimed to have been migrated.
 - Existing rest fields do not claim completion of the separately tracked D5
   earned-recovery, trial/review or polling work. No unused future-policy columns
   are preallocated, and those policy tasks are not silently cancelled.
-- Python production remains unchanged. Implementation follows Plan 67's
-  authorized clean-break sequence; the superseded compatibility migration is
-  not resumed.
+- The Python news pipeline remains unchanged. New-family shared-ledger
+  persistence, readers and compaction are part of Plan 67's authorized
+  clean-break sequence; the superseded compatibility migration is not resumed.
 
 ## Design rationale
 
@@ -553,10 +555,12 @@ actual code paths. No old-to-new migrators, compatibility readers, aliases or
 dual writers are required or permitted for this replacement. The old-to-new
 tables above explain field disposition; they are not migration instructions.
 
-Targeted deletion of the old raw ledgers named in Table F under
-`state/raw/feed-ingest-plan/` is permitted. It does not authorize deletion in
-other families, deletion of compact archives or the historical corpus, Python
-production changes, or a Git history rewrite.
+Targeted deletion of the same eight obsolete ledger prefixes named in Table F
+under both `state/raw/feed-ingest-plan/` and
+`state/compact/feed-ingest-plan/` is permitted, including their compact files
+and indexes. It does not authorize deletion of either broader root, other
+families, the global Python `feed-health` data or the historical corpus, a
+Python news-pipeline rewrite, or a Git history rewrite.
 
 The documentation and updated Plan 67 must reach remote `main` before
 implementation starts. Contracts, current-format readers and writers, API
@@ -564,6 +568,15 @@ cutover, and the required old-writer/data/registry cleanup ship together when
 separating them would leave an unused second implementation. Declare the
 minimal four contracts before their logic within that cohesive change; do not
 land a compatibility phase.
+
+Registration alone cannot make the native file reader and compactor accept
+the proposed minimal metadata. Include new-family native file-format,
+readback, settlement and daily/monthly/yearly packing support, plus the
+TypeScript Parquet reader. Do not restore `unit_id` or hidden generic identity
+fields to fit the existing infrastructure. Keep every other family's current
+protocol unchanged, and remove dead old-family native models and exports with
+their replacement. These are shared-ledger storage changes, not changes to
+Python news fetching, selection, summarization or publication.
 
 The runtime cutover uses typed events and asynchronous, bounded concurrent
 work. Independent requests and work may overlap; each fetch must precede its

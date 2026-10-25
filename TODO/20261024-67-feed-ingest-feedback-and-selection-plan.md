@@ -23,14 +23,14 @@ and causal-score briefs are not executable.
 | Id | Field | Contract |
 | --- | --- | --- |
 | A1 | Why this plan exists | Replace the planner's storage and API/runtime paths with the [four-ledger design](../docs/reference/feed-planner-ledgers.md), then complete the remaining approved nonsemantic work from [Plan 66](20261020-66-feed-ingest-plan.md) without claiming worker publication from planner output. |
-| A2 | Confirmed direction | User approval, 2026-10-25 UTC: make a clean break, delete named legacy planner-family raw data, and replace the real API code with asynchronous typed-event execution and bounded concurrency. No old-to-new migrators, compatibility readers, aliases or dual writers. The seven-day component is a spend report, not a ranking penalty. |
+| A2 | Confirmed direction | User approval, 2026-10-25 UTC: make a clean break, delete the same eight named obsolete planner-family prefixes under both raw and compact roots, and replace the real API code with asynchronous typed-event execution and bounded concurrency. No old-to-new migrators, compatibility readers, aliases or dual writers. The seven-day component is a spend report, not a ranking penalty. |
 | A3 | In scope | Row 22's atomic contracts/storage/API/runtime/cleanup cutover; remaining technical admission, restrictions/recovery, polling, publisher and configured-priority work in Table B, subject only to their unresolved policy decisions. Field lists, dates, windows and APIs are declared once in the [proposal](../docs/reference/feed-planner-ledgers.md). |
 | A4 | Current readiness and first gate | First merge and verify this docs-only change on remote `main`. Then start Row 22 from that head; its contracts precede logic inside one cohesive PR. The earlier compatibility B2 design is not a prerequisite. Unresolved trial, polling and review decisions block only their affected work, not Row 22. |
-| A5 | Strategy | User-directed replacement in the existing TypeScript code paths and existing registered writer. Order the cutover as minimal contracts/storage -> real event-driven API/runtime -> required old-writer/raw-data/registry cleanup and integration, all in one PR where a split would leave an unused second implementation. Reuse bounded pools and share validated payloads; do not add a global all-runs queue or selection idempotency. |
+| A5 | Strategy | User-directed replacement in the existing TypeScript code paths and shared ledger infrastructure. Order the cutover as minimal contracts/storage, including native format readers and compaction -> real event-driven API/runtime -> required old-writer/raw-and-compact-data/registry cleanup and integration, all in one PR where a split would leave an unused second implementation. Reuse bounded pools and share validated payloads; do not add a global all-runs queue or selection idempotency. |
 | A6 | Execution | Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delegates a row where delegation pays; keep parallel N = 4 rows in flight, refilling a slot as soon as a worker returns and never waiting on a merge; consult a persona only where two answers would lead to different code; AUTO-merge on green gates; honor the ESCALATE triggers in section 0. |
 | A7 | One execution queue | Table E is the only queue. Completed rows remain delivery records. Earlier per-row details are context unless the current queue explicitly dispatches them against the replacement contracts; never execute the superseded compatibility, snapshot or causal-score sequence. Row 29 removes obsolete duplicated prose later, not during this field review. |
 | A8 | Remaining permission | Technical admission, earned recovery and polling are not completed by existing rest fields. D5 trial total-cost acceptance, polling formula and review policy remain unresolved; approved restriction/recovery thresholds remain pending implementation. Publisher identity stays curated and unknown matches stay unknown. Worker parity, production digest integration, Python producer/consumer migration and legacy health-page retirement remain deferred. |
-| A9 | Scope and escalation | Raw deletion is limited to the explicit Row 22 planner-family targets. Other families, compact archives, historical corpus, Python production and Git history are untouched. Stop only the affected work for a new persisted meaning outside the field proposal, a trust-boundary change, an unresolved policy decision, unrelated scope or the execution contract's cost-overrun trigger; the authorized clean break itself needs no new vote. |
+| A9 | Scope and escalation | Data deletion is limited to the explicit Row 22 obsolete planner-family prefixes under both roots. New-family native shared-ledger persistence/readback/compaction support is permitted, not registration-only work. Other families' protocols/data, global Python `feed-health`, the Python news pipeline, historical corpus and Git history are unchanged. Stop only the affected work for a new persisted meaning outside the field proposal, a trust-boundary change, an unresolved policy decision, unrelated scope or the execution contract's cost-overrun trigger; the authorized clean break itself needs no new vote. |
 
 ### Table B - Original sixteen pending areas and the separate priority-review task
 
@@ -83,7 +83,7 @@ and causal-score briefs are not executable.
 | D10 | Genuine downstream invocation | Deferred by owner clarification on 2026-10-24. Deliver the feed-to-dispatch-Parquet flow first. Worker parity, the production adapter, workflow cutover and real downstream evidence require a later decision. | Not a gate for the current flow; Rows 17 and 18 deferred. |
 | D11 | New finding during execution | A new persisted meaning, trust-boundary crossing, unrelated repair, scope change or unsupported cost claim. | STOP-AND-SURFACE per [scope changes](../docs/how-to/handle-scope-change.md); do not relax a check or silently narrow delivery. |
 | D12 | Reusing curated editorial priorities | Name each proposed watchlist, theme or carrier term, its recorded input, independent meaning, existing/new config owner and default, no-double-counting rule, score evidence and reader-before-writer sequence. Preserve unknown evidence; no front-page-vote bonus, semantic comparison or wholesale Python-ranking port is implicitly approved. | Owner approval after Row 21's bounded review; no new term before that approval. |
-| D13 | Clean-break four-ledger replacement | Use the four formats in the [durable proposal](../docs/reference/feed-planner-ledgers.md), not the previous eight-ledger rename or snapshot/head design. Declare contracts before logic; replace active readers/writers, routes and registration together; delete only the named legacy raw planner-family data. No migrators, compatibility readers, aliases or dual writers. | User approval, 2026-10-25 UTC. One cohesive Row 22 PR replaces old B1/B2/B3/B4 execution; Python production and other families remain unchanged. |
+| D13 | Clean-break four-ledger replacement | Use the four formats in the [durable proposal](../docs/reference/feed-planner-ledgers.md), not the previous eight-ledger rename or snapshot/head design. Declare and validate contracts before logic within the same atomic PR; replace active TypeScript/native format readers, writers, compaction, routes and registration together; delete the same named obsolete planner-family prefixes under raw and compact roots. No migrators, compatibility readers, aliases or dual writers. | User approval, 2026-10-25 UTC. One cohesive Row 22 PR replaces old B1/B2/B3/B4 execution; the Python news pipeline and other families' protocols/data remain unchanged. |
 | D14 | Lookback cost | Reuse the planned shared health operation and compute bounded lookbacks once per run. Captured reliability is not a freshness-safe future-run cache. Record actual `feed-health-summary` API/phase duration when implementation exists; no timing of the proposed format exists. Consider a persisted cache only if representative runner evidence justifies it, first in the existing health family. | Provisional implementation recommendation, not a measured speed claim or mandatory host/cache/profiler task. |
 
 ## 1. Status Reckoner
@@ -124,7 +124,7 @@ and causal-score briefs are not executable.
 
 Table E is the only execution queue. After the remote-main documentation gate,
 the first implementation PR is Row 22: contracts/storage, real asynchronous
-API/runtime cutover, and required old-writer/raw-data/registry cleanup with
+API/runtime cutover, and required old-writer/raw-and-compact-data/registry cleanup with
 integration checks. These are ordered work packages within one cohesive PR,
 not separately merged unused formats. Rows 23-25 are collapsed, not delivered.
 Later PRs carry independent remaining approved capabilities in Rows 11-13 and
@@ -191,7 +191,7 @@ their scope is not cancelled by retaining their old detail for Row 29 cleanup.
 | G10 | Bounded reads and state | Use named run inputs, configured periods and existing ledger indexes. Declare maximum catch-up and insufficient-state behavior. New registered state may represent temporary restrictions, but must not become another permanent-retirement authority. |
 | G11 | Technical admission and recovery | Report all sampled attempts, successful extraction warnings and exclusions. Technical success does not establish news value. Restriction expiry permits a probe, not automatic recovery. HTTP 403 alone proves neither paywall nor publisher-wide failure. |
 | G12 | Actual costs | Retain source, pipeline and unresolved attribution; keep shared startup/infrastructure costs separate. Optional unmeasured resource values stay null. Hardware-counter permission denial is not a measured zero. |
-| G13 | Historical boundary | Preserve genuine first-sight meaning, actual UTC clocks and external exclusion inputs. Do not restamp historical artifacts, derive order from UUID suffixes, migrate old planner-family rows or alter other families. Only the explicit raw reset is authorized. |
+| G13 | Historical boundary | Preserve genuine first-sight meaning, actual UTC clocks and external exclusion inputs. Do not restamp historical artifacts, derive order from UUID suffixes, migrate old planner-family rows or alter other families. Only the explicit obsolete planner-family raw/compact reset is authorized. |
 | G14 | New modules | Paths marked `(new)` below are proposed files, not claims that they exist. Row 22 declares the minimal contracts before logic within its atomic cutover; update its named footprint before dispatch if a required caller was missed. Add no empty scaffolding. |
 
 ### Numbered API flow and payload boundaries
@@ -950,25 +950,48 @@ publication from dispatch-Parquet creation alone.
 
 ## 24. Row #22 - Replace planner ledgers and APIs in one atomic cutover
 
-- **Scope:** Replace the active planner formats, APIs and runtime with the four-ledger design, including its required raw-data reset, without leaving an unused parallel implementation.
+- **Scope:** Replace the active planner formats, APIs and runtime with the four-ledger design, including its required obsolete raw/compact-data reset, without leaving an unused parallel implementation.
 - **Level and permission:** Level 5, execution authorized by user approval on 2026-10-25 UTC. The coordinator first verifies this documentation change on remote `main`; this docs PR does not implement the row.
 - **Contract source:** [Proposal Tables A-H, K and L](../docs/reference/feed-planner-ledgers.md). Declare the minimal native payloads and strict TypeScript bindings before logic. Preserve all review IDs and field meanings; a new persisted meaning outside that proposal is an escalation, not an excuse to resume the old design.
-- **PR boundary and cost:** One cohesive implementation PR. Separating contracts/storage, current readers/writers, API runtime and mandatory cleanup would temporarily retain unused or incompatible implementations. Price that as a larger review and shared-file footprint, not a compatibility phase. Existing raw planner history is deliberately lost; other families, compact archives, historical corpus and Python production are not reset.
-- **Ordered work package 1 - contracts and storage:** Declare the four persisted payloads, selected artifact and strict allowlisted metadata projection, date stamps/changelogs, current-format stage batches and exact storage metadata. Update the existing registry/writer/compaction bindings for these declared rows; do not inject the removed generic audit columns. Native shared declarations and their registration/binding plumbing may change; Python production producers, consumers and algorithms do not. Implement current-format readers before their writers within this same PR. Reject incompatible old planner batches/rows by name rather than migrating them. Keep other families' native layout and behavior unchanged.
+- **PR boundary and cost:** One cohesive implementation PR. Separating contracts/storage, current readers/writers, API runtime and mandatory cleanup would temporarily retain unused or incompatible implementations. Price that as a larger review and shared-file footprint, not a compatibility phase. Obsolete planner-family history under both named storage roots is deliberately lost; other families, global Python `feed-health`, historical corpus and the Python news pipeline are not reset.
+- **Ordered work package 1 - contracts and storage:** Declare and validate the four persisted payloads, selected artifact and strict allowlisted metadata projection, date stamps/changelogs, current-format stage batches and exact native file metadata before logic within this same atomic cutover. There is no separate approval or contracts-only PR gate. Implement new-family native envelope parsing, stored-row readback, settlement, raw/compact verification and gardener packing through the existing storage infrastructure, alongside the TypeScript reader/writer changes. Registration-only edits cannot satisfy the minimal-metadata format. Do not inject `unit_id` or removed generic audit columns, globally relax the other families' protocol, or fabricate identity to make the old infrastructure accept a new file. Use the declared per-ledger row identity and preserve distinct real run/attempt work. Implement current-format readers before their writers within this PR; reject incompatible old planner batches/rows by name rather than migrating them. Native shared-ledger storage support is permitted, not a Python news-pipeline rewrite.
 - **Ordered work package 2 - actual API/runtime cutover:** Replace the real `/plan`, `/fetch`, `/parse`, `/select-articles`, `/partition-articles` and persistence code paths in proposal Table K, register its planned health operation, and replace the old persistence route without an alias. Keep server-owned stage IDs, the complete parsed input, explicit errors and the existing default-off service flag. Route typed validated events to separate execution modules; do not put execution in the router or use HTTP self-calls. Remove the listener-wide `ready` promise chain in `api/server.ts` and keep run clocks, counters and selected data isolated per execution.
 - **Concurrency and ordering:** Reuse configured bounded work pools for independent history reads, permitted requests and article work; do not serialize all runs. Fetch precedes its parse; article work may start after its supplying feed is parsed; selection waits for the complete admitted batch and health summary; partitioning waits for selection. After selection, health recording/reporting can overlap partitioning. `parse-document.ts` currently reaches synchronous `extractArticle` in `dom-extractor.ts`; `Promise.all` around that call is not CPU parallelism. Use the runtime's native bounded workers for blocking parsing when needed, preserving the same real extractor and safety rules. No new profiler framework or benchmark approval gate.
 - **Shared state and artifact boundary:** Calculate the bounded lookbacks once per run through the shared health operation. Keep the proposal's three window meanings and capture both actual clocks. One in-memory selection produces the text-bearing Actions artifact and metadata-only Parquet without `pop`, `delete` or independent recalculation. Batch health counters per run/UTC work day; preserve completed work on later failure, finalize an explicit empty/partial/failed run result, and do not sum captured reliability during reports or compaction. Record actual `feed-health-summary` phase duration, not an estimated speed claim.
-- **Ordered work package 3 - required cleanup and integration:** Remove old planner writers/readers, old route exports, full-audit/classification/causal-score consumers and active registry/compaction entries replaced by this row. Update the existing isolated workflow adapters to commit only current declared planner output and upload text only as an artifact. Host instruments remain independent and optional, not a planner completion gate. Keep genuine external publication/exclusion inputs and fetch safety unchanged. Do not migrate rows, create aliases/dual writers or change `digest.yml`, `work.py`, Python production or the legacy `feed-health` family.
-- **Raw-data deletion boundary:** At execution, derive the exact tracked deletion list from the named prefixes below at the fixed candidate base. Report absent prefixes rather than inventing files or copying an old file/byte count. Inspect/stage explicit resolved paths only; remove no broader root, compact archive, other family, corpus or Git history. Existing old compact data is not an input to the replacement reader and is not deleted by this raw-only authorization.
+- **Native packing path:** `ledger.read_footer`/`load_stored` feed `gardener.ledger_marks` and `CompactTree.load`/`read_raw_day`; daily packing and reopened months settle rows before `ledger.render_period`, monthly packing uses the same renderer, and yearly packing calls `ledger.render_grouped_period`. Update these actual callers and period-input/packing modules for the new family so raw, daily, monthly, reopened-month and yearly files read back without generic `RowIdentity`/`unit_id` requirements. Keep all other families on their existing protocol. No frontend source `unit_id` consumer was found; do not invent a frontend source rewrite.
+- **Ordered work package 3 - required cleanup and integration:** Remove old planner writers/readers, old route exports, dead old-family native model/export/contract-registry references, full-audit/classification/causal-score consumers and active registry/compaction entries replaced by this row. Remove a model only after its actual callers are replaced; keep unrelated shared types with real consumers. Update the existing isolated workflow adapters to commit only current declared planner output and upload text only as an artifact. Host instruments remain independent and optional, not a planner completion gate. Keep genuine external publication/exclusion inputs and fetch safety unchanged. Do not migrate rows, create aliases/dual writers or change `digest.yml`, `work.py`, the Python news pipeline or the global `feed-health` family.
+- **Data deletion boundary:** At execution, derive the exact tracked deletion list from the same eight obsolete prefixes under both roots, as listed below, at the fixed candidate base. Include their raw data, compact period files and compact indexes. Report absent prefixes rather than inventing files or copying an old file/byte count. Inspect/stage explicit resolved paths only; remove no broader raw/compact root, other family, global Python `feed-health`, corpus or Git history. No permanent old-family compact archive, migration, alias or dual writer remains beside the replacement.
 - **Files touched - shared contracts and storage (existing unless marked new):**
   - `backend/idhazh/contracts/feed_ingest_discovered_article.py` (new)
   - `backend/idhazh/contracts/feed_ingest_selected_article.py` (new)
   - `backend/idhazh/contracts/feed_ingest_plan_run.py` (new)
   - `backend/idhazh/contracts/feed_health_state.py`
+  - `backend/idhazh/contracts/file_envelope.py` (new-family metadata support; other-family protocol unchanged)
+  - `backend/idhazh/contracts/__init__.py`
+  - `backend/idhazh/contracts/feed_ingest_article_assessment.py` (remove dead old-family model/export references)
+  - `backend/idhazh/contracts/feed_ingest_dispatch.py` (remove dead old-family model/export references)
+  - `backend/idhazh/contracts/feed_ingest_diversity.py` (remove dead old-family model/export references)
+  - `backend/idhazh/contracts/feed_ingest_editorial_selection.py` (remove dead old-family model/export references)
+  - `backend/idhazh/contracts/feed_ingest_feedback.py` (remove dead old-family model/export references)
+  - `backend/idhazh/contracts/feed_ingest_observations.py` (remove dead old-family model/export references)
+  - `backend/idhazh/contracts/feed_ingest_rejection.py` (remove dead old-family model/export references)
+  - `backend/idhazh/contracts/feed_ingest_source_run.py` (remove dead old-family model/export references)
   - `backend/idhazh/contracts/planner_stage.py`
   - `backend/idhazh/contracts/ledger_name.py`
-  - `backend/idhazh/ledger/keys.py` (new-family registration only)
-  - `backend/idhazh/ledger/staging.py` (new-family registration only)
+  - `backend/idhazh/ledger/__init__.py`
+  - `backend/idhazh/ledger/keys.py`
+  - `backend/idhazh/ledger/staging.py`
+  - `backend/idhazh/ledger/persist.py`
+  - `backend/idhazh/ledger/raw_files.py`
+  - `backend/idhazh/ledger/stored_output.py`
+  - `backend/idhazh/gardener/period_inputs.py`
+  - `backend/idhazh/gardener/ledger_marks.py`
+  - `backend/idhazh/gardener/tasks/compaction.py`
+  - `backend/idhazh/gardener/tasks/_compact_tree.py`
+  - `backend/idhazh/gardener/tasks/_daily_period.py`
+  - `backend/idhazh/gardener/tasks/_monthly_period.py`
+  - `backend/idhazh/gardener/tasks/_reopened_month.py`
+  - `backend/idhazh/gardener/tasks/_yearly_period.py`
   - `packages/common-contracts/src/index.ts`
   - `packages/common-contracts/src/schemas/discovered-article.schema.ts` (new)
   - `packages/common-contracts/src/schemas/selected-article.schema.ts` (new)
@@ -1050,6 +1073,7 @@ publication from dispatch-Parquet creation alone.
   - `services/feed-ingest-plan/src/read-ledger-history/read-seen-evidence.ts`
   - `services/feed-ingest-plan/src/read-ledger-history/record-feed-health.ts`
   - `services/feed-ingest-plan/src/read-ledger-history/read-ingest-evidence.ts`
+  - `services/feed-ingest-plan/src/read-ledger-history/read-parquet.ts`
   - `services/feed-ingest-plan/src/read-ledger-history/read-period.ts`
   - `services/feed-ingest-plan/src/read-ledger-history/complete-attempt.ts`
   - `services/feed-ingest-plan/src/read-ledger-history/encode-historical-record.ts`
@@ -1110,6 +1134,15 @@ publication from dispatch-Parquet creation alone.
   - `backend/tests/contracts/test_frontend_vocabularies.py`
   - `backend/tests/contracts/_fixtures.py`
   - `backend/tests/ledger/test_feed_ingest_ledgers.py`
+  - `backend/tests/ledger/test_persist.py`
+  - `backend/tests/ledger/test_raw_files.py`
+  - `backend/tests/ledger/test_stored_output.py`
+  - `backend/tests/gardener/test_period_inputs.py`
+  - `backend/tests/gardener/tasks/test_compaction.py`
+  - `backend/tests/gardener/tasks/test_compaction_batch.py`
+  - `backend/tests/gardener/tasks/test_compaction_lifecycle.py`
+  - `backend/tests/gardener/tasks/test_compaction_periods.py`
+  - `backend/tests/gardener/tasks/test_compaction_years.py`
   - `frontend/tests/ledger-catalog.spec.ts`
   - `frontend/tests/ledger-copy.spec.ts`
   - `frontend/tests/ledger-door.spec.ts`
@@ -1129,6 +1162,8 @@ publication from dispatch-Parquet creation alone.
   - `docs/architecture/contracts/schemas.md`
   - `docs/architecture/contracts/state-ledgers.md`
   - `docs/architecture/contracts/ledger-registry.md`
+  - `docs/architecture/contracts/persistence.md`
+  - `docs/architecture/publishing/ledger-compaction.md`
   - `docs/architecture/sources/feed-operator-api.md`
   - `docs/architecture/sources/planner-feed-history.md`
   - `docs/architecture/sources/feed-harvesting.md`
@@ -1140,7 +1175,7 @@ publication from dispatch-Parquet creation alone.
   - `docs/architecture/sources/feed-ingest-policies.md`
   - `docs/how-to/run-feed-ingest-plan-test.md`
   - `TODO/20261024-67-feed-ingest-feedback-and-selection-plan.md`
-- **Named raw deletion allowlist (not a directory to scan at runtime):**
+- **Named deletion allowlist (the same eight obsolete prefixes under both roots; not a runtime scan):**
   - `state/raw/feed-ingest-plan/article-assessments/`
   - `state/raw/feed-ingest-plan/dispatches/`
   - `state/raw/feed-ingest-plan/diversity/`
@@ -1149,9 +1184,17 @@ publication from dispatch-Parquet creation alone.
   - `state/raw/feed-ingest-plan/operational-state/`
   - `state/raw/feed-ingest-plan/rejections/`
   - `state/raw/feed-ingest-plan/source-runs/`
+  - `state/compact/feed-ingest-plan/article-assessments/`
+  - `state/compact/feed-ingest-plan/dispatches/`
+  - `state/compact/feed-ingest-plan/diversity/`
+  - `state/compact/feed-ingest-plan/document-observations/`
+  - `state/compact/feed-ingest-plan/editorial-selections/`
+  - `state/compact/feed-ingest-plan/operational-state/`
+  - `state/compact/feed-ingest-plan/rejections/`
+  - `state/compact/feed-ingest-plan/source-runs/`
 - **Acceptance gates - local:** First inspect the shared selector from `frontend/` with `npm run test:changed -- --list`; record the selection but do not run a Python-bearing local group. Run `bun run --cwd packages/common-contracts check`, `bun run --cwd packages/ledger-file-writer check` and `bun run --cwd services/feed-ingest-plan check`. Extend and run existing bounded planner/API/history/partition/safety cases and the existing adapter command from [isolated checks](../docs/how-to/run-feed-ingest-plan-test.md#local-offline-checks), plus its native TypeScript verifier updated to current planner formats. Reuse recorded HTTP/HTML fixtures and generated run directories; no network tests, local Python, Python packages, mocks or new top-level test functions. Preserve unrelated fixed native compatibility vectors for other families.
-- **Acceptance gates - CI:** Exact candidate full suite, native field/vocabulary/schema bindings, registry/compaction tests, selected frontend registry fixtures and isolated adapter/workflow strict checks. Verify only current planner names/routes are active, the old persistence route returns the ordinary not-found response, and required fixture output has exactly the declared planner families/columns. A manual workflow that commits data is not a repeatable test gate; inspect the next authorized real run separately for correct four-ledger output, artifact-only text and actual phase timings. Do not require a host fingerprint, cache or profiler proof to finish planning.
-- **Oracle:** Run the real listener and CLI against the bounded recorded corpus; independently decode their current-format Parquet and selected artifact and reconcile selected identities, order, worker assignments, per-run/day counters and explicit run outcome. The committed projection has no article text or undeclared audit columns; an empty/partial/failed run remains explicit; concurrent runs do not mix clocks or data; generated raw/compact copies contribute once without summing captured scores. Prove real overlap from typed start/finish events and independent request progress, including a responsive listener during native-worker HTML parsing, not a `Promise.all` wrapper around synchronous code. This proves the cutover and concurrency mechanisms, not a production speed percentage, live-source availability, downstream publication or completion of the remaining policy work.
+- **Acceptance gates - CI:** Exact candidate full suite, native field/vocabulary/schema bindings, registry/compaction tests, selected frontend registry fixtures and isolated adapter/workflow strict checks. Extend the named native persistence/raw-file/stored-output and gardener period tests to read, verify, settle, compact and reopen generated new-family files without `unit_id`; independently prove another family's unchanged protocol still requires its original identity. Verify no dead old-family native model/export requirement remains, only current planner names/routes are active, the old persistence route returns the ordinary not-found response, and fixture output has exactly the declared planner columns. Check the exact deletion diff against the two-root allowlist, including old compact indexes, without an accumulated-tree runtime scan or frozen file count. A manual workflow that commits data is not a repeatable test gate; inspect the next authorized real run separately for correct four-ledger output, artifact-only text and actual phase timings. Do not require a host fingerprint, cache or profiler proof to finish planning.
+- **Oracle:** Run the real listener and CLI against the bounded recorded corpus; independently decode their current-format Parquet and selected artifact and reconcile selected identities, order, worker assignments, per-run/day counters and explicit run outcome. The committed projection has no article text, `unit_id` or undeclared audit columns; native and TypeScript readers accept its declared format, and real daily/monthly/reopened-month/yearly packing preserves its rows and captured scores without generic identity restoration. Generated raw/compact copies contribute once, distinct real work remains counted, an empty/partial/failed run stays explicit, concurrent runs do not mix clocks/data, and another family's protocol remains unchanged. Prove real overlap from typed start/finish events and independent request progress, including a responsive listener during native-worker HTML parsing, not a `Promise.all` wrapper around synchronous code. This proves the cutover, storage and concurrency mechanisms, not a production speed percentage, live-source availability, downstream publication or completion of the remaining policy work.
 
 ### Table AY - Cutover decisions
 
@@ -1160,7 +1203,7 @@ publication from dispatch-Parquet creation alone.
 | AY1 | Land this docs update on remote `main` first, then replace the actual planner path in one atomic PR; contracts are declared before logic within it. | User-directed documentation-first clean break, 2026-10-25 UTC. |
 | AY2 | The four formats and independent windows are defined only in the linked proposal. Its old-field mapping does not require migrating old rows. | User-approved breaking replacement and seven-day report-only choice. |
 | AY3 | Run independent work concurrently with configured bounds and typed events, while preserving data dependencies and per-run isolation. | User-directed asynchronous event-driven runtime. |
-| AY4 | The permitted reset removes only the explicit legacy raw planner-family paths. No other family, compact archive, corpus, Python production or Git history is reset. | Scoped user approval; other migrations remain deferred. |
+| AY4 | The permitted reset removes the same eight obsolete planner-family prefixes under both raw and compact roots, including compact indexes. No broader root, other family, global Python `feed-health`, corpus, Python news pipeline or Git history is reset. Native new-family storage/reader/compaction support is permitted without changing other families' protocol. | Scoped user approval; other migrations remain deferred. |
 
 ### Table AZ - Rejected cutover alternatives
 
@@ -1173,7 +1216,7 @@ publication from dispatch-Parquet creation alone.
 ## 25. Row #23 - Migrate the feed-planning ledger family
 
 - **Status:** COLLAPSED into Row 22, not delivered.
-- **Reason:** The approved clean break removes the old-to-new compatibility phase. Current registration, storage readers/writers and the permitted raw reset belong to the same atomic cutover, not a second implementation.
+- **Reason:** The approved clean break removes the old-to-new compatibility phase. Current registration, native/TypeScript storage readers/writers/compaction and the permitted two-root obsolete-data reset belong to the same atomic cutover, not a second implementation.
 
 ## 26. Row #24 - Incrementally update and read feed-health state
 
@@ -1187,9 +1230,9 @@ publication from dispatch-Parquet creation alone.
 
 ## 28. Row #26 - Migrate Python producers and consumers
 
-- **Scope:** **DEFERRED.** Track migration of Python producers and consumers to the shared feed-planning contracts and renamed state. Python remains unchanged until this separate phase is reopened.
+- **Scope:** **DEFERRED.** Track migration of Python news-pipeline producers and consumers to the shared feed-planning contracts and renamed state. Those stages remain unchanged until this separate phase is reopened; Row 22's new-family shared-ledger storage/readback/compaction support is not this deferred pipeline migration.
 - **Dependency:** Row 22 and a separately authorized Python implementation phase.
-- **Acceptance gates:** Bind Python reads and writes to the current shared ledger identities and prove real Parquet exchange without migrating deleted planner-family raw rows or changing other families.
+- **Acceptance gates:** Bind Python news-pipeline reads and writes to the current shared ledger identities and prove real Parquet exchange without migrating deleted obsolete planner-family rows or changing other families.
 - **Oracle:** Python and TypeScript read the same committed state consistently; this does not authorize digest worker parity or workflow cutover.
 
 ## 29. Row #27 - Migrate the console to derived ledgers
@@ -1197,13 +1240,13 @@ publication from dispatch-Parquet creation alone.
 - **Scope:** **DEFERRED.** Replace console reads of legacy feed-health data with build-time reads of the TypeScript-derived registered ledgers. Keep the static publication boundary; do not add a runtime service.
 - **Dependency:** Row 22 and a separately authorized console implementation phase.
 - **Acceptance gates:** The console reads named committed data from the new registered ledgers and retains its existing behavior for missing and unreadable data; verify the relevant build-time output.
-- **Oracle:** Published console content reflects the committed derived ledger; this does not authorize legacy-file deletion until Python migration is complete.
+- **Oracle:** Published console content reflects the committed derived ledger; this does not authorize deletion of the global `feed-health` data or `source-health.json` until Python news-pipeline migration is complete.
 
 ## 30. Row #28 - Retire legacy feed-health publication
 
 - **Scope:** **DEFERRED.** Remove the legacy `feed-health` ledger and `frontend/public/source-health.json` only after every named Python and console consumer is migrated and coverage is verified.
 - **Dependencies:** Rows 26 and 27 complete, with evidence that no remaining consumer reads either legacy source.
-- **Acceptance gates:** Search and verify the named producer/consumer paths, confirm migrated replacements cover their current behavior, then remove the legacy outputs and their obsolete readers together. No legacy deletion is part of Rows 22-27.
+- **Acceptance gates:** Search and verify the named producer/consumer paths, confirm migrated replacements cover their current behavior, then remove the legacy outputs and their obsolete readers together. Neither global output is deleted in Rows 22-27; Row 22's obsolete planner-family raw/compact cleanup is separate.
 - **Oracle:** No active producer or consumer depends on the legacy ledger or JSON file; this does not claim broader worker parity or completion of the whole plan.
 
 ## 31. Row #29 - Remove obsolete duplicated planning and feedback prose
