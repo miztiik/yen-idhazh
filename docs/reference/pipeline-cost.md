@@ -85,30 +85,22 @@ host's local day. `--taken-on YYYY-MM-DD` keeps the date the operator supplies.
 
 ## Visual-retention activation reading
 
-On 2026-10-25 UTC, the real `gardener run-task visual-prune` command ran
-locally against the 65 committed digest days at revision `25ca19ad8`.
-Run `2026-10-25-13`, attempt 1, surveyed with `dry_run: true`; attempt 2
-ran with the proposed `dry_run: false`. Both selected UTC dates 2025-09-22
-through 2025-09-29, before the kept-day boundary of 2025-09-30. Both found
-zero candidates. The live report recorded zero deleted files, zero files
-held by the ceiling, no tripped fuse and zero reclaimed bytes. This is
-local activation evidence, not a production workflow run.
+On 2026-10-25 UTC, production gardener workflow run 40186617130 ran the
+`visual-prune` task against the merged `main` commit. Shard 3 landed live
+report `2026-10-25-40186617130` with cutoff 2025-09-30, candidate window
+2025-09-22 through 2025-09-29, zero candidates, zero deletions, zero files
+held by the ceiling and zero reclaimed bytes. The fuse was not tripped.
 
-Completed builds before and after the live pass each measured 199,199,056
-deployed bytes (190.0 MiB), 671 files and 22,043 items. The change was zero
-bytes, as expected for zero deletions. Both used `npm run build`, the fixed
-`BUILD_VERSION` from that revision, and
-`python -m idhazh site-weight --site-tree frontend/build`; source-tree size
-was not used. Locally generated gardener and host reports were kept outside
-the checkout before either build, so they did not change the compared corpus.
-`check-publication` passed for all 65 committed days before and after the pass.
+This was a live no-op: it proves the production switch and report path worked,
+not that deletion removed a real visual. The generated-tree integration test
+proves the live policy deletes an expired visual and preserves protected paths.
 
-The size command estimated 885 published days to the 800 MiB warning and
-1,210 to the 1,024 MiB cap, using 9,037 bytes per item and the configured
-80-item input. These are the instrument's estimates, not a measured future
-growth rate. No section 0 escalation trigger was observed in this local run.
-The production gardener wake, its landed report and repeated publication
-and built-size checks remain required before closing the activation plan.
+The completed production build measured 199,317,824 deployed bytes (190.1 MiB),
+671 files and 22,101 published items. `check-publication` passed for all 65
+committed days. The same `site-weight --site-tree` command estimated 886
+published days to the 800 MiB warning and 1,212 to the 1,024 MiB cap, using
+9,018 bytes per item and the configured 80-item input. These are estimates,
+not measured future growth. No Plan 13 escalation trigger was observed.
 
 ## What to measure next
 
