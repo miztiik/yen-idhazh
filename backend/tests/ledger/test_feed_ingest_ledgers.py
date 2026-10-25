@@ -23,6 +23,7 @@ from idhazh.contracts.feed_ingest_candidate import derive_candidate_id
 from idhazh.contracts.feed_ingest_dispatch import FeedIngestDispatch
 from idhazh.contracts.feed_ingest_diversity import DiversityMetricRow
 from idhazh.contracts.feed_ingest_editorial_selection import EditorialSelectionRow
+from idhazh.contracts.feed_ingest_feedback import FeedIngestOperationalStateRow
 from idhazh.contracts.feed_ingest_observations import DocumentObservationRecord
 from idhazh.contracts.feed_ingest_rejection import CandidateRejectionRecord
 from idhazh.contracts.feed_ingest_source_run import SourceRunRecord
@@ -48,7 +49,14 @@ DOCUMENT_OBSERVATION_LEDGER = (
     DocumentObservationRecord,
     "feed-ingest-document-observation/refused-fetch.json",
 )
-REGISTERED_PLANNING_LEDGERS = (*PRODUCED_PLANNING_LEDGERS, DOCUMENT_OBSERVATION_LEDGER)
+OPERATIONAL_STATE_LEDGER = (
+    "operational-state",
+    FeedIngestOperationalStateRow,
+    "feed-ingest-operational-state/qualified.json",
+)
+REGISTERED_PLANNING_LEDGERS = (
+    *PRODUCED_PLANNING_LEDGERS, DOCUMENT_OBSERVATION_LEDGER, OPERATIONAL_STATE_LEDGER,
+)
 
 
 @pytest.mark.parametrize(("name", "model", "fixture"), REGISTERED_PLANNING_LEDGERS)
@@ -105,6 +113,11 @@ def _row(
         )
         payload["selection"]["candidate_id"] = content["candidate_id"]
     else:
+        if model is FeedIngestOperationalStateRow:
+            payload["state_revision"] = run * 10 + attempt
+            payload["date"] = "2026-10-20"
+            if second:
+                payload["source_id"] = "second-feed"
         if model is DocumentObservationRecord:
             payload["event_id"] = str(
                 uuid5(UUID(payload["event_id"]), f"{run}\n{attempt}\n{int(second)}")

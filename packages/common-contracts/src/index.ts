@@ -26,4 +26,5 @@ export * from "./observation-order";
 export * from "./schemas/planner-operation.schema";
 export * from "./schemas/planner-stage.schema";
 export * from "./schemas/ingest-observations.schema";
+export * from "./schemas/feed-ingest-feedback.schema";
 export * from "./schemas/publication-input.schema";

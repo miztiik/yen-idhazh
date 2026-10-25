@@ -22,7 +22,8 @@ MODEL_NAMES = (
     "VerticalPolicyOverride", "PlanningRunOverrides", "EffectiveFeedPolicy",
     "FeedUrlExclusion", "FeedHarvestConfig", "FeedTriageConfig", "FeedSoftCaps", "FeedCurateConfig",
     "FeedPartitionConfig", "FeedSealConfig", "FeedWorkflowReportingConfig",
-    "FeedMetricsConfig", "FeedFeedbackConfig", "FeedIngestConfig", "PlanningTaxonomy",
+    "FeedMetricsConfig", "FeedOperationalComponentWeights", "FeedFeedbackConfig",
+    "FeedIngestConfig", "PlanningTaxonomy",
 )
 
 
@@ -75,6 +76,29 @@ def input_shape(node: dict[str, Any], root: dict[str, Any]) -> Any:
     return result
 
 
+def schema_differences(left: Any, right: Any, path: str = "$") -> list[str]:
+    if isinstance(left, dict) and isinstance(right, dict):
+        differences = []
+        for key in sorted(left.keys() | right.keys()):
+            child = f"{path}.{key}"
+            if key not in left:
+                differences.append(f"{child}: missing from Python schema")
+            elif key not in right:
+                differences.append(f"{child}: missing from TypeScript schema")
+            else:
+                differences.extend(schema_differences(left[key], right[key], child))
+        return differences
+    if isinstance(left, list) and isinstance(right, list):
+        if len(left) != len(right):
+            return [f"{path}: list lengths differ ({len(left)} != {len(right)})"]
+        return [
+            difference
+            for index, (left_item, right_item) in enumerate(zip(left, right, strict=True))
+            for difference in schema_differences(left_item, right_item, f"{path}[{index}]")
+        ]
+    return [] if left == right else [f"{path}: {left!r} != {right!r}"]
+
+
 @pytest.mark.parametrize("name", MODEL_NAMES)
 def test_config_reader_binding(name: str, typescript_schemas: dict[str, Any]) -> None:
     model = getattr(feed_ingest, name)
@@ -83,7 +107,9 @@ def test_config_reader_binding(name: str, typescript_schemas: dict[str, Any]) ->
     ).resolve()
     ours = model.model_json_schema(mode="validation")
     theirs = typescript_schemas[name]
-    assert input_shape(ours, ours) == input_shape(theirs, theirs)
+    ours_shape = input_shape(ours, ours)
+    theirs_shape = input_shape(theirs, theirs)
+    assert ours_shape == theirs_shape, "\n".join(schema_differences(ours_shape, theirs_shape))
 
 
 def config_payload() -> dict[str, Any]:
@@ -110,6 +136,9 @@ def test_python_authored_config_and_config_only_vertical_extension() -> None:
     assert config.workflow_reporting.enabled
     assert config.curate.article_limit == payload["curate"]["article_limit"]
     assert config.feedback.window_days == 7
+    assert config.feedback.minimum_measured_opportunities == 20
+    assert config.feedback.minimum_measured_coverage == 0.8
+    assert config.feedback.component_weights.requests == 1 / 3
     assert feed_ingest.FeedIngestConfig.model_validate(
         {key: value for key, value in payload.items() if key != "feedback"}
     ).feedback.window_days == 7

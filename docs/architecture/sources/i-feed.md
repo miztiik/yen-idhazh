@@ -1,6 +1,6 @@
 # Intelligent F.E.E.D - I Feed
 
-**Last Updated**: 2026-10-24
+**Last Updated**: 2026-10-25
 
 **Status: design proposal and guidelines, not deployed behavior.**
 F.E.E.D expands to Feed Evaluation & Execution Decider. Intelligent F.E.E.D -
@@ -9,10 +9,13 @@ I Feed is the project name for this design. The owner supplied the intent on
 methods can change as we learn. No scoring values have been calibrated, and no
 improvement has yet been measured.
 
-Plan 67's D3 observation scope and D4 settlement behavior are owner-approved;
-their native payloads and writers are not deployed. D5 admission,
-restriction/recovery and polling controls remain unapproved. Recommendations
-below do not activate those controls; see the [feedback contract](../contracts/feed-ingest-feedback.md).
+Plan 67's D3 observation scope and D4 settlement behavior are owner-approved.
+The observation and operational-state contracts have compatible readers, and
+the planner reports a requests-first estimate from measured evidence. The
+derived-state writer and next-selection consumer are not deployed, so this
+estimate does not change ranking. D5 admission, restriction/recovery and
+polling controls remain unapproved. Recommendations below do not activate
+those controls; see the [feedback contract](../contracts/feed-ingest-feedback.md).
 
 **A feed earns its place.** Being on our list gives it a chance to prove useful.
 It does not guarantee requests, model time or space in the digest. A dependable
@@ -159,6 +162,13 @@ them or claim that the new plan used them. They enter the next available update.
 Read state through its versioned contract without silently replacing the run's
 pinned code or policy. An incompatible state revision needs an explicit
 migration or declared degraded mode, not a fresh score with restrictions lost.
+
+The current planner implements only a report-only requests-first estimate. It
+requires at least 20 distinct measured opportunities, at least 80 percent
+measured coverage and a known positive request denominator. These are
+provisional config defaults, not calibrated limits. CPU and private-memory
+evidence are unavailable, their equal one-third weights are not reassigned,
+and no estimate is saved or applied to selection in this phase.
 
 Runs may proceed concurrently. Keep per-run observations immutable. If
 another update lands first, rebuild only derived state from newer committed

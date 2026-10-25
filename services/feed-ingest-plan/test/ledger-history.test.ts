@@ -22,6 +22,7 @@ import { readLedgerParquet } from "../src/read-ledger-history/read-parquet";
 import { readLedgerDay } from "../src/read-ledger-history/read-period";
 import { readPublisherPublication } from "../src/read-ledger-history/read-publisher-publication";
 import { readIngestEvidence, closedObservationDays } from "../src/read-ledger-history/read-ingest-evidence";
+import { estimateOperationalFeedback } from "../src/estimate-operational-feedback";
 import { settleIngestObservations } from "../src/settle-ingest-observations";
 import { rollupIngestOutcomes } from "../src/rollup-ingest-outcomes";
 import { classifyPublicationHistoryError } from "../src/read-ledger-history/classify-publication-history-error";
@@ -394,7 +395,7 @@ test("native raw and daily reads preserve original writer identity instead of th
       registration: registration("document-observations"),
       days: [{ day: input.fixture.date, raw_files: cohortWritten.files.map(file => file.path) }],
     });
-    const cohort = cohortRead.sources[0];
+    const cohort = cohortRead.sources[0]!;
     expect(cohort).toMatchObject({
       observed_attempted_opportunities: 25, observed_measured_opportunities: 20,
       observed_request_census_opportunities: 22, observed_resolved_outcome_opportunities: 23,
@@ -408,6 +409,66 @@ test("native raw and daily reads preserve original writer identity instead of th
     expect(rollupIngestOutcomes(lessMeasured, true).sources[0]).toMatchObject({
       observed_attempted_opportunities: 25, observed_measured_opportunities: 19, measured_coverage: 19 / 25,
       measured_target_requests: 19, measured_source_wasted_requests: 10, waste_ratio: 10 / 19,
+    });
+    const feedbackPolicy = input.planning.config.feedback;
+    expect(estimateOperationalFeedback(
+      { ...cohortRead, sources: [cohort] }, feedbackPolicy,
+    ).sources[0]).toMatchObject({
+      qualification_status: "qualified", measured_coverage: 0.8,
+      request_waste_ratio: 0.5, request_component_weight: 1 / 3,
+      request_component_penalty: 1 / 6,
+    });
+    const belowSupport = rollupIngestOutcomes(lessMeasured, true).sources[0]!;
+    expect(estimateOperationalFeedback(
+      { ...cohortRead, sources: [belowSupport] }, feedbackPolicy,
+    ).sources[0]).toMatchObject({
+      qualification_status: "insufficient_support", request_waste_ratio: null,
+      request_component_penalty: null,
+    });
+    const fullyWastedFacts = cohortFacts.filter(row => row.operation !== "parse").map(row =>
+      row.operation === "fetch" ? {
+        ...row, outcome: "failed" as const, attribution: "source" as const,
+        failure_code: "http" as const, http_status: 403,
+      } : row);
+    const fullyWasted = rollupIngestOutcomes(fullyWastedFacts, true).sources[0]!;
+    expect(estimateOperationalFeedback(
+      { ...cohortRead, sources: [fullyWasted] }, feedbackPolicy,
+    ).sources[0]).toMatchObject({
+      qualification_status: "qualified", request_waste_ratio: 1,
+      request_component_penalty: 1 / 3,
+    });
+    expect(estimateOperationalFeedback(
+      { ...cohortRead, sources: [zero.sources[0]!] }, feedbackPolicy,
+    ).sources[0]).toMatchObject({
+      qualification_status: "insufficient_support", measured_target_requests: 0,
+      request_waste_ratio: null, request_component_penalty: null,
+    });
+    const zeroRequestsWithQualifiedSupport = {
+      ...cohort, measured_target_requests: 0, measured_source_wasted_requests: 0,
+    };
+    expect(estimateOperationalFeedback(
+      { ...cohortRead, sources: [zeroRequestsWithQualifiedSupport] }, feedbackPolicy,
+    ).sources[0]).toMatchObject({
+      qualification_status: "insufficient_support", observed_measured_opportunities: 20,
+      measured_coverage: 0.8, request_waste_ratio: null, request_component_penalty: null,
+    });
+    const unknownFacts = cohortFacts.filter(row => row.operation !== "parse").map(row =>
+      row.operation === "attempt" ? {
+        ...row, request_coverage: "unknown" as const, dispatched_request_count: null,
+      } : row);
+    const unknownRequests = rollupIngestOutcomes(unknownFacts, true).sources[0]!;
+    expect(estimateOperationalFeedback(
+      { ...cohortRead, sources: [unknownRequests] }, feedbackPolicy,
+    ).sources[0]).toMatchObject({
+      qualification_status: "unavailable", measured_target_requests: null,
+      request_waste_ratio: null, request_component_penalty: null,
+    });
+    const missingCoverage = rollupIngestOutcomes(cohortFacts, false).sources[0]!;
+    expect(estimateOperationalFeedback(
+      { ...cohortRead, sources: [missingCoverage] }, feedbackPolicy,
+    ).sources[0]).toMatchObject({
+      qualification_status: "unavailable", measured_coverage: null,
+      request_component_penalty: null,
     });
 
     const evidenceRoot = join(root, "request-evidence");

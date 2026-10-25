@@ -64,6 +64,7 @@ ENVELOPE_NAMED_FIELDS: Final[Mapping[LedgerName, frozenset[str]]] = {
     LedgerName.FEED_INGEST_PLAN_ARTICLE_ASSESSMENTS: frozenset(),
     LedgerName.FEED_INGEST_PLAN_DIVERSITY: frozenset({"run_id"}),
     LedgerName.FEED_INGEST_PLAN_DOCUMENT_OBSERVATIONS: frozenset(),
+    LedgerName.FEED_INGEST_PLAN_OPERATIONAL_STATE: frozenset(),
 }
 
 

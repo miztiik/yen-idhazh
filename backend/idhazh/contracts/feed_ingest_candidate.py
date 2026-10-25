@@ -31,6 +31,7 @@ PositiveCount = Annotated[StrictInt, Field(gt=0)]
 NonEmpty = Annotated[str, StringConstraints(min_length=1)]
 PUBLISHER_IDENTITY_VERSION = "2026-10-24T20:04"
 PUBLISHER_EXPOSURE_VERSION = "2026-10-24T23:00"
+SOURCE_OPERATIONAL_SCORE_VERSION = "2026-10-25"
 PlanningStage = Literal[
     "harvest-feeds",
     "screen-article-candidates",
@@ -46,6 +47,7 @@ def reject_legacy_publisher_identity(value: Any, snapshots: list[Any]) -> None:
         or value.get("version", PUBLISHER_IDENTITY_VERSION) in {
             PUBLISHER_IDENTITY_VERSION,
             PUBLISHER_EXPOSURE_VERSION,
+            SOURCE_OPERATIONAL_SCORE_VERSION,
         }
     ):
         return
@@ -56,11 +58,24 @@ def reject_legacy_publisher_identity(value: Any, snapshots: list[Any]) -> None:
 def reject_legacy_publisher_exposure(value: Any, scores: Any) -> None:
     if (
         isinstance(value, dict)
-        and value.get("version", PUBLISHER_EXPOSURE_VERSION) != PUBLISHER_EXPOSURE_VERSION
+        and value.get("version", PUBLISHER_EXPOSURE_VERSION) not in {
+            PUBLISHER_EXPOSURE_VERSION,
+            SOURCE_OPERATIONAL_SCORE_VERSION,
+        }
         and isinstance(scores, dict)
         and "publisher_exposure" in scores
     ):
         raise ValueError("publisher exposure requires its declared score contract version")
+
+
+def reject_legacy_source_operational(value: Any, scores: Any) -> None:
+    if (
+        isinstance(value, dict)
+        and value.get("version") != SOURCE_OPERATIONAL_SCORE_VERSION
+        and isinstance(scores, dict)
+        and "source_operational" in scores
+    ):
+        raise ValueError("source operational evidence requires its declared score contract version")
 
 
 def derive_candidate_id(run_id: str, source_id: str, entry_ordinal: int) -> str:
@@ -167,6 +182,62 @@ class SourceReliabilityPenalty(Model):
         return self
 
 
+class SourceOperationalEvidence(Model):
+    """Which saved request evidence changed only the source-authority contribution?"""
+
+    status: Literal["qualified", "insufficient_support", "unavailable"]
+    state_status: Literal["current", "stale_fallback", "unavailable"]
+    state_revision: PositiveCount | None
+    window_days: PositiveCount
+    window_start: DateStamp | None
+    window_end: DateStamp | None
+    total_requests: Count | None
+    wasted_requests: Count | None
+    observed_attempted_opportunities: Count
+    observed_measured_opportunities: Count
+    coverage: Annotated[float, Field(ge=0, le=1, allow_inf_nan=False)] | None
+    operational_penalty: Annotated[float, Field(ge=0, le=1, allow_inf_nan=False)] | None
+
+    @model_validator(mode="after")
+    def validate_operational_evidence(self) -> Self:
+        if (self.total_requests is None) != (self.wasted_requests is None):
+            raise ValueError("request totals and waste are available together")
+        if (
+            self.total_requests is not None
+            and self.wasted_requests is not None
+            and self.wasted_requests > self.total_requests
+        ):
+            raise ValueError("wasted requests cannot exceed total requests")
+        if self.observed_measured_opportunities > self.observed_attempted_opportunities:
+            raise ValueError("measured opportunities cannot exceed attempted opportunities")
+        if (
+            self.window_start is not None
+            and self.window_end is not None
+            and self.window_start > self.window_end
+        ):
+            raise ValueError("operational evidence window starts after it ends")
+        if self.state_status == "unavailable":
+            if any(value is not None for value in (
+                self.state_revision, self.window_start, self.window_end, self.operational_penalty,
+            )) or self.status != "unavailable":
+                raise ValueError(
+                    "unavailable state carries no saved revision, window or adjustment"
+                )
+        elif self.state_revision is None or self.window_start is None or self.window_end is None:
+            raise ValueError("a saved operational state records its revision and original window")
+        if self.status == "qualified":
+            if (
+                self.total_requests is None or self.total_requests == 0
+                or self.coverage is None or self.operational_penalty is None
+            ):
+                raise ValueError(
+                    "qualified operational evidence has positive measured requests and coverage"
+                )
+        elif self.operational_penalty is not None:
+            raise ValueError("unqualified operational evidence has no score adjustment")
+        return self
+
+
 class PublisherExposurePenalty(Model):
     """Which confirmed publisher counts reduced this choice on its UTC day?"""
 
@@ -203,6 +274,7 @@ class ScoreEvidence(Model):
     base_article_score: Finite
     marginal_score: Finite
     source_reliability: SourceReliabilityPenalty | None = None
+    source_operational: SourceOperationalEvidence | None = None
     publisher_exposure: PublisherExposurePenalty | None = None
     source: PenaltyEvidence
     source_kind: PenaltyEvidence

@@ -74,3 +74,4 @@ class LedgerName(StrEnum):
     FEED_INGEST_PLAN_ARTICLE_ASSESSMENTS = "article-assessments"
     FEED_INGEST_PLAN_DIVERSITY = "diversity"
     FEED_INGEST_PLAN_DOCUMENT_OBSERVATIONS = "document-observations"
+    FEED_INGEST_PLAN_OPERATIONAL_STATE = "operational-state"

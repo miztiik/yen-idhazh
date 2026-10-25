@@ -24,11 +24,16 @@ if (Bun.argv.includes("--emit-schemas")) {
     });
     expect(config.curate.article_limit).toBe(100);
     expect(config.feedback.window_days).toBe(7);
+    expect(config.feedback.minimum_measured_opportunities).toBe(20);
+    expect(config.feedback.minimum_measured_coverage).toBe(0.8);
+    expect(config.feedback.component_weights).toEqual({ cpu: 1 / 3, private_memory: 1 / 3, requests: 1 / 3 });
     const { feedback: _feedback, ...legacyConfig } = config;
     expect(configs.FeedIngestConfigSchema.parse(legacyConfig).feedback.window_days).toBe(7);
     expect(configs.FeedIngestConfigSchema.parse({
       ...config, feedback: { window_days: 2 },
-    }).feedback.window_days).toBe(2);
+    }).feedback).toMatchObject({
+      window_days: 2, minimum_measured_opportunities: 20, minimum_measured_coverage: 0.8,
+    });
     expect(config.curate.source_reliability_penalty_enabled).toBe(true);
     const { source_reliability_penalty_enabled: _enabled, ...previousCurate } = config.curate;
     expect(configs.FeedCurateConfigSchema.parse(previousCurate).source_reliability_penalty_enabled).toBe(true);
@@ -66,6 +71,9 @@ if (Bun.argv.includes("--emit-schemas")) {
     { feedback: { window_days: 0 } },
     { feedback: { window_days: 1.5 } },
     { feedback: { window_days: null } },
+    { feedback: { minimum_measured_opportunities: 0 } },
+    { feedback: { minimum_measured_coverage: 1.1 } },
+    { feedback: { component_weights: { cpu: 0.2, private_memory: 0.3, requests: 0.3 } } },
   ])("vertical patch rejects invalid or global-only settings: %j", patch => {
     expect(policies.VerticalPolicyOverrideSchema.safeParse(patch).success).toBe(false);
   });

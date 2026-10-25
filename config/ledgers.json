@@ -61,6 +61,14 @@
           "prefix": ["feed-ingest-plan", "document-observations"],
           "stem": null,
           "suffix": null
+        },
+        {
+          "name": "operational-state",
+          "publish_to_data_explorer": false,
+          "grain": "raw-and-compact",
+          "prefix": ["feed-ingest-plan", "operational-state"],
+          "stem": null,
+          "suffix": null
         }
       ]
     },

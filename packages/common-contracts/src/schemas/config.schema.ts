@@ -72,8 +72,24 @@ export const FeedMetricsConfigSchema = z.strictObject({
   overlap_windows_days: z.array(PositiveCountSchema).min(1),
   top_source_counts: z.array(PositiveCountSchema).min(1),
 });
+export const FeedOperationalComponentWeightsSchema = z.strictObject({
+  cpu: z.number().finite().min(0).default(1 / 3),
+  private_memory: z.number().finite().min(0).default(1 / 3),
+  requests: z.number().finite().min(0).default(1 / 3),
+}).superRefine((value, ctx) => {
+  if (Math.abs(value.cpu + value.private_memory + value.requests - 1) > 1e-9) {
+    reject(ctx, "operational component weights must sum to one");
+  }
+});
 export const FeedFeedbackConfigSchema = z.strictObject({
   window_days: PositiveCountSchema.default(7),
+  minimum_measured_opportunities: PositiveCountSchema.default(20),
+  minimum_measured_coverage: z.number().finite().min(0).max(1).default(0.8),
+  component_weights: FeedOperationalComponentWeightsSchema.default(
+    FeedOperationalComponentWeightsSchema.parse({}),
+  ).meta({
+    default: {}, type: "object", additionalProperties: false,
+  }),
 });
 export const FeedIngestConfigSchema = z.strictObject({
   version: z.literal("2026-10-20"),
@@ -85,7 +101,11 @@ export const FeedIngestConfigSchema = z.strictObject({
   seal: FeedSealConfigSchema,
   workflow_reporting: FeedWorkflowReportingConfigSchema,
   metrics: FeedMetricsConfigSchema,
-  feedback: FeedFeedbackConfigSchema.prefault({}),
+  feedback: FeedFeedbackConfigSchema.default(
+    FeedFeedbackConfigSchema.parse({}),
+  ).meta({
+    default: {}, type: "object", additionalProperties: false,
+  }),
 });
 
 // Only the taxonomy fields this reader computes on are declared here.

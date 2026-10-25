@@ -111,6 +111,7 @@ MOVED_LEDGER_TASKS: Final = (
     "compact-feed-ingest-plan-article-assessments",
     "compact-feed-ingest-plan-diversity",
     "compact-feed-ingest-plan-document-observations",
+    "compact-feed-ingest-plan-operational-state",
     "compact-content-similarity-judge-merge-line-holdout-scores",
     "compact-content-similarity-judge-scored-pairs",
     "compact-content-similarity-judge-metrics",

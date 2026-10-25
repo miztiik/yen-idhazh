@@ -21,11 +21,14 @@ import {
   PlannerSeenAvailableSchema, PlannerSeenUnavailableSchema,
   PreflightFreshnessSchema, StageReferenceRequestSchema, PartitionArticlesRequestSchema,
   DocumentObservationRecordSchema,
+  FeedIngestOperationalStateRowSchema, OperationalStateReadSchema,
+  SourceOperationalEvidenceSchema,
 } from "../src/index";
 
 export const runtimeSchemas = {
   SourceSnapshot: SourceSnapshotSchema, ArticleLabels: ArticleLabelsSchema,
   PenaltyEvidence: PenaltyEvidenceSchema, ScoreEvidence: ScoreEvidenceSchema,
+  SourceOperationalEvidence: SourceOperationalEvidenceSchema,
   PublisherExposurePenalty: PublisherExposurePenaltySchema,
   PolicyIdentity: PolicyIdentitySchema, FeedIngestCandidate: FeedIngestCandidateSchema,
   EditorialSelectionRow: EditorialSelectionRowSchema, PartitionAssignment: PartitionAssignmentSchema,
@@ -50,6 +53,8 @@ export const runtimeSchemas = {
   StageReferenceRequest: StageReferenceRequestSchema,
   PartitionArticlesRequest: PartitionArticlesRequestSchema,
   DocumentObservationRecord: DocumentObservationRecordSchema,
+  FeedIngestOperationalStateRow: FeedIngestOperationalStateRowSchema,
+  OperationalStateRead: OperationalStateReadSchema,
 } satisfies Record<string, z.ZodType>;
 
 export const schemas = Object.fromEntries(
