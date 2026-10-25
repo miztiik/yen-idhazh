@@ -23,7 +23,9 @@ from idhazh.contracts.feed_ingest_candidate import (
     NonNegative,
     OperationalHistory,
     PositiveCount,
+    SOURCE_OPERATIONAL_SCORE_VERSION,
     reject_legacy_publisher_identity,
+    reject_legacy_source_operational,
 )
 from idhazh.contracts.feed_ingest_diagnostics import FetchFailure, HarvestDiagnostics
 from idhazh.contracts.feed_ingest_dispatch import FeedIngestDispatch
@@ -276,6 +278,11 @@ class SelectedFeedBatch(Contract):
     __schema_stem__: ClassVar[str] = "selected-feed-batch"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-10-25",
+            change="Carry the saved request-estimate trace in selected batches.",
+            why="Partitioning retains operational evidence with the unchanged rank.",
+        ),
+        ChangelogEntry(
             version="2026-10-24T23:00",
             change="Carry publisher-exposure evidence in selected batches.",
             why="Later stages retain the original ranking counts and missing history.",
@@ -290,8 +297,13 @@ class SelectedFeedBatch(Contract):
             change="Declare selected feed batches linked to their parsed input.",
             why="Partitioning reads ranked choices without copying the original batch.",
         ),
+        ChangelogEntry(
+            version="2026-10-23",
+            change="Earlier changes are available in git history.",
+            why="The contract changelog keeps its four newest changes and one history pointer.",
+        ),
     )
-    version: Literal["2026-10-24T23:00"] = "2026-10-24T23:00"
+    version: Literal["2026-10-25"] = "2026-10-25"
     batch_id: UUID4
     config_sha256: Sha256
     parsed_batch_id: UUID4
@@ -302,14 +314,20 @@ class SelectedFeedBatch(Contract):
     @model_validator(mode="before")
     @classmethod
     def migrate_previous_version(cls, value: Any) -> Any:
-        if isinstance(value, dict) and value.get("version") in {"2026-10-24", "2026-10-24T20:04"}:
+        if isinstance(value, dict) and value.get("version") in {
+            "2026-10-24", "2026-10-24T20:04", "2026-10-24T23:00"
+        }:
             selections = value.get("selections")
             reject_legacy_publisher_identity(value, [
                 selection.get("source")
                 for selection in selections
                 if isinstance(selection, dict)
             ] if isinstance(selections, list) else [])
-            return {**value, "version": "2026-10-24T23:00"}
+            if isinstance(selections, list):
+                for selection in selections:
+                    if isinstance(selection, dict):
+                        reject_legacy_source_operational(selection, selection.get("ratings"))
+            return {**value, "version": SOURCE_OPERATIONAL_SCORE_VERSION}
         return value
 
     @model_validator(mode="after")
@@ -344,6 +362,11 @@ class PartitionedFeedBatch(Contract):
     __schema_stem__: ClassVar[str] = "partitioned-feed-batch"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-10-25",
+            change="Carry the saved request-estimate trace in partitioned batches.",
+            why="Persistence retains operational evidence with the unchanged rank.",
+        ),
+        ChangelogEntry(
             version="2026-10-24T23:00",
             change="Carry publisher-exposure evidence in partitioned batches.",
             why="Persistence preserves the original selection adjustment.",
@@ -358,8 +381,13 @@ class PartitionedFeedBatch(Contract):
             change="Declare partitioned feed batches and worker assignments.",
             why="Persistence receives one validated dispatch snapshot after partitioning.",
         ),
+        ChangelogEntry(
+            version="2026-10-23",
+            change="Earlier changes are available in git history.",
+            why="The contract changelog keeps its four newest changes and one history pointer.",
+        ),
     )
-    version: Literal["2026-10-24T23:00"] = "2026-10-24T23:00"
+    version: Literal["2026-10-25"] = "2026-10-25"
     batch_id: UUID4
     config_sha256: Sha256
     selection_batch_id: UUID4
@@ -372,7 +400,9 @@ class PartitionedFeedBatch(Contract):
     @model_validator(mode="before")
     @classmethod
     def migrate_previous_version(cls, value: Any) -> Any:
-        if isinstance(value, dict) and value.get("version") in {"2026-10-24", "2026-10-24T20:04"}:
+        if isinstance(value, dict) and value.get("version") in {
+            "2026-10-24", "2026-10-24T20:04", "2026-10-24T23:00"
+        }:
             dispatches = value.get("dispatches")
             snapshots = []
             if isinstance(dispatches, list):
@@ -385,7 +415,13 @@ class PartitionedFeedBatch(Contract):
                         selection.get("source") if isinstance(selection, dict) else None,
                     ])
             reject_legacy_publisher_identity(value, snapshots)
-            return {**value, "version": "2026-10-24T23:00"}
+            if isinstance(dispatches, list):
+                for dispatch in dispatches:
+                    if isinstance(dispatch, dict):
+                        selection = dispatch.get("selection")
+                        if isinstance(selection, dict):
+                            reject_legacy_source_operational(selection, selection.get("ratings"))
+            return {**value, "version": SOURCE_OPERATIONAL_SCORE_VERSION}
         return value
 
     @model_validator(mode="after")

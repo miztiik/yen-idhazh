@@ -123,6 +123,14 @@ REGISTRY: Final[dict[LedgerName, LedgerStaging]] = {
         symbol=None,
         job_labels=frozenset(),
     ),
+    LedgerName.FEED_INGEST_PLAN_OPERATIONAL_STATE: LedgerStaging(
+        writer=(
+            "planned TypeScript feed-ingest-plan operational-state writer "
+            "through packages/ledger-file-writer; no writer exists yet"
+        ),
+        symbol=None,
+        job_labels=frozenset(),
+    ),
     LedgerName.RUN_SHARDS: LedgerStaging(
         writer="idhazh.telemetry.run_shards.record, after assemble writes run.json",
         symbol="idhazh.telemetry.run_shards.record",

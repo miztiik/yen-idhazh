@@ -49,6 +49,46 @@ export const SourceReliabilityPenaltySchema = z.strictObject({
     }
   }
 });
+export const SourceOperationalEvidenceSchema = z.strictObject({
+  status: z.enum(["qualified", "insufficient_support", "unavailable"]),
+  state_status: z.enum(["current", "stale_fallback", "unavailable"]),
+  state_revision: PositiveCountSchema.nullable(),
+  window_days: PositiveCountSchema,
+  window_start: DateStampSchema.nullable(), window_end: DateStampSchema.nullable(),
+  total_requests: CountSchema.nullable(), wasted_requests: CountSchema.nullable(),
+  observed_attempted_opportunities: CountSchema, observed_measured_opportunities: CountSchema,
+  coverage: NonNegativeSchema.max(1).nullable(),
+  operational_penalty: NonNegativeSchema.max(1).nullable(),
+}).superRefine((value, ctx) => {
+  if ((value.total_requests === null) !== (value.wasted_requests === null)) {
+    reject(ctx, "request totals and waste are available together");
+  }
+  if (value.total_requests !== null && value.wasted_requests! > value.total_requests) {
+    reject(ctx, "wasted requests cannot exceed total requests");
+  }
+  if (value.observed_measured_opportunities > value.observed_attempted_opportunities) {
+    reject(ctx, "measured opportunities cannot exceed attempted opportunities");
+  }
+  if (value.window_start !== null && value.window_end !== null && value.window_start > value.window_end) {
+    reject(ctx, "operational evidence window starts after it ends");
+  }
+  if (value.state_status === "unavailable") {
+    if ([value.state_revision, value.window_start, value.window_end, value.operational_penalty]
+      .some(item => item !== null) || value.status !== "unavailable") {
+      reject(ctx, "unavailable state carries no saved revision, window or adjustment");
+    }
+  } else if (value.state_revision === null || value.window_start === null || value.window_end === null) {
+    reject(ctx, "a saved operational state records its revision and original window");
+  }
+  if (value.status === "qualified") {
+    if (value.total_requests === null || value.total_requests === 0
+      || value.coverage === null || value.operational_penalty === null) {
+      reject(ctx, "qualified operational evidence has positive measured requests and coverage");
+    }
+  } else if (value.operational_penalty !== null) {
+    reject(ctx, "unqualified operational evidence has no score adjustment");
+  }
+});
 export const PublisherExposurePenaltySchema = z.strictObject({
   day: DateStampSchema, publisher_id: PublisherIdSchema.nullable(),
   history_status: z.enum(["available", "unavailable"]),
@@ -74,6 +114,7 @@ export const PublisherExposurePenaltySchema = z.strictObject({
 export const ScoreEvidenceSchema = z.strictObject({
   base_article_score: FiniteSchema, marginal_score: FiniteSchema,
   source_reliability: SourceReliabilityPenaltySchema.nullable().default(null),
+  source_operational: SourceOperationalEvidenceSchema.nullable().default(null),
   publisher_exposure: PublisherExposurePenaltySchema.nullable().default(null),
   source: PenaltyEvidenceSchema, source_kind: PenaltyEvidenceSchema,
   domain: PenaltyEvidenceSchema, vertical: PenaltyEvidenceSchema,
@@ -90,8 +131,13 @@ export const ScoreEvidenceSchema = z.strictObject({
     reject(ctx, "publisher exposure replaces feed crowding rather than charging both");
   }
 });
-const { publisher_exposure: _publisherExposure, ...previousScoreFields } = ScoreEvidenceSchema.shape;
-export const PreviousPublisherScoreEvidenceSchema = z.strictObject(previousScoreFields);
+const {
+  source_operational: _sourceOperational, publisher_exposure: _publisherExposure,
+  ...previousPublisherScoreFields
+} = ScoreEvidenceSchema.shape;
+export const PreviousPublisherScoreEvidenceSchema = z.strictObject(previousPublisherScoreFields);
+const { source_operational: _previousSourceOperational, ...previousExposureScoreFields } = ScoreEvidenceSchema.shape;
+export const PreviousOperationalScoreEvidenceSchema = z.strictObject(previousExposureScoreFields);
 export const PreviousScoreEvidenceSchema = PreviousPublisherScoreEvidenceSchema.omit({ source_reliability: true });
 export const PolicyIdentitySchema = z.strictObject({
   policy_version: NonEmptySchema, config_sha256: Sha256Schema,
@@ -111,4 +157,5 @@ export type ArticleLabels = z.infer<typeof ArticleLabelsSchema>;
 export type ScoreEvidence = z.infer<typeof ScoreEvidenceSchema>;
 export type OperationalHistory = z.infer<typeof OperationalHistorySchema>;
 export type SourceReliabilityPenalty = z.infer<typeof SourceReliabilityPenaltySchema>;
+export type SourceOperationalEvidence = z.infer<typeof SourceOperationalEvidenceSchema>;
 export type PolicyIdentity = z.infer<typeof PolicyIdentitySchema>;

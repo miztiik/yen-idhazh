@@ -4,9 +4,11 @@ How do measured feed and article costs affect the next planner selection?
 
 **Last Updated**: 2026-10-25
 
-**Status**: Per-operation capture, supported failure attribution and bounded
-article/request aggregation are implemented. Feedback scores,
-derived operational state and its next-run consumer remain unimplemented.
+**Status**: Per-operation capture, supported failure attribution, bounded
+article/request aggregation and a report-only requests-first estimate are
+implemented. The operational-state and saved-score contracts are registered
+with compatible historical readers. No state writer, persisted-state reader or
+selection consumer exists yet; ranking is unchanged.
 The user approved separate hardware and request measures, automatic score use
 after evidence qualifies, replacement of RSS reliability in the isolated
 TypeScript planner, the configurable evidence settings below,
@@ -200,8 +202,15 @@ no final source-run row. Optional `inputs.document_observation_days` in
 those dates; missing entries use the registered paths. The isolated workflow
 stages this same named window without directory discovery.
 
-The planner returns a typed internal aggregate as `article_evidence` in its
-report. It is not a saved operational-state ledger and does not affect ranking.
+The planner returns a typed internal aggregate as `article_evidence` and a
+requests-first estimate as `operational_feedback` in its report. The estimate
+uses only measured target requests, source-supported wasted requests, distinct
+measured opportunities and measured coverage. It requires the configured
+support and coverage thresholds and a known positive request denominator.
+Unqualified or unavailable evidence contributes no penalty. CPU and private
+memory remain unavailable, and their weights are not reassigned. This report
+does not write derived state or change ranking; Row 10 owns the state writer
+and selector consumer.
 Source totals and explicitly recorded publisher totals keep distinct
 attempted/measured opportunities, evidence instants, request counts and
 coverage. Missing publisher IDs are not inferred. Feed polls, robots,
@@ -248,8 +257,9 @@ divided by attempts. A zero denominator or incomplete history gives null
 coverage, while measured-subset amounts remain visible.
 
 At 20 measured opportunities out of 25 attempts, measured coverage is 80
-percent and the supported totals remain available. Below 80 percent they
-still remain available, but Row 7 must not qualify them for scoring. Row 6
+percent and the request component qualifies when its measured request
+denominator is positive; 19 of 25 (76 percent) does not qualify. Below 80
+percent, totals remain visible but the request component is unqualified. Row 6
 does not calculate qualification or scores. A known zero-request opportunity
 retains zero requests but gives no waste ratio.
 The Row 7 caller must use `measured_target_requests`,
@@ -265,22 +275,24 @@ reported without replacing saved state or inventing a successful empty history.
 ## Proposed score
 
 For each supported measure, sum the raw wasted amount and total attributable
-amount before dividing. Do not average article ratios.
+amount before dividing. Do not average article ratios. The current report
+calculates only the requests component; it does not yet apply this estimate to
+selection.
 
 ```text
 component_waste = wasted_amount / total_amount
 component_waste is in [0, 1]
 
-penalty = min(1, sum(component_weight * component_waste))
+operational_penalty = min(1, sum(component_weight * component_waste))
 priority = editorial_priority - (source_authority_contribution * penalty)
 ```
 
 Each component is normalized separately; unavailable components remain `null`
 and do not gain weight through renormalization. A component with no supported
 evidence makes no score change. A measured zero requires a known nonzero
-denominator and no observed waste. The score changes only the source-authority
-contribution, preserves the curated weight and tier, and replaces rather than
-stacks with the RSS reliability penalty.
+denominator and no observed waste. When Row 10 activates the score, it changes
+only the source-authority contribution, preserves the curated weight and tier,
+and replaces rather than stacks with the RSS reliability penalty.
 
 ## Provisional evidence settings
 
@@ -326,10 +338,11 @@ named date range once per run from the UTC clock and this setting.
 Raw observations are written once as native, registered Parquet under
 `state/raw/{ledger}/`. The gardener compacts them to
 `state/compact/{ledger}/`; readers use the existing indexes and period
-precedence so a date is counted once. The derived per-source operational
-state is also a declared, registered Parquet ledger payload, not a growing
-JSON sidecar or input to the digest-feed summarizer. The ledger name and
-persisted row shape remain to be settled before a writer is added.
+precedence so a date is counted once. The derived per-source operational state is a declared, registered raw/compact
+Parquet ledger payload, not a growing JSON sidecar or input to the digest-feed
+summarizer. Its Pydantic row model, TypeScript reader schema, ledger
+registration and compaction task are in place. Row 10 still owns the state
+writer and next-allocation reader.
 
 Yes, read both roots through the registered ledger reader and compact indexes.
 For each date, use the compact period when an index names it; otherwise use
@@ -338,9 +351,9 @@ from exactly one source. Do not append raw re-run files to compact rows when
 the index already names that date; this avoids counting the same observations
 twice.
 
-### Table B - Operational-state field decisions
+### Table B - Declared operational-state fields
 
-| Id | Field | Proposed type or status |
+| Id | Field | Declared type or status |
 | --- | --- | --- |
 | B1 | `state_revision` | Positive integer, advanced per committed operational-state payload |
 | B2 | `parent_revision` | Nullable positive integer naming the state revision used as its base |
@@ -348,7 +361,7 @@ twice.
 | B4 | `window_days` | Positive integer copied from configured setting |
 | B5 | `window_start`, `window_end` | UTC dates; the closed days selected by `window_days` |
 | B6 | `code_revision`, `policy_version` | Writer revision and policy version used |
-| B7 | `sources` | Per-source rows keyed by nonempty `source_id`, with evidence dates, request counts and coverage |
+| B7 | `source_id` and request evidence | One ledger row per source, with nullable evidence dates and request counts, measured opportunity counts, coverage and qualification |
 | B8 | D5 control fields | Excluded until separately approved; not implied by operational telemetry |
 
 **Owner ruling, kumarsnaveen_microsoft, 2026-10-24 UTC:** Preserve immutable
@@ -358,22 +371,21 @@ leaves the old state intact and reports failure. An already-running selection
 keeps the state revision it read. Report corrections outside the configured
 evidence window, but do not use them in that window's score.
 
-The request component's exact field shape remains to be declared. Preserve
-request totals, wasted requests when supported, distinct and measured
-opportunities, evidence dates, coverage, qualification status and policy
-version. Do not add CPU or memory amounts: those are unavailable until
-attributable.
+The row contract preserves measured request totals, source-supported waste,
+distinct and measured opportunities, evidence dates, coverage, qualification
+status and policy version. It does not add CPU or memory amounts: those remain
+unavailable until attributable.
 
 Restriction state is not part of this approved D3/D4 operational telemetry
 payload. Any later D5 restriction fields require separate approval. Existing
 robots, trust and access-safety rules remain unchanged.
 
 Keep operational state separate from the curated source catalog: it cannot
-retire a source or publisher. Declare its Pydantic model under
-`backend/idhazh/contracts/`; persist it through the registered Parquet ledger
-writer and read it through the existing raw/compact ledger reader, with
-TypeScript copies held by the existing binding tests. Do not create a JSON
-state file or another unregistered persistence path.
+retire a source or publisher. The Pydantic model is declared under
+`backend/idhazh/contracts/`; its registered Parquet ledger contract and
+TypeScript binding are in place. Row 10 will persist it through the shared
+ledger writer and read it through the registered raw/compact path. Do not
+create a JSON state file or another unregistered persistence path.
 
 The checkpoint is `state_revision`, `evidence_cutoff_utc`,
 `window_start` and `window_end`; do not add settled event IDs. Recompute the
@@ -578,14 +590,13 @@ restriction scope or other policy fields to this score trace.
 
 The per-source operational state records `policy_version`; do not duplicate
 it in the score trace. The trace carries no CPU/memory amounts, restriction
-scope or additional policy digest. The current score contract has no
-operational-state status, state revision or evidence-window fields.
-Add the object to the saved score evidence, not to a new selection request or
-response. The old `source_reliability` shape remains readable for historical
-rows only; it is not a fallback for new scores. Reader-first schema migration
-remains required: extend the existing Pydantic `ScoreEvidence` and its
-TypeScript copy, then update the named binding tests. The planner-event
-exception does not make the saved score row TypeScript-only.
+scope or additional policy digest. The existing Pydantic `ScoreEvidence` and
+its TypeScript copy now declare this object. Enclosing selection, assessment,
+dispatch and stage payloads carry the new version and migrate historical rows
+without changing publisher identity or exposure evidence. The old
+`source_reliability` shape remains readable for historical rows; future
+operational scoring must not use it as a fallback. The planner-event exception
+does not make the saved score row TypeScript-only.
 
 ## Acceptance examples
 
@@ -607,19 +618,17 @@ exception does not make the saved score row TypeScript-only.
 
 ## Remaining contract work
 
-- D3: declare the exact technical extraction binding, correction identity and
-  persisted field shape before writers. These are native contract details;
-  they do not need another owner vote unless they change the approved meaning.
-- D4: declare the operational-state schema and implement the approved
-  publication/reader behavior at the named caller. These are implementation
+- D3: the operational-state schema, registered ledger and saved-score trace
+  shapes are declared and bound. Row 10 must implement publication and
+  compatible state reading at the named caller. These are implementation
   details; they do not need another owner vote unless they change the approved
   concurrency, immutable-observation, failure, stale-read or late-correction
   behavior.
 - D5: restriction/recovery thresholds, polling formula, review cadence,
   caller and authority remain unapproved. A2's trial remains conditional on
   total implementation cost after the approved telemetry path is delivered.
-- D8: final trace field types against the existing score contract. Its
-  requests-first arithmetic and trace boundary are approved above.
+- D8: the saved-score trace fields and requests-first arithmetic are declared
+  and bound. Row 10 still owns the state-backed consumer and ranking change.
 
 Only D5 behavior or a proposed change to an approved meaning needs another
 owner decision. Native field names, bindings and D8 trace types are

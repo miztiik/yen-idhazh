@@ -20,7 +20,9 @@ from idhazh.contracts.feed_ingest_candidate import (
     PolicyIdentity,
     PositiveCount,
     ScoreEvidence,
+    SOURCE_OPERATIONAL_SCORE_VERSION,
     SourceSnapshot,
+    reject_legacy_source_operational,
     reject_legacy_publisher_exposure,
     reject_legacy_publisher_identity,
 )
@@ -31,6 +33,11 @@ class EditorialSelectionRow(Contract):
 
     __schema_stem__: ClassVar[str] = "feed-ingest-editorial-selection"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-10-25",
+            change="Record the saved request-estimate trace without changing article rank.",
+            why="Operational adjustments need source, support and state-window evidence.",
+        ),
         ChangelogEntry(
             version="2026-10-24T23:00",
             change="Replace feed crowding with separately recorded publisher exposure.",
@@ -48,11 +55,11 @@ class EditorialSelectionRow(Contract):
         ),
         ChangelogEntry(
             version="2026-10-20",
-            change="Declare unsharded editorial selections.",
-            why="Ranking can be replayed without rescoring or copying article text.",
+            change="Earlier changes are available in git history.",
+            why="The contract changelog keeps its four newest changes and one history pointer.",
         ),
     )
-    version: Literal["2026-10-24T23:00"] = "2026-10-24T23:00"
+    version: Literal["2026-10-25"] = "2026-10-25"
     date: DateStamp
     correlation_id: NonEmpty
     candidate_id: Sha256
@@ -72,8 +79,9 @@ class EditorialSelectionRow(Contract):
     def migrate_previous_version(cls, value: Any) -> Any:
         if isinstance(value, dict):
             reject_legacy_publisher_exposure(value, value.get("ratings"))
+            reject_legacy_source_operational(value, value.get("ratings"))
         if isinstance(value, dict) and value.get("version") in {
-            "2026-10-20", "2026-10-24", "2026-10-24T20:04"
+            "2026-10-20", "2026-10-24", "2026-10-24T20:04", "2026-10-24T23:00"
         }:
             reject_legacy_publisher_identity(value, [value.get("source")])
             ratings = value.get("ratings")
@@ -83,7 +91,7 @@ class EditorialSelectionRow(Contract):
                 and ratings.get("source_reliability") is not None
             ):
                 raise ValueError("source reliability requires the declared score contract version")
-            return {**value, "version": "2026-10-24T23:00"}
+            return {**value, "version": SOURCE_OPERATIONAL_SCORE_VERSION}
         return value
 
     @model_validator(mode="after")

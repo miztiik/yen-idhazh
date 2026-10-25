@@ -215,12 +215,19 @@ test("real composition shares one clock and override and reads native dispatches
     expect(rows[0]!.selection.source.publisher_id).toBe(publisherId);
     expect(rows[0]!.partition).toEqual({ strategy: "none", worker_assignment: 0, dispatch_count: 1 });
     expect(rows[0]!.selection.policy).toEqual(rows[0]!.content.policy);
+    expect(rows[0]!.selection.ratings.source_operational).toBeNull();
     expect(summarizePlan(result)).toMatchObject({
       audited_complete: false, dispatch_count: 1, status: "dispatches_persisted_audit_pending",
       planning_complete: false, planning_completion: null, source_records: null,
       article_evidence: {
         window: { start: "2026-10-14", end: "2026-10-20", days: 7 },
         availability: "unavailable", sources: [],
+      },
+      operational_feedback: {
+        window: { start: "2026-10-14", end: "2026-10-20", days: 7 },
+        availability: "unavailable",
+        component_weights: { cpu: 1 / 3, private_memory: 1 / 3, requests: 1 / 3 },
+        sources: [],
       },
     });
     expect(recorded.inputs.harvest.config.curate.article_limit).toBe(configuredLimit);

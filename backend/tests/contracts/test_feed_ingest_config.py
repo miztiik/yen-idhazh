@@ -22,7 +22,8 @@ MODEL_NAMES = (
     "VerticalPolicyOverride", "PlanningRunOverrides", "EffectiveFeedPolicy",
     "FeedUrlExclusion", "FeedHarvestConfig", "FeedTriageConfig", "FeedSoftCaps", "FeedCurateConfig",
     "FeedPartitionConfig", "FeedSealConfig", "FeedWorkflowReportingConfig",
-    "FeedMetricsConfig", "FeedFeedbackConfig", "FeedIngestConfig", "PlanningTaxonomy",
+    "FeedMetricsConfig", "FeedOperationalComponentWeights", "FeedFeedbackConfig",
+    "FeedIngestConfig", "PlanningTaxonomy",
 )
 
 
@@ -110,6 +111,9 @@ def test_python_authored_config_and_config_only_vertical_extension() -> None:
     assert config.workflow_reporting.enabled
     assert config.curate.article_limit == payload["curate"]["article_limit"]
     assert config.feedback.window_days == 7
+    assert config.feedback.minimum_measured_opportunities == 20
+    assert config.feedback.minimum_measured_coverage == 0.8
+    assert config.feedback.component_weights.requests == 1 / 3
     assert feed_ingest.FeedIngestConfig.model_validate(
         {key: value for key, value in payload.items() if key != "feedback"}
     ).feedback.window_days == 7

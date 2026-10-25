@@ -238,8 +238,29 @@ class FeedMetricsConfig(Model):
     top_source_counts: Annotated[list[PositiveCount], Field(min_length=1)]
 
 
+class FeedOperationalComponentWeights(Model):
+    """How much each equally supported cost can reduce source authority."""
+
+    cpu: NonNegative = 1 / 3
+    private_memory: NonNegative = 1 / 3
+    requests: NonNegative = 1 / 3
+
+    @model_validator(mode="after")
+    def require_unit_total(self) -> Self:
+        if abs(self.cpu + self.private_memory + self.requests - 1) > 1e-9:
+            raise ValueError("operational component weights must sum to one")
+        return self
+
+
 class FeedFeedbackConfig(Model):
     window_days: PositiveCount = 7
+    minimum_measured_opportunities: PositiveCount = 20
+    minimum_measured_coverage: Annotated[
+        float, Field(strict=True, ge=0, le=1, allow_inf_nan=False)
+    ] = 0.8
+    component_weights: FeedOperationalComponentWeights = Field(
+        default_factory=FeedOperationalComponentWeights,
+    )
 
 
 class PlanningVertical(Model):

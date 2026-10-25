@@ -22,9 +22,11 @@ from idhazh.contracts.feed_ingest_candidate import (
     PlanningStage,
     PolicyIdentity,
     ScoreEvidence,
+    SOURCE_OPERATIONAL_SCORE_VERSION,
     SourceSnapshot,
     reject_legacy_publisher_exposure,
     reject_legacy_publisher_identity,
+    reject_legacy_source_operational,
 )
 from idhazh.contracts.feed_ingest_diagnostics import ExtractionSignal, HarvestDiagnostics
 from idhazh.contracts.feed_ingest_rejection import REASON_STAGES, DropReason
@@ -42,6 +44,11 @@ class ArticleAssessmentRecord(Contract):
     __schema_stem__: ClassVar[str] = "feed-ingest-article-assessment"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-10-25",
+            change="Record the saved request-estimate trace without changing article rank.",
+            why="Operational adjustments need source, support and state-window evidence.",
+        ),
+        ChangelogEntry(
             version="2026-10-24T23:00",
             change="Record publisher exposure separately from historical feed crowding.",
             why="Unavailable publication history must remain explicit in saved decisions.",
@@ -58,16 +65,11 @@ class ArticleAssessmentRecord(Contract):
         ),
         ChangelogEntry(
             version="2026-10-23",
-            change="Retain measured extraction quality and implementation fingerprints.",
-            why="Later decisions preserve original signals without inventing worker readings.",
-        ),
-        ChangelogEntry(
-            version="2026-10-22T18:15",
             change="Earlier changes are available in git history.",
             why="The contract changelog keeps its four newest changes and one history pointer.",
         ),
     )
-    version: Literal["2026-10-24T23:00"] = "2026-10-24T23:00"
+    version: Literal["2026-10-25"] = "2026-10-25"
     diagnostics: HarvestDiagnostics | None = None
 
     date: DateStamp
@@ -119,8 +121,11 @@ class ArticleAssessmentRecord(Contract):
         if isinstance(value, dict):
             reject_legacy_publisher_identity(value, [value.get("source")])
             reject_legacy_publisher_exposure(value, value.get("score_evidence"))
-        if isinstance(value, dict) and value.get("version") in {"2026-10-24", "2026-10-24T20:04"}:
-            return {**value, "version": "2026-10-24T23:00"}
+            reject_legacy_source_operational(value, value.get("score_evidence"))
+        if isinstance(value, dict) and value.get("version") in {
+            "2026-10-24", "2026-10-24T20:04", "2026-10-24T23:00"
+        }:
+            return {**value, "version": SOURCE_OPERATIONAL_SCORE_VERSION}
         if isinstance(value, dict) and value.get("version") in {
             "2026-10-20", "2026-10-22", "2026-10-22T18:15", "2026-10-22T20:30",
             "2026-10-23",
@@ -153,7 +158,7 @@ class ArticleAssessmentRecord(Contract):
                     "planner exclusions require the declared exclusion "
                     "contract version"
                 )
-            return {**value, "version": "2026-10-24T23:00"}
+            return {**value, "version": SOURCE_OPERATIONAL_SCORE_VERSION}
         if not isinstance(value, dict) or value.get("version") != "2026-10-20":
             return value
         migrated = dict(value)
@@ -161,7 +166,7 @@ class ArticleAssessmentRecord(Contract):
             raise ValueError("legacy timing requires its recorded timestamp and clock")
         migrated["timing_at"] = migrated.pop("effective_published_at")
         migrated["timing_basis"] = migrated.pop("publication_clock")
-        migrated["version"] = "2026-10-24T23:00"
+        migrated["version"] = SOURCE_OPERATIONAL_SCORE_VERSION
         return migrated
 
     @model_validator(mode="after")

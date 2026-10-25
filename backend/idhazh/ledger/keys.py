@@ -29,6 +29,7 @@ from idhazh.contracts.feed_ingest_article_assessment import ArticleAssessmentRec
 from idhazh.contracts.feed_ingest_dispatch import FeedIngestDispatch
 from idhazh.contracts.feed_ingest_diversity import DiversityMetricRow
 from idhazh.contracts.feed_ingest_editorial_selection import EditorialSelectionRow
+from idhazh.contracts.feed_ingest_feedback import FeedIngestOperationalStateRow
 from idhazh.contracts.feed_ingest_observations import DocumentObservationRecord
 from idhazh.contracts.feed_ingest_rejection import CandidateRejectionRecord
 from idhazh.contracts.feed_ingest_source_run import SourceRunRecord
@@ -211,6 +212,7 @@ FEED_INGEST_DIVERSITY_KEY: Final = (
     "date", "metric", "basis", "unit", "dimension", "dimension_value", "stage",
     "window_days", "window_start", "window_end", "top_k",
 )
+FEED_INGEST_OPERATIONAL_STATE_KEY: Final = ("state_revision", "source_id")
 
 
 #: What makes two eval rows the same measurement. The address says which article,
@@ -355,6 +357,9 @@ _DOOR_SHAPES: Final[dict[LedgerName, _DoorShape]] = {
     ),
     LedgerName.FEED_INGEST_PLAN_DOCUMENT_OBSERVATIONS: _DoorShape(
         ("event_id",), DocumentObservationRecord
+    ),
+    LedgerName.FEED_INGEST_PLAN_OPERATIONAL_STATE: _DoorShape(
+        FEED_INGEST_OPERATIONAL_STATE_KEY, FeedIngestOperationalStateRow
     ),
     LedgerName.GARDENER: _DoorShape(COLLECTION_PRUNE_KEY, CollectionPruneRow),
     LedgerName.VISUAL_PRUNES: _DoorShape(VISUAL_PRUNE_KEY, VisualPruneRow),

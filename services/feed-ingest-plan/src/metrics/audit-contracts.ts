@@ -6,6 +6,7 @@ import {
   DropReasonCountSchema,
   FEED_INGEST_AUDIT_VERSION,
   FeedIngestDispatchSchema,
+  FeedIngestOperationalStateRowSchema,
   LegacyArticleAssessmentSchema,
   SourceRunRecordSchema,
   LedgerCompletionEvidenceSchema,
@@ -17,12 +18,14 @@ import {
   PreviousFeedIngestDispatchSchema, PreviousObservedFeedIngestDispatchSchema,
   PreviousReliableFeedIngestDispatchSchema, readFeedIngestDispatch,
   PreviousSourceSnapshotSchema, PUBLISHER_IDENTITY_VERSION, PUBLISHER_EXPOSURE_VERSION,
-  PreviousPublisherFeedIngestDispatchSchema,
+  PreviousExposureFeedIngestDispatchSchema, PreviousPublisherFeedIngestDispatchSchema,
+  FEED_OPERATIONAL_STATE_VERSION, SOURCE_OPERATIONAL_SCORE_VERSION,
 } from "@idhazh/common-contracts";
 import type {
   DocumentObservationRecord,
   DiversityMetricRow,
   FeedIngestDispatch,
+  FeedIngestOperationalStateRow,
   SourceRunRecord,
 } from "@idhazh/common-contracts";
 import type { LedgerRowContract } from "@idhazh/ledger-file-writer";
@@ -96,6 +99,10 @@ export const DocumentObservationContract: LedgerRowContract<DocumentObservationR
   schema: DocumentObservationRecordSchema,
   schemaVersion: DOCUMENT_OBSERVATION_VERSION,
 };
+export const OperationalStateContract: LedgerRowContract<FeedIngestOperationalStateRow> = {
+  schema: FeedIngestOperationalStateRowSchema,
+  schemaVersion: FEED_OPERATIONAL_STATE_VERSION,
+};
 export const SourceRunContract: LedgerRowContract<SourceRunRecord> = {
   schema: SourceRunRecordSchema,
   schemaVersion: SOURCE_RUN_VERSION,
@@ -109,9 +116,13 @@ export const SourceRunContract: LedgerRowContract<SourceRunRecord> = {
 };
 export const DispatchContract: LedgerRowContract<FeedIngestDispatch> = {
   schema: FeedIngestDispatchSchema,
-  schemaVersion: PUBLISHER_EXPOSURE_VERSION,
+  schemaVersion: SOURCE_OPERATIONAL_SCORE_VERSION,
   legacyVersions: {
     [PUBLISHER_IDENTITY_VERSION]: { schema: PreviousPublisherFeedIngestDispatchSchema, migrate: migrateDispatch },
+    [PUBLISHER_EXPOSURE_VERSION]: {
+      schema: PreviousExposureFeedIngestDispatchSchema,
+      migrate: migrateDispatch,
+    },
     [PREVIOUS_VERSION]: { schema: LegacyDispatchSchema, migrate: migrateDispatch },
     [FEED_INGEST_AUDIT_VERSION]: { schema: PreviousDispatchSchema, migrate: migrateDispatch },
     [PLANNING_OBSERVATIONS_VERSION]: { schema: PreviousObservedFeedIngestDispatchSchema, migrate: migrateDispatch },

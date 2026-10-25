@@ -74,6 +74,17 @@ export const FeedMetricsConfigSchema = z.strictObject({
 });
 export const FeedFeedbackConfigSchema = z.strictObject({
   window_days: PositiveCountSchema.default(7),
+  minimum_measured_opportunities: PositiveCountSchema.default(20),
+  minimum_measured_coverage: z.number().finite().min(0).max(1).default(0.8),
+  component_weights: z.strictObject({
+    cpu: z.number().finite().min(0).max(1).default(1 / 3),
+    private_memory: z.number().finite().min(0).max(1).default(1 / 3),
+    requests: z.number().finite().min(0).max(1).default(1 / 3),
+  }).superRefine((value, ctx) => {
+    if (Math.abs(value.cpu + value.private_memory + value.requests - 1) > 1e-9) {
+      reject(ctx, "operational component weights must sum to one");
+    }
+  }).prefault({}),
 });
 export const FeedIngestConfigSchema = z.strictObject({
   version: z.literal("2026-10-20"),
