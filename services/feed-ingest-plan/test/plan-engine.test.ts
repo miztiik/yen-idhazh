@@ -6,6 +6,7 @@ import { dirname, join, relative } from "node:path";
 import {
   FeedIngestEventSchema,
   CandidateRejectionContract,
+  EditorialSelectionContract,
   deriveCandidateId, deriveUrlKey,
   FeedHealthContract, SOURCE_RELIABILITY_VERSION, readFeedIngestEvent,
 } from "@idhazh/common-contracts";
@@ -13,6 +14,8 @@ import { persistLedger } from "@idhazh/ledger-file-writer";
 import { runFeedPlan, summarizePlan } from "../src/run-feed-plan";
 import { loadPlanInputs } from "../src/load-plan-inputs";
 import { readLedgerParquet } from "../src/read-ledger-history/read-parquet";
+import { readLedgerDay } from "../src/read-ledger-history/read-period";
+import { PublishedRowSchema, PUBLISHED_ROW_SCHEMA_VERSION } from "../src/metrics/publication-evidence";
 import { DispatchContract } from "../src/metrics/audit-contracts";
 import { readSeenEvidence, requiredSeenDays } from "../src/read-ledger-history/read-seen-evidence";
 import { SeenRowSchema } from "../src/screen-article-candidates/seen-evidence";
@@ -91,17 +94,48 @@ test("real composition shares one clock and override and reads native dispatches
   </channel></rss>`;
   recorded.transport.recordings.responses[innocentUrl] = [{ status: 200, fixture: "article" }];
   try {
+    const day = "2026-10-21";
+    const publication = await persistLedger({
+      ledger: "published", registryEntry: recorded.inputs.registrations.published,
+      outputRoot: recorded.inputs.outputRoot, ledgerSettings: recorded.inputs.ledgerSettings,
+      rowContract: { schema: PublishedRowSchema, schemaVersion: PUBLISHED_ROW_SCHEMA_VERSION },
+      period: { tier: "raw", covers: day },
+      writerContext: { run_id: `${day}-1`, attempt: 1, job: "work", pipeline_name: null,
+        task_name: null, shard: 0, producer: "tests.publication", git_sha: "a".repeat(40) },
+      rows: [{ version: PUBLISHED_ROW_SCHEMA_VERSION, published_on: day,
+        url_key: deriveUrlKey("https://news.example/historical-publication"), item_id: "recorded-item-01" }],
+    });
+    recorded.inputs.settings.inputs.published_days = [{
+      day, raw_files: publication.files.map(file => `state/${file.path}`),
+    }];
+    const selectionIndex = join(recorded.inputs.outputRoot, "raw",
+      ...recorded.inputs.registrations.selections.prefix, ...day.split("-"), "index.json");
+    await mkdir(dirname(selectionIndex), { recursive: true });
+    await writeFile(selectionIndex, JSON.stringify({
+      version: "2026-10-03", ledger: "editorial-selections", date: day, files: [], bytes: [],
+      content_sha256: "0".repeat(64), listed_at: `${day}T23:59:59Z`,
+    }));
+    await expect(readLedgerDay({
+      ledger: "editorial-selections", day, contract: EditorialSelectionContract,
+      rawIndex: selectionIndex,
+    })).rejects.toThrow("filename digest");
     const result = await runFeedPlan({
       freshness_hours: 18, article_limit: 1, partition_strategy: "none",
     }, recorded.inputs, recorded.runtime);
     expect(clocks).toBe(1);
     expect(result.status).toBe("dispatches_persisted_audit_pending");
     expect(result.context.date).toBe("2026-10-21");
+    expect(result.evidence.publisher_publication.gaps).toEqual(["invalid_publication_history"]);
     expect(result.context.writer.shard).toBe(0);
     expect(result.request.shards).toBe(1);
     expect(result.evidence.curation.rows.map(row => row.candidate_id)).toEqual([
       deriveCandidateId("2026-10-21-700", "recorded-news", 2),
     ]);
+    expect(result.evidence.curation.rows[0]!.ratings.publisher_exposure).toMatchObject({
+      publisher_id: publisherId, history_status: "unavailable",
+      published_today: null, selected_so_far: 0, planned_slots: 1, value: 0,
+    });
+    expect(result.evidence.curation.rows[0]!.ratings.source).toEqual({ available: false, value: null });
     expect(result.evidence.harvest.feed_outcomes).toHaveLength(3);
     expect(result.evidence.harvest.feed_outcomes.map(row => row.source.publisher_id))
       .toEqual([publisherId, publisherId, publisherId]);

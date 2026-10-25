@@ -34,6 +34,10 @@ export function stagesRoute(inputs: PlanInputs, runtime: PlanRuntime) {
           batch_id: result.batch.batch_id, parsed_batch_id: result.batch.parsed_batch_id,
           run_id: result.batch.context.run_id, correlation_id: result.batch.context.correlation_id,
           selections: result.batch.selections, exclusions: result.batch.rejections,
+          publisher_history: {
+            day: result.publisher_publication.day, availability: result.publisher_publication.availability,
+            gaps: result.publisher_publication.gaps,
+          },
           files: { screening_rejections: result.screening.sealing, ...result.portfolio },
         }));
       }

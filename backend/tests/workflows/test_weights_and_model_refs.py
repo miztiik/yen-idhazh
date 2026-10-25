@@ -31,7 +31,6 @@ from ._harness import (
     VERIFY_MODEL_FILES,
     WEIGHTS_CACHE_ROLES,
     WEIGHTS_CACHE_SUFFIX,
-    WEIGHTS_CHECKS,
     WEIGHTS_FETCH_JOBS,
     WORKFLOW_PATHS,
     WORKFLOWS_DIR,
@@ -60,11 +59,6 @@ pytestmark = pytest.mark.workflow
 #: this program by heredoc and the copies drifted; the call is asserted so a
 #: fourth cannot quietly go back to inlining it.
 MODEL_REFS_CALL = "python3 backend/utilities/model_refs.py"
-
-#: The one file under `.github/` that may still spell the hub host. Its four
-#: inline download steps are plan 46's to convert; delete this exception when
-#: they go.
-HUB_HOST_EXCEPTION = "measure.yml"
 
 #: Every name the model file's reader publishes, read off the reader rather than
 #: retyped. A key retyped here would go stale the day a field is added, and the
@@ -126,26 +120,9 @@ def test_every_fetched_weight_is_checked_before_anything_reads_it() -> None:
     """
     workflows = _load_workflows()
     converted = _shared_download_jobs(workflows)
-    assert set(_weights_fetch_steps(workflows)) == set(WEIGHTS_CHECKS) | set(converted)
-    assert not set(WEIGHTS_CHECKS) & set(converted), (
-        "a job cannot both reach the shared download and spell its own"
+    assert set(_weights_fetch_steps(workflows)) == set(converted), (
+        "every weight download must use the shared fetch and verification steps"
     )
-
-    for (filename, job_name), expected in sorted(WEIGHTS_CHECKS.items()):
-        fetch_name, check_name, reader_name, digest_source = expected
-        where = f"{filename}/{job_name}"
-        names = [step.get("name") for step in _steps(workflows[filename], job_name)]
-
-        for expected_name in (fetch_name, check_name, reader_name):
-            assert expected_name in names, f"{where} has no step named {expected_name!r}"
-        assert names.index(fetch_name) < names.index(check_name), where
-        assert names.index(check_name) < names.index(reader_name), where
-
-        check = _step(workflows[filename], job_name, "name", check_name)
-        assert "if" not in check, f"{where}: a restored cache is what most needs checking"
-        script = _script(check, f"{where}/{check_name}")
-        assert digest_source in script, f"{where} must read one recorded digest"
-        assert "sha256sum --check" in script, where
 
     for converted_where in sorted(converted):
         filename, job_name = converted_where
@@ -157,19 +134,11 @@ def test_every_fetched_weight_is_checked_before_anything_reads_it() -> None:
         assert "if" not in check, f"{named}: a restored cache is what most needs checking"
 
 
-def test_no_step_starts_measuring_before_it_knows_which_model_answered() -> None:
+def test_every_server_start_checks_which_model_answered() -> None:
     """The Oracle. A number is about a model only if that model produced it.
 
-    `validate.yml` has asked `/v1/models` since it was written. `measure.yml`
-    waited for a 200 and started the clock, so a server answering under any
-    other alias would have had its throughput filed under the candidate - which
-    is a Guardrail #10 failure that no gate would have caught, because every
-    number in the report would be internally consistent and wrong.
-
     Discovery is over every step that waits for `/health`, so a step added later
-    is held to the same rule whether or not anybody remembered it. The drift this
-    catches has run in both directions: `test_model_server_jobs` records the last
-    time it was `validate.yml` that nobody diffed.
+    is held to the same rule whether or not anybody remembered it.
 
     Absorbing what was a second test beside it: the alias says which name the
     server answered under, and only the loaded path says which bytes. A step
@@ -222,19 +191,9 @@ def test_the_daily_run_writes_no_model_ref_of_its_own() -> None:
 def test_no_workflow_that_loads_weights_writes_a_model_ref_or_a_moving_one() -> None:
     """The Oracle, widened to every workflow that downloads weights.
 
-    `digest.yml` had already been cleaned; `measure.yml` still carried the two
-    production refs as job `env` and a third copy as a dispatch default, and
-    `validate.yml` carried a candidate's repo and filename as defaults. Each was
-    a second answer to a question config already answers, and each one drifts
-    silently the day config moves (Guardrail #6).
-
-    Every download also names an immutable commit. A branch hands back whatever
-    was uploaded last, so a measurement taken from one describes bytes nobody
-    can fetch again (Guardrail #10).
-
-    A dispatch INPUT is not a hardcode and is deliberately left alone: it is how
-    an operator points the measurement harness at a model config does not name.
-    What this test forbids is a literal written into the file.
+    A dispatch input is not a hardcode and is deliberately allowed where a
+    pipeline test selects a model config. What this test forbids is a literal
+    written into a workflow file.
     """
     hub = re.compile(r"huggingface\.co/(?!\$\{)")
     branch = re.compile(r"(?:resolve|tree|blob|raw)/(?:main|master)\b")
@@ -375,9 +334,8 @@ def test_a_candidate_is_named_by_its_models_file_and_by_nothing_else(tmp_path: P
     and not a name check.
     """
     committed = _committed_models()
-    for filename, step_id, prefix in (
-        ("validate.yml", "candidate", ""),
-        ("measure.yml", "models", "candidate_"),
+    for filename, job, step_id, prefix in (
+        ("idhazh-pipeline-tests.yaml", "plan", "models", "candidate_"),
     ):
         workflow = _load_workflows()[filename]
         declared = sorted(
@@ -387,7 +345,6 @@ def test_a_candidate_is_named_by_its_models_file_and_by_nothing_else(tmp_path: P
             f"{filename} asks for more than the one file that already holds the answer"
         )
 
-        job = "plan" if step_id == "candidate" else step_id
         script = _script(_step(workflow, job, "id", step_id), filename)
         assert MODEL_REFS_CALL in script, f"{filename} resolves the candidate somewhere else"
         assert f"--prefix {prefix}" in script or not prefix, (
@@ -489,12 +446,8 @@ def test_the_weights_cache_key_names_the_model_and_the_build_it_holds() -> None:
             )
 
 
-#: Where each bench-side workflow decides what the candidate is: the step that
-#: reads the entry, and the prefix it puts on what it publishes.
-CANDIDATE_STEPS = (
-    ("measure.yml", "models", "models", "candidate_"),
-    ("validate.yml", "plan", "candidate", ""),
-)
+#: Where the pipeline test reads the selected model entry and its output prefix.
+CANDIDATE_STEPS = (("idhazh-pipeline-tests.yaml", "plan", "models", "candidate_"),)
 
 
 def _an_entry(**extra: object) -> dict[str, object]:
@@ -779,8 +732,8 @@ def test_the_search_that_finds_a_weights_fetch_still_finds_every_one_of_them() -
     """The count, beside the set, because the two go blind in different ways.
 
     The set above catches a job that appeared. It cannot catch discovery itself
-    narrowing: a search that stops matching four of the eight leaves an equality
-    comparing a four-entry table against a four-entry answer, and it passes.
+    narrowing: a search that stops matching several jobs leaves an equality
+    comparing a smaller table against a smaller answer, and it passes.
     That is what happens the moment a download stops spelling a URL in a `run:`
     body and starts calling a program, so the count is asserted as a number
     rather than inferred from a table that would shrink with it.
@@ -807,8 +760,7 @@ def test_no_file_the_platform_runs_spells_the_hub_host() -> None:
     spelling = [
         path.name
         for path in (*WORKFLOW_PATHS, *actions)
-        if path.name != HUB_HOST_EXCEPTION
-        and HUB_HOST in path.read_text(encoding="utf-8")
+            if HUB_HOST in path.read_text(encoding="utf-8")
     ]
     assert not spelling, f"the hub host belongs to the download program: {spelling}"
 
@@ -875,9 +827,8 @@ def test_no_job_that_reaches_the_shared_download_pastes_a_value_the_reader_publi
     the action's own reader step is a producer inside this set, and the steps
     that start the server and probe its health are its consumers.
 
-    It says nothing about `measure.yml`'s own paste sites. Those four jobs reach
-    neither the shared action nor the shared download, so they are not in this
-    set at all, and the file is plan 46's.
+    Every workflow fetches through the shared action, so this set covers every
+    shell that can receive a published model value.
     """
     workflows = _load_workflows()
     closed = _shared_download_jobs(workflows)

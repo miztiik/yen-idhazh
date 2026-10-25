@@ -1,10 +1,9 @@
-# How to run the pipeline
+# How the pipeline runs
 
 **Last Updated**: 2026-10-11
 
-Running a digest end to end on your own machine, and what each stage is allowed
-to do. Project-specific by nature: this describes *this* pipeline, not a process
-that transfers between repositories.
+What each production stage does, what it writes, and where it runs. Model
+inference runs in GitHub Actions; local inference is not supported.
 
 ## The three stages
 
@@ -18,36 +17,14 @@ as part of the whole is a stage nobody can debug.
 | `work` | Fetches, extracts, summarizes and scores one item at a time | yes | yes |
 | `assemble` | Collects whatever finished, publishes it, appends the ledger | no | no |
 
-```
-python -m idhazh plan
-python -m idhazh work
-python -m idhazh assemble
-```
+The production `Content refresh` workflow runs the three stages in order.
+Use the [Pipeline tests workflow](../reference/github-actions.md#pipeline-tests)
+to exercise production stages with the configured article cases in
+`config/pipeline-tests.json`. Both paths run their own model server in CI.
 
-`python -m idhazh run` is the three in order.
-
-## Before the first run
-
-Install the package, and the faithfulness extra if you want scores:
-
-```
-python -m pip install -e ".[dev]"
-python -m pip install -e ".[faithfulness]" # current Transformers 5 + torch, hundreds of MB
-```
-
-Get the runtime and the weights per
-[set-up-local-inference.md](set-up-local-inference.md), then print the server
-command with the program in
-[test-models-locally.md](test-models-locally.md#serve-a-model) and run it. Do
-not type the flags: `server_argv` is the only place they are written, and a
-hand-typed copy here has already drifted once.
-
-The summarize stage talks to the address in `config/idhazh.json` under
-`model_server.base_url`, which is `http://127.0.0.1:8080` as committed. To use a
-server on another machine, change that value to its scheme, host and port.
-Article text goes only to a model process the operator of this run controls
-([../../CLAUDE.md](../../CLAUDE.md) Guardrail #11). Every job in `.github/`
-starts its own server and probes it on loopback.
+Do not run inference locally. The project does not support local model inference;
+article text must go only to a model process controlled by the operator
+([../../CLAUDE.md](../../CLAUDE.md) Guardrail #11).
 
 ## Useful flags
 
@@ -281,8 +258,8 @@ The workflow names and triggers are pinned in
 
 ## See also
 
-- [troubleshoot-one-url.md](troubleshoot-one-url.md) - isolate one planned URL or use the explicit manual diagnostic workaround.
-- [set-up-local-inference.md](set-up-local-inference.md) - getting the runtime and the weights.
+- [troubleshoot-one-url.md](troubleshoot-one-url.md) - inspect CI records for an item already processed.
+- [../reference/github-actions.md#pipeline-tests](../reference/github-actions.md#pipeline-tests) - exercising production stages in CI.
 - [../concepts/pipeline-loop.md](../concepts/pipeline-loop.md) - what each stage owns.
 - [../concepts/config.md](../concepts/config.md) - the knobs these stages read.
 - [../architecture/sources/freshness.md](../architecture/sources/freshness.md) - the cadence, the seen ledger, item ids, and why a day has no cap.

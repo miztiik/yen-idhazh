@@ -12,7 +12,7 @@ import {
   FOOTER_METADATA_KEYS,
   OPTIONAL_FOOTER_METADATA_KEYS,
   FeedIngestDispatchSchema,
-  readFeedIngestDispatch, PreviousFeedIngestDispatchSchema, SOURCE_RELIABILITY_VERSION,
+  readFeedIngestDispatch, PreviousFeedIngestDispatchSchema,
   RowIdentitySchema,
   WriterIdentitySchema,
   validateEnvelopeContainer,
@@ -651,11 +651,18 @@ describe("ledger Parquet readback", () => {
       const previous = PreviousFeedIngestDispatchSchema.parse(recorded);
       const migrated = readFeedIngestDispatch(recorded);
       expect(migrated.selection.ratings.source_reliability).toBeNull();
+      expect(migrated.selection.ratings.publisher_exposure).toBeNull();
       const authority = migrated.selection.policy.source_authority_weight
         * migrated.selection.source.weight * migrated.selection.source.applied_tier_weight;
       const dispatch = FeedIngestDispatchSchema.parse({
         ...migrated, selection: { ...migrated.selection, ratings: {
           ...migrated.selection.ratings, marginal_score: migrated.selection.ratings.base_article_score - authority * 0.5,
+          source: { available: false, value: null },
+          publisher_exposure: {
+            day: migrated.selection.date, publisher_id: null, history_status: "unavailable",
+            published_today: null, selected_so_far: 0, planned_slots: 2,
+            coefficient: 0.25, exposure: null, value: null,
+          },
           source_reliability: {
             enabled: true, source_authority_score: authority, reliability_floor: 0.5,
             history: { success_fraction: 0.5, attempted: 4, window_days: 7 },
@@ -666,7 +673,7 @@ describe("ledger Parquet readback", () => {
       expect(dispatch.partition.worker_assignment).not.toBe(writerContext.shard);
       const raw = await persistLedger({
         ledger: "dispatches",
-        rowContract: { schema: FeedIngestDispatchSchema, schemaVersion: SOURCE_RELIABILITY_VERSION },
+        rowContract: { schema: FeedIngestDispatchSchema, schemaVersion: dispatch.version },
         rows: [dispatch],
         outputRoot: root,
         period: { tier: "raw", covers: dispatch.content.date },
@@ -698,10 +705,23 @@ describe("ledger Parquet readback", () => {
       const columns = readback.files[0]!.nativeColumns;
       expect(columns.filter(([name]) => !name.startsWith("content.planning_observations")
         && !name.startsWith("selection.ratings.source_reliability")
+        && !name.startsWith("selection.ratings.publisher_exposure")
         && name !== "content.source.publisher_id" && name !== "selection.source.publisher_id"))
         .toEqual(recordedSchema.columns);
       expect(columns).toContainEqual(["content.source.publisher_id", "Utf8", true]);
       expect(columns).toContainEqual(["selection.source.publisher_id", "Utf8", true]);
+      expect(columns.filter(([name]) => name.startsWith("selection.ratings.publisher_exposure"))).toEqual([
+        ["selection.ratings.publisher_exposure", "Struct", true],
+        ["selection.ratings.publisher_exposure.day", "Utf8", false],
+        ["selection.ratings.publisher_exposure.publisher_id", "Utf8", true],
+        ["selection.ratings.publisher_exposure.history_status", "Utf8", false],
+        ["selection.ratings.publisher_exposure.published_today", "Int64", true],
+        ["selection.ratings.publisher_exposure.selected_so_far", "Int64", false],
+        ["selection.ratings.publisher_exposure.planned_slots", "Int64", false],
+        ["selection.ratings.publisher_exposure.coefficient", "Float64", false],
+        ["selection.ratings.publisher_exposure.exposure", "Float64", true],
+        ["selection.ratings.publisher_exposure.value", "Float64", true],
+      ]);
       expect(columns.filter(([name]) => name.startsWith("selection.ratings.source_reliability"))).toEqual([
         ["selection.ratings.source_reliability", "Struct", true],
         ["selection.ratings.source_reliability.enabled", "Bool", false],

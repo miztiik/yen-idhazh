@@ -8,7 +8,7 @@ Where current runtime measurements live and how to use them when sizing work. Th
 
 | Question | Source |
 | --- | --- |
-| Which model runs, and what was measured for it? | [models.md](models.md), then that model's dossier |
+| Which model runs, and what settings does it use? | [Model configuration](../concepts/config/model-file.md) |
 | What did an item cost? | Item-health rows, defined in [item health](../architecture/sources/item-health.md) |
 | What machine ran a job, and what did the job cost? | Host-fingerprint rows, defined in [host metrics](host-metrics.md) |
 | Which sub-step took time? | Span rollups and recent traces, defined in [telemetry](../concepts/telemetry.md) |
@@ -102,15 +102,14 @@ For reader latency, measure the actual browser path under a named network and CP
 1. State the decision the reading will inform and the comparison that could change it.
 2. Use fixed inputs or paired cases where possible. Record failures and the full population.
 3. Record value, units, spread, method and date. Durations and memory need hardware and runtime details. Token counts need tokenizer identity; byte counts need format and compression settings.
-4. Put model-specific readings on the model's page. Put a reproducible benchmark under `docs/reference/benchmarks/`, named for its question.
+4. Put model settings in its config file. Put reproducible runtime readings under `docs/reference/benchmarks/`, named for the question they answer.
 5. Replace the previous reading of that quantity. Keep current rationale on the page whose behavior it governs; git holds the old result.
 
 ## See also
 
-- [models.md](models.md) - configured and candidate models.
-- [github-actions.md](github-actions.md) - measurement workflows.
+- [github-actions.md](github-actions.md) - which workflows exist and what they run.
 - [site-weight.md](site-weight.md) - deployed bytes and transfer bytes.
 - [documentation-structure.md](documentation-structure.md) - where readings and rationale belong.
 - [../architecture/summarize/throughput.md](../architecture/summarize/throughput.md) - model-call scheduling.
-- [../how-to/evaluate-new-summarizer-model.md](../how-to/evaluate-new-summarizer-model.md) - changing the model.
+- [../concepts/config/model-file.md](../concepts/config/model-file.md) - model identity and runtime settings.
 - [../concepts/telemetry.md](../concepts/telemetry.md) - the measurement records.

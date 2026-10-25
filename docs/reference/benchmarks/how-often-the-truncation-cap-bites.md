@@ -86,17 +86,15 @@ pair sizes at 64,699 of the same window at the 26,000 cap committed now
 
 **Prefill runs at a median 9.85 tokens a second** over the 4,117 timed rows, the
 slowest row at 8.25 and the fastest at 44.71. That is the same figure the
-2026-08-23 sweep took on the configured model at 4,850 tokens
-([../models/qwen3.5-9b-q4km.md](../models/qwen3.5-9b-q4km.md)), re-derived from nine
-days of real items, which is the strongest corroboration on this page.
+2026-08-23 sweep took on the configured model at 4,850 tokens, re-derived from
+nine days of real items, which is the strongest corroboration on this page.
 
 **So 5,000 more prefill tokens is 8.5 minutes, and 10.1 at the slowest rate.**
 That is the whole cost of the raise, and it lands on the item that was cut.
 
 **Against what a summarize call costs today:** the median, the 95th percentile
-and the longest are on the model's own page
-([../models/qwen3.5-9b-q4km.md](../models/qwen3.5-9b-q4km.md)), taken over these same
-4,117 rows. So the worst item roughly doubles: the longest call on record becomes
+and the longest are taken over these same 4,117 rows. So the worst item roughly
+doubles: the longest call on record becomes
 about 1,311 s. `run.shard_size` is 5
 and `run.shard_timeout_minutes` is 200, so a shard of five worst-case items goes
 from about 67 minutes to about 109 - still inside the timeout, and a shard where

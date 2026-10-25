@@ -128,9 +128,18 @@ and terminal rejections use `2026-10-23`; source-run observations use
 unsharded editorial selections and dispatches use `2026-10-24` for their nested
 source-reliability score evidence.
 Their models live in `backend/idhazh/contracts/feed_ingest_*.py`.
+Selections, article assessments, dispatches, selected batches and partitioned
+batches now use `2026-10-24T23:00` for nullable publisher-exposure evidence.
+The native Python declarations and strict TypeScript copies migrate prior
+versions without reinterpreting their `source` feed-crowding term. Historical
+exposure remains null, not an invented publication count; old physical schemas
+and logical commitments retain their original encoding. Current scores cannot
+charge both terms. The formula and bounded publication join live in
+[editorial selection](../sources/feed-curation.md#publisher-exposure-adjustment).
+Candidate, source-run, parsed-batch and rejection stamps are unchanged.
 These declarations do not enable a producer, register a ledger, or change the
 production planner.
-Planner events are independently stamped `2026-10-24` in their TypeScript
+Planner events are independently stamped `2026-10-24T23:00` in their TypeScript
 schema. Native tests cover current fixture validation, UUID versions, typed
 payloads, forbidden article text, identity propagation and event ordering.
 
@@ -282,7 +291,6 @@ The shapes, and where each one lives once written:
 | `CouncilRunRecord` | `council-run-record` | one row of `state/raw/council-run-records/<YYYY>/<MM>/<DD>/`, later packed under `state/compact/council-run-records/` - which council step ran for one tenant, how it ended, how long it took, and what it cost. A missing part row against `work_part_count` shows a part that did not report |
 | `ContentSimilarityJudgeMetrics` | `content-similarity-judge-metrics` | one row of `state/raw/content-similarity-judge/metrics/<YYYY>/<MM>/<DD>/`, in the raw file the council's save job files through the ledger door under the judged date, packed later under `state/compact/content-similarity-judge/metrics/` - what one part of that judge's night, `work_part_index`, dealt, read, agreed and lost, plus its two rates and its clocks |
 | `MergeLineHoldoutScore` | `content-similarity-judge-merge-line-holdout-score` | one row under `state/raw/content-similarity-judge/merge-line-holdout-scores/<YYYY>/<MM>/<DD>/`, packed under `state/compact/content-similarity-judge/merge-line-holdout-scores/` - the line in force, the four cells it scored against the hand-marked holdout, and what the line was made of. No model runs in it, so it carries no call stamp |
-| `ValidationRow` | `validation-row` | one row of `state/<run.trial_state_dirname>/raw/candidate-models/<YYYY>/<MM>/<DD>/`, in the raw file the gates file through the ledger door. A matching `compact-trial-candidate-models` declaration packs named trial roots without changing production retention |
 | `RunManifest` | `run-manifest` | `.../<DD>/run.json`, append-only per date |
 | `DigestDay` | `digest-day` | `.../<DD>/digest.json` and each `run-<N>.json` |
 | `SearchIndex` | `search-index` | `frontend/public/assist/index/<YYYY-MM>.json`, with its vectors in a sibling `.bin` |

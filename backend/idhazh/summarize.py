@@ -58,7 +58,7 @@ from idhazh.contracts.knobs.evaluation import EvaluationConfig
 from idhazh.contracts.knobs.summarize import OverLengthAction, SummarizeConfig, SummaryBand
 from idhazh.contracts.summary import LengthAction, Summary, SummaryStatus
 from idhazh.evals.metrics import verbatim_run
-from idhazh.llm.server import Completion, TurnMarkers, request_payload, window
+from idhazh.llm.server import Completion, TurnMarkers, request_payload
 from idhazh.sanitize import LINK_PLACEHOLDER, sanitize, untrusted_block
 
 PROMPT_PATH: Final = Path(__file__).parent / "prompts" / "summarize.txt"
@@ -339,35 +339,6 @@ def user_turn(article: Article) -> str:
     )
 
 
-def fits_context(
-    article: Article,
-    server: Mapping[str, Any],
-    prompt_config: SummarizeConfig | None = None,
-) -> bool:
-    """The prompt has to leave the window something to reply in.
-
-    **This sizes the single call, and the digest does not send a single call.**
-    One system turn, one article, one reply - which is what the qualification
-    harness sends a candidate model, and it is the only caller. The digest's own
-    path is two calls and `classify.dag.fits_the_window` sizes that one: it
-    reserves both derived reply budgets, because the label call's reply is paid
-    twice and the candidate menu is paid once, and neither term exists here at
-    all. Sizing the two-call path with this function would admit articles it
-    cannot hold.
-
-    **Nothing is reserved for the reply, because nothing caps it.** The two
-    decode budgets left `inference` on 2026-09-21, so a reply ends on the window
-    or on the per-request timeout. What this still refuses is an article that
-    leaves no headroom at all; what it can no longer promise is that the
-    headroom is enough.
-    """
-    rendered = system_prompt(
-        prompt_config, source_words=article.band_source_words, brief=article.brief
-    )
-    overhead = len(rendered.split()) * 2
-    return article.token_count + overhead < window(server)
-
-
 def build_request(
     article: Article,
     *,
@@ -454,8 +425,8 @@ def length_verdict(
 
     Overshoot past the allowance is the band's own call. A short band trims,
     because wire-shaped prose front-loads and the tail is the safe end to cut. A
-    long band publishes over-length, because on a feature the qualification
-    arrives last and cutting it is how a summary stops being true.
+    long band publishes over-length, because a feature's key result may arrive
+    last and cutting it is how a summary stops being true.
 
     Undershoot publishes. The reader can see that a summary is short; they cannot
     see one that was deleted.
@@ -476,7 +447,7 @@ def length_verdict(
             return LengthVerdict(
                 LengthAction.PUBLISH_OVER,
                 f"summary is {words} words against a {band.target_words_max}-word ask; "
-                "published long rather than cut a qualification off the end",
+                "published long rather than cut a key detail off the end",
             )
         return LengthVerdict(
             LengthAction.TRIM,

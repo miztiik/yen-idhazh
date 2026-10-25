@@ -32,8 +32,8 @@ from pathlib import Path
 from typing import Final
 
 import pytest
-import test_canaries as canaries
 from pydantic import ValidationError
+from support import canaries
 from support.paths import CONFIG_DIR, FIXTURES_DIR
 
 from idhazh import config, extract
@@ -59,7 +59,7 @@ PAGES: Final = tuple(
         "wind.html",
     )
 )
-CANARY_NAMES: Final = tuple(sorted(canaries.REQUIRED_ATTACKS))
+CANARY_NAMES: Final = canaries.CANARY_NAMES
 
 #: One figure, two periods. The article a trend chart exists for, and the one
 #: `numeric_facts` is right to collapse and this pass is wrong to.

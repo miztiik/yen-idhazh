@@ -20,6 +20,11 @@ import initializeParquet, { Table as WasmTable, WriterPropertiesBuilder, readMet
 import { tableToIPC } from "apache-arrow";
 import { readLedgerParquet } from "../src/read-ledger-history/read-parquet";
 import { readLedgerDay } from "../src/read-ledger-history/read-period";
+import { readPublisherPublication } from "../src/read-ledger-history/read-publisher-publication";
+import { classifyPublicationHistoryError } from "../src/read-ledger-history/classify-publication-history-error";
+import { LedgerHistoryReadError } from "../src/read-ledger-history/ledger-history-error";
+import { ItemHealthPublicationSchema, PublishedRowSchema, PUBLISHED_ROW_SCHEMA_VERSION } from "../src/metrics/publication-evidence";
+import { ITEM_HEALTH_ROW_SCHEMA_VERSION } from "../src/read-ledger-history/item-health-version";
 import { resolveHealthInventory } from "../src/read-ledger-history/read-health-inventory";
 import { selectCompleteAttempt } from "../src/read-ledger-history/complete-attempt";
 import type { AttemptHistory } from "../src/read-ledger-history/complete-attempt";
@@ -498,8 +503,117 @@ test("one named raw listing verifies its ordered filename digest, sizes and miss
     expect((await read()).status).toBe("missing");
     await writeFile(indexPath, JSON.stringify({ ...index, files: [], bytes: [], content_sha256: createHash("sha256").update("").digest("hex") }));
     expect((await read()).status).toBe("empty");
+    const publisherRoot = join(root, "publisher");
+    const stateRoot = join(publisherRoot, "state");
+    const held = await fixtureInput(stateRoot, { count: 1 });
+    const selected = {
+      ...held.curation.rows[0]!,
+      source: { ...held.curation.rows[0]!.source, publisher_id: "recorded-publisher" },
+    };
+    const day = held.fixture.date;
+    const owner = writer(held.fixture.run_id);
+    const identity = { date: day, run_id: owner.run_id, item_id: "recorded-item-01",
+      url_key: selected.url_key, source_id: selected.source_id, stage: "publish" as const, outcome: "ok" as const };
+    const health = await writeRows(stateRoot, "item-health", day, ItemHealthPublicationSchema,
+      [identity, identity, { ...identity, stage: "extract" }], owner, ITEM_HEALTH_ROW_SCHEMA_VERSION);
+    const publication = await writeRows(stateRoot, "published", day, PublishedRowSchema,
+      [{ version: PUBLISHED_ROW_SCHEMA_VERSION, published_on: day, url_key: selected.url_key, item_id: identity.item_id }],
+      owner, PUBLISHED_ROW_SCHEMA_VERSION);
+    const snapshots = await writeRows(stateRoot, "editorial-selections", day, EditorialSelectionRowSchema,
+      [selected], owner, EditorialSelectionContract.schemaVersion);
+    const writeIndex = async (files: PersistLedgerResult["files"]) => {
+      const file = files[0]!;
+      const path = join(stateRoot, file.path);
+      const names = [basename(path)];
+      await writeFile(join(dirname(path), "index.json"), JSON.stringify({
+        version: "2026-10-03", ledger: "editorial-selections", date: day, files: names,
+        content_sha256: createHash("sha256").update(names.join("\n")).digest("hex"),
+        bytes: [(await stat(path)).size], listed_at: held.fixture.observed_at,
+      }));
+    };
+    await writeIndex(snapshots.files);
+    const localFiles = (files: PersistLedgerResult["files"]) => files.map(file => `state/${file.path}`);
+    const request = {
+      root: publisherRoot, day, published: registration("published"), item_health: registration("item-health"),
+      selections: registration("editorial-selections"),
+      published_days: [{ day, raw_files: localFiles(publication.files) }],
+      health_days: [{ day, raw_files: localFiles(health.files) }],
+    };
+    const counted = await readPublisherPublication(request);
+    expect(counted.availability).toBe("available");
+    expect(counted.counts.get("recorded-publisher")).toBe(1);
+    expect(counted.gaps).toEqual([]);
+    const native = await readWritten(stateRoot, "editorial-selections", day, selectionContract, snapshots);
+    const compact = await compactSelections(stateRoot, held, native.rows, "daily");
+    expect((await readPublisherPublication(request)).counts).toEqual(counted.counts);
+    await rm(compact.path);
+    await writeFile(compact.indexPath, JSON.stringify({
+      ...compact.index, entries: [{ covers: day, rows: 0, bytes: 0, state: "lost" }],
+    }));
+    expect((await readPublisherPublication(request)).availability).toBe("unavailable");
+    await rm(compact.indexPath);
+    const differentRun = await writeRows(stateRoot, "editorial-selections", day, EditorialSelectionRowSchema,
+      [selected], { ...owner, run_id: `${day}-999999` }, selectionContract.schemaVersion);
+    await writeIndex(differentRun.files);
+    expect((await readPublisherPublication(request)).gaps).toContain("recorded_publisher_unavailable");
+    const previousDay = new Date(Date.parse(`${day}T00:00:00Z`) - 86_400_000).toISOString().slice(0, 10);
+    await writeRows(stateRoot, "editorial-selections", previousDay, EditorialSelectionRowSchema,
+      [{ ...selected, date: previousDay }], { ...owner, run_id: `${previousDay}-1` }, selectionContract.schemaVersion);
+    await rm(join(dirname(join(stateRoot, differentRun.files[0]!.path)), "index.json"));
+    const crossDay = await readPublisherPublication(request);
+    expect(crossDay.availability).toBe("unavailable");
+    expect(crossDay.gaps).toContain("recorded_publisher_unavailable");
+    for (const snapshot of [
+      { ...selected, source: { ...selected.source, publisher_id: null } },
+      selected,
+    ]) {
+      const rows = snapshot.source.publisher_id === null ? [snapshot]
+        : [snapshot, { ...snapshot, source: { ...snapshot.source, publisher_id: "conflicting-publisher" } }];
+      const ambiguous = await writeRows(stateRoot, "editorial-selections", day, EditorialSelectionRowSchema,
+        rows, { ...owner, attempt: 2 }, selectionContract.schemaVersion);
+      await writeIndex(ambiguous.files);
+      const gap = await readPublisherPublication(request);
+      expect(gap.availability).toBe("unavailable");
+      expect(gap.counts.size).toBe(0);
+      expect(gap.gaps).toContain("recorded_publisher_unavailable");
+    }
+    const empty = await readPublisherPublication({ ...request, published_days: [{ day, raw_files: [] }] });
+    expect(empty.availability).toBe("available");
+    expect(empty.counts.size).toBe(0);
+    const missing = await readPublisherPublication({ ...request, published_days: [] });
+    expect(missing.availability).toBe("unavailable");
+    const invalidIndex = join(publisherRoot, "invalid-publication-index.json");
+    for (const contents of ["{", JSON.stringify({ version: "not-a-version" })]) {
+      await writeFile(invalidIndex, contents);
+      const invalid = await readPublisherPublication({
+        ...request, published_days: [{ day, raw_index: "invalid-publication-index.json" }],
+      });
+      expect(invalid.availability).toBe("unavailable");
+      expect(invalid.counts.size).toBe(0);
+      expect(invalid.gaps).toEqual(["invalid_publication_history"]);
+    }
+    expect(classifyPublicationHistoryError(new TypeError("unexpected programming error"))).toBeNull();
+    expect(classifyPublicationHistoryError(new Error("unexpected programming error"))).toBeNull();
+    expect(classifyPublicationHistoryError(new SyntaxError("unexpected programming error"))).toBeNull();
+    expect(classifyPublicationHistoryError("unexpected non-error")).toBeNull();
+    expect(classifyPublicationHistoryError(new LedgerHistoryReadError("renamed integrity diagnostic")))
+      .toBe("renamed integrity diagnostic");
+    await writeIndex(snapshots.files);
+    await writeFile(join(dirname(join(stateRoot, snapshots.files[0]!.path)), "index.json"), "{");
+    expect((await readPublisherPublication(request)).gaps).toEqual(["invalid_publication_history"]);
+    for (const bytes of [new Uint8Array([1, 2, 3]), new Uint8Array(20)]) {
+      await writeFile(join(stateRoot, publication.files[0]!.path), bytes);
+      await expect(readLedgerDay({
+        ledger: "published", day, contract: { schema: PublishedRowSchema, schemaVersion: PUBLISHED_ROW_SCHEMA_VERSION },
+        rawFiles: publication.files.map(file => join(stateRoot, file.path)),
+      })).rejects.toThrow();
+      const corrupt = await readPublisherPublication(request);
+      expect(corrupt.availability).toBe("unavailable");
+      expect(corrupt.counts.size).toBe(0);
+      expect(corrupt.gaps).toEqual(["invalid_publication_history"]);
+    }
   } finally { await rm(root, { recursive: true, force: true }); }
-});
+}, 60_000);
 
 test("native digest tampering, wrong ledger, schema, index counts and raw identity are rejected", async () => {
   const root = await mkdtemp(join(tmpdir(), "history-integrity-"));

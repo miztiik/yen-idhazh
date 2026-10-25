@@ -276,6 +276,11 @@ class SelectedFeedBatch(Contract):
     __schema_stem__: ClassVar[str] = "selected-feed-batch"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-10-24T23:00",
+            change="Carry publisher-exposure evidence in selected batches.",
+            why="Later stages retain the original ranking counts and missing history.",
+        ),
+        ChangelogEntry(
             version="2026-10-24T20:04",
             change="Preserve curated publisher identity in selected snapshots.",
             why="Partitioning reads the identity recorded with each selected article.",
@@ -286,7 +291,7 @@ class SelectedFeedBatch(Contract):
             why="Partitioning reads ranked choices without copying the original batch.",
         ),
     )
-    version: Literal["2026-10-24T20:04"] = "2026-10-24T20:04"
+    version: Literal["2026-10-24T23:00"] = "2026-10-24T23:00"
     batch_id: UUID4
     config_sha256: Sha256
     parsed_batch_id: UUID4
@@ -297,14 +302,14 @@ class SelectedFeedBatch(Contract):
     @model_validator(mode="before")
     @classmethod
     def migrate_previous_version(cls, value: Any) -> Any:
-        if isinstance(value, dict) and value.get("version") == "2026-10-24":
+        if isinstance(value, dict) and value.get("version") in {"2026-10-24", "2026-10-24T20:04"}:
             selections = value.get("selections")
             reject_legacy_publisher_identity(value, [
                 selection.get("source")
                 for selection in selections
                 if isinstance(selection, dict)
             ] if isinstance(selections, list) else [])
-            return {**value, "version": "2026-10-24T20:04"}
+            return {**value, "version": "2026-10-24T23:00"}
         return value
 
     @model_validator(mode="after")
@@ -339,6 +344,11 @@ class PartitionedFeedBatch(Contract):
     __schema_stem__: ClassVar[str] = "partitioned-feed-batch"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-10-24T23:00",
+            change="Carry publisher-exposure evidence in partitioned batches.",
+            why="Persistence preserves the original selection adjustment.",
+        ),
+        ChangelogEntry(
             version="2026-10-24T20:04",
             change="Preserve curated publisher identity in partitioned snapshots.",
             why="Saved dispatch rows retain the identity carried by selection.",
@@ -349,7 +359,7 @@ class PartitionedFeedBatch(Contract):
             why="Persistence receives one validated dispatch snapshot after partitioning.",
         ),
     )
-    version: Literal["2026-10-24T20:04"] = "2026-10-24T20:04"
+    version: Literal["2026-10-24T23:00"] = "2026-10-24T23:00"
     batch_id: UUID4
     config_sha256: Sha256
     selection_batch_id: UUID4
@@ -362,7 +372,7 @@ class PartitionedFeedBatch(Contract):
     @model_validator(mode="before")
     @classmethod
     def migrate_previous_version(cls, value: Any) -> Any:
-        if isinstance(value, dict) and value.get("version") == "2026-10-24":
+        if isinstance(value, dict) and value.get("version") in {"2026-10-24", "2026-10-24T20:04"}:
             dispatches = value.get("dispatches")
             snapshots = []
             if isinstance(dispatches, list):
@@ -375,7 +385,7 @@ class PartitionedFeedBatch(Contract):
                         selection.get("source") if isinstance(selection, dict) else None,
                     ])
             reject_legacy_publisher_identity(value, snapshots)
-            return {**value, "version": "2026-10-24T20:04"}
+            return {**value, "version": "2026-10-24T23:00"}
         return value
 
     @model_validator(mode="after")

@@ -1,10 +1,10 @@
 /** Which writer and recorded format identify one immutable ledger file? */
 import { z } from "zod";
-import { CommitShaSchema, CountSchema, DateStampSchema, JobNameSchema, MonthStampSchema, NonEmptySchema, PositiveCountSchema, RunIdSchema, SchemaVersionSchema, ServerJobSchema, Sha256Schema, VersionSchema, YearStampSchema, reject } from "./primitives";
+import { CommitShaSchema, CountSchema, DateStampSchema, JobNameSchema, MonthStampSchema, NonEmptySchema, PositiveCountSchema, RunIdSchema, SchemaVersionSchema, ServerJobSchema, Sha256Schema, YearStampSchema, reject } from "./primitives";
 
 export const LedgerNameSchema = z.enum([
   "seen", "feed-health", "item-health", "host-fingerprint", "summary-quality-evals",
-  "candidate-models", "item-health-summary", "published", "feed-retirements", "visual-prunes",
+  "item-health-summary", "published", "feed-retirements", "visual-prunes",
   "counterfactual-scores", "scored-pairs", "fitted-thresholds", "holdout-pairs", "score-distribution",
   "archive", "metrics", "merge-line-holdout-scores", "traces", "day-metrics", "digest-fragments",
   "gardener", "run-plan", "run-shards", "council-run-records",
@@ -44,13 +44,14 @@ export const RowIdentitySchema = z.strictObject({
   ledger: LedgerNameSchema, covers: DateStampSchema, ...IdentityFields,
   unit_id: z.string().regex(/^[0-9a-f]{8}-[0-9a-f]{4}-5[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/),
 }).superRefine(checkWriterIdentity);
+export const FILE_ENVELOPE_VERSION = "2026-10-24" as const;
 export const ENVELOPE_VERSIONS = [
-  "2026-10-20", "2026-10-14", "2026-09-25", "2026-09-27", "2026-09-28", "2026-09-30",
+  FILE_ENVELOPE_VERSION, "2026-10-20", "2026-10-14", "2026-09-25", "2026-09-27", "2026-09-28", "2026-09-30",
   "2026-10-01", "2026-10-01T16:50", "2026-10-06", "2026-10-10", "2026-10-12",
 ] as const;
 const UuidSchema = z.string().uuid();
 export const FileEnvelopeSchema = z.strictObject({
-  version: SchemaVersionSchema.default(VersionSchema.parse(undefined)),
+  version: SchemaVersionSchema.default(FILE_ENVELOPE_VERSION),
   row_schema_version: SchemaVersionSchema, tier: TierSchema, ledger: LedgerNameSchema,
   covers: z.union([DateStampSchema, MonthStampSchema, YearStampSchema]),
   period: PeriodSchema.nullable().default(null), written_at_ms: CountSchema,

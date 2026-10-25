@@ -800,10 +800,8 @@ a person runs by hand is none of those, so the flag went rather than invent an
 identity (Fowler and Carmack). On 2026-09-28 the utility went too: both
 collections are gardener tasks, and a hand run is `idhazh gardener run-task`.
 
-**2026-09-27: the commit loop lives outside the package.** The loop runs git,
-and `backend/tests/test_canaries.py` refuses `subprocess` anywhere under
-`backend/idhazh/`: the package that reads the open web holds none of the
-machinery an injected instruction would need to act (CLAUDE.md Guardrail #11).
+**2026-09-27: the commit loop lives outside the task package.** The loop runs
+git, so the utility owns the commit operation while task modules describe work.
 Every other git call in this repository already lives under `backend/utilities/`
 for the same reason. So the runner writes the record and hands back the paths,
 and `gardener_publish.py` reads the commit, calls it and lands them. A task that

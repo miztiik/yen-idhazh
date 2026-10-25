@@ -103,7 +103,7 @@ tracing context. The existing default-off service flag gates the new routes.
 | E6 | 6 | Aggregate article delivery and request costs | 5 | F | PENDING | - | - | - |
 | E7 | 7 | Compute supported operational estimates | 6 | G | PENDING | - | - | - |
 | E8 | 8 | Deliver selection, partition and persistence APIs | - (authorized stage contracts included) | E | DONE | feed-ingest-feedback-selection | - | - |
-| E9 | 9 | Apply the soft publisher-exposure preference | 8 | F | PENDING | - | - | - |
+| E9 | 9 | Apply the soft publisher-exposure preference | 8 | F | IN-REVIEW (current-run + fallback) | publisher-exposure-preference | [#1714](https://github.com/miztiik/yen-idhazh/pull/1714) | - |
 | E10 | 10 | Settle feedback and consume it in the next allocation | 7, 8 | H | PENDING | - | - | - |
 | E11 | 11 | Report bounded technical admission trials | 2, 4, 5, 6 | I | PENDING | - | - | - |
 | E12 | 12 | Enforce temporary access restrictions and earned recovery | 11 | J | PENDING | - | - | - |
@@ -484,6 +484,18 @@ deferred.
 
 ## 11. Row #9 - Apply the soft publisher-exposure preference
 
+- **Delivery provenance:** PR [#1714](https://github.com/miztiik/yen-idhazh/pull/1714)
+  delivers the current-run publisher replacement and approved history fallback,
+  not full actual-publication integration. The isolated selector replaces feed crowding with
+  confirmed publisher exposure using the approved coefficient and planned-slot
+  normalizer. Current selections, unknown identities, known-empty history and
+  unavailable-history fallback are implemented. Strict named-day native readers
+  require actual published membership and unambiguous recorded run/source/URL
+  identity; fixture readback is not production integration proof. Production
+  publication does not currently retain the original isolated planner identity,
+  so its nonempty publisher history remains unavailable. The actual downstream
+  identity link remains deferred under Rows 17/18. No mappings, day ceiling,
+  worker integration or separate lookup index are added.
 - **Scope:** Replace the approved feed-crowding term with the agreed publisher-exposure adjustment while preserving the existing numeric base and distinct operational penalty.
 - **Level:** 3 after D6 approval; a changed score meaning returns to its native-contract owner.
 - **Files touched:**

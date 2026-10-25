@@ -150,23 +150,6 @@ def test_source_code_does_not_select_a_model_when_the_pointer_is_missing() -> No
         AppConfig.model_validate({})
 
 
-def test_qualification_defaults_to_one_pass() -> None:
-    assert AppConfig.model_validate({"models_file": "models/test.json"}).run.qualification_repeats == 1
-
-
-@pytest.mark.parametrize("repeats", [1, 2, 3])
-def test_qualification_accepts_one_through_three_passes(repeats: int) -> None:
-    assert AppConfig.model_validate(
-        {"models_file": "models/test.json", "run": {"qualification_repeats": repeats}}
-    ).run.qualification_repeats == repeats
-
-
-@pytest.mark.parametrize("repeats", [0, 4])
-def test_qualification_refuses_counts_outside_one_through_three(repeats: int) -> None:
-    with pytest.raises(ValidationError, match="qualification_repeats"):
-        AppConfig.model_validate({"run": {"qualification_repeats": repeats}})
-
-
 def test_a_trial_case_requires_a_trial_state_root() -> None:
     with pytest.raises(ValidationError, match=r"run\.trial_case_dirname requires"):
         AppConfig.model_validate(

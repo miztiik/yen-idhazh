@@ -46,7 +46,6 @@ ENVELOPE_NAMED_FIELDS: Final[Mapping[LedgerName, frozenset[str]]] = {
         {"job", "pipeline_name", "task_name", "run_id", "shard"}
     ),
     LedgerName.COUNTERFACTUAL_SCORES: frozenset({"run_id"}),
-    LedgerName.CANDIDATE_MODELS: frozenset({"run_id"}),
     LedgerName.FEED_HEALTH: frozenset({"run_id"}),
     LedgerName.SEEN: frozenset(),
     LedgerName.PUBLISHED: frozenset(),

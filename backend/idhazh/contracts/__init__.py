@@ -79,11 +79,6 @@ from idhazh.contracts.planner_stage import (
 )
 from idhazh.contracts.publication_inventory import PublicationInventory
 from idhazh.contracts.publication_receipt import PublicationReceipt
-from idhazh.contracts.qualification import (
-    QualificationReport,
-    QualificationSamples,
-    QualificationShard,
-)
 from idhazh.contracts.reference_dataset import (
     ReferenceCollectionMetadata,
     ReferenceDatasetLocalConfig,
@@ -129,7 +124,6 @@ from idhazh.contracts.taxonomy import (
     Taxonomy,
     VerticalDef,
 )
-from idhazh.contracts.validation_row import ValidationRow, ValidationVerdict
 from idhazh.contracts.visual import VisualPlan
 from idhazh.contracts.visual_data import VisualData
 from idhazh.contracts.visual_decision import VisualDecision, VisualKind, VisualState
@@ -193,9 +187,6 @@ CONTRACTS: Final[tuple[type[Contract], ...]] = (
     PinnedEncoderCandidate,
     PublicationInventory,
     PublicationReceipt,
-    QualificationReport,
-    QualificationSamples,
-    QualificationShard,
     RawDayIndex,
     ReferenceCollectionMetadata,
     ReferenceDatasetLocalConfig,
@@ -218,7 +209,6 @@ CONTRACTS: Final[tuple[type[Contract], ...]] = (
     StorySimilarityPair,
     Summary,
     Taxonomy,
-    ValidationRow,
     VisualAggregateRow,
     VisualAttemptRow,
     VisualData,
@@ -294,7 +284,6 @@ __all__ = [
     "Summary",
     "SummaryStatus",
     "Taxonomy",
-    "ValidationRow",
     "ValidationVerdict",
     "VerticalCount",
     "VerticalDef",

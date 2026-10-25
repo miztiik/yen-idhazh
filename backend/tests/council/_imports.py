@@ -78,7 +78,6 @@ MODULE_NAMES = (
     "idhazh.contracts.story_similarity_distribution",
     "idhazh.contracts.story_similarity_pair",
     "idhazh.contracts.taxonomy",
-    "idhazh.contracts.validation_row",
     "idhazh.contracts.visual_decision",
     "idhazh.contracts.visual_prune",
     "idhazh.contracts.watchlist",

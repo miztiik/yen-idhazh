@@ -7,6 +7,7 @@ import { curateArticles, persistPortfolio } from "./curate-article-portfolio/edi
 import { resolveOperationalHistory } from "./curate-article-portfolio/portfolio-input";
 import { resolvePlanRequest } from "./api/plan-request";
 import { resolvePlanningInputs } from "./resolve-planning-inputs";
+import { readPublisherPublication } from "./read-ledger-history/read-publisher-publication";
 
 export async function selectArticles(
   batch: ParsedFeedBatch, inputs: PlanInputs, onScreened?: (result: ScreeningResult) => void,
@@ -24,6 +25,12 @@ export async function selectArticles(
     ledgerSettings: inputs.ledgerSettings, writerContext: batch.context.writer,
   });
   onScreened?.(screening);
+  const publicationHistory = await readPublisherPublication({
+    root: inputs.root, day: batch.context.date, published: inputs.registrations.published,
+    item_health: inputs.registrations.item_health, selections: inputs.registrations.selections,
+    published_days: inputs.settings.inputs.published_days,
+    health_days: inputs.settings.inputs.settled_failure_days,
+  });
   const curation = curateArticles({
     articles: screening.admitted.map(article => {
       const supplied = batch.evidence[article.candidate.candidate_id] ?? {
@@ -39,10 +46,11 @@ export async function selectArticles(
     planning, observed_at: batch.context.now,
     reliability_floor: inputs.clock_config.collect.reliability_floor,
     opportunity: batch.opportunity,
+    publication_history: publicationHistory,
   });
   const portfolio = await persistPortfolio(curation, {
     outputRoot: inputs.outputRoot, writerContext: batch.context.writer,
     ledgerSettings: inputs.ledgerSettings, registrations: inputs.registrations, date: batch.context.date,
   });
-  return { screening, curation, portfolio };
+  return { screening, curation, portfolio, publisher_publication: publicationHistory };
 }

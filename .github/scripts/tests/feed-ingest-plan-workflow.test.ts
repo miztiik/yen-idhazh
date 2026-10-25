@@ -505,6 +505,7 @@ test("runs the native compatibility verifier in a named-input copy with no backe
       ...common, ...writer, "packages/common-contracts/package.json", "packages/ledger-file-writer/package.json",
       ".github/scripts/feed-ingest-plan-verification.ts",
       "services/feed-ingest-plan/src/read-ledger-history/read-parquet.ts",
+      "services/feed-ingest-plan/src/read-ledger-history/ledger-history-error.ts",
       "services/feed-ingest-plan/src/metrics/audit-contracts.ts",
       "tests/fixtures/ledger-file-writer/feed-ingest-dispatch-row.json",
       "tests/fixtures/ledger-file-writer/legacy-seen-day.parquet",

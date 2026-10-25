@@ -658,7 +658,7 @@ the slot width and by nothing that accumulates.
 **The shards are CI jobs, not processes on one runner.** The runner is 2 physical
 cores behind 4 logical CPUs, and one `llama-server` on the configured weights
 peaks near the runner's whole memory
-([../../reference/models/qwen3.5-9b-q4km.md](../../reference/models/qwen3.5-9b-q4km.md)).
+([../../concepts/config/model-file.md](../../concepts/config/model-file.md)).
 A second server on one runner does not fit at all, never mind four. The shards also
 commit nothing: one job downloads every shard's verdicts and makes one push, so
 there is no merge driver to trust, no union stacking to census afterwards, and no

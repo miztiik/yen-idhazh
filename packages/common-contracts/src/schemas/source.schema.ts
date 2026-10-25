@@ -1,6 +1,6 @@
 /** Which recorded source facts and independent labels accompanied an article? */
 import { z } from "zod";
-import { CountSchema, FiniteSchema, NonEmptySchema, NonNegativeSchema, PositiveCountSchema, PositiveSchema, Sha256Schema, SlugSchema, UrlSchema, reject } from "./primitives";
+import { CountSchema, DateStampSchema, FiniteSchema, NonEmptySchema, NonNegativeSchema, PositiveCountSchema, PositiveSchema, Sha256Schema, SlugSchema, UrlSchema, reject } from "./primitives";
 
 export const SourceKindSchema = SlugSchema;
 export const SourceTierSchema = PositiveCountSchema;
@@ -49,9 +49,32 @@ export const SourceReliabilityPenaltySchema = z.strictObject({
     }
   }
 });
+export const PublisherExposurePenaltySchema = z.strictObject({
+  day: DateStampSchema, publisher_id: PublisherIdSchema.nullable(),
+  history_status: z.enum(["available", "unavailable"]),
+  published_today: CountSchema.nullable(), selected_so_far: CountSchema,
+  planned_slots: PositiveCountSchema, coefficient: NonNegativeSchema,
+  exposure: NonNegativeSchema.max(1).nullable(), value: NonNegativeSchema.nullable(),
+}).superRefine((value, ctx) => {
+  const known = value.publisher_id !== null;
+  if ((value.published_today !== null) !== (known && value.history_status === "available")) {
+    reject(ctx, "publication count requires known publisher and available history");
+  }
+  if (!known) {
+    if (value.selected_so_far !== 0 || value.exposure !== null || value.value !== null) {
+      reject(ctx, "unknown publisher carries no count or adjustment");
+    }
+  } else {
+    const exposure = Math.min(1, ((value.published_today ?? 0) + value.selected_so_far) / value.planned_slots);
+    if (value.exposure !== exposure || value.value !== value.coefficient * exposure) {
+      reject(ctx, "publisher adjustment must match capped day and selection counts");
+    }
+  }
+});
 export const ScoreEvidenceSchema = z.strictObject({
   base_article_score: FiniteSchema, marginal_score: FiniteSchema,
   source_reliability: SourceReliabilityPenaltySchema.nullable().default(null),
+  publisher_exposure: PublisherExposurePenaltySchema.nullable().default(null),
   source: PenaltyEvidenceSchema, source_kind: PenaltyEvidenceSchema,
   domain: PenaltyEvidenceSchema, vertical: PenaltyEvidenceSchema,
   desk: PenaltyEvidenceSchema, lens: PenaltyEvidenceSchema,
@@ -62,8 +85,14 @@ export const ScoreEvidenceSchema = z.strictObject({
   carrier_outlets: z.array(NonEmptySchema), representative_url_key: Sha256Schema.nullable(),
   replacement_url_key: Sha256Schema.nullable(), exploration_slot: z.boolean(),
   cap_relaxations: z.array(z.enum(["distinct_sources", "source_share"])),
+}).superRefine((value, ctx) => {
+  if (value.publisher_exposure !== null && value.source.available) {
+    reject(ctx, "publisher exposure replaces feed crowding rather than charging both");
+  }
 });
-export const PreviousScoreEvidenceSchema = ScoreEvidenceSchema.omit({ source_reliability: true });
+const { publisher_exposure: _publisherExposure, ...previousScoreFields } = ScoreEvidenceSchema.shape;
+export const PreviousPublisherScoreEvidenceSchema = z.strictObject(previousScoreFields);
+export const PreviousScoreEvidenceSchema = PreviousPublisherScoreEvidenceSchema.omit({ source_reliability: true });
 export const PolicyIdentitySchema = z.strictObject({
   policy_version: NonEmptySchema, config_sha256: Sha256Schema,
   min_words_article: PositiveCountSchema, min_words_abstract: PositiveCountSchema,

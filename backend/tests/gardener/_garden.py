@@ -44,7 +44,6 @@ COMMITTED_FILES: Final = ("idhazh.json", "ledgers.json", "appearance.json", "idh
 
 #: The task declarations these integration fixtures exercise, not a directory census.
 COMMITTED_DECLARATIONS: Final = (
-    "compact-candidate-models.json",
     "compact-content-similarity-judge-fitted-thresholds.json",
     "compact-content-similarity-judge-holdout-pairs.json",
     "compact-content-similarity-judge-merge-line-holdout-scores.json",
