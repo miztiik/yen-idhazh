@@ -6,7 +6,7 @@
 **Chain**: previous work delivered in [the chart contract](../docs/architecture/publishing/where-a-drawing-becomes-pixels.md) | next [`20260905-14-sufficiency-bar-plan.md`](20260905-14-sufficiency-bar-plan.md).
 **Reference**: [`20260902-visual-planner-pseudo-plan.md`](20260902-visual-planner-pseudo-plan.md) - O8, O9, section 9 whole, rows 59, 61, 62, E3, E4.
 
-Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delegates a row where delegation pays; keep parallel N = 4 rows in flight, refilling a slot as soon as a worker returns and never waiting on a merge; consult a persona only where two answers would lead to different code; AUTO-merge on green gates; honor the ESCALATE triggers in section 0. AUTHOR-AND-STOP until the user authorizes.
+Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delegates a row where delegation pays; keep parallel N = 4 rows in flight, refilling a slot as soon as a worker returns and never waiting on a merge; consult a persona only where two answers would lead to different code; honor the ESCALATE triggers in section 0. Row 3 PR authorized by kumarsnaveen on 2026-10-25; production-run evidence remains required before DONE.
 
 ---
 
@@ -31,7 +31,7 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | 1 | The rules, and which rule governs every file this project writes | - | A | DONE #643 | p13-1 | #643 | worker |
 | 2 | The window takes a value, and nothing is deleted yet | 1 | B | DONE #651 | p13-2 | #651 | worker |
-| 3 | The fuse comes out, and one run is watched | 2 | C | PENDING | - | - | - |
+| 3 | The fuse comes out, and one run is watched | 2 | C | IN-FLIGHT; production run pending | plan-13-review | - | owner |
 
 The renderer prerequisite is delivered: the pipeline publishes per-item chart
 data and the browser draws it, as defined by the
@@ -98,18 +98,34 @@ This clears that dependency only; it does not authorize or perform deletion.
 ## 4. Row #3 - The fuse comes out, and one run is watched
 
 - **Scope:** `dry_run` in `config/gardener/visual-prune.json` becomes `false`; one scheduled run is watched end to end and its numbers recorded. That key is the switch of the `visual-prune` upkeep task, which deletes rendered visuals; it replaced `retention.dry_run`, and the loader now refuses that key by name.
-- **Files touched:** `config/idhazh.json`, `tests/fixtures/contracts/app-config/tuned.json`, `docs/concepts/adaptive-pruning.md`, `docs/reference/pipeline-cost.md`
-- **Acceptance gates:** the full suite; one dispatch; `idhazh site-weight` before and after; `idhazh check-publication`.
-- **Oracle:** After the run, **every published day still validates and every item that names a visual still has one** - the existing published-assets test, run over the whole corpus. Deletion that orphans a reference is the failure this row exists to avoid, and the site-size delta is the evidence it did something.
+- **Files touched:** `config/gardener/visual-prune.json`, `backend/tests/retention/test_policy_defaults.py`, this plan, `docs/concepts/adaptive-pruning.md`, `docs/architecture/publishing/retention.md`, `docs/concepts/config/idhazh-gardener.md`, `docs/concepts/config/retention-ages.md`, `docs/reference/pipeline-cost.md`. The old list named `config/idhazh.json`, whose window does not change, and the nonexistent `tuned.json` fixture. Neither needs an edit.
+- **Acceptance gates:** selected local checks and the full suite in CI; one production gardener wake after merge; `idhazh site-weight --site-tree frontend/build` on completed builds before and after the pass; `idhazh check-publication` before and after. A local `gardener run-task visual-prune` exercises the real task but does not replace the production wake or its landed report.
+- **Oracle:** After the run, **every published day still validates and every item that names a visual still has one**, checked by `idhazh check-publication`, not a pytest scan of the growing corpus. Record the UTC candidate window, `dry_run: false`, candidates, deleted files, `skipped_by_fuse`, reclaimed bytes and workflow run ID. A zero-candidate pass is valid only when it records zero deletions, zero skipped files, no tripped fuse and zero reclaimed bytes. It proves a live no-op, not that deletion was exercised. A generated-tree integration test must separately prove real deletion with the committed switch, while preserving day payloads, labels and visuals inside the window. Compare built-site bytes under identical build settings; zero size change is expected when nothing was deleted. Never substitute source-tree size or require a size reduction from an empty candidate list.
 
 ### Decisions
 
 | # | Decision | Authority |
 | --- | --- | --- |
-| 1 | This lands **after** the new renderer. Flipping the fuse while the old drawings are the only assets on disk deletes a year of visuals with `max_deletes_per_run: 200` the only bound. **Amended 2026-09-13 by the owner ruling that the reader's browser draws the chart** ([`../docs/architecture/publishing/visuals.md`](../docs/architecture/publishing/visuals.md)). Plan 12 row #1b deletes all 495 committed drawings itself, in one reviewed commit, so by the time this row runs **there is no visual asset left for the prune to select**. The dependency is unchanged and it is now a correctness dependency rather than a safety one: run this row first and the fuse eats a year of drawings that row #1b was going to delete anyway, with the 200-per-run cap the only bound and no record of which day lost what. What this row watches after #1b is a prune whose visual branch has nothing to do, which is a real reading and worth taking - it is the first run where `skipped_by_fuse` means the window rather than the backlog | Row 61, O8; owner ruling 2026-09-13 |
+| 1 | This lands **after** the new renderer. The owner ruling of 2026-09-13 moved drawing into the reader's browser ([chart contract](../docs/architecture/publishing/where-a-drawing-becomes-pixels.md)). That does not imply the tree has no chart files: current browser charts use per-item JSON, and those files remain visual candidates. Inspect the actual UTC window before enabling deletion. An empty window is a valid observed no-op; `skipped_by_fuse` counts candidates beyond the deletion ceiling, not files retained by age | Row 61, O8; owner ruling 2026-09-13; oracle correction authorized by kumarsnaveen, 2026-10-25 |
 | 2 | It lands **here** rather than at the end of the group, because the Pages cap is the first budget the chain breaches and every plan from 15 to 18 adds a family of drawings | Carmack, 2026-09-05 |
 | 3 | `skipped_by_fuse` is watched, not `deleted`. `deleted` is capped at 200, so it reads the same on a healthy run and a runaway one | Row 62 |
 | 4 | Both figures are re-measured after the run and written into `docs/reference/pipeline-cost.md` with the date and the corpus they were taken over | Guardrail #10 |
+
+### Delivery and production closure
+
+The PR changes only the visual-prune switch; the 390-day window, seven-day
+lookback and 200-file ceiling stay unchanged. It must not enable another task.
+Before the switch, inspect the dry-run candidate list and measure the completed
+site build. Stop on any section 0 trigger, including an alarm estimate under
+30 published days. An unavailable growth estimate is not a measured safe
+runway and must be reported as unknown.
+
+After merge, watch the first scheduled gardener wake or an explicit dispatch.
+Verify that the visual-prune shard succeeded and its report landed on `main`;
+a green plan job alone is not evidence. Record that report's run ID and counts,
+repeat publication validation and the completed-build size measurement, and
+only then mark this row DONE. Do not dispatch the branch workflow as a shortcut:
+its publisher targets `main` and its history job can rewrite history.
 
 ### Rejected alternatives
 

@@ -1,4 +1,4 @@
-"""What does a fresh clone delete? Nothing, and this is where that is held."""
+"""What does the committed visual-retention policy delete and preserve?"""
 
 from __future__ import annotations
 
@@ -29,14 +29,7 @@ def test_a_disabled_policy_deletes_nothing(tmp_path: Path) -> None:
     assert (root / "2020" / "01" / "01" / "old-0000000003.webp").exists()
 
 
-#: A day inside the committed window and a day outside it, either side of the
-#: first day the committed visual-prune declaration keeps. Built here rather than
-#: read off `frontend/public/digest/`, so what this costs never moves with what
-#: the pipeline has published (Guardrail #12, `CLAUDE.md` section 13) - and so it
-#: can carry the case the archive cannot yet produce. Nothing committed today is
-#: old enough to be a candidate at any sane window: the oldest visual on disk is
-#: three weeks old, so a run against the real tree would list nothing, and a dry
-#: run that lists nothing proves nothing.
+#: A fixed UTC day keeps generated expiry cases independent of the live archive.
 WINDOW_TODAY: Final = date(2026, 9, 13)
 
 
@@ -78,7 +71,7 @@ def test_the_committed_window_selects_only_rendered_visuals_past_its_cutoff(
         },
     )
 
-    row = pruned(root, WINDOW_TODAY)
+    row = pruned(root, WINDOW_TODAY, dry_run=True)
     candidates = visuals_older_than(root, [expired])
     print(f"candidates={len(candidates)} cutoff={limit.isoformat()}")
 
@@ -89,35 +82,81 @@ def test_the_committed_window_selects_only_rendered_visuals_past_its_cutoff(
         assert date(int(year), int(month), int(day)) < limit, f"{path} is inside the window"
 
 
-def test_the_committed_window_still_deletes_nothing(tmp_path: Path) -> None:
-    """The other half of the row: the window has a value and the fuse is still in.
-
-    `dry_run` is what holds it, and it is the committed value in the task's own
-    declaration. No step flag sits beside it any more, so nothing but an edit to
-    `config/gardener/visual-prune.json` makes this delete.
-    """
-    assert declared()[NAME].dry_run is True
+def test_the_committed_policy_deletes_only_expired_visuals(tmp_path: Path) -> None:
+    """The shipped switch removes an expired chart, not the day or other records."""
     limit = committed_first_kept()
-    root = published(tmp_path, {(limit - timedelta(days=1)).isoformat(): ["ai-01.svg"]})
+    expired = limit - timedelta(days=1)
+    root = published(
+        tmp_path,
+        {
+            expired.isoformat(): ["ai-0000000001.json", "notes.txt"],
+            limit.isoformat(): ["ai-0000000002.json"],
+        },
+    )
+    old_day = root / f"{expired:%Y}" / f"{expired:%m}" / f"{expired:%d}"
+    kept_visual = root / f"{limit:%Y}" / f"{limit:%m}" / f"{limit:%d}" / "ai-0000000002.json"
+    run = old_day / "run.json"
+    run.write_text('{"n": 1}', encoding="utf-8")
+    labels = tmp_path / "state" / "labels.csv"
+    labels.parent.mkdir(parents=True, exist_ok=True)
+    labels.write_text("item_id,label\nai-0000000001,keep\n", encoding="utf-8")
+    protected = {
+        path: path.read_bytes()
+        for path in (old_day / "digest.json", run, old_day / "notes.txt", kept_visual, labels)
+    }
 
-    row = pruned(root, WINDOW_TODAY)
+    row = pruned(root, WINDOW_TODAY, wake=True)
 
     assert row.candidates_found == 1
-    assert row.deleted == 0
-    assert row.dry_run
-    assert len(list(root.rglob("*.svg"))) == 1
+    assert row.deleted == 1
+    assert not row.dry_run
+    assert row.skipped_by_fuse == 0
+    assert not row.fuse_tripped
+    assert row.bytes_reclaimed > 0
+    assert not (old_day / "ai-0000000001.json").exists()
+    assert {path: path.read_bytes() for path in protected} == protected
+
+
+def test_the_committed_live_policy_reports_a_zero_candidate_pass(tmp_path: Path) -> None:
+    """No expired chart is a measured no-op, not proof that deletion was exercised."""
+    root = published(tmp_path, {WINDOW_TODAY.isoformat(): ["ai-0000000001.json"]})
+
+    row = pruned(root, WINDOW_TODAY, wake=True)
+
+    assert not row.dry_run
+    assert (row.candidates_found, row.deleted, row.skipped_by_fuse, row.bytes_reclaimed) == (
+        0,
+        0,
+        0,
+        0,
+    )
+    assert not row.fuse_tripped
+    assert row.payload_bytes_before == row.payload_bytes_after
+    assert (root / f"{WINDOW_TODAY:%Y/%m/%d}" / "ai-0000000001.json").exists()
+
+
+def test_the_committed_live_policy_stops_at_its_deletion_ceiling(tmp_path: Path) -> None:
+    """A scheduled pass reports the backlog it cannot delete in this run."""
+    ceiling = declared()[NAME].max_deletes_per_run
+    assert ceiling is not None
+    expired = committed_first_kept() - timedelta(days=1)
+    root = published(
+        tmp_path,
+        {expired.isoformat(): [f"p-{n:010d}.json" for n in range(ceiling + 1)]},
+    )
+
+    row = pruned(root, WINDOW_TODAY, wake=True)
+
+    assert not row.dry_run
+    assert row.candidates_found == ceiling + 1
+    assert row.deleted == ceiling
+    assert row.skipped_by_fuse == 1
+    assert row.fuse_tripped
+    assert len(list(root.rglob("p-*.json"))) == 1
 
 
 def test_one_run_can_clear_a_backlog_the_committed_window_would_open(tmp_path: Path) -> None:
-    """The fuse is not the bound in steady state, and this says by how much.
-
-    Measured 2026-09-13 over the 19 published days past the startup regime:
-    25.5 visuals arrive a published day, so 25.5 age out a day once the window
-    reaches back that far. The pipeline runs five times a day against a 200-file
-    fuse, which is 1,000 deletes a day of capacity - and the heaviest single day
-    on record is 43. The fuse only becomes interesting if the window is ever
-    narrowed, which drops a whole span in at once rather than a day at a time.
-    """
+    """One scheduled pass clears a generated batch smaller than the committed ceiling."""
     ceiling = declared()[NAME].max_deletes_per_run
     assert ceiling is not None, "the fuse is what this measures against"
     limit = committed_first_kept()

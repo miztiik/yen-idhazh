@@ -1,6 +1,6 @@
 # The gardener's knobs and declarations
 
-**Last Updated**: 2026-10-23
+**Last Updated**: 2026-10-25
 
 What the gardener may delete and rewrite, and how each of its tasks is declared.
 Two inputs, both under `config/`: the gardener's own knobs in
@@ -61,7 +61,8 @@ Each kind adds its own keys, and a key on the wrong kind is refused by name:
 
 ## The retention declarations that ship
 
-Each deletes what it owns past its window, and each ships `dry_run: true`. The
+Each deletes what it owns past its window when its own `dry_run` is false.
+`visual-prune` is live; the other retention declarations remain dry runs. The
 windows were keys in `config/idhazh.json` until 2026-09-28 and moved here with
 no value changed, because each task is the only thing that reads its number.
 Why each tree gets the age it has is

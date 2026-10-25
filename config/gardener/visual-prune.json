@@ -2,7 +2,7 @@
   "appends_to": [
     "visual-prunes"
   ],
-  "dry_run": true,
+  "dry_run": false,
   "kind": "retention",
   "lifecycle_status": "active",
   "lookback": 7,
