@@ -216,14 +216,18 @@ def test_a_compact_day_holds_exactly_what_settling_its_raw_files_gives_in_the_sa
     filed(root, a_pass("2026-09-20", run="1", before=150), attempt=2)
     filed(root, a_pass("2026-09-20", run="2", before=200))
     filed(root, a_pass("2026-09-21", run="3", before=300))
-    before = tmp_path / "before"
-    shutil.copytree(root, before)
+    before_root = tmp_path / "before"
+    shutil.copytree(root, before_root)
 
     outcome = compact(root, date(2026, 9, 23), max_periods_per_run=31)
 
     for day in ("2026-09-20", "2026-09-21"):
         settled = ledger.load_current_rows(
-            state(before), VISUALS, model=VisualPruneRow, key=ledger.VISUAL_PRUNE_KEY, days={day}
+            state(before_root),
+            VISUALS,
+            model=VisualPruneRow,
+            key=ledger.VISUAL_PRUNE_KEY,
+            days={day},
         )
         packed = ledger.compact_file(state(root), VISUALS, Period.DAILY, day)
         assert packed is not None
@@ -284,7 +288,7 @@ def test_a_compact_day_holds_exactly_what_settling_its_raw_files_gives_in_the_sa
     )
     disagreeing_root = tmp_path / "disagreeing-feed-health"
     seed_feed_health(disagreeing_root, head.model_dump_json(), changed_head.model_dump_json())
-    before = files_under(disagreeing_root)
+    disagreeing_files = files_under(disagreeing_root)
     disagreement = compact(
         disagreeing_root,
         date(2026, 12, 31),
@@ -295,11 +299,11 @@ def test_a_compact_day_holds_exactly_what_settling_its_raw_files_gives_in_the_sa
         StopReason.DEFERRED,
         GardenerFault.HEAD_INDEX_UNAVAILABLE,
     )
-    assert files_under(disagreeing_root) == before
+    assert files_under(disagreeing_root) == disagreeing_files
 
     missing_head_root = tmp_path / "missing-feed-health-head"
     seed_feed_health(missing_head_root, "{invalid", "{also invalid")
-    before = files_under(missing_head_root)
+    missing_head_files = files_under(missing_head_root)
     unavailable = compact(
         missing_head_root,
         date(2026, 12, 31),
@@ -310,7 +314,7 @@ def test_a_compact_day_holds_exactly_what_settling_its_raw_files_gives_in_the_sa
         StopReason.DEFERRED,
         GardenerFault.HEAD_INDEX_UNAVAILABLE,
     )
-    assert files_under(missing_head_root) == before
+    assert files_under(missing_head_root) == missing_head_files
 
 
 def test_a_raw_day_folder_entry_that_is_not_a_file_needs_manual_action(

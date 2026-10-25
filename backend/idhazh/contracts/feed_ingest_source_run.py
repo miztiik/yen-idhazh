@@ -126,7 +126,7 @@ class SourceRunRecord(Contract):
             why="The contract changelog keeps its four newest changes and one history pointer.",
         ),
     )
-    version: Literal[SOURCE_RUN_VERSION] = SOURCE_RUN_VERSION
+    version: Literal["2026-10-25T15:28"] = SOURCE_RUN_VERSION
 
     date: DateStamp
     correlation_id: str = Field(min_length=1)
