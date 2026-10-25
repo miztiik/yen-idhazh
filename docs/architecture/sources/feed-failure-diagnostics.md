@@ -130,13 +130,19 @@ does not diagnose intent, prove a paywall or blame a publisher-wide problem.
 
 | Id | Evidence | Attribution |
 | --- | --- | --- |
-| A1 | A target article request receives an HTTP 4xx response, or its robots rule denies the article request | `source` |
-| A2 | Article extraction reports `missing-document-root`, `empty-content` or `missing-title`; a feed parser reports its typed `malformed-feed` failure | `source` |
+| A1 | A fetch or dispatched target attempt reports typed `http` failure with HTTP 401, 403, 404 or 410; or its robots rule denies the request | `source` |
+| A2 | Article extraction reports typed `empty-content`; a feed parser reports its typed `malformed-feed` failure | `source` |
 | A3 | Local target validation rejects an unsafe address, the configured body limit stops a response, or the extractor reports its depth limit | `pipeline` |
-| A4 | DNS, network, timeout, HTTP 5xx, redirect-loop or any untyped exception | `unresolved` |
+| A4 | Other HTTP failures (including 408 and 429), DNS, network, timeout, redirect-loop, missing document root/title or any untyped exception | `unresolved` |
 
 HTTP 403 is an observed refusal for that article request only. It is not proof
 that the article is paywalled or that the publisher has failed generally.
+The selected HTTP codes mean access was refused or the target was absent;
+they do not identify why. Other client-error codes do not establish source
+responsibility. A missing root or title can be an extractor fault, so it does
+not establish source responsibility either. The existing `empty-content`
+outcome establishes failed technical extraction only, not poor editorial
+quality. No new word-count, suitability or semantic test supplies attribution.
 Retries keep separate attempt rows and their own request counts. Their shared
 fetch event identifies one article operation; counting article opportunities
 must not count each retry as another article.

@@ -216,7 +216,9 @@ counts remain visible as lower bounds when coverage is incomplete. A source
 failure marks only requests linked to that failed fetch or failed technical
 extraction as waste. Successful extraction is not reversed by a later model
 failure. Unresolved outcomes retain their requests but do not establish zero
-source waste.
+source waste. If an opportunity eventually extracts successfully, it is not a
+failed opportunity. Supported earlier failed-fetch requests remain operation
+waste; requests from a fetch that later produces usable extraction do not.
 
 Corrections replace their original contribution rather than add work.
 Conflicting replays, tied revisions, cyclic lineage and changed opportunity
@@ -225,11 +227,31 @@ operation's time and causal ID. A known out-of-window target is reported and
 excluded. A target absent from the bounded input is reported as unavailable,
 not assumed to be old or fetched by scanning history.
 
-Counts are summed before dividing. Total requests require complete opportunity
-and day coverage; source-wasted totals also require resolved outcomes.
-The request coverage denominator is distinct attempted opportunities, never
-retry count. A zero opportunity denominator gives null coverage. A known
-zero-request opportunity retains zero requests but gives no waste ratio.
+Counts are summed before dividing. `total_target_requests` requires a complete
+request census for every observed opportunity and complete day coverage;
+`source_wasted_requests` also requires resolved technical outcomes throughout.
+These whole-window totals are separate from the supported measured subset.
+`observed_request_census_opportunities` counts opportunities with complete
+request accounting. `observed_resolved_outcome_opportunities` independently
+counts opportunities where every fetch has successful extraction or a failure
+attributed to the source or pipeline. `observed_measured_opportunities` counts
+their intersection. A successful fetch without a parse outcome is unresolved.
+
+`measured_target_requests` and `measured_source_wasted_requests` sum only that
+intersection; `waste_ratio` divides those two amounts. Unknown requests and
+unresolved outcomes are excluded, not counted as zero and not used to veto
+other measured opportunities. An empty measured subset gives null totals.
+The request and measured coverage denominators are distinct attempted
+opportunities, never retry count. `request_coverage` reports complete request
+censuses divided by attempts; `measured_coverage` reports the intersection
+divided by attempts. A zero denominator or incomplete history gives null
+coverage, while measured-subset amounts remain visible.
+
+At 20 measured opportunities out of 25 attempts, measured coverage is 80
+percent and the supported totals remain available. Below 80 percent they
+still remain available, but Row 7 must not qualify them for scoring. Row 6
+does not calculate qualification or scores. A known zero-request opportunity
+retains zero requests but gives no waste ratio.
 CPU and private memory remain null. Missing, damaged or ambiguous evidence is
 reported without replacing saved state or inventing a successful empty history.
 

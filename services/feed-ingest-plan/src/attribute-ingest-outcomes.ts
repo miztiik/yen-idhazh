@@ -5,7 +5,8 @@ type IngestFailureEvidence = Pick<DocumentObservationRecord,
   "document_kind" | "operation" | "outcome" | "failure_code" | "http_status" | "request_phase">;
 
 function isHttpRefusal(status: number | null): boolean {
-  return status !== null && status >= 400 && status < 500;
+  // Protocol access/absence responses, not transient or rate-limit outcomes.
+  return status === 401 || status === 403 || status === 404 || status === 410;
 }
 
 export function attributeIngestOutcome(
@@ -28,9 +29,7 @@ export function attributeIngestOutcome(
   }
 
   if (evidence.document_kind === "article" && evidence.operation === "parse"
-    && (evidence.failure_code === "missing-document-root"
-      || evidence.failure_code === "empty-content"
-      || evidence.failure_code === "missing-title")) {
+    && evidence.failure_code === "empty-content") {
     return "source";
   }
 

@@ -646,7 +646,7 @@ test("rootless extraction, empty content and article request failures do not kil
     });
     expect(facts.find(row => row.document_kind === "article" && row.operation === "parse"
       && row.failure_code === "missing-document-root")).toMatchObject({
-      outcome: "failed", attribution: "source",
+      outcome: "failed", attribution: "unresolved",
     });
     expect(result.articles[1]?.observation.extraction).toBe("empty");
     expect(result.articles[1]?.rejection?.drop_reason).toBe("EXTRACT_EMPTY");

@@ -12,6 +12,66 @@
     "attribution": "source"
   },
   {
+    "name": "request timeout response is not supported source waste",
+    "evidence": {
+      "document_kind": "article",
+      "operation": "fetch",
+      "outcome": "failed",
+      "failure_code": "http",
+      "http_status": 408,
+      "request_phase": null
+    },
+    "attribution": "unresolved"
+  },
+  {
+    "name": "rate limited target retains unresolved cause",
+    "evidence": {
+      "document_kind": "article",
+      "operation": "attempt",
+      "outcome": "failed",
+      "failure_code": "http",
+      "http_status": 429,
+      "request_phase": "target"
+    },
+    "attribution": "unresolved"
+  },
+  {
+    "name": "missing root does not diagnose publisher failure",
+    "evidence": {
+      "document_kind": "article",
+      "operation": "parse",
+      "outcome": "failed",
+      "failure_code": "missing-document-root",
+      "http_status": null,
+      "request_phase": null
+    },
+    "attribution": "unresolved"
+  },
+  {
+    "name": "missing title does not diagnose publisher failure",
+    "evidence": {
+      "document_kind": "article",
+      "operation": "parse",
+      "outcome": "failed",
+      "failure_code": "missing-title",
+      "http_status": null,
+      "request_phase": null
+    },
+    "attribution": "unresolved"
+  },
+  {
+    "name": "bare status without typed refusal",
+    "evidence": {
+      "document_kind": "article",
+      "operation": "fetch",
+      "outcome": "failed",
+      "failure_code": null,
+      "http_status": 403,
+      "request_phase": null
+    },
+    "attribution": "unresolved"
+  },
+  {
     "name": "article extraction has no content",
     "evidence": {
       "document_kind": "article",

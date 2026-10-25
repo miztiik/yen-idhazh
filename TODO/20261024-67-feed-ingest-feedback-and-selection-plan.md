@@ -378,7 +378,10 @@ The shared document-work producer now records supported source, pipeline or
 unresolved attribution while preserving each factual cause code. A typed
 target refusal is not a paywall claim or a publisher-wide finding.
 Existing extraction outcomes, not new quality tests, determine technical
-failure. Arbitrary network, timeout, server and unknown failures stay
+failure. Only typed empty-content extraction supports source attribution;
+missing root/title and HTTP 408/429 remain unresolved. Target HTTP refusal
+does not establish a paywall or publisher-wide failure.
+Arbitrary network, timeout, server and unknown failures stay
 unresolved. No CPU or private-memory attribution is claimed.
 
 - **Scope:** Attach supported source, pipeline or unresolved attribution to recorded outcomes and costs without discarding unknown causes.
@@ -415,6 +418,11 @@ revisions. Distinct article support, measured request coverage and scoped
 source waste remain separate from retries, feed polls and unlinked work.
 Known totals and lower bounds stay distinct; missing coverage and zero
 opportunity denominators remain unknown.
+Complete request censuses and resolved technical outcomes are counted
+separately. Their intersection supplies measured request/waste totals and
+coverage without requiring every opportunity to be measured. Native readback
+covers 20 of 25 measured opportunities (80 percent), lower coverage and
+successful recovery without calling the opportunity failed.
 
 This increment does not save a second rollup or calculate a score. Row 7
 still owns score qualification/arithmetic; Row 10 owns the registered

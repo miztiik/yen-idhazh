@@ -6,7 +6,10 @@ type Observation = DocumentObservationRecord;
 export type IngestEvidenceTotals = Readonly<{
   observed_attempted_opportunities: number;
   observed_measured_opportunities: number;
+  observed_request_census_opportunities: number;
+  observed_resolved_outcome_opportunities: number;
   request_coverage: number | null;
+  measured_coverage: number | null;
   evidence_start: string | null;
   evidence_end: string | null;
   extracted_opportunities: number;
@@ -17,6 +20,8 @@ export type IngestEvidenceTotals = Readonly<{
   observed_source_wasted_requests: number;
   total_target_requests: number | null;
   source_wasted_requests: number | null;
+  measured_target_requests: number | null;
+  measured_source_wasted_requests: number | null;
   waste_ratio: number | null;
   availability: "available" | "partial" | "unavailable";
   cpu: null;
@@ -38,8 +43,9 @@ function totals(rows: readonly Observation[], historyComplete: boolean): IngestE
     held.push(row);
     opportunities.set(key, held);
   }
-  let measured = 0, extracted = 0, sourceFailed = 0, pipelineFailed = 0, unresolved = 0;
+  let measured = 0, census = 0, resolved = 0, extracted = 0, sourceFailed = 0, pipelineFailed = 0, unresolved = 0;
   let requests = 0, waste = 0;
+  let measuredRequests = 0, measuredWaste = 0;
   for (const facts of opportunities.values()) {
     const byId = new Map(facts.map(row => [row.event_id, row]));
     const fetches = facts.filter(row => row.operation === "fetch");
@@ -59,17 +65,27 @@ function totals(rows: readonly Observation[], historyComplete: boolean): IngestE
     const failed = facts.filter(row => row.operation !== "attempt" && row.outcome === "failed");
     const extractedHere = parses.some(row => row.outcome === "success");
     if (extractedHere) extracted++;
-    if (failed.some(row => row.attribution === "source")) sourceFailed++;
-    if (failed.some(row => row.attribution === "pipeline")) pipelineFailed++;
-    if (failed.some(row => row.attribution === "unresolved") || !extractedHere && failed.length === 0) unresolved++;
+    if (!extractedHere && failed.some(row => row.attribution === "source")) sourceFailed++;
+    if (!extractedHere && failed.some(row => row.attribution === "pipeline")) pipelineFailed++;
 
     const wastedFetches = new Set<string>();
+    const extractedFetches = new Set(parses.filter(row => row.outcome === "success")
+      .flatMap(row => { const fetch = ancestorFetch(row); return fetch === undefined ? [] : [fetch.event_id]; }));
     for (const row of failed.filter(row => row.attribution === "source")) {
       const fetch = ancestorFetch(row);
-      if (fetch !== undefined) wastedFetches.add(fetch.event_id);
+      if (fetch !== undefined && !extractedFetches.has(fetch.event_id)) wastedFetches.add(fetch.event_id);
     }
+    const outcomeResolved = fetches.length > 0 && fetches.every(fetch => {
+      const outcomes = parses.filter(row => ancestorFetch(row)?.event_id === fetch.event_id);
+      if (extractedFetches.has(fetch.event_id)) return true;
+      const failures = [fetch, ...outcomes].filter(row => row.outcome === "failed");
+      return failures.length > 0 && failures.every(row => row.attribution === "source" || row.attribution === "pipeline");
+    });
+    if (outcomeResolved) resolved++;
+    else unresolved++;
     const linked = new Map<string, Observation[]>();
     let complete = fetches.length > 0;
+    let opportunityRequests = 0, opportunityWaste = 0;
     for (const row of attempts) {
       const fetch = ancestorFetch(row);
       if (fetch === undefined) { complete = false; continue; }
@@ -86,26 +102,38 @@ function totals(rows: readonly Observation[], historyComplete: boolean): IngestE
     for (const row of attempts) {
       if (row.request_phase !== "target") continue;
       const count = row.dispatched_request_count ?? 0;
-      requests += count;
+      opportunityRequests += count;
       const fetch = ancestorFetch(row);
-      if (fetch !== undefined && wastedFetches.has(fetch.event_id)) waste += count;
+      if (fetch !== undefined && wastedFetches.has(fetch.event_id)) opportunityWaste += count;
     }
-    if (complete) measured++;
+    requests += opportunityRequests;
+    waste += opportunityWaste;
+    if (complete) census++;
+    if (complete && outcomeResolved) {
+      measured++;
+      measuredRequests += opportunityRequests;
+      measuredWaste += opportunityWaste;
+    }
   }
   const attempted = opportunities.size;
   const evidenceDates = [...opportunities.values()].flat().map(row => row.occurred_at).sort();
-  const complete = historyComplete && attempted > 0 && measured === attempted;
-  const knownWaste = complete && unresolved === 0;
+  const complete = historyComplete && attempted > 0 && census === attempted;
+  const knownWaste = complete && measured === attempted;
+  const hasMeasured = measured > 0;
   return {
     observed_attempted_opportunities: attempted, observed_measured_opportunities: measured,
-    request_coverage: historyComplete && attempted > 0 ? measured / attempted : null,
+    observed_request_census_opportunities: census, observed_resolved_outcome_opportunities: resolved,
+    request_coverage: historyComplete && attempted > 0 ? census / attempted : null,
+    measured_coverage: historyComplete && attempted > 0 ? measured / attempted : null,
     evidence_start: evidenceDates[0] ?? null, evidence_end: evidenceDates.at(-1) ?? null,
     extracted_opportunities: extracted, source_failed_opportunities: sourceFailed,
     pipeline_failed_opportunities: pipelineFailed, unresolved_opportunities: unresolved,
     observed_target_requests: requests, observed_source_wasted_requests: waste,
     total_target_requests: complete ? requests : null,
     source_wasted_requests: knownWaste ? waste : null,
-    waste_ratio: knownWaste && requests > 0 ? waste / requests : null,
+    measured_target_requests: hasMeasured ? measuredRequests : null,
+    measured_source_wasted_requests: hasMeasured ? measuredWaste : null,
+    waste_ratio: hasMeasured && measuredRequests > 0 ? measuredWaste / measuredRequests : null,
     availability: knownWaste ? "available" : attempted > 0 ? "partial" : "unavailable",
     cpu: null, private_memory: null,
   };

@@ -446,7 +446,7 @@ test("actual API and awaited CLI compose the same recorded plan and disclose the
     expect(rootlessParsed.failure).toBe("missing-document-root");
     const parseFacts = await readObservationFiles(api.inputs.outputRoot, api.observation_files);
     expect(parseFacts.find(({ row }) => row.event_id === rootlessParsed.observation.event_id)?.row).toMatchObject({
-      operation: "parse", outcome: "failed", failure_code: "missing-document-root", attribution: "source",
+      operation: "parse", outcome: "failed", failure_code: "missing-document-root", attribution: "unresolved",
       caused_by_event_id: rootless.observation.event_id,
     });
     expect(profiles.at(-1)?.outcome).toBe("error");

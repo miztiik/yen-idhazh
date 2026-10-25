@@ -295,9 +295,21 @@ test("native raw and daily reads preserve original writer identity instead of th
     expect(rollupIngestOutcomes(replaceExtraction("pipeline"), true).sources[0])
       .toMatchObject({ total_target_requests: 4, source_wasted_requests: 3, pipeline_failed_opportunities: 1 });
     expect(rollupIngestOutcomes(replaceExtraction("unresolved"), true).sources[0])
-      .toMatchObject({ total_target_requests: 4, source_wasted_requests: null, unresolved_opportunities: 1 });
+      .toMatchObject({
+        total_target_requests: 4, source_wasted_requests: null, unresolved_opportunities: 1,
+        observed_request_census_opportunities: 2, observed_measured_opportunities: 1,
+        measured_coverage: 0.5, measured_target_requests: 3, measured_source_wasted_requests: 3, waste_ratio: 1,
+      });
     expect(rollupIngestOutcomes(settled.rows, false).sources[0])
-      .toMatchObject({ request_coverage: null, total_target_requests: null, source_wasted_requests: null });
+      .toMatchObject({
+        request_coverage: null, measured_coverage: null, total_target_requests: null, source_wasted_requests: null,
+        measured_target_requests: 4, measured_source_wasted_requests: 3,
+      });
+    expect(rollupIngestOutcomes(requestFacts.filter(row => row.event_id !== extractionFailure.event_id), true).sources[0])
+      .toMatchObject({
+        observed_request_census_opportunities: 2, observed_resolved_outcome_opportunities: 1,
+        request_coverage: 1, measured_coverage: 0.5, measured_target_requests: 3, unresolved_opportunities: 1,
+      });
     const correction = event("request-correction", {
       ...requestFacts[3]!, event_id: createUuidV5(observation.event_id, "request-correction"),
       corrects_event_id: requestFacts[3]!.event_id, correction_revision: 1,
@@ -332,7 +344,8 @@ test("native raw and daily reads preserve original writer identity instead of th
       sources: [{
         observed_attempted_opportunities: 3, observed_measured_opportunities: 2, request_coverage: 2 / 3,
         observed_target_requests: 4, observed_source_wasted_requests: 3,
-        total_target_requests: null, source_wasted_requests: null, waste_ratio: null,
+        total_target_requests: null, source_wasted_requests: null, waste_ratio: 0.75,
+        measured_target_requests: 4, measured_source_wasted_requests: 3,
         unresolved_opportunities: 1,
       }],
       unallocated: { observation_count: 2, observed_dispatched_requests: 12 },
@@ -345,6 +358,56 @@ test("native raw and daily reads preserve original writer identity instead of th
     expect(zero.sources[0]).toMatchObject({
       observed_attempted_opportunities: 1, observed_measured_opportunities: 1, total_target_requests: 0,
       source_wasted_requests: 0, waste_ratio: null,
+    });
+    const recoveredFacts = requestFacts.map(row => row.candidate_id === successfulFetch.candidate_id
+      ? { ...row, candidate_id: failedFetch.candidate_id } : row);
+    expect(rollupIngestOutcomes(recoveredFacts, true).sources[0]).toMatchObject({
+      observed_attempted_opportunities: 1, observed_measured_opportunities: 1,
+      extracted_opportunities: 1, source_failed_opportunities: 0,
+      measured_target_requests: 4, measured_source_wasted_requests: 3, waste_ratio: 0.75,
+    });
+    const cohortFacts = Array.from({ length: 25 }, (_, index) => {
+      const candidate_id = (index + 1).toString(16).padStart(64, "0");
+      const fetch = event(`cohort-fetch-${index}`, {
+        candidate_id, outcome: index < 10 ? "failed" : "success",
+        attribution: index < 10 ? "source" : null, failure_code: index < 10 ? "http" : null,
+        http_status: index < 10 ? 403 : 200,
+      });
+      const attempt = event(`cohort-target-${index}`, {
+        candidate_id, operation: "attempt", caused_by_event_id: fetch.event_id,
+        request_phase: "target", request_sequence: 0, retry: 0,
+        dispatched_request_count: index >= 20 && index < 23 ? null : 1,
+        request_coverage: index >= 20 && index < 23 ? "unknown" : "complete",
+        outcome: "success", attribution: null, failure_code: null,
+      });
+      const parse = event(`cohort-parse-${index}`, {
+        candidate_id, operation: "parse", caused_by_event_id: fetch.event_id,
+        outcome: index >= 23 ? "failed" : "success",
+        attribution: index >= 23 ? "unresolved" : null, failure_code: null,
+      });
+      return index < 10 ? [fetch, attempt] : [fetch, attempt, parse];
+    }).flat();
+    const cohortWritten = await writeRows(join(root, "cohort"), "document-observations", input.fixture.date,
+      DocumentObservationRecordSchema, cohortFacts, observationWriter, DOCUMENT_OBSERVATION_VERSION);
+    const cohortRead = await readIngestEvidence({
+      root: join(root, "cohort"), now: "2026-10-22T00:00:00Z", window_days: 1,
+      registration: registration("document-observations"),
+      days: [{ day: input.fixture.date, raw_files: cohortWritten.files.map(file => file.path) }],
+    });
+    const cohort = cohortRead.sources[0];
+    expect(cohort).toMatchObject({
+      observed_attempted_opportunities: 25, observed_measured_opportunities: 20,
+      observed_request_census_opportunities: 22, observed_resolved_outcome_opportunities: 23,
+      request_coverage: 22 / 25, measured_coverage: 0.8,
+      measured_target_requests: 20, measured_source_wasted_requests: 10, waste_ratio: 0.5,
+      observed_target_requests: 22, total_target_requests: null, source_wasted_requests: null,
+      unresolved_opportunities: 2, availability: "partial",
+    });
+    const lessMeasured = cohortFacts.map(row => row.event_id === createUuidV5(observation.event_id, "cohort-target-19")
+      ? { ...row, request_coverage: "unknown" as const, dispatched_request_count: null } : row);
+    expect(rollupIngestOutcomes(lessMeasured, true).sources[0]).toMatchObject({
+      observed_attempted_opportunities: 25, observed_measured_opportunities: 19, measured_coverage: 19 / 25,
+      measured_target_requests: 19, measured_source_wasted_requests: 10, waste_ratio: 10 / 19,
     });
 
     const evidenceRoot = join(root, "request-evidence");
