@@ -4,9 +4,9 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from types import MappingProxyType
-from typing import Any, Final, Self
+from typing import Annotated, Any, Final, Self
 
-from pydantic import Field, field_validator, model_validator
+from pydantic import Field, StringConstraints, field_validator, model_validator
 
 from idhazh.contracts.base import Model
 from idhazh.contracts.knobs.removed import refuse_a_removed_knob
@@ -18,6 +18,30 @@ from idhazh.contracts.visual_decision import VisualKind
 #: actually gives it, so there is no box to size and nothing answers the same
 #: question.
 SUPERSEDED_VISUALS_NAMES: Final[Mapping[str, str]] = MappingProxyType({"canvas_width": ""})
+
+
+class NumberFormatConfig(Model):
+    """The one locale, SI prefix threshold and precision used on number displays."""
+
+    locale: Annotated[
+        str,
+        StringConstraints(pattern=r"^[A-Za-z]{2,3}(?:-[A-Za-z0-9]{2,8})*$"),
+    ] = Field(
+        default="en-GB",
+        description="Declared BCP 47 locale; display code never reads the reader's locale.",
+    )
+    si_prefix_from: float = Field(
+        default=1000,
+        gt=0,
+        allow_inf_nan=False,
+        description="Magnitude at which an SI prefix replaces a run of digits.",
+    )
+    significant_digits: int = Field(
+        default=3,
+        ge=1,
+        le=21,
+        description="Maximum significant digits for measured values.",
+    )
 
 
 class VisualsConfig(Model):
@@ -52,6 +76,7 @@ class VisualsConfig(Model):
         description="Below this a chart says less than the sentence it sits under.",
     )
     max_chart_points: int = Field(default=8, ge=2)
+    number_format: NumberFormatConfig = Field(default_factory=NumberFormatConfig)
     histogram_bins: int = Field(
         default=3,
         ge=2,

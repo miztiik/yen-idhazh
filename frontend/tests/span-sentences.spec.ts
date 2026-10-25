@@ -12,10 +12,14 @@
 
 import { expect, test } from '@playwright/test';
 import { FLEET_HINT, fleetHintOne } from '../src/lib/charts/fleet';
-import { coverage, coverageSentence, noModelRuleNote } from '../src/lib/charts/frame';
+import {
+	coverage,
+	coverageSentence as coverageSentenceWithFormat,
+	noModelRuleNote
+} from '../src/lib/charts/frame';
 import {
 	chartRule,
-	horizonRate,
+	horizonRate as horizonRateWithFormat,
 	siteCostMeasure,
 	type GlanceDay
 } from '../src/lib/charts/glance';
@@ -23,20 +27,33 @@ import { dailyFiguresPointer, dailyFiguresRows, dailyFiguresSummary } from '../s
 import {
 	neverSeenNote,
 	reasonDays,
-	reasonHeadline,
+	reasonHeadline as reasonHeadlineWithFormat,
 	reasonsLabel,
-	unexplainedNote
+	unexplainedNote as unexplainedNoteWithFormat
 } from '../src/lib/console/doubt-reasons';
-import { EVAL_PANELS, matchHeadline, matchLabel, matchPoints, matchTitle, type EvalDay } from '../src/lib/console/eval-instruments';
+import { EVAL_PANELS, matchLabel, matchPoints, matchTitle, type EvalDay } from '../src/lib/console/eval-instruments';
 import {
 	clampNote,
 	heldNote,
-	mergeNote,
-	mergeRate,
+	mergeNote as mergeNoteWithFormat,
+	mergeRate as mergeRateWithFormat,
 	mergeTotals,
 	type LineDay
 } from '../src/lib/console/merge-line';
 import { quietSentence } from '../src/lib/console/waiting';
+import { matchHeadline, numberFormat } from './support/number-format';
+
+const coverageSentence = (found: Parameters<typeof coverageSentenceWithFormat>[0], lead: string) =>
+	coverageSentenceWithFormat(found, lead, numberFormat);
+const horizonRate = (rate: number, days: number) => horizonRateWithFormat(rate, days, numberFormat);
+const reasonHeadline = (days: Parameters<typeof reasonHeadlineWithFormat>[0], span: number) =>
+	reasonHeadlineWithFormat(days, span, numberFormat);
+const unexplainedNote = (days: Parameters<typeof unexplainedNoteWithFormat>[0], span: number) =>
+	unexplainedNoteWithFormat(days, span, numberFormat);
+const mergeNote = (totals: Parameters<typeof mergeNoteWithFormat>[0], span: number) =>
+	mergeNoteWithFormat(totals, span, numberFormat);
+const mergeRate = (totals: Parameters<typeof mergeRateWithFormat>[0], span: number) =>
+	mergeRateWithFormat(totals, span, numberFormat);
 
 /** One day of the merge line, the line held back by the daily cap or not. */
 function lineDay(date: string, over: Partial<LineDay> = {}): LineDay {
@@ -101,19 +118,19 @@ test('one-day titles name one day, while seven-day words stay unchanged', () => 
 test('the chart-drawing verdict names the one day, since one day has no median day', () => {
 	const thresholds = { ruleDays: 1, minutesTarget: 6, coveragePct: 50 };
 	const day: GlanceDay = { date: '2026-10-06', published: 4, items: 10, minutesPerChart: 4.2 };
-	expect(chartRule([day], thresholds, 1).verdict).toBe(
+	expect(chartRule([day], thresholds, 1, numberFormat).verdict).toBe(
 		'This one day spends 4.2 minutes per visual, inside the 6 that retires chart drawing, and puts a visual on 40% of what it published, below the 50% floor.'
 	);
-	expect(chartRule([day], thresholds, 7).verdict).toBe(
+	expect(chartRule([day], thresholds, 7, numberFormat).verdict).toBe(
 		'The median day spends 4.2 minutes per visual, inside the 6 that retires chart drawing, and puts a visual on 40% of what it published, below the 50% floor.'
 	);
 
 	// Nothing published: one day did not, and no day of seven did.
 	const quiet: GlanceDay = { date: '2026-10-06', published: 0, items: 0, minutesPerChart: null };
-	expect(chartRule([quiet], thresholds, 1).verdict).toBe(
+	expect(chartRule([quiet], thresholds, 1, numberFormat).verdict).toBe(
 		'This one day has no minutes on record, and did not publish anything to put a visual on.'
 	);
-	expect(chartRule([quiet], thresholds, 7).verdict).toBe(
+	expect(chartRule([quiet], thresholds, 7, numberFormat).verdict).toBe(
 		'The median day has no minutes on record over these 7 days, and no day published anything to put a visual on.'
 	);
 });

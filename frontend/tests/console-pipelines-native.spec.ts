@@ -23,6 +23,7 @@ import { pipelinesRecord, publishedShareFor, retryReach } from '../src/lib/conso
 import { chartFlow, visualsPublished } from '../src/lib/console/pipelines/chart-drawing';
 import { windowOfDays } from '../src/lib/charts/viewport';
 import type { Row, SliceResult } from '../src/lib/data/ledger';
+import { numberFormat } from './support/number-format';
 
 const REPO = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const ALL = Object.values(queries) as PanelQuery[];
@@ -235,7 +236,7 @@ test('stage clocks, signed gaps and independent cost pairs never fill unknown ce
 	expect(split.days[0].details.find((part) => part.cell === 'summary_ms')).toEqual({
 		cell: 'summary_ms', label: 'Summary call, including visual plan', value: null, timed: 1
 	});
-	expect(timeSplitReadout(split).series.find((part) => part.label === 'Elapsed time')?.values).toEqual(['0.80 s']);
+	expect(timeSplitReadout(split, numberFormat).series.find((part) => part.label === 'Elapsed time')?.values).toEqual(['0.8 s']);
 });
 
 test('positive gaps and overlap cannot cancel away; calls are never extra durations', () => {
@@ -248,7 +249,7 @@ test('positive gaps and overlap cannot cancel away; calls are never extra durati
 	expect(split.series.map((series) => series.points[0].value)).toEqual([100, 20, 600, 30, 25]);
 	expect(split.days[0].details[0]).toMatchObject({ value: 0, timed: 2 });
 	expect(split.days[1]).toMatchObject({ count: 0, elapsed: null, overlap: null });
-	expect(timeSplitReadout(split).series.find((series) => series.label === 'Overlap')?.values).toEqual(['0.03 s', null]);
+	expect(timeSplitReadout(split, numberFormat).series.find((series) => series.label === 'Overlap')?.values).toEqual(['0.025 s', null]);
 });
 
 test('the record starts at the actual ledger beginning, and retry pins the endpoint', () => {

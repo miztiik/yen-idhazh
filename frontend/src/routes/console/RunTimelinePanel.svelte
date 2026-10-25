@@ -39,6 +39,8 @@
 	import { seconds } from '$lib/charts/machine';
 	import { factsOf, markReadout, recordsOf } from '$lib/charts/readout';
 	import type { RunTimelineView, TimelineBar } from '$lib/console/pipelines/run-timeline';
+	import { useNumberFormat } from '$lib/number-format-context';
+	import { formatNumber } from '$lib/number-format';
 
 	let {
 		view,
@@ -48,6 +50,7 @@
 		/** `chart.readout_max_share`. */
 		readoutMaxShare: number;
 	} = $props();
+	const numberFormat = useNumberFormat();
 
 	/** The three rows this panel can draw, out of the one fold that built them. */
 	type Grain = 'item' | 'by-shard' | 'shard';
@@ -72,7 +75,7 @@
 	);
 
 	/** Milliseconds as the same seconds string the rest of the console uses. */
-	const secs = (ms: number): string => seconds(ms / 1000);
+	const secs = (ms: number): string => seconds(ms / 1000, numberFormat);
 
 	/** Signed seconds, so an overrun reads as one rather than as a plain figure. */
 	const signed = (ms: number): string => (ms < 0 ? `-${secs(-ms)}` : secs(ms));
@@ -87,7 +90,7 @@
 	 * shard count says - and four means four shards were genuinely busy together.
 	 * It is the one number that says whether the shape is a staircase or a block.
 	 */
-	const abreast = $derived(view.spanMs > 0 ? (view.workMs / view.spanMs).toFixed(1) : '0.0');
+	const abreast = $derived(formatNumber(view.spanMs > 0 ? view.workMs / view.spanMs : 0, numberFormat, { si: false }));
 
 	/** Few enough bars to carry their own id, or too many for anything but shape.
 	 * A shard grain is never dense - there are four of them. */

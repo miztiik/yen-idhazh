@@ -20,6 +20,7 @@ import { valueAxis, type ValueAxis } from './axis';
 import { bandScale } from './scale';
 import { checkedRule, LEGACY_MODEL_RULE, ruleBoundaries, ruleEvents, type ModelRule, type RuleBoundary } from './model-rule';
 import { readoutOf, type Readout, type ReadoutInput } from '../readout';
+import { formatNumber, type NumberFormatConfig } from '../../number-format';
 
 /** One reading: a UTC day as `YYYY-MM-DD`, and its value or null where none
  * was recorded. */
@@ -47,6 +48,7 @@ export interface DateSeriesOptions {
 	density: number;
 	/** How many ticks the value axis aims for. */
 	valueTicks: number;
+	number_format: NumberFormatConfig;
 	/** The share of each day's column left empty beside its bar, 0 to 1. */
 	padding: number;
 	rule: ModelRule;
@@ -213,18 +215,27 @@ export function dateSeries(series: readonly SeriesInput[], opts: DateSeriesOptio
 				label: entry.label,
 				swatch: entry.fill ?? `var(${entry.token})`,
 				values: dates.map((date) => allReadings[index].get(date) ?? null),
-				format: String
+				format: (value) => formatNumber(value, opts.number_format)
 			})),
 			notMeasured: 'Not recorded.',
 			resting: 'last'
 		})
 	};
 	function axisFor(readings: readonly number[]): ValueAxis {
-		const axis = valueAxis([...readings, ...spreads, ...rules.map((named) => named.at)], box, { along: 'y', ticks: opts.valueTicks });
+		const axis = valueAxis([...readings, ...spreads, ...rules.map((named) => named.at)], box, {
+			along: 'y',
+			ticks: opts.valueTicks,
+			number_format: opts.number_format
+		});
 		if (opts.domain === undefined) return axis;
 		const [low, high] = opts.domain;
 		if (!Number.isFinite(low) || !Number.isFinite(high) || low >= high || [...readings, ...spreads, ...rules.map((named) => named.at)].some((value) => value < low || value > high)) throw new Error('The date series domain must contain all readings, spreads and rules.');
-		const placed = valueAxis([low, high], box, { along: 'y', ticks: opts.valueTicks, zero: false });
+		const placed = valueAxis([low, high], box, {
+			along: 'y',
+			ticks: opts.valueTicks,
+			zero: false,
+			number_format: opts.number_format
+		});
 		const scale = (value: number) => box.bottom - (value - low) / (high - low) * box.innerHeight;
 		return { ...placed, domain: [low, high], scale, ticks: placed.ticks.filter((tick) => tick.value >= low && tick.value <= high).map((tick) => ({ ...tick, at: scale(tick.value) })) };
 	}

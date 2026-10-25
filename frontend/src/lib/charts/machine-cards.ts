@@ -43,6 +43,7 @@ import type { Row } from '$lib/data/ledger';
 import { linearAxis } from './frame';
 import { seconds } from './machine';
 import { percentOf } from './rank';
+import { formatNumber, type NumberFormatConfig } from '../number-format';
 import {
 	machineKeys,
 	machineRamp,
@@ -295,6 +296,7 @@ export function machineCards(
 		watchedFlags: readonly string[];
 		/** The speed ramp's steps and floor, for a ramp built over this run alone. */
 		colour: { stops: number; floor: number };
+		numberFormat: NumberFormatConfig;
 		/** False where the machine record is switched off. */
 		recording: boolean;
 		/** How many times a machine's cache the probe buffer has to be before its
@@ -472,11 +474,11 @@ export function machineCards(
 	// exist for (`docs/concepts/console-design.md`).
 	const l3Track = sharedTrack(
 		cards.map((card) => cacheMib(card.l3CacheBytes)),
-		(mib) => cacheWords(mib * MIB)
+		(mib) => cacheWords(mib * MIB, options.numberFormat)
 	);
 	const rateTrack = sharedTrack(
 		cards.map((card) => (card.bufferClearedCache ? card.memcpyGibPerSecond : null)),
-		rateWords
+		(rate) => rateWords(rate, options.numberFormat)
 	);
 	const drawnCards: MachineCard[] = cards.map((card) => ({
 		...card,
@@ -523,8 +525,8 @@ function cacheMib(bytes: number | null): number | null {
 
 /** A copy rate in the unit the probe reports it in. The bar's label and the
  * sentence under it both come through here, so they cannot round differently. */
-function rateWords(rate: number): string {
-	return `${rate.toFixed(1)} GiB/s`;
+function rateWords(rate: number, numberFormat: NumberFormatConfig): string {
+	return `${formatNumber(rate, numberFormat, { si: false })} GiB/s`;
 }
 
 /** A cache size in the unit this fleet's caches are actually quoted in.
@@ -533,9 +535,9 @@ function rateWords(rate: number): string {
  * unit that keeps a whole number on the card. Null in, a dash out - an absent
  * cache is not a cache of zero.
  */
-export function cacheWords(bytes: number | null): string {
+export function cacheWords(bytes: number | null, numberFormat: NumberFormatConfig): string {
 	if (bytes === null) return '-';
-	return `${Math.round(bytes / MIB)} MiB`;
+	return `${formatNumber(Math.round(bytes / MIB), numberFormat, { exact: true, si: false })} MiB`;
 }
 
 /** The bandwidth reading and the buffer it was taken with, in one sentence.
@@ -555,7 +557,7 @@ export function cacheWords(bytes: number | null): string {
  * sentence rather than a dash: the probe can be switched off, and a job that was
  * never asked did not copy slowly.
  */
-export function copySpeedSentence(card: MachineCard): string {
+export function copySpeedSentence(card: MachineCard, numberFormat: NumberFormatConfig): string {
 	if (card.memcpyGibPerSecond === null) {
 		return 'Copy speed was not measured on this job.';
 	}
@@ -565,12 +567,12 @@ export function copySpeedSentence(card: MachineCard): string {
 	if (card.l3CacheBytes === null || card.l3CacheBytes <= 0) {
 		return `No copy speed: the probe used a ${card.memcpyProbeMib} MiB buffer and this machine reported no cache size, so nothing says whether the copy left the cache.`;
 	}
-	const against = `a ${card.memcpyProbeMib} MiB buffer against ${cacheWords(card.l3CacheBytes)} of L3`;
-	const times = ((card.memcpyProbeMib * MIB) / card.l3CacheBytes).toFixed(2);
+	const against = `a ${formatNumber(card.memcpyProbeMib, numberFormat, { exact: true, si: false })} MiB buffer against ${cacheWords(card.l3CacheBytes, numberFormat)} of L3`;
+	const times = formatNumber((card.memcpyProbeMib * MIB) / card.l3CacheBytes, numberFormat, { si: false });
 	if (!card.bufferClearedCache) {
 		return `No copy speed: the probe used ${against}, ${times} times it, and a reading has to clear ${card.cacheMargin} times to be sure the copy left the cache.`;
 	}
-	return `${rateWords(card.memcpyGibPerSecond)}, over ${against} - ${times} times it.`;
+	return `${rateWords(card.memcpyGibPerSecond, numberFormat)}, over ${against} - ${times} times it.`;
 }
 
 /** How long the machine had been up when the probe ran, in words.
@@ -579,9 +581,9 @@ export function copySpeedSentence(card: MachineCard): string {
  * one of the two reasons a run reads its weights back off disk. Without it the
  * fault strip has one explanation instead of two.
  */
-export function uptimeSentence(card: MachineCard): string {
+export function uptimeSentence(card: MachineCard, numberFormat: NumberFormatConfig): string {
 	if (card.bootSeconds === null) return 'Uptime was not recorded on this job.';
-	return `Up ${seconds(card.bootSeconds)} when we measured it.`;
+	return `Up ${seconds(card.bootSeconds, numberFormat)} when we measured it.`;
 }
 
 /** What clock the machine was running when the probe ran, in words.

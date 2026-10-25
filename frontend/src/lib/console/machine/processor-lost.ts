@@ -24,6 +24,7 @@
  * tile row covers, so the day grain and the run grain are the same arithmetic
  * over different rows.
  */
+import { formatNumber, type NumberFormatConfig } from '../../number-format';
 
 /** The date the item ledger began recording the stolen share on its own.
  *
@@ -131,7 +132,8 @@ function tileOf(
 	label: string,
 	short: string,
 	rows: readonly Record<string, string>[],
-	marked: number
+	marked: number,
+	numberFormat: NumberFormatConfig
 ): LostTile {
 	let worst: number | null = null;
 	let from = 0;
@@ -143,8 +145,8 @@ function tileOf(
 	}
 	const counted = { key, label, short, worstPct: worst, from, outOf: rows.length };
 	if (worst === null) return { ...counted, state: 'unrecorded', says: 'not recorded' };
-	if (worst >= marked) return { ...counted, state: 'marked', says: `${worst.toFixed(1)}%` };
-	return { ...counted, state: 'quiet', says: `under ${marked}%` };
+	if (worst >= marked) return { ...counted, state: 'marked', says: `${formatNumber(worst, numberFormat, { si: false })}%` };
+	return { ...counted, state: 'quiet', says: `under ${formatNumber(marked, numberFormat, { si: false })}%` };
 }
 
 function groupBy(
@@ -165,7 +167,8 @@ function groupBy(
 /** What one span of days lost to another tenant, a tile a day. */
 export function processorLostOverDays(
 	health: readonly Record<string, string>[],
-	thresholds: LostThresholds
+	thresholds: LostThresholds,
+	numberFormat: NumberFormatConfig
 ): ProcessorLostSpan {
 	const byDay = groupBy(health, (row) => row.date ?? '');
 	// The year is the same on every tile of any window this control offers, so the
@@ -173,7 +176,7 @@ export function processorLostOverDays(
 	// which is a format literal and not a setting (Guardrail #6).
 	const days = [...byDay.keys()]
 		.sort()
-		.map((date) => tileOf(date, date, date.slice(5), byDay.get(date) ?? [], thresholds.marked));
+		.map((date) => tileOf(date, date, date.slice(5), byDay.get(date) ?? [], thresholds.marked, numberFormat));
 
 	let named: LostTile | null = null;
 	for (const day of days) {
@@ -199,7 +202,8 @@ export function processorLostOverDays(
 export function processorLostOverShards(
 	health: readonly Record<string, string>[],
 	run: LostRunKey | null,
-	thresholds: LostThresholds
+	thresholds: LostThresholds,
+	numberFormat: NumberFormatConfig
 ): ProcessorLostRun {
 	if (run === null) return { runId: null, date: null, shards: [], from: 0, outOf: 0 };
 	const mine = health.filter((row) => row.run_id === run.runId && (row.date ?? '') === run.date);
@@ -207,7 +211,7 @@ export function processorLostOverShards(
 	const shards = [...byShard.keys()]
 		.sort((left, right) => Number(left) - Number(right))
 		.map((shard) =>
-			tileOf(shard, `Shard ${shard}`, shard, byShard.get(shard) ?? [], thresholds.marked)
+			tileOf(shard, `Shard ${shard}`, shard, byShard.get(shard) ?? [], thresholds.marked, numberFormat)
 		);
 
 	return {

@@ -1,6 +1,7 @@
 /** Deterministic model instruments rules over bounded fixtures; no browser, build, or layout matrix. */
 import { expect, test } from '@playwright/test';
 import { DRAWN_BY, EVAL_PANELS, RECORDED, FLAGS, evalDays, flagReadings, recordedReadings, recordedText, type EvalInput } from '../src/lib/console/eval-instruments';
+import { numberFormat } from './support/number-format';
 const FIXTURE: EvalInput[] = [
     { date: '2026-04-02', hhem: '0.90', hhem_delta: '0', compression: '0.20', coherence: '0.10' },
     { date: '2026-04-02', hhem: '0.80', hhem_delta: '0', compression: '0.40', coherence: '-0.30' },
@@ -64,8 +65,8 @@ test.describe('the arithmetic', () => {
         const reading = recordedReadings(days).find((entry) => entry.id === 'coherence');
         expect(reading?.days).toBe(1);
         expect(reading?.low).toBe(0.1);
-        expect(recordedText(reading!, -0.3)).toBe('-0.30');
-        expect(recordedText(reading!, null)).toBe('-');
+        expect(recordedText(reading!, -0.3, numberFormat)).toBe('-0.3');
+        expect(recordedText(reading!, null, numberFormat)).toBe('-');
     });
     test('a row with no day is dropped rather than pooled into an empty one', () => {
         const days = evalDays(FIXTURE);

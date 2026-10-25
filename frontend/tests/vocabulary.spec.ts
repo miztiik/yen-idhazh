@@ -1,6 +1,7 @@
 import { expect, test } from '@playwright/test';
 import { frame } from '../src/lib/charts/frame';
-import { dateSeries, type SeriesInput } from '../src/lib/charts/d3/dateSeries';
+import { type SeriesInput } from '../src/lib/charts/d3/dateSeries';
+import { dateSeries } from './support/number-format';
 import { partsOfOne } from '../src/lib/charts/d3/partsOfOne';
 import { sparklineShape } from '../src/lib/charts/sparkline';
 import { targetGeometry } from '../src/lib/charts/targetbar';

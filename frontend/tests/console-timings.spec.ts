@@ -15,7 +15,8 @@
  * assertion into a tautology or a false failure.
  */
 import { expect, test } from '@playwright/test';
-import { coverage, coverageSentence, dayColumns, dayColumnX, dayTicks, frame } from '../src/lib/charts/frame';
+import { coverage, dayColumns, dayColumnX, dayTicks, frame } from '../src/lib/charts/frame';
+import { coverageSentence } from './support/number-format';
 import { readoutCapStyle } from '../src/lib/charts/readout';
 function days(start: string, count: number): string[] {
     const first = new Date(`${start}T00:00:00Z`);

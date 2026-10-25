@@ -41,6 +41,8 @@
 	import { completeModelRule, ruleBoundaries, ruleDeclaration, ruleEvents, type ModelRule } from '$lib/charts/d3/model-rule';
 	import { nearestRank } from '$lib/console/rates';
 	import { SERIES_TOKENS } from '$lib/console/series-tokens';
+	import { useNumberFormat } from '$lib/number-format-context';
+	import { formatNumber } from '$lib/number-format';
 
 	let {
 		days,
@@ -63,6 +65,7 @@
 		windowDays: number;
 		rule?: ModelRule;
 	} = $props();
+	const numberFormat = useNumberFormat();
 
 	const SERIES = $derived([
 		{ key: 'read', label: 'read', colour: rule === undefined ? 'var(--color-accent)' : `var(${SERIES_TOKENS['reading-prompt']})` },
@@ -169,7 +172,7 @@
 	}
 
 	function rate(value: number): string {
-		return `${value.toFixed(2)} tok/s`;
+		return `${formatNumber(value, numberFormat)} tok/s`;
 	}
 
 	/** One series' spread on one day: the median, the middle half, and both ends.
@@ -179,8 +182,8 @@
 		const band = day[key];
 		return (
 			`median ${rate(band.median)}, ` +
-			`middle half ${band.p25.toFixed(2)} to ${band.p75.toFixed(2)}, ` +
-			`slowest ${band.min.toFixed(2)}, fastest ${band.max.toFixed(2)}`
+			`middle half ${formatNumber(band.p25, numberFormat)} to ${formatNumber(band.p75, numberFormat)}, ` +
+			`slowest ${formatNumber(band.min, numberFormat)}, fastest ${formatNumber(band.max, numberFormat)}`
 		);
 	}
 
@@ -198,7 +201,7 @@
 		const runs = day.runs
 			.map(
 				(run) =>
-					`run ${runName(run.runId, day.date)} ${key} ${(key === 'read' ? run.read : run.write).toFixed(2)}`
+					`run ${runName(run.runId, day.date)} ${key} ${formatNumber(key === 'read' ? run.read : run.write, numberFormat)}`
 			)
 			.join(', ');
 		return (
@@ -215,7 +218,7 @@
 	function shift(now: number, before: number): string {
 		if (before <= 0) return 'level';
 		const pct = ((now - before) / before) * 100;
-		return `${pct >= 0 ? 'up' : 'down'} ${Math.abs(pct).toFixed(0)}%`;
+		return `${pct >= 0 ? 'up' : 'down'} ${formatNumber(Math.abs(pct), numberFormat, { si: false })}%`;
 	}
 
 	/** One column per day in the window, whether or not that day ran.
@@ -266,7 +269,7 @@
 									value: drawn
 										.map(
 											(series) =>
-												`${series.key} ${(series.key === 'read' ? run.read : run.write).toFixed(2)}`
+												`${series.key} ${formatNumber(series.key === 'read' ? run.read : run.write, numberFormat)}`
 										)
 										.join(', '),
 									swatch: null
@@ -511,7 +514,7 @@
 				     rate it shares no unit with. -->
 				<li class="flex items-center gap-2" data-series="reused">
 					prompt tokens reused
-					<span class="tabular-nums text-text-secondary">{newest.cacheHitPct.toFixed(0)}%</span>
+					<span class="tabular-nums text-text-secondary">{formatNumber(newest.cacheHitPct, numberFormat, { si: false })}%</span>
 				</li>
 				<!-- Only where a rule was actually drawn. A key to a mark that is not on
 				     the chart is a reader looking for something that is not there. -->

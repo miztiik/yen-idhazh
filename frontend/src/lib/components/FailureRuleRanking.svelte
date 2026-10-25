@@ -6,7 +6,8 @@
 	import { rankedGeometry } from '$lib/charts/d3/rankedList';
 	import { gridStep, type GridPick } from '$lib/charts/readout';
 	import { sparklineMarks, sparklineReadout } from '$lib/charts/sparkline';
-	import { grouped } from '$lib/charts/series';
+	import { grouped as formatGrouped } from '$lib/charts/series';
+	import { useNumberFormat } from '$lib/number-format-context';
 	import { plural } from '$lib/format';
 	import RankedList from './RankedList.svelte';
 	import Sparkline from './Sparkline.svelte';
@@ -19,6 +20,8 @@
 		max: number;
 		readoutMaxShare: number;
 	} = $props();
+	const numberFormat = useNumberFormat();
+	const grouped = (value: number) => formatGrouped(value, numberFormat);
 
 	const counts = $derived(failureRules(rows, window, stage));
 	const ranked = $derived(rank(counts.rules.map((rule) => ({

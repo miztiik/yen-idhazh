@@ -15,6 +15,7 @@
 
 import { linearAxis } from '../charts/frame';
 import { grouped } from '../charts/series';
+import type { NumberFormatConfig } from '../number-format';
 import { dayMonth, shortDate } from '../format';
 import { countDays, nameSpan } from './span-words';
 
@@ -116,7 +117,11 @@ export function mergeState(totals: MergeTotals): MergeState {
 }
 
 /** The sentence under the chart, one per state. */
-export function mergeNote(totals: MergeTotals, windowDays: number): string {
+export function mergeNote(
+	totals: MergeTotals,
+	windowDays: number,
+	numberFormat: NumberFormatConfig
+): string {
 	switch (mergeState(totals)) {
 		case 'no-days':
 			return 'No published day is in this window, so nothing here can be counted.';
@@ -128,7 +133,7 @@ export function mergeNote(totals: MergeTotals, windowDays: number): string {
 			const folded =
 				totals.merges === 1
 					? '1 story was folded into another'
-					: `${grouped(totals.merges)} stories were folded into another`;
+					: `${grouped(totals.merges, numberFormat)} stories were folded into another`;
 			return `${folded} over ${nameSpan(windowDays)}. The biggest group held ${totals.largest} stories, on ${dayMonth(totals.largestOn)}.`;
 		}
 	}
@@ -159,9 +164,13 @@ export function wholePercent(numerator: number, denominator: number, mark?: numb
  *
  * Null where there is no share to state: no days, or no fold.
  */
-export function mergeRate(totals: MergeTotals, windowDays: number): string | null {
+export function mergeRate(
+	totals: MergeTotals,
+	windowDays: number,
+	numberFormat: NumberFormatConfig
+): string | null {
 	if (totals.days === 0 || totals.merges === 0 || totals.published === 0) return null;
-	return `That is ${wholePercent(totals.merges, totals.published)}% of the ${grouped(totals.published)} stories ${nameSpan(windowDays)} published.`;
+	return `That is ${wholePercent(totals.merges, totals.published)}% of the ${grouped(totals.published, numberFormat)} stories ${nameSpan(windowDays)} published.`;
 }
 
 // --- Where the merge line sits -------------------------------------------------
@@ -440,10 +449,11 @@ export function rateWithDenominator(
 	numerator: number | null,
 	denominator: number | null,
 	floor: number,
+	numberFormat: NumberFormatConfig,
 	mark?: number
 ): string | null {
 	if (numerator === null || denominator === null || denominator === 0 || denominator < floor) return null;
-	return `${wholePercent(numerator, denominator, mark)}% of ${grouped(denominator)} pairs`;
+	return `${wholePercent(numerator, denominator, mark)}% of ${grouped(denominator, numberFormat)} pairs`;
 }
 
 /** "Could not tell" in words, against the pairs whose two readings agreed: the
@@ -458,10 +468,11 @@ export function describeUnclear(
 	unclear: number | null,
 	agreed: number | null,
 	floor: number,
+	numberFormat: NumberFormatConfig,
 	mark?: number
 ): string {
 	if (unclear === null || agreed === null) return 'the count of pairs whose readings agreed is unavailable';
 	if (agreed === 0) return 'not counted, no pair agreed';
-	if (agreed < floor) return `${grouped(Math.round(unclear))} of the ${grouped(agreed)} that agreed`;
-	return `${wholePercent(unclear, agreed, mark)}% of the ${grouped(agreed)} that agreed`;
+	if (agreed < floor) return `${grouped(Math.round(unclear), numberFormat)} of the ${grouped(agreed, numberFormat)} that agreed`;
+	return `${wholePercent(unclear, agreed, mark)}% of the ${grouped(agreed, numberFormat)} that agreed`;
 }

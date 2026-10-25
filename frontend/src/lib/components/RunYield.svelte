@@ -51,7 +51,8 @@
 		type RunYieldDay,
 		type RunYieldLoad
 	} from '$lib/charts/run-yield';
-	import { grouped } from '$lib/charts/series';
+	import { grouped as formatGrouped } from '$lib/charts/series';
+	import { useNumberFormat } from '$lib/number-format-context';
 	import { countDays, nameSpan } from '$lib/console/span-words';
 	import { shortDate } from '$lib/format';
 
@@ -80,6 +81,8 @@
 		 * and whether the chart is drawing its narrow shape. */
 		below?: Snippet<[DaySlots, boolean]>;
 	} = $props();
+	const numberFormat = useNumberFormat();
+	const grouped = (value: number) => formatGrouped(value, numberFormat);
 
 	/** Room on the right for the yield axis, on the left for an article count
 	 * that reaches four digits, and above for the two axis titles - a chart with

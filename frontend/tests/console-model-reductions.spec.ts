@@ -3,7 +3,7 @@ import { expect, test } from '@playwright/test';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { callEnding } from '../src/lib/console/model/call-ending';
-import { faithfulness } from '../src/lib/console/model/faithfulness';
+import { faithfulness } from './support/number-format';
 import { sourceDoubts } from '../src/lib/console/model/source-doubts';
 import { summaryLength } from '../src/lib/console/model/summary-length';
 import { modelChange } from '../src/lib/console/model/model-change';

@@ -3,14 +3,15 @@ import type { Row } from '../../data/ledger';
 import { readoutOf } from '../../charts/readout';
 import { durationCohort } from '../duration-cohort';
 import { SERIES_TOKENS } from '../series-tokens';
+import { formatNumber, type NumberFormatConfig } from '../../number-format';
 
 export function nativeTimeSplit(rows: readonly Row[], calendar?: readonly string[]) {
 	return durationCohort(rows, calendar ?? [...new Set(rows.map((row) => String(row.date)))].sort());
 }
 
-export function timeSplitReadout(split: ReturnType<typeof nativeTimeSplit>) {
+export function timeSplitReadout(split: ReturnType<typeof nativeTimeSplit>, numberFormat: NumberFormatConfig) {
 	const detailTokens = [SERIES_TOKENS['label-call'], SERIES_TOKENS['summary-call'], SERIES_TOKENS['visual-plan']];
-	const seconds = (value: number) => `${(value / 1000).toFixed(2)} s`;
+	const seconds = (value: number) => `${formatNumber(value / 1000, numberFormat, { si: false })} s`;
 	return readoutOf({
 		type: 'dateSeries', columns: split.days.map((day) => day.date),
 		series: [
@@ -26,7 +27,7 @@ export function timeSplitReadout(split: ReturnType<typeof nativeTimeSplit>) {
 				note: 'detail, not added'
 			})),
 			{ label: 'Complete clocks', swatch: null, values: split.days.map((day) => day.count),
-				format: (value: number, column: number) => `${value} of ${split.days[column].recorded}` }
+				format: (value: number, column: number) => `${formatNumber(value, numberFormat, { exact: true })} of ${formatNumber(split.days[column].recorded, numberFormat, { exact: true })}` }
 		], notMeasured: 'Not measured for the complete cohort', resting: 'newest'
 	});
 }

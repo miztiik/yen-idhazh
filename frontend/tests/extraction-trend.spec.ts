@@ -1,7 +1,7 @@
 /** The native extraction yield keeps every calendar day, zero and unknown on one scale. */
 import { expect, test } from '@playwright/test';
 import { extractionYield, type ExtractionDay } from '../src/lib/console/pipelines/extraction';
-import { dateSeries } from '../src/lib/charts/d3/dateSeries';
+import { dateSeries } from './support/number-format';
 import { frame } from '../src/lib/charts/frame';
 
 const options = {

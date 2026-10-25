@@ -11,16 +11,19 @@
 	import { dailyFiguresSummary, dailyFiguresRows } from '$lib/console/daily-figures';
 	import type { ChartDay } from '$lib/server/chart-days';
 	import type { ConsoleConfig } from '$lib/server/config';
+	import { formatNumber } from '$lib/number-format';
+	import { useNumberFormat } from '$lib/number-format-context';
 	let { days, windowDays, knobs }: { days: ChartDay[]; windowDays: number; knobs: ConsoleConfig } = $props();
+	const numberFormat = useNumberFormat();
 	let measured = $state<number | null>(null);
 	const thresholds = $derived({ ruleDays: knobs.chart_rule_days, minutesTarget: knobs.chart_minutes_target, coveragePct: knobs.chart_coverage_pct });
-	const rule = $derived(chartRule(days, thresholds, windowDays));
+	const rule = $derived(chartRule(days, thresholds, windowDays, numberFormat));
 	const flow = $derived(chartFlow(days));
 	const geometry = $derived(placeFlow(flow.steps.map((step, index) => ({
 		label: step.label, arrived: step.value, left: flow.steps[index + 1]?.value ?? step.value,
 		drops: step.lost === null ? [] : [{ label: step.lost.label, count: step.lost.value }]
-	})), { narrow: measured !== null && measured < 700, frame: frame(measured ?? knobs.chart_width, 260, { ...MARGIN, right: 170 }), nodeWidth: 12, nodeGap: 34 }));
-	const minutes = (value: number | null) => value === null ? '-' : value.toFixed(1);
+	})), { narrow: measured !== null && measured < 700, frame: frame(measured ?? knobs.chart_width, 260, { ...MARGIN, right: 170 }), nodeWidth: 12, nodeGap: 34, number_format: numberFormat }));
+	const minutes = (value: number | null) => value === null ? '-' : formatNumber(value, numberFormat, { si: false });
 </script>
 <div use:observeWidth={(width) => measured = width} data-windowed="chart-drawing" data-window-days={windowDays}>
 	{#if days.length > 0}<p data-lede class="lede">{visualsPublished(days)} visuals published.</p>{/if}
@@ -34,15 +37,15 @@
 		{:else}
 			<div class="auto-grid">
 				<div data-rule-figure="minutes">
-				<TargetBar marks={rule.minutesMarks} label="Minutes per visual" valueText={rule.minutes === null ? 'Not measured' : minutesText(rule.minutes)}
+				<TargetBar marks={rule.minutesMarks} label="Minutes per visual" valueText={rule.minutes === null ? 'Not measured' : minutesText(rule.minutes, numberFormat)}
 					targetText="Retired above {thresholds.minutesTarget}, on the median day." emptyNote="No minutes are on record." />
-				<Sparkline marks={rule.minutesTrend} series={{ label: 'Minutes per visual', format: minutesText }}
+				<Sparkline marks={rule.minutesTrend} series={{ label: 'Minutes per visual', format: (value) => minutesText(value, numberFormat) }}
 					strip={{ name: 'chart-minutes', maxShare: 1, hint: 'Point at the line to read a day.' }} width={220} height={30} label="Minutes per visual across the window" />
 				{@render movement(rule.minutesTrend.movement, rule.minutesMarks.sense, 'minutes')}
 				</div><div data-rule-figure="coverage">
-				<TargetBar marks={rule.coverageMarks} label="Published articles with a visual" valueText={rule.coverage === null ? 'Not measured' : coverageText(rule.coverage)}
+				<TargetBar marks={rule.coverageMarks} label="Published articles with a visual" valueText={rule.coverage === null ? 'Not measured' : coverageText(rule.coverage, numberFormat)}
 					targetText="Retired below {thresholds.coveragePct}%, on the median day." emptyNote="No published item carries a chart reading." />
-				<Sparkline marks={rule.coverageTrend} series={{ label: 'Articles with a visual', format: coverageText }}
+				<Sparkline marks={rule.coverageTrend} series={{ label: 'Articles with a visual', format: (value) => coverageText(value, numberFormat) }}
 					strip={{ name: 'chart-coverage', maxShare: 1, hint: 'Point at the line to read a day.' }} width={220} height={30} label="Articles with a visual across the window" />
 				{@render movement(rule.coverageTrend.movement, rule.coverageMarks.sense, 'coverage')}
 				</div>
@@ -67,7 +70,7 @@
 </div>
 {#snippet movement(value: number | null, sense: TargetSense, name: string)}
 	{#if value !== null}<p data-rule-move={name}><span data-movement={value.toFixed(4)} data-polarity={sense}
-		data-movement-verdict={movementVerdict(value, sense)} data-movement-paint="color">{value >= 0 ? '+' : ''}{Math.round(value * 100)}%</span> across this window</p>{/if}
+		data-movement-verdict={movementVerdict(value, sense)} data-movement-paint="color">{value >= 0 ? '+' : ''}{formatNumber(value * 100, numberFormat, { si: false })}%</span> across this window</p>{/if}
 {/snippet}
 <style>
 	.lede { font-size: var(--text-2xl); }

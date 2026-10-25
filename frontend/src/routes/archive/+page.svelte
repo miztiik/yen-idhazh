@@ -376,6 +376,7 @@
 						{#if item}
 							<DigestItem
 								{item}
+								numberFormat={data.ui.number_format}
 								verticalName={data.verticalNames[item.vertical] ?? item.vertical}
 								level={3}
 								showVertical={false}

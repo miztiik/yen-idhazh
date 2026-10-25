@@ -11,10 +11,8 @@
  * no zero worth showing: a bar that does not start at zero is a lie, and an
  * axis of change centred on no change is not a bar.
  */
-import { tickStep } from 'd3-array';
-
 import { AXIS_LABEL_GAP_PX, AXIS_LABEL_PX, thinLabels, type Frame } from '../frame';
-import { grouped } from '../series';
+import { formatNumber, type NumberFormatConfig } from '../../number-format';
 import { linearScale, type Along } from './scale';
 
 /** One tick on a value axis. */
@@ -41,22 +39,14 @@ export interface ValueAxisOptions {
 	ticks: number;
 	/** Anchor the domain at zero. True unless the caller says otherwise. */
 	zero?: boolean;
-	/** The words for a tick. Grouped digits, at the precision of one step,
-	 * unless the caller has a unit to print. */
+	/** Override the shared number style when the caller has a unit to print. */
 	format?: (value: number) => string;
+	number_format: NumberFormatConfig;
 }
 
-/** A tick as words, at the precision its step needs and no finer.
- *
- * An ASCII hyphen for a minus, grouped thousands, and every label on one axis
- * carrying the same number of decimals, so a column of labels lines up.
- */
-function tickText(value: number, precision: number): string {
-	const fixed = Math.abs(value).toFixed(precision);
-	const [whole, fraction] = fixed.split('.');
-	const sign = value < 0 && Number(fixed) !== 0 ? '-' : '';
-	const digits = grouped(Number(whole));
-	return fraction === undefined ? `${sign}${digits}` : `${sign}${digits}.${fraction}`;
+/** A tick uses the page's declared locale, precision and SI prefix threshold. */
+function tickText(value: number, numberFormat: NumberFormatConfig): string {
+	return formatNumber(value, numberFormat, { si: true });
 }
 
 /** The labels an upright axis can carry with a line of air between each two.
@@ -108,9 +98,7 @@ export function valueAxis(
 
 	const scale = linearScale([low, high], box, along).nice(count);
 	const domain = scale.domain() as [number, number];
-	const step = Math.abs(tickStep(domain[0], domain[1], count));
-	const precision = step > 0 ? Math.max(0, -Math.floor(Math.log10(step))) : 0;
-	const format = options.format ?? ((value: number) => tickText(value, precision));
+	const format = options.format ?? ((value: number) => tickText(value, options.number_format));
 	const raw = scale.ticks(count).map((value) => ({ value, at: scale(value), text: format(value) }));
 	return {
 		domain,

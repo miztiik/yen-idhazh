@@ -1,9 +1,13 @@
 import { expect, test } from '@playwright/test';
 import { publishedVisualData, refusedVisualData } from '../src/lib/payload/drawing';
 import { drawBars } from '../src/lib/visual/bar';
+import { statedBars } from '../src/lib/visual/bar';
+import { formatNumber } from './support/number-format';
+import { valueAxis } from './support/number-format';
+import { frame } from '../src/lib/charts/frame';
 import type { VisualData } from '../src/lib/payload/types';
 test.describe('what may not be drawn', () => {
-    function compiled(): VisualData {
+    function compiled(values: readonly number[] = [10, 20, 30, 40]): VisualData {
         return {
             version: '2026-09-13',
             renderer_version: '2026-09-13',
@@ -11,7 +15,7 @@ test.describe('what may not be drawn', () => {
             type: 'bar',
             marks: ['A', 'B', 'C', 'D'].flatMap((name, index) => [
                 { mark_id: `category-${index}`, text: name, value: null, unit: null, element_id: `name-${index}`, derived: null },
-                { mark_id: `quantity-${index}`, text: null, value: String((index + 1) * 10), unit: 'MW', element_id: `value-${index}`, derived: null }
+                { mark_id: `quantity-${index}`, text: null, value: String(values[index]), unit: 'MW', element_id: `value-${index}`, derived: null }
             ]),
             encoding: {
                 category: [0, 1, 2, 3].map((index) => `category-${index}`),
@@ -23,7 +27,22 @@ test.describe('what may not be drawn', () => {
     test('the ordinary document is accepted, so the refusals below mean something', () => {
         const data = compiled();
         expect(refusedVisualData(data), 'a clean document was refused, so every case below is vacuous').toBeNull();
-        expect(drawBars(data, 600).bars.length, 'a clean document drew no bar').toBeGreaterThan(0);
+        expect(drawBars(data, 600, formatNumber).bars.length, 'a clean document drew no bar').toBeGreaterThan(0);
+    });
+    test('digest and console display the same configured SI figure and retain the article wording', () => {
+        for (const value of [1_000, 12_345, 1_234_567, 2_400_000, 8_900_000_000, 7_800_000_000_000]) {
+            const drawing = drawBars(compiled([value, 20, 30, 40]), 600, formatNumber);
+            const consoleAxis = valueAxis([0, value], frame(600, 220), {
+                along: 'y', ticks: 4
+            });
+            for (const tick of consoleAxis.ticks.filter((tick) => tick.text !== '')) {
+                const digestTick = drawBars(compiled([tick.value, 20, 30, 40]), 600, formatNumber);
+                expect(digestTick.bars[0].displayed).toBe(tick.text);
+            }
+            expect(drawing.bars[0].displayed).toBe(formatNumber(value));
+            expect(drawing.bars[0].stated).toBe(String(value));
+            expect(statedBars(drawing)).toContain(`A ${value} MW`);
+        }
     });
     for (const [name, path] of [
         ['a walk out of the digest tree', 'digest/2026/08/20/../../../../etc/passwd'],

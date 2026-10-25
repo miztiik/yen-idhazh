@@ -17,7 +17,8 @@
 	import ChartReadout from '$lib/components/ChartReadout.svelte';
 	import { gib } from '$lib/charts/machine';
 	import { markReadout, readoutOf } from '$lib/charts/readout';
-	import { grouped } from '$lib/charts/series';
+	import { grouped as formatGrouped } from '$lib/charts/series';
+	import { useNumberFormat } from '$lib/number-format-context';
 	import type { DiskReadDay, DiskReads } from '$lib/console/machine/disk-reads';
 	import { countDays, nameSpan } from '$lib/console/span-words';
 	import { shortDate } from '$lib/format';
@@ -36,6 +37,8 @@
 		/** `chart.readout_max_share`. */
 		readoutMaxShare: number;
 	} = $props();
+	const numberFormat = useNumberFormat();
+	const grouped = (value: number) => formatGrouped(value, numberFormat);
 
 	/** The tallest bar on the read strip. Every bar is a share of it, so one
 	 * loud day does not make every other day look the same size. */
@@ -132,7 +135,7 @@
 
 	function copiesTitle(day: DiskReadDay): string {
 		if (day.copiesFell === null) return `${shortDate(day.date)}: no reading`;
-		return `${shortDate(day.date)}: ${gib(day.copiesHigh)} down to ${gib(day.copiesLow)}`;
+		return `${shortDate(day.date)}: ${gib(day.copiesHigh, numberFormat)} down to ${gib(day.copiesLow, numberFormat)}`;
 	}
 
 	/** The fill a day's read tile is drawn in, and its state in words, so the
@@ -174,7 +177,7 @@
 					swatch: 'var(--fill-medium)',
 					values: reads.days.map((day) => (day.copiesFell === null ? 'no reading' : day.copiesHigh)),
 					format: (high: number, column: number) =>
-						`${gib(high)} down to ${gib(reads.days[column]?.copiesLow ?? null)}`
+						`${gib(high, numberFormat)} down to ${gib(reads.days[column]?.copiesLow ?? null, numberFormat)}`
 				}
 			],
 			events: {

@@ -7,6 +7,7 @@ import {
 	processorLostOverShards,
 	type LostThresholds
 } from '../src/lib/console/machine/processor-lost';
+import { formatNumber, numberFormat } from './support/number-format';
 
 /**
  * What the host gave to another tenant, and the three things a tile can say.
@@ -59,7 +60,8 @@ test('a day where one article lost a known share draws loud and prints the share
 			row('2026-09-21', '1', 12.5),
 			row('2026-09-22', '0', 0.1)
 		],
-		THRESHOLDS
+		THRESHOLDS,
+		numberFormat
 	);
 
 	const loud = span.days.find((day) => day.key === '2026-09-21');
@@ -79,7 +81,8 @@ test('a day where one article lost a known share draws loud and prints the share
 test('a window with no steal draws every tile outlined and names no day', () => {
 	const span = processorLostOverDays(
 		[row('2026-09-21', '0', 0), row('2026-09-21', '1', 0.04), row('2026-09-22', '0', 0)],
-		THRESHOLDS
+		THRESHOLDS,
+		numberFormat
 	);
 
 	expect(
@@ -90,7 +93,7 @@ test('a window with no steal draws every tile outlined and names no day', () => 
 	// A true 0.04% rounds to `0.0%`, and a printed zero would promise a host
 	// that took nothing. The quiet tile prints the share it stayed under.
 	expect(span.days[0].says, 'a quiet tile printed a rounded figure').toBe(
-		`under ${THRESHOLDS.marked}%`
+		`under ${formatNumber(THRESHOLDS.marked)}%`
 	);
 	expect(span.daysRecording, 'the quiet sentence would be bounded to the wrong day count').toBe(2);
 });
@@ -98,7 +101,8 @@ test('a window with no steal draws every tile outlined and names no day', () => 
 test('a day predating the column draws a blank cell and reports neither state', () => {
 	const span = processorLostOverDays(
 		[row('2026-09-19', '0'), row('2026-09-19', '1'), row('2026-09-21', '0', 0)],
-		THRESHOLDS
+		THRESHOLDS,
+		numberFormat
 	);
 
 	const older = span.days.find((day) => day.key === '2026-09-19');
@@ -113,7 +117,7 @@ test('a day predating the column draws a blank cell and reports neither state', 
 });
 
 test('a span with no reading at all reports none, and keeps the articles it read', () => {
-	const span = processorLostOverDays([row('2026-09-19', '0'), row('2026-09-20', '0')], THRESHOLDS);
+	const span = processorLostOverDays([row('2026-09-19', '0'), row('2026-09-20', '0')], THRESHOLDS, numberFormat);
 
 	expect(span.from, 'a span with no reading claimed one').toBe(0);
 	expect(span.outOf, 'a span with no reading forgot the articles it covered').toBe(2);
@@ -134,7 +138,8 @@ test('the run grain reads one run and no other, a tile a shard', () => {
 	const run = processorLostOverShards(
 		health,
 		{ runId: '2026-09-21-1', date: '2026-09-21' },
-		THRESHOLDS
+		THRESHOLDS,
+		numberFormat
 	);
 
 	// Numeric order, so shard 10 sits after shard 1 rather than after shard 0.
@@ -149,7 +154,7 @@ test('the run grain reads one run and no other, a tile a shard', () => {
 });
 
 test('no run to read draws no shards rather than an empty run', () => {
-	const run = processorLostOverShards([row('2026-09-21', '0', 0)], null, THRESHOLDS);
+	const run = processorLostOverShards([row('2026-09-21', '0', 0)], null, THRESHOLDS, numberFormat);
 	expect(run.runId).toBeNull();
 	expect(run.shards).toEqual([]);
 	expect(run.outOf).toBe(0);

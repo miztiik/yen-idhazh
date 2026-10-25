@@ -1,7 +1,7 @@
 /** Actual native failure surfaces retain row divisors, calendar gaps and measured zero. */
 import { expect, test } from './support/door-page';
 import { nativeFailureMix } from '../src/lib/console/pipelines/failure-mix';
-import { dateSeries } from '../src/lib/charts/d3/dateSeries';
+import { dateSeries, formatNumber } from './support/number-format';
 import { frame } from '../src/lib/charts/frame';
 import { dayBefore, items, openRetained } from './support/retained-telemetry';
 import { setWindow } from './support/console-window/controls';
@@ -30,14 +30,14 @@ test('the actual native panel names its recorded-row divisor, not an inferred st
 	]);
 	await setWindow(page, 7);
 	const surface = page.locator('[data-windowed="failure-mix"]');
-	await expect(surface).toContainText('45.0% of recorded rows failed.');
+	await expect(surface).toContainText(`${formatNumber(9 / 20 * 100, { si: false })}% of recorded rows failed.`);
 	await expect(surface).toContainText('this counts rows, not distinct articles');
 	await expect(surface.locator('[data-failed-rule-divisor]')).toContainText('5 recorded failures at fetch');
 	await expect(surface.locator('[data-failed-rule-unknown]')).toContainText('5 of 5 failures at fetch have no recorded failed rule.');
 	await expect(surface.locator('[data-source-losses], [data-failure-rows]')).toHaveCount(0);
 	await setWindow(page, 1);
 	await expect(surface).toHaveAttribute('data-window-days', '1');
-	await expect(surface).toContainText('57.1% of recorded rows failed.');
+	await expect(surface).toContainText(`${formatNumber(8 / 14 * 100, { si: false })}% of recorded rows failed.`);
 });
 
 test('actual native failure states keep waiting and unavailable distinct from no recorded rows', async ({ page }) => {

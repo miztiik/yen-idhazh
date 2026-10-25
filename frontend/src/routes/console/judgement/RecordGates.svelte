@@ -21,7 +21,8 @@
 	import Panel from '$lib/components/Panel.svelte';
 	import { shortDate } from '$lib/format';
 	import TargetBar from '$lib/components/TargetBar.svelte';
-	import { grouped } from '$lib/charts/series';
+	import { grouped as formatGrouped } from '$lib/charts/series';
+	import { useNumberFormat } from '$lib/number-format-context';
 	import {
 		countedDays,
 		describeEarlierRow,
@@ -49,6 +50,8 @@
 		/** `chart.readout_max_share`. */
 		readoutMaxShare: number;
 	} = $props();
+	const numberFormat = useNumberFormat();
+	const grouped = (value: number) => formatGrouped(value, numberFormat);
 
 	const windowDays = $derived(daysBetween(viewport.start, viewport.end));
 	const days = $derived(inputDays ?? []);

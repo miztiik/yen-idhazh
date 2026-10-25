@@ -7,6 +7,7 @@ import { windowOfDays, type TimeWindow } from '../../src/lib/charts/viewport';
 import type { TelemetryRow } from '../../src/lib/charts/series';
 import type { PanelState } from '../../src/lib/console/waiting';
 import { telemetryRow } from './telemetry-row';
+import { chartConfig } from '../../src/lib/server/config';
 export { dayBefore } from './pipelines-ledgers';
 
 export function items(date: string, prefix: string, stage: string, outcome: string,
@@ -33,7 +34,7 @@ export async function openRetained(
 	const html = readFileSync(resolve('build', 'index.html'), 'utf8');
 	const styles = [...html.matchAll(/href="([^"]+\.css)"/g)].map((match) => match[1]);
 	await drawClient(page, await code, 'RetainedTelemetry', {
-		rows, config: appearance.console, chart: appearance.chart, pinned, initialDays, panelState, ...monthInputs
+		rows, config: appearance.console, chart: chartConfig(), pinned, initialDays, panelState, ...monthInputs
 	}, styles);
 	await expect(page.locator('[data-telemetry-rows]')).toHaveAttribute('data-telemetry-rows', String(rows.length));
 	return { window };
