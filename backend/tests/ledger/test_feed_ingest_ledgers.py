@@ -115,6 +115,7 @@ def _row(
     else:
         if model is FeedIngestOperationalStateRow:
             payload["state_revision"] = run * 10 + attempt
+            payload["date"] = "2026-10-20"
             if second:
                 payload["source_id"] = "second-feed"
         if model is DocumentObservationRecord:

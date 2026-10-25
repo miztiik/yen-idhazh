@@ -44,6 +44,7 @@ FIXTURE_FILES: Final = (
     "feed-ingest-source-run/one-observation.json",
     "feed-ingest-article-assessment/one-observation.json",
     "feed-ingest-diversity/one-observation.json",
+    "feed-ingest-operational-state/qualified.json",
     "feed-ingest-document-observation/refused-fetch.json",
     "run-shards/unknown.json",
     "app-config/every-knob-differs-from-the-committed-config.json",
