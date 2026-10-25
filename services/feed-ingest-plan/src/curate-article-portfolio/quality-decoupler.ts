@@ -1,6 +1,6 @@
 /** Which measured article components contribute before set-dependent penalties? */
 import { ArticleAssessmentRecordSchema } from "@idhazh/common-contracts";
-import type { SourceReliabilityPenalty } from "@idhazh/common-contracts";
+import type { ScoreEvidence } from "@idhazh/common-contracts";
 import type { PortfolioArticle, ReliabilityControls } from "./portfolio-input";
 
 export function measureArticle(article: PortfolioArticle) {
@@ -55,18 +55,16 @@ export function recordAssessment(article: PortfolioArticle, observedAt: string) 
   });
 }
 
-export function measurePriority(article: PortfolioArticle, controls: ReliabilityControls) {
+export function measurePriority(article: PortfolioArticle, _controls: ReliabilityControls) {
   const measured = measureArticle(article);
-  const history = article.evidence.operational;
-  const factor = history === null ? null : Math.max(controls.reliability_floor, history.success_fraction);
-  const reliability: SourceReliabilityPenalty = {
-    ...controls, source_authority_score: measured.components.authority,
-    history, production_factor: factor,
-    value: factor === null ? null : controls.enabled ? measured.components.authority * (1 - factor) : 0,
-  };
+  const sourceOperational = article.evidence.source_operational ?? null;
+  const penalty = sourceOperational?.status === "qualified"
+    ? sourceOperational.operational_penalty : null;
+  const reliability: ScoreEvidence["source_reliability"] = null;
   return {
     base_article_score: measured.base_article_score, source_reliability: reliability,
-    priority_score: measured.base_article_score - (reliability.value ?? 0),
+    source_operational: sourceOperational,
+    priority_score: measured.base_article_score - measured.components.authority * (penalty ?? 0),
   };
 }
 

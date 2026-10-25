@@ -6,9 +6,11 @@ How do measured feed and article costs affect the next planner selection?
 
 **Status**: Per-operation capture, supported failure attribution, bounded
 article/request aggregation and a report-only requests-first estimate are
-implemented. The operational-state and saved-score contracts are registered
-with compatible historical readers. No state writer, persisted-state reader or
-selection consumer exists yet; ranking is unchanged.
+implemented. The registered operational-state writer and bounded raw/compact
+reader now feed both `/plan` and saved-batch `/select-articles`. Qualified
+requests-first evidence replaces RSS reliability on source authority only;
+unqualified or unavailable evidence is neutral. Fresh-base publication
+recomputes only derived state and retains immutable observations.
 The user approved separate hardware and request measures, automatic score use
 after evidence qualifies, replacement of RSS reliability in the isolated
 TypeScript planner, the configurable evidence settings below,
@@ -341,7 +343,7 @@ Raw observations are written once as native, registered Parquet under
 precedence so a date is counted once. The derived per-source operational state is a declared, registered raw/compact
 Parquet ledger payload, not a growing JSON sidecar or input to the digest-feed
 summarizer. Its Pydantic row model, TypeScript reader schema, ledger
-registration and compaction task are in place. Row 10 still owns the state
+registration and compaction task are in place. Row 10 implements the state
 writer and next-allocation reader.
 
 Yes, read both roots through the registered ledger reader and compact indexes.
@@ -383,9 +385,9 @@ robots, trust and access-safety rules remain unchanged.
 Keep operational state separate from the curated source catalog: it cannot
 retire a source or publisher. The Pydantic model is declared under
 `backend/idhazh/contracts/`; its registered Parquet ledger contract and
-TypeScript binding are in place. Row 10 will persist it through the shared
-ledger writer and read it through the registered raw/compact path. Do not
-create a JSON state file or another unregistered persistence path.
+TypeScript binding are in place. Row 10 persists it through the shared ledger
+writer and reads it through the registered raw/compact path. Do not create a
+JSON state file or another unregistered persistence path.
 
 The checkpoint is `state_revision`, `evidence_cutoff_utc`,
 `window_start` and `window_end`; do not add settled event IDs. Recompute the
@@ -419,7 +421,10 @@ the existing push-retry policy and rebuild only the derived per-source
 operational-state payload from the fresh committed state and named raw/compact
 inputs. Preserve immutable observations. This is a scoped adapter extension
 and concurrency tests, not a new commit engine or retry loop. Stale state
-must never be replayed over newer state.
+must never be replayed over newer state. Each retry captures a new UTC cutoff;
+if the retry crosses a day boundary, it reads the newer named indexes and
+advances from that base's state revision instead of publishing an older
+window under a reused revision.
 
 Settlement does not queue or hold other runs. If publication is refused or
 retries are exhausted, leave the previously committed operational state unchanged,
@@ -618,17 +623,14 @@ does not make the saved score row TypeScript-only.
 
 ## Remaining contract work
 
-- D3: the operational-state schema, registered ledger and saved-score trace
-  shapes are declared and bound. Row 10 must implement publication and
-  compatible state reading at the named caller. These are implementation
-  details; they do not need another owner vote unless they change the approved
-  concurrency, immutable-observation, failure, stale-read or late-correction
-  behavior.
+- D3/D4/D8: the approved request evidence, registered state publication,
+  compatible state reading and selection score are implemented in Row 10.
+  These behaviors need no further owner decision unless a later change alters
+  concurrency, immutable observations, failure handling, stale reads or late
+  corrections.
 - D5: restriction/recovery thresholds, polling formula, review cadence,
   caller and authority remain unapproved. A2's trial remains conditional on
   total implementation cost after the approved telemetry path is delivered.
-- D8: the saved-score trace fields and requests-first arithmetic are declared
-  and bound. Row 10 still owns the state-backed consumer and ranking change.
 
 Only D5 behavior or a proposed change to an approved meaning needs another
 owner decision. Native field names, bindings and D8 trace types are
@@ -643,11 +645,12 @@ attribution differ. This page stays whole because its observations, settlement
 and score form one contract consumed by the next planner; splitting it would
 separate persisted fields from the behavior they govern.
 
-The request aggregate remains internal until the saved-state publisher and
-next selector are implemented. This keeps the registered operation rows as
-the only factual authority and avoids a second persistent rollup with no
-consumer. Replaying all writer attempts by event identity preserves work from
-failed attempts without counting a reserialized event as new work.
+The registered operation rows remain the factual authority. The per-source
+state is a replaceable policy snapshot derived from those rows, not a second
+factual rollup. Recomputing it from named committed inputs keeps retries and
+overlapping runs from replaying stale state. Replaying all writer attempts by
+event identity preserves work from failed attempts without counting a
+reserialized event as new work.
 
 ## See also
 

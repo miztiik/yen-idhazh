@@ -9,6 +9,7 @@ import { CompactIndexSchema, RawDayIndexSchema, FeedHealthContract, FeedIngestCo
 import { persistLedger } from "../../../packages/ledger-file-writer/src/index";
 import { PlanRequestSchema } from "../../../services/feed-ingest-plan/src/api/plan-request";
 import { stageFeedHistory } from "../feed-ingest-plan-feed-history";
+import { commitPlannerFiles } from "../feed-ingest-plan-commit";
 import { selectHealthDays } from "../../../services/feed-ingest-plan/src/read-ledger-history/select-health-days";
 import { readLedgerParquet } from "../../../services/feed-ingest-plan/src/read-ledger-history/read-parquet";
 import { verifyHealthOrderCompaction } from "../../../services/feed-ingest-plan/test/health-order-recording";
@@ -196,7 +197,7 @@ test("offers independent machine RAM control and commits only genuine planner an
   expect(plan.run).toContain("stageConfiguredDays(\"published\"");
   expect(plan.run).toContain("stageConfiguredDays(\"item-health\"");
   expect(plan.run).toContain("stageConfiguredDays(\"document-observations\"");
-  expect(plan.run).toContain("inputs: { ...inputs.settings.inputs, seen_days, published_days, settled_failure_days, feed_health_days, document_observation_days }");
+  expect(plan.run).toContain("inputs: { ...inputs.settings.inputs, seen_days, published_days, settled_failure_days, feed_health_days,\n      document_observation_days, operational_state_days }");
   expect(plan.run).not.toContain("feed-ingest-plan-report");
   const reporting = steps.find(step => step.name === "Optional GitHub report")!;
   expect(reporting.if).toContain("workflow_reporting == 'true'");
@@ -238,7 +239,133 @@ test("offers independent machine RAM control and commits only genuine planner an
   expect(commit.env).toEqual({
     CURRENT_RUN_FILES: "${{ steps.plan.outputs.current_run_files }}", HOST_FILES: "${{ steps.host.outputs.host_files }}",
   });
-  expect(commit.run).toContain("paths: [...paths(CURRENT_RUN_FILES), ...paths(HOST_FILES)]");
+  expect(commit.id).toBe("commit");
+  expect(commit.run).toContain("createFreshOperationalStatePreparation(");
+  expect(commit.run).toContain("paths: [...currentFiles.filter(path => !path.startsWith(statePrefix)), ...paths(HOST_FILES)]");
+  expect(commit.run).toContain("operational_state_files: JSON.stringify(result.derived_state_files");
+  expect(commit.run).toContain("commit_manifest: JSON.stringify(result)");
+  const gitFixture = await mkdtemp(join(tmpdir(), "planner-fresh-base-git-"));
+  try {
+    const origin = join(gitFixture, "origin.git");
+    const repository = join(gitFixture, "repository");
+    const competingRun = join(gitFixture, "competing-run");
+    const stateRoot = join(gitFixture, "state");
+    const gitEnvironment = {
+      ...process.env, GIT_AUTHOR_NAME: "Fixture", GIT_AUTHOR_EMAIL: "fixture@example.invalid",
+      GIT_COMMITTER_NAME: "Fixture", GIT_COMMITTER_EMAIL: "fixture@example.invalid",
+    };
+    async function git(cwd: string, args: string[]): Promise<string> {
+      const child = Bun.spawn(["git", ...args], { cwd, env: gitEnvironment, stdout: "pipe", stderr: "pipe" });
+      const [stdout, stderr, code] = await Promise.all([
+        new Response(child.stdout).text(), new Response(child.stderr).text(), child.exited,
+      ]);
+      if (code !== 0) throw new Error(`Git fixture command failed: ${args[0]}: ${stderr}`);
+      return stdout.trim();
+    }
+    await git(gitFixture, ["init", "--bare", "--initial-branch=main", origin]);
+    await git(gitFixture, ["init", "--initial-branch=main", repository]);
+    await writeFile(join(repository, "README"), "base\n");
+    await git(repository, ["add", "README"]);
+    await git(repository, ["commit", "-m", "fixture base"]);
+    await git(repository, ["remote", "add", "origin", origin]);
+    await git(repository, ["push", "-u", "origin", "main"]);
+    await git(gitFixture, ["clone", "--branch", "main", origin, competingRun]);
+
+    const day = "2026-10-22";
+    const nextDay = "2026-10-23";
+    const observationPrefix = "raw/feed-ingest-plan/document-observations";
+    const observationName = "00000000-0000-8000-8000-000000000001.parquet";
+    const competingName = "00000000-0000-8000-8000-000000000002.parquet";
+    const stateName = "00000000-0000-8000-8000-000000000003.parquet";
+    const competingStateName = "00000000-0000-8000-8000-000000000004.parquet";
+    const observationPath = `${observationPrefix}/${day.replaceAll("-", "/")}/${observationName}`;
+    const staleStatePath = `raw/feed-ingest-plan/operational-state/${day.replaceAll("-", "/")}/${stateName}`;
+    const statePath = `raw/feed-ingest-plan/operational-state/${nextDay.replaceAll("-", "/")}/${stateName}`;
+    await mkdir(join(stateRoot, observationPath.split("/").slice(0, -1).join("/")), { recursive: true });
+    await writeFile(join(stateRoot, observationPath), "immutable current-run observation");
+
+    const competingRawDirectory = `state/${observationPrefix}/${day.replaceAll("-", "/")}`;
+    const competingIndexPath = `${competingRawDirectory}/index.json`;
+    const competingRawPath = `${competingRawDirectory}/${competingName}`;
+    await mkdir(join(competingRun, competingRawDirectory), { recursive: true });
+    await writeFile(join(competingRun, competingRawPath), "committed concurrent observation");
+    const competingIndex = RawDayIndexSchema.parse({
+      version: "2026-10-03", ledger: "document-observations", date: day,
+      files: [competingName], content_sha256: createHash("sha256").update(competingName).digest("hex"),
+      bytes: null, listed_at: "2026-10-22T00:00:00Z",
+    });
+    await writeFile(join(competingRun, competingIndexPath), JSON.stringify(competingIndex));
+    const competingStateDirectory = `state/raw/feed-ingest-plan/operational-state/${nextDay.replaceAll("-", "/")}`;
+    const competingStatePath = `${competingStateDirectory}/${competingStateName}`;
+    const competingStateIndexPath = `${competingStateDirectory}/index.json`;
+    await mkdir(join(competingRun, competingStateDirectory), { recursive: true });
+    await writeFile(join(competingRun, competingStatePath), "saved revision 1");
+    const competingStateIndex = RawDayIndexSchema.parse({
+      version: "2026-10-03", ledger: "operational-state", date: nextDay,
+      files: [competingStateName], content_sha256: createHash("sha256").update(competingStateName).digest("hex"),
+      bytes: null, listed_at: "2026-10-23T00:00:00Z",
+    });
+    await writeFile(join(competingRun, competingStateIndexPath), JSON.stringify(competingStateIndex));
+    await git(competingRun, ["add", "state"]);
+
+    const freshBases: string[] = [];
+    const freshTimes = ["2026-10-22T23:59:59Z", "2026-10-23T00:00:01Z"];
+    let freshTimeIndex = 0;
+    let competitorPushed = false;
+    const result = await commitPlannerFiles({
+      repository, stateRoot, paths: [observationPath], message: "append planner observations",
+      now: freshTimes[0]!,
+      clock: () => freshTimes[freshTimeIndex++]!,
+      retry: { deadline_seconds: { default: 30 }, base_step_seconds: 0.01, ceiling_seconds: 0.01, ceiling_after: 1 },
+      prepare_fresh_base: async ({ base, now, read_file }) => {
+        freshBases.push(base);
+        if (!competitorPushed) {
+          expect(now).toBe(freshTimes[0]!);
+          competitorPushed = true;
+          await git(competingRun, ["commit", "-m", "concurrent observation"]);
+          await git(competingRun, ["push", "origin", "main"]);
+          return { status: "written", reason: "none", files: [{ path: staleStatePath, bytes: new TextEncoder().encode("stale derived state") }] };
+        }
+        expect(now).toBe(freshTimes[1]!);
+        const indexBytes = await read_file(competingIndexPath);
+        if (indexBytes === undefined) throw new Error("Fresh base omits the competing raw index");
+        const currentIndex = RawDayIndexSchema.parse(JSON.parse(new TextDecoder().decode(indexBytes)));
+        expect(currentIndex.files).toEqual([competingName]);
+        const stateIndexBytes = await read_file(competingStateIndexPath);
+        if (stateIndexBytes === undefined) throw new Error("Fresh base omits the later state index");
+        const currentStateIndex = RawDayIndexSchema.parse(JSON.parse(new TextDecoder().decode(stateIndexBytes)));
+        expect(currentStateIndex.files).toEqual([competingStateName]);
+        const currentStateBytes = await read_file(competingStatePath);
+        if (currentStateBytes === undefined) throw new Error("Fresh base omits the later state revision");
+        expect(new TextDecoder().decode(currentStateBytes)).toBe("saved revision 1");
+        expect(observationPath).toBe(`${observationPrefix}/${day.replaceAll("-", "/")}/${observationName}`);
+        return {
+          status: "written", reason: "none",
+          files: [{ path: statePath, bytes: new TextEncoder().encode(
+            `derived revision 2 from ${currentIndex.files.length + 1} observations at ${now}`,
+          ) }],
+        };
+      },
+    });
+    expect(result).toMatchObject({ status: "landed", derived_state: { status: "written" } });
+    if (result.commit === null) throw new Error("Planner commit result omits its committed revision");
+    expect(freshBases).toHaveLength(2);
+    expect(freshBases[0]).not.toBe(freshBases[1]);
+    expect(await git(repository, ["show", `${result.commit}:state/${statePath}`]))
+      .toBe(`derived revision 2 from 2 observations at ${freshTimes[1]!}`);
+    expect(result.committed_files.map(file => file.path)).not.toContain(staleStatePath);
+    const landedIndex = RawDayIndexSchema.parse(JSON.parse(await git(repository, ["show", `${result.commit}:${competingIndexPath}`])));
+    expect(landedIndex.files).toEqual([competingName, observationName].sort());
+    expect(new Set(landedIndex.files).size).toBe(2);
+    const landedStateIndex = RawDayIndexSchema.parse(JSON.parse(await git(repository, ["show", `${result.commit}:${competingStateIndexPath}`])));
+    expect(landedStateIndex.files).toEqual([competingStateName, stateName].sort());
+    expect(result.derived_state_files).toEqual([statePath]);
+    expect(result.raw_index_files).toContain(competingIndexPath.slice("state/".length));
+    expect(result.committed_files.map(file => file.path)).toContain(statePath);
+    expect(result.committed_files.map(file => file.path)).toContain(competingIndexPath.slice("state/".length));
+  } finally {
+    await rm(gitFixture, { recursive: true, force: true });
+  }
   expect(commit.run).not.toContain("generated-full-audit");
   expect(steps.indexOf(commit)).toBeLessThan(steps.indexOf(steps.find(step => step.name === "Preserve isolated test evidence")!));
   const runs = steps.flatMap(step => step.run === undefined ? [] : [step.run]).join("\n");
@@ -249,6 +376,7 @@ test("offers independent machine RAM control and commits only genuine planner an
   expect(checkout.with?.["persist-credentials"]).toBe(true);
   expect(checkout.with?.["sparse-checkout"]).toContain("/packages/common-contracts/");
   expect(checkout.with?.["sparse-checkout"]).toContain("/.github/scripts/feed-ingest-plan-http-proof.ts");
+  expect(checkout.with?.["sparse-checkout"]).toContain("/.github/scripts/feed-ingest-plan-operational-state.ts");
   expect(checkout.with?.["sparse-checkout"]).toContain("/.github/scripts/feed-ingest-plan-profile-proof.ts");
   expect(checkout.with?.["sparse-checkout"]).toContain("/.github/scripts/feed-ingest-plan-cache-proof.ts");
   expect(checkout.with?.["sparse-checkout"]).toContain("/.github/scripts/feed-ingest-plan-cache-report.ts");

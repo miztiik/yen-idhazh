@@ -18,7 +18,7 @@ type PlanSummary = ReturnType<typeof summarizePlan>;
 type Registrations = Readonly<{
   dispatches: LedgerRegistration; rejections: LedgerRegistration; selections: LedgerRegistration; seen: LedgerRegistration;
   assessments: LedgerRegistration; diversity: LedgerRegistration; source_runs: LedgerRegistration;
-  feed_health: LedgerRegistration; document_observations: LedgerRegistration;
+  feed_health: LedgerRegistration; document_observations: LedgerRegistration; operational_state: LedgerRegistration;
 }>;
 
 function paths(result: PersistLedgerResult, entry: LedgerRegistration): string[] {
@@ -77,6 +77,7 @@ export function createExecutionOutputs(summary: PlanSummary, registrations: Regi
   const seen = paths(summary.files.seen, registrations.seen);
   const health = paths(summary.files.feed_health, registrations.feed_health);
   const observations = paths(summary.files.document_observations, registrations.document_observations);
+  const operationalState = paths(summary.files.operational_state, registrations.operational_state);
   const rejections = [
     ...paths(summary.files.harvest_rejections, registrations.rejections),
     ...paths(summary.files.screening_rejections, registrations.rejections),
@@ -117,7 +118,7 @@ export function createExecutionOutputs(summary: PlanSummary, registrations: Regi
       ["rejections", "rejections", rejectionResult],
     ] as const) verifyLedgerReceipt(ledger, files, summary.metrics.receipts[key]);
   }
-  const all = [...dispatches, ...selections, ...rejections, ...seen, ...health, ...observations, ...metricPaths];
+  const all = [...dispatches, ...selections, ...rejections, ...seen, ...health, ...observations, ...operationalState, ...metricPaths];
   if (new Set(all).size !== all.length) throw new Error("files.path occurs more than once");
   if (summary.files.dispatches.files.reduce((total, file) => total + file.row_count, 0) !== candidates.length
     || summary.files.selections.files.reduce((total, file) => total + file.row_count, 0) !== candidates.length) {
@@ -132,6 +133,7 @@ export function createExecutionOutputs(summary: PlanSummary, registrations: Regi
     selection_files: JSON.stringify(selections), seen_files: JSON.stringify(seen),
     feed_health_files: JSON.stringify(health),
     document_observation_files: JSON.stringify(observations),
+    operational_state_files: JSON.stringify(operationalState),
     current_run_files: JSON.stringify(all),
     first_sight_absence_proof: summary.first_sight.absence_proof,
     ...metrics,

@@ -8,12 +8,19 @@ import { resolveOperationalHistory } from "./curate-article-portfolio/portfolio-
 import { resolvePlanRequest } from "./api/plan-request";
 import { resolvePlanningInputs } from "./resolve-planning-inputs";
 import { readPublisherPublication } from "./read-ledger-history/read-publisher-publication";
+import { readOperationalState } from "./read-ledger-history/read-operational-state";
+import { SourceOperationalEvidenceSchema } from "@idhazh/common-contracts";
 
 export async function selectArticles(
   batch: ParsedFeedBatch, inputs: PlanInputs, onScreened?: (result: ScreeningResult) => void,
 ) {
   const request = resolvePlanRequest(batch.request, inputs.harvest.config);
   const planning = resolvePlanningInputs(inputs, request);
+  const operationalState = await readOperationalState({
+    root: inputs.root, now: batch.context.now, policy: inputs.harvest.config.feedback,
+    registration: inputs.registrations.operational_state,
+    days: inputs.settings.inputs.operational_state_days,
+  });
   const overrides = request.freshness_hours === undefined ? {} : { freshness_hours: request.freshness_hours };
   const screening = await screenArticleCandidates({
     candidates: batch.candidates, observations: batch.observations,
@@ -41,6 +48,14 @@ export async function selectArticles(
         ...supplied,
         operational: resolveOperationalHistory(article.candidate.source_id, supplied.operational,
           batch.operational_history[article.candidate.source_id] ?? null),
+        source_operational: operationalState.by_source.get(article.candidate.source_id)
+          ?? SourceOperationalEvidenceSchema.parse({
+            status: "unavailable", state_status: "unavailable", state_revision: null,
+            window_days: inputs.harvest.config.feedback.window_days,
+            window_start: null, window_end: null, total_requests: null, wasted_requests: null,
+            observed_attempted_opportunities: 0, observed_measured_opportunities: 0,
+            coverage: null, operational_penalty: null,
+          }),
       } };
     }),
     planning, observed_at: batch.context.now,
@@ -52,5 +67,8 @@ export async function selectArticles(
     outputRoot: inputs.outputRoot, writerContext: batch.context.writer,
     ledgerSettings: inputs.ledgerSettings, registrations: inputs.registrations, date: batch.context.date,
   });
-  return { screening, curation, portfolio, publisher_publication: publicationHistory };
+  return {
+    screening, curation, portfolio, publisher_publication: publicationHistory,
+    operational_state: operationalState,
+  };
 }

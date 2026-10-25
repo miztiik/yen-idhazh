@@ -58,6 +58,7 @@ export async function loadPlanInputs(root: string, settingsPath = "config/feed-i
     published: registration("published"), item_health: registration("item-health"),
     feed_health: registration("feed-health"),
     document_observations: registration("document-observations"),
+    operational_state: registration("operational-state"),
     source_runs: z.object({
       name: z.literal("source-runs"), family: z.literal("feed-ingest-plan"),
       grain: z.literal("raw-and-compact"), lifecycle_status: z.literal("active"),

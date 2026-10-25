@@ -6,28 +6,34 @@ import { loadPlanInputs } from "../src/load-plan-inputs";
 import { RecordedTransport, readRecordings } from "./harvest-recordings";
 import { recordedPlan } from "./plan-recordings";
 import { main } from "../src/index";
-import { mkdir, mkdtemp, rm, unlink, writeFile } from "node:fs/promises";
-import { join } from "node:path";
+import { copyFile, mkdir, mkdtemp, rm, stat, unlink, writeFile } from "node:fs/promises";
+import { basename, dirname, join } from "node:path";
 import { tmpdir } from "node:os";
+import { persistLedger } from "@idhazh/ledger-file-writer";
 import type { PersistedLedgerFile } from "@idhazh/ledger-file-writer";
 import { readLedgerParquet } from "../src/read-ledger-history/read-parquet";
 import { SeenRowSchema } from "../src/screen-article-candidates/seen-evidence";
-import { source } from "./harvest-recordings";
+import { context as harvestContext, source } from "./harvest-recordings";
 import { existsSync } from "node:fs";
 import { readPlanningHistory } from "../src/metrics/planning-populations";
 import { selectCompleteAttempt } from "../src/read-ledger-history/complete-attempt";
 import {
   ArticleAssessmentContract, DiversityMetricContract, SourceRunContract,
 } from "../src/metrics/audit-contracts";
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { openOperationStore } from "../src/api/operation-store";
 import { proposedOperation } from "../src/api/document-operations";
 import { FetchRequestSchema } from "../src/api/operation-contracts";
 import type { FeedWriteReceipt } from "../src/read-ledger-history/own-feed-receipts";
 import { parseDocument } from "../src/harvest-feeds/parse-document";
 import { redactProofResponse, requireExactReplay, requireReadableArticle, selectVerifiedArticle } from "../../../.github/scripts/feed-ingest-plan-http-proof";
-import { FeedHealthContract, PLANNER_OPERATION_VERSION } from "@idhazh/common-contracts";
+import {
+  FeedHealthContract, FeedIngestOperationalStateRowSchema, PLANNER_OPERATION_VERSION,
+  RAW_DAY_INDEX_VERSION, RawDayIndexSchema,
+} from "@idhazh/common-contracts";
 import { loadHarvestInputs } from "../src/harvest-feeds/load-harvest-inputs";
+import { OperationalStateContract } from "../src/metrics/audit-contracts";
+import { operationalPolicyVersion } from "../src/read-ledger-history/read-operational-state";
 import { loadConfig as loadProbeConfig } from "../../host-probes/src/config";
 import { TaskProfileSchema } from "../../host-probes/src/task-profile/profile-schema";
 import type { TaskProfile } from "../../host-probes/src/task-profile/profile-schema";
@@ -574,6 +580,10 @@ test("one listener retains durable seen receipts from an output root outside the
     recorded.inputs.clock_config.collect.seen_window_days = 1;
     recorded.inputs.clock_config.collect.availability_strikes_before_rest = 1;
     recorded.inputs.settings.inputs.seen_days = [{ day: "2026-10-21", raw_files: [] }];
+    const operationalStateIndex = "state/raw/feed-ingest-plan/operational-state/2026/10/21/index.json";
+    recorded.inputs.settings.inputs.operational_state_days = [
+      { day: "2026-10-21", raw_index: operationalStateIndex },
+    ];
     delete recorded.runtime.run_number;
     recorded.runtime.clock = () => new Date(`2026-10-21T12:00:00.${String(clocks++).padStart(3, "0")}Z`);
     recorded.runtime.on_seen_persisted = receipt => { receipts.push(receipt); };
@@ -588,12 +598,57 @@ test("one listener retains durable seen receipts from an output root outside the
     expect(clocks).toBe(2);
     expect(first).not.toHaveProperty("issues");
     expect(second).not.toHaveProperty("issues");
+    const stateWriter = { ...harvestContext().writer, task_name: "operational-state-api-test" };
+    const stateRow = FeedIngestOperationalStateRowSchema.parse({
+      date: "2026-10-21", state_revision: 1, parent_revision: null,
+      written_at_utc: "2026-10-21T12:00:00Z", evidence_cutoff_utc: "2026-10-21T12:00:00Z",
+      window_days: 7, window_start: "2026-10-14", window_end: "2026-10-20",
+      code_revision: recorded.runtime.git_sha,
+      policy_version: operationalPolicyVersion(recorded.inputs.harvest.config.feedback),
+      source_id: "recorded-news",
+      evidence_start_utc: "2026-10-14T00:00:00Z", evidence_end_utc: "2026-10-20T23:59:59Z",
+      measured_target_requests: 30, measured_source_wasted_requests: 30,
+      observed_attempted_opportunities: 20, observed_measured_opportunities: 20,
+      measured_coverage: 1, qualification_status: "qualified",
+      request_waste_ratio: 1, operational_penalty: 1 / 3,
+    });
+    const stateWrite = await persistLedger({
+      ledger: "operational-state", registryEntry: recorded.inputs.registrations.operational_state,
+      rowContract: OperationalStateContract, outputRoot: recorded.inputs.outputRoot,
+      writerContext: stateWriter, ledgerSettings: recorded.inputs.ledgerSettings,
+      period: { tier: "raw", covers: "2026-10-21" }, rows: [stateRow],
+    });
+    expect(stateWrite.status).toBe("written");
+    const stateFiles = [...stateWrite.files].sort((left, right) =>
+      basename(left.path).localeCompare(basename(right.path)));
+    const filenames = stateFiles.map(file => basename(file.path));
+    const indexPath = join(recorded.inputs.root, ...operationalStateIndex.split("/"));
+    await mkdir(dirname(indexPath), { recursive: true });
+    await Promise.all(stateFiles.map(async file => {
+      const destination = join(recorded.inputs.root, "state", ...file.path.split("/"));
+      await mkdir(dirname(destination), { recursive: true });
+      await copyFile(join(recorded.inputs.outputRoot, ...file.path.split("/")), destination);
+    }));
+    const index = RawDayIndexSchema.parse({
+      version: RAW_DAY_INDEX_VERSION, ledger: "operational-state", date: "2026-10-21",
+      files: filenames, content_sha256: createHash("sha256").update(filenames.join("\n")).digest("hex"),
+      bytes: await Promise.all(stateFiles.map(async file =>
+        (await stat(join(recorded.inputs.root, "state", ...file.path.split("/")))).size)),
+      listed_at: "2026-10-21T12:00:00Z",
+    });
+    await writeFile(indexPath, JSON.stringify(index));
     const reselected = await createPlanApp(recorded.inputs, recorded.runtime)
       .request("/api/2026-10-20/select-articles", {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ batch_id: second.batches.parsed_batch_id }),
       });
     expect(reselected.status).toBe(200);
+    const selected = await reselected.json();
+    const operationalEvidence = selected.selections.find((row: { source_id: string }) =>
+      row.source_id === "recorded-news")?.ratings.source_operational;
+    expect(operationalEvidence).toMatchObject({
+      status: "qualified", state_status: "current", state_revision: 1, operational_penalty: 1 / 3,
+    });
     expect(first.first_sight.absence_proof).toBe("unavailable");
     expect(first.first_sight.created_count).toBeGreaterThan(0);
     expect(second.first_sight.created_count).toBe(0);
@@ -603,6 +658,9 @@ test("one listener retains durable seen receipts from an output root outside the
     const thirdResponse = await post();
     expect(thirdResponse.status).toBe(200);
     const third = await thirdResponse.json();
+    expect(third.operational_state.read).toMatchObject({
+      status: "current", state_revision: 1, window_start: "2026-10-14", window_end: "2026-10-20",
+    });
     expect(third.source_records.find((row: { source_id: string }) => row.source_id === "rest-cycle").fetch_status).toBe("success");
     expect(third.source_records.find((row: { source_id: string }) => row.source_id === "gone-health").fetch_status).toBe("http_failure");
     expect(third.feed_history.own_receipts.every((receipt: { ledger: string }) => receipt.ledger === "feed-health")).toBe(true);

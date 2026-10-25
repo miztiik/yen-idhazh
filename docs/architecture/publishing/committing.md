@@ -185,14 +185,18 @@ TypeScript planner workflow commits only its genuine current-run raw UUID
 Parquet files and the real host collector's returned file paths. Its Bun
 adapter uses only ASSEMBLE's append-only Git mechanism: a private
 `GIT_INDEX_FILE`, fetched main, exact immutable blobs, a candidate parented
-on that main and a normal non-force push. It retries the same completed bytes
-against fresh main within `config/push-retry.json`'s deadline and backoff.
-A different blob at the same path is refused. The checkout, staged work and
-sparse patterns do not move. This exception does not add a second general
-publisher: no deletion, preparation, inventory, site update or producer rerun.
-Generated audit fixtures never enter the commit list. Commit failure keeps the
-workflow red and retains artifacts. Other workflows retain the shared Python
-publisher rule above.
+on that main and a normal non-force push. It retries completed immutable
+observations against fresh main within `config/push-retry.json`'s deadline and
+backoff. Its scoped operational-state preparation reads named committed
+observation inputs and rebuilds only the replaceable derived state for each
+fresh base; it does not repeat fetch, parse or selection. The prepared Parquet
+state and its raw index join the exact candidate with those immutable
+observations. A different blob at an immutable path is refused. The checkout,
+staged work and sparse patterns do not move. This exception is not a second
+general publisher: it adds no deletion, inventory, site update or producer
+rerun. Generated audit fixtures never enter the commit list. Commit failure
+keeps the workflow red and retains artifacts. Other workflows retain the
+shared Python publisher rule above.
 
 Owner-approved on 2026-10-09: reuse gardener's private-index, exact-change,
 sparse-safe publication, with three actual policies rather than a generic

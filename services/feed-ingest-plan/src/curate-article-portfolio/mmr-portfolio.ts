@@ -58,7 +58,7 @@ export function scoreMarginal(
   const publisherExposure = measurePublisherExposure(article, selected, plannedSlots, publicationHistory);
   return ScoreEvidenceSchema.parse({
     base_article_score: priority.base_article_score, source_reliability: priority.source_reliability,
-    publisher_exposure: publisherExposure,
+    source_operational: priority.source_operational, publisher_exposure: publisherExposure,
     marginal_score: priority.priority_score - (publisherExposure.value ?? 0)
       - Object.values(terms).reduce((sum, term) => sum + (term.value ?? 0), 0),
     ...terms,

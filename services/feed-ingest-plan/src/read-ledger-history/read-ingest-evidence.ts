@@ -12,6 +12,7 @@ import { classifyPublicationHistoryError } from "./classify-publication-history-
 import { LedgerHistoryReadError } from "./ledger-history-error";
 import { writeJsonLine } from "../logging/structured-logger";
 import type { ReadLedgerFile } from "./read-parquet";
+import type { LedgerHistoryReadSource } from "./named-days";
 
 export function closedObservationDays(now: string, windowDays: number): string[] {
   const today = TimestampSchema.parse(now).slice(0, 10);
@@ -22,6 +23,8 @@ export function closedObservationDays(now: string, windowDays: number): string[]
 export async function readIngestEvidence(input: Readonly<{
   root: string; now: string; window_days: number; registration: LedgerRegistration;
   days: readonly SeenDayInput[];
+  read_source?: LedgerHistoryReadSource<DocumentObservationRecord>;
+  additional_rows?: readonly DocumentObservationRecord[];
 }>) {
   const dates = closedObservationDays(input.now, input.window_days);
   const configured = new Map<string, SeenDayInput>();
@@ -39,7 +42,8 @@ export async function readIngestEvidence(input: Readonly<{
   for (const date of dates) {
     try {
       const held = await readNamedDays(input.root, input.registration,
-        [configured.get(date) ?? defaultDayInput(input.registration.prefix, date)], DocumentObservationContract, fileCache);
+        [configured.get(date) ?? defaultDayInput(input.registration.prefix, date)], DocumentObservationContract,
+        fileCache, input.read_source);
       for (const day of held) {
         if (day.rows.some(({ row }) => row.occurred_at.slice(0, 10) !== date)) {
           throw new LedgerHistoryReadError("Document observation differs from its UTC day partition");
@@ -56,7 +60,9 @@ export async function readIngestEvidence(input: Readonly<{
   let notices: ReturnType<typeof settleIngestObservations>["notices"] = [];
   let totals = rollupIngestOutcomes([], false);
   try {
-    ({ rows, notices } = settleIngestObservations(days.flatMap(day => day.rows.map(held => held.row)), dates[0]!, dates.at(-1)!));
+    ({ rows, notices } = settleIngestObservations([
+      ...days.flatMap(day => day.rows.map(held => held.row)), ...(input.additional_rows ?? []),
+    ], dates[0]!, dates.at(-1)!));
     totals = rollupIngestOutcomes(rows, gaps.length === 0 && days.length === dates.length
       && days.every(usableDay) && notices.length === 0);
   } catch (error) {

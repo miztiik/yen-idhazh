@@ -5,6 +5,15 @@ import type { readIngestEvidence } from "./read-ledger-history/read-ingest-evide
 type ArticleEvidence = Awaited<ReturnType<typeof readIngestEvidence>>;
 type SourceEvidence = ArticleEvidence["sources"][number];
 
+export type MeasuredSourceEvidence = Pick<SourceEvidence,
+  | "source_id"
+  | "observed_attempted_opportunities"
+  | "observed_measured_opportunities"
+  | "measured_coverage"
+  | "measured_target_requests"
+  | "measured_source_wasted_requests"
+>;
+
 export function estimateOperationalFeedback(
   evidence: ArticleEvidence,
   policy: FeedIngestConfig["feedback"],
@@ -15,11 +24,13 @@ export function estimateOperationalFeedback(
     minimum_measured_opportunities: policy.minimum_measured_opportunities,
     minimum_measured_coverage: policy.minimum_measured_coverage,
     component_weights: policy.component_weights,
-    sources: evidence.sources.map(source => estimateSource(source, policy)),
+    sources: evidence.sources.map(source => estimateSourceFeedback(source, policy)),
   };
 }
 
-function estimateSource(source: SourceEvidence, policy: FeedIngestConfig["feedback"]) {
+export function estimateSourceFeedback(
+  source: MeasuredSourceEvidence, policy: FeedIngestConfig["feedback"],
+) {
   const requests = source.measured_target_requests;
   const wastedRequests = source.measured_source_wasted_requests;
   const coverage = source.measured_coverage;

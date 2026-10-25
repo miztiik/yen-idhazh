@@ -29,6 +29,8 @@ export type NamedDayInput<T extends object> = Readonly<{
   rawFiles?: readonly string[];
   rawIndex?: string;
   fileCache?: Map<string, Promise<ReadLedgerFile<T>>>;
+  readIndex?: (path: string) => Promise<Uint8Array | undefined>;
+  readFile?: (path: string) => Promise<ReadLedgerFile<T>>;
 }>;
 
 function missing(error: unknown): boolean {
@@ -43,16 +45,19 @@ function sourceRunPartitionDay(row: object): string | undefined {
   if (row.observation_phase === "publication_complete") return row.observed_at.slice(0, 10);
   return undefined;
 }
-async function readIndex(path: string): Promise<unknown | undefined> {
+async function readIndex(path: string, read?: (path: string) => Promise<Uint8Array | undefined>): Promise<unknown | undefined> {
   try {
-    return JSON.parse(await readFileFromDisk(path, "utf8")) as unknown;
+    const bytes = read === undefined ? await readFileFromDisk(path) : await read(path);
+    if (bytes === undefined) return undefined;
+    return JSON.parse(new TextDecoder().decode(bytes)) as unknown;
   } catch (error) {
     if (missing(error)) return undefined;
     if (error instanceof SyntaxError) throw new LedgerHistoryReadError("Invalid history index JSON", { cause: error });
     throw error;
   }
 }
-async function readFile<T extends object>(input: NamedDayInput<T>, path: string): Promise<ReadLedgerFile<T>> {
+async function readLedgerFile<T extends object>(input: NamedDayInput<T>, path: string): Promise<ReadLedgerFile<T>> {
+  if (input.readFile !== undefined) return input.readFile(path);
   if (input.fileCache === undefined) return readLedgerParquet(path, input.ledger, input.contract);
   let pending = input.fileCache.get(path);
   if (pending === undefined) {
@@ -71,7 +76,7 @@ export async function readLedgerDay<T extends object>(input: NamedDayInput<T>): 
   for (const period of ["yearly", "monthly", "daily"] as const) {
     const path = input.indexes?.[period];
     if (path === undefined) continue;
-    const value = await readIndex(path);
+    const value = await readIndex(path, input.readIndex);
     if (value === undefined) {
       notices.push(`index-missing:${period}`);
       continue;
@@ -126,7 +131,7 @@ export async function readLedgerDay<T extends object>(input: NamedDayInput<T>): 
     if (entry.set_aside > 0) notices.push(`files-set-aside:${entry.set_aside}`);
     let file: ReadLedgerFile<T>;
     try {
-      file = await readFile(input, filePath);
+      file = await readLedgerFile(input, filePath);
     } catch (error) {
       if (!missing(error)) throw error;
       notices.push(`file-missing:${period}:${entry.covers}`);
@@ -144,7 +149,7 @@ export async function readLedgerDay<T extends object>(input: NamedDayInput<T>): 
   let sizes: number[] | null = null;
   if (input.rawIndex !== undefined) {
     if (rawFiles !== undefined) throw new Error("Name raw files or a raw index, not both");
-    const value = await readIndex(input.rawIndex);
+    const value = await readIndex(input.rawIndex, input.readIndex);
     if (value === undefined) {
       notices.push("raw-index-missing");
       return result("missing", "raw");
@@ -163,7 +168,7 @@ export async function readLedgerDay<T extends object>(input: NamedDayInput<T>): 
   for (const [index, path] of rawFiles.entries()) {
     let file: ReadLedgerFile<T>;
     try {
-      file = await readFile(input, path);
+      file = await readLedgerFile(input, path);
     } catch (error) {
       if (!missing(error)) throw error;
       notices.push(`file-missing:${basename(path)}`);

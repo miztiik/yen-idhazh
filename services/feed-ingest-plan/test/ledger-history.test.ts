@@ -4,6 +4,7 @@ import { createHash } from "node:crypto";
 import { mkdtemp, mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import {
   ArticleAssessmentRecordSchema, CandidateRejectionContract, CONTRACT_VERSION,
   DocumentObservationRecordSchema, EditorialSelectionContract, EditorialSelectionRowSchema, SourceRunRecordSchema,
@@ -23,6 +24,9 @@ import { readLedgerDay } from "../src/read-ledger-history/read-period";
 import { readPublisherPublication } from "../src/read-ledger-history/read-publisher-publication";
 import { readIngestEvidence, closedObservationDays } from "../src/read-ledger-history/read-ingest-evidence";
 import { estimateOperationalFeedback } from "../src/estimate-operational-feedback";
+import { readOperationalState } from "../src/read-ledger-history/read-operational-state";
+import { writeOperationalState } from "../src/write-operational-state";
+import { loadPlanInputs } from "../src/load-plan-inputs";
 import { settleIngestObservations } from "../src/settle-ingest-observations";
 import { rollupIngestOutcomes } from "../src/rollup-ingest-outcomes";
 import { classifyPublicationHistoryError } from "../src/read-ledger-history/classify-publication-history-error";
@@ -37,7 +41,7 @@ import { partitionArticles, persistDispatches } from "../src/partition-article-s
 import { fixtureInput, readWritten, registration, settings, writer, writeRows } from "./partition-fixtures";
 import {
   ArticleAssessmentContract, DiversityMetricContract, DispatchContract, DocumentObservationContract,
-  SourceRunContract, legacyAuditSchemas,
+  OperationalStateContract, SourceRunContract, legacyAuditSchemas,
 } from "../src/metrics/audit-contracts";
 
 const selectionContract = EditorialSelectionContract;
@@ -417,6 +421,96 @@ test("native raw and daily reads preserve original writer identity instead of th
       qualification_status: "qualified", measured_coverage: 0.8,
       request_waste_ratio: 0.5, request_component_weight: 1 / 3,
       request_component_penalty: 1 / 6,
+    });
+    const repository = fileURLToPath(new URL("../../../", import.meta.url));
+    const planInputs = await loadPlanInputs(repository);
+    const stateRoot = join(root, "operational-state");
+    const stateInputs = { ...planInputs, outputRoot: stateRoot };
+    const statePolicy = { ...feedbackPolicy, window_days: 1 };
+    const stateRegistration = planInputs.registrations.operational_state;
+    const noSavedState = await readOperationalState({
+      root: stateRoot, now: "2026-10-22T00:00:00Z", policy: statePolicy,
+      registration: stateRegistration, days: [],
+    });
+    expect(noSavedState).toMatchObject({ state: { status: "unavailable" }, reason: "missing" });
+    const firstState = await writeOperationalState({
+      evidence: cohortRead, now: "2026-10-22T00:00:00Z", writer: observationWriter,
+      policy: statePolicy, inputs: stateInputs, saved: noSavedState,
+    });
+    expect(firstState).toMatchObject({ status: "written", reason: "none", result: { status: "written" } });
+    const firstStateFiles = firstState.result.files.map(file => file.path);
+    const firstRead = await readOperationalState({
+      root: stateRoot, now: "2026-10-22T00:00:00Z", policy: statePolicy, registration: stateRegistration,
+      days: [{ day: "2026-10-22", raw_files: firstStateFiles }],
+    });
+    expect(firstRead.state).toMatchObject({
+      status: "current", state_revision: 1, window_start: input.fixture.date, window_end: input.fixture.date,
+    });
+    expect(firstRead.by_source.get(cohort.source_id)).toMatchObject({
+      status: "qualified", operational_penalty: 1 / 6, state_revision: 1,
+    });
+    const nextDay = "2026-10-22";
+    const nextFacts = cohortFacts.map(row => DocumentObservationRecordSchema.parse({
+      ...row, occurred_at: row.occurred_at.replace(input.fixture.date, nextDay),
+    }));
+    const nextHistoryRoot = join(root, "next-history");
+    const nextHistoryFiles = await writeRows(nextHistoryRoot, "document-observations", nextDay,
+      DocumentObservationRecordSchema, nextFacts, { ...observationWriter, attempt: 2 }, DOCUMENT_OBSERVATION_VERSION);
+    const nextEvidence = await readIngestEvidence({
+      root: nextHistoryRoot, now: "2026-10-23T00:00:00Z", window_days: 1,
+      registration: registration("document-observations"),
+      days: [{ day: nextDay, raw_files: nextHistoryFiles.files.map(file => file.path) }],
+    });
+    const secondState = await writeOperationalState({
+      evidence: nextEvidence, now: "2026-10-23T00:00:00Z", writer: { ...observationWriter, attempt: 2 },
+      policy: statePolicy, inputs: stateInputs, saved: firstRead,
+    });
+    expect(secondState).toMatchObject({ status: "written", result: { status: "written" } });
+    const secondStateFiles = secondState.result.files.map(file => file.path);
+    expect(firstRead.state.state_revision).toBe(1);
+    const secondRead = await readOperationalState({
+      root: stateRoot, now: "2026-10-23T00:00:00Z", policy: statePolicy, registration: stateRegistration,
+      days: [
+        { day: "2026-10-22", raw_files: firstStateFiles },
+        { day: "2026-10-23", raw_files: secondStateFiles },
+      ],
+    });
+    expect(secondRead.state).toMatchObject({
+      status: "current", state_revision: 2, window_start: nextDay, window_end: nextDay,
+    });
+    const staleRead = await readOperationalState({
+      root: stateRoot, now: "2026-10-24T00:00:00Z", policy: statePolicy, registration: stateRegistration,
+      days: [
+        { day: "2026-10-22", raw_files: firstStateFiles },
+        { day: "2026-10-23", raw_files: secondStateFiles },
+      ],
+      read_source: {
+        readFile: async path => {
+          if (path.endsWith(secondStateFiles[0]!.split("/").at(-1)!)) {
+            throw Object.assign(new Error("saved state read failed"), { code: "EIO" });
+          }
+          return readLedgerParquet(path, "operational-state", OperationalStateContract);
+        },
+      },
+    });
+    expect(staleRead).toMatchObject({
+      state: { status: "stale_fallback", state_revision: 1, window_start: input.fixture.date, window_end: input.fixture.date },
+      reason: "unreadable", writable: false,
+    });
+    const failedSave = await writeOperationalState({
+      evidence: nextEvidence, now: "2026-10-24T00:00:00Z", writer: { ...observationWriter, attempt: 3 },
+      policy: statePolicy, inputs: stateInputs, saved: staleRead,
+    });
+    expect(failedSave).toMatchObject({ status: "not_written", reason: "state_read_failed" });
+    const stateAfterFailedSave = await readOperationalState({
+      root: stateRoot, now: "2026-10-24T00:00:00Z", policy: statePolicy, registration: stateRegistration,
+      days: [
+        { day: "2026-10-22", raw_files: firstStateFiles },
+        { day: "2026-10-23", raw_files: secondStateFiles },
+      ],
+    });
+    expect(stateAfterFailedSave.state).toMatchObject({
+      status: "stale_fallback", state_revision: 2, window_start: nextDay, window_end: nextDay,
     });
     const belowSupport = rollupIngestOutcomes(lessMeasured, true).sources[0]!;
     expect(estimateOperationalFeedback(

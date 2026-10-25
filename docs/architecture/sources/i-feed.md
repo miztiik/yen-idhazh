@@ -11,11 +11,13 @@ improvement has yet been measured.
 
 Plan 67's D3 observation scope and D4 settlement behavior are owner-approved.
 The observation and operational-state contracts have compatible readers, and
-the planner reports a requests-first estimate from measured evidence. The
-derived-state writer and next-selection consumer are not deployed, so this
-estimate does not change ranking. D5 admission, restriction/recovery and
-polling controls remain unapproved. Recommendations below do not activate
-those controls; see the [feedback contract](../contracts/feed-ingest-feedback.md).
+the isolated TypeScript planner now saves per-source operational state and uses
+qualified requests-first evidence in the next selection. This closes only the
+approved D3/D4/D8 slice; it does not deploy the broader adaptive model
+described below or establish that the score improves editorial outcomes. D5
+admission, restriction/recovery and polling controls remain unapproved.
+Recommendations below do not activate those controls; see the
+[feedback contract](../contracts/feed-ingest-feedback.md).
 
 **A feed earns its place.** Being on our list gives it a chance to prove useful.
 It does not guarantee requests, model time or space in the digest. A dependable

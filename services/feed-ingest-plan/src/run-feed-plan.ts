@@ -33,6 +33,7 @@ import { createProgressLogger } from "./logging/progress-logger";
 import type { ProgressRecord } from "./logging/progress-logger";
 import type { TaskProfiling } from "../../host-probes/src/task-profile/task-profiler";
 import { createIngestObservations } from "./ingest-observations";
+import { writeOperationalState } from "./write-operational-state";
 
 export type PlanRuntime = {
   git_sha: string;
@@ -68,6 +69,7 @@ export async function runFeedPlan(raw: unknown, inputs: PlanInputs, runtime: Pla
     inputs.registrations.published, inputs.registrations.item_health,
     inputs.registrations.feed_health,
     inputs.registrations.document_observations,
+    inputs.registrations.operational_state,
   ]) {
     if (entry.lifecycle_status !== "active") throw new PlanError("LEDGER_INACTIVE", `Required ledger ${entry.name} is not active`, entry.name);
   }
@@ -207,6 +209,10 @@ export async function runFeedPlan(raw: unknown, inputs: PlanInputs, runtime: Pla
     complete("screen-article-candidates", harvest.candidates.length, screening.admitted.length, screening.rejections.length);
     logger.startStep();
   });
+  const operationalStateWrite = await writeOperationalState({
+    evidence: articleEvidence, now: context.now, writer: context.writer,
+    policy: harvestInputs.config.feedback, inputs, saved: selection.operational_state,
+  });
   const { screening, curation, portfolio } = selection;
   for (const assessment of curation.assessments) logger.emit(
     "curate-article-portfolio", { kind: "candidate_decision", assessment },
@@ -249,11 +255,17 @@ export async function runFeedPlan(raw: unknown, inputs: PlanInputs, runtime: Pla
       seen: seen.sealing,
       feed_health: feedFiles.health,
       document_observations: observations.result(),
+      operational_state: operationalStateWrite.result,
     },
     evidence: { harvest, screening, curation, seen, exclusions: exclusionEvidence, partition,
       feed_history: feedHistory, daily_publication: dailyPublication,
       publisher_publication: selection.publisher_publication, article_evidence: articleEvidence,
-      operational_feedback: operationalFeedback },
+      operational_feedback: operationalFeedback,
+      operational_state: {
+        read: selection.operational_state.state,
+        reason: selection.operational_state.reason,
+        save: { status: operationalStateWrite.status, reason: operationalStateWrite.reason },
+      } },
   };
 }
 export type FeedPlanResult = Awaited<ReturnType<typeof runFeedPlan>>;
@@ -308,6 +320,7 @@ export function summarizePlan(result: FeedPlanResult & { metrics?: PlanningMetri
     },
     article_evidence: result.evidence.article_evidence,
     operational_feedback: result.evidence.operational_feedback,
+    operational_state: result.evidence.operational_state,
     editorial_inputs: {
       headline_consumer: "existing_mmr_lens_entity_penalties",
       bonus_consumer: null,

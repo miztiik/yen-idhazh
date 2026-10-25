@@ -306,6 +306,15 @@ thresholds are proposed in
 window, support, coverage and weight defaults are owner-approved. Producer
 fields and exact operation-to-cost bindings remain open in D3.
 
+The TypeScript planner now saves per-source state as registered Parquet and
+reads one compatible snapshot before `/plan` or saved-batch
+`/select-articles` ranks candidates. Qualified requests-first evidence
+replaces RSS reliability on source authority only. Unqualified or unavailable
+evidence stays neutral; the score trace names the state revision, window and
+measured request support. The production Python planner and digest remain
+unchanged. See the [feedback contract](../contracts/feed-ingest-feedback.md)
+for stale-state and concurrent-publication behavior.
+
 Owner ruling, kumarsnaveen_microsoft, 2026-10-24 UTC: reuse the existing
 `lambda_source` value of 0.25 for the soft publisher-exposure preference and
 replace the feed-crowding term. Do not stack both. Count actual publications

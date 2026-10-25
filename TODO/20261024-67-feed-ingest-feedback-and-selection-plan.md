@@ -104,7 +104,7 @@ tracing context. The existing default-off service flag gates the new routes.
 | E7 | 7 | Compute supported operational estimates | 6 | G | IN-REVIEW (report-only request estimate; no ranking change) | operational-score-contracts | [#1719](https://github.com/miztiik/yen-idhazh/pull/1719) | - |
 | E8 | 8 | Deliver selection, partition and persistence APIs | - (authorized stage contracts included) | E | DONE | feed-ingest-feedback-selection | - | - |
 | E9 | 9 | Apply the soft publisher-exposure preference | 8 | F | IN-REVIEW (current-run + fallback) | publisher-exposure-preference | [#1714](https://github.com/miztiik/yen-idhazh/pull/1714) | - |
-| E10 | 10 | Settle feedback and consume it in the next allocation | 7, 8 | H | PENDING | - | - | - |
+| E10 | 10 | Settle feedback and consume it in the next allocation | 7, 8 | H | IN-FLIGHT (local checks; PR pending) | operational-state-feedback | - | - |
 | E11 | 11 | Report bounded technical admission trials | 2, 4, 5, 6 | I | PENDING | - | - | - |
 | E12 | 12 | Enforce temporary access restrictions and earned recovery | 11 | J | PENDING | - | - | - |
 | E13 | 13 | Apply discovery evidence before feed polling | 12 | K | PENDING | - | - | - |
@@ -584,21 +584,40 @@ outside this increment.
 
 ## 12. Row #10 - Settle feedback and consume it in the next allocation
 
-- **Scope:** Close the durable operational loop with concurrent observation settlement, fresh-base derived-state publication and an actual next-run allocation consumer, not report-only estimates.
+- **Scope:** Persist per-source operational state as registered Parquet, read one compatible snapshot for real `/plan` and saved-batch `/select-articles` ranking, and recompute only derived state from a fresh Git base when concurrent publication races. Preserve immutable observations and the approved neutral, stale-fallback and save-failure behavior. Do not add D5 restrictions or alter Python planner/digest behavior.
 - **Level:** 3 after D4/D8 approval.
 - **Files touched:**
-  - `config/ledgers.json`
+  - `.github/scripts/feed-ingest-plan-operational-state.ts` (new)
+  - `.github/scripts/feed-ingest-plan-commit.ts`
+  - `.github/scripts/feed-ingest-plan-outputs.ts`
+  - `.github/scripts/feed-ingest-plan-verification.ts`
+  - `.github/scripts/tests/feed-ingest-plan-workflow.test.ts`
+  - `.github/workflows/feed-ingest-plan-test.yml`
   - `config/feed-ingest-plan-service.json`
   - `services/feed-ingest-plan/src/config/service-settings.ts`
-  - `services/feed-ingest-plan/src/settle-ingest-feedback.ts` (new)
-  - `services/feed-ingest-plan/src/read-ingest-feedback.ts` (new)
+  - `services/feed-ingest-plan/src/read-ledger-history/read-operational-state.ts` (new)
+  - `services/feed-ingest-plan/src/write-operational-state.ts` (new)
+  - `services/feed-ingest-plan/src/read-ledger-history/named-days.ts`
+  - `services/feed-ingest-plan/src/read-ledger-history/read-ingest-evidence.ts`
+  - `services/feed-ingest-plan/src/read-ledger-history/read-parquet.ts`
+  - `services/feed-ingest-plan/src/read-ledger-history/read-period.ts`
+  - `services/feed-ingest-plan/src/estimate-operational-feedback.ts`
+  - `services/feed-ingest-plan/src/load-plan-inputs.ts`
   - `services/feed-ingest-plan/src/run-feed-plan.ts`
+  - `services/feed-ingest-plan/src/select-articles.ts`
+  - `services/feed-ingest-plan/src/curate-article-portfolio/mmr-portfolio.ts`
+  - `services/feed-ingest-plan/src/curate-article-portfolio/portfolio-input.ts`
   - `services/feed-ingest-plan/src/curate-article-portfolio/quality-decoupler.ts`
-  - `services/feed-ingest-plan/test/plan-engine.test.ts`
-  - `services/feed-ingest-plan/test/logical-completion.test.ts`
+  - `services/feed-ingest-plan/src/metrics/planning-populations.ts`
+  - `services/feed-ingest-plan/test/curate.test.ts`
+  - `services/feed-ingest-plan/test/ledger-history.test.ts`
+  - `services/feed-ingest-plan/test/plan-api.test.ts`
   - `docs/architecture/contracts/feed-ingest-feedback.md`
-- **Acceptance gates:** Local: existing generated-run/recorded cases cover duplicate settlement, correction, delayed arrival, failed/partial runs, failed commit, overlap, latest-data lookup, incompatible state and bounded insufficient catch-up. CI: actual two-decision integration and native state readback.
-- **Oracle:** A later allocation names and uses a compatible committed state revision changed by one settled source outcome, while replay settles it zero additional times; this cannot claim use of an unfinished predecessor or facts lost before export.
+  - `docs/architecture/publishing/committing.md`
+  - `docs/architecture/sources/feed-curation.md`
+  - `docs/architecture/sources/i-feed.md`
+- **Acceptance gates:** Local: the planner API case reads a qualified state snapshot through its registered raw index and returns its revision and one-third penalty; ledger-history cases cover current/stale/unavailable reads, policy validation, failed saves and native Parquet readback; curation cases cover qualified and neutral scoring; the workflow case crosses a UTC day during a local Git race and verifies only derived output is rebuilt from the newer base revision. Run selected TypeScript checks and `git diff --check`. CI: native contract bindings and the full suite on the PR candidate.
+- **Oracle:** The saved-batch selector returns the exact captured compatible revision and applies the approved penalty; a concurrent Git update causes only derived state and its index to be rebuilt from the fresh base, while immutable observations remain unchanged and state revisions remain monotonic across UTC days. This does not establish editorial improvement or authorize D5 behavior.
 
 ### Table AA - Decisions
 

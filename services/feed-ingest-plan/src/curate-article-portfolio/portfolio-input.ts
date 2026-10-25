@@ -2,9 +2,9 @@
 import { isDeepStrictEqual } from "node:util";
 import {
   EffectiveFeedPolicySchema, FeedIngestCandidateSchema, FiniteSchema, NonEmptySchema,
-  NonNegativeSchema, OperationalHistorySchema, TimestampSchema,
+  NonNegativeSchema, OperationalHistorySchema, SourceOperationalEvidenceSchema, TimestampSchema,
 } from "@idhazh/common-contracts";
-import type { OperationalHistory, SourceReliabilityPenalty } from "@idhazh/common-contracts";
+import type { OperationalHistory, SourceOperationalEvidence, SourceReliabilityPenalty } from "@idhazh/common-contracts";
 import type { ScreenedCandidate } from "../screen-article-candidates/triage-gates";
 import { resolvePolicy } from "../config/resolve-policy";
 import type { PlanningConfig } from "../config/resolve-policy";
@@ -17,6 +17,7 @@ export type ArticleEvidence = Readonly<{
   publisher: RecordedIdentity | null;
   parent_domain: RecordedIdentity | null;
   operational: OperationalEvidence | null;
+  source_operational?: SourceOperationalEvidence | null;
   primary_evidence: Readonly<{ ids: readonly string[]; origin: string }> | null;
   estimated_work: number;
 }>;
@@ -118,6 +119,7 @@ export function validatePortfolioArticles(
     validateIdentity(evidence.parent_domain);
     NonNegativeSchema.parse(evidence.estimated_work);
     if (evidence.operational !== null) OperationalHistorySchema.parse(evidence.operational);
+    if (evidence.source_operational != null) SourceOperationalEvidenceSchema.parse(evidence.source_operational);
     if (operational.has(candidate.source_id)
       && !isDeepStrictEqual(operational.get(candidate.source_id), evidence.operational)) {
       throw new Error(`source.${candidate.source_id}.operational_history: inconsistent per-source evidence`);

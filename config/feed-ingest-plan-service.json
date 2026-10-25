@@ -16,7 +16,8 @@
     "registrations": "config/ledgers.json",
     "output_root": "state",
     "seen_files": [],
-    "seen_days": []
+    "seen_days": [],
+    "operational_state_days": []
   },
   "run": {
     "attempt": 1,

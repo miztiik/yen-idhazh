@@ -59,6 +59,7 @@ jobs:
             /.github/scripts/feed-ingest-plan-outputs.ts
             /.github/scripts/feed-ingest-plan-feed-history.ts
             /.github/scripts/feed-ingest-plan-commit.ts
+            /.github/scripts/feed-ingest-plan-operational-state.ts
             /.github/scripts/feed-ingest-plan-report.ts
             /.github/scripts/feed-ingest-plan-verification.ts
             /.github/scripts/feed-ingest-plan-audit-fixture.ts
@@ -144,7 +145,7 @@ jobs:
           import { closedObservationDays } from "./services/feed-ingest-plan/src/read-ledger-history/read-ingest-evidence";
           import { HEALTH_RECORDED_DAYS } from "./services/feed-ingest-plan/src/read-ledger-history/read-feed-history";
           import { stageFeedHistory } from "./.github/scripts/feed-ingest-plan-feed-history";
-          import { CompactIndexSchema, RawDayIndexSchema } from "./packages/common-contracts/src/index";
+          import { CompactIndexSchema, LedgerNameSchema, RawDayIndexSchema } from "./packages/common-contracts/src/index";
           import type { CompactIndex, FeedIngestEvent, RawDayIndex } from "./packages/common-contracts/src/index";
           import { completeHistoryDayInputs, createExecutionOutputs, createSeenDayInputs, historyDays, resolveHistoryInventory, sparseCheckoutPath, writeGitHubOutputs } from "./.github/scripts/feed-ingest-plan-outputs";
           import { verifyLedgerReceipt, verifyParquetFiles, verifyPlanningCompletion } from "./.github/scripts/feed-ingest-plan-verification";
@@ -181,6 +182,9 @@ jobs:
             const document_observation_days = completeHistoryDayInputs(inputs.registrations.document_observations.prefix,
               closedObservationDays(now, inputs.harvest.config.feedback.window_days),
               inputs.settings.inputs.document_observation_days, "document_observation_days");
+            const operational_state_days = completeHistoryDayInputs(inputs.registrations.operational_state.prefix,
+              [...closedObservationDays(now, inputs.harvest.config.feedback.window_days), now.slice(0, 10)].sort(),
+              inputs.settings.inputs.operational_state_days, "operational_state_days");
             const registry: { families: { ledgers: { name: string; prefix: string[] }[] }[] } =
               await Bun.file(inputs.settings.inputs.registrations).json();
             const ledgers = ["source-runs", "article-assessments", "diversity", "editorial-selections", "dispatches", "rejections"] as const;
@@ -252,7 +256,8 @@ jobs:
               });
             }
             async function stageConfiguredDays(
-              ledger: CompactIndex["ledger"], prefix: readonly string[], days: readonly (typeof seen_days)[number][],
+              ledger: ReturnType<typeof LedgerNameSchema.parse>, prefix: readonly string[],
+              days: readonly (typeof seen_days)[number][],
             ) {
               for (const input of days) {
                 await stageHistory(ledger, prefix, [input.day], {
@@ -266,6 +271,9 @@ jobs:
             await stageConfiguredDays("published", inputs.registrations.published.prefix, published_days);
             await stageConfiguredDays("item-health", inputs.registrations.item_health.prefix, settled_failure_days);
             await stageConfiguredDays("document-observations", inputs.registrations.document_observations.prefix, document_observation_days);
+            const operationalStateLedger: CompactIndex["ledger"] = "operational-state";
+            await stageConfiguredDays(operationalStateLedger,
+              inputs.registrations.operational_state.prefix, operational_state_days);
             const feedInventory = await stageFeedHistory({
               ledger: "feed-health", prefix: inputs.registrations.feed_health.prefix, now,
               health_window_days: Math.max(HEALTH_RECORDED_DAYS, inputs.clock_config.collect.reliability_window_days),
@@ -287,7 +295,8 @@ jobs:
               throw new Error("workflow: runner directory, output path, run identity and attempt are required");
             }
             const settings = ServiceSettingsSchema.parse({ ...inputs.settings, enabled: true,
-              inputs: { ...inputs.settings.inputs, seen_days, published_days, settled_failure_days, feed_health_days, document_observation_days },
+              inputs: { ...inputs.settings.inputs, seen_days, published_days, settled_failure_days, feed_health_days,
+                document_observation_days, operational_state_days },
               run: { ...inputs.settings.run, attempt: Number(GITHUB_RUN_ATTEMPT) } });
             const artifactRoot = join(RUNNER_TEMP, "feed-ingest-plan");
             await mkdir(artifactRoot, { recursive: true });
@@ -338,6 +347,8 @@ jobs:
             await verifyParquetFiles(join(artifactRoot, "state"), "feed-health", summary.files.feed_health, inputs.registrations.feed_health);
             await verifyParquetFiles(join(artifactRoot, "state"), "document-observations",
               summary.files.document_observations, inputs.registrations.document_observations);
+            await verifyParquetFiles(join(artifactRoot, "state"), "operational-state",
+              summary.files.operational_state, inputs.registrations.operational_state);
             for (const files of [summary.files.harvest_rejections, summary.files.screening_rejections, summary.files.curation_rejections]) {
               await verifyParquetFiles(join(artifactRoot, "state"), "rejections", files, inputs.registrations.rejections);
             }
@@ -447,6 +458,7 @@ jobs:
         run: bun run .github/scripts/feed-ingest-plan-report.ts config/feed-ingest-plan.json "$RUNNER_TEMP/feed-ingest-plan/events.json" "$RUNNER_TEMP/feed-ingest-plan"
 
       - name: Commit exact live planner and host files
+        id: commit
         if: ${{ success() && steps.plan.outputs.planning_complete == 'true' && steps.plan.outputs.stage_api_complete == 'true' && steps.resources.outputs.resource_proof_complete == 'true' && steps.audit_fixture.outputs.audited_complete == 'true' && steps.audit_fixture.outputs.scope == 'generated_fixture' }}
         env:
           CURRENT_RUN_FILES: ${{ steps.plan.outputs.current_run_files }}
@@ -456,21 +468,56 @@ jobs:
           import { join } from "node:path";
           import { writeFile } from "node:fs/promises";
           import { commitPlannerFiles } from "./.github/scripts/feed-ingest-plan-commit";
-          const { RUNNER_TEMP, CURRENT_RUN_FILES, HOST_FILES } = process.env;
-          if (!RUNNER_TEMP || !CURRENT_RUN_FILES || !HOST_FILES) throw new Error("Commit requires exact completed live planner and host outputs");
+          import { createFreshOperationalStatePreparation } from "./.github/scripts/feed-ingest-plan-operational-state";
+          import { loadPlanInputs } from "./services/feed-ingest-plan/src/load-plan-inputs";
+          import { writeGitHubOutputs } from "./.github/scripts/feed-ingest-plan-outputs";
+          const { RUNNER_TEMP, GITHUB_OUTPUT, GITHUB_RUN_ATTEMPT, CURRENT_RUN_FILES, HOST_FILES } = process.env;
+          if (!RUNNER_TEMP || !GITHUB_OUTPUT || !GITHUB_RUN_ATTEMPT || !CURRENT_RUN_FILES || !HOST_FILES) {
+            throw new Error("Commit requires exact completed live planner and host outputs");
+          }
           function paths(value: string): string[] {
             const parsed: unknown = JSON.parse(value);
             if (!Array.isArray(parsed) || parsed.some(path => typeof path !== "string")) throw new Error("Invalid exact output list");
             return parsed;
           }
           const root = join(RUNNER_TEMP, "feed-ingest-plan");
+          const summary = await Bun.file(join(root, "response.json")).json();
+          const attempt = Number(GITHUB_RUN_ATTEMPT);
+          if (!Number.isSafeInteger(attempt) || attempt <= 0 || summary.planning_completion?.attempt !== attempt) {
+            throw new Error("Commit attempt differs from the verified planner completion");
+          }
+          const inputs = await loadPlanInputs(process.cwd());
+          const currentFiles = paths(CURRENT_RUN_FILES);
+          const statePrefix = `raw/${inputs.registrations.operational_state.prefix.join("/")}/`;
+          const git = Bun.spawn(["git", "rev-parse", "HEAD"], { stdout: "pipe", stderr: "inherit" });
+          const git_sha = (await new Response(git.stdout).text()).trim();
+          if (await git.exited !== 0) throw new Error("Commit cannot resolve the executed revision");
+          const prepare_fresh_base = createFreshOperationalStatePreparation({
+            repository: process.cwd(), state_root: join(root, "state"), current_files: currentFiles,
+            inputs: { ...inputs, settings: { ...inputs.settings, run: {
+              ...inputs.settings.run, attempt,
+            } } },
+            writer: {
+              run_id: summary.run_id, attempt, job: null,
+              pipeline_name: "feed-ingest-plan", task_name: "operational-state", shard: 0,
+              producer: inputs.settings.run.producer, git_sha,
+            },
+          });
           const result = await commitPlannerFiles({
             repository: process.cwd(), stateRoot: join(root, "state"),
-            paths: [...paths(CURRENT_RUN_FILES), ...paths(HOST_FILES)],
+            paths: [...currentFiles.filter(path => !path.startsWith(statePrefix)), ...paths(HOST_FILES)],
             message: "Record live feed planner and host observations",
+            now: summary.observed_at,
             retry: await Bun.file("config/push-retry.json").json(),
+            prepare_fresh_base,
           });
           await writeFile(join(root, "commit-result.json"), JSON.stringify(result));
+          await writeGitHubOutputs(GITHUB_OUTPUT, {
+            current_run_files: JSON.stringify(result.committed_files.map(file => `state/${file.path}`)),
+            operational_state_files: JSON.stringify(result.derived_state_files.map(path => `state/${path}`)),
+            raw_index_files: JSON.stringify(result.raw_index_files.map(path => `state/${path}`)),
+            commit_manifest: JSON.stringify(result),
+          });
           console.log(JSON.stringify(result));
           TS
 

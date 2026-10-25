@@ -27,7 +27,8 @@ export type PlanningDay = Readonly<{
   runs: readonly PlanningPopulation[]; findings: readonly AttemptFinding[];
 }>;
 type CompletionLedger = keyof AttemptHistory["ledgers"];
-type NamedPaths = Omit<NamedDayInput<object>, "ledger" | "contract" | "fileCache">;
+type NamedPaths = Omit<NamedDayInput<object>,
+  "ledger" | "contract" | "fileCache" | "readIndex" | "readFile">;
 export type NamedPlanningHistory = Readonly<{
   sources: NamedPaths; ledgers: Readonly<Record<CompletionLedger, NamedPaths>>;
 }>;

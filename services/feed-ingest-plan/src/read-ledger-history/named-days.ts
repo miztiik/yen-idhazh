@@ -17,10 +17,16 @@ export function defaultDayInput(prefix: readonly string[], day: string): SeenDay
   });
 }
 
+export type LedgerHistoryReadSource<T extends object> = Readonly<{
+  readIndex?: (path: string) => Promise<Uint8Array | undefined>;
+  readFile?: (path: string) => Promise<ReadLedgerFile<T>>;
+}>;
+
 export async function readNamedDays<T extends object>(
   root: string, registration: LedgerRegistration, days: readonly SeenDayInput[],
   contract: NamedDayInput<T>["contract"],
   fileCache = new Map<string, Promise<ReadLedgerFile<T>>>(),
+  source: LedgerHistoryReadSource<T> = {},
 ) {
   const parsed = days.map(day => SeenDayInputSchema.parse(day));
   if (parsed.some((day, index) => index > 0 && day.day <= parsed[index - 1]!.day)) {
@@ -35,6 +41,8 @@ export async function readNamedDays<T extends object>(
       ) }),
       ...(input.raw_files === undefined ? {} : { rawFiles: input.raw_files.map(path => resolve(root, path)) }),
       ...(input.raw_index === undefined ? {} : { rawIndex: resolve(root, input.raw_index) }),
+      ...(source.readIndex === undefined ? {} : { readIndex: source.readIndex }),
+      ...(source.readFile === undefined ? {} : { readFile: source.readFile }),
     });
     held.push(day);
   }

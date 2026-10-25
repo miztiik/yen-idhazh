@@ -373,24 +373,13 @@ test("flooding duplicates cannot buy allowance or displace another qualifying so
     opportunity: noOpportunity, reliability_floor: fixture.reliability_floor,
   });
   expect(names(disabled)).toEqual(["first"]);
-  expect(names(enabled)).toEqual(["alternative", "middle"]);
+  expect(names(enabled)).toEqual(names(disabled));
   expect(disabled.normalization.rejected.map(row => row.article.candidate.candidate_id))
     .toEqual([carriers[1]!.candidate.candidate_id]);
-  expect(enabled.normalization.rejected).toEqual([]);
-  expect(enabled.carriers.suppressed[0]!.representative.candidate.source_id).toBe("gamma");
-  expect(enabled.rows.map(row => row.ratings.source_reliability?.value)).toEqual([0.25, 0.5]);
-  const duplicateCarriers = copies.map(copy => ({
-    ...copy, policy: carriers[0]!.policy, freshness: carriers[0]!.freshness,
-    candidate: { ...copy.candidate, policy: carriers[0]!.candidate.policy },
-    evidence: carriers[0]!.evidence,
-  }));
-  const repeated = curateArticles({
-    articles: [...carriers, ...duplicateCarriers], planning: configured, observed_at: fixture.observed_at,
-    opportunity: noOpportunity, reliability_floor: fixture.reliability_floor,
-  });
-  expect(repeated.rows).toEqual(enabled.rows);
-  expect(repeated.normalization.admitted.map(row => row.candidate.candidate_id))
-    .toEqual(enabled.normalization.admitted.map(row => row.candidate.candidate_id));
+  expect(enabled.normalization.rejected.map(row => row.article.candidate.candidate_id))
+    .toEqual(disabled.normalization.rejected.map(row => row.article.candidate.candidate_id));
+  expect(enabled.carriers.suppressed).toEqual(disabled.carriers.suppressed);
+  expect(enabled.rows.map(row => row.ratings.source_reliability)).toEqual([null]);
 });
 
 test("each bonus needs a distinct witness and is granted at most once", async () => {
@@ -555,13 +544,41 @@ test("operational history, length, byline and kind never become model verdicts o
   const b = curateArticles({ articles: [changed], planning, observed_at: fixture.observed_at, opportunity: noOpportunity, reliability_floor: fixture.reliability_floor });
   expect(a.rows[0]!.ratings.base_article_score).toBe(3);
   expect(b.rows[0]!.ratings.base_article_score).toBe(3);
-  expect(a.rows[0]!.ratings.source_reliability?.value).toBe(1);
-  expect(b.rows[0]!.ratings.source_reliability?.value).toBe(0);
-  expect(a.rows[0]!.ratings.marginal_score).toBe(2);
+  expect(a.rows[0]!.ratings.source_reliability).toBeNull();
+  expect(b.rows[0]!.ratings.source_reliability).toBeNull();
+  expect(a.rows[0]!.ratings.marginal_score).toBe(3);
   expect(b.rows[0]!.ratings.marginal_score).toBe(3);
   expect(b.quality[0]!.components).toEqual({ recency: 1, authority: 2 });
   expect(b.assessments[0]!.informative_verdict).toBeNull();
   expect(b.assessments[0]!.suitability_verdict).toBeNull();
+  const operationalEvidence = {
+    status: "qualified" as const, state_status: "current" as const, state_revision: 1,
+    window_days: 7, window_start: "2026-10-14", window_end: "2026-10-20",
+    total_requests: 20, wasted_requests: 10, observed_attempted_opportunities: 25,
+    observed_measured_opportunities: 20, coverage: 0.8, operational_penalty: 1 / 6,
+  };
+  const qualified = curateArticles({
+    articles: [{ ...original, evidence: { ...original.evidence, source_operational: operationalEvidence } }],
+    planning, observed_at: fixture.observed_at, opportunity: noOpportunity,
+    reliability_floor: fixture.reliability_floor,
+  });
+  expect(qualified.rows[0]!.ratings).toMatchObject({
+    base_article_score: 3, marginal_score: 3 - (2 / 6),
+    source_reliability: null, source_operational: operationalEvidence,
+  });
+  const unqualified = curateArticles({
+    articles: [{
+      ...original, evidence: { ...original.evidence, source_operational: {
+        ...operationalEvidence, status: "insufficient_support", operational_penalty: null,
+      } },
+    }],
+    planning, observed_at: fixture.observed_at, opportunity: noOpportunity,
+    reliability_floor: fixture.reliability_floor,
+  });
+  expect(unqualified.rows[0]!.ratings).toMatchObject({
+    marginal_score: 3, source_reliability: null,
+    source_operational: { status: "insufficient_support", operational_penalty: null },
+  });
   for (const recorded of fixture.reliability_cases) {
     const configured = loadPlanningConfig({
       ...planning.config, curate: {
@@ -576,26 +593,28 @@ test("operational history, length, byline and kind never become model verdicts o
       } };
     });
     const before = structuredClone(articles);
+    const withoutRssEvidence = articles.map(offered => ({
+      ...offered, evidence: { ...offered.evidence, operational: null },
+    }));
+    const baseline = curateArticles({
+      articles: withoutRssEvidence, planning: configured, observed_at: fixture.observed_at,
+      opportunity: noOpportunity, reliability_floor: recorded.floor,
+    });
     const result = curateArticles({
       articles, planning: configured, observed_at: fixture.observed_at,
       opportunity: noOpportunity, reliability_floor: recorded.floor,
     });
-    expect(result.rows[0]!.source_id, recorded.name).toBe(recorded.winner);
+    expect(result.rows[0]!.source_id, recorded.name).toBe(baseline.rows[0]!.source_id);
     expect(articles, recorded.name).toEqual(before);
     for (const entry of result.trace[0]!.evaluated) {
-      const offered = articles.find(article => article.candidate.candidate_id === entry.candidate_id)!;
-      const history = offered.evidence.operational;
-      const penalty = offered.candidate.source_id === "alpha" ? recorded.alpha_penalty : recorded.gamma_penalty;
       expect(entry.scores.base_article_score, recorded.name).toBe(2);
-      expect(entry.scores.marginal_score, recorded.name).toBe(2 - (penalty ?? 0));
-      expect(entry.scores.source_reliability, recorded.name).toEqual({
-        enabled: recorded.enabled, source_authority_score: 1, reliability_floor: recorded.floor,
-        history, production_factor: history === null ? null : Math.max(recorded.floor, history.success_fraction),
-        value: penalty,
-      });
+      expect(entry.scores.marginal_score, recorded.name).toBe(2);
+      expect(entry.scores.source_reliability, recorded.name).toBeNull();
+      expect(entry.scores.source_operational, recorded.name).toBeNull();
     }
     expect(result.assessments.every(row => row.score_evidence !== null
-      && row.score_evidence.source_reliability !== null), recorded.name).toBe(true);
+      && row.score_evidence.source_reliability === null
+      && row.score_evidence.source_operational === null), recorded.name).toBe(true);
     expect(result.rows[0]!.ratings).toEqual(result.choices[0]!.scores);
     expect(result.quality.map(row => row.components), recorded.name).toEqual([
       { recency: 1, authority: 1 }, { recency: 1, authority: 1 },
