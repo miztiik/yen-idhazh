@@ -30,6 +30,7 @@ from idhazh.contracts.feed_ingest_candidate import (
 from idhazh.contracts.feed_ingest_diagnostics import FetchFailure, HarvestDiagnostics
 from idhazh.contracts.feed_ingest_dispatch import FeedIngestDispatch
 from idhazh.contracts.feed_ingest_editorial_selection import EditorialSelectionRow
+from idhazh.contracts.feed_ingest_feedback import SelectionStateCapture
 from idhazh.contracts.feed_ingest_rejection import CandidateRejectionRecord
 from idhazh.contracts.file_envelope import WriterIdentity
 from idhazh.contracts.recorded_instant import RecordedInstant
@@ -273,10 +274,15 @@ class ParsedFeedBatch(Contract):
 
 
 class SelectedFeedBatch(Contract):
-    """The ranked choices and refusals produced from one parsed batch."""
+    """The ranked choices and exact health-state read captured at selection start."""
 
     __schema_stem__: ClassVar[str] = "selected-feed-batch"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-10-25T11:21",
+            change="Capture the state revision and UTC start used by each selection.",
+            why="A later state update must not rewrite the evidence already used by selection.",
+        ),
         ChangelogEntry(
             version="2026-10-25",
             change="Carry the saved request-estimate trace in selected batches.",
@@ -293,21 +299,17 @@ class SelectedFeedBatch(Contract):
             why="Partitioning reads the identity recorded with each selected article.",
         ),
         ChangelogEntry(
-            version="2026-10-24",
-            change="Declare selected feed batches linked to their parsed input.",
-            why="Partitioning reads ranked choices without copying the original batch.",
-        ),
-        ChangelogEntry(
             version="2026-10-23",
             change="Earlier changes are available in git history.",
             why="The contract changelog keeps its four newest changes and one history pointer.",
         ),
     )
-    version: Literal["2026-10-25"] = "2026-10-25"
+    version: Literal["2026-10-25T11:21"] = "2026-10-25T11:21"
     batch_id: UUID4
     config_sha256: Sha256
     parsed_batch_id: UUID4
     context: PlannerStageContext
+    selection_state: SelectionStateCapture
     selections: list[EditorialSelectionRow]
     rejections: list[CandidateRejectionRecord]
 
@@ -327,7 +329,13 @@ class SelectedFeedBatch(Contract):
                 for selection in selections:
                     if isinstance(selection, dict):
                         reject_legacy_source_operational(selection, selection.get("ratings"))
-            return {**value, "version": SOURCE_OPERATIONAL_SCORE_VERSION}
+            value = {**value, "version": SOURCE_OPERATIONAL_SCORE_VERSION}
+        if isinstance(value, dict) and value.get("version") == SOURCE_OPERATIONAL_SCORE_VERSION:
+            return {
+                **value,
+                "version": "2026-10-25T11:21",
+                "selection_state": {"capture_status": "not_recorded"},
+            }
         return value
 
     @model_validator(mode="after")

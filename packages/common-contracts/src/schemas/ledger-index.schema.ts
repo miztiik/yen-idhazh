@@ -8,14 +8,15 @@ import {
 
 // These stamps identify existing persisted index formats, not runtime settings.
 export const RAW_DAY_INDEX_VERSION = "2026-10-03";
-export const COMPACT_INDEX_VERSION = "2026-10-07";
+export const COMPACT_INDEX_VERSION = "2026-10-25";
 export const FileIdNameSchema = z.string().regex(
   /^[0-9a-f]{8}-[0-9a-f]{4}-8[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\.(parquet|json)$/,
 );
 export const EntryStateSchema = z.enum(["packed", "empty", "lost"]);
 export const CompactEntrySchema = z.strictObject({
   covers: z.union([DateStampSchema, MonthStampSchema, YearStampSchema]),
-  rows: CountSchema, bytes: CountSchema, state: EntryStateSchema.default("packed"),
+  rows: CountSchema, bytes: CountSchema, file_sha256: Sha256Schema.nullable().optional(),
+  state: EntryStateSchema.default("packed"),
   lost_days: z.array(DateStampSchema).default([]), set_aside: CountSchema.default(0),
 });
 function ascending(values: readonly string[]): boolean {
@@ -45,7 +46,9 @@ export const CompactIndexSchema = z.strictObject({
   const stamp = value.period === "yearly" ? YearStampSchema : value.period === "monthly" ? MonthStampSchema : DateStampSchema;
   for (const entry of value.entries) {
     if (!stamp.safeParse(entry.covers).success) reject(ctx, "covers must match index period");
-    if (entry.state !== "packed" && (entry.rows !== 0 || entry.bytes !== 0)) reject(ctx, "an entry without a file counts no rows or bytes");
+    if (entry.state !== "packed" && (entry.rows !== 0 || entry.bytes !== 0 || entry.file_sha256 != null)) {
+      reject(ctx, "an entry without a file counts no rows or bytes or digest");
+    }
     if (entry.state === "lost" && value.period !== "daily") reject(ctx, "only a daily entry can be lost");
     if (entry.lost_days.length > 0 && (value.period === "daily" || !ascending(entry.lost_days)
       || entry.lost_days.some(day => !realDay(day) || !day.startsWith(`${entry.covers}-`)))) {

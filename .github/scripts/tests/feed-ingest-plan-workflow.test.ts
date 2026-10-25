@@ -113,6 +113,9 @@ test("offers independent machine RAM control and commits only genuine planner an
   expect(preflight?.run).toContain("./.github/scripts/tests/feed-ingest-plan-workflow.test.ts --timeout 30000");
   expect(preflight?.run).toContain("bun run .github/scripts/feed-ingest-plan-verification.ts");
   const { parsed, steps } = await workflow();
+  const planScript = steps.find(step => step.id === "plan")?.run ?? "";
+  expect(planScript).toContain("inputs.harvest.config.feedback.lifecycle_window_days");
+  expect(planScript).not.toContain("HEALTH_RECORDED_DAYS");
   expect(Object.keys(parsed.on)).toEqual(["workflow_dispatch"]);
   const inputs = parsed.on.workflow_dispatch.inputs;
   expect(Object.keys(inputs)).toEqual(["freshness_hours", "article_limit", "shards", "partition_strategy", "profile_machine_memory"]);
@@ -487,7 +490,8 @@ test("runs the native compatibility verifier in a named-input copy with no backe
       "index", "version", "schemas/article-assessment.schema", "schemas/candidate.schema",
       "schemas/config.schema", "schemas/dispatch.schema", "schemas/diversity.schema",
       "schemas/editorial-selection.schema", "schemas/envelope.schema", "schemas/event.schema",
-      "schemas/feed-ingest-feedback.schema", "schemas/ledger-index.schema", "schemas/partition.schema",
+      "schemas/feed-health-state.schema", "schemas/feed-ingest-feedback.schema",
+      "schemas/ledger-index.schema", "schemas/partition.schema",
       "schemas/policy.schema",
       "schemas/primitives", "schemas/rejection.schema", "schemas/source-run.schema",
       "schemas/source.schema", "schemas/telemetry.schema", "schemas/host-fingerprint.schema",

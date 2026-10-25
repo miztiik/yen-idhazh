@@ -280,38 +280,108 @@ contract binding checks remain required.
 
 ## Feed-health state update API
 
-The planned local operator route is
-`POST /api/<existingversion>/feed-health-state`. Its full request, response
-and error contract is a design deliverable; do not infer payload fields or
-error codes from this route name. It must identify the exact saved selection
-batch being settled using that selected output's `batch_id`; `correlation_id`
-remains tracing context and cannot stand in for it.
+The contract route is
+`POST /api/2026-10-20/feed-health-state`. It uses the existing operator
+`settings.enabled` switch, which defaults off; it adds no route-specific flag.
+The persisted payload, two-window policy and update behavior are defined in
+the [feed-health contract](../contracts/feed-ingest-feedback.md#d4-approved-state-behavior-and-implementation-details).
+The route and state updater are not implemented in this contract phase.
 
-The planner and API must call shared TypeScript operations, not call their own
-HTTP endpoints. State update begins after selection and can run alongside
-partitioning; the next planner run reads the saved state. An independent
-selection records the state revision it read but does not update state.
-`/plan` invokes the shared update after selection, while the explicit operator
-route invokes the same operation. The API contract must cover late and
-out-of-order commits, corrections, concurrency and expiry of the configured
-represented-day inventory before a writer is added. Check registered day
-index identities before Parquet data reads and reuse unchanged cached
-identities. When an identity changes, reread that day and validate its
-immutable input identity before replacing its saved contribution. Reuse
-existing native settlement for raw, compact and attempt records rather than
-adding a duplicate-resolution rule. Declare validated day-input fingerprints and
-retained contributions, including cross-day causal settlement. Corrections
-outside the retained window are reported, not applied. The owner approved
-changed-day replacement. Access evidence comes from recorded robots
-permission, not source-catalog status.
+The strict request contains exactly one field:
 
-Keep two configured windows distinct: the represented-day lifecycle window
-defaults to 31 days, while the article-request score uses its existing
-configurable seven closed UTC days. Neither value is a source-code constant.
-Preserve the current score qualification: at least 20 measured opportunities,
-at least 80 percent coverage, requests weighted at one third, no renormalizing
-missing components and no RSS fallback. Do not add a second request-weight
-cap.
+```json
+{"batch_id":"<server-generated selected-batch UUIDv4>"}
+```
+
+The batch ID names the saved selected-feed batch being settled. A correlation
+ID only groups work. The caller cannot supply a URL, path, score, clock or
+other identity.
+
+The response contains the requested `batch_id`, the exact `selection_state`
+captured by that selected batch, and `update`. The capture records
+`capture_status`, `selection_started_at_utc`, the state status and revision,
+both original window ranges and its notices. An unavailable read carries only
+the neutral `restrictions_unverified` notice and no score adjustment or RSS
+fallback. It remains the state read used by selection, even when the selection
+is empty; returning it does not claim that the new state changed the completed
+selection's score.
+
+`update` contains `status`, `state_revision`, `attempted_revision`,
+`parent_revision`, distinct `changed_days` and closed diagnostic codes.
+`status` is `saved`, `unchanged`, `save_failed` or `unavailable`. A save
+advances from its actual parent by one; the first revision is 1 with no
+parent. An unchanged result has the current revision and no changed days. A
+failed save names its attempted next revision while preserving the committed
+parent. An unavailable result has no revision. Each outcome is an HTTP 200
+typed response, including an exhausted publication retry (`save_failed`), not
+a second HTTP 409 result.
+
+The response shape is:
+
+```json
+{
+  "batch_id": "<selected-batch UUIDv4>",
+  "selection_state": {
+    "capture_status": "captured",
+    "selection_started_at_utc": "<UTC timestamp>",
+    "state": {
+      "status": "unavailable",
+      "state_revision": null,
+      "notices": ["restrictions_unverified"],
+      "lifecycle_status": "unavailable",
+      "lifecycle_window_days": 31,
+      "lifecycle_window_start": null,
+      "lifecycle_window_end": null,
+      "request_status": "unavailable",
+      "request_window_days": 7,
+      "request_window_start": null,
+      "request_window_end": null
+    }
+  },
+  "update": {
+    "status": "saved",
+    "state_revision": 1,
+    "attempted_revision": 1,
+    "parent_revision": null,
+    "changed_days": ["<UTC date>"],
+    "diagnostics": []
+  }
+}
+```
+
+Errors use the existing listener's HTTP boundary:
+
+- 400 `INVALID_REQUEST` for malformed JSON; 400 `INVALID_INPUT` for valid JSON
+  outside the strict request shape (not 422). Both use the listener's
+  `{ "code": "...", "issues": [{ "field": "...", "message": "..." }] }`
+  error envelope.
+- 404 `ARTIFACT_NOT_FOUND` when the selected batch is absent.
+- 409 `REQUEST_CONFLICT` when the batch configuration differs or the batch
+  predates captured selection state.
+- 413 `BODY_TOO_LARGE` at the configured listener limit; 503
+  `PLANNER_DISABLED` when the existing operator switch is off.
+- 500 `ARTIFACT_INVALID` for a damaged selected batch; 500 `PLAN_FAILED` for
+  unexpected programming errors.
+
+A valid request whose saved state cannot be read is not a schema error. It
+returns HTTP 200 with the typed response, `selection_state.state.status:
+"unavailable"`, the neutral `restrictions_unverified` notice, null state-window
+bounds and an `update.status` of `unavailable`. It does not return 400 or
+represent the missing evidence as an empty history.
+
+Known native state-input refusals, including invalid indexes and Parquet
+integrity failures, follow the same bounded recovery path as other state-input
+gaps: use a valid previous snapshot when available, otherwise return
+`update.status: "unavailable"` with the `input_gap` diagnostic. Preserve the
+previous valid state and the completed selection. These classified input
+failures are not HTTP 500; unexpected programming exceptions still return
+`PLAN_FAILED`.
+
+The contract requires one shared TypeScript update operation. `/plan` will
+call it after selection and concurrently with partitioning; the standalone
+route will call the same operation. Standalone selection only records the
+revision it read and does not update state. The next planner run will read the
+saved result. No caller uses an HTTP loopback.
 
 ## Design rationale
 

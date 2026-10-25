@@ -1,6 +1,9 @@
 /** Do the small index copies match bounded recorded fields, vocabulary and validation rules? */
 import { expect, test } from "bun:test";
-import { CompactEntrySchema, CompactIndexSchema, EntryStateSchema, PeriodSchema, RawDayIndexSchema } from "../src/index";
+import {
+  COMPACT_INDEX_VERSION, CompactEntrySchema, CompactIndexSchema, EntryStateSchema,
+  PeriodSchema, RawDayIndexSchema,
+} from "../src/index";
 
 type Fixture = { index_contracts: {
   raw_fields: string[]; compact_fields: string[]; entry_fields: string[];
@@ -35,7 +38,17 @@ test("index validation preserves named empty, lost and historical default meanin
     entries: [{ covers: "2026-10-21", rows: 0, bytes: 0, state: "empty" }],
   };
   expect(CompactIndexSchema.parse(base).entries[0]!.state).toBe("empty");
+  const packed = {
+    ...base,
+    version: COMPACT_INDEX_VERSION,
+    entries: [{
+      covers: "2026-10-21", rows: 1, bytes: 128, file_sha256: "a".repeat(64),
+    }],
+  };
+  expect(CompactIndexSchema.parse(packed).entries[0]!.file_sha256).toBe("a".repeat(64));
   const invalid = [
+    { entries: [{ ...base.entries[0], file_sha256: "a".repeat(64) }] },
+    { entries: [{ covers: "2026-10-21", rows: 1, bytes: 128, file_sha256: "not-a-digest" }] },
     { entries: [{ ...base.entries[0], state: "lost", rows: 1 }] },
     { entries: [{ ...base.entries[0], bytes: 1 }] },
     { entries: [base.entries[0], base.entries[0]] },

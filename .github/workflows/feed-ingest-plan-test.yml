@@ -142,7 +142,6 @@ jobs:
           import { ServiceSettingsSchema } from "./services/feed-ingest-plan/src/config/service-settings";
           import { requiredSeenDays } from "./services/feed-ingest-plan/src/read-ledger-history/read-seen-evidence";
           import { closedObservationDays } from "./services/feed-ingest-plan/src/read-ledger-history/read-ingest-evidence";
-          import { HEALTH_RECORDED_DAYS } from "./services/feed-ingest-plan/src/read-ledger-history/read-feed-history";
           import { stageFeedHistory } from "./.github/scripts/feed-ingest-plan-feed-history";
           import { CompactIndexSchema, RawDayIndexSchema } from "./packages/common-contracts/src/index";
           import type { CompactIndex, FeedIngestEvent, RawDayIndex } from "./packages/common-contracts/src/index";
@@ -268,7 +267,10 @@ jobs:
             await stageConfiguredDays("document-observations", inputs.registrations.document_observations.prefix, document_observation_days);
             const feedInventory = await stageFeedHistory({
               ledger: "feed-health", prefix: inputs.registrations.feed_health.prefix, now,
-              health_window_days: Math.max(HEALTH_RECORDED_DAYS, inputs.clock_config.collect.reliability_window_days),
+              health_window_days: Math.max(
+                inputs.harvest.config.feedback.lifecycle_window_days,
+                inputs.clock_config.collect.reliability_window_days,
+              ),
               authored: inputs.settings.inputs.feed_health_days, read: readCommitted,
             });
             console.error(JSON.stringify({ event: "feed_health_inventory", inventory_complete: feedInventory.inventory_complete,

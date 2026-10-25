@@ -19,7 +19,7 @@
  * **The guard checks what the door acts on, and nothing else.** An older index
  * may carry a field this build no longer declares, and that is not a reason to
  * refuse it. The ledger, the period and every entry's `covers`, `rows`, `bytes`,
- * `state`, `lost_days` and `set_aside` are checked in full, because file
+ * `file_sha256`, `state`, `lost_days` and `set_aside` are checked in full, because file
  * selection and the answers trust them and a `covers` becomes part of a file's
  * address. An entry that carries no `state`, `lost_days` or `set_aside` was
  * written before entries had them, and is handed on without them: `namesFile()`
@@ -32,7 +32,7 @@
 import { isDay, type LedgerName } from './slice-shapes';
 
 /** The `CompactIndex` stamp this build reads: `CompactIndex.schema_version()`. */
-export const COMPACT_INDEX_STAMP = '2026-10-07';
+export const COMPACT_INDEX_STAMP = '2026-10-25';
 
 /** How much time one compact file covers. Also the directory name. */
 export const COMPACT_PERIODS = ['daily', 'monthly', 'yearly'] as const;
@@ -49,6 +49,7 @@ export interface CompactEntry {
 	covers: string;
 	rows: number;
 	bytes: number;
+	file_sha256?: string | null;
 	state?: EntryState;
 	lost_days?: string[];
 	set_aside?: number;
@@ -115,16 +116,23 @@ function brokenEntry(entries: unknown[], period: Period): string | null {
 	let previous = '';
 	for (const [at, entry] of entries.entries()) {
 		if (!isRecord(entry)) return `entry ${at} is not an object`;
-		const { covers, rows, bytes, state, lost_days: lostDays, set_aside: setAside } = entry;
+		const { covers, rows, bytes, file_sha256: fileSha256, state, lost_days: lostDays, set_aside: setAside } = entry;
 		if (typeof covers !== 'string' || !COVERS[period].test(covers)) {
 			return `entry ${at} covers ${JSON.stringify(covers)}, which is not a ${period} period`;
 		}
 		if (!isCount(rows)) return `entry ${at} (${covers}) has rows ${JSON.stringify(rows)}`;
 		if (!isCount(bytes)) return `entry ${at} (${covers}) has bytes ${JSON.stringify(bytes)}`;
+		if (fileSha256 !== undefined && fileSha256 !== null
+			&& (typeof fileSha256 !== 'string' || !/^[0-9a-f]{64}$/.test(fileSha256))) {
+			return `entry ${at} (${covers}) has file_sha256 ${JSON.stringify(fileSha256)}`;
+		}
 		if (covers <= previous) return `entry ${at} (${covers}) does not come after ${previous}`;
 		if (state !== undefined && !isState(state)) return `entry ${at} (${covers}) has state ${JSON.stringify(state)}`;
 		if (state !== undefined && state !== 'packed' && (rows > 0 || bytes > 0)) {
 			return `entry ${at} (${covers}) is ${state}, which names no file, and has rows ${rows} and bytes ${bytes}`;
+		}
+		if (state !== undefined && state !== 'packed' && fileSha256 != null) {
+			return `entry ${at} (${covers}) is ${state}, which names no file, and has a file digest`;
 		}
 		if (state === 'lost' && period !== 'daily') {
 			return `entry ${at} (${covers}) is lost, and only a day is: a ${period} entry lists the days it lost in lost_days`;
@@ -166,10 +174,11 @@ export function readIndex(value: unknown, ledger: LedgerName, period: Period): I
 	if (typeof expired === 'string' && value.entries.some((entry) => entry.covers <= expired)) {
 		return unreadable('it lists entries at or before expired_through');
 	}
-	const entries = (value.entries as CompactEntry[]).map(({ covers, rows, bytes, state, lost_days, set_aside }) => ({
+	const entries = (value.entries as CompactEntry[]).map(({ covers, rows, bytes, file_sha256, state, lost_days, set_aside }) => ({
 		covers,
 		rows,
 		bytes,
+		file_sha256,
 		state,
 		lost_days,
 		set_aside
