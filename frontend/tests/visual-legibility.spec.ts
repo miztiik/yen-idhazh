@@ -128,13 +128,20 @@ test('reader labels clear the text floor without scaling, and every mark survive
 	}
 
 	await page.goto(`/${date}/`);
-	const first = await drawings(page);
-	await page.locator('a[href="/archive/"]').first().click();
-	await expect(page.locator('main')).toBeVisible();
-	await expect(page).toHaveURL(/\/archive\/$/);
-	await page.goBack();
-	expect(await drawings(page)).toEqual(first);
-	await page.reload();
-	expect(await drawings(page)).toEqual(first);
+	for (const viewport of [
+		{ width: 390, height: 844 },
+		{ width: 1440, height: 900 }
+	]) {
+		await page.setViewportSize(viewport);
+		await page.goto(`/${date}/`);
+		const first = await drawings(page);
+		await page.locator('a[href="/archive/"]').first().click();
+		await expect(page.locator('main')).toBeVisible();
+		await expect(page).toHaveURL(/\/archive\/$/);
+		await page.goBack();
+		expect(await drawings(page)).toEqual(first);
+		await page.reload();
+		expect(await drawings(page)).toEqual(first);
+	}
 	expect(errors).toEqual([]);
 });
