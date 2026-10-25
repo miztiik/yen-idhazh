@@ -294,9 +294,9 @@ a valid no-op, not evidence that deletion was exercised. The generated-tree
 integration tests separately prove that the committed switch deletes an old
 visual and preserves day payloads, labels and visuals inside the window.
 Measure any deployed-size change on completed builds with
-`site-weight --site-tree frontend/build`, never on the source tree. A
-production wake and its landed report remain required before the activation
-work is closed.
+`site-weight --site-tree frontend/build`, never on the source tree. The
+production wake on 2026-10-25 found zero expired candidates, so it was a
+live no-op with no reclaimed bytes.
 
 **The window is an archive policy and not a cap defence, and the measurement is
 what says so.** The recorded 2026-09-13 sample added 324,580 visual bytes per
