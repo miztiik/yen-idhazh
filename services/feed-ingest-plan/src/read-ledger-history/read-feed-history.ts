@@ -13,8 +13,6 @@ import { readNamedDays, historyCoverage, latestNativeRows } from "./named-days";
 import { readOwnFeedReceipts } from "./own-feed-receipts";
 import type { OwnFeedReceipt } from "./own-feed-receipts";
 
-// Matches ledger.rows.HEALTH_WINDOW_DAYS: the native availability reader's fixed cover.
-export const HEALTH_RECORDED_DAYS = 31;
 export const FeedHistoryPolicySchema = z.object({
   availability_strikes_before_rest: z.int().positive(),
   reliability_window_days: z.int().positive(), reliability_floor: z.number().finite().min(0).max(1),
@@ -60,13 +58,17 @@ function measuredReliability(
 
 export async function readFeedHistory(input: {
   root: string; now: string; run_id: string; sources: readonly SourceSnapshot[]; policy: FeedHistoryPolicy;
+  lifecycle_window_days: number;
   health: LedgerRegistration;
   health_days: readonly SeenDayInput[];
   own_receipts?: readonly OwnFeedReceipt[]; receipt_root?: string;
 }) {
   const policy = FeedHistoryPolicySchema.parse(input.policy);
   RecordedInstantSchema.parse(input.now);
-  const maxDays = Math.max(HEALTH_RECORDED_DAYS, policy.reliability_window_days);
+  if (!Number.isSafeInteger(input.lifecycle_window_days) || input.lifecycle_window_days < 1) {
+    throw new Error("feed health lifecycle window must be a positive represented-day count");
+  }
+  const maxDays = Math.max(input.lifecycle_window_days, policy.reliability_window_days);
   if (input.health_days.length > maxDays) throw new Error("feed_health_days exceeds its recorded-day cover");
   for (const day of input.health_days) {
     if (day.day > input.now.slice(0, 10)) throw new Error("Feed history day exceeds the captured UTC clock");
@@ -85,7 +87,7 @@ export async function readFeedHistory(input: {
   }
   const rows = settleFeedHealth(latestNativeRows([...healthDays.flatMap(day => [...day.rows]), ...ownHealth]));
   const representedDays = [...new Set([...input.health_days.map(day => day.day), ...ownHealth.map(({ row }) => row.date)])].sort();
-  const recent = rows.filter(row => representedDays.slice(-HEALTH_RECORDED_DAYS).includes(row.date));
+  const recent = rows.filter(row => representedDays.slice(-input.lifecycle_window_days).includes(row.date));
   const reliabilityDays = healthDays.slice(-policy.reliability_window_days);
   const reliabilityCoverage = historyCoverage(reliabilityDays);
   const sources = new Map<string, SourceHistoryEvidence>();
@@ -110,9 +112,9 @@ export async function readFeedHistory(input: {
         })),
       })),
       health: {
-        ...historyCoverage(healthDays), required_recorded_days: HEALTH_RECORDED_DAYS,
-        represented_days: representedDays.slice(-HEALTH_RECORDED_DAYS),
-        availability: healthDays.length >= HEALTH_RECORDED_DAYS
+        ...historyCoverage(healthDays), required_recorded_days: input.lifecycle_window_days,
+        represented_days: representedDays.slice(-input.lifecycle_window_days),
+        availability: healthDays.length >= input.lifecycle_window_days
           ? historyCoverage(healthDays).availability : "unavailable" as const,
       },
       reliability: {

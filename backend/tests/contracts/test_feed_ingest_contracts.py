@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import importlib
 import json
 import shutil
@@ -31,6 +32,8 @@ CONTRACT_NAMES = (
     ("planner_stage", "PartitionedFeedBatch"),
     ("feed_ingest_observations", "DocumentObservationRecord"),
     ("feed_ingest_feedback", "FeedIngestOperationalStateRow"),
+    ("feed_health_state", "FeedHealthStateSnapshot"),
+    ("feed_health_state", "FeedHealthStateHeadIndex"),
 )
 
 MODEL_NAMES = (
@@ -38,6 +41,18 @@ MODEL_NAMES = (
     ("feed_ingest_candidate", "SourceOperationalEvidence"),
     ("feed_ingest_candidate", "PublisherExposurePenalty"),
     ("feed_ingest_feedback", "OperationalStateRead"),
+    ("feed_ingest_feedback", "SelectionStateCapture"),
+    ("feed_health_state", "FeedHealthStateInputIdentity"),
+    ("feed_health_state", "FeedHealthStateLifecycleDay"),
+    ("feed_health_state", "FeedHealthStateRequestDay"),
+    ("feed_health_state", "FeedHealthStateInventorySource"),
+    ("feed_health_state", "FeedHealthStateReliability"),
+    ("feed_health_state", "FeedHealthStateLifecycleResult"),
+    ("feed_health_state", "FeedHealthStateRequestResult"),
+    ("feed_health_state", "FeedHealthStateSourceResult"),
+    ("feed_health_state", "FeedHealthStateIndexIdentity"),
+    ("feed_health_state", "FeedHealthStateFileIdentity"),
+    ("feed_health_state", "FeedHealthStateSnapshotReference"),
     ("planner_stage", "PlannerStageContext"),
     ("planner_stage", "PlannerStageRequest"),
     ("planner_stage", "RecordedIdentity"),
@@ -118,6 +133,116 @@ def test_declared_contract(module: str, name: str) -> None:
                 observation.model_dump(mode="json")
                 | {"corrects_event_id": observation.event_id, "correction_revision": 1}
             )
+    if name == "FeedHealthStateSnapshot":
+        snapshot = contract.from_json(read_text(
+            CONTRACT_FIXTURES_DIR / "feed-health-state" / "one-complete-snapshot.json"
+        ))
+        with pytest.raises(ValidationError, match="every closed UTC day exactly once"):
+            contract.model_validate(snapshot.model_dump(mode="json") | {"request_days": []})
+        empty_roster = contract.model_validate(
+            snapshot.model_dump(mode="json")
+            | {
+                "source_inventory_sha256": hashlib.sha256(b"[]").hexdigest(),
+                "source_inventory": [],
+                "source_results": [],
+            }
+        )
+        assert empty_roster.source_inventory_complete
+        with pytest.raises(ValidationError, match="source roster digest matches"):
+            contract.model_validate(
+                snapshot.model_dump(mode="json") | {"source_inventory_sha256": "d" * 64}
+            )
+        unavailable_roster = contract.model_validate(
+            snapshot.model_dump(mode="json")
+            | {
+                "source_inventory_complete": False,
+                "source_inventory_sha256": None,
+                "source_inventory": [],
+                "source_results": [],
+            }
+        )
+        assert not unavailable_roster.source_inventory_complete
+        partial_request = snapshot.model_dump(mode="json")
+        partial_request["request_availability"] = "unavailable"
+        partial_request["request_days"][0]["read_status"] = "gap"
+        partial_request["request_days"][0]["gap_reason"] = "unreadable"
+        partial_request["source_results"][0]["requests"] |= {
+            "input_status": "unavailable",
+            "qualification_status": "unavailable",
+            "request_waste_ratio": None,
+            "request_component_penalty": None,
+        }
+        accepted_gap = contract.model_validate(partial_request)
+        assert accepted_gap.source_results[0].requests.qualification_status == "unavailable"
+        excessive_weight = snapshot.model_dump(mode="json")
+        excessive_weight["source_results"][0]["requests"]["request_component_weight"] = 1.1
+        with pytest.raises(ValidationError):
+            contract.model_validate(excessive_weight)
+        for field in (
+            "measured_target_requests",
+            "measured_source_wasted_requests",
+            "observed_attempted_opportunities",
+            "observed_measured_opportunities",
+            "measured_coverage",
+        ):
+            missing_support = snapshot.model_dump(mode="json")
+            missing_support["source_results"][0]["requests"][field] = None
+            with pytest.raises(ValidationError):
+                contract.model_validate(missing_support)
+        inconsistent_request_ratio = snapshot.model_dump(mode="json")
+        inconsistent_request_ratio["source_results"][0]["requests"]["request_waste_ratio"] = 0.5
+        with pytest.raises(ValidationError, match="request waste ratio"):
+            contract.model_validate(inconsistent_request_ratio)
+        inconsistent_coverage = snapshot.model_dump(mode="json")
+        inconsistent_coverage["source_results"][0]["requests"]["measured_coverage"] = 0.5
+        with pytest.raises(ValidationError, match="measured coverage"):
+            contract.model_validate(inconsistent_coverage)
+        unverifiable_compact = snapshot.model_dump(mode="json")
+        compact_file = next(
+            item for item in unverifiable_compact["request_days"][0]["input_identity"]["files"]
+            if item["tier"] == "compact"
+        )
+        invalid_compact_path = snapshot.model_dump(mode="json")
+        compact_file_path = next(
+            item for item in invalid_compact_path["request_days"][0]["input_identity"]["files"]
+            if item["tier"] == "compact"
+        )
+        compact_file_path["path"] = (
+            "state/compact/feed-ingest-plan/document-observations/yearly/2026/2027.parquet"
+        )
+        with pytest.raises(ValidationError, match="native yearly coverage"):
+            contract.model_validate(invalid_compact_path)
+        compact_file["file_sha256"] = None
+        with pytest.raises(ValidationError, match="indexed byte digest"):
+            contract.model_validate(unverifiable_compact)
+        lifecycle_unknown = snapshot.model_dump(mode="json")
+        lifecycle_unknown["lifecycle_days"] = []
+        lifecycle_unknown["lifecycle_availability"] = "unavailable"
+        lifecycle_unknown["lifecycle_window_start"] = None
+        lifecycle_unknown["lifecycle_window_end"] = None
+        lifecycle_unknown["source_results"][0]["lifecycle"] |= {
+            "input_status": "unavailable",
+            "lifecycle": "unknown",
+            "strikes": None,
+            "rested_runs": None,
+        }
+        accepted_lifecycle_unknown = contract.model_validate(lifecycle_unknown)
+        assert accepted_lifecycle_unknown.lifecycle_window_start is None
+    if name == "FeedHealthStateHeadIndex":
+        head = contract.from_json(read_text(
+            CONTRACT_FIXTURES_DIR / "feed-health-state-head-index" / "two-snapshots.json"
+        ))
+        duplicate = head.latest.model_dump(mode="json") | {
+            "snapshot_role": "previous", "state_revision": 3, "parent_revision": 2,
+        }
+        with pytest.raises(ValidationError, match="independent files"):
+            contract.model_validate(head.model_dump(mode="json") | {"previous": duplicate})
+        invalid_path = head.latest.model_dump(mode="json") | {
+            "path": "state/raw/feed-ingest-plan/feed-health-state/snapshots/"
+            "00000000-0000-8000-8000-000000000003.parquet",
+        }
+        with pytest.raises(ValidationError, match="native raw UTC day layout"):
+            contract.model_validate(head.model_dump(mode="json") | {"latest": invalid_path})
     publisher_snapshot: dict[str, object] = {"publisher_id": "recorded-publication"}
     publisher_source: dict[str, object] = {"source": publisher_snapshot}
     previous_identity_cases: dict[tuple[str, str], tuple[str, dict[str, object]]] = {

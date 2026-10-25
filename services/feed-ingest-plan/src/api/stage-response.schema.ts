@@ -4,6 +4,7 @@ import {
   CandidateRejectionRecordSchema, EditorialSelectionRowSchema, FeedIngestDispatchSchema,
   CountSchema, DateStampSchema, NonEmptySchema, NonNegativeSchema, PositiveCountSchema,
   RequestIdSchema, RunIdSchema, Sha256Schema,
+  SelectionStateCaptureSchema,
 } from "@idhazh/common-contracts";
 import { RelativePathSchema } from "../config/service-settings";
 
@@ -22,6 +23,7 @@ export const StageErrorResponseSchema = z.strictObject({
 export const SelectionResponseSchema = z.strictObject({
   batch_id: RequestIdSchema, parsed_batch_id: RequestIdSchema,
   run_id: RunIdSchema, correlation_id: RequestIdSchema,
+  selection_state: SelectionStateCaptureSchema,
   selections: z.array(EditorialSelectionRowSchema),
   exclusions: z.array(CandidateRejectionRecordSchema),
   publisher_history: z.strictObject({

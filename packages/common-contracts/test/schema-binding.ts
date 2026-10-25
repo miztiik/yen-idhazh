@@ -22,6 +22,13 @@ import {
   PreflightFreshnessSchema, StageReferenceRequestSchema, PartitionArticlesRequestSchema,
   DocumentObservationRecordSchema,
   FeedIngestOperationalStateRowSchema, OperationalStateReadSchema,
+  SelectionStateCaptureSchema, FeedHealthStateSnapshotSchema,
+  FeedHealthStateHeadIndexSchema, FeedHealthStateSnapshotReferenceSchema,
+  FeedHealthStateIndexIdentitySchema, FeedHealthStateFileIdentitySchema,
+  FeedHealthStateInputIdentitySchema, FeedHealthStateLifecycleDaySchema,
+  FeedHealthStateRequestDaySchema, FeedHealthStateInventorySourceSchema,
+  FeedHealthStateReliabilitySchema, FeedHealthStateLifecycleResultSchema,
+  FeedHealthStateRequestResultSchema, FeedHealthStateSourceResultSchema,
   SourceOperationalEvidenceSchema,
 } from "../src/index";
 
@@ -55,6 +62,20 @@ export const runtimeSchemas = {
   DocumentObservationRecord: DocumentObservationRecordSchema,
   FeedIngestOperationalStateRow: FeedIngestOperationalStateRowSchema,
   OperationalStateRead: OperationalStateReadSchema,
+  SelectionStateCapture: SelectionStateCaptureSchema,
+  FeedHealthStateSnapshot: FeedHealthStateSnapshotSchema,
+  FeedHealthStateHeadIndex: FeedHealthStateHeadIndexSchema,
+  FeedHealthStateSnapshotReference: FeedHealthStateSnapshotReferenceSchema,
+  FeedHealthStateIndexIdentity: FeedHealthStateIndexIdentitySchema,
+  FeedHealthStateFileIdentity: FeedHealthStateFileIdentitySchema,
+  FeedHealthStateInputIdentity: FeedHealthStateInputIdentitySchema,
+  FeedHealthStateLifecycleDay: FeedHealthStateLifecycleDaySchema,
+  FeedHealthStateRequestDay: FeedHealthStateRequestDaySchema,
+  FeedHealthStateInventorySource: FeedHealthStateInventorySourceSchema,
+  FeedHealthStateReliability: FeedHealthStateReliabilitySchema,
+  FeedHealthStateLifecycleResult: FeedHealthStateLifecycleResultSchema,
+  FeedHealthStateRequestResult: FeedHealthStateRequestResultSchema,
+  FeedHealthStateSourceResult: FeedHealthStateSourceResultSchema,
 } satisfies Record<string, z.ZodType>;
 
 export const schemas = Object.fromEntries(

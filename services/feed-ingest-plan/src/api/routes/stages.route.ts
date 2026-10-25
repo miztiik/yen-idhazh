@@ -33,6 +33,7 @@ export function stagesRoute(inputs: PlanInputs, runtime: PlanRuntime) {
         return c.json(SelectionResponseSchema.parse({
           batch_id: result.batch.batch_id, parsed_batch_id: result.batch.parsed_batch_id,
           run_id: result.batch.context.run_id, correlation_id: result.batch.context.correlation_id,
+          selection_state: result.batch.selection_state,
           selections: result.batch.selections, exclusions: result.batch.rejections,
           publisher_history: {
             day: result.publisher_publication.day, availability: result.publisher_publication.availability,

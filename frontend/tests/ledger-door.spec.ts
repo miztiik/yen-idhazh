@@ -444,7 +444,7 @@ test.describe('yearly expiry metadata', () => {
 		for (const covers of ['2025', '2026', '2027']) {
 			const reading = readIndex({
 				ledger: LEDGER, period: 'yearly', expired_through: '2026',
-				entries: [{ covers, rows: 1, bytes: 1 }]
+				entries: [{ covers, rows: 1, bytes: 1, file_sha256: 'a'.repeat(64) }]
 			}, LEDGER, 'yearly');
 			expect('index' in reading).toBe(covers === '2027');
 		}
@@ -1775,6 +1775,8 @@ test.describe('THE ORACLE for a period with no file: an empty day is quiet, a lo
 		['a state the contract does not declare', { ...LOST_DAY, state: 'missing' as unknown as CompactEntry['state'] }],
 		['an empty entry that counts bytes', { ...EMPTY_DAY, bytes: 7950 }],
 		['a lost entry that counts rows', { ...LOST_DAY, rows: 2 }],
+		['a lost entry with a file digest', { ...LOST_DAY, file_sha256: 'a'.repeat(64) }],
+		['an invalid file digest', { ...LOST_DAY, file_sha256: 'bad' }],
 		['lost_days on a day', { ...LOST_DAY, lost_days: ['2026-09-04'] }],
 		['a set_aside that is not a count', { ...LOST_DAY, set_aside: -1 }]
 	];

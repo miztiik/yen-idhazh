@@ -49,6 +49,7 @@ from idhazh.contracts.element import ElementTable
 from idhazh.contracts.eval_row import ConfidenceBand, EvalRow
 from idhazh.contracts.evidence import EvidenceItem
 from idhazh.contracts.feed_health import FeedHealthRow
+from idhazh.contracts.feed_health_state import FeedHealthStateHeadIndex, FeedHealthStateSnapshot
 from idhazh.contracts.feed_ingest_article_assessment import ArticleAssessmentRecord
 from idhazh.contracts.feed_ingest_candidate import FeedIngestCandidate
 from idhazh.contracts.feed_ingest_dispatch import FeedIngestDispatch
@@ -152,6 +153,8 @@ CONTRACTS: Final[tuple[type[Contract], ...]] = (
     FeedIngestCandidate,
     FeedIngestDispatch,
     FeedIngestOperationalStateRow,
+    FeedHealthStateSnapshot,
+    FeedHealthStateHeadIndex,
     DocumentObservationRecord,
     SourceRunRecord,
     AppConfig,
@@ -250,6 +253,8 @@ __all__ = [
     "EvalRow",
     "EventDef",
     "FeedDef",
+    "FeedHealthStateHeadIndex",
+    "FeedHealthStateSnapshot",
     "FeedIngestCandidate",
     "FeedIngestDispatch",
     "FeedIngestOperationalStateRow",

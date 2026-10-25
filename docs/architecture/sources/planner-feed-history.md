@@ -34,12 +34,14 @@ byte counts and canonical row digests. Yearly files take precedence over
 monthly, daily and raw files. Shared file caches avoid opening one compact file
 again for each represented day.
 
-Health uses the newest 31 native represented days. Reliability uses
-`collect.reliability_window_days`. Native `ledger_files.held_days` includes a raw
-day holding files or a nonempty daily cover; a nonempty compact month or year
-represents all its calendar days, including selected days that return no rows.
-The selector does not replace this rule with a trailing calendar cutoff or a
-filter keeping only row-bearing days.
+Health uses the newest `feedback.lifecycle_window_days` represented days,
+defaulting to 31. Reliability uses `collect.reliability_window_days`. Native
+`ledger_files.held_days` includes a raw day holding files or a nonempty daily
+cover; a nonempty compact month or year represents all its calendar days,
+including selected days that return no rows. The selector does not replace this
+rule with a trailing calendar cutoff or a filter keeping only row-bearing days.
+The lifecycle setting now validates the prior 31-day behavior as a tunable
+default rather than a source-code constant.
 
 The health input resolver uses the existing publication inventory's health
 paths, the three native compact indexes and exact checked producer receipts.
@@ -50,6 +52,12 @@ new date index, parallel history file or retirement input is needed.
 Missing evidence remains unavailable. Current observations never turn a
 missing earlier day into a known empty day. Named observations are not a claim
 that every possible external producer has been inventoried.
+
+The separate `feed-health-state` snapshot contract retains lifecycle-day
+contributions and closed request-evidence days, but its updater and reader are
+not wired into planner runtime in this contract phase. Selection therefore
+continues to use the current native history reader until the later TypeScript
+state phase implements the reviewed contract.
 
 ## Recorded time and uncertain order
 

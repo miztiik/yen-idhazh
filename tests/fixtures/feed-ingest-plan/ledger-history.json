@@ -11,7 +11,7 @@
   "index_contracts": {
     "raw_fields": ["version", "ledger", "date", "files", "content_sha256", "bytes", "listed_at"],
     "compact_fields": ["version", "ledger", "period", "entries", "expired_through"],
-    "entry_fields": ["covers", "rows", "bytes", "state", "lost_days", "set_aside"],
+    "entry_fields": ["covers", "rows", "bytes", "file_sha256", "state", "lost_days", "set_aside"],
     "states": ["packed", "empty", "lost"],
     "periods": ["daily", "monthly", "yearly"],
     "legacy_entry": { "covers": "2026-10-21", "rows": 0, "bytes": 128 },

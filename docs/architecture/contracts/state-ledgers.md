@@ -6,7 +6,7 @@
 
 Three neighbours own the rest of the question. [schemas.md](schemas.md) owns the shape of a row and the rule that decides a grain. [../../concepts/partitions.md](../../concepts/partitions.md) owns what counts as a day file and a month name. [ledger-registry.md](ledger-registry.md) owns which ledgers exist, where each one sits, and the check that stops the build when the code and `config/ledgers.json` disagree. This page is the per-ledger answer: this ledger, this grain, this reason.
 
-Every ledger here is append-only except `state/day-metrics/`, which rewrites one day's record when that day is corrected. The item-health summary is derived from a whole month, but it is filed through the ledger door as raw daily summary rows and packed later.
+Every ledger here is append-only except `state/day-metrics/`, which rewrites one day's record when that day is corrected, and `feed-health-state`, which rotates a fixed pair of complete snapshots. The item-health summary is derived from a whole month, but it is filed through the ledger door as raw daily summary rows and packed later.
 
 ## A ledger partitions only when its read carries a time window
 
@@ -30,6 +30,7 @@ A window lets the reader name the files it wants and skip the rest. Without one 
 | `state/raw/run-shards/<YYYY>/<MM>/<DD>/<file_id>.parquet` | How many shards did the manifest record for this run? Only date, run identity and nullable count | raw and compact | the widest console window |
 | `state/raw/council-run-records/<YYYY>/<MM>/<DD>/<file_id>.parquet` | Which step ran for each hosted judge, how it ended and what it cost | raw and compact | the judged UTC day |
 | `state/raw/feed-ingest-plan/operational-state/<YYYY>/<MM>/<DD>/<file_id>.parquet` | Which qualified per-source request estimate was derived from the named evidence window and policy revision? | raw and compact | the configured evidence window |
+| `state/raw/feed-ingest-plan/feed-health-state/<YYYY>/<MM>/<DD>/<file_id>.parquet` | What complete lifecycle and request state did selection read? | raw and compact | the two snapshot references in the fixed head metadata |
 
 The seen ledger has no published mirror at all, so unlike the two health ledgers there is no second grain anywhere near it.
 
@@ -52,12 +53,21 @@ no fault. Exception details are not persisted. The
 [council's recording rule](../publishing/llm-council.md#the-venue-keeps-its-own-record-of-every-unit-it-ran)
 owns collection, recording failures and isolated trials.
 
-The operational-state ledger has a versioned Pydantic row contract, a bound
-TypeScript schema and a scheduled compaction task. The row preserves its
-revision lineage, UTC evidence window, policy version, measured request counts,
-coverage, qualification and request penalty. The report-only estimate does
-not write this ledger or alter selection. Row 10 owns the writer and the
-next-allocation reader; until then, no operational state is persisted.
+The earlier `operational-state` row is a request-only estimate contract. The
+new `feed-health-state` contract is the complete derived authority: it stores
+the source roster, saved lifecycle and request results, bounded causal evidence
+and both evidence windows. Runtime writing and selection consumption remain
+deferred; no updater or writer is added in the contract phase.
+
+The state head is metadata at
+`state/metadata/feed-ingest-plan/feed-health-state/head/index-a.json` and
+`index-b.json`, not another ledger. The existing ledger writer places each
+snapshot in its normal raw UTC-day folder using the snapshot write date. A
+successful head rotation removes the former previous snapshot in the same
+commit, so ordinary operation retains two files. The compactor protects the
+references in one valid head copy; if two valid copies disagree, or neither
+validates, it defers pruning this ledger rather than guessing. This bounded
+exception does not disable normal yearly pruning for the observation ledgers.
 
 The run-shards ledger publishes `RunRecord.shards` exactly. Assemble files the
 counts after its final manifest write. An absent count stays null; observed

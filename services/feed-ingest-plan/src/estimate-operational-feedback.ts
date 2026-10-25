@@ -43,6 +43,7 @@ function estimateSource(source: SourceEvidence, policy: FeedIngestConfig["feedba
     measured_source_wasted_requests: wastedRequests,
     request_waste_ratio: wasteRatio,
     request_component_weight: policy.component_weights.requests,
-    request_component_penalty: wasteRatio === null ? null : wasteRatio * policy.component_weights.requests,
+    request_component_penalty: wasteRatio === null
+      ? null : wasteRatio * policy.component_weights.requests,
   };
 }

@@ -180,6 +180,20 @@ def test_a_compact_index_writes_one_entry_a_line_and_reads_back_what_it_wrote() 
     assert len(entry_lines) == len(index.entries)
     assert CompactIndex.from_json(text).to_json() == text
     assert CompactIndex.from_json(text) == index
+    packed = _sample("compact-index", "a-daily-index")["entries"][0] | {
+        "file_sha256": "a" * 64,
+    }
+    with_digest = CompactIndex.model_validate(
+        _sample("compact-index", "a-daily-index") | {"entries": [packed]}
+    )
+    assert with_digest.entries[0].file_sha256 == "a" * 64
+    empty = _sample("compact-index", "an-empty-day")["entries"][1] | {
+        "file_sha256": "a" * 64,
+    }
+    with pytest.raises(ValidationError, match="no file"):
+        CompactIndex.model_validate(
+            _sample("compact-index", "an-empty-day") | {"entries": [empty]}
+        )
 
 
 def test_a_daily_index_refuses_an_entry_that_covers_a_month_by_ledger_and_period() -> None:
@@ -262,6 +276,7 @@ def test_an_index_written_before_entries_had_a_state_reads_as_all_packed() -> No
     assert [(entry.covers, entry.rows, entry.bytes) for entry in index.entries] == [
         (entry["covers"], entry["rows"], entry["bytes"]) for entry in payload["entries"]
     ]
+    assert all(entry.file_sha256 is None for entry in index.entries)
 
 
 @pytest.mark.parametrize(("field", "count"), [("bytes", 7950), ("rows", 3)])
