@@ -1,6 +1,6 @@
 # Adaptive Pruning
 
-**Last Updated**: 2026-10-08
+**Last Updated**: 2026-10-25
 
 One question, asked of every file this project writes:
 
@@ -282,11 +282,21 @@ window joins that check in the same commit. Fowler, 2026-09-13.
 
 `retention.image_months` was `-1` until 2026-09-13 - no age window at all - so
 this is the first age this project has put on a published asset rather than a
-tightening of one. `config/gardener/visual-prune.json` keeps `dry_run: true`,
-so the window names days
-and removes none of them; the deletion is a separate commit, and it lands that
-way round so that the first evidence of what the window selects arrives before
-the deletion rather than after it.
+tightening of one. The window first shipped with `dry_run: true`, so its
+candidate list could be reviewed before deletion. The owner authorized live
+visual pruning on 2026-10-25. `config/gardener/visual-prune.json` now has
+`dry_run: false`; its 390-day window and 200-file ceiling are unchanged.
+
+Browser drawing does not remove the visual-retention policy: per-item chart
+JSON is a visual file too. A live pass with no expired candidates must record
+zero deletions, zero files held by the ceiling and zero reclaimed bytes. It is
+a valid no-op, not evidence that deletion was exercised. The generated-tree
+integration tests separately prove that the committed switch deletes an old
+visual and preserves day payloads, labels and visuals inside the window.
+Measure any deployed-size change on completed builds with
+`site-weight --site-tree frontend/build`, never on the source tree. A
+production wake and its landed report remain required before the activation
+work is closed.
 
 **The window is an archive policy and not a cap defence, and the measurement is
 what says so.** The recorded 2026-09-13 sample added 324,580 visual bytes per
