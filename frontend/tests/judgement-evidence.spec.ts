@@ -9,6 +9,7 @@ import { markedPairs, holdoutReading, mergeLineHoldoutScore } from '../src/lib/s
 import { buildLedger, buildRows } from './support/ledger-lifecycle';
 import { serverPanels } from './support/console-window/server-panels';
 import { judgeDay, propsOf } from './support/console-window/judgement-fixtures';
+import { formatNumber } from './support/number-format';
 
 const WINDOW = { start: '2030-06-09', end: '2030-06-15' };
 const LOADED = { start: '2030-03-18', end: '2030-06-15' };
@@ -208,6 +209,6 @@ test('each nullable denominator suppresses only its own dot and never contribute
 		}, height: 220, width: 760, readoutMaxShare: 1
 	});
 	expect(words(separateScore)).toContain('The hand-marked pairs are unavailable.');
-	expect(words(separateScore)).toContain('Scored on 2030-06-14 at a line of 0.9400, against marks by a person. It joined 1 of the 5 pairs marked as two stories, and left 3 pairs marked as one story apart.');
+	expect(words(separateScore)).toContain(`Scored on 2030-06-14 at a line of ${formatNumber(0.94, { si: false })}, against marks by a person. It joined 1 of the 5 pairs marked as two stories, and left 3 pairs marked as one story apart.`);
 	expect(separateScore).toContain('data-holdout-skips="1"');
 });

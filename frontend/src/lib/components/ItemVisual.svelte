@@ -58,11 +58,13 @@
 	import { navigating } from '$app/state';
 	import { publishedVisualData, refusedVisualData } from '$lib/payload/drawing';
 	import type { SeededVisual, VisualData } from '$lib/payload/types';
+	import { numberFormatter, type NumberFormatConfig } from '$lib/number-format';
 	import { whenNear } from '$lib/reveal';
 	import { drawBars, statedBars, type Drawing } from '$lib/visual/bar';
 	import { whenWide } from '$lib/visual/width';
 
-	let { visual }: { visual: SeededVisual | null } = $props();
+	let { visual, numberFormat }: { visual: SeededVisual | null; numberFormat: NumberFormatConfig } = $props();
+	const formatNumber = $derived(numberFormatter(numberFormat));
 
 	/** The file this story's marks are in, or null when it has none to ask for.
 	 *
@@ -81,7 +83,7 @@
 	/** How much room the card gives the drawing, or 0 before it has been measured. */
 	let room = $state(0);
 	const drawing = $derived<Drawing | null>(
-		arrived && room > 0 ? drawBars(arrived, room) : null
+		arrived && room > 0 ? drawBars(arrived, room, formatNumber) : null
 	);
 	/** Every figure the bars are drawn at, in one sentence, for a reader who is
 	 * not looking at them. It is the whole of what the tab stop below announces. */
@@ -207,7 +209,7 @@
 				{#each drawing.bars as bar (bar.y)}
 					<text class="name" x="0" y={bar.label}>{bar.name}</text>
 					<rect class="bar" x="0" y={bar.y} width={bar.width} height={bar.height} rx="3" />
-					<text class="figure" x={bar.figure} y={bar.y + bar.height / 2}>{bar.stated}</text>
+					<text class="figure" x={bar.figure} y={bar.y + bar.height / 2}>{bar.displayed}</text>
 				{/each}
 				<line class="axis" x1="0" y1={drawing.baseline} x2={drawing.width} y2={drawing.baseline} />
 				{#if drawing.unit}

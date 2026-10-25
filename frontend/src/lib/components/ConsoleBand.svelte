@@ -23,8 +23,11 @@
 	import { base } from '$app/paths';
 	import { PAGES_CAP_BYTES } from '$lib/charts/glance';
 	import { type ConsoleBandFacts, type Health } from '$lib/console/band';
+	import { useNumberFormat } from '$lib/number-format-context';
+	import { formatNumber } from '$lib/number-format';
 
 	let { band }: { band: ConsoleBandFacts } = $props();
+	const numberFormat = useNumberFormat();
 
 	const capPct = $derived(band.size.capFraction === null ? null : band.size.capFraction * 100);
 
@@ -131,7 +134,7 @@
 				<div
 					class="track"
 					role="img"
-					aria-label="{capPct.toFixed(1)} percent of the 1 GB limit"
+					aria-label="{formatNumber(capPct, numberFormat, { si: false })} percent of the 1 GB limit"
 					data-band-size-pct={capPct.toFixed(2)}
 					data-band-size-cap={PAGES_CAP_BYTES}
 				>

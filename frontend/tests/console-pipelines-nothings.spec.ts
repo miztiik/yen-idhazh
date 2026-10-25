@@ -3,7 +3,8 @@ import { expect, test } from './support/door-page';
 import { readFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { render } from 'svelte/server';
+import { renderConfigured as render } from './support/server-render';
+import { numberFormat } from './support/number-format';
 import { serverCompiler, type Rewrite } from './support/server-render';
 import { BUILD_TIME } from './support/panel-drivers/pipelines';
 
@@ -57,7 +58,7 @@ for (const [id, name] of PANELS) {
 		const component = (await import(pathToFileURL(module).href)).default;
 		const appearance = JSON.parse(readFileSync(join(FRONTEND, '..', 'config', 'appearance.json'), 'utf8'));
 		const common = {
-			knobs: appearance.console, chart: appearance.chart, window: { start: DAY.date, end: DAY.date },
+			knobs: appearance.console, chart: { ...appearance.chart, number_format: numberFormat }, window: { start: DAY.date, end: DAY.date },
 			viewport: { start: DAY.date, end: DAY.date },
 			windowDays: 1, days: 1, rule: { declined: 'one distribution, not a date axis' },
 			floorPct: 70, height: appearance.console.chart_height, width: appearance.console.chart_width,

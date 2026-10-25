@@ -5,7 +5,7 @@ import type { TelemetryRow } from '../src/lib/charts/series';
 import { daysInWindow } from '../src/lib/charts/viewport';
 import { nativeFailureMix } from '../src/lib/console/pipelines/failure-mix';
 import { nativeTimeSplit, timeSplitReadout } from '../src/lib/console/pipelines/item-time-split';
-import { dateSeries } from '../src/lib/charts/d3/dateSeries';
+import { dateSeries, numberFormat } from './support/number-format';
 import { frame } from '../src/lib/charts/frame';
 import { telemetryRow } from './support/telemetry-row';
 import { JUDGED_THROUGH } from './support/console-window/judgement-fixtures';
@@ -57,11 +57,11 @@ test.describe("Pipelines' failure mix and time split draw the window's days, on 
             ['2030-06-13', 1, true], ['2030-06-15', 0, true]
         ]);
         const split = nativeTimeSplit(rows.map((row) => ({ ...row })), calendar);
-        const strip = timeSplitReadout(split);
+        const strip = timeSplitReadout(split, numberFormat);
         expect(split.series.map((band) => band.points.map((point) => point.value))).toEqual(
             [100, 20, 600, 30, 50].map((value) => [null, null, value]));
         expect(strip.series.slice(0, 7).map((band) => band.values)).toEqual(
-            ['0.10 s', '0.02 s', '0.60 s', '0.03 s', '0.05 s', '0.80 s', '0.00 s'].map((value) => [null, null, value]));
+            ['0.1 s', '0.02 s', '0.6 s', '0.03 s', '0.05 s', '0.8 s', '0 s'].map((value) => [null, null, value]));
         expect(strip.notMeasured).toBe('Not measured for the complete cohort');
     });
 });

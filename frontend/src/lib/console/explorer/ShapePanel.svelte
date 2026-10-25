@@ -37,6 +37,7 @@
 	import { MOST_ROLES, SERIES_TOKENS, type ExplorerChartType, type RoleId } from '$lib/console/explorer/chart-roles';
 	import { IN_THE_ANSWER, chartNotes, chooseDateSeriesDays, numericValue, readTruthValue, type ExplorerChart, type ExplorerShape, type ExplorerShapeBounds } from './shape';
 	import { printCell } from './answer';
+	import { useNumberFormat } from '$lib/number-format-context';
 
 	let {
 		chart,
@@ -73,6 +74,7 @@
 		/** What the drawing holds while there is no answer to draw: a state's sentence or its shimmer. */
 		placeholder?: Snippet | null;
 	} = $props();
+	const numberFormat = useNumberFormat();
 
 	let box = $state<HTMLDivElement | null>(null);
 	let stack = $state<HTMLDivElement | null>(null);
@@ -91,7 +93,7 @@
 	const flowDrawing = $derived.by(() => {
 		if (active.kind !== 'chart' || active.type !== 'flow') return null;
 		const stages = rows.map((row) => ({ label: text(row, active.stageColumn), arrived: numericValue(row, active.arrivedColumn) as number, left: numericValue(row, active.wentOnColumn) as number, drops: active.droppedColumns.map((column) => ({ label: column, count: numericValue(row, column) as number })) }));
-		return flow(stages, { frame: frame(chartWidth, chartHeight), narrow: chartWidth < narrowBelow || nodeWidth === 0, nodeWidth, nodeGap, includeCountsStatus: true });
+		return flow(stages, { frame: frame(chartWidth, chartHeight), narrow: chartWidth < narrowBelow || nodeWidth === 0, nodeWidth, nodeGap, includeCountsStatus: true, number_format: numberFormat });
 	});
 
 	function text(row: Row, column: string): string {
@@ -120,13 +122,13 @@
 
 	function tooFew(next: ExplorerShape): string | null {
 		if (next.kind === 'none' || !('tooFew' in next) || !next.tooFew) return null;
-		if (next.type === 'dateSeries') return tooFewSentence(next.days, bounds.chartMinRows, 'UTC days', IN_THE_ANSWER);
+		if (next.type === 'dateSeries') return tooFewSentence(next.days, bounds.chartMinRows, 'UTC days', numberFormat, IN_THE_ANSWER);
 		if (next.type === 'pairedScatter') {
 			return next.readings < bounds.fleetMinRows
-				? tooFewSentence(next.readings, bounds.fleetMinRows, 'readings', IN_THE_ANSWER)
-				: tooFewSentence(next.subjects, bounds.bandwidthMinKinds, 'names', IN_THE_ANSWER);
+				? tooFewSentence(next.readings, bounds.fleetMinRows, 'readings', numberFormat, IN_THE_ANSWER)
+				: tooFewSentence(next.subjects, bounds.bandwidthMinKinds, 'names', numberFormat, IN_THE_ANSWER);
 		}
-		if (next.type === 'distribution') return tooFewSentence(next.readings, bounds.fleetMinRows, 'readings', IN_THE_ANSWER);
+		if (next.type === 'distribution') return tooFewSentence(next.readings, bounds.fleetMinRows, 'readings', numberFormat, IN_THE_ANSWER);
 		return null;
 	}
 
@@ -223,7 +225,7 @@
 							{@const plotFrame = frame(chartWidth, chartHeight)}
 							{@const seriesColumns = active.seriesColumns}
 							{@const days = chooseDateSeriesDays(active.dateColumn, rows, lostDays)}
-							{@const dateGeometry = dateSeries(seriesColumns.map((column, index) => ({ label: column, token: SERIES_TOKENS[index] ?? SERIES_TOKENS[0], points: days.map(({ day, row }) => ({ date: day, value: row === null ? null : numericValue(row, column) })) })), { frame: plotFrame, density: 6, valueTicks: 4, padding: 0.25, rule: { declined: 'A written question supplies no settings comparison record.' } })}
+							{@const dateGeometry = dateSeries(seriesColumns.map((column, index) => ({ label: column, token: SERIES_TOKENS[index] ?? SERIES_TOKENS[0], points: days.map(({ day, row }) => ({ date: day, value: row === null ? null : numericValue(row, column) })) })), { frame: plotFrame, density: 6, valueTicks: 4, padding: 0.25, rule: { declined: 'A written question supplies no settings comparison record.' }, number_format: numberFormat })}
 							{@const dateReadout = readoutOf({ type: 'dateSeries', columns: days.map(({ day }) => day), series: seriesColumns.map((column, index) => ({ label: column, swatch: `var(${SERIES_TOKENS[index] ?? SERIES_TOKENS[0]})`, values: days.map(({ row }) => (row === null ? null : numericValue(row, column))), format: (n) => text({ [column]: n }, column) })), notMeasured: 'No number for this day', resting: 'last' })}
 							<div data-model-rule="no" data-model-rule-none="this page does not know which settings changed inside your span">
 								<DateSeries geometry={dateGeometry} empty={emptyState('quiet', 'No rows to draw.')} name="data-explorer-shape" label={`Over time: ${[active.dateColumn, ...active.seriesColumns].join(', ')}`} width={chartWidth} height={chartHeight} readout={dateReadout} />
@@ -237,14 +239,14 @@
 						{:else if active.type === 'pairedScatter'}
 							{@const plotFrame = frame(chartWidth, chartHeight)}
 							{@const points = rows.flatMap((row, index) => numericValue(row, active.xColumn) === null || numericValue(row, active.yColumn) === null ? [] : [{ label: active.subjectColumn === null ? `row ${index + 1}` : text(row, active.subjectColumn), x: numericValue(row, active.xColumn) as number, y: numericValue(row, active.yColumn) as number }])}
-							<PairedScatter geometry={pairedScatter(points, { frame: plotFrame, minRows: bounds.fleetMinRows, minSubjects: bounds.bandwidthMinKinds, valueTicks: 4 })} empty={emptyState('too-few', tooFew(active) ?? 'Too few rows.')} name="data-explorer-shape" label={`Paired: ${active.yColumn} against ${active.xColumn}`} width={chartWidth} height={chartHeight} />
+							<PairedScatter geometry={pairedScatter(points, { frame: plotFrame, minRows: bounds.fleetMinRows, minSubjects: bounds.bandwidthMinKinds, valueTicks: 4, number_format: numberFormat })} empty={emptyState('too-few', tooFew(active) ?? 'Too few rows.')} name="data-explorer-shape" label={`Paired: ${active.yColumn} against ${active.xColumn}`} width={chartWidth} height={chartHeight} />
 							<p data-comparison={active.comparison}>{active.comparison}.</p>
 						{:else}
 							{@const plotFrame = frame(chartWidth, chartHeight)}
 							{@const values = rows.map((row) => numericValue(row, active.valueColumn)).filter((one): one is number => one !== null)}
 							<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
 							<div tabindex="0" role="group" aria-label={`Spread readout: ${active.valueColumn}`} data-chart-readout-focus>
-								<Distribution geometry={distribution(values, { frame: plotFrame, minValues: bounds.fleetMinRows, valueTicks: 4, scale: 'linear' })} empty={emptyState('too-few', tooFew(active) ?? 'Too few rows.')} name="data-explorer-shape" label={`Spread: ${active.valueColumn}`} width={chartWidth} height={chartHeight} />
+								<Distribution geometry={distribution(values, { frame: plotFrame, minValues: bounds.fleetMinRows, valueTicks: 4, scale: 'linear', number_format: numberFormat })} empty={emptyState('too-few', tooFew(active) ?? 'Too few rows.')} name="data-explorer-shape" label={`Spread: ${active.valueColumn}`} width={chartWidth} height={chartHeight} />
 							</div>
 							<p data-comparison={active.comparison}>{active.comparison}.</p>
 						{/if}

@@ -33,6 +33,7 @@ import {
 	scoreRange,
 	type HoldoutMark
 } from '../src/lib/console/holdout';
+import { formatNumber, numberFormat } from './support/number-format';
 
 const REPO = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 
@@ -183,9 +184,9 @@ test('a pair read as one story is in no reach at all', () => {
 test('the headline says what one more day costs, not just the distance', () => {
 	const { applied, maxDownStep } = knobs();
 	const marks = COMMITTED.map((score) => mark(score));
-	const said = reachNote(holdoutReach(applied, maxDownStep, marks), maxDownStep, marks.length);
+	const said = reachNote(holdoutReach(applied, maxDownStep, marks), maxDownStep, marks.length, numberFormat);
 
-	expect(said).toContain('0.010');
+	expect(said).toContain(formatNumber(maxDownStep, { si: false }));
 	expect(said).toContain('3 more marks');
 	expect(said).toContain("tomorrow's reach");
 	expect(said).toContain('4 of 4');
@@ -193,7 +194,7 @@ test('the headline says what one more day costs, not just the distance', () => {
 
 test('a day nothing is inside reach of says so rather than printing a zero', () => {
 	const marks = [mark(0.90), mark(0.85)];
-	const said = reachNote(holdoutReach(0.94, 0.005, marks), 0.005, marks.length);
+	const said = reachNote(holdoutReach(0.94, 0.005, marks), 0.005, marks.length, numberFormat);
 
 	expect(said).toContain('no further mark');
 	expect(said).not.toContain('0 more');
@@ -241,15 +242,15 @@ test('the one-story pairs below the line are the other cost of the number', () =
 });
 
 test('the one-story sentence names the count, the range and the misses', () => {
-	const said = agreedNote([0.7316, 0.9378, 0.9914, 0.9385], 0.94);
+	const said = agreedNote([0.7316, 0.9378, 0.9914, 0.9385], 0.94, numberFormat);
 
 	expect(said).toContain('4 pairs were read as one story');
-	expect(said).toContain('0.7316');
-	expect(said).toContain('0.9914');
+	expect(said).toContain(formatNumber(0.7316, { si: false }));
+	expect(said).toContain(formatNumber(0.9914, { si: false }));
 	expect(said).toContain('3 of them score below the line');
 	expect(said).toContain('see those stories twice');
 });
 
 test('a panel with no one-story marks says so rather than drawing an empty strip', () => {
-	expect(agreedNote([], 0.94)).toBe('No scored pair marked as one story was returned, so there is no second population to draw.');
+	expect(agreedNote([], 0.94, numberFormat)).toBe('No scored pair marked as one story was returned, so there is no second population to draw.');
 });

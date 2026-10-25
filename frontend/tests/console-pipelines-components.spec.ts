@@ -1,6 +1,7 @@
 /** Explicit chart contracts are checked on the real client components and keyboard readouts. */
 import { test, expect } from './support/browser';
 import { clientCode, drawClient } from './support/console-window/client-render';
+import { numberFormat } from './support/number-format';
 import { failureRuleRows } from '../src/lib/console/failure-rules';
 import { SERIES_TOKENS } from '../src/lib/console/series-tokens';
 
@@ -103,7 +104,7 @@ test('histogram bars and inspection swatches use the same named quantity', async
 test('elapsed markers stay inside a narrow frame and retain a zero beside an unknown day', async ({ page }) => {
 	const width = 390;
 	await page.setViewportSize({ width, height: 900 });
-	await drawClient(page, code, 'DurationStack', { width: width - 24 });
+	await drawClient(page, code, 'DurationStack', { width: width - 24, number_format: numberFormat });
 	await expect(page.locator('[data-stack-elapsed]')).toHaveCount(2);
 	await expect(page.locator('[data-model-rule-name="item-time"]')).toHaveAttribute('data-model-rule-from', '2026-09-01');
 	await expect(page.locator('[data-model-rule-name="item-time"]')).toHaveAttribute('data-model-rule-to', '2026-09-03');

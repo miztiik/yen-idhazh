@@ -4,14 +4,16 @@
 	import type { ChartConfig } from '../../server/config';
 	import Series from './Series.svelte';
 	import { reasonDrawing } from './doubt-reasons';
+	import { useNumberFormat } from '$lib/number-format-context';
 	let { days, start, end, rule, chart, windowDays }: {
 		days: readonly ReasonDay[] | null; start: string; end: string; rule: ModelRule; chart: ChartConfig; windowDays: number;
 	} = $props();
+	const numberFormat = useNumberFormat();
 	const selected = $derived(reasonsWithin([...(days ?? [])], { start, end }));
 	const series = $derived(reasonDrawing(selected));
 	const totals = $derived(reasonTotals(selected));
-	const headline = $derived(reasonHeadline(selected, windowDays));
-	const unexplained = $derived(unexplainedNote(selected, windowDays));
+	const headline = $derived(reasonHeadline(selected, windowDays, numberFormat));
+	const unexplained = $derived(unexplainedNote(selected, windowDays, numberFormat));
 </script>
 <div data-eval-panel="doubt-reasons" data-model-reasons data-model-reasons-from={start}
 	data-model-reasons-to={end} data-model-reasons-days={windowDays}>

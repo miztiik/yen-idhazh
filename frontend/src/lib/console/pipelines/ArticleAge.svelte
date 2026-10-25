@@ -6,7 +6,9 @@
 	import { frame, MARGIN, chartWidth, observeWidth } from '$lib/charts/frame';
 	import type { Row } from '$lib/data/ledger';
 	import type { ConsoleConfig } from '$lib/server/config';
+	import { useNumberFormat } from '$lib/number-format-context';
 	let { rows, knobs }: { rows: Row[]; knobs: ConsoleConfig } = $props();
+	const numberFormat = useNumberFormat();
 	let measured = $state<number | null>(null);
 	const width = $derived(chartWidth(measured, knobs.chart_width));
 	const age = $derived(articleAge(rows));
@@ -14,7 +16,8 @@
 	const options = $derived({
 		frame: frame(width, knobs.chart_height, MARGIN), minValues: knobs.fleet_min_rows,
 		valueTicks: 5, scale: 'log' as const,
-		rules: [{ at: 24, label: 'one day' }, ...(age.median !== null && age.median > 0 ? [{ at: age.median, label: 'median' }] : [])]
+		rules: [{ at: 24, label: 'one day' }, ...(age.median !== null && age.median > 0 ? [{ at: age.median, label: 'median' }] : [])],
+		number_format: numberFormat
 	});
 	const geometry = $derived(distribution(positive, options));
 </script>

@@ -18,6 +18,7 @@
 import type { Frame } from '../frame';
 import { tooFewSentence } from '../../console/waiting';
 import { valueAxis, type ValueAxis } from './axis';
+import type { NumberFormatConfig } from '../../number-format';
 
 export interface ScatterInput {
 	/** The subject the reading is of - a machine kind, a source. */
@@ -34,6 +35,7 @@ export interface ScatterOptions {
 	minSubjects: number;
 	/** How many ticks each axis aims for. */
 	valueTicks: number;
+	number_format: NumberFormatConfig;
 }
 
 export interface ScatterMark extends ScatterInput {
@@ -59,13 +61,17 @@ function readingsOf(points: readonly ScatterInput[]): ScatterInput[] {
  * nothing at all. */
 export function pairedScatterShortfall(
 	points: readonly ScatterInput[],
-	opts: Pick<ScatterOptions, 'minRows' | 'minSubjects'>
+	opts: Pick<ScatterOptions, 'minRows' | 'minSubjects' | 'number_format'>
 ): string | null {
 	const readings = readingsOf(points);
 	if (readings.length === 0) return null;
-	if (readings.length < opts.minRows) return tooFewSentence(readings.length, opts.minRows, 'readings');
+	if (readings.length < opts.minRows) {
+		return tooFewSentence(readings.length, opts.minRows, 'readings', opts.number_format);
+	}
 	const subjects = new Set(readings.map((point) => point.label)).size;
-	if (subjects < opts.minSubjects) return tooFewSentence(subjects, opts.minSubjects, 'subjects');
+	if (subjects < opts.minSubjects) {
+		return tooFewSentence(subjects, opts.minSubjects, 'subjects', opts.number_format);
+	}
 	return null;
 }
 
@@ -80,12 +86,12 @@ export function pairedScatter(points: readonly ScatterInput[], opts: ScatterOpti
 	const x = valueAxis(
 		readings.map((point) => point.x),
 		box,
-		{ along: 'x', ticks: opts.valueTicks, zero: false }
+		{ along: 'x', ticks: opts.valueTicks, zero: false, number_format: opts.number_format }
 	);
 	const y = valueAxis(
 		readings.map((point) => point.y),
 		box,
-		{ along: 'y', ticks: opts.valueTicks, zero: false }
+		{ along: 'y', ticks: opts.valueTicks, zero: false, number_format: opts.number_format }
 	);
 	return {
 		frame: box,

@@ -35,7 +35,8 @@ import type { LostDay } from '../console/recording';
 import { nameSpan } from '../console/span-words';
 import type { Row } from '../data/ledger';
 import { normalizeHostRows } from '../data/host-fingerprint';
-import { plural, shortDate } from '../format';
+import { shortDate } from '../format';
+import { formatNumber, type NumberFormatConfig } from '../number-format';
 import { dayTicks, type DayTick, type Frame } from './frame';
 import {
 	isUnrecorded,
@@ -150,6 +151,7 @@ export interface FleetView {
 	shape: 'bars' | 'dots';
 	minRows: number;
 	topKinds: number;
+	numberFormat: NumberFormatConfig;
 	/** The kind placed most in the span, or null where none was named. */
 	mostPlaced: FleetRow | null;
 	/** Why there is nothing to draw. Null where there is something.
@@ -173,6 +175,7 @@ export interface FleetOptions {
 	minRows: number;
 	/** `console.fleet_top_kinds`. */
 	topKinds: number;
+	numberFormat: NumberFormatConfig;
 	/** False where the machine record is switched off. */
 	recording: boolean;
 	/** Days that published articles and kept no machine row. Only their presence
@@ -249,13 +252,15 @@ function speedRank(at: number, of: number): string {
 	return `${place}${suffix} fastest`;
 }
 
-function rangeNote(rates: readonly number[]): string | null {
+function rangeNote(rates: readonly number[], numberFormat: NumberFormatConfig): string | null {
 	if (rates.length === 0) return null;
 	const low = Math.min(...rates);
 	const high = Math.max(...rates);
-	return low.toFixed(1) === high.toFixed(1)
-		? rateWords(low)
-		: `${low.toFixed(1)} to ${rateWords(high)}`;
+	const lowWords = formatNumber(low, numberFormat);
+	const highWords = formatNumber(high, numberFormat);
+	return lowWords === highWords
+		? rateWords(low, numberFormat)
+		: `${lowWords} to ${rateWords(high, numberFormat)}`;
 }
 
 /** A known machine the ramp has no identity for: a machine with no reading. */
@@ -350,7 +355,7 @@ export function fleetView(jobs: readonly FleetJob[], options: FleetOptions): Fle
 		rows.push({
 			key: identity.key,
 			label: identity.name,
-			note: identity.rate === null ? 'no speed reading' : rateWords(identity.rate),
+			note: identity.rate === null ? 'no speed reading' : rateWords(identity.rate, options.numberFormat),
 			colour: identity.colour,
 			drawing: identity.step === null ? 'untimed' : 'step',
 			step: identity.step,
@@ -371,7 +376,7 @@ export function fleetView(jobs: readonly FleetJob[], options: FleetOptions): Fle
 				first.step === null
 					? 'Other machines with no speed reading'
 					: `Other machines at the ${stepWords(first.step, options.ramp.steps.length)} speed`,
-			note: rangeNote(rates) ?? 'no speed reading',
+			note: rangeNote(rates, options.numberFormat) ?? 'no speed reading',
 			colour: first.colour,
 			drawing: first.step === null ? 'untimed' : 'step',
 			step: first.step,
@@ -465,6 +470,7 @@ export function fleetView(jobs: readonly FleetJob[], options: FleetOptions): Fle
 		shape: inSpan.length >= options.minRows ? 'bars' : 'dots',
 		minRows: options.minRows,
 		topKinds: options.topKinds,
+		numberFormat: options.numberFormat,
 		mostPlaced,
 		nothing
 	};
@@ -516,7 +522,7 @@ export function fleetReadout(view: FleetView, hatch: AbsentHatch): Readout {
 						? hatch.background
 						: hollowSwatch(hatch.ink),
 			values: row.counts,
-			format: (value: number) => `${value}`,
+			format: (value: number) => formatNumber(value, view.numberFormat, { exact: true, si: false }),
 			...(row.note === null ? {} : { note: row.note })
 		})),
 		notMeasured: 'No job was placed on this day',
@@ -628,12 +634,12 @@ export function fleetDots(
 
 /** The sentence above the plot: the count, its days, and the kind given most. */
 export function fleetSentence(view: FleetView): string {
-	const ran = `${plural(view.placements, 'job', 'jobs')} ran in ${nameSpan(view.windowDays)}`;
-	const on =
-		view.days.length === view.windowDays ? '' : `, on ${plural(view.days.length, 'day', 'days')} of them`;
+	const ran = `${formatNumber(view.placements, view.numberFormat, { exact: true, si: false })} ${view.placements === 1 ? 'job' : 'jobs'} ran in ${nameSpan(view.windowDays)}`;
+	const on = view.days.length === view.windowDays ? '' :
+		`, on ${formatNumber(view.days.length, view.numberFormat, { exact: true, si: false })} ${view.days.length === 1 ? 'day' : 'days'} of them`;
 	const counted = `${ran}${on}.`;
 	if (view.mostPlaced === null) return counted;
-	return `${counted} The kind we are given most is ${view.mostPlaced.label}, ${view.mostPlaced.placements} of them.`;
+	return `${counted} The kind we are given most is ${view.mostPlaced.label}, ${formatNumber(view.mostPlaced.placements, view.numberFormat, { exact: true, si: false })} of them.`;
 }
 
 /** What each fold row holds, in words, or nothing where no row folds. */
@@ -644,7 +650,7 @@ export function foldSentences(view: FleetView): string[] {
 			const names = row.members;
 			const listed =
 				names.length < 2 ? names.join('') : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
-			return `The ${row.label} row holds ${names.length} kinds: ${listed}.`;
+			return `The ${row.label} row holds ${formatNumber(names.length, view.numberFormat, { exact: true, si: false })} kinds: ${listed}.`;
 		});
 }
 

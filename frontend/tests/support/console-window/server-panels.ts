@@ -1,7 +1,6 @@
 /** Compile a caller's named real panels with their existing real children. */
-import { serverCompiler, type Rewrite } from '../server-render';
+import { renderConfigured, serverCompiler, type Rewrite } from '../server-render';
 import { pathToFileURL } from 'node:url';
-import { render } from 'svelte/server';
 export async function serverPanels(directory: string, panels: readonly (readonly [file: string, name: string])[]) {
   const compiled = serverCompiler(directory);
 const rewrite: Rewrite[] = [
@@ -38,7 +37,7 @@ const files = [
   const drawn: Record<string, (props: Record<string, unknown>) => string> = {};
   for (const [name,module] of modules) {
     const component = (await import(pathToFileURL(module).href)).default;
-    drawn[name] = (props) => render(component, { props }).body;
+    drawn[name] = (props) => renderConfigured(component, { props }).body;
   }
   return { drawn, stripStyles: compiled.css.get('ChartReadout') ?? '' };
 }

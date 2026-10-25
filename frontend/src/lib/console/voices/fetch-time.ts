@@ -3,11 +3,15 @@ import type { Row } from '../../data/slice-shapes';
 import { rankedList } from '../../charts/d3/rankedList';
 import { SERIES_TOKENS } from '../series-tokens';
 import { numberOf, wordOf, readingRecords } from './record';
+import { formatNumber, type NumberFormatConfig } from '../../number-format';
 
 const CLOCKS = ['robots_ms', 'retry_total_ms', 'fetch_connect_ms', 'fetch_ttfb_ms'] as const;
 const PARTS = ['Robots check', 'Retries', 'Connecting', 'Waiting for headers', 'Rest of fetch'] as const;
 const TOKENS = [SERIES_TOKENS['robots-check'], SERIES_TOKENS.retries, SERIES_TOKENS.connecting, SERIES_TOKENS['waiting-headers'], SERIES_TOKENS['fetch-rest']];
-export function fetchTime(rows: readonly Row[], cap: number) {
+export function fetchTime(rows: readonly Row[], cap: number, numberFormat: NumberFormatConfig) {
+	const seconds = (value: number) => formatNumber(value / 1000, numberFormat, { si: false });
+	const milliseconds = (value: number) => formatNumber(value, numberFormat, { si: false });
+	const count = (value: number) => formatNumber(value, numberFormat, { exact: true });
 	const sources = new Map<string, Row[]>();
 	let excluded = 0;
 	for (const row of rows) {
@@ -32,26 +36,26 @@ export function fetchTime(rows: readonly Row[], cap: number) {
 	}).sort((a, b) => b.total - a.total || a.id.localeCompare(b.id));
 	const geometry = rankedList(summaries.map((source) => ({
 		label: source.id, value: source.total, segments: source.segments,
-		context: `${source.count} fetches; ${source.complete} complete clock readings`,
+		context: `${count(source.count)} fetches; ${count(source.complete)} complete clock readings`,
 		status: source.overlap > 0 ? 'Clocks overlap; split unavailable' : source.segments === undefined ? 'Split not recorded for every fetch' : undefined
 	})), { max: cap });
-	if (geometry) for (const row of geometry.rows) row.row.value = `${(row.value / 1000).toFixed(2)} s`;
+	if (geometry) for (const row of geometry.rows) row.row.value = `${seconds(row.value)} s`;
 	const drawn = summaries.slice(0, cap);
 	const slowest = drawn[0];
 	const largest = slowest?.segments?.reduce((best, part) => part.value > best.value ? part : best);
 	return {
 		geometry, summaries, excluded,
-		lede: slowest ? `${slowest.id} is slowest, averaging ${(slowest.total / 1000).toFixed(2)} seconds a fetch.` : 'No fetch has the recorded whole and robots clocks this comparison needs.',
+		lede: slowest ? `${slowest.id} is slowest, averaging ${seconds(slowest.total)} seconds a fetch.` : 'No fetch has the recorded whole and robots clocks this comparison needs.',
 		finding: largest ? `${largest.label} is its largest recorded part, against the other four parts.` : 'The whole is useful; missing or overlapping clocks cannot supply a five-part split.',
-		maxText: geometry ? `${(geometry.max / 1000).toFixed(2)} seconds` : '',
-		tail: `${excluded} rows lack a whole, robots clock or source. ${Math.max(0, summaries.length - cap)} sources lie below this list.`,
+		maxText: geometry ? `${seconds(geometry.max)} seconds` : '',
+		tail: `${count(excluded)} rows lack a whole, robots clock or source. ${count(Math.max(0, summaries.length - cap))} sources lie below this list.`,
 		noRetries: rows.length > 0 && rows.every((row) => numberOf(row.retry_count) === 0),
 		records: readingRecords(drawn.map((source) => ({
 			title: source.id,
 			facts: [
-				{ label: 'Whole mean', value: `${source.total.toFixed(2)} ms over ${source.count} fetches` },
-				...PARTS.map((label, index) => ({ label, value: (index === 4 ? source.rest : source.means[index]) === null ? 'not recorded for every fetch' : `${(index === 4 ? source.rest : source.means[index])!.toFixed(2)} ms` })),
-				{ label: 'Retry count', value: source.retries === null ? 'not recorded for every fetch' : String(source.retries) }
+				{ label: 'Whole mean', value: `${milliseconds(source.total)} ms over ${count(source.count)} fetches` },
+				...PARTS.map((label, index) => ({ label, value: (index === 4 ? source.rest : source.means[index]) === null ? 'not recorded for every fetch' : `${milliseconds((index === 4 ? source.rest : source.means[index])!)} ms` })),
+				{ label: 'Retry count', value: source.retries === null ? 'not recorded for every fetch' : count(source.retries) }
 			]
 		})))
 	};

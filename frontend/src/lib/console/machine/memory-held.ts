@@ -35,6 +35,7 @@
 
 import { gib } from '$lib/charts/machine';
 import { percentOf } from '$lib/charts/rank';
+import { formatNumber, type NumberFormatConfig } from '$lib/number-format';
 
 /** One part of the bar. `bytes` is signed; `width` is never negative, because a
  * negative width is not a thing a browser can paint - the sign leaves the bar
@@ -147,11 +148,11 @@ const BYTES_IN_GIB = 1024 * 1024 * 1024;
 
 /** Under a tenth of a GiB, say it in MiB. A reader who is told `0.00 GiB` has
  * been told nothing, and a swap of 60 KiB is not the same fact as no swap. */
-function memoryFigure(bytes: number): string {
+function memoryFigure(bytes: number, numberFormat: NumberFormatConfig): string {
 	const size = Math.abs(bytes);
-	if (size >= BYTES_IN_GIB / 10) return gib(bytes);
-	if (size >= BYTES_IN_MIB / 100) return `${(bytes / BYTES_IN_MIB).toFixed(2)} MiB`;
-	return `${Math.round(bytes / 1024)} KiB`;
+	if (size >= BYTES_IN_GIB / 10) return gib(bytes, numberFormat);
+	if (size >= BYTES_IN_MIB / 100) return `${formatNumber(bytes / BYTES_IN_MIB, numberFormat, { si: false })} MiB`;
+	return `${formatNumber(Math.round(bytes / 1024), numberFormat, { exact: true, si: false })} KiB`;
 }
 
 function numberCell(row: Record<string, string>, name: string): number | null {
@@ -183,7 +184,8 @@ function tightestOf(rows: readonly Record<string, string>[]): Record<string, str
 function bracketsOf(
 	row: Record<string, string>,
 	heldBytes: number,
-	scaleBytes: number
+	scaleBytes: number,
+	numberFormat: NumberFormatConfig
 ): { brackets: MemoryBracket[]; overlapBytes: number } {
 	const readings: { key: 'server' | 'worker'; label: string; bytes: number | null }[] = [
 		{ key: 'server', label: 'the model server, at most', bytes: numberCell(row, 'llama_rss_bytes') },
@@ -197,7 +199,7 @@ function bracketsOf(
 			key: reading.key,
 			label: reading.label,
 			bytes: reading.bytes,
-			figure: memoryFigure(reading.bytes),
+			figure: memoryFigure(reading.bytes, numberFormat),
 			width: widthOn(reading.bytes, scaleBytes),
 			pastHeld: reading.bytes > heldBytes
 		}));
@@ -215,7 +217,10 @@ function bracketsOf(
  * its rows carries both the machine's own total and what the kernel said was
  * available; nothing is inferred for a day that carries neither.
  */
-export function memoryHeld(health: readonly Record<string, string>[]): MemoryHeldRecord {
+export function memoryHeld(
+	health: readonly Record<string, string>[],
+	numberFormat: NumberFormatConfig
+): MemoryHeldRecord {
 	const byDay = new Map<string, Record<string, string>[]>();
 	const allDays = new Set<string>();
 	for (const row of health) {
@@ -254,7 +259,7 @@ export function memoryHeld(health: readonly Record<string, string>[]): MemoryHel
 				key: 'free',
 				label: 'the kernel could still hand this out',
 				bytes: availableBytes,
-				figure: memoryFigure(availableBytes),
+				figure: memoryFigure(availableBytes, numberFormat),
 				width: widthOn(availableBytes, scaleBytes)
 			}
 		];
@@ -263,21 +268,21 @@ export function memoryHeld(health: readonly Record<string, string>[]): MemoryHel
 				key: 'server',
 				label: "the model server's own memory",
 				bytes: serverAnon as number,
-				figure: memoryFigure(serverAnon as number),
+				figure: memoryFigure(serverAnon as number, numberFormat),
 				width: widthOn(serverAnon as number, scaleBytes)
 			});
 			segments.push({
 				key: 'worker',
 				label: "our own worker's memory",
 				bytes: workerAnon as number,
-				figure: memoryFigure(workerAnon as number),
+				figure: memoryFigure(workerAnon as number, numberFormat),
 				width: widthOn(workerAnon as number, scaleBytes)
 			});
 			segments.push({
 				key: 'rest',
 				label: 'everything else the machine is holding',
 				bytes: restBytes as number,
-				figure: memoryFigure(restBytes as number),
+				figure: memoryFigure(restBytes as number, numberFormat),
 				width: widthOn(restBytes as number, scaleBytes)
 			});
 		} else {
@@ -285,12 +290,12 @@ export function memoryHeld(health: readonly Record<string, string>[]): MemoryHel
 				key: 'held',
 				label: 'held',
 				bytes: heldBytes,
-				figure: memoryFigure(heldBytes),
+				figure: memoryFigure(heldBytes, numberFormat),
 				width: widthOn(heldBytes, scaleBytes)
 			});
 		}
 
-		const { brackets, overlapBytes } = bracketsOf(row, heldBytes, scaleBytes);
+		const { brackets, overlapBytes } = bracketsOf(row, heldBytes, scaleBytes, numberFormat);
 		const swapTotal = numberCell(row, 'os_swap_total_bytes');
 		const swapFree = numberCell(row, 'os_swap_free_bytes');
 		const swapUsed = swapTotal !== null && swapFree !== null ? swapTotal - swapFree : null;
@@ -300,25 +305,25 @@ export function memoryHeld(health: readonly Record<string, string>[]): MemoryHel
 			itemId: (row.item_id ?? '').trim(),
 			shape: four ? 'four' : 'two',
 			totalBytes,
-			totalFigure: memoryFigure(totalBytes),
+			totalFigure: memoryFigure(totalBytes, numberFormat),
 			scaleBytes,
 			machineWidth: widthOn(totalBytes, scaleBytes),
 			segments,
 			brackets,
 			overlapBytes,
 			overlapWidth: widthOn(overlapBytes, scaleBytes),
-			overlapFigure: memoryFigure(overlapBytes),
+			overlapFigure: memoryFigure(overlapBytes, numberFormat),
 			restBytes,
 			overBytes,
-			overFigure: memoryFigure(overBytes),
+			overFigure: memoryFigure(overBytes, numberFormat),
 			swap:
 				swapTotal === null || swapUsed === null
 					? null
 					: {
 							usedBytes: swapUsed,
 							totalBytes: swapTotal,
-							usedFigure: memoryFigure(swapUsed),
-							totalFigure: memoryFigure(swapTotal),
+							usedFigure: memoryFigure(swapUsed, numberFormat),
+							totalFigure: memoryFigure(swapTotal, numberFormat),
 							width: widthOn(swapUsed, swapTotal),
 							none: swapUsed === 0
 						}

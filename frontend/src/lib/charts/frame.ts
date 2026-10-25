@@ -22,6 +22,7 @@ import { countDays, nameSpan } from '../console/span-words';
 import { dayMonth, shortDate } from '../format';
 import type { ReadoutLine } from './readout';
 import { grouped } from './series';
+import type { NumberFormatConfig } from '../number-format';
 
 export interface Margin {
 	top: number;
@@ -715,6 +716,7 @@ export interface CoverageItems {
 export function coverageSentence(
 	found: Coverage,
 	lead: string,
+	numberFormat: NumberFormatConfig,
 	items: CoverageItems | null = null
 ): string | null {
 	if (!found.sparse) return null;
@@ -724,9 +726,9 @@ export function coverageSentence(
 			? ''
 			: `, and ${
 					items.low === items.high
-						? grouped(items.low)
-						: `${grouped(items.low)} to ${grouped(items.high)}`
-				} of the ${grouped(items.total)} items on them`;
+						? grouped(items.low, numberFormat)
+						: `${grouped(items.low, numberFormat)} to ${grouped(items.high, numberFormat)}`
+				} of the ${grouped(items.total, numberFormat)} items on them`;
 	return `${days}${count}. The tinted span is days nothing recorded, not quiet days.`;
 }
 

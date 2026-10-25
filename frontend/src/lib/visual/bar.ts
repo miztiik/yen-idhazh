@@ -27,6 +27,7 @@
 
 import { scaleBand } from 'd3-scale';
 import type { VisualData, VisualMark } from '$lib/payload/types';
+import type { NumberFormatter } from '$lib/number-format';
 
 /** How tall one bar's row is: the name on the line above, the bar under it.
  *
@@ -61,6 +62,8 @@ export interface Bar {
 	name: string;
 	/** The figure as the article states it, which is what a reader reads. */
 	stated: string;
+	/** The same quantity in the configured display notation. */
+	displayed: string;
 	/** Where the name sits, on the line above the bar and with the width to itself. */
 	label: number;
 	y: number;
@@ -121,7 +124,7 @@ function figureOf(mark: VisualMark): number {
  * Throws where the data does not fit - see the module note: `refusedVisualData`
  * is the check, and this is the code that trusts it.
  */
-export function drawBars(data: VisualData, room: number): Drawing {
+export function drawBars(data: VisualData, room: number, formatNumber: NumberFormatter): Drawing {
 	const held = new Map(data.marks.map((mark) => [mark.mark_id, mark]));
 	const mark = (id: string): VisualMark => {
 		const found = held.get(id);
@@ -157,6 +160,7 @@ export function drawBars(data: VisualData, room: number): Drawing {
 		return {
 			name: named.text ?? '',
 			stated: figures[index].value ?? '',
+			displayed: formatNumber(value, { si: true }),
 			// The name has the line above the bar to itself, centred in the room the
 			// bar leaves, so a long name never meets the figure beside the bar.
 			label: top + (band.bandwidth() - height) / 2,

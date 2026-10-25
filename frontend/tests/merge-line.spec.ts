@@ -12,6 +12,7 @@
 import { expect, test } from '@playwright/test';
 
 import { shortDate } from '../src/lib/format';
+import { numberFormat } from './support/number-format';
 import {
 	agreementCorridor,
 	clampEnvelope,
@@ -19,17 +20,17 @@ import {
 	corridorOf,
 	countedDays,
 	describeEarlierRow,
-	describeUnclear,
+	describeUnclear as describeUnclearWithFormat,
 	findNewestRow,
 	gateNeeds,
 	heldInWords,
 	heldNote,
 	mergeCountsOf,
-	mergeNote,
-	mergeRate,
+	mergeNote as mergeNoteWithFormat,
+	mergeRate as mergeRateWithFormat,
 	mergeState,
 	mergeTotals,
-	rateWithDenominator,
+	rateWithDenominator as rateWithDenominatorWithFormat,
 	silentTail,
 	wholePercent,
 	type JudgeDay,
@@ -46,6 +47,23 @@ const DAY: MergeItem[] = [
 	{ item_id: 'd', same_story_as: null },
 	{ item_id: 'e' }
 ];
+
+const mergeNote = (totals: Parameters<typeof mergeNoteWithFormat>[0], days: number) =>
+	mergeNoteWithFormat(totals, days, numberFormat);
+const mergeRate = (totals: Parameters<typeof mergeRateWithFormat>[0], days: number) =>
+	mergeRateWithFormat(totals, days, numberFormat);
+const rateWithDenominator = (
+	numerator: number | null,
+	denominator: number | null,
+	floor: number,
+	mark?: number
+) => rateWithDenominatorWithFormat(numerator, denominator, floor, numberFormat, mark);
+const describeUnclear = (
+	unclear: number | null,
+	agreed: number | null,
+	floor: number,
+	mark?: number
+) => describeUnclearWithFormat(unclear, agreed, floor, numberFormat, mark);
 
 function day(date: string, items: MergeItem[]): MergeDay {
 	return { date, ...mergeCountsOf(items) };

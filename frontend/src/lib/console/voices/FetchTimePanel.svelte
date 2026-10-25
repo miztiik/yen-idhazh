@@ -7,16 +7,19 @@
 	import ChartReadout from '../../components/ChartReadout.svelte';
 	import { markReadout } from '../../charts/readout';
 	import type { RankedRow, RankedDisplay } from '../../charts/rank';
+	import { formatNumber } from '../../number-format';
+	import { useNumberFormat } from '../../number-format-context';
 	let { view, panelState, width, height, readoutMaxShare, notes, days }: {
 		view: ReturnType<typeof fetchTime>; panelState: PanelState; width: number; height: number; readoutMaxShare: number; notes: string[]; days: number;
 	} = $props();
+	const numberFormat = useNumberFormat();
 	let selected = $state<number | null>(null);
 </script>
 {#snippet timingTrack(row: RankedRow<RankedDisplay>)}
 	{@const entry = view.geometry?.rows.find((candidate) => candidate.key === row.key)}
 	<span class="timing-track" data-readout-at={view.geometry?.rows.findIndex((candidate) => candidate.key === row.key)}>
 		{#if entry?.segments.length}
-			{#each entry.segments as part (part.label)}<span class="timing-part" style="inset-inline-start: {part.start}; inline-size: {part.size}; background: var({part.token})" aria-label="{part.label}: {part.value} ms"></span>{/each}
+			{#each entry.segments as part (part.label)}<span class="timing-part" style="inset-inline-start: {part.start}; inline-size: {part.size}; background: var({part.token})" aria-label="{part.label}: {formatNumber(part.value, numberFormat, { si: false })} ms"></span>{/each}
 		{:else}<span class="timing-whole" style="inline-size: {row.percent}"></span>{/if}
 	</span>
 {/snippet}

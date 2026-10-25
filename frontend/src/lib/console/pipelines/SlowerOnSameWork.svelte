@@ -8,18 +8,22 @@
 	import type { Row } from '$lib/data/ledger';
 	import type { ModelRule } from '$lib/charts/d3/model-rule';
 	import type { ConsoleConfig, ChartConfig } from '$lib/server/config';
+	import { formatNumber } from '$lib/number-format';
+	import { useNumberFormat } from '$lib/number-format-context';
 	let { rows, knobs, chart, rule, calendar }: { rows: Row[]; knobs: ConsoleConfig; chart: ChartConfig; rule: ModelRule; calendar?: readonly string[] } = $props();
 	let measured = $state<number | null>(null);
+	const numberFormat = useNumberFormat();
 	const width = $derived(chartWidth(measured, knobs.chart_width));
 	const work = $derived(slowerOnSameWork(rows, calendar));
 	const geometry = $derived(dateSeries(work.series, {
 		frame: frame(width, knobs.chart_height, MARGIN), density: chart.tick_density,
 		valueTicks: 5, padding: 0.2, rule,
-		rules: work.median === null ? [] : [{ at: work.median, label: 'window median' }]
+		rules: work.median === null ? [] : [{ at: work.median, label: 'window median' }],
+		number_format: chart.number_format
 	}));
 </script>
 <div use:observeWidth={(next) => measured = next}>
-<p data-lede class="lede">{work.newest === null ? 'No comparable reference work on the newest day.' : `${work.newest.toFixed(1)} seconds for the typical article.`}</p>
+<p data-lede class="lede">{work.newest === null ? 'No comparable reference work on the newest day.' : `${formatNumber(work.newest, numberFormat, { si: false })} seconds for the typical article.`}</p>
 <p data-comparison="The newest day's seconds against the window's median.">The newest day's seconds against the window's median, pricing the same article size on the same reference machine.</p>
 <DateSeries {geometry} empty={emptyState('quiet', 'No qualifying reference-machine work was measured.')}
 	name="slower-on-same-work" label="Seconds for the same typical article, one point a recorded day"

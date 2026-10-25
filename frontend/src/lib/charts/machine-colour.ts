@@ -37,6 +37,7 @@ import { median } from 'd3-array';
 import { orderedRamp, RESERVED_GREY, RESERVED_GREY_INK } from './d3/ordered-colour';
 import { machineName } from './machine-name';
 import type { ChartToken } from './theme';
+import { formatNumber, type NumberFormatConfig } from '../number-format';
 
 /** The key the shards that recorded no machine are grouped under.
  *
@@ -177,15 +178,15 @@ export function promptRate(tokens: number | null, seconds: number | null): numbe
 }
 
 /** A reading speed in words, to one decimal: `8.8 tokens a second`. */
-export function rateWords(rate: number): string {
-	return `${rate.toFixed(1)} tokens a second`;
+export function rateWords(rate: number, numberFormat: NumberFormatConfig): string {
+	return `${formatNumber(rate, numberFormat)} tokens a second`;
 }
 
 /** The speed a machine's colour stands for, in words, so a colour is never the
  * only carrier of it. Null for no machine recorded, which has no speed to say. */
-export function speedWords(identity: MachineIdentity): string | null {
+export function speedWords(identity: MachineIdentity, numberFormat: NumberFormatConfig): string | null {
 	if (isUnrecorded(identity)) return null;
-	return identity.rate === null ? 'no speed reading' : rateWords(identity.rate);
+	return identity.rate === null ? 'no speed reading' : rateWords(identity.rate, numberFormat);
 }
 
 /** One job as the ramp takes it: which machine, and its reading speed where the

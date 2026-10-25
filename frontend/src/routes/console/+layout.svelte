@@ -47,8 +47,12 @@
 	} from '$lib/console/completeness';
 	import { stickStrip } from '$lib/console/strip';
 	import { provideWindowSlot, type WindowSource } from '$lib/console/window-slot';
+	import { provideNumberFormat } from '$lib/number-format-context';
 
 	let { data, children } = $props();
+	// Context belongs to the mounted layout, so the value is captured once.
+	// svelte-ignore state_referenced_locally
+	provideNumberFormat(data.number_format);
 
 	// Read off the route rather than passed in by each page. Three pages naming
 	// their own id is three places for it to be wrong, and the routes already

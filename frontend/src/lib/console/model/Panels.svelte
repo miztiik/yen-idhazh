@@ -25,7 +25,9 @@
 	import { median } from './rows';
 	import { refusingRule, MODEL_STAGES } from './refusing-rule';
 	import { completeModelRule } from './model-rule';
-	import { grouped } from '../../charts/series';
+	import { grouped as formatGrouped } from '../../charts/series';
+	import { useNumberFormat } from '$lib/number-format-context';
+	import { formatNumber } from '$lib/number-format';
 	import { nameSpan } from '../span-words';
 
 	let { id, rows, range, rule, chart, knobs, bands, thresholds, throughputReference }: {
@@ -33,10 +35,12 @@
 		knobs: ConsoleConfig; bands: readonly SummaryBand[]; thresholds: { high: number; low: number };
 		throughputReference: string;
 	} = $props();
+	const numberFormat = useNumberFormat();
+	const grouped = (value: number) => formatGrouped(value, numberFormat);
 	const window = $derived({ start: range.from, end: range.to, days: range.days });
 	const throughputs = $derived(id === 'model-throughput' ? modelThroughput(rows[0], window) : []);
 	const endings = $derived(id === 'call-ending' ? callEnding(rows[0]) : null);
-	const scores = $derived(id === 'faithfulness' ? faithfulness(rows[0], thresholds, { step: knobs.faithfulness_axis_step, floorMax: knobs.faithfulness_axis_floor_max }) : null);
+	const scores = $derived(id === 'faithfulness' ? faithfulness(rows[0], thresholds, { step: knobs.faithfulness_axis_step, floorMax: knobs.faithfulness_axis_floor_max }, numberFormat) : null);
 	const sources = $derived(id === 'source-doubts' ? sourceDoubts(rows[0], rows[1], window, { limit: knobs.doubt_rows, minForShare: knobs.min_attempts_for_rate }) : null);
 	const times = $derived(id === 'write-cost' || id === 'score-cost' ? cost(rows[0], id === 'write-cost' ? 'summarize_ms' : 'score_ms') : null);
 	const lengths = $derived(id === 'summary-length' ? summaryLength(rows[0], bands) : []);
@@ -47,7 +51,7 @@
 </script>
 
 {#if id === 'model-throughput'}
-	<p data-lede>{throughputs.at(-1)?.write.median.toFixed(2) ?? 'not measured'} tokens per second on the newest day</p>
+	<p data-lede>{throughputs.at(-1) === undefined ? 'not measured' : formatNumber(throughputs.at(-1)!.write.median, numberFormat, { si: false })} tokens per second on the newest day</p>
 	<p data-comparison="each day's rate against the window's median">Each day's rate against the window's median.</p>
 	<ThroughputTrend days={throughputs} height={chart.height_px} width={chart.width_px} reference={throughputReference}
 		tickDensity={chart.tick_density} readoutMaxShare={chart.readout_max_share} windowDays={range.days} rule={speedRule} />
@@ -94,8 +98,8 @@
 					<p><span data-doubt-count="not-sure" data-doubt-n={source.notSure}>{source.notSure} marked "not sure"</span>;
 						<span data-doubt-count="unsupported" data-doubt-n={source.unsupportedNumbers}>{source.unsupportedNumbers} with numbers not in the article</span>;
 						<span data-doubt-count="hedge" data-doubt-n={source.hedgeDropped}>{source.hedgeDropped} with "maybe" told as fact</span>.</p>
-					<p>{RECORDED.find((i) => i.id === 'evidential_density')?.label}: <span data-instrument="evidential_density">{source.evidential === null ? 'not measured' : `${source.evidential.toFixed(1)} per 1,000 words`}</span>.</p>
-					<p>{RECORDED.find((i) => i.id === 'speculative_density')?.label}: <span data-instrument="speculative_density">{source.speculative === null ? 'not measured' : `${source.speculative.toFixed(1)} per 1,000 words`}</span>.</p>
+					<p>{RECORDED.find((i) => i.id === 'evidential_density')?.label}: <span data-instrument="evidential_density">{source.evidential === null ? 'not measured' : `${formatNumber(source.evidential, numberFormat, { si: false })} per 1,000 words`}</span>.</p>
+					<p>{RECORDED.find((i) => i.id === 'speculative_density')?.label}: <span data-instrument="speculative_density">{source.speculative === null ? 'not measured' : `${formatNumber(source.speculative, numberFormat, { si: false })} per 1,000 words`}</span>.</p>
 				{/if}
 			{/snippet}
 		</RankedList>
@@ -106,7 +110,7 @@
 		<p>Nothing acts on these numbers.</p>
 	</div>
 {:else if times !== null}
-	<p data-lede>{times.times === null ? 'not measured' : (times.times.median / 1000).toFixed(2)} median seconds</p>
+	<p data-lede>{times.times === null ? 'not measured' : formatNumber(times.times.median / 1000, numberFormat, { si: false })} median seconds</p>
 	<p data-comparison="each time band's count against the share done by then">Each time band's count against the share done by then.</p>
 	{#if times.times !== null}
 		<figure data-eval-panel={id} data-chart={id}>

@@ -1,6 +1,7 @@
 import { expect, test } from './support/door-page';
 import { frame } from '../src/lib/charts/frame';
-import { dateSeries, type SeriesInput } from '../src/lib/charts/d3/dateSeries';
+import { type SeriesInput } from '../src/lib/charts/d3/dateSeries';
+import { dateSeries } from './support/number-format';
 import { readoutCapStyle } from '../src/lib/charts/readout';
 import { describeMissingMarkers, measurementOff, recordDestroyed, recordingNotes, recordingStarted, sampledAt, type OfferedWindow, type RecordingNotes, type RecordRead } from '../src/lib/console/recording';
 import { daysBetween, type HeldPeriod } from '../src/lib/data/slice';
