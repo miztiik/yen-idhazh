@@ -23,6 +23,12 @@ if (Bun.argv.includes("--emit-schemas")) {
       max_age_hours: 24, recency_half_life_hours: 18, recency_weight: 0.6,
     });
     expect(config.curate.article_limit).toBe(100);
+    expect(config.feedback.window_days).toBe(7);
+    const { feedback: _feedback, ...legacyConfig } = config;
+    expect(configs.FeedIngestConfigSchema.parse(legacyConfig).feedback.window_days).toBe(7);
+    expect(configs.FeedIngestConfigSchema.parse({
+      ...config, feedback: { window_days: 2 },
+    }).feedback.window_days).toBe(2);
     expect(config.curate.source_reliability_penalty_enabled).toBe(true);
     const { source_reliability_penalty_enabled: _enabled, ...previousCurate } = config.curate;
     expect(configs.FeedCurateConfigSchema.parse(previousCurate).source_reliability_penalty_enabled).toBe(true);
@@ -57,6 +63,9 @@ if (Bun.argv.includes("--emit-schemas")) {
     { metrics: { rolling_window_days: 3 } },
     { seal: { compression: "zstd" } },
     { desk_overrides: {} },
+    { feedback: { window_days: 0 } },
+    { feedback: { window_days: 1.5 } },
+    { feedback: { window_days: null } },
   ])("vertical patch rejects invalid or global-only settings: %j", patch => {
     expect(policies.VerticalPolicyOverrideSchema.safeParse(patch).success).toBe(false);
   });

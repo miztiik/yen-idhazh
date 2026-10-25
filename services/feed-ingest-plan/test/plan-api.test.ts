@@ -430,7 +430,7 @@ test("actual API and awaited CLI compose the same recorded plan and disclose the
     expect(failedFetch.failure).toBe("http");
     const failedFacts = await readObservationFiles(api.inputs.outputRoot, api.observation_files);
     expect(failedFacts.find(({ row }) => row.event_id === failedFetch.observation.event_id)?.row).toMatchObject({
-      outcome: "failed", failure_code: "http", attribution: "unresolved", http_status: 404,
+      outcome: "failed", failure_code: "http", attribution: "source", http_status: 404,
     });
     expect(profiles.at(-1)?.outcome).toBe("error");
     const afterFailedFetch = profiles.length;

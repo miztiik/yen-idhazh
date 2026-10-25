@@ -72,6 +72,9 @@ export const FeedMetricsConfigSchema = z.strictObject({
   overlap_windows_days: z.array(PositiveCountSchema).min(1),
   top_source_counts: z.array(PositiveCountSchema).min(1),
 });
+export const FeedFeedbackConfigSchema = z.strictObject({
+  window_days: PositiveCountSchema.default(7),
+});
 export const FeedIngestConfigSchema = z.strictObject({
   version: z.literal("2026-10-20"),
   harvest: FeedHarvestConfigSchema,
@@ -82,6 +85,7 @@ export const FeedIngestConfigSchema = z.strictObject({
   seal: FeedSealConfigSchema,
   workflow_reporting: FeedWorkflowReportingConfigSchema,
   metrics: FeedMetricsConfigSchema,
+  feedback: FeedFeedbackConfigSchema.prefault({}),
 });
 
 // Only the taxonomy fields this reader computes on are declared here.

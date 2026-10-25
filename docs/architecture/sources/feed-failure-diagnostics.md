@@ -1,6 +1,6 @@
 # Feed and article failure diagnostics
 
-**Last Updated**: 2026-10-23
+**Last Updated**: 2026-10-25
 
 Which operation failed, what evidence survives it, and which durations were
 actually measured? This is the isolated TypeScript planner's diagnostic
@@ -118,6 +118,41 @@ differences, missing sibling-host measurement and worker-owned token/cap
 measurements. Recording a shape signal and rejecting an article for it remain
 different behaviors. This change does not alter ranking, workers or production
 cutover.
+
+## Operation failure attribution
+
+Each failed fetch, parse or request-attempt observation keeps its existing
+`failure_code` and records whether the evidence belongs to the source, the
+pipeline or remains unresolved. This describes the observed operation; it
+does not diagnose intent, prove a paywall or blame a publisher-wide problem.
+
+**Table A**
+
+| Id | Evidence | Attribution |
+| --- | --- | --- |
+| A1 | A fetch or dispatched target attempt reports typed `http` failure with HTTP 401, 403, 404 or 410; or its robots rule denies the request | `source` |
+| A2 | Article extraction reports typed `empty-content`; a feed parser reports its typed `malformed-feed` failure | `source` |
+| A3 | Local target validation rejects an unsafe address, the configured body limit stops a response, or the extractor reports its depth limit | `pipeline` |
+| A4 | Other HTTP failures (including 408 and 429), DNS, network, timeout, redirect-loop, missing document root/title or any untyped exception | `unresolved` |
+
+HTTP 403 is an observed refusal for that article request only. It is not proof
+that the article is paywalled or that the publisher has failed generally.
+The selected HTTP codes mean access was refused or the target was absent;
+they do not identify why. Other client-error codes do not establish source
+responsibility. A missing root or title can be an extractor fault, so it does
+not establish source responsibility either. The existing `empty-content`
+outcome establishes failed technical extraction only, not poor editorial
+quality. No new word-count, suitability or semantic test supplies attribution.
+Retries keep separate attempt rows and their own request counts. Their shared
+fetch event identifies one article operation; counting article opportunities
+must not count each retry as another article.
+
+A successful article parse has no failure attribution. The later
+`ArticleAssessment.extraction_outcome` reports `success` only when extraction
+produced measured words, `failed` for a failed or empty extraction,
+`not_attempted` when extraction did not run, and `unavailable` otherwise. A
+model failure after usable extraction does not change that extraction result
+or make the source responsible.
 
 ## Design rationale
 
