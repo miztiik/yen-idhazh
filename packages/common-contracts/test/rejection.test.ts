@@ -292,6 +292,7 @@ describe("planning audit contracts", () => {
   test("does not turn unassessed or missing measurements into evidence", async () => {
     const staleOperationalState = OperationalStateReadSchema.parse({
       status: "stale_fallback", state_revision: 4,
+      lifecycle_status: "complete", request_status: "complete",
       lifecycle_window_days: 31, lifecycle_window_start: "2026-09-20", lifecycle_window_end: "2026-10-20",
       request_window_days: 7, request_window_start: "2026-10-14", request_window_end: "2026-10-20",
     });
@@ -299,11 +300,20 @@ describe("planning audit contracts", () => {
       status: "stale_fallback", state_revision: 4,
       lifecycle_window_start: "2026-09-20", request_window_start: "2026-10-14",
     });
+    const savedWithoutLifecycleEvidence = OperationalStateReadSchema.parse({
+      status: "stale_fallback", state_revision: 5,
+      lifecycle_status: "unavailable", lifecycle_window_days: 31,
+      lifecycle_window_start: null, lifecycle_window_end: null,
+      request_status: "complete", request_window_days: 7,
+      request_window_start: "2026-10-14", request_window_end: "2026-10-20",
+    });
+    expect(savedWithoutLifecycleEvidence.lifecycle_window_start).toBeNull();
     expect(OperationalStateReadSchema.safeParse({
       ...staleOperationalState, status: "unavailable",
     }).success).toBe(false);
     const unavailableOperationalState = OperationalStateReadSchema.parse({
       status: "unavailable", state_revision: null, notices: ["restrictions_unverified"],
+      lifecycle_status: "unavailable", request_status: "unavailable",
       lifecycle_window_days: 31, lifecycle_window_start: null, lifecycle_window_end: null,
       request_window_days: 7, request_window_start: null, request_window_end: null,
     });
@@ -315,15 +325,71 @@ describe("planning audit contracts", () => {
       "../../../tests/fixtures/contracts/feed-health-state/one-complete-snapshot.json", import.meta.url,
     )).json());
     expect(snapshot.request_days[0]!.rows).toHaveLength(3);
+    const emptyRosterDigest = createHash("sha256").update("[]", "utf8").digest("hex");
     expect(FeedHealthStateSnapshotSchema.safeParse({
       ...snapshot,
-      lifecycle_days: [{
-        ...snapshot.lifecycle_days[0]!,
-        read_status: "gap", gap_reason: "missing", input_identity: null, rows: [],
-      }],
+      source_inventory_sha256: emptyRosterDigest,
+      source_inventory: [],
+      source_results: [],
     }).success).toBe(true);
     expect(FeedHealthStateSnapshotSchema.safeParse({
+      ...snapshot, source_inventory_sha256: "d".repeat(64),
+    }).success).toBe(false);
+    expect(FeedHealthStateSnapshotSchema.safeParse({
+      ...snapshot,
+      lifecycle_availability: "unavailable",
+      lifecycle_days: [{
+        ...snapshot.lifecycle_days[0]!,
+        read_status: "gap", gap_reason: "index-identity-unavailable", input_identity: null, rows: [],
+      }],
+      source_results: [{
+        ...snapshot.source_results[0]!,
+        lifecycle: {
+          ...snapshot.source_results[0]!.lifecycle,
+          input_status: "unavailable",
+          lifecycle: "unknown",
+          strikes: null,
+          rested_runs: null,
+        },
+      }],
+    }).success).toBe(true);
+    const compactFile = snapshot.request_days[0]!.input_identity!.files.find(file => file.tier === "compact")!;
+    expect(FeedHealthStateSnapshotSchema.safeParse({
+      ...snapshot,
+      request_days: [{
+        ...snapshot.request_days[0]!,
+        input_identity: {
+          ...snapshot.request_days[0]!.input_identity!,
+          files: snapshot.request_days[0]!.input_identity!.files.map(file =>
+            file.file_id === compactFile.file_id ? { ...file, file_sha256: null } : file),
+        },
+      }],
+    }).success).toBe(false);
+    expect(FeedHealthStateSnapshotSchema.safeParse({
+      ...snapshot,
+      request_days: [{
+        ...snapshot.request_days[0]!,
+        input_identity: {
+          ...snapshot.request_days[0]!.input_identity!,
+          files: snapshot.request_days[0]!.input_identity!.files.map(file =>
+            file.file_id === compactFile.file_id
+              ? { ...file, path: file.path.replace("2026/2026.parquet", "2026/2027.parquet") }
+              : file),
+        },
+      }],
+    }).success).toBe(false);
+    expect(FeedHealthStateSnapshotSchema.safeParse({
       ...snapshot, request_days: [],
+    }).success).toBe(false);
+    expect(FeedHealthStateSnapshotSchema.safeParse({
+      ...snapshot,
+      source_results: [{
+        ...snapshot.source_results[0]!,
+        requests: { ...snapshot.source_results[0]!.requests, request_component_weight: 1.1 },
+      }],
+    }).success).toBe(false);
+    expect(FeedHealthStateSnapshotSchema.safeParse({
+      ...snapshot, snapshot_role: "latest",
     }).success).toBe(false);
     const headIndex = FeedHealthStateHeadIndexSchema.parse(await Bun.file(new URL(
       "../../../tests/fixtures/contracts/feed-health-state-head-index/two-snapshots.json", import.meta.url,
@@ -331,6 +397,13 @@ describe("planning audit contracts", () => {
     expect(headIndex.latest.state_revision).toBe(4);
     expect(FeedHealthStateHeadIndexSchema.safeParse({
       ...headIndex, previous: { ...headIndex.latest, snapshot_role: "previous" },
+    }).success).toBe(false);
+    expect(FeedHealthStateHeadIndexSchema.safeParse({
+      ...headIndex,
+      latest: {
+        ...headIndex.latest,
+        path: "state/raw/feed-ingest-plan/feed-health-state/snapshots/00000000-0000-8000-8000-000000000003.parquet",
+      },
     }).success).toBe(false);
     expect(FeedHealthStateHeadIndexSchema.safeParse({
       ...headIndex,
@@ -582,6 +655,7 @@ describe("planning audit contracts", () => {
         capture_status: "captured", selection_started_at_utc: context.now,
         state: {
           status: "unavailable", state_revision: null, notices: ["restrictions_unverified"],
+          lifecycle_status: "unavailable", request_status: "unavailable",
           lifecycle_window_days: 31, lifecycle_window_start: null, lifecycle_window_end: null,
           request_window_days: 7, request_window_start: null, request_window_end: null,
         },

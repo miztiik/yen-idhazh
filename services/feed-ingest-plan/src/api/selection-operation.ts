@@ -31,6 +31,7 @@ export async function executeSelection(
   const selectionStartedAtUtc = utcTimestamp(runtime.selection_clock ?? runtime.clock);
   const selectionState = OperationalStateReadSchema.parse({
     status: "unavailable", state_revision: null, notices: ["restrictions_unverified"],
+    lifecycle_status: "unavailable", request_status: "unavailable",
     lifecycle_window_days: inputs.harvest.config.feedback.lifecycle_window_days,
     lifecycle_window_start: null, lifecycle_window_end: null,
     request_window_days: inputs.harvest.config.feedback.window_days,

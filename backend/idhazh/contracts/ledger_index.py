@@ -214,6 +214,14 @@ class CompactEntry(Model):
             "parses anything. 0 for an entry with no file."
         ),
     )
+    file_sha256: Sha256 | None = Field(
+        default=None,
+        exclude_if=lambda value: value is None,
+        description=(
+            "SHA-256 of the exact Parquet bytes for a packed file. Older indexes omit it; "
+            "an empty or lost entry has no file digest."
+        ),
+    )
     state: EntryState = Field(
         default=EntryState.PACKED,
         description=(
@@ -257,6 +265,11 @@ class CompactIndex(Contract):
 
     __schema_stem__: ClassVar[str] = "compact-index"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-10-25",
+            change="Packed entries may carry the exact Parquet file digest.",
+            why="A bounded reader can detect changed compact content before opening it.",
+        ),
         ChangelogEntry(
             version="2026-10-07",
             change="Yearly indexes gain expired_through; omitted marks read as null.",
@@ -350,6 +363,11 @@ class CompactIndex(Contract):
                 raise ValueError(
                     f"{where} marks {entry.covers!r} {entry.state.value} with rows {entry.rows} "
                     f"and bytes {entry.bytes}, and an entry with no file counts neither"
+                )
+            if entry.state is not EntryState.PACKED and entry.file_sha256 is not None:
+                raise ValueError(
+                    f"{where} marks {entry.covers!r} {entry.state.value} with a file digest, "
+                    "and an entry with no file has no digest"
                 )
             if entry.state is EntryState.LOST and self.period is not Period.DAILY:
                 raise ValueError(

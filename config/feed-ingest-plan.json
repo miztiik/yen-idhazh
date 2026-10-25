@@ -67,7 +67,11 @@
     "window_days": 7,
     "minimum_measured_opportunities": 20,
     "minimum_measured_coverage": 0.8,
-    "request_weight": 0.3333333333333333
+    "component_weights": {
+      "cpu": 0.3333333333333333,
+      "private_memory": 0.3333333333333333,
+      "requests": 0.3333333333333333
+    }
   },
   "metrics": {
     "rolling_window_days": 7,

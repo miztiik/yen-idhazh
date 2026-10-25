@@ -55,9 +55,11 @@ export const OperationalStateReadSchema = z.strictObject({
   status: z.enum(["current", "stale_fallback", "unavailable"]),
   state_revision: PositiveCountSchema.nullable(),
   notices: z.array(z.literal("restrictions_unverified")).default([]),
+  lifecycle_status: z.enum(["complete", "partial", "unavailable"]),
   lifecycle_window_days: PositiveCountSchema,
   lifecycle_window_start: DateStampSchema.nullable(),
   lifecycle_window_end: DateStampSchema.nullable(),
+  request_status: z.enum(["complete", "partial", "unavailable"]),
   request_window_days: PositiveCountSchema,
   request_window_start: DateStampSchema.nullable(),
   request_window_end: DateStampSchema.nullable(),
@@ -76,13 +78,26 @@ export const OperationalStateReadSchema = z.strictObject({
     ].some(item => item !== null)) {
       reject(ctx, "unavailable state has no saved revision or window");
     }
-  } else if (value.state_revision === null || [
-    value.lifecycle_window_start,
-    value.lifecycle_window_end,
-    value.request_window_start,
-    value.request_window_end,
-  ].some(item => item === null)) {
-    reject(ctx, "a saved state reading retains its revision and original window");
+    if (value.lifecycle_status !== "unavailable" || value.request_status !== "unavailable") {
+      reject(ctx, "unavailable state has unavailable evidence components");
+    }
+  } else {
+    if (value.state_revision === null || [
+      value.request_window_start, value.request_window_end,
+    ].some(item => item === null)) {
+      reject(ctx, "a saved state reading retains its revision and request window");
+    }
+    if ((value.lifecycle_window_start === null) !== (value.lifecycle_window_end === null)) {
+      reject(ctx, "lifecycle represented-day bounds are available together");
+    }
+    if (value.lifecycle_status !== "unavailable"
+      && (value.lifecycle_window_start === null || value.lifecycle_window_end === null)) {
+      reject(ctx, "known lifecycle evidence retains its represented-day bounds");
+    }
+    if (value.request_status === "unavailable"
+      && (value.request_window_start === null || value.request_window_end === null)) {
+      reject(ctx, "unavailable request evidence still names its configured window");
+    }
   }
   const windows: [string | null, string | null][] = [
     [value.lifecycle_window_start, value.lifecycle_window_end],

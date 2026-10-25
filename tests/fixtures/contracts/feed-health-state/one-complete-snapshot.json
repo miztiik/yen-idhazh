@@ -1,6 +1,5 @@
 {
-  "version": "2026-10-25T11:21",
-  "snapshot_role": "latest",
+  "version": "2026-10-25T13:50",
   "state_revision": 1,
   "parent_revision": null,
   "written_at_utc": "2026-10-25T01:05:00Z",
@@ -10,6 +9,7 @@
   "policy_version": "2026-10-25",
   "policy_sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
   "lifecycle_window_days": 1,
+  "lifecycle_availability": "complete",
   "lifecycle_window_start": "2026-10-24",
   "lifecycle_window_end": "2026-10-24",
   "lifecycle_days": [
@@ -18,13 +18,15 @@
       "read_status": "available",
       "gap_reason": null,
       "input_identity": {
+        "input_day": "2026-10-24",
         "fingerprint": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
         "indexes": [
           {
             "ledger": "feed-health",
             "kind": "raw",
             "path": "state/raw/feed-health/2026/10/24/index.json",
-            "content_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+            "content_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "day_membership_sha256": "3333333333333333333333333333333333333333333333333333333333333333"
           }
         ],
         "files": [
@@ -35,11 +37,13 @@
             "path": "state/raw/feed-health/2026/10/24/00000000-0000-8000-8000-000000000001.parquet",
             "file_id": "00000000-0000-8000-8000-000000000001",
             "content_sha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+            "file_sha256": null,
             "bytes": 512,
             "row_count": 1
           }
         ]
       },
+      "observed_fingerprint": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
       "rows": [
         {
           "version": "2026-10-24T20:04",
@@ -62,6 +66,7 @@
     }
   ],
   "request_window_days": 1,
+  "request_availability": "complete",
   "request_window_start": "2026-10-24",
   "request_window_end": "2026-10-24",
   "request_days": [
@@ -70,13 +75,22 @@
       "read_status": "available",
       "gap_reason": null,
       "input_identity": {
+        "input_day": "2026-10-24",
         "fingerprint": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
         "indexes": [
           {
             "ledger": "document-observations",
             "kind": "raw",
             "path": "state/raw/feed-ingest-plan/document-observations/2026/10/24/index.json",
-            "content_sha256": "1111111111111111111111111111111111111111111111111111111111111111"
+            "content_sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+            "day_membership_sha256": "4444444444444444444444444444444444444444444444444444444444444444"
+          },
+          {
+            "ledger": "document-observations",
+            "kind": "yearly",
+            "path": "state/compact/feed-ingest-plan/document-observations/index/yearly.json",
+            "content_sha256": "5555555555555555555555555555555555555555555555555555555555555555",
+            "day_membership_sha256": "6666666666666666666666666666666666666666666666666666666666666666"
           }
         ],
         "files": [
@@ -87,11 +101,24 @@
             "path": "state/raw/feed-ingest-plan/document-observations/2026/10/24/00000000-0000-8000-8000-000000000002.parquet",
             "file_id": "00000000-0000-8000-8000-000000000002",
             "content_sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+            "file_sha256": null,
             "bytes": 1024,
             "row_count": 3
+          },
+          {
+            "ledger": "document-observations",
+            "tier": "compact",
+            "period": "yearly",
+            "path": "state/compact/feed-ingest-plan/document-observations/yearly/2026/2026.parquet",
+            "file_id": "00000000-0000-8000-8000-000000000005",
+            "content_sha256": "7777777777777777777777777777777777777777777777777777777777777777",
+            "file_sha256": "8888888888888888888888888888888888888888888888888888888888888888",
+            "bytes": 4096,
+            "row_count": 12
           }
         ]
       },
+      "observed_fingerprint": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
       "rows": [
         {
           "version": "2026-10-24T23:08",
@@ -175,6 +202,42 @@
           "request_coverage": null
         }
       ]
+    }
+  ],
+  "source_inventory_complete": true,
+  "source_inventory_sha256": "729e6ffc64a3ab568958f45c86725ee6266c64994e3a6c5a17b3851f5952360e",
+  "source_inventory": [
+    {
+      "source_id": "recorded-news",
+      "endpoint_key": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+      "publisher_id": "recorded-publisher",
+      "registry_status": "active"
+    }
+  ],
+  "source_results": [
+    {
+      "source_id": "recorded-news",
+      "endpoint_key": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+      "lifecycle": {
+        "input_status": "complete",
+        "lifecycle": "eligible",
+        "strikes": null,
+        "rested_runs": null,
+        "robots_permission": "allowed",
+        "reliability": null
+      },
+      "requests": {
+        "input_status": "complete",
+        "qualification_status": "qualified",
+        "measured_target_requests": 1,
+        "measured_source_wasted_requests": 0,
+        "observed_attempted_opportunities": 1,
+        "observed_measured_opportunities": 1,
+        "measured_coverage": 1.0,
+        "request_waste_ratio": 0.0,
+        "request_component_weight": 0.3333333333333333,
+        "request_component_penalty": 0.0
+      }
     }
   ]
 }

@@ -27,18 +27,21 @@ if (Bun.argv.includes("--emit-schemas")) {
     expect(config.feedback.window_days).toBe(7);
     expect(config.feedback.minimum_measured_opportunities).toBe(20);
     expect(config.feedback.minimum_measured_coverage).toBe(0.8);
-    expect(config.feedback.request_weight).toBe(1 / 3);
+    expect(config.feedback.component_weights).toEqual({
+      cpu: 1 / 3, private_memory: 1 / 3, requests: 1 / 3,
+    });
     const { feedback: _feedback, ...legacyConfig } = config;
     expect(configs.FeedIngestConfigSchema.parse(legacyConfig).feedback.window_days).toBe(7);
     expect(configs.FeedIngestConfigSchema.parse({
       ...config, feedback: { window_days: 2 },
     }).feedback).toMatchObject({
       lifecycle_window_days: 31, window_days: 2, minimum_measured_opportunities: 20,
-      minimum_measured_coverage: 0.8, request_weight: 1 / 3,
+      minimum_measured_coverage: 0.8,
+      component_weights: { cpu: 1 / 3, private_memory: 1 / 3, requests: 1 / 3 },
     });
     expect(configs.FeedIngestConfigSchema.parse({
-      ...config, feedback: { request_weight: 2 },
-    }).feedback.request_weight).toBe(2);
+      ...config, feedback: { component_weights: { cpu: 0.2, private_memory: 0.2, requests: 0.6 } },
+    }).feedback.component_weights).toEqual({ cpu: 0.2, private_memory: 0.2, requests: 0.6 });
     expect(config.curate.source_reliability_penalty_enabled).toBe(true);
     const { source_reliability_penalty_enabled: _enabled, ...previousCurate } = config.curate;
     expect(configs.FeedCurateConfigSchema.parse(previousCurate).source_reliability_penalty_enabled).toBe(true);
@@ -80,7 +83,8 @@ if (Bun.argv.includes("--emit-schemas")) {
     { feedback: { window_days: null } },
     { feedback: { minimum_measured_opportunities: 0 } },
     { feedback: { minimum_measured_coverage: 1.1 } },
-    { feedback: { request_weight: -0.1 } },
+    { feedback: { component_weights: { requests: -0.1 } } },
+    { feedback: { component_weights: { requests: 0.2 } } },
   ])("vertical patch rejects invalid or global-only settings: %j", patch => {
     expect(policies.VerticalPolicyOverrideSchema.safeParse(patch).success).toBe(false);
   });
@@ -105,6 +109,9 @@ if (Bun.argv.includes("--emit-schemas")) {
       { curate: { ...config.curate, article_limit: 1.5 } },
       { curate: { ...config.curate, source_reliability_penalty_enabled: "true" } },
       { curate: { ...config.curate, source_reliability_penalty_enabled: null } },
+      { feedback: {
+        ...config.feedback, component_weights: { cpu: 0.2, private_memory: 0.2, requests: 0.2 },
+      } },
       { triage: { ...config.triage, min_words_article: true } },
       { triage: { ...config.triage, max_age_hours: Infinity } },
       { desk_overrides: {} },

@@ -328,9 +328,11 @@ The response shape is:
       "status": "unavailable",
       "state_revision": null,
       "notices": ["restrictions_unverified"],
+      "lifecycle_status": "unavailable",
       "lifecycle_window_days": 31,
       "lifecycle_window_start": null,
       "lifecycle_window_end": null,
+      "request_status": "unavailable",
       "request_window_days": 7,
       "request_window_start": null,
       "request_window_end": null
@@ -350,7 +352,9 @@ The response shape is:
 Errors use the existing listener's HTTP boundary:
 
 - 400 `INVALID_REQUEST` for malformed JSON; 400 `INVALID_INPUT` for valid JSON
-  outside the strict request shape.
+  outside the strict request shape (not 422). Both use the listener's
+  `{ "code": "...", "issues": [{ "field": "...", "message": "..." }] }`
+  error envelope.
 - 404 `ARTIFACT_NOT_FOUND` when the selected batch is absent.
 - 409 `REQUEST_CONFLICT` when the batch configuration differs or the batch
   predates captured selection state.
@@ -359,6 +363,12 @@ Errors use the existing listener's HTTP boundary:
 - 500 `ARTIFACT_INVALID` for a damaged selected batch; 500
   `STATE_INPUT_INVALID` for known native index or Parquet integrity failures;
   500 `PLAN_FAILED` for unexpected programming errors.
+
+A valid request whose saved state cannot be read is not a schema error. It
+returns HTTP 200 with the typed response, `selection_state.state.status:
+"unavailable"`, the neutral `restrictions_unverified` notice, null state-window
+bounds and an `update.status` of `unavailable`. It does not return 400 or
+represent the missing evidence as an empty history.
 
 The contract requires one shared TypeScript update operation. `/plan` will
 call it after selection and concurrently with partitioning; the standalone

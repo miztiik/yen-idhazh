@@ -1,8 +1,8 @@
 """Which saved operational estimate records one source's request evidence?"""
 
-from typing import Annotated, ClassVar, Literal, Self
+from typing import Annotated, ClassVar, Field, Literal, Self
 
-from pydantic import Field, StrictInt, model_validator
+from pydantic import StrictInt, model_validator
 
 from idhazh.contracts.base import (
     ChangelogEntry,
@@ -21,7 +21,7 @@ UnitInterval = Annotated[float, Field(ge=0, le=1, allow_inf_nan=False)]
 
 
 class FeedIngestOperationalStateRow(Contract):
-    """One source's request estimate in a versioned operational-state snapshot."""
+    """One source's request estimate in the legacy operational-state snapshot."""
 
     __schema_stem__: ClassVar[str] = "feed-ingest-operational-state"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
@@ -67,9 +67,7 @@ class FeedIngestOperationalStateRow(Contract):
             and self.evidence_start_utc > self.evidence_end_utc
         ):
             raise ValueError("observed evidence starts after it ends")
-        if (
-            self.measured_target_requests is None
-        ) != (
+        if (self.measured_target_requests is None) != (
             self.measured_source_wasted_requests is None
         ):
             raise ValueError("measured request totals and waste are available together")
@@ -103,9 +101,11 @@ class OperationalStateRead(Model):
     notices: list[Literal["restrictions_unverified"]] = Field(
         default_factory=list, json_schema_extra={"default": []},
     )
+    lifecycle_status: Literal["complete", "partial", "unavailable"]
     lifecycle_window_days: PositiveCount
     lifecycle_window_start: DateStamp | None
     lifecycle_window_end: DateStamp | None
+    request_status: Literal["complete", "partial", "unavailable"]
     request_window_days: PositiveCount
     request_window_start: DateStamp | None
     request_window_end: DateStamp | None
@@ -124,13 +124,23 @@ class OperationalStateRead(Model):
                 self.request_window_end,
             )):
                 raise ValueError("unavailable state has no saved revision or window")
-        elif self.state_revision is None or any(value is None for value in (
-            self.lifecycle_window_start,
-            self.lifecycle_window_end,
-            self.request_window_start,
-            self.request_window_end,
-        )):
-            raise ValueError("a saved state reading retains its revision and original window")
+            if self.lifecycle_status != "unavailable" or self.request_status != "unavailable":
+                raise ValueError("unavailable state has unavailable evidence components")
+        else:
+            if self.state_revision is None or any(value is None for value in (
+                self.request_window_start, self.request_window_end,
+            )):
+                raise ValueError("a saved state reading retains its revision and request window")
+            if (self.lifecycle_window_start is None) != (self.lifecycle_window_end is None):
+                raise ValueError("lifecycle represented-day bounds are available together")
+            if self.lifecycle_status != "unavailable" and (
+                self.lifecycle_window_start is None or self.lifecycle_window_end is None
+            ):
+                raise ValueError("known lifecycle evidence retains its represented-day bounds")
+            if self.request_status == "unavailable" and any(value is None for value in (
+                self.request_window_start, self.request_window_end,
+            )):
+                raise ValueError("unavailable request evidence still names its configured window")
         if any(start is not None and end is not None and start > end for start, end in (
             (self.lifecycle_window_start, self.lifecycle_window_end),
             (self.request_window_start, self.request_window_end),

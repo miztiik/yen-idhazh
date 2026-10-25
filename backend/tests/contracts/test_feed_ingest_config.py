@@ -139,7 +139,11 @@ def test_python_authored_config_and_config_only_vertical_extension() -> None:
     assert config.feedback.window_days == 7
     assert config.feedback.minimum_measured_opportunities == 20
     assert config.feedback.minimum_measured_coverage == 0.8
-    assert config.feedback.request_weight == 1 / 3
+    assert config.feedback.component_weights.model_dump() == {
+        "cpu": 1 / 3,
+        "private_memory": 1 / 3,
+        "requests": 1 / 3,
+    }
     assert feed_ingest.FeedIngestConfig.model_validate(
         {key: value for key, value in payload.items() if key != "feedback"}
     ).feedback.lifecycle_window_days == 31
@@ -197,6 +201,9 @@ def test_python_refuses_invalid_global_settings_and_duplicate_references() -> No
     patches: tuple[dict[str, Any], ...] = (
         {"partition": dict(payload["partition"], default_shards=9)},
         {"partition": dict(payload["partition"], min_shards=9)},
+        {"feedback": dict(payload["feedback"], component_weights={
+            "cpu": 0.2, "private_memory": 0.2, "requests": 0.2,
+        })},
         {"curate": dict(payload["curate"], article_limit=0)},
         {"curate": dict(payload["curate"], article_limit=1.5)},
         {"curate": dict(payload["curate"], source_reliability_penalty_enabled="true")},
