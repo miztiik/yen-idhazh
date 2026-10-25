@@ -1,6 +1,7 @@
 {
   "entries": [
-    {"bytes": 14994,"covers": "2026-10-22","lost_days": [],"rows": 146,"set_aside": 0,"state": "packed"}
+    {"bytes": 14994,"covers": "2026-10-22","lost_days": [],"rows": 146,"set_aside": 0,"state": "packed"},
+    {"bytes": 15575,"covers": "2026-10-23","lost_days": [],"rows": 219,"set_aside": 0,"state": "packed"}
   ],
   "ledger": "diversity",
   "period": "daily",
