@@ -107,10 +107,13 @@ replay key. A correction is a new event with nullable `corrects_event_id` and
 `correction_revision`. Both fields are null for an ordinary event and both
 are present for a correction. The row contract checks the pair and requires a
 positive revision. The current reader retains correction events without
-applying them; contribution aggregation must replace the prior contribution
-and reject tied revisions. Each event retains its UTC time and producer
-revision. Operation costs that cannot be linked to one article stay at their
-actual feed, run or pipeline scope.
+applying them; it also preserves events from every writer attempt, so a partial
+retry cannot erase earlier operation facts. The replay key settles duplicate
+`event_id` rows within the same run and attempt, not across attempts.
+Contribution aggregation must replace the prior contribution and reject tied
+revisions. Each event retains its UTC time and producer revision. Operation
+costs that cannot be linked to one article stay at their actual feed, run or
+pipeline scope.
 
 Use the existing `ArticleAssessmentRecordSchema.extraction_outcome` as the
 nonsemantic article extraction result. Its values are `success`, `failed`,

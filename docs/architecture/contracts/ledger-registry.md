@@ -377,7 +377,9 @@ The frontend's query-door readers accept a name only when their bound catalog re
 contain fewer articles than the previous complete attempt. Discarding older
 rows during packing would remove the only complete answer before the later
 reader can verify completion. The six planning ledgers therefore keep each
-attempt until that reader selects one.
+attempt until that reader selects one. The `document-observations` ledger also
+keeps every attempt: a partial retry cannot replace earlier immutable operation
+facts, and the later feedback reader needs both.
 
 ## See also
 
