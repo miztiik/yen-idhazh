@@ -1,7 +1,7 @@
 # 14 - The rest of the ship-or-not bar
 
 **Last Updated**: 2026-10-25
-**Level**: 3 (build-failing checks on the published surface, and the test one compliance clause now rests on)
+**Level**: 3 (build-failing checks on the published browser surface)
 
 **Chain**: previous [`20260905-13-switch-on-deletion-plan.md`](20260905-13-switch-on-deletion-plan.md) | next [`20260905-15-chart-vocabulary-plan.md`](20260905-15-chart-vocabulary-plan.md).
 **Reference**: [`20260902-visual-planner-pseudo-plan.md`](20260902-visual-planner-pseudo-plan.md) - O36, rows 22, 31, 32, 33, 36, sections 12.10, 12.13 G31.
@@ -14,11 +14,11 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 
 | Field | Value |
 | --- | --- |
-| Why this plan exists | Plan 12 shipped the two floors that decide whether a drawing can be read. Three checks remain, and each fails in a way no reader would report as a bug: a visual can be correct and enormous, correct and unreachable without a mouse, and correct at build time then redrawn differently by the browser. **The third also carries a compliance load** - "code owns the path from spec to pixels" survives progressive enhancement only while the browser reproduces bytes code already chose |
-| Hard scope - in | A per-visual byte cap that degrades to `none`; a keyboard route to every fact; hydration byte-identity; motion tokenised, bounded and killable |
-| Hard scope - out | The legibility and density floors (plan 12 owns them). Any new type. Any accessibility audit tooling - descoped at project level; basic ARIA and keyboard navigation are in scope and that is what row 2 is |
-| ESCALATE triggers | 1. The post-hydrate DOM cannot be made byte-identical to the build-time emit - that reopens a compliance clause and is Level 5. 2. The byte cap would refuse more than a stated share of otherwise-valid visuals, which means the cap is wrong rather than the visuals. 3. A fact is reachable only on hover and cannot be given a keyboard route without a new interaction pattern |
-| Chosen strategy | Each check is a build-failing oracle, not a review item. A check a person can skip is the check skipped on the day it would have bitten |
+| Why this plan exists | Plan 12 shipped the floors that decide whether a drawing can be read. The remaining checks must protect that delivery in the browser: every fact remains reachable by keyboard, the browser shell remains stable across navigation and reload, and motion remains finite and respectful of reduced motion. |
+| Hard scope - in | The existing mark and fact limits remain authoritative; a keyboard route to every fact; reusable browser-shell identity checks; motion tokenised, bounded and killable |
+| Hard scope - out | A new per-visual byte cap; chart-specific test fixtures; prerendered chart markup; new chart types; accessibility audit tooling; legibility and density floors owned by plan 12 |
+| ESCALATE triggers | 1. A fact is reachable only on hover and cannot be given a keyboard route without a new interaction pattern. 2. The browser shell cannot produce stable geometry, text, focus order and accessibility from the same validated data and width. 3. A future chart or shell change requires layout animation, an invented motion limit or a per-type exception |
+| Chosen strategy | Generic shared-shell checks replace visual-specific checks. A new chart uses the same shell contract; it does not get a separate identity or motion test |
 | Execution | `autonomous orchestrator per docs/how-to/execute-a-plan.md. Parallel N = 4.` |
 
 ---
@@ -27,34 +27,34 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 
 | # | Row title | Depends-on | Parallel-group | Status | Worktree | PR | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| 1 | A drawing that costs too much is not drawn | - | A | PENDING | - | - | - |
+| 1 | Existing mark limits bound visual complexity | - | A | COLLAPSED | - | - | - |
 | 2 | Every fact is reachable without a mouse | - | A | DONE | p14-r2 | #696 | - |
-| 3 | The browser draws exactly what the build drew | 1, 2 | B | PENDING | - | - | - |
-| 4 | Motion that can be turned off, and that ends | 3 | C | PENDING | - | - | - |
+| 3 | The browser shell is stable across loads and navigation | 1, 2 | B | PENDING | - | - | - |
+| 4 | Motion is shared, finite and reduced-motion safe | 3 | C | PENDING | - | - | - |
 
 ---
 
-## 2. Row #1 - A drawing that costs too much is not drawn
+## 2. Row #1 - Existing mark limits bound visual complexity
 
-- **Scope:** A per-visual byte cap in config; a compiled visual over the cap becomes `none` with a recorded reason rather than publishing.
-- **Files touched:** `frontend/src/lib/charts/**` or the compiler module, `config/idhazh.json`, `backend/idhazh/contracts/app_config.py`, `schemas/app-config.schema.json`, `tests/fixtures/contracts/app-config/tuned.json`, `backend/idhazh/contracts/visual.py` (the reason enum), `frontend/tests/**`, `docs/concepts/design-system.md`
-- **Acceptance gates:** `ruff`; `mypy --strict`; export + drift; the full suite; `npm run check`; build; `bundle-gate`; `idhazh site-weight`; the browser suite.
-- **Oracle:** A plan whose compiled output exceeds the cap publishes the item **with no visual and a recorded reason**, and the item is otherwise unchanged - asserted by comparing the published item to the same item with the visual removed by hand. Degrading must cost the reader the drawing and nothing else.
+- **Scope:** No new visual byte limit. Keep `visuals.min_chart_points`, `visuals.max_chart_points`, `visuals.max_facts`, text limits and the existing mark-count validator as the complexity contract. A plan outside those limits follows the existing validation and downgrade behaviour.
+- **Files touched:** None for a new implementation. The result is recorded in the plan and in the current contract documentation.
+- **Acceptance gates:** The existing visual contract and validator tests are the gates. No byte gate or byte measurement is added.
+- **Oracle:** Valid plans with between the configured minimum and maximum marks publish. Plans outside the configured mark window are refused or downgraded by the existing validator; no additional byte rule changes them.
 
 ### Decisions
 
 | # | Decision | Authority |
 | --- | --- | --- |
-| 1 | There is **no per-item route**, so a visual lives on a list that has reached 621 items. One expensive drawing is one expensive drawing on a page carrying hundreds | Row 36 |
-| 2 | Over-cap degrades to `none` with its own reason, which joins the enum plan 11 established. It is not a validator rejection - the plan was valid and the drawing was too big | Row 36, 12.7 G11 |
-| 3 | The cap is a config number with the measurement behind it committed | Guardrail #6, Guardrail #10 |
+| 1 | Mark and fact limits are the complexity boundary. A byte limit is a second, arbitrary size rule with no fixed reader-facing failure mode. | Visual contract, validator |
+| 2 | Adding a byte limit does not improve graceful degradation. Invalid visual plans already degrade; the existing story stays unchanged. | `VisualsConfig`, `visual_validator.py` |
+| 3 | Site growth belongs in site-weight and retention measurement, not in a per-visual published-data rule. | Guardrail #10, site-weight documentation |
 
 ### Rejected alternatives
 
 | # | Option | Why rejected | Authority |
 | --- | --- | --- | --- |
-| 1 | Simplify the drawing until it fits | Silently changes what the reader is shown, and the plan's own downgrade ladder already exists for that decision | Jony |
-| 2 | No cap, and rely on the page ceilings | The routes that render a day are counted and not capped, so nothing would ever fire | Carmack |
+| 1 | Add a per-visual byte cap | It is an arbitrary new threshold layered on top of existing mark and text bounds and would require a separate measurement and downgrade vocabulary. | Fowler, current visual contract |
+| 2 | Put each chart type on a different byte budget | It creates chart-specific exceptions and defeats the shared visual shell. | Susan, architecture |
 
 ---
 
@@ -70,9 +70,9 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 | # | Decision | Authority |
 | --- | --- | --- |
 | 1 | **The dominant device has no hover.** A fact behind a pointer is a fact most readers never get | Row 33, Reader |
-| 2 | `alt_text` is generated by the compiler from the plan and the elements, so it is satisfied by construction and never carries model prose | 12.8 X6 |
-| 3 | Focus order and the accessible tree are **not** a separate workstream - they fall out of row 3. If the post-hydrate DOM equals the build-time emit byte for byte, both match by construction, because both are functions of that DOM | 12.13 G31 |
-| 4 | Row 3's failure message names accessibility among the things it guards, or the next person to relax that test will not know what they are relaxing | 12.13 G31 |
+| 2 | The browser writes the accessible name from the same `Drawing` used to place every mark, so one derivation supplies both facts and labels | Current reader visual |
+| 3 | Focus order and the accessible tree stay with the shared browser shell. Row 3 verifies their stability across navigation and reload rather than comparing build output | 12.13 G31 |
+| 4 | Row 3 names the stable geometry, focus order, accessible name and complete fact set that its shared browser contract guards | 12.13 G31 |
 
 ### Rejected alternatives
 
@@ -83,50 +83,55 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 
 ---
 
-## 4. Row #3 - The browser draws exactly what the build drew
+## 4. Row #3 - The browser shell is stable across loads and navigation
 
-- **Scope:** One plan, rendered at build time and again after hydration, compared byte for byte.
-- **Files touched:** `frontend/src/lib/charts/**`, `frontend/tests/hydration-identity.spec.ts` (new), `docs/concepts/design-system.md`, `docs/architecture/publishing/frontend.md`
-- **Acceptance gates:** `npm run check`; build; the browser suite; the section 12 smoke.
-- **Oracle:** For a seed item and a past-seed item, the drawn SVG markup after hydration equals the build-time emit byte for byte. **The failure message names what it guards** - pixel identity, focus order and the accessible tree - so a later relaxation is an informed one.
+- **Scope:** Strengthen one reusable browser contract for the browser-owned visual shell. It applies to every valid visual-data shape the shared reader shell can render, not to one chart implementation or one seed item.
+- **Files touched:** `frontend/src/lib/components/ItemVisual.svelte`, `frontend/src/lib/visual/**`, `frontend/tests/visual-legibility.spec.ts`, `frontend/tests/**` only where the shared shell test needs support, `docs/concepts/design-system.md`, `docs/architecture/publishing/where-a-drawing-becomes-pixels.md`
+- **Acceptance gates:** `npm run check`; build; the browser suite; the section 12 smoke across representative narrow and wide viewports.
+- **Oracle:** For real rendered visuals in the shared shell, navigation and reload produce the same geometry, text, accessible name, focus route and drawing facts for the same data and measured width. The shell must not gain chart-specific markup or per-type identity exceptions.
 
 ### Decisions
 
 | # | Decision | Authority |
 | --- | --- | --- |
-| 1 | A chart that redraws on hydrate is this project's first spinner in all but name | Row 31 |
-| 2 | **This test is what a compliance clause now rests on.** "Deterministic code controls rendering" survives progressive enhancement only while the browser reproduces bytes code already chose. It is recorded as conditionally compliant until this test exists | Section 12.10 |
-| 3 | Hydration stays off by default per type, and any hydrated route earns its byte entry before it merges | Row 22 |
+| 1 | Charts are browser-owned and never prerendered. There is no build-time SVG against which a hydration byte comparison can be meaningful. | Reader visual architecture, owner ruling |
+| 2 | D3 supplies drawing arithmetic; Svelte emits the shared DOM. The browser contract covers their combined output rather than either implementation alone. | Architecture boundary |
+| 3 | One test reads all currently rendered visuals on the real day fixture and checks the shared shell contract. It does not name or branch on chart types. | Reusable browser test |
+| 4 | Navigation, reload and repeated navigation are part of the identity contract because the shell mounts the same visual through several lifecycle paths. | Existing visual-legibility coverage |
 
 ### Rejected alternatives
 
 | # | Option | Why rejected | Authority |
 | --- | --- | --- | --- |
-| 1 | Compare a screenshot | Fails on every font-rendering difference and would be disabled within a week | Jony |
-| 2 | Skip the check and trust the shared code path | The clause is only conditionally compliant without it, and nobody has tested it | Fowler |
+| 1 | Compare build-time SVG with post-hydration SVG | No chart markup exists at build time in the current architecture. | Fowler, current code |
+| 2 | Add a separate identity test for each chart type | It makes the chart vocabulary multiply test code and creates unicorn fixtures. | Susan |
+| 3 | Compare screenshots | Screenshot differences are font and platform artifacts; they do not prove stable geometry or accessible facts. | Jony |
 
 ---
 
-## 5. Row #4 - Motion that can be turned off, and that ends
+## 5. Row #4 - Motion is shared, finite and reduced-motion safe
 
-- **Scope:** Any motion is tokenised, bounded in duration and count, and honours a reduced-motion preference.
-- **Files touched:** `frontend/src/app.css` or the token layer, `frontend/src/lib/charts/**`, `config/appearance.json`, `frontend/tests/**`, `docs/concepts/design-system.md`
-- **Acceptance gates:** `npm run check`; build; the browser suite; the section 12 smoke.
-- **Oracle:** On the heaviest committed day, the count of animated elements is bounded by a stated number regardless of item count, and with reduced motion requested the count is **zero**. Both halves, because a preference honoured in one component and not another is the usual shape of this defect.
+- **Scope:** Reader charts use no entrance or value animation unless a future shared-shell motion is admitted through the existing token system. Any shell or console motion honours reduced motion and is finite; it must not scale with the number of reader visual items.
+- **Files touched:** `frontend/src/styles/**`, `frontend/src/lib/charts/d3/motion.ts`, `config/appearance.json`, `frontend/tests/**`, `docs/concepts/design-system.md`
+- **Acceptance gates:** `npm run check`; build; the browser suite; the section 12 smoke in both themes.
+- **Oracle:** A representative shared page contract counts browser animations before and after navigation and with reduced motion requested. Reader charts have no animation. Reduced-motion mode has zero running page animations in the tested reader surface; no animation count grows with item count. Existing finite loading motion settles when loading ends.
 
 ### Decisions
 
 | # | Decision | Authority |
 | --- | --- | --- |
-| 1 | The largest committed day carries **621 items**. 621 entrance animations is a page that never settles | Row 32 |
-| 2 | Motion is bounded by a token, not by each component's own judgement, so the bound cannot drift per chart | Susan |
-| 3 | The renderer keeps motion bounded and tied to shared tokens; this row makes the limit a gate | Plan 12's renderer scope |
+| 1 | Reader chart motion is unnecessary until a real reading aid is admitted. The current visual implementation is static. | Susan, current reader shell |
+| 2 | A generic animation inventory is stronger than a chart count: it proves the shared page boundary and catches later chart or shell additions regardless of type. | Browser contract |
+| 3 | Motion timing and allowed properties use shared appearance tokens and the existing D3 motion guard. A component must not invent its own duration or layout animation. | Config, D3 motion helper |
+| 4 | Reduced motion removes animation rather than shortening it, and it leaves no frozen or decorative moving state. | Accessibility requirement |
 
 ### Rejected alternatives
 
 | # | Option | Why rejected | Authority |
 | --- | --- | --- | --- |
-| 1 | No motion at all | Motion that shows a value arriving is a real aid on one drawing. Unbounded motion on 621 is the defect | Susan |
+| 1 | Add a fixed number of entrance animations | That recreates unbounded per-item work by number alone and has no current reading benefit. | Susan |
+| 2 | Add per-chart motion and per-chart tests | It creates chart-specific behavior and test unicorns. | Shared shell |
+| 3 | Add a separate motion contract for reader visual types | Generic page motion applies to the shell regardless of chart implementation. | Fowler, Susan |
 
 ---
 
