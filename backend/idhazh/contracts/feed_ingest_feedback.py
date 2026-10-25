@@ -28,9 +28,7 @@ class FeedIngestOperationalStateRow(Contract):
         ChangelogEntry(
             version="2026-10-25",
             change="Declare per-source request estimates and their saved evidence window.",
-            why=(
-                "A later selection needs a typed state revision without replacing raw observations."
-            ),
+            why="A later selection needs a typed revision without replacing raw observations.",
         ),
     )
 
