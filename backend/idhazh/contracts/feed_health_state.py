@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import date, datetime, timedelta
+from datetime import date, timedelta
 from typing import Annotated, ClassVar, Literal, Self
 from uuid import UUID
 
@@ -227,7 +227,10 @@ class FeedHealthStateHeadIndex(Contract):
                 raise ValueError("previous snapshot revision is older than latest")
             if self.latest.parent_revision != self.previous.state_revision:
                 raise ValueError("latest snapshot parent is the previous saved revision")
-            if self.previous.path == self.latest.path or self.previous.file_id == self.latest.file_id:
+            if (
+                self.previous.path == self.latest.path
+                or self.previous.file_id == self.latest.file_id
+            ):
                 raise ValueError("latest and previous snapshots are independent files")
         elif self.latest.parent_revision is not None:
             raise ValueError("a noninitial latest snapshot retains its previous revision")
@@ -242,7 +245,10 @@ class FeedHealthStateSnapshot(Contract):
         ChangelogEntry(
             version="2026-10-25T11:21",
             change="Declare bounded lifecycle and causal request evidence snapshots.",
-            why="A selection needs a complete, versioned state read without replaying ledger history.",
+            why=(
+                "A selection needs a complete, versioned state read "
+                "without replaying ledger history."
+            ),
         ),
     )
 
@@ -275,13 +281,21 @@ class FeedHealthStateSnapshot(Contract):
             raise ValueError("snapshot revision follows its actual parent")
 
         lifecycle_dates = [day.input_day for day in self.lifecycle_days]
-        if len(lifecycle_dates) > self.lifecycle_window_days or lifecycle_dates != sorted(set(lifecycle_dates)):
-            raise ValueError("lifecycle days are distinct, ascending and within the configured window")
+        if (
+            len(lifecycle_dates) > self.lifecycle_window_days
+            or lifecycle_dates != sorted(set(lifecycle_dates))
+        ):
+            raise ValueError(
+                "lifecycle days are distinct, ascending and within the configured window"
+            )
         if any(day > self.selection_started_at_utc[:10] for day in lifecycle_dates):
             raise ValueError("lifecycle inputs do not follow the selection start clock")
         expected_start = lifecycle_dates[0] if lifecycle_dates else None
         expected_end = lifecycle_dates[-1] if lifecycle_dates else None
-        if (self.lifecycle_window_start, self.lifecycle_window_end) != (expected_start, expected_end):
+        if (self.lifecycle_window_start, self.lifecycle_window_end) != (
+            expected_start,
+            expected_end,
+        ):
             raise ValueError("lifecycle bounds match the retained represented-day inputs")
 
         start = date.fromisoformat(self.request_window_start)
