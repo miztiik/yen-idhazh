@@ -1,6 +1,6 @@
 # How a story chart is drawn, and what refuses one
 
-**Last Updated**: 2026-10-03
+**Last Updated**: 2026-10-25
 
 A story that carries a chart carries a pointer at its marks, and the reader's
 browser is what turns those marks into a picture. This page holds that path: who
@@ -48,9 +48,14 @@ an interrupted request; a completed request is not repeated.
 
 **Marks that do not arrive leave the story shorter, and nothing else.** No broken-image glyph, no grey box, no skeleton - which is the shape two stories in three already have, and the reason the placeholder was refused in the first place: a grey rectangle makes "this story needed no picture" look identical to "the picture failed". The element that waits for the fetch is a zero-height `div` with no border and no background, so a story that never gets its chart is exactly as tall as a story that never had one.
 
-## Inlining moves the trust boundary, and the check is at the move
+## Untrusted marks become text and geometry, never supplied markup
 
-Inside an `img` an SVG is inert whatever it holds. In the document it is markup in our own origin, and a chart's labels are written by a model that read a stranger's page (Guardrail #11). So a drawing is refused if it does not open on an `<svg>` element or if it carries a script, an inline handler, embedded HTML, a link out, or a fetched image - and its path is matched against the shape `visual_planner.py` writes before that path is joined onto a directory or onto `base`, because it is about to become an address. [drawing.ts](../../../frontend/src/lib/payload/drawing.ts) holds both checks and imports nothing, which is what lets the build and the browser run the same code: `node:fs` in that graph would put the build's file reader in a browser bundle, and a `$lib` alias would put a Vite alias in a plain `node` process. **The browser's copy is the one that matters**, because that is the path a stranger's bytes travel with nobody watching; two copies of one refusal is how the two drift. A refused drawing is logged by name and not drawn, which is a degrade rather than a failure: the story is shorter. [frontend/tests/item-visual.spec.ts](../../../frontend/tests/item-visual.spec.ts) plants each of those six shapes in a copy of the canary tree, asserts the markup never reaches the story and that the same markup would be refused on the fetch path too, with a control that the ordinary drawing does inline - without it every refusal case would pass on a build that inlined nothing.
+The page accepts structured chart data, not SVG from disk or fetched markup.
+[drawing.ts](../../../frontend/src/lib/payload/drawing.ts) checks the published
+path and current payload before the component draws it. Svelte writes titles,
+captions, labels and source figures as text nodes. Bar geometry comes from
+validated values. None of that text becomes HTML, a path or a fetch URL.
+The retired SVG reader and its markup checks have no compatibility path.
 
 The fixed canary has eight stories and seeds three through its fixture config.
 Its second chart sorts last and loads after the initial shell. Browser tests
@@ -65,9 +70,18 @@ It visits the archive and returns, then reloads the day, to check that the same
 data keeps the same geometry. No reader styling change was needed to meet the
 floor; this gate protects the existing measured-width drawing.
 
-**The same boundary applies one step earlier, now that the data travels.** From 2026-09-13 a rendered visual also publishes its data - the marks, their values and their provenance, and the encoding that says which marks fill which channel ([where-a-drawing-becomes-pixels.md](where-a-drawing-becomes-pixels.md)). `refusedVisualData` in [drawing.ts](../../../frontend/src/lib/payload/drawing.ts) sits beside `refusedDrawing` and answers the questions a shape can answer: this page knows the `renderer_version` the document names, it knows the `type`, every channel names marks the document carries, and the channels of a `bar` pair into bars. **It refuses rather than guesses, and refusing is free** - a degrade path that draws something approximate is how a wrong chart reaches a reader, and a story with no visual is simply shorter, which is already the shape 94.7 percent of stories have. So there is no placeholder to design and no layout to hold open. Nothing here re-decides whether three bars are worth the space: that is an editorial floor, the pipeline holds it, and a second opinion in the drawing code is one nobody could reconcile with the first.
+`refusedVisualData` checks the current renderer, supported type, mark references,
+paired bar channels, framing fields and exactly one emphasized measured mark.
+The [compiler contract](where-a-drawing-becomes-pixels.md#design-rationale)
+owns how plan references select that mark. Invalid or older incompatible data
+costs the story its chart, not its text. There is no placeholder and no guessed
+priority. The pipeline owns mark-count limits; the browser does not invent a
+second editorial threshold.
 
-**`renderer_version` is what makes the shape movable at all.** The page holds the set of renderers it knows and refuses anything else, so a later build can publish a later stamp without a cached older page drawing data that means something other than what its picture would say. It is stated in exactly one place, on the document a browser reads. `spec_format` carried the same idea in two places, the two disagreed on 2026-09-05T18:00, and a version in two places cannot be adjudicated by anything downstream.
+The page accepts one current `renderer_version`, stated on the chart document.
+A cached page refuses an unknown stamp rather than drawing values under rules
+it does not know. The dated owner exception for older charts lives in the
+[contract rationale](where-a-drawing-becomes-pixels.md#design-rationale).
 
 **The mis-shaped cases are built in the spec rather than committed, and that is a constraint.** Every file under `tests/fixtures/contracts/` is round-tripped through its model by the backend suite, and a mis-shaped document will not load - so a committed one fails that gate before it reaches this one. [item-visual.spec.ts](../../../frontend/tests/item-visual.spec.ts) loads the one fitting case, which the real compiler produced from the committed plan, asserts it is **accepted** as the control, and then makes one named change per case: a renderer this page does not know, a type it cannot draw, channels that do not pair, a bar whose figure or name is absent, a channel naming a mark the document lacks, no marks, no encoding. Every case differs from the control in exactly one place, and the difference is the line of code you are reading.
 

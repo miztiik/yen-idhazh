@@ -1,9 +1,9 @@
 # 13 - Deletion switched on
 
-**Last Updated**: 2026-09-30
+**Last Updated**: 2026-10-25
 **Level**: 4 (structural: the first configuration in this repository that deletes committed files on a schedule)
 
-**Chain**: previous [`20260905-12-readable-visuals-plan.md`](20260905-12-readable-visuals-plan.md) | next [`20260905-14-sufficiency-bar-plan.md`](20260905-14-sufficiency-bar-plan.md).
+**Chain**: previous work delivered in [the chart contract](../docs/architecture/publishing/where-a-drawing-becomes-pixels.md) | next [`20260905-14-sufficiency-bar-plan.md`](20260905-14-sufficiency-bar-plan.md).
 **Reference**: [`20260902-visual-planner-pseudo-plan.md`](20260902-visual-planner-pseudo-plan.md) - O8, O9, section 9 whole, rows 59, 61, 62, E3, E4.
 
 Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delegates a row where delegation pays; keep parallel N = 4 rows in flight, refilling a slot as soon as a worker returns and never waiting on a merge; consult a persona only where two answers would lead to different code; AUTO-merge on green gates; honor the ESCALATE triggers in section 0. AUTHOR-AND-STOP until the user authorizes.
@@ -31,9 +31,12 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | 1 | The rules, and which rule governs every file this project writes | - | A | DONE #643 | p13-1 | #643 | worker |
 | 2 | The window takes a value, and nothing is deleted yet | 1 | B | DONE #651 | p13-2 | #651 | worker |
-| 3 | The fuse comes out, and one run is watched | 2, plan 12 row #1b | C | PENDING | - | - | - |
+| 3 | The fuse comes out, and one run is watched | 2 | C | PENDING | - | - | - |
 
-**Row #3's `Depends-on` was `2` alone until 2026-09-13, and its own decision 1 contradicted that.** "This lands after the new renderer. Flipping the fuse while the old drawings are the only assets on disk deletes a year of visuals with `max_deletes_per_run: 200` the only bound." The new renderer is [`20260905-12-readable-visuals-plan.md`](20260905-12-readable-visuals-plan.md) row #1, which is PENDING - so the queue reader was offering row #3 as ready while the row's own text refused it. The dependency is now written where a tool can read it. Corrected by the orchestrator before dispatch.
+The renderer prerequisite is delivered: the pipeline publishes per-item chart
+data and the browser draws it, as defined by the
+[chart contract](../docs/architecture/publishing/where-a-drawing-becomes-pixels.md).
+This clears that dependency only; it does not authorize or perform deletion.
 
 ---
 
@@ -120,6 +123,6 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 ## See also
 
 - [`20260902-visual-planner-pseudo-plan.md`](20260902-visual-planner-pseudo-plan.md) - the decision record this group executes.
-- [`20260905-12-readable-visuals-plan.md`](20260905-12-readable-visuals-plan.md) - the previous plan.
+- [The chart contract](../docs/architecture/publishing/where-a-drawing-becomes-pixels.md) - the delivered renderer prerequisite.
 - [`20260905-14-sufficiency-bar-plan.md`](20260905-14-sufficiency-bar-plan.md) - the next plan.
 - [Site weight](../docs/reference/site-weight.md) - the capacity check and its reporting.

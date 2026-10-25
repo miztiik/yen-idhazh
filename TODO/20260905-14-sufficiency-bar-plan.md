@@ -1,6 +1,6 @@
 # 14 - The rest of the ship-or-not bar
 
-**Last Updated**: 2026-09-14
+**Last Updated**: 2026-10-25
 **Level**: 3 (build-failing checks on the published surface, and the test one compliance clause now rests on)
 
 **Chain**: previous [`20260905-13-switch-on-deletion-plan.md`](20260905-13-switch-on-deletion-plan.md) | next [`20260905-15-chart-vocabulary-plan.md`](20260905-15-chart-vocabulary-plan.md).
@@ -135,4 +135,4 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 - [`20260902-visual-planner-pseudo-plan.md`](20260902-visual-planner-pseudo-plan.md) - the decision record this group executes.
 - [`20260905-13-switch-on-deletion-plan.md`](20260905-13-switch-on-deletion-plan.md) - the previous plan.
 - [`20260905-15-chart-vocabulary-plan.md`](20260905-15-chart-vocabulary-plan.md) - the next plan.
-- [`20260905-12-readable-visuals-plan.md`](20260905-12-readable-visuals-plan.md) - where the legibility and density floors landed.
+- [Reader chart rules](../docs/concepts/design-system.md#a-charts-column-is-set-by-what-the-chart-was-drawn-at) - the delivered text floor and unscaled width; mark-count limits remain with the visual validator.
