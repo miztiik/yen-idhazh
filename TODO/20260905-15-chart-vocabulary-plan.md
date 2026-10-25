@@ -1,12 +1,16 @@
 # 15 - Charts, plus the two the reader asked for
 
-**Last Updated**: 2026-09-05
-**Level**: 3 (the type vocabulary in config, and one compiler template per type)
+**Last Updated**: 2026-10-25
+**Level**: 5 for persisted-contract design; 3 for the approved implementation sequence.
 
 **Chain**: previous work delivered in the [chart contract](../docs/architecture/publishing/where-a-drawing-becomes-pixels.md) | next [`20260905-16-composition-vocabulary-plan.md`](20260905-16-composition-vocabulary-plan.md).
 **Reference**: [`20260902-visual-planner-pseudo-plan.md`](20260902-visual-planner-pseudo-plan.md) - O13, rows 38, 39, 41, 48, 49, sections 7.2, 12.8 X1, 12.12 G26.
 
-Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delegates a row where delegation pays; keep parallel N = 4 rows in flight, refilling a slot as soon as a worker returns and never waiting on a merge; consult a persona only where two answers would lead to different code; AUTO-merge on green gates; honor the ESCALATE triggers in section 0. AUTHOR-AND-STOP until the user authorizes.
+Plan reconciliation only. Implementation, commits, pull requests and merging
+are not authorised by this update. Follow the current
+[execution guide](../docs/how-to/execute-a-plan.md) when execution is authorised.
+Persisted-contract design remains consultation-only under CLAUDE.md section 6
+until the owner approves that design.
 
 ---
 
@@ -14,14 +18,70 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 
 | Field | Value |
 | --- | --- |
-| Why this plan exists | Until now the planner can say one shape. This gives it the position-and-length family, which is what most quantitative stories need - **and the two types the reader actually named**, so the first vocabulary plan does not publish a wall of identical bars |
-| Hard scope - in | The full type vocabulary declared in config with unbuilt types downgrading deterministically; `bar`, `dot`, `slope`, `line`, `area`, `scatter`, `stacked_bar`; and `comparison` and `quotecard` pulled forward from the infographic family |
+| Why this plan exists | Story publication supports bars. Shared D3 renderers and source-span extraction exist elsewhere, but they do not complete the other story types. Reuse those foundations to answer each story's question with a suitable visual |
+| Hard scope - in | Config selects from the full declared vocabulary; code owns correctness rules. Complete story delivery for `bar`, `dot`, `slope`, `line`, `area`, `scatter`, `stacked_bar`, `comparison` and `quotecard`. Record safe fallback or refusal |
 | Hard scope - out | `pie`, `bubble`, `histogram` and derived-value producers (plan 16). `callout`, `whowhat`, `keyfacts` (plan 17). Diagrams (plan 18). Any change to the validator's universal checks |
-| ESCALATE triggers | 1. A type is proposed for the config list without both a validator rule set and a compiler template - it may be **named** but it may not **render**. 2. `wasted_decode_rate` cannot be computed, meaning the downgrade path is not recording what it did. 3. A non-magnitude question is being answered with a bar by fallback |
+| ESCALATE triggers | 1. A type without validator rules and a supported compiler is allowed to render. It may be named, not rendered. 2. Requested/rendered accounting cannot compute `wasted_decode_rate`. 3. A fallback changes the question or facts. 4. Any further scope, functionality or acceptance change is proposed, however small |
 | Chosen strategy | Declare the whole vocabulary, build the families in order of what the planner actually chooses, and make a day that would otherwise be one shape impossible |
-| Execution | `autonomous orchestrator per docs/how-to/execute-a-plan.md. Parallel N = 4.` |
+| Execution | One meaningful PR phase per row, in the dependency order below, after execution approval. No fixed worker count or automatic merge instruction |
 
-**The rule that stops a grey wall.** An article whose question is not a magnitude comparison gets `none`, **never a bar by fallback**. Row 49 records a single-shape day as a defect rather than gating on it, so a bar-only day is legal - and it is also a wall of grey on 80 items. Two things prevent it: the refusal rule, and shipping `comparison` and `quotecard` here rather than two plans later.
+**The rule that prevents misleading repetition.** A bar fallback is allowed
+only for a magnitude comparison. A supported replacement must preserve the
+question and source facts and pass the target's validation. Otherwise the story
+retains its text without a visual, with the reason recorded. A type-diversity
+quota must never force an unsuitable visual.
+
+### Owner-approved reconciliation
+
+kumarsnaveen approved these decisions on 2026-10-25 UTC in this session:
+
+| ID | Decision | Change from the September plan |
+| --- | --- | --- |
+| R1 | Config selects types; code validates names and owns correctness rules | Retains config control; reconcile the current code-only vocabulary documentation before implementation |
+| R2 | Separate default-off switches | Replaces default-on features controlled by one `disabled_features` list. Agree and document each switch's declaring line and removal condition |
+| R3 | Safe supported replacement or no visual, with the reason recorded | Removes the guarantee that every unbuilt type has a rendered neighbour |
+| R4 | A stacked bar that fails its declared-whole check leaves text without a visual | Removes grouped-bar fallback and its grouping implementation from this plan |
+| R5 | Focused integration checks plus representative browser coverage | Replaces every-type browser checks at both widths; retain source-derived correctness and width behavior checks below the browser tier |
+| R6 | Bounded mixed fixture only | Removes the real committed-day diversity demonstration and its release evidence step |
+| R7 | D3.js; no prerendering; shared reusable patterns; no magic numbers | Explicit user requirements. No separate chart engine, build-time drawing, per-page special cases or source-fixed tunables |
+
+No other scope or functionality change is approved. Existing current-renderer-only
+chart compatibility follows the owner ruling already in CLAUDE.md section 11;
+this plan does not restore historical redraw or migration machinery.
+
+### Shared implementation and evidence rules
+
+- Use the Data explorer's shared chart-builder/component pattern, not a second
+  story-only chart engine. Its current composition is
+  `frontend/src/lib/console/explorer/ShapePanel.svelte`; shared D3 builders live
+  under `frontend/src/lib/charts/d3/`.
+- Reuse geometry, scales, formatting, measured width, typography and tokens.
+  Reuse does not import a consumer's unsuitable data policy: dropping scatter
+  pairs or summing supplied parts is not valid story evidence.
+- Put tunable appearance and behavior in shared validated config/tokens.
+  Naming a source literal does not make it configurable. Do not expand this
+  work into a whole-site cleanup.
+- Render visuals in the browser from validated published data. Do not add
+  build-time SVG/image output or restore retired prerendering.
+- Keep native payload ownership, current schema stamps, changelogs and binding
+  tests. Follow the chart compatibility exception, not an obsolete migration
+  assumption. Config selection must remain bound to the native type names.
+- Use named bounded fixtures loaded inside tests. Derive geometry expectations
+  from source elements, not snapshots of the current drawing. Keep width
+  behavior evidence for the original narrow/wide cases below the browser tier;
+  read their dimensions from shared test configuration.
+- Use the current shared test selector and gates in
+  [run-the-gates](../docs/how-to/run-the-gates.md). Replace retired export/drift
+  commands with current on-demand schema and binding checks, not a weaker
+  contract-consistency obligation. CI owns the full-suite merge gate.
+- Browser rendering and interaction use representative coverage under
+  CLAUDE.md section 13, plus section 12 smoke when the site changes.
+- The inherited legibility and density floors remain obligations. Resolve their
+  current canonical definitions before implementation; do not invent a density
+  threshold or substitute a minimum point count. Removing or changing either
+  floor requires owner approval.
+- Other inherited whole-day correctness obligations remain. Owner R6 removes
+  the real-day diversity proof, not unrelated publication or correctness rules.
 
 ---
 
@@ -36,24 +96,41 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 | 5 | Parts as bars: stacked_bar, with its own question | 4 | E | PENDING | - | - | - |
 | 6 | The two the reader asked for | 5 | F | PENDING | - | - | - |
 
+All rows stay PENDING. Existing parts are reuse evidence, not completed
+end-to-end delivery.
+
+### Current delivery evidence
+
+Susan reviewed the current code on 2026-10-25 UTC. These are inspected
+implementation/test references, not a claim that tests were run.
+
+| ID | Row | Existing parts | Remaining delivery |
+| --- | --- | --- | --- |
+| E1 | 1 | Type enum in `backend/idhazh/contracts/visual.py`; rules/edges in `backend/idhazh/visual_vocabulary.py`; validator and ladder tests | Config selection, bounded production fallback input, compiler-aware replacement, requested/rendered accounting and metric. `backend/idhazh/stages/two_calls.py` passes an empty floor population; shipped config disables the ladder |
+| E2 | 2 | Story bar compiler in `backend/idhazh/render/chart.py`, reader guard in `frontend/src/lib/payload/drawing.ts`, drawing in `frontend/src/lib/visual/bar.ts` and `frontend/src/lib/components/ItemVisual.svelte`; compiler and publication tests | Dot and slope story delivery; shared configurable geometry. Console `rankedList.ts` is bars, not dots; `paired.ts` is normalised before/after comparison, not the required slope |
+| E3 | 3 | Time/quantity role rules; shared `frontend/src/lib/charts/d3/dateSeries.ts` | Story line/area compilation and rendering; stock/cumulative-versus-rate evidence and refusal. A spread band is not the required cumulative-area chart |
+| E4 | 4 | Scatter role rules and `frontend/src/lib/charts/d3/pairedScatter.ts` | Required relationship purpose, complete entity pairs, story compilation and rendering. Shared scatter omission of incomplete pairs must not bypass story refusal |
+| E5 | 5 | Stacked-bar role rule; stacking in `frontend/src/lib/charts/d3/partsOfOne.ts` | Independently declared-whole evidence and exhaustiveness validation; story compilation/rendering; recorded text-only outcome on refusal. Summing the supplied parts is not proof of the whole |
+| E6 | 6 | Quote/claim source ranges in `backend/idhazh/classify/calls.py`; shared item typography and loading | Comparison/quote rules, suitable published payloads, browser markup, source re-slicing and bounded mixed-fixture evidence. The current measured-quantity payload is not a text-only quote contract |
+
 ---
 
 ## 2. Row #1 - The whole vocabulary is declarable, and an unbuilt type steps down
 
-- **Scope:** The full type list lives in `config/`, a type with no template is still declarable, and choosing one downgrades deterministically to its nearest built neighbour with the downgrade logged.
-- **Files touched:** `config/idhazh.json`, `backend/idhazh/contracts/app_config.py`, `backend/idhazh/contracts/visual.py`, `schemas/*.schema.json`, `tests/fixtures/**`, `backend/idhazh/visual_planner.py`, `backend/tests/**`, `docs/concepts/config.md`, `docs/architecture/publishing/**`
-- **Acceptance gates:** `ruff`; `mypy --strict`; export + drift; the full suite.
-- **Oracle:** A plan naming a declared-but-unbuilt type publishes its nearest built neighbour **and records both the requested and the rendered type**. `wasted_decode_rate` is then non-zero and computable, which is what makes the next plan's build order evidence rather than a guess.
+- **Scope:** Config selects from the full vocabulary, validated against native type names. An unbuilt type remains declarable. Choose a supported replacement deterministically only when it preserves purpose and facts and passes target validation; otherwise retain text without a visual. Record the reason and both requested and rendered outcomes. Supply bounded production inputs rather than an empty floor population.
+- **Current files:** `config/idhazh.json`, `backend/idhazh/contracts/app_config.py`, `backend/idhazh/contracts/visual.py`, `backend/idhazh/visual_vocabulary.py`, `backend/idhazh/visual_validator.py`, `backend/idhazh/stages/two_calls.py`, named fixtures/tests and the current vocabulary/config documentation.
+- **Acceptance gates:** Current selected lint, strict type, config, schema and binding checks; bounded integration evidence; full suite in CI.
+- **Oracle:** A fixture requesting an unbuilt type records the request and either a safe supported replacement or a reasoned no-visual outcome. A separate purpose-mismatch fixture proves that bar fallback is refused. `wasted_decode_rate` is defined in the owning contract/doc and computable from recorded outcomes, including refused outcomes; do not invent a new formula silently.
 
 ### Decisions
 
 | # | Decision | Authority |
 | --- | --- | --- |
-| 1 | **Full vocabulary, located in config.** Guardrail #6 puts the list in `config/`; it does not shorten it. Read as "limited to types with templates", the neighbour-downgrade is unreachable, `wasted_decode_rate` is identically zero, and the build order stops being derivable | 12.8 X1 |
+| 1 | **Full vocabulary selectable in config.** Config selection is validated against native names; code owns correctness rules. Declared-but-unbuilt types remain possible | 12.8 X1; owner R1 |
 | 2 | This does not cross the non-goal about types arriving without rules. **That governs what may render; this governs what may be named.** An unbuilt type never reaches a reader | 12.8 X1 |
-| 3 | Template order follows **observed frequency**, not a fixed wave order. Guessing the order is an unmeasured number justifying a design | Row 48 |
+| 3 | Record observed requested-type frequency to inform build order. Keep this plan's dependency order unless the owner approves a change; counts do not authorise dropping a family | Row 48; section 0 |
 | 4 | `planned_type` and `rendered_type` are both recorded, always | Row 48, P.D2 |
-| 5 | **Features default on in code, behind one `disabled_features` list. No config key per feature.** Four vocabulary plans follow this one, and a knob per family is how a config file grows a switch nobody remembers the state of | O15 |
+| 5 | **Separate default-off switches.** Document activation behavior and a removal condition for each switch; this plan update enables nothing | Owner R2, replacing O15's switch model |
 
 ### Rejected alternatives
 
@@ -66,10 +143,10 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 
 ## 3. Row #2 - Position and length: bar, dot, slope
 
-- **Scope:** Three templates whose encodings a reader judges by position or length - the family human perception reads most accurately.
-- **Files touched:** `frontend/src/lib/charts/types/{bar,dot,slope}.ts`, `backend/idhazh/contracts/visual.py` (role sets), `frontend/tests/**`, `docs/architecture/publishing/**`, `docs/concepts/design-system.md`
-- **Acceptance gates:** `npm run check`; build; `bundle-gate`; the browser suite; both floors from plan 12; the section 12 smoke.
-- **Oracle:** For each type, drawn geometry is re-derived in the test from the committed element table and compared to the drawn attributes, at 390 and 1440. A chart proved only at one width has not been proved on the surface most readers use.
+- **Scope:** Complete bar, dot and slope through source data, validation, compilation and browser rendering. Reuse the existing story bar and shared D3 patterns instead of three bespoke page implementations.
+- **Current files:** `backend/idhazh/render/chart.py`, `backend/idhazh/visual_vocabulary.py`, applicable native published contracts, `frontend/src/lib/payload/drawing.ts`, `frontend/src/lib/visual/bar.ts`, `frontend/src/lib/charts/d3/`, `frontend/src/lib/components/ItemVisual.svelte`, named tests and current chart/design docs.
+- **Acceptance gates:** Current frontend check, build and bundle gate; native-reader bindings; both inherited legibility/density floors; representative browser coverage and section 12 smoke.
+- **Oracle:** For each type, focused integration tests re-derive geometry from bounded source elements and check drawn attributes and narrow/wide behavior. Representative browser evidence checks actual browser integration. Do not multiply browser cases by type and width (owner R5).
 
 ### Decisions
 
@@ -89,8 +166,8 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 
 ## 4. Row #3 - Trend and magnitude: line, area
 
-- **Scope:** `line` for a trend over time; `area` for cumulative magnitude, gated so it never draws a rate.
-- **Files touched:** `frontend/src/lib/charts/types/{line,area}.ts`, `backend/idhazh/contracts/visual.py`, `frontend/tests/**`, `docs/architecture/publishing/**`
+- **Scope:** `line` for a trend over time; `area` for stock or cumulative magnitude, gated so it never draws a rate. Complete source evidence, validation, compilation and browser drawing using shared D3 date/series patterns.
+- **Current files:** `backend/idhazh/visual_vocabulary.py`, `backend/idhazh/visual_validator.py`, `backend/idhazh/render/chart.py`, applicable native contracts, `frontend/src/lib/charts/d3/dateSeries.ts`, shared reader/drawing components, named fixtures/tests and current chart docs.
 - **Acceptance gates:** as row 2.
 - **Oracle:** An `area` plan whose measure is a rate rather than a stock is **refused by the validator**, not drawn - asserted with a fixture pair that differs only in the measure.
 
@@ -111,8 +188,8 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 
 ## 5. Row #4 - Relationship: scatter
 
-- **Scope:** `scatter` for two measures over a shared set of entities.
-- **Files touched:** `frontend/src/lib/charts/types/scatter.ts`, `backend/idhazh/contracts/visual.py`, `frontend/tests/**`, `docs/architecture/publishing/**`
+- **Scope:** `scatter` for two measures over a shared set of entities, with required relationship purpose and complete pairs. Validate before reusing shared D3 scatter geometry; do not inherit incomplete-pair filtering.
+- **Current files:** `backend/idhazh/visual_vocabulary.py`, `backend/idhazh/visual_validator.py`, `backend/idhazh/render/chart.py`, applicable native contracts, `frontend/src/lib/charts/d3/pairedScatter.ts`, shared reader/drawing components, named fixtures/tests and current chart docs.
 - **Acceptance gates:** as row 2.
 - **Oracle:** Every drawn point resolves to an entity element carrying **both** measures; a plan where the two measures cover different entity sets is refused rather than drawn with gaps.
 
@@ -132,10 +209,10 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 
 ## 6. Row #5 - Parts as bars: stacked_bar, with its own question
 
-- **Scope:** `stacked_bar` with **its own** exhaustiveness gate, not merely as the thing `pie` falls back to.
-- **Files touched:** `frontend/src/lib/charts/types/stacked_bar.ts`, `backend/idhazh/contracts/visual.py` (the predicate), `frontend/tests/**`, `docs/architecture/publishing/**`
+- **Scope:** `stacked_bar` with **its own** exhaustiveness gate against an independently declared whole, not merely as the thing `pie` falls back to. Reuse shared D3 stacking, not a computed sum as evidence of completeness.
+- **Current files:** `backend/idhazh/visual_vocabulary.py`, `backend/idhazh/visual_validator.py`, `backend/idhazh/render/chart.py`, applicable native contracts, `frontend/src/lib/charts/d3/partsOfOne.ts`, shared reader/drawing components, named fixtures/tests and current chart docs.
 - **Acceptance gates:** as row 2.
-- **Oracle:** A `stacked_bar` whose parts are not exhaustive against a **declared** whole downgrades to a grouped `bar`. Asserted directly, because the whole point is that the question is asked here and not only upstream.
+- **Oracle:** A `stacked_bar` whose parts are not exhaustive against a **declared** whole is refused, records the reason and retains story text without a visual. Test direct requests and an upstream fallback so refusal cannot be bypassed. Grouped-bar fallback is removed by owner R4.
 
 ### Decisions
 
@@ -143,6 +220,7 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 | --- | --- | --- |
 | 1 | **`stacked_bar` has its own gate.** Without one, a `pie` refused for summing its whole rather than reading a declared one lands in a `stacked_bar` that never re-asks the question, and the refusal buys nothing | 12.12 G26 |
 | 2 | This is the shape the downgrade ladder's re-validation rule needs: a downgrade target with no predicate makes re-entering the validator pointless | 12.7 G8, 12.12 G26 |
+| 3 | Failed declared-whole validation produces no visual, not grouped bars | Owner R4 |
 
 ### Rejected alternatives
 
@@ -154,10 +232,10 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 
 ## 7. Row #6 - The two the reader asked for
 
-- **Scope:** `comparison` - a rectangular grid of span-anchored cells - and `quotecard`, restricted to a quote the semantic pass identified.
-- **Files touched:** `frontend/src/lib/charts/types/{comparison,quotecard}.ts` or typeset HTML components, `backend/idhazh/contracts/visual.py`, `frontend/tests/**`, `docs/architecture/publishing/**`, `docs/concepts/design-system.md`
-- **Acceptance gates:** as row 2, plus the whole-day check from plan 12.
-- **Oracle:** On a real committed day the page carries **more than one rendered type**, and every `quotecard` renders a quote whose span slices to the drawn text from the article's own bytes - re-sliced in the test, not compared to a stored string.
+- **Scope:** `comparison` - a rectangular grid of span-anchored cells - and `quotecard`, restricted to a quote the semantic pass identified. Use shared typography and typeset browser markup, with native payloads suitable for text rather than fake measured quantities.
+- **Current files:** `backend/idhazh/classify/calls.py`, `backend/idhazh/visual_vocabulary.py`, `backend/idhazh/visual_validator.py`, `backend/idhazh/contracts/visual_data.py`, publication/reader boundaries, shared item markup and typography, named fixtures/tests and current chart/design docs.
+- **Acceptance gates:** as row 2, plus a bounded mixed fixture. The real committed-day demonstration and recurring mutable-data check are removed by owner R6.
+- **Oracle:** A bounded mixed fixture proves more than one rendered type without forcing unsuitable visuals. Every `quotecard` renders a quote whose span slices to the drawn text from the article's own bytes - re-sliced in the test, not compared to a stored string.
 
 ### Decisions
 
