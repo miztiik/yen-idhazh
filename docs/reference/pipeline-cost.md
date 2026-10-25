@@ -1,6 +1,6 @@
 # What the Pipeline Costs to Run
 
-**Last Updated**: 2026-10-24
+**Last Updated**: 2026-10-25
 
 Where current runtime measurements live and how to use them when sizing work. This page does not keep a history of production runs or duplicate model readings.
 
@@ -82,6 +82,33 @@ Retake model-dependent readings in CI when the subject changes. Do not copy a va
 
 `measure_budgets.py read` dates a reading with the current UTC day, not the
 host's local day. `--taken-on YYYY-MM-DD` keeps the date the operator supplies.
+
+## Visual-retention activation reading
+
+On 2026-10-25 UTC, the real `gardener run-task visual-prune` command ran
+locally against the 65 committed digest days at revision `25ca19ad8`.
+Run `2026-10-25-13`, attempt 1, surveyed with `dry_run: true`; attempt 2
+ran with the proposed `dry_run: false`. Both selected UTC dates 2025-09-22
+through 2025-09-29, before the kept-day boundary of 2025-09-30. Both found
+zero candidates. The live report recorded zero deleted files, zero files
+held by the ceiling, no tripped fuse and zero reclaimed bytes. This is
+local activation evidence, not a production workflow run.
+
+Completed builds before and after the live pass each measured 199,199,056
+deployed bytes (190.0 MiB), 671 files and 22,043 items. The change was zero
+bytes, as expected for zero deletions. Both used `npm run build`, the fixed
+`BUILD_VERSION` from that revision, and
+`python -m idhazh site-weight --site-tree frontend/build`; source-tree size
+was not used. Locally generated gardener and host reports were kept outside
+the checkout before either build, so they did not change the compared corpus.
+`check-publication` passed for all 65 committed days before and after the pass.
+
+The size command estimated 885 published days to the 800 MiB warning and
+1,210 to the 1,024 MiB cap, using 9,037 bytes per item and the configured
+80-item input. These are the instrument's estimates, not a measured future
+growth rate. No section 0 escalation trigger was observed in this local run.
+The production gardener wake, its landed report and repeated publication
+and built-size checks remain required before closing the activation plan.
 
 ## What to measure next
 

@@ -1,6 +1,6 @@
 # Retention
 
-**Last Updated**: 2026-10-08
+**Last Updated**: 2026-10-25
 
 What the app may delete, what must survive, and the safeguards before deletion.
 [layout.md](layout.md) owns publication. The [gardener](idhazh-gardener.md)
@@ -33,9 +33,10 @@ delete them.
 
 `retention.image_months` controls the published visual-retention promise, with
 `-1` meaning no age-based visual deletion. The gardener declaration must match
-that promise. Visual pruning is currently a dry run; inspect
-[visual-prune.json](../../../config/gardener/visual-prune.json) before assuming
-that a pass deletes anything.
+that promise. Visual pruning is live, with a 390-day window and a 200-file
+ceiling per pass in
+[visual-prune.json](../../../config/gardener/visual-prune.json).
+The switch does not enable any other cleanup task.
 
 State the visual window on the archive before enabling deletion. Say what the
 policy permits, not that a deletion has already happened. Stories and their links

@@ -1,6 +1,6 @@
 # Instrument switches and cleanup ages
 
-**Last Updated**: 2026-10-08
+**Last Updated**: 2026-10-25
 
 live in one JSON block - `observability` in `config/idhazh.json` - with the ages
 a publisher reads, because a switch that stops a record being written and an age
@@ -293,15 +293,15 @@ rather than a measurement: its compaction's monthly window is what drops an
 old month, and that window may not reach back fewer days than
 `collect.seen_window_days`.
 
-**And every retention task ships in dry run.** Each retention declaration carries
-`dry_run: true`,
-so a pass lists every file a live pass would remove and removes none of them.
+**Each retention task has its own deletion switch.** `visual-prune` now carries
+`dry_run: false`, with the same 390-day window and 200-file ceiling. The other
+retention declarations keep `dry_run: true`: their passes report candidates
+and remove none of them. Enabling visual pruning does not enable those tasks.
 The `history` job of `.github/workflows/idhazh-gardener.yml` squashes and force-pushes
 `main` on a schedule, so a state file deleted here stops being recoverable from
 history once that prune passes over it (`CLAUDE.md` section 8) - which makes
 "read the list first" the only safe order. Turning one task's deletion on is a
-change to that task's own declaration and its entry in the contract test's list
-of live switches
+change to that task's own declaration and its matching behavior test
 ([../../how-to/run-the-pipeline.md](../../how-to/run-the-pipeline.md#turning-state-cleanup-on)).
 Measured on this checkout on 2026-09-13: a live run today
 removes nothing, and the first files the fourteen-month rules take are the day
