@@ -20,11 +20,6 @@ a period too big to hold whole - a year, built one month at a time.
 `render_renamed` builds a file that already exists again under another ledger's
 name and changes nothing else, for a ledger whose name moves.
 
-Compact rendering stamps every row and the file envelope with the model passed
-to it. Rows that entered compaction under an older contract are read, checked,
-then emitted under the current contract stamp. The recompiled file replaces the
-old bytes; a second build does not need a special reader migration.
-
 Two formats behind one door: parquet, and JSON lines a person can read in a
 pull request. `ledger/parquet.py` is the only module that imports the engine, and
 it is imported inside the functions that need it, so importing the ledger never
@@ -449,15 +444,12 @@ def _refuse_rows_outside_the_period[C: Contract](
         )
 
 
-def _stored[C: Contract](
-    rows: Sequence[StoredRow[C]], *, model: type[C]
-) -> list[dict[str, Any]]:
+def _stored[C: Contract](rows: Sequence[StoredRow[C]]) -> list[dict[str, Any]]:
     """Each row as the cells a file holds: its identity cells, then its contract's own."""
     return [
         held.identity.model_dump(mode="json")
         | (held.provenance.model_dump(mode="json") if held.provenance is not None else {})
-        | (held.row.model_dump(mode="json") | {"version": model.schema_version()})
-        for held in rows
+        | held.row.model_dump(mode="json") for held in rows
     ]
 
 
@@ -490,7 +482,7 @@ def render_period[C: Contract](
     chosen = knobs.format if fmt is None else fmt
     compression = _compression(chosen, Tier.COMPACT, knobs)
     _, data = _rendered(
-        _stored(rows, model=model),
+        _stored(rows),
         model=model,
         ledger=ledger,
         covers=covers,
@@ -540,7 +532,7 @@ def render_grouped_period[C: Contract](
         nonlocal counted
         for group in groups:
             _refuse_rows_outside_the_period(group, model=model, ledger=ledger, covers=covers)
-            stored = _stored(group, model=model)
+            stored = _stored(group)
             digest.update(json_lines.rows_bytes(stored))
             counted += len(stored)
             yield stored

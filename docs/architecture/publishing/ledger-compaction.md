@@ -12,9 +12,6 @@ it moved.** Where its declaration asks, it then packs each finished year's month
 files into one file a year. A raw file holds one writer's rows for one day, so a
 ledger gains a file on every run, and at a few rows a file a parquet file is
 mostly its footer.
-When a compact period combines rows first written under older contract stamps,
-the ledger writer stamps every row and the period envelope with the current
-model stamp. It does this in the writer, not in a planner-only reader.
 One task a ledger does the move: `config/gardener/compact-<folder>.json`, where
 `<folder>` is its door folder with `/` written `-`. It is served by
 `backend/idhazh/gardener/tasks/compaction.py` through its kind, so another

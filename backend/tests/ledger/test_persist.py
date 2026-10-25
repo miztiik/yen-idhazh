@@ -375,40 +375,6 @@ def test_nested_read_side_migration_runs_under_both_engines(fmt: Format, tmp_pat
 
 
 @pytest.mark.parametrize("fmt", list(Format), ids=[fmt.value for fmt in Format])
-def test_compact_writer_uses_one_row_contract_version(fmt: Format, tmp_path: Path) -> None:
-    row = MigratedNestedLedgerRow(
-        version="2026-10-03",
-        items=[MigratedNestedLedgerItem(name="kept")],
-    )
-    written = ledger.persist(
-        tmp_path,
-        [row],
-        ledger=LedgerName.VISUAL_PRUNES,
-        covers="2026-10-04",
-        identity=_identity(),
-        fmt=fmt,
-    )
-    stored = ledger.load_stored(written, model=MigratedNestedLedgerRow)
-
-    compact = ledger.persist_period(
-        tmp_path,
-        stored,
-        model=MigratedNestedLedgerRow,
-        ledger=LedgerName.VISUAL_PRUNES,
-        period=Period.DAILY,
-        covers="2026-10-04",
-        identity=_identity(),
-        built_from=1,
-        fmt=fmt,
-    )
-
-    envelope = ledger.read_envelope(compact)
-    rows = ledger.load_stored([compact], model=MigratedNestedLedgerRow)
-    assert envelope.row_schema_version == MigratedNestedLedgerRow.schema_version()
-    assert all(held.row.version == MigratedNestedLedgerRow.schema_version() for held in rows)
-
-
-@pytest.mark.parametrize("fmt", list(Format), ids=[fmt.value for fmt in Format])
 def test_the_files_an_earlier_engine_wrote_still_load(fmt: Format) -> None:
     """A file yesterday's build committed has to read today (CLAUDE.md section 11)."""
     committed = FIXTURES_DIR / "parquet" / f"visual-prunes-raw-2026-09-06.{fmt.value}"
