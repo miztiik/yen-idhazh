@@ -1,6 +1,6 @@
 # Plan 67 - Feed ingestion feedback and publisher selection
 
-**Last Updated**: 2026-10-24
+**Last Updated**: 2026-10-25
 **Level**: 5 - broader feedback contracts remain design-gated; the owner authorized the feed-to-Parquet API delivery below.
 
 **Owner clarification, 2026-10-24 UTC:** The current delivery target is
@@ -99,8 +99,8 @@ tracing context. The existing default-off service flag gates the new routes.
 | E2 | 2 | Land compatible shared readers before writers | 1 | B | IN-FLIGHT | document-observation-contracts | [#1712](https://github.com/miztiik/yen-idhazh/pull/1712) | - |
 | E3 | 3 | Implement curated publisher catalog references | 2 | C | DONE | publisher-catalog-support | [#1704](https://github.com/miztiik/yen-idhazh/pull/1704) | - |
 | E4 | 4 | Wire common fetch and parse observations | 2 (observation contract slice landed; other Row 2 contracts remain open) | D | DONE | persist-ingestion-observations | [#1717](https://github.com/miztiik/yen-idhazh/pull/1717) | - |
-| E5 | 5 | Classify failure and work attribution | 4 | E | IN-REVIEW | operational-request-evidence | - | failure-attribution |
-| E6 | 6 | Aggregate article delivery and request costs | 5 | F | IN-REVIEW (typed planner report; saved state remains Row 10) | operational-request-evidence | - | - |
+| E5 | 5 | Classify failure and work attribution | 4 | E | IN-REVIEW | operational-request-evidence | [#1718](https://github.com/miztiik/yen-idhazh/pull/1718) | failure-attribution |
+| E6 | 6 | Aggregate article delivery and request costs | 5 | F | IN-REVIEW (typed planner report; saved state remains Row 10) | operational-request-evidence | [#1718](https://github.com/miztiik/yen-idhazh/pull/1718) | - |
 | E7 | 7 | Compute supported operational estimates | 6 | G | PENDING | - | - | - |
 | E8 | 8 | Deliver selection, partition and persistence APIs | - (authorized stage contracts included) | E | DONE | feed-ingest-feedback-selection | - | - |
 | E9 | 9 | Apply the soft publisher-exposure preference | 8 | F | IN-REVIEW (current-run + fallback) | publisher-exposure-preference | [#1714](https://github.com/miztiik/yen-idhazh/pull/1714) | - |
