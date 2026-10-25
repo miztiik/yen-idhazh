@@ -182,9 +182,6 @@ jobs:
             const document_observation_days = completeHistoryDayInputs(inputs.registrations.document_observations.prefix,
               closedObservationDays(now, inputs.harvest.config.feedback.window_days),
               inputs.settings.inputs.document_observation_days, "document_observation_days");
-            const operational_state_days = completeHistoryDayInputs(inputs.registrations.operational_state.prefix,
-              [...closedObservationDays(now, inputs.harvest.config.feedback.window_days), now.slice(0, 10)].sort(),
-              inputs.settings.inputs.operational_state_days, "operational_state_days");
             const registry: { families: { ledgers: { name: string; prefix: string[] }[] }[] } =
               await Bun.file(inputs.settings.inputs.registrations).json();
             const ledgers = ["source-runs", "article-assessments", "diversity", "editorial-selections", "dispatches", "rejections"] as const;
@@ -271,9 +268,10 @@ jobs:
             await stageConfiguredDays("published", inputs.registrations.published.prefix, published_days);
             await stageConfiguredDays("item-health", inputs.registrations.item_health.prefix, settled_failure_days);
             await stageConfiguredDays("document-observations", inputs.registrations.document_observations.prefix, document_observation_days);
-            const operationalStateLedger: CompactIndex["ledger"] = "operational-state";
-            await stageConfiguredDays(operationalStateLedger,
-              inputs.registrations.operational_state.prefix, operational_state_days);
+            const operationalStateSnapshots = inputs.registrations.operational_state.prefix.join("/");
+            for (const name of ["latest.parquet", "previous-complete.parquet"]) {
+              inventory.add(`state/compact/${operationalStateSnapshots}/snapshots/${name}`);
+            }
             const feedInventory = await stageFeedHistory({
               ledger: "feed-health", prefix: inputs.registrations.feed_health.prefix, now,
               health_window_days: Math.max(HEALTH_RECORDED_DAYS, inputs.clock_config.collect.reliability_window_days),
@@ -296,7 +294,7 @@ jobs:
             }
             const settings = ServiceSettingsSchema.parse({ ...inputs.settings, enabled: true,
               inputs: { ...inputs.settings.inputs, seen_days, published_days, settled_failure_days, feed_health_days,
-                document_observation_days, operational_state_days },
+                document_observation_days },
               run: { ...inputs.settings.run, attempt: Number(GITHUB_RUN_ATTEMPT) } });
             const artifactRoot = join(RUNNER_TEMP, "feed-ingest-plan");
             await mkdir(artifactRoot, { recursive: true });

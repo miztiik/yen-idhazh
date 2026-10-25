@@ -3,16 +3,17 @@ import { z } from "zod";
 import { FEED_OPERATIONAL_STATE_VERSION } from "../version";
 import {
   CommitShaSchema, CountSchema, DateStampSchema, NonEmptySchema, NonNegativeSchema,
-  PositiveCountSchema, SlugSchema, TimestampSchema, reject,
+  PositiveCountSchema, Sha256Schema, SlugSchema, TimestampSchema, reject,
 } from "./primitives";
 
-export const FeedIngestOperationalStateRowSchema = z.strictObject({
-  version: z.literal(FEED_OPERATIONAL_STATE_VERSION).default(FEED_OPERATIONAL_STATE_VERSION),
+const operationalStateFields = {
   date: DateStampSchema,
   state_revision: PositiveCountSchema, parent_revision: PositiveCountSchema.nullable(),
   written_at_utc: TimestampSchema, evidence_cutoff_utc: TimestampSchema,
   window_days: PositiveCountSchema, window_start: DateStampSchema, window_end: DateStampSchema,
   code_revision: CommitShaSchema, policy_version: NonEmptySchema, source_id: SlugSchema,
+  snapshot_source_ids: z.array(SlugSchema).nonempty().nullable(),
+  snapshot_sha256: Sha256Schema.nullable(),
   evidence_start_utc: TimestampSchema.nullable(), evidence_end_utc: TimestampSchema.nullable(),
   measured_target_requests: CountSchema.nullable(), measured_source_wasted_requests: CountSchema.nullable(),
   observed_attempted_opportunities: CountSchema, observed_measured_opportunities: CountSchema,
@@ -20,7 +21,23 @@ export const FeedIngestOperationalStateRowSchema = z.strictObject({
   qualification_status: z.enum(["qualified", "insufficient_support", "unavailable"]),
   request_waste_ratio: NonNegativeSchema.max(1).nullable(),
   operational_penalty: NonNegativeSchema.max(1).nullable(),
-}).superRefine((value, ctx) => {
+};
+function validateOperationalState(value: {
+  parent_revision: number | null; state_revision: number; window_start: string; window_end: string;
+  evidence_start_utc: string | null; evidence_end_utc: string | null;
+  measured_target_requests: number | null; measured_source_wasted_requests: number | null;
+  observed_measured_opportunities: number; observed_attempted_opportunities: number;
+  qualification_status: "qualified" | "insufficient_support" | "unavailable";
+  measured_coverage: number | null; request_waste_ratio: number | null; operational_penalty: number | null;
+  snapshot_source_ids: string[] | null; snapshot_sha256: string | null;
+}, ctx: z.RefinementCtx) {
+  if ((value.snapshot_source_ids === null) !== (value.snapshot_sha256 === null)) {
+    reject(ctx, "snapshot source roster and digest are available together");
+  }
+  if (value.snapshot_source_ids !== null
+    && value.snapshot_source_ids.some((source, index) => index > 0 && source <= value.snapshot_source_ids![index - 1]!)) {
+    reject(ctx, "snapshot source IDs must be unique and sorted");
+  }
   if (value.parent_revision !== null && value.parent_revision >= value.state_revision) {
     reject(ctx, "parent revision must be older than the saved state");
   }
@@ -48,8 +65,25 @@ export const FeedIngestOperationalStateRowSchema = z.strictObject({
   } else if (value.request_waste_ratio !== null || value.operational_penalty !== null) {
     reject(ctx, "unqualified state has no request estimate or score adjustment");
   }
-});
+}
+
+export const FeedIngestOperationalStateRowSchema = z.strictObject({
+  version: z.literal(FEED_OPERATIONAL_STATE_VERSION).default(FEED_OPERATIONAL_STATE_VERSION),
+  ...operationalStateFields,
+}).superRefine(validateOperationalState);
 export type FeedIngestOperationalStateRow = z.infer<typeof FeedIngestOperationalStateRowSchema>;
+
+const {
+  snapshot_source_ids: _snapshotSourceIds,
+  snapshot_sha256: _snapshotSha256,
+  ...legacyOperationalStateFields
+} = operationalStateFields;
+export const PreviousFeedIngestOperationalStateRowSchema = z.strictObject({
+  version: z.literal("2026-10-25"),
+  ...legacyOperationalStateFields,
+}).superRefine((value, ctx) => validateOperationalState({
+  ...value, snapshot_source_ids: null, snapshot_sha256: null,
+}, ctx));
 
 export const OperationalStateReadSchema = z.strictObject({
   status: z.enum(["current", "stale_fallback", "unavailable"]),

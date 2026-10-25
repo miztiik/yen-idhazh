@@ -14,8 +14,9 @@ The observation and operational-state contracts have compatible readers, and
 the isolated TypeScript planner now saves per-source operational state and uses
 qualified requests-first evidence in the next selection. This closes only the
 approved D3/D4/D8 slice; it does not deploy the broader adaptive model
-described below or establish that the score improves editorial outcomes. D5
-admission, restriction/recovery and polling controls remain unapproved.
+described below or establish that the score improves editorial outcomes. The
+separate D5 failure-pause/recovery policy is approved but not implemented or
+activated here. Other admission and polling controls remain unapproved.
 Recommendations below do not activate those controls; see the
 [feedback contract](../contracts/feed-ingest-feedback.md).
 

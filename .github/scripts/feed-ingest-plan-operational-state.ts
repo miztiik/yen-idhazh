@@ -13,7 +13,9 @@ import { closedObservationDays, readIngestEvidence } from "../../services/feed-i
 import { readOperationalState } from "../../services/feed-ingest-plan/src/read-ledger-history/read-operational-state";
 import type { LedgerHistoryReadSource } from "../../services/feed-ingest-plan/src/read-ledger-history/named-days";
 import { readLedgerParquet, readLedgerParquetBytes } from "../../services/feed-ingest-plan/src/read-ledger-history/read-parquet";
-import { buildOperationalStateRows } from "../../services/feed-ingest-plan/src/write-operational-state";
+import {
+  buildOperationalStateRows, renderOperationalStateSnapshots,
+} from "../../services/feed-ingest-plan/src/write-operational-state";
 import { completeHistoryDayInputs } from "./feed-ingest-plan-outputs";
 import type { PreparedPlannerState } from "./feed-ingest-plan-commit";
 
@@ -35,11 +37,6 @@ export function createFreshOperationalStatePreparation(input: Readonly<{
       const observationDays = completeHistoryDayInputs(
         input.inputs.registrations.document_observations.prefix, days,
         input.inputs.settings.inputs.document_observation_days, "document_observation_days",
-      );
-      const stateDays = completeHistoryDayInputs(
-        input.inputs.registrations.operational_state.prefix,
-        [...days, baseInput.now.slice(0, 10)].sort(),
-        input.inputs.settings.inputs.operational_state_days, "operational_state_days",
       );
       const source = <T extends object>(
         registration: LedgerRegistration, contract: LedgerRowContract<T>,
@@ -72,8 +69,8 @@ export function createFreshOperationalStatePreparation(input: Readonly<{
           read_source: observationSource, additional_rows: additionalRows,
         }),
         readOperationalState({
-          root: input.repository, now: baseInput.now, policy,
-          registration: input.inputs.registrations.operational_state, days: stateDays,
+          root: input.state_root, snapshot_root: resolve(input.repository, "state"),
+          now: baseInput.now, policy, registration: input.inputs.registrations.operational_state,
           read_source: stateSource,
         }),
       ]);
@@ -105,9 +102,16 @@ export function createFreshOperationalStatePreparation(input: Readonly<{
       if (!isDeepStrictEqual(readback.rows.map(held => held.row), rows)) {
         throw new Error("Fresh-base operational state differs from its native readback");
       }
+      const snapshots = await renderOperationalStateSnapshots({
+        rows, ...(saved.latest_snapshot_rows === undefined ? {} : { previous_rows: saved.latest_snapshot_rows }),
+        writer, inputs: input.inputs,
+      });
       return {
         status: "written", reason: "none",
-        files: [{ path: file.path, bytes: await readFile(resolve(outputRoot, ...file.path.split("/"))) }],
+        files: [
+          { path: file.path, bytes: await readFile(resolve(outputRoot, ...file.path.split("/"))) },
+          ...snapshots,
+        ],
       };
     } catch (error) {
       console.error(JSON.stringify({

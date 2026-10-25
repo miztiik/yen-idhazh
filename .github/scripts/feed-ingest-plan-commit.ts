@@ -11,6 +11,11 @@ export type PreparedPlannerState = Readonly<{
   reason: string;
   files: readonly Readonly<{ path: string; bytes: Uint8Array }>[];
 }>;
+const operationalStateSnapshotPaths = new Set([
+  "compact/feed-ingest-plan/operational-state/snapshots/latest.parquet",
+  "compact/feed-ingest-plan/operational-state/snapshots/previous-complete.parquet",
+]);
+
 function utcSecond(value: string): string {
   const milliseconds = Date.parse(value);
   if (!value.endsWith("Z") || !Number.isFinite(milliseconds)) throw new Error("commit: fresh-base clock must return a UTC instant");
@@ -127,8 +132,9 @@ export async function commitPlannerFiles(input: Readonly<{
       const iterationWrites = [...writes];
       const indexWrites: { path: string; blob: string }[] = [];
       for (const file of prepared.files) {
-        if (!/^raw\/(?:[a-z0-9-]+\/)+\d{4}\/\d{2}\/\d{2}\/[0-9a-f]{8}-[0-9a-f]{4}-8[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\.parquet$/.test(file.path)) {
-          throw new Error("commit: prepared output must be an exact raw UUID Parquet path");
+        const rawPath = /^raw\/(?:[a-z0-9-]+\/)+\d{4}\/\d{2}\/\d{2}\/[0-9a-f]{8}-[0-9a-f]{4}-8[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\.parquet$/.test(file.path);
+        if (!rawPath && !operationalStateSnapshotPaths.has(file.path)) {
+          throw new Error("commit: prepared output must be a named raw file or operational-state snapshot");
         }
         const preparedPath = join(directory, `${createHash("sha256").update(file.path).digest("hex")}.parquet`);
         await writeFile(preparedPath, file.bytes);
@@ -140,6 +146,7 @@ export async function commitPlannerFiles(input: Readonly<{
       const groups = new Map<string, { ledger: string; date: string; names: string[] }>();
       for (const write of iterationWrites) {
         const parts = write.path.split("/");
+        if (parts[1] !== "raw") continue;
         const dateParts = parts.slice(-4, -1);
         const date = dateParts.join("-");
         const prefix = parts.slice(2, -4);

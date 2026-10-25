@@ -39,7 +39,6 @@ export const ServiceSettingsSchema = z.strictObject({
     settled_failure_days: z.array(SeenDayInputSchema).default([]),
     feed_health_days: z.array(SeenDayInputSchema).default([]),
     document_observation_days: z.array(SeenDayInputSchema).default([]),
-    operational_state_days: z.array(SeenDayInputSchema).default([]),
   }),
   run: z.strictObject({ attempt: PositiveCountSchema, producer: NonEmptySchema }),
 });

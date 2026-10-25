@@ -27,7 +27,12 @@ export async function executeSelection(
   const request = StageReferenceRequestSchema.parse(raw);
   const parsed = await readStageBatch(inputs.outputRoot, "parsed", request.batch_id, ParsedFeedBatchSchema, readParsedFeedBatch);
   requireStageConfiguration(parsed, inputs, runtime);
-  const result = await selectArticles(parsed, inputs, onScreened);
+  const selectedAt = runtime.clock?.() ?? new Date();
+  if (!Number.isFinite(selectedAt.getTime())) {
+    throw new PlanError("INVALID_RUN_CONTEXT", "selection clock must be a valid UTC instant", "now");
+  }
+  const operationalStateNow = selectedAt.toISOString().replace(/\.\d{3}Z$/, "Z");
+  const result = await selectArticles(parsed, inputs, operationalStateNow, onScreened);
   const batch = await writeStageBatch(inputs.outputRoot, "selected", SelectedFeedBatchSchema, {
     batch_id: randomUUID(), parsed_batch_id: parsed.batch_id,
     config_sha256: parsed.config_sha256, context: parsed.context,

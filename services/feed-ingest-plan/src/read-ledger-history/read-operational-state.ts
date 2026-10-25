@@ -1,5 +1,6 @@
 /** Which saved registered state is safe to use for one planner selection? */
 import { createHash } from "node:crypto";
+import { posix, resolve } from "node:path";
 import {
   FeedIngestOperationalStateRowSchema, OperationalStateReadSchema, SourceOperationalEvidenceSchema,
 } from "@idhazh/common-contracts";
@@ -7,8 +8,6 @@ import type {
   FeedIngestConfig, FeedIngestOperationalStateRow, OperationalStateRead, SourceOperationalEvidence,
 } from "@idhazh/common-contracts";
 import type { LedgerRegistration } from "@idhazh/ledger-file-writer";
-import type { SeenDayInput } from "../config/service-settings";
-import { defaultDayInput, readNamedDays } from "./named-days";
 import type { LedgerHistoryReadSource } from "./named-days";
 import { OperationalStateContract } from "../metrics/audit-contracts";
 import { shiftUtcDay } from "../metrics/history-window";
@@ -16,7 +15,20 @@ import { closedObservationDays } from "./read-ingest-evidence";
 import { estimateSourceFeedback } from "../estimate-operational-feedback";
 import type { MeasuredSourceEvidence } from "../estimate-operational-feedback";
 import { classifyPublicationHistoryError } from "./classify-publication-history-error";
+import { LedgerHistoryReadError } from "./ledger-history-error";
+import { readLedgerParquet } from "./read-parquet";
+import type { ReadLedgerFile } from "./read-parquet";
 import { writeJsonLine } from "../logging/structured-logger";
+
+export const OPERATIONAL_STATE_SNAPSHOT_FILES = {
+  latest: "snapshots/latest.parquet",
+  previous_complete: "snapshots/previous-complete.parquet",
+} as const;
+type SnapshotSlot = keyof typeof OPERATIONAL_STATE_SNAPSHOT_FILES;
+type SnapshotResult =
+  | { status: "valid"; rows: FeedIngestOperationalStateRow[] }
+  | { status: "missing" }
+  | { status: "invalid"; diagnostic: string };
 
 export function operationalPolicyVersion(policy: FeedIngestConfig["feedback"]): string {
   return createHash("sha256").update(JSON.stringify({
@@ -27,14 +39,18 @@ export function operationalPolicyVersion(policy: FeedIngestConfig["feedback"]): 
   })).digest("hex");
 }
 
-function candidateDays(now: string, days: readonly SeenDayInput[], windowDays: number, prefix: readonly string[]) {
-  const today = now.slice(0, 10);
-  const named = new Map(days.map(day => [day.day, day]));
-  for (let offset = 0; offset <= windowDays; offset++) {
-    const day = shiftUtcDay(today, -offset);
-    if (!named.has(day)) named.set(day, defaultDayInput(prefix, day));
-  }
-  return [...named.values()].sort((left, right) => left.day.localeCompare(right.day));
+export function operationalStateSnapshotPath(registration: LedgerRegistration, slot: SnapshotSlot): string {
+  return posix.join("compact", ...registration.prefix, OPERATIONAL_STATE_SNAPSHOT_FILES[slot]);
+}
+
+export function operationalStateSnapshotDigest(rows: readonly FeedIngestOperationalStateRow[]): string {
+  const canonical = [...rows]
+    .sort((left, right) => left.source_id.localeCompare(right.source_id))
+    .map(row => {
+      const { snapshot_sha256: _snapshotSha256, ...content } = row;
+      return content;
+    });
+  return createHash("sha256").update(JSON.stringify(canonical), "utf8").digest("hex");
 }
 
 function validateSnapshot(
@@ -42,6 +58,8 @@ function validateSnapshot(
 ): boolean {
   if (rows.length === 0) return false;
   const first = rows[0]!;
+  const roster = first.snapshot_source_ids;
+  if (roster === null || first.snapshot_sha256 === null || roster.length !== rows.length) return false;
   const sources = new Set<string>();
   for (const row of rows) {
     if (row.state_revision !== first.state_revision || row.parent_revision !== first.parent_revision
@@ -49,6 +67,8 @@ function validateSnapshot(
       || row.evidence_cutoff_utc !== first.evidence_cutoff_utc || row.window_days !== first.window_days
       || row.window_start !== first.window_start || row.window_end !== first.window_end
       || row.code_revision !== first.code_revision || row.policy_version !== first.policy_version
+      || row.snapshot_sha256 !== first.snapshot_sha256
+      || JSON.stringify(row.snapshot_source_ids) !== JSON.stringify(roster)
       || sources.has(row.source_id)) return false;
     sources.add(row.source_id);
     const cutoffDay = row.evidence_cutoff_utc.slice(0, 10);
@@ -86,7 +106,9 @@ function validateSnapshot(
           ? expected.request_component_penalty : null) !== row.operational_penalty) return false;
     }
   }
-  return true;
+  const sourceIds = [...sources].sort();
+  return JSON.stringify(sourceIds) === JSON.stringify(roster)
+    && operationalStateSnapshotDigest(rows) === first.snapshot_sha256;
 }
 
 function operationalEvidence(
@@ -104,67 +126,93 @@ function operationalEvidence(
   });
 }
 
+async function readSnapshot(input: Readonly<{
+  root: string; registration: LedgerRegistration; slot: SnapshotSlot;
+  read_source?: LedgerHistoryReadSource<FeedIngestOperationalStateRow>;
+}>): Promise<SnapshotResult> {
+  const path = resolve(input.root, operationalStateSnapshotPath(input.registration, input.slot));
+  try {
+    const loaded: ReadLedgerFile<FeedIngestOperationalStateRow> = input.read_source?.readFile === undefined
+      ? await readLedgerParquet(path, "operational-state", OperationalStateContract)
+      : await input.read_source.readFile(path);
+    if (loaded.envelope.ledger !== "operational-state" || loaded.envelope.tier !== "compact"
+      || loaded.envelope.period !== "daily" || loaded.rows.length === 0
+      || loaded.envelope.covers !== loaded.rows[0]!.row.date) {
+      throw new LedgerHistoryReadError("Operational-state snapshot envelope is incomplete or inconsistent");
+    }
+    const rows = loaded.rows.map(({ row }) => FeedIngestOperationalStateRowSchema.parse(row));
+    if (rows.some(row => row.date !== loaded.envelope.covers) || !validateSnapshot(rows)) {
+      throw new LedgerHistoryReadError("Operational-state snapshot roster or digest is incomplete");
+    }
+    return { status: "valid", rows };
+  } catch (error) {
+    const diagnostic = classifyPublicationHistoryError(error);
+    if (diagnostic === null) throw error;
+    return diagnostic === "ENOENT" ? { status: "missing" } : { status: "invalid", diagnostic };
+  }
+}
+
+function compatibleSnapshot(
+  snapshot: SnapshotResult, policy: FeedIngestConfig["feedback"],
+): FeedIngestOperationalStateRow[] | undefined {
+  if (snapshot.status !== "valid" || !validateSnapshot(snapshot.rows, policy)) return undefined;
+  const first = snapshot.rows[0]!;
+  return first.window_days === policy.window_days
+    && first.policy_version === operationalPolicyVersion(policy) ? snapshot.rows : undefined;
+}
+
 export async function readOperationalState(input: Readonly<{
-  root: string; now: string; policy: FeedIngestConfig["feedback"];
-  registration: LedgerRegistration; days: readonly SeenDayInput[];
+  root: string; snapshot_root?: string; now: string; policy: FeedIngestConfig["feedback"];
+  registration: LedgerRegistration;
   read_source?: LedgerHistoryReadSource<FeedIngestOperationalStateRow>;
 }>) {
   if (input.registration.name !== "operational-state" || input.registration.family !== "feed-ingest-plan") {
     throw new Error("Operational state requires the registered operational-state ledger");
   }
-  const named = candidateDays(input.now, input.days, input.policy.window_days, input.registration.prefix);
-  const cache = new Map<string, Promise<import("./read-parquet").ReadLedgerFile<FeedIngestOperationalStateRow>>>();
-  const rows = new Map<string, FeedIngestOperationalStateRow>();
-  const errors: { day: string; diagnostic: string }[] = [];
-  const dayStatuses: { day: string; status: string }[] = [];
-  let invalidSnapshot = false;
-  for (const day of named) {
-    try {
-      const held = await readNamedDays(input.root, input.registration, [day], OperationalStateContract, cache,
-        input.read_source);
-      dayStatuses.push(...held.map(item => ({ day: item.day, status: item.status })));
-      for (const file of held.flatMap(item => item.files)) {
-        for (const stored of file.rows) {
-          const row = FeedIngestOperationalStateRowSchema.parse(stored.row);
-          const key = `${row.state_revision}:${row.source_id}`;
-          if (rows.has(key)) invalidSnapshot = true;
-          else rows.set(key, row);
-        }
-      }
-    } catch (error) {
-      const diagnostic = classifyPublicationHistoryError(error);
-      errors.push({
-        day: day.day,
-        diagnostic: diagnostic ?? (error instanceof Error ? error.message : "unknown_reader_error"),
-      });
+  const snapshotRoot = input.snapshot_root ?? input.root;
+  let latestSnapshot = await readSnapshot({
+    root: snapshotRoot, registration: input.registration, slot: "latest",
+    ...(input.read_source === undefined ? {} : { read_source: input.read_source }),
+  });
+  const previousSnapshot = await readSnapshot({
+    root: snapshotRoot, registration: input.registration, slot: "previous_complete",
+    ...(input.read_source === undefined ? {} : { read_source: input.read_source }),
+  });
+  if (latestSnapshot.status === "valid" && previousSnapshot.status === "valid") {
+    const latest = latestSnapshot.rows[0]!;
+    const previous = previousSnapshot.rows[0]!;
+    if (latest.state_revision <= previous.state_revision || latest.parent_revision !== previous.state_revision) {
+      latestSnapshot = { status: "invalid", diagnostic: "snapshot revision does not follow previous complete state" };
     }
   }
-  const all = [...rows.values()];
-  const latestRevision = all.reduce((latest, row) => Math.max(latest, row.state_revision), 0) || null;
-  const revisionGroups = new Map<number, FeedIngestOperationalStateRow[]>();
-  for (const row of all) {
-    const group = revisionGroups.get(row.state_revision) ?? [];
-    group.push(row);
-    revisionGroups.set(row.state_revision, group);
-  }
-  for (const group of revisionGroups.values()) {
-    if (!validateSnapshot(group)) invalidSnapshot = true;
-    else if (group.every(row => row.policy_version === operationalPolicyVersion(input.policy))
-      && !validateSnapshot(group, input.policy)) invalidSnapshot = true;
-  }
-  const policyVersion = operationalPolicyVersion(input.policy);
-  const compatible = [...revisionGroups.entries()]
-    .filter(([, group]) => validateSnapshot(group, input.policy) && group.every(row =>
-      row.window_days === input.policy.window_days && row.policy_version === policyVersion))
-    .sort(([left], [right]) => right - left)[0]?.[1] ?? [];
-  const latest = compatible[0];
-  const writable = errors.length === 0 && !invalidSnapshot;
-  if (latest === undefined) {
-    const reason = errors.length > 0 ? "unreadable"
-      : all.length > 0 || invalidSnapshot ? "incompatible"
-        : dayStatuses.some(day => day.status === "empty") ? "known_empty"
-          : dayStatuses.length > 0 && dayStatuses.every(day => day.status === "missing") ? "missing"
-            : "unknown";
+  const latestRows = compatibleSnapshot(latestSnapshot, input.policy);
+  const previousRows = compatibleSnapshot(previousSnapshot, input.policy);
+  const latestRevision = latestSnapshot.status === "valid" ? latestSnapshot.rows[0]!.state_revision
+    : previousSnapshot.status === "valid" ? previousSnapshot.rows[0]!.state_revision : null;
+  const writable = latestSnapshot.status === "valid"
+    || (latestSnapshot.status === "missing" && previousSnapshot.status === "missing");
+  const expectedWindow = closedObservationDays(input.now, input.policy.window_days);
+  const useLatest = latestRows !== undefined;
+  const selectedRows = latestRows ?? previousRows;
+  const selectedSlot = selectedRows === undefined ? null : useLatest ? "latest" : "previous_complete";
+  const latestCurrent = latestRows !== undefined
+    && latestRows[0]!.window_start === expectedWindow[0]
+    && latestRows[0]!.window_end === expectedWindow.at(-1);
+  const stale = selectedRows !== undefined && (selectedSlot !== "latest" || !latestCurrent);
+  const unavailableReason = latestSnapshot.status === "invalid" || previousSnapshot.status === "invalid"
+    ? "unreadable"
+    : latestSnapshot.status === "missing" && previousSnapshot.status === "missing" ? "missing"
+      : latestRows === undefined && previousRows === undefined ? "incompatible" : "unknown";
+  const reason = selectedRows === undefined ? unavailableReason
+    : !stale ? null
+      : selectedSlot === "previous_complete" ? latestSnapshot.status === "missing" ? "latest_missing"
+        : latestSnapshot.status === "invalid" ? "unreadable" : "incompatible"
+        : "window_behind";
+  const errors = [
+    latestSnapshot.status === "invalid" ? { file: "latest", diagnostic: latestSnapshot.diagnostic } : null,
+    previousSnapshot.status === "invalid" ? { file: "previous_complete", diagnostic: previousSnapshot.diagnostic } : null,
+  ].filter((item): item is { file: string; diagnostic: string } => item !== null);
+  if (selectedRows === undefined) {
     const state: OperationalStateRead = OperationalStateReadSchema.parse({
       status: "unavailable", state_revision: null, window_days: input.policy.window_days,
       window_start: null, window_end: null,
@@ -175,30 +223,29 @@ export async function readOperationalState(input: Readonly<{
     });
     return {
       state, reason, by_source: new Map<string, SourceOperationalEvidence>(),
-      latest_revision: latestRevision, writable, errors,
+      latest_revision: latestRevision, latest_snapshot_rows: latestSnapshot.status === "valid" ? latestSnapshot.rows : undefined,
+      writable, errors,
     };
   }
-  const expectedWindow = closedObservationDays(input.now, input.policy.window_days);
-  const isCurrentWindow = latest.window_start === expectedWindow[0]
-    && latest.window_end === expectedWindow.at(-1);
-  const stale = errors.length > 0 || latestRevision !== latest.state_revision || !isCurrentWindow;
-  const reason = stale ? errors.length > 0 ? "unreadable"
-    : latestRevision !== latest.state_revision ? "incompatible" : "window_behind" : null;
+  const latestSelected = selectedRows[0]!;
   const state = OperationalStateReadSchema.parse({
-    status: stale ? "stale_fallback" : "current", state_revision: latest.state_revision,
-    window_days: latest.window_days, window_start: latest.window_start, window_end: latest.window_end,
+    status: stale ? "stale_fallback" : "current",
+    state_revision: latestSelected.state_revision,
+    window_days: latestSelected.window_days,
+    window_start: latestSelected.window_start, window_end: latestSelected.window_end,
   });
   if (stale) {
     writeJsonLine({
       timestamp: input.now, level: "WARN", event: "operational_state_stale_fallback",
-      reason,
-      state_revision: latest.state_revision, window_start: latest.window_start, window_end: latest.window_end,
-      errors,
+      reason, state_revision: latestSelected.state_revision,
+      window_start: latestSelected.window_start, window_end: latestSelected.window_end, errors,
     });
   }
   return {
-    state, reason, by_source: new Map(compatible.map(row =>
+    state, reason,
+    by_source: new Map(selectedRows.map(row =>
       [row.source_id, operationalEvidence(row, state.status as "current" | "stale_fallback")])),
-    latest_revision: latestRevision, writable, errors,
+    latest_revision: latestRevision, latest_snapshot_rows: latestSnapshot.status === "valid" ? latestSnapshot.rows : undefined,
+    writable, errors,
   };
 }

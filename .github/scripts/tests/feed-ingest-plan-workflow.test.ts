@@ -197,7 +197,8 @@ test("offers independent machine RAM control and commits only genuine planner an
   expect(plan.run).toContain("stageConfiguredDays(\"published\"");
   expect(plan.run).toContain("stageConfiguredDays(\"item-health\"");
   expect(plan.run).toContain("stageConfiguredDays(\"document-observations\"");
-  expect(plan.run).toContain("inputs: { ...inputs.settings.inputs, seen_days, published_days, settled_failure_days, feed_health_days,\n      document_observation_days, operational_state_days }");
+  expect(plan.run).toContain("operationalStateSnapshots = inputs.registrations.operational_state.prefix.join(\"/\")");
+  expect(plan.run).toContain("document_observation_days }");
   expect(plan.run).not.toContain("feed-ingest-plan-report");
   const reporting = steps.find(step => step.name === "Optional GitHub report")!;
   expect(reporting.if).toContain("workflow_reporting == 'true'");
@@ -278,6 +279,8 @@ test("offers independent machine RAM control and commits only genuine planner an
     const competingName = "00000000-0000-8000-8000-000000000002.parquet";
     const stateName = "00000000-0000-8000-8000-000000000003.parquet";
     const competingStateName = "00000000-0000-8000-8000-000000000004.parquet";
+    const latestSnapshotPath = "compact/feed-ingest-plan/operational-state/snapshots/latest.parquet";
+    const previousSnapshotPath = "compact/feed-ingest-plan/operational-state/snapshots/previous-complete.parquet";
     const observationPath = `${observationPrefix}/${day.replaceAll("-", "/")}/${observationName}`;
     const staleStatePath = `raw/feed-ingest-plan/operational-state/${day.replaceAll("-", "/")}/${stateName}`;
     const statePath = `raw/feed-ingest-plan/operational-state/${nextDay.replaceAll("-", "/")}/${stateName}`;
@@ -341,9 +344,13 @@ test("offers independent machine RAM control and commits only genuine planner an
         expect(observationPath).toBe(`${observationPrefix}/${day.replaceAll("-", "/")}/${observationName}`);
         return {
           status: "written", reason: "none",
-          files: [{ path: statePath, bytes: new TextEncoder().encode(
-            `derived revision 2 from ${currentIndex.files.length + 1} observations at ${now}`,
-          ) }],
+          files: [
+            { path: statePath, bytes: new TextEncoder().encode(
+              `derived revision 2 from ${currentIndex.files.length + 1} observations at ${now}`,
+            ) },
+            { path: latestSnapshotPath, bytes: new TextEncoder().encode("latest complete snapshot") },
+            { path: previousSnapshotPath, bytes: new TextEncoder().encode("previous complete snapshot") },
+          ],
         };
       },
     });
@@ -359,10 +366,12 @@ test("offers independent machine RAM control and commits only genuine planner an
     expect(new Set(landedIndex.files).size).toBe(2);
     const landedStateIndex = RawDayIndexSchema.parse(JSON.parse(await git(repository, ["show", `${result.commit}:${competingStateIndexPath}`])));
     expect(landedStateIndex.files).toEqual([competingStateName, stateName].sort());
-    expect(result.derived_state_files).toEqual([statePath]);
+    expect(result.derived_state_files).toEqual([statePath, latestSnapshotPath, previousSnapshotPath]);
     expect(result.raw_index_files).toContain(competingIndexPath.slice("state/".length));
     expect(result.committed_files.map(file => file.path)).toContain(statePath);
     expect(result.committed_files.map(file => file.path)).toContain(competingIndexPath.slice("state/".length));
+    expect(result.committed_files.map(file => file.path)).toContain(latestSnapshotPath);
+    expect(result.committed_files.map(file => file.path)).toContain(previousSnapshotPath);
   } finally {
     await rm(gitFixture, { recursive: true, force: true });
   }

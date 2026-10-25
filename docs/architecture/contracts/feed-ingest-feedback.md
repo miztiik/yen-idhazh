@@ -17,8 +17,9 @@ TypeScript planner, the configurable evidence settings below,
 requests-first eligibility, and counting only supported source-side failures
 as waste. D3/D4 approvals recorded below define the initial observations and
 per-source operational state. The rolling closed-UTC-day window is
-configurable with a seven-day default. D5 admission, restriction and polling
-rules remain unapproved.
+configurable with a seven-day default. The separate D5 failure-pause/recovery
+policy is approved but is not implemented or activated in this phase. Other
+D5 admission and polling rules remain unapproved.
 
 ## Scope
 
@@ -364,7 +365,7 @@ twice.
 | B5 | `window_start`, `window_end` | UTC dates; the closed days selected by `window_days` |
 | B6 | `code_revision`, `policy_version` | Writer revision and policy version used |
 | B7 | `source_id` and request evidence | One ledger row per source, with nullable evidence dates and request counts, measured opportunity counts, coverage and qualification |
-| B8 | D5 control fields | Excluded until separately approved; not implied by operational telemetry |
+| B8 | D5 control fields | Approved separately; not implemented or activated in this state or score trace |
 
 **Owner ruling, kumarsnaveen_microsoft, 2026-10-24 UTC:** Preserve immutable
 per-run observations. If another run saves first, recalculate only the
@@ -378,9 +379,11 @@ distinct and measured opportunities, evidence dates, coverage, qualification
 status and policy version. It does not add CPU or memory amounts: those remain
 unavailable until attributable.
 
-Restriction state is not part of this approved D3/D4 operational telemetry
-payload. Any later D5 restriction fields require separate approval. Existing
-robots, trust and access-safety rules remain unchanged.
+Restriction state is not part of this D3/D4 operational telemetry payload.
+The separately approved D5 failure-pause and recovery policy remains
+unimplemented and inactive in this phase. Its later implementation must not
+add restriction fields to the D3/D4 state or score trace. Existing robots,
+trust and access-safety rules remain unchanged.
 
 Keep operational state separate from the curated source catalog: it cannot
 retire a source or publisher. The Pydantic model is declared under
@@ -389,13 +392,24 @@ TypeScript binding are in place. Row 10 persists it through the shared ledger
 writer and reads it through the registered raw/compact path. Do not create a
 JSON state file or another unregistered persistence path.
 
-The checkpoint is `state_revision`, `evidence_cutoff_utc`,
-`window_start` and `window_end`; do not add settled event IDs. Recompute the
-configured named UTC days and select the latest compatible operational state
-through the registered ledger index, not a repository walk.
+Each complete state revision is stored in one of two fixed native Parquet
+snapshots under
+`state/compact/feed-ingest-plan/operational-state/snapshots/`:
+`latest.parquet` and `previous-complete.parquet`. Each file contains the whole
+per-source revision, a sorted source roster and a SHA-256 digest of its
+canonical rows. The TypeScript reader opens these two named files only; it
+checks the Parquet envelope, row revision, roster, digest, policy and score
+math before using any row. It never stitches revisions or searches history.
+Rows from before the roster and digest fields remain readable as historical
+ledger data, but cannot be treated as a complete fixed snapshot.
 
-Recompute the active configured window from named ledger periods, then publish
-the derived per-source operational state. Report corrections outside the
+The checkpoint is `state_revision`, `evidence_cutoff_utc`,
+`window_start` and `window_end`; do not add settled event IDs. Retain the two
+complete snapshots independently of normal historical ledger retention. Do
+not change yearly pruning or keep an unbounded snapshot history.
+
+Recompute the active configured window from named observation periods, then
+publish the derived per-source operational state. Report corrections outside the
 configured window; do not use them in that window's score. Event replay and correction identity details remain to be declared. An older correction does
 not rewrite expired score evidence or clear a restriction.
 
@@ -418,10 +432,11 @@ This TypeScript flow cannot call the shared Python publisher as a local step.
 Its existing publisher retries the same immutable files, so extend that
 publication adapter with a bounded prepare callback: on a stale base, reuse
 the existing push-retry policy and rebuild only the derived per-source
-operational-state payload from the fresh committed state and named raw/compact
-inputs. Preserve immutable observations. This is a scoped adapter extension
-and concurrency tests, not a new commit engine or retry loop. Stale state
-must never be replayed over newer state. Each retry captures a new UTC cutoff;
+operational-state payload and two fixed snapshots from the fresh committed
+state and named raw/compact inputs. Preserve immutable observations. The raw
+state file, its raw-day index and both fixed snapshots enter one Git commit.
+This is a scoped adapter extension and concurrency tests, not a new commit
+engine or retry loop. Stale state must never be replayed over newer state. Each retry captures a new UTC cutoff;
 if the retry crosses a day boundary, it reads the newer named indexes and
 advances from that base's state revision instead of publishing an older
 window under a reused revision.
@@ -439,13 +454,14 @@ a separate per-source reservation rule, which is not included in this
 proposal.
 
 The next allocation reads the latest usable operational state with its code,
-revision and original UTC window. If the current state is unreadable, use the
-last valid saved state when one exists and label it `stale_fallback`; preserve
-its original window and do not invent an expiry time. Apply its saved
+revision and original UTC window. If the latest file is missing, unreadable,
+incomplete or incompatible, use the previous complete snapshot when valid and
+label it `stale_fallback`; preserve its original window and do not invent an
+expiry time. Apply its saved
 qualified score adjustment as the best available state, but do not call it
-current. Do not apply D5 restrictions unless separately approved and
-implemented. If no state is readable, continue selection without an
-operational adjustment and emit `restrictions_unverified`; never write empty
+current. The separately approved D5 failure-pause/recovery policy is not
+implemented or activated here. If no state is readable, continue selection
+without an operational adjustment and emit `restrictions_unverified`; never write empty
 history over saved state. Existing robots, trust and access-safety checks do
 not change.
 
@@ -465,7 +481,11 @@ automatic score use after qualification is already approved. Keep any
 existing API development flag separate from feedback policy. This proposal
 does not add selection idempotency, conditional HTTP or semantic assessment.
 
-### Table C - Unapproved controls and conditional trial
+### Table C - Proposed controls and conditional trial
+
+The separate D5 failure-pause/recovery approval does not implement or activate
+those controls in this contract. The estimates below are not substituted for
+that approved policy.
 
 | Id | Setting | Proposed type and value | Effect |
 | --- | --- | --- | --- |
@@ -603,6 +623,15 @@ without changing publisher identity or exposure evidence. The old
 operational scoring must not use it as a fallback. The planner-event exception
 does not make the saved score row TypeScript-only.
 
+The existing `frontend/public/source-health.json` is a legacy publication
+view produced by the Python pipeline. It reports 30-day RSS reliability and
+14-day daily opportunity, publication and source-failure counts; these inputs,
+windows and meanings differ from the TypeScript request-based operational
+state. It does not consume the Row 10 score, and Row 10 does not add another
+public health report. Future production UI work should project the actual
+captured state and score rather than recompute them; that integration remains
+deferred to Rows 17/18.
+
 ## Acceptance examples
 
 - Replaying the same request event adds no request cost or article support.
@@ -628,9 +657,10 @@ does not make the saved score row TypeScript-only.
   These behaviors need no further owner decision unless a later change alters
   concurrency, immutable observations, failure handling, stale reads or late
   corrections.
-- D5: restriction/recovery thresholds, polling formula, review cadence,
-  caller and authority remain unapproved. A2's trial remains conditional on
-  total implementation cost after the approved telemetry path is delivered.
+- D5 failure-pause/recovery policy is approved separately but is not
+  implemented or activated in this phase. Other D5 admission and polling
+  rules remain unapproved. A2's trial configuration placement and total
+  implementation cost remain unsettled.
 
 Only D5 behavior or a proposed change to an approved meaning needs another
 owner decision. Native field names, bindings and D8 trace types are

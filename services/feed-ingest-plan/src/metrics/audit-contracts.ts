@@ -20,6 +20,7 @@ import {
   PreviousSourceSnapshotSchema, PUBLISHER_IDENTITY_VERSION, PUBLISHER_EXPOSURE_VERSION,
   PreviousExposureFeedIngestDispatchSchema, PreviousPublisherFeedIngestDispatchSchema,
   FEED_OPERATIONAL_STATE_VERSION, SOURCE_OPERATIONAL_SCORE_VERSION,
+  PreviousFeedIngestOperationalStateRowSchema,
 } from "@idhazh/common-contracts";
 import type {
   DocumentObservationRecord,
@@ -89,6 +90,15 @@ function migrateDispatch(row: object): FeedIngestDispatch {
   return readFeedIngestDispatch(row);
 }
 
+function migrateOperationalState(row: object): FeedIngestOperationalStateRow {
+  return FeedIngestOperationalStateRowSchema.parse({
+    ...PreviousFeedIngestOperationalStateRowSchema.parse(row),
+    version: FEED_OPERATIONAL_STATE_VERSION,
+    snapshot_source_ids: null,
+    snapshot_sha256: null,
+  });
+}
+
 export { ArticleAssessmentContract } from "@idhazh/common-contracts";
 export const DiversityMetricContract: LedgerRowContract<DiversityMetricRow> = {
   schema: DiversityMetricRowSchema,
@@ -102,6 +112,12 @@ export const DocumentObservationContract: LedgerRowContract<DocumentObservationR
 export const OperationalStateContract: LedgerRowContract<FeedIngestOperationalStateRow> = {
   schema: FeedIngestOperationalStateRowSchema,
   schemaVersion: FEED_OPERATIONAL_STATE_VERSION,
+  legacyVersions: {
+    "2026-10-25": {
+      schema: PreviousFeedIngestOperationalStateRowSchema,
+      migrate: migrateOperationalState,
+    },
+  },
 };
 export const SourceRunContract: LedgerRowContract<SourceRunRecord> = {
   schema: SourceRunRecordSchema,

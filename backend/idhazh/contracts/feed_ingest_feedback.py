@@ -10,6 +10,7 @@ from idhazh.contracts.base import (
     Contract,
     DateStamp,
     Model,
+    Sha256,
     Slug,
     Timestamp,
 )
@@ -26,13 +27,18 @@ class FeedIngestOperationalStateRow(Contract):
     __schema_stem__: ClassVar[str] = "feed-ingest-operational-state"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-10-27",
+            change="Bind complete source rosters and content digests to saved snapshots.",
+            why="A bounded reader must reject a partial snapshot without searching history.",
+        ),
+        ChangelogEntry(
             version="2026-10-25",
             change="Declare per-source request estimates and their saved evidence window.",
             why="A later selection needs a typed revision without replacing raw observations.",
         ),
     )
 
-    version: Literal["2026-10-25"] = "2026-10-25"
+    version: Literal["2026-10-25", "2026-10-27"] = "2026-10-27"
     date: DateStamp
     state_revision: PositiveCount
     parent_revision: PositiveCount | None
@@ -44,6 +50,8 @@ class FeedIngestOperationalStateRow(Contract):
     code_revision: CommitSha
     policy_version: NonEmpty
     source_id: Slug
+    snapshot_source_ids: list[Slug] | None = None
+    snapshot_sha256: Sha256 | None = None
     evidence_start_utc: Timestamp | None
     evidence_end_utc: Timestamp | None
     measured_target_requests: Count | None
@@ -57,6 +65,13 @@ class FeedIngestOperationalStateRow(Contract):
 
     @model_validator(mode="after")
     def validate_state(self) -> Self:
+        if (self.snapshot_source_ids is None) != (self.snapshot_sha256 is None):
+            raise ValueError("snapshot source roster and digest are available together")
+        if self.snapshot_source_ids is not None and (
+            not self.snapshot_source_ids
+            or self.snapshot_source_ids != sorted(set(self.snapshot_source_ids))
+        ):
+            raise ValueError("snapshot source IDs must be non-empty, unique and sorted")
         if self.parent_revision is not None and self.parent_revision >= self.state_revision:
             raise ValueError("parent revision must be older than the saved state")
         if self.window_start > self.window_end:

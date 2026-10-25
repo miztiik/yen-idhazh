@@ -12,14 +12,14 @@ import { readOperationalState } from "./read-ledger-history/read-operational-sta
 import { SourceOperationalEvidenceSchema } from "@idhazh/common-contracts";
 
 export async function selectArticles(
-  batch: ParsedFeedBatch, inputs: PlanInputs, onScreened?: (result: ScreeningResult) => void,
+  batch: ParsedFeedBatch, inputs: PlanInputs, operationalStateNow: string,
+  onScreened?: (result: ScreeningResult) => void,
 ) {
   const request = resolvePlanRequest(batch.request, inputs.harvest.config);
   const planning = resolvePlanningInputs(inputs, request);
   const operationalState = await readOperationalState({
-    root: inputs.root, now: batch.context.now, policy: inputs.harvest.config.feedback,
+    root: inputs.outputRoot, now: operationalStateNow, policy: inputs.harvest.config.feedback,
     registration: inputs.registrations.operational_state,
-    days: inputs.settings.inputs.operational_state_days,
   });
   const overrides = request.freshness_hours === undefined ? {} : { freshness_hours: request.freshness_hours };
   const screening = await screenArticleCandidates({

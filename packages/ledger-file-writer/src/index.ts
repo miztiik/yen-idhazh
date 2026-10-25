@@ -18,3 +18,5 @@ export type { UnitIdentity } from "./uuid/unit-id";
 export { digestRows } from "./parquet/row-digest";
 export type { LogicalField, LogicalType } from "./parquet/row-digest";
 export { describeObjectSchema, appendIdentityColumns } from "./row-schema";
+export { checkTrustedParent } from "./ledger-paths";
+export { writeAtomically } from "./atomic-file";
