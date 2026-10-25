@@ -18,12 +18,12 @@ from idhazh.contracts.base import (
     Timestamp,
 )
 from idhazh.contracts.feed_ingest_candidate import (
+    SOURCE_OPERATIONAL_SCORE_VERSION,
     FeedIngestCandidate,
     NonEmpty,
     NonNegative,
     OperationalHistory,
     PositiveCount,
-    SOURCE_OPERATIONAL_SCORE_VERSION,
     reject_legacy_publisher_identity,
     reject_legacy_source_operational,
 )

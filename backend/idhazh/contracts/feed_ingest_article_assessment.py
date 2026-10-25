@@ -17,12 +17,12 @@ from idhazh.contracts.base import (
     derive_url_key,
 )
 from idhazh.contracts.feed_ingest_candidate import (
+    SOURCE_OPERATIONAL_SCORE_VERSION,
     ArticleLabels,
     NonEmpty,
     PlanningStage,
     PolicyIdentity,
     ScoreEvidence,
-    SOURCE_OPERATIONAL_SCORE_VERSION,
     SourceSnapshot,
     reject_legacy_publisher_exposure,
     reject_legacy_publisher_identity,

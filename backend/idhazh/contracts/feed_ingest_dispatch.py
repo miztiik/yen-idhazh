@@ -6,13 +6,13 @@ from pydantic import model_validator
 
 from idhazh.contracts.base import ChangelogEntry, Contract, Model
 from idhazh.contracts.feed_ingest_candidate import (
+    PUBLISHER_EXPOSURE_VERSION,
+    SOURCE_OPERATIONAL_SCORE_VERSION,
     Count,
     FeedIngestCandidate,
-    PUBLISHER_EXPOSURE_VERSION,
     PositiveCount,
-    SOURCE_OPERATIONAL_SCORE_VERSION,
-    reject_legacy_source_operational,
     reject_legacy_publisher_identity,
+    reject_legacy_source_operational,
 )
 from idhazh.contracts.feed_ingest_editorial_selection import EditorialSelectionRow
 
