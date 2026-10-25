@@ -10,9 +10,10 @@ from support.ledger import seed_item_health, writer_identity
 from support.paths import CONTRACT_FIXTURES_DIR, FIXTURES_DIR, read_text
 
 from idhazh import ledger
+from idhazh.contracts.file_envelope import Period
 from idhazh.contracts.item_health import ItemHealthRow
 from idhazh.contracts.knobs.visuals import VisualsConfig
-from idhazh.contracts.ledger_index import CompactEntry, CompactIndex, Period
+from idhazh.contracts.ledger_index import CompactEntry, CompactIndex
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.visual_type import VisualType
 from idhazh.visual_population import load_visual_population

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from typing import Any
+from typing import Any, cast
 
 import pytest
 from pydantic import ValidationError
@@ -26,7 +26,7 @@ def payload(model: type[VisualDecision] | type[ItemHealthRow]) -> dict[str, Any]
         if model is VisualDecision
         else "item-health-row/published.json"
     )
-    return json.loads(read_text(CONTRACT_FIXTURES_DIR / fixture))
+    return cast(dict[str, Any], json.loads(read_text(CONTRACT_FIXTURES_DIR / fixture)))
 
 
 @pytest.mark.parametrize("model", MODELS)

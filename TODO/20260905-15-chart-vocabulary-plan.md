@@ -8,10 +8,11 @@
 
 kumarsnaveen authorised Row 1 planning and delivery on 2026-10-25 UTC and
 approved its [concrete delivery design](20261025-chart-vocabulary-row1-plan.md),
-including the requested-versus-delivered metric. Later rows and automatic
-merging are not authorised. Follow the current
+including the requested-versus-delivered metric. On 2026-10-25, kumarsnaveen
+authorised execution of the remaining rows. Follow the current
 [execution guide](../docs/how-to/execute-a-plan.md); any further persisted-design
-change still requires owner approval under CLAUDE.md section 6.
+change beyond the plan's approved scope still requires owner approval under
+CLAUDE.md section 6.
 
 ---
 
@@ -90,7 +91,7 @@ this plan does not restore historical redraw or migration machinery.
 
 | # | Row title | Depends-on | Parallel-group | Status | Worktree | PR | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| 1 | The whole vocabulary is declarable, and an unbuilt type steps down | - | A | IN-FLIGHT | chart-vocabulary-plan | - | - |
+| 1 | The whole vocabulary is declarable, and an unbuilt type steps down | - | A | DONE | chart-vocabulary-plan | - | - |
 | 2 | Position and length: bar, dot, slope | 1 | B | PENDING | - | - | - |
 | 3 | Trend and magnitude: line, area | 2 | C | PENDING | - | - | - |
 | 4 | Relationship: scatter | 3 | D | PENDING | - | - | - |
