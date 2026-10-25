@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import json
 import time
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Final, NamedTuple
@@ -33,7 +33,7 @@ from idhazh.contracts.call_cost import COST_FIELDS, CallCost, CallKind
 from idhazh.contracts.element import ElementTable
 from idhazh.contracts.item_health import FailureCode
 from idhazh.contracts.summary import Summary, SummaryStatus
-from idhazh.contracts.visual import PlanDecision, VisualPlan
+from idhazh.contracts.visual import PlanDecision, VisualPlan, VisualType
 from idhazh.contracts.visual_decision import VisualDecision
 from idhazh.fingerprint import (
     text_digest,
@@ -46,7 +46,7 @@ from idhazh.llm.server import (
     resolve_endpoint,
     window,
 )
-from idhazh.render import asset_relpath, render_planned_visual
+from idhazh.render import asset_relpath, can_compile, render_planned_visual
 from idhazh.stages import common
 from idhazh.stages.common import (
     LOG,
@@ -237,28 +237,53 @@ def _drawn(
     date: str,
     stamp: Mapping[str, str],
     run_id: str | None,
+    published_marks: Mapping[VisualType, Sequence[int]] | None = None,
 ) -> VisualDecision:
-    """One drafted plan becomes a picture on disk, or the reason it did not.
-
-    The order is validate first, and only a plan no depth of the ladder can
-    rescue is refused. `published_marks` is empty because the depth-0 population
-    the floors read is a ledger nothing has built, and a floor that cannot be
-    computed is not cleared - so the ladder is wired and inert rather than wired
-    and lenient.
-    """
+    """Validate and deliver one typed request, preserving its original choice on refusal."""
     visuals = settings.app.visuals
+    if visuals.downgrade_enabled and published_marks is None:
+        raise ValueError("enabled visual downgrade requires the shard's published mark population")
+    if plan.type is None:
+        raise ValueError("a typed visual request requires its original type")
+    outcome: dict[str, object] = {"planned_type": plan.type, "downgrade_depth": 0}
+    if plan.type not in visuals.select_types():
+        refused = visual_planner.not_drawable_here(
+            summary, why=f"{plan.type.value} is not selected in visuals.enabled_types", **stamp
+        )
+        return VisualDecision.model_validate(refused.model_dump(mode="json") | outcome)
     rejections = validate_plan(plan, table, visuals=visuals)
     drawable = plan
-    if rejections:
-        step = visual_planner.downgrade(plan, table, visuals=visuals, published_marks={})
+    reason = "the plan passed every check and this build could not draw it"
+    if rejections or not can_compile(plan.type):
+        cause = (
+            "the plan was refused on "
+            + ", ".join(rejection.check.value for rejection in rejections)
+            if rejections else f"{plan.type.value} has no compiler"
+        )
+        step = (
+            visual_planner.downgrade(
+                plan, table, visuals=visuals, published_marks=published_marks
+            )
+            if published_marks is not None and visuals.downgrade_enabled else None
+        )
         if step is None:
-            return visual_planner.refused_by_the_validator(summary, rejections, **stamp)
+            refused = visual_planner.not_drawable_here(
+                summary,
+                why=f"{cause}; no safe supported replacement cleared validation and its floor"
+                if visuals.downgrade_enabled else f"{cause}; replacement is switched off",
+                **stamp,
+            )
+            return VisualDecision.model_validate(refused.model_dump(mode="json") | outcome)
         drawable = step.plan
+        outcome["downgrade_depth"] = step.depth
+        reason = (
+            f"{cause}; replaced with {drawable.type} at depth {step.depth}; "
+            f"mark-count floor {step.floor}"
+        )
     return render_planned_visual(
-        visual_planner.not_drawable_here(
-            summary,
-            why="the plan passed every check and this build could not draw it",
-            **stamp,
+        VisualDecision.model_validate(
+            visual_planner.not_drawable_here(summary, why=reason, **stamp).model_dump(mode="json")
+            | outcome
         ),
         drawable,
         table,
@@ -427,6 +452,7 @@ def two_calls_one_item(
     tracer: telemetry.Tracer | None = None,
     recorder: ItemRecorder | None = None,
     capture_root: Path | None = None,
+    published_marks: Mapping[VisualType, Sequence[int]] | None = None,
 ) -> _TwoCalls:
     """One article read once, labelled, summarized and drawn - in two adjacent calls.
 
@@ -470,6 +496,8 @@ def two_calls_one_item(
     and still could not be read lands as `bad_shape`. Both lose the item, and
     both are a cell in the census rather than a silence.
     """
+    if settings.app.visuals.downgrade_enabled and published_marks is None:
+        raise ValueError("enabled visual downgrade requires the shard's published mark population")
     endpoint = endpoint or resolve_endpoint(settings.app.model_server.base_url)
     trace = tracer if tracer is not None else silent_tracer()
     kept = recorder if recorder is not None else _silent_recorder()
@@ -647,6 +675,7 @@ def two_calls_one_item(
                     source_words=article.band_source_words,
                     brief=article.brief,
                     plan=so_far.wants_a_plan,
+                    visuals=settings.app.visuals,
                 )
                 second_rendered = str(second["prompt"])
                 span.set(telemetry.AttrKey.PROMPT_CHARS, len(second_rendered))
@@ -764,6 +793,7 @@ def two_calls_one_item(
             wants_a_plan=wants_a_plan,
             run_id=run_id,
             recorder=kept,
+            published_marks=published_marks,
         )
         decision = decision.model_copy(
             update={"decision_ms": int((time.monotonic() - started) * 1000)}
@@ -787,6 +817,7 @@ def _decide_the_visual(
     wants_a_plan: bool,
     run_id: str | None,
     recorder: ItemRecorder | None = None,
+    published_marks: Mapping[VisualType, Sequence[int]] | None = None,
 ) -> VisualDecision:
     """Which of the routes to a picture, or to none, this reply took.
 
@@ -847,4 +878,7 @@ def _decide_the_visual(
         return visual_planner.declined_by_the_model(
             summary, why=plan.why if plan is not None else "the reply carried no plan", **stamp
         )
-    return _drawn(summary, plan, table, settings=settings, date=date, stamp=stamp, run_id=run_id)
+    return _drawn(
+        summary, plan, table, settings=settings, date=date, stamp=stamp,
+        run_id=run_id, published_marks=published_marks,
+    )

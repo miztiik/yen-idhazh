@@ -10,6 +10,7 @@ from pydantic import Field, StringConstraints, field_validator, model_validator
 
 from idhazh.contracts.base import Model
 from idhazh.contracts.knobs.removed import refuse_a_removed_knob
+from idhazh.contracts.visual import VisualType
 from idhazh.contracts.visual_decision import VisualKind
 
 #: The `visuals` knob this block used to carry. `canvas_width` was one fixed
@@ -47,9 +48,9 @@ class NumberFormatConfig(Model):
 class VisualsConfig(Model):
     """Planning, rendering and serving knobs. "Nothing" is the common answer, by design.
 
-    `enabled_kinds` is the gate that keeps an unbuilt renderer unreachable. It
-    is a list rather than a flag so that a kind added later is switched on by a
-    config edit rather than by a code change.
+    `enabled_kinds` controls whether planning is reachable at all. Type
+    selection and safe replacement have separate activation switches; naming
+    an unbuilt type never enables its rendering.
 
     `asset_base_url` is the same shape at the other end of the pipeline: where a
     browser asks for a drawing the pipeline already published. It ships empty,
@@ -69,6 +70,26 @@ class VisualsConfig(Model):
             "is decidable in advance - and its renderer was deleted with the Mermaid "
             "round trip on 2026-09-05."
         ),
+    )
+    type_selection_enabled: bool = Field(  # Remove after owner-approved permanent activation.
+        default=False,
+        description="Apply enabled_types to the request grammar, reachability and parsed plans.",
+    )
+    enabled_types: list[VisualType] = Field(
+        default_factory=lambda: list(VisualType), min_length=1, max_length=len(VisualType),
+        description="Native type names the operator selects, including unruled and unbuilt forms.",
+    )
+    downgrade_enabled: bool = Field(  # Remove after tested, owner-approved permanent activation.
+        default=False,
+        description="Try supported purpose-preserving replacements using measured history.",
+    )
+    downgrade_lookback_days: int = Field(
+        default=30, ge=1,
+        description="Previous UTC days of direct delivered item-health outcomes to read per shard.",
+    )
+    downgrade_max_samples_per_type: int = Field(
+        default=256, ge=1,
+        description="Most recent direct delivered mark counts retained per target type.",
     )
     min_chart_points: int = Field(
         default=3,
@@ -103,9 +124,8 @@ class VisualsConfig(Model):
             "depth n+1 must reach, so the length is the deepest permitted downgrade and "
             "the depth after it refuses. Two entries is the design's own ladder - the "
             "median at the first step down, the 75th percentile at the second, refuse at "
-            "the third. An empty list is the ladder switched off, which is one knob doing "
-            "two jobs on purpose: a separate on-off flag can disagree with the rungs "
-            "beside it, and zero rungs is already an unambiguous no. It must rise, "
+            "the third. downgrade_enabled is the separate activation switch. An enabled "
+            "ladder requires at least one rung. The percentiles must rise, "
             "because a floor that does not is not an escalating one. The floor it reads "
             "is a mark count, which the validator already bounds to min_chart_points to "
             "max_chart_points, so two adjacent percentiles can land on one integer and "
@@ -219,7 +239,15 @@ class VisualsConfig(Model):
             )
         if VisualKind.NONE in self.enabled_kinds:
             raise ValueError("`none` is always reachable and is never listed as enabled")
+        if len(set(self.enabled_types)) != len(self.enabled_types):
+            raise ValueError("visuals.enabled_types names each native type at most once")
+        if self.downgrade_enabled and not rungs:
+            raise ValueError("visuals.downgrade_enabled requires downgrade_floor_percentiles")
         return self
+
+    def select_types(self) -> tuple[VisualType, ...]:
+        """The effective selection, preserving the full vocabulary while its policy is off."""
+        return tuple(self.enabled_types) if self.type_selection_enabled else tuple(VisualType)
 
     @model_validator(mode="before")
     @classmethod

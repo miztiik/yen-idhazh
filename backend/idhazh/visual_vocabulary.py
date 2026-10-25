@@ -125,8 +125,8 @@ TYPE_RULES: Final[dict[VisualType, TypeRules]] = {
 #: infographic forms to theirs. Naming them here rather than leaving them out is
 #: the whole point - a type in neither set would be waved through by the two
 #: per-type checks and drawn with nothing having ruled on it. Until those rules
-#: are written, a plan naming one is refused and the downgrade ladder moves it to
-#: a nearer neighbour, which is what "declarable is not renderable" means.
+#: are written, a plan naming one is refused unless an explicit supported
+#: replacement preserves its purpose and facts and clears the measured floor.
 UNRULED_TYPES: Final[frozenset[VisualType]] = frozenset(
     {_T.TABLE, _T.FLOW, _T.COMPARISON, _T.CALLOUT, _T.QUOTECARD, _T.WHOWHAT, _T.KEYFACTS}
 )
@@ -156,20 +156,16 @@ VALUE_ROLES: Final[frozenset[EncodingRole]] = frozenset(
 #: `plan_version_current` compares a plan against, so moving it re-plans every
 #: item that carries an older one - a model call apiece. Adding an edge must not
 #: cost that.
-DOWNGRADE_TABLE_VERSION: Final = "2026-09-11"
+DOWNGRADE_TABLE_VERSION: Final = "2026-10-25"
 
 
 class DowngradeEdge(NamedTuple):
     """One legal step down, and the purposes it leaves standing.
 
     The purposes are half the edge rather than a note beside it. "Purpose
-    survives" is checked against the plan's own `purpose` field, and that check
-    alone cannot stop a chain: `pie` -> `stacked_bar` keeps a composition, and
-    `stacked_bar` -> `bar` does not, so a ladder that only compared each step's
-    endpoints would walk a composition into a comparison in two moves and record
-    both as legal. Naming the purposes an edge preserves makes the chain safe by
-    construction, because every step is asked the same question about the one
-    purpose the plan started with.
+    survives" is checked against the plan's own `purpose` field. Every step is
+    asked about the original purpose, not only its immediate predecessor.
+    A refused declared whole has no onward bar edge.
     """
 
     target: VisualType
@@ -185,12 +181,8 @@ _P = VisualPurpose
 #: walk a comparison into a timeline and record it as a legal edge, and the
 #: cross-family ban is what "purpose survives" implies and never states.
 #:
-#: **Five edges, and an edge that cannot change an outcome is not one of them.**
-#: A target whose required role set equals the source's rescues nothing - a
-#: plan refused as a `line` is refused identically as an `area`, so that pair is
-#: absent rather than listed and never fired. What is left are the three trims
-#: (a channel the target does not declare, emptied) and the two relabels of an
-#: unruled type onto its nearest built neighbour.
+#: An edge can rescue a validator refusal or a type whose compiler is not built.
+#: Config selects requests; this table only names purpose-preserving replacements.
 #:
 #: **Three types that look like they want an edge have none, each for its own
 #: reason.** `line` -> `bar` is in the source document with the condition "if
@@ -204,16 +196,13 @@ _P = VisualPurpose
 #: validator refuses by name rescues nothing: "any chart -> `table` at depth 2"
 #: is in the source document and `table` has no rule, so it is not here.
 DOWNGRADE_EDGES: Final[dict[VisualType, tuple[DowngradeEdge, ...]]] = {
+    _T.DOT: (DowngradeEdge(_T.BAR, frozenset({_P.COMPARISON})),),
     # Drops the size channel and keeps the two measured axes the relationship is.
     _T.BUBBLE: (DowngradeEdge(_T.SCATTER, frozenset({_P.RELATIONSHIP})),),
     # The parts of a declared whole, stacked in one bar instead of swept round a
     # circle. The one edge the source document names outright.
     _T.PIE: (DowngradeEdge(_T.STACKED_BAR, frozenset({_P.COMPOSITION})),),
-    # Drops the series split, which is what a stacked bar is refused for when the
-    # parts are not exhaustive.
-    _T.STACKED_BAR: (DowngradeEdge(_T.BAR, frozenset({_P.COMPARISON})),),
-    # Two unruled comparison forms onto the built comparison form. This is the
-    # "downgraded to its nearest built neighbour" that `UNRULED_TYPES` promises.
+    # These unruled forms may recover only as a complete magnitude comparison.
     _T.COMPARISON: (DowngradeEdge(_T.BAR, frozenset({_P.COMPARISON})),),
     _T.WHOWHAT: (DowngradeEdge(_T.BAR, frozenset({_P.COMPARISON})),),
 }
@@ -353,7 +342,7 @@ def _longest_chain(source: VisualType, walked: frozenset[VisualType]) -> int:
 
 
 #: The deepest the ladder can ever reach, whatever `visuals.downgrade_floor_percentiles`
-#: says. Two today: `pie` -> `stacked_bar` -> `bar`.
+#: says. A refused stacked whole has no onward bar edge.
 LONGEST_DOWNGRADE_CHAIN: Final = max(
     _longest_chain(source, frozenset()) for source in DOWNGRADE_EDGES
 )

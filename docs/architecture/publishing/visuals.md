@@ -1,6 +1,6 @@
 # Visual planning and rendering
 
-**Last Updated**: 2026-10-04
+**Last Updated**: 2026-10-25
 
 How an item gets a chart or - most of the time - nothing at all: which pass
 decides, which gate refuses, and what every refusal is called. The rule this
@@ -228,13 +228,34 @@ single-call prefilter above and the two-call suppression - and both record `not_
 what an operator acts on is the gate rather than the line of code. And **which** check refused is
 `ValidatorCheck`'s to say: one fact with two homes is a fact that can disagree with itself.
 
-`validation_failed` is the member that rule is doing the most work in. Three routes write it, and
-the last two only exist once a stage dispatches the summarize-and-plan call: the validator refused the plan by name; the
-reply's plan half would not hold `VisualPlan`'s own rules, which a grammar cannot enforce because
-they read one field against another; and every check passed and `compile_bar` still could not draw
-it. To an operator those are one answer - a plan was drafted and this build refuses it - so the
-rationale says which, and the member does not. `visual_planner.not_drawable_here` writes the second
-and third; `refused_by_the_validator` writes the first, because only it has rejections to name.
+`validation_failed` means a plan was drafted and this build refused it. Its
+`rationale` distinguishes invalid evidence, an unsupported compiler, an
+unselected request and a replacement that cleared no measured floor. The
+summary remains publishable.
+
+The final `VisualDecision` records the original `planned_type` and the
+successfully written `rendered_type` separately. `downgrade_depth` is zero
+without a selected replacement and positive after one is selected, even if its
+later write fails. `marks` counts delivered marks, not the flat mark pool.
+Without successful delivery, the delivered type and mark count are null.
+Untyped requests and older unmeasured outcomes leave all four fields null;
+never infer an old request from its final drawing.
+
+The worker copies these fields into its sealed item record before either
+completion path. The record stage writes that same row through the existing
+item-health ledger under `state/raw/item-health/`; its compactor later writes
+the corresponding `state/compact/item-health/` files. No second visual ledger
+or browser observation is implied.
+
+The shard's `visual_outcomes` report counts requested types and computes
+`wasted_decode_rate`: measured typed requests not delivered in their requested
+form divided by all measured typed requests. Both a different delivered type
+and no delivered type count. Thus a safe replacement still records demand for
+the missing requested form, not a quality failure in the replacement. The
+result is a fraction, not a token-weighted cost; no measured request gives
+null, not zero. Declines, suppressed or unparseable requests and historical
+unknown outcomes do not enter its denominator. The stored item rows preserve
+the inputs, not a second copy of the derived rate.
 
 **Four members, because four routes have a writer.** The design record names six gates and the
 two-call flow adds a seventh. The potential class, the novelty floor, the sufficiency bar and the
@@ -366,6 +387,14 @@ flowchart TD
 **The text never waits on a drawing.** `digest.json` is a complete page on its own. The visual file is a separate fetch, and a reader who never scrolls to a chart never pays for one.
 
 ## Design rationale
+
+Type selection and safe replacement are separate default-off policies. Their
+configuration, production evidence and refusal rules are defined on the
+[plan validation page](what-a-visual-plan-may-say-and-what-happens-to-one-that-is-refused.md).
+The existing item ledger carries terminal measurements so requested forms
+remain visible through both replacement and refusal. A failed file write is
+not delivery, and a useful replacement is still an unmet original request.
+Owner approval: kumarsnaveen, 2026-10-25 UTC.
 
 **Why the model picks an index instead of writing a spec.** The obvious design is to ask the model
 for a Vega-Lite object. It is also the design where a hallucinated axis value is one sampling

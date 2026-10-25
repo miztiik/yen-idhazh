@@ -14,6 +14,7 @@ from idhazh.contracts.visual_data import (
     VisualEncoding,
     VisualMark,
 )
+from idhazh.render.chart import can_compile
 
 pytestmark = pytest.mark.contract
 
@@ -34,7 +35,7 @@ def test_frontend_chart_vocabularies_match_the_native_contract() -> None:
     assert f"export const RENDERER_VERSION = '{RENDERER_VERSION}';" in source
     for name, expected in (
         ("ENCODING_ROLES", [role.value for role in EncodingRole]),
-        ("DRAWABLE", [VisualType.BAR.value]),
+        ("DRAWABLE", [visual_type.value for visual_type in VisualType if can_compile(visual_type)]),
     ):
         found = re.search(rf"export const {name} = \[(.*?)\] as const;", source, re.S)
         assert found is not None

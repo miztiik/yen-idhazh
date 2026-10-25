@@ -211,6 +211,11 @@ def render_planned_visual(
     """
     if decision.kind is not VisualKind.NONE:
         raise ValueError("a planned visual starts as an item decided to nothing")
+    if plan.type is not None and decision.planned_type is None:
+        decision = VisualDecision.model_validate(
+            decision.model_dump(mode="json")
+            | {"planned_type": plan.type.value, "downgrade_depth": 0}
+        )
     try:
         compiled = compile_bar(plan, table, visuals=visuals)
     except CompileError as error:
@@ -231,13 +236,20 @@ def render_planned_visual(
         write_bytes_atomic(public_root / relpath, compiled.data.to_json().encode("utf-8"))
     except OSError as error:
         _log_render_failed(planned, error=error, run_id=run_id)
-        return planned.model_copy(
-            update={
+        return VisualDecision.model_validate(
+            planned.model_dump(mode="json") | {
                 "visual_state": VisualState.RENDER_FAILED,
                 "failure_detail": f"the data file could not be written: {type(error).__name__}",
             }
         )
-    return planned.model_copy(update={"visual_state": VisualState.RENDERED, "data_path": relpath})
+    return VisualDecision.model_validate(
+        planned.model_dump(mode="json") | {
+            "visual_state": VisualState.RENDERED,
+            "data_path": relpath,
+            "rendered_type": compiled.data.type,
+            "marks": len(compiled.data.encoding.quantity),
+        }
+    )
 
 
 def _log_render_failed(planned: VisualDecision, *, error: OSError, run_id: str | None) -> None:

@@ -69,7 +69,7 @@ export const ITEM_HEALTH_COLUMNS = [
 	'n_threads', 'n_batch', 'weights_pinned', 'label_budget_tokens', 'summary_budget_tokens',
 	'run_visual_decision', 'temperature', 'failed_field', 'failed_rule', 'os_mem_available_bytes',
 	'os_mem_total_bytes', 'os_mem_cached_bytes', 'os_swap_free_bytes', 'os_swap_total_bytes',
-	'os_mem_available_min_bytes'
+	'os_mem_available_min_bytes', 'planned_type', 'rendered_type', 'downgrade_depth', 'marks'
 ] as const;
 
 /** Every column `EvalRow` declares.

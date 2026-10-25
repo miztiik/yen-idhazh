@@ -47,6 +47,7 @@ from idhazh.contracts.visual import (
 from idhazh.contracts.visual_decision import NoneReason, VisualDecision, VisualKind
 from idhazh.extract import approx_tokens
 from idhazh.llm.server import Completion
+from idhazh.render.chart import can_compile
 from idhazh.visual_planner import (
     declined_by_the_model,
     depth_floor,
@@ -459,41 +460,36 @@ class TestEveryRouteToNoneCarriesItsOwnReason:
 class TestTheDowngradeLadder:
     """The four invariance rules, one test each, plus the floor that cannot be read."""
 
-    def refused_stacked_bar(self) -> VisualPlan:
-        """A plan the validator refuses for a reason a `bar` does not have.
-
-        A `stacked_bar` draws its series channel and this one leaves it empty,
-        which is `roles_valid_for_type`. As a `bar` the same encodings are legal,
-        because `series` is optional there - so the rescue is real rather than
-        arranged.
-        """
-        return wind_plan(type=VisualType.STACKED_BAR.value)
+    def unbuilt_dot(self) -> VisualPlan:
+        """A valid magnitude comparison this build cannot compile as requested."""
+        return wind_plan(type=VisualType.DOT.value)
 
     def test_the_case_this_class_is_built_on_really_is_refused(self) -> None:
         table = wind_table(*WHOLE)
-        assert validate_plan(self.refused_stacked_bar(), table, visuals=committed_visuals())
+        assert validate_plan(self.unbuilt_dot(), table, visuals=committed_visuals()) == []
+        assert not can_compile(self.unbuilt_dot().type)
 
     def test_a_refused_plan_is_re_drawn_as_the_nearest_built_neighbour(self) -> None:
         made = downgrade(
-            self.refused_stacked_bar(),
+            self.unbuilt_dot(),
             wind_table(*WHOLE),
-            visuals=committed_visuals(downgrade_floor_percentiles=[50, 75]),
+            visuals=committed_visuals(downgrade_enabled=True, downgrade_floor_percentiles=[50, 75]),
             published_marks={VisualType.BAR: [3, 4, 5, 8]},
         )
 
         assert made is not None
         assert made.plan.type is VisualType.BAR
-        assert made.edge == (VisualType.STACKED_BAR, VisualType.BAR)
+        assert made.edge == (VisualType.DOT, VisualType.BAR)
         assert made.depth == 1
 
     def test_invariance_one_the_element_set_does_not_change(self) -> None:
         """A downgrade is the same claim re-drawn. It is never permission to go
         and find something else to draw."""
-        plan = self.refused_stacked_bar()
+        plan = self.unbuilt_dot()
         made = downgrade(
             plan,
             wind_table(*WHOLE),
-            visuals=committed_visuals(downgrade_floor_percentiles=[50, 75]),
+            visuals=committed_visuals(downgrade_enabled=True, downgrade_floor_percentiles=[50, 75]),
             published_marks={VisualType.BAR: [3, 4, 5, 8]},
         )
 
@@ -503,19 +499,14 @@ class TestTheDowngradeLadder:
         assert made.plan.annotations == plan.annotations
 
     def test_invariance_two_the_purpose_survives_the_step_and_the_chain(self) -> None:
-        """A chain is safe as well as a step, which comparing endpoints cannot give.
-
-        `pie` -> `stacked_bar` keeps a composition and `stacked_bar` -> `bar`
-        does not, so a ladder that only asked about each step's endpoints would
-        walk a composition into a comparison in two moves and record both legal.
-        """
+        """A composition cannot escape its refused whole by reaching plain bars."""
         composition = wind_plan(
             type=VisualType.PIE.value, purpose=VisualPurpose.COMPOSITION.value
         )
         made = downgrade(
             composition,
             wind_table(*WHOLE),
-            visuals=committed_visuals(downgrade_floor_percentiles=[50, 75]),
+            visuals=committed_visuals(downgrade_enabled=True, downgrade_floor_percentiles=[50, 75]),
             published_marks={VisualType.BAR: [3, 4], VisualType.STACKED_BAR: [3, 4]},
         )
 
@@ -527,9 +518,11 @@ class TestTheDowngradeLadder:
         assert depth_floor((), 50) is None
         assert (
             downgrade(
-                self.refused_stacked_bar(),
+                self.unbuilt_dot(),
                 wind_table(*WHOLE),
-                visuals=committed_visuals(downgrade_floor_percentiles=[50, 75]),
+                visuals=committed_visuals(
+                    downgrade_enabled=True, downgrade_floor_percentiles=[50, 75]
+                ),
                 published_marks={},
             )
             is None
@@ -537,9 +530,9 @@ class TestTheDowngradeLadder:
 
     def test_invariance_three_a_thin_downgrade_does_not_clear_a_fat_corpus(self) -> None:
         made = downgrade(
-            self.refused_stacked_bar(),
+            self.unbuilt_dot(),
             wind_table(*WHOLE),
-            visuals=committed_visuals(downgrade_floor_percentiles=[50, 75]),
+            visuals=committed_visuals(downgrade_enabled=True, downgrade_floor_percentiles=[50, 75]),
             published_marks={VisualType.BAR: [5, 6, 7, 8]},
         )
 
@@ -547,9 +540,9 @@ class TestTheDowngradeLadder:
 
     def test_invariance_four_the_published_plan_re_enters_the_same_validator(self) -> None:
         made = downgrade(
-            self.refused_stacked_bar(),
+            self.unbuilt_dot(),
             wind_table(*WHOLE),
-            visuals=committed_visuals(downgrade_floor_percentiles=[50, 75]),
+            visuals=committed_visuals(downgrade_enabled=True, downgrade_floor_percentiles=[50, 75]),
             published_marks={VisualType.BAR: [3, 4, 5, 8]},
         )
 
@@ -561,20 +554,37 @@ class TestTheDowngradeLadder:
         form still worth showing."""
         assert (
             downgrade(
-                wind_plan(type=VisualType.STACKED_BAR.value, annotations=[]),
+                wind_plan(type=VisualType.DOT.value, annotations=[]),
                 wind_table(*WHOLE),
-                visuals=committed_visuals(downgrade_floor_percentiles=[50, 75]),
+                visuals=committed_visuals(
+                    downgrade_enabled=True, downgrade_floor_percentiles=[50, 75]
+                ),
                 published_marks={VisualType.BAR: [3, 4, 5, 8]},
             )
             is None
         )
 
-    def test_an_empty_rung_list_is_the_ladder_switched_off(self) -> None:
+    def test_target_validation_still_refuses_an_invented_source_figure(self) -> None:
+        table = wind_table(*WHOLE).model_dump(mode="json")
+        quantity = next(
+            element for element in table["elements"]
+            if element["element_id"] == self.unbuilt_dot().encodings.quantity[0]
+        )
+        quantity["value"] = "999999"
+        assert downgrade(
+            self.unbuilt_dot(), ElementTable.model_validate(table),
+            visuals=committed_visuals(downgrade_enabled=True),
+            published_marks={VisualType.BAR: [3, 4, 5, 8]},
+        ) is None
+
+    def test_the_separate_switch_blocks_rescue_with_populated_rungs(self) -> None:
         assert (
             downgrade(
-                self.refused_stacked_bar(),
+                self.unbuilt_dot(),
                 wind_table(*WHOLE),
-                visuals=committed_visuals(downgrade_floor_percentiles=[]),
+                visuals=committed_visuals(
+                    downgrade_enabled=False, downgrade_floor_percentiles=[50, 75]
+                ),
                 published_marks={VisualType.BAR: [3, 4, 5, 8]},
             )
             is None
@@ -583,9 +593,9 @@ class TestTheDowngradeLadder:
     def test_the_rung_count_is_how_many_depths_exist(self) -> None:
         rungs = [50]
         made = downgrade(
-            self.refused_stacked_bar(),
+            self.unbuilt_dot(),
             wind_table(*WHOLE),
-            visuals=committed_visuals(downgrade_floor_percentiles=rungs),
+            visuals=committed_visuals(downgrade_enabled=True, downgrade_floor_percentiles=rungs),
             published_marks={VisualType.BAR: [3, 4, 5, 8]},
         )
 
@@ -599,7 +609,9 @@ class TestTheDowngradeLadder:
             downgrade(
                 declined,
                 wind_table(*WHOLE),
-                visuals=committed_visuals(downgrade_floor_percentiles=[50, 75]),
+                visuals=committed_visuals(
+                    downgrade_enabled=True, downgrade_floor_percentiles=[50, 75]
+                ),
                 published_marks={VisualType.BAR: [3, 4, 5, 8]},
             )
             is None
@@ -637,5 +649,3 @@ class TestTheDowngradeLadder:
             committed_visuals(downgrade_floor_percentiles=[50, 50])
         with pytest.raises(ValidationError):
             committed_visuals(downgrade_floor_percentiles=[101])
-
-

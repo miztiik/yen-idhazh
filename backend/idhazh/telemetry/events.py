@@ -103,6 +103,7 @@ INSTRUMENT_CELLS: Final[frozenset[str]] = frozenset(
         "items",
         "failures",
         "slowest",
+        "visual_outcomes",
         #: What the model was sent and what came back, recorded whether or not
         #: the text itself was captured. Two runs whose prompts differ are two
         #: different measurements, and this is the cheapest way to see that.

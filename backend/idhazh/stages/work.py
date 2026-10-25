@@ -69,6 +69,8 @@ from idhazh.telemetry import census, host
 from idhazh.telemetry.host_control import enabled as host_telemetry_enabled
 from idhazh.telemetry.item_heartbeat import ItemHeartbeat
 from idhazh.telemetry.record import Flags, ItemRecorder, persist, shard_done
+from idhazh.visual_outcomes import count_visual_outcomes, project_visual_outcome
+from idhazh.visual_population import load_visual_population
 
 
 def _evidence_dir(date: str) -> Path:
@@ -314,6 +316,9 @@ def stage_work(
     if not mine:
         LOG.info("working shard=%s/%s items=0", shard, shards)
         return
+    published_marks = load_visual_population(
+        common.STATE_ROOT, on=plan.date, visuals=settings.app.visuals
+    )
     model_endpoint = model_endpoint or resolve_endpoint(settings.app.model_server.base_url)
     shard_started = time.monotonic()
     tracer = telemetry.Tracer(
@@ -338,7 +343,9 @@ def stage_work(
         # longer reaches what the model reads and the markers the server derived
         # do. Handing over the rendered pair is what digests the envelope, all
         # four prompt files and the turn order together.
-        prompt=calls.prompt_inputs(settings.app.summarize, markers=markers),
+        prompt=calls.prompt_inputs(
+            settings.app.summarize, markers=markers, visuals=settings.app.visuals
+        ),
         output_schema=summarize.output_schema_text(settings.app.summarize),
         runner_class=runner_class(),
         extractor_version=extract.EXTRACTOR_VERSION,
@@ -515,6 +522,7 @@ def stage_work(
                 run_id=plan.run_id,
                 tracer=tracer,
                 recorder=recorder,
+                published_marks=published_marks,
             )
             summarize_ms = int((time.monotonic() - model_started) * 1000)
             # What the stage spent NOT being served: the window check, the
@@ -573,6 +581,7 @@ def stage_work(
                 cached_tokens=summary.cached_tokens if spent else None,
             )
             if decision is not None:
+                recorder.note(**project_visual_outcome(decision))
                 atomic_write.write_atomic(
                     items_dir / f"{item.item_id}{PAYLOAD_SUFFIX}", decision.to_json()
                 )
@@ -692,6 +701,7 @@ def stage_work(
         items=len(mine),
         failures=failures,
         slowest=_slowest(finished),
+        visual_outcomes=count_visual_outcomes(finished)._asdict(),
     )
     tracer.flush()
 

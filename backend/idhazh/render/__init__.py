@@ -12,7 +12,7 @@ a new module anyway (Fowler, 2026-09-13).
 
 from __future__ import annotations
 
-from idhazh.render.chart import CompiledChart, CompileError, compile_bar
+from idhazh.render.chart import CompiledChart, CompileError, can_compile, compile_bar
 from idhazh.render.write import (
     asset_relpath,
     render_planned_visual,
@@ -23,6 +23,7 @@ __all__ = [
     "CompileError",
     "CompiledChart",
     "asset_relpath",
+    "can_compile",
     "compile_bar",
     "render_planned_visual",
     "write_charts_from_decisions",
