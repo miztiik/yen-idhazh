@@ -54,6 +54,7 @@ from idhazh.contracts.feed_ingest_candidate import FeedIngestCandidate
 from idhazh.contracts.feed_ingest_dispatch import FeedIngestDispatch
 from idhazh.contracts.feed_ingest_diversity import DiversityMetricRow
 from idhazh.contracts.feed_ingest_editorial_selection import EditorialSelectionRow
+from idhazh.contracts.feed_ingest_observations import DocumentObservationRecord
 from idhazh.contracts.feed_ingest_rejection import CandidateRejectionRecord
 from idhazh.contracts.feed_ingest_source_run import SourceRunRecord
 from idhazh.contracts.feed_retirement import FeedRetirementRow
@@ -149,6 +150,7 @@ CONTRACTS: Final[tuple[type[Contract], ...]] = (
     EditorialSelectionRow,
     FeedIngestCandidate,
     FeedIngestDispatch,
+    DocumentObservationRecord,
     SourceRunRecord,
     AppConfig,
     AppearanceConfig,
@@ -238,6 +240,7 @@ __all__ = [
     "DigestViewVisual",
     "DigestVisual",
     "DiversityMetricRow",
+    "DocumentObservationRecord",
     "EdgarPolicy",
     "EditorialSelectionRow",
     "EntityDef",

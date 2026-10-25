@@ -206,7 +206,7 @@ into an active family unchanged. See [judge status](../publishing/llm-council.md
 
 ## Onboarding and offboarding
 
-**What a new ledger owes.** A new ledger files through the ledger door from its first row. It owes every edit below, each in the file named beside it, and the change that adds the ledger makes all of them. The check at load time, or the test named beside an edit, refuses the change while one is missing.
+**What a new ledger owes.** A new ledger files through the ledger door from its first row. It owes every edit below, each in the file named beside it. The reader-side contract, binding and registration must be present before its writer emits rows. Owner approval on 2026-10-24 permits the D3 observation ledger to land those reader-side pieces before producer wiring; the later writer still uses the same registered door. The check at load time, or the test named beside an edit, refuses a change while one of its required pieces is missing.
 
 - **Lifecycle.**
   - A family in `config/ledgers.json` with `lifecycle_status` `active`, a one-line `description` and the UTC day it is `onboarded`, holding the ledger's entry: grain `raw-and-compact`, explicit `publish_to_data_explorer` consent, and the `prefix` it files under inside `state/raw/` and `state/compact/`, which starts with the family's name and ends with the ledger's own value. A ledger that joins a family adds only its entry to that family's `ledgers`, and the family's status covers it from its first row.
@@ -330,6 +330,13 @@ One module outside may ask, and none may carry a copy. `backend/idhazh/path_clas
 
 ## Design rationale
 
+**A compatible reader lands before the first writer.** Owner approval,
+2026-10-24, for the feed-ingest feedback observations. Registering the row
+contract, its cross-language binding, raw-and-compact ledger path and
+compaction task first gives a later producer a reader that already accepts the
+shape. Keep data-explorer publication disabled until a separate consent
+decision.
+
 **The set of ledgers is a config file, not a Python set and not a glob.** Owner decision, 2026-09-26.
 
 A frozen set in Python was what this replaced, and it is the defect rather than the alternative. The state cleanup of the day subtracted the set from the children of `state/` and treated the remainder as a trial run's tree, so a ledger left out of the set was a production directory it emptied. One ledger was exactly that: a real ledger, written by a stage, absent from the set - and its 90-day trial sweep emptied it well before the 14-month window its own retention knob promised. Nothing in the old design could catch it, because a missing name reads as a name that was never meant to be there.
@@ -370,7 +377,9 @@ The frontend's query-door readers accept a name only when their bound catalog re
 contain fewer articles than the previous complete attempt. Discarding older
 rows during packing would remove the only complete answer before the later
 reader can verify completion. The six planning ledgers therefore keep each
-attempt until that reader selects one.
+attempt until that reader selects one. The `document-observations` ledger also
+keeps every attempt: a partial retry cannot replace earlier immutable operation
+facts, and the later feedback reader needs both.
 
 **The candidate-model ledger and its files are removed, not retired.** Owner
 ruling, 2026-10-24. No writer or reader remains for its verdict rows. The owner

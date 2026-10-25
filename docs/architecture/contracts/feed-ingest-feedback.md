@@ -53,6 +53,16 @@ other ledgers are not article costs. The existing feed
 `parse_status` describes RSS entry parsing; `success` with `parsed_count > 0`
 does not prove article material was extracted. Keep those cases distinct.
 
+The Row 2 contract slice registers `document-observations` for raw and compact
+Parquet reads, with a Pydantic row model and a matching TypeScript reader
+contract. Fetch and parse outcomes remain separate from request-attempt rows;
+attempt rows retain their phase, sequence, retry, duration and known request
+count. Nullable `observed_run_id` and `observed_attempt` retain fact-source
+identity separately from the Parquet writer's required run identity. Unknown
+request coverage remains null rather than becoming a zero.
+This declaration does not emit observations or expose the ledger to the data
+explorer; producer wiring remains in Row 4.
+
 Record the approved `source`, `pipeline` or `unresolved` attribution and
 supported failure cause on operation observations; exact field names and types
 are implementation details. The planner-only event stream remains its
@@ -87,13 +97,23 @@ producer rather than infer a count from a successful response. Preserve
 unknown request coverage until each relevant dispatch is recorded.
 
 Use `(run_id, source_id, candidate_id)` as the article-opportunity key.
-Retries and correction records do not add article support. Use `event_id` as
-the replay key. A correction is a new event with nullable
-`corrects_event_id` and `correction_revision`. Both fields are null for an
-ordinary event and both are present for a correction. The positive correction
-revision replaces the prior contribution; tied revisions are invalid. Each
-event retains its UTC time and producer revision. Operation costs that cannot
-be linked to one article stay at their actual feed, run or pipeline scope.
+Retries and correction records do not add article support. An observation
+retains the actual request's required `document_kind` (`feed` or `article`),
+so a feed URL hash in `article_id` cannot make a feed poll an article
+opportunity. A candidate is an article opportunity only with article kind,
+run identity and source identity. `caused_by_event_id` records causal lineage;
+it does not replace a missing opportunity identity. Use `event_id` as the
+replay key. A correction is a new event with nullable `corrects_event_id` and
+`correction_revision`. Both fields are null for an ordinary event and both
+are present for a correction. The row contract checks the pair and requires a
+positive revision. The current reader retains correction events without
+applying them; it also preserves events from every writer attempt, so a partial
+retry cannot erase earlier operation facts. The replay key settles duplicate
+`event_id` rows within the same run and attempt, not across attempts.
+Contribution aggregation must replace the prior contribution and reject tied
+revisions. Each event retains its UTC time and producer revision. Operation
+costs that cannot be linked to one article stay at their actual feed, run or
+pipeline scope.
 
 Use the existing `ArticleAssessmentRecordSchema.extraction_outcome` as the
 nonsemantic article extraction result. Its values are `success`, `failed`,
