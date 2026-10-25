@@ -1,8 +1,10 @@
 /** Prove live feed and selected article HTTP operations without publishing private bodies. */
 import { Database } from "bun:sqlite";
+import { constants } from "node:fs";
 import { createHash, randomUUID } from "node:crypto";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
-import { join } from "node:path";
+import { copyFile, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { dirname, join } from "node:path";
+import type { PersistedLedgerFile, PersistLedgerResult } from "../../packages/ledger-file-writer/src/index";
 import { FetchedDocumentSchema, PlannerObservationSchema, RequestIdSchema } from "../../services/feed-ingest-plan/src/api/operation-contracts";
 import { sha256 } from "../../services/feed-ingest-plan/src/api/operation-store";
 import { servePlan } from "../../services/feed-ingest-plan/src/api/server";
@@ -185,6 +187,7 @@ export async function verifyLiveDocumentHttp(
     return writeFile(join(artifactRoot, "stage-api-proof.json"), JSON.stringify(evidence));
   };
   await persist();
+  const retainedObservations: PersistedLedgerFile[] = [];
   try {
     const completed = progress.find(event => event.eventType === "FEED_FETCH_COMPLETED"
       && event.correlationId === summary.correlation_id
@@ -205,6 +208,8 @@ export async function verifyLiveDocumentHttp(
     evidence.error = `Stage ${evidence.stage} failed; HTML verification is not complete unless its document proof is complete`;
     throw new Error(evidence.error);
   } finally { await persist(); }
+  return retainedObservations.length
+    ? { status: "written" as const, files: retainedObservations } : { status: "empty" as const, files: [] };
 
   async function verifyTarget(target: {
     kind: "feed" | "article"; source_id: string; canonical_url: string; url_key: string;
@@ -229,6 +234,7 @@ export async function verifyLiveDocumentHttp(
     };
     let privateRoot: string | undefined;
     let server: ReturnType<typeof servePlan> | undefined;
+    const observations: PersistedLedgerFile[] = [];
     try {
       const source = inputs.harvest.sources.find(source => source.id === target.source_id && source.status === "active");
       if (!source) throw new Error("Active configured source is unavailable");
@@ -243,6 +249,7 @@ export async function verifyLiveDocumentHttp(
       const apiInputs = { ...inputs, outputRoot };
       const apiRuntime: PlanRuntime = {
         ...runtime,
+        on_document_observations_persisted: files => { observations.push(...files); },
         task_profiling: {
           config: profilingConfig,
           report: profile => {
@@ -427,13 +434,24 @@ export async function verifyLiveDocumentHttp(
       let cleanupStage = "stop_listener";
       try {
         if (server) await server.stop(true);
+        cleanupStage = "retain_document_observations";
+        if (privateRoot && observations.length) {
+          const written: PersistLedgerResult = { status: "written", files: observations };
+          await verifyParquetFiles(privateRoot, "document-observations", written, inputs.registrations.document_observations);
+          for (const file of observations) {
+            const target = join(artifactRoot, "state", ...file.path.split("/"));
+            await mkdir(dirname(target), { recursive: true });
+            await copyFile(join(privateRoot, ...file.path.split("/")), target, constants.COPYFILE_EXCL);
+            retainedObservations.push(file);
+          }
+        }
         cleanupStage = "remove_private_directory";
         // Every operation closes its database before responding; stop the listener before removing this one private root.
         if (privateRoot) await rm(privateRoot, { recursive: true, force: true });
       } catch {
         proof.status = "failed";
         proof.stage = cleanupStage;
-        proof.reason = "PRIVATE_CLEANUP_FAILED";
+        proof.reason = cleanupStage === "retain_document_observations" ? "OBSERVATION_RETENTION_FAILED" : "PRIVATE_CLEANUP_FAILED";
         proof.error = `Stage ${cleanupStage} failed; the private directory remains outside uploaded evidence`;
         throw new Error(proof.error);
       } finally { await persist(); }
