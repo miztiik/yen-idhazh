@@ -252,6 +252,13 @@ percent and the supported totals remain available. Below 80 percent they
 still remain available, but Row 7 must not qualify them for scoring. Row 6
 does not calculate qualification or scores. A known zero-request opportunity
 retains zero requests but gives no waste ratio.
+The Row 7 caller must use `measured_target_requests`,
+`measured_source_wasted_requests`, `observed_measured_opportunities` and
+`measured_coverage`, not the strict whole-window totals or
+`availability === "available"`. Partial opportunity coverage can meet the
+approved 80 percent requirement. A history gap leaves coverage unknown and
+cannot qualify, even when some measured totals are available. Missing resource
+components stay unavailable; their weights are not reassigned to requests.
 CPU and private memory remain null. Missing, damaged or ambiguous evidence is
 reported without replacing saved state or inventing a successful empty history.
 
