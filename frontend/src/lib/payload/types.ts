@@ -25,15 +25,6 @@ export interface DigestVisual {
 	 * before the file existed - both readings are the same one: no data carried,
 	 * never an empty chart. */
 	data_path?: string | null;
-	/** Where the drawing was, before the reader's browser took over the drawing.
-	 *
-	 * **Retired from the contract on 2026-09-13** and kept here as the read side:
-	 * the 24 days published before that carry the key on every rendered visual,
-	 * and the build still reads those files off disk. Nothing points anywhere -
-	 * the 495 drawings are deleted - so the build asks for a file that is not
-	 * there and the story is simply shorter. It goes with the build-time inlining
-	 * that reads it. */
-	path?: string | null;
 	alt: string | null;
 }
 
@@ -48,6 +39,7 @@ export interface VisualMark {
 	text: string | null;
 	value: string | null;
 	unit: string | null;
+	source_text: string | null;
 	element_id: string | null;
 	derived: unknown | null;
 }
@@ -76,26 +68,11 @@ export interface VisualData {
 	item_id: string;
 	type: string;
 	renderer_version: string;
+	title: string | null;
+	caption: string | null;
+	emphasized_mark_id: string;
 	marks: VisualMark[];
 	encoding: VisualEncoding;
-}
-
-/** A visual as the build hands it to a component: the committed fields, plus
- * the drawing itself for the stories a prerendered document carries.
- *
- * `markup` is not in `DigestDay` and is not meant to be.
- * `dayShell()` reads the file off disk for the seed alone and attaches it here,
- * so the field exists between that loader and `ItemVisual` and nowhere else. It
- * is separate from `DigestVisual` because that type mirrors the committed
- * payload, and it is out of the served projection because a fetched day would
- * then carry every seed item's drawing a second time - `project.ts` keeps three
- * named fields of a visual and drops this one without being told to.
- *
- * The drawing has to be IN the document to be themed at all. An SVG inside an
- * `img` is a separate document: it reads none of the page's custom properties,
- * so a chart drawn in black axis type stayed black on a near-black card. */
-export interface SeededVisual extends DigestVisual {
-	markup?: string | null;
 }
 
 export interface DigestItem {
@@ -268,7 +245,7 @@ export interface DigestDay {
 /** The rendered chart as a served item carries it, mirroring
  * `DigestView`. `kind` is a build-time field of the
  * committed tree and never reaches a browser. */
-export type DigestViewVisual = Pick<DigestVisual, 'state' | 'path' | 'alt'>;
+export type DigestViewVisual = Pick<DigestVisual, 'state' | 'data_path' | 'alt'>;
 
 /** One item as the served day carries it - twenty-five of the published item's
  * fields, every one with a renderer.

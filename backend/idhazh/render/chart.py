@@ -143,7 +143,7 @@ def compile_bar(plan: VisualPlan, table: ElementTable, *, visuals: VisualsConfig
     # that is not - so any spelling in it names the same axis, and the first is
     # the plan's own order rather than a rule minted here.
     unit = figures[0].unit
-    data = _bar_data(table.item_id, names, naming, figures, measuring)
+    data = _bar_data(table.item_id, names, naming, figures, measuring, plan, known)
     return CompiledChart(
         _alt_text(names, figures, unit), data, measure_displayed_values(measuring, table)
     )
@@ -155,6 +155,8 @@ def _bar_data(
     naming: Sequence[DisplayedValue],
     figures: Sequence[_Figure],
     measuring: Sequence[DisplayedValue],
+    plan: VisualPlan,
+    known: Mapping[ElementId, Element],
 ) -> VisualData:
     """The same bars as data: one mark a name, one mark a length, and the channels.
 
@@ -163,9 +165,7 @@ def _bar_data(
     chart with four names and three figures" can be said at all, and the drawing
     code has to be able to refuse one.
 
-    Nothing here is drawn. No width, no colour, no font and no title: the plan
-    carries none of those and publishing the compiled result must not become the
-    hole one gets through (owner, 2026-09-13).
+    Framing remains sanitized text; appearance stays with the browser tokens.
     """
     marks: list[VisualMark] = []
     category: list[str] = []
@@ -177,6 +177,7 @@ def _bar_data(
                 text=name,
                 value=None,
                 unit=None,
+                source_text=None,
                 element_id=value.element_id,
                 derived=value.derived,
             )
@@ -189,6 +190,10 @@ def _bar_data(
                 text=None,
                 value=figure.stated,
                 unit=figure.unit,
+                source_text=(
+                    sanitize("; ".join(known[cited].span_excerpt for cited in value.derived.inputs))
+                    if value.derived is not None else None
+                ),
                 element_id=value.element_id,
                 derived=value.derived,
             )
@@ -199,6 +204,9 @@ def _bar_data(
         item_id=item_id,
         type=VisualType.BAR,
         renderer_version=RENDERER_VERSION,
+        title=sanitize(plan.title).strip() or None if plan.title is not None else None,
+        caption=sanitize(plan.caption).strip() or None if plan.caption is not None else None,
+        emphasized_mark_id=_emphasized_mark(plan, naming, measuring, quantity),
         marks=marks,
         encoding=VisualEncoding(
             category=category,
@@ -212,6 +220,36 @@ def _bar_data(
             event_label=[],
         ),
     )
+
+
+def _emphasized_mark(
+    plan: VisualPlan,
+    naming: Sequence[DisplayedValue],
+    measuring: Sequence[DisplayedValue],
+    quantity: Sequence[str],
+) -> str:
+    """Resolve selected elements to bars without inventing a reading priority."""
+    selected: set[str] = set()
+    matched: set[str] = set()
+    annotations = set(plan.annotations)
+    for name, figure, mark_id in zip(naming, measuring, quantity, strict=True):
+        inputs: set[str] = set()
+        for value in (name, figure):
+            if value.derived is not None:
+                inputs.update(value.derived.inputs)
+            elif value.element_id is not None:
+                inputs.add(value.element_id)
+        found = annotations & inputs
+        if found:
+            selected.add(mark_id)
+            matched.update(found)
+    if matched != annotations:
+        raise CompileError("an annotation does not identify a displayed bar")
+    if len(selected) != 1:
+        raise CompileError(
+            f"annotations select {len(selected)} distinct bars; exactly one is required"
+        )
+    return selected.pop()
 
 
 def _mark_name(value: DisplayedValue, known: Mapping[ElementId, Element]) -> str:
@@ -246,9 +284,8 @@ def _alt_text(names: Sequence[str], figures: Sequence[_Figure], unit: str | None
     a bar was converted onto the axis it is the converted one, because that is
     what a reader reads off the axis.
 
-    **It is also the whole of what a reader with JavaScript off receives.** The
-    drawing is built in the browser from 2026-09-13, so on a page that never
-    runs a script the figure carries this sentence and nothing else.
+    The browser builds its complete accessible name from the published data;
+    this bounded sentence remains on the decision, not on a script-less page.
     """
     tail = f" {unit}" if unit else ""
     parts = [

@@ -3,7 +3,7 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { deskOf, orderByTime } from '../src/lib/day-shape';
 import { dayShell, homeShell, loadDay, publishedDates } from '../src/lib/server/payload';
-import type { DigestDay, DigestItem, SeededVisual } from '../src/lib/payload/types';
+import type { DigestDay, DigestItem } from '../src/lib/payload/types';
 import { publishedSite } from './support/published-site';
 
 /**
@@ -65,33 +65,16 @@ function reading(day: DigestDay): DigestDay {
 	return { ...day, items: orderByTime(day.items) };
 }
 
-/** Whether any seeded story arrived carrying a drawing.
- *
- * **Nothing does, and that is the assertion rather than a control.** Between
- * 2026-09-05 and 2026-09-13 `dayShell` read a seeded story's SVG off disk and
- * handed the markup over with the story, so the halves put back together held
- * one thing the loader's day did not and the test had to strip it. The reader's
- * browser draws the chart now and the pipeline renders nothing, so there is no
- * file to read and the two halves are the same shape again. A counter over
- * inlined drawings could only ever return zero from here, which is a control
- * that cannot fire - so it is inverted into the property that replaced it.
- */
-function inlinedDrawings(items: DigestItem[]): number {
-	return items.filter((item) => (item.visual as SeededVisual | null)?.markup).length;
-}
-
 test.describe('the reading routes load a day in two halves', () => {
 	test('the halves put back together are the day the loader read', () => {
 		const dates = publishedDates(FIXTURE);
 		expect(dates.length, 'the local fixture published no day').toBeGreaterThan(0);
-		let inlined = 0;
 		for (const date of dates) {
 			const whole = loadDay(date, FIXTURE);
 			expect(whole, `${date} did not load`).not.toBeNull();
 			for (const seed of SEEDS) {
 				const shell = dayShell(date, seed, { root: FIXTURE });
 				expect(shell, `${date} at a seed of ${seed} did not load`).not.toBeNull();
-				inlined += inlinedDrawings(shell!.seed);
 				expect(
 					JSON.stringify([...shell!.seed, ...shell!.rest]),
 					`${date} at a seed of ${seed} changed the stories or their order`
@@ -107,11 +90,6 @@ test.describe('the reading routes load a day in two halves', () => {
 				).toEqual(whole!.items.map((item) => item.item_id).sort());
 			}
 		}
-		// The build draws nothing, so a seeded story carries a pointer and never a
-		// picture - and the two halves are therefore the same shape with nothing to
-		// strip. Asserted rather than assumed: a build that started inlining again
-		// would make the comparison above fail for a reason nobody could read.
-		expect(inlined, 'a seeded story arrived carrying a drawing the build no longer makes').toBe(0);
 	});
 
 	test('the seed is the head of the reading order and the rest is the tail', () => {

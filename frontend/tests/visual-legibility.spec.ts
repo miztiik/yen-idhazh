@@ -89,6 +89,29 @@ test('reader labels clear the text floor without scaling, and every mark survive
 				expect(text.size, `${id}: ${text.value}`).toBeGreaterThanOrEqual(measured.floor);
 			}
 			const expected = drawBars(data, measured.width, formatNumber);
+			const emphasized = svg.locator('rect.emphasized');
+			await expect(emphasized).toHaveCount(1);
+			const styles = await svg.locator('rect').evaluateAll((bars) => bars.map((bar) => {
+				const style = getComputedStyle(bar);
+				return {
+					selected: bar.classList.contains('emphasized'),
+					fill: style.fill,
+					stroke: style.stroke,
+					dashes: style.strokeDasharray
+				};
+			}));
+			const selected = styles.find((style) => style.selected)!;
+			for (const sibling of styles.filter((style) => !style.selected)) {
+				expect(selected.fill).not.toBe(sibling.fill);
+				expect(selected.stroke).not.toBe(sibling.stroke);
+				expect(selected.dashes).not.toBe(sibling.dashes);
+			}
+			const heading = figure.locator('.chart-title');
+			const caption = figure.locator('figcaption');
+			await expect(heading).toHaveCount(data.title ? 1 : 0);
+			await expect(caption).toHaveCount(data.caption ? 1 : 0);
+			if (data.title) await expect(heading).toHaveText(data.title);
+			if (data.caption) await expect(caption).toHaveText(data.caption);
 			expect(measured.text.map((text) => text.value)).toEqual([
 				...expected.bars.flatMap((bar) => [bar.name, bar.displayed]),
 				...(expected.unit ? [expected.unit] : [])
