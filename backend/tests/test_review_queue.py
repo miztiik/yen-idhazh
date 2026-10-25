@@ -30,7 +30,7 @@ from idhazh.contracts.digest_day import (
 )
 from idhazh.contracts.review_queue import ReviewPopulation, ReviewQueue
 from idhazh.contracts.visual import EncodingRole, VisualType
-from idhazh.contracts.visual_data import RENDERER_VERSION, VisualData
+from idhazh.contracts.visual_data import RENDERER_VERSION, MarkId, VisualData
 from idhazh.contracts.visual_decision import (
     PAYLOAD_SUFFIX,
     NoneReason,
@@ -47,7 +47,7 @@ DATE: Final = "2026-08-21"
 
 def _drawing(item_id: str) -> str:
     """Build two bars through the current published chart contract."""
-    encoding = {role.value: [] for role in EncodingRole}
+    encoding: dict[str, list[MarkId]] = {role.value: [] for role in EncodingRole}
     encoding[EncodingRole.CATEGORY.value] = ["m0", "m1"]
     encoding[EncodingRole.QUANTITY.value] = ["m2", "m3"]
     return VisualData.model_validate(
