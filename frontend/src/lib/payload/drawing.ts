@@ -10,8 +10,8 @@ const VISUAL_DATA_PATH =
 	/^digest\/\d{4}\/\d{2}\/\d{2}\/[a-z0-9]+(?:-[a-z0-9]+)*-(?:[0-9]{2,}|[0-9a-hjkmnp-tv-z]{16})\.json$/;
 
 /** Protocol stamp, held to the Python authority by the visual binding test. */
-export const RENDERER_VERSION = '2026-10-24';
-export const DRAWABLE = ['bar'] as const;
+export const RENDERER_VERSION = '2026-10-25';
+export const DRAWABLE = ['bar', 'dot', 'slope'] as const;
 export const ENCODING_ROLES = [
 	'category', 'quantity', 'quantity_x', 'time', 'series', 'size', 'bins', 'entity', 'event_label'
 ] as const;
@@ -39,41 +39,89 @@ export function refusedVisualData(data: unknown): string | null {
 	if (!nullableText(data.title) || !nullableText(data.caption)) return 'carries invalid framing';
 
 	const marks = data.marks;
-	if (!Array.isArray(marks) || marks.length === 0) return 'carries no marks';
+	if (!Array.isArray(marks) || marks.length === 0 || marks.length > 72) return 'carries an invalid number of marks';
 	const held = new Map<string, Record<string, unknown>>();
 	for (const mark of marks) {
-		if (!isObject(mark) || typeof mark.mark_id !== 'string') return 'carries a mark with no id';
+		if (!isObject(mark) || typeof mark.mark_id !== 'string' || !/^m[0-9]{1,3}$/.test(mark.mark_id)) {
+			return 'carries a mark with no valid id';
+		}
 		if (held.has(mark.mark_id)) return 'carries duplicate mark ids';
-		if (!nullableText(mark.source_text) || !nullableText(mark.unit)) return 'carries invalid source text or unit';
+		if (!nullableText(mark.source_text) || !nullableText(mark.unit) || !nullableText(mark.text)) {
+			return 'carries invalid mark text or unit';
+		}
 		held.set(mark.mark_id, mark);
 	}
 	const encoding = data.encoding;
 	if (!isObject(encoding)) return 'carries no encoding';
 	const drawn = new Set<string>();
+	const channels: Record<string, string[]> = {};
 	for (const role of ENCODING_ROLES) {
 		const ids = encoding[role];
-		if (!Array.isArray(ids)) return 'carries a channel that is not a list of marks';
-		if (role !== 'category' && role !== 'quantity' && ids.length !== 0) {
-			return 'carries a channel this bar renderer does not draw';
+		if (!Array.isArray(ids) || !ids.every((id): id is string => typeof id === 'string')) {
+			return 'carries a channel that is not a list of marks';
 		}
+		if (ids.length > 8) return 'carries too many marks in one channel';
+		channels[role] = ids;
 		for (const id of ids) {
-			if (typeof id !== 'string' || !held.has(id)) return 'draws a mark it does not carry';
+			if (!held.has(id)) return 'draws a mark it does not carry';
 			if (drawn.has(id)) return 'draws a mark twice';
 			drawn.add(id);
 		}
 	}
 	if (drawn.size !== held.size) return 'carries marks it does not draw';
-	const names = encoding.category as string[];
-	const figures = encoding.quantity as string[];
-	if (names.length === 0 || names.length !== figures.length) return 'names and figures do not pair into bars';
-	for (const id of names) {
-		const text = held.get(id)?.text;
-		if (typeof text !== 'string' || !text.trim()) return 'draws a bar with no name';
-	}
+	const figures = channels.quantity;
 	for (const id of figures) {
 		const value = held.get(id)?.value;
-		if (typeof value !== 'string' || !value.trim() || !Number.isFinite(Number(value))) {
+		if (typeof value !== 'string' || !value.trim() || !Number.isFinite(Number(value)) || held.get(id)?.text !== null) {
 			return 'draws a bar with no finite figure';
+		}
+	}
+	const textChannels: string[] = [];
+	if (data.type === 'bar' || data.type === 'dot') {
+		const names = channels.category;
+		const series = channels.series;
+		if (names.length === 0 || names.length !== figures.length) return 'names and figures do not pair';
+		if (series.length !== 0 && series.length !== figures.length) return 'series labels do not pair with figures';
+		if (
+			channels.quantity_x.length !== 0 || channels.time.length !== 0 ||
+			channels.entity.length !== 0 || channels.size.length !== 0 ||
+			channels.bins.length !== 0 || channels.event_label.length !== 0
+		) return 'carries a channel this chart does not draw';
+		textChannels.push(...names, ...series);
+	} else if (data.type === 'slope') {
+		const times = channels.time;
+		const entities = channels.entity;
+		const series = channels.series;
+		const lines = figures.length / 2;
+		if (times.length !== 2 || figures.length < 4 || figures.length % 2 !== 0) {
+			return 'does not pair quantities across two time labels';
+		}
+		if (entities.length === 0 && series.length === 0) return 'has no label for each slope line';
+		if (entities.length !== 0 && entities.length !== lines) return 'entity labels do not pair with slope lines';
+		if (series.length !== 0 && series.length !== lines) return 'series labels do not pair with slope lines';
+		if (
+			channels.category.length !== 0 || channels.quantity_x.length !== 0 ||
+			channels.size.length !== 0 || channels.bins.length !== 0 ||
+			channels.event_label.length !== 0
+		) return 'carries a channel this chart does not draw';
+		const timeLabels = times.map((id) => held.get(id)?.text);
+		if (
+			timeLabels.some((text) => typeof text !== 'string' || !text.trim()) ||
+			timeLabels[0] === timeLabels[1]
+		) {
+			return 'has invalid or repeated slope time labels';
+		}
+		if (entities.length === 0 && new Set(series.map((id) => held.get(id)?.text)).size !== lines) {
+			return 'slope lines need distinct series labels';
+		}
+		textChannels.push(...times, ...entities, ...series);
+	} else {
+		return 'names a type this page cannot draw';
+	}
+	for (const id of textChannels) {
+		const mark = held.get(id);
+		if (typeof mark?.text !== 'string' || !mark.text.trim() || mark.value !== null) {
+			return 'draws a text channel without source text';
 		}
 	}
 	if (typeof data.emphasized_mark_id !== 'string' || !figures.includes(data.emphasized_mark_id)) {

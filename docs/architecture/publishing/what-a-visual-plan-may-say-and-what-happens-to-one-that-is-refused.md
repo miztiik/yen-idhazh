@@ -249,7 +249,7 @@ purpose the plan started with. A failed declared-whole check has no onward bar
 edge, so neither a direct stacked request nor an upstream pie request can
 escape that refusal.
 
-### The static allow-list, and the four edges it refuses
+### The static allow-list, and the four edges it permits
 
 `DOWNGRADE_EDGES` is a static table with its own date-stamp. Without one the ladder can walk a
 comparison into a timeline and record it as a legal edge; the cross-family ban is what "purpose
@@ -257,22 +257,25 @@ survives" implies and never states.
 
 | From | To | Preserves | What the step gives up |
 | --- | --- | --- | --- |
-| `dot` | `bar` | `comparison` | Position-only marks become lengths for the same magnitude comparison; filled grouping or other undisplayed channels refuse replacement. |
 | `bubble` | `scatter` | `relationship` | The size channel. The two measured axes the relationship is stay. |
 | `pie` | `stacked_bar` | `composition` | The circle. Parts of a declared whole, stacked in one bar. |
 | `comparison` | `bar` | `comparison` | An unruled request can become bars only when its complete channels already state a magnitude comparison. |
 | `whowhat` | `bar` | `comparison` | The grid. A one-attribute comparison grid drawn as the comparison it is. |
 
 **An edge must change an outcome.** It changes either validation or compiler
-availability: a valid `dot` has no compiler yet and can reach a supported bar.
-The compiler's own capability query also controls which targets may be returned.
+availability: an unruled `comparison` can reach a supported bar when its complete
+channels already state that comparison. The compiler's own capability query
+also controls which targets may be returned.
 An unsupported intermediate may be traversed but never returned as drawable.
 When selection is active, the replacement must also be selected. The bar
 compiler cannot preserve an extra grouping or other channel, so those
 requests are refused rather than silently dropping facts.
 
-Four refusals are worth naming, because each is a judgement rather than a derivation:
+Five refusals are worth naming, because each is a judgement rather than a derivation:
 
+- **`dot` to `bar`** would replace position on a common scale with length from
+  zero. Position is the better comparison when ranking items, so a dot must
+  stay a dot or be refused.
 - **`line` to `bar`** is in the source document with the condition "if the time axis is safely
   categorical". Nothing in this build can decide that, and a condition nobody can evaluate is a
   condition nobody should encode.

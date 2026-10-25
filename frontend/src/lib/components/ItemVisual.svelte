@@ -26,7 +26,7 @@
 	 * accessible name is written from the same `Drawing` the marks are drawn from
 	 * - so what a keyboard reaches and what an eye reaches are one set by
 	 * construction rather than by two derivations agreeing. One tab stop for a
-	 * chart and never one per bar: a day runs to hundreds of stories, and a bar
+	 * chart and never one per mark: a day runs to hundreds of stories, and a mark
 	 * apiece would make the stream something a keyboard cannot get past. The ring
 	 * is the scale's own step rather than a rule in the block below, because a px
 	 * size in an authored style block ignores a reader who set their browser text
@@ -45,14 +45,10 @@
 	 * token says and what a reader sees. Before this the drawing was laid out at
 	 * a fixed 720 units and stretched to fit, so a `--text-xs` string resolved at
 	 * 4.8 CSS px on a 390 px phone - the right size in a coordinate space nobody
-	 * reads. The height is a count of bars and does not depend on the width, so
-	 * the figure is its final height from the frame the marks land in and the
-	 * story cannot shift as it is read; that is the promise the `viewBox` used to
-	 * keep by holding an aspect ratio.
-	 *
-	 * **Marks that do not arrive cost the story its picture and nothing else.**
-	 * No broken-image glyph, no grey box, no skeleton: the story is shorter,
-	 * which is the shape two stories in three already have.
+	 * reads. Height follows the displayed rows and labelled bands, never the
+	 * width, so the figure is its final height from the frame the marks land in
+	 * and the story cannot shift as it is read; that is the promise the `viewBox`
+	 * used to keep by holding an aspect ratio.
 	 */
 	import { base } from '$app/paths';
 	import { navigating } from '$app/state';
@@ -60,10 +56,19 @@
 	import type { DigestVisual, VisualData } from '$lib/payload/types';
 	import { numberFormatter, type NumberFormatConfig } from '$lib/number-format';
 	import { whenNear } from '$lib/reveal';
-	import { drawBars, statedBars, type Drawing } from '$lib/visual/bar';
+	import type { StoryChartGeometryConfig } from '$lib/server/config';
+	import { drawVisual, statedDrawing, type Drawing } from '$lib/visual/bar';
 	import { whenWide } from '$lib/visual/width';
 
-	let { visual, numberFormat }: { visual: DigestVisual | null; numberFormat: NumberFormatConfig } = $props();
+	let {
+		visual,
+		numberFormat,
+		storyChartGeometry
+	}: {
+		visual: DigestVisual | null;
+		numberFormat: NumberFormatConfig;
+		storyChartGeometry: StoryChartGeometryConfig;
+	} = $props();
 	const formatNumber = $derived(numberFormatter(numberFormat));
 
 	/** The file this story's marks are in, or null when it has none to ask for.
@@ -76,20 +81,23 @@
 		visual?.state === 'rendered' && visual.data_path ? visual.data_path : null
 	);
 
-	/** What the fetch brought back, or null while it has not run or did not work. */
-	let arrived = $state<VisualData | null>(null);
+	/** The result for the current path, or null while its request has not settled. */
+	let loaded = $state<{ file: string; data: VisualData | null } | null>(null);
 	let near = $state(false);
-	let settledFile: string | null = null;
+	let settled = $state<string | null>(null);
 	/** How much room the card gives the drawing, or 0 before it has been measured. */
 	let room = $state(0);
+	const currentLoad = $derived(loaded?.file === wanted ? loaded.data : null);
 	const drawing = $derived<Drawing | null>(
-		arrived && room > 0 ? drawBars(arrived, room, formatNumber) : null
+		currentLoad && room > 0
+			? drawVisual(currentLoad, room, formatNumber, storyChartGeometry)
+			: null
 	);
 	/** Every figure the bars are drawn at, in one sentence, for a reader who is
 	 * not looking at them. It is the whole of what the tab stop below announces. */
-	const stated = $derived(drawing ? statedBars(drawing) : '');
+	const stated = $derived(drawing ? statedDrawing(drawing) : '');
 
-	/** The marks that file holds, or null when there is nothing safe to draw.
+	/** Read one published path, refusing any document that is not current and valid.
 	 *
 	 * **It refuses rather than guesses, and refusing is free.** A degrade path
 	 * that draws something approximate is how a wrong chart reaches a reader, and
@@ -153,15 +161,20 @@
 	 */
 	$effect(() => {
 		const file = wanted;
-		if (!near || !file || navigating.to !== null || settledFile === file) return;
+		if (
+			!near || !file || navigating.to !== null ||
+			settled === file
+		) return;
 		const request = new AbortController();
 		void read(file, request.signal).then((data) => {
 			if (!request.signal.aborted) {
-				settledFile = file;
-				arrived = data;
+				settled = file;
+				loaded = { file, data };
 			}
 		});
-		return () => request.abort();
+		return () => {
+			request.abort();
+		};
 	});
 
 	function askWhenNear(node: Element): { destroy: () => void } {
@@ -185,7 +198,7 @@
 	}
 </script>
 
-{#if arrived}
+{#if currentLoad}
 	<!-- The figure takes the focus, not the marks inside it: `role="img"` replaces
 	     its whole subtree with one name, so a bar given its own tab stop would be
 	     a stop announcing nothing. It is not a control and it is still focusable,
@@ -208,22 +221,120 @@
 				height={drawing.height}
 				role="presentation"
 			>
-				{#each drawing.bars as bar (bar.y)}
-					<text class="name" class:emphasized={bar.emphasized} x="0" y={bar.label}>{bar.name}</text>
-					<rect class="bar" class:emphasized={bar.emphasized} x="0" y={bar.y} width={bar.width} height={bar.height} rx="3" />
-					<text class="figure" x={bar.figure} y={bar.y + bar.height / 2}>{bar.displayed}</text>
-				{/each}
-				<line class="axis" x1="0" y1={drawing.baseline} x2={drawing.width} y2={drawing.baseline} />
-				{#if drawing.unit}
-					<text class="unit" x="0" y={drawing.baseline + 16}>{drawing.unit}</text>
+				{#if drawing.type === 'bar'}
+					{#each drawing.bars as bar (bar.y)}
+						<text class="name" class:emphasized={bar.emphasized} x="0" y={bar.label}>{bar.name}</text>
+						<rect
+							class="bar"
+							class:emphasized={bar.emphasized}
+							stroke-width={storyChartGeometry.mark_outline_width_px}
+							x="0"
+							y={bar.y}
+							width={bar.width}
+							height={bar.height}
+							rx={storyChartGeometry.bar_corner_radius_px}
+						/>
+						<text class="figure" x={bar.figure} y={bar.y + bar.height / 2}>{bar.displayed}</text>
+					{/each}
+					<line
+						class="axis"
+						stroke-width={storyChartGeometry.axis_line_width_px}
+						x1="0"
+						y1={drawing.baseline}
+						x2={drawing.width}
+						y2={drawing.baseline}
+					/>
+					{#if drawing.unit}
+						<text class="unit" x="0" y={drawing.baseline + storyChartGeometry.axis_label_offset_px}>{drawing.unit}</text>
+					{/if}
+				{:else if drawing.type === 'dot'}
+					{#each drawing.dots as dot (dot.y)}
+						<text class="name" class:emphasized={dot.emphasized} x="0" y={dot.labelY}>{dot.name}</text>
+						<circle
+							class="dot"
+							class:emphasized={dot.emphasized}
+							stroke-width={storyChartGeometry.mark_outline_width_px}
+							cx={dot.x}
+							cy={dot.y}
+							r={dot.radius}
+						/>
+						<text class="figure" x={dot.valueX} y={dot.y}>{dot.displayed}</text>
+					{/each}
+					<line
+						class="axis"
+						stroke-width={storyChartGeometry.axis_line_width_px}
+						x1={storyChartGeometry.dot_radius_px}
+						y1={drawing.baseline}
+						x2={drawing.axisEnd}
+						y2={drawing.baseline}
+					/>
+					{#if drawing.unit}
+						<text class="unit" x="0" y={drawing.baseline + storyChartGeometry.axis_label_offset_px}>{drawing.unit}</text>
+					{/if}
+				{:else}
+					<text class="column-label" text-anchor="middle" x={drawing.leftX} y={storyChartGeometry.slope_header_band_px / 2}>
+						{drawing.leftLabel}
+					</text>
+					<text class="column-label" text-anchor="middle" x={drawing.rightX} y={storyChartGeometry.slope_header_band_px / 2}>
+						{drawing.rightLabel}
+					</text>
+					{#each drawing.slopes as slope (slope.color)}
+						<line
+							class={`slope-line chart-${slope.color}`}
+							x1={slope.left.x}
+							y1={slope.left.y}
+							x2={slope.right.x}
+							y2={slope.right.y}
+							stroke-width={slope.left.emphasized || slope.right.emphasized
+								? storyChartGeometry.slope_highlight_line_width_px
+								: storyChartGeometry.slope_line_width_px}
+						/>
+						<circle
+							class={`slope-point chart-${slope.color}`}
+							class:emphasized={slope.left.emphasized}
+							stroke-width={storyChartGeometry.mark_outline_width_px}
+							cx={slope.left.x}
+							cy={slope.left.y}
+							r={storyChartGeometry.dot_radius_px}
+						/>
+						<circle
+							class={`slope-point chart-${slope.color}`}
+							class:emphasized={slope.right.emphasized}
+							stroke-width={storyChartGeometry.mark_outline_width_px}
+							cx={slope.right.x}
+							cy={slope.right.y}
+							r={storyChartGeometry.dot_radius_px}
+						/>
+						<text class="figure" text-anchor="end" x={slope.left.x - storyChartGeometry.value_gap_px} y={slope.left.y}>
+							{slope.left.displayed}
+						</text>
+						<text class="figure" x={slope.right.x + storyChartGeometry.value_gap_px} y={slope.right.y}>
+							{slope.right.displayed}
+						</text>
+					{/each}
+					{#if drawing.unit}
+						<text class="unit" x="0" y={drawing.height - storyChartGeometry.slope_footer_band_px / 2}>
+							{drawing.unit}
+						</text>
+					{/if}
 				{/if}
 			</svg>
+			{#if drawing.type === 'slope'}
+				<ul class="slope-legend px-3">
+					{#each drawing.slopes as slope (slope.color)}
+						<li>
+							<span class={`legend-mark chart-${slope.color}`} aria-hidden="true"></span>
+							<span>{slope.name}</span>
+						</li>
+					{/each}
+				</ul>
+			{/if}
 			{#if drawing.caption}
 				<figcaption class="px-3 pb-3 text-xs leading-normal text-text-secondary">{drawing.caption}</figcaption>
 			{/if}
 		{/if}
 	</figure>
-{:else if wanted}
+{:else if wanted && settled !== wanted}
 	<!-- Where the drawing will go, and nothing a reader can see: no box, no
 	     border, no height. It exists so the fetch can wait until the story is
 	     nearly on screen, and a story whose marks never arrive keeps exactly the
@@ -251,10 +362,9 @@
 
 	   `--text-xs` rather than a px size, for the reason every other type on the
 	   site takes a token: a px size ignores a reader who set their browser text
-	   larger. **And it is now the size a reader gets**, because the drawing is
-	   placed at the card's own width: a 12 px token resolves at 12 CSS px rather
-	   than at the 4.8 the old 720-unit box scaled it to. Row #4 is the row that
-	   holds that to a floor; this row is what makes the token mean what it says. */
+	   larger. The drawing is placed at the card's own width, so the token keeps
+	   its computed size rather than being scaled with a fixed viewBox. The
+	   browser gate measures the rendered text against that same token. */
 	.name,
 	.figure,
 	.unit {
@@ -274,7 +384,6 @@
 	   so there is one answer to "what colour is an axis here" rather than two. */
 	.axis {
 		stroke: var(--chart-axis);
-		stroke-width: 1;
 	}
 
 	.bar {
@@ -284,13 +393,64 @@
 	.bar.emphasized {
 		fill: var(--chart-2);
 		stroke: var(--color-text);
-		stroke-width: 1;
 		stroke-dasharray: var(--space-1);
 	}
 
 	.name.emphasized {
 		font-weight: var(--font-weight-semibold);
 		fill: var(--color-text);
+	}
+
+	.dot {
+		fill: var(--chart-1);
+	}
+
+	.dot.emphasized,
+	.slope-point.emphasized {
+		fill: var(--chart-2);
+		stroke: var(--color-text);
+	}
+
+	.column-label {
+		dominant-baseline: middle;
+		fill: var(--color-text);
+		font-family: inherit;
+		font-size: var(--text-xs);
+		font-weight: var(--font-weight-semibold);
+	}
+
+	.slope-line {
+		stroke-linecap: round;
+	}
+
+	.chart-1 { color: var(--chart-1); stroke: var(--chart-1); }
+	.chart-2 { color: var(--chart-2); stroke: var(--chart-2); }
+	.chart-3 { color: var(--chart-3); stroke: var(--chart-3); }
+	.chart-4 { color: var(--chart-4); stroke: var(--chart-4); }
+
+	.slope-point {
+		fill: var(--color-surface);
+	}
+
+	.slope-legend {
+		display: flex;
+		flex-wrap: wrap;
+		gap: var(--space-2) var(--space-4);
+		padding-bottom: var(--space-2);
+		list-style: none;
+	}
+
+	.slope-legend li {
+		display: flex;
+		align-items: center;
+		gap: var(--space-2);
+		font-size: var(--text-xs);
+		color: var(--color-text-secondary);
+	}
+
+	.legend-mark {
+		width: var(--space-4);
+		border-top: 2px solid;
 	}
 
 	/* Stated rather than left to an empty box, so nothing a later rule does to a

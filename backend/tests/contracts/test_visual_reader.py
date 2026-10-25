@@ -7,6 +7,7 @@ import pytest
 from pydantic import ValidationError
 from support.paths import CONTRACT_FIXTURES_DIR, REPO_ROOT, read_text
 
+from idhazh.contracts.appearance_config import StoryChartGeometryConfig
 from idhazh.contracts.visual import EncodingRole, VisualType
 from idhazh.contracts.visual_data import (
     RENDERER_VERSION,
@@ -28,6 +29,14 @@ def test_frontend_chart_fields_match_the_native_contract(
     assert found is not None
     fields = set(re.findall(r"^\t(\w+):", found[1], re.M))
     assert fields == set(model.model_fields)
+
+
+def test_frontend_story_chart_geometry_matches_its_native_contract() -> None:
+    source = read_text(REPO_ROOT / "frontend/src/lib/server/config.ts")
+    found = re.search(r"export interface StoryChartGeometryConfig \{(.*?)\n\}", source, re.S)
+    assert found is not None
+    fields = set(re.findall(r"^\t(\w+):", found[1], re.M))
+    assert fields == set(StoryChartGeometryConfig.model_fields)
 
 
 def test_frontend_chart_vocabularies_match_the_native_contract() -> None:
@@ -54,4 +63,24 @@ def test_incompatible_chart_data_is_refused_without_migration(change: str) -> No
     else:
         data["emphasized_mark_id"] = data["encoding"]["category"][0]
     with pytest.raises(ValidationError):
+        VisualData.model_validate(data)
+
+
+def test_slope_reader_rejects_repeated_time_labels() -> None:
+    data = VisualData.model_validate_json(
+        read_text(CONTRACT_FIXTURES_DIR / "visual-data/slope-from-wind.json")
+    ).model_dump(mode="json")
+    data["marks"][5]["text"] = data["marks"][4]["text"]
+    with pytest.raises(ValidationError, match="two distinct time labels"):
+        VisualData.model_validate(data)
+
+
+def test_slope_reader_rejects_duplicate_series_names_without_entities() -> None:
+    data = VisualData.model_validate_json(
+        read_text(CONTRACT_FIXTURES_DIR / "visual-data/slope-from-wind.json")
+    ).model_dump(mode="json")
+    data["encoding"]["series"] = data["encoding"]["entity"]
+    data["encoding"]["entity"] = []
+    data["marks"][7]["text"] = data["marks"][6]["text"]
+    with pytest.raises(ValidationError, match="distinct series labels"):
         VisualData.model_validate(data)

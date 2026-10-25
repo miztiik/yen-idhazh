@@ -34,7 +34,7 @@ from idhazh.contracts.visual_decision import (
     VisualKind,
     VisualState,
 )
-from idhazh.render.chart import CompileError, compile_bar
+from idhazh.render.chart import CompileError, compile_chart
 from idhazh.sanitize import sanitize
 
 LOG: Final = logging.getLogger("idhazh")
@@ -217,7 +217,7 @@ def render_planned_visual(
             | {"planned_type": plan.type.value, "downgrade_depth": 0}
         )
     try:
-        compiled = compile_bar(plan, table, visuals=visuals)
+        compiled = compile_chart(plan, table, visuals=visuals)
     except CompileError as error:
         return VisualDecision.model_validate(
             decision.model_dump(mode="json") | {"rationale": sanitize(str(error))}

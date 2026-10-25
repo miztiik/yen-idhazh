@@ -498,6 +498,7 @@
 				days={foundDays}
 				{verticalNames}
 				numberFormat={ui.number_format}
+				storyChartGeometry={ui.story_chart_geometry}
 				onClear={clearSearch}
 			/>
 		{:else if found !== null}
@@ -543,6 +544,7 @@
 					<DigestItemView
 						{item}
 						numberFormat={ui.number_format}
+						storyChartGeometry={ui.story_chart_geometry}
 						verticalName={verticalNames[deskOf(item)] ?? deskOf(item)}
 						showMark={ui.source_mark}
 						stack={stackOf(item)}

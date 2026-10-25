@@ -460,18 +460,18 @@ class TestEveryRouteToNoneCarriesItsOwnReason:
 class TestTheDowngradeLadder:
     """The four invariance rules, one test each, plus the floor that cannot be read."""
 
-    def unbuilt_dot(self) -> VisualPlan:
-        """A valid magnitude comparison this build cannot compile as requested."""
-        return wind_plan(type=VisualType.DOT.value)
+    def unruled_comparison(self) -> VisualPlan:
+        """A comparison request the validator refuses until its type has a rule."""
+        return wind_plan(type=VisualType.COMPARISON.value)
 
     def test_the_case_this_class_is_built_on_really_is_refused(self) -> None:
         table = wind_table(*WHOLE)
-        assert validate_plan(self.unbuilt_dot(), table, visuals=committed_visuals()) == []
-        assert not can_compile(self.unbuilt_dot().type)
+        assert validate_plan(self.unruled_comparison(), table, visuals=committed_visuals())
+        assert not can_compile(self.unruled_comparison().type)
 
     def test_a_refused_plan_is_re_drawn_as_the_nearest_built_neighbour(self) -> None:
         made = downgrade(
-            self.unbuilt_dot(),
+            self.unruled_comparison(),
             wind_table(*WHOLE),
             visuals=committed_visuals(downgrade_enabled=True, downgrade_floor_percentiles=[50, 75]),
             published_marks={VisualType.BAR: [3, 4, 5, 8]},
@@ -479,13 +479,13 @@ class TestTheDowngradeLadder:
 
         assert made is not None
         assert made.plan.type is VisualType.BAR
-        assert made.edge == (VisualType.DOT, VisualType.BAR)
+        assert made.edge == (VisualType.COMPARISON, VisualType.BAR)
         assert made.depth == 1
 
     def test_invariance_one_the_element_set_does_not_change(self) -> None:
         """A downgrade is the same claim re-drawn. It is never permission to go
         and find something else to draw."""
-        plan = self.unbuilt_dot()
+        plan = self.unruled_comparison()
         made = downgrade(
             plan,
             wind_table(*WHOLE),
@@ -518,7 +518,7 @@ class TestTheDowngradeLadder:
         assert depth_floor((), 50) is None
         assert (
             downgrade(
-                self.unbuilt_dot(),
+                self.unruled_comparison(),
                 wind_table(*WHOLE),
                 visuals=committed_visuals(
                     downgrade_enabled=True, downgrade_floor_percentiles=[50, 75]
@@ -530,7 +530,7 @@ class TestTheDowngradeLadder:
 
     def test_invariance_three_a_thin_downgrade_does_not_clear_a_fat_corpus(self) -> None:
         made = downgrade(
-            self.unbuilt_dot(),
+            self.unruled_comparison(),
             wind_table(*WHOLE),
             visuals=committed_visuals(downgrade_enabled=True, downgrade_floor_percentiles=[50, 75]),
             published_marks={VisualType.BAR: [5, 6, 7, 8]},
@@ -540,7 +540,7 @@ class TestTheDowngradeLadder:
 
     def test_invariance_four_the_published_plan_re_enters_the_same_validator(self) -> None:
         made = downgrade(
-            self.unbuilt_dot(),
+            self.unruled_comparison(),
             wind_table(*WHOLE),
             visuals=committed_visuals(downgrade_enabled=True, downgrade_floor_percentiles=[50, 75]),
             published_marks={VisualType.BAR: [3, 4, 5, 8]},
@@ -554,7 +554,7 @@ class TestTheDowngradeLadder:
         form still worth showing."""
         assert (
             downgrade(
-                wind_plan(type=VisualType.DOT.value, annotations=[]),
+                wind_plan(type=VisualType.COMPARISON.value, annotations=[]),
                 wind_table(*WHOLE),
                 visuals=committed_visuals(
                     downgrade_enabled=True, downgrade_floor_percentiles=[50, 75]
@@ -567,20 +567,25 @@ class TestTheDowngradeLadder:
     def test_target_validation_still_refuses_an_invented_source_figure(self) -> None:
         table = wind_table(*WHOLE).model_dump(mode="json")
         quantity = next(
-            element for element in table["elements"]
-            if element["element_id"] == self.unbuilt_dot().encodings.quantity[0]
+            element
+            for element in table["elements"]
+            if element["element_id"] == self.unruled_comparison().encodings.quantity[0]
         )
         quantity["value"] = "999999"
-        assert downgrade(
-            self.unbuilt_dot(), ElementTable.model_validate(table),
-            visuals=committed_visuals(downgrade_enabled=True),
-            published_marks={VisualType.BAR: [3, 4, 5, 8]},
-        ) is None
+        assert (
+            downgrade(
+                self.unruled_comparison(),
+                ElementTable.model_validate(table),
+                visuals=committed_visuals(downgrade_enabled=True),
+                published_marks={VisualType.BAR: [3, 4, 5, 8]},
+            )
+            is None
+        )
 
     def test_the_separate_switch_blocks_rescue_with_populated_rungs(self) -> None:
         assert (
             downgrade(
-                self.unbuilt_dot(),
+                self.unruled_comparison(),
                 wind_table(*WHOLE),
                 visuals=committed_visuals(
                     downgrade_enabled=False, downgrade_floor_percentiles=[50, 75]
@@ -593,7 +598,7 @@ class TestTheDowngradeLadder:
     def test_the_rung_count_is_how_many_depths_exist(self) -> None:
         rungs = [50]
         made = downgrade(
-            self.unbuilt_dot(),
+            self.unruled_comparison(),
             wind_table(*WHOLE),
             visuals=committed_visuals(downgrade_enabled=True, downgrade_floor_percentiles=rungs),
             published_marks={VisualType.BAR: [3, 4, 5, 8]},

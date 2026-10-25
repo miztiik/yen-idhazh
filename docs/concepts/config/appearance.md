@@ -21,7 +21,7 @@ Its blocks:
 | `assist` | On-device archive search. Formerly `idhazh.json`'s `assist` block. |
 | `frame` | The frame maximums, the reading measure, the gutter range, and the three breakpoints. |
 | `theme` | Whether gradients, elevation and the display face are drawn, and how strongly a panel takes a tint. |
-| `chart` | Drawn height and seed coordinate width, how wide the readout under a chart may be, tick density, and the sparkline height. `hover_readout` and `palette` are still in the contract, but nothing reads them, so setting either changes nothing. |
+| `chart` | Console chart dimensions, readout width, tick density, sparkline height, and bounded geometry for story bars, dots and slopes. `hover_readout` and `palette` are still in the contract, but nothing reads them, so setting either changes nothing. |
 | `icons` | Icon size, whether an icon takes the hue of what it means, and whether a topic carries a mark. |
 | `motion` | The two durations, and one switch. `prefers-reduced-motion` sits above the switch and is deliberately not configurable. |
 
@@ -76,6 +76,14 @@ their actual browser container and redraw when it changes. This retained width
 validation does not imply that a server still prerenders chart values or SVG.
 
 Two knobs in that block decide what a chart's axis and its readout look like, and both exist because a number written into a component is a number nobody can move. **`chart.tick_density` is the most date labels an x axis may carry** - a ceiling and never a target, because the axis then measures those labels against the room the plot actually has and drops more of them until none touch. So a month of columns gets six dates on a desktop rather than one span string, three on a phone rather than six overlapping ones, and a column whose date was dropped keeps its tick mark. **`chart.readout_max_share` is the widest the readout strip under a plot may be, as a share of that plot** - 1, the whole plot, bounded above 0 and at or below 1. The strip sits below the plot, so no value here can cover a mark, and its entries lie side by side and wrap only when the next one does not fit. It was 0.33 until 2026-09-28, which left 119px of a 394px phone plot and stacked every entry on a line of its own; the floating box before that was measured on 2026-08-29 at 88 to 121px over a 220px plot, which is 40 to 55 percent of the chart it was explaining.
+
+`chart.story_geometry` is separate from the console's `chart.width_px` and
+`chart.height_px`: each story chart measures the space its card gives it.
+`row_height_px`, padding, label gaps, mark sizes, the bar's figure gutter, and
+the slope's labelled-column bands tune that shared browser drawing.
+`mark_outline_width_px` sets the outline used to distinguish chart marks without
+relying on colour alone. The native contract bounds each setting, and the typed
+build-time UI projection passes only these values to the reader.
 
 ## Console surface
 
