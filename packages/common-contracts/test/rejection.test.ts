@@ -388,6 +388,36 @@ describe("planning audit contracts", () => {
         requests: { ...snapshot.source_results[0]!.requests, request_component_weight: 1.1 },
       }],
     }).success).toBe(false);
+    const requests = snapshot.source_results[0]!.requests;
+    for (const field of [
+      "measured_target_requests",
+      "measured_source_wasted_requests",
+      "observed_attempted_opportunities",
+      "observed_measured_opportunities",
+      "measured_coverage",
+    ] as const) {
+      expect(FeedHealthStateSnapshotSchema.safeParse({
+        ...snapshot,
+        source_results: [{
+          ...snapshot.source_results[0]!,
+          requests: { ...requests, [field]: null },
+        }],
+      }).success).toBe(false);
+    }
+    expect(FeedHealthStateSnapshotSchema.safeParse({
+      ...snapshot,
+      source_results: [{
+        ...snapshot.source_results[0]!,
+        requests: { ...requests, request_waste_ratio: 0.5 },
+      }],
+    }).success).toBe(false);
+    expect(FeedHealthStateSnapshotSchema.safeParse({
+      ...snapshot,
+      source_results: [{
+        ...snapshot.source_results[0]!,
+        requests: { ...requests, measured_coverage: 0.5 },
+      }],
+    }).success).toBe(false);
     expect(FeedHealthStateSnapshotSchema.safeParse({
       ...snapshot, snapshot_role: "latest",
     }).success).toBe(false);

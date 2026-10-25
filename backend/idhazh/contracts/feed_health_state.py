@@ -346,6 +346,17 @@ class FeedHealthStateRequestResult(Model):
             and self.observed_measured_opportunities > self.observed_attempted_opportunities
         ):
             raise ValueError("measured opportunities cannot exceed attempted opportunities")
+        if self.measured_coverage is not None:
+            if (
+                self.observed_attempted_opportunities is None
+                or self.observed_measured_opportunities is None
+                or self.observed_attempted_opportunities == 0
+            ):
+                raise ValueError("measured coverage requires a positive opportunity denominator")
+            if self.measured_coverage != (
+                self.observed_measured_opportunities / self.observed_attempted_opportunities
+            ):
+                raise ValueError("measured coverage matches the measured opportunity fraction")
         if self.input_status != "complete":
             if self.qualification_status == "qualified":
                 raise ValueError("incomplete request inputs cannot qualify a source")
@@ -355,11 +366,19 @@ class FeedHealthStateRequestResult(Model):
             if (
                 self.measured_target_requests is None
                 or self.measured_target_requests == 0
+                or self.measured_source_wasted_requests is None
+                or self.observed_attempted_opportunities is None
+                or self.observed_attempted_opportunities == 0
+                or self.observed_measured_opportunities is None
                 or self.measured_coverage is None
                 or self.request_waste_ratio is None
                 or self.request_component_penalty is None
             ):
                 raise ValueError("qualified request evidence has complete positive support")
+            if self.request_waste_ratio != (
+                self.measured_source_wasted_requests / self.measured_target_requests
+            ):
+                raise ValueError("request waste ratio matches the saved request totals")
             if self.request_component_penalty != (
                 self.request_waste_ratio * self.request_component_weight
             ):

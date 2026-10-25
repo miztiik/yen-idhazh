@@ -86,6 +86,17 @@ async function verifySavedStageFlow() {
       },
     });
     expect(failedSave.update.status).toBe("save_failed");
+    const unavailableState = FeedHealthStateUpdateResponseSchema.parse({
+      batch_id: selected.batch_id,
+      selection_state: selected.selection_state,
+      update: {
+        status: "unavailable", state_revision: null, attempted_revision: null,
+        parent_revision: null, changed_days: [], diagnostics: ["input_gap"],
+      },
+    });
+    expect(unavailableState.update).toMatchObject({
+      status: "unavailable", diagnostics: ["input_gap"],
+    });
     expect(selected.selections).toEqual(plan.evidence.curation.rows);
     expect(selected.exclusions).toEqual([
       ...plan.evidence.harvest.rejections, ...plan.evidence.screening.rejections, ...plan.evidence.curation.rejections,

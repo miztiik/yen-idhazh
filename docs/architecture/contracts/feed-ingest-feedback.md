@@ -541,8 +541,12 @@ Errors follow the current listener boundary: malformed JSON is HTTP 400
 409 `REQUEST_CONFLICT` means its configuration differs or it predates captured
 selection state; 413 `BODY_TOO_LARGE` is the configured listener limit; and
 503 `PLANNER_DISABLED` follows the existing false-by-default service setting.
-Damaged selected batches return HTTP 500 `ARTIFACT_INVALID`; known native index
-or Parquet integrity failures return HTTP 500 `STATE_INPUT_INVALID`.
+Damaged selected batches return HTTP 500 `ARTIFACT_INVALID`. Known native state
+input refusals, including index and Parquet integrity failures, follow the
+bounded input-gap path: use a valid previous snapshot when available, or return
+`update.status: unavailable` with the `input_gap` diagnostic when no valid
+snapshot can be read. Preserve the previous valid state and the completed
+selection. These classified input failures do not become HTTP 500.
 Unexpected programming exceptions remain HTTP 500 `PLAN_FAILED`; they are not
 converted to a successful unavailable result.
 

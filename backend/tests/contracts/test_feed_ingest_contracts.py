@@ -178,6 +178,25 @@ def test_declared_contract(module: str, name: str) -> None:
         excessive_weight["source_results"][0]["requests"]["request_component_weight"] = 1.1
         with pytest.raises(ValidationError):
             contract.model_validate(excessive_weight)
+        for field in (
+            "measured_target_requests",
+            "measured_source_wasted_requests",
+            "observed_attempted_opportunities",
+            "observed_measured_opportunities",
+            "measured_coverage",
+        ):
+            missing_support = snapshot.model_dump(mode="json")
+            missing_support["source_results"][0]["requests"][field] = None
+            with pytest.raises(ValidationError):
+                contract.model_validate(missing_support)
+        inconsistent_request_ratio = snapshot.model_dump(mode="json")
+        inconsistent_request_ratio["source_results"][0]["requests"]["request_waste_ratio"] = 0.5
+        with pytest.raises(ValidationError, match="request waste ratio"):
+            contract.model_validate(inconsistent_request_ratio)
+        inconsistent_coverage = snapshot.model_dump(mode="json")
+        inconsistent_coverage["source_results"][0]["requests"]["measured_coverage"] = 0.5
+        with pytest.raises(ValidationError, match="measured coverage"):
+            contract.model_validate(inconsistent_coverage)
         unverifiable_compact = snapshot.model_dump(mode="json")
         compact_file = next(
             item for item in unverifiable_compact["request_days"][0]["input_identity"]["files"]

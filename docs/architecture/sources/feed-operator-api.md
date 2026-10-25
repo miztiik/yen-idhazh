@@ -360,15 +360,22 @@ Errors use the existing listener's HTTP boundary:
   predates captured selection state.
 - 413 `BODY_TOO_LARGE` at the configured listener limit; 503
   `PLANNER_DISABLED` when the existing operator switch is off.
-- 500 `ARTIFACT_INVALID` for a damaged selected batch; 500
-  `STATE_INPUT_INVALID` for known native index or Parquet integrity failures;
-  500 `PLAN_FAILED` for unexpected programming errors.
+- 500 `ARTIFACT_INVALID` for a damaged selected batch; 500 `PLAN_FAILED` for
+  unexpected programming errors.
 
 A valid request whose saved state cannot be read is not a schema error. It
 returns HTTP 200 with the typed response, `selection_state.state.status:
 "unavailable"`, the neutral `restrictions_unverified` notice, null state-window
 bounds and an `update.status` of `unavailable`. It does not return 400 or
 represent the missing evidence as an empty history.
+
+Known native state-input refusals, including invalid indexes and Parquet
+integrity failures, follow the same bounded recovery path as other state-input
+gaps: use a valid previous snapshot when available, otherwise return
+`update.status: "unavailable"` with the `input_gap` diagnostic. Preserve the
+previous valid state and the completed selection. These classified input
+failures are not HTTP 500; unexpected programming exceptions still return
+`PLAN_FAILED`.
 
 The contract requires one shared TypeScript update operation. `/plan` will
 call it after selection and concurrently with partitioning; the standalone

@@ -287,6 +287,17 @@ export const FeedHealthStateRequestResultSchema = z.strictObject({
     && value.observed_measured_opportunities > value.observed_attempted_opportunities) {
     reject(ctx, "measured opportunities cannot exceed attempted opportunities");
   }
+  if (value.measured_coverage !== null) {
+    if (value.observed_attempted_opportunities === null
+      || value.observed_measured_opportunities === null
+      || value.observed_attempted_opportunities === 0) {
+      reject(ctx, "measured coverage requires a positive opportunity denominator");
+    }
+    if (value.measured_coverage
+      !== value.observed_measured_opportunities! / value.observed_attempted_opportunities!) {
+      reject(ctx, "measured coverage matches the measured opportunity fraction");
+    }
+  }
   if (value.input_status !== "complete") {
     if (value.qualification_status === "qualified") {
       reject(ctx, "incomplete request inputs cannot qualify a source");
@@ -297,9 +308,17 @@ export const FeedHealthStateRequestResultSchema = z.strictObject({
   }
   if (value.qualification_status === "qualified") {
     if (value.measured_target_requests === null || value.measured_target_requests === 0
+      || value.measured_source_wasted_requests === null
+      || value.observed_attempted_opportunities === null
+      || value.observed_attempted_opportunities === 0
+      || value.observed_measured_opportunities === null
       || value.measured_coverage === null || value.request_waste_ratio === null
       || value.request_component_penalty === null) {
       reject(ctx, "qualified request evidence has complete positive support");
+    }
+    if (value.request_waste_ratio
+      !== value.measured_source_wasted_requests! / value.measured_target_requests!) {
+      reject(ctx, "request waste ratio matches the saved request totals");
     }
     if (value.request_component_penalty
       !== value.request_waste_ratio! * value.request_component_weight) {
