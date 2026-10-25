@@ -76,6 +76,29 @@ def input_shape(node: dict[str, Any], root: dict[str, Any]) -> Any:
     return result
 
 
+def schema_differences(left: Any, right: Any, path: str = "$") -> list[str]:
+    if isinstance(left, dict) and isinstance(right, dict):
+        differences = []
+        for key in sorted(left.keys() | right.keys()):
+            child = f"{path}.{key}"
+            if key not in left:
+                differences.append(f"{child}: missing from Python schema")
+            elif key not in right:
+                differences.append(f"{child}: missing from TypeScript schema")
+            else:
+                differences.extend(schema_differences(left[key], right[key], child))
+        return differences
+    if isinstance(left, list) and isinstance(right, list):
+        if len(left) != len(right):
+            return [f"{path}: list lengths differ ({len(left)} != {len(right)})"]
+        return [
+            difference
+            for index, (left_item, right_item) in enumerate(zip(left, right, strict=True))
+            for difference in schema_differences(left_item, right_item, f"{path}[{index}]")
+        ]
+    return [] if left == right else [f"{path}: {left!r} != {right!r}"]
+
+
 @pytest.mark.parametrize("name", MODEL_NAMES)
 def test_config_reader_binding(name: str, typescript_schemas: dict[str, Any]) -> None:
     model = getattr(feed_ingest, name)
@@ -84,7 +107,9 @@ def test_config_reader_binding(name: str, typescript_schemas: dict[str, Any]) ->
     ).resolve()
     ours = model.model_json_schema(mode="validation")
     theirs = typescript_schemas[name]
-    assert input_shape(ours, ours) == input_shape(theirs, theirs)
+    ours_shape = input_shape(ours, ours)
+    theirs_shape = input_shape(theirs, theirs)
+    assert ours_shape == theirs_shape, "\n".join(schema_differences(ours_shape, theirs_shape))
 
 
 def config_payload() -> dict[str, Any]:
