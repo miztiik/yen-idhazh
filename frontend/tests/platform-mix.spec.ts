@@ -23,7 +23,7 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { dateSeries } from '../src/lib/charts/d3/dateSeries';
+import { dateSeries, formatNumber, numberFormat } from './support/number-format';
 import { absentHatch } from '../src/lib/charts/d3/ordered-colour';
 import {
 	FLEET_COLUMNS,
@@ -105,6 +105,7 @@ function options(jobs: readonly FleetJob[], over: Partial<FleetOptions> = {}): F
 		windowDays: 3,
 		minRows: config.fleet_min_rows,
 		topKinds: config.fleet_top_kinds,
+		numberFormat,
 		recording: true,
 		...over
 	};
@@ -206,8 +207,19 @@ test.describe('THE ORACLE: the recorded door answer, drawn', () => {
 		const readout = fleetReadout(view, absentHatch({ degrees: config.absent_hatch_degrees, gapPx: 3, linePx: 1 }));
 		expect(readout.columns).toEqual(view.days.map(shortDate));
 		expect(readout.series).toHaveLength(view.rows.length);
+		const largeCountView = {
+			...view,
+			rows: view.rows.map((row, index) =>
+				index === 0 ? { ...row, counts: [12_345, ...row.counts.slice(1)] } : row
+			)
+		};
+		const largeCountReadout = fleetReadout(
+			largeCountView,
+			absentHatch({ degrees: config.absent_hatch_degrees, gapPx: 3, linePx: 1 })
+		);
+		expect(largeCountReadout.series[0].values[0]).toBe(formatNumber(12_345, { exact: true, si: false }));
 		for (const series of readout.series) {
-			expect(series.note, series.label).toMatch(/^\d+\.\d( to \d+\.\d)? tokens a second$/);
+			expect(series.note, series.label).toMatch(/^\d+(?:\.\d+)?(?: to \d+(?:\.\d+)?)? tokens a second$/);
 		}
 		// Two kinds of one name are told apart by speed, in words.
 		const labels = readout.series.map((series) => series.label);
@@ -227,6 +239,13 @@ test.describe('THE ORACLE: the recorded door answer, drawn', () => {
 		expect(fleetSentence(view)).toBe(
 			'90 jobs ran in these 3 days. The kind we are given most is AMD EPYC 7763, 50 of them.'
 		);
+		const largeView = {
+			...view,
+			placements: 12_345,
+			mostPlaced: view.mostPlaced === null ? null : { ...view.mostPlaced, placements: 12_345 }
+		};
+		expect(fleetSentence(largeView)).toContain('12,345 jobs ran');
+		expect(fleetSentence(largeView)).toContain('12,345 of them.');
 		const dots = fleetDots(view, { frame: frame(760, 220), density: 6, padding: 0.2, maxPx: knobs().fleet_dot_max_px, gapPx: 1 });
 		expect(dots?.squares).toHaveLength(90);
 		expect(dots?.size).toBeLessThanOrEqual(knobs().fleet_dot_max_px);
@@ -275,7 +294,7 @@ test.describe('which kinds get a row of their own', () => {
 		expect(fold?.label).toBe(`Other machines at the ${stepWords(1, knobs().machine_colour_stops)} speed`);
 		expect(fold?.members.sort()).toEqual(['Left One', 'Left Two']);
 		expect(fold?.placements).toBe(5);
-		expect(fold?.note).toBe('10.0 to 11.0 tokens a second');
+		expect(fold?.note).toBe('10 to 11 tokens a second');
 		// The two lone leftovers keep rows of their own, named; Left Three shares
 		// its step with a named kind, which is no fold.
 		expect(view.rows.filter((row) => row.members.length === 0).map((row) => row.key).sort()).toEqual([

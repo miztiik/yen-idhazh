@@ -1,6 +1,6 @@
 # Where a drawing becomes pixels
 
-**Last Updated**: 2026-10-09
+**Last Updated**: 2026-10-25
 
 The reader's browser draws the chart and the pipeline never draws one. This page
 holds that ruling, what it cost and what it bought, where the marks are
@@ -17,28 +17,15 @@ does with the file is
 
 **The chain, end to end.** Code reads the article and finds every quantity it can, with the
 offsets that prove where each one came from. The model labels those quantities, names the
-chart type and selects which elements it is drawn from. Code compiles that into a spec -
-the data and its shape, and nothing else. **The day payload carries that spec**, and the
-reader's browser draws the SVG from it with d3. Nothing renders at build time and no
-drawing is committed.
+chart type and selects which elements it is drawn from. Code compiles those references
+into validated chart data. The day payload points to a separate per-item JSON file;
+the reader's browser draws its SVG with d3 scale arithmetic and Svelte elements.
+Nothing draws a chart at build time and no SVG is committed.
 
-**This closes a question three documents answered three different ways**, which is why a
-worker scoping plan 12 row #1 stopped rather than guess. In
-[`../../../TODO/20260902-visual-planner-pseudo-plan.md`](../../../TODO/20260902-visual-planner-pseudo-plan.md),
-row 22 ruled build-time SVG with hydration on point-or-focus, and row 37 ruled that the
-compiled spec travels in the day payload and the browser draws it. The proposal behind both
-still records the question as open. The code follows row 22. **Row 37 was right, and it is
-now the whole rule rather than the tail of it**: there is one drawing path and it is the
-browser's.
-
-**What the ruling costs, named rather than implied.** A reader with JavaScript off gets no
-chart, where today they get one, because today the drawing is markup inside the document
-itself. That is the reason row 22 chose build-time SVG and it is a real loss. **They get no
-sentence either.** Measured on the canary
-build that day: the prerendered document carries zero `<figure>` elements, because the
-figure exists only once the marks have arrived - so `alt` reaches a payload blob and never
-a reader who runs no script. What a reader who does run one hears is written in the browser
-off the same marks the bars are drawn from, and it states every one of them
+**A reader without JavaScript gets story text, but no chart or chart description.**
+The figure exists only once its marks have arrived. This gives up the no-script
+drawing the retired build-time renderer supplied. With JavaScript, the browser builds
+the accessible name from the same marks it draws, including every figure
 ([../../concepts/design-system.md](../../concepts/design-system.md#every-fact-a-drawing-shows-is-reachable-without-a-pointer)).
 
 **And every day published before 2026-09-13 loses its chart, for every reader rather than
@@ -57,7 +44,7 @@ re-measured on this branch 2026-09-13 - stop being published bytes, and their gr
 stops counting against the 1 GB site cap (Guardrail #2). A visual's marks weigh about a tenth
 of what its drawing did: the two on the canary day are 1,711 and 1,332 bytes against a mean
 drawing of 12,722. The chart takes the width the reader's screen actually has, which a fixed
-build-time canvas cannot do and which is the whole of plan 12's complaint. And the build-time
+build-time canvas cannot do. And the build-time
 renderer's own non-determinism goes with it - the clip-path counter recorded in
 [what-drawing-costs-and-what-has-been-retired-for-it.md](what-drawing-costs-and-what-has-been-retired-for-it.md) - so an
 item compiled twice from unchanged inputs now writes identical bytes, and git does not
@@ -97,7 +84,7 @@ that a route may be named in `page_weight.ceilings_bytes` only if its weight doe
 when a run publishes, and a reading route's document carries the day. The gate measures and
 prints it rather than guarding it.
 
-**What the reader can read, measured rather than promised, and it is not the floor yet.** The
+**The browser gate protects the measured text floor.** The
 drawing is placed at the width the card actually gave it, in CSS pixels, so one drawn unit is
 one pixel on screen and there is no scale factor between what a token says and what a reader
 sees. Measured on the canary day, both cases on one developer machine back to back with
@@ -109,9 +96,9 @@ and 1.233 at 1440 px**. A string set at 12 therefore reached the reader at **4.2
 14.8 CSS px** - 65 percent under the token on a small phone, and 23 percent over it on a
 desktop. The drawn height moved with the width the same way: the taller of the canary's two
 charts stood 59.5 px at 360 and 209.7 px at 1440, and now stands **202 px at all three**, so
-the figure is its final height before a mark lands in it. Plan 12 row #2 removed that scale;
-row #4 is the row that holds the result to a floor a person can read, and it could not start
-until something measurable was drawing. The width comes from
+the figure is its final height before a mark lands in it. The representative reader browser
+case now protects the text floor and unscaled width; narrow and wide geometry stay in
+logic tests. The width comes from
 `frontend/src/lib/visual/width.ts`, which measures the figure's content box and is one watcher
 for every chart on the page rather than one each (Guardrail #12).
 
@@ -163,13 +150,15 @@ further up against the 1 GB site cap.
 ## The contract, and the one field the day payload gains
 
 `VisualData` in `backend/idhazh/contracts/visual_data.py` is the shape of that file.
-Three parts.
+The data and framing travel together.
 
 | Part | What it is |
 | --- | --- |
 | `item_id`, `type` | Which story, and which of the declarable forms. A new type costs an enum member, never a new document format. |
 | `marks` | **A flat pool, not a list of rows.** Each mark carries what it says (`text`), what it measures (`value` with its `unit`), and where that came from - `element_id` for a slice of the article, or `derived` for a chain through the four-function allow-list. Exactly one of the two, checked. |
 | `encoding` | Which marks fill which channel, by id, mirroring `PlanEncodings` role for role. Every role is a key and an unused one is empty. |
+| `title`, `caption` | Nullable, sanitized plan prose. The browser writes text nodes, never markup. |
+| `emphasized_mark_id` | Exactly one measured mark, resolved from the plan's selected elements. Its bar has a distinct fill, a dashed outline and a stronger name. |
 
 **The pool is flat because a row is a geometry decision.** A bar is a name and a length, a scatter
 point is two measured axes, a histogram bar is a bin - shape them into rows here and this contract
@@ -190,7 +179,7 @@ second place, the two disagreed on 2026-09-05T18:00, and what disagreeing looks 
 seat is a page drawing yesterday's numbers under today's rules. A version in one place can be wrong.
 A version in two places can be *inconsistent*, and nothing downstream can tell which one to believe.
 
-The reader's page holds the set of renderers it knows and refuses anything else. That is what lets
+The reader's page accepts only the current renderer and refuses anything else. That is what lets
 the shape move at all: a later build publishes a later stamp, an older cached page does not draw it,
 and nobody gets a chart whose data means something other than what the picture says.
 
@@ -262,16 +251,16 @@ that order. Re-ranking them here would be the compiler deciding what the compari
 
 **One type, and a second is refused by name.** `bar` is what this build compiles. Compiling a `line`
 plan into bars because bars are what we have would publish a picture nobody planned, so every other
-member of the vocabulary raises `CompileError` naming itself. The rest of the types are plan 12's.
+member of the vocabulary raises `CompileError` naming itself. Other plan types are not implemented by this compiler.
 
-**The alt text is assembled from the same figures the marks carry**, so the sentence and the
-picture cannot disagree. That is the reason `alt_text` is not a field the model may write - and
-since 2026-09-13 it is also the whole of what a reader with JavaScript off receives.
+**The browser's accessible name includes every original figure, the title, the caption and
+which bar is highlighted.** Converted figures also carry their original source text in
+`VisualMark.source_text`. The compiler's shorter alt text remains on the decision, but is
+not the browser's complete description. Without JavaScript no chart is drawn.
 
-**No `title` and no `caption` reach the wire.** The plan carries both and the published marks carry
-neither, because publishing the compiled result must not become the hole an authored string gets
-through. The drawn title the old renderer put above the bars is therefore gone, and plan 12 row #5
-is the row that gives a caption a home.
+The compiler sanitizes the plan's title and caption before publishing them. Absent or
+sanitized-empty framing stays null and takes no space. No framing becomes markup, a path
+or a URL. Appearance stays with the site's tokens.
 
 **A plan this build cannot compile leaves the item decided to nothing, and that is the contract's
 ruling rather than a shortcut.** `render_failed` means marks were compiled and their file did not
@@ -295,6 +284,31 @@ reads back the marks the backend oracle compiled. Driven from the canary and nev
 The hand-written one carries the case a compiled plan cannot - bars with no unit on their axis - and
 a third story is planned with no file, which is what keeps a visual that is not a published chart on
 the day.
+
+## Design rationale
+
+Owner ruling, kumarsnaveen, 2026-10-24 UTC: replace the chart payload and renderer
+without backward compatibility. The renderer stamp is `2026-10-24`; the page
+has one reader, not two styles. This supersedes the earlier no-bump policy.
+Older incompatible chart data is refused and those stories remain without
+charts; their text remains. The old SVG read, inlining and markup checks are
+removed. No historical corpus is deleted or rewritten. This is the named
+exception to `CLAUDE.md` section 11, not a general migration policy.
+
+Owner ruling, kumarsnaveen, 2026-10-24 UTC: omit a chart unless the plan selects
+exactly one distinct displayed bar. Resolve every annotation through category,
+quantity or a derived quantity's source inputs, then deduplicate references
+to the same bar. Zero selected bars, several distinct selected bars or a
+reference with no displayed bar explicitly refuse compilation. Story text
+still publishes. No largest-value or first-bar fallback invents a priority.
+The general plan vocabulary remains zero to four element references; the
+current bar compiler requires one resolved bar. This may reduce chart count
+for otherwise valid plans, which the owner accepted instead of invented emphasis.
+
+Framing changes no values, mark count, channel order or provenance. The flat
+mark pool stays intact; the emphasized id points to its measured member, not a
+second copy. The existing compiler and degrade path own the new check, so the
+page does not make a second editorial choice.
 
 ## Rejected alternatives
 

@@ -7,12 +7,15 @@
 	import { runTimeline } from './run-timeline';
 	import { noRecordSentence, setAsideSentence } from '../recording';
 	import type { ConsoleConfig, ChartConfig } from '../../server/config';
+	import { formatNumber } from '../../number-format';
+	import { useNumberFormat } from '../../number-format-context';
 
 	let { knobs, chart, answer = 'pending' }: {
 		knobs: ConsoleConfig;
 		chart: ChartConfig;
 		answer?: SliceResult | LedgerReach | 'pending';
 	} = $props();
+	const numberFormat = useNumberFormat();
 	const rows = $derived(answer !== 'pending' && 'rows' in answer ? answer.rows : []);
 	const native = $derived(runTimeline(rows, knobs.timeline_bars));
 	const panelState = $derived(answer === 'pending' ? 'loading' :
@@ -26,7 +29,7 @@
 <Reserved record {panelState} height={knobs.chart_height} width={knobs.chart_width} name="run-timeline" label="The newest run's own clock">
 	{#if native.itemsPerMinute !== null}
 		<p class="lede" data-lede data-timeline-items-per-minute={native.itemsPerMinute}>
-			{native.itemsPerMinute.toFixed(1)} items a minute
+			{formatNumber(native.itemsPerMinute, numberFormat, { si: false })} items a minute
 		</p>
 	{/if}
 	<p class="comparison" data-comparison="The shards' work against the time the run took.">
@@ -40,8 +43,8 @@
 			<ul>
 				{#each native.queue as row, index (row.itemId)}
 					<li data-timeline-clock={row.itemId} data-queue-wait-ms={row.milliseconds} data-robots-ms={native.robots[index].milliseconds}>
-						{row.itemId}: queue {row.milliseconds === null ? 'not measured' : `${row.milliseconds} ms`};
-						robots {native.robots[index].milliseconds === null ? 'not measured' : `${native.robots[index].milliseconds} ms`}.
+						{row.itemId}: queue {row.milliseconds === null ? 'not measured' : `${formatNumber(row.milliseconds, numberFormat, { exact: true })} ms`};
+						robots {native.robots[index].milliseconds === null ? 'not measured' : `${formatNumber(native.robots[index].milliseconds, numberFormat, { exact: true })} ms`}.
 					</li>
 				{/each}
 			</ul>
@@ -49,7 +52,7 @@
 	{/if}
 	{#if native.unplaced > 0}
 		<p class="note" data-timeline-unplaced={native.unplaced}>
-			{native.unplaced} items in this run have no recorded start, total or machine shard, so they are not placed on its clock.
+			{formatNumber(native.unplaced, numberFormat, { exact: true })} items in this run have no recorded start, total or machine shard, so they are not placed on its clock.
 		</p>
 	{/if}
 	{#if lost}<p class="note" data-record-note="lost">{lost}</p>{/if}

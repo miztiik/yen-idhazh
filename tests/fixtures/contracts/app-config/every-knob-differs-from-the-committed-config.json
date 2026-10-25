@@ -473,6 +473,11 @@
     "max_output_tokens": 400,
     "min_chart_points": 3,
     "min_diagram_steps": 3,
+    "number_format": {
+      "locale": "de-DE",
+      "si_prefix_from": 10000,
+      "significant_digits": 5
+    },
     "request_timeout_minutes": 1.5
   }
 }

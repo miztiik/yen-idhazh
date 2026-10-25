@@ -22,6 +22,7 @@
 import type { DayMetrics } from '$lib/server/payload';
 import type { ReadoutInputSeries } from './readout';
 import { grouped } from './series';
+import type { NumberFormatConfig } from '../number-format';
 import { indexedRuns } from './indexed-runs';
 import { daysInWindow, type TimeWindow } from './viewport';
 
@@ -170,14 +171,17 @@ export function yieldPercent(rate: number | null): string {
  * chart's key as well and the plot needs no legend of its own. A day that
  * planned nothing reads null in all four: it has no share to print, and a row of
  * zeros beside it would read as a day that planned and lost it all. */
-export function yieldSeries(columns: readonly RunYieldDay[]): ReadoutInputSeries[] {
+export function yieldSeries(
+	columns: readonly RunYieldDay[],
+	numberFormat: NumberFormatConfig
+): ReadoutInputSeries[] {
 	const planned = (column: RunYieldDay) => column.planned > 0;
 	return [
 		...YIELD_SERIES.map((entry) => ({
 			label: entry.label,
 			swatch: `var(${entry.token})`,
 			values: columns.map((column) => (planned(column) ? yieldCount(column, entry.key) : null)),
-			format: (value: number) => grouped(value)
+			format: (value: number) => grouped(value, numberFormat)
 		})),
 		{
 			label: 'Share published',

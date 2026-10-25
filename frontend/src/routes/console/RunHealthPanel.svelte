@@ -27,6 +27,7 @@
 	import { HEALTH_FILL, type DayColumn } from '$lib/console/run-square';
 	import { nameSpan } from '$lib/console/span-words';
 	import { shortDate } from '$lib/format';
+	import { useNumberFormat } from '$lib/number-format-context';
 
 	let {
 		yieldDays,
@@ -57,6 +58,7 @@
 		/** The day both figures are showing, or null for the newest. */
 		selected?: number | null;
 	} = $props();
+	const numberFormat = useNumberFormat();
 
 	const load = $derived(runYield(yieldDays, window));
 	const windowDays = $derived(load.columns.length);
@@ -76,7 +78,7 @@
 	// on is a fact about the record, and hiding it would report a fuller one than
 	// exists. Where the empty part is the larger part, the caption says how much.
 	const covered = $derived(coverage(plannedDays(load.columns)));
-	const coverageNote = $derived(coverageSentence(covered, 'Runs planned articles on'));
+	const coverageNote = $derived(coverageSentence(covered, 'Runs planned articles on', numberFormat));
 
 	const NO_RUN = 'No run is on record for this day.';
 	const NOTHING_PLANNED = 'No article was planned on this day.';
@@ -90,7 +92,7 @@
 		readoutOf({
 			type: 'dateSeries',
 			columns: load.columns.map((column) => shortDate(column.date)),
-			series: yieldSeries(load.columns),
+			series: yieldSeries(load.columns, numberFormat),
 			events: {
 				lines: days.map((day) =>
 					day.squares.map(

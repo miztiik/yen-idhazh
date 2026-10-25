@@ -493,7 +493,13 @@
 		{/if}
 	{:else if section === 'items'}
 		{#if found !== null && found.hits.length > 0}
-			<FoundStories {found} days={foundDays} {verticalNames} onClear={clearSearch} />
+			<FoundStories
+				{found}
+				days={foundDays}
+				{verticalNames}
+				numberFormat={ui.number_format}
+				onClear={clearSearch}
+			/>
 		{:else if found !== null}
 			<p class="py-12 text-base text-text-secondary" data-day-found="empty">
 				Nothing matched &ldquo;{found.query}&rdquo; in the days we can search. The
@@ -536,6 +542,7 @@
 				{#each paged as item (item.item_id)}
 					<DigestItemView
 						{item}
+						numberFormat={ui.number_format}
 						verticalName={verticalNames[deskOf(item)] ?? deskOf(item)}
 						showMark={ui.source_mark}
 						stack={stackOf(item)}

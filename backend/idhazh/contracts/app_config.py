@@ -110,6 +110,11 @@ class AppConfig(Contract):
     __schema_stem__: ClassVar[str] = "app-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-10-24T18:29",
+            change="visuals.number_format added.",
+            why="The digest and console need one declared number style.",
+        ),
+        ChangelogEntry(
             version="2026-10-24",
             change="bench.run_model_speed_case removed; the model_speed_case input decides it.",
             why="A knob nothing reads is a second spelling of the dispatch input.",
@@ -123,11 +128,6 @@ class AppConfig(Contract):
             version="2026-10-09",
             change="console.panel_groups and console.judged_panel_ids removed.",
             why="Each route's console file owns its panel order and judged list.",
-        ),
-        ChangelogEntry(
-            version="2026-10-08",
-            change="similarity.holdout_reach_days added, additive.",
-            why="The hand marks moved onto the ledger door, and their read needs a bound.",
         ),
         ChangelogEntry(
             version="2026-09-28",

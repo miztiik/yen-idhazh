@@ -44,7 +44,8 @@
 	} from '$lib/charts/frame';
 	import { pointerReadout, readoutMarks, readoutOf } from '$lib/charts/readout';
 	import { indexedRuns } from '$lib/charts/indexed-runs';
-	import { grouped } from '$lib/charts/series';
+	import { grouped as formatGrouped } from '$lib/charts/series';
+	import { useNumberFormat } from '$lib/number-format-context';
 	import { daysBetween, daysInWindow, type TimeWindow } from '$lib/charts/viewport';
 	import ChartReadout from '$lib/components/ChartReadout.svelte';
 	import Panel from '$lib/components/Panel.svelte';
@@ -92,6 +93,8 @@
 		/** `console.min_attempts_for_rate`. Under it a share is not a measurement. */
 		attemptsFloor: number;
 	} = $props();
+	const numberFormat = useNumberFormat();
+	const grouped = (value: number) => formatGrouped(value, numberFormat);
 
 	let measured = $state<number | null>(null);
 	let selected = $state<number | null>(null);
@@ -169,7 +172,7 @@
 		const date = dayMonth(day.date);
 		const disagreedCount = day.pairsJudged === null ? null : day.disagreementRate * day.pairsJudged;
 		const disagreed =
-			rateWithDenominator(disagreedCount, day.pairsJudged, attemptsFloor, limits.disagreementMax) ??
+			rateWithDenominator(disagreedCount, day.pairsJudged, attemptsFloor, numberFormat, limits.disagreementMax) ??
 			(disagreedCount === null
 				? 'the count of pairs read twice is unavailable'
 				: `${grouped(Math.round(disagreedCount))} of ${formatPairs(day.pairsJudged!)}`);
@@ -177,6 +180,7 @@
 			day.pairsUsable === null ? null : day.unclearRate * day.pairsUsable,
 			day.pairsUsable,
 			attemptsFloor,
+			numberFormat,
 			limits.unclearMax
 		);
 		return {
@@ -360,9 +364,11 @@
 		agreed === null ? null : read.reduce((total, day) => total + day.unclearRate * day.pairsUsable!, 0)
 	);
 	const disagreeShare = $derived(
-		rateWithDenominator(disagreed, judged, attemptsFloor, limits.disagreementMax)
+		rateWithDenominator(disagreed, judged, attemptsFloor, numberFormat, limits.disagreementMax)
 	);
-	const unclearSaid = $derived(describeUnclear(unclear, agreed, attemptsFloor, limits.unclearMax));
+	const unclearSaid = $derived(
+		describeUnclear(unclear, agreed, attemptsFloor, numberFormat, limits.unclearMax)
+	);
 	/** Each share against its own mark, read off the share itself and never off
 	 * why a day was held: the run first checks whether the record holds enough
 	 * to fit on, so a day held for that can carry a share past its mark. A share

@@ -1,17 +1,24 @@
 import { expect, test } from '@playwright/test';
 import { publishedVisualData, refusedVisualData } from '../src/lib/payload/drawing';
 import { drawBars } from '../src/lib/visual/bar';
+import { statedBars } from '../src/lib/visual/bar';
+import { formatNumber } from './support/number-format';
+import { valueAxis } from './support/number-format';
+import { frame } from '../src/lib/charts/frame';
 import type { VisualData } from '../src/lib/payload/types';
 test.describe('what may not be drawn', () => {
-    function compiled(): VisualData {
+    function compiled(values: readonly number[] = [10, 20, 30, 40]): VisualData {
         return {
-            version: '2026-09-13',
-            renderer_version: '2026-09-13',
+            version: '2026-10-24',
+            renderer_version: '2026-10-24',
+            title: 'A comparison',
+            caption: null,
+            emphasized_mark_id: 'quantity-1',
             item_id: 'energy-4821903756',
             type: 'bar',
             marks: ['A', 'B', 'C', 'D'].flatMap((name, index) => [
-                { mark_id: `category-${index}`, text: name, value: null, unit: null, element_id: `name-${index}`, derived: null },
-                { mark_id: `quantity-${index}`, text: null, value: String((index + 1) * 10), unit: 'MW', element_id: `value-${index}`, derived: null }
+                { mark_id: `category-${index}`, text: name, value: null, unit: null, source_text: null, element_id: `name-${index}`, derived: null },
+                { mark_id: `quantity-${index}`, text: null, value: String(values[index]), unit: 'MW', source_text: null, element_id: `value-${index}`, derived: null }
             ]),
             encoding: {
                 category: [0, 1, 2, 3].map((index) => `category-${index}`),
@@ -23,7 +30,55 @@ test.describe('what may not be drawn', () => {
     test('the ordinary document is accepted, so the refusals below mean something', () => {
         const data = compiled();
         expect(refusedVisualData(data), 'a clean document was refused, so every case below is vacuous').toBeNull();
-        expect(drawBars(data, 600).bars.length, 'a clean document drew no bar').toBeGreaterThan(0);
+        expect(drawBars(data, 600, formatNumber).bars.length, 'a clean document drew no bar').toBeGreaterThan(0);
+    });
+    test('framing and one selected bar survive geometry without losing original figures', () => {
+        const data = compiled();
+        data.caption = '<script>not markup</script>';
+        data.marks[3].source_text = '0.02 GW';
+        const drawing = drawBars(data, 390, formatNumber);
+        expect(drawing.title).toBe(data.title);
+        expect(drawing.caption).toBe(data.caption);
+        expect(drawing.bars.map((bar) => bar.emphasized)).toEqual([false, true, false, false]);
+        expect(statedBars(drawing)).toContain('B 20 MW (highlighted) (source: 0.02 GW)');
+        expect(statedBars(drawing)).toContain(data.caption);
+    });
+    test('narrow and wide drawings keep every mark inside the measured width without changing their readings', () => {
+        const data = compiled();
+        const narrow = drawBars(data, 360, formatNumber);
+        for (const room of [360, 1440]) {
+            const drawing = drawBars(data, room, formatNumber);
+            expect(drawing.width).toBe(room);
+            expect(drawing.height).toBe(narrow.height);
+            expect(statedBars(drawing)).toBe(statedBars(narrow));
+            expect(drawing.bars.map(({ name, stated, displayed, label, y, height }) =>
+                ({ name, stated, displayed, label, y, height })
+            )).toEqual(narrow.bars.map(({ name, stated, displayed, label, y, height }) =>
+                ({ name, stated, displayed, label, y, height })
+            ));
+            for (const bar of drawing.bars) {
+                expect(bar.width).toBeGreaterThanOrEqual(0);
+                expect(bar.figure).toBeGreaterThan(bar.width);
+                expect(bar.figure).toBeLessThan(drawing.width);
+            }
+            const fractional = drawBars(data, room + 0.75, formatNumber);
+            expect(fractional).toEqual(drawing);
+        }
+    });
+    test('digest and console display the same configured SI figure and retain the article wording', () => {
+        for (const value of [1_000, 12_345, 1_234_567, 2_400_000, 8_900_000_000, 7_800_000_000_000]) {
+            const drawing = drawBars(compiled([value, 20, 30, 40]), 600, formatNumber);
+            const consoleAxis = valueAxis([0, value], frame(600, 220), {
+                along: 'y', ticks: 4
+            });
+            for (const tick of consoleAxis.ticks.filter((tick) => tick.text !== '')) {
+                const digestTick = drawBars(compiled([tick.value, 20, 30, 40]), 600, formatNumber);
+                expect(digestTick.bars[0].displayed).toBe(tick.text);
+            }
+            expect(drawing.bars[0].displayed).toBe(formatNumber(value));
+            expect(drawing.bars[0].stated).toBe(String(value));
+            expect(statedBars(drawing)).toContain(`A ${value} MW`);
+        }
     });
     for (const [name, path] of [
         ['a walk out of the digest tree', 'digest/2026/08/20/../../../../etc/passwd'],
@@ -43,6 +98,11 @@ test.describe('what may not be drawn', () => {
         expect(publishedVisualData('digest/2026/08/20/energy-4821903756.json')).toBe(true);
     });
     for (const [name, breaks] of [
+        ['the retired renderer', (data: VisualData) => { data.renderer_version = '2026-09-13'; }],
+        ['emphasis on a category rather than a quantity', (data: VisualData) => { data.emphasized_mark_id = data.encoding.category[0]; }],
+        ['emphasis on an absent mark', (data: VisualData) => { data.emphasized_mark_id = 'absent'; }],
+        ['a duplicate mark id', (data: VisualData) => { data.marks.push(data.marks[0]); }],
+        ['a non-finite figure', (data: VisualData) => { data.marks[1].value = 'Infinity'; }],
         [
             'a renderer this page does not know',
             (data: VisualData) => {

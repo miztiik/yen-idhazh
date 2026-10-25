@@ -69,6 +69,8 @@
 	import ChartReadout from './ChartReadout.svelte';
 	import { countDays, nameSpan } from '$lib/console/span-words';
 	import { shortDate } from '$lib/format';
+	import { useNumberFormat } from '$lib/number-format-context';
+	import { formatNumber } from '$lib/number-format';
 	import type { StageTiming, StageTimingDay } from '$lib/charts/series';
 	import { daysInWindow, type TimeWindow } from '$lib/charts/viewport';
 	import {
@@ -104,6 +106,7 @@
 		modelChanges?: string[];
 		rule?: ModelRule;
 	} = $props();
+	const numberFormat = useNumberFormat();
 
 	const STAGES = [
 		{ key: 'fetch', label: 'fetch', colour: 'var(--series-1)' },
@@ -236,7 +239,7 @@
 	 * three times in near-identical words - so a fourth stage would have made it
 	 * four. Null where every day was timed in full: a sentence that only ever
 	 * says "all of it" is noise. */
-	const coverageNote = $derived(coverageSentence(covered, 'We timed', timedItems));
+	const coverageNote = $derived(coverageSentence(covered, 'We timed', numberFormat, timedItems));
 	/** Every drawn stage's geometry, built once. The runs, the marks and the
 	 * zeros were three functions the template called per stage on every render,
 	 * so a pointer move walked the window three times a stage for a picture that
@@ -355,7 +358,7 @@
 	}
 
 	function duration(ms: number): string {
-		return ms >= 1000 ? `${(ms / 1000).toFixed(1)} s` : `${Math.round(ms)} ms`;
+		return ms >= 1000 ? `${formatNumber(ms / 1000, numberFormat, { si: false })} s` : `${formatNumber(ms, numberFormat, { exact: true, si: false })} ms`;
 	}
 
 	/** What a stage's number reads as, in the strip and in the announcement.

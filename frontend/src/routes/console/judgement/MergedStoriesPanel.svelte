@@ -39,6 +39,7 @@
 		type MergeDay
 	} from '$lib/console/merge-line';
 	import { countDays, nameSpan } from '$lib/console/span-words';
+	import { useNumberFormat } from '$lib/number-format-context';
 
 	let {
 		days: inputDays,
@@ -61,6 +62,7 @@
 		/** `chart.readout_max_share`. */
 		readoutMaxShare: number;
 	} = $props();
+	const numberFormat = useNumberFormat();
 
 	/** What the panel says in place of a strip when the window holds no column.
 	 * One string, because the sentence a reader sees and the reason the markup
@@ -88,8 +90,8 @@
 	// Not `state`: a const of that name turns every `$state(...)` in this file
 	// into an auto-subscription to it, and svelte-check says so three ways.
 	const panelState = $derived(mergeState(totals));
-	const note = $derived(mergeNote(totals, windowDays));
-	const rate = $derived(mergeRate(totals, windowDays));
+	const note = $derived(mergeNote(totals, windowDays, numberFormat));
+	const rate = $derived(mergeRate(totals, windowDays, numberFormat));
 
 	const box = $derived(frame(chartWidth(measured, width), height));
 	/** Zero-anchored, because a column's length carries the value. The biggest

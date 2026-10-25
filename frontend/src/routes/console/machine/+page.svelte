@@ -229,15 +229,15 @@
 						<DiskReadsPanel reads={diskReads(textRows(rows('diskReadsQuery')), { marked: shared.model_disk_reads_marked, named: shared.model_disk_reads_named })}
 							days={windowDays} {windowDays} readoutMaxShare={cfg.chart.readout_max_share} />
 					{:else if id === 'processor-lost'}
-						<ProcessorLostPanel span={processorLostOverDays(textRows(rows('processorLostQuery')), lostThresholds)}
-							run={processorLostOverShards(textRows(rows('processorLostQuery')), newest, lostThresholds)}
+						<ProcessorLostPanel span={processorLostOverDays(textRows(rows('processorLostQuery')), lostThresholds, cfg.chart.number_format)}
+							run={processorLostOverShards(textRows(rows('processorLostQuery')), newest, lostThresholds, cfg.chart.number_format)}
 							days={windowDays} {windowDays} markedAt={lostThresholds.marked} namedAt={lostThresholds.named} readoutMaxShare={cfg.chart.readout_max_share} />
 					{:else if id === 'memory-held'}
-						<MemoryHeldPanel record={memoryHeld(textRows(rows('memoryHeldQuery')))} start={end} {end} days={1} />
+						<MemoryHeldPanel record={memoryHeld(textRows(rows('memoryHeldQuery')), cfg.chart.number_format)} start={end} {end} days={1} />
 					{:else if id === 'machine-cards'}
 						<MachineCardsPanel newestRunId={latestRunId} machines={machineCards(cardCounters.runs.find((run) => run.runId === latestRunId) ?? null,
 							fingerprints(rows('machineCardsQuery')), { watchedFlags: cfg.flags, colour: { stops: shared.machine_colour_stops, floor: shared.machine_colour_floor_share },
-								recording: cfg.recording, cacheMargin: cfg.cacheMargin, ramp, keys, items: rows('machineCardsItemsQuery'),
+								recording: cfg.recording, cacheMargin: cfg.cacheMargin, numberFormat: cfg.chart.number_format, ramp, keys, items: rows('machineCardsItemsQuery'),
 								lost: lost.find((day) => day.date === newest?.date) ?? null })} />
 					{:else if id === 'tail-trend'}
 						<TailTrendPanel rows={latency.runs} {start} {end} modelChanges={changes.map((move) => move.date)}

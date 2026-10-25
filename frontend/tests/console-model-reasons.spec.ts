@@ -1,6 +1,7 @@
 /** Deterministic model reasons rules over bounded fixtures; no browser, build, or layout matrix. */
 import { expect, test } from '@playwright/test';
-import { REASONS, neverSeenNote, reasonDays, reasonHeadline, reasonTotals, unexplainedNote } from '../src/lib/console/doubt-reasons';
+import { REASONS, neverSeenNote, reasonDays, reasonTotals } from '../src/lib/console/doubt-reasons';
+import { reasonHeadline, unexplainedNote } from './support/number-format';
 interface RawItem {
     band?: string | null;
     band_reason?: string | null;

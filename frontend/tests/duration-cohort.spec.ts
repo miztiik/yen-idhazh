@@ -1,7 +1,7 @@
 /** Duration means use the same recorded clocks and never hide overlapping rows by cancellation. */
 import { test, expect } from '@playwright/test';
 import { durationCohort } from '../src/lib/console/duration-cohort';
-import { dateSeries } from '../src/lib/charts/d3/dateSeries';
+import { dateSeries } from './support/number-format';
 import { frame } from '../src/lib/charts/frame';
 import type { Row } from '../src/lib/data/ledger';
 

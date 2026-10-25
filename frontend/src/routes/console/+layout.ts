@@ -1,5 +1,6 @@
 import { base } from '$app/paths';
 import { BAND_UNREAD, readBand } from '$lib/console/band';
+import type { LayoutLoad } from './$types';
 
 export const prerender = true;
 
@@ -22,16 +23,16 @@ export const prerender = true;
  * file would be one more wait before the first row of data (Carmack,
  * 2026-09-08).
  */
-export async function load({ fetch }) {
+export const load: LayoutLoad = async ({ fetch, data }) => {
 	try {
 		const response = await fetch(`${base}/console/band.json`);
 		if (!response.ok) {
 			console.warn(`[console] band unavailable (${response.status}); drawing the absence`);
-			return BAND_UNREAD;
+			return { ...BAND_UNREAD, number_format: data.number_format };
 		}
-		return readBand(await response.json());
+		return { ...readBand(await response.json()), number_format: data.number_format };
 	} catch (cause) {
 		console.warn(`[console] band could not be read; drawing the absence - ${String(cause)}`);
-		return BAND_UNREAD;
+		return { ...BAND_UNREAD, number_format: data.number_format };
 	}
-}
+};

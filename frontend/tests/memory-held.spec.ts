@@ -1,5 +1,10 @@
 import { expect, test } from '@playwright/test';
-import { memoryHeld, memoryHeldWithin } from '../src/lib/console/machine/memory-held';
+import { memoryHeld as buildMemoryHeld, memoryHeldWithin } from '../src/lib/console/machine/memory-held';
+import { numberFormat } from './support/number-format';
+
+function memoryHeld(health: readonly Record<string, string>[]) {
+	return buildMemoryHeld(health, numberFormat);
+}
 
 /**
  * Plan 37 row #20: the arithmetic behind the machine's memory bar, checked in

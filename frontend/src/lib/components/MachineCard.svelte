@@ -38,6 +38,7 @@
 		type MachineCard
 	} from '$lib/charts/machine-cards';
 	import { isUnrecorded, speedWords } from '$lib/charts/machine-colour';
+	import { useNumberFormat } from '$lib/number-format-context';
 
 	/** True where this run's day published articles and the record kept no row.
 	 *
@@ -45,6 +46,7 @@
 	 * places: the record had not begun yet, or it ran and what it wrote is gone.
 	 */
 	let { card, lost = false }: { card: MachineCard; lost?: boolean } = $props();
+	const numberFormat = useNumberFormat();
 
 	/** Why a bar is missing where a neighbour drew one. Said once, because a
 	 * reader who has to work out which cards are comparable has lost the
@@ -53,7 +55,7 @@
 
 	const where = $derived(card.where);
 	/** The speed the edge colour stands for, so the colour is never its only carrier. */
-	const speed = $derived(speedWords(card.identity));
+	const speed = $derived(speedWords(card.identity, numberFormat));
 	const algorithm = $derived(
 		card.identity.fingerprintVersion === 1
 			? 'Historical fingerprint v1'
@@ -198,7 +200,7 @@
 				{#if card.l3CacheBytes === null}
 					L3 was not recorded on this job.
 				{:else}
-					{cacheWords(card.l3CacheBytes)} of L3.
+					{cacheWords(card.l3CacheBytes, numberFormat)} of L3.
 				{/if}
 			</p>
 			{#if card.l3Bar.state === 'alone'}
@@ -224,7 +226,7 @@
 				</div>
 			{/if}
 			<p class="reading" data-machine-copy-speed={card.memcpyGibPerSecond ?? ''}>
-				{copySpeedSentence(card)}
+				{copySpeedSentence(card, numberFormat)}
 			</p>
 			{#if card.bandwidthBar.state === 'alone'}
 				<p class="note" data-machine-bar-why="alone">{ALONE}</p>
@@ -236,7 +238,7 @@
 		</div>
 
 		<p class="reading" data-machine-clock={card.observedMhz ?? ''}>{clockSentence(card)}</p>
-		<p class="reading" data-machine-uptime={card.bootSeconds ?? ''}>{uptimeSentence(card)}</p>
+		<p class="reading" data-machine-uptime={card.bootSeconds ?? ''}>{uptimeSentence(card, numberFormat)}</p>
 	{/if}
 
 	<p class="drawn" data-machine-jobs="{card.jobsDrawn}/{card.jobsTotal}">

@@ -28,7 +28,7 @@
 	const extraction = $derived(nativeExtraction(rows, evaluations));
 	const classes = $derived(rankedList(extraction.classes.map((entry) => ({ label: entry.label, value: entry.count })), {}));
 	const geometry = $derived(dateSeries(extractionYield(yieldDays, viewport),
-		{ frame: frame(width, knobs.chart_height, MARGIN), density: chart.tick_density, valueTicks: 5, padding: 0.2, rule }));
+		{ frame: frame(width, knobs.chart_height, MARGIN), density: chart.tick_density, valueTicks: 5, padding: 0.2, rule, number_format: chart.number_format }));
 	const noRule = { declined: 'one figure of the window, not a date axis' };
 </script>
 <div data-eval-panel="extraction" use:observeWidth={(next) => measured = next}>

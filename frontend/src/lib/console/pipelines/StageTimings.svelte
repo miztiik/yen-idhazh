@@ -6,16 +6,19 @@
 	import type { TimeWindow } from '$lib/charts/viewport';
 	import type { ModelRule } from '$lib/charts/d3/model-rule';
 	import type { ConsoleConfig, ChartConfig } from '$lib/server/config';
+	import { formatNumber } from '$lib/number-format';
+	import { useNumberFormat } from '$lib/number-format-context';
 	let { rows, knobs, chart, window, rule }: {
 		rows: Row[]; knobs: ConsoleConfig; chart: ChartConfig; window: TimeWindow; rule: ModelRule;
 	} = $props();
+	const numberFormat = useNumberFormat();
 	const days = $derived(nativeStageTimings(rows));
 	const summarize = $derived(nearestRank(rows.flatMap((row) => {
 		const value = finiteCell(row.summarize_ms);
 		return value === null ? [] : [value];
 	}), 0.5));
 </script>
-<p data-lede class="lede">{summarize === null ? 'No summarize clock was measured.' : `${(summarize / 1000).toFixed(2)} median summarize seconds.`}</p>
+<p data-lede class="lede">{summarize === null ? 'No summarize clock was measured.' : `${formatNumber(summarize / 1000, numberFormat, { si: false })} median summarize seconds.`}</p>
 <p data-comparison="Summarize against fetch and extract.">Summarize against fetch and extract, with timed coverage kept beside each stage.</p>
 <StageTimings {days} span={window} height={knobs.chart_height} width={knobs.chart_width}
 	tickDensity={chart.tick_density} readoutMaxShare={chart.readout_max_share} {rule} />

@@ -1,12 +1,13 @@
 # Agent Notes - Gates and Builds
 
-**Last Updated**: 2026-10-24
+**Last Updated**: 2026-10-25
 
 Checks before trusting a test or build result. Commands belong in [run-the-gates.md](../../how-to/run-the-gates.md).
 
 ## Gate commands
 
 - Inspect `npm --prefix frontend run test:changed -- --list`, then run the selected checks. Keep full-suite checks in CI unless local full coverage is needed.
+- A build-independent logic group can still contain slow integration cases. Repair a known failure with named affected specs, not another full logic run. Overlapping selections are not additive test counts.
 - Read the first failure and which later checks did not run. A missing tool, interrupted process, cached failure or skipped test is not a pass.
 - Inspect an existing run before starting another. Use the launcher's `--status`; use `--fresh` only when an unchanged run must be repeated.
 - `node scripts/build-state.ts --complete` took 112.5 s on the shared Windows machine on 2026-10-03, so wait for it rather than calling it hung.
@@ -62,6 +63,8 @@ Checks before trusting a test or build result. Commands belong in [run-the-gates
   [report check](../../../.github/scripts/tests/feed-ingest-plan-outputs.test.ts)
   does. Text matches alone do not prove rendering.
 - Adding a persisted contract or retiring a task changes named test inputs too. Update the explicit fixture-path list, task declaration and module lists, and transitive-import lists beside the implementation. A committed fixture that the named fixture list omits is still untested.
+- Generated test payloads are contract writers too. Build valid controls through the native model with its authoritative version and renderer stamps; then make one deliberate invalid change per refusal case. Check the changed helper with mypy as well as pytest.
+- Standalone server-rendered and browser component mounts need the settings normal pages provide. Supply canonical config through shared test helpers and complete chart props; do not hide missing context with a production fallback. For formatting expectations, keep counts, divisors and clocks independent, deriving only the displayed string from the approved formatter.
 - Check platform-specific Python APIs with mypy's CI target platform. Guard Windows-only code directly with `sys.platform == "win32"`; an intermediate boolean can prevent the checker from excluding that branch on Linux. Include the shared fixture module when checking a test file in isolation.
 - A passing race test must reproduce the production changes: file additions and deletions, changing content-addressed paths, and competing push timing. A stable-path fixture or a test that retains superseded nodes does not prove a content-addressed replacement retry works.
 - Before and after splitting tests, compare the collected test cases, allowing only the intended module-path changes. A passing remainder does not prove that no tests were lost.
@@ -312,6 +315,7 @@ Checks before trusting a test or build result. Commands belong in [run-the-gates
 - Use the project's build and preview scripts. Verify a feature of the intended build before measuring, including hydration when the check needs it.
 - For paired measurements, keep inputs and build settings equal except for the change being measured, and alternate the cases. Verify the intended difference before comparing results.
 - Prove missing-data behavior by removing the input the surface actually reads. For build-time data, rebuild against an isolated fixture; blocking an unused request proves nothing.
+- Vite preview can crash when a served asset is deleted after it enters the preview cache. For a real missing-file smoke, serve the completed build with a static file host, remove and restore only the named generated asset, and confirm both the expected HTTP 404 and retained story text.
 
 ## See also
 

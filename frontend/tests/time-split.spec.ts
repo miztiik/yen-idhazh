@@ -2,7 +2,7 @@
 import { expect, test } from '@playwright/test';
 import { TELEMETRY_COLUMNS, type TelemetryRow } from '../src/lib/charts/series';
 import { nativeTimeSplit, timeSplitReadout } from '../src/lib/console/pipelines/item-time-split';
-import { dateSeries } from '../src/lib/charts/d3/dateSeries';
+import { dateSeries, numberFormat } from './support/number-format';
 import { frame } from '../src/lib/charts/frame';
 import { telemetryRow } from './support/telemetry-row';
 
@@ -96,24 +96,24 @@ test('the actual native stack contains only additive stages and totals the elaps
 });
 
 test('the readout names every stage, calls as detail, and the complete-clock divisor', () => {
-	const strip = timeSplitReadout(nativeTimeSplit([fullyTimed()], calendar));
+	const strip = timeSplitReadout(nativeTimeSplit([fullyTimed()], calendar), numberFormat);
 	expect(strip.columns).toEqual(calendar);
 	expect(strip.series.map((one) => one.label)).toEqual([
 		'Fetch', 'Extract', 'Summarize', 'Checking', 'Unattributed duration',
 		'Elapsed time', 'Overlap', 'Label call', 'Summary call', 'Visual plan', 'Complete clocks'
 	]);
 	expect(strip.series.map((one) => one.values[0])).toEqual([
-		'0.10 s', '0.02 s', '0.60 s', '0.03 s', '0.05 s', '0.80 s', '0.00 s',
+		'0.1 s', '0.02 s', '0.6 s', '0.03 s', '0.05 s', '0.8 s', '0 s',
 		'0.15 s', '0.43 s', '0.06 s', '1 of 1'
 	]);
 });
 
 test('a day without a complete clock prints unknown durations and a zero complete-clock count', () => {
-	const strip = timeSplitReadout(nativeTimeSplit([fullyTimed()], ['2026-09-13', ...calendar]));
+	const strip = timeSplitReadout(nativeTimeSplit([fullyTimed()], ['2026-09-13', ...calendar]), numberFormat);
 	expect(strip.notMeasured).toBe('Not measured for the complete cohort');
 	expect(strip.series.slice(0, 10).map((one) => one.values[0])).toEqual(Array(10).fill(null));
 	expect(strip.series[10].values).toEqual(['0 of 0', '1 of 1']);
-	expect(strip.series[0].values[1]).toBe('0.10 s');
+	expect(strip.series[0].values[1]).toBe('0.1 s');
 });
 
 test('a fully timed zero remains measured and does not disappear into the missing cohort', () => {

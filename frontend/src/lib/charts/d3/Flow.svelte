@@ -9,7 +9,8 @@
 	 * flow it says so above them.
 	 */
 	import { AXIS_LABEL_PX } from '$lib/charts/frame';
-	import { grouped } from '$lib/charts/series';
+	import { grouped as formatGrouped } from '$lib/charts/series';
+	import { useNumberFormat } from '$lib/number-format-context';
 	import EmptyState from './EmptyState.svelte';
 	import type { EmptyDrawing } from './empty';
 	import type { FlowGeometry, SteppedGeometry } from './flow';
@@ -37,6 +38,8 @@
 		readoutMaxShare?: number;
 		tooltips?: boolean;
 	} = $props();
+	const numberFormat = useNumberFormat();
+	const grouped = (value: number) => formatGrouped(value, numberFormat);
 	let selected = $state<number | null>(null);
 	const records = $derived(readout === null ? [] : recordsOf(readout));
 

@@ -685,6 +685,7 @@ def _unitless_bars(item_id: str) -> VisualData:
     marks = [
         VisualMark(
             mark_id=f"m{index}",
+            source_text=None,
             text=name,
             value=None,
             unit=None,
@@ -696,6 +697,7 @@ def _unitless_bars(item_id: str) -> VisualData:
     marks += [
         VisualMark(
             mark_id=f"m{len(SECOND_CHART_MARKS) + index}",
+            source_text=None,
             text=None,
             value=figure,
             unit=None,
@@ -709,6 +711,9 @@ def _unitless_bars(item_id: str) -> VisualData:
         item_id=item_id,
         type=VisualType.BAR,
         renderer_version=RENDERER_VERSION,
+        title=None,
+        caption=None,
+        emphasized_mark_id=f"m{len(SECOND_CHART_MARKS)}",
         marks=marks,
         encoding=VisualEncoding(
             category=[mark.mark_id for mark in marks[: len(SECOND_CHART_MARKS)]],
