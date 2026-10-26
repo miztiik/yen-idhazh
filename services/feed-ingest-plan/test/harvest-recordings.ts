@@ -76,7 +76,7 @@ export class RecordedTransport implements HarvestTransport {
 export function source(patch: Partial<ConfiguredSource> = {}): ConfiguredSource {
   return {
     id: "recorded-news", url: "https://news.example/feed.xml", title: "Configured science news",
-    vertical: "world", kind: "reporting", tier: 2, form: "article",
+    kind: "reporting", tier: 2, form: "article",
     weight: 0.8, status: "active", retired_on: null, added_on: null,
     retirement_reason: null, publisher_id: null, ...patch,
   };
@@ -115,6 +115,7 @@ export function context(log: HarvestContext["log"] = () => {}): HarvestContext {
     },
     correlation_id: "recorded-harvest-700",
     clock: () => new Date("2026-10-21T23:59:59.000Z"), log,
+    observation_clock: () => new Date("2026-10-21T23:59:59.000Z"),
   };
 }
 

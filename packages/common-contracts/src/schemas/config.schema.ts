@@ -1,10 +1,10 @@
 /** Which authored planner settings and vertical references are valid before a run? */
 import { z } from "zod";
 import {
-  NonEmptySchema, PositiveCountSchema, PositiveSchema, SlugSchema, reject,
+  NonEmptySchema, PositiveCountSchema, PositiveSchema, reject,
 } from "./primitives";
 import {
-  FeedCurationPolicySchema, FeedScreeningPolicySchema, VerticalPolicyOverrideSchema,
+  FeedCurationPolicySchema, FeedScreeningPolicySchema,
 } from "./policy.schema";
 
 export const FeedUrlExclusionSchema = z.strictObject({
@@ -73,7 +73,6 @@ export const FeedIngestConfigSchema = z.strictObject({
   harvest: FeedHarvestConfigSchema,
   triage: FeedTriageConfigSchema,
   curate: FeedCurateConfigSchema,
-  vertical_overrides: z.record(SlugSchema, VerticalPolicyOverrideSchema),
   partition: FeedPartitionConfigSchema,
   seal: FeedSealConfigSchema,
   workflow_reporting: FeedWorkflowReportingConfigSchema,
@@ -84,19 +83,4 @@ export const FeedIngestConfigSchema = z.strictObject({
   }),
 });
 
-// Only the taxonomy fields this reader computes on are declared here.
-export const PlanningTaxonomySchema = z.object({
-  verticals: z.array(z.object({ id: SlugSchema })).min(1),
-}).superRefine((value, ctx) => {
-  const ids = value.verticals.map(vertical => vertical.id);
-  if (new Set(ids).size !== ids.length) reject(ctx, "verticals contains duplicate ids", ["verticals"]);
-});
 export type FeedIngestConfig = z.infer<typeof FeedIngestConfigSchema>;
-export type PlanningTaxonomy = z.infer<typeof PlanningTaxonomySchema>;
-
-export function validatePlanningReferences(config: FeedIngestConfig, taxonomy: PlanningTaxonomy): void {
-  const ids = new Set(taxonomy.verticals.map(vertical => vertical.id));
-  for (const id of Object.keys(config.vertical_overrides)) {
-    if (!ids.has(id)) throw new Error(`vertical_overrides.${id}: unknown taxonomy vertical`);
-  }
-}

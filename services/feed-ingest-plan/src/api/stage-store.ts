@@ -28,6 +28,18 @@ export class StageStore {
     return structuredClone(batch);
   }
   has(id: string) { return this.batches.has(RequestIdSchema.parse(id)); }
+  replace<T extends { batch_id: string }>(stage: BatchStage, schema: z.ZodType<T>, raw: unknown): T {
+    const value = schema.parse(raw);
+    const held = this.batches.get(value.batch_id);
+    if (held === undefined || held.stage !== stage) throw new PlanError("ARTIFACT_NOT_FOUND", "Current batch has expired", "batch_id");
+    this.batches.set(value.batch_id, { stage, value: structuredClone(value) });
+    return value;
+  }
+  update<T extends { batch_id: string }>(stage: BatchStage, id: string, schema: z.ZodType<T>, update: (current: T) => T) {
+    const value = schema.parse(update(this.read(stage, id, schema)));
+    if (value.batch_id !== id) throw new PlanError("ARTIFACT_INVALID", "Stage update changed its server-owned batch identity", "batch_id");
+    return this.replace(stage, schema, value);
+  }
 }
 const stores = new WeakMap<PlanInputs, StageStore>();
 export function stageStore(inputs: PlanInputs) {

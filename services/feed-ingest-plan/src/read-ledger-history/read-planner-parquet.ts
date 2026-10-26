@@ -13,13 +13,22 @@ import { checkFields, normalize } from "./read-parquet";
 import { LedgerHistoryReadError } from "./ledger-history-error";
 
 let initialization: ReturnType<typeof initializeParquet> | undefined;
+function parseContainer<T>(read: () => T): T {
+  try { return read(); }
+  catch (error) {
+    if (error instanceof Error && (error.message.startsWith("Parquet error:") || error.message.startsWith("EOF:"))) {
+      throw new LedgerHistoryReadError("Planner Parquet container was refused", { cause: error });
+    }
+    throw error;
+  }
+}
 export async function readPlannerParquet<T extends object>(
   path: string, ledger: PlannerFileEnvelope["ledger"], contract: LedgerRowContract<T>,
 ) {
   initialization ??= initializeParquet();
   await initialization;
   const bytes = await readFile(path);
-  const metadata = readMetadata(bytes);
+  const metadata = parseContainer(() => readMetadata(bytes));
   const footer = metadata.fileMetadata();
   let envelope: PlannerFileEnvelope;
   try {
@@ -48,7 +57,7 @@ export async function readPlannerParquet<T extends object>(
   if (envelope.tier === "raw" && basename(path) !== `${envelope.file_id}.parquet`) {
     throw new LedgerHistoryReadError("Planner raw filename differs from its file identity");
   }
-  const table = tableFromIPC(readParquet(bytes).intoIPCStream());
+  const table = tableFromIPC(parseContainer(() => readParquet(bytes)).intoIPCStream());
   const columns = describeObjectSchema(contract.schema).fields;
   checkFields(table.schema.fields, columns);
   const records = table.toArray().map(value => {

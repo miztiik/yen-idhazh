@@ -10,6 +10,10 @@ import { source } from "./harvest-recordings";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { mkdir, writeFile } from "node:fs/promises";
+import {
+  DiscoveredArticleRowContract, PlanRunRowContract, SelectedArticleRowContract,
+} from "@idhazh/common-contracts";
+import { readPlannerParquet } from "../src/read-ledger-history/read-planner-parquet";
 
 const root = fileURLToPath(new URL("../../../", import.meta.url));
 
@@ -30,10 +34,11 @@ test("CLI blanks are absent; typed API strings, nulls, unknown fields and invali
   }
   for (const field of ["article_limit", "shards"]) expect(PlanRequestSchema.safeParse({ [field]: 1.5 }).success).toBe(false);
   expect(PlanRequestSchema.safeParse({ date: "2026-10-21" }).success).toBe(false);
+  expect(PlanRequestSchema.safeParse({ vertical: "world" }).success).toBe(false);
   expect(PlanRequestSchema.safeParse({ partition_strategy: "random" }).success).toBe(false);
   for (const args of [
     ["--cli", "--shards", "bad"], ["--cli", "--article-limit=-1"], ["--cli", "--freshness-hours=Infinity"],
-    ["--cli", "--shards=1.2"], ["--cli", "--date=2026-10-21"], ["--cli", "--cli"],
+    ["--cli", "--shards=1.2"], ["--cli", "--date=2026-10-21"], ["--cli", "--vertical=world"], ["--cli", "--cli"],
     ["--serve", "--cli"], ["--serve", "--shards=1"], ["--cli", "--shards=1", "--shards=2"], [],
   ]) expect(() => parseCliRequest(args)).toThrow();
   const inputs = await loadPlanInputs(root);
@@ -82,42 +87,68 @@ test("real CLI process refuses disabled or invalid requests without Python or ne
   }
 }, 30000);
 
-test("the awaited entrypoint records positive configured counts, signed ages and first sight", async () => {
-  for (const mode of ["top_k", "negative_age", "first_seen"] as const) {
+test("the awaited entrypoint records configured selection counts, signed ages and global first sight", async () => {
+  for (const mode of ["counts", "negative_age", "first_seen"] as const) {
     const recorded = await recordedPlan(mode === "first_seen"
       ? [source({ url: "https://news.example/article-failures.xml" })] : undefined);
     const printed: unknown[] = [];
     try {
-      if (mode === "top_k") recorded.inputs.harvest.config.metrics.top_source_counts = [1, 3, 5];
+      if (mode === "counts") {
+        recorded.inputs.harvest.config.feedback.lifecycle_window_days = 5;
+        recorded.inputs.harvest.config.feedback.request_report_closed_days = 2;
+      }
       if (mode === "negative_age") recorded.runtime.clock = () => new Date("2026-10-21T09:00:00Z");
       if (mode === "first_seen") {
         recorded.inputs.clock_config.collect.seen_window_days = 0;
         recorded.inputs.settings.inputs.seen_days = [{ day: "2026-10-21", raw_files: [] }];
       }
-      await main(["--cli", "--partition-strategy=none"], {
+      const summary = await main(["--cli", "--partition-strategy=none", "--article-limit=1"], {
         inputs: recorded.inputs, runtime: recorded.runtime, output: value => { printed.push(value); },
       });
+      if (!("planning_complete" in summary)) throw new Error("Expected the one-shot CLI summary");
       expect(printed).toHaveLength(1);
-      for (const ledger of ["article-assessments", "diversity", "source-runs"]) {
+      expect(summary.planning_complete).toBe(true);
+      expect(summary.selected_count).toBe(1);
+      for (const ledger of ["discovered-articles", "selected-articles", "feed-health-state", "plan-runs"]) {
         expect(existsSync(join(recorded.inputs.outputRoot, "raw", "feed-ingest-plan", ledger))).toBe(true);
       }
-      expect(recorded.events.some(event => event.stage === "seal-article-ledger")).toBe(true);
+      const selectedFile = summary.files.selected_articles!.files[0]!;
+      const selected = await readPlannerParquet(join(recorded.inputs.outputRoot, selectedFile.path),
+        "selected-articles", SelectedArticleRowContract);
+      expect(selected.rows).toHaveLength(1);
+      expect(selected.rows[0]).not.toHaveProperty("article_text");
+      if (mode === "negative_age") expect(selected.rows[0]!.age_hours).toBeLessThan(0);
+      if (mode === "counts") expect(summary).toMatchObject({ lifecycle_window_days: 5, request_report_closed_days: 2 });
+      if (mode === "first_seen") {
+        const file = summary.files.discovered_articles!.files[0]!;
+        const discovered = await readPlannerParquet(join(recorded.inputs.outputRoot, file.path),
+          "discovered-articles", DiscoveredArticleRowContract);
+        expect(discovered.rows.some(row => row.url_key === selected.rows[0]!.url_key)).toBe(true);
+      }
+      expect(recorded.events.some(event => event.operation === "persist" && event.phase === "completed")).toBe(true);
     } finally { await recorded.close(); }
   }
 }, 30000);
 
-test("a real required source write failure cannot print a successful CLI summary", async () => {
+test("a real selected-metadata write failure prints an explicit partial run instead of success", async () => {
   const recorded = await recordedPlan();
   const printed: unknown[] = [];
   try {
     const raw = join(recorded.inputs.outputRoot, "raw", "feed-ingest-plan");
     await mkdir(raw, { recursive: true });
-    await writeFile(join(raw, "source-runs"), "A file cannot hold source output.");
-    await expect(main(["--cli"], {
+    await writeFile(join(raw, "selected-articles"), "A file cannot hold selected metadata.");
+    const summary = await main(["--cli"], {
       inputs: recorded.inputs, runtime: recorded.runtime, output: value => { printed.push(value); },
-    })).rejects.toThrow();
-    expect(printed).toEqual([]);
-    expect(existsSync(join(raw, "article-assessments"))).toBe(true);
-    expect(existsSync(join(raw, "diversity"))).toBe(true);
+    });
+    if (!("planning_complete" in summary)) throw new Error("Expected the one-shot CLI summary");
+    expect(printed).toEqual([summary]);
+    expect(summary).toMatchObject({ planning_complete: false, status: "partial", selected_articles_artifact: null });
+    expect(summary.failure_code).not.toBeNull();
+    expect(summary.files.selected_articles).toBeUndefined();
+    const file = summary.files.plan_runs!.files[0]!;
+    const saved = await readPlannerParquet(join(recorded.inputs.outputRoot, file.path), "plan-runs", PlanRunRowContract);
+    expect(saved.rows[0]).toMatchObject({ status: "partial", failure_code: summary.failure_code, selected_count: summary.selected_count });
+    expect(existsSync(join(raw, "feed-health-state"))).toBe(true);
+    expect(existsSync(join(raw, "discovered-articles"))).toBe(true);
   } finally { await recorded.close(); }
 }, 30000);

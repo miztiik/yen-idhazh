@@ -58,6 +58,7 @@ export type HarvestContext = {
   observation_clock?: () => Date;
   observations?: IngestObservations;
   parser_pool?: ArticleParserPool;
+  parser_options?: Parameters<ArticleParserPool["parse"]>[4];
   on_feed?: (outcome: FeedOutcomePayload, entries: readonly FeedEntry[], checked_at: string) => void;
   on_article?: (result: HarvestArticleResult) => void;
   log?: (record: z.infer<typeof CandidateRejectionRecordSchema>) => void;

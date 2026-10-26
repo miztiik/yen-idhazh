@@ -1,4 +1,4 @@
-"""Which authored settings control feed planning and its per-vertical policy patches?"""
+"""Which authored global settings control the isolated feed planner?"""
 
 from __future__ import annotations
 
@@ -17,7 +17,6 @@ Count = Annotated[int, Field(strict=True, ge=0, le=MAX_JSON_INTEGER)]
 Positive = Annotated[float, Field(strict=True, gt=0, allow_inf_nan=False)]
 NonNegative = Annotated[float, Field(strict=True, ge=0, allow_inf_nan=False)]
 Share = Annotated[float, Field(strict=True, gt=0, le=1, allow_inf_nan=False)]
-Slug = Annotated[str, Field(pattern=r"^[a-z0-9]+(?:-[a-z0-9]+)*$")]
 NonEmpty = Annotated[str, Field(min_length=1)]
 Relaxation = Literal["distinct_sources", "source_share"]
 
@@ -58,10 +57,11 @@ def describe_patch_input(schema: dict[str, Any]) -> None:
             field.update(branches[0] if len(branches) == 1 else {"anyOf": branches})
 
 
-class PolicyPatch(Model):
-    """An omitted field inherits; an explicit null is invalid."""
+class PlanningRunOverrides(Model):
+    """Only an explicit freshness value overrides the planner's global policy."""
 
     model_config = ConfigDict(json_schema_extra=describe_patch_input)
+    freshness_hours: Positive | None = None
 
     @model_validator(mode="before")
     @classmethod
@@ -71,37 +71,6 @@ class PolicyPatch(Model):
                 if field is None:
                     raise ValueError(f"{name} must be omitted to inherit, not null")
         return value
-
-
-# None is only the in-memory marker for a field absent from authored JSON.
-class FeedScreeningPatch(PolicyPatch):
-    min_words_article: PositiveCount | None = None
-    min_words_abstract: PositiveCount | None = None
-    max_age_hours: Positive | None = None
-    recency_half_life_hours: Positive | None = None
-    recency_weight: NonNegative | None = None
-
-
-class FeedPenaltyWeightsPatch(PolicyPatch):
-    lambda_source: NonNegative | None = None
-    lambda_source_kind: NonNegative | None = None
-    lambda_domain: NonNegative | None = None
-
-
-class FeedCurationPatch(PolicyPatch):
-    source_authority_weight: NonNegative | None = None
-    base_source_allowance: Count | None = None
-    bonus_unique_evidence: Count | None = None
-    mmr_weights: FeedPenaltyWeightsPatch | None = None
-
-
-class VerticalPolicyOverride(PolicyPatch):
-    triage: FeedScreeningPatch | None = None
-    curate: FeedCurationPatch | None = None
-
-
-class PlanningRunOverrides(PolicyPatch):
-    freshness_hours: Positive | None = None
 
 
 class EffectiveFeedPolicy(Model):
@@ -216,41 +185,14 @@ class FeedFeedbackConfig(Model):
     request_report_closed_days: PositiveCount = 7
 
 
-class PlanningVertical(Model):
-    model_config = ConfigDict(extra="ignore")
-    id: Slug
-
-
-class PlanningTaxonomy(Model):
-    """Read only the taxonomy fields this configuration reader computes on."""
-
-    model_config = ConfigDict(extra="ignore")
-    verticals: Annotated[list[PlanningVertical], Field(min_length=1)]
-
-    @model_validator(mode="after")
-    def refuse_duplicate_verticals(self) -> Self:
-        ids = [vertical.id for vertical in self.verticals]
-        if len(set(ids)) != len(ids):
-            raise ValueError("verticals contains duplicate ids")
-        return self
-
-
 class FeedIngestConfig(Model):
     version: Literal["2026-10-20"]
     harvest: FeedHarvestConfig
     triage: FeedTriageConfig
     curate: FeedCurateConfig
-    vertical_overrides: dict[Slug, VerticalPolicyOverride]
     partition: FeedPartitionConfig
     seal: FeedSealConfig
     workflow_reporting: FeedWorkflowReportingConfig
     feedback: FeedFeedbackConfig = Field(
         default_factory=FeedFeedbackConfig, json_schema_extra={"default": {}},
     )
-
-    def validate_verticals(self, taxonomy: PlanningTaxonomy) -> None:
-        """Refuse a planning patch that names an unconfigured vertical."""
-        ids = {vertical.id for vertical in taxonomy.verticals}
-        for vertical in self.vertical_overrides:
-            if vertical not in ids:
-                raise ValueError(f"vertical_overrides.{vertical}: unknown taxonomy vertical")

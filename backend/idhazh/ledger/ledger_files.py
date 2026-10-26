@@ -264,7 +264,7 @@ _STRETCH: Final[dict[Period, str]] = {
 def list_ledger_files(
     state_dir: Path, ledger: LedgerName, *, registry: paths.DoorRegistry | None = None
 ) -> LedgerFiles:
-    """Every source this ledger is read from, oldest first, each date from exactly one."""
+    """Every selected compact source, plus raw work that this ledger's protocol retains."""
     yearly, monthly, daily = _indexes(state_dir, ledger, registry=registry)
     named_by: dict[Period, list[CompactEntry]] = {
         Period.YEARLY: yearly.entries if yearly else [],
@@ -312,7 +312,8 @@ def list_ledger_files(
     unnamed = {
         day
         for day in raw_files.raw_days(state_dir, ledger, registry=registry)
-        if day not in named and day[:7] not in absorbed and day[:4] not in packed
+        if ledger in PLANNER_LEDGERS
+        or (day not in named and day[:7] not in absorbed and day[:4] not in packed)
     }
     by_day: dict[str, list[Path]] = {}
     for held in raw_files.list_raw_files(state_dir, ledger, days=unnamed, registry=registry):

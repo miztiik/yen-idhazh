@@ -90,8 +90,8 @@ from pathlib import Path
 from typing import NamedTuple, assert_never
 
 from idhazh import atomic_write, day_partition, ledger
-from idhazh.contracts.feed_ingest_discovered_article import LedgerContract
 from idhazh.contracts.collection_prune import Recovery, StopReason, stop_for
+from idhazh.contracts.feed_ingest_discovered_article import LedgerContract
 from idhazh.contracts.file_envelope import Format, Period
 from idhazh.contracts.gardener_events import (
     CompactionStep,

@@ -36,7 +36,6 @@
     },
     "exploration_slot_share": 0.08
   },
-  "vertical_overrides": {},
   "partition": {
     "default_strategy": "bin-pack",
     "default_shards": 4,

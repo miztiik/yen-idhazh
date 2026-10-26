@@ -17,12 +17,12 @@ export async function readRequestBody(request: Request): Promise<unknown> {
     throw error;
   }
 }
-export function stagesRoute(inputs: PlanInputs, runtime: PlanRuntime) {
+export function stagesRoute(inputs: PlanInputs, runtime: () => PlanRuntime) {
   const app = new Hono<{ Bindings: PlanningBindings }>();
   app.post("/select-articles", async c => {
     const request = StageReferenceRequestSchema.parse(await readRequestBody(c.req.raw));
     c.env?.beginPlanning?.();
-    const { batch } = await executeSelection(request, inputs, runtime);
+    const { batch } = await executeSelection(request, inputs, runtime());
     return c.json(SelectionResponseSchema.parse({
       batch_id: batch.batch_id, parsed_batch_id: batch.parsed_batch_id, run_id: batch.context.run_id,
       articles: batch.articles.map(article => ({ ...selectedArticleMetadata(article),
@@ -33,7 +33,7 @@ export function stagesRoute(inputs: PlanInputs, runtime: PlanRuntime) {
   app.post("/partition-articles", async c => {
     const request = PartitionArticlesRequestSchema.parse(await readRequestBody(c.req.raw));
     c.env?.beginPlanning?.();
-    const { batch } = await executePartition(request, inputs, runtime);
+    const { batch } = await executePartition(request, inputs, runtime());
     return c.json(PartitionResponseSchema.parse({
       batch_id: batch.batch_id, selection_batch_id: batch.selection_batch_id, run_id: batch.context.run_id,
       strategy: batch.strategy, dispatch_count: batch.dispatch_count, work: batch.work,
@@ -44,7 +44,7 @@ export function stagesRoute(inputs: PlanInputs, runtime: PlanRuntime) {
   app.post("/persist-selected-articles", async c => {
     const request = StageReferenceRequestSchema.parse(await readRequestBody(c.req.raw));
     c.env?.beginPlanning?.();
-    return c.json(PersistenceResponseSchema.parse({ batch_id: request.batch_id, ...await executePersistence(request, inputs, runtime) }));
+    return c.json(PersistenceResponseSchema.parse({ batch_id: request.batch_id, ...await executePersistence(request, inputs, runtime()) }));
   });
   return app;
 }

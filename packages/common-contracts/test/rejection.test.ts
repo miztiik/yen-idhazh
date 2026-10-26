@@ -13,6 +13,7 @@ import {
   PlannerHarvestObservationSchema, PlannerSeenEvidenceSchema, PlannerSeenRowSchema,
   PlannerStageContextSchema, PlannerStageRequestSchema, StageReferenceRequestSchema,
   PartitionArticlesRequestSchema, PlannerWorkEventSchema, DiscoveredArticleRowSchema,
+  FetchRequestSchema,
   SelectedArticleRowSchema, SelectedArticlesArtifactSchema, SelectedArtifactArticleSchema,
   selectedArticleMetadata, FeedHealthStateRowSchema, PlanRunRowSchema,
 } from "../src/index";
@@ -25,14 +26,14 @@ const url = "https://example.com/article?x=1";
 const digest = "a".repeat(64);
 const source = SourceSnapshotSchema.parse({
   source_id: "example", feed_url: "https://example.com/feed", title: "Example",
-  vertical: "science", kind: "new-kind", tier: 4, form: "article", status: "active",
+  kind: "new-kind", tier: 4, form: "article", status: "active",
   weight: 1, applied_tier_weight: 0.6,
 });
 function candidate() {
   return FeedIngestCandidateSchema.parse({
     date: day, correlation_id: "correlation", run_id: run,
     candidate_id: deriveCandidateId(run, source.source_id, 0), entry_ordinal: 0,
-    source_id: source.source_id, vertical: source.vertical, source,
+    source_id: source.source_id, source,
     canonical_url: url, url_key: deriveUrlKey(url), title: "An article", categories: [],
     article_text: "A recorded article.", word_count: 3, author: null,
     published_at: null, fetched_at: at,
@@ -100,7 +101,7 @@ function assessment() {
 function event() {
   return FeedIngestEventSchema.parse({
     run_id: run, correlation_id: "7cef34e3-dd9f-40ce-9a56-4d01ff5115cc",
-    occurred_at: at, operation: "fetch", phase: "completed", source_id: null,
+    occurred_at: at, operation: "fetch", phase: "completed", feed_id: null,
     input_count: 0, output_count: 0, duration_ms: 1, failure_code: null,
   });
 }
@@ -124,7 +125,7 @@ describe("rejection evidence", () => {
   test("enforces every reason's stage and required measurements", () => {
     const details = RejectionDetailsSchema.parse({
       http_status: 503, timeout_ms: 200, words_found: 3, words_required: 100,
-      age_hours: 60, max_age_hours: 48, observed_value: 1, limit: 2,
+      age_hours: 60, max_age_hours: 48,
       matched_url_key: digest, published_on: day, failure_code: "network_error",
       matched_url_marker: "blocked", history_window_days: 7,
       diagnostics: HarvestDiagnosticsSchema.parse({
@@ -149,8 +150,8 @@ describe("rejection evidence", () => {
     for (const changed of [
       { ...row, extra: true }, { ...row, details: { ...row.details, untyped: 1 } },
       { ...row, details: { ...row.details, words_found: "3" } },
-      { ...row, details: { ...row.details, observed_value: Infinity } },
-      { ...row, details: { ...row.details, observed_value: NaN } },
+      { ...row, details: { ...row.details, words_found: Infinity } },
+      { ...row, details: { ...row.details, words_found: NaN } },
       { ...row, rejected_at: "2026-10-20T12:00:00+00:00" },
       { ...row, date: "2026-10-19" }, { ...row, url_key: digest },
     ]) expect(CandidateRejectionRecordSchema.safeParse(changed).success).toBe(false);
@@ -166,7 +167,7 @@ describe("rejection evidence", () => {
     expect(FeedIngestCandidateSchema.safeParse({ ...candidate(), vertical: "other" }).success).toBe(false);
   });
 
-  test("retains independent stage context but enforces shared dispatch identity", () => {
+  test("projects selected metadata without mutating its text-bearing artifact", () => {
     const row = selection();
     const { run_id: _run, attempt: _attempt, date: _day, ...metadata } = row;
     const article = SelectedArtifactArticleSchema.parse({ ...metadata, article_text: "Artifact-only text." });
@@ -201,6 +202,7 @@ describe("rejection evidence", () => {
     expect(FileEnvelopeSchema.safeParse({ ...row, covers: "2026-10" }).success).toBe(false);
     expect(FileEnvelopeSchema.safeParse({ ...row, unit_id: row.file_id }).success).toBe(false);
     expect(WriterIdentitySchema.safeParse({ ...row.identity, task_name: null }).success).toBe(false);
+    expect(FileEnvelopeSchema.safeParse({ ...row, ledger: "selected-articles" }).success).toBe(false);
     const planner = PlannerFileEnvelopeSchema.parse({
       row_schema_version: PLANNER_LEDGER_VERSION, ledger: "feed-health-state", tier: "raw", covers: day,
       file_id: row.file_id, content_sha256: digest, writer: row.writer, writer_version: row.writer_version,
@@ -215,8 +217,8 @@ describe("rejection evidence", () => {
   });
 });
 
-describe("planning audit contracts", () => {
-  test("validates diversity values by unit without rounding fractional source estimates", () => {
+describe("current planner contracts", () => {
+  test("keeps health counts integral and captured ratios within their domain", () => {
     const row = sourceRun();
     for (const field of ["feed_reads", "productive_reads", "failed_reads", "article_candidates", "articles_selected", "feed_requests", "article_requests", "robots_requests", "items"]) {
       for (const value of [0, 1, 42]) expect(FeedHealthStateRowSchema.safeParse({ ...row, [field]: value }).success).toBe(true);
@@ -226,7 +228,7 @@ describe("planning audit contracts", () => {
     for (const value of [-0.1, 1.1, Infinity, NaN]) expect(FeedHealthStateRowSchema.safeParse({ ...row, reliability: { ...row.reliability, success_fraction: value } }).success).toBe(false);
   });
 
-  test("permits signed diversity loss only with nonnegative finite source readings", () => {
+  test("keeps signed score adjustments distinct from unavailable values", () => {
     const row = selection();
     for (const value of [-1, 0, 0.25, null]) {
       expect(SelectedArticleRowSchema.safeParse({ ...row, ratings: {
@@ -241,14 +243,18 @@ describe("planning audit contracts", () => {
     } }).success).toBe(false);
   });
 
-  test("retains known-empty completion evidence and refuses partial or conflicting totals", () => {
+  test("records explicit empty runs and honest unavailable total duration", () => {
     const row = assessment();
     expect(row.selected_count).toBe(0);
     expect(row.selected_articles_artifact).toBeNull();
     const { selected_count: _count, ...missing } = row;
     expect(PlanRunRowSchema.safeParse(missing).success).toBe(false);
     expect(PlanRunRowSchema.safeParse({ ...row, completion_evidence: [] }).success).toBe(false);
+    expect(PlanRunRowSchema.safeParse({ ...row, selected_articles_artifact: "https://example.org/signed?token=secret" }).success).toBe(false);
     expect(PlanRunRowSchema.safeParse({ ...row, duration_ms: 0.5 }).success).toBe(false);
+    expect(PlanRunRowSchema.parse({ ...row, duration_ms: null }).duration_ms).toBeNull();
+    const { duration_ms: _duration, ...missingDuration } = row;
+    expect(PlanRunRowSchema.safeParse(missingDuration).success).toBe(false);
     expect(PlanRunRowSchema.safeParse({ ...row, status: "failed", failure_code: "fetch-failed", selection_started_at_utc: null, dispatch_count: 0 }).success).toBe(true);
     for (const operation of ["fetch", "parse", "select", "partition", "persist", "feed-health-summary"]) {
       expect(PlanRunRowSchema.safeParse({ ...row, api_timings: [{ operation, duration_ms: 0, status: "interrupted" }] }).success).toBe(true);
@@ -276,9 +282,19 @@ describe("planning audit contracts", () => {
     expect(FeedIngestEventSchema.safeParse({ ...row, operation: "article-assessment" }).success).toBe(false);
     expect(FeedIngestEventSchema.safeParse({ ...row, duration_ms: 0.5 }).success).toBe(false);
     expect(PlannerWorkEventSchema.safeParse({ stage: "unknown", payload: {} }).success).toBe(false);
+    const request = {
+      request_id: "00000000-0000-4000-8000-000000000010",
+      correlation_id: "00000000-0000-4000-8000-000000000011",
+      feed_id: source.source_id, kind: "article", batch_id: "00000000-0000-4000-8000-000000000012",
+      offer_id: digest,
+    };
+    expect(FetchRequestSchema.safeParse(request).success).toBe(true);
+    expect(FetchRequestSchema.safeParse({ ...request, source_id: source.source_id }).success).toBe(false);
+    expect(FetchRequestSchema.safeParse({ ...request, offer_id: undefined }).success).toBe(false);
+    expect(FetchRequestSchema.safeParse({ ...request, url }).success).toBe(false);
   });
 
-  test("migrates the historical event fixture with its sole native declaration", () => {
+  test("refuses old progress shapes through the sole TypeScript event declaration", () => {
     const row = event();
     expect(readFeedIngestEvent(JSON.parse(JSON.stringify(row)))).toEqual(row);
     expect(() => readFeedIngestEvent({ ...row, version: "2026-10-24" })).toThrow();
@@ -304,6 +320,20 @@ describe("planning audit contracts", () => {
       expect(runtimeSchemas[name].parse({ ...original, version: undefined }).version).toBe(name === "PlannerOperation" ? PLANNER_OPERATION_VERSION : OPERATION_VERSION);
       if (name === "PlannerOperation") {
         expect(runtimeSchemas[name].parse({ ...original, version: PLANNER_OPERATION_VERSION, created_at: `${at.slice(0, -1)}.123Z` }).created_at).toBe(`${at.slice(0, -1)}.123Z`);
+        expect(runtimeSchemas[name].safeParse({ ...original, version: "2026-10-23T18:50", created_at: `${at.slice(0, -1)}.123Z` }).success).toBe(true);
+        expect(runtimeSchemas[name].safeParse({ ...original, version: "2026-10-23T09:22", created_at: `${at.slice(0, -1)}.123Z` }).success).toBe(false);
+      } else {
+        const saved = runtimeSchemas[name].parse(original);
+        expect(saved.parent_fetch_request_id).toBeNull();
+        expect(saved.parent_batch_id).toBeNull();
+        expect(saved.entry_ordinal).toBeNull();
+        const linked = runtimeSchemas[name].parse({
+          ...original, version: OPERATION_VERSION,
+          parent_fetch_request_id: "00000000-0000-4000-8000-000000000010",
+          parent_batch_id: "00000000-0000-4000-8000-000000000012", entry_ordinal: 1,
+        });
+        expect(linked.entry_ordinal).toBe(1);
+        expect(runtimeSchemas[name].safeParse({ ...original, version: "2026-10-25" }).success).toBe(false);
       }
     }
     expect(FetchAttemptSchema.parse({ phase: "target", sequence: 0, retry: 0, duration_ms: 0, http_status: 404, failure: "http", error_code: null }).backoff_ms).toBeNull();
@@ -323,7 +353,22 @@ describe("planning audit contracts", () => {
     expect(PlannerStageContextSchema.parse(context).captured_at).toBe(context.captured_at);
     expect(PlannerStageRequestSchema.parse({})).toEqual({});
     expect(PlannerStageRequestSchema.safeParse({ article_limit: null }).success).toBe(false);
-    expect(ParsedFeedBatchSchema.parse(parsed).version).toBe(PLANNER_LEDGER_VERSION);
+    const parsedBatch = ParsedFeedBatchSchema.parse(parsed);
+    expect(parsedBatch.version).toBe(PLANNER_LEDGER_VERSION);
+    expect(parsedBatch.offers).toEqual([]);
+    expect(parsedBatch.feed_fetch_request_id).toBeNull();
+    expect(parsedBatch.input_complete).toBe(true);
+    const offered = ParsedFeedBatchSchema.parse({
+      ...parsed, input_complete: false, feed_fetch_request_id: batch_id,
+      offers: [{
+        offer_id: digest, source,
+        entry: { entry_ordinal: 0, title: null, link: url, categories: [], author: null, published_at: null },
+        state: "pending", fetch_request_id: null,
+      }],
+    });
+    expect(offered.offers[0]!.source.source_id).toBe(source.source_id);
+    expect(offered.input_complete).toBe(false);
+    expect(ParsedFeedBatchSchema.safeParse({ ...parsed, input_complete: "true" }).success).toBe(false);
     expect(ParsedFeedBatchSchema.safeParse({ ...parsed, version: "2026-10-24" }).success).toBe(false);
     expect(ParsedFeedBatchSchema.safeParse({ ...parsed, observations: { [digest]: { candidate_id: digest } } }).success).toBe(false);
     const selected = SelectedFeedBatchSchema.parse({

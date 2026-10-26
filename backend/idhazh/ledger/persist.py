@@ -167,6 +167,18 @@ def _one_contract(rows: Sequence[LedgerContract]) -> type[LedgerContract]:
     return model
 
 
+def _validated_planner_rows[C: LedgerContract](
+    rows: Sequence[C], *, model: type[C]
+) -> list[C]:
+    """Canonical native values before hashing, including models a caller copied or changed."""
+    try:
+        return [
+            model.model_validate(row.model_dump(mode="json", warnings=False)) for row in rows
+        ]
+    except ValidationError:
+        raise ValueError("planner write refuses invalid declared row fields") from None
+
+
 def _by_day(
     rows: Sequence[LedgerContract], *, model: type[LedgerContract], covers: str
 ) -> dict[str, list[LedgerContract]]:
@@ -427,10 +439,7 @@ def persist(
 
         if model is not door_contract(ledger):
             raise ValueError("planner raw write requires the registered current row contract")
-        try:
-            rows = [model.model_validate(row.model_dump(mode="json")) for row in rows]
-        except ValidationError:
-            raise ValueError("planner raw write refuses invalid declared row fields") from None
+        rows = _validated_planner_rows(rows, model=model)
         rows = [held.row for held in settle_rows(
             [[PlannerStoredRow(row=row) for row in rows]], door_key(ledger)
         )]
@@ -589,6 +598,10 @@ def render_period[C: LedgerContract](
         from idhazh.ledger.keys import door_key
         from idhazh.ledger.raw_files import settle_rows
 
+        rows = [
+            PlannerStoredRow(row=row)
+            for row in _validated_planner_rows([held.row for held in rows], model=model)
+        ]
         rows = settle_rows([rows], door_key(ledger))
     knobs = _knobs()
     chosen = knobs.format if fmt is None else fmt
@@ -650,6 +663,10 @@ def render_grouped_period[C: LedgerContract](
                 from idhazh.ledger.raw_files import settle_rows
 
                 key = door_key(ledger)
+                group = [
+                    PlannerStoredRow(row=row)
+                    for row in _validated_planner_rows([held.row for held in group], model=model)
+                ]
                 unique: list[LedgerStoredRow[C]] = []
                 for held in settle_rows([group], key):
                     record = tuple(str(getattr(held.row, name)) for name in key)

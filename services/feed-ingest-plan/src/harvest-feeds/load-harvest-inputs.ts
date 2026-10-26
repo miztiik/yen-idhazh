@@ -23,7 +23,7 @@ const ConfiguredUrlSchema = UrlSchema.refine(value => {
   catch { return false; }
 }, { message: "configured feed URL must be valid and contain no credentials" });
 const SourceConfigSchema = LifecycleSchema.safeExtend({
-  id: SlugSchema, url: ConfiguredUrlSchema, title: NonEmptySchema, vertical: SlugSchema,
+  id: SlugSchema, url: ConfiguredUrlSchema, title: NonEmptySchema,
   kind: SlugSchema, tier: PositiveCountSchema, form: SourceFormSchema, weight: WeightSchema,
   added_on: DateStampSchema.nullable().default(null),
   publisher_id: SlugSchema.nullable().default(null),
@@ -58,7 +58,6 @@ const SourcesSchema = z.object({
   publishers: z.array(PublisherDefinitionSchema).default([]),
 });
 const RegistrySchema = z.object({
-  verticals: z.array(z.object({ id: SlugSchema })),
   source_kinds: z.array(LifecycleSchema.safeExtend({ id: SlugSchema })),
   source_tiers: z.array(LifecycleSchema.safeExtend({ id: PositiveCountSchema, weight: WeightSchema })),
 });
@@ -79,7 +78,7 @@ export type HarvestInputs = ReturnType<typeof loadHarvestInputs>;
 export function loadHarvestInputs(raw: {
   config: unknown; taxonomy: unknown; sources: unknown; extraction: unknown;
 }) {
-  const planning = loadPlanningConfig(raw.config, raw.taxonomy);
+  const planning = loadPlanningConfig(raw.config);
   const registry = RegistrySchema.parse(raw.taxonomy);
   const { feeds: sources, retired, publishers } = SourcesSchema.parse(raw.sources);
   validatePublisherReferences(publishers, [...sources, ...retired]);
@@ -98,9 +97,6 @@ export function loadHarvestInputs(raw: {
         throw new Error(`source.${source.id}.tier: missing registered snapshot weight`);
       }
       continue;
-    }
-    if (!registry.verticals.some(vertical => vertical.id === source.vertical)) {
-      throw new Error(`source.${source.id}.vertical: unknown registry entry`);
     }
     if (!registry.source_kinds.some(kind => kind.id === source.kind && kind.status === "active")) {
       throw new Error(`source.${source.id}.kind: source kind must be active and registered`);
@@ -133,7 +129,7 @@ export function sourceSnapshot(inputs: HarvestInputs, source: ConfiguredSource):
   const tier = inputs.registry.source_tiers.find(tier => tier.id === source.tier);
   if (!tier) throw new Error(`source.${source.id}.tier: unknown registry entry`);
   return SourceSnapshotSchema.parse({
-    source_id: source.id, feed_url: source.url, title: source.title, vertical: source.vertical,
+    source_id: source.id, feed_url: source.url, title: source.title,
     publisher_id: source.publisher_id, kind: source.kind, tier: source.tier, form: source.form, status: source.status,
     weight: source.weight, applied_tier_weight: tier.weight,
   });

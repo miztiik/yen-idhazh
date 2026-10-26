@@ -5,6 +5,7 @@ import { resolvePolicy } from "../config/resolve-policy";
 import { findBlockedCategory } from "./category-guard";
 import { calculateFreshness } from "./freshness-decay";
 import type { FreshnessEvidence } from "./freshness-decay";
+import { matchUrlExclusion, urlExclusionMarker } from "../harvest-feeds/url-exclusions";
 import { validateScreeningInput } from "./screening-input";
 import type { HarvestObservation, ScreeningInput } from "./screening-input";
 import { indexSeenEvidence } from "./seen-evidence";
@@ -26,19 +27,32 @@ export type { FreshnessEvidence } from "./freshness-decay";
 export async function screenArticleCandidates(
   input: ScreeningInput,
 ): Promise<ScreeningResult> {
-  const { candidates, observations, seen, planning, run, maxFutureHours } = validateScreeningInput(input);
+  const { candidates, observations, seen, planning, run, exclusions, maxFutureHours } = validateScreeningInput(input);
   const seenByUrl = indexSeenEvidence(seen);
   const admitted: ScreenedCandidate[] = [];
   const rejections: CandidateRejectionRecord[] = [];
   for (const candidate of candidates) {
-    const policy = resolvePolicy(planning, candidate.vertical, run.overrides);
+    const policy = resolvePolicy(planning, run.overrides);
     const observation = observations[candidate.candidate_id] ?? null;
     const freshness = calculateFreshness(candidate, seenByUrl.get(candidate.url_key), run.now, maxFutureHours, policy);
     const required = candidate.source.form === "article" ? policy.triage.min_words_article : policy.triage.min_words_abstract;
     const blockedStatus = observation?.http_status != null &&
       planning.config.triage.blocked_http_statuses.includes(observation.http_status);
     let rejection: Pick<CandidateRejectionRecord, "drop_reason"> & { details: Partial<RejectionDetails> } | null = null;
-    if (observation?.paywall === true || blockedStatus) {
+    const blockedUrl = matchUrlExclusion(candidate.canonical_url, planning.config.harvest.url_exclusions);
+    const publishedOn = exclusions?.published_on[candidate.url_key];
+    const failureCode = exclusions?.settled_failure_codes[candidate.url_key];
+    if (blockedUrl !== undefined) {
+      rejection = { drop_reason: "BLOCKED_URL_MARKER", details: {
+        matched_url_key: candidate.url_key, matched_url_marker: urlExclusionMarker(blockedUrl),
+      } };
+    } else if (publishedOn !== undefined) {
+      rejection = { drop_reason: "ALREADY_PUBLISHED", details: {
+        matched_url_key: candidate.url_key, published_on: publishedOn, history_window_days: exclusions!.published_window_days,
+      } };
+    } else if (failureCode !== undefined) {
+      rejection = { drop_reason: "SETTLED_FAILURE", details: { matched_url_key: candidate.url_key, failure_code: failureCode } };
+    } else if (observation?.paywall === true || blockedStatus) {
       rejection = { drop_reason: "PAYWALL_OR_BLOCKED", details: { http_status: observation?.http_status ?? null } };
     } else if (findBlockedCategory(candidate.categories, planning.config.harvest.blocked_categories) !== null) {
       rejection = { drop_reason: "CATEGORY_EXCLUDED", details: {} };

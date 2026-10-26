@@ -11,7 +11,7 @@ from support.paths import CONTRACT_FIXTURES_DIR, read_text
 
 from idhazh import ledger
 from idhazh.contracts.base import ServerJob
-from idhazh.contracts.file_envelope import Period, WriterIdentity
+from idhazh.contracts.file_envelope import FileEnvelope, Period, WriterIdentity
 from idhazh.contracts.item_health import ItemHealthRow
 from idhazh.contracts.ledger_index import CompactEntry, CompactIndex
 from idhazh.contracts.ledger_name import LedgerName
@@ -46,6 +46,8 @@ def _raw(root: Path, day: str = DAY) -> Path:
 def _packed(root: Path, period: Period, covers: str) -> Path:
     """One compact file for a period, packed from a raw row filed on a day inside it."""
     raw = _raw(root, covers if period is Period.DAILY else f"{covers}-02")
+    envelope = ledger.read_envelope(raw)
+    assert isinstance(envelope, FileEnvelope)
     return ledger.persist_period(
         root,
         ledger.load_stored([raw], model=ItemHealthRow),
@@ -53,7 +55,7 @@ def _packed(root: Path, period: Period, covers: str) -> Path:
         ledger=WHICH,
         period=period,
         covers=covers,
-        identity=ledger.read_envelope(raw).identity,
+        identity=envelope.identity,
         built_from=1,
     )
 

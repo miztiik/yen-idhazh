@@ -62,6 +62,7 @@ export const FileEnvelopeSchema = z.strictObject({
   writer_version: NonEmptySchema, compression: CompressionSchema,
   built_from: CountSchema.nullable().default(null),
 }).superRefine((value, ctx) => {
+  if (PlannerLedgerNameSchema.safeParse(value.ledger).success) reject(ctx, "planner ledgers require their minimal file envelope");
   if ((value.tier === "compact") !== (value.period !== null)) reject(ctx, "compact files need a period; raw files name no period");
   if (value.tier === "raw" && value.built_from !== null) reject(ctx, "raw files carry no built_from");
   const stamp = value.tier === "raw" || value.period === "daily" ? DateStampSchema : value.period === "monthly" ? MonthStampSchema : YearStampSchema;

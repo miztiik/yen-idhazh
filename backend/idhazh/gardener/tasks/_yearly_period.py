@@ -66,8 +66,8 @@ from pathlib import Path
 from typing import Final
 
 from idhazh import ledger
-from idhazh.contracts.feed_ingest_discovered_article import LedgerContract
 from idhazh.contracts.collection_prune import StopReason
+from idhazh.contracts.feed_ingest_discovered_article import LedgerContract
 from idhazh.contracts.file_envelope import Period, WriterIdentity
 from idhazh.contracts.gardener_events import CompactionStep, StepChoice
 from idhazh.contracts.gardener_fault import GardenerFault, RecoveryNote

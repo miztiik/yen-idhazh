@@ -1,4 +1,4 @@
-/** Do the authored planner config and its typed patches reject invalid settings? */
+/** Do global planner settings reject invalid values and retired per-vertical controls? */
 import { expect, test } from "bun:test";
 import { z } from "zod";
 import * as policies from "../src/schemas/policy.schema";
@@ -43,7 +43,7 @@ if (Bun.argv.includes("--emit-schemas")) {
       ...config.curate, source_reliability_penalty_enabled: false,
     }).source_reliability_penalty_enabled).toBe(false);
     expect(config.curate.mmr_weights.lambda_source_kind).toBe(0.05);
-    expect(config.vertical_overrides).toEqual({});
+    expect(config).not.toHaveProperty("vertical_overrides");
     expect(config.workflow_reporting.enabled).toBe(true);
     expect(configs.FeedWorkflowReportingConfigSchema.parse({
       removal_condition: config.workflow_reporting.removal_condition,
@@ -54,39 +54,44 @@ if (Bun.argv.includes("--emit-schemas")) {
   });
 
   test.each([
-    { triage: { min_words_article: 0 } },
-    { triage: { min_words_abstract: 1.5 } },
-    { triage: { max_age_hours: null } },
-    { triage: { recency_weight: -1 } },
-    { triage: { kind: "research" } },
-    { curate: { source_authority_weight: Infinity } },
-    { curate: { source_reliability_penalty_enabled: false } },
-    { curate: { base_source_allowance: -1 } },
-    { curate: { mmr_weights: { lambda_domain: NaN } } },
-    { curate: { mmr_weights: { lambda_lens: 0 } } },
-    { curate: { soft_caps: { max_source_share: 0.2 } } },
-    { harvest: { concurrency: 2 } },
-    { partition: { default_shards: 2 } },
-    { workflow_reporting: { enabled: true } },
-    { metrics: { rolling_window_days: 3 } },
-    { seal: { compression: "zstd" } },
-    { desk_overrides: {} },
-    { feedback: { lifecycle_window_days: 0 } },
-    { feedback: { lifecycle_window_days: 1.5 } },
-    { feedback: { request_report_closed_days: 0 } },
-    { feedback: { request_report_closed_days: 1.5 } },
-    { feedback: { request_report_closed_days: null } },
-    { feedback: { minimum_measured_opportunities: 0 } },
-    { feedback: { minimum_measured_coverage: 1.1 } },
-    { feedback: { component_weights: { requests: -0.1 } } },
-    { feedback: { component_weights: { requests: 0.2 } } },
-  ])("vertical patch rejects invalid or global-only settings: %j", patch => {
-    expect(policies.VerticalPolicyOverrideSchema.safeParse(patch).success).toBe(false);
+    [["triage", "min_words_article"], 0],
+    [["triage", "min_words_abstract"], 1.5],
+    [["triage", "max_age_hours"], null],
+    [["triage", "recency_weight"], -1],
+    [["triage", "kind"], "research"],
+    [["curate", "source_authority_weight"], Infinity],
+    [["curate", "source_reliability_penalty_enabled"], null],
+    [["curate", "base_source_allowance"], -1],
+    [["curate", "mmr_weights", "lambda_domain"], NaN],
+    [["curate", "mmr_weights", "lambda_lens"], 0],
+    [["curate", "soft_caps", "max_source_share"], 0],
+    [["harvest", "concurrency"], "2"],
+    [["partition", "default_shards"], 9],
+    [["workflow_reporting", "enabled"], "true"],
+    [["metrics"], {}],
+    [["seal", "compression"], "gzip"],
+    [["vertical_overrides"], {}],
+    [["feedback", "lifecycle_window_days"], 0],
+    [["feedback", "lifecycle_window_days"], 1.5],
+    [["feedback", "request_report_closed_days"], 0],
+    [["feedback", "request_report_closed_days"], 1.5],
+    [["feedback", "request_report_closed_days"], null],
+    [["feedback", "minimum_measured_opportunities"], 0],
+    [["feedback", "minimum_measured_coverage"], 1.1],
+    [["feedback", "component_weights"], { requests: -0.1 }],
+    [["feedback", "component_weights"], { requests: 0.2 }],
+  ] as const)("global config rejects invalid or retired settings: %j=%j", async (path, value) => {
+    const config = await readConfig();
+    let leaf = config;
+    for (const segment of path.slice(0, -1)) leaf = leaf[segment];
+    leaf[path.at(-1)!] = value;
+    expect(configs.FeedIngestConfigSchema.safeParse(config).success).toBe(false);
   });
 
   test("each independent penalty accepts zero without dropping other dimensions", () => {
+    const weights = { lambda_source: 0.1, lambda_source_kind: 0.05, lambda_domain: 0.1 };
     for (const name of Object.keys(policies.FeedPenaltyWeightsSchema.shape)) {
-      expect(policies.FeedPenaltyWeightsPatchSchema.parse({ [name]: 0 })).toEqual({ [name]: 0 });
+      expect(policies.FeedPenaltyWeightsSchema.parse({ ...weights, [name]: 0 })[name as keyof typeof weights]).toBe(0);
     }
   });
 
@@ -116,10 +121,6 @@ if (Bun.argv.includes("--emit-schemas")) {
     ]) {
       expect(configs.FeedIngestConfigSchema.safeParse({ ...config, ...patch }).success).toBe(false);
     }
-    const parsed = configs.FeedIngestConfigSchema.parse({ ...config, vertical_overrides: { missing: {} } });
-    expect(() => configs.validatePlanningReferences(parsed, { verticals: [{ id: "ai" }] }))
-      .toThrow("vertical_overrides.missing");
-    expect(() => configs.PlanningTaxonomySchema.parse({ verticals: [{ id: "ai" }, { id: "ai" }] }))
-      .toThrow("duplicate ids");
+    expect(configs.FeedIngestConfigSchema.safeParse({ ...config, vertical_overrides: {} }).success).toBe(false);
   });
 }

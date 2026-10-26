@@ -14,6 +14,7 @@ import { requiredSeenDays } from "./read-seen-evidence";
 import { UtcInstantSchema } from "../screen-article-candidates/seen-evidence";
 import type { LedgerDay } from "./read-period";
 import type { ReadLedgerFile } from "./read-parquet";
+import { mapPool } from "../harvest-feeds/harvest-pool";
 
 function defaultInput(prefix: readonly string[], day: string): SeenDayInput {
   const base = prefix.join("/");
@@ -74,6 +75,7 @@ export async function readExclusionEvidence(input: {
   root: string; now: string; publishedWindowDays: number; settledFailureCodes: readonly ItemHealthFailureCode[];
   publishedRegistration: LedgerRegistration; itemHealthRegistration: LedgerRegistration;
   publishedDays: readonly SeenDayInput[]; settledFailureDays: readonly SeenDayInput[];
+  concurrency?: number;
 }) {
   const now = UtcInstantSchema.parse(input.now);
   if (!Number.isSafeInteger(input.publishedWindowDays) || input.publishedWindowDays < 0) {
@@ -83,13 +85,14 @@ export async function readExclusionEvidence(input: {
   const publishedNamed = namedDays(input.publishedRegistration.prefix, publishedDays,
     input.publishedDays, "published_days");
   const publishedFileCache = new Map<string, Promise<ReadLedgerFile<PublishedRow>>>();
-  const publishedHeld = await Promise.all(publishedNamed.map(async ({ input: day }) => ({
+  const indexCache = new Map<string, Promise<unknown | undefined>>();
+  const publishedHeld = await mapPool(publishedNamed, input.concurrency ?? publishedNamed.length, async ({ input: day }) => ({
     input: day,
     held: await readLedgerDay({
       ...folderInputs(input.root, day), ledger: "published", day: day.day, contract: PublishedRowProjectionContract,
-      fileCache: publishedFileCache,
+      fileCache: publishedFileCache, indexCache,
     }),
-  })));
+  }));
   const publishedOn = new Map<string, string>();
   for (const { input: day, held } of publishedHeld) {
     for (const { row } of held.rows) {
@@ -110,14 +113,14 @@ export async function readExclusionEvidence(input: {
   const settledDays = namedDays(input.itemHealthRegistration.prefix, [now.slice(0, 10)],
     input.settledFailureDays, "settled_failure_days");
   const settledFileCache = new Map<string, Promise<ReadLedgerFile<ItemHealthFailureProjection>>>();
-  const settledHeld = await Promise.all(settledDays.map(async ({ input: day }) => ({
+  const settledHeld = await mapPool(settledDays, input.concurrency ?? settledDays.length, async ({ input: day }) => ({
     input: day,
     held: await readLedgerDay({
       ...folderInputs(input.root, day), ledger: "item-health", day: day.day,
       contract: ItemHealthFailureProjectionContract,
-      fileCache: settledFileCache,
+      fileCache: settledFileCache, indexCache,
     }),
-  })));
+  }));
   const settledCodes = new Map<string, ItemHealthFailureCode>();
   for (const { input: day, held } of settledHeld) {
     for (const { row: raw } of held.rows) {

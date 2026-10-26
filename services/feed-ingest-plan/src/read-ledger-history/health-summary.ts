@@ -1,5 +1,6 @@
 /** Derive independent lifecycle, reliability and closed-day spend views from run facts. */
 import { availabilityEvidence, definitelyAfter } from "@idhazh/common-contracts";
+import { FeedHealthStateRowSchema } from "@idhazh/common-contracts";
 import type { FeedHealthStateRow, SourceSnapshot } from "@idhazh/common-contracts";
 import type { SourceHistoryEvidence, FeedHistoryPolicy } from "./read-feed-history";
 
@@ -57,16 +58,18 @@ export function summarizeHealth(input: {
       date: row.date, run_id: row.run_id, checked_at: row.checked_at!,
       outcome: row.outcome!, items: row.items!,
     }));
-    const availability = availabilityEvidence(logical.filter(row => lifecycleDays.includes(row.date)),
+    const lifecycleRows = logical.filter(row => lifecycleDays.includes(row.date));
+    const availability = availabilityEvidence(lifecycleRows,
       input.policy.availability_strikes_before_rest);
     const measured = logical.filter(row => reliabilityDays.includes(row.date)
       && row.outcome !== "skipped" && row.outcome !== "robots_denied");
     const productive = measured.filter(row => row.outcome === "ok" && row.items > 0).length;
     sources.set(source.source_id, {
       endpoint_key: inputEndpointKey(endpoint),
-      lifecycle: source.status === "retired" ? "retired"
+      lifecycle: source.status === "retired" ? "retired" : lifecycleRows.length === 0 ? "unknown"
         : availability.resting === true ? "resting" : availability.resting === null ? "unknown" : "eligible",
-      strikes: availability.strikes, rested_runs: availability.rested_runs,
+      strikes: lifecycleRows.length === 0 ? null : availability.strikes,
+      rested_runs: lifecycleRows.length === 0 ? null : availability.rested_runs,
       reliability: measured.length === 0 ? null : {
         productive, attempted: measured.length, success_fraction: productive / measured.length,
         from_day: reliabilityDays[0] ?? null, through_day: reliabilityDays.at(-1) ?? null,
@@ -82,7 +85,8 @@ export function summarizeHealth(input: {
     feeds: input.sources.map(source => {
       const work = rows.filter(row => row.feed_id === source.source_id
         && row.endpoint_key === inputEndpointKey(source.feed_url) && requestDays.includes(row.date));
-      const known = windowComplete && work.every(row => row.counts_complete);
+      const known = windowComplete && work.every(row =>
+        row.feed_requests !== null && row.article_requests !== null && row.robots_requests !== null);
       const sum = (field: "feed_requests" | "article_requests" | "robots_requests") =>
         !known || work.some(row => row[field] === null) ? null : work.reduce((total, row) => total + row[field]!, 0);
       return {
@@ -92,6 +96,17 @@ export function summarizeHealth(input: {
     }),
   };
   return { sources, request_report, represented_days: represented };
+}
+
+export function captureHealthRows(rows: readonly FeedHealthStateRow[], sources: ReadonlyMap<string, SourceHistoryEvidence>) {
+  return rows.map(row => {
+    const observed = sources.get(row.feed_id);
+    if (observed === undefined || observed.endpoint_key !== row.endpoint_key) throw new Error("Health capture does not match its configured feed endpoint");
+    return FeedHealthStateRowSchema.parse({
+      ...row, availability: observed.lifecycle, strikes: observed.strikes, rested_runs: observed.rested_runs,
+      reliability: observed.reliability,
+    });
+  });
 }
 
 import { createHash } from "node:crypto";

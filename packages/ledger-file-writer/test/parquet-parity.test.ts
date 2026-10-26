@@ -277,7 +277,7 @@ describe("ledger Parquet readback", () => {
     });
   });
 
-  test("writes a real dispatch with worker assignment distinct from writer shard", async () => {
+  test("writes all four planner ledgers without article text or generic identity", async () => {
     await withOutputRoot(async root => {
       const article = selectedArticle();
       const before = structuredClone(article);
@@ -303,12 +303,14 @@ describe("ledger Parquet readback", () => {
         expect(readback.files[0]!.footer.has("git_sha")).toBe(false);
         if (recording.name === "feed-health-state") expect(readback.files[0]!.footer.get("updated_at")).toBe("2026-10-21T00:00:00.001Z");
         for (const [period, covers] of [["daily", "2026-10-20"], ["monthly", "2026-10"], ["yearly", "2026"]] as const) {
-          const retry = plannerRecordings("2026-10-20", 2).find(row => row.name === recording.name)!.row;
+          const recordedRetry = plannerRecordings("2026-10-20", 2).find(row => row.name === recording.name)!.row;
+          const retry = recording.name === "plan-runs" ? { ...recordedRetry, duration_ms: null } : recordedRetry;
           const compact = await persistLedger({ ...context, rows: [recording.row, recording.row, retry], period: { tier: "compact", period, covers, builtFrom: 2 } });
           if (compact.status !== "written") throw new Error("planner compact file was not written");
           const packed = await checkParquetReadback(recording.name, root, compact.files, recording.contract.schema);
           expect(packed.files[0]!.row_count).toBe(recording.name === "discovered-articles" ? 1 : 2);
           if (recording.name === "feed-health-state") expect(packed.files[0]!.rows.reduce((sum, row) => sum + Number(row.article_requests), 0)).toBe(2);
+          if (recording.name === "plan-runs") expect(packed.files[0]!.rows.some(row => row.duration_ms === null)).toBe(true);
         }
       }
       const discovery = plannerRecordings()[0]!;
@@ -335,7 +337,7 @@ describe("ledger Parquet readback", () => {
       } })).rejects.toThrow("declared current planner row contract");
       await expect(persistLedger({ ...context, rows: [recording.row, { ...recording.row, title: "Conflicting copy" }] })).rejects.toThrow("conflicting duplicate");
       await expect(persistLedger({
-        ...context, rows: [{ ...recording.row, url_key: "f".repeat(64) }],
+        ...context, rows: [{ ...SelectedArticleRowSchema.parse(recording.row), url_key: "f".repeat(64) }],
         rowContract: { schema: z.strictObject(SelectedArticleRowSchema.shape), schemaVersion: "2026-10-25" },
       })).rejects.toThrow();
       const health = plannerRecordings().find(row => row.name === "feed-health-state")!;

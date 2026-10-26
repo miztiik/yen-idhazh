@@ -81,14 +81,13 @@ from pathlib import Path
 from typing import Final
 
 from idhazh import ledger, month_partition
-from idhazh.contracts.feed_ingest_discovered_article import LedgerContract
 from idhazh.contracts.collection_prune import StopReason
-from idhazh.contracts.file_envelope import Format, Period, WriterIdentity
+from idhazh.contracts.feed_ingest_discovered_article import LedgerContract
+from idhazh.contracts.file_envelope import PLANNER_LEDGERS, Format, Period, WriterIdentity
 from idhazh.contracts.gardener_events import CompactionStep, LedgerFaultMet, StepChoice
 from idhazh.contracts.gardener_fault import GardenerFault, RecoveryNote
 from idhazh.contracts.knobs.gardener import DaysWindow, ForeverWindow, Window
 from idhazh.contracts.ledger_index import CompactEntry, EntryState
-from idhazh.contracts.ledger_name import LedgerName
 from idhazh.gardener import event_log, ledger_marks, named_trees, schedule
 from idhazh.gardener.error_cause import ManualActionError
 from idhazh.gardener.file_listing import OverBudgetError
@@ -394,12 +393,7 @@ def _keep_own[C: LedgerContract](
     else:
         try:
             rows = [row for path in sources for row in tree.load(path, model=model)]
-            if tree.ledger in {
-                LedgerName.FEED_INGEST_PLAN_DISCOVERED_ARTICLES,
-                LedgerName.FEED_INGEST_PLAN_SELECTED_ARTICLES,
-                LedgerName.FEED_INGEST_PLAN_FEED_HEALTH_STATE,
-                LedgerName.FEED_INGEST_PLAN_PLAN_RUNS,
-            }:
+            if tree.ledger in PLANNER_LEDGERS:
                 rows = ledger.settle_rows([rows], ledger.door_key(tree.ledger))
             if tree.load(own.path, model=model) != rows:
                 # Its own file is at its path, no monthly entry names it, and it

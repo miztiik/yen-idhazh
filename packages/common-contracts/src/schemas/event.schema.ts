@@ -12,7 +12,7 @@ export const FeedIngestEventSchema = z.strictObject({
   occurred_at: RecordedInstantSchema,
   operation: z.enum(["history", "fetch", "parse", "select", "partition", "persist", "feed-health-summary", "plan"]),
   phase: z.enum(["started", "completed", "failed"]),
-  source_id: SlugSchema.nullable(), input_count: CountSchema.nullable(), output_count: CountSchema.nullable(),
+  feed_id: SlugSchema.nullable(), input_count: CountSchema.nullable(), output_count: CountSchema.nullable(),
   duration_ms: CountSchema.nullable(), failure_code: NonEmptySchema.nullable(),
 }).meta({
   version: "2026-10-25",

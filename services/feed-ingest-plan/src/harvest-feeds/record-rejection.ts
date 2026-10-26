@@ -7,7 +7,7 @@ import type { HarvestContext } from "./harvest-types";
 import { utcTimestamp } from "./harvest-types";
 import type { FetchResult } from "./robots-policy";
 
-export function fetchRejection(result: FetchResult, timeout_ms: number, diagnostics: HarvestDiagnostics): {
+export function fetchRejection(result: FetchResult, timeout_ms: number, diagnostics: HarvestDiagnostics | null): {
   reason: DropReason; details: Partial<RejectionDetails>;
 } {
   const details = { http_status: result.http_status, diagnostics };

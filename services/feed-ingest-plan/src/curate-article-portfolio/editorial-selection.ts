@@ -76,7 +76,7 @@ export function curateArticles(input: {
           : chosen.filter(previous => previous.candidate.source.kind === candidate.source.kind).length / chosen.length) },
         { term: "domain", value: domain === undefined ? null : -weights.lambda_domain * (chosen.length === 0 ? 0
           : chosen.filter(previous => sourceEvidence[previous.candidate.candidate_id]?.parent_domain?.value === domain).length / chosen.length) },
-      ];
+      ].map(adjustment => ({ ...adjustment, value: adjustment.value === 0 ? 0 : adjustment.value }));
       const blocked: string[] = [];
       if (!relaxations.includes("distinct_sources") && feeds.size < Math.min(config.soft_caps.min_distinct_sources, target)
         && feeds.has(candidate.source_id)) blocked.push("distinct_sources");

@@ -6,7 +6,7 @@ import type { LedgerRegistration } from "@idhazh/ledger-file-writer";
 import type { SeenDayInput } from "../config/service-settings";
 import { defaultDayInput } from "./named-days";
 import { mapPool } from "../harvest-feeds/harvest-pool";
-import { readPlannerDay } from "./read-planner-history";
+import { readPlannerDay, createPlannerHistoryCache } from "./read-planner-history";
 import { closedRequestDays, inputEndpointKey, summarizeHealth, settleHealthRows } from "./health-summary";
 
 export const FeedHistoryPolicySchema = z.object({
@@ -25,6 +25,9 @@ export async function readFeedHistory(input: {
   lifecycle_window_days: number; request_report_closed_days: number; concurrency: number;
   health: LedgerRegistration; health_days: readonly SeenDayInput[];
   own_days?: readonly SeenDayInput[];
+  own_rows?: readonly FeedHealthStateRow[];
+  current_rows?: readonly FeedHealthStateRow[];
+  exclude_execution?: { run_id: string; attempt: number };
 }) {
   const limit = Math.max(input.lifecycle_window_days, input.policy.reliability_window_days);
   if (input.health_days.length > limit + input.request_report_closed_days) {
@@ -38,15 +41,20 @@ export async function readFeedHistory(input: {
   for (const day of closedRequestDays(input.now, input.request_report_closed_days)) {
     if (!named.has(day)) named.set(day, defaultDayInput(input.health.prefix, day));
   }
+  const cache = createPlannerHistoryCache<FeedHealthStateRow>();
   const loaded = await mapPool([...named.values()].sort((a, b) => a.day.localeCompare(b.day)), input.concurrency,
-    day => readPlannerDay(input.root, input.health, day, FeedHealthStateRowContract));
+    day => readPlannerDay(input.root, input.health, day, FeedHealthStateRowContract, cache));
   const own = await mapPool(input.own_days ?? [], input.concurrency,
-    day => readPlannerDay(input.root, input.health, day, FeedHealthStateRowContract));
-  const rows = settleHealthRows([...loaded, ...own].flatMap(day => day.rows));
+    day => readPlannerDay(input.root, input.health, day, FeedHealthStateRowContract, cache));
+  const stored = [...loaded, ...own].flatMap(day => day.rows).concat(input.own_rows ?? []).filter(row =>
+    input.exclude_execution === undefined || row.run_id !== input.exclude_execution.run_id || row.attempt !== input.exclude_execution.attempt);
+  const rows = settleHealthRows([...stored, ...(input.current_rows ?? [])]);
   const represented = new Set([...input.health_days, ...input.own_days ?? []].map(day => day.day));
   const days = [...new Map([...loaded, ...own].filter(day => represented.has(day.day) || day.complete || day.rows.length > 0)
     .map(day => [day.day, { day: day.day, complete: day.complete }])).values()]
     .sort((a, b) => a.day.localeCompare(b.day));
+  for (const row of rows) if (!days.some(day => day.day === row.date)) days.push({ day: row.date, complete: false });
+  days.sort((a, b) => a.day.localeCompare(b.day));
   return { rows, days, ...summarizeHealth({ ...input, rows, days }) };
 }
 export type FeedHistory = Awaited<ReturnType<typeof readFeedHistory>>;

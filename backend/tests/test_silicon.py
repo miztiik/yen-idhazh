@@ -16,7 +16,7 @@ from support.paths import FIXTURES_DIR
 
 from idhazh import config, ledger
 from idhazh.contracts.base import ServerJob
-from idhazh.contracts.file_envelope import WriterIdentity
+from idhazh.contracts.file_envelope import FileEnvelope, WriterIdentity
 from idhazh.contracts.host_fingerprint import HostFingerprintRow, fingerprint_v2
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.telemetry import silicon, task_telemetry
@@ -43,6 +43,15 @@ A_RUN_ID = f"{FINGERPRINT_DAY}-1"
 def raw_files(state: Path) -> list[ledger.RawFile]:
     """Every raw file of the fingerprint day, oldest first, each with the envelope of its writer."""
     return ledger.list_raw_files(state, LedgerName.HOST_FINGERPRINT, days={FINGERPRINT_DAY})
+
+
+def fingerprint_envelopes(files: list[ledger.RawFile]) -> list[FileEnvelope]:
+    """Keep the fingerprint family's original identity protocol explicit."""
+    envelopes = []
+    for held in files:
+        assert isinstance(held.envelope, FileEnvelope)
+        envelopes.append(held.envelope)
+    return envelopes
 
 
 def settled(state: Path) -> list[HostFingerprintRow]:
@@ -584,7 +593,7 @@ def test_the_stage_files_this_job_its_own_raw_file(
 
     assert row is not None
     (written,) = raw_files(tmp_path)
-    who = written.envelope.identity
+    who = fingerprint_envelopes([written])[0].identity
     assert (who.run_id, who.attempt, who.job, who.shard) == ("2026-09-16-1", 1, ServerJob.WORK, 2)
     assert who.producer == silicon.PRODUCER
     assert who.git_sha == SEED_COMMIT, "a file says which commit wrote it"
@@ -624,8 +633,12 @@ def test_a_second_attempt_at_one_shard_writes_beside_the_first_and_wins(
     )
 
     written = raw_files(tmp_path)
-    assert sorted(held.envelope.identity.attempt for held in written) == [1, 2]
-    assert len({held.envelope.unit_id for held in written}) == 1, "two tries at one work unit"
+    assert sorted(envelope.identity.attempt for envelope in fingerprint_envelopes(written)) == [
+        1, 2
+    ]
+    assert len({envelope.unit_id for envelope in fingerprint_envelopes(written)}) == 1, (
+        "two tries at one work unit"
+    )
     assert settled(tmp_path) == [second], "one machine, one row, however many attempts drew it"
 
 
@@ -651,7 +664,7 @@ def test_a_second_call_in_one_attempt_is_read_as_one_row(
             job=ServerJob.WORK,
         )
 
-    assert len({held.envelope.unit_id for held in raw_files(tmp_path)}) == 1, (
+    assert len({envelope.unit_id for envelope in fingerprint_envelopes(raw_files(tmp_path))}) == 1, (
         "one writer, one work unit"
     )
     assert len(settled(tmp_path)) == 1, "one row, however many times the stage ran"
@@ -857,8 +870,10 @@ def test_the_clock_is_a_later_write_of_the_probes_own_work_unit(
     )
 
     written = raw_files(tmp_path)
-    assert len({held.envelope.unit_id for held in written}) == 1, "one writer, one work unit"
-    assert {held.envelope.identity.attempt for held in written} == {1}
+    assert len({envelope.unit_id for envelope in fingerprint_envelopes(written)}) == 1, (
+        "one writer, one work unit"
+    )
+    assert {envelope.identity.attempt for envelope in fingerprint_envelopes(written)} == {1}
     assert probe is not None and whole is not None
     assert whole.fingerprint == probe.fingerprint, "the clock carries the probe's machine"
     assert settled(tmp_path) == [whole]

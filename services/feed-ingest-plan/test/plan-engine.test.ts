@@ -1,15 +1,45 @@
 /** Verify the real four-ledger flow, clocks, partial work and text boundary on recorded content. */
 import { expect, test } from "bun:test";
-import { join } from "node:path";
-import { mkdir, writeFile, readFile } from "node:fs/promises";
+import { basename, dirname, join } from "node:path";
+import { mkdir, writeFile, readFile, stat } from "node:fs/promises";
+import { createHash } from "node:crypto";
 import {
   DiscoveredArticleRowContract, SelectedArticleRowContract, FeedHealthStateRowContract, PlanRunRowContract,
   SelectedArticlesArtifactSchema, deriveUrlKey,
+  RAW_DAY_INDEX_VERSION,
 } from "@idhazh/common-contracts";
+import { persistLedger } from "@idhazh/ledger-file-writer";
 import { runFeedPlan, summarizePlan } from "../src/run-feed-plan";
 import { readPlannerParquet } from "../src/read-ledger-history/read-planner-parquet";
 import { recordedPlan } from "./plan-recordings";
 import { source } from "./harvest-recordings";
+import { executeSelection } from "../src/api/selection-operation";
+import { endpointKey } from "../src/read-ledger-history/read-feed-history";
+
+async function writeHistoricalHealth(recorded: Awaited<ReturnType<typeof recordedPlan>>, day: string) {
+  const row = FeedHealthStateRowContract.schema.parse({
+    date: day, run_id: `${day}-900`, attempt: 1, feed_id: "recorded-news",
+    endpoint_key: endpointKey("https://news.example/feed.xml"), checked_at: `${day}T10:00:00Z`,
+    permission: "allowed", availability: "unknown", strikes: null, rested_runs: null,
+    last_failure_code: "FETCH_FAILED_HTTP", status: 503, reliability: null,
+    feed_reads: 1, productive_reads: 0, failed_reads: 1, article_candidates: 0, articles_selected: 0,
+    feed_requests: 2, article_requests: 3, robots_requests: 1, counts_complete: true, rejection_counts: [],
+    items: 0, outcome: "transient",
+  });
+  const result = await persistLedger({
+    ledger: "feed-health-state", registryEntry: recorded.inputs.registrations.feed_health_state, rowContract: FeedHealthStateRowContract,
+    outputRoot: recorded.inputs.outputRoot, ledgerSettings: recorded.inputs.ledgerSettings,
+    period: { tier: "raw", covers: day }, updatedAt: `${day}T11:00:00Z`, rows: [row],
+  });
+  const path = join(recorded.inputs.outputRoot, result.files[0]!.path);
+  const index = join(dirname(path), "index.json");
+  const names = [basename(path)];
+  await writeFile(index, JSON.stringify({
+    version: RAW_DAY_INDEX_VERSION, ledger: "feed-health-state", date: day, files: names, bytes: [(await stat(path)).size],
+    content_sha256: createHash("sha256").update(names.join("\n")).digest("hex"), listed_at: `${day}T12:00:00Z`,
+  }));
+  return { path, index, index_bytes: await readFile(index, "utf8") };
+}
 
 test("real composition separates run and selection clocks and reads native dispatches with exact choices", async () => {
   const recorded = await recordedPlan();
@@ -72,6 +102,17 @@ test("named native first sight wins for undated articles; arbitrary empty histor
   const recorded = await recordedPlan();
   try {
     const first = await runFeedPlan({}, recorded.inputs, recorded.runtime);
+    const originalSettings = JSON.stringify(recorded.inputs.settings);
+    await writeHistoricalHealth(recorded, "2026-10-20");
+    const fresh = await executeSelection({ batch_id: first.batches.parsed_batch_id! }, recorded.inputs, {
+      ...recorded.runtime, selection_clock: () => new Date("2026-10-22T00:10:00Z"),
+    });
+    expect(JSON.stringify(recorded.inputs.settings)).toBe(originalSettings);
+    expect(fresh.batch.evaluated_at).toBe(first.row.evaluated_at);
+    expect(fresh.batch.selection_started_at_utc).toBe("2026-10-22T00:10:00Z");
+    expect(fresh.batch.request_report.through_day).toBe("2026-10-21");
+    expect(fresh.batch.health_rows[0]!.reliability).toMatchObject({ productive: 1, attempted: 2, production_factor: 0.5, complete: false });
+    expect(fresh.batch.articles.every(article => article.ratings.adjustments.find(adjustment => adjustment.term === "feed_reliability")!.value! < 0)).toBe(true);
     recorded.runtime.run_number = "701";
     recorded.runtime.clock = () => new Date("2026-10-22T00:10:00Z");
     const second = await runFeedPlan({}, recorded.inputs, recorded.runtime);
@@ -94,6 +135,27 @@ test("invalid controls, disabled runs, inactive ledgers and unavailable named hi
     recorded.inputs.settings.enabled = false;
     await expect(runFeedPlan({}, recorded.inputs, recorded.runtime)).rejects.toThrow("disabled");
     expect(recorded.transport.requests).toHaveLength(0);
+    recorded.inputs.settings.enabled = true;
+    await writeHistoricalHealth(recorded, "2026-10-19");
+    const damaged = await writeHistoricalHealth(recorded, "2026-10-20");
+    await writeFile(damaged.index, "{\"malformed_index\":true}");
+    recorded.runtime.run_number = "702";
+    const partialHistory = await runFeedPlan({}, recorded.inputs, recorded.runtime);
+    expect(partialHistory.row.status).toBe("completed");
+    expect(partialHistory.files.selected_articles!.status).toBe("written");
+    expect(partialHistory.selected.length).toBeGreaterThan(0);
+    const captured = await readPlannerParquet(join(recorded.inputs.outputRoot, partialHistory.files.feed_health_state!.files[0]!.path),
+      "feed-health-state", FeedHealthStateRowContract);
+    expect(captured.rows[0]!.reliability).toMatchObject({ productive: 1, attempted: 2, complete: false });
+    await writeFile(damaged.index, damaged.index_bytes);
+    await writeFile(damaged.path, "corrupt Parquet");
+    recorded.runtime.run_number = "703";
+    const corruptFile = await runFeedPlan({}, recorded.inputs, recorded.runtime);
+    expect(corruptFile.row.status).toBe("completed");
+    expect(corruptFile.files.selected_articles!.status).toBe("written");
+    const retained = await readPlannerParquet(join(recorded.inputs.outputRoot, corruptFile.files.feed_health_state!.files[0]!.path),
+      "feed-health-state", FeedHealthStateRowContract);
+    expect(retained.rows[0]!.reliability).toMatchObject({ productive: 2, attempted: 3, complete: false });
   } finally { await recorded.close(); }
 });
 

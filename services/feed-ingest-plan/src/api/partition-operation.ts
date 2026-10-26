@@ -7,8 +7,10 @@ import { resolvePartitionRequest } from "../partition-article-shards/partition-i
 import { requireStageConfiguration } from "./selection-operation";
 import { stageStore } from "./stage-store";
 import { partitionArticles } from "../partition-article-shards/shard-packer";
+import { appendDocumentTiming } from "./document-state";
 
 export async function executePartition(raw: unknown, inputs: PlanInputs, runtime: PlanRuntime) {
+  const started = performance.now();
   const request = PartitionArticlesRequestSchema.parse(raw);
   const selected = stageStore(inputs).read("selected", request.batch_id, SelectedFeedBatchSchema);
   requireStageConfiguration(selected, inputs, runtime);
@@ -20,5 +22,6 @@ export async function executePartition(raw: unknown, inputs: PlanInputs, runtime
   const batch = stageStore(inputs).write("partitioned", PartitionedFeedBatchSchema, {
     ...selected, batch_id: randomUUID(), selection_batch_id: selected.batch_id, ...partition,
   });
+  await appendDocumentTiming(inputs, batch.context.run_id, { operation: "partition", duration_ms: Math.round(performance.now() - started), status: "completed" });
   return { batch };
 }

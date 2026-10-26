@@ -23,11 +23,7 @@ from idhazh.contracts.sources import SourceForm
 from idhazh.contracts.taxonomy import LifecycleStatus, SourceKind, SourceTier
 
 # Shared by the retained technical fetch/parse DTOs, not by an audit ledger.
-NonNegative = Annotated[float, Field(ge=0, allow_inf_nan=False)]
-Positive = Annotated[float, Field(gt=0, allow_inf_nan=False)]
-Finite = Annotated[float, Field(allow_inf_nan=False)]
 Count = Annotated[StrictInt, Field(ge=0)]
-PositiveCount = Annotated[StrictInt, Field(gt=0)]
 NonEmpty = Annotated[str, StringConstraints(min_length=1)]
 
 
@@ -48,7 +44,6 @@ class SourceSnapshot(Model):
     publisher_id: Slug | None = None
     feed_url: Url
     title: NonEmpty
-    vertical: Slug
     kind: SourceKind
     tier: SourceTier
     form: SourceForm
@@ -76,7 +71,6 @@ class FeedIngestCandidate(Contract):
     candidate_id: Sha256
     entry_ordinal: Count
     source_id: Slug
-    vertical: Slug
     source: SourceSnapshot
     canonical_url: Url
     url_key: Sha256
@@ -92,7 +86,7 @@ class FeedIngestCandidate(Contract):
     def validate_candidate(self) -> Self:
         if self.url_key != derive_url_key(self.canonical_url):
             raise ValueError("url_key must match canonical_url")
-        if self.source_id != self.source.source_id or self.vertical != self.source.vertical:
+        if self.source_id != self.source.source_id:
             raise ValueError("candidate feed must match configured feed facts")
         if self.candidate_id != derive_candidate_id(
             self.run_id, self.source_id, self.entry_ordinal

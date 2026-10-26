@@ -22,7 +22,7 @@ import pytest
 
 from idhazh import ledger
 from idhazh.contracts.base import ServerJob
-from idhazh.contracts.file_envelope import Period, Tier, WriterIdentity
+from idhazh.contracts.file_envelope import FileEnvelope, Period, Tier, WriterIdentity
 from idhazh.contracts.item_health import ItemHealthRow
 
 from ._every_tier import CENSUS, QUIET_DAY, RAW_DAYS, YEAR_DAYS, a_census_in_every_tier
@@ -107,6 +107,7 @@ def test_a_daily_file_whose_every_row_goes_is_built_empty_and_reads_back(
 
     scratch = put_aside(built.data, tmp_path, day.path.name)
     envelope = ledger.read_envelope(scratch)
+    assert isinstance(envelope, FileEnvelope)
     assert built.rows == 0
     assert ledger.load_stored([scratch], model=ItemHealthRow) == []
     assert (envelope.tier, envelope.period, envelope.covers) == (

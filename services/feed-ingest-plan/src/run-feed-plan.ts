@@ -1,10 +1,9 @@
 /** Execute one isolated planner run and finalize its four-ledger result even after later work fails. */
 import { randomUUID } from "node:crypto";
 import {
-  DiscoveredArticleRowSchema, ParsedFeedBatchSchema, PlanRunRowContract, PlanRunRowSchema, PlannerWorkEventSchema,
+  DiscoveredArticleRowSchema, ParsedFeedBatchSchema, PlannerWorkEventSchema,
 } from "@idhazh/common-contracts";
 import type { FeedIngestEvent, PlannerArticleEvidence, DiscoveredArticleRow, PlanRunRow } from "@idhazh/common-contracts";
-import { persistLedger } from "@idhazh/ledger-file-writer";
 import type { PersistLedgerResult } from "@idhazh/ledger-file-writer";
 import { harvestFeeds } from "./harvest-feeds/harvest-pool";
 import { sourceSnapshot } from "./harvest-feeds/load-harvest-inputs";
@@ -27,6 +26,7 @@ import { createIngestObservations } from "./ingest-observations";
 import { createRunHealth } from "./run-health";
 import { plannerMemory } from "./planner-memory";
 import { summarizeHealth } from "./read-ledger-history/health-summary";
+import { recordPlanRun } from "./record-plan-run";
 
 export type PlanRuntime = {
   git_sha: string; run_number?: string; correlation_id?: string; clock?: () => Date;
@@ -34,6 +34,8 @@ export type PlanRuntime = {
   boundary?: NonNullable<Parameters<typeof harvestFeeds>[2]>;
   log?: (event: FeedIngestEvent) => void; progress?: (record: ProgressRecord) => void;
   task_profiling?: TaskProfiling;
+  parser_pool?: ArticleParserPool;
+  signal?: AbortSignal;
   evidence?: ReadonlyMap<string, PlannerArticleEvidence>;
 };
 export async function runFeedPlan(raw: unknown, inputs: PlanInputs, runtime: PlanRuntime) {
@@ -58,13 +60,14 @@ export async function runFeedPlan(raw: unknown, inputs: PlanInputs, runtime: Pla
   let parseStarted: number | undefined;
   let parseFinished: number | undefined;
   let parseFailed = false;
-  const parserPool = new ArticleParserPool(inputs.settings.listener.parser_concurrency, phase => {
+  const parserActivity = (phase: "started" | "completed" | "failed") => {
     const now = performance.now();
     if (phase === "started") parseStarted ??= now;
     else parseFinished = now;
     if (phase === "failed") parseFailed = true;
     emit("parse", phase);
-  });
+  };
+  const parserPool = runtime.parser_pool ?? new ArticleParserPool(inputs.settings.listener.parser_concurrency);
   let work: ReturnType<typeof createRunHealth> | undefined;
   let history: Awaited<ReturnType<typeof prepareFeedHealthState>> | undefined;
   let discovery: Awaited<ReturnType<typeof readSeenEvidence>> | undefined;
@@ -88,7 +91,7 @@ export async function runFeedPlan(raw: unknown, inputs: PlanInputs, runtime: Pla
   emit("plan", "started");
   try {
     const loaded = await Promise.all([
-      phase("feed-health-summary", () => prepareFeedHealthState(inputs, context.now)),
+      prepareFeedHealthState(inputs, context.now),
       readSeenEvidence({
         root: inputs.root, files: inputs.settings.inputs.seen_files, days: inputs.settings.inputs.seen_days,
         registration: inputs.registrations.discovered_articles, now: context.now,
@@ -100,6 +103,7 @@ export async function runFeedPlan(raw: unknown, inputs: PlanInputs, runtime: Pla
         settledFailureCodes: inputs.clock_config.collect.settled_failure_codes,
         publishedRegistration: inputs.registrations.published, itemHealthRegistration: inputs.registrations.item_health,
         publishedDays: inputs.settings.inputs.published_days, settledFailureDays: inputs.settings.inputs.settled_failure_days,
+        concurrency: inputs.harvest.config.harvest.concurrency,
       }),
     ]);
     history = loaded[0];
@@ -117,6 +121,7 @@ export async function runFeedPlan(raw: unknown, inputs: PlanInputs, runtime: Pla
       max_future_hours: inputs.clock_config.collect.max_future_hours,
       exclusions: { ...loaded[2], published_window_days: inputs.clock_config.collect.published_window_days },
       feed_history: initialHealth.sources, observations, parser_pool: parserPool,
+      parser_options: { activity: parserActivity, ...(runtime.signal === undefined ? {} : { signal: runtime.signal }) },
       overrides: request.freshness_hours === undefined ? {} : { freshness_hours: request.freshness_hours },
       clock: () => new Date(context.now), observation_clock: runtime.observation_clock ?? (() => new Date()),
       log: () => {},
@@ -135,7 +140,7 @@ export async function runFeedPlan(raw: unknown, inputs: PlanInputs, runtime: Pla
       },
       on_article: currentWork.article,
       progress: (eventType, details) => runtime.progress?.({
-        eventType, source_id: details?.source_id ?? null, output_count: details?.output_count ?? null,
+        eventType, feed_id: details?.source_id ?? null, output_count: details?.output_count ?? null,
       }),
     }, runtime.boundary));
     const seenRows = memory.rememberDiscoveries([...discovery.rows, ...sightings],
@@ -165,8 +170,10 @@ export async function runFeedPlan(raw: unknown, inputs: PlanInputs, runtime: Pla
     batches.parsed_batch_id = parsed.batch_id;
     selectionStartedAt = utcTimestamp(runtime.selection_clock ?? runtime.clock);
     const selectionClock = selectionStartedAt;
-    selected = (await phase("select", () => executeSelection({ batch_id: parsed.batch_id }, inputs,
-      { ...runtime, selection_clock: () => new Date(selectionClock) }))).batch;
+    const selection = await phase("select", () => executeSelection({ batch_id: parsed.batch_id }, inputs,
+      { ...runtime, selection_clock: () => new Date(selectionClock) }));
+    selected = selection.batch;
+    timings.push({ operation: "feed-health-summary", duration_ms: selection.health_summary_duration_ms, status: "completed" });
     PlannerWorkEventSchema.parse({ stage: "selected", payload: selected });
     batches.selection_batch_id = selected.batch_id;
     const chosen = selected;
@@ -186,11 +193,16 @@ export async function runFeedPlan(raw: unknown, inputs: PlanInputs, runtime: Pla
       PlannerWorkEventSchema.parse({ stage: "partitioned", payload: partitioned });
       batches.partition_batch_id = partitioned.batch_id;
     }
+    if (partitioned !== undefined) {
+      const persisted = await phase("persist", () => executePersistence({ batch_id: partitioned!.batch_id }, inputs, runtime));
+      files.selected_articles = persisted.files;
+      artifact = persisted.artifact;
+    }
     const rejected = settled.filter(result => result.status === "rejected");
-    if (rejected.length) throw new AggregateError(rejected.map(result => result.reason), "Planner finalization phase failed");
-    const persisted = await phase("persist", () => executePersistence({ batch_id: partitioned!.batch_id }, inputs, runtime));
-    files.selected_articles = persisted.files;
-    artifact = persisted.artifact;
+    if (rejected.length) {
+      failureCode = settled[1].status === "rejected" ? "FEED_HEALTH_WRITE_FAILED" : "PARTITION_FAILED";
+      emit("plan", "failed", { failure_code: failureCode });
+    }
   } catch (error) {
     failureCode = error instanceof PlanError ? error.code : "PLANNER_EXECUTION_FAILED";
     emit("plan", "failed", { failure_code: failureCode });
@@ -216,33 +228,23 @@ export async function runFeedPlan(raw: unknown, inputs: PlanInputs, runtime: Pla
       }
     }
   } finally {
-    parserPool.close();
+    if (runtime.parser_pool === undefined) parserPool.close();
     if (parseStarted !== undefined) timings.push({
       operation: "parse", duration_ms: Math.round((parseFinished ?? performance.now()) - parseStarted),
       status: parseFailed ? "failed" : "completed",
     });
   }
-  const row = PlanRunRowSchema.parse({
-    run_id: context.run_id, attempt: context.writer.attempt, date: context.date, started_at: context.captured_at,
+  const recorded = await recordPlanRun(inputs, context, {
     duration_ms: Math.round(performance.now() - started), status: failureCode === null ? "completed"
       : work !== undefined && work.rows().some(row => row.checked_at !== null) ? "partial" : "failed",
     failure_code: failureCode, selected_count: selected?.articles.length ?? 0,
     strategy: partitioned?.strategy ?? request.partition_strategy, dispatch_count: partitioned?.dispatch_count ?? 0,
     selected_articles_artifact: artifact, api_timings: timings,
-    lifecycle_window_days: inputs.harvest.config.feedback.lifecycle_window_days,
-    reliability_floor: inputs.clock_config.collect.reliability_floor,
-    reliability_penalty_enabled: inputs.harvest.config.curate.source_reliability_penalty_enabled,
     evaluated_at: selected?.evaluated_at ?? context.now,
-    request_report_closed_days: inputs.harvest.config.feedback.request_report_closed_days,
-    reliability_window_days: inputs.clock_config.collect.reliability_window_days,
     selection_started_at_utc: selectionStartedAt,
   });
-  files.plan_runs = await persistLedger({
-    ledger: "plan-runs", rowContract: PlanRunRowContract, rows: [row], registryEntry: inputs.registrations.plan_runs,
-    outputRoot: inputs.outputRoot, writerContext: context.writer, ledgerSettings: inputs.ledgerSettings,
-    period: { tier: "raw", covers: context.date },
-  });
-  if (files.plan_runs.status !== "written") throw new Error("Planner run outcome was not saved");
+  const row = recorded.row;
+  files.plan_runs = recorded.files;
   if (failureCode === null) emit("plan", "completed", { output_count: row.selected_count, duration_ms: row.duration_ms });
   return { context, row, batches, files, selected: partitioned?.articles ?? selected?.articles ?? [] };
 }

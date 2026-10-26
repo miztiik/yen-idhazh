@@ -29,7 +29,7 @@ class PlanRunRow(PlannerRow):
 
     run_id: RunId
     started_at: RecordedInstant
-    duration_ms: Count
+    duration_ms: Count | None
     status: Literal["completed", "partial", "failed"]
     failure_code: Code | None
     selected_count: Count
@@ -51,4 +51,9 @@ class PlanRunRow(PlannerRow):
     def validate_run_day(self) -> Self:
         if self.date != self.started_at[:10] or not self.run_id.startswith(f"{self.date}-"):
             raise ValueError("run date and run_id must match the UTC day of started_at")
+        reference = self.selected_articles_artifact
+        if reference is not None and (
+            "://" in reference or any(ord(char) < 32 or ord(char) == 127 for char in reference)
+        ):
+            raise ValueError("artifact reference must not contain a URL or artifact content")
         return self

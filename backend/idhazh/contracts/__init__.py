@@ -4,10 +4,10 @@ This package is the bottom of the dependency graph and MUST NOT import any other
 subpackage of `idhazh` (CLAUDE.md section 4). A contract that imports a stage is
 a contract that cannot be loaded by a test of that stage.
 
-`CONTRACTS` below is the registry: every top-level persisted document this
-project writes. It is what a check over all of them iterates - the stamped read
-boundary, the fixture map, the changelog shape. A shape that is not on it is not
-a document a run persists.
+`CONTRACTS` registers version-bearing documents. `PLANNER_CONTRACTS` registers
+the planner's file-versioned rows, artifact and minimal envelope. Their bounded
+fixture and binding checks cover each protocol without adding a version column
+to planner rows.
 """
 
 from typing import Final
@@ -50,10 +50,13 @@ from idhazh.contracts.eval_row import ConfidenceBand, EvalRow
 from idhazh.contracts.evidence import EvidenceItem
 from idhazh.contracts.feed_health import FeedHealthRow
 from idhazh.contracts.feed_health_state import FeedHealthStateRow
+from idhazh.contracts.feed_ingest_candidate import FeedIngestCandidate
 from idhazh.contracts.feed_ingest_discovered_article import DiscoveredArticleRow, PlannerPayload
 from idhazh.contracts.feed_ingest_plan_run import PlanRunRow
-from idhazh.contracts.feed_ingest_selected_article import SelectedArticleRow, SelectedArticlesArtifact
-from idhazh.contracts.feed_ingest_candidate import FeedIngestCandidate
+from idhazh.contracts.feed_ingest_selected_article import (
+    SelectedArticleRow,
+    SelectedArticlesArtifact,
+)
 from idhazh.contracts.feed_retirement import FeedRetirementRow
 from idhazh.contracts.file_envelope import FileEnvelope, PlannerFileEnvelope
 from idhazh.contracts.fingerprint import PipelineInputs
@@ -231,6 +234,7 @@ __all__ = [
     "DigestViewItem",
     "DigestViewVisual",
     "DigestVisual",
+    "DiscoveredArticleRow",
     "EdgarPolicy",
     "EntityDef",
     "EntityFeed",
@@ -238,11 +242,6 @@ __all__ = [
     "EventDef",
     "FeedDef",
     "FeedHealthStateRow",
-    "DiscoveredArticleRow",
-    "PlanRunRow",
-    "PlannerFileEnvelope",
-    "SelectedArticleRow",
-    "SelectedArticlesArtifact",
     "FeedIngestCandidate",
     "FetchedDocument",
     "FileEnvelope",
@@ -256,7 +255,9 @@ __all__ = [
     "ParsedFeedBatch",
     "PartitionedFeedBatch",
     "PipelineInputs",
+    "PlanRunRow",
     "PlannedItem",
+    "PlannerFileEnvelope",
     "PlannerOperation",
     "PublicationInventory",
     "RawDayIndex",
@@ -266,6 +267,8 @@ __all__ = [
     "RunShards",
     "RunStatus",
     "SalienceFeedDef",
+    "SelectedArticleRow",
+    "SelectedArticlesArtifact",
     "SelectedFeedBatch",
     "SourceForm",
     "SourceKind",

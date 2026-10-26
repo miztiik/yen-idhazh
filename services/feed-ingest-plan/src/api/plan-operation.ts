@@ -8,7 +8,7 @@ import { prepareOperation } from "./document-operations";
 import { RequestIdSchema } from "./operation-contracts";
 import { openOperationStore } from "./operation-store";
 
-export type CapturedPlanIdentity = Pick<PlanRuntime, "clock" | "run_number" | "correlation_id" | "captured_at">;
+export type CapturedPlanIdentity = Pick<PlanRuntime, "clock" | "run_number" | "correlation_id" | "captured_at" | "signal">;
 export async function executeKeyedPlan(
   key: string, request: PlanRequest, inputs: PlanInputs, runtime: PlanRuntime,
   execute: (request: PlanRequest, captured?: CapturedPlanIdentity) => Promise<FeedPlanResult>,

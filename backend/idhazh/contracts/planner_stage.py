@@ -15,9 +15,10 @@ from idhazh.contracts.base import (
     Sha256,
     Slug,
     Timestamp,
+    Url,
 )
 from idhazh.contracts.feed_health_state import FeedHealthStateRow
-from idhazh.contracts.feed_ingest_candidate import FeedIngestCandidate
+from idhazh.contracts.feed_ingest_candidate import FeedIngestCandidate, SourceSnapshot
 from idhazh.contracts.feed_ingest_diagnostics import FetchFailure, HarvestDiagnostics
 from idhazh.contracts.feed_ingest_discovered_article import DiscoveredArticleRow
 from idhazh.contracts.feed_ingest_selected_article import (
@@ -164,6 +165,27 @@ class PlannerArticleEvidence(Model):
     estimated_work: NonNegative
 
 
+class PlannerFeedEntry(Model):
+    """One offered RSS entry, before its article fetch or technical admission."""
+
+    entry_ordinal: Count
+    title: str | None
+    link: Url | None
+    categories: list[str]
+    author: str | None
+    published_at: Timestamp | None
+
+
+class PlannerFeedOffer(Model):
+    """One server-owned feed offer and the request currently handling it."""
+
+    offer_id: Sha256
+    source: SourceSnapshot
+    entry: PlannerFeedEntry
+    state: Literal["pending", "fetched", "parsed", "rejected"]
+    fetch_request_id: UUID4 | None
+
+
 class PlannerRejectionCount(Model):
     """Transient grouped exclusions that become health counts, not article ledgers."""
 
@@ -232,6 +254,11 @@ class ParsedFeedBatch(Contract):
     history_days: list[PlannerHealthDay]
     work_rows: list[FeedHealthStateRow]
     exclusions: list[PlannerRejectionCount]
+    offers: list[PlannerFeedOffer] = Field(
+        default_factory=list, json_schema_extra={"default": []},
+    )
+    feed_fetch_request_id: UUID4 | None = None
+    input_complete: bool = Field(default=True, strict=True)
 
     @model_validator(mode="after")
     def validate_complete_input(self) -> Self:

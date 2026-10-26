@@ -29,12 +29,20 @@ export type NamedDayInput<T extends object> = Readonly<{
   rawFiles?: readonly string[];
   rawIndex?: string;
   fileCache?: Map<string, Promise<ReadLedgerFile<T>>>;
+  indexCache?: Map<string, Promise<unknown | undefined>>;
 }>;
 
 function missing(error: unknown): boolean {
   return error instanceof Error && "code" in error && error.code === "ENOENT";
 }
-async function readIndex(path: string): Promise<unknown | undefined> {
+async function readIndex(path: string, cache?: Map<string, Promise<unknown | undefined>>): Promise<unknown | undefined> {
+  const existing = cache?.get(path);
+  if (existing !== undefined) return existing;
+  const pending = readIndexFile(path);
+  cache?.set(path, pending);
+  return pending;
+}
+async function readIndexFile(path: string): Promise<unknown | undefined> {
   try {
     return JSON.parse(await readFileFromDisk(path, "utf8")) as unknown;
   } catch (error) {
@@ -62,7 +70,7 @@ export async function readLedgerDay<T extends object>(input: NamedDayInput<T>): 
   for (const period of ["yearly", "monthly", "daily"] as const) {
     const path = input.indexes?.[period];
     if (path === undefined) continue;
-    const value = await readIndex(path);
+    const value = await readIndex(path, input.indexCache);
     if (value === undefined) {
       notices.push(`index-missing:${period}`);
       continue;
@@ -125,7 +133,7 @@ export async function readLedgerDay<T extends object>(input: NamedDayInput<T>): 
   let sizes: number[] | null = null;
   if (input.rawIndex !== undefined) {
     if (rawFiles !== undefined) throw new Error("Name raw files or a raw index, not both");
-    const value = await readIndex(input.rawIndex);
+    const value = await readIndex(input.rawIndex, input.indexCache);
     if (value === undefined) {
       notices.push("raw-index-missing");
       return result("missing", "raw");

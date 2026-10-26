@@ -445,6 +445,7 @@ def test_the_filename_is_the_file_id_and_both_identifiers_recompute(
         fmt=fmt,
     )
     envelope = ledger.read_envelope(written)
+    assert isinstance(envelope, FileEnvelope)
     unit = filenames.unit_id(
         ledger=envelope.ledger,
         covers=envelope.covers,
@@ -495,12 +496,16 @@ def test_two_attempts_at_one_unit_are_two_files_and_the_union_keeps_the_second(
     newest: dict[object, tuple[int, Path]] = {}
     for path in [*first, *second]:
         envelope = ledger.read_envelope(path)
+        assert isinstance(envelope, FileEnvelope)
         held = newest.get(envelope.unit_id)
         if held is None or envelope.identity.attempt > held[0]:
             newest[envelope.unit_id] = (envelope.identity.attempt, path)
 
     assert first[0].name != second[0].name
-    assert ledger.read_envelope(first[0]).unit_id == ledger.read_envelope(second[0]).unit_id
+    first_envelope = ledger.read_envelope(first[0])
+    second_envelope = ledger.read_envelope(second[0])
+    assert isinstance(first_envelope, FileEnvelope) and isinstance(second_envelope, FileEnvelope)
+    assert first_envelope.unit_id == second_envelope.unit_id
     assert ledger.load([path for _, path in newest.values()], model=VisualPruneRow) == rows[:1]
 
 
@@ -603,6 +608,7 @@ def test_a_compact_write_covers_its_period_and_keeps_every_rows_own_identity(
         built_from=31,
     )
     envelope = ledger.read_envelope(written)
+    assert isinstance(envelope, FileEnvelope)
 
     assert (
         written.relative_to(tmp_path).as_posix() == "compact/visual-prunes/monthly/2026/08.parquet"

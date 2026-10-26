@@ -2,7 +2,7 @@
 import { FeedHealthStateRowSchema } from "@idhazh/common-contracts";
 import type {
   CandidateRejectionRecord, DocumentWorkFact, FeedHealthStateRow,
-  FeedOutcomePayload, PlannerRejectionCount, SourceSnapshot,
+  FeedOutcomePayload, PlannerRejectionCount, SourceSnapshot, FetchedDocument,
 } from "@idhazh/common-contracts";
 import type { RunContext } from "./resolve-run-context";
 import type { SourceHistoryEvidence } from "./read-ledger-history/read-feed-history";
@@ -53,17 +53,20 @@ export function createRunHealth(context: RunContext, sources: readonly SourceSna
     if (held === undefined) target.rejection_counts.push(reason);
     else held.count += reason.count;
   }
-  function reject(rejection: CandidateRejectionRecord) {
-    const attribution = rejection.drop_reason === "FETCH_FAILED" || rejection.drop_reason === "EXTRACT_FAILED"
-      || rejection.drop_reason === "FETCH_FAILED_HTTP" || rejection.drop_reason === "FEED_PARSE_FAILED"
+  function reject(rejection: CandidateRejectionRecord, override?: PlannerRejectionCount["attribution"]) {
+    const failureCode = rejection.details.diagnostics?.fetch_failure ?? rejection.details.diagnostics?.extraction_failure
+      ?? (rejection.drop_reason === "FETCH_FAILED_HTTP" ? "http" : rejection.drop_reason === "FETCH_TIMEOUT" ? "timeout"
+        : rejection.drop_reason === "FEED_PARSE_FAILED" ? "malformed-feed" : rejection.drop_reason === "EXTRACT_EMPTY" ? "empty-content" : null);
+    const failure = failureCode !== null || ["FETCH_FAILED", "EXTRACT_FAILED", "FETCH_TIMEOUT"].includes(rejection.drop_reason);
+    const attribution = failure
       ? attributeIngestOutcome({
-        document_kind: rejection.subject, operation: rejection.stage === "harvest-feeds" ? "fetch" : "parse",
-        outcome: "failed", failure_code: rejection.details.diagnostics?.fetch_failure ?? null,
+        document_kind: rejection.subject, operation: rejection.drop_reason.startsWith("EXTRACT") || rejection.drop_reason === "FEED_PARSE_FAILED" ? "parse" : "fetch",
+        outcome: "failed", failure_code: failureCode,
         http_status: rejection.details.http_status ?? null, request_phase: null,
       }) : null;
     const grouped: PlannerRejectionCount = {
       feed_id: rejection.source_id, subject: rejection.subject, stage: rejection.stage,
-      reason_code: rejection.drop_reason, attribution: attribution === "source" ? "feed"
+      reason_code: rejection.drop_reason, attribution: override !== undefined ? override : attribution === "source" ? "feed"
         : attribution === "unresolved" ? "unknown" : attribution, count: 1,
     };
     group(grouped, rejection.rejected_at);
@@ -93,7 +96,8 @@ export function createRunHealth(context: RunContext, sources: readonly SourceSna
         : fetched.failure === "http" && fetched.http_status !== null && !retryableStatus.has(fetched.http_status) ? "permanent" : "transient";
       target.productive_reads = fetched.failure === null ? null : 0;
       target.failed_reads = fetched.failure === null ? null : target.feed_reads;
-      target.counts_complete = fetched.failure !== null;
+      target.counts_complete = fetched.failure !== null
+        && target.feed_requests !== null && target.article_requests !== null && target.robots_requests !== null;
     },
     unknownRequests(feedId: string, instant: string) {
       const target = row(feedId, instant);
@@ -101,6 +105,25 @@ export function createRunHealth(context: RunContext, sources: readonly SourceSna
       target.article_requests = null;
       target.robots_requests = null;
       target.counts_complete = false;
+    },
+    restoreRequests(artifact: FetchedDocument) {
+      if (artifact.attempts.length === 0) {
+        const target = row(artifact.source_id, artifact.observation.occurred_at);
+        target.feed_requests = null;
+        target.article_requests = null;
+        target.robots_requests = null;
+        target.counts_complete = false;
+      }
+      for (const [index, attempt] of artifact.attempts.entries()) {
+        const instant = artifact.attempt_observations[index]!.occurred_at;
+        const target = row(artifact.source_id, instant);
+        if (attempt.phase === "validation") continue;
+        const field = attempt.phase === "robots" ? "robots_requests" : artifact.kind === "feed" ? "feed_requests" : "article_requests";
+        if (attempt.http_status === null) {
+          target[field] = null;
+          target.counts_complete = false;
+        } else if (target[field] !== null) target[field]++;
+      }
     },
     feed(outcome: FeedOutcomePayload, entries: readonly FeedEntry[], checkedAt: string, fetched?: FetchResult) {
       const target = row(outcome.source.source_id, checkedAt);

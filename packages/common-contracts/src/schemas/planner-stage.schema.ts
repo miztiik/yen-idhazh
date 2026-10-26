@@ -11,6 +11,8 @@ import {
   RunIdSchema, Sha256Schema, SlugSchema, TimestampSchema, reject,
 } from "./primitives";
 import { RecordedInstantSchema } from "./recorded-instant.schema";
+import { SourceSnapshotSchema } from "./source.schema";
+import { UrlSchema } from "./primitives";
 
 export const PlannerStageContextSchema = z.strictObject({
   now: TimestampSchema, captured_at: RecordedInstantSchema, date: DateStampSchema,
@@ -63,6 +65,16 @@ export const PlannerArticleEvidenceSchema = z.strictObject({
   estimated_work: NonNegativeSchema,
 });
 export type PlannerArticleEvidence = z.infer<typeof PlannerArticleEvidenceSchema>;
+export const PlannerFeedEntrySchema = z.strictObject({
+  entry_ordinal: CountSchema, title: z.string().nullable(), link: UrlSchema.nullable(),
+  categories: z.array(z.string()), author: z.string().nullable(), published_at: TimestampSchema.nullable(),
+});
+export const PlannerFeedOfferSchema = z.strictObject({
+  offer_id: Sha256Schema, source: SourceSnapshotSchema, entry: PlannerFeedEntrySchema,
+  state: z.enum(["pending", "fetched", "parsed", "rejected"]),
+  fetch_request_id: z.uuid({ version: "v4" }).nullable(),
+});
+export type PlannerFeedOffer = z.infer<typeof PlannerFeedOfferSchema>;
 export const PlannerRejectionCountSchema = z.strictObject({
   feed_id: SlugSchema, subject: z.enum(["feed", "article"]), stage: NonEmptySchema,
   reason_code: NonEmptySchema, attribution: z.enum(["feed", "pipeline", "unknown"]).nullable(), count: CountSchema,
@@ -90,6 +102,9 @@ export const ParsedFeedBatchSchema = z.strictObject({
   evidence: z.record(Sha256Schema, PlannerArticleEvidenceSchema),
   history_rows: z.array(FeedHealthStateRowSchema), history_days: z.array(PlannerHealthDaySchema),
   work_rows: z.array(FeedHealthStateRowSchema), exclusions: z.array(PlannerRejectionCountSchema),
+  offers: z.array(PlannerFeedOfferSchema).default([]),
+  feed_fetch_request_id: z.uuid({ version: "v4" }).nullable().default(null),
+  input_complete: z.boolean().default(true),
 }).superRefine((value, ctx) => {
   const ids = new Set(value.candidates.map(candidate => candidate.candidate_id));
   if (ids.size !== value.candidates.length) reject(ctx, "parsed candidate identities must be distinct");

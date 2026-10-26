@@ -16,7 +16,9 @@ type Scope = {
   document_kind: "feed" | "article"; publisher_id: string | null; candidate_id: string | null;
   observed_run_id: string; observed_attempt: number; source_id: string;
 };
-type Context = Pick<HarvestContext, "progress" | "observations" | "observation_clock">;
+type Context = Pick<HarvestContext, "progress" | "observations" | "observation_clock"> & {
+  on_attempt?: (observation: ReturnType<typeof observeDocument>) => void;
+};
 
 export function documentWork(context: Context, identity: DocumentIdentity, key: string, scope: Scope) {
   const timestamp = () => utcTimestamp(context.observation_clock);
@@ -49,6 +51,7 @@ export function documentWork(context: Context, identity: DocumentIdentity, key: 
         try {
           fetched = await fetcher.fetch(url, async measurement => {
             const observation = event("attempt", fetchId, measurement.occurred_at, `${key}\n${measurement.attempt.sequence}`);
+            context.on_attempt?.(observation);
             await save(observation, {
               outcome: measurement.outcome,
               failure_code: measurement.attempt.failure,

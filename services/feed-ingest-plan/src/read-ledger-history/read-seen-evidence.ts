@@ -8,9 +8,10 @@ import { SeenDayInputSchema, RelativePathSchema } from "../config/service-settin
 import type { SeenDayInput } from "../config/service-settings";
 import { UtcInstantSchema } from "../screen-article-candidates/seen-evidence";
 import type { RunContext } from "../resolve-run-context";
-import { readPlannerDay } from "./read-planner-history";
+import { readPlannerDay, createPlannerHistoryCache } from "./read-planner-history";
 import { readPlannerParquet } from "./read-planner-parquet";
 import { mapPool } from "../harvest-feeds/harvest-pool";
+import { defaultDayInput } from "./named-days";
 
 const dayMilliseconds = 86_400_000;
 export function requiredSeenDays(now: string, lookbackDays: number): string[] {
@@ -44,10 +45,13 @@ export async function readSeenEvidence(input: {
   const required = requiredSeenDays(input.now, input.lookback_days);
   const named = parseSeenDays(input.days);
   if (named.some(day => !required.includes(day.day))) throw new Error("Discovery day lies outside its configured UTC window");
+  const byDay = new Map(named.map(day => [day.day, day]));
+  const inventory = required.map(day => byDay.get(day) ?? defaultDayInput(input.registration.prefix, day));
+  const cache = createPlannerHistoryCache<DiscoveredArticleRow>();
   const [files, days] = await Promise.all([
     mapPool(input.files, input.concurrency, path =>
       readPlannerParquet(resolve(input.root, RelativePathSchema.parse(path)), "discovered-articles", DiscoveredArticleRowContract)),
-    mapPool(named, input.concurrency, day => readPlannerDay(input.root, input.registration, day, DiscoveredArticleRowContract)),
+    mapPool(inventory, input.concurrency, day => readPlannerDay(input.root, input.registration, day, DiscoveredArticleRowContract, cache)),
   ]);
   const rows = foldFirstSight([...files.flatMap(file => file.rows), ...days.flatMap(day => day.rows), ...(input.own_rows ?? [])]);
   const complete = required.every(day => days.find(value => value.day === day)?.complete === true);

@@ -3,6 +3,9 @@ import { expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
 import { mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
+import { existsSync } from "node:fs";
+import { loadPlanInputs } from "../src/load-plan-inputs";
+import { fileURLToPath } from "node:url";
 import { createPlanApp, servePlan } from "../src/api/server";
 import { main } from "../src/index";
 import { recordedPlan } from "./plan-recordings";
@@ -14,9 +17,9 @@ const json = (body: unknown) => ({ method: "POST", headers: { "content-type": "a
 
 test("health is explicit; disabled, malformed, oversized and unknown controls cannot fetch", async () => {
   const recorded = await recordedPlan();
+  const app = createPlanApp(recorded.inputs, recorded.runtime);
   try {
     recorded.inputs.settings.enabled = false;
-    const app = createPlanApp(recorded.inputs, recorded.runtime);
     expect(await (await app.request(`${prefix}/health`)).json()).toEqual({ status: "available", planner_enabled: false });
     expect((await app.request(`${prefix}/plan`, json({}))).status).toBe(503);
     expect((await app.request(`${prefix}/plan`, json({ article_limit: "2" }))).status).toBe(400);
@@ -24,29 +27,39 @@ test("health is explicit; disabled, malformed, oversized and unknown controls ca
     expect((await app.request(`${prefix}/plan`, { ...json({}), body: "{" })).status).toBe(400);
     expect((await app.request(`${prefix}/persist-dispatches`, json({ batch_id: randomUUID() }))).status).toBe(404);
     expect((await app.request(`${prefix}/feeds`)).status).toBe(404);
+    for (const action of ["summarize", "record"]) {
+      expect((await app.request(`${prefix}/feed-health-state`, json({ batch_id: randomUUID(), action }))).status).toBe(503);
+    }
+    expect(existsSync(join(recorded.inputs.outputRoot, "planner-operations.sqlite"))).toBe(false);
+    expect((await app.request(`${prefix}/plan`, json({ padding: "x".repeat(recorded.inputs.settings.listener.max_body_bytes) }))).status).toBe(413);
+    expect((await app.request(`${prefix}/fetch`, json({
+      request_id: randomUUID(), correlation_id: randomUUID(), source_id: "recorded-news", kind: "feed",
+    }))).status).toBe(400);
     expect(recorded.transport.requests).toHaveLength(0);
-  } finally { await recorded.close(); }
+  } finally { app.close(); await recorded.close(); }
 });
 
 test("actual API and awaited CLI compose the same recorded plan and disclose the same audit limit", async () => {
   const api = await recordedPlan();
   const cli = await recordedPlan();
-  const server = Bun.serve({ port: 0, hostname: "127.0.0.1", fetch: createPlanApp(api.inputs, api.runtime).fetch });
+  const app = createPlanApp(api.inputs, api.runtime);
+  const server = Bun.serve({ port: 0, hostname: "127.0.0.1", fetch: app.fetch });
   try {
     const url = `http://127.0.0.1:${server.port}${prefix}`;
     const key = randomUUID();
-    const response = await fetch(`${url}/plan`, { ...json({ article_limit: 2 }), headers: {
+    const response = await fetch(`${url}/plan`, { ...json({ article_limit: 1 }), headers: {
       "content-type": "application/json", "Idempotency-Key": key,
     } });
     expect(response.status).toBe(200);
     const summary = await response.json();
     const requests = api.transport.requests.length;
-    const replay = await (await fetch(`${url}/plan`, { ...json({ article_limit: 2 }), headers: {
+    expect(summary.selected_count).toBe(1);
+    const replay = await (await fetch(`${url}/plan`, { ...json({ article_limit: 1 }), headers: {
       "content-type": "application/json", "Idempotency-Key": key,
     } })).json();
     expect(replay).toEqual(summary);
     expect(api.transport.requests.length).toBe(requests);
-    const cliSummary = await main(["--cli", "--article-limit=2"], { inputs: cli.inputs, runtime: cli.runtime, output: () => {} });
+    const cliSummary = await main(["--cli", "--article-limit=1"], { inputs: cli.inputs, runtime: cli.runtime, output: () => {} });
     expect("selected_url_keys" in cliSummary && cliSummary.selected_url_keys).toEqual(summary.selected_url_keys);
     const healthFolder = join(api.inputs.outputRoot, "raw", "feed-ingest-plan", "feed-health-state", "2026", "10", "21");
     const before = await readdir(healthFolder);
@@ -57,45 +70,75 @@ test("actual API and awaited CLI compose the same recorded plan and disclose the
     expect(selected.articles.every((article: object) => !Object.hasOwn(article, "article_text"))).toBe(true);
     const partition = await (await fetch(`${url}/partition-articles`, json({ batch_id: selected.batch_id, strategy: "none" }))).json();
     expect(partition.dispatch_count).toBe(1);
-    expect(partition.articles.map((article: { worker_assignment: number }) => article.worker_assignment)).toEqual([0, 0]);
-    const persisted = await (await fetch(`${url}/persist-selected-articles`, json({ batch_id: partition.batch_id }))).json();
-    const artifact = SelectedArticlesArtifactSchema.parse(JSON.parse(await readFile(join(api.directory, persisted.artifact), "utf8")));
+    expect(partition.articles.map((article: { worker_assignment: number }) => article.worker_assignment)).toEqual([0]);
+    expect((await fetch(`${url}/persist-selected-articles`, json({ batch_id: partition.batch_id }))).status).toBe(409);
+    const artifact = SelectedArticlesArtifactSchema.parse(JSON.parse(await readFile(join(api.directory, summary.selected_articles_artifact), "utf8")));
     expect(artifact.articles.every(article => article.article_text.length > 0)).toBe(true);
     expect(JSON.stringify(summary)).not.toContain(artifact.articles[0]!.article_text);
-    const fetchId = randomUUID();
-    const correlation = randomUUID();
-    const fetched = await (await fetch(`${url}/fetch`, json({
-      request_id: fetchId, correlation_id: correlation, source_id: "recorded-news",
-      kind: "article", url: "https://news.example/second",
+    const feedKey = randomUUID();
+    const feedCorrelation = randomUUID();
+    const feed = await (await fetch(`${url}/fetch`, json({
+      request_id: feedKey, correlation_id: feedCorrelation, feed_id: "recorded-news", kind: "feed",
     }))).json();
-    expect(fetched.failure).toBeNull();
-    expect(Object.hasOwn(fetched, "body")).toBe(false);
-    const parsed = await (await fetch(`${url}/parse`, json({
-      request_id: randomUUID(), fetch_request_id: fetchId, article_id: fetched.article_id, correlation_id: correlation,
+    expect(Object.hasOwn(feed, "body")).toBe(false);
+    const beforeFeedParse = api.transport.requests.length;
+    const offered = await (await fetch(`${url}/parse`, json({
+      request_id: randomUUID(), fetch_request_id: feedKey, article_id: feed.article_id, correlation_id: feedCorrelation,
     }))).json();
-    expect(parsed.parsed_count).toBe(1);
-    expect(Object.hasOwn(parsed, "parsed")).toBe(false);
-    const standalone = await (await fetch(`${url}/select-articles`, json({ batch_id: parsed.batch_id }))).json();
-    expect(standalone.articles).toHaveLength(1);
-    const recordedHealth = await (await fetch(`${url}/feed-health-state`, json({ batch_id: standalone.batch_id }))).json();
-    expect(recordedHealth.status).toBe("recorded");
-    expect(recordedHealth.rows.reduce((sum: number, row: { article_requests: number }) => sum + row.article_requests, 0)).toBe(1);
-  } finally { await server.stop(true); await api.close(); await cli.close(); }
+    expect(api.transport.requests.length).toBe(beforeFeedParse);
+    expect(Object.hasOwn(offered, "parsed")).toBe(false);
+    expect(offered.offers).toHaveLength(2);
+    expect((await fetch(`${url}/select-articles`, json({ batch_id: offered.batch_id }))).status).toBe(409);
+    const fetchedOffers = await Promise.all(offered.offers.map(async (offer: { offer_id: string }) => {
+      const key = randomUUID();
+      const fetched = await (await fetch(`${url}/fetch`, json({
+        request_id: key, correlation_id: feedCorrelation, feed_id: "recorded-news",
+        kind: "article", batch_id: offered.batch_id, offer_id: offer.offer_id,
+      }))).json();
+      return { key, fetched };
+    }));
+    const requestsBeforeParse = api.transport.requests.length;
+    await Promise.all(fetchedOffers.map(async ({ key, fetched }: { key: string; fetched: { article_id: string } }) => {
+      const parsed = await (await fetch(`${url}/parse`, json({
+        request_id: randomUUID(), fetch_request_id: key, article_id: fetched.article_id, correlation_id: feedCorrelation,
+      }))).json();
+      expect(parsed.batch_id).toBe(offered.batch_id);
+    }));
+    expect(api.transport.requests.length).toBe(requestsBeforeParse);
+    const complete = await (await fetch(`${url}/select-articles`, json({ batch_id: offered.batch_id }))).json();
+    expect(complete.articles).toHaveLength(2);
+    const packed = await (await fetch(`${url}/partition-articles`, json({ batch_id: complete.batch_id, strategy: "none" }))).json();
+    const healthResponse = await (await fetch(`${url}/feed-health-state`, json({ batch_id: complete.batch_id }))).json();
+    expect(healthResponse.files.status).toBe("written");
+    expect(healthResponse.reliability.window_days).toBe(api.inputs.clock_config.collect.reliability_window_days);
+    const final = await (await fetch(`${url}/persist-selected-articles`, json({ batch_id: packed.batch_id }))).json();
+    expect(final.run_status).toBe("completed");
+    expect(final.run_files.status).toBe("written");
+    const delivered = SelectedArticlesArtifactSchema.parse(JSON.parse(await readFile(join(api.directory, final.artifact), "utf8")));
+    expect(delivered.articles.map(article => article.url_key)).toEqual(complete.articles.map((article: { url_key: string }) => article.url_key));
+    expect(delivered.articles.every(article => article.article_text.length > 0)).toBe(true);
+    expect(delivered.articles.find(article => article.categories.length > 0)!.categories).toHaveLength(4);
+  } finally { await server.stop(true); app.close(); await api.close(); await cli.close(); }
 });
 
 test("a required source write failure returns an API error, not proven planning completion", async () => {
   const recorded = await recordedPlan();
+  const app = createPlanApp(recorded.inputs, recorded.runtime);
   try {
     await mkdir(join(recorded.inputs.outputRoot, "raw", "feed-ingest-plan"), { recursive: true });
     await writeFile(join(recorded.inputs.outputRoot, "raw", "feed-ingest-plan", "feed-health-state"), "obstruction");
-    const response = await createPlanApp(recorded.inputs, recorded.runtime).request(`${prefix}/plan`, json({}));
+    const response = await app.request(`${prefix}/plan`, json({}));
     expect(response.status).toBe(500);
     const summary = await response.json();
     expect(summary.planning_complete).toBe(false);
     expect(summary.status).toBe("partial");
     expect(summary.files.plan_runs.status).toBe("written");
     expect(summary.files.feed_health_state).toBeUndefined();
-  } finally { await recorded.close(); }
+    expect(summary.files.selected_articles.status).toBe("written");
+    const artifact = SelectedArticlesArtifactSchema.parse(JSON.parse(await readFile(join(recorded.directory, summary.selected_articles_artifact), "utf8")));
+    expect(artifact.articles.length).toBeGreaterThan(0);
+    expect(artifact.articles.every(article => article.article_text.length > 0)).toBe(true);
+  } finally { app.close(); await recorded.close(); }
 });
 
 test("one listener retains durable seen receipts from an output root outside the checkout", async () => {
@@ -103,6 +146,7 @@ test("one listener retains durable seen receipts from an output root outside the
   delete recorded.runtime.run_number;
   delete recorded.runtime.correlation_id;
   recorded.inputs.settings.listener.port = 0;
+  recorded.inputs.settings.listener.parser_concurrency = 2;
   const original = recorded.transport.recordings.bodies.article;
   recorded.transport.recordings.bodies.article = original.replace("</article>", `${original.repeat(12)}</article>`);
   recorded.inputs.harvest.extraction.max_body_bytes = Buffer.byteLength(recorded.transport.recordings.bodies.article) + 1024;
@@ -125,12 +169,16 @@ test("one listener retains durable seen receipts from an output root outside the
     expect((await fetch(`${url}/health`)).status).toBe(200);
     expect(activeParsers).toBeGreaterThan(0);
     const independent = await fetch(`${url}/fetch`, json({
-      request_id: randomUUID(), correlation_id: randomUUID(), source_id: "recorded-news", kind: "feed",
+      request_id: randomUUID(), correlation_id: randomUUID(), feed_id: "recorded-news", kind: "feed",
     }));
     expect(independent.status).toBe(200);
     expect(activeParsers).toBeGreaterThan(0);
     const results = await Promise.all([first, second].map(async pending => (await pending).json()));
     expect(peak).toBeGreaterThan(1);
+    expect(peak).toBeLessThanOrEqual(recorded.inputs.settings.listener.parser_concurrency);
+    const firstCompletion = recorded.events.findIndex(event => event.operation === "plan" && event.phase === "completed");
+    expect(new Set(recorded.events.slice(0, firstCompletion).filter(event =>
+      event.operation === "plan" && event.phase === "started").map(event => event.run_id)).size).toBe(2);
     expect(results[0].run_id).not.toBe(results[1].run_id);
     expect(results[0].batches.parsed_batch_id).not.toBe(results[1].batches.parsed_batch_id);
     for (const result of results) {
@@ -143,11 +191,11 @@ test("one listener retains durable seen receipts from an output root outside the
 
 test("a later dispatch failure does not lose already durable first sight from this listener", async () => {
   const recorded = await recordedPlan();
+  const app = createPlanApp(recorded.inputs, recorded.runtime);
   try {
     const obstruction = join(recorded.inputs.outputRoot, "raw", "feed-ingest-plan", "selected-articles");
     await mkdir(join(recorded.inputs.outputRoot, "raw", "feed-ingest-plan"), { recursive: true });
     await writeFile(obstruction, "obstruction");
-    const app = createPlanApp(recorded.inputs, recorded.runtime);
     expect((await app.request(`${prefix}/plan`, json({}))).status).toBe(500);
     await rm(obstruction);
     recorded.runtime.run_number = "701";
@@ -155,7 +203,27 @@ test("a later dispatch failure does not lose already durable first sight from th
     const second = await (await app.request(`${prefix}/plan`, json({}))).json();
     expect(second.status).toBe("completed");
     expect(second.files.discovered_articles).toEqual({ status: "empty", files: [] });
-  } finally { await recorded.close(); }
+    const fetchKey = randomUUID();
+    const correlationId = randomUUID();
+    const fetched = await (await app.request(`${prefix}/fetch`, json({
+      request_id: fetchKey, correlation_id: correlationId, feed_id: "recorded-news", kind: "article", url: "https://news.example/second",
+    }))).json();
+    app.close();
+    const loaded = await loadPlanInputs(fileURLToPath(new URL("../../../", import.meta.url)));
+    const restartedInputs = { ...loaded, root: recorded.inputs.root, outputRoot: recorded.inputs.outputRoot,
+      settings: recorded.inputs.settings, harvest: recorded.inputs.harvest };
+    const restarted = createPlanApp(restartedInputs, { ...recorded.runtime, clock: () => new Date("2026-10-23T00:00:00Z") });
+    try {
+      const parsed = await (await restarted.request(`${prefix}/parse`, json({
+        request_id: randomUUID(), fetch_request_id: fetchKey, article_id: fetched.article_id, correlation_id: correlationId,
+      }))).json();
+      const saved = await (await restarted.request(`${prefix}/feed-health-state`, json({ batch_id: parsed.batch_id }))).json();
+      const originalDay = saved.rows.find((row: { date: string }) => row.date === "2026-10-21");
+      expect(originalDay.article_requests).toBe(1);
+      expect(originalDay.robots_requests).toBe(1);
+      expect(saved.rows.some((row: { date: string; article_requests: number }) => row.date === "2026-10-23" && row.article_requests > 0)).toBe(false);
+    } finally { restarted.close(); }
+  } finally { app.close(); await recorded.close(); }
 });
 
 test("a listener keeps first-seen evidence stable across UTC midnight", async () => {
@@ -166,8 +234,9 @@ test("a listener keeps first-seen evidence stable across UTC midnight", async ()
   recorded.transport.on_request = request => {
     if (request.url.pathname !== "/feed.xml" && request.url.pathname !== "/robots.txt") workClock = "2026-10-22T00:00:01Z";
   };
+  const app = createPlanApp(recorded.inputs, recorded.runtime);
   try {
-    const response = await createPlanApp(recorded.inputs, recorded.runtime).request(`${prefix}/plan`, json({ article_limit: 2 }));
+    const response = await app.request(`${prefix}/plan`, json({ article_limit: 2 }));
     expect(response.status).toBe(200);
     const result = await response.json();
     expect(result.date).toBe("2026-10-21");
@@ -183,5 +252,5 @@ test("a listener keeps first-seen evidence stable across UTC midnight", async ()
       checked_at: null, outcome: null, feed_reads: 0, feed_requests: 0, article_requests: 2,
       article_candidates: 2, articles_selected: 2,
     });
-  } finally { await recorded.close(); }
+  } finally { app.close(); await recorded.close(); }
 });

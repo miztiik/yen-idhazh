@@ -34,7 +34,7 @@ from typing import TYPE_CHECKING, Final
 
 from idhazh import ledger, run_context
 from idhazh.contracts.base import WORK_JOB, PipelineName, ServerJob, TaskName
-from idhazh.contracts.file_envelope import WriterIdentity
+from idhazh.contracts.file_envelope import FileEnvelope, WriterIdentity
 from idhazh.contracts.host_fingerprint import (
     HOST_FINGERPRINT_VERSION,
     WATCHED_FLAGS,
@@ -743,11 +743,13 @@ def _own_probe(state_root: Path, date: str, identity: WriterIdentity) -> HostFin
         shard=identity.shard,
         producer=identity.producer,
     )
-    mine = [
-        held
-        for held in ledger.list_raw_files(state_root, LedgerName.HOST_FINGERPRINT, days={date})
-        if held.envelope.unit_id == unit and held.envelope.identity.attempt == identity.attempt
-    ]
+    mine = []
+    for held in ledger.list_raw_files(state_root, LedgerName.HOST_FINGERPRINT, days={date}):
+        envelope = held.envelope
+        if not isinstance(envelope, FileEnvelope):
+            raise ValueError("host fingerprint requires its original file envelope")
+        if envelope.unit_id == unit and envelope.identity.attempt == identity.attempt:
+            mine.append(held)
     if not mine:
         return None
     rows = ledger.load([mine[-1].path], model=HostFingerprintRow)

@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from idhazh.contracts.base import StalePayloadError
-from idhazh.contracts.file_envelope import Format, Period, PlannerFileEnvelope, Tier
+from idhazh.contracts.file_envelope import FileEnvelope, Format, Period, PlannerFileEnvelope, Tier
 from idhazh.contracts.ledger_index import CompactIndex
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.ledger import keys, paths
@@ -22,12 +22,13 @@ def check_raw_day(state_dir: Path, which: LedgerName, day: str) -> bool:
             if any(row.day != day for row in stored):
                 raise ValueError(f"{held.path.name}: planner row names another UTC work day")
             continue
+        legacy: FileEnvelope = held.envelope
         if any(
             not isinstance(row, StoredRow)
             or row.identity.ledger != which
             or row.identity.covers != day
-            or row.identity.unit_id != str(held.envelope.unit_id)
-            or row.identity.attempt != held.envelope.identity.attempt
+            or row.identity.unit_id != str(legacy.unit_id)
+            or row.identity.attempt != legacy.identity.attempt
             for row in stored
         ):
             raise ValueError(f"{held.path.name}: raw row identity differs from its envelope")

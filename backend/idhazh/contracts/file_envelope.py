@@ -472,6 +472,8 @@ class FileEnvelope(Contract):
 
     @model_validator(mode="after")
     def _writer_scope_is_finite(self) -> Self:
+        if self.ledger in PLANNER_LEDGERS:
+            raise ValueError("planner ledgers require their minimal file envelope")
         if self.version not in _ENVELOPE_VERSIONS:
             raise ValueError("unrecognized file envelope version")
         if self.writer == "idhazh_typescript.ledger.parquet" and self.version < "2026-10-20":

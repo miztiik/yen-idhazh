@@ -10,6 +10,7 @@ import pytest
 
 from idhazh import ledger
 from idhazh.contracts.base import ServerJob
+from idhazh.contracts.file_envelope import FileEnvelope
 from idhazh.contracts.ledger_name import LedgerName
 
 from ._oracle_tree import RUN_ID, TODAY, build
@@ -50,6 +51,7 @@ def test_a_dry_run_files_its_report_through_the_ledger_door(tmp_path: Path) -> N
     assert outcome.written == ()
     assert outcome.appended == (held.path.relative_to(root).as_posix(),)
     assert held.envelope.covers == TODAY.isoformat()
+    assert isinstance(held.envelope, FileEnvelope)
     identity = held.envelope.identity
     assert (identity.run_id, identity.job, identity.git_sha) == (
         RUN_ID,

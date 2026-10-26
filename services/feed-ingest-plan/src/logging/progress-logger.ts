@@ -7,12 +7,12 @@ export type ProgressDetails = {
   source_id?: string; candidate_id?: string; output_count?: number; diagnostics?: unknown;
 };
 export type ProgressRecord = {
-  eventType: ProgressEventType; source_id: string | null; output_count: number | null;
+  eventType: ProgressEventType; feed_id: string | null; output_count: number | null;
 };
 export function createProgressLogger(
   _correlationId: string, write?: (record: ProgressRecord) => void,
 ) {
   return (eventType: ProgressEventType, details: ProgressDetails = {}) => {
-    write?.({ eventType, source_id: details.source_id ?? null, output_count: details.output_count ?? null });
+    write?.({ eventType, feed_id: details.source_id ?? null, output_count: details.output_count ?? null });
   };
 }

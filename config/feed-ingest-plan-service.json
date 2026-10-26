@@ -17,6 +17,8 @@
     "registrations": "config/ledgers.json",
     "output_root": "state",
     "artifact_root": "backend/var/feed-ingest-plan",
+    "health_period_limit": 32,
+    "feed_health_input_gap": false,
     "seen_files": [],
     "seen_days": []
   },

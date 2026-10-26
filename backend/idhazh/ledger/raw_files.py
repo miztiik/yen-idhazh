@@ -317,17 +317,17 @@ def settle_rows[C: LedgerContract](
         if key != door_key(which):
             raise ValueError(f"planner settlement requires the declared key for {which.value}")
         kept_planner: dict[tuple[str, ...], PlannerStoredRow[C]] = {}
-        for held in planner:
-            record = tuple(str(getattr(held.row, name)) for name in key)
-            incumbent = kept_planner.get(record)
-            if incumbent is None:
-                kept_planner[record] = held
+        for planned in planner:
+            record = tuple(str(getattr(planned.row, name)) for name in key)
+            previous_planned = kept_planner.get(record)
+            if previous_planned is None:
+                kept_planner[record] = planned
             elif which is LedgerName.FEED_INGEST_PLAN_DISCOVERED_ARTICLES:
-                later = datetime.fromisoformat(getattr(held.row, "first_seen_at"))
-                earlier = datetime.fromisoformat(getattr(incumbent.row, "first_seen_at"))
+                later = datetime.fromisoformat(getattr(planned.row, "first_seen_at"))
+                earlier = datetime.fromisoformat(getattr(previous_planned.row, "first_seen_at"))
                 if later < earlier:
-                    kept_planner[record] = held
-            elif incumbent.row.to_json() != held.row.to_json():
+                    kept_planner[record] = planned
+            elif previous_planned.row.to_json() != planned.row.to_json():
                 raise ValueError(f"conflicting duplicate {which.value} record")
         return list(kept_planner.values())
     legacy = cast("Sequence[Sequence[StoredRow[C]]]", files)
