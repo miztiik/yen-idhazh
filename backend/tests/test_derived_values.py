@@ -380,38 +380,36 @@ def test_sum_totals_the_elements_it_names() -> None:
     assert set(total.inputs) == set(WIND_QUANTITIES)
 
 
-def test_share_of_declared_whole_is_a_percentage_of_the_parts_it_names() -> None:
-    """The part first, the whole after it, and every one of them in the chain.
-
-    The whole is declared by enumeration - these parts and no others - which is
-    what the function's middle word means. A share of a whole nobody declared is
-    a share of an assumption.
-    """
-    table = load_table("wind")
-    parts = elements_of(table, *WIND_QUANTITIES)
-    share = share_of_declared_whole(parts[0], parts)
+def test_share_of_declared_whole_uses_the_separate_source_quantity() -> None:
+    table = load_table("pie-whole")
+    part, whole = elements_of(table, "quantity-43-47", "quantity-21-26")
+    share = share_of_declared_whole(part, whole)
     assert share.function is DerivedFunction.SHARE_OF_DECLARED_WHOLE
     assert share.unit == "%"
-    assert share.inputs[0] == parts[0].element_id
-    assert set(share.inputs) == set(WIND_QUANTITIES)
-    assert Decimal(share.value) == pytest.approx(Decimal(900) / Decimal(7600) * 100)
+    assert share.inputs == [part.element_id, whole.element_id]
+    assert Decimal(share.value) == pytest.approx(Decimal(9) / Decimal(76) * 100)
 
 
-def test_a_pie_resolves_to_shares_of_the_slices_it_draws() -> None:
-    table = load_table("wind")
-    plan = built_plan(
-        VisualType.PIE, category=list(WIND_ENTITIES), quantity=list(WIND_QUANTITIES)
-    )
+def test_a_pie_resolves_every_slice_against_its_declared_whole() -> None:
+    table = load_table("pie-whole")
+    plan = load_plan("pie-valid")
     assert validate_plan(plan, table, visuals=committed_visuals()) == []
     values = resolve(plan, table)
     slices = [one for one in values if one.role is EncodingRole.QUANTITY]
     assert len(slices) == 4
     assert all(one.derived is not None for one in slices)
     assert {one.derived.unit for one in slices if one.derived is not None} == {"%"}
+    assert all(
+        one.derived.inputs[1] == "quantity-21-26"
+        for one in slices
+        if one.derived is not None
+    )
     total = sum(Decimal(one.derived.value) for one in slices if one.derived is not None)
     assert total == pytest.approx(Decimal(100))
     names = [one for one in values if one.role is EncodingRole.CATEGORY]
-    assert [one.element_id for one in names] == list(WIND_ENTITIES), (
+    assert [one.element_id for one in names] == [
+        "entity-28-32", "entity-49-54", "entity-72-77", "entity-99-104"
+    ], (
         "a slice's name is the article's own characters and is never arithmetic"
     )
 

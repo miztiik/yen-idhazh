@@ -13,6 +13,8 @@ from idhazh.contracts.knobs.removed import refuse_a_removed_knob
 from idhazh.contracts.visual import VisualType
 from idhazh.contracts.visual_decision import VisualKind
 
+MAX_PIE_PARTS: Final = 5
+
 #: The `visuals` knob this block used to carry. `canvas_width` was one fixed
 #: drawing box for every visual, with a 16:10 height derived from it. The
 #: reader's browser draws the chart now and takes the width the reader's screen
@@ -97,6 +99,12 @@ class VisualsConfig(Model):
         description="Below this a chart says less than the sentence it sits under.",
     )
     max_chart_points: int = Field(default=8, ge=2)
+    max_pie_parts: int = Field(
+        default=5,
+        ge=2,
+        le=MAX_PIE_PARTS,
+        description="Most named parts a pie may show; more parts are harder to compare by angle.",
+    )
     number_format: NumberFormatConfig = Field(default_factory=NumberFormatConfig)
     histogram_bins: int = Field(
         default=3,
@@ -222,6 +230,8 @@ class VisualsConfig(Model):
         """
         if self.max_chart_points < self.min_chart_points:
             raise ValueError("max_chart_points is below min_chart_points")
+        if not self.min_chart_points <= self.max_pie_parts <= self.max_chart_points:
+            raise ValueError("max_pie_parts is between the chart-point bounds and five")
         if self.max_diagram_steps < self.min_diagram_steps:
             raise ValueError("max_diagram_steps is below min_diagram_steps")
         if not self.min_chart_points <= self.histogram_bins <= self.max_chart_points:

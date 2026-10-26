@@ -36,6 +36,7 @@ from idhazh.contracts.visual_data import (
     VisualData,
     VisualEncoding,
     VisualMark,
+    VisualWhole,
 )
 from idhazh.derived_values import measure_displayed_values, resolve_displayed_values
 from idhazh.relationship_evidence import refuse_relationship
@@ -139,6 +140,7 @@ def can_compile(visual_type: VisualType | None) -> bool:
         VisualType.SCATTER,
         VisualType.BUBBLE,
         VisualType.STACKED_BAR,
+        VisualType.PIE,
     }
 
 
@@ -161,12 +163,12 @@ def compile_chart(
         named = visual_type.value if visual_type is not None else "no type"
         raise CompileError(f"this build cannot draw the plan's {named} type")
 
-    if visual_type is VisualType.STACKED_BAR:
+    if visual_type in (VisualType.STACKED_BAR, VisualType.PIE):
         from idhazh.visual_validator import validate_plan
 
         if rejections := validate_plan(plan, table, visuals=visuals):
             names = ", ".join(rejection.check.value for rejection in rejections)
-            raise CompileError(f"stacked_bar was refused on {names}")
+            raise CompileError(f"{visual_type.value} was refused on {names}")
 
     if visual_type in (VisualType.SCATTER, VisualType.BUBBLE):
         source = {element.element_id: element for element in table.elements}
@@ -191,7 +193,7 @@ def compile_chart(
     _check_channel_pairing(visual_type, channels, known)
     data, figures = _chart_data(table.item_id, channels, plan, visual_type, known)
     return CompiledChart(
-        _chart_alt_text(visual_type, channels, figures, known),
+        _chart_alt_text(visual_type, channels, figures, known, data.declared_whole),
         data,
         measure_displayed_values(
             [value for role in VALUE_ROLES for value in channels[role]], table
@@ -239,6 +241,14 @@ def _check_channel_pairing(
         labels = [_mark_text(value, known, max_length=None) for value in series]
         if len(set(labels)) != len(labels):
             raise CompileError("stacked-bar part labels must remain distinct after sanitizing")
+        return
+    if visual_type is VisualType.PIE:
+        categories = channels[EncodingRole.CATEGORY]
+        labels = [_mark_text(value, known) for value in categories]
+        if len(categories) != len(quantities):
+            raise CompileError("a pie pairs one category with each part quantity")
+        if len(set(labels)) != len(labels):
+            raise CompileError("pie category names must remain distinct after sanitizing")
         return
 
     times = channels[EncodingRole.TIME]
@@ -348,11 +358,30 @@ def _chart_data(
     emphasized = _emphasized_chart_mark(
         plan, _observations(visual_type, channels, mark_by_value), visual_type
     )
+    whole_id = (
+        plan.declared_whole_element_id
+        if visual_type in (VisualType.PIE, VisualType.STACKED_BAR)
+        else None
+    )
+    whole = (
+        known[plan.declared_whole_element_id]
+        if visual_type is VisualType.PIE and plan.declared_whole_element_id is not None
+        else None
+    )
     data = VisualData(
         version=VisualData.schema_version(),
         item_id=item_id,
         type=visual_type,
         renderer_version=RENDERER_VERSION,
+        declared_whole_element_id=whole_id,
+        declared_whole=(
+            VisualWhole(
+                element_id=whole.element_id,
+                text=sanitize(whole.span_excerpt).strip(),
+            )
+            if whole is not None
+            else None
+        ),
         title=sanitize(plan.title).strip() or None if plan.title is not None else None,
         caption=sanitize(plan.caption).strip() or None if plan.caption is not None else None,
         emphasized_mark_id=emphasized,
@@ -411,6 +440,14 @@ def _observations(
                     quantities[index],
                     channels[EncodingRole.SERIES][index],
                 ],
+                [mark_by_value[(EncodingRole.QUANTITY, index)]],
+            )
+            for index in range(len(quantities))
+        ]
+    if visual_type is VisualType.PIE:
+        return [
+            (
+                [channels[EncodingRole.CATEGORY][index], quantities[index]],
                 [mark_by_value[(EncodingRole.QUANTITY, index)]],
             )
             for index in range(len(quantities))
@@ -519,6 +556,7 @@ def _chart_alt_text(
     channels: Mapping[EncodingRole, Sequence[DisplayedValue]],
     figures: Sequence[_Figure],
     known: Mapping[ElementId, Element],
+    declared_whole: VisualWhole | None,
 ) -> str:
     """State every visible label and figure from the source channels."""
     unit = f" {figures[0].unit}" if figures and figures[0].unit else ""
@@ -567,6 +605,19 @@ def _chart_alt_text(
             for index, figure in enumerate(figures)
         ]
         return f"Stacked bar chart. {row}: {'; '.join(facts)}."[:ALT_TEXT_MAX]
+    if visual_type is VisualType.PIE:
+        if declared_whole is None:
+            raise CompileError("a pie has no declared whole to read out")
+        categories = channels[EncodingRole.CATEGORY]
+        facts = [
+            f"{_mark_text(categories[index], known)} "
+            f"{format(figure.value.normalize(), ',f')}{unit}"
+            for index, figure in enumerate(figures)
+        ]
+        return (
+            f"Pie chart. Declared total: {declared_whole.text}. "
+            f"{'; '.join(facts)}."
+        )[:ALT_TEXT_MAX]
 
     times = [_mark_text(value, known) for value in channels[EncodingRole.TIME]]
     entities = channels[EncodingRole.ENTITY]

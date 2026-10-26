@@ -32,7 +32,7 @@ import { LEGACY_MODEL_RULE } from '../charts/d3/model-rule';
 import { PALETTE, type ChartPaletteToken } from '../charts/theme';
 import { UNRECORDED_STOP } from '../charts/machine-colour';
 import { factsOf, type ReadoutFacts } from '../charts/readout';
-import { partsOfOne, type PartsGeometry } from '../charts/d3/partsOfOne';
+import { partsOfOne, pieOfOne, type PartsGeometry, type PieGeometry } from '../charts/d3/partsOfOne';
 import type { VisualData, VisualMark } from '$lib/payload/types';
 import type { NumberFormatConfig, NumberFormatter } from '$lib/number-format';
 import type { StoryChartGeometryConfig } from '$lib/server/config';
@@ -185,6 +185,13 @@ export interface StackedBarDrawing {
 	readout: ReadoutFacts;
 }
 
+export interface PieDrawing extends DrawingBase {
+	type: 'pie';
+	whole: string;
+	geometry: PieGeometry;
+	parts: { label: string; value: number; displayed: string; emphasized: boolean }[];
+}
+
 export type Drawing =
 	| BarDrawing
 	| DotDrawing
@@ -192,7 +199,8 @@ export type Drawing =
 	| LineDrawing
 	| ScatterDrawing
 	| BubbleDrawing
-	| StackedBarDrawing;
+	| StackedBarDrawing
+	| PieDrawing;
 
 function figureOf(mark: VisualMark): number {
 	// The compiler pins `value` to the characters the article wrote, so this is
@@ -594,13 +602,60 @@ export function drawStackedBars(
 	};
 }
 
+/** Draw source-linked shares against the separately stated whole. */
+export function drawPie(
+	data: VisualData,
+	room: number,
+	formatNumber: NumberFormatter,
+	availableHeight: number,
+	geometry: StoryChartGeometryConfig
+): PieDrawing {
+	const held = new Map(data.marks.map((mark) => [mark.mark_id, mark]));
+	const labels = data.encoding.category.map((id) => held.get(id)!);
+	const quantities = data.encoding.quantity.map((id) => held.get(id)!);
+	if (
+		data.declared_whole === null || labels.length < 2 ||
+		labels.length !== quantities.length
+	) throw new Error('pie data has no declared whole or does not pair each part');
+	const parts = labels.map((label, index) => {
+		const quantity = quantities[index]!;
+		const value = figureOf(quantity);
+		return {
+			label: label.text ?? '',
+			value,
+			emphasized: quantity.mark_id === data.emphasized_mark_id
+		};
+	});
+	const width = Math.max(0, Math.floor(room));
+	const height = Math.max(
+		geometry.line_min_height_px,
+		Math.floor(Math.min(width, availableHeight))
+	);
+	const pieGeometry = pieOfOne(parts, Math.min(width, height));
+	if (pieGeometry === null) throw new Error('a validated pie has no measurable parts');
+	return {
+		type: 'pie',
+		title: data.title,
+		caption: data.caption,
+		width,
+		height,
+		whole: data.declared_whole.text,
+		geometry: pieGeometry,
+		parts: parts.map((part) => ({
+			...part,
+			displayed: formatNumber(part.value, { si: false })
+		}))
+	};
+}
+
 export function drawVisual(
 	data: VisualData,
 	room: number,
 	formatNumber: NumberFormatter,
 	numberFormat: NumberFormatConfig,
 	tickDensity: number,
-	geometry: StoryChartGeometryConfig
+	geometry: StoryChartGeometryConfig,
+	availableHeight: number = geometry.line_min_height_px
 ): Drawing {
 	switch (data.type) {
 		case 'bar':
@@ -617,6 +672,8 @@ export function drawVisual(
 			return drawBubble(data, room, formatNumber, numberFormat, tickDensity, geometry);
 		case 'stacked_bar':
 			return drawStackedBars(data, room, formatNumber);
+		case 'pie':
+			return drawPie(data, room, formatNumber, availableHeight, geometry);
 		default:
 			throw new Error(`visual type is not drawn: ${data.type}`);
 	}
@@ -711,6 +768,16 @@ export function statedDrawing(drawing: Drawing): string {
 			return [
 				drawing.title,
 				`Stacked bar chart. ${drawing.geometry.rows[0].label}: ${facts.join('; ')}.`,
+				drawing.caption
+			].filter(Boolean).join(' ');
+		}
+		case 'pie': {
+			const facts = drawing.parts.map((part) =>
+				`${part.label} ${part.displayed}%${part.emphasized ? ' (highlighted)' : ''}`
+			);
+			return [
+				drawing.title,
+				`Pie chart. Declared total: ${drawing.whole}. Shares: ${facts.join('; ')}.`,
 				drawing.caption
 			].filter(Boolean).join(' ');
 		}

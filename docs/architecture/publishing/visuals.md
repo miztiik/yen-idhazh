@@ -18,7 +18,7 @@ Six pages, one question each. Arrive at the one holding your question and stop.
 | Page | The question it answers |
 | --- | --- |
 | this one | Which pass decides a picture, which gate refuses, and what every `none` is called |
-| [what-a-visual-plan-may-say-and-what-happens-to-one-that-is-refused.md](what-a-visual-plan-may-say-and-what-happens-to-one-that-is-refused.md) | What shape the model decodes into, the ten checks it must clear, and the ladder a refused plan may step down |
+| [what-a-visual-plan-may-say-and-what-happens-to-one-that-is-refused.md](what-a-visual-plan-may-say-and-what-happens-to-one-that-is-refused.md) | What shape the model decodes into, the eleven checks it must clear, and the ladder a refused plan may step down |
 | [where-every-drawn-figure-came-from.md](where-every-drawn-figure-came-from.md) | This number is on a bar - is it the article's own characters, or arithmetic over them, and what chain proves it |
 | [where-a-drawing-becomes-pixels.md](where-a-drawing-becomes-pixels.md) | Who draws the chart, what the compiler publishes, and what a reader receives |
 | [one-visual-one-file-and-the-race-between-two-runs.md](one-visual-one-file-and-the-race-between-two-runs.md) | What the file is called, and what happens when two overlapping runs write it |
@@ -151,7 +151,7 @@ table alone: is every required channel fillable by some element of a kind that c
 the channel the type counts its marks in reach the floor, and - where that channel is drawn on a
 measured axis - do enough of those marks measure the same thing.
 
-Three of the ten checks cannot refuse a plan the gate admitted, so the gate does not ask them.
+Three of the eleven checks cannot refuse a plan the gate admitted, so the gate does not ask them.
 `element_exists` is satisfied by choosing from the table. `plan_version_current` is stamped by code.
 `numerals_matched` is about prose, and a plan can always write prose with no numeral in it. One
 check does the opposite and is asked early: an element whose cell disagrees with its own characters
@@ -465,7 +465,7 @@ chain; each child keeps one of the others. The cost is real and is the usual one
 page nobody can guess now costs a table lookup, where before it cost a long scroll
 ([../../reference/documentation-structure.md](../../reference/documentation-structure.md)). One
 correction travelled with the split: the flow drawing's node table said the validator holds eight
-checks and it holds ten - `plan_version_current` and `stacked_bar_exhaustive` were added after the drawing was made.
+checks and it holds eleven - `plan_version_current`, `stacked_bar_exhaustive` and `pie_exhaustive` were added after the drawing was made.
 Authority: Fowler.
 
 ## Rejected alternatives
@@ -486,7 +486,7 @@ Authority: Fowler.
 
 ## See also
 
-- [what-a-visual-plan-may-say-and-what-happens-to-one-that-is-refused.md](what-a-visual-plan-may-say-and-what-happens-to-one-that-is-refused.md) - the shape and the ten checks.
+- [what-a-visual-plan-may-say-and-what-happens-to-one-that-is-refused.md](what-a-visual-plan-may-say-and-what-happens-to-one-that-is-refused.md) - the shape and the eleven checks.
 - [where-every-drawn-figure-came-from.md](where-every-drawn-figure-came-from.md) - where every number on an axis came from.
 - [where-a-drawing-becomes-pixels.md](where-a-drawing-becomes-pixels.md) - who draws the chart, and what the compiler publishes.
 - [one-visual-one-file-and-the-race-between-two-runs.md](one-visual-one-file-and-the-race-between-two-runs.md) - the file's name, and the race it ended.
