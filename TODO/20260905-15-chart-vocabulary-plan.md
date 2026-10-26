@@ -228,6 +228,7 @@ implementation/test references, not a claim that tests were run.
 | 1 | **`stacked_bar` has its own gate.** Without one, a `pie` refused for summing its whole rather than reading a declared one lands in a `stacked_bar` that never re-asks the question, and the refusal buys nothing | 12.12 G26 |
 | 2 | This is the shape the downgrade ladder's re-validation rule needs: a downgrade target with no predicate makes re-entering the validator pointless | 12.7 G8, 12.12 G26 |
 | 3 | Failed declared-whole validation produces no visual, not grouped bars | Maintainer R4 |
+| 4 | One stacked row, covered by an independently stated whole. A pie fallback uses the whole's source label as the row label and the pie categories as the parts. Several category rows are refused | Maintainer confirmation "A1 - Confirm one-row delivery", 2026-10-26 UTC |
 
 ### Rejected alternatives
 

@@ -268,6 +268,11 @@ sum of the parts is never evidence that the article stated the total. The pie
 fallback re-enters the same validator, so neither direct requests nor fallback
 can skip this rule.
 
+The maintainer confirmed "A1 - Confirm one-row delivery" on 2026-10-26 UTC:
+one stacked row represents the whole and its parts. For a pie fallback, the
+whole's source label names that row, and the pie categories name its parts.
+Multiple category rows are refused in this phase.
+
 **The stack keeps the plan's part order.** Unlike ranked bars, its segment
 labels, source values and emphasis stay paired in the series order the plan
 declared. The shared `PartsOfOne` drawing hides its computed total; the label,
