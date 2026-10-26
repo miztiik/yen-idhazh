@@ -63,9 +63,9 @@ WATCHED_FLAGS: tuple[str, ...] = (
     "sse4_2",
 )
 
-HOST_FINGERPRINT_VERSION: Final = "2026-10-14"
+HOST_FINGERPRINT_VERSION: Final = "2026-10-26"
 HOST_FINGERPRINT_READ_VERSIONS: Final = frozenset(
-    {"2026-10-10", "2026-10-12", HOST_FINGERPRINT_VERSION}
+    {"2026-10-10", "2026-10-12", "2026-10-14", HOST_FINGERPRINT_VERSION}
 )
 LEGACY_HOST_VERSIONS: Final = (
     "2026-09-16",
@@ -113,6 +113,7 @@ _CORRECTED_FLOAT_FIELDS: Final = frozenset(
         "cpu_quota_cores",
         "cpu_observed_mhz",
         "cpu_reported_max_mhz",
+        "machine_memory_total_mib",
         "boot_seconds",
         "memcpy_gib_s",
         "model_load_ms",
@@ -192,7 +193,12 @@ COLUMN_READERS: Final[Mapping[str, tuple[str, ...]]] = MappingProxyType(
 )
 
 UNREAD_CELLS: Final[Mapping[str, tuple[str, ...]]] = MappingProxyType(
-    {"Historical machine label and sampling instant": ("measured_at", "runner_name")}
+    {
+        "Historical machine label and sampling instant": ("measured_at", "runner_name"),
+        "Total machine RAM returned by the fingerprint API, not drawn by the console": (
+            "machine_memory_total_mib",
+        ),
+    }
 )
 
 
@@ -508,6 +514,11 @@ class HostFingerprintRow(Contract):
     __schema_stem__: ClassVar[str] = "host-fingerprint-row"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-10-26",
+            change="Add optional total machine RAM capacity in MiB.",
+            why="Machine capacity is distinct from transient task and process memory.",
+        ),
+        ChangelogEntry(
             version="2026-10-14",
             change="Allow pipeline and task identity without a legacy job value.",
             why="Shared host records group reusable readings by separate identity columns.",
@@ -521,11 +532,6 @@ class HostFingerprintRow(Contract):
             version="2026-09-20",
             change="`memcpy_probe_mib` records the derived probe buffer.",
             why="The configured floor is not the size actually measured.",
-        ),
-        ChangelogEntry(
-            version="2026-09-19",
-            change="Earlier changes are in this contract's git history.",
-            why="Git is the archive for older shape changes.",
         ),
         ChangelogEntry(
             version="2026-09-18",
@@ -558,6 +564,12 @@ class HostFingerprintRow(Contract):
     cpu_target_measured_at: Timestamp | None = None
 
     l3_cache_bytes: int | None = Field(default=None, ge=0)
+    machine_memory_total_mib: float | None = Field(
+        default=None,
+        gt=0,
+        strict=True,
+        description="Linux kernel-visible MemTotal at capture, in MiB; unavailable stays null.",
+    )
     cpu_observed_mhz: float | None = Field(default=None, gt=0, strict=True)
     cpu_reported_max_mhz: float | None = Field(default=None, gt=0, strict=True)
     flags: str = ""

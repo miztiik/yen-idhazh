@@ -59,6 +59,7 @@ function host(over: Partial<HostFingerprint>): HostFingerprint {
 		cpu_quota_state: null,
 		cpu_target_measured_at: null,
 		l3_cache_bytes: 32 * MIB,
+		machine_memory_total_mib: null,
 		cpu_observed_mhz: 2800,
 		cpu_reported_max_mhz: null,
 		flags: '',

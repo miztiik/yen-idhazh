@@ -296,7 +296,7 @@ def test_corrected_host_history_retains_its_versioned_facts(
 
     assert ledger.load(written, model=HostFingerprintRow) == [row]
     envelope = ledger.read_envelope(written[0])
-    assert envelope.row_schema_version == "2026-10-14"
+    assert envelope.row_schema_version == HostFingerprintRow.schema_version()
     assert envelope.writer == (parquet if fmt is Format.PARQUET else json_lines).__name__
 
 

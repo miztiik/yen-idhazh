@@ -38,7 +38,7 @@ operator console, not on the news-reading pages.
 | Producer | [`silicon.py`](../../backend/idhazh/telemetry/silicon.py), through [`task_telemetry.record`](../../backend/idhazh/telemetry/task_telemetry.py), or the independent [`host-fingerprints`](../../services/host-fingerprints/src/index.ts) API/CLI. Both use the existing host ledger and separate pipeline/task identity. |
 | Read by | `/console/machine/`, through the browser questions in `frontend/src/lib/console/queries/machine.ts` and shared helpers in `frontend/src/lib/console/machine/records.ts` |
 | Key | `date`, `run_id`, `pipeline_name`, `task_name`, `shard`; legacy rows use `job` instead |
-| Switch | `observability.host_telemetry_enabled` for the whole instrument; `host_fingerprint` for host-row writes; `host_fingerprint_placement_enabled` for Python placement metadata; `memory_profiling_enabled` for memory/page-fault observations only |
+| Switch | `observability.host_telemetry_enabled` for the whole instrument; `host_fingerprint` for host-row writes; `host_fingerprint_placement_enabled` for placement metadata in either collector; `memory_profiling_enabled` for memory/page-fault observations only |
 | Committed | The caller owns publication of the files returned by the recorder |
 | Shown on news-reading pages | **no.** Operator surface only |
 
@@ -54,9 +54,9 @@ acquisition choice and refuse entry to the real placement reader, so a missing
 forwarding step fails before any network access.
 
 The default-on `observability.host_fingerprint_placement_enabled` setting also
-stops Python placement reads when false. The caller's `ask_placement=False`
-remains a narrower opt-out; neither choice stops local fingerprint collection
-or its ledger write.
+stops placement reads in both collectors when false. A Python caller's
+`ask_placement=False` remains a narrower opt-out; neither choice stops local
+fingerprint collection or its ledger write.
 
 The manual feed planner workflow uses the existing Bun collector for its
 actual-host report. The caller is pipeline `feed-ingest-plan`, task
@@ -113,11 +113,20 @@ Memory diagnostics are separate from the persisted hardware fingerprint.
 
 ## Independent fingerprint API and CLI
 
-`services/host-fingerprints` collects the full existing 38-field
-`HostFingerprintRow`, including hardware, capacity, optional frequency, uptime,
-placement, runner label and caller-supplied timing/model counters. It adds no
-persisted fields and rewrites no historical files. The service is build-time
-operator tooling, not a backend for the published site.
+`services/host-fingerprints` collects hardware, capacity, optional frequency,
+uptime, placement and the runner label into `HostFingerprintRow`. Its HTTP API
+does not accept task timing or model counters. The CLI retains those optional
+caller inputs, and the shared ledger retains their fields for other producers.
+The service is build-time operator tooling, not a backend for the published site.
+
+`machine_memory_total_mib` is total RAM visible to the Linux kernel at capture,
+from `MemTotal` in `/proc/meminfo`. Linux kB means 1024 bytes; division by 1024
+gives MiB without rounding. This optional positive number is machine capacity,
+not free or available RAM, process memory, a cgroup limit or a task sample.
+Missing, malformed, duplicate, oversized or unsupported input leaves it null
+with an unavailable reason. Task-memory profiling does not control this capacity
+reading. Total RAM is not part of the hardware hash, and `l3_cache_bytes` stays
+byte-valued.
 
 From the service directory, run:
 
@@ -156,14 +165,19 @@ immutable writes and normal ledger settlement chooses the later whole row.
 Dates and timestamps are UTC. Integer inputs must be exactly representable
 JavaScript safe integers; values outside that range fail rather than round.
 
-`POST /api/2026-10-20/fingerprint` takes that same JSON body. Success returns
+`POST /api/2026-10-20/fingerprint` takes only `date` and `writer` from that
+example. The four timing/model keys are refused with 400 even when null:
+`model_load_ms`, `job_seconds`, `server_prompt_tokens` and
+`server_prompt_seconds`. API-generated rows leave those existing ledger cells
+null; the API neither accepts nor collects them. Success returns
 `status: "written"`, the validated `row`, an `unavailable` reason map, and the
 shared writer's `files`. Each file's `path` is relative to the caller's state
 root, with POSIX separators; no absolute local path is returned. The caller
-owns publication. Validation failures return 400; oversized request bodies
-return 413. A collection or persistence failure returns 500, never a row or
-success-shaped paths. The CLI prints JSON only after persistence, or exits
-nonzero and logs the failure on stderr.
+owns publication. The API writes raw Parquet only: it creates no index and does
+not commit, push, compact or deploy. Validation failures return 400; oversized
+request bodies return 413. A collection or persistence failure returns 500,
+never a row or success-shaped paths. The CLI prints JSON only after persistence,
+or exits nonzero and logs the failure on stderr.
 
 `GET /api/2026-10-20/health` reports readiness and the selected instrument
 switch without collection or writes. GET on the write endpoint returns 405.
@@ -184,8 +198,14 @@ online processors, read the eight named cache indices, and inspect at most
 64 cgroup ancestor levels. These limits bound one collection; exceeding a host
 input limit yields an unavailable reading, not a partial count.
 The metadata URL is committed and restricted to the host link-local address;
-its default deadline is 2000 milliseconds. `metadata_url: null` opts out of
-placement reads and records `configured_off`. Missing metadata remains null.
+its default deadline is 2000 milliseconds. Either the selected
+`host_fingerprint_placement_enabled: false` or `metadata_url: null` prevents
+metadata access and records `configured_off`. A deadline records
+`metadata_timeout`; an unreachable transport records `metadata_unavailable`;
+a status other than 200 records `metadata_http_<status>`; an invalid or empty
+body records `metadata_invalid`; a body above the read limit records
+`metadata_too_large`. These failures leave placement null, not the whole
+fingerprint unavailable, and do not stop the ledger write.
 `copy_repeats` defaults to three real memory transfers, taking their median.
 Only tasks selected by the existing observability bandwidth list take that
 optional benchmark; the recorded buffer size is derived from L3 and the shared
@@ -205,13 +225,15 @@ independently recorded full schema/types/nullability and hardware hash bytes,
 real API-handler/CLI writes, and real Parquet WASM/Arrow readback. They run no
 Python, read no backend source, install no Python package, and do not claim
 that a Python reader ran. Backend code is not a TS test/runtime prerequisite.
-The schema fixture is a deliberate compatibility snapshot: its authority path
-is provenance only, not an executable binding. Changes to that snapshot
-require review alongside the declared row semantics.
-No test contacts a network: placement parsing uses the bounded response
-fixture; the CLI placement read is explicitly off. The live-Linux test runs
-only on Linux and reports its machine separately; Windows fixture results do
-not certify Linux collection or live cloud metadata access.
+The schema fixture records the shared row's columns, types, nullability and a
+complete value. The named backend contract check
+`backend/tests/contracts/test_host_fingerprint_snapshot.py` binds that
+snapshot to the actual Pydantic model in CI. The Bun checks use the recorded
+snapshot without a Python prerequisite; they do not claim that Python ran.
+No test contacts a network: placement replays bounded native response bodies
+and transport failures; the CLI placement read is explicitly off. The live-Linux
+test runs only on Linux and reports its machine separately; Windows fixture
+results do not certify Linux collection or live cloud metadata access.
 
 ## Independent CPU and memory samples
 
@@ -425,17 +447,17 @@ Table C - controls inside an enabled instrument
 | C3 | `memory_profiling: off` | Stop those memory/fault observations; leave their cells unavailable | CPU/load, timing, identity, heartbeat, item health or memory copying |
 | C4 | `observability.host_fingerprint: false` | Stop raw job fingerprint writes/probes | The complete resource monitor or per-item memory/CPU observations |
 | C5 | Empty `host_fingerprint_bandwidth_jobs`, or zero `host_fingerprint_bandwidth_floor_mib` | Stop the copy benchmark | Other host observations |
-| C6 | `observability.host_fingerprint_placement_enabled: false` | Stop Python placement metadata reads; leave those cells empty | Local host readings, the fingerprint row or its task clock |
+| C6 | `observability.host_fingerprint_placement_enabled: false` | Stop placement metadata reads in either collector; leave those cells empty | Local host readings, the fingerprint row or its task clock |
 
 The master false value or caller's off choice wins first. Memory on cannot
 restart a disabled instrument. Whole off skips host readings, raw host
 writes and host-memory artifacts. It keeps work, item health and progress
 logging. No setting deletes existing readings.
 
-Placement metadata requires both the configured switch and the caller's
-`ask_placement` choice. Either false value skips the external read; true in the
-config cannot override a caller opting out, and a caller's default-on cannot
-override config opting out.
+Placement metadata requires the configured switch. Python also requires the
+caller's `ask_placement` choice. Either false value skips the external read;
+true in the config cannot override a caller opting out, and a caller's
+default-on cannot override config opting out.
 
 Set the master field to false to stop collection for every caller:
 
@@ -830,6 +852,16 @@ discard the reading the fingerprint exists to capture.
 to keep one column. Its full vocabulary lives in the contract.
 
 ## Design rationale
+
+**The HTTP API collects hardware, not work done by its caller.** Maintainer
+ruling, 2026-10-26 UTC: remove timing/model inputs from the HTTP API only, with
+no request migration. The CLI, Python producers and persisted ledger keep those
+fields and their existing consumers. Total machine RAM is an optional addition
+to the shared row; unmeasured historical capacity stays null. No compatibility
+migration, historical rewrite or replacement metrics ledger is introduced.
+Placement is optional and its failure cannot discard local hardware or a
+completed write. The API creates no host index; publication remains the caller's
+responsibility.
 
 **The independent collector shares the existing persistence stack.** Zod
 validates caller context and the full host row; the existing
