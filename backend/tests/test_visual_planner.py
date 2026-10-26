@@ -45,6 +45,7 @@ from idhazh.contracts.visual import (
     widest_json_characters,
 )
 from idhazh.contracts.visual_decision import NoneReason, VisualDecision, VisualKind
+from idhazh.contracts.visual_telemetry import ValidatorCheck
 from idhazh.extract import approx_tokens
 from idhazh.llm.server import Completion
 from idhazh.render.chart import can_compile
@@ -59,7 +60,7 @@ from idhazh.visual_planner import (
     refused_by_the_validator,
     suppressed_by_the_gate,
 )
-from idhazh.visual_validator import Rejection, ValidatorCheck, validate_plan
+from idhazh.visual_validator import Rejection, validate_plan
 from idhazh.visual_vocabulary import TYPE_RULES, UNRULED_TYPES
 
 pytestmark = pytest.mark.visual

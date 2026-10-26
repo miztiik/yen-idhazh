@@ -428,12 +428,12 @@ class VisualData(Contract):
             names = [by_id[mark_id].text for mark_id in channels.category]
             if len(set(names)) != len(names):
                 raise ValueError("pie category names remain distinct")
-            if any(
-                by_id[mark_id].element_id is None
-                or not by_id[mark_id].element_id.startswith(("entity-", "place-", "date-"))
-                for mark_id in channels.category
-            ):
-                raise ValueError("pie categories cite source labels")
+            for mark_id in channels.category:
+                category = by_id[mark_id]
+                if category.element_id is None or not category.element_id.startswith(
+                    ("entity-", "place-", "date-")
+                ):
+                    raise ValueError("pie categories cite source labels")
             parts = [by_id[mark_id] for mark_id in channels.quantity]
             part_ids: list[str] = []
             for part in parts:
