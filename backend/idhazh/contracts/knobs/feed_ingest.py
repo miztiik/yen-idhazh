@@ -113,6 +113,13 @@ class FeedUrlExclusion(Model):
 class FeedHarvestConfig(Model):
     concurrency: PositiveCount
     fetch_timeout_ms: PositiveCount
+    tidy_urls: bool = Field(
+        strict=True,
+        description=(
+            "Clean request targets only. Remove this switch and the disabled path "
+            "when request cleanup becomes mandatory."
+        ),
+    )
     user_agent: NonEmpty
     blocked_categories: list[NonEmpty]
     url_exclusions: list[FeedUrlExclusion]

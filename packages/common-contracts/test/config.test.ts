@@ -23,6 +23,7 @@ if (Bun.argv.includes("--emit-schemas")) {
       max_age_hours: 24, recency_half_life_hours: 18, recency_weight: 0.6,
     });
     expect(config.curate.article_limit).toBe(100);
+    expect(config.harvest.tidy_urls).toBe(true);
     expect(config.feedback.lifecycle_window_days).toBe(31);
     expect(config.feedback.request_report_closed_days).toBe(7);
     expect(Object.keys(config.feedback)).toEqual(["lifecycle_window_days", "request_report_closed_days"]);
@@ -66,6 +67,7 @@ if (Bun.argv.includes("--emit-schemas")) {
     [["curate", "mmr_weights", "lambda_lens"], 0],
     [["curate", "soft_caps", "max_source_share"], 0],
     [["harvest", "concurrency"], "2"],
+    [["harvest", "tidy_urls"], "true"],
     [["partition", "default_shards"], 9],
     [["workflow_reporting", "enabled"], "true"],
     [["metrics"], {}],

@@ -3,6 +3,7 @@
   "harvest": {
     "concurrency": 24,
     "fetch_timeout_ms": 6000,
+    "tidy_urls": true,
     "user_agent": "Mozilla/5.0 (compatible; YenIdhazhBot/2026.10; +https://github.com/miztiik/yen-idhazh)",
     "blocked_categories": ["links", "show types", "podcasts", "video", "galleries"],
     "url_exclusions": [

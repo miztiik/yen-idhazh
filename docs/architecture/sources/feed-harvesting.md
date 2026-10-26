@@ -35,6 +35,13 @@ Reporting configuration does not change harvested content identity.
 Missing feed fields do not renumber later entries. Page canonical tags,
 scripts and prose never grant a new fetch destination.
 
+With `harvest.tidy_urls` enabled, TidyURL cleans actual feed and article
+request targets, including redirect destinations. The original offered URL
+still supplies `canonical_url`, `url_key` and configured source provenance.
+Cleanup does not rewrite earlier records. Each transformed address passes
+public-address validation, robots permission and pinned dispatch before use.
+An unsafe transformed address is never dispatched.
+
 Feedsmith normalizes RSS, Atom, RDF and JSON Feed entries. They retain
 categories, authors, offered ordinals and entry-level UTC dates. A feed's
 build or update time is not an article publication time. Missing, invalid
@@ -86,6 +93,8 @@ The existing Defuddle 0.19.5 node entry uses its installed Markdown converter;
 LinkeDOM still supplies inert documents. Undici, address and robots
 libraries retain transport control. These dependencies run in the
 build-time Bun process and workers, not the published browser bundle.
+TidyURL 1.18.3 adds its bundled URL-cleaning rules and no runtime dependencies
+for request-target cleanup. Its installed bytes remain build-time only.
 No new HTTP client, parser framework or profiler is introduced.
 
 ## Design rationale

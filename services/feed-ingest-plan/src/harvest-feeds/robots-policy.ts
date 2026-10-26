@@ -10,6 +10,7 @@ import { UnsafeTargetError, resolveAddresses, validateTarget, validateTargetName
 import type { ResolveAddresses } from "./safe-target";
 import type { FetchAttempt } from "../api/operation-contracts";
 import { utcTimestamp } from "./harvest-types";
+import { cleanRequestTarget } from "./request-url";
 
 export type FetchAttemptMeasurement = {
   attempt: FetchAttempt; occurred_at: string; outcome: "success" | "failed";
@@ -209,7 +210,10 @@ export function createPermittedFetcher(
       let url: URL;
       // Syntax is refused without retries; transient initial DNS failures use the same retry policy.
       const started = performance.now();
-      try { url = validateTargetName(target); }
+      try {
+        url = config.tidy_urls ? cleanRequestTarget(target) : validateTargetName(target);
+        target = url.href;
+      }
       catch (error) {
         const failure = transportFailure(error, signal);
         const attempt: FetchAttempt = {

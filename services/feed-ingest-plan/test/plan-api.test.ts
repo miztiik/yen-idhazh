@@ -59,6 +59,8 @@ test("actual API and awaited CLI compose the same recorded plan and disclose the
     expect(response.status).toBe(200);
     const summary = await response.json();
     const requests = api.transport.requests.length;
+    expect(api.transport.requests.find(request => request.url.pathname === "/story/")?.url.href)
+      .toBe("https://news.example/story/?b=2&a=1#section");
     expect(summary.selected_count).toBe(1);
     expect(summary.api_timings.filter((timing: { operation: string }) => timing.operation.startsWith("feed-health-")))
       .toMatchObject([

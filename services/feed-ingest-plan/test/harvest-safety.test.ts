@@ -13,6 +13,8 @@ import { recordHarvestObservations } from "./observation-recordings";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { z } from "zod";
+import { canonicalizeUrl } from "../src/harvest-feeds/url-cleaner";
 
 test("recorded sanitizer vectors match sanitizer-3, keep prose and are idempotent", async () => {
   const fixture = await readSafety();
@@ -35,6 +37,44 @@ test("literal, encoded and named unsafe addresses fail before transport", async 
     expect((await fetcher.fetch(target)).failure).toBe("unsafe-target");
   }
   expect(transport.requests).toEqual([]);
+});
+
+test("TidyURL changes actual destinations without changing offered identities or bypassing permission", async () => {
+  const fixture = z.object({
+    allowed: z.array(z.object({ offered: z.string(), target: z.string(), canonical_url: z.string() })),
+    refused: z.array(z.object({
+      offered: z.string(), failure: z.enum(["unsafe-target", "robots-denied", "robots-unknown"]),
+      requests: z.array(z.string()),
+    })),
+  }).parse(await Bun.file(new URL(
+    "../../../tests/fixtures/feed-ingest-plan/harvest-url-cleanup.json", import.meta.url,
+  )).json());
+  const loaded = await inputs();
+  for (const vector of fixture.allowed) {
+    const transport = new RecordedTransport(await readRecordings());
+    const identity = canonicalizeUrl(vector.offered);
+    const result = await createPermittedFetcher(loaded.config.harvest, loaded.extraction,
+      { transport, resolve: transport.resolve }).fetch(vector.offered);
+    expect(result.failure, vector.offered).toBeNull();
+    expect(transport.requests.at(-1)?.url.href).toBe(vector.target);
+    expect(identity.canonical_url).toBe(vector.canonical_url);
+    expect(canonicalizeUrl(vector.offered)).toEqual(identity);
+    expect(transport.requests.some(request => request.url.hostname === "www.google.com")).toBe(false);
+  }
+  for (const vector of fixture.refused) {
+    const transport = new RecordedTransport(await readRecordings());
+    const result = await createPermittedFetcher(loaded.config.harvest, loaded.extraction,
+      { transport, resolve: transport.resolve }).fetch(vector.offered);
+    expect(result.failure, vector.offered).toBe(vector.failure);
+    expect(transport.requests.map(request => request.url.href)).toEqual(vector.requests);
+  }
+  const vector = fixture.allowed[0]!;
+  const recordings = await readRecordings();
+  recordings.responses[vector.offered] = [{ status: 200, fixture: "article" }];
+  const transport = new RecordedTransport(recordings);
+  expect((await createPermittedFetcher({ ...loaded.config.harvest, tidy_urls: false }, loaded.extraction,
+    { transport, resolve: transport.resolve }).fetch(vector.offered)).failure).toBeNull();
+  expect(transport.requests.at(-1)?.url.href).toBe(vector.offered);
 });
 
 test("recorded robots rules and structured URL exclusions bind configured policy", async () => {

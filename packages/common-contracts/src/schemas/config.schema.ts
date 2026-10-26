@@ -19,6 +19,9 @@ export const FeedUrlExclusionSchema = z.strictObject({
 export const FeedHarvestConfigSchema = z.strictObject({
   concurrency: PositiveCountSchema,
   fetch_timeout_ms: PositiveCountSchema,
+  tidy_urls: z.boolean().describe(
+    "Clean request targets only. Remove this switch and the disabled path when request cleanup becomes mandatory.",
+  ),
   user_agent: NonEmptySchema,
   blocked_categories: z.array(NonEmptySchema),
   url_exclusions: z.array(FeedUrlExclusionSchema),
