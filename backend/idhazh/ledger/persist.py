@@ -1103,20 +1103,19 @@ def load_planner_stored[C: PlannerRow](
     paths: Sequence[Path], *, model: type[C]
 ) -> list[PlannerStoredRow[C]]:
     """Read only current planner cells, preserving their own declared execution identity."""
-    wanted = model.schema_version()
     held: list[PlannerStoredRow[C]] = []
     for path in paths:
         envelope, stored = _opened(path)
         if not isinstance(envelope, PlannerFileEnvelope):
             raise ValueError(f"{path.name}: planner rows require their strict planner envelope")
         _planner_model(model, ledger=envelope.ledger)
-        if envelope.row_schema_version != wanted:
+        if not model.accepts_schema_version(envelope.row_schema_version):
             raise ValueError(f"{path.name}: incompatible planner row schema version")
         if hashlib.sha256(json_lines.rows_bytes(stored)).hexdigest() != envelope.content_sha256:
             raise ValueError(f"{path.name}: planner content_sha256 mismatch")
         try:
             for cells in stored:
-                row = model.model_validate(cells)
+                row = model.read_row(cells, schema_version=envelope.row_schema_version)
                 if not _inside(str(getattr(row, DATE_CELL)), envelope.covers):
                     raise ValueError(f"{path.name}: planner row outside its UTC period")
                 held.append(PlannerStoredRow(row=row))

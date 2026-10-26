@@ -87,7 +87,8 @@ test("packing retains actual timing, accounting dates and text rather than recon
   const root = await mkdtemp(join(tmpdir(), "partition-cross-stage-"));
   try {
     const input = await fixtureInput(root, { count: 1 });
-    const article = { ...input.curation.articles[0]!, timing_at: "2026-10-20T23:55:00Z", age_hours: 12 + 5 / 60 };
+    const publication = "2026-10-20T23:55:00Z";
+    const article = { ...input.curation.articles[0]!, published_at: publication, timing_at: publication, age_hours: 12 + 5 / 60 };
     const packed = partitionArticles([article], { strategy: "none", dispatch_count: 1 });
     expect(packed.articles[0]).toEqual({ ...article, worker_assignment: 0 });
     expect(article.worker_assignment).toBeNull();

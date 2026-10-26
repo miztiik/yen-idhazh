@@ -1,15 +1,15 @@
 /** Prove default-off cache probes and real unprivileged Linux instrument results without claiming L3 hits. */
-import { z } from "../../services/host-probes/node_modules/zod";
-import { ProbeConfigSchema } from "../../services/host-probes/src/config";
-import type { ProbeConfig } from "../../services/host-probes/src/config";
-import { CacheProbeConfigSchema } from "../../services/host-probes/src/cache-probe/cache-config";
-import { CacheCountersSchema, CacheCountersStartSchema, CacheLatencySchema } from "../../services/host-probes/src/cache-probe/cache-schema";
-import { startCacheCounters } from "../../services/host-probes/src/cache-probe/cache-counters";
-import { measureWorkingSetLatency } from "../../services/host-probes/src/cache-probe/working-set-latency";
-import { readProcessIdentity } from "../../services/host-probes/src/task-profile/process-stat";
-import { OwnedProcessSchema } from "../../services/host-probes/src/task-profile/profile-schema";
-import { startBoundedTool } from "../../services/host-probes/src/cache-probe/bounded-tool";
-import { CACHE_LATENCY_PATH, serveSamples } from "../../services/host-probes/src/api/server";
+import { z } from "zod";
+import { ProbeConfigSchema } from "../src/config";
+import type { ProbeConfig } from "../src/config";
+import { CacheProbeConfigSchema } from "../src/cache-probe/cache-config";
+import { CacheCountersSchema, CacheCountersStartSchema, CacheLatencySchema } from "../src/cache-probe/cache-schema";
+import { startCacheCounters } from "../src/cache-probe/cache-counters";
+import { measureWorkingSetLatency } from "../src/cache-probe/working-set-latency";
+import { readProcessIdentity } from "../src/task-profile/process-stat";
+import { OwnedProcessSchema } from "../src/task-profile/profile-schema";
+import { startBoundedTool } from "../src/cache-probe/bounded-tool";
+import { CACHE_LATENCY_PATH, serveSamples } from "../src/api/server";
 import type { TaskProfileProof } from "./feed-ingest-plan-profile-schema";
 import { CacheAffinityProofSchema, verifyCacheAffinity } from "./host-cache-affinity-proof";
 

@@ -31,9 +31,9 @@ function reduced(text: string): string {
     letter => ASCII_FOLDS[letter]!).replace(/[^a-z0-9]+/g, " ").trim();
 }
 
-export function corroborateWords(
-  document: Document, metadata: readonly unknown[], minimum: number, extractContainer: (html: string) => string,
-): number | null {
+export async function corroborateWords(
+  document: Document, metadata: readonly unknown[], minimum: number, extractContainer: (html: string) => Promise<string>,
+): Promise<number | null> {
   let best = 0;
   for (const value of metadata) best = Math.max(best, jsonWords(value));
   // Match Python's independent tree reading: scripts and styles are not article prose.
@@ -45,7 +45,7 @@ export function corroborateWords(
   if (wanted) for (const node of document.querySelectorAll("article")) {
     const heading = reduced(node.querySelector("h1,h2")?.textContent ?? "");
     if (!heading || (!heading.includes(wanted) && !wanted.includes(heading))) continue;
-    best = Math.max(best, countWords(extractContainer(`<html><body>${node.outerHTML}</body></html>`)));
+    best = Math.max(best, countWords(await extractContainer(`<html><body>${node.outerHTML}</body></html>`)));
     break;
   }
   return best >= minimum ? best : null;

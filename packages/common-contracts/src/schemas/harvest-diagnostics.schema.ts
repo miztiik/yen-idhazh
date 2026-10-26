@@ -51,7 +51,7 @@ export const HarvestDiagnosticsSchema = z.strictObject({
   ]).nullable().default(null),
   fetch_ms: CountSchema.nullable().default(null),
   extract_ms: CountSchema.nullable().default(null),
-  warnings: z.array(z.literal("malformed-json-ld")).max(1).default([]),
+  warnings: z.array(z.enum(["malformed-json-ld", "semantic-dom-fallback"])).max(2).default([]),
   quality: ExtractionQualitySchema.nullable().default(null),
 });
 export const PreviousHarvestDiagnosticsSchema = HarvestDiagnosticsSchema.omit({ quality: true }).extend({

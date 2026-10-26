@@ -10,7 +10,7 @@ import type { RunContext } from "../resolve-run-context";
 export function curateArticles(input: {
   articles: readonly ScreenedCandidate[]; batch: ParsedFeedBatch; inputs: PlanInputs;
   health: ReadonlyMap<string, SourceHistoryEvidence>; publications: PublisherPublicationHistory;
-  context?: RunContext;
+  selectionStartedAt: string; context?: RunContext;
 }) {
   const context = input.context ?? input.batch.context;
   const config = input.inputs.harvest.config.curate;
@@ -108,7 +108,9 @@ export function curateArticles(input: {
       run_id: context.run_id, attempt: context.writer.attempt, date: context.date,
       url_key: candidate.url_key, feed_id: candidate.source_id, publisher_id: candidate.source.publisher_id,
       canonical_url: candidate.canonical_url, title: candidate.title, categories: candidate.categories,
-      article_text: candidate.article_text, author: candidate.author, published_at: candidate.published_at,
+      article_text: candidate.article_text, author: candidate.author,
+      published_at: freshness.timing_source === "published_at" ? candidate.published_at : input.selectionStartedAt,
+      published_at_source: freshness.timing_source === "published_at" ? "source" : "selection",
       tier: candidate.source.tier, weight: candidate.source.weight, applied_tier_weight: candidate.source.applied_tier_weight,
       editorial_rank: articles.length + 1, estimated_work: sourceEvidence[candidate.candidate_id]?.estimated_work ?? candidate.word_count,
       worker_assignment: null, feed_allowance: allowance.value, exploration_slot: exploration.length > 0,

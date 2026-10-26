@@ -1,6 +1,6 @@
 # What the pipeline records about the machine it ran on
 
-**Last Updated**: 2026-10-24
+**Last Updated**: 2026-10-26
 
 Every host-fingerprint field, what it means and which readings are optional.
 The hardware fingerprint is reusable by any pipeline. Callers name their
@@ -58,15 +58,13 @@ stops Python placement reads when false. The caller's `ask_placement=False`
 remains a narrower opt-out; neither choice stops local fingerprint collection
 or its ledger write.
 
-The manual feed planner workflow installs the existing Bun fingerprint
-service and invokes `persistFingerprint` after live planning and the separate
-generated audit gate. The producer remains `telemetry.silicon`; the caller is
-pipeline `feed-ingest-plan`, task `isolated-plan`, shard 0. Its `job_seconds`
-measures the first workflow step through the host observation, not the later
-report, commit or upload. The readable workflow summary includes the recorded
+The manual feed planner workflow uses the existing Bun collector for its
+actual-host report. The caller is pipeline `feed-ingest-plan`, task
+`isolated-plan`, shard 0. This observation does not run the copy benchmark,
+invent job timing or write a host ledger. Its Resources section shows the
 hardware fingerprint, CPU model, visible/allowed processors, quota and L3.
-Missing hardware remains unavailable. The exact returned host UUID Parquet
-path joins the genuine planner files in the append-only main commit.
+Missing hardware remains unavailable with its reason. Only the planner's
+four current metadata ledgers join its append-only main commit.
 
 Whole-instrument off and memory-only off are different controls. Their exact
 configuration, overrides and effects are in [Controls and precedence](#controls-and-precedence).
@@ -371,22 +369,33 @@ last-level-cache read events with Linux perf and a native random-pointer-chain
 working-set latency curve. Copy throughput is neither of those measurements.
 Cache results are transient and do not add fingerprint fields.
 
-The isolated workflow's `profile_machine_memory` checkbox selects only task
-machine RAM and defaults to false. Its separate standalone RAM HTTP sample and
-copy OFF/ON proof still run; they are not task measurements. Optional reporting
-reads the workflow-written `stage-api-proof.json` and `resource-proof.json`.
-Tables H and I show document fetch/parse CPU, elapsed time, window and poll
-controls, observed counts, guarded PID RAM and optional machine RAM. Table J
-keeps standalone RAM, host context, L3 and cache-derived copy buffers/rates
-separate. All values retain their units and unavailable reasons. No sample
-dump enters the summary or notices.
+The isolated workflow's `profile_machine_memory` checkbox defaults false.
+When selected, it enables the existing profiler around the whole real HTTP
+planner invocation and separately selects the controlled sample/copy/cache
+proof. It does not enable per-document profiles or a resource ledger. Global
+`host_telemetry_enabled` still controls collection; `memory_profiling_enabled`
+still controls process and machine RAM. The fingerprint and placement switches
+also govern the basic actual-host observation.
 
-The report validates the executed revision, run, attempt, correlation and
-document request identities before showing measurements. Replay labels also
-require matching response and journal digests and unchanged profile counts.
-Missing older artifacts mean not recorded, not zero or successful collection.
-Invalid or foreign evidence fails the existing optional report step explicitly;
-reporting off reads no evidence and writes no summary or annotations. These
+The job summary and one grouped Resources notice combine actual host facts,
+the live planner process and the separate controlled proof, with each scope
+labelled. The planner and listener share one PID. An absent separate-server
+PID means there is no second process to measure, not that the HTTP API is down.
+No process is counted twice. CPU values include all work in the measured PID.
+
+RAM display uses decimal GB: 1 GB is 1,000,000,000 bytes. Linux proc `kB`
+values remain KiB in the stored readings and are multiplied by 1,024 before
+display. Free RAM and available RAM each show `X.XX GB / Y.YY GB total
+(NN.nn% free)` or `(NN.nn% available)`. Available RAM includes reclaimable
+cache; free RAM does not. The lowest observed available RAM describes only
+sampled observations, never an assured whole-run minimum. Its percentage is
+unavailable if the corresponding total was not retained.
+
+`resources.json` holds the validated actual-host and live-process evidence;
+the separate `resource-proof.json` describes controlled work. Missing,
+disabled, failed and unsupported readings retain their reasons, never zero
+or successful collection. No sample dump enters the summary or notices.
+Reporting off reads no evidence and writes no summary or annotations. These
 transient inputs add no native host fields, durable request fields or ledger.
 
 ## Controls and precedence

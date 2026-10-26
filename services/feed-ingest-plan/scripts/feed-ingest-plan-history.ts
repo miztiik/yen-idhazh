@@ -2,16 +2,16 @@
 import { resolve } from "node:path";
 import {
   CompactIndexSchema, RawDayIndexSchema, LedgerNameSchema, FeedHealthStateRowContract,
-} from "../../packages/common-contracts/src/index";
-import type { CompactIndex, RawDayIndex } from "../../packages/common-contracts/src/index";
-import type { PlanInputs } from "../../services/feed-ingest-plan/src/load-plan-inputs";
-import { mapPool } from "../../services/feed-ingest-plan/src/harvest-feeds/harvest-pool";
-import { requiredSeenDays } from "../../services/feed-ingest-plan/src/read-ledger-history/read-seen-evidence";
-import { readPlannerParquet } from "../../services/feed-ingest-plan/src/read-ledger-history/read-planner-parquet";
-import { closedRequestDays } from "../../services/feed-ingest-plan/src/read-ledger-history/health-summary";
+} from "../../../packages/common-contracts/src/index";
+import type { CompactIndex, RawDayIndex } from "../../../packages/common-contracts/src/index";
+import type { PlanInputs } from "../src/load-plan-inputs";
+import { mapPool } from "../src/harvest-feeds/harvest-pool";
+import { requiredSeenDays } from "../src/read-ledger-history/read-seen-evidence";
+import { readPlannerParquet } from "../src/read-ledger-history/read-planner-parquet";
+import { closedRequestDays } from "../src/read-ledger-history/health-summary";
 import { completeHistoryDayInputs, createSeenDayInputs, resolveHistoryIndexes, resolveHistoryInventory, sparseCheckoutPath } from "./feed-ingest-plan-outputs";
 import { stageFeedHistory } from "./feed-ingest-plan-feed-history";
-import { LedgerHistoryReadError } from "../../services/feed-ingest-plan/src/read-ledger-history/ledger-history-error";
+import { LedgerHistoryReadError } from "../src/read-ledger-history/ledger-history-error";
 
 export async function stageNamedFiles(repository: string, paths: readonly string[]) {
   const names = [...new Set(paths)].map(sparseCheckoutPath);

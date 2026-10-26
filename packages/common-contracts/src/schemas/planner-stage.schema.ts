@@ -120,7 +120,7 @@ export const ParsedFeedBatchSchema = z.strictObject({
 });
 export type ParsedFeedBatch = z.infer<typeof ParsedFeedBatchSchema>;
 export const SelectedFeedBatchSchema = z.strictObject({
-  ...batchIdentity, parsed_batch_id: z.uuid({ version: "v4" }),
+  ...batchIdentity, version: z.literal("2026-10-26").default("2026-10-26"), parsed_batch_id: z.uuid({ version: "v4" }),
   selection_started_at_utc: TimestampSchema, evaluated_at: TimestampSchema,
   articles: z.array(SelectedArticleContentSchema), health_rows: z.array(FeedHealthStateRowSchema),
   exclusions: z.array(PlannerRejectionCountSchema), request_report: PlannerRequestReportSchema,
