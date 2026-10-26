@@ -1,28 +1,16 @@
 /** Do API and CLI captures persist real compatible Parquet or fail explicitly? */
 import { expect, test } from "bun:test";
+import { existsSync } from "node:fs";
 import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { tableFromIPC } from "apache-arrow";
-import initializeWasm, { readParquet, readMetadata } from "parquet-wasm/esm";
-import type { Table } from "apache-arrow";
-import { HostFingerprintRowSchema } from "@idhazh/common-contracts";
+import { readMetadata } from "parquet-wasm/esm";
+import { HostFingerprintRowSchema, HOST_FINGERPRINT_VERSION } from "@idhazh/common-contracts";
 import { createFingerprintHandler, FINGERPRINT_PATH, HEALTH_PATH } from "../src/api/server";
 import { persistFingerprint } from "../src/persist-fingerprint";
 import { writeAtomically } from "../../../packages/ledger-file-writer/src/atomic-file";
 import { fixture } from "./fixture";
+import { readTable, storedRow } from "./parquet-readback";
 
-async function readTable(root: string, path: string) {
-  await initializeWasm();
-  const bytes = new Uint8Array(await readFile(join(root, ...path.split("/"))));
-  const table = tableFromIPC(readParquet(bytes).intoIPCStream());
-  return { table, bytes };
-}
-function storedRow(table: Table): Record<string, unknown> {
-  const row = table.get(0);
-  if (!row) throw new Error("expected one persisted host row");
-  return Object.fromEntries(Object.entries(row.toJSON()).map(([name, value]) =>
-    [name, typeof value === "bigint" ? Number(value) : value]));
-}
 function request(input: unknown) {
   return new Request(`http://localhost${FINGERPRINT_PATH}`, { method: "POST", body: JSON.stringify(input) });
 }
@@ -31,12 +19,17 @@ test("POST persists the entire hardware row and independent Arrow column transcr
   try {
     const outputRoot = join(f.directory, "state");
     const handler = createFingerprintHandler(f.config, f.settings, { outputRoot, inspection: f.inspection });
-    const response = await handler(request(f.capture));
+    const response = await handler(request(f.apiInput));
     expect(response.status).toBe(200);
     const body = await response.json();
     expect(body.status).toBe("written");
     expect(body.row).toMatchObject(f.input.expected);
     expect(body.files).toHaveLength(1);
+    expect(body.row).toMatchObject({
+      model_load_ms: null, job_seconds: null, server_prompt_tokens: null, server_prompt_seconds: null,
+      memcpy_probe_mib: 0, memcpy_gib_s: null,
+    });
+    expect(body.unavailable.memcpy_gib_s).toBe("configured_off");
     expect(body.files[0].path).toMatch(/^raw\/host-fingerprint\/2026\/10\/21\/[0-9a-f-]+\.parquet$/);
     const { table, bytes } = await readTable(outputRoot, body.files[0].path);
     const recorded = await Bun.file(new URL("../../../tests/fixtures/host-fingerprints/host-schema.json", import.meta.url)).json();
@@ -53,9 +46,10 @@ test("POST persists the entire hardware row and independent Arrow column transcr
     const parquetMetadata = readMetadata(bytes);
     const metadata = Object.fromEntries(parquetMetadata.fileMetadata().keyValueMetadata());
     parquetMetadata.free();
-    expect(metadata.schema_version).toBe("2026-10-14");
+    expect(metadata.schema_version).toBe(HOST_FINGERPRINT_VERSION);
     expect(metadata.writer).toBe("idhazh_typescript.ledger.parquet");
     expect(metadata.content_sha256).toBe(body.files[0].content_sha256);
+    expect((await readdir(outputRoot, { recursive: true })).some((path) => path.endsWith("index.json"))).toBe(false);
   } finally { await f.cleanup(); }
 });
 test("full independently recorded row retains every non-null hardware and clock cell through the shared writer", async () => {
@@ -84,13 +78,14 @@ test("health and inspection GET have no side effects; malformed caller input nev
     const handler = createFingerprintHandler(f.config, f.settings, { outputRoot, inspection: f.inspection });
     expect((await handler(new Request(`http://localhost${HEALTH_PATH}`))).status).toBe(200);
     expect((await handler(new Request(`http://localhost${FINGERPRINT_PATH}`))).status).toBe(405);
-    expect((await handler(request({ ...f.capture, writer: { ...f.capture.writer, pipeline_name: "../unsafe" } }))).status).toBe(400);
-    expect((await handler(request({ ...f.capture, writer: { ...f.capture.writer, task_name: null } }))).status).toBe(400);
-    expect((await handler(request({ ...f.capture, writer: { ...f.capture.writer, shard: -1 } }))).status).toBe(400);
+    expect((await handler(request({ ...f.apiInput, writer: { ...f.apiInput.writer, pipeline_name: "../unsafe" } }))).status).toBe(400);
+    expect((await handler(request({ ...f.apiInput, writer: { ...f.apiInput.writer, task_name: null } }))).status).toBe(400);
+    expect((await handler(request({ ...f.apiInput, writer: { ...f.apiInput.writer, shard: -1 } }))).status).toBe(400);
+    expect((await handler(request({ ...f.apiInput, writer: { ...f.apiInput.writer, producer: "another-producer" } }))).status).toBe(400);
     expect((await handler(new Request(`http://localhost${FINGERPRINT_PATH}`, { method: "POST", body: "bad JSON" }))).status).toBe(400);
     expect(await Bun.file(outputRoot).exists()).toBe(false);
     f.config.max_input_bytes = 1;
-    expect((await handler(request(f.capture))).status).toBe(413);
+    expect((await handler(request(f.apiInput))).status).toBe(413);
   } finally { await f.cleanup(); }
 });
 test.each(["host_telemetry_enabled", "host_fingerprint"] as const)("%s off skips reads and all writes but still validates caller identity", async (key) => {
@@ -110,7 +105,7 @@ test("failed persistence rejects the API request rather than returning row or pa
     const outputRoot = join(f.directory, "blocked");
     await writeFile(outputRoot, "existing file");
     const handler = createFingerprintHandler(f.config, f.settings, { outputRoot, inspection: f.inspection });
-    await expect(handler(request(f.capture))).rejects.toThrow();
+    await expect(handler(request(f.apiInput))).rejects.toThrow();
     expect(await readFile(outputRoot, "utf8")).toBe("existing file");
     const target = join(f.directory, "rename-blocked.parquet");
     await mkdir(target);
@@ -118,6 +113,39 @@ test("failed persistence rejects the API request rather than returning row or pa
     await expect(writeAtomically(target, new Uint8Array([1, 2, 3]))).rejects.toThrow();
     expect(await readFile(join(target, "keep"), "utf8")).toBe("original");
     expect((await readdir(f.directory)).filter((name) => name.endsWith(".tmp"))).toEqual([]);
+  } finally { await f.cleanup(); }
+});
+test.each(["model_load_ms", "job_seconds", "server_prompt_tokens", "server_prompt_seconds"] as const)(
+  "HTTP refuses %s even when null, without changing CLI or ledger acceptance", async (field) => {
+    const f = await fixture();
+    try {
+      const outputRoot = join(f.directory, "refused-counter");
+      const handler = createFingerprintHandler(f.config, f.settings, { outputRoot, inspection: f.inspection });
+      for (const value of [f.capture[field], null]) {
+        const response = await handler(request({ ...f.apiInput, [field]: value }));
+        expect(response.status).toBe(400);
+        expect((await response.json()).error).toContain(field);
+      }
+      expect(existsSync(outputRoot)).toBe(false);
+    } finally { await f.cleanup(); }
+  },
+);
+test("HTTP retains the existing task-gated copy benchmark", async () => {
+  const f = await fixture();
+  try {
+    await writeFile(join(f.root, "sys/devices/system/cpu/cpu0/cache/index2/size"), "1K");
+    f.settings.observability.host_fingerprint_bandwidth_jobs = [f.apiInput.writer.task_name!];
+    f.settings.observability.host_fingerprint_bandwidth_floor_mib = 1;
+    const handler = createFingerprintHandler(f.config, f.settings, {
+      outputRoot: join(f.directory, "copy"), inspection: f.inspection,
+    });
+    const response = await handler(request(f.apiInput));
+    expect(response.status).toBe(200);
+    const body = await response.json();
+    expect(body.row.memcpy_probe_mib).toBe(2);
+    expect(body.row.memcpy_gib_s).toBeGreaterThan(0);
+    expect(body.row.job_seconds).toBeNull();
+    expect(body.files).toHaveLength(1);
   } finally { await f.cleanup(); }
 });
 test("retry keeps one work-unit identity and later whole-row settlement without editing prior files", async () => {

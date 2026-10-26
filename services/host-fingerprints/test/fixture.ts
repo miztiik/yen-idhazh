@@ -32,7 +32,11 @@ export async function fixture() {
   });
   return {
     input, directory, root, config, settings, capture,
-    inspection: { root, platform: "linux" as const, metadata: input.metadata, environment: input.environment },
+    apiInput: { date: capture.date, writer: capture.writer },
+    inspection: {
+      root, platform: "linux" as const, environment: input.environment,
+      get metadata() { return Response.json(input.metadata); },
+    },
     cleanup: () => rm(directory, { recursive: true, force: true }),
   };
 }

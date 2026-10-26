@@ -8,6 +8,7 @@ import { parseCpuModel } from "./inspect/cpu-model";
 import { collectTopology } from "./inspect/cpu-topology";
 import { collectCapacity } from "./inspect/cpu-capacity";
 import { collectHardware } from "./inspect/hardware-identity";
+import { collectMemoryCapacity } from "./inspect/memory-capacity";
 import { collectPlacement } from "./inspect/placement";
 import { measureCopy } from "./inspect/copy-bandwidth";
 import { runnerName } from "./inspect/runner-env";
@@ -26,6 +27,7 @@ export async function collectFingerprint(input: unknown, config: ServiceConfig, 
   };
   if ((inspection.platform ?? process.platform) !== "linux") {
     unavailable.platform = "unsupported_platform";
+    unavailable.machine_memory_total_mib = "unsupported_platform";
     return { row: HostFingerprintRowSchema.parse(rowInput), unavailable };
   }
   const frequency = settings.observability.host_fingerprint_frequency_enabled;
@@ -36,14 +38,15 @@ export async function collectFingerprint(input: unknown, config: ServiceConfig, 
   const topology = await collectTopology(config, context, frequency);
   const hardware = await collectHardware(config, context);
   const capacity = await collectCapacity(topology.ids, config, context);
-  const placement = await collectPlacement(config, context);
+  const memory = await collectMemoryCapacity(config, context);
+  const placement = await collectPlacement(config, settings, context);
   if (placement) {
     for (const [field, value] of Object.entries(placement)) {
       if (value === null) unavailable[field] = "metadata_field_unavailable";
     }
   }
   const row = HostFingerprintRowSchema.parse({
-    ...rowInput, ...model, ...hardware, ...capacity,
+    ...rowInput, ...model, ...hardware, ...capacity, ...memory,
     cpu_logical_processors: topology.cpu_logical_processors,
     cpu_physical_cores: topology.cpu_physical_cores,
     cpu_reported_max_mhz: topology.cpu_reported_max_mhz,

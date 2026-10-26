@@ -1,6 +1,6 @@
 /** Which request may collect and persist a host fingerprint? */
 import { z } from "zod";
-import { CaptureContextSchema } from "../../config";
+import { FingerprintRequestSchema } from "../../config";
 import type { ServiceConfig, SelectedSettings } from "../../config";
 import { persistFingerprint } from "../../persist-fingerprint";
 import type { PersistenceOptions } from "../../persist-fingerprint";
@@ -26,7 +26,7 @@ export async function postFingerprint(request: Request, config: ServiceConfig, s
     } finally {
       reader.releaseLock();
     }
-    input = CaptureContextSchema.parse(JSON.parse(Buffer.concat(chunks).toString("utf8")));
+    input = FingerprintRequestSchema.parse(JSON.parse(Buffer.concat(chunks).toString("utf8")));
   } catch (error) {
     if (!(error instanceof SyntaxError || error instanceof z.ZodError)) throw error;
     return Response.json({ error: error.message }, { status: 400 });

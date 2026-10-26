@@ -14,7 +14,7 @@ test("retains every recorded host field without a backend source dependency", as
 test("algorithm 2 excludes capacity, microcode, placement, clocks and caller context", async () => {
   const { row } = await Bun.file(fixtureUrl).json();
   expect(fingerprintV2(row)).toBe("27f9cc4dc522f48d");
-  expect(fingerprintV2({ ...row, cpu_allowed_processors: 1, microcode: "changed", cpu_model: row.cpu_model })).toBe(row.fingerprint);
+  expect(fingerprintV2({ ...row, cpu_allowed_processors: 1, machine_memory_total_mib: 1, microcode: "changed", cpu_model: row.cpu_model })).toBe(row.fingerprint);
   expect(fingerprintV2({ ...row, cpu_model: "another CPU" })).not.toBe(row.fingerprint);
   expect(() => fingerprintV2({ ...row, flags: "avx2 avx2" })).toThrow();
   expect(() => fingerprintV2({ ...row, cpu_family: -1 })).toThrow();
@@ -32,6 +32,9 @@ test.each([
   { cpu_target_measured_at: null }, { cpu_target_measured_at: "2026-10-21T17:00:00Z" },
   { measured_at: "2026-02-30T00:00:00Z" }, { fingerprint: "0".repeat(16) },
   { cpu_family: "6" }, { boot_seconds: Infinity }, { server_prompt_tokens: 2 ** 63 },
+  { machine_memory_total_mib: 0 }, { machine_memory_total_mib: -1 },
+  { machine_memory_total_mib: Infinity }, { machine_memory_total_mib: true },
+  { machine_memory_total_mib: "16383.75" },
   { extra: 1 }, { version: "1999-01-01" }, { cpu_logical_processors: 0 },
 ])("refuses inconsistent or lossy host input %j", async (patch) => {
   const fixture = await Bun.file(fixtureUrl).json();
@@ -39,7 +42,11 @@ test.each([
 });
 test("accepts supported normalized versions without changing recorded cells", async () => {
   const fixture = await Bun.file(fixtureUrl).json();
-  for (const version of ["2026-10-10", "2026-10-12", "2026-10-14"] as const) {
-    expect(HostFingerprintRowSchema.parse({ ...fixture.row, version }).version).toBe(version);
+  for (const version of ["2026-10-10", "2026-10-12", "2026-10-14", "2026-10-26"] as const) {
+    const { machine_memory_total_mib, ...historical } = fixture.row;
+    const row = HostFingerprintRowSchema.parse({ ...historical, version });
+    expect(row.version).toBe(version);
+    expect(row.machine_memory_total_mib).toBeNull();
+    expect(row.job_seconds).toBe(historical.job_seconds);
   }
 });

@@ -8,7 +8,7 @@ export type Inspection = {
   root?: string;
   environment?: NodeJS.ProcessEnv;
   unavailable?: Record<string, string>;
-  metadata?: unknown;
+  metadata?: Response;
 };
 export function unavailable(context: Inspection, field: string, reason: string): null {
   if (context.unavailable) context.unavailable[field] = reason;

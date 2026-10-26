@@ -87,6 +87,7 @@ function fingerprint(over: Partial<HostFingerprint>): HostFingerprint {
 		cpu_quota_state: null,
 		cpu_target_measured_at: null,
 		l3_cache_bytes: 32 * MIB,
+		machine_memory_total_mib: null,
 		cpu_observed_mhz: 2664.85,
 		cpu_reported_max_mhz: null,
 		flags: 'avx2 f16c fma sse4_2',
@@ -739,9 +740,19 @@ test.describe("one job's row", () => {
 				fingerprint: 'cccccccccccccccc',
 				fingerprint_version: '2'
 			},
+			{
+				version: '2026-10-26',
+				date: '2026-10-26',
+				run_id: '2026-10-26-1',
+				job: 'work',
+				shard: '0',
+				fingerprint: 'dddddddddddddddd',
+				fingerprint_version: '2',
+				machine_memory_total_mib: '16383.75'
+			},
 			{ version: '2099-01-01', date: '2099-01-01', run_id: 'bad', job: 'work', shard: '0' }
 		]);
-		expect(rows).toHaveLength(4);
+		expect(rows).toHaveLength(5);
 		expect(rows[0]).toMatchObject({
 			version: '2026-09-20',
 			fingerprint_version: 1,
@@ -758,7 +769,8 @@ test.describe("one job's row", () => {
 		expect(rows.slice(1).map((row) => row.version)).toEqual([
 			'2026-10-10',
 			'2026-10-12',
-			'2026-10-14'
+			'2026-10-14',
+			'2026-10-26'
 		]);
 	});
 

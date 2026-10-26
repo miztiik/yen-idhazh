@@ -1,0 +1,15 @@
+{
+  "provenance": "Bounded Linux meminfo inputs for capacity parsing; authored protocol cases, not live machine readings.",
+  "cases": [
+    { "name": "fractional MiB", "input": "MemTotal: 16776960 kB\n", "expected": 16383.75 },
+    { "name": "small positive capacity", "input": "MemTotal: 1 kB\n", "expected": 0.0009765625 },
+    { "name": "no total", "input": "MemAvailable: 1024 kB\n", "expected": null },
+    { "name": "zero is not capacity", "input": "MemTotal: 0 kB\n", "expected": null },
+    { "name": "negative capacity", "input": "MemTotal: -1024 kB\n", "expected": null },
+    { "name": "wrong unit", "input": "MemTotal: 1024 MB\n", "expected": null },
+    { "name": "fractional kernel input", "input": "MemTotal: 1.5 kB\n", "expected": null },
+    { "name": "duplicate totals", "input": "MemTotal: 1024 kB\nMemTotal: 2048 kB\n", "expected": null },
+    { "name": "unsafe integer", "input": "MemTotal: 9007199254740992 kB\n", "expected": null },
+    { "name": "extra token", "input": "MemTotal: 1024 kB extra\n", "expected": null }
+  ]
+}

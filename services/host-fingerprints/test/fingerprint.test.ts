@@ -26,6 +26,8 @@ test.each(["win32", "darwin"] as const)("unsupported %s never fabricates reading
     expect(result.row.cpu_logical_processors).toBeNull();
     expect(result.row.fingerprint).toBeNull();
     expect(result.row.cpu_quota_state).toBeNull();
+    expect(result.row.machine_memory_total_mib).toBeNull();
+    expect(result.unavailable.machine_memory_total_mib).toBe("unsupported_platform");
     expect(result.unavailable.platform).toBe("unsupported_platform");
   } finally { await f.cleanup(); }
 });
@@ -129,6 +131,11 @@ test("authored controls refuse missing fields and invalid settings", async () =>
     expect(ServiceConfigSchema.safeParse({ ...f.config, max_input_bytes: 0 }).success).toBe(false);
     expect(ServiceConfigSchema.safeParse({ ...f.config, metadata_url: "https://example.org" }).success).toBe(false);
     expect(SelectedSettingsSchema.safeParse({ ...f.settings, observability: {} }).success).toBe(false);
+    for (const value of [undefined, "false"]) {
+      expect(SelectedSettingsSchema.safeParse({
+        ...f.settings, observability: { ...f.settings.observability, host_fingerprint_placement_enabled: value },
+      }).success).toBe(false);
+    }
   } finally { await f.cleanup(); }
 });
 test("recorded placement parses independently; explicit opt-out reads no metadata", async () => {
@@ -141,14 +148,14 @@ test("recorded placement parses independently; explicit opt-out reads no metadat
     expect(parsePlacement({ vmSize: 123 })).toBeNull();
     f.config.metadata_url = null;
     const unavailable: Record<string, string> = {};
-    expect(await collectPlacement(f.config, { unavailable })).toBeNull();
+    expect(await collectPlacement(f.config, f.settings, { unavailable })).toBeNull();
     expect(unavailable.placement).toBe("configured_off");
   } finally { await f.cleanup(); }
 });
 test.skipIf(process.platform !== "linux")("live Linux collection, distinct from Windows fixture evidence", async () => {
   const f = await fixture();
   try {
-    const result = await collectFingerprint(f.capture, f.config, f.settings, { metadata: f.input.metadata });
+    const result = await collectFingerprint(f.capture, f.config, f.settings, { metadata: Response.json(f.input.metadata) });
     expect(result.row.cpu_logical_processors).toBeGreaterThan(0);
     expect(result.row.cpu_allowed_processors).toBeGreaterThan(0);
     console.error(JSON.stringify({ event: "live_linux_host", cpu_model: result.row.cpu_model, logical_processors: result.row.cpu_logical_processors, quota_state: result.row.cpu_quota_state }));
