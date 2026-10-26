@@ -95,7 +95,7 @@ Execute per docs/how-to/execute-a-plan.md: one maintainer carries the plan and d
 | --- | --- | --- |
 | 1 | It ships as a variant of `comparison`, not a new template. One grid engine, two purposes | Row 41 |
 | 2 | The same-sentence rule is what stops the grid asserting that an actor said a thing they did not | Row 41 |
-| 3 | Rectangularity is already stated on the base type in plan 15, so this row inherits it rather than restating it | 12.13 G33, plan 15 |
+| 3 | Rectangularity belongs to this row's grid contract; it is not inherited from the abandoned Row 6 comparison type | 12.13 G33 |
 
 ### Rejected alternatives
 

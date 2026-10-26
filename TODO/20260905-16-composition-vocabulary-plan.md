@@ -4,7 +4,7 @@
 **Level**: 5 for persisted composition and review contracts; 3 for the
 implementation phases.
 
-**Chain**: previous [`20260905-15-chart-vocabulary-plan.md`](20260905-15-chart-vocabulary-plan.md) | next [`20260905-17-infographic-vocabulary-plan.md`](20260905-17-infographic-vocabulary-plan.md).
+**Chart context**: [visual-plan rules and refusal](../docs/architecture/publishing/what-a-visual-plan-may-say-and-what-happens-to-one-that-is-refused.md) | **Next**: [`20260905-17-infographic-vocabulary-plan.md`](20260905-17-infographic-vocabulary-plan.md).
 **Reference**: [`20260902-visual-planner-pseudo-plan.md`](20260902-visual-planner-pseudo-plan.md) - O45, O47, rows 43, 44, 45, sections 7.2, 12.2 L3, 12.12 G27, M7.
 
 The maintainer approved this alignment on 2026-10-25 UTC. Execute per
@@ -18,7 +18,7 @@ different code; no automatic merge.
 
 | Field | Value |
 | --- | --- |
-| Why this plan exists | Some stories are a breakdown - a vote, a budget split, a spread of values. The chart family plan 15 built cannot show a part-of-whole read or a distribution at all. This plan adds the three types that can, and with them the first producers of a value the article did not write in so many words |
+| Why this plan exists | Some stories are a breakdown - a vote, a budget split, a spread of values. The existing bar, dot, slope and line charts cannot show a part-of-whole read or a distribution at all. This plan adds the three types that can, and with them the first producers of a value the article did not write in so many words |
 | Hard scope - in | `pie` under its gate; `bubble` as a relationship visual with source-backed size and viewport-adaptive geometry; `histogram` with deterministic versioned binning; the four closed derived-value producers; a separate human keep-rate ledger that can compare pie and bubble |
 | Hard scope - out | The Derived Value **contract** - plan 10 built it and plan 16 resolves its producers; any fifth allow-list function; diagrams; the infographic family; machine labels pooled with human labels |
 | ESCALATE triggers | 1. A derived value is produced whose provenance chain does not name its function, its version and every input element. 2. A `pie` or `stacked_bar` is drawn against a whole that was **summed** rather than independently declared. 3. Bubble geometry cannot adapt to the measured plot area while retaining every point and its readable values |
@@ -127,7 +127,7 @@ facts, not claims that later rows passed.
 - **Scope:** `pie` under a gate: composition purpose, five parts or fewer, a separately cited **declared** whole, one canonical measure, one unit, and a stacked-bar downgrade that re-enters the same composition checks.
 - **Files touched:** `backend/idhazh/contracts/visual.py`, `backend/idhazh/contracts/visual_data.py`, `backend/idhazh/contracts/knobs/visuals.py`, `backend/idhazh/visual_vocabulary.py`, `backend/idhazh/visual_validator.py`, `backend/idhazh/derived_values.py`, `backend/idhazh/render/chart.py`, `frontend/src/lib/payload/drawing.ts`, `frontend/src/lib/payload/types.ts`, `frontend/src/lib/charts/d3/partsOfOne.ts`, `frontend/src/lib/components/ItemVisual.svelte`, named contract and browser fixtures/tests, `docs/architecture/publishing/**`, `docs/concepts/design-system.md`
 - **Acceptance gates:** `npm run check`; build; `bundle-gate`; the browser suite; both floors; the section 12 smoke.
-- **Oracle:** A plan whose whole is **summed rather than declared** downgrades to `stacked_bar` and **re-enters plan 15's exhaustiveness gate**, which then rules on it. The chain is asserted end to end, because a downgrade into a type with no predicate would launder the refusal.
+- **Oracle:** A plan whose whole is **summed rather than declared** downgrades to `stacked_bar` and **re-enters the `stacked_bar_exhaustive` validator check**, which then rules on it. The chain is asserted end to end, because a downgrade into a type with no predicate would launder the refusal.
 
 ### Decisions
 
@@ -219,6 +219,6 @@ facts, not claims that later rows passed.
 ## See also
 
 - [`20260902-visual-planner-pseudo-plan.md`](20260902-visual-planner-pseudo-plan.md) - the decision record this group executes.
-- [`20260905-15-chart-vocabulary-plan.md`](20260905-15-chart-vocabulary-plan.md) - the previous plan.
+- [Visual-plan rules and refusal](../docs/architecture/publishing/what-a-visual-plan-may-say-and-what-happens-to-one-that-is-refused.md) - the chart contract this work follows.
 - [`20260905-17-infographic-vocabulary-plan.md`](20260905-17-infographic-vocabulary-plan.md) - the next plan.
 - [Where every drawn figure came from](../docs/architecture/publishing/where-every-drawn-figure-came-from.md) - the arithmetic contract and its source evidence.

@@ -347,6 +347,12 @@ is what stops the number being argued after it is seen.
 
 ## Design rationale
 
+**Text-only visual types are abandoned.** On 2026-10-26 UTC, `quotecard` and
+`comparison` were abandoned: an exact quote requires article wording in new
+visual data, and current summarizer metadata cannot express an honest
+shared-attribute comparison without source wording. Their names remain declared
+but unruled; this adds no reader payload, renderer or switch.
+
 **Why every field of the model's reply is required, including the empty ones.** A field with a
 default is absent from the schema's `required` list, and a constrained decoder emits exactly what
 `required` forces. On the first live run the model returned a confident `kind` of `chart` with no
