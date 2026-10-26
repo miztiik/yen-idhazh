@@ -265,11 +265,6 @@ class VisualData(Contract):
             why="Partial pairs hide the actual comparison set.",
         ),
         ChangelogEntry(
-            version="2026-10-27",
-            change="Carry a canonical date beside source wording for time marks.",
-            why="A time axis needs sortable dates without replacing the article's words.",
-        ),
-        ChangelogEntry(
             version="2026-10-24",
             change="Earlier changes are in git.",
             why="Git history is the archive for older contract changes.",

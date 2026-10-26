@@ -165,6 +165,7 @@ The data and framing travel together.
 | Part | What it is |
 | --- | --- |
 | `item_id`, `type` | Which story, and which of the declarable forms. A new type costs an enum member, never a new document format. |
+| `declared_whole_element_id`, `declared_whole` | The independently cited source quantity and wording for a pie, or the source quantity named by a stacked bar's category mark. Other chart types carry nulls. |
 | `marks` | **A flat pool, not a list of rows.** Each mark carries what it says (`text`), what it measures (`value` with its `unit`), and where that came from - `element_id` for a slice of the article, or `derived` for a chain through the four-function allow-list. Exactly one of the two, checked. |
 | `encoding` | Which marks fill which channel, by id, mirroring `PlanEncodings` role for role. Every role is a key and an unused one is empty. |
 | `title`, `caption` | Nullable, sanitized plan prose. The browser writes text nodes, never markup. |
@@ -348,11 +349,13 @@ charts; their text remains. The old SVG read, inlining and markup checks are
 removed. No historical corpus is deleted or rewritten. This is the named
 exception to `CLAUDE.md` section 11, not a general migration policy.
 
-The current renderer stamp is `2026-10-27T01:01`. Stacked-bar data now requires
-a distinct source quantity for its whole label. A time mark carries its canonical
+The current renderer stamp is `2026-10-27T04:00`. Stacked bars name their whole
+with the source quantity on the category mark. Pies carry a separately cited
+source whole and derive each displayed slice as a share of it; the whole is
+never reconstructed by adding the slices. A time mark carries its canonical
 date or year alongside the source wording, so the compiler can order readings
 without replacing what the article wrote. The reader refuses older or malformed
-time marks rather than guessing.
+chart data rather than guessing.
 
 Bubble adds a relationship drawing without changing the fields or the meaning
 of an existing chart. Its x and y positions reuse the paired relationship
