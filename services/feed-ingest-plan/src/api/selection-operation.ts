@@ -57,7 +57,7 @@ export async function executeSelection(raw: unknown, inputs: PlanInputs, runtime
     healthStatus = "completed";
   } finally {
     healthDuration = Math.round(performance.now() - healthStarted);
-    const timing: PlanApiTiming = { operation: "feed-health-summary", duration_ms: healthDuration, status: healthStatus };
+    const timing: PlanApiTiming = { operation: "feed-health-for-selection", duration_ms: healthDuration, status: healthStatus };
     recordHealthTiming?.(timing);
     await appendDocumentTiming(inputs, context.run_id, timing);
   }

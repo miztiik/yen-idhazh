@@ -9,13 +9,13 @@ import {
   SourceSnapshotSchema, WriterIdentitySchema, deriveCandidateId, deriveUrlKey, validateEnvelopeContainer,
   readFeedIngestEvent, HarvestDiagnosticsSchema, FetchAttemptSchema, OPERATION_VERSION,
   PLANNER_OPERATION_VERSION, RecordedInstantSchema, TimestampSchema,
-  PLANNER_LEDGER_VERSION, ParsedFeedBatchSchema, SelectedFeedBatchSchema, PartitionedFeedBatchSchema,
+  PLANNER_LEDGER_VERSION, SELECTED_ARTICLE_VERSION, ParsedFeedBatchSchema, SelectedFeedBatchSchema, PartitionedFeedBatchSchema,
   PlannerHarvestObservationSchema, PlannerSeenEvidenceSchema, PlannerSeenRowSchema,
   PlannerStageContextSchema, PlannerStageRequestSchema, StageReferenceRequestSchema,
   PartitionArticlesRequestSchema, PlannerWorkEventSchema, DiscoveredArticleRowSchema,
   FetchRequestSchema,
   SelectedArticleRowSchema, SelectedArticlesArtifactSchema, SelectedArtifactArticleSchema,
-  selectedArticleMetadata, FeedHealthStateRowSchema, PlanRunRowSchema,
+  selectedArticleMetadata, readSelectedArticlesArtifact, FeedHealthStateRowSchema, PlanRunRowSchema,
 } from "../src/index";
 import { plannerStageSchemas, runtimeSchemas, schemas } from "./schema-binding";
 
@@ -63,7 +63,7 @@ function selection() {
   return SelectedArticleRowSchema.parse({
     run_id: run, attempt: 1, date: day, url_key: deriveUrlKey(url), feed_id: "example",
     publisher_id: null, canonical_url: url, title: "An article", categories: [],
-    author: null, published_at: null, tier: 1, weight: 1, applied_tier_weight: 0.5,
+    author: null, published_at: at, published_at_source: "selection", tier: 1, weight: 1, applied_tier_weight: 0.5,
     editorial_rank: 1, estimated_work: 3, worker_assignment: null,
     ratings: {
       base_article_score: 1.5, marginal_score: 1.25, recency_score: 1,
@@ -180,11 +180,21 @@ describe("rejection evidence", () => {
     expect(article).toEqual(before);
     expect(SelectedArticleRowSchema.safeParse({ ...row, article_text: article.article_text }).success).toBe(false);
     expect(SelectedArticleRowSchema.safeParse({ ...row, evaluated_at: at }).success).toBe(false);
-    expect(SelectedArticleRowSchema.safeParse({ ...row, age_hours: -1, timing_basis: "published_at" }).success).toBe(true);
+    expect(SelectedArticleRowSchema.safeParse({ ...row, age_hours: -1, timing_basis: "published_at", published_at_source: "source" }).success).toBe(true);
+    expect(SelectedArticleRowSchema.safeParse({ ...row, published_at: null }).success).toBe(false);
+    expect(SelectedArticleRowSchema.safeParse({ ...row, published_at_source: "source" }).success).toBe(false);
+    expect(SelectedArticleRowSchema.safeParse({ ...row, timing_basis: "published_at" }).success).toBe(false);
     expect(SelectedArticleRowSchema.safeParse({ ...row, timing_basis: "fetched_at" }).success).toBe(false);
     const artifact = SelectedArticlesArtifactSchema.parse({ run_id: run, attempt: 1, date: day, evaluated_at: at, articles: [article] });
-    expect(artifact.schema_version).toBe(PLANNER_LEDGER_VERSION);
+    expect(artifact.schema_version).toBe(SELECTED_ARTICLE_VERSION);
     expect(SelectedArticlesArtifactSchema.safeParse({ ...artifact, articles: [{ ...article, run_id: run }] }).success).toBe(false);
+    const { published_at_source: _source, ...previous } = article;
+    const legacy = readSelectedArticlesArtifact({ ...artifact, schema_version: PLANNER_LEDGER_VERSION,
+      articles: [{ ...previous, published_at: null }] });
+    expect(legacy.articles[0]).toEqual({ ...previous, published_at: null, published_at_source: "legacy-unavailable" });
+    expect(legacy.articles[0]?.timing_at).toBe(article.timing_at);
+    expect(() => readSelectedArticlesArtifact({ ...artifact, schema_version: PLANNER_LEDGER_VERSION })).toThrow();
+    expect(() => readSelectedArticlesArtifact({ ...artifact, schema_version: "2026-10-24" })).toThrow();
   });
 
   test("reads finite historical provenance while refusing incompatible formats and identities", () => {
@@ -261,7 +271,8 @@ describe("current planner contracts", () => {
     const { duration_ms: _duration, ...missingDuration } = row;
     expect(PlanRunRowSchema.safeParse(missingDuration).success).toBe(false);
     expect(PlanRunRowSchema.safeParse({ ...row, status: "failed", failure_code: "fetch-failed", selection_started_at_utc: null, dispatch_count: 0 }).success).toBe(true);
-    for (const operation of ["fetch", "parse", "select", "partition", "persist", "feed-health-summary"]) {
+    for (const operation of ["fetch", "parse", "select", "partition", "persist", "feed-health-summary",
+      "feed-health-before-fetch", "feed-health-for-selection"]) {
       expect(PlanRunRowSchema.safeParse({ ...row, api_timings: [{ operation, duration_ms: 0, status: "interrupted" }] }).success).toBe(true);
     }
   });
@@ -282,7 +293,7 @@ describe("current planner contracts", () => {
 
   test("binds event discriminators, candidate identities and stages", () => {
     const row = event();
-    expect(row.version).toBe("2026-10-25");
+    expect(row.version).toBe("2026-10-26");
     expect(FeedIngestEventSchema.safeParse({ ...row, payload: { article_text: "must not escape" } }).success).toBe(false);
     expect(FeedIngestEventSchema.safeParse({ ...row, operation: "article-assessment" }).success).toBe(false);
     expect(FeedIngestEventSchema.safeParse({ ...row, duration_ms: 0.5 }).success).toBe(false);
@@ -302,10 +313,15 @@ describe("current planner contracts", () => {
   test("refuses old progress shapes through the sole TypeScript event declaration", () => {
     const row = event();
     expect(readFeedIngestEvent(JSON.parse(JSON.stringify(row)))).toEqual(row);
+    expect(readFeedIngestEvent({ ...row, version: "2026-10-25" })).toEqual(row);
+    expect(() => readFeedIngestEvent({ ...row, version: "2026-10-25", operation: "feed-health-for-selection" })).toThrow();
     expect(() => readFeedIngestEvent({ ...row, version: "2026-10-24" })).toThrow();
     const schema = z.toJSONSchema(FeedIngestEventSchema);
-    expect(schema.version).toBe("2026-10-25");
-    expect(schema.changelog).toEqual([{ version: "2026-10-25", change: "Emit sparse body-free progress instead of article audit histories." }]);
+    expect(schema.version).toBe("2026-10-26");
+    expect(schema.changelog).toEqual([
+      { version: "2026-10-26", change: "Name pre-fetch and selection health captures separately." },
+      { version: "2026-10-25", change: "Emit sparse body-free progress instead of article audit histories." },
+    ]);
     expect(schema.additionalProperties).toBe(false);
   });
 
@@ -381,7 +397,7 @@ describe("current planner contracts", () => {
       selection_started_at_utc: at, evaluated_at: at, health_rows: [], exclusions: [],
       request_report: { from_day: day, through_day: day, complete: false, feeds: [] },
     });
-    expect(PartitionedFeedBatchSchema.parse({ ...selected, selection_batch_id: batch_id, strategy: "none", dispatch_count: 1, work: [0] }).version).toBe(PLANNER_LEDGER_VERSION);
+    expect(PartitionedFeedBatchSchema.parse({ ...selected, selection_batch_id: batch_id, strategy: "none", dispatch_count: 1, work: [0] }).version).toBe(SELECTED_ARTICLE_VERSION);
     const observation = PlannerHarvestObservationSchema.parse({
       candidate_id: digest, http_status: null, robots: null, fetch_failure: null, paywall: null,
       paywall_evidence: "not-observed", extraction: "not-attempted", observed_at: context.now,

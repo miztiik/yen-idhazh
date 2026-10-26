@@ -3,10 +3,10 @@ import { mkdtemp, readFile, realpath, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { isAbsolute, join, relative, resolve } from "node:path";
 import { createHash } from "node:crypto";
-import { RawDayIndexSchema, RAW_DAY_INDEX_VERSION, PlannerLedgerNameSchema } from "../../packages/common-contracts/src/index";
+import { RawDayIndexSchema, RAW_DAY_INDEX_VERSION, PlannerLedgerNameSchema } from "../../../packages/common-contracts/src/index";
 import { plannerContracts } from "./feed-ingest-plan-verification";
-import { readPlannerParquet } from "../../services/feed-ingest-plan/src/read-ledger-history/read-planner-parquet";
-import type { LedgerRowContract } from "../../packages/ledger-file-writer/src/index";
+import { readPlannerParquet } from "../src/read-ledger-history/read-planner-parquet";
+import type { LedgerRowContract } from "../../../packages/ledger-file-writer/src/index";
 function readRetry(input: unknown) {
   if (typeof input !== "object" || input === null || !("deadline_seconds" in input)
     || typeof input.deadline_seconds !== "object" || input.deadline_seconds === null) {
@@ -160,10 +160,20 @@ if (import.meta.main) {
   const paths: unknown = JSON.parse(CURRENT_RUN_FILES);
   if (!Array.isArray(paths) || paths.some(path => typeof path !== "string")) throw new Error("Commit output list is invalid");
   const root = join(RUNNER_TEMP, "feed-ingest-plan");
-  const result = await commitPlannerFiles({
-    repository: process.cwd(), stateRoot: join(root, "state"), paths,
-    message: "Record feed planner outcomes", retry: await Bun.file("config/push-retry.json").json(),
-  });
-  await writeFile(join(root, "commit-result.json"), JSON.stringify(result));
-  console.log(JSON.stringify(result));
+  try {
+    const result = await commitPlannerFiles({
+      repository: process.cwd(), stateRoot: join(root, "state"), paths,
+      message: "Record feed planner outcomes", retry: await Bun.file("config/push-retry.json").json(),
+    });
+    await writeFile(join(root, "commit-result.json"), JSON.stringify(result));
+    console.log(JSON.stringify(result));
+  } catch (error) {
+    const result = { status: "failed", commit: null, files: paths.length };
+    await writeFile(join(root, "commit-result.json"), JSON.stringify(result));
+    console.error(JSON.stringify({ event: "planner_metadata_commit_failed", ...result,
+      code: error instanceof Error ? error.name : "UnknownError",
+      reason: error instanceof Error ? error.message.replaceAll(root, "feed-ingest-plan")
+        .replaceAll(process.cwd(), ".").replaceAll("\\", "/") : "Unknown commit failure" }));
+    process.exitCode = 2;
+  }
 }

@@ -1,13 +1,20 @@
 /** Which body-free resource evidence belongs to one isolated planning attempt? */
-import { z } from "../../services/host-probes/node_modules/zod";
+import { z } from "zod";
 import {
   HostFingerprintRowSchema, PlannerObservationSchema, RequestIdSchema, RunIdSchema, Sha256Schema, WriterIdentitySchema,
-} from "../../packages/common-contracts/src/index";
-import { TaskProfileConfigSchema } from "../../services/host-probes/src/config";
-import { OwnedProcessSchema, TaskProfileSchema } from "../../services/host-probes/src/task-profile/profile-schema";
-import { HostSampleSchema } from "../../services/host-probes/src/probe/sample-host";
+} from "../../../packages/common-contracts/src/index";
+import { TaskProfileConfigSchema } from "../src/config";
+import { OwnedProcessSchema, TaskProfileSchema } from "../src/task-profile/profile-schema";
+import { HostSampleSchema } from "../src/probe/sample-host";
 import { CacheProofSchema } from "./feed-ingest-plan-cache-proof";
-import { CacheCountersSchema, CacheCountersStartSchema } from "../../services/host-probes/src/cache-probe/cache-schema";
+import { CacheCountersSchema, CacheCountersStartSchema } from "../src/cache-probe/cache-schema";
+import { SelectedSettingsSchema } from "../../host-fingerprints/src/config";
+
+export const WorkflowSettingsSchema = SelectedSettingsSchema.extend({
+  observability: SelectedSettingsSchema.shape.observability.extend({
+    memory_profiling_enabled: z.boolean(), host_fingerprint_placement_enabled: z.boolean(),
+  }),
+});
 
 export const WorkflowMachineMemorySchema = z.enum(["false", "true"]).default("false")
   .transform(value => value === "true");

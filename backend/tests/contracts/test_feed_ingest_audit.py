@@ -51,15 +51,17 @@ def make_diversity() -> dict[str, Any]:
 
 
 def test_named_canonical_observations_round_trip() -> None:
-    for model, name in (
-        (DiscoveredArticleRow, "discovered-articles"), (SelectedArticleRow, "selected-articles"),
-        (FeedHealthStateRow, "feed-health-state"), (PlanRunRow, "plan-runs"),
+    for model, name, version in (
+        (DiscoveredArticleRow, "discovered-articles", "2026-10-25"),
+        (SelectedArticleRow, "selected-articles", "2026-10-26"),
+        (FeedHealthStateRow, "feed-health-state", "2026-10-25"),
+        (PlanRunRow, "plan-runs", "2026-10-26"),
     ):
         row = model.model_validate(load_observation(name))
         assert model.from_json(row.to_json()) == row
         assert "version" not in row.model_dump()
-        assert model.json_schema()["version"] == "2026-10-25"
-        assert model.json_schema()["changelog"][0]["version"] == "2026-10-25"
+        assert model.json_schema()["version"] == version
+        assert model.json_schema()["changelog"][0]["version"] == version
 
 
 def test_source_observation_distinguishes_unavailable_from_known_zero() -> None:
@@ -93,7 +95,18 @@ def test_completion_evidence_proves_empty_and_nonempty_ledger_files() -> None:
 def test_assessment_keeps_unassessed_evidence_null_and_measured_zero() -> None:
     row = SelectedArticleRow.model_validate(make_assessment())
     assert [item.value for item in row.ratings.adjustments] == [None, 0.0, -0.25]
-    assert row.publisher_id is None and row.published_at is None
+    assert row.publisher_id is None
+    assert row.published_at == "2026-10-20T10:00:00.123Z"
+    assert row.published_at_source == "selection"
+    previous = {
+        name: value for name, value in row.model_dump(mode="json").items()
+        if name != "published_at_source"
+    } | {"published_at": None}
+    legacy = SelectedArticleRow.read_row(previous, schema_version="2026-10-25")
+    assert legacy.published_at is None and legacy.published_at_source == "legacy-unavailable"
+    assert (legacy.timing_at, legacy.timing_basis, legacy.age_hours) == (
+        row.timing_at, row.timing_basis, row.age_hours,
+    )
     assert row.ratings.recency_score == 1.0 and row.ratings.feed_authority_score == 0.5
     with pytest.raises(ValidationError):
         SelectedArticleRow.model_validate(make_assessment() | {"article_text": "artifact-only"})

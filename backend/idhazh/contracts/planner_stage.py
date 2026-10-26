@@ -284,13 +284,18 @@ class SelectedFeedBatch(Contract):
     __schema_stem__: ClassVar[str] = "selected-feed-batch"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-10-26",
+            change="Carry publication provenance on the same selected content.",
+            why="Only selected rows receive the saved selection-start fallback.",
+        ),
+        ChangelogEntry(
             version="2026-10-25",
             change="Keep lean selected content and run health only in memory.",
             why="Committed selected rows use the explicit metadata-only projection.",
         ),
     )
 
-    version: Literal["2026-10-25"] = "2026-10-25"
+    version: Literal["2026-10-26"] = "2026-10-26"
     batch_id: UUID4
     config_sha256: Sha256
     context: PlannerStageContext
@@ -308,6 +313,11 @@ class PartitionedFeedBatch(SelectedFeedBatch):
 
     __schema_stem__: ClassVar[str] = "partitioned-feed-batch"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-10-26",
+            change="Retain selected publication provenance through partitioning.",
+            why="Partition assignment must not recompute publication or admission time.",
+        ),
         ChangelogEntry(
             version="2026-10-25",
             change="Partition the same current selected content without dispatch audit rows.",

@@ -27,10 +27,12 @@ strategy through the real CLI request validator. Values are environment data,
 never interpolated shell code. Blank optional values use configuration.
 For `none`, clear the worker count or set it to one.
 
-The independent host-tools checkbox defaults off. It runs the existing
-separate host proof, not a measurement of the live article selection.
-Its failure is explicit but does not gate planner output or commit. No
-hardware proof or benchmark is required to finish planning.
+The CPU/RAM checkbox defaults off. When selected, it profiles the whole live
+planner process and also runs the existing independent controlled host proof.
+These are separate measurements in one Resources section, not per-article
+profiles. The listener and planner share one Bun process; no second server
+PID is required. An optional instrument failure is explicit and does not
+change planning completion or block its metadata commit.
 
 ## Local offline checks
 
@@ -42,11 +44,11 @@ bun run --cwd packages/common-contracts check
 bun run --cwd packages/ledger-file-writer check
 bun run --cwd services/feed-ingest-plan check
 bun run --cwd services/feed-ingest-plan test
-bun test ./.github/scripts/tests/feed-ingest-plan-report.test.ts ./.github/scripts/tests/feed-ingest-plan-outputs.test.ts ./.github/scripts/tests/feed-ingest-plan-workflow.test.ts --timeout 30000
-bun run .github/scripts/feed-ingest-plan-verification.ts
+bun run services/feed-ingest-plan/test/verify-recorded-compatibility.ts
 ```
 
-The existing case timeout bounds test execution; it is not a planner speed
+The service suite includes the existing workflow/report cases. Its case
+timeout bounds test execution; it is not a planner speed
 target. The workflow case compiles mandatory adapters and tests from its exact
 named sparse inputs; independent host tools retain their own checks. An
 unselected local module cannot satisfy a missing dependency. A second
@@ -66,6 +68,14 @@ separate compatibility checks.
 
 ## Saved output and failures
 
+`services/feed-ingest-plan/scripts/` owns workflow execution, bounded history
+staging, native verification, metadata commits, artifact preparation and
+reporting. `services/host-probes/scripts/` owns optional controlled host tools.
+Workflow YAML calls those modules directly. `.github/scripts/` retains only
+the independent `ai-pipeline.ts` experiment and `serve-evaluator.py`; neither
+is required for the native feed APIs. Recorded compatibility drivers live in
+the service's test directory, not in the runtime verifier.
+
 The commit manifest permits exact current raw Parquet paths for the four
 planner siblings only. The committer validates bytes, appends them through a
 temporary Git index and rebuilds the affected raw-day indexes from the
@@ -74,13 +84,39 @@ It does not rewrite the checkout, rebase or force-push.
 
 Partial completed files are retained and can be committed even when the
 planning step fails. Selected text is uploaded separately for the summarizer.
-Body-free evidence uploads name response, health, measured staging time,
-commit result and current planner metadata. They never upload the whole
-temporary root, private SQLite store or parsed/rejected populations.
+The selected JSON handoff, response, health, measured staging time, commit
+result, effective settings, resources, report and real process logs are each
+one unarchived artifact. Filenames include the run number and attempt, so
+retries do not replace earlier evidence. The upload action uses each filename
+as its artifact name; its `name` input does not name an unarchived upload.
+
+The runtime log retains the real planner/listener stdout and stderr; the
+commit log retains the real metadata-commit output. A pipeline failure keeps
+its nonzero exit status through `tee`. Neither log is a second server or a
+copy of article text.
+
+When the metadata commit is not confirmed, a separate artifact named
+`uncommitted-metadata-recovery-<run>-<attempt>` contains only the exact
+validated current-run metadata files and their receipt list. This small
+recovery archive can contain multiple UTC-day files. It never includes the
+whole temporary root, private SQLite store or parsed/rejected populations.
+It is not a successful commit. Invalid evidence fails preparation while
+already copied individual evidence remains available for upload.
 
 The Actions Markdown report reads the actual body-free response and health
-result. It labels units, UTC clocks, incomplete coverage and unknown values.
-Reporting cannot change ledger bytes or establish completion.
+result after the optional instruments finish. It writes the actual job
+summary and five grouped public notices: Resources, This run's feed work,
+Closed-day request spend, Grouped exclusions, and Policy used. Full per-feed
+details stay in the public summary rather than one notice per feed or article.
+Effective settings include workflow overrides, not just committed defaults.
+Missing policy evidence stays unavailable; defaults are not substituted.
+Reporting is controlled by `workflow_reporting.enabled`; it cannot change
+ledger bytes or establish completion.
+
+`MISSING_REQUIRED_FIELDS` is an article rejection: its offered URL or identity
+was missing or invalid, or extraction produced no usable title. A grouped
+count does not identify the exact missing field and does not mean a feed
+configuration field is absent. The protocol reason code is unchanged.
 
 ## CI and hosted verification
 
@@ -99,11 +135,20 @@ throughput claim.
 
 ## Resource proof
 
-The optional host proof uses the independent sample, pinned-process profile,
-copy and cache tools. Its evidence describes those controlled operations,
-not article-attributed cost or a planner speed gain. It never determines
-planning completion. The host APIs and their default-off controls remain
-available independently of this workflow.
+Basic host facts use the existing collector without the copy benchmark and
+respect the global host, fingerprint, frequency and placement switches.
+The checkbox permits the existing whole-task profiler around the real HTTP
+planner call; global host telemetry and memory switches remain authoritative.
+CPU samples, process RAM and machine RAM are not per-article costs.
+
+The independent proof uses the sample, pinned-process profile, copy and cache
+tools. Its rows are labelled as controlled work, not live planner measurements
+or a planner speed gain. Missing or disabled observations retain their reasons,
+never zero substitutes. RAM is displayed in decimal GB with two-decimal free
+and available percentages. Free RAM and available RAM are different quantities;
+the lowest observed available RAM is a sample, not an assured whole-run minimum.
+See [host measurements](../reference/host-metrics.md#whole-task-typescript-samples)
+for units and controls. No host benchmark determines planning completion.
 
 ## See also
 

@@ -95,7 +95,8 @@ function selectionInput(setup: Setup, articles: ScreenedCandidate[], options: {
   evidence?: Record<string, PlannerArticleEvidence>;
 } = {}) {
   return {
-    articles, inputs: setup.inputs, health: options.health ?? new Map<string, SourceHistoryEvidence>(),
+    articles, inputs: setup.inputs, selectionStartedAt: setup.context.now,
+    health: options.health ?? new Map<string, SourceHistoryEvidence>(),
     publications: options.publications ?? { day: setup.context.date, availability: "unavailable" as const, counts: new Map<string, number>() },
     batch: ParsedFeedBatchSchema.parse({
       batch_id: randomUUID(), config_sha256: "b".repeat(64), context: setup.context, request: {},
@@ -268,6 +269,9 @@ test("unknown timing stays unknown; first-seen keeps its own basis and timestamp
   for (const seen of [undefined, { url_key: original.candidate.url_key, first_seen_at: firstSeenAt, date: "2026-10-20" }]) {
     const offered = { ...original, freshness: calculateFreshness(original.candidate, seen, setup.fixture.observed_at, 6, original.policy) };
     const row = curateArticles(selectionInput(setup, [offered])).articles[0]!;
+    expect(row.published_at).toBe(setup.context.now);
+    expect(row.published_at_source).toBe("selection");
+    expect(original.candidate.published_at).toBeNull();
     expect(row.timing_basis).toBe(seen === undefined ? "unavailable" : "first_seen");
     expect(row.timing_at).toBe(seen === undefined ? null : firstSeenAt);
     expect(row.age_hours).toBe(seen === undefined ? null : 25);
@@ -281,6 +285,13 @@ test("admitted future timing preserves its signed observation and floors only th
   expect(row.age_hours).toBe(-1);
   expect(row.ratings.recency_score).toBe(1);
   expect(row.timing_at).toBe("2026-10-21T13:00:00Z");
+  expect(row.published_at).toBe(row.timing_at);
+  expect(row.published_at_source).toBe("source");
+  const untrusted = run(setup, [{ ...setup.fixture.candidates[0]!, published_at: "2026-10-23T00:00:00Z" }]).articles[0]!;
+  expect(untrusted).toMatchObject({
+    published_at: setup.context.now, published_at_source: "selection", timing_basis: "unavailable",
+    timing_at: null, age_hours: null,
+  });
 });
 
 test("operational history, length, byline and kind never become model verdicts or a quality product", async () => {

@@ -86,7 +86,7 @@ export async function documentState(record: PlannerOperation, inputs: PlanInputs
         kind: "document", context, history, work: createRunHealth(context, inputs.harvest.sources.map(source => sourceSnapshot(inputs.harvest, source)), history.sources),
         fetcher: createPermittedFetcher(inputs.harvest.config.harvest, inputs.harvest.extraction, runtime.boundary, runtime.observation_clock),
         recovered: new Set<string>(), exclusions: null, started,
-        api_timings: [{ operation: "feed-health-summary", duration_ms: Math.round(performance.now() - historyStarted), status: "completed" }],
+        api_timings: [{ operation: "feed-health-before-fetch", duration_ms: Math.round(performance.now() - historyStarted), status: "completed" }],
         health_written: false, health_fingerprint: null, owns_choice: false,
       };
     })();

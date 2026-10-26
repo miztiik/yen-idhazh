@@ -51,7 +51,9 @@ export async function selectArticles(batch: ParsedFeedBatch, inputs: PlanInputs,
     item_health: inputs.registrations.item_health, selections: inputs.registrations.selected_articles,
     published_days: inputs.settings.inputs.published_days, health_days: inputs.settings.inputs.settled_failure_days,
   });
-  const curation = curateArticles({ articles: screening.admitted, batch, inputs, health: health.sources, publications, context });
+  const curation = curateArticles({
+    articles: screening.admitted, batch, inputs, health: health.sources, publications, context, selectionStartedAt,
+  });
   const losses: PlannerRejectionCount[] = [...batch.exclusions];
   for (const rejection of screening.rejections) losses.push({
     feed_id: rejection.source_id, subject: "article", stage: "screen-article-candidates",

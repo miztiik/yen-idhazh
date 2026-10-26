@@ -1,15 +1,15 @@
 /** Prove that real HTTP commands profile an external PID throughout controlled CPU and RAM work. */
 import { randomUUID } from "node:crypto";
 import { fileURLToPath } from "node:url";
-import { z } from "../../services/host-probes/node_modules/zod";
-import { loadConfig, ProbeConfigSchema } from "../../services/host-probes/src/config";
-import type { ProbeConfig } from "../../services/host-probes/src/config";
-import { serveSamples, START_TASK_PROFILE_PATH, STOP_TASK_PROFILE_PATH } from "../../services/host-probes/src/api/server";
+import { z } from "zod";
+import { loadConfig, ProbeConfigSchema } from "../src/config";
+import type { ProbeConfig } from "../src/config";
+import { serveSamples, START_TASK_PROFILE_PATH, STOP_TASK_PROFILE_PATH } from "../src/api/server";
 import {
   StartTaskProfileResponseSchema, StopTaskProfileResponseSchema,
-} from "../../services/host-probes/src/api/task-command-schema";
-import { OwnedProcessSchema } from "../../services/host-probes/src/task-profile/profile-schema";
-import { readPinnedProcess, readProcessIdentity } from "../../services/host-probes/src/task-profile/process-stat";
+} from "../src/api/task-command-schema";
+import { OwnedProcessSchema } from "../src/task-profile/profile-schema";
+import { readPinnedProcess, readProcessIdentity } from "../src/task-profile/process-stat";
 import {
   CONTROLLED_POLL_INTERVAL_MS, CONTROLLED_TASK_NAME, ControlledWorkResultSchema, TaskProfileProofSchema,
 } from "./feed-ingest-plan-profile-schema";
@@ -26,7 +26,7 @@ const ChildMessageSchema = z.union([
 export async function verifyTaskProfileHttp(identity: { run_id: string; correlation_id: string }, settings?: ProbeConfig) {
   if (process.platform !== "linux") throw new Error("Live PID CPU proof requires Linux");
   const controls = ControlsSchema.parse(await Bun.file(
-    new URL("../../tests/fixtures/host-probes/controlled-task.json", import.meta.url),
+    new URL("../../../tests/fixtures/host-probes/controlled-task.json", import.meta.url),
   ).json());
   const defaults = settings ?? await loadConfig();
   const config = ProbeConfigSchema.parse({ ...defaults, task_profile: {
@@ -57,7 +57,7 @@ export async function verifyTaskProfileHttp(identity: { run_id: string; correlat
   });
   try {
     child = Bun.spawn({
-      cmd: [process.execPath, fileURLToPath(new URL("../../tests/fixtures/host-probes/controlled-task.ts", import.meta.url))],
+      cmd: [process.execPath, fileURLToPath(new URL("../../../tests/fixtures/host-probes/controlled-task.ts", import.meta.url))],
       stdin: "ignore", stdout: "ignore", stderr: "inherit", serialization: "json",
       ipc(raw: unknown) {
         const result = ChildMessageSchema.safeParse(raw);

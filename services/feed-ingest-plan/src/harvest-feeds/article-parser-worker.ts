@@ -10,7 +10,7 @@ export const ArticleParserRequestSchema = z.strictObject({
   config: ExtractionControlsSchema, form: z.enum(["article", "abstract"]),
 });
 export type ArticleParserRequest = z.infer<typeof ArticleParserRequestSchema>;
-export type ArticleParserResult = ReturnType<typeof extractArticle>;
+export type ArticleParserResult = Awaited<ReturnType<typeof extractArticle>>;
 export type ArticleParserResponse =
   | { id: string; phase: "started" }
   | { id: string; phase: "completed"; ok: true; result: ArticleParserResult }
@@ -29,14 +29,14 @@ export const ArticleParserResponseSchema = z.union([
 ]);
 
 declare const self: Worker;
-if (!isMainThread) self.onmessage = (event: MessageEvent<unknown>) => {
+if (!isMainThread) self.onmessage = async (event: MessageEvent<unknown>) => {
   const request = ArticleParserRequestSchema.parse(event.data);
   self.postMessage({ id: request.id, phase: "started" } satisfies ArticleParserResponse);
   let response: ArticleParserResponse;
   try {
     response = {
       id: request.id, phase: "completed", ok: true,
-      result: extractArticle(request.body, request.url, request.config, request.form),
+      result: await extractArticle(request.body, request.url, request.config, request.form),
     };
   } catch (error) {
     response = {

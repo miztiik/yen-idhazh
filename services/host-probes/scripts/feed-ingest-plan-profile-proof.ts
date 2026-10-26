@@ -3,17 +3,17 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { arch, release } from "node:os";
 import { randomUUID } from "node:crypto";
-import { loadConfig as loadProbeConfig, ProbeConfigSchema } from "../../services/host-probes/src/config";
-import { SAMPLE_PATH, serveSamples } from "../../services/host-probes/src/api/server";
-import { HostSampleSchema } from "../../services/host-probes/src/probe/sample-host";
-import { collectFingerprint } from "../../services/host-fingerprints/src/collect-fingerprint";
-import { loadConfig, loadSettings, SelectedSettingsSchema } from "../../services/host-fingerprints/src/config";
-import { probeBufferMib } from "../../services/host-fingerprints/src/inspect/copy-bandwidth";
+import { loadConfig as loadProbeConfig, ProbeConfigSchema } from "../src/config";
+import { SAMPLE_PATH, serveSamples } from "../src/api/server";
+import { HostSampleSchema } from "../src/probe/sample-host";
+import { collectFingerprint } from "../../host-fingerprints/src/collect-fingerprint";
+import { loadConfig, SelectedSettingsSchema } from "../../host-fingerprints/src/config";
+import { probeBufferMib } from "../../host-fingerprints/src/inspect/copy-bandwidth";
 import { verifyTaskProfileHttp } from "./host-task-profile-proof";
 import { CopyResultSchema, ProfileProofIdentitySchema, ResourceProofSchema } from "./feed-ingest-plan-profile-schema";
 import type { ResourceProof } from "./feed-ingest-plan-profile-schema";
 import { verifyLiveCacheProfiling } from "./feed-ingest-plan-cache-proof";
-import { formatPidCpuReport } from "./feed-ingest-plan-pid-report";
+import { WorkflowSettingsSchema } from "./feed-ingest-plan-profile-schema";
 
 export async function verifyLiveHostProfiling(
   identity: { git_sha: string; run_id: string; correlation_id: string; attempt: number }, artifactRoot: string,
@@ -29,6 +29,13 @@ export async function verifyLiveHostProfiling(
   await persist();
   let server: ReturnType<typeof serveSamples> | undefined;
   try {
+    const settings = WorkflowSettingsSchema.parse(await Bun.file("config/idhazh.json").json());
+    if (!settings.observability.host_telemetry_enabled || !settings.observability.host_fingerprint) {
+      throw new Error("Host instrument is configured off; independent resource proof is unavailable");
+    }
+    if (!settings.observability.memory_profiling_enabled) {
+      throw new Error("Memory profiling is configured off; independent RAM/copy proof is unavailable");
+    }
     proof.stage = "ram_http";
     await persist();
     server = serveSamples(await loadProbeConfig());
@@ -52,14 +59,8 @@ export async function verifyLiveHostProfiling(
       ...probeConfig, cache_probe: { ...probeConfig.cache_probe,
         counters: { ...probeConfig.cache_probe.counters, enabled: true } },
     }));
-    const pidReport = formatPidCpuReport([{ work: "Controlled CPU task / external PID", profile: proof.task_profile.profile }]);
-    for (const notice of pidReport.annotations) console.log(notice);
     await persist();
     const config = await loadConfig();
-    const settings = await loadSettings();
-    if (!settings.observability.host_telemetry_enabled || !settings.observability.host_fingerprint) {
-      throw new Error("Host instrument is configured off; live resource proof is unavailable");
-    }
     // Only this isolated invocation selects copy work. No shared setting or host row is written.
     const task_name = "isolated-copy-proof";
     const capture = { date: new Date().toISOString().slice(0, 10), writer: {
@@ -105,10 +106,12 @@ export async function verifyLiveHostProfiling(
       async cache => { proof.cache = cache; await persist(); });
     proof.stage = "complete";
     proof.status = "complete";
-  } catch {
+  } catch (error) {
     proof.status = "failed";
-    proof.error = `Live resource proof failed at ${proof.stage}; unavailable measurements are not success`;
-    throw new Error(proof.error);
+    const reason = error instanceof Error ? error.message : "Unknown resource proof failure";
+    proof.error = `Independent resource proof failed at ${proof.stage}: ${reason}`
+      .replaceAll(process.cwd(), ".").replaceAll(artifactRoot, "resource-proof").replaceAll("\\", "/");
+    throw new Error(proof.error, { cause: error });
   } finally {
     try { if (server) await server.stop(true); }
     finally { await persist(); }

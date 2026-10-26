@@ -35,8 +35,11 @@ Reporting configuration does not change harvested content identity.
 Missing feed fields do not renumber later entries. Page canonical tags,
 scripts and prose never grant a new fetch destination.
 
-RSS and Atom retain their original categories, authors and normalized UTC
-dates. Empty category labels are removed; real labels and repeats remain.
+Feedsmith normalizes RSS, Atom, RDF and JSON Feed entries. They retain
+categories, authors, offered ordinals and entry-level UTC dates. A feed's
+build or update time is not an article publication time. Missing, invalid
+or zone-free entry dates remain unknown through admission.
+Empty category labels are removed; real labels and repeats remain.
 Unrecognized or invalid XML is a typed parse failure, not an empty feed.
 
 ## Request and extraction controls
@@ -55,6 +58,11 @@ date retains the later first-sight or unknown-time path.
 
 A missing title retains page-title recovery. Actual HTML extraction keeps
 prose and byline but never executes scripts or loads page resources.
+Defuddle's node entry produces Markdown with asynchronous source fetches
+disabled and a rejecting resource-fetch callback. The sanitizer runs after
+Markdown conversion. If that result is too short, semantic HTML elements
+can supply actual page prose; a `semantic-dom-fallback` warning records its
+use. No invented article or default URL fills a failed extraction.
 Missing, empty and refused extraction remain distinct from successful work.
 The [screening stage](feed-screening.md) applies admission to parsed candidates.
 
@@ -72,8 +80,11 @@ Only selected article text enters the summarizer artifact.
 
 ## Dependencies and cost
 
-Existing Undici, feed XML parsing, LinkeDOM, Defuddle, address and robots
-libraries serve the permitted transport and real extractor. They run in the
+Feedsmith 3.0.1 replaces rss-parser and adds JSON Feed and RDF support. Its
+XML parser and entity decoder replace the old XML dependency tree.
+The existing Defuddle 0.19.5 node entry uses its installed Markdown converter;
+LinkeDOM still supplies inert documents. Undici, address and robots
+libraries retain transport control. These dependencies run in the
 build-time Bun process and workers, not the published browser bundle.
 No new HTTP client, parser framework or profiler is introduced.
 

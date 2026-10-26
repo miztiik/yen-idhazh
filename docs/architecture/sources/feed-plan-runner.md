@@ -14,6 +14,10 @@ loopback listener or `bun src/index.ts --cli` for an awaited one-shot run.
 flag defaults off until production use is approved.
 
 The health route reports listener availability and enablement only.
+The service owns its API code and workflow adapters. GitHub workflow YAML
+calls `services/feed-ingest-plan/scripts/`; no native API depends on
+`.github/scripts/`. The two independent experiment files retained there
+do not supply API execution, history, verification or reporting.
 `POST /api/2026-10-20/plan` accepts optional numeric `freshness_hours`,
 `article_limit`, `shards` and a configured partition strategy. Unknown fields,
 strings in numeric API fields, invalid counts and null controls fail before
@@ -44,6 +48,10 @@ The [shared health operation](planner-feed-history.md) captures pre-fetch
 rest evidence and refreshes current feedback before selection. Its complete
 measured cost belongs in `plan-runs`, without per-candidate history reads
 or a persistent summary cache.
+New timing entries name these purposes `feed-health-before-fetch` and
+`feed-health-for-selection`. Their names, not their positions, identify them.
+Selected publication fallback uses the same saved selection-start instant,
+after admission; the older saved age clock and first sight are unchanged.
 
 ## Concurrency and ownership
 
