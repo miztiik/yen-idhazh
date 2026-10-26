@@ -127,7 +127,12 @@ test("native monthly and yearly precedence reads only the requested day's origin
       indexes[period] = compact.indexPath;
       const current = await readPlannerDay(root, registration("selected-articles"), { day, indexes }, SelectedArticleRowContract);
       expect(current.complete).toBe(true);
+      expect(current.represented).toBe(true);
       expect(current.rows).toEqual([original]);
+      const quiet = await readPlannerDay(root, registration("selected-articles"), {
+        day: "2026-10-18", indexes,
+      }, SelectedArticleRowContract);
+      expect(quiet).toMatchObject({ complete: true, represented: true, rows: [] });
       const native = await readPlannerParquet(compact.path!, "selected-articles", SelectedArticleRowContract);
       expect(native.rows).toHaveLength(2);
       expect(native.rows.every(row => !("unit_id" in row) && !("article_text" in row))).toBe(true);
@@ -153,6 +158,11 @@ test("named empty, lost, expired and missing periods preserve each family's comp
       const held = await read();
       expect(held.rows).toEqual([original]);
       expect(held.complete).toBe(state === "empty");
+      expect(held.represented).toBe(true);
+      const quiet = await readPlannerDay(root, registration("selected-articles"), {
+        day, indexes: { daily: indexPath },
+      }, SelectedArticleRowContract);
+      expect(quiet).toMatchObject({ complete: state === "empty", represented: false, rows: [] });
     }
     await writeFile(indexPath, JSON.stringify({
       version: COMPACT_INDEX_VERSION, ledger: "selected-articles", period: "daily",
@@ -219,6 +229,7 @@ test("one named raw listing verifies filenames and sizes, and genuine publicatio
     }));
     const empty = await read();
     expect(empty.complete).toBe(true);
+    expect(empty.represented).toBe(false);
     expect(empty.rows).toEqual([]);
 
     const publisherRoot = join(root, "publisher");

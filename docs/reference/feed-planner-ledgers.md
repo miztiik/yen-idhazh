@@ -469,6 +469,15 @@ already exists in current configuration. The cutover keeps those meanings
 rather than changing 30 to 31 or using the seven-day request window for
 feed-read scoring.
 
+Represented membership follows native coverage. A daily entry contributes its
+day only when it has rows. A nonempty monthly or yearly entry contributes
+every calendar day in that declared cover, including a covered day with no
+feed row. This is named evidence, not padding outside the inventory.
+Covered membership never invents a feed check or request; denominators and
+counters still come only from actual rows. Known-empty daily entries are not
+lifecycle or reliability members. Missing, refused or lost evidence stays
+explicitly incomplete.
+
 The shared operation:
 
 1. Capture the trusted selection/feedback clock once in D22. Ordinary age

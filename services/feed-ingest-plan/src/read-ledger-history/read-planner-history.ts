@@ -31,7 +31,9 @@ export async function readPlannerDay<T extends object>(
 ) {
   const ledger = PlannerLedgerNameSchema.parse(registration.name);
   const files: Awaited<ReturnType<typeof readPlannerParquet<T>>>[] = [];
-  let represented = false;
+  let represented: boolean | null = null;
+  let covered = false;
+  let selectedCompact = false;
   let complete = true;
   const gaps = new Map<string, string>();
   function readIndex(path: string) {
@@ -69,10 +71,15 @@ export async function readPlannerDay<T extends object>(
     const covers = period === "yearly" ? day.day.slice(0, 4) : period === "monthly" ? day.day.slice(0, 7) : day.day;
     const entry = compact.entries.find(entry => entry.covers === covers);
     if (entry === undefined) continue;
-    represented = true;
-    if (entry.state === "lost" || entry.lost_days.includes(day.day)) { complete = false; break; }
+    // Match native held_days: a nonempty month/year represents even its row-free days.
+    // Known-empty entries prove request coverage, not lifecycle/reliability membership.
+    represented = (represented ?? false) || entry.rows > 0;
+    if (selectedCompact) continue;
+    selectedCompact = true;
+    covered = true;
+    if (entry.state === "lost" || entry.lost_days.includes(day.day)) { complete = false; continue; }
     if (entry.set_aside > 0) complete = false;
-    if (entry.state === "empty") break;
+    if (entry.state === "empty") continue;
     const base = dirname(dirname(indexPath));
     const parts = covers.split("-");
     const path = period === "yearly" ? join(base, period, covers, `${covers}.parquet`)
@@ -86,7 +93,6 @@ export async function readPlannerDay<T extends object>(
       }
       files.push(held);
     });
-    break;
   }
   let rawPaths = day.raw_files?.map(path => resolve(root, path));
   let sizes: readonly number[] | null = null;
@@ -108,7 +114,8 @@ export async function readPlannerDay<T extends object>(
     }
   }
   if (rawPaths !== undefined) {
-    represented = true;
+    covered = true;
+    represented = (represented ?? false) || rawPaths.length > 0;
     if (new Set(rawPaths).size !== rawPaths.length) throw new LedgerHistoryReadError("Planner raw input repeats a file");
     for (const [position, path] of rawPaths.entries()) {
       await attempt(path, async () => {
@@ -123,7 +130,7 @@ export async function readPlannerDay<T extends object>(
   }
   for (const [code, path] of gaps) console.error(JSON.stringify({ event: "planner_history_gap", ledger, day: day.day, code, path }));
   return {
-    day: day.day, complete: represented && complete,
+    day: day.day, represented, complete: covered && complete,
     rows: files.flatMap(file => file.rows.filter(row => "date" in row && row.date === day.day)),
     gaps: [...gaps.keys()],
   };

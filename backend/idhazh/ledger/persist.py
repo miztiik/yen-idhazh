@@ -1132,10 +1132,10 @@ def load_registered_stored[C: LedgerContract](
     """Dispatch shared storage reads without claiming either protocol is the other."""
     if ledger in PLANNER_LEDGERS:
         planner_model = _planner_model(model, ledger=ledger)
-        return [held for held in load_planner_stored(paths, model=planner_model)]
+        return list(load_planner_stored(paths, model=planner_model))
     if not issubclass(model, Contract):
         raise ValueError("non-planner ledger requires its original row contract")
-    return [held for held in load_stored(paths, model=model)]
+    return list(load_stored(paths, model=model))
 
 
 def rows_for_model[C: LedgerContract](

@@ -49,12 +49,17 @@ export async function readFeedHistory(input: {
   const stored = [...loaded, ...own].flatMap(day => day.rows).concat(input.own_rows ?? []).filter(row =>
     input.exclude_execution === undefined || row.run_id !== input.exclude_execution.run_id || row.attempt !== input.exclude_execution.attempt);
   const rows = settleHealthRows([...stored, ...(input.current_rows ?? [])]);
-  const represented = new Set([...input.health_days, ...input.own_days ?? []].map(day => day.day));
-  const days = [...new Map([...loaded, ...own].filter(day => represented.has(day.day) || day.complete || day.rows.length > 0)
+  const inventory = new Set([...input.health_days, ...input.own_days ?? []].map(day => day.day));
+  const request_days = [...new Map([...loaded, ...own]
+    .map(day => [day.day, { day: day.day, complete: day.complete }])).values()];
+  // Keep refused/missing declared members incomplete, but never promote a verified
+  // empty daily entry just because the independent closed-day report read it.
+  const days = [...new Map([...loaded, ...own].filter(day => day.represented === true
+    || (day.represented === null && inventory.has(day.day)))
     .map(day => [day.day, { day: day.day, complete: day.complete }])).values()]
     .sort((a, b) => a.day.localeCompare(b.day));
   for (const row of rows) if (!days.some(day => day.day === row.date)) days.push({ day: row.date, complete: false });
   days.sort((a, b) => a.day.localeCompare(b.day));
-  return { rows, days, ...summarizeHealth({ ...input, rows, days }) };
+  return { rows, days, request_days, ...summarizeHealth({ ...input, rows, days, request_days }) };
 }
 export type FeedHistory = Awaited<ReturnType<typeof readFeedHistory>>;

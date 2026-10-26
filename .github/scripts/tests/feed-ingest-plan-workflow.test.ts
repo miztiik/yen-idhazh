@@ -25,7 +25,7 @@ const StepSchema = z.object({
   id: z.string().optional(), name: z.string().optional(), run: z.string().optional(), uses: z.string().optional(),
   if: z.string().optional(), "continue-on-error": z.boolean().optional(),
   env: z.record(z.string(), z.string()).optional(),
-  with: z.record(z.string(), z.union([z.string(), z.boolean()])).optional(),
+  with: z.record(z.string(), z.union([z.string(), z.boolean(), z.number().finite()])).optional(),
 });
 const WorkflowSchema = z.object({
   on: z.strictObject({ workflow_dispatch: z.object({ inputs: z.record(z.string(), z.object({
@@ -78,9 +78,18 @@ test("manual controls commit only current metadata and keep optional host tools 
   expect(steps.at(-1)?.env).toEqual({ PLANNING_COMPLETE: "${{ steps.plan.outputs.planning_complete }}" });
   expect(text).not.toContain("audited_complete");
   expect(text).not.toContain("persist-dispatches");
+  const ci = z.object({ jobs: z.object({
+    site: z.object({ steps: z.array(StepSchema) }), browser: z.object({ steps: z.array(StepSchema) }),
+  }) }).parse(Bun.YAML.parse(await readFile(join(root, ".github", "workflows", "ci.yml"), "utf8")));
+  for (const job of [ci.jobs.site, ci.jobs.browser]) {
+    expect(job.steps.some(step => step.uses === "oven-sh/setup-bun@v2")).toBe(true);
+    const install = job.steps.find(step => step.name === "Install the native planner fixture writer")!;
+    expect(install.run).toContain("bun install --frozen-lockfile --cwd packages/common-contracts");
+    expect(install.run).toContain("bun install --frozen-lockfile --cwd packages/ledger-file-writer");
+  }
 });
 
-test("bounded native history uses represented row days and retains planner raw overlap only", async () => {
+test("bounded native history preserves covered-day membership and planner raw overlap", async () => {
   const seen = requiredSeenDays("2026-01-01T00:00:00Z", 2);
   expect(seen).toEqual(["2025-12-30", "2025-12-31", "2026-01-01"]);
   expect(completeHistoryDayInputs(["feed-ingest-plan", "discovered-articles"], seen, [], "seen_days")).toHaveLength(3);
@@ -140,12 +149,13 @@ test("bounded native history uses represented row days and retains planner raw o
       read_period: async path => (await readPlannerParquet(join(directory, path), "feed-health-state", FeedHealthStateRowContract)).rows,
     });
     const first = await stage();
-    expect(first.represented_days).toEqual(["2024-01-01", "2026-01-01"]);
+    expect(first.represented_days).toEqual(["2024-01-31", "2026-01-01"]);
     expect(first.files).toContain(monthPath);
-    expect(first.files).toContain(`state/${entries[0]!.path}`);
+    expect(first.files).not.toContain(`state/${entries[0]!.path}`);
     await writeFile(join(directory, monthPath), "invalid Parquet");
     const partial = await stage();
     expect(partial.notices).toContain("health_period_refused:2024-01");
+    expect(partial.represented_days).toEqual(["2024-01-31", "2026-01-01"]);
     expect(partial.represented_days).toContain("2026-01-01");
     const named = createSeenDayInputs(registration.prefix, ["2026-01-01"])[0]!;
     await mkdir(dirname(join(directory, named.raw_index)), { recursive: true });

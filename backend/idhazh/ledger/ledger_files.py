@@ -455,7 +455,7 @@ def _stored_or_skipped[C: LedgerContract](
             return load_registered_stored([path], ledger=ledger, model=model)
         if not issubclass(model, Contract):
             raise ValueError("non-planner ledger requires its original row contract")
-        return [held for held in load_stored([path], model=model)]
+        return list(load_stored([path], model=model))
     except ValueError as refusal:
         logger.warning(
             "skipped a ledger file path=%s reason=%s",

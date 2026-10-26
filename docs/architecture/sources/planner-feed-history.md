@@ -19,6 +19,14 @@ The exact windows, units and skip rules are
 Lifecycle and reliability share the validated health input, not each other's
 window setting. The request report uses closed calendar days instead.
 
+Native represented membership is not limited to row-bearing dates. A daily
+compact entry contributes its date only when it has rows. A nonempty month
+or year contributes every calendar day in its declared cover, including
+covered days with no feed row. January 31 can therefore be in the window
+when January's only saved read was on January 1. This does not invent a
+logical feed check or pad days outside named evidence. Known-empty daily
+entries remain outside lifecycle/reliability membership.
+
 Within a capture, index and Parquet caches prevent reopening one compact file
 for each day it represents. A new selection capture reads current named
 evidence and finalized in-memory facts, rather than reusing a saved parsed

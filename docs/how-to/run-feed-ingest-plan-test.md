@@ -86,6 +86,9 @@ Reporting cannot change ledger bytes or establish completion.
 
 The repository's test-only `ci.yml` remains authoritative for native typing,
 field/default/vocabulary bindings, full-suite and real gardener packing.
+Its site and browser jobs install Bun and the frozen shared-contract/writer
+packages for the current native planner fixtures. Cost is those existing
+test dependencies on each clean job; no new package or browser bundle bytes.
 Do not dispatch `feed-ingest-plan-test.yml` to obtain those checks: it does
 live work and commits data. A conflicting PR must first merge current main
 normally, then receive CI on its exact resolved head.

@@ -319,10 +319,10 @@ def list_registered_raw_files(
 ) -> list[RawFile | PlannerRawFile]:
     """Dispatch shared storage enumeration by its registered format."""
     if ledger in PLANNER_LEDGERS:
-        return [held for held in list_planner_raw_files(
+        return list(list_planner_raw_files(
             state_dir, ledger, days=days, registry=registry
-        )]
-    return [held for held in list_raw_files(state_dir, ledger, days=days, registry=registry)]
+        ))
+    return list(list_raw_files(state_dir, ledger, days=days, registry=registry))
 
 
 def read_registered_day_folder(
@@ -339,8 +339,8 @@ def read_registered_day_files(
 ) -> list[RawFile | PlannerRawFile]:
     """The shared deleting reader, preserving each format's refusal behavior."""
     if ledger in PLANNER_LEDGERS:
-        return [held for held in read_planner_day_files(state_dir, ledger, day, registry=registry)]
-    return [held for held in read_day_files(state_dir, ledger, day, registry=registry)]
+        return list(read_planner_day_files(state_dir, ledger, day, registry=registry))
+    return list(read_day_files(state_dir, ledger, day, registry=registry))
 
 
 def _cells(row: Contract) -> dict[str, str]:
@@ -503,7 +503,7 @@ def settle_registered_rows(
                     raise ValueError("planner settlement requires only declared planner rows")
                 planned.append(held)
             planner_files.append(planned)
-        return [held for held in settle_planner_rows(planner_files, key)]
+        return list(settle_planner_rows(planner_files, key))
     legacy_files: list[list[StoredRow[Contract]]] = []
     for rows in files:
         original: list[StoredRow[Contract]] = []
@@ -512,7 +512,7 @@ def settle_registered_rows(
                 raise ValueError("original settlement requires its original stored identities")
             original.append(held)
         legacy_files.append(original)
-    return [held for held in settle_rows(legacy_files, key)]
+    return list(settle_rows(legacy_files, key))
 
 
 def load_current_rows[C: Contract](

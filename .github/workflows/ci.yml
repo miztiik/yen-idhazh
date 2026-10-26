@@ -306,6 +306,15 @@ jobs:
           cache: npm
           cache-dependency-path: frontend/package-lock.json
 
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.3.13'
+
+      - name: Install the native planner fixture writer
+        run: |
+          bun install --frozen-lockfile --cwd packages/common-contracts
+          bun install --frozen-lockfile --cwd packages/ledger-file-writer
+
       # For the site-weight gate at the end, which is a backend module: one
       # reader of `config/idhazh.json` rather than a second copy of the budget.
       - uses: actions/setup-python@v7
@@ -419,7 +428,16 @@ jobs:
         working-directory: frontend
         run: npm ci
 
-      # The canary day and explorer fixtures use the real backend contracts.
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.3.13'
+
+      - name: Install the native planner fixture writer
+        run: |
+          bun install --frozen-lockfile --cwd packages/common-contracts
+          bun install --frozen-lockfile --cwd packages/ledger-file-writer
+
+      # The canary day and other-family fixtures use the real backend contracts.
       # The dev extra supplies DuckDB for the independent native schema oracle.
       - name: Install the backend and test tooling
         run: pip install -e ".[dev]"

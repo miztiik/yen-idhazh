@@ -9,6 +9,25 @@ import { closedRequestDays } from "../../services/feed-ingest-plan/src/read-ledg
 import { classifyPlannerHistoryGap } from "../../services/feed-ingest-plan/src/read-ledger-history/planner-history-gap";
 import { LedgerHistoryReadError } from "../../services/feed-ingest-plan/src/read-ledger-history/ledger-history-error";
 
+function representedPeriodDays(period: CompactIndex["period"], covers: string, today: string) {
+  const first = period === "yearly" ? `${covers}-01-01` : period === "monthly" ? `${covers}-01` : covers;
+  const start = new Date(`${first}T00:00:00Z`);
+  if (!Number.isFinite(start.getTime()) || start.getUTCFullYear() < 1 || start.toISOString().slice(0, 10) !== first) {
+    throw new LedgerHistoryReadError("Health cover is not a valid UTC period");
+  }
+  const end = new Date(start);
+  if (period === "yearly") end.setUTCFullYear(end.getUTCFullYear() + 1);
+  else if (period === "monthly") end.setUTCMonth(end.getUTCMonth() + 1);
+  else end.setUTCDate(end.getUTCDate() + 1);
+  const days: string[] = [];
+  for (const at = new Date(start); at < end; at.setUTCDate(at.getUTCDate() + 1)) {
+    const day = at.toISOString().slice(0, 10);
+    if (day > today) break;
+    days.push(day);
+  }
+  return days;
+}
+
 export async function stageFeedHistory(input: {
   ledger: "feed-health-state"; prefix: readonly string[]; now: string;
   health_window_days: number; request_report_closed_days: number; period_limit: number;
@@ -57,7 +76,7 @@ export async function stageFeedHistory(input: {
     const rawFiles = [...new Set([...(held.raw_files ?? []), `state/${entry.path}`])];
     days.set(day, { day, indexes: defaults.indexes, raw_files: rawFiles });
   }
-  const periods = compact.flatMap(index => index.entries.filter(entry => entry.state === "packed").map(entry => ({
+  const periods = compact.flatMap(index => index.entries.filter(entry => entry.state === "packed" && entry.rows > 0).map(entry => ({
     period: index.period, covers: entry.covers,
     path: `state/compact/${base}/${index.period}/${index.period === "yearly"
       ? `${entry.covers}/${entry.covers}` : entry.covers.replaceAll("-", "/")}.parquet`,
@@ -72,9 +91,10 @@ export async function stageFeedHistory(input: {
     inspected++;
     files.add(period.path);
     try {
-      for (const row of await input.read_period(period.path)) {
-        if (row.date <= input.now.slice(0, 10) && !days.has(row.date)) days.set(row.date, createSeenDayInputs(input.prefix, [row.date])[0]!);
+      for (const day of representedPeriodDays(period.period, period.covers, input.now.slice(0, 10))) {
+        if (!days.has(day)) days.set(day, createSeenDayInputs(input.prefix, [day])[0]!);
       }
+      await input.read_period(period.path);
     } catch (error) {
       const code = classifyPlannerHistoryGap(error);
       if (code === null) throw error;
@@ -100,6 +120,14 @@ export async function stageFeedHistory(input: {
     days.set(named.day, named);
   }
   const selected = [...days.values()].sort((a, b) => a.day.localeCompare(b.day)).slice(-input.health_window_days);
+  const from = selected[0]?.day;
+  if (from !== undefined && compact.some(index => index.entries.some(entry =>
+    (entry.state === "lost" && entry.covers >= from && entry.covers <= input.now.slice(0, 10))
+      || entry.lost_days.some(day => day >= from && day <= input.now.slice(0, 10))
+      || (entry.set_aside > 0 && entry.covers >= from.slice(0, entry.covers.length)
+        && entry.covers <= input.now.slice(0, entry.covers.length))))) {
+    notices.push("health_coverage_gap");
+  }
   for (const day of selected) {
     const rawPath = day.raw_index ?? createSeenDayInputs(input.prefix, [day.day])[0]!.raw_index;
     let index: ReturnType<typeof RawDayIndexSchema.parse>[] = [];

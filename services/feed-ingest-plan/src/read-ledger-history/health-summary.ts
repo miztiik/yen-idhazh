@@ -27,6 +27,7 @@ export function settleHealthRows(rows: readonly FeedHealthStateRow[]): FeedHealt
 export function summarizeHealth(input: {
   rows: readonly FeedHealthStateRow[];
   days: readonly { day: string; complete: boolean }[];
+  request_days?: readonly { day: string; complete: boolean }[];
   sources: readonly SourceSnapshot[]; now: string; policy: FeedHistoryPolicy;
   lifecycle_window_days: number; request_report_closed_days: number;
 }) {
@@ -37,8 +38,8 @@ export function summarizeHealth(input: {
   const represented = [...new Set(input.days.filter(day => day.day <= input.now.slice(0, 10)).map(day => day.day))].sort();
   const lifecycleDays = represented.slice(-input.lifecycle_window_days);
   const reliabilityDays = represented.slice(-input.policy.reliability_window_days);
-  const complete = (days: readonly string[], required: number) => days.length >= required
-    && days.every(day => input.days.find(value => value.day === day)?.complete === true);
+  const complete = (days: readonly string[], required: number, coverage = input.days) => days.length >= required
+    && days.every(day => coverage.find(value => value.day === day)?.complete === true);
   const sources = new Map<string, SourceHistoryEvidence>();
   for (const source of input.sources) {
     const endpoint = source.feed_url;
@@ -79,7 +80,7 @@ export function summarizeHealth(input: {
     });
   }
   const requestDays = closedRequestDays(input.now, input.request_report_closed_days);
-  const windowComplete = complete(requestDays, input.request_report_closed_days);
+  const windowComplete = complete(requestDays, input.request_report_closed_days, input.request_days ?? input.days);
   const request_report = {
     from_day: requestDays[0]!, through_day: requestDays.at(-1)!, complete: windowComplete,
     feeds: input.sources.map(source => {

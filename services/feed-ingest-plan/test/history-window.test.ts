@@ -10,7 +10,7 @@ import { plannerRecordings } from "../../../packages/ledger-file-writer/test/pla
 import { loadPlanInputs } from "../src/load-plan-inputs";
 import { closedRequestDays, summarizeHealth } from "../src/read-ledger-history/health-summary";
 import { endpointKey, readFeedHistory } from "../src/read-ledger-history/read-feed-history";
-import { registration, writeRows } from "./partition-fixtures";
+import { compactRows, registration, writeRows } from "./partition-fixtures";
 
 const now = "2026-10-21T12:00:00Z";
 function work(day = "2026-10-20", patch: Partial<FeedHealthStateRow> = {}) {
@@ -34,7 +34,8 @@ function summarize(setup: Awaited<ReturnType<typeof input>>, rows: FeedHealthSta
   patch: Partial<Parameters<typeof summarizeHealth>[0]> = {}) {
   return summarizeHealth({
     ...setup, rows,
-    days: closedRequestDays(now, setup.request_report_closed_days).map(day => ({ day, complete: true })), ...patch,
+    days: [...new Set(rows.map(row => row.date))].map(day => ({ day, complete: true })),
+    request_days: closedRequestDays(now, setup.request_report_closed_days).map(day => ({ day, complete: true })), ...patch,
   });
 }
 
@@ -95,7 +96,7 @@ test("represented-day reliability excludes skips and honors its floor rather tha
 
 test("missing work, nullable counters and partial days never become measured zero or perfect reliability", async () => {
   const setup = await input();
-  const unavailable = summarize(setup, [], { days: [] });
+  const unavailable = summarize(setup, [], { days: [], request_days: [] });
   expect(unavailable.sources.get("recorded-news")!.reliability).toBeNull();
   expect(unavailable.sources.get("recorded-news")!.lifecycle).toBe("unknown");
   expect(unavailable.request_report).toMatchObject({ complete: false, feeds: [{
@@ -108,7 +109,7 @@ test("missing work, nullable counters and partial days never become measured zer
   expect(unknown.sources.get("recorded-news")!.reliability).toBeNull();
   expect(unknown.request_report.feeds[0]).toMatchObject({ counts_complete: false, article_requests: null, feed_requests: null });
   const partial = summarize(setup, [work()], {
-    days: closedRequestDays(now, 7).map(day => ({ day, complete: day !== "2026-10-18" })),
+    request_days: closedRequestDays(now, 7).map(day => ({ day, complete: day !== "2026-10-18" })),
   });
   expect(partial.request_report.complete).toBe(false);
   expect(partial.request_report.feeds[0]!.article_requests).toBeNull();
@@ -166,6 +167,7 @@ test("logical productive-read settlement never erases a lower attempt's dispatch
 test("known-empty closed days contribute zero while today's and future work stay out of the spend window", async () => {
   const setup = await input();
   const empty = summarize(setup, []);
+  expect(empty.represented_days).toEqual([]);
   expect(empty.request_report.feeds[0]).toMatchObject({
     counts_complete: true, feed_requests: 0, article_requests: 0, robots_requests: 0,
   });
@@ -197,5 +199,108 @@ test("native history reads only named current-family days and rejects unbounded 
     await expect(readFeedHistory({
       ...request, health_days: Array.from({ length: 39 }, () => request.health_days[0]!),
     })).rejects.toThrow("bounds");
+
+    const dailyRoot = join(root, "daily-window");
+    const dailyState = join(dailyRoot, "state");
+    const earlier = work("2026-01-01", {
+      outcome: "permanent", items: 0, productive_reads: 0, failed_reads: 1,
+    });
+    const recent = work("2026-10-20", {
+      outcome: "permanent", items: 0, productive_reads: 0, failed_reads: 1, article_requests: 3,
+    });
+    const dailyInputs = await Promise.all([earlier, recent].map(async row => {
+      const raw = await writeRows(dailyState, "feed-health-state", row.date, FeedHealthStateRowContract, [row]);
+      return { day: row.date, raw_files: raw.files.map(file => `state/${file.path}`) };
+    }));
+    const empty = await compactRows(dailyState, "feed-health-state", "2026-10-19", FeedHealthStateRowContract, [], "daily");
+    await writeFile(empty.indexPath, JSON.stringify({
+      ...empty.index, entries: closedRequestDays(now, 7).filter(day => day !== recent.date)
+        .map(covers => ({ covers, rows: 0, bytes: 0, state: "empty" })),
+    }));
+    const daily = await readFeedHistory({
+      ...request, root: dailyRoot, health_days: dailyInputs, lifecycle_window_days: 2,
+      policy: { ...setup.policy, reliability_window_days: 2, availability_strikes_before_rest: 2 },
+    });
+    expect(daily.represented_days).toEqual([earlier.date, recent.date]);
+    expect(daily.days.map(day => day.day)).toEqual(daily.represented_days);
+    expect(daily.sources.get("recorded-news")).toMatchObject({
+      lifecycle: "resting", strikes: 2,
+      reliability: { attempted: 2, productive: 0, from_day: earlier.date, through_day: recent.date, complete: true },
+    });
+    expect(daily.request_report).toMatchObject({
+      complete: true, feeds: [{ article_requests: 3, counts_complete: true }],
+    });
+
+    const monthDays = Array.from({ length: 31 }, (_, index) => `2026-10-${String(index + 1).padStart(2, "0")}`);
+    const packedRows = [
+      work("2026-10-01", { outcome: "permanent", items: 0, productive_reads: 0, failed_reads: 1 }),
+      work("2026-10-02", { outcome: "robots_denied", permission: "denied", items: 0, productive_reads: 0, failed_reads: 0 }),
+      work("2026-10-03", { outcome: "skipped", items: 0, feed_reads: 0, productive_reads: 0, failed_reads: 0 }),
+      work("2026-10-30", { outcome: "permanent", items: 0, productive_reads: 0, failed_reads: 1, article_requests: 3 }),
+    ];
+    for (const period of ["monthly", "yearly"] as const) {
+      const periodRoot = join(root, period);
+      const state = join(periodRoot, "state");
+      const compact = await compactRows(state, "feed-health-state", "2026-10-30", FeedHealthStateRowContract, packedRows, period);
+      const old = work("2026-09-30", { outcome: "permanent", items: 0, productive_reads: 0, failed_reads: 1 });
+      const oldRaw = await writeRows(state, "feed-health-state", old.date, FeedHealthStateRowContract, [old]);
+      const original = packedRows.at(-1)!;
+      const late = { ...original, attempt: 2, checked_at: "2026-10-30T16:00:00Z", article_requests: 5 };
+      const copies = await Promise.all([original, late].map(row =>
+        writeRows(state, "feed-health-state", row.date, FeedHealthStateRowContract, [row])));
+      const indexes = { [period]: compact.indexPath };
+      const healthDays = [
+        { day: old.date, raw_files: oldRaw.files.map(file => `state/${file.path}`) },
+        ...monthDays.map(day => ({
+          day, indexes,
+          ...(day !== original.date ? {} : { raw_files: copies.flatMap(result => result.files.map(file => `state/${file.path}`)) }),
+        })),
+      ];
+      const periodRequest = { ...request, root: periodRoot, now: "2026-10-31T12:00:00Z", health_days: healthDays,
+        policy: { ...setup.policy, availability_strikes_before_rest: 2 } };
+      const packed = await readFeedHistory(periodRequest);
+      expect(packed.represented_days).toEqual([old.date, ...monthDays]);
+      expect(packed.days.every(day => day.complete)).toBe(true);
+      expect(packed.rows).toHaveLength(6);
+      expect(packed.rows.filter(row => row.date === original.date).map(row => row.attempt).sort()).toEqual([1, 2]);
+      expect(packed.sources.get("recorded-news")).toMatchObject({
+        lifecycle: "resting", strikes: 2,
+        reliability: {
+          attempted: 1, productive: 0, from_day: "2026-10-02", through_day: "2026-10-31",
+          success_fraction: 0, production_factor: 0.5, complete: true,
+        },
+      });
+      expect(packed.request_report).toMatchObject({
+        complete: true, from_day: "2026-10-24", through_day: "2026-10-30",
+        feeds: [{ article_requests: 8, counts_complete: true }],
+      });
+      const beforeMidnight = await readFeedHistory({
+        ...periodRequest, now: "2026-10-30T23:59:59Z", health_days: healthDays.filter(day => day.day !== "2026-10-31"),
+      });
+      expect(beforeMidnight.represented_days).not.toContain("2026-10-31");
+      expect(beforeMidnight.sources.get("recorded-news")).toMatchObject({
+        strikes: 3, reliability: { attempted: 2, from_day: "2026-10-01", through_day: "2026-10-30", complete: true },
+      });
+      await writeFile(compact.indexPath, JSON.stringify({
+        ...compact.index, entries: [{ ...compact.index.entries[0]!, lost_days: ["2026-10-15"] }],
+      }));
+      const lost = await readFeedHistory(periodRequest);
+      expect(lost.represented_days).toEqual(packed.represented_days);
+      expect(lost.sources.get("recorded-news")!.reliability!.complete).toBe(false);
+      expect(lost.request_report).toEqual(packed.request_report);
+      await writeFile(compact.indexPath, "{");
+      const refused = await readFeedHistory(periodRequest);
+      expect(refused.sources.get("recorded-news")!.reliability).toMatchObject({ attempted: 1, complete: false });
+      expect(refused.request_report).toMatchObject({
+        complete: false, feeds: [{ article_requests: null, counts_complete: false }],
+      });
+      await writeFile(compact.indexPath, JSON.stringify(compact.index));
+      await rm(compact.path!);
+      const missing = await readFeedHistory(periodRequest);
+      expect(missing.sources.get("recorded-news")!.reliability).toMatchObject({ attempted: 1, complete: false });
+      expect(missing.request_report).toMatchObject({
+        complete: false, feeds: [{ article_requests: null, counts_complete: false }],
+      });
+    }
   } finally { await rm(root, { recursive: true, force: true }); }
 });
