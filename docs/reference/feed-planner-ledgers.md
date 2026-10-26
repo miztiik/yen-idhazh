@@ -193,7 +193,7 @@ totals or add together saved rolling reliability results.
 | C37 | `rejection_counts[].attribution` | Run counters | Feed, pipeline or unknown for failures; null for ordinary exclusions |
 | C38 | `attempt` | Feed/run/day | Retain the run attempt when compacted rows from different executions coexist |
 | C39 | `items` | Feed/run/day | Existing distinct-offered-URL count used to decide whether the feed read was productive |
-| C40 | `outcome` | Feed/run/day | Existing feed outcome, including skipped/blocked/failed cases; needed for reliability/rest settlement |
+| C40 | `outcome` | Feed/run/day | Native download/permission result, not parse success; combined with C39 for reliability/rest settlement |
 
 Retired field IDs: C3 moved to D16; C4 moved to D17; C17 moved to D21. These
 settings belong once to the run, rather than repeated on every feed row or
@@ -205,7 +205,14 @@ sum those per-run decisions; they do not claim unique articles across the day.
 Planning yield is calculated from selected/candidate counts. Request totals
 measure spend, not blame.
 
-The current writer's productivity test is `outcome == "ok"` and `items > 0`.
+`outcome` preserves the native download/permission result. An HTTP success
+can therefore record `ok` even when the feed is empty or parsing fails.
+`last_failure_code = FEED_PARSE_FAILED` identifies the latter; it does not
+rewrite the download outcome. A human-facing feed read result combines that
+outcome, the usable URL count and the failure code.
+
+The current writer's productivity test remains `outcome == "ok"` and
+`items > 0`; `ok` with zero items is a failed/nonproductive read.
 Its `items` counts distinct offered canonical URLs across candidates and
 article-level rejections. It is not automatically the raw XML-entry count,
 extracted-article count or selected count. C39-C40 preserve that distinction

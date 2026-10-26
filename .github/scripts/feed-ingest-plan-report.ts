@@ -4,6 +4,7 @@ import { join } from "node:path";
 import {
   FeedIngestConfigSchema, PlanRunRowSchema, readFeedIngestEvent,
 } from "../../packages/common-contracts/src/index";
+import type { FeedHealthStateRow } from "../../packages/common-contracts/src/index";
 import { PlanResponseSchema } from "../../services/feed-ingest-plan/src/api/plan-response.schema";
 import { FeedHealthStateUpdateResponseSchema } from "../../services/feed-ingest-plan/src/api/feed-health-state.schema";
 import { escapeCommand, escapeMarkdown, escapeParameter } from "./feed-ingest-plan-report-format";
@@ -15,6 +16,20 @@ export type ExecutionReportEvidence = {
   response: unknown; health?: unknown; historyStagingMs?: unknown;
   policy?: unknown; resources?: unknown; independent?: unknown; profileRequested?: boolean;
 };
+function describeFeedRead(feed: Pick<FeedHealthStateRow, "outcome" | "items" | "last_failure_code">): string {
+  if (feed.last_failure_code === "FEED_PARSE_FAILED") return "Feed parsing failed";
+  switch (feed.outcome) {
+    case "ok":
+      return feed.items === null ? "Download succeeded; parsing not recorded"
+        : feed.items === 0 ? "No usable feed URLs" : "Feed read succeeded";
+    case "robots_denied": return "Robots permission denied or unknown";
+    case "blocked": return "Request blocked by URL safety checks";
+    case "permanent": return "HTTP request failed (outside retry list)";
+    case "transient": return "Download failed (retryable or network failure)";
+    case "skipped": return "Feed download skipped";
+    case null: return "Unavailable (download outcome not recorded)";
+  }
+}
 export function formatPlannerReport(input: unknown): PlannerReport {
   if (!Array.isArray(input)) throw new Error("Progress must be an explicit array");
   const events = input.map(readFeedIngestEvent);
@@ -78,10 +93,11 @@ export function formatExecutionOutcome(input: ExecutionReportEvidence): PlannerR
     ...row.api_timings.map((span, index) => `| B${index + 1} | ${operationName(span.operation)} | ${span.duration_ms} milliseconds | ${span.status} |`),
     "", "Concurrent spans can overlap. Do not add them to estimate elapsed run time.",
     "", "## Table C - This run's feed work", "",
-    "| Id | Feed | UTC work day | Feed checks | Admitted articles | Chosen articles | Feed / article / robots requests | Outcome |",
+    "| Id | Feed | UTC work day | Feed checks | Admitted articles | Chosen articles | Feed / article / robots requests | Feed read result |",
     "| --- | --- | --- | --- | --- | --- | --- | --- |",
-    ...feedRows.map((feed, index) => `| C${index + 1} | ${escapeMarkdown(feed.feed_id)} | ${feed.date} | ${known(feed.feed_reads, "checks")} | ${known(feed.article_candidates, "articles")} | ${known(feed.articles_selected, "articles")} | ${[feed.feed_requests, feed.article_requests, feed.robots_requests].map(value => known(value, "requests")).join(" / ")} | ${feed.outcome ?? "Unavailable"} |`),
+    ...feedRows.map((feed, index) => `| C${index + 1} | ${escapeMarkdown(feed.feed_id)} | ${feed.date} | ${known(feed.feed_reads, "checks")} | ${known(feed.article_candidates, "articles")} | ${known(feed.articles_selected, "articles")} | ${[feed.feed_requests, feed.article_requests, feed.robots_requests].map(value => known(value, "requests")).join(" / ")} | ${escapeMarkdown(describeFeedRead(feed))} |`),
     ...(feedRows.length ? [] : ["", health === null ? "Feed work is unavailable." : "The supplied run has zero recorded feed rows."]),
+    "", "Feed read results combine the recorded download result, usable URL count and failure code. The saved download outcome is unchanged.",
     "", "## Table D - Closed-day request spend", "",
     requests === undefined ? "Request evidence is unavailable." : `Window: ${requests.from_day} through ${requests.through_day} UTC. Coverage: ${requests.complete ? "complete" : "incomplete"}. This is spend, not waste or a ranking penalty.`,
     "", "| Id | Feed | Feed requests | Article requests | Robots requests | Accounting |", "| --- | --- | --- | --- | --- | --- |",

@@ -18,6 +18,7 @@ import { createExecutionOutputs, writeGitHubOutputs } from "../feed-ingest-plan-
 import { formatExecutionOutcome, formatExecutionReport, readExecutionReport, writePlannerReport } from "../feed-ingest-plan-report";
 import { prepareWorkflowArtifacts } from "../feed-ingest-plan-artifacts";
 import { observeWorkflowResources, WorkflowResourcesSchema } from "../feed-ingest-plan-workflow-resources";
+import { escapeMarkdown } from "../feed-ingest-plan-report-format";
 
 async function git(directory: string, args: string[]) {
   const child = Bun.spawn(["git", ...args], { cwd: directory, stdout: "pipe", stderr: "pipe", env: {
@@ -175,12 +176,17 @@ test("exact metadata appends through a generated bare origin with complete raw i
 });
 
 test("one real result and every native file stay unchanged through both report modes", async () => {
-  const fixture = await recordedPlan();
+  const fixture = await recordedPlan([
+    source(),
+    source({ id: "recorded-empty", url: "https://news.example/empty.xml" }),
+    source({ id: "recorded-malformed", url: "https://news.example/malformed.xml" }),
+  ]);
   try {
     const result = await runFeedPlan({}, fixture.inputs, fixture.runtime);
     const response = summarizePlan(result);
     const health = await executeFeedHealthState({ batch_id: response.batches.selection_batch_id, action: "summarize" },
       fixture.inputs, fixture.runtime);
+    const healthBefore = JSON.stringify(health);
     const outputs = createExecutionOutputs(response, fixture.inputs.registrations);
     const paths: string[] = JSON.parse(outputs.current_run_files!);
     const bytes = await Promise.all(paths.map(path => readFile(join(fixture.inputs.outputRoot, path))));
@@ -204,6 +210,21 @@ test("one real result and every native file stay unchanged through both report m
     ]);
     const rendered = Bun.markdown.html(await readFile(summary, "utf8"));
     expect((rendered.match(/<table>/g) ?? [])).toHaveLength(7);
+    expect(rendered).toContain("<th>Feed read result</th>");
+    expect(rendered).not.toContain("<th>Outcome</th>");
+    for (const [feedId, code, description] of [
+      ["recorded-empty", "FEED_EMPTY", "No usable feed URLs"],
+      ["recorded-malformed", "FEED_PARSE_FAILED", "Feed parsing failed"],
+    ] as const) {
+      const index = health.rows.findIndex(row => row.feed_id === feedId);
+      expect(index).toBeGreaterThanOrEqual(0);
+      expect(health.rows[index]).toMatchObject({
+        status: 200, outcome: "ok", items: 0, failed_reads: 1, last_failure_code: code,
+      });
+      const cell = formatExecutionReport(evidence).split("\n").find(line => line.startsWith(`| C${index + 1} |`));
+      expect(cell).toContain(`| ${description} |`);
+    }
+    expect(rendered).toContain("Feed read succeeded");
     for (const table of rendered.matchAll(/<table>[\s\S]*?<\/table>/g)) {
       const header = table[0].match(/<thead>[\s\S]*?<\/thead>/)?.[0] ?? "";
       const columns = (header.match(/<th>/g) ?? []).length;
@@ -215,6 +236,15 @@ test("one real result and every native file stay unchanged through both report m
     }
     const reason = "MISSING_REQUIRED_FIELDS";
     const firstHealth = health.rows[0]!;
+    for (const [outcome, description] of [
+      ["ok", "Download succeeded; parsing not recorded"],
+      [null, "Unavailable (download outcome not recorded)"],
+    ] as const) {
+      const missing = { ...evidence, health: { ...health, rows: [{ ...firstHealth,
+        outcome, items: null, last_failure_code: null,
+      }] } };
+      expect(formatExecutionReport(missing)).toContain(escapeMarkdown(description));
+    }
     const changed = { ...evidence, health: { ...health, rows: [{ ...firstHealth, rejection_counts: [
       ...firstHealth.rejection_counts, { reason_code: reason, count: 1, subject: "article", stage: "harvest-feeds", attribution: null },
       { reason_code: "HOSTILE\r\n::error title=unsafe::% <script>", count: 1, subject: "article", stage: "harvest-feeds", attribution: null },
@@ -232,6 +262,7 @@ test("one real result and every native file stay unchanged through both report m
     await writeFile(join(directory, "history-staging-ms.json"), "3");
     await writeFile(join(directory, "workflow-policy.json"), JSON.stringify(evidence.policy));
     expect(await readExecutionReport(directory)).toBe(formatExecutionReport(evidence));
+    expect(JSON.stringify(health)).toBe(healthBefore);
     for (const [index, path] of paths.entries()) expect(await readFile(join(fixture.inputs.outputRoot, path))).toEqual(bytes[index]!);
     await verifyPlanningCompletion(fixture.inputs.outputRoot, response, fixture.inputs.registrations, fixture.directory);
   } finally { await fixture.close(); }
