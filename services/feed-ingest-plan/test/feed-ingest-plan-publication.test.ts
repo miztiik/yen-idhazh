@@ -116,6 +116,7 @@ test("a real rejected push rebuilds only planner day indexes on the new parent w
     await fixtureGit(concurrent, ["add", "--", `state/${priorPath}`, unrelated]);
     await fixtureGit(concurrent, ["commit", "-m", "Record concurrent native metadata"]);
     const moved = await fixtureGit(concurrent, ["rev-parse", "HEAD"]);
+    await fixtureGit(concurrent, ["push", "origin", "HEAD:refs/heads/prepared-concurrent"]);
     const hook = join(f.repository, ".git", "hooks", "pre-push");
     await writeFile(hook, [
       "#!/bin/sh", "set -eu",

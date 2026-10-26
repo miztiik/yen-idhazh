@@ -245,7 +245,8 @@ complete value. The named backend contract check
 `backend/tests/contracts/test_host_fingerprint_snapshot.py` binds that
 snapshot to the actual Pydantic model in CI. The Bun checks use the recorded
 snapshot without a Python prerequisite; they do not claim that Python ran.
-No test contacts a network: placement replays bounded native response bodies
+No test contacts an external service: loopback checks use the real HTTP listener,
+placement replays bounded native response bodies
 and transport failures; the CLI placement read is explicitly off. The live-Linux
 test runs only on Linux and reports its machine separately; Windows fixture
 results do not certify Linux collection or live cloud metadata access.

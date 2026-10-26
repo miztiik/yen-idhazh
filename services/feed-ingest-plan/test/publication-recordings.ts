@@ -30,7 +30,7 @@ export async function publicationRecording(failPlanning = false) {
     for (const name of ["ledgers.json", "feed-ingest-plan-service.json"]) {
       await copyFile(new URL(`../../../config/${name}`, import.meta.url), join(repository, "config", name));
     }
-    const retry = { deadline_seconds: { default: 90 }, base_step_seconds: 0.01, ceiling_seconds: 0.1, ceiling_after: 1 };
+    const retry = await Bun.file(new URL("../../../config/push-retry.json", import.meta.url)).json();
     await writeFile(join(repository, "config", "push-retry.json"), JSON.stringify(retry));
     await fixtureGit(repository, ["add", "--", "README.md", "config/ledgers.json",
       "config/feed-ingest-plan-service.json", "config/push-retry.json"]);

@@ -1,6 +1,6 @@
 /** Do actual HTTP results, native files and selected artifacts survive the isolated handoff? */
 import { expect, test } from "bun:test";
-import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { copyFile, mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
@@ -121,7 +121,7 @@ test("exact metadata appends through a generated bare origin with complete raw i
     await git(fixture.directory, ["init", "--bare", "--initial-branch=main", origin]);
     await git(repository, ["init", "--initial-branch=main"]);
     await writeFile(join(repository, "README.md"), "Generated bounded fixture.\n");
-    const retry = { deadline_seconds: { default: 90 }, base_step_seconds: 0.01, ceiling_seconds: 0.1, ceiling_after: 1 };
+    const retry = await Bun.file(new URL("../../../config/push-retry.json", import.meta.url)).json();
     await mkdir(join(repository, "config"));
     await writeFile(join(repository, "config", "push-retry.json"), JSON.stringify(retry));
     for (const name of ["ledgers.json", "feed-ingest-plan-service.json"]) {
@@ -134,6 +134,11 @@ test("exact metadata appends through a generated bare origin with complete raw i
     const head = await git(repository, ["rev-parse", "HEAD"]);
     const publication = { identity: { run_id: summary.run_id, attempt: summary.attempt, git_sha: head },
       registrations: await metadataRegistrations() };
+    if (summary.selected_articles_artifact !== null) {
+      const artifact = join(repository, summary.selected_articles_artifact);
+      await mkdir(dirname(artifact), { recursive: true });
+      await copyFile(join(fixture.directory, summary.selected_articles_artifact), artifact);
+    }
     await writeFile(join(fixture.directory, "feed-ingest-plan", "resources.json"), JSON.stringify(WorkflowResourcesSchema.parse({
       host_request: { date: summary.date, writer: hostWriter(publication.identity) }, profile_requested: false,
       host: { status: "disabled", reason: "observability.host_fingerprint=false" },
