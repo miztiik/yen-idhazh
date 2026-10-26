@@ -79,6 +79,8 @@ def test_fixture_round_trips_without_losing_values(path: Path) -> None:
                 "parent_fetch_request_id": None, "parent_batch_id": None,
                 "entry_ordinal": None, **original,
             }
+        elif contract.__schema_stem__ == "host-fingerprint-row":
+            expected = {"machine_memory_total_mib": None, **original}
         assert json.loads(once) == expected
     else:
         assert original["version"] < record.version

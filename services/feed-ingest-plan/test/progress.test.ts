@@ -6,12 +6,14 @@ import type { ProgressRecord } from "../src/logging/progress-logger";
 import { stageStore } from "../src/api/stage-store";
 import { recordedPlan } from "./plan-recordings";
 import { parseFeed } from "../src/harvest-feeds/feed-client";
+import { cleanRequestTarget } from "../src/harvest-feeds/request-url";
 
 test("live progress precedes completion and the structured event stream stays sparse and body-free", async () => {
   const recorded = await recordedPlan();
   const first = (await parseFeed(recorded.transport.recordings.bodies.rss))[0]!;
   if (first.link === null) throw new Error("Recorded entry must identify its target");
-  recorded.transport.recordings.responses[first.link] = [{
+  const target = recorded.inputs.harvest.config.harvest.tidy_urls ? cleanRequestTarget(first.link).href : first.link;
+  recorded.transport.recordings.responses[target] = [{
     status: 200,
     body: recorded.transport.recordings.bodies.article.replace("</head>", '<script type="application/ld+json">{</script></head>'),
   }];

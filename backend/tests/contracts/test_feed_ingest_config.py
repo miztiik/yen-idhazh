@@ -57,7 +57,10 @@ def input_shape(node: dict[str, Any], root: dict[str, Any]) -> Any:
         result["required"] = sorted(result["required"])
     for name in ("anyOf", "oneOf"):
         if name in result:
-            result[name] = sorted((input_shape(branch, root) for branch in result[name]), key=repr)
+            result[name] = sorted(
+                (input_shape(branch, root) for branch in result[name]),
+                key=lambda branch: json.dumps(branch, sort_keys=True),
+            )
     if "properties" in result:
         result["properties"] = {
             key: input_shape(value, root) for key, value in result["properties"].items()

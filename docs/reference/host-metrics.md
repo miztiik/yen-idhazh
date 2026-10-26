@@ -140,6 +140,8 @@ Missing, malformed, duplicate, oversized or unsupported input leaves it null
 with an unavailable reason. Task-memory profiling does not control this capacity
 reading. Total RAM is not part of the hardware hash, and `l3_cache_bytes` stays
 byte-valued.
+Older rows without this field read it as null and retain their original version
+stamp and measurements; historical files are not rewritten.
 
 From the service directory, run:
 

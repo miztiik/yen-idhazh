@@ -16,10 +16,48 @@ export const FeedUrlExclusionSchema = z.strictObject({
   "path_prefix must be an absolute path without query, fragment, dot segments or trailing slash"),
   include_subdomains: z.boolean(),
 });
+// Navigation metadata cannot replace request authority, credentials or crawler identity.
+const browserHeaderNames = new Set([
+  "user-agent", "accept", "accept-language", "sec-ch-ua", "sec-ch-ua-mobile", "sec-ch-ua-platform",
+  "sec-fetch-dest", "sec-fetch-mode", "sec-fetch-site", "sec-fetch-user", "upgrade-insecure-requests",
+]);
+const BrowserHeadersSchema = z.record(z.string(), NonEmptySchema.regex(/^[\x20-\x7e]+$/)).superRefine((headers, ctx) => {
+  if (!Object.keys(headers).length) reject(ctx, "a browser header profile must not be empty");
+  for (const name of Object.keys(headers)) {
+    if (!browserHeaderNames.has(name)) reject(ctx, "unsupported browser header", [name]);
+  }
+});
+export const FeedRequestHeadersSchema = z.strictObject({
+  primary: BrowserHeadersSchema,
+  secondary: BrowserHeadersSchema.nullable(),
+  recoverable_http_statuses: z.array(z.int().min(400).max(599)),
+  recovery_min_body_bytes: z.int().nonnegative(),
+}).superRefine((value, ctx) => {
+  if (new Set(value.recoverable_http_statuses).size !== value.recoverable_http_statuses.length) {
+    reject(ctx, "recoverable_http_statuses must not repeat a status", ["recoverable_http_statuses"]);
+  }
+});
+export const FeedMetadataSelectorSchema = z.strictObject({
+  selector: NonEmptySchema, attribute: NonEmptySchema.nullable(),
+});
+export const FeedSemanticFallbackConfigSchema = z.strictObject({
+  content_roots: z.array(NonEmptySchema).min(1),
+  remove_elements: z.array(NonEmptySchema).min(1),
+  paragraph_elements: z.array(NonEmptySchema).min(1),
+  min_root_chars: z.int().nonnegative(),
+  min_paragraph_chars: z.int().nonnegative(),
+  title_sources: z.array(FeedMetadataSelectorSchema).min(1),
+  author_sources: z.array(FeedMetadataSelectorSchema).min(1),
+});
 export const FeedHarvestConfigSchema = z.strictObject({
   concurrency: PositiveCountSchema,
   fetch_timeout_ms: PositiveCountSchema,
+  tidy_urls: z.boolean().describe(
+    "Clean request targets only. Remove this switch and the disabled path when request cleanup becomes mandatory.",
+  ),
   user_agent: NonEmptySchema,
+  request_headers: FeedRequestHeadersSchema,
+  semantic_fallback: FeedSemanticFallbackConfigSchema,
   blocked_categories: z.array(NonEmptySchema),
   url_exclusions: z.array(FeedUrlExclusionSchema),
 });

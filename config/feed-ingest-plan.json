@@ -3,7 +3,60 @@
   "harvest": {
     "concurrency": 24,
     "fetch_timeout_ms": 6000,
+    "tidy_urls": true,
     "user_agent": "Mozilla/5.0 (compatible; YenIdhazhBot/2026.10; +https://github.com/miztiik/yen-idhazh)",
+    "request_headers": {
+      "primary": {
+        "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+        "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+        "accept-language": "en-US,en;q=0.9",
+        "sec-ch-ua": "\"Chromium\";v=\"131\", \"Not_A Brand\";v=\"24\"",
+        "sec-ch-ua-mobile": "?0",
+        "sec-ch-ua-platform": "\"Windows\"",
+        "sec-fetch-dest": "document",
+        "sec-fetch-mode": "navigate",
+        "sec-fetch-site": "none",
+        "sec-fetch-user": "?1",
+        "upgrade-insecure-requests": "1"
+      },
+      "secondary": {
+        "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 14.7; rv:132.0) Gecko/20100101 Firefox/132.0",
+        "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "accept-language": "en-US,en;q=0.5",
+        "sec-fetch-dest": "document",
+        "sec-fetch-mode": "navigate",
+        "sec-fetch-site": "none",
+        "upgrade-insecure-requests": "1"
+      },
+      "recoverable_http_statuses": [403, 406, 408, 425, 500, 502, 503, 504],
+      "recovery_min_body_bytes": 200
+    },
+    "semantic_fallback": {
+      "content_roots": [
+        "article", "main", "[role='main']", ".post-content", ".article-content",
+        ".entry-content", "#content", ".story-body"
+      ],
+      "remove_elements": [
+        "script", "style", "template", "noscript", "iframe", "object", "embed",
+        "nav", "header", "footer", "aside", "form", "svg", "button",
+        ".ad", ".advertisement", ".social-share", ".cookie-banner", ".comments",
+        ".o-em-consent", ".o-em-adblock"
+      ],
+      "paragraph_elements": ["h1", "h2", "h3", "h4", "h5", "h6", "p", "blockquote", "li"],
+      "min_root_chars": 300,
+      "min_paragraph_chars": 1,
+      "title_sources": [
+        { "selector": "meta[property='og:title']", "attribute": "content" },
+        { "selector": "meta[name='twitter:title']", "attribute": "content" },
+        { "selector": "title", "attribute": null }
+      ],
+      "author_sources": [
+        { "selector": "meta[name='author']", "attribute": "content" },
+        { "selector": "meta[property='article:author']", "attribute": "content" },
+        { "selector": "[rel='author']", "attribute": null },
+        { "selector": "[itemprop='author']", "attribute": null }
+      ]
+    },
     "blocked_categories": ["links", "show types", "podcasts", "video", "galleries"],
     "url_exclusions": [
       { "host": "fool.com", "path_prefix": "/the-ascent", "include_subdomains": true }
