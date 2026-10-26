@@ -31,6 +31,32 @@
       "recoverable_http_statuses": [403, 406, 408, 425, 500, 502, 503, 504],
       "recovery_min_body_bytes": 200
     },
+    "semantic_fallback": {
+      "content_roots": [
+        "article", "main", "[role='main']", ".post-content", ".article-content",
+        ".entry-content", "#content", ".story-body"
+      ],
+      "remove_elements": [
+        "script", "style", "template", "noscript", "iframe", "object", "embed",
+        "nav", "header", "footer", "aside", "form", "svg", "button",
+        ".ad", ".advertisement", ".social-share", ".cookie-banner", ".comments",
+        ".o-em-consent", ".o-em-adblock"
+      ],
+      "paragraph_elements": ["h1", "h2", "h3", "h4", "h5", "h6", "p", "blockquote", "li"],
+      "min_root_chars": 300,
+      "min_paragraph_chars": 1,
+      "title_sources": [
+        { "selector": "meta[property='og:title']", "attribute": "content" },
+        { "selector": "meta[name='twitter:title']", "attribute": "content" },
+        { "selector": "title", "attribute": null }
+      ],
+      "author_sources": [
+        { "selector": "meta[name='author']", "attribute": "content" },
+        { "selector": "meta[property='article:author']", "attribute": "content" },
+        { "selector": "[rel='author']", "attribute": null },
+        { "selector": "[itemprop='author']", "attribute": null }
+      ]
+    },
     "blocked_categories": ["links", "show types", "podcasts", "video", "galleries"],
     "url_exclusions": [
       { "host": "fool.com", "path_prefix": "/the-ascent", "include_subdomains": true }

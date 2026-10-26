@@ -49,6 +49,16 @@ function publisherMetadata(document: Document): { metadata: unknown[]; malformed
   return { metadata, malformed };
 }
 
+function readMetadata(document: Document, sources: ExtractionControls["semantic_fallback"]["title_sources"]): string | null {
+  for (const source of sources) {
+    for (const element of document.querySelectorAll(source.selector)) {
+      const value = cleanText((source.attribute === null ? element.textContent : element.getAttribute(source.attribute)) ?? "");
+      if (value) return value;
+    }
+  }
+  return null;
+}
+
 function paywallEvidence(document: Document, html: string, markers: readonly string[]): {
   paywall: HarvestObservation["paywall"]; paywall_evidence: HarvestObservation["paywall_evidence"];
   warnings: HarvestDiagnostics["warnings"];
@@ -106,6 +116,10 @@ async function extractDocument(html: string, configuredUrl: string, config: Extr
   const { document } = parseHTML(html);
   if (!document.documentElement) throw new ArticleExtractionError("missing-document-root");
   const { metadata, ...paywall } = paywallEvidence(document, html, config.paywall_markers);
+  const recovered = {
+    page_title: readMetadata(document, config.semantic_fallback.title_sources),
+    author: readMetadata(document, config.semantic_fallback.author_sources),
+  };
   let corroborated: number | null = null;
   if (!paywall.paywall) {
     const corroborationDocument = parseHTML(html).document;
@@ -123,7 +137,7 @@ async function extractDocument(html: string, configuredUrl: string, config: Extr
   }
   let text = sanitizeText(extracted?.content ?? "");
   if (primaryError !== undefined || countWords(text) < config.min_source_words) {
-    const fallback = extractSemanticContent(html);
+    const fallback = extractSemanticContent(html, config.semantic_fallback);
     if (fallback && countWords(fallback) > countWords(text)) {
       text = fallback;
       paywall.warnings.push("semantic-dom-fallback");
@@ -132,8 +146,8 @@ async function extractDocument(html: string, configuredUrl: string, config: Extr
   return {
     article_text: text,
     word_count: countWords(text),
-    author: cleanText(extracted?.author ?? document.querySelector('meta[name="author"]')?.getAttribute("content") ?? "") || null,
-    page_title: cleanText(extracted?.title ?? document.querySelector("title")?.textContent ?? "") || null,
+    author: cleanText(extracted?.author ?? "") || recovered.author,
+    page_title: cleanText(extracted?.title ?? "") || recovered.page_title,
     ...paywall,
     quality: text && !paywall.paywall ? measureExtractionQuality(text, corroborated, config, form) : null,
   };

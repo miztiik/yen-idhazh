@@ -148,6 +148,23 @@ class FeedRequestHeaders(Model):
         return value
 
 
+class FeedMetadataSelector(Model):
+    selector: NonEmpty
+    attribute: NonEmpty | None
+
+
+class FeedSemanticFallbackConfig(Model):
+    """Which actual page elements can supply fallback prose and metadata?"""
+
+    content_roots: Annotated[list[NonEmpty], Field(min_length=1)]
+    remove_elements: Annotated[list[NonEmpty], Field(min_length=1)]
+    paragraph_elements: Annotated[list[NonEmpty], Field(min_length=1)]
+    min_root_chars: Count
+    min_paragraph_chars: Count
+    title_sources: Annotated[list[FeedMetadataSelector], Field(min_length=1)]
+    author_sources: Annotated[list[FeedMetadataSelector], Field(min_length=1)]
+
+
 class FeedHarvestConfig(Model):
     concurrency: PositiveCount
     fetch_timeout_ms: PositiveCount
@@ -160,6 +177,7 @@ class FeedHarvestConfig(Model):
     )
     user_agent: NonEmpty
     request_headers: FeedRequestHeaders
+    semantic_fallback: FeedSemanticFallbackConfig
     blocked_categories: list[NonEmpty]
     url_exclusions: list[FeedUrlExclusion]
 

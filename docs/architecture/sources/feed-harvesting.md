@@ -88,7 +88,17 @@ Defuddle's node entry produces Markdown with asynchronous source fetches
 disabled and a rejecting resource-fetch callback. The sanitizer runs after
 Markdown conversion. If that result is too short, semantic HTML elements
 can supply actual page prose; a `semantic-dom-fallback` warning records its
-use. No invented article or default URL fills a failed extraction.
+use. `harvest.semantic_fallback` configures ordered content roots, removed
+elements, paragraph elements, minimum root/paragraph characters and metadata
+sources. A short teaser does not hide a later substantial content root.
+Nested blocks and repeated paragraphs contribute their text once; block
+boundaries retain word separation. Consent, ad, sharing and comment elements
+are removed before roots are measured.
+
+Title and author recovery read actual page metadata before the primary
+extractor can mutate it. Empty metadata values do not stop later sources.
+Descriptions never enter the body or increase its word count. No invented
+title, article or default URL fills a failed extraction.
 Missing, empty and refused extraction remain distinct from successful work.
 The [screening stage](feed-screening.md) applies admission to parsed candidates.
 

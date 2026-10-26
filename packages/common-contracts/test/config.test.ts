@@ -124,6 +124,12 @@ if (Bun.argv.includes("--emit-schemas")) {
       { partition: { ...config.partition, default_shards: 9 } },
       { harvest: { ...config.harvest, concurrency: "24" } },
       { harvest: { ...config.harvest, tidy_urls: "true" } },
+      { harvest: { ...config.harvest, semantic_fallback: {
+        ...config.harvest.semantic_fallback, content_roots: [],
+      } } },
+      { harvest: { ...config.harvest, semantic_fallback: {
+        ...config.harvest.semantic_fallback, min_root_chars: -1,
+      } } },
       { curate: { ...config.curate, article_limit: 0 } },
       { curate: { ...config.curate, article_limit: 1.5 } },
       { curate: { ...config.curate, source_reliability_penalty_enabled: "true" } },

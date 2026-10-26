@@ -37,6 +37,18 @@ export const FeedRequestHeadersSchema = z.strictObject({
     reject(ctx, "recoverable_http_statuses must not repeat a status", ["recoverable_http_statuses"]);
   }
 });
+export const FeedMetadataSelectorSchema = z.strictObject({
+  selector: NonEmptySchema, attribute: NonEmptySchema.nullable(),
+});
+export const FeedSemanticFallbackConfigSchema = z.strictObject({
+  content_roots: z.array(NonEmptySchema).min(1),
+  remove_elements: z.array(NonEmptySchema).min(1),
+  paragraph_elements: z.array(NonEmptySchema).min(1),
+  min_root_chars: z.int().nonnegative(),
+  min_paragraph_chars: z.int().nonnegative(),
+  title_sources: z.array(FeedMetadataSelectorSchema).min(1),
+  author_sources: z.array(FeedMetadataSelectorSchema).min(1),
+});
 export const FeedHarvestConfigSchema = z.strictObject({
   concurrency: PositiveCountSchema,
   fetch_timeout_ms: PositiveCountSchema,
@@ -45,6 +57,7 @@ export const FeedHarvestConfigSchema = z.strictObject({
   ),
   user_agent: NonEmptySchema,
   request_headers: FeedRequestHeadersSchema,
+  semantic_fallback: FeedSemanticFallbackConfigSchema,
   blocked_categories: z.array(NonEmptySchema),
   url_exclusions: z.array(FeedUrlExclusionSchema),
 });

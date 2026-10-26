@@ -14,6 +14,7 @@ import { attributeIngestOutcome } from "../src/attribute-ingest-outcomes";
 import { parseDocument } from "../src/harvest-feeds/parse-document";
 import { EXTRACTOR_VERSION, SANITIZER_FINGERPRINT } from "../src/harvest-feeds/extraction-provenance";
 import { measureExtractionQuality } from "../src/harvest-feeds/extraction-quality";
+import { extractSemanticContent } from "../src/harvest-feeds/semantic-extractor";
 import { canonicalizeUrl, InvalidArticleUrlError } from "../src/harvest-feeds/url-cleaner";
 import { createPinnedDispatcher, readResponseBody } from "../src/harvest-feeds/transport";
 import { addAbortSignal, PassThrough, Readable } from "node:stream";
@@ -398,8 +399,47 @@ test("real inert DOM extraction retains prose and author but never calls a page 
   expect(semantic.article_text).not.toContain("exfil.example");
   expect(semantic.article_text).not.toContain("Privacy and site links");
   expect(semantic.warnings).toContain("semantic-dom-fallback");
+  const headingOnly = await extractArticle(bodies.article, "https://news.example/story", {
+    ...controls, min_source_words: extracted.word_count + 1,
+    semantic_fallback: { ...controls.semantic_fallback, paragraph_elements: ["h1"] },
+  });
+  expect(headingOnly.warnings).not.toContain("semantic-dom-fallback");
+  expect(headingOnly.article_text).toBe(extracted.article_text);
   expect((await extractArticle("<html><body><main><script>fake story</script></main></body></html>",
     "https://news.example/story", controls)).article_text).toBe("");
+  const semanticPage = await Bun.file(new URL(
+    "../../../tests/fixtures/feed-ingest-plan/harvest-semantic.html", import.meta.url,
+  )).text();
+  const recoveredText = extractSemanticContent(semanticPage, controls.semantic_fallback);
+  expect(recoveredText).toContain("Engineers reopened the bridge");
+  expect(recoveredText).toContain("journeys. The next speaker");
+  expect(recoveredText).toContain("Morning services will use the bridge");
+  expect(recoveredText).toContain("The inspection did not change");
+  expect(recoveredText.match(/Engineers reopened the bridge/g)).toHaveLength(1);
+  for (const excluded of [
+    "METADATA_ONLY", "HEADER_NOT_ARTICLE", "NAVIGATION_NOT_ARTICLE", "A short teaser",
+    "ADVERTISING_NOT_ARTICLE", "SHARING_NOT_ARTICLE", "COOKIES_NOT_ARTICLE",
+    "COMMENTS_NOT_ARTICLE", "PLAYER_NOT_ARTICLE", "BLOCKED_PLAYER_NOT_ARTICLE",
+    "RELATED_NOT_ARTICLE", "FOOTER_NOT_ARTICLE", "alternative content root",
+  ]) expect(recoveredText).not.toContain(excluded);
+  const alternate = extractSemanticContent(semanticPage, {
+    ...controls.semantic_fallback, content_roots: ["#alternate-content"], min_root_chars: 0,
+  });
+  expect(alternate).toContain("An alternative content root");
+  expect(alternate).not.toContain("Engineers reopened the bridge");
+  await expect(inputs([], { harvest: {
+    semantic_fallback: { ...controls.semantic_fallback, content_roots: ["["] },
+  } })).rejects.toThrow("harvest.semantic_fallback.content_roots[0]");
+  const shortPage = semanticPage.replace(/<body>[\s\S]*<\/body>/u,
+    "<body><div class='post-content'><p>Workers checked the bridge supports before opening the road. "
+    + "Inspectors found no new damage during the morning visit. "
+    + "The council will publish the detailed inspection report next week.</p></div></body>");
+  const shortRecovered = await parseDocument("article", shortPage, "https://news.example/second", controls, "article");
+  expect(shortRecovered.page_title).toBe("Bridge inspection restores the morning bus route");
+  expect(shortRecovered.author).toBe("Recorded Reporter");
+  expect(shortRecovered.article_text).not.toContain("METADATA_ONLY");
+  expect(shortRecovered.word_count).toBeLessThan(controls.min_source_words);
+  expect(shortRecovered.quality).toMatchObject({ too_short: true, not_prose: false, rejected: true });
 });
 
 test("URL identity uses discovery sorting, tracking removal and shared hashing", () => {
