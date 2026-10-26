@@ -35,7 +35,7 @@ costs.
 
 **No budget is sent, and none can be set.** The two decode caps left
 the entry's settings on 2026-09-21, so the span ends where the model writes
-its closing marker and the window is the only other thing that stops it. Owner
+its closing marker and the window is the only other thing that stops it. Maintainer
 ruling, 2026-09-17: the 256 that used to sit there was carried over from no
 reading of any of these weights, it was below every published thinking budget we
 could find, and it landed in the band where a thought is cut rather than
@@ -361,7 +361,7 @@ on every item, with nothing in any log to say so.
 **There is no flag and no second path.** `run.two_calls_per_item` switched
 between the two for one day. Plan 11 row #6 deleted the knob, the small model,
 the `visuals` job and the single-call branch of `stage_work` in one commit, so
-the pair is what the stage does rather than what it can be asked to do. Owner
+the pair is what the stage does rather than what it can be asked to do. Maintainer
 ruling, 2026-09-13: move forward, no rollback.
 
 **The pipeline stamp digests a different prompt now.** The stamp

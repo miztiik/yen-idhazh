@@ -2,14 +2,14 @@
 
 **Last Updated**: 2026-10-23
 
-**Author**: Fowler (architecture), 2026-10-12, plan 65 Q68. **Status**: design for plan 65.2. The owner ruled T1, U1 and V1 on 2026-10-12 (plan 65, Table Q, Q69 to Q71), and named the unified judge summary-fidelity-judge, with the drift judge renamed summary-drift-judge (Q72); "the drift judge" below is summary-drift-judge; everything else here is proposed until 65.2 is approved. In this record "source" means a feed or publisher only; a summary is checked against its article. "Estimate" marks an estimate.
+**Author**: Fowler (architecture), 2026-10-12, plan 65 Q68. **Status**: design for plan 65.2. The maintainer ruled T1, U1 and V1 on 2026-10-12 (plan 65, Table Q, Q69 to Q71), and named the unified judge summary-fidelity-judge, with the drift judge renamed summary-drift-judge (Q72); "the drift judge" below is summary-drift-judge; everything else here is proposed until 65.2 is approved. In this record "source" means a feed or publisher only; a summary is checked against its article. "Estimate" marks an estimate.
 **Ids**: Q61, QQ28, P15, X8.4 cite plan 65 (`TODO/20261011-65-summary-fidelity-judge-plan.md`), as "plan 65 B2" where a row here could be meant; "research Q5" cites `TODO/20261012-unsupervised-summary-improvement-research-record.md`. Code paths are repository paths.
 
 ## Answer first
 
 - **One protocol.** A scorer answers one question - does this text support this claim? - through `ClaimChecker.check(premise, claims)`, for a GGUF model behind llama.cpp and an in-process encoder alike. What it scores is a task in config, never a code path per model.
 - **One file per scorer**, bound to a slot (primary, held-out, key-fact listing, key-fact coverage, every-summary). Its derived instrument id rides on every row; only a metric's own instrument restarts it (Q61).
-- **Candidates, not training.** A newer model scores the incumbent's units every night and takes the slot by itself when it beats it on planted faults with known answers, inside guards, with an off switch. The same records test a candidate summarizer; whether code may switch the summarizer is the owner's (Table T).
+- **Candidates, not training.** A newer model scores the incumbent's units every night and takes the slot by itself when it beats it on planted faults with known answers, inside guards, with an off switch. The same records test a candidate summarizer; whether code may switch the summarizer is the maintainer's (Table T).
 - **Cells.** A cell learns its model from the judge's cell plan, asked at planning; it replaces X8.4, which cannot run a candidate beside its incumbent.
 
 ## 1. Intent
@@ -78,7 +78,7 @@ Table C - what the instrument id covers
 | C5 | The unit: task and sentence-rule version | in: a new rule changes every sentence (Y2.8) |
 | C6 | Status, slot, standing, budgets, shards, cache rule, byte count, timeout | out: cost or use, never a reading; a stamp that moves too often never builds a series (qualification.md) |
 | C7 | Derivation | sha256 of a canonical JSON of C1 to C5, after load and verification, never typed; the health row spells it |
-| C8 | To confirm | C2 makes a llama.cpp bump restart every GGUF scorer's metrics, not the encoders'; this reads Q61's "a metric's own scorer", and the owner may narrow it |
+| C8 | To confirm | C2 makes a llama.cpp bump restart every GGUF scorer's metrics, not the encoders'; this reads Q61's "a metric's own scorer", and the maintainer may narrow it |
 
 ### 3.4 How a cell learns its model
 
@@ -324,7 +324,7 @@ Table S - rejected, with the cost of taking each
 
 | # | Alternative | Why not; cost to take it |
 | --- | --- | --- |
-| S1 | One council judge per model | the code path per model the owner wants gone; a package, family and registration per model; no shared night |
+| S1 | One council judge per model | the code path per model the maintainer wants gone; a package, family and registration per model; no shared night |
 | S2 | X8.4 as proposed | one model per judge, a role inside a weights file; GGUF candidates on other nights, so nothing is paired |
 | S3 | Scorer classes named in config by import path | config would choose the code that runs, not three reviewed loaders |
 | S4 | Train or calibrate a scorer | Q67; a calibrator needs labels this project lacks |
@@ -335,7 +335,7 @@ Table S - rejected, with the cost of taking each
 | S9 | Thresholds recalibrated nightly | a new instrument nightly; no series holds |
 | S10 | Rates only in Table P | few summaries per source per night; readers could neither pool nor correct |
 
-## 9. Open decisions for the owner
+## 9. Open decisions for the maintainer
 
 **Situation.** Plan 65 names the scorer in config (P38, kept by Q61), approves two second models on a sample (Q66) and trains nothing (Q67; plan 65 E3 pending). This design promotes council-only slots by itself, inside guards. Open decisions A, B and C stand; rows A2, A4 and R7 here show where this design touches them.
 
@@ -367,4 +367,4 @@ Table V - one judge for the sampled pipeline?
 | V2 | Two judges; shared ledgers in one family both write | no ruling changes | two prepares that must segment alike | one pipeline in one place |
 | V3 | Two judges with their own copies | self-contained families | six ledgers for three records | one record per question |
 
-**Recommendation.** T1: the owner's stated intent, bounded by the held-out judge, the A/A test, the fresh-article check and the off switch, once plan 65 E3 is confirmed. U1: the published gap is inside noise, and measuring it costs one cell a night for a few weeks. V1: one pipeline belongs in one judge, and before any row starts a merge costs only plan text.
+**Recommendation.** T1: the maintainer's stated intent, bounded by the held-out judge, the A/A test, the fresh-article check and the off switch, once plan 65 E3 is confirmed. U1: the published gap is inside noise, and measuring it costs one cell a night for a few weeks. V1: one pipeline belongs in one judge, and before any row starts a merge costs only plan text.

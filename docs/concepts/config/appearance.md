@@ -29,13 +29,13 @@ The contract is `backend/idhazh/contracts/appearance_config.py`, and it imports 
 
 **One definition, two exposure points, so one new knob is a four-file commit.** `UiConfig`, `ConsoleConfig` and `AssistConfig` are each reachable through `AppConfig` and through `AppearanceConfig`, and each of those two is a contract in its own right. Adding one field to any of the three therefore moves two models, `AppConfig` and `AppearanceConfig`, a `version` stamp and a `changelog` entry on each of those two, and the committed fixture for each under `tests/fixtures/contracts/`. Change the model and stop there and the fixture check fails on a file the commit never mentioned, which reads as an unrelated breakage - each of those two fixtures holds a value for every knob that differs from the committed config, so a knob it has never heard of is a knob it cannot differ from. Plan the second half before writing the first.
 
-### Every key has one owner, and the owner is whoever draws it
+### Every key has one maintainer, and the maintainer is whoever draws it
 
 The merge runs one way: `config/appearance.json` is the last layer, so it wins. A knob the legacy `ui`, `console` or `assist` block still carries therefore has to agree with the appearance file. Let the two differ and the loser is silent - a knob edited in the file somebody happened to open does nothing, and nothing says why.
 
 Six keys were settled that way, and the rule is the same each time: **the file that owns a key is the file whose readers read it.** `digest.visual_side` on 2026-09-05, then the last five later the same day:
 
-| Key | Was | Owner now | Why |
+| Key | Was | Maintainer now | Why |
 | --- | --- | --- | --- |
 | `console.chart_height` | 180 here, 220 there | `config/appearance.json` | Every reader is a console page. Nothing under `backend/idhazh/` reads it |
 | `console.chart_width` | 600 here, 760 there | `config/appearance.json` | Same |

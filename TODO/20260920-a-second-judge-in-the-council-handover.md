@@ -9,7 +9,7 @@ execution-ready plan-doc under `TODO/`, not code.
 
 The merge line now fits itself against judge verdicts
 ([`docs/architecture/publishing/autotune-content-similarity.md`](../docs/architecture/publishing/autotune-content-similarity.md)).
-The owner was asked how the holdout benchmark stays current as content drifts,
+The maintainer was asked how the holdout benchmark stays current as content drifts,
 and chose: **the pipeline surfaces candidate pairs automatically, and a
 different authority labels them.** The rejected option was letting the council
 label its own benchmark, because that makes the floor a copy of the line it is

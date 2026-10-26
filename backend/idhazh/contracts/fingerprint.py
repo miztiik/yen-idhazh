@@ -10,7 +10,7 @@ enumerated by name, and `PipelineInputs` is that enumeration.
 number turns on these values: a run whose inputs moved is counted, averaged and
 published exactly as one whose inputs held still. They were a digest that gated
 a skip nobody wired and keyed an eval window that never opened, and both jobs
-were deleted on 2026-09-10 by owner decision. What survives is the reading.
+were deleted on 2026-09-10 by maintainer decision. What survives is the reading.
 
 `FingerprintRow` and `state/fingerprints.csv` were what the digest half left
 behind. Both were deleted on 2026-09-13 with the field itself.

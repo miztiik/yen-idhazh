@@ -4,12 +4,12 @@
 
 **Status: design proposal and guidelines, not deployed behavior.**
 F.E.E.D expands to Feed Evaluation & Execution Decider. Intelligent F.E.E.D -
-I Feed is the project name for this design. The owner supplied the intent on
+I Feed is the project name for this design. The maintainer supplied the intent on
 2026-09-09. This page recommends what to build for this app. Its settings and
 methods can change as we learn. No scoring values have been calibrated, and no
 improvement has yet been measured.
 
-Plan 67's D3 observation scope and D4 settlement behavior are owner-approved.
+Plan 67's D3 observation scope and D4 settlement behavior are maintainer-approved.
 The observation and operational-state contracts have compatible readers, and
 the planner reports a requests-first estimate from measured evidence. The
 derived-state writer and next-selection consumer are not deployed, so this
@@ -408,7 +408,7 @@ exploration allowance instead of ranking every feed by raw posting volume.
 Apply due times before requesting RSS. Permission checks and retries still
 consume the polling budget. Conditional HTTP requests are excluded from Plan
 67; ordinary feed polls may transfer an unchanged body again. Reducing those
-network bytes and time needs a separate owner-approved design. No poll means
+network bytes and time needs a separate maintainer-approved design. No poll means
 unknown new arrivals, never an observed zero.
 
 The maximum gap needs a freshness decision. With today's 24-hour article age
@@ -573,7 +573,7 @@ before adding a database, approximate index or contextual-bandit predictor.
 Validate scale with built varied catalogs and finite samples, not by treating
 copies of one feed as independent evidence.
 
-Shard and worker efficiency stay a separate question, and the owner raised it
+Shard and worker efficiency stay a separate question, and the maintainer raised it
 beside I Feed on 2026-09-09. One fact joins the two: on 2026-09-13 `digest.yml`
 restores the weights and starts the model before `stages.work.stage_work` fetches any
 article, and `shard_count` never returns fewer than one worker, so a day whose
@@ -634,7 +634,7 @@ rewrite the source list. Its filename is secondary. Preserve the catalog's
 policy can delegate catalog transitions, but runtime state and catalog state
 need an explicit reconciliation procedure rather than two conflicting answers.
 
-Owner ruling, kumarsnaveen_microsoft, 2026-10-24 UTC: set `added_on` to the
+Maintainer ruling, 2026-10-24 UTC: set `added_on` to the
 UTC date a feed first enters the catalog. Leave absent legacy dates and
 retirement reasons unknown; do not infer them. A newly retired feed has
 `retired_on` and an open lowercase `retirement_reason`; an existing retired
@@ -831,13 +831,13 @@ disprove defects; only independent outcome evidence can justify improvement.
 
 ## Design rationale
 
-The owner requested a unified, tunable model rather than unrelated fixes.
+The maintainer requested a unified, tunable model rather than unrelated fixes.
 Editor, Andre, Carmack and Fowler were consulted. The composite is useful
 because it can control allocation; the component evidence remains necessary
 because the remedy depends on what failed. An RSS response alone cannot justify
 continued article work, and rank-only demotion may still spend the same slots.
 
-The owner also clarified that Python-only scoring is a possible starting mode,
+The maintainer also clarified that Python-only scoring is a possible starting mode,
 not a permanent architecture restriction. Hybrid deterministic, LLM and human
 assessment is within the design space. Classification and qualitative numeric
 assessment are separate capabilities with separately tunable influence.
@@ -883,7 +883,7 @@ scope. After the first delivery is agreed, write an execution plan under
 `TODO/` that links here for decisions and contains the ordered changes and
 checks. Do not create a second competing design or repeat the paper search.
 
-The owner clarified on 2026-09-09 that every-run feedback is core delivery, not
+The maintainer clarified on 2026-09-09 that every-run feedback is core delivery, not
 later tuning work. Live evidence must affect the next allocation. Quiet feeds
 should cost fewer polls without becoming quality failures. Rolling live audits
 complement small regression anchors; a golden set alone cannot represent the
@@ -891,7 +891,7 @@ changing catalog. Worker startup stays with the catalog-scale section above and
 with [throughput](../summarize/throughput.md), so an execution experiment does
 not block the score-update path.
 
-Owner ruling, kumarsnaveen_microsoft, 2026-10-24 UTC: in the isolated
+Maintainer ruling, 2026-10-24 UTC: in the isolated
 TypeScript planner, cost from an operation that failed to produce usable
 material for a supported source-side reason may reduce the operational part of
 priority once its evidence qualifies. Keep CPU, memory and HTTP request costs
@@ -900,7 +900,7 @@ their normalized values. Preserve curated source weight and tier, and replace
 rather than stack the existing RSS reliability penalty. This does not change
 production Python planning or permit semantic assessment. See the
 [feedback contract proposal](../contracts/feed-ingest-feedback.md); its
-provisional window, support, coverage and component weights are owner-approved.
+provisional window, support, coverage and component weights are maintainer-approved.
 Producer fields and exact operation-to-cost bindings remain open in D3.
 
 ### What the next design pass must settle
@@ -913,15 +913,15 @@ Authority follows [CLAUDE.md](../../../CLAUDE.md) section 14.
 
 | # | Decision to settle | Authority |
 | --- | --- | --- |
-| 1 | Distinguish permitted access, extraction success, substantive material, editorial selection and summary quality. Settle it on captured examples including failures and short primary documents; word count alone decides none of them. | Owner with Editor and Andre. |
-| 2 | Name the initial enabled signals and their raw units, denominators, direction, normalizers, weights, priors, half-lives and missing-data behavior. Do not enable request or model-waste ratios without complete exposure records. | Owner with Andre. |
+| 1 | Distinguish permitted access, extraction success, substantive material, editorial selection and summary quality. Settle it on captured examples including failures and short primary documents; word count alone decides none of them. | Maintainer with Editor and Andre. |
+| 2 | Name the initial enabled signals and their raw units, denominators, direction, normalizers, weights, priors, half-lives and missing-data behavior. Do not enable request or model-waste ratios without complete exposure records. | Maintainer with Andre. |
 | 3 | Set the evidence unit and duplicate key. Retries spend requests; repeated reports or several assessors of one article do not create additional article support. | Fowler. |
-| 4 | Set minimum distinct evidence, time span, affected scope, pause duration, recovery requirements, probation limit and automatic versus human authority. A confirmed restriction cannot expire through score decay. | Owner with Fowler and Editor. |
-| 5 | Set poll, article, assessment and recovery budgets, maximum discovery delay and the permitted coverage loss. Reconcile them with today's 24-hour article age policy and feed-entry rotation. | Owner with Carmack and Editor. |
-| 6 | Approve a single private-state writer, latest-state acquisition with pinned code, atomic snapshots and checkpoints, bounded late-event catch-up and explicit degraded behavior. Say how overlapping runs and a lost commit are recovered. | Owner with Fowler. |
-| 7 | Define the qualification period for score-led allocation and its activation condition. Record-only output is not completion. Every enabled estimate refreshes; not every value must move. | Owner with Andre and Fowler. |
-| 8 | Define the rolling review's sample units, rotation, strata, uncovered-group report and drift actions. Keep a small fixed regression set without making it the whole live learning set. | Owner with Andre and Editor. |
-| 9 | Preserve deterministic, LLM and human assessment as separately weighted options. Any newly enabled LLM numeric grading needs explicit adoption; no mandatory second model call per article is assumed. | Owner with Andre. |
+| 4 | Set minimum distinct evidence, time span, affected scope, pause duration, recovery requirements, probation limit and automatic versus human authority. A confirmed restriction cannot expire through score decay. | Maintainer with Fowler and Editor. |
+| 5 | Set poll, article, assessment and recovery budgets, maximum discovery delay and the permitted coverage loss. Reconcile them with today's 24-hour article age policy and feed-entry rotation. | Maintainer with Carmack and Editor. |
+| 6 | Approve a single private-state writer, latest-state acquisition with pinned code, atomic snapshots and checkpoints, bounded late-event catch-up and explicit degraded behavior. Say how overlapping runs and a lost commit are recovered. | Maintainer with Fowler. |
+| 7 | Define the qualification period for score-led allocation and its activation condition. Record-only output is not completion. Every enabled estimate refreshes; not every value must move. | Maintainer with Andre and Fowler. |
+| 8 | Define the rolling review's sample units, rotation, strata, uncovered-group report and drift actions. Keep a small fixed regression set without making it the whole live learning set. | Maintainer with Andre and Editor. |
+| 9 | Preserve deterministic, LLM and human assessment as separately weighted options. Any newly enabled LLM numeric grading needs explicit adoption; no mandatory second model call per article is assumed. | Maintainer with Andre. |
 
 Only then write the execution plan under `TODO/`. Its rows would be: the
 admission report, the persisted outcomes and private state, the update-and-use
@@ -939,7 +939,7 @@ writing them as a plan earlier states decisions nobody made.
 | [discover.py](../../../backend/idhazh/discover.py) | Fix host/path matching separately from identity-changing query cleanup. There is no `/news/` allowlist to remove. |
 | [test_discover.py](../../../backend/tests/test_discover.py) and [test_publish_source_health.py](../../../backend/tests/test_publish_source_health.py) | Extend bounded fixtures for the touched behavior. Add a focused report test when its contract is defined. |
 
-Preserve the owner's ability to augment, replace and retire metrics. A metric
+Preserve the maintainer's ability to augment, replace and retire metrics. A metric
 definition names its meaning, unit, direction, range, evidence source, version
 and active weight. Setting its weight to zero can disable influence without
 deleting old evidence. Replacing its meaning creates a new version, rather than

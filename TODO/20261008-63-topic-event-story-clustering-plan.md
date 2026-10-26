@@ -4,13 +4,13 @@
 
 **Level**: 5 (CLAUDE.md section 6). The work adds persisted shapes - an event
 group, a topic, a story edge - and changes what the reader sees. No row of this
-plan writes one yet: rows R1 to R8 measure, and the owner rules on the shapes
+plan writes one yet: rows R1 to R8 measure, and the maintainer rules on the shapes
 before any row declares one.
 
 **Status**: written 2026-10-08 from a research session that read eight papers
 and the current corpus. It supersedes nothing: `TODO/unsupervised-topic-
 detection-event-clustering.md` stays where it is and this plan sits beside it,
-per the owner's ruling of 2026-10-07. Checked against `origin/main` at
+per the maintainer's ruling of 2026-10-07. Checked against `origin/main` at
 0c6b69015.
 
 **Why this plan exists.** The pipeline groups two articles as one story when
@@ -32,7 +32,7 @@ Table A - operating contract
 | A3 | Hard scope - out | Table B |
 | A4 | ESCALATE triggers | Table C |
 | A5 | Chosen strategy | Measure first, on the runner, with no labels. Then build the validated group set, because every later number needs it. Then one small learned model, not fifteen hand-set numbers |
-| A6 | Execution | Owner carries the plan. Rows R1-R8 need no labels and no owner decision, so they run first and in parallel where they touch different files |
+| A6 | Execution | Maintainer carries the plan. Rows R1-R8 need no labels and no maintainer decision, so they run first and in parallel where they touch different files |
 
 ### Hard scope - out
 
@@ -52,7 +52,7 @@ Table C - when to stop and ask
 
 | # | Trigger | What happens |
 | --- | --- | --- |
-| C1 | A row would declare a persisted shape - a model under `backend/idhazh/contracts/` | Stop. The owner rules on a persisted shape (CLAUDE.md section 0) |
+| C1 | A row would declare a persisted shape - a model under `backend/idhazh/contracts/` | Stop. The maintainer rules on a persisted shape (CLAUDE.md section 0) |
 | C2 | A measurement refuses the intent, for example no encoder separates these summaries | Report it as a finding with options, never as a veto (CLAUDE.md section 0d) |
 | C3 | A row would publish a reader-facing grouping before R14 validates it | Stop. An unvalidated group shown to a reader is a claim nobody checked |
 | C4 | A measurement is taken on hardware that is not the runner and then quoted as a runner number | Stop and re-run on the runner (Guardrail #2) |
@@ -109,7 +109,7 @@ Table E - the papers and what each one decides here
 | E8 | Survey54 | Keith Norambuena, B.F., Mitra, T. and North, C. "A Survey on Event-based News Narrative Extraction." ACM Computing Surveys, 2023. arXiv:2302.08351. <https://arxiv.org/pdf/2302.08351> | Screened 900 papers, kept 54. Entity use across the field "remains limited in scope". **No benchmark exists** for grouping at the article-set level - a gap this project could fill |
 
 All eight were read in full on 2026-10-07, not read about. E1 and E2 came from
-the owner first, E3 and E4 second, E5 to E8 third. The ninth input is this
+the maintainer first, E3 and E4 second, E5 to E8 third. The ninth input is this
 repository's own `TODO/unsupervised-topic-detection-event-clustering.md`, which
 is the design these papers were read against.
 
@@ -170,7 +170,7 @@ list - with one number (E5).
 
 ## 4. Status reckoner
 
-Rows R1 to R8 need no labels, no owner decision and no new dependency. They run
+Rows R1 to R8 need no labels, no maintainer decision and no new dependency. They run
 first.
 
 | # | Row title | Depends-on | Status | Note |
@@ -188,7 +188,7 @@ first.
 | R11 | A topic's life: starting, busy, fading, quiet | R10 | TODO | Counted on events arriving, not articles, so republished copy cannot fake vitality |
 | R12 | A topic becomes visible only after it holds still | R11 | TODO | Enough events, enough days, enough runs. Otherwise every outlier is a node in the reader's graph |
 | R13 | A quiet topic can come back | R11 | TODO | Similar meaning, far apart in time. The air-crash case: new evidence years later |
-| R14 | **Event groups, validated by a person** | R6 | **TODO - blocks everything measured** | I group, the owner marks each group keep, split or join. About 2,000 groups covering about 12,000 articles, worth 5,000 to 6,000 confirmed same-event pairs |
+| R14 | **Event groups, validated by a person** | R6 | **TODO - blocks everything measured** | I group, the maintainer marks each group keep, split or join. About 2,000 groups covering about 12,000 articles, worth 5,000 to 6,000 confirmed same-event pairs |
 | R15 | Identity that survives a re-run | R9 | TODO | The repository already derives an article's identity from its address. Groups need the same |
 | R16 | Set aside the judge's existing answers | - | TODO | They were only ever asked about pairs that already looked alike, so they cannot show the error that matters: two reports of one event written differently |
 | R17 | Ask the judge where the grouping is unsure | R7, R14 | TODO | Replaces the fixed band. The disagreements from R7 are the questions worth paying for |
@@ -199,12 +199,12 @@ first.
 
 ## 5. Open questions
 
-Table G - what the owner still decides
+Table G - what the maintainer still decides
 
 | # | Question | Why it matters | Recommendation |
 | --- | --- | --- | --- |
-| G1 | Does sentence structure come from the parser that was tested as noisy, or another? | Without it, reversed roles and denials have no cheap detector (B2). The noisy test may have been the small model; the large one is a different thing | Measure the large one on 200 summaries and show the owner the rate before deciding |
-| G2 | How many groups can the owner validate in a week | R14 blocks every measured number | About 2,000 groups, over-grouped on purpose so the work is mostly splitting, which is quicker than hunting for a missed merge |
+| G1 | Does sentence structure come from the parser that was tested as noisy, or another? | Without it, reversed roles and denials have no cheap detector (B2). The noisy test may have been the small model; the large one is a different thing | Measure the large one on 200 summaries and show the maintainer the rate before deciding |
+| G2 | How many groups can the maintainer validate in a week | R14 blocks every measured number | About 2,000 groups, over-grouped on purpose so the work is mostly splitting, which is quicker than hunting for a missed merge |
 | G3 | Which encoders go in the runner comparison | R2 | Table H. No paper read here settles it, and the one trial so far was run on a laptop and scored wrongly (C4) |
 | G4 | May the plan commit work that rebuilds vectors for every published day | A better encoder means re-reading 45 days | Yes, once. The published form stays compressed for the site; the grouping reads the full-precision form inside the run |
 
@@ -225,7 +225,7 @@ to summarize the day.
 | H2 | `BAAI/bge-base-en-v1.5` | 768 | 110M | A widely used mid-sized English model. Known to pack unrelated pairs close together, which is a problem for a fixed cut-off and not for a rank score |
 | H3 | `thenlper/gte-base` | 768 | 110M | Same size as H2, trained differently. Two models of one size tell us whether size or training is doing the work |
 | H4 | `intfloat/e5-base-v2` | 768 | 110M | Same size again. Needs a short prefix on its input; getting that wrong silently costs quality, which is itself worth proving on our own data |
-| H5 | `BAAI/bge-large-en-v1.5` | 1024 | 335M | Three times H2. The owner has approved the larger published size, so the question is whether the extra time fits the job |
+| H5 | `BAAI/bge-large-en-v1.5` | 1024 | 335M | Three times H2. The maintainer has approved the larger published size, so the question is whether the extra time fits the job |
 | H6 | `BAAI/bge-m3` | 1024 | 568M | The one with a different shape: it returns a meaning vector **and** word weights from a single pass, which is channels F1 and F2 from one model instead of two. Five times H2 in size, and multilingual weight we do not need |
 
 **On H6.** It is the model most often named when people ask for "the best", and

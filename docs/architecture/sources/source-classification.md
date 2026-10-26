@@ -23,7 +23,7 @@ writer did not record; it does not add empty registries or null defaults.
 
 ## Design rationale
 
-The owner authorized this migration on 2026-10-20 as part of Plan 66.
+The maintainer authorized this migration on 2026-10-20 as part of Plan 66.
 Readers expand before configuration and consumers migrate. Closed live lookups
 are removed only after their consumers move. Historical read rules stay.
 No committed archive payload is rewritten.

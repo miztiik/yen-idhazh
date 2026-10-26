@@ -109,7 +109,7 @@ and version are unavailable. The declared query has only date, article key and
 the flag. `EvalRow` defaults the flag to false, and `work.py`'s `to_eval_row`
 does not pass an extraction measurement. No contract guarantees that other
 evaluators leave null. A zero count therefore says only that no recorded flag
-is true. Proving instrument selection needs an owner-designed provenance
+is true. Proving instrument selection needs a maintainer-designed provenance
 producer and declared query contract; this route invents neither.
 Each native half states its returned dates beside the private published figures.
 Private payload-size rates require the immediately preceding manifest and the
@@ -360,7 +360,7 @@ spent reading and the part it spent writing.
 
 Hardware compares independent server and item clocks at run or shard grain.
 This panel instead reads the declared `itemCostQuery` cells from item-health for
-the selected record window. Its owner is
+the selected record window. Its maintainer is
 [nativeItemCost](../../../frontend/src/lib/console/pipelines/item-cost.ts), drawn
 by [ItemCost.svelte](../../../frontend/src/lib/console/pipelines/ItemCost.svelte).
 

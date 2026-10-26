@@ -127,7 +127,7 @@ rather than a missing field.
 
 ## Which knobs the record carries
 
-The model file spells llama-server's own flags, so the record enumerates flags rather than field names. `idhazh.fingerprint.DIGESTED_FLAGS` is the list, and it is a choice about which switches can move a decode rather than a closed set over a declared shape - there is no declared shape to close over any more (`CLAUDE.md` Guardrail #3, owner ruling 2026-09-21).
+The model file spells llama-server's own flags, so the record enumerates flags rather than field names. `idhazh.fingerprint.DIGESTED_FLAGS` is the list, and it is a choice about which switches can move a decode rather than a closed set over a declared shape - there is no declared shape to close over any more (`CLAUDE.md` Guardrail #3, maintainer ruling 2026-09-21).
 
 **A flag the file leaves out records as `runtime-default`.** What the server picks is a real and different choice from pinning a value, and writing our guess at its default into the record would file a guess as a measurement (Guardrail #10). A bare flag - one the file names with no argument - records as `set`.
 

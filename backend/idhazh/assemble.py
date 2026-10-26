@@ -711,7 +711,7 @@ def outlet_of(item: DigestItem) -> str:
     43 groups the pass had formed were one outlet on two of its own feeds.
 
     `source_name` is the masthead and separates 143 of our 160 feeds, which is
-    why it is the key. It deliberately does NOT fold two mastheads of one owner:
+    why it is the key. It deliberately does NOT fold two mastheads of one maintainer:
     The Hindu and The Hindu BusinessLine are different papers with different
     desks, and a reader who sees both has two newsrooms, not one.
     """

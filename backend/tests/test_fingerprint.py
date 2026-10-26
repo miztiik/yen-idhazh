@@ -372,7 +372,7 @@ def test_the_rename_moves_no_recorded_value() -> None:
 # --- The one alarm that survives the retired gate ---------------------------
 #
 # `classify` and the four observations it returned are gone with the gate they
-# fed (owner decision, 2026-09-10): the skip-if-unchanged half was never wired
+# fed (maintainer decision, 2026-09-10): the skip-if-unchanged half was never wired
 # to a caller, and the eval-window half withheld a quality number until N
 # consecutive run-days ran at one digest, which in a repository whose prompts
 # move weekly meant never. What is left reports and never blocks.

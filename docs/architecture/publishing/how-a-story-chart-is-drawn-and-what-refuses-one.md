@@ -12,7 +12,7 @@ become markup in our own origin. The routes this drawing arrives on are
 
 ## The browser draws the chart, so the chart reads the page it is printed on
 
-**The reader's browser draws the chart and the pipeline never draws one** (owner ruling, 2026-09-13, [where-a-drawing-becomes-pixels.md](where-a-drawing-becomes-pixels.md)). A story arrives carrying a pointer at its marks; [ItemVisual.svelte](../../../frontend/src/lib/components/ItemVisual.svelte) fetches that file when the story comes near, [drawing.ts](../../../frontend/src/lib/payload/drawing.ts) refuses anything that does not fit the type it names, and [visual/bar.ts](../../../frontend/src/lib/visual/bar.ts) places bar, dot, slope and line marks. Line marks use the shared D3 date-series builder. Svelte writes them, so the marks are ordinary elements in the component's own subtree and take the page's tokens through plain scoped CSS.
+**The reader's browser draws the chart and the pipeline never draws one** (maintainer ruling, 2026-09-13, [where-a-drawing-becomes-pixels.md](where-a-drawing-becomes-pixels.md)). A story arrives carrying a pointer at its marks; [ItemVisual.svelte](../../../frontend/src/lib/components/ItemVisual.svelte) fetches that file when the story comes near, [drawing.ts](../../../frontend/src/lib/payload/drawing.ts) refuses anything that does not fit the type it names, and [visual/bar.ts](../../../frontend/src/lib/visual/bar.ts) places bar, dot, slope and line marks. Line marks use the shared D3 date-series builder. Svelte writes them, so the marks are ordinary elements in the component's own subtree and take the page's tokens through plain scoped CSS.
 
 **Two carriers preceded it and both are worth keeping on the page, because the second one is why the tokens below exist.** Until 2026-09-05 every published chart shipped inside an `img`. An SVG in an `img` is a separate document: it reads none of the page's custom properties, so the only colours it could ever have are the ones the renderer baked in - black axis type, `#888` ticks, `#ddd` grid lines and a `#4c6ef5` bar, fine on white and on the dark theme black type on a near-black card. **It was the loudest reader-facing defect on the site and no gate could see it**, because every check the drawing had was about whether the file was served. From 2026-09-05 the build read the committed SVG off disk for the stories a prerendered document carried and inlined it, so the page could repaint it; that carrier went on 2026-09-13 with the renderer that filled it.
 
@@ -85,7 +85,7 @@ second editorial threshold.
 
 The page accepts one current `renderer_version`, stated on the chart document.
 A cached page refuses an unknown stamp rather than drawing values under rules
-it does not know. The dated owner exception for older charts lives in the
+it does not know. The dated maintainer exception for older charts lives in the
 [contract rationale](where-a-drawing-becomes-pixels.md#design-rationale).
 
 **The mis-shaped cases are built in the spec rather than committed, and that is a constraint.** Every file under `tests/fixtures/contracts/` is round-tripped through its model by the backend suite, and a mis-shaped document will not load - so a committed one fails that gate before it reaches this one. [item-visual.spec.ts](../../../frontend/tests/item-visual.spec.ts) accepts the fitting bar control, then changes one named condition per refusal case. Dot, slope and line fixtures come from bounded element-table sources and are checked against native compilation; the geometry tests use those same files at narrow and wide widths.
@@ -113,7 +113,7 @@ from that bounded geometry.
 | Option | Why rejected | Authority |
 | --- | --- | --- |
 | A visual placeholder when there is no visual | Makes "we correctly decided this needed no picture" look identical to a failed image. | Jony |
-| Drawing the chart in the pipeline and shipping it inside an `img` | An SVG in an `img` is a separate document and reads none of the page's tokens, so the only colours it can have are baked ones - black axis type at 1.19:1 on the dark card, which no gate could see. | owner, 2026-09-13 |
+| Drawing the chart in the pipeline and shipping it inside an `img` | An SVG in an `img` is a separate document and reads none of the page's tokens, so the only colours it can have are baked ones - black axis type at 1.19:1 on the dark card, which no gate could see. | maintainer, 2026-09-13 |
 | A degrade path that draws something approximate from mis-shaped data | It is how a wrong chart reaches a reader. A story with no visual is simply shorter, which is already the shape 94.7 percent of stories have. | Jony |
 
 ## See also

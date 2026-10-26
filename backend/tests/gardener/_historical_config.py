@@ -9,6 +9,6 @@ from typing import Final
 
 from support.paths import FIXTURES_DIR
 
-# Recorded from c8251c596, before the owner approved finite yearly retention. The
+# Recorded from c8251c596, before the maintainer approved finite yearly retention. The
 # retention declarations stay as they were then.
 PRE_YEARLY_CONFIG: Final = FIXTURES_DIR / "gardener" / "pre-yearly-retention" / "config"

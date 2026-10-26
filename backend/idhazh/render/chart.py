@@ -1,7 +1,7 @@
 """A plan becomes the data a reader's browser draws. Nothing here draws.
 
 **The reader's browser draws the chart and the pipeline never draws one**
-(owner ruling, 2026-09-13,
+(maintainer ruling, 2026-09-13,
 [`docs/architecture/publishing/visuals.md`](../../../docs/architecture/publishing/visuals.md)).
 Until then this module also held `render_chart`, which handed a Vega-Lite spec
 to `vl-convert` and got SVG bytes back. That half is gone, with the dependency,

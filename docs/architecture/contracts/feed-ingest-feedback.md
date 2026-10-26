@@ -84,9 +84,9 @@ to the event.
 | A4 | `cpu_ms` | Nullable integer, `>= 0` | Proposal only. Eligible only when CPU belongs exclusively to this operation. Overlapping process deltas are not attributable. |
 | A5 | Task-profile process CPU | Existing pinned-process delta; diagnostic only | Not additive across overlapping operations and never eligible for source waste. |
 | A6 | `private_memory` | Unavailable for source scoring until attribution is proved | RSS and sampled maximum are diagnostic; they include retained/shared memory and cannot identify its source. |
-| A7 | `http_request_count` | Nullable integer, `>= 0` | Owner-approved actual article-target attempts, including retries and redirects once. Exclude validation/API calls; unknown if coverage is incomplete. |
+| A7 | `http_request_count` | Nullable integer, `>= 0` | Maintainer-approved actual article-target attempts, including retries and redirects once. Exclude validation/API calls; unknown if coverage is incomplete. |
 
-**Owner ruling, kumarsnaveen_microsoft, 2026-10-24 UTC:** Extend existing
+**Maintainer ruling, 2026-10-24 UTC:** Extend existing
 records with actual article-request totals, technical extraction outcomes and
 supported failure causes. Save per-source operational state with evidence
 dates, coverage and policy version. Do not invent CPU or memory costs.
@@ -148,7 +148,7 @@ robots costs stay at their actual operation scope, not copied onto articles.
 
 The correction identity, publisher mapping, full component schema and detailed
 per-operation bindings are implementation details to declare and test before
-writer changes. They do not need another owner vote unless they change the
+writer changes. They do not need another maintainer vote unless they change the
 approved attribution or scoring meaning.
 
 ### Completed-unit persistence
@@ -297,7 +297,7 @@ and replaces rather than stacks with the RSS reliability penalty.
 
 ## Provisional evidence settings
 
-These owner-approved policy defaults are not measurements learned from the
+These maintainer-approved policy defaults are not measurements learned from the
 historical records:
 
 - A configurable rolling window of closed UTC days, defaulting to seven.
@@ -323,7 +323,7 @@ value pretends to be measured evidence.
 
 ## D4 approved state behavior and implementation details
 
-**Owner ruling, kumarsnaveen_microsoft, 2026-10-25 UTC:** keep two positive,
+**Maintainer ruling, 2026-10-25 UTC:** keep two positive,
 validated settings in `feedback` in `config/feed-ingest-plan.json`.
 `lifecycle_window_days` defaults to 31 represented UTC days and preserves the
 existing represented-day membership and known-empty rules.
@@ -556,7 +556,7 @@ change the current feed-lifecycle behavior before Row 24 replaces its reader.
 
 ## Approved feed-health state migration
 
-**Owner ruling, kumarsnaveen_microsoft, 2026-10-25 UTC:** adopt these ledger
+**Maintainer ruling, 2026-10-25 UTC:** adopt these ledger
 names within the existing `feed-ingest-plan` family:
 
 - Keep `article-assessments` and `editorial-selections`.
@@ -647,7 +647,7 @@ idempotency, conditional HTTP or semantic assessment is added.
 | C5 | `special_probe_budget` | **Approved 2026-10-25 UTC:** at most 20 recovery-check opportunities per planner run and at most 1 per source | Select oldest due checks first; ties use stable source ID, then endpoint identity. This limits checks, not HTTP requests; retries and redirects can exceed 20 requests. It does not cap ordinary feed or article work. |
 | C6 | `maximum_poll_gap_hours` | Integer, 24 | Unapproved ceiling only; it does not define adaptive polling cadence. |
 
-The owner-approved C2-C5 values are estimates, not measured thresholds. No
+The maintainer-approved C2-C5 values are estimates, not measured thresholds. No
 restriction or recovery action is active until Row 12 declares the policy
 state and implements it. The prior 25-article trial suggestion remains
 withdrawn. Capture all actual fetch, parse and technical-check work regardless
@@ -682,11 +682,11 @@ recording all actual work through the same observation and Parquet path. Do
 not add an HTTP or selection API field, another ranking system or a second
 pipeline. A worker identified additional disposition-contract, native-binding,
 writer and readback work, plus a trial-only 24-36-hour harvest path. Total-cost
-acceptance awaits the owner's decision; the earlier config-only estimate
+acceptance awaits the maintainer's decision; the earlier config-only estimate
 omitted the approved telemetry dependency. Configuration placement remains
 unsettled.
 
-Owner ruling, kumarsnaveen_microsoft, 2026-10-24 UTC: approve A2 only if it is
+Maintainer ruling, 2026-10-24 UTC: approve A2 only if it is
 not too much of a configuration or coding change. The approved trial groups
 are non-overlapping age ranges `[24,36]`, `[12,24)`, `[6,12)`, `[2,6)` and
 `[0,2)` hours, with up to 100 distinct articles selected from each and fewer
@@ -700,7 +700,7 @@ delivered; no further approval is needed for that telemetry. Saving each
 considered entry's disposition remains part of the trial. Total-cost
 acceptance remains open. Configuration placement remains unsettled.
 
-**Owner rulings, kumarsnaveen_microsoft, 2026-10-25 UTC:** Approve C2-C5 as
+**Maintainer rulings, 2026-10-25 UTC:** Approve C2-C5 as
 the restriction and recovery policy above. Three consecutive confirmed
 source-side failures for the same source and evidenced endpoint/feed scope
 within the configured window pause that scope. A known success at the scope
@@ -722,7 +722,7 @@ Adaptive polling cadence remains unresolved. I Feed names new eligible
 discoveries per completed permitted poll as the evidence and requires due
 times within freshness and coverage bounds, but this plan has no approved
 formula mapping that rate to a next-poll time. A 24-hour maximum alone does
-not implement that behavior, so Row 13 is not ready to implement. Owner
+not implement that behavior, so Row 13 is not ready to implement. Maintainer
 approval is needed for the rate-to-interval formula and any minimum interval;
 do not add a statistical model to fill this gap.
 Keep permanent retirement in the curated catalog. Never broaden a restriction
@@ -750,7 +750,7 @@ The proposed review call is `review-ingest-operations.ts` from that same
 planner run, with Markdown rendered by
 `.github/scripts/feed-ingest-plan-report.ts`. There is no production workflow
 caller for this flow today; the existing test workflow is not a production
-caller. Row 19 cannot close until an owner-approved real caller writes and
+caller. Row 19 cannot close until a maintainer-approved real caller writes and
 consumes the report and a later allocation reads the resulting committed
 state.
 
@@ -823,7 +823,7 @@ does not make the saved score row TypeScript-only.
 - D3: the operational-state schema, registered ledger and saved-score trace
   shapes are declared and bound. Row 10 must implement publication and
   compatible state reading at the named caller. These are implementation
-  details; they do not need another owner vote unless they change the approved
+  details; they do not need another maintainer vote unless they change the approved
   concurrency, immutable-observation, failure, stale-read or late-correction
   behavior.
 - D5: the C2-C5 restriction/recovery rules are approved but inactive pending
@@ -835,13 +835,13 @@ does not make the saved score row TypeScript-only.
   and bound. Row 10 still owns the state-backed consumer and ranking change.
 
 Only D5 behavior or a proposed change to an approved meaning needs another
-owner decision. Native field names, bindings and D8 trace types are
+maintainer decision. Native field names, bindings and D8 trace types are
 implementation work; proceed without another approval unless they change the
 settled behavior.
 
 ## Design rationale
 
-The owner asked for a score that can reduce priority when measured operational
+The maintainer asked for a score that can reduce priority when measured operational
 cost. Requests, CPU and memory need separate measures because their units and
 attribution differ. This page stays whole because its observations, settlement
 and score form one contract consumed by the next planner; splitting it would
@@ -862,4 +862,4 @@ failed attempts without counting a reserialized event as new work.
 - [I Feed](../sources/i-feed.md) - proposed source feedback and allocation.
 - [Operator requests](../sources/feed-operator-api.md) - fetch, parse and
   selection request behavior.
-- [Schema ownership](schemas.md) - persisted payload owners and migrations.
+- [Schema ownership](schemas.md) - persisted payload maintainers and migrations.

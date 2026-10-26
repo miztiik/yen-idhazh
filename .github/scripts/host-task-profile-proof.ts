@@ -131,7 +131,7 @@ export async function verifyTaskProfileHttp(identity: { run_id: string; correlat
     finally {
       if (child !== undefined) {
         const ownedChild = child;
-        // Only this fixture's owner can end its child; the profiling API never signals the target.
+        // Only this fixture's maintainer can end its child; the profiling API never signals the target.
         const cleanup = setTimeout(() => ownedChild.kill(), config.task_profile.lifecycle_timeout_ms);
         try {
           if (ownedChild.exitCode === null) ownedChild.send({ command: "close" });

@@ -508,7 +508,7 @@ It may go where the table goes: into the labelled table the summarize-and-plan c
 eval row, into a log line, into a fixture. **It may not reach a reader-facing
 page**, and neither may a fragment of it. What publishes is the link and our own
 summary. A later row that wants to show a quotation is proposing a change to
-that rule and has to take it to the owner, not to this page.
+that rule and has to take it to the maintainer, not to this page.
 
 ### Two failures no anchoring check can see, recorded rather than papered over
 

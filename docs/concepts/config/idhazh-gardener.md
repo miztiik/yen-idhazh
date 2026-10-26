@@ -211,7 +211,7 @@ matrix.
 | `push_attempts` | `3` | How many pushes one run makes in all. Git refuses a push when `main` moved after the run read it, and each refusal is followed by the whole squash again on the new tip. After the last refusal the run is not recorded, so the squash is due again at the next daily wake |
 | `push_retry_delay_seconds` | `60` | How long a run waits after a refused push before it fetches `main` and squashes again |
 | `owns` | `["corpus"]` | The one file the task writes, `corpus/corpus.meta.json`, sits under it |
-| `dry_run` | `false` | The squash has run live since 2026-08-28 by owner decision (`CLAUDE.md` section 8), so the declaration transcribes a live squash rather than starting one |
+| `dry_run` | `false` | The squash has run live since 2026-08-28 by maintainer decision (`CLAUDE.md` section 8), so the declaration transcribes a live squash rather than starting one |
 
 Both numbers were `finetune.prune_keep_days` and `finetune.prune_every_days` until
 2026-09-28. They moved here because the squash is the only thing that reads them,
@@ -236,8 +236,8 @@ which is live only while its task's own `dry_run` is `false` too; and every
 `dry_run` is `false`. It names the live ones as its exceptions, each with the
 decision beside it: `corpus-squash`'s `dry_run`; the `dry_run` and the
 `yearly_prune_enable` of all fourteen compactions, `compact-gardener` among
-them, under the owner's approval of 2026-10-07; the same two of each compaction
-for a ledger moved onto the door since, under that approval and the owner's
+them, under the maintainer's approval of 2026-10-07; the same two of each compaction
+for a ledger moved onto the door since, under that approval and the maintainer's
 direction of 2026-10-05 that a moved ledger takes its retention and upkeep with
 it; and the `month_deletes_dry_run`
 of `compact-feed-retirements`, `compact-gardener`, `compact-host-fingerprint`,
@@ -286,10 +286,10 @@ is refused by the commit loop, where the deletions are known.
 
 ## Design rationale
 
-Owner @kumarsnaveen_microsoft approved this policy on 2026-10-07 for all fourteen
+Maintainer approved this policy on 2026-10-07 for all fourteen
 ledgers, including the four report-only tasks that now run live. Older
 published deduplication and evaluation history may be lost. A ledger moved onto
-the door since takes the same policy with it, because the owner directed on
+the door since takes the same policy with it, because the maintainer directed on
 2026-10-05 that a moved ledger takes its retention and upkeep with it:
 `MOVED_LEDGER_TASKS` in `backend/tests/contracts/test_gardener_config.py` names
 each one. The owning
@@ -298,7 +298,7 @@ records the safety design. The yearly boolean is a permanent operator choice,
 not a second packing implementation.
 
 **Score packing must run for score charts to refresh.** On 2026-10-04,
-kumarsnaveen requested a fix for console charts that had stopped updating.
+The maintainer requested a fix for console charts that had stopped updating.
 `compact-summary-quality-evals` now packs live because those charts read only
 packed files. The forever retention window, 45-day daily retention and 93-day
 year packing wait stay unchanged. A contract test checks that every console

@@ -180,7 +180,7 @@ enable the expensive memory copy. Only jobs selected by its config knob copy.
 
 ## Design rationale
 
-Owner-directed narrow exception (kumarsnaveen, 2026-10-22): the manual
+Maintainer-directed narrow exception (2026-10-22): the manual
 TypeScript planner workflow commits only its genuine current-run raw UUID
 Parquet files and the real host collector's returned file paths. Its Bun
 adapter uses only ASSEMBLE's append-only Git mechanism: a private
@@ -194,7 +194,7 @@ Generated audit fixtures never enter the commit list. Commit failure keeps the
 workflow red and retains artifacts. Other workflows retain the shared Python
 publisher rule above.
 
-Owner-approved on 2026-10-09: reuse gardener's private-index, exact-change,
+Maintainer-approved on 2026-10-09: reuse gardener's private-index, exact-change,
 sparse-safe publication, with three actual policies rather than a generic
 framework. Rebase, broad staging/restoration and text conflict resolution were
 removed because they could discard foreign work or publish bytes no producer

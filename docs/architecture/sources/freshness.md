@@ -238,7 +238,7 @@ called: `items_planned` has been **exactly the ceiling on every run** since
 ([../../reference/pipeline-cost.md](../../reference/pipeline-cost.md)). Supply
 overtook the guard.
 
-It is now a cap on purpose. Owner decision, 2026-09-05: the number comes down to
+It is now a cap on purpose. Maintainer decision, 2026-09-05: the number comes down to
 80 from 160, so a day publishes half as many stories and the gain is that those
 80 slots go to articles worth reading - the source sweep in
 [discovery.md](discovery.md) and the same-day failure memory above - rather than
@@ -263,7 +263,7 @@ So there are two ceilings and each one answers its own question. `run.safety_cei
 
 What it counts is what earlier runs of this date actually put in front of a reader, read off the item-health shard for the date. A run that planned an item and then failed to publish it costs the day nothing.
 
-The committed pair is `80` and `400`, which is five runs at the run ceiling. That is the arithmetic of the design that already ships, so turning the day ceiling on changes no day that has ever been published and only refuses a runaway. **Lowering it is an editorial decision about how long a day should be**, and it is the owner's to make, not this page's.
+The committed pair is `80` and `400`, which is five runs at the run ceiling. That is the arithmetic of the design that already ships, so turning the day ceiling on changes no day that has ever been published and only refuses a runaway. **Lowering it is an editorial decision about how long a day should be**, and it is the maintainer's to make, not this page's.
 
 ## How much of a day one publication may be
 
@@ -307,7 +307,7 @@ a factor of 2.2, so it is a bound on the thin day rather than a change to the
 busy one. Any value tight enough to bind on 2026-08-30 would have displaced 126
 of its 431 items, and the runs of that day planned 106, 99, 93, 88 and 79 items
 against a 160 ceiling - so there was no reserve to repay them with. Setting the
-number lower is the owner's call and needs a run measured at it first
+number lower is the maintainer's call and needs a run measured at it first
 (Guardrail #10).
 
 ## A feed that publishes badly stops scoring as though it did not
@@ -429,9 +429,9 @@ publishing was a back catalogue. That is the finding, not a side effect: the
 gate did not thin the AI desk, it revealed how thin the AI desk's *news* supply
 already was. Ten of 104 sources publish nothing at all under the gate.
 
-Authority: owner, 2026-08-30, over the alternatives of 48 hours (drops 745
+Authority: maintainer, 2026-08-30, over the alternatives of 48 hours (drops 745
 rather than 826 - it keeps a second bite at a story every top feed already
-carried) and of leaving the rule alone. The owner's argument was the one the
+carried) and of leaving the rule alone. The maintainer's argument was the one the
 old paragraph has no answer to: **if a story matters, a top feed carries it
 today**, so an old item in the pool is a signal about the feed list rather than
 about the story. `too_old` on each vertical's plan summary is what makes that

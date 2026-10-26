@@ -12,7 +12,7 @@ does with the file is
 
 ## Where a drawing becomes pixels, ruled
 
-**The reader's browser draws the chart. The pipeline never draws one.** Owner ruling,
+**The reader's browser draws the chart. The pipeline never draws one.** Maintainer ruling,
 2026-09-13, under `CLAUDE.md` section 0.
 
 **The chain, end to end.** Code reads the article and finds every quantity it can, with the
@@ -76,7 +76,7 @@ at `origin/main` against this branch, same machine and same toolchain: the readi
 first load goes from **60,544 to 62,577 bytes at gzip -5**, over 24 modules either way. That
 is **2,033 bytes, 3.4 percent**, and it covers the scale arithmetic, the geometry module and
 the component rewrite together, net of the inlining code they replaced. Raw, it is 144,500 to
-149,955. **There is no `page_weight` entry to re-baseline**: the owner ruled on 2026-09-10
+149,955. **There is no `page_weight` entry to re-baseline**: the maintainer ruled on 2026-09-10
 that a route may be named in `page_weight.ceilings_bytes` only if its weight does not move
 when a run publishes, and a reading route's document carries the day. The gate measures and
 prints it rather than guarding it.
@@ -295,7 +295,7 @@ the day.
 
 ## Design rationale
 
-Owner ruling, kumarsnaveen, 2026-10-24 UTC: replace the chart payload and renderer
+Maintainer ruling, 2026-10-24 UTC: replace the chart payload and renderer
 without backward compatibility. The renderer stamp is `2026-10-24`; the page
 has one reader, not two styles. This supersedes the earlier no-bump policy.
 Older incompatible chart data is refused and those stories remain without
@@ -308,7 +308,7 @@ date or year alongside the source wording, so the compiler can order readings
 without replacing what the article wrote. The reader refuses older or malformed
 time marks rather than guessing.
 
-Owner ruling, kumarsnaveen, 2026-10-24 UTC: omit a chart unless the plan selects
+Maintainer ruling, 2026-10-24 UTC: omit a chart unless the plan selects
 exactly one distinct displayed bar. Resolve every annotation through category,
 quantity or a derived quantity's source inputs, then deduplicate references
 to the same bar. Zero selected bars, several distinct selected bars or a
@@ -316,7 +316,7 @@ reference with no displayed bar explicitly refuse compilation. Story text
 still publishes. No largest-value or first-bar fallback invents a priority.
 The general plan vocabulary remains zero to four element references; the
 current bar compiler requires one resolved bar. This may reduce chart count
-for otherwise valid plans, which the owner accepted instead of invented emphasis.
+for otherwise valid plans, which the maintainer accepted instead of invented emphasis.
 
 Framing changes no values, mark count, channel order or provenance. The flat
 mark pool stays intact; the emphasized id points to its measured member, not a

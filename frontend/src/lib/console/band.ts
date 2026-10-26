@@ -37,7 +37,7 @@ export const CLEAR = 0;
 
 export interface ConsoleRoute {
 	id: RouteId;
-	/** The strip's word for the route. `Pipelines` is the owner's own, taken
+	/** The strip's word for the route. `Pipelines` is the maintainer's own, taken
 	 * verbatim on 2026-08-30; `Summaries` and `Hardware` replaced `Model` and
 	 * `Machine` on 2026-08-31. The id and the href did not move with them.
 	 * `Judgement` and `Voices` joined on 2026-09-12, and `Data explorer` on 2026-10-02. */
@@ -144,7 +144,7 @@ const HEALTHS: Health[] = ['green', 'amber', 'red'];
  * The same words `console_band.ROUTES` writes, so the fallback strip
  * and the published one cannot say different things about the same route.
  * `console-nav.spec.ts` types them out a third time on purpose - that copy is
- * what the owner chose and reading it from here would only prove the page
+ * what the maintainer chose and reading it from here would only prove the page
  * agrees with itself.
  */
 const ROUTE_WORDS: Record<RouteId, { label: string; href: string; description: string }> = {

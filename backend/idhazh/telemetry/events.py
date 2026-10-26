@@ -31,7 +31,7 @@ class EventName(StrEnum):
     builds. The six below them are the work stage's instrument and ride the flat
     record `record` builds, because the common operation on them is grepping one
     field across a whole shard and a nested envelope makes that harder than it
-    needs to be (owner, 2026-09-14).
+    needs to be (maintainer, 2026-09-14).
     """
 
     ITEM_SUMMARIZE_FAILED = "item.summarize.failed"
@@ -180,7 +180,7 @@ def record(
     **Flat, and that is the whole design.** The common operation on these lines
     is `grep '"summary_decode_ms":' | ...` across a 200-minute shard, and a
     nested `ctx`/`data` envelope puts every interesting field one level down
-    where no line-oriented tool can reach it (owner, 2026-09-14). The four
+    where no line-oriented tool can reach it (maintainer, 2026-09-14). The four
     envelope fields sit beside the cells rather than above them, and a cell may
     not be called `ts`, `src`, `v`, `run` or `name` for that reason.
 

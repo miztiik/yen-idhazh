@@ -7,7 +7,7 @@
 	 * carry no visual, so this is the default shape, not a fallback.
 	 *
 	 * **The reader's browser draws the chart and the pipeline never draws one**
-	 * (owner ruling, 2026-09-13,
+	 * (maintainer ruling, 2026-09-13,
 	 * `docs/architecture/publishing/visuals.md`). A story arrives carrying a
 	 * pointer at its marks; this component asks for that file when the story
 	 * comes near, checks the shape, and draws it. Nothing is rendered at build

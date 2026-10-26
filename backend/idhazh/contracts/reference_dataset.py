@@ -24,9 +24,9 @@ nothing renders this text, links to it or serves it.
 
 **Who wrote the labels is the one fact a number taken on this set depends on, so
 it is written here rather than inferred.** The committed pass of 2026-09-13 was
-produced by agents reading each article in full at the owner's direction and on
-the owner's behalf, and the owner ruled that it records `labelled_by` of
-`human` (owner decision, 2026-09-13, `CLAUDE.md` section 0). The set's datasheet
+produced by agents reading each article in full at the maintainer's direction and on
+the maintainer's behalf, and the maintainer ruled that it records `labelled_by` of
+`human` (maintainer decision, 2026-09-13, `CLAUDE.md` section 0). The set's datasheet
 carries the same sentence and what it costs. A model verdict here reaches no
 reader and selects nothing to publish, which used to be what made one allowed at
 all; `CLAUDE.md` section 1a has since lifted that ban. What has not changed is

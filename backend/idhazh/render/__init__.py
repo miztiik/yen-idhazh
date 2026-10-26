@@ -1,7 +1,7 @@
 """Turn a validated plan into the data a reader's browser draws, or degrade to nothing.
 
 Nothing here renders. The reader's browser draws the chart and the pipeline
-never does (owner, 2026-09-13). A compile failure is recorded and the item
+never does (maintainer, 2026-09-13). A compile failure is recorded and the item
 publishes without a picture. Never the other way round.
 
 The package kept its name. Renaming it moves 23 importers and a dozen doc

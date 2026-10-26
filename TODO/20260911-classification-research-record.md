@@ -18,15 +18,15 @@ and
 Its job is to let a future agent reconstruct **why** those three plans say what
 they say, without the conversation: every decision, who took it and on what day,
 the measurement behind it, and the alternatives that were rejected and the
-reason each one was rejected. Owner decisions recorded here are authoritative
+reason each one was rejected. Maintainer decisions recorded here are authoritative
 under [`../CLAUDE.md`](../CLAUDE.md) section 0, which puts user approval above
 every rule and every agent.
 
 ---
 
-## 2. Owner decisions
+## 2. Maintainer decisions
 
-Every row is an owner decision taken on 2026-09-10 or 2026-09-11. The date
+Every row is a maintainer decision taken on 2026-09-10 or 2026-09-11. The date
 column says which.
 
 | Decision | Date | Why |
@@ -44,8 +44,8 @@ column says which.
 | **Links may break.** The real world is messy and a dead link is not a defect worth a migration; semantic search is the fallback | 2026-09-11 | A forward-only id change is cheap only if old addresses are allowed to rot |
 | **The item id becomes 16 Crockford base32 characters** over `url_key`, forward-only | 2026-09-11 | Deterministic by construction (a slice of a digest the payload already carries), 80 bits, and Crockford excludes `i`, `l`, `o` and `u` so the existing slug grammar survives untouched |
 | **Political viewpoint becomes FIVE independent fields**, each with its own `not_applicable` | 2026-09-11 | One axis forces unrelated arguments onto one line. Five independent fields let a piece be loud on one axis and silent on four, which is what most pieces are |
-| **The console gains two tabs: `Judgement` and `Voices`** | 2026-09-11 | `Voices` is the owner's name, chosen over Susan's `Sources`: the tab is about who is speaking in the corpus, and `Sources` already means a feed everywhere else in this repository |
-| **The confidence panel must be drawn, not refused** | 2026-09-11 | The owner ruled that refusing to draw a distribution is a charting failure rather than a reading problem - the answer to a panel nobody can read is a better panel |
+| **The console gains two tabs: `Judgement` and `Voices`** | 2026-09-11 | `Voices` is the maintainer's name, chosen over Susan's `Sources`: the tab is about who is speaking in the corpus, and `Sources` already means a feed everywhere else in this repository |
+| **The confidence panel must be drawn, not refused** | 2026-09-11 | The maintainer ruled that refusing to draw a distribution is a charting failure rather than a reading problem - the answer to a panel nobody can read is a better panel |
 
 ---
 
@@ -296,7 +296,7 @@ or the mean number of live fields per labelled item rises above **2.0**.
 | Transparency-versus-secrecy as the fifth axis | It is about the state's own visibility, not the person's. Most pieces that fire on it also fire on `stance_on_state_power`, so it buys a second reading of one fact |
 | Individual-autonomy-versus-collective-security as the fifth axis | Closest of the three, and refused on the tie-break: "security" narrows it to safety, where the sphere being argued over is data, body, movement, belief and speech. The personal-sphere wording covers a privacy story with no threat in it, which this wording does not |
 | A single combined quality score on the console | It hides which of the things it combines moved, so the one number an operator watches is the one number that cannot be acted on |
-| `Sources` as the fifth tab name | `Sources` already means a feed everywhere else in this repository, and the tab is about who is speaking in the corpus. Susan proposed it; the owner chose `Voices` |
+| `Sources` as the fifth tab name | `Sources` already means a feed everywhere else in this repository, and the tab is about who is speaking in the corpus. Susan proposed it; the maintainer chose `Voices` |
 
 ---
 
@@ -378,7 +378,7 @@ Named here so they are not lost. None of them is a row of plan 23, 24 or 25.
   stopped prerendering on 2026-09-09 and six routes deliberately did not, with
   the reasons written beside the code, so the guard is legacy and the routes are
   a live decision. That plan rules the six stay, deletes the guard, and prices
-  the reversal for the day the owner wants it.
+  the reversal for the day the maintainer wants it.
 - **`watchlist_bonus` was documented as dead arithmetic**, fixed on 2026-08-26,
   and it now fires: `watchlist_hit` is true on **1,118 of the 5,101 committed
   items that record it, 21.92 percent** (measured 2026-09-11). The gap is that
@@ -400,7 +400,7 @@ does not claim to be one.
 Three consequences, stated plainly:
 
 1. **Anything a future agent cannot verify from the tree should be treated as
-   provenance, not as fact.** The owner decisions in section 2, the persona
+   provenance, not as fact.** The maintainer decisions in section 2, the persona
    rulings in section 7 and the rejected alternatives in section 6 are records
    of what was decided and why it was said to have been decided. They are not
    independently checkable, and several of them - the Editor's refusal of a
@@ -427,4 +427,4 @@ Three consequences, stated plainly:
 - [`20260902-visual-planner-pseudo-plan.md`](20260902-visual-planner-pseudo-plan.md) - decision O43, which section 2 amends.
 - [`../docs/reference/pipeline-cost.md`](../docs/reference/pipeline-cost.md) - the instrument log section 3 cites rather than restates.
 - [`../docs/architecture/contracts/determinism.md`](../docs/architecture/contracts/determinism.md) - the page the determinism decision rewrites.
-- [`../CLAUDE.md`](../CLAUDE.md) - section 0 (owner approval), section 0a (the judge ban), Guardrail #10 (a number carries its hardware, date and spread).
+- [`../CLAUDE.md`](../CLAUDE.md) - section 0 (maintainer approval), section 0a (the judge ban), Guardrail #10 (a number carries its hardware, date and spread).

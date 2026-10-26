@@ -200,7 +200,7 @@ change, and
 is what forced a second link rather than one - a screen with nothing to do on it
 reads as a dead site. **No replacement surface was built.** A manifest a page
 fetches to print a commit was considered and refused - the commit is not worth a
-file, a schema, a request and a cleanup story (owner, 2026-09-08).
+file, a schema, a request and a cleanup story (maintainer, 2026-09-08).
 
 **`/404` never carried any of this, and that is worth writing down because the
 plan that made the first change assumed it did.** The document is the adapter's
@@ -223,8 +223,8 @@ Grouping the all-topics page by topic is hierarchy, not truncation, and the dist
 | Grouping a day that ran to a single topic | One heading over the whole page states what the page already says, and it puts items behind a link that leads back to the same list. | Jony |
 | One paragraph per later run in the day notice | Three runs printed three near-identical sentences saying one fact. One total says it once. | Jony |
 | A divider naming the run that added an item | A run is our schedule rather than the reader's, and nobody reading past it can do anything differently for knowing. | Editor |
-| Computing "today" in the browser or at build time | The browser would vary by reader timezone, and the build clock would let a stale deploy claim a date the payload does not carry. | owner |
-| A manifest a page fetches so the footer can print the commit | The commit is not worth a file, a schema, a request and a cleanup story. | owner, 2026-09-08 |
+| Computing "today" in the browser or at build time | The browser would vary by reader timezone, and the build clock would let a stale deploy claim a date the payload does not carry. | maintainer |
+| A manifest a page fetches so the footer can print the commit | The commit is not worth a file, a schema, a request and a cleanup story. | maintainer, 2026-09-08 |
 
 ## See also
 

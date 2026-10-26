@@ -1,7 +1,7 @@
 /** Where story-chart geometry comes from, and it is the only place it does.
  *
  * **The reader's browser draws the chart and the pipeline never draws one**
- * (owner ruling, 2026-09-13,
+ * (maintainer ruling, 2026-09-13,
  * `docs/architecture/publishing/visuals.md`). This module is the half of that
  * which decides where every mark sits. `ItemVisual.svelte` is the half that
  * writes them into the document.

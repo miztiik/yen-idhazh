@@ -7,11 +7,11 @@ ASCII only in agent/customization Markdown: "-", "->", ">=", "section".
 
 ## The model
 
-The agent that runs a plan **owns** it. It carries a row itself, or delegates the row to a **worker subagent** (`runSubagent`) when delegation buys something: the row is independent of what the owner already holds, or the owner's context is filling up.
+The agent that runs a plan **owns** it. It carries a row itself, or delegates the row to a **worker subagent** (`runSubagent`) when delegation buys something: the row is independent of what the maintainer already holds, or the maintainer's context is filling up.
 
-**Delegation costs a hand-off.** A worker starts cold and returns a report the owner then reads. It pays when two rows can be built at once, or when the owner cannot hold another row's detail without losing the plan. It does not pay for a row the owner is already inside.
+**Delegation costs a hand-off.** A worker starts cold and returns a report the maintainer then reads. It pays when two rows can be built at once, or when the maintainer cannot hold another row's detail without losing the plan. It does not pay for a row the maintainer is already inside.
 
-## The owner
+## The maintainer
 1. Read the queue before adding to it: what is already half-done, and what the tables say is done. Adopt or close it first (below).
 2. Read the plan-doc Section 0 (operating contract) + Section 1 (Status Reckoner).
 3. Keep `Parallel N` rows in flight, and refill a slot the moment one returns. A row is ready when every `Depends-on` is `DONE` and it shares no `Files touched` entry with a row already running. Dispatch the next ready row straight away - do not wait for the rest of a group, for a sibling's checks, or for a merge. None of those is a dependency.
@@ -51,7 +51,7 @@ release; it does not replace the current plan or certify later checks.
 
 4. **Re-derive any number the row quotes.** An approved decision can be arithmetically wrong, and a worker implementing it verbatim ships the error under a green check. One row sized a setting from a single model call on a path that makes two, the second replaying the first; taken as written it would have widened the context window in five model files and spent a few hundred megabytes of runner memory to buy nothing. Do the arithmetic against the code that will run, not against the sentence that quotes it, and correct the row the way check 1 says.
 
-**When a row is delegated, the owner does not also implement it.** The owner's edits are then limited to the plan-doc and the merge: correcting a row before dispatch, filling `Worktree` and `Subagent`, and marking `IN-FLIGHT`. A page derived from every Reckoner at once is not on that list either (worker step 7). Do not remove or alter a worker's checkout while its tests or build are running.
+**When a row is delegated, the maintainer does not also implement it.** The maintainer's edits are then limited to the plan-doc and the merge: correcting a row before dispatch, filling `Worktree` and `Subagent`, and marking `IN-FLIGHT`. A page derived from every Reckoner at once is not on that list either (worker step 7). Do not remove or alter a worker's checkout while its tests or build are running.
 
 **Remove the row's worktree before the merge, and never by detaching it instead.** Removing it frees the branch, so the merge's own branch delete succeeds. Detaching frees the branch too and throws it away, and the branch is the only signal a later sweep can judge the leftover on ([git-and-github.md](../reference/agent-notes/git-and-github.md)). If the merge needs a fixup afterwards, one `git worktree add` brings the checkout back.
 
@@ -68,14 +68,14 @@ Dispatched with `runSubagent` (default agent). Its brief is the row verbatim (Sc
 3. Resolves ambiguity by consulting personas (below), baking the ruling into the code.
 4. Runs the row's Oracle and the local checks selected by the project's gate guide. Leaves full-suite checks assigned to CI there; a list of acceptance gates is not an instruction to repeat every CI job locally. Records the tested inputs, selection, result and test counts. An active check is followed to completion, never launched again because its output is quiet.
 5. Turns every defect discovered during execution into explicit work: fix it in the row if it is in scope, or record a follow-up row / scope-change item. Do not bury defects in a footnote.
-6. Returns a STRUCTURED report: files changed, gate + Oracle results, decisions taken (+ which persona ruled), any ESCALATE, and the branch / worktree state. **The report opens with one plain sentence saying what the row settled, before any table.** A report that opens with a table hands the owner the subsystem's vocabulary, and the owner then forwards it to a person who asked what happened (`CLAUDE.md` section 0b). **It keeps a running copy of that report in a file outside the repository from its first push on**, one entry per milestone: what was pushed, which check ran and what it said, what comes next. A worker can end before it returns - its context runs out, or the session is paused - and that file with the pushed branch is what lets the owner adopt the row instead of doing it again.
+6. Returns a STRUCTURED report: files changed, gate + Oracle results, decisions taken (+ which persona ruled), any ESCALATE, and the branch / worktree state. **The report opens with one plain sentence saying what the row settled, before any table.** A report that opens with a table hands the maintainer the subsystem's vocabulary, and the maintainer then forwards it to a person who asked what happened (`CLAUDE.md` section 0b). **It keeps a running copy of that report in a file outside the repository from its first push on**, one entry per milestone: what was pushed, which check ran and what it said, what comes next. A worker can end before it returns - its context runs out, or the session is paused - and that file with the pushed branch is what lets the maintainer adopt the row instead of doing it again.
 7. Updates its OWN row's Reckoner line in its own pull request - `Status`, `Worktree`, `PR`, `Subagent` - and no other line of that table. Refreshes any derived page whose numbers this row invalidates, in the same pull request - **unless that page is derived from every row at once, in which case the worker never touches it.** Such a page has one writer per open branch, so two branches that each stamp a row then conflict on every line that moved. It is written once, after the merge, by the project's own job, and the gate guide says which pages those are and refuses a branch that carries one.
-8. Does NOT merge, does NOT edit another row's line, does NOT start another row. Merge and closure are the owner's.
+8. Does NOT merge, does NOT edit another row's line, does NOT start another row. Merge and closure are the maintainer's.
 
 ### Persona custom agents resolve ambiguity (they are not an approval gate)
 When a row is genuinely ambiguous - a design fork, a contested decision, a fact-finding sweep - the worker dispatches the relevant persona custom agent(s) **by their exact name as listed in CLAUDE.md section 14** (plus "Explore" for read-only breadth) via `runSubagent`. A persona returns a WRITTEN ruling the worker bakes into the row; it is an input to the worker's action, never a request-for-approval surface (section "Escalation"). A contested decision runs the relevant personas in DEBATE to ONE ruling (author-a-plan.md step 3).
 
-If the harness does not permit a worker to dispatch a nested subagent, the worker surfaces the ambiguity in its report; the owner runs the consult and re-dispatches the row with the ruling appended to the brief. Reading a persona's file is not a consultation. What the harness needs configured first is in [shell-and-tools.md](../reference/agent-notes/shell-and-tools.md).
+If the harness does not permit a worker to dispatch a nested subagent, the worker surfaces the ambiguity in its report; the maintainer runs the consult and re-dispatches the row with the ruling appended to the brief. Reading a persona's file is not a consultation. What the harness needs configured first is in [shell-and-tools.md](../reference/agent-notes/shell-and-tools.md).
 
 **Consult when two defensible answers would lead to different code and the difference matters.** Not for coverage, not one per surface touched, and never as a gate. A consultation whose outcome cannot change what gets written is one to skip - running it anyway is how a row acquires an hour and a paragraph without acquiring a decision.
 
@@ -84,7 +84,7 @@ If the harness does not permit a worker to dispatch a nested subagent, the worke
 Every plan-doc carries exactly one execution stamp (author-a-plan.md step 5). It is the line that makes "implement it" sufficient: the executing agent reads it, loads this doc, and follows the contract with no further instruction.
 
 ```
-Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delegates a row where delegation pays; keep parallel N = 4 rows in flight, refilling a slot as soon as a worker returns and never waiting on a merge; consult a persona only where two answers would lead to different code; AUTO-merge on green gates; honor the ESCALATE triggers in section 0. AUTHOR-AND-STOP until the user authorizes.
+Execute per docs/how-to/execute-a-plan.md: one maintainer carries the plan and delegates a row where delegation pays; keep parallel N = 4 rows in flight, refilling a slot as soon as a worker returns and never waiting on a merge; consult a persona only where two answers would lead to different code; AUTO-merge on green gates; honor the ESCALATE triggers in section 0. AUTHOR-AND-STOP until the user authorizes.
 ```
 
 Drop the `AUTHOR-AND-STOP...` clause once the user authorizes execution.
@@ -95,21 +95,21 @@ A plan-doc carrying an earlier wording of this stamp is run under this doc as it
 
 **`Parallel N` is a running pool, not a wave.** Four slots means four rows in flight, and a slot refills the moment its worker returns - not four dispatched, then a wait for the slowest, then four more. A wave idles every finished slot until the last one lands, and that idle time is the whole of the difference. **The default is 4.**
 
-**Check first that the harness can run a pool at all.** A harness that hands back a block of parallel worker calls only when every call in it has finished cannot refill one slot while another worker runs, so a block of four is a wave of four whatever this section says. There, put rows of similar size in one block, and write the idle time down as the harness's cost rather than reading it as the owner's delay.
+**Check first that the harness can run a pool at all.** A harness that hands back a block of parallel worker calls only when every call in it has finished cannot refill one slot while another worker runs, so a block of four is a wave of four whatever this section says. There, put rows of similar size in one block, and write the idle time down as the harness's cost rather than reading it as the maintainer's delay.
 
-**A slot frees when the worker returns its report, not when the row merges.** The writing is finished at that point; the merge is bookkeeping the owner does between dispatches. An owner sitting on a pull request is an owner that should be dispatching.
+**A slot frees when the worker returns its report, not when the row merges.** The writing is finished at that point; the merge is bookkeeping the maintainer does between dispatches. A maintainer sitting on a pull request is a maintainer that should be dispatching.
 
 **Readiness is computed, not read off a letter.** A row is ready when every `Depends-on` is `DONE` and it shares no `Files touched` entry with a row already in flight. `Parallel-group` records which rows the author believed were independent; it is a hint, and the file lists are the fact (below).
 
-Merging stays serialized - one at a time, re-checking the next branch against the advanced `main` - so a green branch never lands on a stale base. **A merge that conflicts or goes red returns that row to its owner, and the pool keeps running.** Reconcile it at the next dependency boundary rather than stopping the line for it.
+Merging stays serialized - one at a time, re-checking the next branch against the advanced `main` - so a green branch never lands on a stale base. **A merge that conflicts or goes red returns that row to its maintainer, and the pool keeps running.** Reconcile it at the next dependency boundary rather than stopping the line for it.
 
 **Check every dispatch against the rows already in flight by diffing their `Files touched` lists.** A plan asserting that its parallel rows are disjoint is making a claim, not stating a fact ([git-and-github.md](../reference/agent-notes/git-and-github.md)). Where a ready row shares a file with one in flight, hold it and write the new `Depends-on` into the Status Reckoner, so the next dispatch reads it instead of re-deriving it.
 
 **Rows that share one surface do not parallelise, and the pool width is what makes that expensive.** Measured on one plan whose whole second half drew the same page: every remaining row edited that route's server module and its chart module, four were kept in flight anyway, and every merge after the first needed a hand resolution. Several were semantic - each side had deleted what the other kept, and git called the file clean ([gates-and-builds.md](../reference/agent-notes/gates-and-builds.md)). **Holding a row costs one merge of waiting; dispatching it onto a file in flight costs a resolution nobody reviewed.** Where a whole group shares one surface, the group is serial whatever `Parallel N` says, and the refactor that splits the surface is the row that makes the rest of them parallel - so it runs first or the width is fiction.
 
-**One mechanical row can fan out too: by file, inside one checkout.** Where a row is one small edit repeated across many files - a retired word, a moved name - the owner lists every place it occurs, splits that list by file into one list per worker, writes one shared brief, and dispatches the workers into the same checkout. Each worker edits only the files on its own list and runs no git command that writes, so no two can collide; the owner then runs the real check over the whole tree and commits once. Measured on one such row: five workers changed about 190 lines in 54 files in one round, with no conflict and nothing left for the check to find.
+**One mechanical row can fan out too: by file, inside one checkout.** Where a row is one small edit repeated across many files - a retired word, a moved name - the maintainer lists every place it occurs, splits that list by file into one list per worker, writes one shared brief, and dispatches the workers into the same checkout. Each worker edits only the files on its own list and runs no git command that writes, so no two can collide; the maintainer then runs the real check over the whole tree and commits once. Measured on one such row: five workers changed about 190 lines in 54 files in one round, with no conflict and nothing left for the check to find.
 
-**When the owner's own turn ends mid-run, the work is still there.** The checkouts, each pull request's checks and the workers' report files are the state. Read them before dispatching anything again: on one row they showed one pull request already green and another half done, and nothing had to be redone.
+**When the maintainer's own turn ends mid-run, the work is still there.** The checkouts, each pull request's checks and the workers' report files are the state. Read them before dispatching anything again: on one row they showed one pull request already green and another half done, and nothing had to be redone.
 
 ### The workers are parallel; the machine is not
 
@@ -121,7 +121,7 @@ Merging stays serialized - one at a time, re-checking the next branch against th
 
 ## Escalation (when to pause for the user)
 
-AUTO is the default. PAUSE and surface only for: a Level-5 row (CLAUDE.md section 6), a new `## Design rationale` that would change a persisted contract, an unresolved persona conflict, a scope change (-> [handle-scope-change.md](handle-scope-change.md)), or a 3x cost overrun. Otherwise the owner advances without asking.
+AUTO is the default. PAUSE and surface only for: a Level-5 row (CLAUDE.md section 6), a new `## Design rationale` that would change a persisted contract, an unresolved persona conflict, a scope change (-> [handle-scope-change.md](handle-scope-change.md)), or a 3x cost overrun. Otherwise the maintainer advances without asking.
 
 **If the user goes quiet, stay in scope.** Do not invent scope, and do not quietly shrink it. Silence is not a new instruction.
 
@@ -150,5 +150,5 @@ When every row is `DONE` / `COLLAPSED`: confirm the Status Reckoner is fully res
 - [../agents/bootstrap.md](../agents/bootstrap.md) - what to read before answering, and what every answer owes.
 - [distill-a-plan.md](distill-a-plan.md) - where a finding goes when no page owns it yet.
 - [handle-scope-change.md](handle-scope-change.md) - STOP-AND-SURFACE when scope shifts mid-row.
-- [ship-a-pr.md](ship-a-pr.md) - the PR lifecycle the owner runs at merge.
+- [ship-a-pr.md](ship-a-pr.md) - the PR lifecycle the maintainer runs at merge.
 - [../../CLAUDE.md](../../CLAUDE.md) - correction levels (section 6), Definition of Done (section 9), agent roster (section 14).

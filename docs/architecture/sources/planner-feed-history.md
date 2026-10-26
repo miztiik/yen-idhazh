@@ -120,23 +120,6 @@ publication observer supplies its result.
 The versioned feed event carries these facts. Native health receipts join the
 exact verified workflow output files; no retirement output is created.
 
-## Design rationale
-
-Owner ruling, kumarsnaveen_microsoft, 2026-10-23: permanent TypeScript retirement
-is the existing source registry's retired list and status, not another raw or
-compact retirement ledger. This replaces the earlier draft dynamic-retirement
-assumption. It authorizes no source-configuration mutation, new state file,
-glob exception, publication-inventory purpose or publisher change.
-
-Owner approval, kumarsnaveen_microsoft, 2026-10-23, "Bug 1 - A1": evolve the
-existing check/request clock fields and their readers without adding a column
-or using packaging as observation order. The narrow Python time-capture and
-reader changes follow the [recorded-instant contract](../contracts/recorded-instants.md).
-
-The selection consumer follows the separate
-[2026-10-24 A1 approval](feed-curation.md#design-rationale). This history reader
-adds no score weight, daily source ceiling or retirement authority.
-
 ## See also
 
 - [Planning policies](feed-ingest-policies.md) - the isolated selection switch.

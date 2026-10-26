@@ -13,6 +13,7 @@ Checks before trusting a test or build result. Commands belong in [run-the-gates
 - `node scripts/build-state.ts --complete` took 112.5 s on the shared Windows machine on 2026-10-03, so wait for it rather than calling it hung.
 - A fresh worktree has no `.venv` and no `frontend/node_modules`, and setting both up is the slowest step: on 2026-10-07, on the shared Windows machine, `npm ci` took 513 s and `pip install -e ".[dev]"` took 1,583 s after one package-feed timeout and a retry (plan 62's row L19), and 114 s and 991 s in another worktree the same day. Start both before the first check needs them, and wait rather than calling either hung.
 - **`test:changed` stops with "The selected Python executable does not exist" in a worktree with no `.venv`, though `python` runs.** With no `.venv` the launcher falls back to the bare word `python`, hands it on as `IDHAZH_PYTHON`, and its second pass after the test-slot wait checks that word as a file path. The tell: the selection prints twice before the error. Name the full path first (seen 2026-10-08): `$env:IDHAZH_PYTHON = (Get-Command python).Source`.
+- **`bun install --frozen-lockfile` fails with `EPERM: failed copying files from cache` for a `file:` dependency that points at a sibling package (seen 2026-10-26, Bun 1.3.13, Windows).** The registry packages install; the sibling does not, and the Bun-backed backend tests then stop with `Cannot find module '@idhazh/common-contracts'`. Link each sibling by hand: `New-Item -ItemType Junction -Path <consumer>\node_modules\@idhazh\<name> -Target packages\<name>`, and repeat for each package that imports another one (`packages/ledger-file-writer` needs `common-contracts` too). The `node_modules` folders are Git-ignored.
 - **`pip install -e ".[dev]"` stops because it cannot fetch `hatchling` from the package feed; the project is fine, and the same install can pass on the next try.**
   `hatchling` is the build backend `pyproject.toml` names, and an editable
   install fetches it first, under `Installing build dependencies`, before it
@@ -97,7 +98,7 @@ Checks before trusting a test or build result. Commands belong in [run-the-gates
   ```
 
 - **A build through a linked `node_modules` fails on a missing package; the
-  code is fine, the linked install changed under you.** Its owner can run
+  code is fine, the linked install changed under you.** Its maintainer can run
   `npm ci` or switch branches while you use it. On 2026-10-07, on this Windows
   machine with Node 24.12.0, vite failed with `Rollup failed to resolve import
   "@duckdb/duckdb-wasm"` after two builds through the same link had passed.

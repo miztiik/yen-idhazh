@@ -32,14 +32,14 @@ Four were consulted. Three refused a bounded repeat guard. This plan ships their
 
 | Persona | Ruling | What this plan did with it |
 | --- | --- | --- |
-| Carmack | Approve shards, veto day shards, fix the materialising read first | Row 2 lands first. Day grain overruled by the owner on structural grounds - see below |
+| Carmack | Approve shards, veto day shards, fix the materialising read first | Row 2 lands first. Day grain overruled by the maintainer on structural grounds - see below |
 | Fowler | Veto the horizon. The cutover loses a day's push if the migration deletes the flat file under a running job | Rows 4-7 are his expand-migrate-contract sequence |
 | Editor | No horizon. Every case where re-planning helps happens within days; every case where it hurts happens after months | Default `-1`. The knob exists; the horizon does not fire |
 | Reader | "It feels like being lied to about the date." Ranked a republished story above a dead link as a trust failure | Row 7's Oracle is that with `-1` the guard is bit-identical to today's |
 
-**Owner decisions, 2026-09-07, under CLAUDE.md section 0.** Day grain for the published ledger, overriding Carmack's veto - his veto was against the claim that day files load faster, which is false, and the owner's reason is structural instead. The horizon ships off. A finite value is a later decision on row 1's evidence, and section 0 makes it an ESCALATE trigger for any agent.
+**Maintainer decisions, 2026-09-07, under CLAUDE.md section 0.** Day grain for the published ledger, overriding Carmack's veto - his veto was against the claim that day files load faster, which is false, and the maintainer's reason is structural instead. The horizon ships off. A finite value is a later decision on row 1's evidence, and section 0 makes it an ESCALATE trigger for any agent.
 
-**Deferred, and named so it is not lost.** The owner's actual intent - republish when something underlying changed - is a content fingerprint, not a clock. A clock cannot tell a developed story from a forgotten one. Separate feature, out of scope.
+**Deferred, and named so it is not lost.** The maintainer's actual intent - republish when something underlying changed - is a content fingerprint, not a clock. A clock cannot tell a developed story from a forgotten one. Separate feature, out of scope.
 
 ## 0a - What was measured
 
@@ -206,7 +206,7 @@ Rows 1, 2, 3, 10 and 11 are disjoint and run together. Rows 4 to 7 are strictly 
 
 | # | Decision | Authority |
 | --- | --- | --- |
-| 1 | `-1` is the only sentinel. Not `0`, not `null`, not a very large number - a large number is a cover that silently becomes finite when the archive outgrows it | Owner, 2026-09-07 |
+| 1 | `-1` is the only sentinel. Not `0`, not `null`, not a very large number - a large number is a cover that silently becomes finite when the archive outgrows it | Maintainer, 2026-09-07 |
 | 2 | Accepts `-1` **or** strictly greater than `collect.seen_window_days`, refusing everything between including 90. Equal is the hole: an undated address whose sight row expires the same week reads as first-seen-today and republishes as new. Asserted in the contract, not in prose | Editor, Carmack |
 | 3 | A cross-field validator, so it re-runs whenever either value moves. Raising the sight window past a finite cover fails the config rather than opening the hole quietly | Fowler |
 
@@ -219,7 +219,7 @@ Rows 1, 2, 3, 10 and 11 are disjoint and run together. Rows 4 to 7 are strictly 
 
 | # | Decision | Authority |
 | --- | --- | --- |
-| 1 | **No glob.** The enumerator walks `state/published/YYYY/MM/` and accepts a stem only if it matches `\d{2}` under `\d{4}/\d{2}`. Anything else raises rather than being skipped - a file nobody can explain in a state directory is a fault, and silently ignoring it is how a reader starts missing rows | Owner, 2026-09-07 |
+| 1 | **No glob.** The enumerator walks `state/published/YYYY/MM/` and accepts a stem only if it matches `\d{2}` under `\d{4}/\d{2}`. Anything else raises rather than being skipped - a file nobody can explain in a state directory is a fault, and silently ignoring it is how a reader starts missing rows | Maintainer, 2026-09-07 |
 | 2 | `state/published/` beside the flat file rather than replacing it in place. A reader that enumerates a directory reads every file it finds as that directory's shape | [ledger/__init__.py](../backend/idhazh/ledger/__init__.py) |
 | 3 | A missing directory and a missing flat file both mean "no history", which is what a fresh clone has. Neither is an error | [ledger/__init__.py](../backend/idhazh/ledger/__init__.py) |
 
@@ -232,7 +232,7 @@ Rows 1, 2, 3, 10 and 11 are disjoint and run together. Rows 4 to 7 are strictly 
 
 | # | Decision | Authority |
 | --- | --- | --- |
-| 1 | **`.gitattributes` gets an explicit line for `state/published/**/*.csv`**, not the existing `state/**/*.csv` catch-all. The catch-all would already cover it, and that is the problem: a merge rule a new collection inherits without anyone choosing it is the same defect as a growing cost nobody chose | Owner, 2026-09-07 |
+| 1 | **`.gitattributes` gets an explicit line for `state/published/**/*.csv`**, not the existing `state/**/*.csv` catch-all. The catch-all would already cover it, and that is the problem: a merge rule a new collection inherits without anyone choosing it is the same defect as a growing cost nobody chose | Maintainer, 2026-09-07 |
 | 2 | `merge=union` stays correct for the reason the existing comment gives - rows are independent and the reader keeps the earliest of two. Restated at the new line rather than assumed from the neighbour | Fowler |
 | 3 | `REFRESH_PATHS` names the directory `state/published`, matching `state/scores` and `state/item-health`. The mirror in `backend/tests/workflows/` reds in CI if the two drift - move both in one commit | Fowler |
 | 4 | A run whose date falls in a closed day performs a correction, the case `append_seen` already handles and the freeze rule already permits | [partitions.md](../docs/concepts/partitions.md) |
@@ -260,7 +260,7 @@ Rows 1, 2, 3, 10 and 11 are disjoint and run together. Rows 4 to 7 are strictly 
 
 | # | Decision | Authority |
 | --- | --- | --- |
-| 1 | **`-1` enumerates; a finite cover names days.** The unbounded path walks the tree validating every stem; the bounded path asks for the dates in range and opens only those. Two paths, two tests, neither one a glob | Owner, 2026-09-07 |
+| 1 | **`-1` enumerates; a finite cover names days.** The unbounded path walks the tree validating every stem; the bounded path asks for the dates in range and opens only those. Two paths, two tests, neither one a glob | Maintainer, 2026-09-07 |
 | 2 | `freshness.md` currently argues at length that this file must not shard, and lists the shard as a rejected alternative. That section is **rewritten to say what changed and why**, not deleted. A reversed decision whose reasoning vanishes is how the same argument gets had twice | CLAUDE.md section 4 |
 | 3 | `partitions.md` moves the published row into the partition table and states the coupling to `seen_window_days` next to it. It also gains the day grain as a second partition unit, which the digest tree already uses | Carmack |
 | 4 | `pipeline-cost.md` gains the 2026-09-07 figures, including the two that went **against** the design - day files take twice the wall clock of month files, and after packing they are the largest in git. A measurement that contradicts the design is recorded, not dropped | Guardrail #10 |
@@ -289,7 +289,7 @@ Rows 1, 2, 3, 10 and 11 are disjoint and run together. Rows 4 to 7 are strictly 
 
 | # | Decision | Authority |
 | --- | --- | --- |
-| 1 | **The cover is not a clock, it is the files this run staged.** A run appends only to its own date's shard, so a duplicate can only exist in a file this run wrote to. The staged set is already known; nothing needs computing. This is the one row that ships a real cover rather than `-1`, because it has no reader-facing risk | Owner, 2026-09-07 |
+| 1 | **The cover is not a clock, it is the files this run staged.** A run appends only to its own date's shard, so a duplicate can only exist in a file this run wrote to. The staged set is already known; nothing needs computing. This is the one row that ships a real cover rather than `-1`, because it has no reader-facing risk | Maintainer, 2026-09-07 |
 | 2 | What we lose, stated: if an **earlier** run left a duplicate that was never settled - because the settle step itself failed - a later run no longer cleans it up silently. The full settle stays available as an operator command a person runs on demand | this plan |
 | 3 | The real-Git tests run directly rather than through the selector, because this is the row most likely to be found wrong by them | [agent-notes.md](../docs/reference/agent-notes.md) |
 
@@ -326,7 +326,7 @@ Rows 1, 2, 3, 10 and 11 are disjoint and run together. Rows 4 to 7 are strictly 
 
 | # | Decision | Authority |
 | --- | --- | --- |
-| 1 | **Not a clock - a receipt.** A published day is a frozen artefact; nothing about it can change except deletion. So do not re-validate it on a window, do not re-validate it at all. Validate once at write. Re-validate only when the validator itself changes, and then re-validate everything, once | Owner, 2026-09-07 |
+| 1 | **Not a clock - a receipt.** A published day is a frozen artefact; nothing about it can change except deletion. So do not re-validate it on a window, do not re-validate it at all. Validate once at write. Re-validate only when the validator itself changes, and then re-validate everything, once | Maintainer, 2026-09-07 |
 | 2 | The receipt keys on content **and** validator-plus-projector version. Mtime alone would reuse a stale result; content alone would miss a rule change | Fowler |
 
 ## 14 - Row #13 - Site size is a maintained total
@@ -350,7 +350,7 @@ Rows 1, 2, 3, 10 and 11 are disjoint and run together. Rows 4 to 7 are strictly 
 
 | # | Decision | Authority |
 | --- | --- | --- |
-| 1 | **No globbing per day.** Walk `YYYY/MM/` and select the days in range by name. A directory entry that is not a date raises | Owner, 2026-09-07 |
+| 1 | **No globbing per day.** Walk `YYYY/MM/` and select the days in range by name. A directory entry that is not a date raises | Maintainer, 2026-09-07 |
 | 2 | Exact candidate counts, suffix exclusions, backdated-run safety and fuse behaviour are unchanged. Stopping at the fuse would lose the backlog count | [audit finding 18](../docs/reference/data-growth.md) |
 
 ## 16 - Row #15 - State cleanup asks the catalogue what is due
@@ -374,7 +374,7 @@ Rows 1, 2, 3, 10 and 11 are disjoint and run together. Rows 4 to 7 are strictly 
 
 | # | Decision | Authority |
 | --- | --- | --- |
-| 1 | It grows with runs, so it takes the same layout as everything else that does. Consistency is worth more here than the 274 KB a year it saves | Owner, 2026-09-07 |
+| 1 | It grows with runs, so it takes the same layout as everything else that does. Consistency is worth more here than the 274 KB a year it saves | Maintainer, 2026-09-07 |
 | 2 | The **read** stays unbounded at `-1`, because the report is about the whole series and a cover would answer a different question. The layout changes; the question does not | this plan |
 
 ## 18 - Row #17 - The rule gets its concept doc
@@ -389,7 +389,7 @@ Rows 1, 2, 3, 10 and 11 are disjoint and run together. Rows 4 to 7 are strictly 
 | 1 | **A property, not a list.** The doc states the question - does this read cost more when a run appended more - and the inventory is a dated example table underneath it. The archive guard deleted on 2026-09-06 failed precisely because it was a list of paths pretending to be a rule | [CLAUDE.md](../CLAUDE.md) Guardrail #12 design rationale |
 | 2 | It names the three shapes a cover can take - a span of days, the files a run staged, one run or one payload - so the next reader does not reach for a clock by reflex. Rows 8, 9 and 10 are the worked examples of each | this plan |
 | 3 | `docs/concepts/`, beside [partitions.md](../docs/concepts/partitions.md): that page says what a layout obliges a writer to do, this says what a growing collection obliges a reader to declare | [documentation-structure.md](../docs/reference/documentation-structure.md) |
-| 4 | CLAUDE.md gains a paragraph rather than a new rule. Guardrail #12 already forbids the growing cost nobody chose; this only says where the choosing is now written down | Owner, 2026-09-07 |
+| 4 | CLAUDE.md gains a paragraph rather than a new rule. Guardrail #12 already forbids the growing cost nobody chose; this only says where the choosing is now written down | Maintainer, 2026-09-07 |
 
 ## What this plan does not fix
 

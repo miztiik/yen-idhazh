@@ -24,7 +24,7 @@ despite common ownership.
 name is separate and can change. Several feeds can explicitly reference one
 publisher ID; their `source_id` values still identify separate feeds.
 
-The owner-maintained [source catalog](../../../config/sources.json) declares
+The maintainer-maintained [source catalog](../../../config/sources.json) declares
 the publisher registry beside feed references. Its current registry is empty;
 no feed has a confirmed `publisher_id`.
 Existing story grouping uses the recorded `source_name` masthead through
@@ -35,7 +35,7 @@ publisher ID. This contract does not replace it or change story grouping.
 
 Apply this procedure when adding a publisher or assigning a feed:
 
-1. Check the owner-controlled source catalog and its existing publisher IDs.
+1. Check the maintainer-controlled source catalog and its existing publisher IDs.
    Use feed metadata only to find possible matches; confirm the editorial
    publication from publisher-owned evidence before assigning an ID. AI may
    help find and compare that evidence, but a feed-ID prefix, domain, feed
@@ -111,7 +111,7 @@ it must never be reassigned to another publication.
 
 There is no separate alias or reconciliation list. A display-name change edits
 `display_name`; the stable ID does not change. A merger or split changes only
-the current feed-to-publisher assignments after owner review. Keep old IDs in
+the current feed-to-publisher assignments after maintainer review. Keep old IDs in
 the registry and leave historical observations unchanged; do not redirect or
 rewrite them.
 
@@ -140,7 +140,7 @@ change preserves identity, or that an old reservation was not reused. Catalog
 review establishes those facts; implementation must test the creation and
 historical-read meanings as well as the scalar spelling.
 
-Owner-authored catalog configuration uses reader-native validation of the
+Maintainer-authored catalog configuration uses reader-native validation of the
 fields its readers compute on, under `CLAUDE.md` Guardrail #3. It does not need
 a second persisted-payload schema just because it is configuration.
 Publisher identity is carried by the Pydantic-owned shared snapshot and the
@@ -192,7 +192,7 @@ acceptance cases, not claims of executed runtime checks:
 - [ ] Check the positive and negative examples with the shared slug validator
   and the separate human identity review.
 - [ ] Keep the same ID through display-name and domain changes; prevent reuse
-  of an old ID and change current mappings only after owner review of a merger
+  of an old ID and change current mappings only after maintainer review of a merger
   or split.
 - [ ] Keep missing historical IDs unknown, without current-catalog backfill.
 - [ ] Review catalog storage, actual feed mappings, persisted-field compatibility
@@ -203,7 +203,7 @@ acceptance cases, not claims of executed runtime checks:
 
 ## Design rationale
 
-Owner decision, kumarsnaveen_microsoft, 2026-10-24 UTC, publisher option A1:
+Maintainer decision, 2026-10-24 UTC, publisher option A1:
 adopt an immutable curated publisher slug and document its creation before
 implementation. A human-readable key makes catalog review practical; choosing
 it once prevents a name or endpoint edit from changing the counted publisher.
@@ -211,17 +211,17 @@ This adopts the existing editorial unit, not its mutable masthead text as the
 permanent identifier. Approval covers this contract only, not runtime wiring,
 shared persisted fields, feed assignments or the separate API implementation.
 
-Owner decision, kumarsnaveen_microsoft, 2026-10-24 UTC: keep the publisher
+Maintainer decision, 2026-10-24 UTC: keep the publisher
 registry in `config/sources.json`, beside the feed references it validates.
 Use `publishers[]` entries with `id` and `display_name`; each feed has nullable
 `publisher_id`. Do not add separate alias or reconciliation lists. Keep all
 publisher data in config so adding or changing an entry does not need a
 per-publisher code edit. A rename changes the display name; a merger or split
-changes current feed assignments after owner review; old IDs and historical
+changes current feed assignments after maintainer review; old IDs and historical
 observations remain unchanged. The reviewed catalog change and Git history
 are enough provenance; do not add an `identity_provenance` field.
 
-Owner ruling, kumarsnaveen_microsoft, 2026-10-24 UTC: AI may help identify
+Maintainer ruling, 2026-10-24 UTC: AI may help identify
 publisher-owned evidence for feed mappings. It must leave a feed unknown when
 that evidence does not settle the publication identity.
 

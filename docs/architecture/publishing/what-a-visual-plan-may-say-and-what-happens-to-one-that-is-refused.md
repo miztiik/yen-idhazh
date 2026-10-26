@@ -294,7 +294,7 @@ ladder, the median at the first step down and the 75th percentile at the second,
 third. `visuals.downgrade_enabled` is the separate default-false switch. Off
 reads no history and attempts no replacement. On requires a nonempty,
 strictly increasing percentile list. Each policy switch declares removal
-after owner-approved permanent activation; its on/off behavior must remain
+after maintainer-approved permanent activation; its on/off behavior must remain
 covered until then.
 
 **The floor is on the mark count**, which is the quantity the validator's own `enough_data` already
@@ -390,7 +390,7 @@ edges and compiler capability. The two activation switches default off and
 are independent. The existing item ledger supplies bounded, measured
 history, so no new ledger or fabricated seed is required. A refusal keeps the
 summary, not a forced bar, and stacked parts cannot bypass their declared
-whole. Owner approval: kumarsnaveen, 2026-10-25 UTC.
+whole. Maintainer approval: 2026-10-25 UTC.
 
 ## Rejected alternatives
 

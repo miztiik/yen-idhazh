@@ -14,7 +14,7 @@ from is
 
 Jony refused a top-level search bar and Reader called it "clutter, and a lie about what is behind it" - a box implying an archive the reader cannot reach, which manufactures a failure out of a quiet morning.
 
-The owner asked for it. What ships is the narrow defensible version, which is a filter, not a search:
+The maintainer asked for it. What ships is the narrow defensible version, which is a filter, not a search:
 
 - It lives **inside the filter bar**, beside the topic pills, not as a top-level bar above the first headline.
 - It filters **in place** over what is already on the page. It never navigates and never touches the URL.
@@ -45,7 +45,7 @@ Eight decisions. Susan's, except the two the row order added on 2026-09-13: the 
 - **The archive's pills carry whole-archive totals**, one integer a vertical, computed in `+page.server.ts` which already loads every day. That number is also the honest denominator of a topic-filtered list while months are still unread. The pill count and the list count are different numbers and never share a sentence.
 - **The archive's model-state and scope sentences moved up**, under the panel. They used to sit below the story list, which put the control behind the answer.
 
-Two shapes were refused. **A search field that expands to reveal filters** hides the filter set behind a control, which is the failure this replaced. **Keeping two separate blocks** was the owner's rejection: the two bands of vertical space are the cost the row exists to remove.
+Two shapes were refused. **A search field that expands to reveal filters** hides the filter set behind a control, which is the failure this replaced. **Keeping two separate blocks** was the maintainer's rejection: the two bands of vertical space are the cost the row exists to remove.
 
 **The thin-desk sentence is drawn by this component and rendered outside the panel.** A topic page whose desk published at most `digest.desk_thin_max` stories carries one line saying what our sources offered it and how much of that was too old. It is a sibling of the panel rather than a third child, because at 1024px and up the panel is one nowrap band and a third child would be squeezed in beside the pills - and because it is a fact about the desk rather than a control, so it should scroll away with the stories it is about. It draws for the active desk only; on the all-topics view there is no desk being read, and on the archive the counts are sums over every published day, so the panel is handed no threshold there at all. What the sentence says and the three clauses behind it are in [../../concepts/digest.md](../../concepts/digest.md#a-thin-desk-says-what-did-not-run).
 
@@ -415,7 +415,7 @@ cost, Jony on the sentence, 2026-08-27.
 | Reaching a full month back from the newest published day on every date | A constant window, bought with two whole shards on 29 days out of 30 and a second 518 KB browse index charged to every visitor who only browses. | Carmack |
 | Naming the months a search read, rather than the days | On 1 September "September 2026" reads like thirty days and holds one. The month name is what hid the collapse it was meant to disclose. | Jony |
 | A search field that expands to reveal filters | It hides the filter set behind a control, which is the failure the one panel replaced. | Susan |
-| Keeping the pills and the field as two separate blocks | Two bands of vertical space are the cost the one panel exists to remove. | owner |
+| Keeping the pills and the field as two separate blocks | Two bands of vertical space are the cost the one panel exists to remove. | maintainer |
 
 ## See also
 

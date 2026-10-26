@@ -34,7 +34,7 @@ Long content scrolls inside the region that owns it. The SQL editor shows at lea
 
 ## Design rationale
 
-**Browse a table, query through SQL.** Owner-directed, 2026-10-23. Ledger rows
+**Browse a table, query through SQL.** Maintainer-directed, 2026-10-23. Ledger rows
 are native buttons, not mandatory checkboxes. Names use the existing data face
 and small-text size with matching leading, larger than the former extra-small
 type. The pressed row marks only whose columns are shown. Repetitive grain and
@@ -45,7 +45,7 @@ as provenance and a separate Remove button. Refresh explicitly discards them.
 This retains the existing workbench and tokens, without a second query-selection
 state. Susan advised the interaction and type choice.
 
-**The Data explorer takes the whole window** (owner, 2026-10-05; the layout is
+**The Data explorer takes the whole window** (maintainer, 2026-10-05; the layout is
 Jony's). It is a tool an operator works in, so the room a screen has is room
 for the question and the answer, not margin. Before, the page was capped at
 1,600 px less two gutters and gave every region a fixed size: on a 1920 px
@@ -65,7 +65,7 @@ Each share is a number in the stylesheet, not a setting: a share means something
 only beside the others in the same track list, so a setting for one would quietly
 change the rest.
 
-**Run is the last button of the group by the editor.** The owner asked for Run
+**Run is the last button of the group by the editor.** The maintainer asked for Run
 beside Save and Copy link. The last button of a group that stands at the end of
 its line never moves when anything to its left changes, so naming a question
 moves nothing. The words `DuckDB SQL` give way first, cut short with an
@@ -75,7 +75,7 @@ ellipsis, so the line never wraps after a click.
 
 **Below 1024 px the question is a whole number of pixels tall** (found 2026-10-06). Its text lines are 1.3rem and 1.6rem tall, 20.8 and 25.6 px, so left to its content the question ended between two pixels - 1,100.375 px tall at 768 px - and so did the answer under it and the page's foot. The browser scrolls and sizes the page in whole pixels, so the window-tall answer could never fill the window exactly, and at 768 px the page's last 0.375 px lay past the last pixel a scroll reaches. The panel pictures could hold neither. Rounding the question adds no fraction of its own, but the strip above it can: in a desktop browser whose scroll bars take room, the strip's tabs show a scroll bar at 390 px and the strip is 42.67 px tall, where the browser that takes the pictures, whose scroll bars take none, measures 33 px. **What it costs:** less than one pixel of empty space at the question's foot. A browser without `calc-size()` keeps the content's height, which moves nothing a reader can see.
 
-**The question strip is one line.** Saving a question added a chip, and on a strip that wraps the chip pushed it onto a second line: at 1440 x 900 the editor, the rails and the status bar moved down 40 px, which breaks the rule that only a region's content changes. A line that folds what does not fit has one height whatever is saved (the executing owner, 2026-10-06).
+**The question strip is one line.** Saving a question added a chip, and on a strip that wraps the chip pushed it onto a second line: at 1440 x 900 the editor, the rails and the status bar moved down 40 px, which breaks the rule that only a region's content changes. A line that folds what does not fit has one height whatever is saved (the executing maintainer, 2026-10-06).
 
 **Both floating lists close themselves.** While open, `{n} more` lies over the ledger rail and the editor, and History's list over Save, Copy link and Run, so a list that waits to be closed covers what a person reaches for next. After a pick, focus stays on the list's own control rather than in the editor, because a phone's keyboard would rise over the question that was just loaded. One helper, `floating-list.ts`, closes both, so the two cannot drift apart (Jony, 2026-10-06).
 
@@ -85,7 +85,7 @@ mouse, so they spilled 6 px over the ledger rail above and 6 px onto the note
 below. The buttons now take the control's height, and the message after a copy
 moved to the page's floating notice, so a long sentence never widens the line.
 
-**The reader chooses the chart and its columns, and room is reserved by band, never by chart** (owner, 2026-10-07; the layout is Jony's and the words Susan's). Every chart is a tile on every answer and every tile can be pressed, because a switch whose tiles come and go on each run is one a reader cannot learn, and a disabled radio is one the arrow keys skip without a reason. The role row reserves a slot for each role of the chart with the most roles, so the drawing's top edge stands in one place for every chart. **What it costs:** on a phone a chart with one role leaves two empty lines, 96 px with touch, that the drawing does not get, and the foot keeps the room of every note the answer can give, even under a chart that shows none of them.
+**The reader chooses the chart and its columns, and room is reserved by band, never by chart** (maintainer, 2026-10-07; the layout is Jony's and the words Susan's). Every chart is a tile on every answer and every tile can be pressed, because a switch whose tiles come and go on each run is one a reader cannot learn, and a disabled radio is one the arrow keys skip without a reason. The role row reserves a slot for each role of the chart with the most roles, so the drawing's top edge stands in one place for every chart. **What it costs:** on a phone a chart with one role leaves two empty lines, 96 px with touch, that the drawing does not get, and the foot keeps the room of every note the answer can give, even under a chart that shows none of them.
 
 **The foot reserves only the notes an answer can give, and the result region keeps a floor** (Jony, 2026-10-08). The foot first reserved the status bar's lines on every answer, and most answers give no note, so it was an empty band where the chart should be: at 1024 x 768 the drawing got 102 px, the main figure and the top of the plot, and the plot scrolled inside a page that did not. Now the foot takes room only for a note the answer can give, counted from the answer alone so a change of chart or column never moves it, and the result region never gets less room than its parts need. A short window scrolls the page, the one scroll every reader knows, and the plot keeps the height every console chart has. The floor counts the chart's readout as well as the figure and the comparison, because the readout is fixed text under the plot, as they are; a floor that left it out shortened the plot by the readout's height, which is a second, lower plot height for the same charts. **What it costs:** from 1024 px a window shorter than about 950 px scrolls the page - about 183 px at 1024 x 768 and about 145 px at 1366 x 768 - so the question and the whole chart are not in view together there, and at 1440 x 900 the question half is 321 px tall instead of 389 px. A note takes its room from the plot: at the floor the plot is 220 px with no note and 191 px with one.
 

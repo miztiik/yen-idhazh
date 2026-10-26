@@ -11,7 +11,7 @@ template from the server that will apply it, the runner class from the runner.
 A source that does not answer is recorded as unanswered, which is a different
 reading from a source that answered (Guardrail #10).
 
-**This records and it gates nothing.** Owner decision, 2026-09-10. The digest
+**This records and it gates nothing.** Maintainer decision, 2026-09-10. The digest
 over these inputs used to do two jobs and did neither: the skip-if-unchanged
 half was never wired to a caller, and the eval-window half withheld a quality
 number until N consecutive run-days ran at one digest - which, in a repository
@@ -334,7 +334,7 @@ def prose_changed_alone(
 ) -> tuple[str, ...]:
     """The prose inputs that moved while the model and the binary held still.
 
-    The one alarm that survives the gate (owner decision, 2026-09-10). It
+    The one alarm that survives the gate (maintainer decision, 2026-09-10). It
     reports, it never blocks, and it never withholds a number: a run whose
     prompt changed publishes exactly as a run whose prompt did not.
 

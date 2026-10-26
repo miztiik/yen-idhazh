@@ -4,7 +4,7 @@
 
 **Level**: 3, except rows 8 and 9, which are Level 5 if they end in adoption.
 
-Execute per docs/how-to/execute-a-plan.md: one worktree-isolated worker per row, AUTO-merge on green gates, parallel N = 4. AUTHOR-AND-STOP until the owner authorizes a row.
+Execute per docs/how-to/execute-a-plan.md: one worktree-isolated worker per row, AUTO-merge on green gates, parallel N = 4. AUTHOR-AND-STOP until the maintainer authorizes a row.
 
 **No step in this plan asks a human to download, upload or copy anything on a schedule.** The one recurring human action is running a notebook, because training is not allowed on the runner.
 
@@ -186,7 +186,7 @@ Measured 2026-08-29 over the 1,308 committed rows. Days are uneven - 61, 337,
 | 7 | 1,308 | 0 | no |
 | 14 (today) | 1,308 | 0 | no |
 
-**Set to 2 on 2026-08-29** (owner decision). It holds out 125 rows, which is
+**Set to 2 on 2026-08-29** (maintainer decision). It holds out 125 rows, which is
 enough to measure something, and leaves 1,183 - the draw fills with room to
 spare. 1 makes the holdout too thin to say anything. 3 clears the ceiling by 15
 rows, which is inside the noise of one day's publishing. `split` now reports
@@ -229,7 +229,7 @@ of three measured parts, not an estimate:
 4,096 never could have held that. The old value was derived from a 1,923-word
 article, which was the cap before it moved.
 
-**Set to 8,192 on 2026-08-29** (owner decision). 7,168 also clears 7,155 - by 13
+**Set to 8,192 on 2026-08-29** (maintainer decision). 7,168 also clears 7,155 - by 13
 tokens, which is not a margin, and any wording added to the system prompt eats
 it. 8,192 leaves 1,037. The old field text argued that 8,192 "would waste
 free-tier memory quadratically in attention for headroom nothing uses"; the
@@ -318,7 +318,7 @@ amend.
 
 ---
 
-## Section 1 - Inputs needed from the owner
+## Section 1 - Inputs needed from the maintainer
 
 Seven answers. Each row names what it unblocks.
 
@@ -338,7 +338,7 @@ Seven answers. Each row names what it unblocks.
 
 ## Section 2 - The rows, one line each
 
-The plan runs in three phases. **A is everything that must exist before a GPU is touched, and all of it is in-repo. B is the only work that leaves the repo. C brings the result back and decides what to do with it.** No row in A depends on any row in B, which is the property that lets A land while the owner is still thinking about Colab.
+The plan runs in three phases. **A is everything that must exist before a GPU is touched, and all of it is in-repo. B is the only work that leaves the repo. C brings the result back and decides what to do with it.** No row in A depends on any row in B, which is the property that lets A land while the maintainer is still thinking about Colab.
 
 | Phase | # | Row | What it does | Runs on | Human effort |
 | --- | --- | --- | --- | --- | --- |
@@ -1235,7 +1235,7 @@ A critical read of this plan against the repo as it actually stands. Six finding
 
 ## Row #10 - Adopt, or do not
 
-**Level 5. ESCALATE. Nothing in this row runs without explicit approval** (CLAUDE.md section 6, ESCALATE trigger 3). It is written down so that phase C has an owner, not so that it can start.
+**Level 5. ESCALATE. Nothing in this row runs without explicit approval** (CLAUDE.md section 6, ESCALATE trigger 3). It is written down so that phase C has a maintainer, not so that it can start.
 
 - **Scope:** Point production at the tuned weights, or record why we did not. This is the only row in the plan that changes what a reader receives.
 - **Files:** `config/idhazh.json`, `docs/reference/pipeline-cost.md`, `docs/how-to/fine-tune-a-model.md`. A new fingerprint row appears under `state/` on the next run, written by the pipeline, not by hand.

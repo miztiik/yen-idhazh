@@ -90,8 +90,8 @@ Its raw fallback response need not carry a `noindex` tag. Do not generate a
 separate route document or change the common fallback to satisfy that check.
 Dated reader addresses use the same fallback, so changing it would affect
 pages outside the console. Existing search hints do not guarantee exclusion
-from search results and are not access controls. Owner ruling:
-kumarsnaveen, 2026-10-09.
+from search results and are not access controls. Maintainer ruling:
+2026-10-09.
 
 ## See also
 

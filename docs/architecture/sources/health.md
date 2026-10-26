@@ -5,7 +5,7 @@ What every feed did on every run, where that record lives, and how a run decides
 
 The isolated TypeScript planner uses these native health rows for rest and
 reliability. Its permanent retirement authority is the curated source registry.
-The [history input contract](planner-feed-history.md) records that owner ruling,
+The [history input contract](planner-feed-history.md) records that maintainer ruling,
 saved-time uncertainty and native health-input coverage.
 
 ## From item outcome to feed rest or retirement
@@ -535,7 +535,7 @@ dates or reasons belongs on `FeedDef`, not on every feed-health observation.
 
 ### Intelligent F.E.E.D - I Feed design direction
 
-The owner requested an earned, tunable source model on 2026-09-09.
+The maintainer requested an earned, tunable source model on 2026-09-09.
 [Intelligent F.E.E.D - I Feed](i-feed.md) records
 the design guidelines, including a composite score, bounded allocation and
 recovery, evolving topic assignments, and optional weighted deterministic,
@@ -582,7 +582,7 @@ cannot disagree about what a failure is. Three facts it settles:
  because two spans in one section is the defect the shared window exists to
  remove. Until 2026-09-09 the sentence said the feeds "have never failed",
  which claims every run there has been over a read that opens a bounded set of
- files - a growing read in different clothes (`CLAUDE.md` Guardrail #12, owner
+ files - a growing read in different clothes (`CLAUDE.md` Guardrail #12, maintainer
  decision 2026-09-08). It now names the run count the record holds.
 
 **A refusal used to count as an ask, and that put a source we have never read

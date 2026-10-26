@@ -360,7 +360,7 @@ def test_the_runner_name_is_read_off_the_platform_and_never_invented() -> None:
 def test_the_named_server_pid_wins_over_an_unrelated_server(
     monkeypatch: MonkeyPatch, tmp_path: Path
 ) -> None:
-    """Use the PID from the server owner, not the first matching process."""
+    """Use the PID from the server maintainer, not the first matching process."""
     requested_pid, unrelated_pid = 742, 700
     for pid, name, rss_kb in (
         (requested_pid, "llama-server", A_SERVER_RSS_KB),

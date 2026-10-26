@@ -306,7 +306,7 @@ def test_a_moved_block_is_declared_in_one_file_and_the_other_does_not_argue(
     (docs/concepts/config.md), so the rule is one-directional: whatever the
     legacy block still carries has to agree with it. The exception is a key the
     published surface does not draw at all - see `PIPELINE_OWNED`, where the
-    pipeline file is the owner and the appearance file declares nothing.
+    pipeline file is the maintainer and the appearance file declares nothing.
 
     A key declared in both files with the SAME value is tolerated, because that
     is the read-side migration's middle layer doing its job (section 11): a

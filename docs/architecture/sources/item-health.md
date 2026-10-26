@@ -11,7 +11,7 @@ shows where item evidence stops and feed quarantine or retirement begins.
 **This ledger is the pipeline's spine.** It is the most granular record the
 pipeline keeps, and every other telemetry surface is derived from it - the
 native panel query answers, the day aggregate in
-`state/day-metrics/`, and the operator console. Owner decision, 2026-09-14: new
+`state/day-metrics/`, and the operator console. Maintainer decision, 2026-09-14: new
 telemetry lands here first and is projected outward, rather than each surface
 growing its own ledger.
 
@@ -74,7 +74,7 @@ the item-health compaction's responsibility, not the former public-copy policy.
 
 The 30-day window on this page is a read-side parameter and is unrelated to that
 age. Day files followed the published ledger, and the seen and feed-health
-ledgers followed it too in the days after - owner instruction,
+ledgers followed it too in the days after - maintainer instruction,
 2026-09-10, and the reason is in
 [../../concepts/partitions.md](../../concepts/partitions.md#a-ledger-and-its-mirror-may-file-at-different-grains).
 What the summary keeps, what it costs and why fourteen is
@@ -901,7 +901,7 @@ Shape is evidence, not a verdict. `too_short`, `not_prose`, `boilerplate` and
 `contaminated` can appear on an `ok` row because the item published and the
 signal still matters to the editor. They never count against a source by
 default. Only a paywall, an unsupported form, or genuine missing text stops
-extract. Authority: Owner override O3.
+extract. Authority: Maintainer override O3.
 
 Each of the four has a switch that closes it
 ([../../concepts/config/summary-length.md](../../concepts/config/summary-length.md)). O3 is what the DEFAULT
@@ -971,7 +971,7 @@ sets `turns.thinking_close`, and double it again because each span reads its
 prompt before it writes its answer. Clearing one marker halves it with no code
 changed. **Write the rule, never the count.** Every fixed count written about
 this pipeline has been wrong in turn, and a number here rots on a config edit
-that no test and no reviewer can see. Authority: Owner, 2026-09-20.
+that no test and no reviewer can see. Authority: Maintainer, 2026-09-20.
 
 A worker commits the rows for its own items, and Assemble writes the rest.
 Assemble was the only writer until 2026-08-27, to keep a diagnostic append out of

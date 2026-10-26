@@ -1,7 +1,7 @@
 /** Refuse chart data the current browser renderer cannot safely draw.
  *
  * Framing is untrusted text, never markup. Paths accept only published item
- * identities. Older renderers have no compatibility reader (owner, 2026-10-24).
+ * identities. Older renderers have no compatibility reader (maintainer, 2026-10-24).
  * This module has no runtime imports so plain Node and the browser share it.
  */
 import type { VisualData } from './types';

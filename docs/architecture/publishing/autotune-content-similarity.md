@@ -61,7 +61,7 @@ the build. The dated page loads the day and reveals the named story. From the
 home page this opens the dated page; from that day's page it changes only the
 fragment. The payload and the grouping are unchanged.
 
-**What the reader loses, stated.** On a false merge a story is one click away instead of on the page. That is a real loss and it is the trade the owner took on 2026-09-14, on the reasoning under `Editor's asymmetry` below. `ui.draw_same_story` is the revert: default true, and false restores one card per story with no other change. It is removed when the grouping's false-merge rate has been measured on a published day and the Editor has accepted it.
+**What the reader loses, stated.** On a false merge a story is one click away instead of on the page. That is a real loss and it is the trade the maintainer took on 2026-09-14, on the reasoning under `Editor's asymmetry` below. `ui.draw_same_story` is the revert: default true, and false restores one card per story with no other change. It is removed when the grouping's false-merge rate has been measured on a published day and the Editor has accepted it.
 
 **The card prints names where it has them and a count where it does not**, because the two answer different questions. `covered_by` is capped at three and drops a name this page cannot reach, so it is never the whole of the count; `also_covered_by` is whole, and the card prints the difference as `and N more`. A card that named two newsrooms on a story five outlets ran would be a wrong number, which is the one thing this block exists to avoid.
 
@@ -143,7 +143,7 @@ part of `digest.yml`: at the cap the block permits, the model time alone would
 push the job past the 6 h ceiling GitHub kills a job at, and a shape that only
 fits on a median day is a shape that finds out on a busy one.
 
-**The name is about where this goes rather than where it is** - owner ruling,
+**The name is about where this goes rather than where it is** - maintainer ruling,
 2026-09-18. The shards split a list today and never confer, so `judges` would be
 the more literal word for what is on disk. What is coming is not one question:
 this loop argues a case, and a case needs something to adjudicate it - a judge,
@@ -469,7 +469,7 @@ flowchart TD
 
 **Counts, and never one rate.** With 196 of the 200 marks on one side, always answering "one story" scores 98 percent and measures nothing. The row carries the four cells and the negative population beside them, so every rate a reader derives is derived with the denominator it came from in view (Guardrail #10). The two directions of a mistake stay apart for the reason the Editor gives above: a missed group shows the reader one story twice, a false merge hides one of them.
 
-**The reading is refused below half the marks read.** Retention deletes published days the marks still name, so a run can resolve almost nothing and still produce four cells that add up - and four small cells read as a line that got nearly everything right. `HOLDOUT_RESOLVED_SHARE_MIN` is a constant beside `HOLDOUT_TWO_STORY_MAX` in `backend/idhazh/contracts/knobs/placement.py` rather than a knob in `config/`, because it says what makes the reading mean anything and a share that can be tuned down is a share somebody tunes down on the morning the reading goes red (owner, 2026-09-21).
+**The reading is refused below half the marks read.** Retention deletes published days the marks still name, so a run can resolve almost nothing and still produce four cells that add up - and four small cells read as a line that got nearly everything right. `HOLDOUT_RESOLVED_SHARE_MIN` is a constant beside `HOLDOUT_TWO_STORY_MAX` in `backend/idhazh/contracts/knobs/placement.py` rather than a knob in `config/`, because it says what makes the reading mean anything and a share that can be tuned down is a share somebody tunes down on the morning the reading goes red (maintainer, 2026-09-21).
 
 **`HOLDOUT_TWO_STORY_MAX` has one declaration and one instrument.** The constant is what the config validator reads, because a config validator does not read a ledger; the verb retakes the reading on its way past and prints both numbers when they disagree. It writes nothing - a committed copy would be the second source the constant is not allowed to have (Guardrail #10).
 
@@ -495,7 +495,7 @@ The vector pass alone left the same story on the page several times. `dolly part
 
 **Numbers come out of the words and are compared separately**, because the two need different rules. The words have to match exactly. A number only has to agree to the coarser of the two precisions it was written with, and a scale word is read into the value rather than left among the words. A desk that writes `2 million` is not claiming to know the next six digits; a desk that writes `2,000,035` is. So `$12.9 billion`, `$12.93 billion` and `$13 billion` are one acquisition, and `$12.9bn` is the same headline as `$12.9 billion`. What it refuses is the pair written to the same precision and different inside it: `25 percent` against `50 percent`, `Budget 2025` against `Budget 2026`, `7 dead` against `70 dead`, and `100` against `104` - because a trailing zero is a written digit, so `100` claims three of them.
 
-**That rule is bounded by the words around it, which is why it is safe.** A number is only ever compared against a headline that is otherwise identical word for word, so the question is never "are these two numbers close" - it is "did two desks write one sentence and round one figure differently". Measured 2026-09-14 over the twenty-five committed days, it admits **12 cross-source pairs** the exact-digit rule refused and **every one of them is the same Nvidia acquisition**. No false merge, and the 42 groups the exact rule already found are unchanged. Owner ruling, 2026-09-14, over Andre's narrower stop-at-punctuation: two decimal places are not a reason to print one story twice, and the corroboration claim survives because a genuine disagreement - a different figure at the same precision - still refuses.
+**That rule is bounded by the words around it, which is why it is safe.** A number is only ever compared against a headline that is otherwise identical word for word, so the question is never "are these two numbers close" - it is "did two desks write one sentence and round one figure differently". Measured 2026-09-14 over the twenty-five committed days, it admits **12 cross-source pairs** the exact-digit rule refused and **every one of them is the same Nvidia acquisition**. No false merge, and the 42 groups the exact rule already found are unchanged. Maintainer ruling, 2026-09-14, over Andre's narrower stop-at-punctuation: two decimal places are not a reason to print one story twice, and the corroboration claim survives because a genuine disagreement - a different figure at the same precision - still refuses.
 
 **A matching headline does not lift the vector gate.** It decides that two items are the same story; it does not decide that an item with no vector may be grouped. That item stays out, as it always did.
 
@@ -557,7 +557,7 @@ Two passes read the finished day inside `assemble.build_day`, and both were writ
 ## Design rationale
 
 **Saved model identities are open; recorded instruments must still agree.**
-Owner ruling, kumarsnaveen, 2026-10-24: a valid new model configuration must not
+Maintainer ruling, 2026-10-24: a valid new model configuration must not
 require edits to saved-data model lists. This reverses the former policy that
 an encoder or judge swap required a similarity schema edit. The five saved
 similarity contracts now check the same slug spelling as model configuration.
@@ -647,7 +647,7 @@ any line. The fourth, at 0.9343, is same-day and sits below the floor.
 **What is not decided.** Whether the hand marks should become a live floor the
 fit reads on every day - refusing to apply a line at or below the highest
 two-story mark - rather than a number copied into source. That is the structural
-fix for the class of defect this page just recorded, and it is an owner decision.
+fix for the class of defect this page just recorded, and it is a maintainer decision.
 
 **The record is fixed-size and the fit never reads the judged pairs back.** The
 alternative - sort every pair ever judged - answers the same question and costs

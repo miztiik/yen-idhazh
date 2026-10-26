@@ -121,7 +121,7 @@ The branch squashes to one entry on `main`.
 
 ```powershell
 gh pr merge NNN --squash --delete-branch --auto
-gh api graphql -f query='{repository(owner:"OWNER",name:"REPO"){pullRequest(number:NNN){autoMergeRequest{enabledAt}}}}'
+gh api graphql -f query='{repository(owner:"ACCOUNT",name:"REPO"){pullRequest(number:NNN){autoMergeRequest{enabledAt}}}}'
 ```
 
 A `null` there means the plain form above is still the merge.
@@ -163,7 +163,7 @@ Review only the branches this task owns. A `: gone` marker means the remote
 branch was deleted; it does not prove the pull request merged.
 
 ```powershell
-gh pr view NNN --repo OWNER/REPO --json state,headRefOid,mergeCommit
+gh pr view NNN --repo ACCOUNT/REPO --json state,headRefOid,mergeCommit
 git rev-parse <branch>
 git ls-remote --heads origin refs/heads/<branch>
 git worktree list --porcelain

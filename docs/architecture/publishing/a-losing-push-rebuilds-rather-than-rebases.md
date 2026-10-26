@@ -9,7 +9,7 @@ pay for history without making a data producer own those paths.
 
 ## A candidate is a tree, not a patch
 
-The owner-approved publisher builds a private index from fresh main, applies
+The maintainer-approved publisher builds a private index from fresh main, applies
 only independently declared, confirmed operations, verifies their actual blobs
 and modes, and creates a candidate with that main as its sole parent.
 The checkout's HEAD, index, sparse patterns and foreign files never move.

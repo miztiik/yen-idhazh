@@ -140,7 +140,7 @@ def test_every_shard_count_the_matrix_can_run_is_a_partition_of_the_tasks(tmp_pa
 
 
 def test_a_shard_lists_what_its_tasks_own_or_read_and_never_a_whole_root(tmp_path: Path) -> None:
-    """Every owned folder is listed by the one shard that runs its owner, and none is a root.
+    """Every owned folder is listed by the one shard that runs its maintainer, and none is a root.
 
     A shard checks out none of these folders: it lists their files from the
     commit. A whole root here would list every ledger's files for one task.

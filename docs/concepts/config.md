@@ -131,11 +131,11 @@ ledger families and ledgers that the Data explorer page refreshes and compares w
 the site's published list. The build copies it verbatim to the site at the same
 path, and the page fetches it when the operator opens that page. That makes the
 refresh a real read of the site's declaration rather than a rebuild-time
-constant. Owner ruling, 2026-09-28.
+constant. Maintainer ruling, 2026-09-28.
 
 ## Design rationale
 
-**No watchlist entry limit.** Owner ruling, kumarsnaveen, 2026-10-23:
+**No watchlist entry limit.** Maintainer ruling, 2026-10-23:
 remove `collect.watchlist_max_entities`. Only a test read it; no runtime
 consumer limited the registry. The list grows through entries a person authors
 in `config/watchlist.json`, without a separate count setting. Entity kinds,

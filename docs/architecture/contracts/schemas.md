@@ -43,7 +43,7 @@ spelling, never membership in today's selected model file. Existing JSON,
 CSV and Parquet strings, versions and provenance remain unchanged on read;
 no archive rewrite, second write format or migration is needed.
 Fixed judge software identities and verdict vocabularies remain closed.
-The owner-directed reversal of the former closed model lists is recorded in
+The maintainer-directed reversal of the former closed model lists is recorded in
 [similarity's design rationale](../publishing/autotune-content-similarity.md#design-rationale).
 
 The ledger layer reads a field annotation as a recursive tree: scalar (`string`, `int64`, `float64`, `bool`), list (`list[T]` and `tuple[T, ...]`), or struct (nested Pydantic model). A closed set of unions and wrapped aliases is reduced before the conversion, and unsupported shapes fail with the full nested field path. `backend/idhazh/ledger/arrow_schema.py` is the single entry point; `backend/idhazh/ledger/parquet.py` renders that tree to Arrow; `backend/idhazh/ledger/json_lines.py` stays format-generic and never adds contract-specific branches.
@@ -209,7 +209,7 @@ Rejections require the deciding stage's reason and measurements; feed failures
 have no article identity. Audit payloads use declared variants and never carry
 full article text.
 Current planner event identities use UUIDv5 and execution correlations use
-UUIDv4, as defined by [the identity contract](identity.md). The owner's
+UUIDv4, as defined by [the identity contract](identity.md). The maintainer's
 2026-10-22 correction replaces the unshipped SHA event implementation fixtures;
 it does not migrate or rewrite historical production ledger files.
 
@@ -232,7 +232,7 @@ Named tests in `backend/tests/contracts/`, each proving a specific binding.
 
 ## The model file has no declared shape
 
-`config/models/<name>.json` is validated by `ModelsConfig`, which is deliberately absent from `contracts.CONTRACTS`. **A configuration file this project authors needs no declared shape** (`CLAUDE.md` Guardrail #3, owner ruling 2026-09-21): nothing but this repository writes one and nothing but this repository reads one, so a schema of it restates a model that is already its only reader.
+`config/models/<name>.json` is validated by `ModelsConfig`, which is deliberately absent from `contracts.CONTRACTS`. **A configuration file this project authors needs no declared shape** (`CLAUDE.md` Guardrail #3, maintainer ruling 2026-09-21): nothing but this repository writes one and nothing but this repository reads one, so a schema of it restates a model that is already its only reader.
 
 What the entry still declares is what this project's own code names: the weights, the architecture, the two turn-envelope strings no template can answer, how long one request may wait, and the digest the settings were derived against. **What it does not declare is the settings themselves.** The `server` block is llama-server's own flags, spelled as the binary spells them and emitted verbatim, and the `sampling` block is every value that decides which token is drawn, spelled as the request body spells it. A typed field for a value this project hands straight to another program is a second spelling somebody has to keep in step - and llama-server refuses a flag it does not accept at every server start, which names it and does not start.
 
@@ -492,7 +492,7 @@ record earlier changes; they are not instructions to an agent.
 
 **Five entries at most** - the four newest changes, then one pointer entry saying the rest is in git. The pointer carries the oldest stamp the contract still names, so it also marks how far back the retained history reaches. A contract that has never had five changes carries no pointer; there is nothing to point at.
 
-**What may not appear in an entry**: a measurement, a hardware line, a date inside the prose, an incident, a plan row, a persona's name or an owner ruling. A reading belongs in the instrument log (`CLAUDE.md` Guardrail #10) and a rationale belongs in the living doc it impacts (Guardrail #4). The entry names what moved, not the argument that moved it.
+**What may not appear in an entry**: a measurement, a hardware line, a date inside the prose, an incident, a plan row, a persona's name or a maintainer ruling. A reading belongs in the instrument log (`CLAUDE.md` Guardrail #10) and a rationale belongs in the living doc it impacts (Guardrail #4). The entry names what moved, not the argument that moved it.
 
 **The line is the test.** An entry that will not fit one line is asking a question rather than failing a limit: is the reason worth a `## Design rationale` section on the page that owns the subsystem? If yes, write it there and leave one line here pointing at the page. If no, it was never worth keeping. Those are the only two answers - a wrapped entry is neither.
 
@@ -529,7 +529,7 @@ Two more clauses, and each one has already cost a day:
 - **A model's size, vendor or revision never appears in an identifier.** `models.summarizer` names the role; which weights fill it is a value in `config/`, and a knob called `models.qwen9b` would have to be renamed the day the weights change. A **filename** under `config/models/` is not an identifier - it names one set of weights and is meant to, which is why `models_file` is the whole swap and no code may compare against what it says (`backend/tests/test_summarize.py::test_no_module_that_opens_a_model_branches_on_which_model_it_is`).
 - **A word that is wrong is renamed early, not when it is convenient.** `route` named a dispatch decision and the stage makes a planning decision. It reached a module, a contract, a schema stem, two config keys, a workflow job, an enum member, two TypeScript fields and about two hundred sentences before anybody paid it off. Every plan written against the wrong word writes more of it, so the bill grows with the calendar and never with the difficulty.
 
-Two names in this repository do not take the word a glossary would give them, recorded here so they are not argued twice. **`visual_planner.py`** is the module filename, decided ahead of any glossary because a glossary names steps and not files; the stage it was named for retired on 2026-09-13 and the file kept the name, because what it still holds is the gate and the ladder that decide a picture. **`density_floor`** was chosen over the more formal term outright, by the owner.
+Two names in this repository do not take the word a glossary would give them, recorded here so they are not argued twice. **`visual_planner.py`** is the module filename, decided ahead of any glossary because a glossary names steps and not files; the stage it was named for retired on 2026-09-13 and the file kept the name, because what it still holds is the gate and the ladder that decide a picture. **`density_floor`** was chosen over the more formal term outright, by the maintainer.
 
 **A definition that turns out to be false does not stop the term binding.** `Ledger` is defined as "never edited in place" and the corpus window rewrites at its edge. The word is still the identifier; the narrowed definition on the page that owns it governs what it means. Narrow the definition there rather than minting a second word.
 
@@ -652,25 +652,25 @@ an earlier run's plan look larger than it was.
 
 ## Design rationale
 
-Owner approval, kumarsnaveen_microsoft, 2026-10-24, A1: evolve only score-bearing
+Maintainer approval, 2026-10-24, A1: evolve only score-bearing
 selection, assessment, dispatch and event contracts for the
 [separate reliability penalty](../sources/feed-curation.md#design-rationale).
 Python changes remain declarations, migrations and compatibility bindings;
 the production Python ranking implementation is unchanged.
 
-Owner approval, kumarsnaveen_microsoft, 2026-10-24, compatibility-gate A1:
+Maintainer approval, 2026-10-24, compatibility-gate A1:
 extend the published-column validator and existing cases for nullable nested
 additions in older schemas. This narrowly extends the declaration-only Python
 scope to the compatibility gate. Current-schema and existing-type checks stay
 strict; no production planner change, local Python run or historical rewrite
 is authorized.
 
-Owner ruling, kumarsnaveen, 2026-10-22: remove the Python planner event model
+Maintainer ruling, 2026-10-22: remove the Python planner event model
 and its comparison checks because no Python production reader consumes it.
 The TypeScript producer and readers use one Zod declaration directly.
 Keep shared ledger declarations where Python actually reads the records.
 
-Owner ruling, kumarsnaveen, 2026-10-22: the shared stored rejection,
+Maintainer ruling, 2026-10-22: the shared stored rejection,
 assessment and source-run contracts add distinct already-published,
 same-day-settled-failure and configured-blocked-marker reasons. Their
 readers preserve old versions and reject those reasons on old stamps; Python
@@ -682,7 +682,7 @@ Making `version` a date-stamp rather than an integer is a small choice with a sp
 
 **What the replacement does not cover, stated rather than implied.** A generator held every shape in step whether or not anybody had thought about it; three tests hold the shapes somebody named. `frontend/src/lib/payload/types.ts` is the gap: it mirrors four contracts by hand and no test binds it. That was true before this change too - it was the one mirror the generator never replaced - but the generated tree beside it made it look like an exception rather than the rule. Binding it is a row nobody has written.
 
-Owner ruling, kumarsnaveen_microsoft, 2026-10-25: add the exact Parquet-byte
+Maintainer ruling, 2026-10-25: add the exact Parquet-byte
 digest to each compact entry. `rows` and `bytes` cannot identify same-sized
 content changes, while hashing a whole compact index would reread unrelated
 days. One digest on the selected covering entry lets every day covered by a

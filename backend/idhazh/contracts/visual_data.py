@@ -1,6 +1,6 @@
 """The chart data a reader's browser draws: one published file per visual.
 
-**The reader's browser draws the chart; the pipeline never draws one** (owner
+**The reader's browser draws the chart; the pipeline never draws one** (maintainer
 ruling, 2026-09-13,
 [`docs/architecture/publishing/visuals.md`](../../../docs/architecture/publishing/visuals.md)).
 Code finds the quantities, the model labels them and selects elements by id,
@@ -55,7 +55,7 @@ from idhazh.contracts.visual import (
 #: read by the page, which refuses a version it does not know rather than
 #: guessing at what a later shape meant.
 #:
-#: It is minted before anything draws from it, and that is the point. The owner
+#: It is minted before anything draws from it, and that is the point. The maintainer
 #: ruling's named cost is that a drawing stops being an archival artefact: a
 #: committed SVG is a fixed record of what a reader saw on a given day, and a
 #: spec plus drawing code can be redrawn differently by a later change with

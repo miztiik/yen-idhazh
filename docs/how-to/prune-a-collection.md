@@ -17,7 +17,7 @@ stops at a ceiling and says where the next pass resumes. What "atomic" means her
 | You need | Why |
 | --- | --- |
 | A clean working tree | a live pass deletes committed files, and you want the diff to be only that |
-| `GITHUB_TOKEN` in the environment, with `actions:write`, and `GITHUB_REPOSITORY` as `owner/name` | only to run a GitHub collection task by hand; a scheduled wake has both. The token is never read from a file and never printed |
+| `GITHUB_TOKEN` in the environment, with `actions:write`, and `GITHUB_REPOSITORY` as `account/name` | only to run a GitHub collection task by hand; a scheduled wake has both. The token is never read from a file and never printed |
 | A run id and the full sha of the checkout | only for a live pass on a ledger the door files: each file it rebuilds names them as its writer |
 | The output of a dry run | it is the default, and it is the list you are agreeing to |
 
@@ -145,7 +145,7 @@ idhazh telemetry prune --target item-health --since 2026-08-24 --until 2026-08-2
 | What you see | What happened | What to do |
 | --- | --- | --- |
 | `GITHUB_TOKEN is not set` | the token is not exported | export one with `actions:write` for this repository. Never put it in a file |
-| `GITHUB_REPOSITORY is not set`, or `a repository is named owner/name` | the repository is not exported, or the slug is wrong | export `GITHUB_REPOSITORY=miztiik/yen-idhazh` |
+| `GITHUB_REPOSITORY is not set`, or `a repository is named account/name` | the repository is not exported, or the slug is wrong | export `GITHUB_REPOSITORY=miztiik/yen-idhazh` |
 | `a prune takes the name of a ledger, not ...` | a path was passed where a name belongs | pass a name. There is no argument on either route a path can travel through |
 | `published is refused: ...` | you named a ledger that must not forget | read the reason in the message. It is a decision, not an oversight |
 | `summary-quality-evals is refused: ...` | the ledger's compaction declaration refuses it | read the reason. Changing it is a reviewed edit to that declaration's `prune_refusal` |
@@ -153,9 +153,9 @@ idhazh telemetry prune --target item-health --since 2026-08-24 --until 2026-08-2
 | `... cannot be read, so which files hold the days is not known` or `... names <period> and no file holds it` | an index of the ledger is damaged, or names a file that is gone. Nothing was changed | restore the index or the file from git, then run the command again |
 | `since is after until` | the two ends are swapped | the oldest day comes first |
 | the list, then exit 1 | a delete or a write failed part way; the files listed have already changed | fix the cause, then run the same command again |
-| a `page-out-of-order` event naming page N of `workflow-artifacts` | GitHub's pages no longer run from the oldest day to the newest. The pass read every page, held each artifact to the line, and kept its mark | nothing for one wake. If every wake says it, GitHub changed its order: each pass then reads every page, so tell the gardener's owner |
+| a `page-out-of-order` event naming page N of `workflow-artifacts` | GitHub's pages no longer run from the oldest day to the newest. The pass read every page, held each artifact to the line, and kept its mark | nothing for one wake. If every wake says it, GitHub changed its order: each pass then reads every page, so tell the gardener's maintainer |
 | a `page-count-changed` event naming page N of `workflow-artifacts` | an artifact was made or removed while the pass read, so one may have been missed. The pass kept its mark | nothing; the next wake starts from the same mark and reads again |
-| a `list-end-missing` event naming page N of `workflow-artifacts` | GitHub's count no longer names the last page, so the pass may have started in the middle of the list. It kept its mark | nothing for one wake. If every wake says it, the count stops short of the list: tell the gardener's owner |
+| a `list-end-missing` event naming page N of `workflow-artifacts` | GitHub's count no longer names the last page, so the pass may have started in the middle of the list. It kept its mark | nothing for one wake. If every wake says it, the count stops short of the list: tell the gardener's maintainer |
 | the same members are listed on every run | the pass is a dry run | for a ledger, add `--no-dry-run`; for a GitHub collection, set its declaration's `dry_run` to `false` |
 
 ## See also

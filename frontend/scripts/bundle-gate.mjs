@@ -228,7 +228,7 @@ let failed = false;
  * file.
  *
  * **A route is named here only if its weight does not move when a run
- * publishes** (owner, 2026-09-10). `/archive/` and the three `/console/` routes
+ * publishes** (maintainer, 2026-09-10). `/archive/` and the three `/console/` routes
  * were named until then and are not now: they grow when the pipeline appends a
  * day, so the gate fired on ordinary publishing and the only way past it was to
  * type a bigger number. `/404` moves only when a person edits source.

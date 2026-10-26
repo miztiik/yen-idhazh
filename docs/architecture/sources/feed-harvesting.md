@@ -167,14 +167,14 @@ counts actual extracted candidates, not early refusals.
 
 ## Design rationale
 
-Owner ruling (kumarsnaveen, 2026-10-22): reject already-expired entries before
+Maintainer ruling (2026-10-22): reject already-expired entries before
 page download. This deliberately makes age the first terminal reason for
 those entries, before page failure, paywall, category or substance checks.
 Those checks did not run and receive no invented measurements. The configured
 age policy is unchanged; this is not a fetch cap, a new seen-URL exclusion or
 a change to the final selection limit. No extraction worker pool is added.
 
-Owner ruling (kumarsnaveen, 2026-10-22): also refuse already-published URLs,
+Maintainer ruling (2026-10-22): also refuse already-published URLs,
 same-day settled failures and configured blocked URL markers before page
 download. Each refusal keeps its actual reason and known evidence; unavailable
 history is reported as unavailable and does not become an empty-history claim.

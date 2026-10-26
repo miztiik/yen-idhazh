@@ -144,7 +144,7 @@ In absolute terms it is **7.3 percent of PyYAML's 728,341 installed bytes**, a
 dependency nobody has argued about, and **0.15 percent of the 34,782,285 that
 `shellcheck-py` held while it was one.**
 
-**The installed figure is the baseline, and the wheel figure is not.** Owner
+**The installed figure is the baseline, and the wheel figure is not.** Maintainer
 ruling, 2026-09-02, on reading the two numbers above: `protego` is inside the
 budget, and every future size comparison for this dependency is made against
 **53,292 installed bytes and 0.521 s to install**. A wheel is a zip, so the
