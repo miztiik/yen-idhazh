@@ -1,6 +1,6 @@
 /** How do recorded resources read in decimal GB without claiming unobserved minima? */
-import type { TaskProfile } from "../../services/host-probes/src/task-profile/profile-schema";
-import { ResourceProofSchema } from "./feed-ingest-plan-profile-schema";
+import type { TaskProfile } from "../../host-probes/src/task-profile/profile-schema";
+import { ResourceProofSchema } from "../../host-probes/scripts/feed-ingest-plan-profile-schema";
 import { WorkflowResourcesSchema } from "./feed-ingest-plan-workflow-resources";
 import { escapeMarkdown } from "./feed-ingest-plan-report-format";
 import { measurement } from "./feed-ingest-plan-resource-values";

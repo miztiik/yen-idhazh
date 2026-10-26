@@ -4,14 +4,14 @@ import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { readFeedIngestEvent } from "../../../packages/common-contracts/src/index";
-import { formatPlannerReport, writePlannerReport } from "../feed-ingest-plan-report";
-import { formatRam, formatResourceSummary } from "../feed-ingest-plan-resource-summary";
-import { formatWorkflowPolicy } from "../feed-ingest-plan-policy-report";
-import { configureWorkflowProfiling, observeWorkflowResources, WorkflowResourcesSchema } from "../feed-ingest-plan-workflow-resources";
-import { loadConfig as loadProbeConfig } from "../../../services/host-probes/src/config";
-import { ResourceProofSchema } from "../feed-ingest-plan-profile-schema";
-import { fixture as hostFixture } from "../../../services/host-fingerprints/test/fixture";
-import { collectFingerprint } from "../../../services/host-fingerprints/src/collect-fingerprint";
+import { formatPlannerReport, writePlannerReport } from "../scripts/feed-ingest-plan-report";
+import { formatRam, formatResourceSummary } from "../scripts/feed-ingest-plan-resource-summary";
+import { formatWorkflowPolicy } from "../scripts/feed-ingest-plan-policy-report";
+import { configureWorkflowProfiling, observeWorkflowResources, WorkflowResourcesSchema } from "../scripts/feed-ingest-plan-workflow-resources";
+import { loadConfig as loadProbeConfig } from "../../host-probes/src/config";
+import { ResourceProofSchema } from "../../host-probes/scripts/feed-ingest-plan-profile-schema";
+import { fixture as hostFixture } from "../../host-fingerprints/test/fixture";
+import { collectFingerprint } from "../../host-fingerprints/src/collect-fingerprint";
 
 async function fixture() {
   const rows: unknown[] = await Bun.file(

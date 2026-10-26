@@ -1,5 +1,5 @@
 /** Which CPU time and one-core use belong to each explicitly identified PID? */
-import type { TaskProfile } from "../../services/host-probes/src/task-profile/profile-schema";
+import type { TaskProfile } from "../../host-probes/src/task-profile/profile-schema";
 import { escapeMarkdown, resourceNotice } from "./feed-ingest-plan-report-format";
 import { measurement } from "./feed-ingest-plan-resource-values";
 

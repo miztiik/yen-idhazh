@@ -3,10 +3,10 @@ import { appendFile, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import {
   FeedIngestConfigSchema, PlanRunRowSchema, readFeedIngestEvent,
-} from "../../packages/common-contracts/src/index";
-import type { FeedHealthStateRow } from "../../packages/common-contracts/src/index";
-import { PlanResponseSchema } from "../../services/feed-ingest-plan/src/api/plan-response.schema";
-import { FeedHealthStateUpdateResponseSchema } from "../../services/feed-ingest-plan/src/api/feed-health-state.schema";
+} from "../../../packages/common-contracts/src/index";
+import type { FeedHealthStateRow } from "../../../packages/common-contracts/src/index";
+import { PlanResponseSchema } from "../src/api/plan-response.schema";
+import { FeedHealthStateUpdateResponseSchema } from "../src/api/feed-health-state.schema";
 import { escapeCommand, escapeMarkdown, escapeParameter } from "./feed-ingest-plan-report-format";
 import { formatPolicyTable } from "./feed-ingest-plan-policy-report";
 import { formatResourceSummary } from "./feed-ingest-plan-resource-summary";

@@ -1,26 +1,23 @@
 /** Which real host and optional whole-planner process observations were collected? */
 import { writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { z } from "../../packages/common-contracts/node_modules/zod";
-import { HostFingerprintRowSchema } from "../../packages/common-contracts/src/index";
-import { collectFingerprint } from "../../services/host-fingerprints/src/collect-fingerprint";
-import { loadConfig as loadFingerprintConfig, SelectedSettingsSchema } from "../../services/host-fingerprints/src/config";
-import { loadConfig as loadProbeConfig, ProbeConfigSchema } from "../../services/host-probes/src/config";
-import type { ProbeConfig } from "../../services/host-probes/src/config";
-import { TaskProfileSchema } from "../../services/host-probes/src/task-profile/profile-schema";
-import type { TaskIdentity, TaskOutcome } from "../../services/host-probes/src/task-profile/profile-schema";
-import { startTaskProfile } from "../../services/host-probes/src/task-profile/task-profiler";
-import type { TaskProfileSession } from "../../services/host-probes/src/task-profile/task-profiler";
-import { writeJsonLine } from "../../services/feed-ingest-plan/src/logging/structured-logger";
-import { describePlanError } from "../../services/feed-ingest-plan/src/api/plan-request";
+import { z } from "zod";
+import { HostFingerprintRowSchema } from "../../../packages/common-contracts/src/index";
+import { collectFingerprint } from "../../host-fingerprints/src/collect-fingerprint";
+import { loadConfig as loadFingerprintConfig } from "../../host-fingerprints/src/config";
+import { loadConfig as loadProbeConfig, ProbeConfigSchema } from "../../host-probes/src/config";
+import type { ProbeConfig } from "../../host-probes/src/config";
+import { TaskProfileSchema } from "../../host-probes/src/task-profile/profile-schema";
+import type { TaskIdentity, TaskOutcome } from "../../host-probes/src/task-profile/profile-schema";
+import { startTaskProfile } from "../../host-probes/src/task-profile/task-profiler";
+import type { TaskProfileSession } from "../../host-probes/src/task-profile/task-profiler";
+import { writeJsonLine } from "../src/logging/structured-logger";
+import { describePlanError } from "../src/api/plan-request";
+import { WorkflowSettingsSchema } from "../../host-probes/scripts/feed-ingest-plan-profile-schema";
+export { WorkflowSettingsSchema } from "../../host-probes/scripts/feed-ingest-plan-profile-schema";
 
 const UnrecordedSchema = z.strictObject({
   status: z.enum(["disabled", "unavailable", "failed"]), reason: z.string().min(1),
-});
-export const WorkflowSettingsSchema = SelectedSettingsSchema.extend({
-  observability: SelectedSettingsSchema.shape.observability.extend({
-    memory_profiling_enabled: z.boolean(), host_fingerprint_placement_enabled: z.boolean(),
-  }),
 });
 export const WorkflowResourcesSchema = z.strictObject({
   profile_requested: z.boolean(),

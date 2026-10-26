@@ -44,11 +44,11 @@ bun run --cwd packages/common-contracts check
 bun run --cwd packages/ledger-file-writer check
 bun run --cwd services/feed-ingest-plan check
 bun run --cwd services/feed-ingest-plan test
-bun test ./.github/scripts/tests/feed-ingest-plan-report.test.ts ./.github/scripts/tests/feed-ingest-plan-outputs.test.ts ./.github/scripts/tests/feed-ingest-plan-workflow.test.ts --timeout 30000
-bun run .github/scripts/feed-ingest-plan-verification.ts
+bun run services/feed-ingest-plan/test/verify-recorded-compatibility.ts
 ```
 
-The existing case timeout bounds test execution; it is not a planner speed
+The service suite includes the existing workflow/report cases. Its case
+timeout bounds test execution; it is not a planner speed
 target. The workflow case compiles mandatory adapters and tests from its exact
 named sparse inputs; independent host tools retain their own checks. An
 unselected local module cannot satisfy a missing dependency. A second
@@ -67,6 +67,14 @@ Other-family UUID, canonical-byte and legacy native-file vectors remain
 separate compatibility checks.
 
 ## Saved output and failures
+
+`services/feed-ingest-plan/scripts/` owns workflow execution, bounded history
+staging, native verification, metadata commits, artifact preparation and
+reporting. `services/host-probes/scripts/` owns optional controlled host tools.
+Workflow YAML calls those modules directly. `.github/scripts/` retains only
+the independent `ai-pipeline.ts` experiment and `serve-evaluator.py`; neither
+is required for the native feed APIs. Recorded compatibility drivers live in
+the service's test directory, not in the runtime verifier.
 
 The commit manifest permits exact current raw Parquet paths for the four
 planner siblings only. The committer validates bytes, appends them through a

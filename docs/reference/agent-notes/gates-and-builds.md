@@ -62,7 +62,7 @@ Checks before trusting a test or build result. Commands belong in [run-the-gates
   expected cell substring without producing a table. Render actual adapter
   output with `Bun.markdown.html` and check table, header and data-cell
   structure, plus escaping, as the existing
-  [report check](../../../.github/scripts/tests/feed-ingest-plan-outputs.test.ts)
+  [report check](../../../services/feed-ingest-plan/test/feed-ingest-plan-outputs.test.ts)
   does. Text matches alone do not prove rendering.
 - Adding a persisted contract or retiring a task changes named test inputs too. Update the explicit fixture-path list, task declaration and module lists, and transitive-import lists beside the implementation. A committed fixture that the named fixture list omits is still untested.
 - Generated test payloads are contract writers too. Build valid controls through the native model with its authoritative version and renderer stamps; then make one deliberate invalid change per refusal case. Check the changed helper with mypy as well as pytest.

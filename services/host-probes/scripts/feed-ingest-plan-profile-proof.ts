@@ -3,17 +3,17 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { arch, release } from "node:os";
 import { randomUUID } from "node:crypto";
-import { loadConfig as loadProbeConfig, ProbeConfigSchema } from "../../services/host-probes/src/config";
-import { SAMPLE_PATH, serveSamples } from "../../services/host-probes/src/api/server";
-import { HostSampleSchema } from "../../services/host-probes/src/probe/sample-host";
-import { collectFingerprint } from "../../services/host-fingerprints/src/collect-fingerprint";
-import { loadConfig, SelectedSettingsSchema } from "../../services/host-fingerprints/src/config";
-import { probeBufferMib } from "../../services/host-fingerprints/src/inspect/copy-bandwidth";
+import { loadConfig as loadProbeConfig, ProbeConfigSchema } from "../src/config";
+import { SAMPLE_PATH, serveSamples } from "../src/api/server";
+import { HostSampleSchema } from "../src/probe/sample-host";
+import { collectFingerprint } from "../../host-fingerprints/src/collect-fingerprint";
+import { loadConfig, SelectedSettingsSchema } from "../../host-fingerprints/src/config";
+import { probeBufferMib } from "../../host-fingerprints/src/inspect/copy-bandwidth";
 import { verifyTaskProfileHttp } from "./host-task-profile-proof";
 import { CopyResultSchema, ProfileProofIdentitySchema, ResourceProofSchema } from "./feed-ingest-plan-profile-schema";
 import type { ResourceProof } from "./feed-ingest-plan-profile-schema";
 import { verifyLiveCacheProfiling } from "./feed-ingest-plan-cache-proof";
-import { WorkflowSettingsSchema } from "./feed-ingest-plan-workflow-resources";
+import { WorkflowSettingsSchema } from "./feed-ingest-plan-profile-schema";
 
 export async function verifyLiveHostProfiling(
   identity: { git_sha: string; run_id: string; correlation_id: string; attempt: number }, artifactRoot: string,

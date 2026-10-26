@@ -5,20 +5,20 @@ import { copyFile, mkdir, mkdtemp, readFile, rm, stat, symlink, writeFile } from
 import { dirname, join } from "node:path";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
-import { z } from "../../../packages/common-contracts/node_modules/zod";
+import { z } from "zod";
 import {
   COMPACT_INDEX_VERSION, RAW_DAY_INDEX_VERSION, CompactIndexSchema, RawDayIndexSchema,
   FeedHealthStateRowContract, FeedHealthStateRowSchema, FeedIngestConfigSchema, PUBLICATION_INVENTORY_VERSION,
 } from "../../../packages/common-contracts/src/index";
 import { persistLedger } from "../../../packages/ledger-file-writer/src/index";
 import { plannerRecordings } from "../../../packages/ledger-file-writer/test/planner-recordings";
-import { PlanRequestSchema } from "../../../services/feed-ingest-plan/src/api/plan-request";
-import { readPlannerParquet } from "../../../services/feed-ingest-plan/src/read-ledger-history/read-planner-parquet";
-import { LedgerHistoryReadError } from "../../../services/feed-ingest-plan/src/read-ledger-history/ledger-history-error";
-import { requiredSeenDays } from "../../../services/feed-ingest-plan/src/read-ledger-history/read-seen-evidence";
-import { stageFeedHistory } from "../feed-ingest-plan-feed-history";
-import { completeHistoryDayInputs, createSeenDayInputs, historyIndexPaths, resolveHistoryInventory, sparseCheckoutPath } from "../feed-ingest-plan-outputs";
-import { loadConfig as loadProbeConfig } from "../../../services/host-probes/src/config";
+import { PlanRequestSchema } from "../src/api/plan-request";
+import { readPlannerParquet } from "../src/read-ledger-history/read-planner-parquet";
+import { LedgerHistoryReadError } from "../src/read-ledger-history/ledger-history-error";
+import { requiredSeenDays } from "../src/read-ledger-history/read-seen-evidence";
+import { stageFeedHistory } from "../scripts/feed-ingest-plan-feed-history";
+import { completeHistoryDayInputs, createSeenDayInputs, historyIndexPaths, resolveHistoryInventory, sparseCheckoutPath } from "../scripts/feed-ingest-plan-outputs";
+import { loadConfig as loadProbeConfig } from "../../host-probes/src/config";
 
 const root = fileURLToPath(new URL("../../../", import.meta.url));
 const StepSchema = z.object({
@@ -55,7 +55,7 @@ test("manual controls commit only current metadata and keep optional host tools 
   expect(controls.profile_machine_memory!.default).toBe((await loadProbeConfig()).task_profile.machine_memory_enabled);
   const plan = steps.find(step => step.id === "plan")!;
   expect(plan.run).toContain("set -o pipefail");
-  expect(plan.run).toContain('bun run .github/scripts/feed-ingest-plan-http-proof.ts 2>&1 | tee "$RUNNER_TEMP/feed-ingest-plan/runtime.log"');
+  expect(plan.run).toContain('bun run services/feed-ingest-plan/scripts/feed-ingest-plan-http-proof.ts 2>&1 | tee "$RUNNER_TEMP/feed-ingest-plan/runtime.log"');
   expect(plan.env).toEqual({
     FRESHNESS_HOURS: "${{ inputs.freshness_hours }}", ARTICLE_LIMIT: "${{ inputs.article_limit }}",
     SHARDS: "${{ inputs.shards }}", PARTITION_STRATEGY: "${{ inputs.partition_strategy }}",
@@ -84,7 +84,7 @@ test("manual controls commit only current metadata and keep optional host tools 
   expect(steps.find(step => step.id === "evidence")?.if).toContain("always()");
   const report = steps.findIndex(step => step.name === "Write the public planner summary and grouped annotations");
   expect(report).toBeGreaterThan(steps.findIndex(step => step.name === "Run independent optional host proof"));
-  expect(steps[report]?.run).toBe("bun run .github/scripts/feed-ingest-plan-report.ts");
+  expect(steps[report]?.run).toBe("bun run services/feed-ingest-plan/scripts/feed-ingest-plan-report.ts");
   expect(steps[report]?.if).toContain("always()");
   expect(text).not.toContain("/state/raw/feed-ingest-plan/");
   const optional = steps.filter(step => step["continue-on-error"]);
@@ -93,6 +93,7 @@ test("manual controls commit only current metadata and keep optional host tools 
   expect(steps.at(-1)?.env).toEqual({ PLANNING_COMPLETE: "${{ steps.plan.outputs.planning_complete }}" });
   expect(text).not.toContain("audited_complete");
   expect(text).not.toContain("persist-dispatches");
+  expect(text).not.toContain(".github/scripts/");
   const ci = z.object({ jobs: z.object({
     site: z.object({ steps: z.array(StepSchema) }), browser: z.object({ steps: z.array(StepSchema) }),
   }) }).parse(Bun.YAML.parse(await readFile(join(root, ".github", "workflows", "ci.yml"), "utf8")));
@@ -186,7 +187,7 @@ test("bounded native history preserves covered-day membership and planner raw ov
 });
 
 test("hostile dispatch strings fail in the actual adapter before loading inputs or making requests", async () => {
-  const child = Bun.spawn([process.execPath, join(root, ".github", "scripts", "feed-ingest-plan-http-proof.ts")], {
+  const child = Bun.spawn([process.execPath, join(root, "services", "feed-ingest-plan", "scripts", "feed-ingest-plan-http-proof.ts")], {
     cwd: root, stdout: "pipe", stderr: "pipe",
     env: { ...Bun.env, FRESHNESS_HOURS: '24; throw new Error("injected")', ARTICLE_LIMIT: "", SHARDS: "", PARTITION_STRATEGY: "" },
   });
@@ -204,10 +205,11 @@ test("strict-checks the exact named sparse adapter and test inventory in one com
     const selection = steps.find(step => step.uses?.startsWith("actions/checkout@"))!.with?.["sparse-checkout"];
     if (typeof selection !== "string") throw new Error("Expected a named sparse selection");
     const required = new Set([
-      ".github/scripts/feed-ingest-plan-http-proof.ts", ".github/scripts/feed-ingest-plan-commit.ts",
-      ".github/scripts/feed-ingest-plan-verification.ts", ".github/scripts/tests/feed-ingest-plan-outputs.test.ts",
-      ".github/scripts/tests/feed-ingest-plan-report.test.ts", ".github/scripts/tests/feed-ingest-plan-workflow.test.ts",
-      ".github/scripts/feed-ingest-plan-artifacts.ts", ".github/scripts/feed-ingest-plan-profile-proof.ts",
+      "services/feed-ingest-plan/scripts/feed-ingest-plan-http-proof.ts", "services/feed-ingest-plan/scripts/feed-ingest-plan-commit.ts",
+      "services/feed-ingest-plan/scripts/feed-ingest-plan-verification.ts", "services/feed-ingest-plan/test/feed-ingest-plan-outputs.test.ts",
+      "services/feed-ingest-plan/test/feed-ingest-plan-report.test.ts", "services/feed-ingest-plan/test/feed-ingest-plan-workflow.test.ts",
+      "services/feed-ingest-plan/scripts/feed-ingest-plan-artifacts.ts", "services/host-probes/scripts/feed-ingest-plan-profile-proof.ts",
+      "services/feed-ingest-plan/test/verify-recorded-compatibility.ts",
     ]);
     const adapters: string[] = [];
     for (const entry of selection.trim().split("\n").map(value => value.trim())) {
@@ -215,7 +217,15 @@ test("strict-checks the exact named sparse adapter and test inventory in one com
       const path = entry.slice(1);
       const target = join(directory, ...path.split("/"));
       await mkdir(dirname(target), { recursive: true });
-      if (entry.endsWith("/")) await symlink(join(root, ...path.split("/")), target, "junction");
+      if (entry.endsWith("/")) {
+        await symlink(join(root, ...path.split("/")), target, "junction");
+        for (const name of required) if (name.startsWith(path)) {
+          const named = join(directory, ...name.split("/"));
+          expect((await stat(named)).isFile()).toBe(true);
+          required.delete(name);
+          adapters.push(named);
+        }
+      }
       else {
         await copyFile(join(root, ...path.split("/")), target);
         if (required.delete(path)) adapters.push(target);
@@ -249,7 +259,8 @@ test("the native verifier runs from a fixed named-input copy with no backend or 
       ...common.map(name => `packages/common-contracts/src/${name}.ts`),
       ...writer.map(name => `packages/ledger-file-writer/src/${name}.ts`),
       "packages/common-contracts/package.json", "packages/ledger-file-writer/package.json",
-      "packages/ledger-file-writer/test/planner-recordings.ts", ".github/scripts/feed-ingest-plan-verification.ts",
+      "packages/ledger-file-writer/test/planner-recordings.ts", "services/feed-ingest-plan/scripts/feed-ingest-plan-verification.ts",
+      "services/feed-ingest-plan/test/verify-recorded-compatibility.ts",
       ...["read-parquet", "read-planner-parquet", "ledger-history-error"].map(name =>
         `services/feed-ingest-plan/src/read-ledger-history/${name}.ts`),
       "services/feed-ingest-plan/src/config/service-settings.ts",
@@ -271,7 +282,7 @@ test("the native verifier runs from a fixed named-input copy with no backend or 
     for (const name of ["apache-arrow", "parquet-wasm", "zod"]) await symlink(
       join(root, "packages", "ledger-file-writer", "node_modules", name), join(modules, name), "junction");
     await expect(stat(join(directory, "backend"))).rejects.toMatchObject({ code: "ENOENT" });
-    const child = Bun.spawn([process.execPath, join(directory, ".github", "scripts", "feed-ingest-plan-verification.ts")], {
+    const child = Bun.spawn([process.execPath, join(directory, "services", "feed-ingest-plan", "test", "verify-recorded-compatibility.ts")], {
       cwd: directory, stdout: "pipe", stderr: "pipe",
     });
     const [output, errors] = await Promise.all([new Response(child.stdout).text(), new Response(child.stderr).text()]);

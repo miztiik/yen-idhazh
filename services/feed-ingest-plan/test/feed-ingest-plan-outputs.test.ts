@@ -6,19 +6,20 @@ import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { createHash } from "node:crypto";
 import { RawDayIndexSchema, SelectedArticlesArtifactSchema } from "../../../packages/common-contracts/src/index";
-import { runFeedPlan, summarizePlan } from "../../../services/feed-ingest-plan/src/run-feed-plan";
-import { recordedPlan } from "../../../services/feed-ingest-plan/test/plan-recordings";
-import { source } from "../../../services/feed-ingest-plan/test/harvest-recordings";
-import { main } from "../../../services/feed-ingest-plan/src/index";
-import { executeFeedHealthState } from "../../../services/feed-ingest-plan/src/api/feed-health-state-operation";
-import { invokePlannerHttp } from "../feed-ingest-plan-http-proof";
-import { commitPlannerFiles } from "../feed-ingest-plan-commit";
-import { verifyParquetFiles, verifyPlanningCompletion, verifyRecordedCompatibility } from "../feed-ingest-plan-verification";
-import { createExecutionOutputs, writeGitHubOutputs } from "../feed-ingest-plan-outputs";
-import { formatExecutionOutcome, formatExecutionReport, readExecutionReport, writePlannerReport } from "../feed-ingest-plan-report";
-import { prepareWorkflowArtifacts } from "../feed-ingest-plan-artifacts";
-import { observeWorkflowResources, WorkflowResourcesSchema } from "../feed-ingest-plan-workflow-resources";
-import { escapeMarkdown } from "../feed-ingest-plan-report-format";
+import { runFeedPlan, summarizePlan } from "../src/run-feed-plan";
+import { recordedPlan } from "./plan-recordings";
+import { source } from "./harvest-recordings";
+import { main } from "../src/index";
+import { executeFeedHealthState } from "../src/api/feed-health-state-operation";
+import { invokePlannerHttp } from "../scripts/feed-ingest-plan-http-proof";
+import { commitPlannerFiles } from "../scripts/feed-ingest-plan-commit";
+import { verifyParquetFiles, verifyPlanningCompletion } from "../scripts/feed-ingest-plan-verification";
+import { verifyRecordedCompatibility } from "./verify-recorded-compatibility";
+import { createExecutionOutputs, writeGitHubOutputs } from "../scripts/feed-ingest-plan-outputs";
+import { formatExecutionOutcome, formatExecutionReport, readExecutionReport, writePlannerReport } from "../scripts/feed-ingest-plan-report";
+import { prepareWorkflowArtifacts } from "../scripts/feed-ingest-plan-artifacts";
+import { observeWorkflowResources, WorkflowResourcesSchema } from "../scripts/feed-ingest-plan-workflow-resources";
+import { escapeMarkdown } from "../scripts/feed-ingest-plan-report-format";
 
 async function git(directory: string, args: string[]) {
   const child = Bun.spawn(["git", ...args], { cwd: directory, stdout: "pipe", stderr: "pipe", env: {
@@ -125,7 +126,7 @@ test("exact metadata appends through a generated bare origin with complete raw i
     await git(repository, ["push", "origin", "HEAD:refs/heads/main"]);
     const head = await git(repository, ["rev-parse", "HEAD"]);
     async function invokeCommit() {
-      const child = Bun.spawn([process.execPath, fileURLToPath(new URL("../feed-ingest-plan-commit.ts", import.meta.url))], {
+      const child = Bun.spawn([process.execPath, fileURLToPath(new URL("../scripts/feed-ingest-plan-commit.ts", import.meta.url))], {
         cwd: repository, stdout: "pipe", stderr: "pipe", timeout: 25000,
         env: { ...Bun.env, RUNNER_TEMP: fixture.directory, CURRENT_RUN_FILES: JSON.stringify(paths) },
       });
@@ -155,7 +156,7 @@ test("exact metadata appends through a generated bare origin with complete raw i
     await expect(commitPlannerFiles({ repository, stateRoot: fixture.inputs.outputRoot, retry, message: "Refuse old format",
       paths: ["raw/feed-ingest-plan/dispatches/2026/10/21/anything.parquet"] })).rejects.toThrow("current planner");
     await writeFile(join(repository, "config", "push-retry.json"), "{}");
-    const failed = Bun.spawn([process.execPath, fileURLToPath(new URL("../feed-ingest-plan-commit.ts", import.meta.url))], {
+    const failed = Bun.spawn([process.execPath, fileURLToPath(new URL("../scripts/feed-ingest-plan-commit.ts", import.meta.url))], {
       cwd: repository, stdout: "pipe", stderr: "pipe",
       env: { ...Bun.env, RUNNER_TEMP: fixture.directory, CURRENT_RUN_FILES: JSON.stringify(paths) },
     });

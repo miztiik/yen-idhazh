@@ -1,9 +1,9 @@
 /** Which effective controls governed this invocation rather than its committed defaults? */
-import { z } from "../../packages/common-contracts/node_modules/zod";
-import { FeedIngestConfigSchema } from "../../packages/common-contracts/src/index";
-import { PlanRequestSchema, resolvePlanRequest } from "../../services/feed-ingest-plan/src/api/plan-request";
-import { resolvePolicy } from "../../services/feed-ingest-plan/src/config/resolve-policy";
-import { FeedHistoryPolicySchema } from "../../services/feed-ingest-plan/src/read-ledger-history/read-feed-history";
+import { z } from "zod";
+import { FeedIngestConfigSchema } from "../../../packages/common-contracts/src/index";
+import { PlanRequestSchema, resolvePlanRequest } from "../src/api/plan-request";
+import { resolvePolicy } from "../src/config/resolve-policy";
+import { FeedHistoryPolicySchema } from "../src/read-ledger-history/read-feed-history";
 import { escapeMarkdown } from "./feed-ingest-plan-report-format";
 
 export const WorkflowPolicySchema = z.strictObject({

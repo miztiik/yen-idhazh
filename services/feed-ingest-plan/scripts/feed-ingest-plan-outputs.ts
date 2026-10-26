@@ -4,14 +4,14 @@ import { appendFile } from "node:fs/promises";
 import { posix } from "node:path";
 import {
   COMPACT_INDEX_VERSION, RAW_DAY_INDEX_VERSION, CompactIndexSchema, DateStampSchema, RawDayIndexSchema, PlannerLedgerNameSchema,
-} from "../../packages/common-contracts/src/index";
-import type { CompactIndex, RawDayIndex } from "../../packages/common-contracts/src/index";
-import type { LedgerRegistration } from "../../packages/ledger-file-writer/src/index";
-import { RelativePathSchema, SeenDayInputSchema } from "../../services/feed-ingest-plan/src/config/service-settings";
-import type { SeenDayInput } from "../../services/feed-ingest-plan/src/config/service-settings";
+} from "../../../packages/common-contracts/src/index";
+import type { CompactIndex, RawDayIndex } from "../../../packages/common-contracts/src/index";
+import type { LedgerRegistration } from "../../../packages/ledger-file-writer/src/index";
+import { RelativePathSchema, SeenDayInputSchema } from "../src/config/service-settings";
+import type { SeenDayInput } from "../src/config/service-settings";
 import { validateLedgerFilePath } from "./feed-ingest-plan-verification";
-import { PlanResponseSchema } from "../../services/feed-ingest-plan/src/api/plan-response.schema";
-import { LedgerHistoryReadError } from "../../services/feed-ingest-plan/src/read-ledger-history/ledger-history-error";
+import { PlanResponseSchema } from "../src/api/plan-response.schema";
+import { LedgerHistoryReadError } from "../src/read-ledger-history/ledger-history-error";
 
 export function createExecutionOutputs(raw: unknown, registrations: {
   discovered_articles: LedgerRegistration; selected_articles: LedgerRegistration;

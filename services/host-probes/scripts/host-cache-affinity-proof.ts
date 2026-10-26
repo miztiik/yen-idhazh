@@ -1,13 +1,13 @@
 /** Does an owned native benchmark verify its CPU when its caller has a restricted allowed set? */
 import { fileURLToPath } from "node:url";
-import { z } from "../../services/host-probes/node_modules/zod";
-import { loadConfig, ProbeConfigSchema } from "../../services/host-probes/src/config";
-import type { ProbeConfig } from "../../services/host-probes/src/config";
-import { readProcFile } from "../../services/host-probes/src/probe/proc-reader";
-import { measureWorkingSetLatency } from "../../services/host-probes/src/cache-probe/working-set-latency";
-import { startBoundedTool } from "../../services/host-probes/src/cache-probe/bounded-tool";
-import { loadConfig as loadFingerprintConfig } from "../../services/host-fingerprints/src/config";
-import { parseCpuIds } from "../../services/host-fingerprints/src/inspect/cpu-topology";
+import { z } from "zod";
+import { loadConfig, ProbeConfigSchema } from "../src/config";
+import type { ProbeConfig } from "../src/config";
+import { readProcFile } from "../src/probe/proc-reader";
+import { measureWorkingSetLatency } from "../src/cache-probe/working-set-latency";
+import { startBoundedTool } from "../src/cache-probe/bounded-tool";
+import { loadConfig as loadFingerprintConfig } from "../../host-fingerprints/src/config";
+import { parseCpuIds } from "../../host-fingerprints/src/inspect/cpu-topology";
 
 const cpus = z.array(z.int().nonnegative()).min(1);
 const AffinityResultSchema = z.strictObject({

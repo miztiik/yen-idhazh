@@ -1,9 +1,9 @@
 /** Which exact run receipts can be retained without copying private stage or article populations? */
 import { copyFile, mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
-import { z } from "../../packages/common-contracts/node_modules/zod";
-import { WriterIdentitySchema } from "../../packages/common-contracts/src/index";
-import { PlanResponseSchema } from "../../services/feed-ingest-plan/src/api/plan-response.schema";
+import { z } from "zod";
+import { WriterIdentitySchema } from "../../../packages/common-contracts/src/index";
+import { PlanResponseSchema } from "../src/api/plan-response.schema";
 import { verifyPlanningCompletion } from "./feed-ingest-plan-verification";
 import { writeGitHubOutputs } from "./feed-ingest-plan-outputs";
 

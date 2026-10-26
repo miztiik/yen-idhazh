@@ -53,29 +53,6 @@ jobs:
             /services/feed-ingest-plan/
             /services/host-probes/
             /services/host-fingerprints/
-            /.github/scripts/feed-ingest-plan-outputs.ts
-            /.github/scripts/feed-ingest-plan-feed-history.ts
-            /.github/scripts/feed-ingest-plan-history.ts
-            /.github/scripts/feed-ingest-plan-commit.ts
-            /.github/scripts/feed-ingest-plan-report.ts
-            /.github/scripts/feed-ingest-plan-report-format.ts
-            /.github/scripts/feed-ingest-plan-policy-report.ts
-            /.github/scripts/feed-ingest-plan-resource-summary.ts
-            /.github/scripts/feed-ingest-plan-workflow-resources.ts
-            /.github/scripts/feed-ingest-plan-artifacts.ts
-            /.github/scripts/feed-ingest-plan-verification.ts
-            /.github/scripts/feed-ingest-plan-http-proof.ts
-            /.github/scripts/feed-ingest-plan-profile-proof.ts
-            /.github/scripts/feed-ingest-plan-profile-schema.ts
-            /.github/scripts/feed-ingest-plan-cache-proof.ts
-            /.github/scripts/feed-ingest-plan-pid-report.ts
-            /.github/scripts/feed-ingest-plan-resource-values.ts
-            /.github/scripts/host-task-profile-proof.ts
-            /.github/scripts/host-cache-affinity-proof.ts
-            /.github/scripts/install-host-cache-tools.sh
-            /.github/scripts/tests/feed-ingest-plan-outputs.test.ts
-            /.github/scripts/tests/feed-ingest-plan-report.test.ts
-            /.github/scripts/tests/feed-ingest-plan-workflow.test.ts
             /.github/workflows/feed-ingest-plan-test.yml
             /.github/workflows/ci.yml
             /tests/fixtures/feed-ingest-plan/
@@ -102,8 +79,8 @@ jobs:
           bun run --cwd packages/common-contracts check
           bun run --cwd packages/ledger-file-writer check
           bun run --cwd services/feed-ingest-plan check
-          bun test ./.github/scripts/tests/feed-ingest-plan-report.test.ts ./.github/scripts/tests/feed-ingest-plan-outputs.test.ts ./.github/scripts/tests/feed-ingest-plan-workflow.test.ts --timeout 30000
-          bun run .github/scripts/feed-ingest-plan-verification.ts
+          bun test ./services/feed-ingest-plan/test/feed-ingest-plan-report.test.ts ./services/feed-ingest-plan/test/feed-ingest-plan-outputs.test.ts ./services/feed-ingest-plan/test/feed-ingest-plan-workflow.test.ts --timeout 30000
+          bun run services/feed-ingest-plan/test/verify-recorded-compatibility.ts
 
       - name: Read named history and call the real HTTP planner
         id: plan
@@ -116,7 +93,7 @@ jobs:
         run: |
           mkdir -p "$RUNNER_TEMP/feed-ingest-plan"
           set -o pipefail
-          bun run .github/scripts/feed-ingest-plan-http-proof.ts 2>&1 | tee "$RUNNER_TEMP/feed-ingest-plan/runtime.log"
+          bun run services/feed-ingest-plan/scripts/feed-ingest-plan-http-proof.ts 2>&1 | tee "$RUNNER_TEMP/feed-ingest-plan/runtime.log"
 
       - name: Commit exact current planner metadata
         if: ${{ !cancelled() && steps.plan.outputs.current_run_files != '' }}
@@ -124,26 +101,26 @@ jobs:
           CURRENT_RUN_FILES: ${{ steps.plan.outputs.current_run_files }}
         run: |
           set -o pipefail
-          bun run .github/scripts/feed-ingest-plan-commit.ts 2>&1 | tee "$RUNNER_TEMP/feed-ingest-plan/commit.log"
+          bun run services/feed-ingest-plan/scripts/feed-ingest-plan-commit.ts 2>&1 | tee "$RUNNER_TEMP/feed-ingest-plan/commit.log"
 
       - name: Install optional host instruments
         if: ${{ !cancelled() && inputs.profile_machine_memory }}
         continue-on-error: true
-        run: bash .github/scripts/install-host-cache-tools.sh
+        run: bash services/host-probes/scripts/install-host-cache-tools.sh
 
       - name: Run independent optional host proof
         if: ${{ !cancelled() && inputs.profile_machine_memory }}
         continue-on-error: true
-        run: bun run .github/scripts/feed-ingest-plan-profile-proof.ts
+        run: bun run services/host-probes/scripts/feed-ingest-plan-profile-proof.ts
 
       - name: Write the public planner summary and grouped annotations
         if: ${{ always() }}
-        run: bun run .github/scripts/feed-ingest-plan-report.ts
+        run: bun run services/feed-ingest-plan/scripts/feed-ingest-plan-report.ts
 
       - name: Prepare exact individual evidence and uncommitted metadata recovery
         id: evidence
         if: ${{ always() }}
-        run: bun run .github/scripts/feed-ingest-plan-artifacts.ts
+        run: bun run services/feed-ingest-plan/scripts/feed-ingest-plan-artifacts.ts
 
       # For unarchived uploads the filename is the artifact name; each path is one file.
       - name: Preserve selected text for the summarizer
