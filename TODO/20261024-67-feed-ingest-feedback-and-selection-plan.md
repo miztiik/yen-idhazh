@@ -226,7 +226,7 @@ deferred.
 
 ## 3. Row #1 - Settle remaining trial, polling and review policy
 
-- **Scope:** Settle only the still-open D5 trial total-cost acceptance, adaptive-polling formula and operational-review caller/cadence/authority before their affected capabilities.
+- **Scope:** Settle only the still-open D5 recovery-state contract, trial total-cost acceptance, adaptive-polling formula and operational-review caller/cadence/authority before their affected capabilities.
 - **Level:** 5 for those unresolved policies; the clean-break Row 22 direction is already authorized and does not wait for this row.
 - **Files touched:**
   - `docs/architecture/contracts/publisher-identity.md`
@@ -236,6 +236,11 @@ deferred.
   - `docs/architecture/sources/i-feed.md`
 - **Acceptance gates:** Local: bounded named-link/anchor checks and ASCII/whitespace; no application suite for a documentation-only decision. CI: documentation-selected checks. Record each unresolved policy's input, default, actual authority and cost on its living page. Preserve already approved restriction/recovery thresholds, the report-only request component and all three window meanings. Do not restart old arithmetic, state revisions or migration work.
 - **Oracle:** For each newly settled policy, a recorded fixture and its configured values determine the permitted action without an invented threshold or authority; this does not prove long-term effectiveness or complete its implementation.
+
+- **OPEN - Recovery-state contract:** Decide whether to adopt the [optional C/D policy records](../docs/architecture/contracts/feed-ingest-feedback.md#recovery-state-gap-proposal-only), then choose the minimal typed fields and additive carry/read semantics. No proposed field, persisted meaning or activation is approved by this finding.
+- **OPEN - Known outcomes:** Define the numerator/denominator cohort for D5's >=80 percent known outcomes and when that cohort resets. Keep the approved 80 percent threshold; no interval is chosen here.
+- **OPEN - State continuity:** Decide first enablement and missing/refused prior-state behavior, including a scope absent beyond retained history. Settle the guarantee for carrying finite state through not-due or deferred recovery decisions without inventing work, ordinary access or a source failure.
+- **Ordering unchanged:** A2's five-age-band article sampler is not an inherent prerequisite for source/endpoint recovery checks. E12 still depends on E11; a split or reordering needs a recorded maintainer decision.
 
 ### Table I - Decisions
 
