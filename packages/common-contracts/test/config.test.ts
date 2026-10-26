@@ -23,6 +23,7 @@ if (Bun.argv.includes("--emit-schemas")) {
       max_age_hours: 24, recency_half_life_hours: 18, recency_weight: 0.6,
     });
     expect(config.curate.article_limit).toBe(100);
+    expect(config.harvest.tidy_urls).toBe(true);
     expect(config.feedback.lifecycle_window_days).toBe(31);
     expect(config.feedback.request_report_closed_days).toBe(7);
     expect(Object.keys(config.feedback)).toEqual(["lifecycle_window_days", "request_report_closed_days"]);
@@ -101,10 +102,34 @@ if (Bun.argv.includes("--emit-schemas")) {
 
   test("global config rejects bad bounds, unknown keys, and invalid references", async () => {
     const config = await readConfig();
+    const profiles = config.harvest.request_headers;
+    expect(configs.FeedRequestHeadersSchema.parse({ ...profiles, secondary: null }).secondary).toBeNull();
+    for (const headers of [
+      {}, { host: "internal.example" },
+      { authorization: "credentials" }, { accept: "text/html\r\nhost: internal.example" },
+      { accept: "" }, { Accept: "text/html" },
+    ]) {
+      for (const name of ["primary", "secondary"]) {
+        expect(configs.FeedRequestHeadersSchema.safeParse({ ...profiles, [name]: headers }).success).toBe(false);
+      }
+    }
+    expect(configs.FeedRequestHeadersSchema.safeParse({
+      ...profiles, recoverable_http_statuses: [403, 403],
+    }).success).toBe(false);
+    expect(configs.FeedRequestHeadersSchema.safeParse({
+      ...profiles, recovery_min_body_bytes: -1,
+    }).success).toBe(false);
     for (const patch of [
       { partition: { ...config.partition, min_shards: 9 } },
       { partition: { ...config.partition, default_shards: 9 } },
       { harvest: { ...config.harvest, concurrency: "24" } },
+      { harvest: { ...config.harvest, tidy_urls: "true" } },
+      { harvest: { ...config.harvest, semantic_fallback: {
+        ...config.harvest.semantic_fallback, content_roots: [],
+      } } },
+      { harvest: { ...config.harvest, semantic_fallback: {
+        ...config.harvest.semantic_fallback, min_root_chars: -1,
+      } } },
       { curate: { ...config.curate, article_limit: 0 } },
       { curate: { ...config.curate, article_limit: 1.5 } },
       { curate: { ...config.curate, source_reliability_penalty_enabled: "true" } },

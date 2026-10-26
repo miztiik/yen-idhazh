@@ -22,6 +22,7 @@ export type TransportRequest = {
   url: URL;
   addresses: readonly ResolvedAddress[];
   user_agent: string;
+  headers: Readonly<Record<string, string>>;
   max_body_bytes: number;
   signal: AbortSignal;
 };
@@ -53,13 +54,13 @@ export async function readResponseBody(body: Readable, status: number, limit: nu
 }
 
 export const networkTransport: HarvestTransport = {
-  async request({ url, addresses, user_agent, max_body_bytes, signal }) {
+  async request({ url, addresses, user_agent, headers, max_body_bytes, signal }) {
     const dispatcher = createPinnedDispatcher(addresses);
     try {
       const response = await request(url, {
         dispatcher: dispatcher.compose(interceptors.decompress({ skipErrorResponses: false })),
         signal,
-        headers: { "user-agent": user_agent },
+        headers: { ...headers, "user-agent": user_agent },
       });
       const location = response.headers.location;
       if (Array.isArray(location)) throw new Error("response has multiple redirect locations");

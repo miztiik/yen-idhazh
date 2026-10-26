@@ -19,6 +19,10 @@ NonNegative = Annotated[float, Field(strict=True, ge=0, allow_inf_nan=False)]
 Share = Annotated[float, Field(strict=True, gt=0, le=1, allow_inf_nan=False)]
 NonEmpty = Annotated[str, Field(min_length=1)]
 Relaxation = Literal["distinct_sources", "source_share"]
+BrowserHeaders = Annotated[
+    dict[str, Annotated[str, Field(min_length=1, pattern=r"^[\x20-\x7e]+$")]],
+    Field(json_schema_extra={"propertyNames": {"type": "string"}}),
+]
 
 
 class FeedScreeningPolicy(Model):
@@ -110,10 +114,70 @@ class FeedUrlExclusion(Model):
         return value
 
 
+class FeedRequestHeaders(Model):
+    """Which navigation headers can recover an otherwise permitted request?"""
+
+    primary: BrowserHeaders
+    secondary: BrowserHeaders | None
+    recoverable_http_statuses: list[Annotated[int, Field(strict=True, ge=400, le=599)]]
+    recovery_min_body_bytes: Count
+
+    @field_validator("primary", "secondary")
+    @classmethod
+    def validate_browser_headers(cls, value: dict[str, str] | None) -> dict[str, str] | None:
+        if value is None:
+            return value
+        # Navigation metadata cannot replace request authority, credentials or crawler identity.
+        permitted = {
+            "user-agent", "accept", "accept-language", "sec-ch-ua", "sec-ch-ua-mobile",
+            "sec-ch-ua-platform",
+            "sec-fetch-dest", "sec-fetch-mode", "sec-fetch-site", "sec-fetch-user",
+            "upgrade-insecure-requests",
+        }
+        if not value:
+            raise ValueError("a browser header profile must not be empty")
+        if value.keys() - permitted:
+            raise ValueError("unsupported browser header")
+        return value
+
+    @field_validator("recoverable_http_statuses")
+    @classmethod
+    def validate_recovery_statuses(cls, value: list[int]) -> list[int]:
+        if len(value) != len(set(value)):
+            raise ValueError("recoverable_http_statuses must not repeat a status")
+        return value
+
+
+class FeedMetadataSelector(Model):
+    selector: NonEmpty
+    attribute: NonEmpty | None
+
+
+class FeedSemanticFallbackConfig(Model):
+    """Which actual page elements can supply fallback prose and metadata?"""
+
+    content_roots: Annotated[list[NonEmpty], Field(min_length=1)]
+    remove_elements: Annotated[list[NonEmpty], Field(min_length=1)]
+    paragraph_elements: Annotated[list[NonEmpty], Field(min_length=1)]
+    min_root_chars: Count
+    min_paragraph_chars: Count
+    title_sources: Annotated[list[FeedMetadataSelector], Field(min_length=1)]
+    author_sources: Annotated[list[FeedMetadataSelector], Field(min_length=1)]
+
+
 class FeedHarvestConfig(Model):
     concurrency: PositiveCount
     fetch_timeout_ms: PositiveCount
+    tidy_urls: bool = Field(
+        strict=True,
+        description=(
+            "Clean request targets only. Remove this switch and the disabled path "
+            "when request cleanup becomes mandatory."
+        ),
+    )
     user_agent: NonEmpty
+    request_headers: FeedRequestHeaders
+    semantic_fallback: FeedSemanticFallbackConfig
     blocked_categories: list[NonEmpty]
     url_exclusions: list[FeedUrlExclusion]
 

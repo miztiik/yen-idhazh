@@ -10,6 +10,7 @@ import { loadPlanningConfig } from "../config/resolve-policy";
 import { ExtractionControlsSchema } from "./extraction-controls";
 import { EXTRACTOR_VERSION, SANITIZER_FINGERPRINT } from "./extraction-provenance";
 import { PublisherDefinitionSchema, validatePublisherReferences } from "../publisher-catalog";
+import { validateSemanticSelectors } from "./semantic-extractor";
 export type { ExtractionControls } from "./extraction-controls";
 
 const LifecycleSchema = z.object({
@@ -62,7 +63,7 @@ const RegistrySchema = z.object({
   source_tiers: z.array(LifecycleSchema.safeExtend({ id: PositiveCountSchema, weight: WeightSchema })),
 });
 const ExtractionSchema = z.object({
-  extract: ExtractionControlsSchema,
+  extract: ExtractionControlsSchema.omit({ semantic_fallback: true }),
   summarize: z.object({ bands: z.array(z.object({ target_words_min: z.int().min(1) })).min(1) }),
   evaluation: z.object({ brief_compression_ceiling: z.number().finite().gt(0).max(1) }),
 }).superRefine((value, ctx) => {
@@ -83,7 +84,10 @@ export function loadHarvestInputs(raw: {
   const { feeds: sources, retired, publishers } = SourcesSchema.parse(raw.sources);
   validatePublisherReferences(publishers, [...sources, ...retired]);
   const extraction_settings = ExtractionSchema.parse(raw.extraction);
-  const extraction = extraction_settings.extract;
+  const extraction = ExtractionControlsSchema.parse({
+    ...extraction_settings.extract, semantic_fallback: planning.config.harvest.semantic_fallback,
+  });
+  validateSemanticSelectors(extraction.semantic_fallback);
   for (const [name, ids] of [
     ["source", [...sources, ...retired].map(source => source.id)],
     ["source kind", registry.source_kinds.map(kind => kind.id)],
