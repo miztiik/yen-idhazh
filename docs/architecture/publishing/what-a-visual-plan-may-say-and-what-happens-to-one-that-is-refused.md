@@ -348,11 +348,13 @@ is what stops the number being argued after it is seen.
 
 ## Design rationale
 
-**Text-only visual types are abandoned.** On 2026-10-26 UTC, `quotecard` and
-`comparison` were abandoned: an exact quote requires article wording in new
-visual data, and current summarizer metadata cannot express an honest
-shared-attribute comparison without source wording. Their names remain declared
-but unruled; this adds no reader payload, renderer or switch.
+**Plan 15 Row 6's text-only visuals are abandoned.** On 2026-10-26 UTC, its
+`quotecard` and `comparison` proposal was abandoned: an exact quote requires
+article wording in new visual data, and current summarizer metadata cannot
+express an honest shared-attribute comparison without source wording. This
+ruling does not abandon Plan 17's `whowhat` comparison variant or rule out a
+future separately implemented reader for it. Row 6 adds no reader payload,
+renderer or switch.
 
 **Why every field of the model's reply is required, including the empty ones.** A field with a
 default is absent from the schema's `required` list, and a constrained decoder emits exactly what
