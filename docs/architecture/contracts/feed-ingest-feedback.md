@@ -95,7 +95,7 @@ temporal order. Missing or refused prior policy state is not proof of recovery.
 Any approved extension must be additive and read-compatible: native Pydantic
 first, version/changelog, named TypeScript field/vocabulary binding cases, and
 absent policy read as UNKNOWN, never ordinary or TRIAL. Existing four-family
-records must stay readable; the prior eight-prefix deletion permission does
+records must stay readable; the prior eight-ledger deletion permission does
 not authorize another clean break. Packing would retain captured policy state
 without summing it or adding snapshots. A/B and artifact-only article text stay
 unchanged. These are proposed records, not approved field names or a ruling;
