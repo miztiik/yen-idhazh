@@ -38,8 +38,8 @@ from idhazh.contracts.visual_data import (
     VisualMark,
 )
 from idhazh.derived_values import measure_displayed_values, resolve_displayed_values
+from idhazh.relationship_evidence import refuse_relationship
 from idhazh.sanitize import sanitize
-from idhazh.scatter_evidence import refuse_scatter
 from idhazh.visual_vocabulary import TYPE_RULES, VALUE_ROLES
 
 #: How many of an element's own characters name one bar. The drawn label is the
@@ -94,7 +94,8 @@ class _Figure(NamedTuple):
 def can_compile(visual_type: VisualType | None) -> bool:
     """The current compiler capability, not the configurable request vocabulary."""
     return visual_type in {
-        VisualType.BAR, VisualType.DOT, VisualType.SLOPE, VisualType.LINE, VisualType.SCATTER
+        VisualType.BAR, VisualType.DOT, VisualType.SLOPE, VisualType.LINE,
+        VisualType.SCATTER, VisualType.BUBBLE,
     }
 
 
@@ -106,7 +107,8 @@ def compile_chart(
     Bar and dot pair categories and optional series labels with quantities.
     Slope pairs two time labels with consecutive quantity pairs and one entity
     or series label per line. Line pairs each quantity with a date and optional
-    series label. Scatter pairs both measures with a source-labelled entity.
+    series label. Relationship charts pair every measure with a source-labelled
+    entity, and bubble also carries one positive size measure per entity.
     Unsupported source channels are refused rather than approximated.
     """
     if plan.decision is not PlanDecision.VISUAL:
@@ -115,12 +117,12 @@ def compile_chart(
     if visual_type is None or not can_compile(visual_type):
         named = visual_type.value if visual_type is not None else "no type"
         raise CompileError(
-            f"this build draws bar, dot, slope, line and scatter; the plan says {named}"
+            f"this build draws bar, dot, slope, line, scatter and bubble; the plan says {named}"
         )
 
-    if visual_type is VisualType.SCATTER:
+    if visual_type in (VisualType.SCATTER, VisualType.BUBBLE):
         source = {element.element_id: element for element in table.elements}
-        detail = refuse_scatter(plan, {
+        detail = refuse_relationship(plan, {
             role: [source[cited] for cited in ids if cited in source]
             for role, ids in plan.encodings.filled().items()
         })
@@ -166,10 +168,12 @@ def _check_channel_pairing(
 ) -> None:
     """Refuse a channel shape that cannot be drawn without losing values."""
     quantities = channels[EncodingRole.QUANTITY]
-    if visual_type is VisualType.SCATTER:
+    if visual_type in (VisualType.SCATTER, VisualType.BUBBLE):
         names = [_mark_text(value, known) for value in channels[EncodingRole.ENTITY]]
         if len(set(names)) != len(names):
-            raise CompileError("scatter entity labels must remain distinct after sanitizing")
+            raise CompileError("relationship entity labels must remain distinct after sanitizing")
+        if visual_type is VisualType.BUBBLE and len(channels[EncodingRole.SIZE]) != len(quantities):
+            raise CompileError("a bubble needs one size measure for every point")
         return
     if visual_type in (VisualType.BAR, VisualType.DOT):
         categories = channels[EncodingRole.CATEGORY]
@@ -304,12 +308,16 @@ def _observations(
     mark_by_value: Mapping[tuple[EncodingRole, int], str],
 ) -> list[tuple[list[DisplayedValue], list[str]]]:
     quantities = channels[EncodingRole.QUANTITY]
-    if visual_type is VisualType.SCATTER:
+    if visual_type in (VisualType.SCATTER, VisualType.BUBBLE):
         return [
             (
                 [
                     quantities[index],
                     channels[EncodingRole.QUANTITY_X][index],
+                    *(
+                        [channels[EncodingRole.SIZE][index]]
+                        if visual_type is VisualType.BUBBLE else []
+                    ),
                     channels[EncodingRole.ENTITY][index],
                     *([channels[EncodingRole.SERIES][index]]
                       if channels[EncodingRole.SERIES] else []),
@@ -401,6 +409,7 @@ def _emphasized_chart_mark(
             VisualType.SLOPE: "slope measurements",
             VisualType.LINE: "line measurements",
             VisualType.SCATTER: "scatter points",
+            VisualType.BUBBLE: "bubbles",
         }[visual_type]
         raise CompileError(
             f"annotations select {len(selected)} distinct {selected_name}; exactly one is required"
@@ -443,6 +452,19 @@ def _chart_alt_text(
                 f"y {figure.stated}{unit}"
             )
         return f"Scatter chart. {'; '.join(facts)}."[:ALT_TEXT_MAX]
+    if visual_type is VisualType.BUBBLE:
+        sizes = channels[EncodingRole.SIZE]
+        facts = []
+        for index, figure in enumerate(figures):
+            horizontal = _figure(channels[EncodingRole.QUANTITY_X][index], known)
+            size = _figure(sizes[index], known)
+            label = _mark_text(channels[EncodingRole.ENTITY][index], known)
+            facts.append(
+                f"{label}: x {horizontal.stated} {horizontal.unit or ''}, "
+                f"y {figure.stated} {figure.unit or ''}, "
+                f"area {size.stated} {size.unit or ''}"
+            )
+        return f"Bubble chart. {'; '.join(facts)}."[:ALT_TEXT_MAX]
     if visual_type in (VisualType.BAR, VisualType.DOT):
         categories = channels[EncodingRole.CATEGORY]
         series = channels[EncodingRole.SERIES]

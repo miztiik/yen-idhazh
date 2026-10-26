@@ -117,6 +117,8 @@ def test_story_chart_geometry_is_bounded_and_committed() -> None:
         {"scatter_margin_top_px": 65},
         {"scatter_margin_bottom_px": 31},
         {"scatter_margin_bottom_px": 97},
+        {"bubble_max_radius_share": 0},
+        {"bubble_max_radius_share": 0.5},
         {"line_series_dash_arrays": ("none",) * 8},
         {"line_series_dash_arrays": ("none",)},
         {

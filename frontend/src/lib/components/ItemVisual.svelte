@@ -346,7 +346,7 @@
 							{drawing.unit}
 						</text>
 					{/if}
-				{:else if drawing.type === 'scatter'}
+				{:else if drawing.type === 'scatter' || drawing.type === 'bubble'}
 					{#each drawing.y.ticks as tick (tick.value)}
 						<line class="grid" stroke-width={storyChartGeometry.axis_line_width_px}
 							x1={drawing.frame.left} x2={drawing.frame.right} y1={tick.at} y2={tick.at} />
@@ -374,13 +374,26 @@
 						y={drawing.height - storyChartGeometry.value_gap_px}>
 						x{drawing.xUnit ? ` (${drawing.xUnit})` : ''}
 					</text>
-					{#each drawing.points as point (point.label)}
-						<circle class="scatter-point" class:emphasized={point.emphasized}
-							stroke-width={storyChartGeometry.mark_outline_width_px}
-							cx={point.cx} cy={point.cy} r={storyChartGeometry.dot_radius_px}>
-							<title>{point.label}: x {point.statedX} {drawing.xUnit ?? ''}, y {point.statedY} {drawing.yUnit ?? ''}</title>
-						</circle>
-					{/each}
+					{#if drawing.type === 'bubble'}
+						{#each drawing.points as point (point.label)}
+							<circle class="bubble-point" class:emphasized={point.emphasized}
+								stroke-width={storyChartGeometry.mark_outline_width_px}
+								cx={point.cx} cy={point.cy} r={point.radius}>
+								<title>{point.label}: x {point.statedX} {drawing.xUnit ?? ''},
+									y {point.statedY} {drawing.yUnit ?? ''}, area
+									{point.statedSize} {drawing.sizeUnit ?? ''}</title>
+							</circle>
+						{/each}
+					{:else}
+						{#each drawing.points as point (point.label)}
+							<circle class="scatter-point" class:emphasized={point.emphasized}
+								stroke-width={storyChartGeometry.mark_outline_width_px}
+								cx={point.cx} cy={point.cy} r={storyChartGeometry.dot_radius_px}>
+								<title>{point.label}: x {point.statedX} {drawing.xUnit ?? ''},
+									y {point.statedY} {drawing.yUnit ?? ''}</title>
+							</circle>
+						{/each}
+					{/if}
 				{:else}
 					<text class="column-label" text-anchor="middle" x={drawing.leftX} y={storyChartGeometry.slope_header_band_px / 2}>
 						{drawing.leftLabel}
@@ -429,7 +442,31 @@
 					{/if}
 				{/if}
 			</svg>
-			{#if drawing.type === 'scatter'}
+			{#if drawing.type === 'bubble'}
+				<div class="bubble-size-key px-3" aria-hidden="true">
+					<span>Circle area represents {drawing.sizeUnit ?? 'size'}.</span>
+					<span class="bubble-key-entry">
+						<span class="bubble-key-mark"
+							style={`width: ${drawing.sizeRange.minRadius * 2}px; height: ${drawing.sizeRange.minRadius * 2}px`}></span>
+						<span>{drawing.sizeRange.min}{drawing.sizeUnit ? ` ${drawing.sizeUnit}` : ''}</span>
+					</span>
+					<span class="bubble-key-entry">
+						<span class="bubble-key-mark"
+							style={`width: ${drawing.maxRadius * 2}px; height: ${drawing.maxRadius * 2}px`}></span>
+						<span>{drawing.sizeRange.max}{drawing.sizeUnit ? ` ${drawing.sizeUnit}` : ''}</span>
+					</span>
+				</div>
+				<ul class="bubble-readings px-3 pb-3 text-xs leading-normal text-text-secondary">
+					{#each drawing.points as point (point.label)}
+						<li class:highlighted={point.emphasized}>
+							<span class="font-semibold text-text">{point.label}</span>:
+							x {point.displayedX}{drawing.xUnit ? ` ${drawing.xUnit}` : ''},
+							y {point.displayedY}{drawing.yUnit ? ` ${drawing.yUnit}` : ''},
+							area {point.displayedSize}{drawing.sizeUnit ? ` ${drawing.sizeUnit}` : ''}
+						</li>
+					{/each}
+				</ul>
+			{:else if drawing.type === 'scatter'}
 				<ul class="scatter-readings px-3 pb-3 text-xs leading-normal text-text-secondary">
 					{#each drawing.points as point (point.label)}
 						<li class:highlighted={point.emphasized}>
@@ -564,6 +601,49 @@
 		fill: var(--chart-2);
 		stroke: var(--color-text);
 		stroke-dasharray: var(--space-1);
+	}
+
+	.bubble-point {
+		fill: var(--chart-1);
+		stroke: var(--color-surface);
+	}
+
+	.bubble-point.emphasized {
+		fill: var(--chart-2);
+		stroke: var(--color-text);
+		stroke-dasharray: var(--space-1);
+	}
+
+	.bubble-size-key {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: var(--space-2) var(--space-3);
+		padding-bottom: var(--space-2);
+		font-size: var(--text-xs);
+		color: var(--color-text-secondary);
+	}
+
+	.bubble-key-entry {
+		display: inline-flex;
+		align-items: center;
+		gap: var(--space-1);
+	}
+
+	.bubble-key-mark {
+		display: inline-block;
+		flex: none;
+		border-radius: 50%;
+		background: var(--chart-1);
+	}
+
+	.bubble-readings {
+		list-style: none;
+	}
+
+	.bubble-readings .highlighted {
+		font-weight: var(--font-weight-semibold);
+		color: var(--color-text);
 	}
 
 	.scatter-readings {

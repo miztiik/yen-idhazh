@@ -34,6 +34,7 @@ import type { VisualData, VisualMark } from '$lib/payload/types';
 import type { NumberFormatConfig, NumberFormatter } from '$lib/number-format';
 import type { StoryChartGeometryConfig } from '$lib/server/config';
 import { drawScatter, statedScatter, type ScatterDrawing } from './scatter';
+import { drawBubble, statedBubble, type BubbleDrawing } from './bubble';
 
 /** One bar, placed. Every number here is a CSS pixel on the reader's screen. */
 export interface Bar {
@@ -134,7 +135,13 @@ export interface LineDrawing extends DrawingBase {
 	lines: Line[];
 }
 
-export type Drawing = BarDrawing | DotDrawing | SlopeDrawing | LineDrawing | ScatterDrawing;
+export type Drawing =
+	| BarDrawing
+	| DotDrawing
+	| SlopeDrawing
+	| LineDrawing
+	| ScatterDrawing
+	| BubbleDrawing;
 
 function figureOf(mark: VisualMark): number {
 	// The compiler pins `value` to the characters the article wrote, so this is
@@ -499,6 +506,8 @@ export function drawVisual(
 			return drawLines(data, room, formatNumber, numberFormat, tickDensity, geometry);
 		case 'scatter':
 			return drawScatter(data, room, formatNumber, numberFormat, tickDensity, geometry);
+		case 'bubble':
+			return drawBubble(data, room, formatNumber, numberFormat, tickDensity, geometry);
 		default:
 			throw new Error(`visual type is not drawn: ${data.type}`);
 	}
@@ -581,5 +590,7 @@ export function statedDrawing(drawing: Drawing): string {
 			return statedLines(drawing);
 		case 'scatter':
 			return statedScatter(drawing);
+		case 'bubble':
+			return statedBubble(drawing);
 	}
 }

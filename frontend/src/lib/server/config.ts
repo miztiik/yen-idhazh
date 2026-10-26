@@ -504,6 +504,7 @@ export interface StoryChartGeometryConfig {
 	scatter_margin_right_px: number;
 	scatter_margin_top_px: number;
 	scatter_margin_bottom_px: number;
+	bubble_max_radius_share: number;
 	line_series_dash_arrays: readonly string[];
 }
 
@@ -567,6 +568,7 @@ const DEFAULTS: UiConfig = {
 		scatter_margin_right_px: 24,
 		scatter_margin_top_px: 32,
 		scatter_margin_bottom_px: 48,
+		bubble_max_radius_share: 0.25,
 		line_series_dash_arrays: [
 			'none',
 			'8 4',
