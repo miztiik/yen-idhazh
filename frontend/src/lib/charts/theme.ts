@@ -18,7 +18,7 @@
 /** Every token a chart may draw with, in the order a categorical series takes
  * them. A token that is not here cannot be used by a chart, which is the point:
  * it makes the palette a closed set rather than whatever someone typed. */
-const PALETTE = [
+export const PALETTE = [
 	'--chart-1',
 	'--chart-2',
 	'--chart-3',
@@ -28,6 +28,8 @@ const PALETTE = [
 	'--chart-7',
 	'--chart-8'
 ] as const;
+
+export type ChartPaletteToken = (typeof PALETTE)[number];
 
 const STRUCTURE = [
 	'--chart-grid',
@@ -44,7 +46,7 @@ const STRUCTURE = [
 	'--band-low'
 ] as const;
 
-export type ChartToken = (typeof PALETTE)[number] | (typeof STRUCTURE)[number];
+export type ChartToken = ChartPaletteToken | (typeof STRUCTURE)[number];
 
 const TOKENS: readonly ChartToken[] = [...PALETTE, ...STRUCTURE];
 

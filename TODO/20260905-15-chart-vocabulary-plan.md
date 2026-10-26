@@ -21,8 +21,8 @@ CLAUDE.md section 6.
 | Field | Value |
 | --- | --- |
 | Why this plan exists | Story publication supports bars. Shared D3 renderers and source-span extraction exist elsewhere, but they do not complete the other story types. Reuse those foundations to answer each story's question with a suitable visual |
-| Hard scope - in | Config selects from the full declared vocabulary; code owns correctness rules. Complete story delivery for `bar`, `dot`, `slope`, `line`, `area`, `scatter`, `stacked_bar`, `comparison` and `quotecard`. Record safe fallback or refusal |
-| Hard scope - out | `pie`, `bubble`, `histogram` and derived-value producers (plan 16). `callout`, `whowhat`, `keyfacts` (plan 17). Diagrams (plan 18). Any change to the validator's universal checks |
+| Hard scope - in | Config selects from the full declared vocabulary; code owns correctness rules. Complete story delivery for `bar`, `dot`, `slope`, `line`, `scatter`, `stacked_bar`, `comparison` and `quotecard`. Record safe fallback or refusal |
+| Hard scope - out | `area` pending a separately approved source-evidence design. `pie`, `bubble`, `histogram` and derived-value producers (plan 16). `callout`, `whowhat`, `keyfacts` (plan 17). Diagrams (plan 18). Any change to the validator's universal checks |
 | ESCALATE triggers | 1. A type without validator rules and a supported compiler is allowed to render. It may be named, not rendered. 2. Requested/rendered accounting cannot compute `wasted_decode_rate`. 3. A fallback changes the question or facts. 4. Any further scope, functionality or acceptance change is proposed, however small |
 | Chosen strategy | Declare the whole vocabulary, build the families in order of what the planner actually chooses, and make a day that would otherwise be one shape impossible |
 | Execution | One meaningful PR phase per row, in the dependency order below, after execution approval. No fixed worker count or automatic merge instruction |
@@ -46,6 +46,7 @@ kumarsnaveen approved these decisions on 2026-10-25 UTC in this session:
 | R5 | Focused integration checks plus representative browser coverage | Replaces every-type browser checks at both widths; retain source-derived correctness and width behavior checks below the browser tier |
 | R6 | Bounded mixed fixture only | Removes the real committed-day diversity demonstration and its release evidence step |
 | R7 | D3.js; no prerendering; shared reusable patterns; no magic numbers | Explicit user requirements. No separate chart engine, build-time drawing, per-page special cases or source-fixed tunables |
+| R8 | Row 3 delivers `line` only; `area` is deferred to a separately approved phase | Owner decision 2026-10-25; the current free-form measure label cannot prove stock or cumulative magnitude rather than a rate |
 
 No other scope or functionality change is approved. Existing current-renderer-only
 chart compatibility follows the owner ruling already in CLAUDE.md section 11;
@@ -170,23 +171,23 @@ implementation/test references, not a claim that tests were run.
 
 ## 4. Row #3 - Trend and magnitude: line, area
 
-- **Scope:** `line` for a trend over time; `area` for stock or cumulative magnitude, gated so it never draws a rate. Complete source evidence, validation, compilation and browser drawing using shared D3 date/series patterns.
+- **Scope:** `line` for a trend over time. Complete source evidence, validation, compilation and browser drawing using shared D3 date/series patterns. `area` is deferred to a separately approved phase under owner decision R8.
 - **Current files:** `backend/idhazh/visual_vocabulary.py`, `backend/idhazh/visual_validator.py`, `backend/idhazh/render/chart.py`, applicable native contracts, `frontend/src/lib/charts/d3/dateSeries.ts`, shared reader/drawing components, named fixtures/tests and current chart docs.
 - **Acceptance gates:** as row 2.
-- **Oracle:** An `area` plan whose measure is a rate rather than a stock is **refused by the validator**, not drawn - asserted with a fixture pair that differs only in the measure.
+- **Oracle:** A line plan with unordered categories or a non-date time element is refused by the validator; a valid date/quantity series compiles to source-backed marks and draws in the browser.
 
 ### Decisions
 
 | # | Decision | Authority |
 | --- | --- | --- |
-| 1 | `area` is gated to stock or cumulative measures. Filling under a rate states a total that is not the sum of the drawn values | Section 7.2 |
-| 2 | A time axis needs the `date` kind, which plan 08 built. A trend over unordered categories is a bar | Plan 08 |
+| 1 | A time axis needs the `date` kind, which plan 08 built. A trend over unordered categories is a bar | Plan 08 |
+| 2 | `area` may draw only when source evidence proves a stock or cumulative measure, never a rate. This evidence rule is not implemented in Row 3 | Section 7.2; owner decision R8 |
 
 ### Rejected alternatives
 
 | # | Option | Why rejected | Authority |
 | --- | --- | --- | --- |
-| 1 | Let `area` draw any series | The fill reads as a quantity, and under a rate that quantity is meaningless | Jony |
+| 1 | Infer the area gate from the current free-form measure label | It cannot prove that a measure is a stock or cumulative total, or catch every rate | Owner decision R8 |
 
 ---
 

@@ -261,6 +261,45 @@ def test_a_type_whose_rules_are_not_written_yet_is_refused_rather_than_drawn() -
         assert "no role rule" in rejections[0].detail
 
 
+def test_line_requires_dates_and_rejects_unordered_categories() -> None:
+    plan = load_plan("line-trend")
+    table = load_table("line-trend")
+    visuals = committed_visuals()
+    assert validate_plan(plan, table, visuals=visuals) == []
+
+    unordered = VisualPlan.model_validate(
+        plan.model_dump(mode="json")
+        | {
+            "encodings": plan.encodings.model_dump(mode="json")
+            | {"category": [plan.encodings.time[0]]}
+        }
+    )
+    rejected_categories = validate_plan(unordered, table, visuals=visuals)
+    category_rule = next(
+        rejection for rejection in rejected_categories
+        if rejection.check is ValidatorCheck.ROLES_VALID_FOR_TYPE
+    )
+    assert "has no category channel" in category_rule.detail
+
+    non_date = VisualPlan.model_validate(
+        plan.model_dump(mode="json")
+        | {
+            "encodings": plan.encodings.model_dump(mode="json")
+            | {
+                "time": [
+                    *plan.encodings.quantity,
+                ]
+            }
+        }
+    )
+    rejected_time = validate_plan(non_date, table, visuals=visuals)
+    date_rule = next(
+        rejection for rejection in rejected_time
+        if rejection.check is ValidatorCheck.SEMANTICALLY_COMPATIBLE
+    )
+    assert "date" in date_rule.detail and "time" in date_rule.detail
+
+
 def test_the_vocabulary_stamp_is_compared_rather_than_matched() -> None:
     """Decision 3: versions are date-stamps, so "current" orders them.
 

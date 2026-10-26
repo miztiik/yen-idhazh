@@ -16,8 +16,8 @@ nowhere (Fowler, 2026-09-13).
 
 `compile_chart` takes one validated `VisualPlan` and one article's element table
 and returns what a reader gets: the sentence a screen reader hears, and the
-marks a browser draws. It compiles only the position-and-length family, and a
-type this build cannot compile is refused by name rather than approximated.
+marks a browser draws. It compiles the supported chart forms, and a type this
+build cannot compile is refused by name rather than approximated.
 """
 
 from __future__ import annotations
@@ -28,7 +28,7 @@ from typing import Final, NamedTuple
 
 from idhazh.contracts.chart_evidence import ChartEvidence
 from idhazh.contracts.derived import DisplayedValue
-from idhazh.contracts.element import Element, ElementId, ElementTable
+from idhazh.contracts.element import Element, ElementId, ElementKind, ElementTable
 from idhazh.contracts.knobs.visuals import VisualsConfig
 from idhazh.contracts.visual import EncodingRole, PlanDecision, VisualPlan, VisualType
 from idhazh.contracts.visual_data import (
@@ -92,25 +92,26 @@ class _Figure(NamedTuple):
 
 def can_compile(visual_type: VisualType | None) -> bool:
     """The current compiler capability, not the configurable request vocabulary."""
-    return visual_type in {VisualType.BAR, VisualType.DOT, VisualType.SLOPE}
+    return visual_type in {VisualType.BAR, VisualType.DOT, VisualType.SLOPE, VisualType.LINE}
 
 
 def compile_chart(
     plan: VisualPlan, table: ElementTable, *, visuals: VisualsConfig
 ) -> CompiledChart:
-    """Compile a position-and-length plan as marks grounded in the article.
+    """Compile a supported plan as marks grounded in the article.
 
     Bar and dot pair categories and optional series labels with quantities.
     Slope pairs two time labels with consecutive quantity pairs and one entity
-    or series label per line. The validator refuses other source channels
-    rather than approximating them.
+    or series label per line. Line pairs each quantity with a date and optional
+    series label. The validator refuses other source channels rather than
+    approximating them.
     """
     if plan.decision is not PlanDecision.VISUAL:
         raise CompileError("this plan asks for no picture, so there is nothing to compile")
     visual_type = plan.type
     if visual_type is None or not can_compile(visual_type):
         named = visual_type.value if visual_type is not None else "no type"
-        raise CompileError(f"this build draws bar, dot and slope, and the plan says {named}")
+        raise CompileError(f"this build draws bar, dot, slope and line, and the plan says {named}")
 
     resolved = resolve_displayed_values(plan, table, visuals=visuals)
     if resolved.refusal is not None:
@@ -120,7 +121,16 @@ def compile_chart(
     allowed = (
         {EncodingRole.CATEGORY, EncodingRole.QUANTITY, EncodingRole.SERIES}
         if visual_type in (VisualType.BAR, VisualType.DOT)
-        else {EncodingRole.TIME, EncodingRole.QUANTITY, EncodingRole.SERIES, EncodingRole.ENTITY}
+        else (
+            {EncodingRole.TIME, EncodingRole.QUANTITY, EncodingRole.SERIES}
+            if visual_type is VisualType.LINE
+            else {
+                EncodingRole.TIME,
+                EncodingRole.QUANTITY,
+                EncodingRole.SERIES,
+                EncodingRole.ENTITY,
+            }
+        )
     )
     channels = {
         role: [value for value in resolved.values if value.role is role] if role in allowed else []
@@ -164,6 +174,28 @@ def _check_channel_pairing(
     times = channels[EncodingRole.TIME]
     entities = channels[EncodingRole.ENTITY]
     series = channels[EncodingRole.SERIES]
+    if visual_type is VisualType.LINE:
+        if len(quantities) < 2 or len(times) != len(quantities):
+            raise CompileError("a line needs at least two quantities paired with dates")
+        if series and len(series) != len(quantities):
+            raise CompileError("a line needs one series label for each quantity")
+        by_series: dict[str, set[str]] = {}
+        precisions: set[int] = set()
+        for index, time in enumerate(times):
+            element = known[time.element_id] if time.element_id is not None else None
+            if element is None or element.kind is not ElementKind.DATE or element.value is None:
+                raise CompileError("a line time has no source date")
+            precisions.add(len(element.value))
+            label = _mark_text(series[index], known) if series else ""
+            dates = by_series.setdefault(label, set())
+            if element.value in dates:
+                raise CompileError("a line has two readings for one series and date")
+            dates.add(element.value)
+        if len(precisions) != 1:
+            raise CompileError("a line cannot mix year and day precision")
+        if any(len(dates) < 2 for dates in by_series.values()):
+            raise CompileError("each line series needs at least two dates")
+        return
     pair_count = len(quantities) // 2
     if len(times) != 2 or len(quantities) < 4 or len(quantities) % 2:
         raise CompileError("a slope needs two times and an even pair of at least four quantities")
@@ -223,10 +255,12 @@ def _chart_data(
                     raise CompileError(
                         f"a {role.value} mark has nothing after sanitizing and cannot be drawn"
                     )
+                time = _time_value(value, known) if role is EncodingRole.TIME else None
                 marks.append(
                     VisualMark(
                         mark_id=mark_id,
                         text=text,
+                        time=time,
                         value=None,
                         unit=None,
                         source_text=None,
@@ -273,6 +307,16 @@ def _observations(
                         else []
                     ),
                 ],
+                [mark_by_value[(EncodingRole.QUANTITY, index)]],
+            )
+            for index in range(len(quantities))
+        ]
+    if visual_type is VisualType.LINE:
+        times = channels[EncodingRole.TIME]
+        series = channels[EncodingRole.SERIES]
+        return [
+            (
+                [quantities[index], times[index], *([series[index]] if series else [])],
                 [mark_by_value[(EncodingRole.QUANTITY, index)]],
             )
             for index in range(len(quantities))
@@ -332,6 +376,7 @@ def _emphasized_chart_mark(
             VisualType.BAR: "bars",
             VisualType.DOT: "dots",
             VisualType.SLOPE: "slope measurements",
+            VisualType.LINE: "line measurements",
         }[visual_type]
         raise CompileError(
             f"annotations select {len(selected)} distinct {selected_name}; exactly one is required"
@@ -344,6 +389,16 @@ def _mark_text(value: DisplayedValue, known: Mapping[ElementId, Element]) -> str
     if value.element_id is None:
         raise CompileError("a label has to be an element the article wrote")
     return sanitize(known[value.element_id].span_excerpt)[:MARK_NAME_MAX]
+
+
+def _time_value(value: DisplayedValue, known: Mapping[ElementId, Element]) -> str:
+    """The element's checked date or year, separate from its source wording."""
+    if value.element_id is None:
+        raise CompileError("a time label has to be a source date element")
+    element = known[value.element_id]
+    if element.kind is not ElementKind.DATE or element.value is None:
+        raise CompileError("a time label has no canonical date or year")
+    return element.value
 
 
 def _chart_alt_text(
@@ -369,6 +424,15 @@ def _chart_alt_text(
     times = [_mark_text(value, known) for value in channels[EncodingRole.TIME]]
     entities = channels[EncodingRole.ENTITY]
     series = channels[EncodingRole.SERIES]
+    if visual_type is VisualType.LINE:
+        facts = []
+        for index, figure in enumerate(figures):
+            name = f"{_mark_text(series[index], known)}: " if series else ""
+            facts.append(
+                f"{name}{times[index]} "
+                f"{format(figure.value.normalize(), ',f')}{unit}"
+            )
+        return f"Line chart. {'; '.join(facts)}."[:ALT_TEXT_MAX]
     facts = []
     for index in range(len(figures) // 2):
         label = _mark_text(entities[index], known) if entities else _mark_text(series[index], known)

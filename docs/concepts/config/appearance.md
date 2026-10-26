@@ -21,7 +21,7 @@ Its blocks:
 | `assist` | On-device archive search. Formerly `idhazh.json`'s `assist` block. |
 | `frame` | The frame maximums, the reading measure, the gutter range, and the three breakpoints. |
 | `theme` | Whether gradients, elevation and the display face are drawn, and how strongly a panel takes a tint. |
-| `chart` | Console chart dimensions, readout width, tick density, sparkline height, and bounded geometry for story bars, dots and slopes. `hover_readout` and `palette` are still in the contract, but nothing reads them, so setting either changes nothing. |
+| `chart` | Console chart dimensions, readout width, tick density, sparkline height, and bounded geometry for story bars, dots, slopes and lines. `hover_readout` and `palette` are still in the contract, but nothing reads them, so setting either changes nothing. |
 | `icons` | Icon size, whether an icon takes the hue of what it means, and whether a topic carries a mark. |
 | `motion` | The two durations, and one switch. `prefers-reduced-motion` sits above the switch and is deliberately not configurable. |
 
@@ -79,8 +79,11 @@ Two knobs in that block decide what a chart's axis and its readout look like, an
 
 `chart.story_geometry` is separate from the console's `chart.width_px` and
 `chart.height_px`: each story chart measures the space its card gives it.
-`row_height_px`, padding, label gaps, mark sizes, the bar's figure gutter, and
-the slope's labelled-column bands tune that shared browser drawing.
+`row_height_px`, padding, label gaps, mark sizes, the bar's figure gutter, the
+slope's labelled-column bands, and the line's axis margins and stroke width tune
+that shared browser drawing. `line_series_dash_arrays` gives each ordered line
+series a distinct stroke pattern; the same pattern appears in its legend, so
+series remain distinguishable without relying on colour.
 `mark_outline_width_px` sets the outline used to distinguish chart marks without
 relying on colour alone. The native contract bounds each setting, and the typed
 build-time UI projection passes only these values to the reader.

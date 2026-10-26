@@ -43,6 +43,7 @@
 		item,
 		numberFormat,
 		storyChartGeometry,
+		chartTickDensity,
 		verticalName,
 		level = 2,
 		showVertical = true,
@@ -57,6 +58,7 @@
 		item: DigestItem;
 		numberFormat: NumberFormatConfig;
 		storyChartGeometry: StoryChartGeometryConfig;
+		chartTickDensity: number;
 		verticalName: string;
 		/** 2 on a flat list, 3 under a topic heading. A skipped level breaks
 		 * heading-to-heading navigation. */
@@ -223,7 +225,7 @@
 			{/if}
 		</div>
 
-		<ItemVisual visual={item.visual} {numberFormat} {storyChartGeometry} />
+		<ItemVisual visual={item.visual} {numberFormat} {storyChartGeometry} {chartTickDensity} />
 	</div>
 
 	<div class="item-rail">

@@ -34,6 +34,7 @@
 		verticalNames,
 		numberFormat,
 		storyChartGeometry,
+		chartTickDensity,
 		onClear
 	}: {
 		found: SearchOutcome;
@@ -43,6 +44,7 @@
 		verticalNames: Record<string, string>;
 		numberFormat: NumberFormatConfig;
 		storyChartGeometry: StoryChartGeometryConfig;
+		chartTickDensity: number;
 		/** Put the day back. The field's next keystroke does this too. */
 		onClear: () => void;
 	} = $props();
@@ -66,6 +68,7 @@
 						{item}
 						{numberFormat}
 						{storyChartGeometry}
+						{chartTickDensity}
 						verticalName={verticalNames[item.vertical] ?? item.vertical}
 						level={3}
 						showVertical={false}

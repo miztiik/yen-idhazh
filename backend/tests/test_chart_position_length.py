@@ -15,10 +15,13 @@ from idhazh.contracts.visual_data import VisualData
 from idhazh.render.chart import compile_chart
 
 PLAN: Final = FIXTURES_DIR / "visual-validator" / "plans" / "passes.json"
+LINE_PLAN: Final = FIXTURES_DIR / "visual-validator" / "plans" / "line-trend.json"
 WIND: Final = FIXTURES_DIR / "visual-validator" / "tables" / "wind.json"
 SLOPE: Final = FIXTURES_DIR / "visual-validator" / "tables" / "wind-slope.json"
+LINE: Final = FIXTURES_DIR / "visual-validator" / "tables" / "line-trend.json"
 DOT_OUTPUT: Final = FIXTURES_DIR / "contracts" / "visual-data" / "dot-from-wind.json"
 SLOPE_OUTPUT: Final = FIXTURES_DIR / "contracts" / "visual-data" / "slope-from-wind.json"
+LINE_OUTPUT: Final = FIXTURES_DIR / "contracts" / "visual-data" / "line-from-wind.json"
 
 
 def _visuals() -> VisualsConfig:
@@ -28,6 +31,10 @@ def _visuals() -> VisualsConfig:
 def _quantities(table: ElementTable, plan: VisualPlan) -> list[Decimal]:
     by_id = {element.element_id: element for element in table.elements}
     return [Decimal(str(by_id[element_id].value)) for element_id in plan.encodings.quantity]
+
+
+def _line_plan() -> VisualPlan:
+    return VisualPlan.read(LINE_PLAN)
 
 
 def test_dot_compilation_keeps_the_source_order_and_each_stated_measure() -> None:
@@ -113,3 +120,44 @@ def test_slope_compilation_pairs_two_source_values_for_each_named_entity() -> No
     ]
     assert compiled.data.emphasized_mark_id == compiled.data.encoding.quantity[1]
     assert "Slope chart." in compiled.alt_text
+
+
+def test_line_compilation_keeps_source_measures_paired_with_their_dates() -> None:
+    table = ElementTable.read(LINE)
+    plan = _line_plan()
+    quantities = plan.encodings.quantity
+
+    compiled = compile_chart(plan, table, visuals=_visuals())
+    held = {mark.mark_id: mark for mark in compiled.data.marks}
+
+    assert compiled.data == VisualData.model_validate_json(read_text(LINE_OUTPUT))
+    assert compiled.data.type is VisualType.LINE
+    assert [held[mark_id].time for mark_id in compiled.data.encoding.time] == [
+        "2025", "2024", "2023"
+    ]
+    assert [held[mark_id].text for mark_id in compiled.data.encoding.time] == [
+        "2025", "2024", "2023"
+    ]
+    assert compiled.data.encoding.series == []
+    assert [Decimal(held[mark_id].value or "0") for mark_id in compiled.data.encoding.quantity] == [
+        Decimal("2400"), Decimal("1800"), Decimal("1200")
+    ]
+    assert compiled.data.emphasized_mark_id == compiled.data.encoding.quantity[1]
+    assert "Line chart." in compiled.alt_text
+    source_text = read_text(FIXTURES_DIR / "visual-validator" / "articles" / "line-trend.txt")
+    assert table.span_drift(source_text) is None
+    assert table.source_text_length == len(source_text)
+    source = {element.element_id: element for element in table.elements}
+    assert [source[element_id].span_excerpt for element_id in quantities] == [
+        source_text[source[element_id].span_start : source[element_id].span_end]
+        for element_id in quantities
+    ]
+    assert [Decimal(source[element_id].value or "0") for element_id in quantities] == [
+        Decimal(held[mark_id].value or "0") for mark_id in compiled.data.encoding.quantity
+    ]
+    assert [held[mark_id].element_id for mark_id in compiled.data.encoding.time] == list(
+        plan.encodings.time
+    )
+    assert [held[mark_id].element_id for mark_id in compiled.data.encoding.series] == list(
+        plan.encodings.series
+    )

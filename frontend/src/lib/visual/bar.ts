@@ -26,8 +26,12 @@
  */
 
 import { scaleBand, scaleLinear } from 'd3-scale';
+import { frame, type Frame } from '../charts/frame';
+import { dateSeries, type PlacedPoint } from '../charts/d3/dateSeries';
+import { LEGACY_MODEL_RULE } from '../charts/d3/model-rule';
+import { PALETTE, type ChartPaletteToken } from '../charts/theme';
 import type { VisualData, VisualMark } from '$lib/payload/types';
-import type { NumberFormatter } from '$lib/number-format';
+import type { NumberFormatConfig, NumberFormatter } from '$lib/number-format';
 import type { StoryChartGeometryConfig } from '$lib/server/config';
 
 /** One bar, placed. Every number here is a CSS pixel on the reader's screen. */
@@ -103,7 +107,33 @@ export interface SlopeDrawing extends DrawingBase {
 	slopes: Slope[];
 }
 
-export type Drawing = BarDrawing | DotDrawing | SlopeDrawing;
+export interface LinePoint extends PlacedPoint {
+	timeLabel: string;
+	stated: string;
+	displayed: string;
+	sourceText: string | null;
+	emphasized: boolean;
+}
+
+export interface Line {
+	name: string;
+	color: number;
+	dasharray: string;
+	path: string;
+	points: LinePoint[];
+}
+
+export interface LineDrawing extends DrawingBase {
+	type: 'line';
+	frame: Frame;
+	columns: number[];
+	ticks: { index: number; date: string; text: string; anchor: 'start' | 'middle' | 'end' }[];
+	axis: { ticks: { value: number; at: number; text: string }[] };
+	unit: string | null;
+	lines: Line[];
+}
+
+export type Drawing = BarDrawing | DotDrawing | SlopeDrawing | LineDrawing;
 
 function figureOf(mark: VisualMark): number {
 	// The compiler pins `value` to the characters the article wrote, so this is
@@ -345,10 +375,117 @@ export function drawSlopes(
 	};
 }
 
+/** Place source-backed date/quantity pairs with the shared D3 date-series builder. */
+export function drawLines(
+	data: VisualData,
+	room: number,
+	formatNumber: NumberFormatter,
+	numberFormat: NumberFormatConfig,
+	tickDensity: number,
+	geometry: StoryChartGeometryConfig
+): LineDrawing {
+	const held = new Map(data.marks.map((mark) => [mark.mark_id, mark]));
+	const mark = (id: string): VisualMark => {
+		const found = held.get(id);
+		if (found === undefined) throw new Error(`visual data draws a mark it does not carry: ${id}`);
+		return found;
+	};
+	const quantities = data.encoding.quantity.map(mark);
+	const times = data.encoding.time.map(mark);
+	const labels = data.encoding.series.map(mark);
+	const inputs = new Map<
+		string,
+		{ label: string; token: ChartPaletteToken; points: { date: string; value: number }[] }
+	>();
+	const sourcePoints = new Map<string, Map<string, LinePoint>>();
+	for (const [index, quantity] of quantities.entries()) {
+		const time = times[index];
+		if (time?.time === null || time?.time === undefined || time.text === null) {
+			throw new Error('line data has no canonical date and source label');
+		}
+		const name = labels[index]?.text ?? '';
+		let input = inputs.get(name);
+		if (input === undefined) {
+			const token = PALETTE[inputs.size];
+			if (token === undefined) throw new Error('line data exceeds the chart colour palette');
+			input = { label: name, token, points: [] };
+			inputs.set(name, input);
+			sourcePoints.set(name, new Map());
+		}
+		if (quantity.value === null) throw new Error('line data has no measured value');
+		const value = figureOf(quantity);
+		const point: LinePoint = {
+			date: time.time,
+			value,
+			timeLabel: time.text,
+			stated: quantity.value,
+			displayed: formatNumber(value, { si: true }),
+			sourceText: quantity.source_text,
+			emphasized: quantity.mark_id === data.emphasized_mark_id,
+			x: 0,
+			y: 0,
+			alone: false
+		};
+		input.points.push({ date: time.time, value });
+		const source = sourcePoints.get(name);
+		if (source === undefined) throw new Error(`line source points are absent for series: ${name}`);
+		source.set(time.time, point);
+	}
+
+	const width = Math.max(0, Math.floor(room));
+	const chartFrame = frame(width, geometry.line_min_height_px, {
+		top: geometry.line_axis_margin_top_px,
+		right: geometry.dot_radius_px,
+		bottom: geometry.axis_band_px,
+		left: geometry.line_axis_margin_left_px
+	});
+	const series = dateSeries([...inputs.values()], {
+		frame: chartFrame,
+		density: tickDensity,
+		valueTicks: tickDensity,
+		number_format: numberFormat,
+		padding: geometry.row_padding_share,
+		rule: LEGACY_MODEL_RULE
+	});
+	if (series === null) throw new Error('line data has no finite readings');
+	const lines = series.lines.map((line, index): Line => {
+		const dasharray = geometry.line_series_dash_arrays[index];
+		if (dasharray === undefined) throw new Error('line data exceeds the configured series patterns');
+		const source = sourcePoints.get(line.label);
+		if (source === undefined) throw new Error(`line geometry names an absent series: ${line.label}`);
+		return {
+			name: line.label,
+			color: index + 1,
+			dasharray,
+			path: line.path,
+			points: line.points.map((placed) => {
+				const original = source.get(placed.date);
+				if (original === undefined) throw new Error(`line geometry has no source point for ${placed.date}`);
+				return { ...original, ...placed };
+			})
+		};
+	});
+	return {
+		type: 'line',
+		title: data.title,
+		caption: data.caption,
+		width,
+		height: chartFrame.height,
+		frame: chartFrame,
+		columns: series.columns,
+		ticks: series.ticks,
+		axis: series.axis,
+		unit: quantities[0]?.unit ?? null,
+		lines
+	};
+}
+
 export function drawVisual(
 	data: VisualData,
 	room: number,
 	formatNumber: NumberFormatter,
+	numberFormat: NumberFormatConfig,
+	tickDensity: number,
 	geometry: StoryChartGeometryConfig
 ): Drawing {
 	switch (data.type) {
@@ -358,6 +495,8 @@ export function drawVisual(
 			return drawDots(data, room, formatNumber, geometry);
 		case 'slope':
 			return drawSlopes(data, room, formatNumber, geometry);
+		case 'line':
+			return drawLines(data, room, formatNumber, numberFormat, tickDensity, geometry);
 		default:
 			throw new Error(`visual type is not drawn: ${data.type}`);
 	}
@@ -417,6 +556,17 @@ export function statedSlopes(drawing: SlopeDrawing): string {
 		.filter(Boolean).join(' ');
 }
 
+export function statedLines(drawing: LineDrawing): string {
+	const tail = drawing.unit ? ` ${drawing.unit}` : '';
+	const facts = drawing.lines.flatMap((line) => line.points.map((point) =>
+		`${line.name ? `${line.name}: ` : ''}${point.timeLabel} ${point.stated}${tail}` +
+		`${point.emphasized ? ' (highlighted)' : ''}` +
+		`${point.sourceText ? ` (source: ${point.sourceText})` : ''}`
+	));
+	return [drawing.title, `Line chart. ${facts.join('; ')}.`, drawing.caption]
+		.filter(Boolean).join(' ');
+}
+
 export function statedDrawing(drawing: Drawing): string {
 	switch (drawing.type) {
 		case 'bar':
@@ -425,5 +575,7 @@ export function statedDrawing(drawing: Drawing): string {
 			return statedDots(drawing);
 		case 'slope':
 			return statedSlopes(drawing);
+		case 'line':
+			return statedLines(drawing);
 	}
 }

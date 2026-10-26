@@ -67,6 +67,7 @@ test('one click downloads the encoder and answers the question already typed', a
     // feature turned on, so the field is there before anything is downloaded and
     // one click pays for the encoder and runs what is already in it.
     await page.goto('/archive/');
+    await page.waitForLoadState('networkidle');
     await expect(page.locator('#archive-query')).toBeVisible();
     await expect(page.locator('[data-search-state]')).toContainText('The first search downloads');
     await expect(page.locator('h2').first()).toHaveText('Stories');

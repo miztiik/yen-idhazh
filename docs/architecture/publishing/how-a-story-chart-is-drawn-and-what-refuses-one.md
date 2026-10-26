@@ -12,7 +12,7 @@ become markup in our own origin. The routes this drawing arrives on are
 
 ## The browser draws the chart, so the chart reads the page it is printed on
 
-**The reader's browser draws the chart and the pipeline never draws one** (owner ruling, 2026-09-13, [where-a-drawing-becomes-pixels.md](where-a-drawing-becomes-pixels.md)). A story arrives carrying a pointer at its marks; [ItemVisual.svelte](../../../frontend/src/lib/components/ItemVisual.svelte) fetches that file when the story comes near, [drawing.ts](../../../frontend/src/lib/payload/drawing.ts) refuses anything that does not fit the type it names, and [visual/bar.ts](../../../frontend/src/lib/visual/bar.ts) places bar, dot and slope marks. Svelte writes them, so the marks are ordinary elements in the component's own subtree and take the page's tokens through plain scoped CSS.
+**The reader's browser draws the chart and the pipeline never draws one** (owner ruling, 2026-09-13, [where-a-drawing-becomes-pixels.md](where-a-drawing-becomes-pixels.md)). A story arrives carrying a pointer at its marks; [ItemVisual.svelte](../../../frontend/src/lib/components/ItemVisual.svelte) fetches that file when the story comes near, [drawing.ts](../../../frontend/src/lib/payload/drawing.ts) refuses anything that does not fit the type it names, and [visual/bar.ts](../../../frontend/src/lib/visual/bar.ts) places bar, dot, slope and line marks. Line marks use the shared D3 date-series builder. Svelte writes them, so the marks are ordinary elements in the component's own subtree and take the page's tokens through plain scoped CSS.
 
 **Two carriers preceded it and both are worth keeping on the page, because the second one is why the tokens below exist.** Until 2026-09-05 every published chart shipped inside an `img`. An SVG in an `img` is a separate document: it reads none of the page's custom properties, so the only colours it could ever have are the ones the renderer baked in - black axis type, `#888` ticks, `#ddd` grid lines and a `#4c6ef5` bar, fine on white and on the dark theme black type on a near-black card. **It was the loudest reader-facing defect on the site and no gate could see it**, because every check the drawing had was about whether the file was served. From 2026-09-05 the build read the committed SVG off disk for the stories a prerendered document carried and inlined it, so the page could repaint it; that carrier went on 2026-09-13 with the renderer that filled it.
 
@@ -20,7 +20,7 @@ become markup in our own origin. The routes this drawing arrives on are
 
 | What is drawn | Token | Why that one |
 | --- | --- | --- |
-| Bars, dots and slope points/lines | `--chart-1` through `--chart-4` | The categorical chart ramp. It holds no green, amber or red, so a mark cannot read as a status |
+| Bars, dots, slope points/lines and line-series paths/points | `--chart-1` through `--chart-8` | The categorical chart ramp. It holds no green, amber or red, so a mark cannot read as a status |
 | Names, time labels and units | `--color-text-secondary` | Type on the card, read the way the reader note above it is read. The chart ramp is for marks that carry no word |
 | Figures and column labels | `--color-text` | A reader reads these as values or time labels, so they take the page's own ink |
 | Bar and dot baselines (`line.axis`) | `--chart-axis` | The token every console chart already draws an axis with, so there is one answer here rather than two |
@@ -30,7 +30,7 @@ become markup in our own origin. The routes this drawing arrives on are
 `refusedVisualData` in [../../../frontend/src/lib/payload/drawing.ts](../../../frontend/src/lib/payload/drawing.ts) is the guard: it refuses a path that is not a published visual, a document whose `renderer_version` this page does not hold, a type it cannot draw, and a shape that does not fit that type - four names against three figures, a channel naming a mark that is not carried, a bar with no figure. A refusal costs the story its picture and nothing else. **The build checks none of it**, because the build draws nothing: every chart on the site is checked on the device of the reader who opens that day. That is the same trade `check-publication` records on [frontend.md](frontend.md) - the build stopped being the place a bad day is found, and it is written down rather than assumed.
 
 **Before the position-and-length charts landed, every published visual was a bar.** The
-compiler now draws `bar`, `dot` and `slope` from source-backed channels. The historical
+compiler now draws `bar`, `dot`, `slope` and `line` from source-backed channels. The historical
 forty-three drawings on 2026-08-31 - the heaviest committed day, 43 across 601 stories - were
 all bars, which is why this chart family was needed.
 
@@ -75,7 +75,8 @@ data keeps the same geometry. No reader styling change was needed to meet the
 floor; this gate protects the existing measured-width drawing.
 
 `refusedVisualData` checks the current renderer, supported type, mark references,
-paired channels for each type, framing fields and exactly one emphasized measured mark.
+paired channels for each type, canonical dates on line time marks, framing fields
+and exactly one emphasized measured mark.
 The [compiler contract](where-a-drawing-becomes-pixels.md#design-rationale)
 owns how plan references select that mark. Invalid or older incompatible data
 costs the story its chart, not its text. There is no placeholder and no guessed
@@ -87,15 +88,19 @@ A cached page refuses an unknown stamp rather than drawing values under rules
 it does not know. The dated owner exception for older charts lives in the
 [contract rationale](where-a-drawing-becomes-pixels.md#design-rationale).
 
-**The mis-shaped cases are built in the spec rather than committed, and that is a constraint.** Every file under `tests/fixtures/contracts/` is round-tripped through its model by the backend suite, and a mis-shaped document will not load - so a committed one fails that gate before it reaches this one. [item-visual.spec.ts](../../../frontend/tests/item-visual.spec.ts) accepts the fitting bar control, then changes one named condition per refusal case. Separate dot and slope fixtures come from the bounded element-table source and are checked against native compilation; the geometry tests use those same files at narrow and wide widths.
+**The mis-shaped cases are built in the spec rather than committed, and that is a constraint.** Every file under `tests/fixtures/contracts/` is round-tripped through its model by the backend suite, and a mis-shaped document will not load - so a committed one fails that gate before it reaches this one. [item-visual.spec.ts](../../../frontend/tests/item-visual.spec.ts) accepts the fitting bar control, then changes one named condition per refusal case. Dot, slope and line fixtures come from bounded element-table sources and are checked against native compilation; the geometry tests use those same files at narrow and wide widths.
 
 ## Design rationale
 
 Bars stay horizontal at narrow widths so category names remain readable. Dots
 use one shared value scale when position compares items better than length.
 Slopes join paired values across two labelled time columns and omit an axis;
-their units are still visible. One shared drawing component handles all three.
-Their bounded settings live under `chart.story_geometry`, separate from the
+their units are still visible. Lines order source-backed measurements by
+canonical date, keep source wording for labels, and group only when each
+reading carries its own series label. They share date ticks, value axes and
+measured width with the Data explorer's date-series builder. One shared drawing
+component handles all four forms. A line's unit appears once at the value axis;
+numeric tick labels do not repeat it. Their bounded settings live under `chart.story_geometry`, separate from the
 console chart's fixed coordinate dimensions, and reach the browser only through
 the existing typed build-time UI configuration. The dot baseline ends at the
 same measured position as its value scale, and mark outlines take their width

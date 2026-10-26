@@ -1,94 +1,41 @@
 {
-  "version": "2026-10-25",
-  "item_id": "energy-4821903756",
-  "type": "slope",
-  "renderer_version": "2026-10-25",
-  "title": "Offshore wind capacity, four countries",
   "caption": "Each line joins a country's figures across two years.",
   "emphasized_mark_id": "m1",
-  "marks": [
-    {
-      "mark_id": "m0",
-      "text": null,
-      "value": "1200",
-      "unit": "mw",
-      "source_text": null,
-      "element_id": "quantity-12-19",
-      "derived": null
-    },
-    {
-      "mark_id": "m1",
-      "text": null,
-      "value": "1500",
-      "unit": "mw",
-      "source_text": null,
-      "element_id": "quantity-32-39",
-      "derived": null
-    },
-    {
-      "mark_id": "m2",
-      "text": null,
-      "value": "2800",
-      "unit": "mw",
-      "source_text": null,
-      "element_id": "quantity-61-68",
-      "derived": null
-    },
-    {
-      "mark_id": "m3",
-      "text": null,
-      "value": "3400",
-      "unit": "mw",
-      "source_text": null,
-      "element_id": "quantity-81-88",
-      "derived": null
-    },
-    {
-      "mark_id": "m4",
-      "text": "2024",
-      "value": null,
-      "unit": null,
-      "source_text": null,
-      "element_id": "date-23-27",
-      "derived": null
-    },
-    {
-      "mark_id": "m5",
-      "text": "2025",
-      "value": null,
-      "unit": null,
-      "source_text": null,
-      "element_id": "date-43-47",
-      "derived": null
-    },
-    {
-      "mark_id": "m6",
-      "text": "Denmark",
-      "value": null,
-      "unit": null,
-      "source_text": null,
-      "element_id": "entity-0-7",
-      "derived": null
-    },
-    {
-      "mark_id": "m7",
-      "text": "Germany",
-      "value": null,
-      "unit": null,
-      "source_text": null,
-      "element_id": "entity-49-56",
-      "derived": null
-    }
-  ],
   "encoding": {
+    "bins": [],
     "category": [],
-    "quantity": ["m0", "m1", "m2", "m3"],
+    "entity": [
+      "m6",
+      "m7"
+    ],
+    "event_label": [],
+    "quantity": [
+      "m0",
+      "m1",
+      "m2",
+      "m3"
+    ],
     "quantity_x": [],
-    "time": ["m4", "m5"],
     "series": [],
     "size": [],
-    "bins": [],
-    "entity": ["m6", "m7"],
-    "event_label": []
-  }
+    "time": [
+      "m4",
+      "m5"
+    ]
+  },
+  "item_id": "energy-4821903756",
+  "marks": [
+    {"derived": null,"element_id": "quantity-12-19","mark_id": "m0","source_text": null,"text": null,"time": null,"unit": "mw","value": "1200"},
+    {"derived": null,"element_id": "quantity-32-39","mark_id": "m1","source_text": null,"text": null,"time": null,"unit": "mw","value": "1500"},
+    {"derived": null,"element_id": "quantity-61-68","mark_id": "m2","source_text": null,"text": null,"time": null,"unit": "mw","value": "2800"},
+    {"derived": null,"element_id": "quantity-81-88","mark_id": "m3","source_text": null,"text": null,"time": null,"unit": "mw","value": "3400"},
+    {"derived": null,"element_id": "date-23-27","mark_id": "m4","source_text": null,"text": "2024","time": "2024","unit": null,"value": null},
+    {"derived": null,"element_id": "date-43-47","mark_id": "m5","source_text": null,"text": "2025","time": "2025","unit": null,"value": null},
+    {"derived": null,"element_id": "entity-0-7","mark_id": "m6","source_text": null,"text": "Denmark","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": "entity-49-56","mark_id": "m7","source_text": null,"text": "Germany","time": null,"unit": null,"value": null}
+  ],
+  "renderer_version": "2026-10-27",
+  "title": "Offshore wind capacity, four countries",
+  "type": "slope",
+  "version": "2026-10-27"
 }

@@ -4,9 +4,9 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { DigestDay, VisualData } from '../src/lib/payload/types';
 import { drawVisual, statedDrawing } from '../src/lib/visual/bar';
-import { storyChartGeometryConfig } from '../src/lib/server/config';
+import { chartConfig, storyChartGeometryConfig } from '../src/lib/server/config';
 import { dayReady } from './support/day-ready';
-import { formatNumber } from './support/number-format';
+import { formatNumber, numberFormat } from './support/number-format';
 import { CANARY, newestDate, payloadOf } from './support/published';
 
 test.use({ viewport: { width: 390, height: 844 } });
@@ -70,6 +70,7 @@ test('reader labels clear the text floor without scaling, and every mark survive
 				return {
 					width: svg.getBoundingClientRect().width,
 					drawnWidth: svg.viewBox.baseVal.width,
+					drawnHeight: svg.viewBox.baseVal.height,
 					scale: [transform.a, transform.b, transform.c, transform.d],
 					floor,
 					text: [...svg.querySelectorAll('text')].map((text) => ({
@@ -78,8 +79,19 @@ test('reader labels clear the text floor without scaling, and every mark survive
 						x: text.x.baseVal.getItem(0).value,
 						y: text.y.baseVal.getItem(0).value
 					})),
+					valueTickBounds: [...svg.querySelectorAll<SVGTextElement>('text.value-tick')].map((text) => {
+						const { x, y, width, height } = text.getBBox();
+						return { x, y, width, height };
+					}),
 					bars: [...svg.querySelectorAll('rect')].map((bar) =>
 						['x', 'y', 'width', 'height'].map((key) => Number(bar.getAttribute(key)))
+					),
+					lines: [...svg.querySelectorAll('path.series-line')].map((line) => ({
+						path: line.getAttribute('d'),
+						dasharray: line.getAttribute('stroke-dasharray')
+					})),
+					points: [...svg.querySelectorAll('circle.line-point')].map((point) =>
+						['cx', 'cy'].map((key) => Number(point.getAttribute(key)))
 					)
 				};
 			});
@@ -90,12 +102,27 @@ test('reader labels clear the text floor without scaling, and every mark survive
 			for (const text of measured.text) {
 				expect(text.size, `${id}: ${text.value}`).toBeGreaterThanOrEqual(measured.floor);
 			}
-			const expected = drawVisual(data, measured.width, formatNumber, geometry);
+			for (const bounds of measured.valueTickBounds) {
+				expect(bounds.x, `${id}: value tick clears the left edge`).toBeGreaterThanOrEqual(0);
+				expect(bounds.x + bounds.width, `${id}: value tick clears the right edge`)
+					.toBeLessThanOrEqual(measured.drawnWidth);
+				expect(bounds.y, `${id}: value tick clears the top edge`).toBeGreaterThanOrEqual(0);
+				expect(bounds.y + bounds.height, `${id}: value tick clears the bottom edge`)
+					.toBeLessThanOrEqual(measured.drawnHeight);
+			}
+			const expected = drawVisual(
+				data,
+				measured.width,
+				formatNumber,
+				numberFormat,
+				chartConfig().tick_density,
+				geometry
+			);
 			const emphasized = svg.locator(
-				'rect.bar.emphasized, circle.dot.emphasized, circle.slope-point.emphasized'
+				'rect.bar.emphasized, circle.dot.emphasized, circle.slope-point.emphasized, circle.line-point.emphasized'
 			);
 			await expect(emphasized).toHaveCount(1);
-			const styles = await svg.locator('rect.bar, circle.dot, line.slope-line, circle.slope-point').evaluateAll((marks) => marks.map((mark) => {
+			const styles = await svg.locator('rect.bar, circle.dot, line.slope-line, circle.slope-point, path.series-line, circle.line-point').evaluateAll((marks) => marks.map((mark) => {
 				const style = getComputedStyle(mark);
 				return {
 					selected: mark.classList.contains('emphasized'),
@@ -133,7 +160,7 @@ test('reader labels clear the text floor without scaling, and every mark survive
 					...expected.dots.flatMap((dot) => [dot.name, dot.displayed]),
 					...(expected.unit ? [expected.unit] : [])
 				]);
-			} else {
+			} else if (expected.type === 'slope') {
 				const lines = await svg.locator('line.slope-line').evaluateAll((marks) =>
 					marks.map((line) => ['x1', 'y1', 'x2', 'y2'].map((key) => Number(line.getAttribute(key))))
 				);
@@ -147,6 +174,28 @@ test('reader labels clear the text floor without scaling, and every mark survive
 						slope.left.displayed,
 						slope.right.displayed
 					]),
+					...(expected.unit ? [expected.unit] : [])
+				]);
+			} else if (expected.type === 'line') {
+				expect(measured.valueTickBounds.length).toBeGreaterThan(0);
+				expect(measured.lines).toEqual(expected.lines.map((line) => ({
+					path: line.path,
+					dasharray: line.dasharray
+				})));
+				expect(measured.points).toEqual(expected.lines.flatMap((line) =>
+					line.points.map((point) => [point.x, point.y])
+				));
+				if (expected.lines.length > 1) {
+					const legend = await svg.locator('.line-legend-mark line').evaluateAll((marks) =>
+						marks.map((line) => line.getAttribute('stroke-dasharray'))
+					);
+					expect(legend).toEqual(expected.lines.map((line) => line.dasharray));
+				}
+				expect(measured.text.map((text) => text.value)).toEqual([
+					...expected.axis.ticks
+						.filter((tick) => tick.text !== '')
+						.map((tick) => tick.text),
+					...expected.ticks.map((tick) => tick.text),
 					...(expected.unit ? [expected.unit] : [])
 				]);
 			}
@@ -239,7 +288,7 @@ test('the reader surface stays still as it loads and gains no page animation und
 		await dayReady(page);
 		return page.evaluate(() =>
 			document.getAnimations().filter((animation) =>
-				animation.playState === 'running'
+				animation instanceof CSSAnimation && animation.playState === 'running'
 			).length
 		);
 	}

@@ -41,7 +41,7 @@ from idhazh.contracts.base import (
     records_json,
 )
 from idhazh.contracts.derived import DerivedNumber, DerivedUnit, DerivedValue
-from idhazh.contracts.element import ElementId
+from idhazh.contracts.element import DateOrYear, ElementId
 from idhazh.contracts.visual import (
     MAX_IDS_PER_ROLE,
     EncodingRole,
@@ -60,7 +60,7 @@ from idhazh.contracts.visual import (
 #: committed SVG is a fixed record of what a reader saw on a given day, and a
 #: spec plus drawing code can be redrawn differently by a later change with
 #: nothing in the payload to show it moved. This field is what shows it.
-RENDERER_VERSION: Final = "2026-10-25"
+RENDERER_VERSION: Final = "2026-10-27"
 
 #: How a mark is addressed inside its own file. Local to one visual and never an
 #: identity anything outside it holds, so it is short and positional rather than
@@ -104,6 +104,13 @@ class VisualMark(Model):
             "than names."
         )
     )
+    time: DateOrYear | None = Field(
+        default=None,
+        description=(
+            "The contract-validated date or year used to order a time mark. Its source "
+            "wording remains in `text`, and its element id preserves the provenance."
+        ),
+    )
     value: DerivedNumber | None = Field(
         description=(
             "How big a measured mark is, as a decimal pinned to text the way a Tier 1 "
@@ -141,10 +148,21 @@ class VisualMark(Model):
     @model_validator(mode="after")
     def _a_mark_says_something_or_measures_something(self) -> Self:
         """A mark carrying neither draws an empty space under a name nobody wrote."""
-        if self.text is None and self.value is None:
+        if self.text is None and self.value is None and self.time is None:
             raise ValueError("a mark names something or measures something")
         if self.unit is not None and self.value is None:
             raise ValueError("a unit is what a value measures, so a mark with no value states none")
+        return self
+
+    @model_validator(mode="after")
+    def _a_time_value_keeps_its_date_element_and_source_wording(self) -> Self:
+        if self.time is not None and (
+            self.text is None
+            or self.value is not None
+            or self.element_id is None
+            or not self.element_id.startswith("date-")
+        ):
+            raise ValueError("a time value keeps a date element and its source wording")
         return self
 
     @model_validator(mode="after")
@@ -212,6 +230,11 @@ class VisualData(Contract):
         return records_json(self.model_dump(mode="json"), record_lists=frozenset({"marks"}))
 
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-10-27",
+            change="Carry a canonical date beside source wording for time marks.",
+            why="A time axis needs sortable dates without replacing the article's words.",
+        ),
         ChangelogEntry(
             version="2026-10-25",
             change="Compile and draw bar, dot and slope charts with their source channels.",
@@ -332,8 +355,11 @@ class VisualData(Contract):
                 raise ValueError(
                     "a slope chart carries only time, quantity, entity and series channels"
                 )
-            held_time = [by_id[mark_id].text for mark_id in channels.time]
-            if held_time[0] == held_time[1]:
+            held_time = [by_id[mark_id].time for mark_id in channels.time]
+            if None in held_time or held_time[0] == held_time[1]:
+                raise ValueError("a slope chart needs two distinct time labels")
+            held_labels = [by_id[mark_id].text for mark_id in channels.time]
+            if held_labels[0] == held_labels[1]:
                 raise ValueError("a slope chart needs two distinct time labels")
             if (
                 not channels.entity
@@ -342,9 +368,54 @@ class VisualData(Contract):
                 raise ValueError(
                     "a slope chart needs distinct series labels when entity labels are absent"
                 )
+        elif self.type is VisualType.LINE:
+            if len(channels.quantity) < 2 or len(channels.time) != len(channels.quantity):
+                raise ValueError("a line chart pairs at least two quantities with dates")
+            if channels.series and len(channels.series) != len(channels.quantity):
+                raise ValueError("a line chart pairs one series label with each quantity")
+            if any(
+                (
+                    channels.category,
+                    channels.quantity_x,
+                    channels.entity,
+                    channels.size,
+                    channels.bins,
+                    channels.event_label,
+                )
+            ):
+                raise ValueError(
+                    "a line chart carries only time, quantity and optional series channels"
+                )
+            times = [by_id[mark_id].time for mark_id in channels.time]
+            if any(value is None for value in times):
+                raise ValueError("a line chart needs a canonical date for each time mark")
+            precisions = {len(value) for value in times if value is not None}
+            if len(precisions) != 1:
+                raise ValueError("a line chart cannot mix year and day precision")
+            labels = (
+                [by_id[mark_id].text for mark_id in channels.series]
+                if channels.series
+                else [""] * len(channels.quantity)
+            )
+            dates_by_series: dict[str, set[str]] = {}
+            for label, date in zip(labels, times, strict=True):
+                if date is None:
+                    continue
+                dates = dates_by_series.setdefault(label or "", set())
+                if date in dates:
+                    raise ValueError("a line chart has two readings for one series and date")
+                dates.add(date)
+            if any(len(dates) < 2 for dates in dates_by_series.values()):
+                raise ValueError("each line series needs at least two dates")
         else:
             raise ValueError(f"{self.type.value} has no current story-chart data shape")
 
+        time_ids = set(channels.time)
+        if any(
+            (by_id[mark_id].time is not None) != (mark_id in time_ids)
+            for mark_id in by_id
+        ):
+            raise ValueError("only time-channel marks carry a canonical date")
         text_channels = channels.category + channels.time + channels.series + channels.entity
         if any(
             not (by_id[mark_id].text or "").strip() or by_id[mark_id].value is not None
