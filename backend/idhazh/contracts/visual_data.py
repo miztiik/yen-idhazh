@@ -234,10 +234,7 @@ class VisualData(Contract):
         ChangelogEntry(
             version="2026-10-27T02:00",
             change="Add bubble as a source-backed relationship chart type.",
-            why=(
-                "The reader can encode a third measure as area without hiding points at "
-                "narrow widths."
-            ),
+            why="Circle area shows a third measure at the measured viewport width.",
         ),
         ChangelogEntry(
             version="2026-10-27T01:00",
