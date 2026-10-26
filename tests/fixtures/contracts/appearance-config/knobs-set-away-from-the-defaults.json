@@ -51,6 +51,11 @@
       "line_axis_margin_left_px": 56,
       "line_axis_margin_top_px": 32,
       "line_width_px": 2.5,
+      "scatter_height_px": 240,
+      "scatter_margin_left_px": 60,
+      "scatter_margin_right_px": 28,
+      "scatter_margin_top_px": 36,
+      "scatter_margin_bottom_px": 52,
       "line_series_dash_arrays": [
         "none",
         "7 3",
