@@ -16,7 +16,7 @@ export function fitChartTicks(
 	textHeight: number,
 	maximum: number
 ): number {
-	const span = data.type === 'scatter'
+	const span = data.type === 'scatter' || data.type === 'bubble'
 		? geometry.scatter_height_px - geometry.scatter_margin_top_px - geometry.scatter_margin_bottom_px
 		: geometry.line_min_height_px - geometry.line_axis_margin_top_px - geometry.axis_band_px;
 	return Math.max(1, Math.min(maximum, Math.floor(span / (textHeight + geometry.value_gap_px))));

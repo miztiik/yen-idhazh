@@ -52,6 +52,7 @@
       "line_axis_margin_top_px": 32,
       "line_width_px": 2.5,
       "scatter_height_px": 240,
+      "bubble_max_radius_share": 0.2,
       "scatter_margin_left_px": 60,
       "scatter_margin_right_px": 28,
       "scatter_margin_top_px": 36,

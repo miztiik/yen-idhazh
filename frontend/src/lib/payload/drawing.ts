@@ -11,7 +11,7 @@ const VISUAL_DATA_PATH =
 
 /** Protocol stamp, held to the Python authority by the visual binding test. */
 export const RENDERER_VERSION = '2026-10-27T01:00';
-export const DRAWABLE = ['bar', 'dot', 'line', 'scatter', 'slope'] as const;
+export const DRAWABLE = ['bar', 'dot', 'line', 'scatter', 'bubble', 'slope'] as const;
 export const ENCODING_ROLES = [
 	'category', 'quantity', 'quantity_x', 'time', 'series', 'size', 'bins', 'entity', 'event_label'
 ] as const;
@@ -86,7 +86,7 @@ export function refusedVisualData(data: unknown): string | null {
 	}
 	if (drawn.size !== held.size) return 'carries marks it does not draw';
 	const figures = channels.quantity;
-	for (const id of [...figures, ...channels.quantity_x]) {
+	for (const id of [...figures, ...channels.quantity_x, ...(data.type === 'bubble' ? channels.size : [])]) {
 		const value = held.get(id)?.value;
 		if (typeof value !== 'string' || !value.trim() || !Number.isFinite(Number(value)) || held.get(id)?.text !== null) {
 			return 'draws a bar with no finite figure';
@@ -158,6 +158,32 @@ export function refusedVisualData(data: unknown): string | null {
 			new Set(entities.map((mark) => mark.element_id)).size !== figures.length ||
 			new Set(entities.map((mark) => mark.text)).size !== figures.length
 		) return 'scatter entity labels must be distinct';
+		textChannels.push(...channels.entity, ...channels.series);
+	} else if (data.type === 'bubble') {
+		if (
+			figures.length === 0 || channels.quantity_x.length !== figures.length ||
+			channels.size.length !== figures.length || channels.entity.length !== figures.length
+		) return 'a bubble pairs one entity with both positions and size';
+		if (channels.series.length !== 0 && channels.series.length !== figures.length) {
+			return 'a bubble pairs one series label with every point';
+		}
+		if (
+			channels.category.length !== 0 || channels.time.length !== 0 ||
+			channels.bins.length !== 0 || channels.event_label.length !== 0
+		) return 'carries a channel this bubble does not draw';
+		if (channels.size.some((id) => Number(held.get(id)?.value) <= 0)) {
+			return 'bubble size measures must be positive';
+		}
+		const entities = channels.entity.map((id) => held.get(id)!);
+		if (entities.some((mark) =>
+			typeof mark.element_id !== 'string' || !/^(entity|place)-/.test(mark.element_id)
+		)) {
+			return 'bubble entities need source element references';
+		}
+		if (
+			new Set(entities.map((mark) => mark.element_id)).size !== figures.length ||
+			new Set(entities.map((mark) => mark.text)).size !== figures.length
+		) return 'bubble entity labels must be distinct';
 		textChannels.push(...channels.entity, ...channels.series);
 	} else if (data.type === 'line') {
 		const times: string[] = [];
