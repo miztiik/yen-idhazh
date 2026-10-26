@@ -138,7 +138,8 @@ Contract input bindings use `Contract.json_schema()`, which includes its
 read-time version default; nested models use `model_json_schema()`.
 
 Current planner batches and ledger rows reject the replaced formats. There
-is no old planner migrator, compatibility alias or dual writer. Finite
+is no old planner migrator, compatibility alias or dual writer. Replaced
+row and stage version exports are removed with their schemas. Finite
 historical generic-envelope vectors for unrelated families remain readable.
 The private fetch journal retains its separately declared finite receipt
 stamps; it does not preserve an obsolete planner ledger.

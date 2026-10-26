@@ -1,21 +1,6 @@
-/** Which calendar stamp identifies these initial feed planning contracts? */
+/** Which schema and package stamps do current readers and writers use? */
 export const CONTRACT_VERSION = "2026-10-20" as const;
 export const PACKAGE_VERSION = "2026.10.20" as const;
-export const FEED_INGEST_AUDIT_VERSION = "2026-10-22" as const;
-export const PLANNER_EXCLUSIONS_VERSION = "2026-10-22T20:30" as const;
 export const EXTRACTION_QUALITY_VERSION = "2026-10-23" as const;
-export const FEED_HISTORY_EVENT_VERSION = "2026-10-23T18:50" as const;
-export const SOURCE_RELIABILITY_VERSION = "2026-10-24" as const;
-export const DOCUMENT_OBSERVATION_VERSION = "2026-10-24T23:08" as const;
-export const HARVEST_DIAGNOSTICS_VERSION = "2026-10-22T18:15" as const;
-export const PLANNING_OBSERVATIONS_VERSION = "2026-10-23" as const;
 export const PUBLISHER_IDENTITY_VERSION = "2026-10-24T20:04" as const;
-export const PUBLISHER_EXPOSURE_VERSION = "2026-10-24T23:00" as const;
-export const SOURCE_OPERATIONAL_SCORE_VERSION = "2026-10-25" as const;
-export const FEED_OPERATIONAL_STATE_VERSION = "2026-10-25" as const;
-export const FEED_HEALTH_STATE_VERSION = "2026-10-25T13:50" as const;
-export const SELECTED_FEED_BATCH_VERSION = "2026-10-25T11:21" as const;
-export const SOURCE_RUN_VERSION = PUBLISHER_IDENTITY_VERSION;
-export const FEED_INGEST_EVENT_VERSION = SOURCE_OPERATIONAL_SCORE_VERSION;
-export const PLANNER_STAGE_VERSION = PUBLISHER_IDENTITY_VERSION;
 export const PLANNER_LEDGER_VERSION = "2026-10-25" as const;

@@ -278,19 +278,21 @@ def test_typescript_field_types_defaults_and_vocabularies(
 
 def test_typescript_envelope_fields_and_footer_keys(typescript_schemas: dict[str, Any]) -> None:
     from idhazh.contracts import file_envelope
-    from idhazh.contracts.base import Contract
     from idhazh.contracts.feed_health import FeedHealthRow
     from idhazh.contracts.publication_inventory import PublicationEntry, PublicationInventory
 
     # Other-family historical identity and publication bindings stay unchanged.
     with pytest.raises(ValidationError, match="curated publisher identity requires its declared contract version"):
         FeedHealthRow.model_validate({"version": "2026-10-23T18:50", "publisher_id": "recorded-publication"})
-    for contract in (
-        file_envelope.FileEnvelope, file_envelope.PlannerFileEnvelope,
-        file_envelope.WriterIdentity, file_envelope.RowIdentity, FeedHealthRow,
-    ):
-        ours = contract.json_schema() if issubclass(contract, Contract) else contract.model_json_schema()
-        theirs = typescript_schemas[contract.__name__]
+    native_schemas = {
+        "FileEnvelope": file_envelope.FileEnvelope.json_schema(),
+        "PlannerFileEnvelope": file_envelope.PlannerFileEnvelope.json_schema(),
+        "WriterIdentity": file_envelope.WriterIdentity.model_json_schema(),
+        "RowIdentity": file_envelope.RowIdentity.model_json_schema(),
+        "FeedHealthRow": FeedHealthRow.json_schema(),
+    }
+    for name, ours in native_schemas.items():
+        theirs = typescript_schemas[name]
         assert normalized_shape(theirs, theirs) == normalized_shape(ours, ours)
     assert typescript_schemas["__footer_keys"] == list(file_envelope._KEYS)
     assert typescript_schemas["__planner_footer_keys"] == list(file_envelope.PLANNER_FOOTER_KEYS)
