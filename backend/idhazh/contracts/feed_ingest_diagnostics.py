@@ -125,5 +125,5 @@ class HarvestDiagnostics(Model):
     ) = None
     fetch_ms: Count | None = None
     extract_ms: Count | None = None
-    warnings: list[Literal["malformed-json-ld"]] = Field(default=[], max_length=1)
+    warnings: list[Literal["malformed-json-ld", "semantic-dom-fallback"]] = Field(default=[], max_length=2)
     quality: ExtractionQuality | None = None

@@ -54,22 +54,47 @@ test("real response streams enforce decoded byte limits and release an aborted b
   expect(pending.destroyed).toBe(true);
 });
 
-test("RSS and prefixed Atom retain every category, author, ordinal and UTC timestamp", async () => {
+test("Feedsmith formats retain categories, author, ordinal and only entry-level UTC timestamps", async () => {
   const recordings = await readRecordings();
   const rss = await parseFeed(recordings.bodies.rss);
   expect(rss.map(entry => entry.entry_ordinal)).toEqual([0, 1, 2]);
-  expect(rss[0]?.categories).toEqual(["Science", "Energy / Research", "Regional reporting", "Nested category name"]);
+  expect(rss[0]?.categories).toEqual(["Science", "Energy / Research", "Nested category name", "Regional reporting"]);
   expect(rss[0]?.author).toBe("Feed Reporter");
   expect(rss[0]?.published_at).toBe("2026-10-21T09:15:00Z");
   expect(rss[1]?.link).toBeNull();
   expect(rss[2]?.categories).toEqual([]);
-  expect(rss[2]?.published_at).toBe("2026-10-21T10:00:00Z");
+  expect(rss[2]?.published_at).toBeNull();
   const atom = await parseFeed(recordings.bodies.atom);
   expect(atom[0]?.categories).toEqual(["Science", "Research / Methods"]);
   expect(atom[0]?.author).toBe("Atom Reporter");
   expect(atom[0]?.published_at).toBe("2026-10-21T06:30:00Z");
   expect(atom[1]?.categories).toEqual([]);
-  expect(atom[1]?.published_at).toBe("2026-10-21T10:00:00Z");
+  expect(atom[1]?.published_at).toBeNull();
+  for (const date of ["not-a-date", "2026-10-21T08:30:00"]) {
+    expect((await parseFeed(recordings.bodies.atom.replace("2026-10-21T08:30:00+02:00", date)))[0]?.published_at).toBeNull();
+  }
+  const json = await parseFeed(await Bun.file(new URL(
+    "../../../tests/fixtures/feed-ingest-plan/harvest-json.json", import.meta.url,
+  )).text());
+  expect(json).toEqual([
+    { entry_ordinal: 0, title: "JSON feed entry", link: "https://json.example/story", categories: ["Science", "Science"],
+      author: "JSON Reporter", published_at: "2026-10-21T06:30:00Z" },
+    { entry_ordinal: 1, title: "Opaque identifier is not an article URL", link: null, categories: [],
+      author: null, published_at: null },
+    { entry_ordinal: 2, title: "URL identifier", link: "https://json.example/undated", categories: [],
+      author: null, published_at: null },
+  ]);
+  const rdf = await parseFeed(await Bun.file(new URL(
+    "../../../tests/fixtures/feed-ingest-plan/harvest-rdf.xml", import.meta.url,
+  )).text());
+  expect(rdf).toEqual([
+    { entry_ordinal: 0, title: "RDF feed entry", link: "https://rdf.example/story", categories: ["Science"],
+      author: "RDF Reporter", published_at: "2026-10-21T06:30:00Z" },
+  ]);
+  const guid = recordings.bodies.rss.replace(/<link>https:\/\/news\.example\/second<\/link>/,
+    "<guid>https://news.example/second</guid>");
+  expect((await parseFeed(guid))[2]?.link).toBe("https://news.example/second");
+  expect((await parseFeed(guid.replace("<guid>", '<guid isPermaLink="false">')))[2]?.link).toBeNull();
 });
 
 test("public harvest returns strict full text and streamed work facts without persisting an audit population", async () => {
@@ -241,12 +266,15 @@ test("inactive, empty, malformed, HTTP, timeout and address failures are distinc
 test("real inert DOM extraction retains prose and author but never calls a page resource", async () => {
   const { bodies } = await readRecordings();
   const controls = (await inputs()).extraction;
-  const extracted = extractArticle(bodies.article, "https://news.example/story", controls);
+  const extracted = await extractArticle(bodies.article, "https://news.example/story", controls);
+  expect(extracted.article_text).toContain("![A chart]");
   expect(extracted.author).toBe("Page Reporter");
   expect(extracted.article_text).toContain("Independent reviewers will repeat the work");
   expect(extracted.article_text).not.toContain("Privacy and site links");
-  expect(extracted.article_text).toContain("[link]");
-  expect(extracted.article_text).toContain("[omitted]");
+  expect(extracted.article_text).toMatch(/\\?\[link\\?\]/);
+  expect(extracted.article_text).toMatch(/\\?\[omitted\\?\]/);
+  expect(extracted.article_text).not.toContain("UNTRUSTED");
+  expect(extracted.article_text).not.toContain("<iframe");
   expect(extracted.paywall).toBe(false);
   expect(extracted.quality).toMatchObject({
     word_count: extracted.word_count, source_word_count: extracted.word_count, token_count: null,
@@ -259,7 +287,7 @@ test("real inert DOM extraction retains prose and author but never calls a page 
   const implementation = createHash("sha256");
   for (const name of [
     "dom-extractor.ts", "corroborated-words.ts", "extraction-quality.ts", "extraction-controls.ts",
-    "parse-document.ts", "extraction-provenance.ts",
+    "parse-document.ts", "extraction-provenance.ts", "semantic-extractor.ts",
   ]) {
     implementation.update(name).update("\0").update(
       (await Bun.file(new URL(`../src/harvest-feeds/${name}`, import.meta.url)).text()).replace(/\r\n/g, "\n"),
@@ -282,36 +310,36 @@ test("real inert DOM extraction retains prose and author but never calls a page 
   const witnessWords = firstParagraph.split(/\s+/u).length;
   const witnessControls = { ...controls, corroboration_min_words: witnessWords, reject_contaminated: true };
   const declared = JSON.stringify({ "@graph": [{ "@type": ["Article", "NewsArticle"], articleBody: firstParagraph }] });
-  expect(extractArticle(withMetadata(declared), "https://news.example/story", witnessControls).quality).toMatchObject({
+  expect((await extractArticle(withMetadata(declared), "https://news.example/story", witnessControls)).quality).toMatchObject({
     source_word_count: extracted.word_count, corroborated_word_count: witnessWords,
     contaminated: true, failure_code: "contaminated", rejected: true,
   });
-  expect(extractArticle(withMetadata(declared), "https://news.example/story", { ...witnessControls, reject_contaminated: false }).quality?.rejected).toBe(false);
-  expect(extractArticle(withMetadata(declared), "https://news.example/story", {
+  expect((await extractArticle(withMetadata(declared), "https://news.example/story", { ...witnessControls, reject_contaminated: false })).quality?.rejected).toBe(false);
+  expect((await extractArticle(withMetadata(declared), "https://news.example/story", {
     ...witnessControls, corroboration_ratio_max: extracted.word_count / witnessWords,
-  }).quality?.contaminated).toBe(false);
-  expect(extractArticle(withMetadata(declared), "https://news.example/story", {
+  })).quality?.contaminated).toBe(false);
+  expect((await extractArticle(withMetadata(declared), "https://news.example/story", {
     ...witnessControls, corroboration_min_words: witnessWords + 1,
-  }).quality?.contaminated).toBeNull();
-  expect(extractArticle(withMetadata(JSON.stringify({ "@type": "WebPage", articleBody: firstParagraph })),
-    "https://news.example/story", witnessControls).quality?.corroborated_word_count).toBeNull();
+  })).quality?.contaminated).toBeNull();
+  expect((await extractArticle(withMetadata(JSON.stringify({ "@type": "WebPage", articleBody: firstParagraph })),
+    "https://news.example/story", witnessControls)).quality?.corroborated_word_count).toBeNull();
   const microdata = bodies.article.replace("<article>", '<article itemprop="articleBody">');
-  expect(extractArticle(microdata, "https://news.example/story", controls).quality?.corroborated_word_count).toBeGreaterThan(100);
+  expect((await extractArticle(microdata, "https://news.example/story", controls)).quality?.corroborated_word_count).toBeGreaterThan(100);
   const foldedHeading = bodies.article.replace("</head>", '<meta property="og:title" content="STRASSE"></head>')
     .replace(/<h1>[^<]+<\/h1>/u, "<h1>Stra\u00dfe</h1>");
-  expect(extractArticle(foldedHeading, "https://news.example/story", controls).quality?.corroborated_word_count).toBeGreaterThan(100);
-  const malformed = extractArticle(withMetadata("{broken JSON"), "https://news.example/story", controls);
+  expect((await extractArticle(foldedHeading, "https://news.example/story", controls)).quality?.corroborated_word_count).toBeGreaterThan(100);
+  const malformed = await extractArticle(withMetadata("{broken JSON"), "https://news.example/story", controls);
   expect(malformed.warnings).toEqual(["malformed-json-ld"]);
   expect(malformed.quality?.corroborated_word_count).toBeNull();
   expect(malformed.quality?.source_word_count).toBe(extracted.word_count);
-  const invalidAccess = extractArticle(withMetadata(JSON.stringify({ "@graph": [
+  const invalidAccess = await extractArticle(withMetadata(JSON.stringify({ "@graph": [
     { isAccessibleForFree: { toString: "" } }, { "@type": "NewsArticle", articleBody: firstParagraph },
   ] })), "https://news.example/story", witnessControls);
   expect(invalidAccess.paywall).toBe(false);
   expect(invalidAccess.quality?.corroborated_word_count).toBe(witnessWords);
   expect(invalidAccess.warnings).toEqual([]);
   for (const access of [false, "false", " FALSE "]) {
-    const accessPage = extractArticle(withMetadata(JSON.stringify({ isAccessibleForFree: access })), "https://news.example/story", controls);
+    const accessPage = await extractArticle(withMetadata(JSON.stringify({ isAccessibleForFree: access })), "https://news.example/story", controls);
     expect(accessPage.paywall).toBe(true);
     expect(accessPage.quality).toBeNull();
   }
@@ -329,14 +357,22 @@ test("real inert DOM extraction retains prose and author but never calls a page 
     ...controls, min_source_words: extracted.word_count,
   }, "article").too_short).toBe(false);
   for (const form of ["article", "abstract"] as const) {
-    const short = extractArticle(bodies.article, "https://news.example/story", {
-      ...controls, min_source_words: extracted.word_count + 1, reject_too_short: true,
+    const short = await extractArticle(bodies.article, "https://news.example/story", {
+      ...controls, min_source_words: extracted.word_count * 2, reject_too_short: true,
     }, form);
     expect(short.quality).toMatchObject({ failure_code: "too_short", too_short: true, rejected: form === "article" });
   }
-  const capChanged = extractArticle(bodies.article, "https://news.example/story", { ...controls, truncation_cap_tokens: 256 });
+  const capChanged = await extractArticle(bodies.article, "https://news.example/story", { ...controls, truncation_cap_tokens: 256 });
   expect(capChanged.article_text).toBe(extracted.article_text);
   expect(capChanged.quality).toMatchObject({ token_count: null, truncated: null, truncation_cap_tokens: 256 });
+  const semantic = await extractArticle(bodies.article, "https://news.example/story",
+    { ...controls, min_source_words: extracted.word_count + 1 });
+  expect(semantic.article_text).toContain("Independent reviewers will repeat the work");
+  expect(semantic.article_text).not.toContain("exfil.example");
+  expect(semantic.article_text).not.toContain("Privacy and site links");
+  expect(semantic.warnings).toContain("semantic-dom-fallback");
+  expect((await extractArticle("<html><body><main><script>fake story</script></main></body></html>",
+    "https://news.example/story", controls)).article_text).toBe("");
 });
 
 test("URL identity uses discovery sorting, tracking removal and shared hashing", () => {
