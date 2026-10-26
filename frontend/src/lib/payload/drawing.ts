@@ -10,8 +10,8 @@ const VISUAL_DATA_PATH =
 	/^digest\/\d{4}\/\d{2}\/\d{2}\/[a-z0-9]+(?:-[a-z0-9]+)*-(?:[0-9]{2,}|[0-9a-hjkmnp-tv-z]{16})\.json$/;
 
 /** Protocol stamp, held to the Python authority by the visual binding test. */
-export const RENDERER_VERSION = '2026-10-27';
-export const DRAWABLE = ['bar', 'dot', 'line', 'slope'] as const;
+export const RENDERER_VERSION = '2026-10-27T01:00';
+export const DRAWABLE = ['bar', 'dot', 'line', 'scatter', 'slope'] as const;
 export const ENCODING_ROLES = [
 	'category', 'quantity', 'quantity_x', 'time', 'series', 'size', 'bins', 'entity', 'event_label'
 ] as const;
@@ -86,7 +86,7 @@ export function refusedVisualData(data: unknown): string | null {
 	}
 	if (drawn.size !== held.size) return 'carries marks it does not draw';
 	const figures = channels.quantity;
-	for (const id of figures) {
+	for (const id of [...figures, ...channels.quantity_x]) {
 		const value = held.get(id)?.value;
 		if (typeof value !== 'string' || !value.trim() || !Number.isFinite(Number(value)) || held.get(id)?.text !== null) {
 			return 'draws a bar with no finite figure';
@@ -135,6 +135,30 @@ export function refusedVisualData(data: unknown): string | null {
 			return 'slope lines need distinct series labels';
 		}
 		textChannels.push(...times, ...entities, ...series);
+	} else if (data.type === 'scatter') {
+		if (
+			figures.length === 0 || channels.quantity_x.length !== figures.length ||
+			channels.entity.length !== figures.length
+		) return 'a scatter pairs one entity with both measures';
+		if (channels.series.length !== 0 && channels.series.length !== figures.length) {
+			return 'a scatter pairs one series label with every point';
+		}
+		if (
+			channels.category.length !== 0 || channels.time.length !== 0 ||
+			channels.size.length !== 0 || channels.bins.length !== 0 ||
+			channels.event_label.length !== 0
+		) return 'carries a channel this scatter does not draw';
+		const entities = channels.entity.map((id) => held.get(id)!);
+		if (entities.some((mark) =>
+			typeof mark.element_id !== 'string' || !/^(entity|place)-/.test(mark.element_id)
+		)) {
+			return 'scatter entities need source element references';
+		}
+		if (
+			new Set(entities.map((mark) => mark.element_id)).size !== figures.length ||
+			new Set(entities.map((mark) => mark.text)).size !== figures.length
+		) return 'scatter entity labels must be distinct';
+		textChannels.push(...channels.entity, ...channels.series);
 	} else if (data.type === 'line') {
 		const times: string[] = [];
 		for (const id of channels.time) {

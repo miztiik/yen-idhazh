@@ -426,7 +426,7 @@ def test_an_element_whose_cell_disagrees_with_its_own_characters_is_refused() ->
 # --- The two structural guards -----------------------------------------------
 
 
-@pytest.mark.parametrize("module", ["visual_validator", "visual_vocabulary"])
+@pytest.mark.parametrize("module", ["visual_validator", "visual_vocabulary", "scatter_evidence"])
 def test_no_check_can_reach_a_model(module: str) -> None:
     """ESCALATE trigger 1, asserted rather than promised.
 
@@ -458,6 +458,7 @@ def test_no_check_can_reach_a_model(module: str) -> None:
         "idhazh.contracts.visual",
         "idhazh.contracts.visual_telemetry",
         "idhazh.elements",
+        "idhazh.scatter_evidence",
         "idhazh.visual_vocabulary",
         "re",
         "typing",

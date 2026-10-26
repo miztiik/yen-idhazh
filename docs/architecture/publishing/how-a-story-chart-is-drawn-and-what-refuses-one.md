@@ -1,6 +1,6 @@
 # How a story chart is drawn, and what refuses one
 
-**Last Updated**: 2026-10-25
+**Last Updated**: 2026-10-26
 
 A story that carries a chart carries a pointer at its marks, and the reader's
 browser is what turns those marks into a picture. This page holds that path: who
@@ -12,7 +12,7 @@ become markup in our own origin. The routes this drawing arrives on are
 
 ## The browser draws the chart, so the chart reads the page it is printed on
 
-**The reader's browser draws the chart and the pipeline never draws one** (maintainer ruling, 2026-09-13, [where-a-drawing-becomes-pixels.md](where-a-drawing-becomes-pixels.md)). A story arrives carrying a pointer at its marks; [ItemVisual.svelte](../../../frontend/src/lib/components/ItemVisual.svelte) fetches that file when the story comes near, [drawing.ts](../../../frontend/src/lib/payload/drawing.ts) refuses anything that does not fit the type it names, and [visual/bar.ts](../../../frontend/src/lib/visual/bar.ts) places bar, dot, slope and line marks. Line marks use the shared D3 date-series builder. Svelte writes them, so the marks are ordinary elements in the component's own subtree and take the page's tokens through plain scoped CSS.
+**The reader's browser draws the chart and the pipeline never draws one** (maintainer ruling, 2026-09-13, [where-a-drawing-becomes-pixels.md](where-a-drawing-becomes-pixels.md)). A story arrives carrying a pointer at its marks; [ItemVisual.svelte](../../../frontend/src/lib/components/ItemVisual.svelte) fetches that file when the story comes near, [drawing.ts](../../../frontend/src/lib/payload/drawing.ts) refuses anything that does not fit the type it names, and [visual/bar.ts](../../../frontend/src/lib/visual/bar.ts) dispatches bar, dot, slope, line and scatter geometry. Line and scatter marks use shared D3 builders. Svelte writes them, so the marks are ordinary elements in the component's own subtree and take the page's tokens through plain scoped CSS.
 
 **Two carriers preceded it and both are worth keeping on the page, because the second one is why the tokens below exist.** Until 2026-09-05 every published chart shipped inside an `img`. An SVG in an `img` is a separate document: it reads none of the page's custom properties, so the only colours it could ever have are the ones the renderer baked in - black axis type, `#888` ticks, `#ddd` grid lines and a `#4c6ef5` bar, fine on white and on the dark theme black type on a near-black card. **It was the loudest reader-facing defect on the site and no gate could see it**, because every check the drawing had was about whether the file was served. From 2026-09-05 the build read the committed SVG off disk for the stories a prerendered document carried and inlined it, so the page could repaint it; that carrier went on 2026-09-13 with the renderer that filled it.
 
@@ -30,7 +30,7 @@ become markup in our own origin. The routes this drawing arrives on are
 `refusedVisualData` in [../../../frontend/src/lib/payload/drawing.ts](../../../frontend/src/lib/payload/drawing.ts) is the guard: it refuses a path that is not a published visual, a document whose `renderer_version` this page does not hold, a type it cannot draw, and a shape that does not fit that type - four names against three figures, a channel naming a mark that is not carried, a bar with no figure. A refusal costs the story its picture and nothing else. **The build checks none of it**, because the build draws nothing: every chart on the site is checked on the device of the reader who opens that day. That is the same trade `check-publication` records on [frontend.md](frontend.md) - the build stopped being the place a bad day is found, and it is written down rather than assumed.
 
 **Before the position-and-length charts landed, every published visual was a bar.** The
-compiler now draws `bar`, `dot`, `slope` and `line` from source-backed channels. The historical
+compiler now draws `bar`, `dot`, `slope`, `line` and `scatter` from source-backed channels. The historical
 forty-three drawings on 2026-08-31 - the heaviest committed day, 43 across 601 stories - were
 all bars, which is why this chart family was needed.
 
@@ -75,7 +75,7 @@ data keeps the same geometry. No reader styling change was needed to meet the
 floor; this gate protects the existing measured-width drawing.
 
 `refusedVisualData` checks the current renderer, supported type, mark references,
-paired channels for each type, canonical dates on line time marks, framing fields
+paired channels for each type, complete entity pairs on scatter, canonical dates on line time marks, framing fields
 and exactly one emphasized measured mark.
 The [compiler contract](where-a-drawing-becomes-pixels.md#design-rationale)
 owns how plan references select that mark. Invalid or older incompatible data
@@ -92,6 +92,37 @@ it does not know. The dated maintainer exception for older charts lives in the
 
 ## Design rationale
 
+**Maintainer ruling, 2026-10-26 UTC.** The exact direction was: "engage susan
+agent. do not want fixed numbers that is not current design pattern it should
+allow to fit device screen or viewport. mor over sort the bar graph from
+ascending or descending choose one." The rejected fixed density proposal was
+an editorial budget, not a measured readability result. It is not a gate.
+The follow-up choice was "A1 - Fit where possible; allow normal page scrolling".
+This replaces the inherited undefined density obligation for bar, dot, slope,
+line and scatter. The existing text floor remains.
+
+The browser measures the visible viewport, the sticky filter band and all
+figure content outside the plot. Bar and dot rows retain content-sized height;
+the other plots use the remaining room or the height needed for readable text
+and marks, whichever is larger. Slope endpoints also reserve separation for
+distinct values within each column; coincident readings remain coincident.
+These are layout measurements, not a marks-per-height threshold or a claim
+that readability has a measured numerical limit. Fixed line/scatter heights
+are not the responsive minimum. Measurements change with viewport size,
+wrapping and font loading, not the figure's position during scrolling.
+The requested axis tick count is capped by measured plot span and text
+clearance, within the existing configured maximum. This reduces grid guides
+as well as labels on short plots; it never removes source marks.
+When the readable complete figure exceeds one screen, normal page scrolling
+preserves its chart and facts. No supported family silently disappears.
+Failure to find readable geometry returns to the maintainer rather than
+silently narrowing the comparison.
+
+Bars sort descending by numeric value. Equal values retain source order.
+Each category moves with its quantity, source text and emphasis; the keyboard
+description uses this same sorted drawing. Ranking is not applied to dates
+or to the two sides of a relationship.
+
 Bars stay horizontal at narrow widths so category names remain readable. Dots
 use one shared value scale when position compares items better than length.
 Slopes join paired values across two labelled time columns and omit an axis;
@@ -99,12 +130,24 @@ their units are still visible. Lines order source-backed measurements by
 canonical date, keep source wording for labels, and group only when each
 reading carries its own series label. They share date ticks, value axes and
 measured width with the Data explorer's date-series builder. One shared drawing
-component handles all four forms. A line's unit appears once at the value axis;
+component handles these forms. A line's unit appears once at the value axis;
 numeric tick labels do not repeat it. Their bounded settings live under `chart.story_geometry`, separate from the
 console chart's fixed coordinate dimensions, and reach the browser only through
 the existing typed build-time UI configuration. The dot baseline ends at the
 same measured position as its value scale, and mark outlines take their width
 from that bounded geometry.
+
+Scatter answers whether two measures move together over the same entities.
+It reuses the Data explorer's `pairedScatter` builder, but validates every pair
+before that builder can filter missing values. Both axes use shared value
+scales and number formatting. The plot has no fitted line and does not force
+zero onto either axis. Its readings below the plot name every entity and both
+values; the figure's keyboard description includes the source figures when
+unit conversion changed a displayed value. Axis units distinguish x from y.
+Scatter dimensions and margins live in the same bounded appearance settings.
+The source-derived geometry test reads the shared narrow and wide viewports
+from `tests/fixtures/visual-validator/viewports.json`; the existing reader
+journey checks the real drawing, text floor, focus and navigation.
 
 **The oracle is an equality against a token, never against a hex.** The same spec plants a probe element, sets its `background-color` to the property the stylesheet routes a mark to, and compares what the document computed with what the mark was painted. The two themes give that property two different values, so one baked colour fails one case whichever colour it is - and a test written against a literal would need editing every time the palette moves, which is how a colour test stops being one.
 

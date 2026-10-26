@@ -99,7 +99,7 @@ TYPE_RULES: Final[dict[VisualType, TypeRules]] = {
     _T.LINE: TypeRules(frozenset({_R.TIME, _R.QUANTITY}), frozenset({_R.SERIES}), _R.QUANTITY),
     _T.AREA: TypeRules(frozenset({_R.TIME, _R.QUANTITY}), frozenset({_R.SERIES}), _R.QUANTITY),
     _T.SCATTER: TypeRules(
-        frozenset({_R.QUANTITY_X, _R.QUANTITY}), frozenset({_R.SERIES, _R.ENTITY}), _R.QUANTITY
+        frozenset({_R.QUANTITY_X, _R.QUANTITY, _R.ENTITY}), frozenset({_R.SERIES}), _R.QUANTITY
     ),
     _T.BUBBLE: TypeRules(
         frozenset({_R.QUANTITY_X, _R.QUANTITY, _R.SIZE}),

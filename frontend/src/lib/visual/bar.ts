@@ -33,6 +33,7 @@ import { PALETTE, type ChartPaletteToken } from '../charts/theme';
 import type { VisualData, VisualMark } from '$lib/payload/types';
 import type { NumberFormatConfig, NumberFormatter } from '$lib/number-format';
 import type { StoryChartGeometryConfig } from '$lib/server/config';
+import { drawScatter, statedScatter, type ScatterDrawing } from './scatter';
 
 /** One bar, placed. Every number here is a CSS pixel on the reader's screen. */
 export interface Bar {
@@ -55,7 +56,7 @@ export interface Bar {
 }
 
 /** A whole chart, placed. */
-interface DrawingBase {
+export interface DrawingBase {
 	title: string | null;
 	caption: string | null;
 	/** The room the caller measured, which every mark below is placed inside. */
@@ -133,7 +134,7 @@ export interface LineDrawing extends DrawingBase {
 	lines: Line[];
 }
 
-export type Drawing = BarDrawing | DotDrawing | SlopeDrawing | LineDrawing;
+export type Drawing = BarDrawing | DotDrawing | SlopeDrawing | LineDrawing | ScatterDrawing;
 
 function figureOf(mark: VisualMark): number {
 	// The compiler pins `value` to the characters the article wrote, so this is
@@ -145,9 +146,8 @@ function figureOf(mark: VisualMark): number {
 /**
  * Place every bar of one published visual.
  *
- * **Category `i` names quantity `i`**, which is the plan's own order carried
- * through the compiler. Re-ranking here would be the drawing code deciding what
- * the comparison says.
+ * Categories and quantities are paired before stable descending ranking.
+ * Equal values retain their source order; emphasis never changes the order.
  *
  * **The measured axis is anchored at zero and scaled to the longest bar.** A
  * bar chart whose axis starts anywhere else exaggerates every difference on it,
@@ -188,8 +188,11 @@ export function drawBars(
 		if (found === undefined) throw new Error(`visual data draws a mark it does not carry: ${id}`);
 		return found;
 	};
-	const names = data.encoding.category.map(mark);
-	const figures = data.encoding.quantity.map(mark);
+	const rows = data.encoding.category.map((id, index) => ({
+		name: mark(id), figure: mark(data.encoding.quantity[index]), index
+	})).sort((a, b) => figureOf(b.figure) - figureOf(a.figure) || a.index - b.index);
+	const names = rows.map((row) => row.name);
+	const figures = rows.map((row) => row.figure);
 
 	const band = scaleBand<string>()
 		.domain(names.map((_, index) => String(index)))
@@ -324,10 +327,7 @@ export function drawSlopes(
 	const maximum = Math.max(...finite);
 	const count = quantities.length / 2;
 	const width = Math.max(0, Math.floor(room));
-	const height = Math.max(
-		geometry.slope_min_height_px,
-		geometry.slope_header_band_px + count * geometry.row_height_px + geometry.slope_footer_band_px
-	);
+	const height = geometry.slope_min_height_px;
 	const top = geometry.slope_header_band_px;
 	const bottom = height - geometry.slope_footer_band_px;
 	const y = scaleLinear()
@@ -497,6 +497,8 @@ export function drawVisual(
 			return drawSlopes(data, room, formatNumber, geometry);
 		case 'line':
 			return drawLines(data, room, formatNumber, numberFormat, tickDensity, geometry);
+		case 'scatter':
+			return drawScatter(data, room, formatNumber, numberFormat, tickDensity, geometry);
 		default:
 			throw new Error(`visual type is not drawn: ${data.type}`);
 	}
@@ -577,5 +579,7 @@ export function statedDrawing(drawing: Drawing): string {
 			return statedSlopes(drawing);
 		case 'line':
 			return statedLines(drawing);
+		case 'scatter':
+			return statedScatter(drawing);
 	}
 }

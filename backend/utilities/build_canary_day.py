@@ -176,21 +176,18 @@ SITE_BYTES_FIRST_DAY = 54_230
 #: at all.
 SITE_BYTES_PER_DAY = 11_000
 
-# Three items carry a real visual, so the browser suite exercises the picture
+# Four items carry a real visual, so the browser suite exercises the picture
 # path rather than proving it safe by never serving one.
 #
-# **The first and third are compiled, and the second is written out here.** The
-# first is a committed bar plan and element table, so every bar can be
-# re-derived from its source. The third is a committed line plan and element
-# table, so the browser exercises dated marks as well. The second is written
-# here because it carries a case a compiled plan cannot - bars with no unit.
-#
-# Both compiled charts read the validator's own fixtures rather than a second
-# copy of them, so the browser and backend oracle hold the same source evidence.
+# Bar, line and scatter read the validator's committed plans and element tables,
+# so the browser and backend oracle hold the same source evidence. The other
+# chart is written here because its bars deliberately carry no unit.
 PLANNED_PLAN = Path("tests/fixtures/visual-validator/plans/passes.json")
 PLANNED_TABLE = Path("tests/fixtures/visual-validator/tables/wind.json")
 LINE_PLAN = Path("tests/fixtures/visual-validator/plans/line-trend.json")
 LINE_TABLE = Path("tests/fixtures/visual-validator/tables/line-trend.json")
+SCATTER_PLAN = Path("tests/fixtures/visual-validator/plans/scatter-relationship.json")
+SCATTER_TABLE = Path("tests/fixtures/visual-validator/tables/scatter-relationship.json")
 
 #: A second chart, with no unit on its axis. Three stages of one process, which
 #: a unit would not describe, so the drawing code has to lay out an axis that
@@ -607,19 +604,17 @@ def lenses_for(index: int) -> list[str]:
 def visual_for(
     index: int, item_id: str, target: Path, *, visuals: VisualsConfig
 ) -> VisualDecision | None:
-    """Published charts on the first and fourth items, and a failed one on the third.
+    """Publish four charts and retain one failed chart decision.
 
-    Two published, not one, because the browser suite's oracle is that every
+    Several published charts let the browser suite prove that every
     promised picture is served - a single figure cannot show that the page draws
     each story its own. The third is planned and never written, which is what
     keeps a visual that is not a published chart on the day: the console counts
     rendered charts rather than visuals, and a fixture where the two numbers
     agree cannot tell the two readings apart.
 
-    **The first goes through the compiler.** Its marks and its alt text are built
-    from a committed plan over a committed element table, so the day carries one
-    visual whose every bar can be re-derived from the figures the article states
-    - which is what the browser suite reads back.
+    Bar, line and scatter go through the compiler. Their marks and alt text
+    come from committed plans and element tables.
     """
     # The payload holds `digest/<Y>/<M>/<D>/...`, so the root here is the parent
     # of the digest directory - exactly as the real pipeline does it.
@@ -652,6 +647,16 @@ def visual_for(
         return render_planned_visual(
             decided(VisualKind.NONE, None, None),
             VisualPlan.read(LINE_PLAN),
+            table,
+            public_root=public_root,
+            relpath=relpath,
+            visuals=visuals,
+        )
+    if index == 7:
+        table = ElementTable.read(SCATTER_TABLE).model_copy(update={"item_id": item_id})
+        return render_planned_visual(
+            decided(VisualKind.NONE, None, None),
+            VisualPlan.read(SCATTER_PLAN),
             table,
             public_root=public_root,
             relpath=relpath,
@@ -941,7 +946,7 @@ def manifest(target: Path, published: int) -> RunManifest:
     table has one day with real arithmetic under it and nineteen quiet days with
     none. They are consistent with the digest too: the planner reached all eight
     published items, posted five and answered three from their own numbers, and
-    of its three chart drafts two are the charts the day publishes. The third was
+    of its five chart drafts four are the charts the day publishes. The fifth was
     planned and the renderer refused it, which is the gap the table exists to
     show.
     """
@@ -960,7 +965,7 @@ def manifest(target: Path, published: int) -> RunManifest:
                 skipped=0,
                 decided=5,
                 prefiltered=3,
-                charts_drafted=3,
+                charts_drafted=5,
                 decision_ms=264_000,
             ),
             # Amber: nothing was attempted. Every candidate was already published.
