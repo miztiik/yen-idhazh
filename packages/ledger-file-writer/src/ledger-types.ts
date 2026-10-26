@@ -1,6 +1,7 @@
 import type { RowIdentity, WriterIdentity } from "@idhazh/common-contracts";
 import type { ArrowColumn } from "./parquet/arrow-builder";
 import type { z } from "zod";
+import type { PersistedLedgerFileSchema } from "./ledger-file-receipt";
 
 export type LedgerRowContract<T extends object> = {
   schema: z.ZodType<T>;
@@ -60,15 +61,7 @@ export type ValidatedLedgerWrite<T extends object> = {
   columns: ArrowColumn[];
 };
 
-export type PersistedLedgerFile = {
-  path: string;
-  file_id: string;
-  /** Other families retain their work-unit identity; planner files have none. */
-  unit_id?: string;
-  covers: string;
-  content_sha256: string;
-  row_count: number;
-};
+export type PersistedLedgerFile = z.infer<typeof PersistedLedgerFileSchema>;
 
 export type PersistLedgerResult =
   | { status: "written"; files: PersistedLedgerFile[] }

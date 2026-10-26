@@ -1,12 +1,12 @@
 /** Prove live task CPU/RAM HTTP readings and the separate existing optional copy probe. */
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { arch, release } from "node:os";
 import { randomUUID } from "node:crypto";
 import { loadConfig as loadProbeConfig, ProbeConfigSchema } from "../src/config";
 import { SAMPLE_PATH, serveSamples } from "../src/api/server";
 import { HostSampleSchema } from "../src/probe/sample-host";
-import { collectFingerprint } from "../../host-fingerprints/src/collect-fingerprint";
+import { captureLocalFingerprint } from "../../host-fingerprints/src/api/local-fingerprint";
 import { loadConfig, SelectedSettingsSchema } from "../../host-fingerprints/src/config";
 import { probeBufferMib } from "../../host-fingerprints/src/inspect/copy-bandwidth";
 import { verifyTaskProfileHttp } from "./host-task-profile-proof";
@@ -28,6 +28,7 @@ export async function verifyLiveHostProfiling(
   const persist = () => writeFile(join(artifactRoot, "resource-proof.json"), JSON.stringify(ResourceProofSchema.parse(proof)));
   await persist();
   let server: ReturnType<typeof serveSamples> | undefined;
+  let copyRoot: string | undefined;
   try {
     const settings = WorkflowSettingsSchema.parse(await Bun.file("config/idhazh.json").json());
     if (!settings.observability.host_telemetry_enabled || !settings.observability.host_fingerprint) {
@@ -61,7 +62,8 @@ export async function verifyLiveHostProfiling(
     }));
     await persist();
     const config = await loadConfig();
-    // Only this isolated invocation selects copy work. No shared setting or host row is written.
+    // Controlled HTTP captures use disposable state, never the real run's publication output.
+    copyRoot = await mkdtemp(join(artifactRoot, "host-copy-"));
     const task_name = "isolated-copy-proof";
     const capture = { date: new Date().toISOString().slice(0, 10), writer: {
       run_id: identity.run_id, attempt: identity.attempt, job: null,
@@ -79,7 +81,10 @@ export async function verifyLiveHostProfiling(
       const selected = SelectedSettingsSchema.parse({ ...settings, observability: {
         ...settings.observability, host_fingerprint_bandwidth_jobs: enabled ? [task_name] : [],
       } });
-      const result = await collectFingerprint(capture, config, selected);
+      const result = await captureLocalFingerprint(capture, config, selected, {
+        outputRoot: join(copyRoot, enabled ? "on" : "off"),
+      });
+      if (result.status !== "written") throw new Error("Controlled fingerprint HTTP capture did not persist");
       const row = CopyResultSchema.parse(result.row);
       if (enabled) {
         proof.copy.on = row;
@@ -114,7 +119,10 @@ export async function verifyLiveHostProfiling(
     throw new Error(proof.error, { cause: error });
   } finally {
     try { if (server) await server.stop(true); }
-    finally { await persist(); }
+    finally {
+      try { if (copyRoot !== undefined) await rm(copyRoot, { recursive: true, force: true }); }
+      finally { await persist(); }
+    }
   }
   return ResourceProofSchema.parse(proof);
 }

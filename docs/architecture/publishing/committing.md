@@ -181,11 +181,21 @@ enable the expensive memory copy. Only jobs selected by its config knob copy.
 ## Design rationale
 
 The manual TypeScript planner commits only exact current raw UUID Parquet
-files for its four registered siblings. The Bun adapter validates each file
-before hashing it, uses a private `GIT_INDEX_FILE`, fetches main and builds a
-candidate parented on that tip. A normal non-force push preserves completed
-bytes; different committed bytes at the same UUID are refused. The checkout,
-staged work and sparse patterns do not move.
+files for its four registered planner ledgers and `host-fingerprint`.
+Permissions come from those five committed registrations, never an API path.
+The caller confirms completed API receipts, the configured prefix, UTC day,
+UUID, row count and canonical digest against the actual Parquet. Host files
+use the shared generic envelope and recomputed work-unit identity, including
+the executed revision, run, attempt, pipeline, task and shard. Planner files
+use their native minimal envelope; discovery rows do not acquire invented
+run fields.
+
+The Bun adapter rejects symlink/junction escapes and non-directory Git parents,
+checks that completed local bytes have not changed on each retry, and builds
+a private `GIT_INDEX_FILE` candidate parented on fetched main. A normal
+non-force push preserves completed bytes; different committed bytes at the
+same UUID are refused. The checkout, caller's index, foreign index and sparse
+patterns do not move. Only declared candidate changes can be pushed.
 
 The same commit also maintains each affected planner UTC day's existing
 native `index.json`. This mutable index is required by the current-format
@@ -194,12 +204,19 @@ tip, combines its immutable members with the validated current files, sorts
 names and records actual byte counts and the filename digest. On a lost push,
 it fetches again and rebuilds those day indexes from the new tip before
 retrying. Replaying identical output leaves an unchanged index alone.
+Host files never enter this index builder: no host `index.json` is created,
+read, recovered or inferred from an archive scan.
 
-This is the Row 22 native-format handoff, not a second general publisher.
-The adapter performs no deletion, other-family write, publication/site
+This is a bounded native-format handoff, not a second general publisher.
+The adapter performs no deletion, other-ledger write, publication/site
 inventory update, site deploy or producer rerun. Selected text stays in its
-separate artifact. Partial completed metadata may land with its explicit run
-outcome; commit failure keeps the workflow red and retains evidence.
+separate artifact. Completed host files remain publishable and recoverable
+even when the planner saves no response. Partial completed metadata may land
+with its explicit failed run outcome; publication success never turns failed
+planning green. A refused publication retains exact validated Parquet and a
+path manifest in the uncommitted metadata recovery artifact, without indexes
+or article bodies. The commit result identifies the exact confirmed paths,
+not only their count.
 Other workflows retain the shared Python publisher rule above.
 
 Maintainer-approved on 2026-10-09: reuse gardener's private-index, exact-change,

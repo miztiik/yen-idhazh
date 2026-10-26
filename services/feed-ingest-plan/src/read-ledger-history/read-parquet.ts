@@ -21,6 +21,7 @@ export type ReadLedgerFile<T extends object> = Readonly<{
   envelope: FileEnvelope;
   rows: readonly StoredLedgerRow<T>[];
   bytes: number;
+  file_sha256: string;
 }>;
 export type LedgerRowProjectionContract<T extends object> = Readonly<{
   schema: z.ZodType<T>;
@@ -228,5 +229,5 @@ export async function readLedgerParquet<T extends object>(
       : contract.schema.parse(legacy === undefined ? storedRow : legacy.migrate(storedRow!));
     return { identity, row };
   });
-  return { envelope, rows, bytes: bytes.byteLength };
+  return { envelope, rows, bytes: bytes.byteLength, file_sha256: Bun.CryptoHasher.hash("sha256", bytes, "hex") };
 }

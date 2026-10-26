@@ -17,6 +17,8 @@ import { verifyPlanningCompletion } from "./feed-ingest-plan-verification";
 import { WorkflowMachineMemorySchema } from "../../host-probes/scripts/feed-ingest-plan-profile-schema";
 import { WorkflowPolicySchema } from "./feed-ingest-plan-policy-report";
 import { observeWorkflowResources } from "./feed-ingest-plan-workflow-resources";
+import { readMetadataRegistrations } from "./feed-ingest-plan-metadata";
+import { collectWorkflowFiles } from "./feed-ingest-plan-current-files";
 
 export async function invokePlannerHttp(inputs: PlanInputs, runtime: PlanRuntime, request: PlanRequest, directory: string) {
   await mkdir(directory, { recursive: true });
@@ -88,18 +90,35 @@ async function runWorkflow() {
     parser_concurrency: inputs.settings.listener.parser_concurrency,
   })));
   console.error(JSON.stringify({ event: "planner_history_staged", notices: staged.notices }));
-  const closeResources = await observeWorkflowResources({
-    root, directory, profileRequested, gitSha: runtime.git_sha, attempt: inputs.settings.run.attempt,
+  const identity = { run_id: `${captured.toISOString().slice(0, 10)}-${GITHUB_RUN_ID}`,
+    attempt: inputs.settings.run.attempt, git_sha: runtime.git_sha };
+  const registryPath = join(root, inputs.settings.inputs.registrations);
+  const registrations = await readMetadataRegistrations(registryPath);
+  const resources = await observeWorkflowResources({
+    root, directory, stateRoot: inputs.outputRoot, registryPath, profileRequested,
+    gitSha: runtime.git_sha, attempt: identity.attempt,
     identity: { pipeline_name: "feed-ingest-plan", task_name: "planner-http-request",
-      run_id: `${captured.toISOString().slice(0, 10)}-${GITHUB_RUN_ID}`, correlation_id: correlationId, request_id: randomUUID() },
+      run_id: identity.run_id, correlation_id: correlationId, request_id: randomUUID() },
   });
   let outcome: "success" | "error" = "error";
+  let result: Awaited<ReturnType<typeof invokePlannerHttp>> | undefined;
   try {
-    const result = await invokePlannerHttp(inputs, runtime, request, directory);
-    await writeGitHubOutputs(GITHUB_OUTPUT, result.outputs);
+    await writeGitHubOutputs(GITHUB_OUTPUT, {
+      run_id: identity.run_id, date: captured.toISOString().slice(0, 10), planning_complete: "false",
+      current_run_files: JSON.stringify(resources.evidence.host.status === "recorded"
+        ? resources.evidence.host.files.map(file => file.path) : []),
+    });
+    result = await invokePlannerHttp(inputs, runtime, request, directory);
     if (!result.summary.planning_complete || result.http_status !== 200) process.exitCode = 2;
     else outcome = "success";
-  } finally { await closeResources(outcome); }
+  } finally {
+    await resources.close(outcome);
+    const completed = await collectWorkflowFiles({ root, directory, identity, registrations });
+    await writeGitHubOutputs(GITHUB_OUTPUT, {
+      ...result?.outputs, current_run_files: JSON.stringify(completed.paths),
+    });
+    if (completed.failures.length) throw new AggregateError(completed.failures, "Workflow metadata collection failed; completed diagnostics retained");
+  }
 }
 if (import.meta.main) {
   try { await runWorkflow(); }

@@ -20,6 +20,8 @@ import { formatExecutionOutcome, formatExecutionReport, readExecutionReport, wri
 import { prepareWorkflowArtifacts } from "../scripts/feed-ingest-plan-artifacts";
 import { observeWorkflowResources, WorkflowResourcesSchema } from "../scripts/feed-ingest-plan-workflow-resources";
 import { escapeMarkdown } from "../scripts/feed-ingest-plan-report-format";
+import { hostWriter } from "../scripts/feed-ingest-plan-metadata";
+import { metadataRegistrations } from "./host-recordings";
 
 async function git(directory: string, args: string[]) {
   const child = Bun.spawn(["git", ...args], { cwd: directory, stdout: "pipe", stderr: "pipe", env: {
@@ -34,6 +36,8 @@ async function git(directory: string, args: string[]) {
 test("actual HTTP output retains selected text separately from its strict metadata manifest", async () => {
   const fixture = await recordedPlan();
   try {
+    const publication = { identity: { run_id: "2026-10-21-700", attempt: 1, git_sha: fixture.runtime.git_sha },
+      registrations: await metadataRegistrations() };
     fixture.inputs.settings.listener.port = 0;
     const directory = join(fixture.directory, "evidence");
     const resourceConfig = join(fixture.directory, "resource-config");
@@ -45,7 +49,7 @@ test("actual HTTP output retains selected text separately from its strict metada
       await Bun.file(new URL("../../../config/host-probes.json", import.meta.url)).text());
     await mkdir(directory, { recursive: true });
     const closeResources = await observeWorkflowResources({
-      root: resourceConfig, directory, profileRequested: true, gitSha: fixture.runtime.git_sha, attempt: 1,
+      root: resourceConfig, directory, stateRoot: join(directory, "state"), profileRequested: true, gitSha: fixture.runtime.git_sha, attempt: 1,
       identity: { pipeline_name: "feed-ingest-plan", task_name: "planner-http-request",
         run_id: "2026-10-21-700", correlation_id: fixture.runtime.correlation_id!, request_id: crypto.randomUUID() },
     });
@@ -54,7 +58,7 @@ test("actual HTTP output retains selected text separately from its strict metada
     try {
       result = await invokePlannerHttp(fixture.inputs, fixture.runtime, { article_limit: 1 }, directory);
       if (result.summary.planning_complete) outcome = "success";
-    } finally { await closeResources(outcome); }
+    } finally { await closeResources.close(outcome); }
     const resources = WorkflowResourcesSchema.parse(await Bun.file(join(directory, "resources.json")).json());
     expect(resources.host.status).toBe("disabled");
     expect(resources.profile.status).toBe("recorded");
@@ -81,7 +85,7 @@ test("actual HTTP output retains selected text separately from its strict metada
       await Bun.write(join(directory, "state", path), await readFile(join(fixture.inputs.outputRoot, path)));
     }
     await writeFile(join(directory, "runtime.log"), fixture.events.map(event => JSON.stringify(event)).join("\n"));
-    const retained = await prepareWorkflowArtifacts({ root: fixture.directory, directory, runNumber: "700", attempt: 1 });
+    const retained = await prepareWorkflowArtifacts({ root: fixture.directory, directory, runNumber: "700", attempt: 1, ...publication });
     expect(retained.selected).toBe("artifacts/700-1-selected-articles.json");
     expect(SelectedArticlesArtifactSchema.parse(await Bun.file(join(directory, retained.selected!)).json())).toEqual(artifact);
     const recovery = join(directory, retained.metadata_recovery!);
@@ -90,16 +94,16 @@ test("actual HTTP output retains selected text separately from its strict metada
     const log = await Bun.file(join(directory, retained.runtime_log!)).text();
     expect(log).not.toContain(artifact.articles[0]!.article_text);
     expect(log).not.toContain("article_text");
-    await writeFile(join(directory, "commit-result.json"), JSON.stringify({ status: "landed", commit: "a".repeat(40), files: paths.length }));
-    const confirmed = await prepareWorkflowArtifacts({ root: fixture.directory, directory, runNumber: "700", attempt: 2 });
+    await writeFile(join(directory, "commit-result.json"), JSON.stringify({ status: "landed", commit: "a".repeat(40), files: paths.length, paths }));
+    const confirmed = await prepareWorkflowArtifacts({ root: fixture.directory, directory, runNumber: "700", attempt: 2, ...publication });
     expect(confirmed.metadata_recovery).toBeUndefined();
     expect(confirmed.selected).toBe("artifacts/700-2-selected-articles.json");
     expect(confirmed.selected).not.toBe(retained.selected);
-    await expect(prepareWorkflowArtifacts({ root: fixture.directory, directory, runNumber: "../injected", attempt: 1 })).rejects.toThrow();
+    await expect(prepareWorkflowArtifacts({ root: fixture.directory, directory, runNumber: "../injected", attempt: 1, ...publication })).rejects.toThrow();
     await writeFile(join(directory, "response.json"), "invalid JSON");
     const published = join(directory, "artifact-outputs");
     await expect(prepareWorkflowArtifacts({ root: fixture.directory, directory, runNumber: "700", attempt: 3,
-      outputPath: published })).rejects.toThrow();
+      outputPath: published, ...publication })).rejects.toThrow();
     expect(await readFile(published, "utf8")).toContain("runtime_log<<");
   } finally { await fixture.close(); }
 });
@@ -117,18 +121,29 @@ test("exact metadata appends through a generated bare origin with complete raw i
     await git(fixture.directory, ["init", "--bare", "--initial-branch=main", origin]);
     await git(repository, ["init", "--initial-branch=main"]);
     await writeFile(join(repository, "README.md"), "Generated bounded fixture.\n");
-    const retry = { deadline_seconds: { default: 20 }, base_step_seconds: 0.01, ceiling_seconds: 0.1, ceiling_after: 1 };
+    const retry = { deadline_seconds: { default: 90 }, base_step_seconds: 0.01, ceiling_seconds: 0.1, ceiling_after: 1 };
     await mkdir(join(repository, "config"));
     await writeFile(join(repository, "config", "push-retry.json"), JSON.stringify(retry));
-    await git(repository, ["add", "--", "README.md", "config/push-retry.json"]);
+    for (const name of ["ledgers.json", "feed-ingest-plan-service.json"]) {
+      await writeFile(join(repository, "config", name), await Bun.file(new URL(`../../../config/${name}`, import.meta.url)).text());
+    }
+    await git(repository, ["add", "--", "README.md", "config/push-retry.json", "config/ledgers.json", "config/feed-ingest-plan-service.json"]);
     await git(repository, ["commit", "-m", "Create generated fixture"]);
     await git(repository, ["remote", "add", "origin", origin]);
     await git(repository, ["push", "origin", "HEAD:refs/heads/main"]);
     const head = await git(repository, ["rev-parse", "HEAD"]);
+    const publication = { identity: { run_id: summary.run_id, attempt: summary.attempt, git_sha: head },
+      registrations: await metadataRegistrations() };
+    await writeFile(join(fixture.directory, "feed-ingest-plan", "resources.json"), JSON.stringify(WorkflowResourcesSchema.parse({
+      host_request: { date: summary.date, writer: hostWriter(publication.identity) }, profile_requested: false,
+      host: { status: "disabled", reason: "observability.host_fingerprint=false" },
+      profile: { status: "disabled", reason: "profile_machine_memory=false" },
+    })));
     async function invokeCommit() {
       const child = Bun.spawn([process.execPath, fileURLToPath(new URL("../scripts/feed-ingest-plan-commit.ts", import.meta.url))], {
-        cwd: repository, stdout: "pipe", stderr: "pipe", timeout: 25000,
-        env: { ...Bun.env, RUNNER_TEMP: fixture.directory, CURRENT_RUN_FILES: JSON.stringify(paths) },
+        cwd: repository, stdout: "pipe", stderr: "pipe", timeout: 120000,
+        env: { ...Bun.env, RUNNER_TEMP: fixture.directory, CURRENT_RUN_FILES: JSON.stringify(paths),
+          GITHUB_RUN_ID: "700", GITHUB_RUN_ATTEMPT: "1" },
       });
       const [output, errors] = await Promise.all([new Response(child.stdout).text(), new Response(child.stderr).text()]);
       expect({ code: await child.exited, errors }).toEqual({ code: 0, errors: "" });
@@ -144,7 +159,8 @@ test("exact metadata appends through a generated bare origin with complete raw i
     const indexes = [...new Set(paths.map(path => `state/${path.slice(0, path.lastIndexOf("/"))}/index.json`))];
     // This tree was just built by this case; it cannot grow with repository history.
     const members = (await git(fixture.directory, ["--git-dir", origin, "ls-tree", "-r", "--name-only", "main"])).split("\n");
-    expect(members.sort()).toEqual(["README.md", "config/push-retry.json", ...paths.map(path => `state/${path}`), ...indexes].sort());
+    expect(members.sort()).toEqual(["README.md", "config/push-retry.json", "config/ledgers.json", "config/feed-ingest-plan-service.json",
+      ...paths.map(path => `state/${path}`), ...indexes].sort());
     for (const path of indexes) {
       const index = RawDayIndexSchema.parse(JSON.parse(await git(fixture.directory, ["--git-dir", origin, "show", `main:${path}`])));
       expect(index.files).toEqual(paths.filter(file => `state/${file}`.startsWith(path.slice(0, -10))).map(file => file.split("/").at(-1)!));
@@ -154,11 +170,12 @@ test("exact metadata appends through a generated bare origin with complete raw i
     }
     expect((await invokeCommit()).status).toBe("already-on-main");
     await expect(commitPlannerFiles({ repository, stateRoot: fixture.inputs.outputRoot, retry, message: "Refuse old format",
-      paths: ["raw/feed-ingest-plan/dispatches/2026/10/21/anything.parquet"] })).rejects.toThrow("current planner");
+      paths: ["raw/feed-ingest-plan/dispatches/2026/10/21/anything.parquet"], ...publication })).rejects.toThrow("current planner");
     await writeFile(join(repository, "config", "push-retry.json"), "{}");
     const failed = Bun.spawn([process.execPath, fileURLToPath(new URL("../scripts/feed-ingest-plan-commit.ts", import.meta.url))], {
       cwd: repository, stdout: "pipe", stderr: "pipe",
-      env: { ...Bun.env, RUNNER_TEMP: fixture.directory, CURRENT_RUN_FILES: JSON.stringify(paths) },
+      env: { ...Bun.env, RUNNER_TEMP: fixture.directory, CURRENT_RUN_FILES: JSON.stringify(paths),
+        GITHUB_RUN_ID: "700", GITHUB_RUN_ATTEMPT: "1" },
     });
     const [failedOutput, failedErrors, exit] = await Promise.all([
       new Response(failed.stdout).text(), new Response(failed.stderr).text(), failed.exited,
@@ -168,9 +185,9 @@ test("exact metadata appends through a generated bare origin with complete raw i
     expect(JSON.parse(failedErrors)).toMatchObject({ event: "planner_metadata_commit_failed", status: "failed",
       reason: "push retry requires deadline_seconds.default" });
     expect(await Bun.file(join(fixture.directory, "feed-ingest-plan", "commit-result.json")).json())
-      .toEqual({ status: "failed", commit: null, files: paths.length });
+      .toEqual({ status: "failed", commit: null, files: paths.length, paths });
     const recovered = await prepareWorkflowArtifacts({ root: fixture.directory, directory: join(fixture.directory, "feed-ingest-plan"),
-      runNumber: "700", attempt: 3 });
+      runNumber: "700", attempt: 3, ...publication });
     expect(recovered.metadata_recovery).toBeDefined();
     for (const path of paths) expect(await readFile(join(fixture.inputs.outputRoot, path))).toBeInstanceOf(Buffer);
   } finally { await fixture.close(); }

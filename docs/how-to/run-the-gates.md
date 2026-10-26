@@ -1,6 +1,6 @@
 # Run the Gates
 
-**Last Updated**: 2026-10-22
+**Last Updated**: 2026-10-26
 Set up a machine, then run every check `CLAUDE.md` section 9 asks for before a
 merge. This page owns the project's actual gate commands; the neutral PR
 lifecycle that calls for them is
@@ -225,6 +225,18 @@ Use actual Parquet readback and named recorded compatibility fixtures for
 schema, footer, identifier and canonical-digest checks. These results do not
 claim that a Python reader was executed. Persisted-contract changes still
 require the approval and compatibility rules in `CLAUDE.md`.
+
+For the manual planner's metadata integration, select its five named native
+cases: `feed-ingest-plan-report.test.ts`, `feed-ingest-plan-outputs.test.ts`,
+`feed-ingest-plan-workflow.test.ts`, `feed-ingest-plan-host.test.ts` and
+`feed-ingest-plan-publication.test.ts`, all under
+`services/feed-ingest-plan/test/`. They use the real loopback fingerprint API,
+actual Parquet bytes and generated local Git origins. The publication cases
+cover sparse and foreign indexes, concurrent main movement, immutable
+collisions, already-published output and failed-planner recovery. No live feed
+or manual workflow dispatch is needed. Run the changed fingerprint service
+and shared writer's native checks as well. A Windows fixture pass does not
+certify live Linux hardware collection.
 
 Maintainer clarification, 2026-10-22: the existing contract-tier
 `backend/tests/ledger/test_feed_ingest_ledgers.py::test_zero_completion_evidence_survives_without_erasing_an_earlier_complete_attempt`

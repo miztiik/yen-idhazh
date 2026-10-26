@@ -1,4 +1,4 @@
-/** How do recorded resources read in decimal GB without claiming unobserved minima? */
+/** How do recorded hardware capacity and task samples read without claiming unobserved minima? */
 import type { TaskProfile } from "../../host-probes/src/task-profile/profile-schema";
 import { ResourceProofSchema } from "../../host-probes/scripts/feed-ingest-plan-profile-schema";
 import { WorkflowResourcesSchema } from "./feed-ingest-plan-workflow-resources";
@@ -61,14 +61,17 @@ export function formatResourceSummary(input: unknown, independent: unknown, requ
     const reason = (field: string) => unavailable[field] ?? unavailable.platform ?? "not observed";
     const cpu = row.cpu_model ?? `Unavailable (${unavailable.cpu_model ?? unavailable.platform ?? "not observed"})`;
     const cache = row.l3_cache_bytes === null ? `Unavailable (${unavailable.l3_cache_bytes ?? unavailable.platform ?? "not observed"})`
-      : `${(row.l3_cache_bytes / BYTES_PER_GB).toFixed(2)} GB`;
+      : `${(row.l3_cache_bytes / BYTES_PER_MIB).toFixed(2)} MiB`;
+    const capacity = measurement(row.machine_memory_total_mib, "MiB", reason("machine_memory_total_mib"));
     add("Actual host", [
       ["CPU", cpu], ["Logical / allowed processors", `${measurement(row.cpu_logical_processors, "processors", reason("cpu_logical_processors"))} / ${measurement(row.cpu_allowed_processors, "processors", reason("cpu_allowed_processors"))}`],
       ["CPU quota", row.cpu_quota_state === "unlimited" ? "No quota" : measurement(row.cpu_quota_cores, "cores", reason("cpu_quota_cores"))],
-      ["L3 cache", cache], ["Hardware fingerprint", row.fingerprint ?? `Unavailable (${unavailable.platform ?? "not observed"})`],
+      ["L3 cache", cache], ["Total machine RAM capacity", capacity],
+      ["Completed host files", `${resources.host.files.length} raw Parquet file; publication is recorded separately`],
+      ["Hardware fingerprint", row.fingerprint ?? `Unavailable (${unavailable.platform ?? "not observed"})`],
       ["Observation clock", row.measured_at === null ? "Unavailable" : `${row.measured_at} UTC`],
     ]);
-    hostNotice = `Actual host: ${cpu}; ${measurement(row.cpu_allowed_processors, "allowed processors", reason("cpu_allowed_processors"))}; L3 ${cache}`;
+    hostNotice = `Actual host: ${cpu}; ${measurement(row.cpu_allowed_processors, "allowed processors", reason("cpu_allowed_processors"))}; L3 ${cache}; total RAM ${capacity}`;
   } else {
     add("Actual host", [["Collection", resources?.host.reason ?? "Unavailable; host evidence was not saved"]]);
     if (resources !== undefined) hostNotice = `Actual host: ${resources.host.status} (${resources.host.reason})`;
@@ -123,7 +126,7 @@ export function formatResourceSummary(input: unknown, independent: unknown, requ
       "## Table G - Resources", "",
       "| Id | Scope | Measurement | Recorded value |", "| --- | --- | --- | --- |",
       ...rows.map((row, index) => `| G${index + 1} | ${escapeMarkdown(row.scope)} | ${escapeMarkdown(row.fact)} | ${escapeMarkdown(row.value)} |`),
-      "", "GB means 1,000,000,000 bytes. Linux proc kB values are KiB (1,024 bytes). Free RAM excludes reclaimable cache; available RAM includes it. Unavailable readings are not zero.", "",
+      "", "MiB means 1,048,576 bytes; L3 cache and total machine RAM capacity use MiB. Task RAM uses GB (1,000,000,000 bytes). Linux proc kB values are KiB (1,024 bytes). Free RAM excludes reclaimable cache; available RAM includes it. Unavailable readings are not zero.", "",
     ].join("\n"),
   };
 }

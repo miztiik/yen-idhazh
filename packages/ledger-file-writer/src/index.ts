@@ -2,6 +2,7 @@
 export { persistLedger } from "./persist-ledger";
 export { persistRawLedger } from "./persist-raw";
 export { persistCompactLedger } from "./persist-compact";
+export { PersistedLedgerFileSchema } from "./ledger-file-receipt";
 export type {
   LedgerPeriod,
   LedgerRegistration,
