@@ -1,6 +1,6 @@
 # Where a drawing becomes pixels
 
-**Last Updated**: 2026-10-26
+**Last Updated**: 2026-10-27
 
 The reader's browser draws the chart and the pipeline never draws one. This page
 holds that ruling, what it cost and what it bought, where the marks are
@@ -259,20 +259,26 @@ the pairing is the plan's rather than a rule invented in the compiler, and the b
 that order. Re-ranking them here would be the compiler deciding what the comparison says.
 
 **Only a supported type is compiled.** This build compiles `bar`, `dot`, `slope`,
-`line`, `scatter`, `bubble` and `stacked_bar`; a plan for any other declared type raises `CompileError` naming it
-rather than publishing a picture nobody planned.
+`line`, `scatter`, `bubble`, `stacked_bar` and `pie`; a plan for any other declared type raises
+`CompileError` naming it rather than publishing a picture nobody planned.
+
+**A pie needs a separately stated whole.** `pie_exhaustive` checks that its parts
+use one measure and unit and exactly make that independent source quantity.
+Each slice is a computed share with both its part and whole in its provenance.
+The circle has at most five parts; the visible readout names every part and
+prints the article's wording for the total.
 
 **A stacked bar needs an independently stated whole.** `stacked_bar_exhaustive`
-requires a separate source quantity and compares it with the exact sum of the
-parts after unit conversion. The whole cannot also be one of those parts, and a
-sum of the parts is never evidence that the article stated the total. The pie
-fallback re-enters the same validator, so neither direct requests nor fallback
-can skip this rule.
+compares a separate source quantity with the exact sum of its parts after unit
+conversion. The whole cannot also be one of those parts, and a sum of the parts
+is never evidence that the article stated the total. A pie downgrade re-enters
+this check; failure of the stricter pie whole check cannot be laundered by the
+replacement.
 
 The maintainer confirmed "A1 - Confirm one-row delivery" on 2026-10-26 UTC:
-one stacked row represents the whole and its parts. For a pie fallback, the
-whole's source label names that row, and the pie categories name its parts.
-Multiple category rows are refused in this phase.
+one stacked row represents the whole and its parts. In a stacked-bar downgrade,
+the source whole labels the row and the pie categories name its parts. Multiple
+category rows are refused in this phase.
 
 **The stack keeps the plan's part order.** Unlike ranked bars, its segment
 labels, source values and emphasis stay paired in the series order the plan

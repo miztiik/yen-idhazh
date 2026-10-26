@@ -1,0 +1,35 @@
+{
+  "caption": "The source states the whole and each part.",
+  "declared_whole": {
+    "element_id": "quantity-21-26",
+    "text": "76 MW"
+  },
+  "declared_whole_element_id": "quantity-21-26",
+  "emphasized_mark_id": "m4",
+  "encoding": {
+    "bins": [],
+    "category": ["m0", "m1", "m2", "m3"],
+    "entity": [],
+    "event_label": [],
+    "quantity": ["m4", "m5", "m6", "m7"],
+    "quantity_x": [],
+    "series": [],
+    "size": [],
+    "time": []
+  },
+  "item_id": "energy-7731902044",
+  "marks": [
+    {"derived": null, "element_id": "entity-28-32", "mark_id": "m0", "source_text": null, "text": "Wind", "time": null, "unit": null, "value": null},
+    {"derived": null, "element_id": "entity-49-54", "mark_id": "m1", "source_text": null, "text": "solar", "time": null, "unit": null, "value": null},
+    {"derived": null, "element_id": "entity-72-77", "mark_id": "m2", "source_text": null, "text": "hydro", "time": null, "unit": null, "value": null},
+    {"derived": null, "element_id": "entity-99-104", "mark_id": "m3", "source_text": null, "text": "tidal", "time": null, "unit": null, "value": null},
+    {"derived": {"bin_lower": null, "bin_upper": null, "function": "share_of_declared_whole", "inputs": ["quantity-43-47", "quantity-21-26"], "source_unit": null, "unit": "%", "unit_table_version": null, "value": "11.84210526315789473684210526", "version": "2026-09-09"}, "element_id": null, "mark_id": "m4", "source_text": "9 MW; 76 MW", "text": null, "time": null, "unit": "%", "value": "11.84210526315789473684210526"},
+    {"derived": {"bin_lower": null, "bin_upper": null, "function": "share_of_declared_whole", "inputs": ["quantity-65-70", "quantity-21-26"], "source_unit": null, "unit": "%", "unit_table_version": null, "value": "28.94736842105263157894736842", "version": "2026-09-09"}, "element_id": null, "mark_id": "m5", "source_text": "22 MW; 76 MW", "text": null, "time": null, "unit": "%", "value": "28.94736842105263157894736842"},
+    {"derived": {"bin_lower": null, "bin_upper": null, "function": "share_of_declared_whole", "inputs": ["quantity-88-93", "quantity-21-26"], "source_unit": null, "unit": "%", "unit_table_version": null, "value": "19.73684210526315789473684211", "version": "2026-09-09"}, "element_id": null, "mark_id": "m6", "source_text": "15 MW; 76 MW", "text": null, "time": null, "unit": "%", "value": "19.73684210526315789473684211"},
+    {"derived": {"bin_lower": null, "bin_upper": null, "function": "share_of_declared_whole", "inputs": ["quantity-115-120", "quantity-21-26"], "source_unit": null, "unit": "%", "unit_table_version": null, "value": "39.47368421052631578947368421", "version": "2026-09-09"}, "element_id": null, "mark_id": "m7", "source_text": "30 MW; 76 MW", "text": null, "time": null, "unit": "%", "value": "39.47368421052631578947368421"}
+  ],
+  "renderer_version": "2026-10-27T02:00",
+  "title": "Generation by source",
+  "type": "pie",
+  "version": "2026-10-27T04:00"
+}

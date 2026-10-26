@@ -142,6 +142,10 @@ class ResolverCheck(StrEnum):
     CONVERSION_IS_EXACT = "conversion_is_exact"
     #: A total or a share was asked of inputs stating more than one unit.
     ONE_UNIT_ACROSS_INPUTS = "one_unit_across_inputs"
+    #: A pie part and its declared whole do not state one canonical measure.
+    MEASURE_CANONICAL_MATCHES = "measure_canonical_matches"
+    #: A pie part is negative and cannot be a share of its declared whole.
+    PART_IS_NONNEGATIVE = "part_is_nonnegative"
     #: A total or a whole was asked of a single element, which is that element.
     TWO_INPUTS_AT_LEAST = "two_inputs_at_least"
     #: A declared whole totals zero, so no part has a share of it.
@@ -301,42 +305,45 @@ def sum_of(inputs: Sequence[Element]) -> DerivedValue:
     )
 
 
-def share_of_declared_whole(part: Element, whole: Sequence[Element]) -> DerivedValue:
-    """This part as a percentage of the whole these parts declare.
-
-    The whole is declared by enumeration - these elements and no others - which
-    is what the middle word of the name means. A share of a whole nobody declared
-    is a share of an assumption, and the assumption never appears in the chain.
-
-    The part comes first in `inputs` and the whole follows, which is why `inputs`
-    is ordered. A whole totalling zero is refused rather than divided by.
-    """
-    if len(whole) < 2:
+def share_of_declared_whole(part: Element, whole: Element) -> DerivedValue:
+    """This part as a percentage of its independently stated whole."""
+    if part.element_id == whole.element_id:
         raise DerivedValueError(
             ResolverCheck.TWO_INPUTS_AT_LEAST,
-            "a whole of one part is that part, and its share is all of it",
+            "a declared whole is separate from each part",
         )
-    units = {element.unit for element in whole} | {part.unit}
-    if len(units) != 1:
-        stated = sorted(unit or "(no unit)" for unit in units)
+    if (
+        whole.measure_canonical is None
+        or part.measure_canonical != whole.measure_canonical
+    ):
+        raise DerivedValueError(
+            ResolverCheck.MEASURE_CANONICAL_MATCHES,
+            "a part and its declared whole state the same canonical measure",
+        )
+    if part.unit != whole.unit:
+        stated = sorted({part.unit or "(no unit)", whole.unit or "(no unit)"})
         raise DerivedValueError(
             ResolverCheck.ONE_UNIT_ACROSS_INPUTS,
             f"a share needs one unit and these state {stated}",
         )
+    if _quantity(part) < 0:
+        raise DerivedValueError(
+            ResolverCheck.PART_IS_NONNEGATIVE,
+            "a part of a whole cannot be negative",
+        )
+    total = _quantity(whole)
+    if total <= 0:
+        raise DerivedValueError(
+            ResolverCheck.WHOLE_IS_NOT_NOTHING,
+            "a whole of nothing has no parts to take a share of",
+        )
     with localcontext() as context:
         context.prec = _SHARE_PRECISION
-        total = sum((_quantity(element) for element in whole), Decimal(0))
-        try:
-            share = _quantity(part) / total * _HUNDRED
-        except (DivisionByZero, InvalidOperation) as empty:
-            raise DerivedValueError(
-                ResolverCheck.WHOLE_IS_NOT_NOTHING,
-                "a whole of nothing has no parts to take a share of",
-            ) from empty
+        share = _quantity(part) / total * _HUNDRED
     return DerivedValue(
         function=DerivedFunction.SHARE_OF_DECLARED_WHOLE,
         version=DERIVED_VALUE_VERSION,
-        inputs=[part.element_id] + [element.element_id for element in whole],
+        inputs=[part.element_id, whole.element_id],
         value=_plain(share),
         unit="%",
         source_unit=None,
@@ -483,13 +490,13 @@ def _channel(role: EncodingRole, elements: Sequence[Element]) -> list[DisplayedV
     return drawn
 
 
-def _slices(elements: Sequence[Element]) -> list[DisplayedValue]:
-    """A pie's marks: each slice as a share of the whole the slices declare."""
+def _slices(elements: Sequence[Element], whole: Element) -> list[DisplayedValue]:
+    """A pie's marks: each slice as a share of its separately stated whole."""
     return [
         DisplayedValue(
             role=EncodingRole.QUANTITY,
             element_id=None,
-            derived=share_of_declared_whole(element, elements),
+            derived=share_of_declared_whole(element, whole),
         )
         for element in elements
     ]
@@ -601,7 +608,14 @@ def _resolved(
         if not elements:
             continue
         if plan.type is VisualType.PIE and role is EncodingRole.QUANTITY:
-            drawn += _slices(elements)
+            whole_id = plan.declared_whole_element_id
+            whole = known.get(whole_id) if whole_id is not None else None
+            if whole is None:
+                raise DerivedValueError(
+                    ResolverCheck.ELEMENT_EXISTS,
+                    "a pie needs its declared whole in the article's element table",
+                )
+            drawn += _slices(elements, whole)
         elif plan.type is VisualType.HISTOGRAM and role is EncodingRole.BINS:
             drawn += _bars(elements, bins=visuals.histogram_bins)
         elif role in VALUE_ROLES:

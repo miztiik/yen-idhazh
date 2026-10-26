@@ -41,7 +41,7 @@ from idhazh.contracts.base import (
     SchemaVersion,
     records_json,
 )
-from idhazh.contracts.derived import DerivedNumber, DerivedUnit, DerivedValue
+from idhazh.contracts.derived import DerivedFunction, DerivedNumber, DerivedUnit, DerivedValue
 from idhazh.contracts.element import DateOrYear, ElementId
 from idhazh.contracts.visual import (
     MAX_IDS_PER_ROLE,
@@ -61,7 +61,7 @@ from idhazh.contracts.visual import (
 #: committed SVG is a fixed record of what a reader saw on a given day, and a
 #: spec plus drawing code can be redrawn differently by a later change with
 #: nothing in the payload to show it moved. This field is what shows it.
-RENDERER_VERSION: Final = "2026-10-27T01:01"
+RENDERER_VERSION: Final = "2026-10-27T02:00"
 
 #: How a mark is addressed inside its own file. Local to one visual and never an
 #: identity anything outside it holds, so it is short and positional rather than
@@ -183,6 +183,19 @@ class VisualMark(Model):
         return self
 
 
+class VisualWhole(Model):
+    """The source wording for a pie's independently stated whole."""
+
+    element_id: ElementId
+    text: UntrustedLine
+
+    @model_validator(mode="after")
+    def _the_whole_has_source_text(self) -> Self:
+        if not self.element_id.startswith("quantity-") or not self.text.strip():
+            raise ValueError("a declared whole is a source quantity with readable text")
+        return self
+
+
 class VisualEncoding(Model):
     """Which marks fill which channel of the drawing.
 
@@ -232,6 +245,11 @@ class VisualData(Contract):
 
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-10-27T04:00",
+            change="Publish pie slices as shares of a separately stated whole.",
+            why="A pie's denominator and exact source total must reach its reader.",
+        ),
+        ChangelogEntry(
             version="2026-10-27T03:00",
             change="Publish one declared whole with its source-backed stacked parts.",
             why="A reader needs the declared total and every part in one current drawing.",
@@ -274,6 +292,12 @@ class VisualData(Contract):
             "page refuses a version it does not know, so a later change that would move "
             "pixels cannot redraw an older day without saying so."
         )
+    )
+    declared_whole_element_id: ElementId | None = Field(
+        description="The source quantity naming the denominator, or null when the visual has none."
+    )
+    declared_whole: VisualWhole | None = Field(
+        description="The source wording shown beside a pie, or null for every other chart."
     )
     title: PlanTitle | None = Field(description="Sanitized plan heading, as untrusted text.")
     caption: PlanCaption | None = Field(description="Sanitized plan framing, as untrusted text.")
@@ -321,6 +345,10 @@ class VisualData(Contract):
             raise ValueError("the renderer version is not current")
         channels = self.encoding
         by_id = {mark.mark_id: mark for mark in self.marks}
+        if self.type not in (VisualType.PIE, VisualType.STACKED_BAR) and (
+            self.declared_whole_element_id is not None or self.declared_whole is not None
+        ):
+            raise ValueError("only a composition chart carries a declared whole")
         if self.type in (VisualType.BAR, VisualType.DOT):
             if not channels.category or len(channels.category) != len(channels.quantity):
                 raise ValueError("bar and dot charts pair one category with each quantity")
@@ -364,6 +392,8 @@ class VisualData(Contract):
             whole = by_id[channels.category[0]]
             if whole.element_id is None or not whole.element_id.startswith("quantity-"):
                 raise ValueError("a stacked bar's whole label cites a source quantity")
+            if self.declared_whole_element_id != whole.element_id or self.declared_whole is not None:
+                raise ValueError("a stacked bar's category mark is its declared whole")
             whole_inputs: set[str] = set()
             for mark_id in channels.quantity:
                 part = by_id[mark_id]
@@ -383,6 +413,57 @@ class VisualData(Contract):
                 for mark_id in channels.quantity
             ):
                 raise ValueError("stacked-bar parts are non-negative quantities")
+        elif self.type is VisualType.PIE:
+            if (
+                len(channels.quantity) < 2
+                or len(channels.category) != len(channels.quantity)
+                or self.declared_whole_element_id is None
+                or self.declared_whole is None
+                or self.declared_whole.element_id != self.declared_whole_element_id
+            ):
+                raise ValueError("a pie pairs each part with a source category and declared whole")
+            names = [by_id[mark_id].text for mark_id in channels.category]
+            if len(set(names)) != len(names):
+                raise ValueError("pie category names remain distinct")
+            if any(
+                by_id[mark_id].element_id is None
+                or not by_id[mark_id].element_id.startswith(("entity-", "place-", "date-"))
+                for mark_id in channels.category
+            ):
+                raise ValueError("pie categories cite source labels")
+            parts = [by_id[mark_id] for mark_id in channels.quantity]
+            part_ids: list[str] = []
+            for part in parts:
+                derived = part.derived
+                if (
+                    derived is None
+                    or derived.function is not DerivedFunction.SHARE_OF_DECLARED_WHOLE
+                    or len(derived.inputs) != 2
+                    or derived.inputs[1] != self.declared_whole_element_id
+                    or part.unit != "%"
+                    or Decimal(part.value or "0") < 0
+                    or Decimal(part.value or "0") > 100
+                ):
+                    raise ValueError("every pie slice is a bounded share of its declared whole")
+                part_ids.append(derived.inputs[0])
+            if len(set(part_ids)) != len(part_ids) or any(
+                not part_id.startswith("quantity-")
+                or part_id == self.declared_whole_element_id
+                for part_id in part_ids
+            ):
+                raise ValueError("pie slices cite distinct source quantity parts")
+            if any(
+                (
+                    channels.quantity_x,
+                    channels.time,
+                    channels.series,
+                    channels.entity,
+                    channels.size,
+                    channels.bins,
+                    channels.event_label,
+                )
+            ):
+                raise ValueError("a pie draws only category and quantity channels")
         elif self.type is VisualType.SLOPE:
             pair_count = len(channels.quantity) // 2
             if len(channels.time) != 2 or len(channels.quantity) < 4 or len(channels.quantity) % 2:
@@ -513,6 +594,8 @@ class VisualData(Contract):
             if any(len(dates) < 2 for dates in dates_by_series.values()):
                 raise ValueError("each line series needs at least two dates")
         else:
+            if self.declared_whole_element_id is not None or self.declared_whole is not None:
+                raise ValueError("only a composition chart carries a declared whole")
             raise ValueError(f"{self.type.value} has no current story-chart data shape")
 
         time_ids = set(channels.time)

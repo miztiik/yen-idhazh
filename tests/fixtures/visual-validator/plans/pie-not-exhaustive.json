@@ -1,0 +1,36 @@
+{
+  "annotations": ["quantity-43-47"],
+  "caption": "The source states the whole and each part.",
+  "confidence": 0.86,
+  "decision": "visual",
+  "declared_whole_element_id": "quantity-21-26",
+  "element_ids": [
+    "quantity-21-26",
+    "entity-28-32",
+    "quantity-43-47",
+    "entity-49-54",
+    "quantity-65-70",
+    "entity-72-77",
+    "quantity-88-93",
+    "entity-99-104",
+    "quantity-115-120"
+  ],
+  "encodings": {
+    "bins": [],
+    "category": ["entity-28-32", "entity-49-54", "entity-72-77"],
+    "entity": [],
+    "event_label": [],
+    "quantity": ["quantity-43-47", "quantity-65-70", "quantity-88-93"],
+    "quantity_x": [],
+    "series": [],
+    "size": [],
+    "time": []
+  },
+  "labels": ["entity-28-32", "entity-49-54", "entity-72-77"],
+  "plan_version": "2026-09-09",
+  "purpose": "composition",
+  "title": "Generation by source",
+  "type": "pie",
+  "version": "2026-09-09T03:11",
+  "why": "The source states the whole and each part separately."
+}

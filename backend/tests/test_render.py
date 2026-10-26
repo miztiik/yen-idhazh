@@ -66,6 +66,9 @@ BAR_TABLE: Final = TABLE_FIXTURES / "wind.json"
 STACKED_PLAN: Final = PLAN_FIXTURES / "stacked-valid.json"
 STACKED_TABLE: Final = TABLE_FIXTURES / "stacked-whole.json"
 STACKED_DATA: Final = CONTRACT_FIXTURES_DIR / "visual-data" / "stacked-bar-from-whole.json"
+PIE_PLAN: Final = PLAN_FIXTURES / "pie-valid.json"
+PIE_TABLE: Final = TABLE_FIXTURES / "pie-whole.json"
+PIE_DATA: Final = CONTRACT_FIXTURES_DIR / "visual-data" / "pie-from-declared-whole.json"
 
 DAY: Final = "digest/2026/08/22"
 MARKS: Final = f"{DAY}/ai-01.json"
@@ -235,15 +238,35 @@ class TestCompiledBar:
                 visuals=committed_visuals(),
             )
 
-    def test_a_type_this_build_cannot_draw_is_refused_by_its_own_name(self) -> None:
-        """One type. Compiling a `pie` into bars would publish a picture nobody planned."""
+    def test_compile_bar_refuses_a_pie_instead_of_compiling_it_as_bars(self) -> None:
         plan = VisualPlan.read(BAR_PLAN)
         other = VisualPlan.model_validate(
             plan.model_dump(mode="json") | {"type": VisualType.PIE.value}
         )
 
-        with pytest.raises(CompileError, match="pie"):
+        with pytest.raises(CompileError, match="compile_bar cannot compile pie"):
             compile_bar(other, ElementTable.read(BAR_TABLE), visuals=committed_visuals())
+
+    def test_a_pie_compiles_shares_and_its_declared_total(self) -> None:
+        compiled = compile_chart(
+            VisualPlan.read(PIE_PLAN),
+            ElementTable.read(PIE_TABLE),
+            visuals=committed_visuals(),
+        )
+
+        assert compiled.data.type is VisualType.PIE
+        assert compiled.data.declared_whole_element_id == "quantity-21-26"
+        assert compiled.data.declared_whole is not None
+        assert compiled.data.declared_whole.text == "76 MW"
+        assert compiled.data.to_json() == VisualData.read(PIE_DATA).to_json()
+        assert len(compiled.data.encoding.category) == len(compiled.data.encoding.quantity) == 4
+        assert "Pie chart. Declared total: 76 MW." in compiled.alt_text
+        assert all(
+            mark.derived is not None
+            and mark.derived.inputs[1] == "quantity-21-26"
+            for mark in compiled.data.marks
+            if mark.mark_id in compiled.data.encoding.quantity
+        )
 
     def test_a_plan_the_resolver_refuses_never_becomes_a_picture(self) -> None:
         """The refusal travels with its check's name, so an operator can act on it."""

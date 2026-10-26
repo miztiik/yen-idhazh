@@ -50,7 +50,7 @@ from idhazh.contracts.visual_decision import NoneReason, VisualState
 
 
 class ValidatorCheck(StrEnum):
-    """The ten checks, in the order the validator runs them.
+    """The eleven checks, in the order the validator runs them.
 
     Each member is the property that must HOLD, not the failure - the same way
     `span_integrity_pass` and `derived_provenance_complete` are named.
@@ -74,6 +74,8 @@ class ValidatorCheck(StrEnum):
     ROLES_VALID_FOR_TYPE = "roles_valid_for_type"
     #: Stacked parts exactly make a separate source-declared whole.
     STACKED_BAR_EXHAUSTIVE = "stacked_bar_exhaustive"
+    #: Pie parts exactly make a separate source-declared whole.
+    PIE_EXHAUSTIVE = "pie_exhaustive"
     #: The marks fit between the two committed chart-point knobs - and for a
     #: histogram, whose marks are its bins, there is a value for every bin.
     ENOUGH_DATA = "enough_data"
@@ -224,6 +226,11 @@ class VisualAttemptRow(Contract):
 
     __schema_stem__: ClassVar[str] = "visual-attempt-row"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-10-27T04:00",
+            change="Name pie exhaustiveness refusals in attempt records.",
+            why="A refused pie must say which check stopped it.",
+        ),
         ChangelogEntry(
             version="2026-10-26T09:41",
             change="Name the stacked-bar exhaustiveness refusal in attempt records.",
