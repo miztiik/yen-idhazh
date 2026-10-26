@@ -14,6 +14,7 @@ from pydantic import TypeAdapter
 from pydantic_core import to_jsonable_python
 
 from idhazh.contracts.base import Model
+from idhazh.story_dataset.portable_evidence import refuse_absolute_evidence
 
 
 def canonical(value: object) -> bytes:
@@ -119,6 +120,7 @@ class Store:
         self.db.execute("INSERT OR IGNORE INTO artifacts VALUES(?,?,?)", (kind, identity, raw))
 
     def append(self, kind: str, identity: str, subject: str, value: Model) -> None:
+        refuse_absolute_evidence(value)
         self.db.execute(
             "INSERT INTO records(kind,id,subject,payload) VALUES(?,?,?,?)",
             (kind, identity, subject, canonical(value).decode()),

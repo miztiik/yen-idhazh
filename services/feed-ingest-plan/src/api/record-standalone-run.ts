@@ -27,12 +27,12 @@ export async function recordFinalizedDocumentWork(inputs: PlanInputs, state: Doc
 }
 
 export async function recordStandaloneRun(inputs: PlanInputs, batch: PartitionedFeedBatch, artifact: string) {
-  const owner = stageStore(inputs).ownership(batch.batch_id);
-  if (owner.scope === "plan") return undefined;
+  const claim = stageStore(inputs).ownership(batch.batch_id);
+  if (claim.scope === "plan") return undefined;
   const pending = currentExecutionState(inputs, batch.context.run_id);
   const state = pending === undefined
     ? registerStageExecution(inputs, batch.context, "partition", null) : await pending;
-  const healthRecorded = batch.health_rows.length === 0 || state.health_written || owner.health_fingerprint !== null;
+  const healthRecorded = batch.health_rows.length === 0 || state.health_written || claim.health_fingerprint !== null;
   return saveOutcome(inputs, state, {
     duration_ms: state.started === null ? null : Math.round(performance.now() - state.started),
     status: healthRecorded ? "completed" : "partial",

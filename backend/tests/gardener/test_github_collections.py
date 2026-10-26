@@ -4,7 +4,7 @@ The adapter's whole job is a translation: a page of REST JSON in, a `Member`
 out, a member id into one DELETE, a span of UTC days into the searches that
 list the runs created in it, and the artifacts' pages into a walk from the
 oldest end. So the test drives it with recorded answers - what
-`GET /repos/{owner}/{repo}`, `.../actions/artifacts` and `.../actions/runs`
+`GET /repos/{account}/{repo}`, `.../actions/artifacts` and `.../actions/runs`
 really returned - and never the network (Guardrail #7).
 
 The transport is the declared injection point, the way `idhazh.fetch` takes its
@@ -673,10 +673,10 @@ def test_an_empty_path_addresses_the_repository_itself() -> None:
     assert api._url("actions/runs") == "https://api.github.com/repos/miztiik/yen-idhazh/actions/runs"
 
 
-@pytest.mark.parametrize("repo", ["not-a-slug", "owner/name/extra", "../../etc", "owner/"])
-def test_a_repository_that_is_not_owner_slash_name_is_refused(repo: str) -> None:
+@pytest.mark.parametrize("repo", ["not-a-slug", "account/name/extra", "../../etc", "account/"])
+def test_a_repository_that_is_not_account_slash_name_is_refused(repo: str) -> None:
     """The slug is interpolated into an API address, so it is checked as an identity."""
-    with pytest.raises(ValueError, match="owner/name"):
+    with pytest.raises(ValueError, match="account/name"):
         github_collections.RestApi(repo, token="not-a-real-token")
 
 

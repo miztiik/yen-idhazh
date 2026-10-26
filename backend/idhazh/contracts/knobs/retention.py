@@ -65,7 +65,7 @@ class RetentionConfig(Model):
             "published day, so 390 days stands at 120.7 MiB for ever, 11.8 percent "
             "of the 1 GiB Pages ceiling, where 12 months would stand at 111.4 and "
             "14 at 130.0. Those are 18.6 MiB apart against a one-spread band of "
-            "47.6 MiB, so the byte budget cannot separate them and the owner's 13 "
+            "47.6 MiB, so the byte budget cannot separate them and the maintainer's 13 "
             "stands (Carmack, 2026-09-13). The derivation is "
             "docs/reference/site-weight.md, 'What a published day adds in "
             "rendered visuals'."

@@ -354,7 +354,7 @@ def test_a_moved_block_is_declared_in_one_file_and_the_other_does_not_argue(
     # already has - and a second copy that agrees today is the next divergence.
     settled_away = {"ui": ("visual_side",), "console": ("chart_height", "chart_width")}
     for key in settled_away.get(legacy_key, ()):
-        assert key not in legacy, f"{key} has one owner, and it is config/appearance.json"
+        assert key not in legacy, f"{key} has one source of truth, and it is config/appearance.json"
 
 
 def test_the_legacy_blocks_still_validate_so_an_unmigrated_config_still_reads() -> None:

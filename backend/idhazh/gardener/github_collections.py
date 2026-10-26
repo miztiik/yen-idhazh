@@ -115,7 +115,7 @@ class RestApi:
     def __init__(self, repo: str, *, token: str | None = None) -> None:
         if not _REPO_PATTERN.fullmatch(repo):
             raise ValueError(
-                f"a repository is named owner/name, not {repo!r}. It is interpolated into "
+                f"a repository is named account/name, not {repo!r}. It is interpolated into "
                 "an API address, so it is checked as an identity rather than trusted"
             )
         secret = token if token is not None else os.environ.get(TOKEN_ENV)
@@ -197,7 +197,7 @@ def api_of_this_repository() -> RestApi:
     if not repo:
         raise ValueError(
             f"{REPO_ENV} is not set, so no repository is named. Actions sets it for every "
-            "run; a person running a collection task by hand exports it as owner/name"
+            "run; a person running a collection task by hand exports it as account/name"
         )
     return RestApi(repo)
 
