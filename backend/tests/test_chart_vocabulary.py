@@ -138,7 +138,6 @@ def test_mixed_requests_preserve_types_source_figures_and_metric_denominators(
     for number, case in enumerate(fixture["cases"], start=1):
         decision = draw(knobs, population=population, type=case["type"], purpose=case["purpose"])
         assert decision.planned_type == case["type"], case["name"]
-        assert decision.rendered_type == case["rendered_type"], case["name"]
         assert decision.downgrade_depth == case["depth"], case["name"]
         assert decision.rationale
         outcomes.append(record(decision, number))
@@ -159,6 +158,7 @@ def test_mixed_requests_preserve_types_source_figures_and_metric_denominators(
             assert decision.marks == len(data.encoding.quantity)
         else:
             assert decision.marks is None
+        assert decision.rendered_type == case["rendered_type"], case["name"]
 
     counted = count_visual_outcomes(outcomes)
     assert counted.measured_requests == len(fixture["cases"])

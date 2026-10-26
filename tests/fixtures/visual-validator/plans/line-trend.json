@@ -1,0 +1,46 @@
+{
+  "annotations": [
+    "quantity-60-67"
+  ],
+  "caption": "Each point is the capacity the source reports for that year.",
+  "confidence": 0.82,
+  "decision": "visual",
+  "element_ids": [
+    "date-43-47",
+    "date-71-75",
+    "date-99-103",
+    "quantity-32-39",
+    "quantity-60-67",
+    "quantity-88-95"
+  ],
+  "encodings": {
+    "bins": [],
+    "category": [],
+    "entity": [],
+    "event_label": [],
+    "quantity": [
+      "quantity-88-95",
+      "quantity-60-67",
+      "quantity-32-39"
+    ],
+    "quantity_x": [],
+    "series": [],
+    "size": [],
+    "time": [
+      "date-99-103",
+      "date-71-75",
+      "date-43-47"
+    ]
+  },
+  "labels": [
+    "date-43-47",
+    "date-71-75",
+    "date-99-103"
+  ],
+  "plan_version": "2026-09-09",
+  "purpose": "trend",
+  "title": "Offshore wind capacity over time",
+  "type": "line",
+  "version": "2026-09-09T03:11",
+  "why": "The dated readings show how reported capacity changed."
+}

@@ -37,6 +37,7 @@ export interface DigestVisual {
 export interface VisualMark {
 	mark_id: string;
 	text: string | null;
+	time: string | null;
 	value: string | null;
 	unit: string | null;
 	source_text: string | null;
