@@ -53,7 +53,7 @@ rules remain unchanged.
 | 1 | How often does an article actually state a whole | - | A | DONE #654 | p16-1 | #654 | worker |
 | 2 | The four ways code may reach a number the article did not write | 1 | B | DONE #537, #538 | - | #537, #538 | worker |
 | 3 | A declared whole: pie | 2 | C | PENDING | - | - | - |
-| 4 | Three numbers at once: bubble | 2 | D | IN PROGRESS | - | - | - |
+| 4 | Three numbers at once: bubble | 2 | D | IN PROGRESS | composition-vocabulary-row-4 | #1747 | - |
 | 5 | A spread of values: histogram | 2 | E | PENDING | - | - | - |
 | 6 | Human pie and bubble keep-rate evidence | 3, 4 | F | PENDING | - | - | - |
 
