@@ -1,6 +1,7 @@
 /** Which authored settings bound the operator listener and its named input files? */
 import { z } from "zod";
 import { DateStampSchema, NonEmptySchema, PositiveCountSchema } from "@idhazh/common-contracts";
+import { ArtifactRootSchema } from "../selected-artifact-path";
 
 export const RelativePathSchema = NonEmptySchema.refine(
   value => !value.includes("\\") && !value.includes(":") && !value.startsWith("/")
@@ -35,7 +36,7 @@ export const ServiceSettingsSchema = z.strictObject({
     planning: RelativePathSchema, taxonomy: RelativePathSchema, sources: RelativePathSchema,
     extraction: RelativePathSchema, registrations: RelativePathSchema,
     output_root: RelativePathSchema, seen_files: z.array(RelativePathSchema),
-    artifact_root: RelativePathSchema.default("backend/var/feed-ingest-plan"),
+    artifact_root: ArtifactRootSchema.default("backend/var/feed-ingest-plan"),
     health_period_limit: PositiveCountSchema.default(32),
     feed_health_input_gap: z.boolean().default(false),
     seen_days: z.array(SeenDayInputSchema).default([]),

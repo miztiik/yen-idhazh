@@ -6,7 +6,6 @@ import {
   FetchFailureSchema, PlannerHarvestObservationSchema,
 } from "@idhazh/common-contracts";
 import type { FeedIngestConfig, FeedOutcomePayload, ItemHealthFailureCode, WriterIdentity } from "@idhazh/common-contracts";
-import type { LedgerRegistration, LedgerSettings } from "@idhazh/ledger-file-writer";
 import type { HarvestInputs } from "./load-harvest-inputs";
 import type { ProgressDetails, ProgressEventType } from "../logging/progress-logger";
 import type { SourceHistoryEvidence } from "../read-ledger-history/read-feed-history";
@@ -63,11 +62,6 @@ export type HarvestContext = {
   on_article?: (result: HarvestArticleResult) => void;
   log?: (record: z.infer<typeof CandidateRejectionRecordSchema>) => void;
   progress?: (event: ProgressEventType, details?: ProgressDetails) => void;
-};
-export type RejectionDestination = {
-  outputRoot: string;
-  registryEntry: LedgerRegistration;
-  ledgerSettings: LedgerSettings;
 };
 export type HarvestResult = {
   inputs: HarvestInputs;

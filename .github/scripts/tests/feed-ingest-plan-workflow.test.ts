@@ -178,6 +178,11 @@ test("strict-checks the exact named sparse adapter and test inventory in one com
   try {
     const selection = steps.find(step => step.uses?.startsWith("actions/checkout@"))!.with?.["sparse-checkout"];
     if (typeof selection !== "string") throw new Error("Expected a named sparse selection");
+    const required = new Set([
+      ".github/scripts/feed-ingest-plan-http-proof.ts", ".github/scripts/feed-ingest-plan-commit.ts",
+      ".github/scripts/feed-ingest-plan-verification.ts", ".github/scripts/tests/feed-ingest-plan-outputs.test.ts",
+      ".github/scripts/tests/feed-ingest-plan-report.test.ts", ".github/scripts/tests/feed-ingest-plan-workflow.test.ts",
+    ]);
     const adapters: string[] = [];
     for (const entry of selection.trim().split("\n").map(value => value.trim())) {
       if (!/^\/[\w./-]+$/.test(entry) || entry.split("/").includes("..")) throw new Error("Sparse input must be a literal rooted name");
@@ -187,9 +192,10 @@ test("strict-checks the exact named sparse adapter and test inventory in one com
       if (entry.endsWith("/")) await symlink(join(root, ...path.split("/")), target, "junction");
       else {
         await copyFile(join(root, ...path.split("/")), target);
-        if (path.startsWith(".github/scripts/") && path.endsWith(".ts")) adapters.push(target);
+        if (required.delete(path)) adapters.push(target);
       }
     }
+    expect([...required], "Every mandatory adapter and test must be in the named checkout").toEqual([]);
     const service = join(directory, "services", "feed-ingest-plan");
     const child = Bun.spawn([process.execPath, "run", "tsc", "--noEmit", "--target", "ESNext", "--module", "ESNext",
       "--moduleResolution", "Bundler", "--strict", "--noUncheckedIndexedAccess", "--exactOptionalPropertyTypes",
@@ -221,6 +227,7 @@ test("the native verifier runs from a fixed named-input copy with no backend or 
       ...["read-parquet", "read-planner-parquet", "ledger-history-error"].map(name =>
         `services/feed-ingest-plan/src/read-ledger-history/${name}.ts`),
       "services/feed-ingest-plan/src/config/service-settings.ts",
+      "services/feed-ingest-plan/src/selected-artifact-path.ts",
       "services/feed-ingest-plan/src/api/plan-response.schema.ts", "services/feed-ingest-plan/src/api/stage-response.schema.ts",
       "tests/fixtures/ledger-file-writer/legacy-seen-day.parquet",
     ];

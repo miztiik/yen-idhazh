@@ -1,6 +1,6 @@
 # Contracts and Schemas
 
-**Last Updated**: 2026-10-24
+**Last Updated**: 2026-10-26
 
 The persisted-shape subsystem: where the models live, how a schema is obtained from one, the small hand copy the frontend carries, and the tests that stop the two drifting apart. This is the operational home of Guardrail #3 (contracts before logic) and `CLAUDE.md` sections 1a and 11.
 
@@ -114,104 +114,48 @@ The CI backend gate installs the locked package and runs these checks before
 pytest, which executes the Python-to-Zod bindings. It does not skip a binding
 when Bun or the package is absent.
 
-The publication observer's `RecordedEventPairSchema` is a read projection of
-the Python-owned pair, not a writer contract. The same binding module checks
-its actual runtime field types, closed vocabularies and model identity patterns
-against Python. Its bounded fixture names the projected fields, not an allowed
-model list. Historical example IDs in that fixture remain recorded evidence.
-Install the locked `services/feed-ingest-plan` dependencies before running this
-binding locally; the CI backend gate already does so.
+The current planner family has four strict native payloads:
+`DiscoveredArticleRow`, `SelectedArticleRow`, `FeedHealthStateRow` and
+`PlanRunRow`. Their `PlannerRow` declaration uses the current schema stamp
+once in file metadata, not a repeated row version or generic identity.
+`SelectedArticlesArtifact` carries the same declared selected content plus
+text, with one stamped header. The exact fields and review IDs are
+[the planner reference](../../reference/feed-planner-ledgers.md).
 
-The shared feed planning contracts have independent stamps. Harvested content
-and terminal rejections use `2026-10-23`; source-run observations use
-`2026-10-22T20:30`; diversity readings use `2026-10-22`. Article assessments,
-unsharded editorial selections and dispatches use `2026-10-24` for their nested
-source-reliability score evidence.
-Their models live in `backend/idhazh/contracts/feed_ingest_*.py`.
-Selections, article assessments, dispatches, selected batches and partitioned
-batches now use `2026-10-24T23:00` for nullable publisher-exposure evidence.
-The native Python declarations and strict TypeScript copies migrate prior
-versions without reinterpreting their `source` feed-crowding term. Historical
-exposure remains null, not an invented publication count; old physical schemas
-and logical commitments retain their original encoding. Current scores cannot
-charge both terms. The formula and bounded publication join live in
-[editorial selection](../sources/feed-curation.md#publisher-exposure-adjustment).
-Candidate, source-run, parsed-batch and rejection stamps are unchanged.
-These declarations do not enable a producer, register a ledger, or change the
-production planner.
-Planner events are independently stamped `2026-10-24T23:00` in their TypeScript
-schema. Native tests cover current fixture validation, UUID versions, typed
-payloads, forbidden article text, identity propagation and event ordering.
+The native `PlannerFileEnvelope` is distinct from the unchanged generic
+`FileEnvelope`. Both languages validate its allowed footer keys and declared
+row schema. Planner files have no generic `unit_id`, writer identity tree or
+Git SHA. Raw, compact and stored-row readers must support this format
+directly; they cannot add placeholder identity to make it fit.
 
-The `2026-10-22` audit rows accept their `2026-10-20` predecessors through
-read-side migrations in the native Python models and the bounded TypeScript
-Parquet reader. A prior unknown timing remains unknown; the migration does not
-infer a first-seen instant or change a source row's original run date.
-The existing fixture round-trip check keeps every value of a same-version payload.
-When reading advances an old version, it requires the current version and
-identical serialized bytes on the next read, leaving the old fixture unchanged.
+Named native binding cases compare current rows, nested values, artifact,
+private receipt and stage-batch shapes with actual Zod input schemas,
+including required keys, defaults and vocabularies. The report and runtime
+use those real schemas, not hand-built export copies. Native CI also reads
+real Bun output through daily, monthly, reopened-month and yearly packing.
+The TypeScript package checks do not claim that local Python ran.
 
-Terminal rejection version `2026-10-22` adds harvest-stage
-`STALE_MAX_AGE_EXCEEDED` with measured age and cutoff. Its `2026-10-20`
-read migration changes only the stamp; original physical digests and recorded
-logical-proof stamps remain independently verifiable. The precedence and
-unperformed checks are defined in
-[harvesting](../sources/feed-harvesting.md#design-rationale), not inferred from
-a missing page.
+Current planner batches and ledger rows reject the replaced formats. There
+is no old planner migrator, compatibility alias or dual writer. Finite
+historical generic-envelope vectors for unrelated families remain readable.
+The private fetch journal retains its separately declared finite receipt
+stamps; it does not preserve an obsolete planner ledger.
 
-Source-run revision `2026-10-22T10:05` adds nullable logical record commitments
-beside physical file receipts. Both prior source stamps migrate with null
-logical proof, never reconstructed evidence. The native reader verifies each
-old file against its original stored schema before migration.
-The encoding and old compact-only limitation are defined in
-[feed planning audit recording](../sources/feed-ingest-audit.md#compaction-safe-attempt-proof).
-
-Rejections, article assessments and source-run rejection vocabularies advance
-to `2026-10-22T20:30` for
-[shared fetch and extraction diagnostics](../sources/feed-failure-diagnostics.md)
-and the three pre-fetch planner refusals. Existing rejection, assessment,
-source-run and event versions remain readable. Old rows cannot claim the new
-reasons under an earlier version. Physical and logical digests retain the old
-schema's exact fields before migration; new evidence is not stripped to satisfy
-an old logical commitment. The existing native event fixture verifies migration
-from `2026-10-22T12:20`.
-
-Score revision `2026-10-24` adds nullable `source_reliability` to `ScoreEvidence`,
-declared in `feed_ingest_candidate.py` and copied in `source.schema.ts`. It
-records the enabled state, source-authority contribution, configured floor,
-measured fraction, attempted-read denominator, window, factor and separate
-penalty. The native and TypeScript validators enforce the factor and penalty
-calculation. The unchanged base article score is not an operational product.
-The exact selection rule is owned by [curation](../sources/feed-curation.md).
-
-Old selections, assessments, dispatches and events migrate with null new score
-evidence. They do not acquire today's history or a claimed zero measurement.
-Historical logical encoders omit only fields their recorded schema lacked.
-In particular, `2026-10-23` assessments retain extraction quality and
-`2026-10-23` dispatches retain headline observations and their original nested
-selection stamp. A nonnull new reliability record cannot be encoded under an
-old stamp, even when its penalty is zero or disabled. Rejection and source-run
-stamps, old exclusion details, physical receipts and logical commitments are
-not restamped for this score change.
-
-Candidates keep source, original vertical, assigned desk, lenses, content event
-types, event cluster, and entities separate. Null labels mean unknown;
-empty lists mean assessed and empty. Known labels record their matcher and
-version. Resolved policy values and source classification weights travel with
-the evidence, so a later configuration edit cannot reinterpret history.
+Candidates retain sanitized content and only configured feed facts.
+They contain no vertical, desk, lens, entity, carrier or quality payload
+tree. Unknown publisher identity remains null. Current selected metadata
+records the numeric contributions actually used, not a semantic verdict.
 
 Candidate identity is SHA-256 over validated run ID, source ID, and zero-based
 parsed-entry ordinal, separated by newline characters with no final newline.
 This is a protocol encoding, not a tunable selection rule. It exists before
 article validation and distinguishes two offered entries with the same URL.
 Article URL identity uses the existing `derive_url_key` function.
-Rejections require the deciding stage's reason and measurements; feed failures
-have no article identity. Audit payloads use declared variants and never carry
-full article text.
-Current planner event identities use UUIDv5 and execution correlations use
-UUIDv4, as defined by [the identity contract](identity.md). The maintainer's
-2026-10-22 correction replaces the unshipped SHA event implementation fixtures;
-it does not migrate or rewrite historical production ledger files.
+Transient exclusions require the deciding stage's reason and measurements;
+feed failures have no article identity. Only grouped counts persist in health.
+The sole TypeScript progress schema carries sparse body-free operation
+events and UUIDv4 execution correlations. Typed full stage payloads remain
+internal; they are not log records or archived event exports.
 
 Named tests in `backend/tests/contracts/`, each proving a specific binding.
 
@@ -652,29 +596,11 @@ an earlier run's plan look larger than it was.
 
 ## Design rationale
 
-Maintainer approval, 2026-10-24, A1: evolve only score-bearing
-selection, assessment, dispatch and event contracts for the
-[separate reliability penalty](../sources/feed-curation.md#design-rationale).
-Python changes remain declarations, migrations and compatibility bindings;
-the production Python ranking implementation is unchanged.
-
-Maintainer approval, 2026-10-24, compatibility-gate A1:
-extend the published-column validator and existing cases for nullable nested
-additions in older schemas. This narrowly extends the declaration-only Python
-scope to the compatibility gate. Current-schema and existing-type checks stay
-strict; no production planner change, local Python run or historical rewrite
-is authorized.
-
-Maintainer ruling, 2026-10-22: remove the Python planner event model
-and its comparison checks because no Python production reader consumes it.
-The TypeScript producer and readers use one Zod declaration directly.
-Keep shared ledger declarations where Python actually reads the records.
-
-Maintainer ruling, 2026-10-22: the shared stored rejection,
-assessment and source-run contracts add distinct already-published,
-same-day-settled-failure and configured-blocked-marker reasons. Their
-readers preserve old versions and reject those reasons on old stamps; Python
-changes are limited to declarations and contract-level compatibility.
+The planner cutover replaces its old formats atomically. Native declaration,
+readback and compaction support are required because Python still packs this
+family. A Python planner-event copy is not required: only TypeScript consumes
+the progress stream. Shared persisted payloads retain their native authority
+and named binding checks. Production Python ranking is unchanged.
 
 **The generated layer went on 2026-09-23, and the hand copy plus two tests replaced it.** Until that date `python -m idhazh.contracts.export` wrote 66 JSON Schemas and 66 TypeScript modules, and CI regenerated both and failed on any diff. What it bought was real - a Python model, a JSON Schema and a TypeScript interface cannot be kept in step by hand, and the failure is always the same one: two of the three agree and the third was edited in a hurry. What it cost was the reviewer's attention: one commit in ten touched those two trees, so about one review in ten opened on 1,573,101 bytes of regenerated diff, and six names in two frontend modules were the whole of what any of it served. Sixty-one of the sixty-six schemas were read by nothing but the gate that checked they had been generated. The replacement is narrower and says the same thing: the copy is small, it is hand-written, and three named tests fail when it falls behind. Authority: Fowler.
 

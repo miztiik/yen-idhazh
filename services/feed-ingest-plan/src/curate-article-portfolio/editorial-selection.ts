@@ -5,11 +5,14 @@ import type { ScreenedCandidate } from "../screen-article-candidates/triage-gate
 import type { PlanInputs } from "../load-plan-inputs";
 import type { SourceHistoryEvidence } from "../read-ledger-history/read-feed-history";
 import type { PublisherPublicationHistory } from "./publisher-exposure";
+import type { RunContext } from "../resolve-run-context";
 
 export function curateArticles(input: {
   articles: readonly ScreenedCandidate[]; batch: ParsedFeedBatch; inputs: PlanInputs;
   health: ReadonlyMap<string, SourceHistoryEvidence>; publications: PublisherPublicationHistory;
+  context?: RunContext;
 }) {
+  const context = input.context ?? input.batch.context;
   const config = input.inputs.harvest.config.curate;
   const sourceEvidence = input.batch.evidence;
   const score = (article: ScreenedCandidate) => {
@@ -102,7 +105,7 @@ export function curateArticles(input: {
     const { candidate, freshness } = winner.article;
     const allowance = allowances.get(candidate.source_id)!;
     articles.push(SelectedArticleContentSchema.parse({
-      run_id: input.batch.context.run_id, attempt: input.batch.context.writer.attempt, date: input.batch.context.date,
+      run_id: context.run_id, attempt: context.writer.attempt, date: context.date,
       url_key: candidate.url_key, feed_id: candidate.source_id, publisher_id: candidate.source.publisher_id,
       canonical_url: candidate.canonical_url, title: candidate.title, categories: candidate.categories,
       article_text: candidate.article_text, author: candidate.author, published_at: candidate.published_at,

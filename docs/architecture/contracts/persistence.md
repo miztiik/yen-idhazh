@@ -1,6 +1,6 @@
 # The Ledger Door: Parquet and JSON Lines Under state/raw and state/compact
 
-**Last Updated**: 2026-10-21
+**Last Updated**: 2026-10-26
 
 How a contract payload reaches disk under `state/raw/` and `state/compact/`, how it comes back, and how the parquet engine is swapped. The door is `backend/idhazh/ledger/persist.py`; everything a producer needs is two calls, `ledger.persist` and `ledger.load`. The registry and the lifecycle statuses are [ledger-registry.md](ledger-registry.md), what each ledger answers is [state-ledgers.md](state-ledgers.md), and the shape of a contract is [schemas.md](schemas.md).
 
@@ -113,16 +113,42 @@ format. The public-import integrity test reads an actual native Parquet file
 and reproduces its footer digest. The bounded planner reader and its completion
 proof limits are described in [feed-partitioning.md](../sources/feed-partitioning.md).
 
-Feed planning data remains typed Parquet under registered raw/compact prefixes.
-Nested rejection observations and completion evidence are structs and lists,
-not serialized JSON cells or extra footer keys. A source-run completion
-records required ledger files, digests and row counts, including explicit
-zero-row outcomes. Declaring these contracts does not register their ledgers
-or implement attempt settlement.
+## Planner files without generic identities
+
+Only the four current planner siblings use `PlannerFileEnvelope` and
+`PlannerStoredRow`. Format-specific typed readers share the private I/O
+decoder. Existing generic readers retain their original envelope/row types
+and reject a planner format; shared native and gardener callers dispatch by
+the registered family. No old-family caller receives an optional identity
+where its existing protocol requires one.
+
+Planner payload models do not inherit generic row identity. Native and
+TypeScript writers emit the exact declared payload columns; persistence,
+raw readers, stored-output verification and all gardener packing tiers
+understand that format directly.
+
+The minimal footer contains schema/envelope versions, registered ledger,
+tier/period/coverage, file ID, canonical content digest and the actual writer
+format/compression. Health also records its finalization time. Standard Arrow
+container schema metadata is not a planner audit field. No planner footer or
+row restores `unit_id`, Git SHA or a hidden generic writer tree.
+
+The row's declared identity settles copies. Discovery keeps global minimum
+first sight by URL key. Other planner facts keep their explicit execution,
+attempt and ledger-specific key. Late raw facts remain visible beside compact
+planner coverage. Counts from distinct real attempts survive; duplicate
+storage copies and captured rolling reliability are not summed twice.
+
+These rules apply only to the planner family. The two-identifier protocol,
+generic identity columns and highest-attempt settlement below remain unchanged
+for every other family. A caller that requires an original file envelope
+must verify its type rather than assume a planner file has generic identity.
+See [the field reference](../../reference/feed-planner-ledgers.md) for the
+planner rows, artifact and explicit completion rules.
 
 ## The two identifiers
 
-**One file carries two identifiers, because it answers two questions.**
+**A generic-envelope file carries two identifiers, because it answers two questions.**
 
 | | `unit_id` | `file_id`, the filename |
 | --- | --- | --- |

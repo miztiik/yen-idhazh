@@ -35,11 +35,11 @@ test('published flat and nested ledgers absent from the build are not weighed, a
 		'state/compact/seen/index/yearly.json': 'yearly'
 	});
 	const ceilings = {
-		'state/compact/feed-ingest-plan/dispatches/index/': 2200,
+		'state/compact/feed-ingest-plan/selected-articles/index/': 2200,
 		'state/compact/item-health/index/': 2200,
 		'state/compact/seen/index/': 2200
 	};
-	expect(weighPayloads(build, ceilings, ['dispatches', 'item-health', 'seen'], '', onDisk)).toEqual({
+	expect(weighPayloads(build, ceilings, ['selected-articles', 'item-health', 'seen'], '', onDisk)).toEqual({
 		weighed: [
 			{ key: 'state/compact/seen/index/', path: 'state/compact/seen/index/monthly.json', bytes: 7, ceiling: 2200 },
 			{ key: 'state/compact/seen/index/', path: 'state/compact/seen/index/yearly.json', bytes: 6, ceiling: 2200 },
@@ -49,10 +49,10 @@ test('published flat and nested ledgers absent from the build are not weighed, a
 		namesNothing: [],
 		notWeighed: [
 			{
-				key: 'state/compact/feed-ingest-plan/dispatches/index/',
+				key: 'state/compact/feed-ingest-plan/selected-articles/index/',
 				reason:
-					'dispatches is not packed yet, so the build holds none of its files. ' +
-					'If it was packed before, restore state/compact/feed-ingest-plan/dispatches/ from git history.'
+					'selected-articles is not packed yet, so the build holds none of its files. ' +
+					'If it was packed before, restore state/compact/feed-ingest-plan/selected-articles/ from git history.'
 			},
 			{
 				key: 'state/compact/item-health/index/',
@@ -66,10 +66,10 @@ test('published flat and nested ledgers absent from the build are not weighed, a
 });
 
 test('a nested ledger index is weighed at its registered path and still fails above its ceiling', () => {
-	const key = 'state/compact/feed-ingest-plan/dispatches/index/';
+	const key = 'state/compact/feed-ingest-plan/selected-articles/index/';
 	const build = aBuildTree({ [`${key}daily.json`]: 'daily' });
 	const file = { key, path: `${key}daily.json`, bytes: 5, ceiling: 4 };
-	expect(weighPayloads(build, { [key]: 4 }, ['dispatches'], '', onDisk)).toEqual({
+	expect(weighPayloads(build, { [key]: 4 }, ['selected-articles'], '', onDisk)).toEqual({
 		weighed: [file], over: [file], namesNothing: [], notWeighed: []
 	});
 });
@@ -98,7 +98,7 @@ const filesWithNoIndex: Record<string, Record<string, string>> = {
 	'a compact data file': { 'state/compact/item-health/daily/2026/10/01.parquet': 'PAR1' }
 };
 
-for (const [ledger, folder] of [['item-health', 'item-health'], ['dispatches', 'feed-ingest-plan/dispatches']] as const) {
+for (const [ledger, folder] of [['item-health', 'item-health'], ['selected-articles', 'feed-ingest-plan/selected-articles']] as const) {
 	for (const [held, files] of Object.entries(filesWithNoIndex)) {
 		test(`published ${ledger} with ${held} in the build and nothing at its index key still fails`, () => {
 			const build = aBuildTree(Object.fromEntries(

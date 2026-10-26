@@ -25,8 +25,8 @@ import type { TaskProfiling } from "../../host-probes/src/task-profile/task-prof
 import { createIngestObservations } from "./ingest-observations";
 import { createRunHealth } from "./run-health";
 import { plannerMemory } from "./planner-memory";
-import { summarizeHealth } from "./read-ledger-history/health-summary";
 import { recordPlanRun } from "./record-plan-run";
+import { registerStageExecution } from "./api/document-state";
 
 export type PlanRuntime = {
   git_sha: string; run_number?: string; correlation_id?: string; clock?: () => Date;
@@ -45,6 +45,7 @@ export async function runFeedPlan(raw: unknown, inputs: PlanInputs, runtime: Pla
   const context = resolveRunContext(inputs.settings, runtime.git_sha, captured,
     runtime.run_number, runtime.correlation_id, runtime.captured_at);
   const started = performance.now();
+  registerStageExecution(inputs, context, "plan", started);
   const emit = createStageLogger(context, runtime.log);
   const timings: PlanRunRow["api_timings"] = [];
   const files: Partial<Record<"discovered_articles" | "selected_articles" | "feed_health_state" | "plan_runs", PersistLedgerResult>> = {};
@@ -91,7 +92,7 @@ export async function runFeedPlan(raw: unknown, inputs: PlanInputs, runtime: Pla
   emit("plan", "started");
   try {
     const loaded = await Promise.all([
-      prepareFeedHealthState(inputs, context.now),
+      phase("feed-health-summary", () => prepareFeedHealthState(inputs, context.now)),
       readSeenEvidence({
         root: inputs.root, files: inputs.settings.inputs.seen_files, days: inputs.settings.inputs.seen_days,
         registration: inputs.registrations.discovered_articles, now: context.now,
@@ -106,21 +107,20 @@ export async function runFeedPlan(raw: unknown, inputs: PlanInputs, runtime: Pla
         concurrency: inputs.harvest.config.harvest.concurrency,
       }),
     ]);
-    history = loaded[0];
+    const initialHistory = loaded[0];
+    history = initialHistory;
     discovery = loaded[1];
-    const historyRows = [...history.rows, ...memory.health()];
-    const initialHealth = summarizeHealth({
-      rows: historyRows, days: history.days, sources, now: context.now,
-      policy: inputs.clock_config.collect, ...inputs.harvest.config.feedback,
-    });
-    work = createRunHealth(context, sources, initialHealth.sources);
+    // The measured initial capture already includes bounded in-memory evidence and its summary.
+    // Selection performs a separate fresh capture; no membership/index cache crosses that boundary.
+    const historyRows = initialHistory.rows;
+    work = createRunHealth(context, sources, initialHistory.sources);
     const currentWork = work;
     const observations = createIngestObservations(currentWork.observe);
     const harvest = await phase("fetch", () => harvestFeeds(inputs.harvest, {
       writer: context.writer, correlation_id: context.correlation_id,
       max_future_hours: inputs.clock_config.collect.max_future_hours,
       exclusions: { ...loaded[2], published_window_days: inputs.clock_config.collect.published_window_days },
-      feed_history: initialHealth.sources, observations, parser_pool: parserPool,
+      feed_history: initialHistory.sources, observations, parser_pool: parserPool,
       parser_options: { activity: parserActivity, ...(runtime.signal === undefined ? {} : { signal: runtime.signal }) },
       overrides: request.freshness_hours === undefined ? {} : { freshness_hours: request.freshness_hours },
       clock: () => new Date(context.now), observation_clock: runtime.observation_clock ?? (() => new Date()),
@@ -171,9 +171,8 @@ export async function runFeedPlan(raw: unknown, inputs: PlanInputs, runtime: Pla
     selectionStartedAt = utcTimestamp(runtime.selection_clock ?? runtime.clock);
     const selectionClock = selectionStartedAt;
     const selection = await phase("select", () => executeSelection({ batch_id: parsed.batch_id }, inputs,
-      { ...runtime, selection_clock: () => new Date(selectionClock) }));
+      { ...runtime, selection_clock: () => new Date(selectionClock) }, timing => { timings.push(timing); }));
     selected = selection.batch;
-    timings.push({ operation: "feed-health-summary", duration_ms: selection.health_summary_duration_ms, status: "completed" });
     PlannerWorkEventSchema.parse({ stage: "selected", payload: selected });
     batches.selection_batch_id = selected.batch_id;
     const chosen = selected;

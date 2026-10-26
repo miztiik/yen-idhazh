@@ -9,8 +9,9 @@ import { fileURLToPath } from "node:url";
 import { createPlanApp, servePlan } from "../src/api/server";
 import { main } from "../src/index";
 import { recordedPlan } from "./plan-recordings";
-import { FeedHealthStateRowContract, PlanRunRowContract, SelectedArticlesArtifactSchema } from "@idhazh/common-contracts";
+import { FeedHealthStateRowContract, PlanRunRowContract, SelectedArticleRowContract, SelectedArticlesArtifactSchema, selectedArticleMetadata } from "@idhazh/common-contracts";
 import { readPlannerParquet } from "../src/read-ledger-history/read-planner-parquet";
+import { currentExecutionState } from "../src/api/document-state";
 
 const prefix = "/api/2026-10-20";
 const json = (body: unknown) => ({ method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
@@ -36,6 +37,11 @@ test("health is explicit; disabled, malformed, oversized and unknown controls ca
       request_id: randomUUID(), correlation_id: randomUUID(), source_id: "recorded-news", kind: "feed",
     }))).status).toBe(400);
     expect(recorded.transport.requests).toHaveLength(0);
+    recorded.inputs.settings.enabled = true;
+    recorded.runtime.run_number = "9".repeat(512);
+    expect((await app.request(`${prefix}/plan`, json({}))).status).toBe(400);
+    expect(recorded.transport.requests).toHaveLength(0);
+    expect(existsSync(join(recorded.inputs.outputRoot, "raw"))).toBe(false);
   } finally { app.close(); await recorded.close(); }
 });
 
@@ -54,6 +60,8 @@ test("actual API and awaited CLI compose the same recorded plan and disclose the
     const summary = await response.json();
     const requests = api.transport.requests.length;
     expect(summary.selected_count).toBe(1);
+    expect(summary.api_timings.filter((timing: { operation: string }) => timing.operation === "feed-health-summary"))
+      .toMatchObject([{ status: "completed" }, { status: "completed" }]);
     const replay = await (await fetch(`${url}/plan`, { ...json({ article_limit: 1 }), headers: {
       "content-type": "application/json", "Idempotency-Key": key,
     } })).json();
@@ -63,15 +71,73 @@ test("actual API and awaited CLI compose the same recorded plan and disclose the
     expect("selected_url_keys" in cliSummary && cliSummary.selected_url_keys).toEqual(summary.selected_url_keys);
     const healthFolder = join(api.inputs.outputRoot, "raw", "feed-ingest-plan", "feed-health-state", "2026", "10", "21");
     const before = await readdir(healthFolder);
+    const originalPaths: string[] = [join(api.directory, summary.selected_articles_artifact)];
+    for (const family of ["selected_articles", "feed_health_state", "plan_runs"]) {
+      for (const file of summary.files[family].files) originalPaths.push(join(api.inputs.outputRoot, file.path));
+    }
+    const originalBytes = await Promise.all(originalPaths.map(path => readFile(path)));
+    api.runtime.selection_clock = () => new Date("2026-10-22T00:01:00Z");
     const selected = await (await fetch(`${url}/select-articles`, json({ batch_id: summary.batches.parsed_batch_id }))).json();
     const repeated = await (await fetch(`${url}/select-articles`, json({ batch_id: summary.batches.parsed_batch_id }))).json();
     expect(selected.batch_id).not.toBe(repeated.batch_id);
+    expect(selected.run_id).not.toBe(summary.run_id);
+    expect(repeated.run_id).not.toBe(selected.run_id);
+    expect(repeated.run_id).not.toBe(summary.run_id);
     expect(await readdir(healthFolder)).toEqual(before);
     expect(selected.articles.every((article: object) => !Object.hasOwn(article, "article_text"))).toBe(true);
     const partition = await (await fetch(`${url}/partition-articles`, json({ batch_id: selected.batch_id, strategy: "none" }))).json();
+    const alternative = await (await fetch(`${url}/partition-articles`, json({
+      batch_id: selected.batch_id, strategy: "round-robin", shards: 2,
+    }))).json();
     expect(partition.dispatch_count).toBe(1);
     expect(partition.articles.map((article: { worker_assignment: number }) => article.worker_assignment)).toEqual([0]);
-    expect((await fetch(`${url}/persist-selected-articles`, json({ batch_id: partition.batch_id }))).status).toBe(409);
+    expect(alternative.run_id).not.toBe(partition.run_id);
+    const decisionHealth = await (await fetch(`${url}/feed-health-state`, json({ batch_id: selected.batch_id }))).json();
+    expect(decisionHealth.rows).toHaveLength(1);
+    expect(decisionHealth.rows[0]).toMatchObject({
+      run_id: selected.run_id, date: "2026-10-22", checked_at: null, outcome: null, items: null,
+      feed_reads: 0, productive_reads: 0, failed_reads: 0, feed_requests: 0, article_requests: 0,
+      robots_requests: 0, article_candidates: 2, articles_selected: 1, counts_complete: true,
+    });
+    const selectedResponse = await fetch(`${url}/persist-selected-articles`, json({ batch_id: partition.batch_id }));
+    expect(selectedResponse.status).toBe(200);
+    const selectedSaved = await selectedResponse.json();
+    expect(selectedSaved.run_status).toBe("completed");
+    const selectedRun = (await readPlannerParquet(join(api.inputs.outputRoot, selectedSaved.run_files.files[0].path),
+      "plan-runs", PlanRunRowContract)).rows[0]!;
+    expect(selectedRun).toMatchObject({
+      run_id: selected.run_id, date: "2026-10-22", selected_count: 1, strategy: "none",
+      evaluated_at: summary.evaluated_at, selection_started_at_utc: "2026-10-22T00:01:00Z",
+    });
+    expect(selectedRun.api_timings.map(timing => timing.operation)).toEqual(["feed-health-summary", "select", "partition", "persist"]);
+    const selectedArtifactBytes = await readFile(join(api.directory, selectedSaved.artifact));
+    const selectedPaths: string[] = [join(api.directory, selectedSaved.artifact)];
+    for (const saved of [selectedSaved.files, selectedSaved.run_files, decisionHealth.files]) {
+      for (const file of saved.files) selectedPaths.push(join(api.inputs.outputRoot, file.path));
+    }
+    const selectedBytes = await Promise.all(selectedPaths.map(path => readFile(path)));
+    const alternativeResponse = await fetch(`${url}/persist-selected-articles`, json({ batch_id: alternative.batch_id }));
+    expect(alternativeResponse.status).toBe(200);
+    const alternativeSaved = await alternativeResponse.json();
+    const alternativeRun = (await readPlannerParquet(join(api.inputs.outputRoot, alternativeSaved.run_files.files[0].path),
+      "plan-runs", PlanRunRowContract)).rows[0]!;
+    expect(alternativeRun.run_id).toBe(alternative.run_id);
+    expect(alternativeRun.strategy).toBe("round-robin");
+    expect(alternativeRun.api_timings.map(timing => timing.operation)).toEqual(["partition", "persist"]);
+    expect(await readFile(join(api.directory, selectedSaved.artifact))).toEqual(selectedArtifactBytes);
+    expect(await (await fetch(`${url}/persist-selected-articles`, json({ batch_id: partition.batch_id }))).json()).toEqual(selectedSaved);
+    const deliveredChoice = SelectedArticlesArtifactSchema.parse(JSON.parse(selectedArtifactBytes.toString("utf8")));
+    const selectedRows = (await readPlannerParquet(join(api.inputs.outputRoot, selectedSaved.files.files[0].path),
+      "selected-articles", SelectedArticleRowContract)).rows;
+    expect(selectedRows).toEqual(deliveredChoice.articles.map(article => ({
+      ...selectedArticleMetadata(article), run_id: deliveredChoice.run_id, attempt: deliveredChoice.attempt, date: deliveredChoice.date,
+    })));
+    const repeatedPartition = await (await fetch(`${url}/partition-articles`, json({ batch_id: repeated.batch_id, strategy: "bin-pack", shards: 2 }))).json();
+    const repeatedSaved = await (await fetch(`${url}/persist-selected-articles`, json({ batch_id: repeatedPartition.batch_id }))).json();
+    expect(repeatedSaved.run_status).toBe("partial");
+    expect(repeatedSaved.run_files.status).toBe("written");
+    expect(repeatedSaved.artifact).not.toBe(selectedSaved.artifact);
+    expect(api.transport.requests.length).toBe(requests);
     const artifact = SelectedArticlesArtifactSchema.parse(JSON.parse(await readFile(join(api.directory, summary.selected_articles_artifact), "utf8")));
     expect(artifact.articles.every(article => article.article_text.length > 0)).toBe(true);
     expect(JSON.stringify(summary)).not.toContain(artifact.articles[0]!.article_text);
@@ -105,8 +171,22 @@ test("actual API and awaited CLI compose the same recorded plan and disclose the
       expect(parsed.batch_id).toBe(offered.batch_id);
     }));
     expect(api.transport.requests.length).toBe(requestsBeforeParse);
-    const complete = await (await fetch(`${url}/select-articles`, json({ batch_id: offered.batch_id }))).json();
+    const choices = await Promise.all([0, 1].map(async () =>
+      (await fetch(`${url}/select-articles`, json({ batch_id: offered.batch_id }))).json()));
+    const complete = choices.find(choice => choice.run_id === offered.run_id);
+    const beforeOriginalPersistence = choices.find(choice => choice.run_id !== offered.run_id);
+    expect(complete).toBeDefined();
+    expect(beforeOriginalPersistence).toBeDefined();
     expect(complete.articles).toHaveLength(2);
+    expect(beforeOriginalPersistence.run_id).not.toBe(complete.run_id);
+    const freshHealth = await (await fetch(`${url}/feed-health-state`, json({ batch_id: beforeOriginalPersistence.batch_id }))).json();
+    expect(freshHealth.rows.every((row: { feed_reads: number; article_requests: number; feed_requests: number; robots_requests: number }) =>
+      row.feed_reads === 0 && row.article_requests === 0 && row.feed_requests === 0 && row.robots_requests === 0)).toBe(true);
+    const freshPartition = await (await fetch(`${url}/partition-articles`, json({ batch_id: beforeOriginalPersistence.batch_id, strategy: "round-robin", shards: 2 }))).json();
+    const freshFinal = await (await fetch(`${url}/persist-selected-articles`, json({ batch_id: freshPartition.batch_id }))).json();
+    expect(freshFinal.run_status).toBe("completed");
+    expect((await readPlannerParquet(join(api.inputs.outputRoot, freshFinal.run_files.files[0].path),
+      "plan-runs", PlanRunRowContract)).rows[0]!.run_id).toBe(beforeOriginalPersistence.run_id);
     const packed = await (await fetch(`${url}/partition-articles`, json({ batch_id: complete.batch_id, strategy: "none" }))).json();
     const healthResponse = await (await fetch(`${url}/feed-health-state`, json({ batch_id: complete.batch_id }))).json();
     expect(healthResponse.files.status).toBe("written");
@@ -118,6 +198,38 @@ test("actual API and awaited CLI compose the same recorded plan and disclose the
     expect(delivered.articles.map(article => article.url_key)).toEqual(complete.articles.map((article: { url_key: string }) => article.url_key));
     expect(delivered.articles.every(article => article.article_text.length > 0)).toBe(true);
     expect(delivered.articles.find(article => article.categories.length > 0)!.categories).toHaveLength(4);
+    const earlyKey = randomUUID();
+    const earlyCorrelation = randomUUID();
+    const earlyFetch = await (await fetch(`${url}/fetch`, json({
+      request_id: earlyKey, correlation_id: earlyCorrelation, feed_id: "recorded-news",
+      kind: "article", url: "https://news.example/second",
+    }))).json();
+    const earlyParsed = await (await fetch(`${url}/parse`, json({
+      request_id: randomUUID(), fetch_request_id: earlyKey, article_id: earlyFetch.article_id, correlation_id: earlyCorrelation,
+    }))).json();
+    const closedHealth = await (await fetch(`${url}/feed-health-state`, json({ batch_id: earlyParsed.batch_id }))).json();
+    const closedPaths: string[] = closedHealth.files.files.map((file: { path: string }) => join(api.inputs.outputRoot, file.path));
+    const closedBytes = await Promise.all(closedPaths.map(path => readFile(path)));
+    const afterHealth = await (await fetch(`${url}/select-articles`, json({ batch_id: earlyParsed.batch_id }))).json();
+    expect(afterHealth.run_id).not.toBe(earlyParsed.run_id);
+    const afterHealthRows = await (await fetch(`${url}/feed-health-state`, json({ batch_id: afterHealth.batch_id }))).json();
+    expect(afterHealthRows.rows[0]).toMatchObject({
+      run_id: afterHealth.run_id, checked_at: null, feed_reads: 0, productive_reads: 0, failed_reads: 0,
+      feed_requests: 0, article_requests: 0, robots_requests: 0,
+    });
+    const afterHealthPartition = await (await fetch(`${url}/partition-articles`, json({ batch_id: afterHealth.batch_id, strategy: "none" }))).json();
+    const afterHealthResponse = await fetch(`${url}/persist-selected-articles`, json({ batch_id: afterHealthPartition.batch_id }));
+    expect(afterHealthResponse.status).toBe(200);
+    const afterHealthSaved = await afterHealthResponse.json();
+    expect(afterHealthSaved.run_status).toBe("completed");
+    expect((await readPlannerParquet(join(api.inputs.outputRoot, afterHealthSaved.run_files.files[0].path),
+      "plan-runs", PlanRunRowContract)).rows[0]!.run_id).toBe(afterHealth.run_id);
+    const closedExecution = await currentExecutionState(api.inputs, earlyParsed.run_id);
+    const workOnlyRun = await closedExecution?.run_result;
+    expect(workOnlyRun?.row).toMatchObject({ run_id: earlyParsed.run_id, selected_count: 0, selected_articles_artifact: null });
+    expect(await Promise.all(closedPaths.map(path => readFile(path)))).toEqual(closedBytes);
+    expect(await Promise.all(originalPaths.map(path => readFile(path)))).toEqual(originalBytes);
+    expect(await Promise.all(selectedPaths.map(path => readFile(path)))).toEqual(selectedBytes);
   } finally { await server.stop(true); app.close(); await api.close(); await cli.close(); }
 });
 
@@ -138,6 +250,28 @@ test("a required source write failure returns an API error, not proven planning 
     const artifact = SelectedArticlesArtifactSchema.parse(JSON.parse(await readFile(join(recorded.directory, summary.selected_articles_artifact), "utf8")));
     expect(artifact.articles.length).toBeGreaterThan(0);
     expect(artifact.articles.every(article => article.article_text.length > 0)).toBe(true);
+    const failedCapture = await recordedPlan();
+    const failedApp = createPlanApp(failedCapture.inputs, failedCapture.runtime);
+    try {
+      failedCapture.runtime.progress = () => {
+        failedCapture.inputs.settings.inputs.feed_health_days = [
+          { day: "2026-10-21", raw_files: [] }, { day: "2026-10-21", raw_files: [] },
+        ];
+      };
+      const failed = await (await failedApp.request(`${prefix}/plan`, json({}))).json();
+      expect(failed.status).toBe("partial");
+      const healthTimings = failed.api_timings.filter((timing: { operation: string }) => timing.operation === "feed-health-summary");
+      expect(healthTimings).toMatchObject([{ status: "completed" }, { status: "failed" }]);
+      expect(healthTimings.every((timing: { duration_ms: number }) => Number.isSafeInteger(timing.duration_ms) && timing.duration_ms >= 0)).toBe(true);
+      const requestCount = failedCapture.transport.requests.length;
+      failedCapture.runtime.run_number = "701";
+      delete failedCapture.runtime.progress;
+      const failedBeforeWork = await (await failedApp.request(`${prefix}/plan`, json({}))).json();
+      expect(failedBeforeWork.status).toBe("failed");
+      expect(failedBeforeWork.api_timings.filter((timing: { operation: string }) => timing.operation === "feed-health-summary"))
+        .toMatchObject([{ status: "failed" }]);
+      expect(failedCapture.transport.requests.length).toBe(requestCount);
+    } finally { failedApp.close(); await failedCapture.close(); }
   } finally { app.close(); await recorded.close(); }
 });
 
@@ -217,11 +351,23 @@ test("a later dispatch failure does not lose already durable first sight from th
       const parsed = await (await restarted.request(`${prefix}/parse`, json({
         request_id: randomUUID(), fetch_request_id: fetchKey, article_id: fetched.article_id, correlation_id: correlationId,
       }))).json();
-      const saved = await (await restarted.request(`${prefix}/feed-health-state`, json({ batch_id: parsed.batch_id }))).json();
+      const selected = await (await restarted.request(`${prefix}/select-articles`, json({ batch_id: parsed.batch_id }))).json();
+      expect(selected.run_id).toBe(parsed.run_id);
+      const partition = await (await restarted.request(`${prefix}/partition-articles`, json({ batch_id: selected.batch_id, strategy: "none" }))).json();
+      const saved = await (await restarted.request(`${prefix}/feed-health-state`, json({ batch_id: selected.batch_id }))).json();
       const originalDay = saved.rows.find((row: { date: string }) => row.date === "2026-10-21");
       expect(originalDay.article_requests).toBe(1);
       expect(originalDay.robots_requests).toBe(1);
       expect(saved.rows.some((row: { date: string; article_requests: number }) => row.date === "2026-10-23" && row.article_requests > 0)).toBe(false);
+      const persistedResponse = await restarted.request(`${prefix}/persist-selected-articles`, json({ batch_id: partition.batch_id }));
+      expect(persistedResponse.status).toBe(200);
+      const persisted = await persistedResponse.json();
+      const run = (await readPlannerParquet(join(restartedInputs.outputRoot, persisted.run_files.files[0].path),
+        "plan-runs", PlanRunRowContract)).rows[0]!;
+      expect(run.duration_ms).toBeNull();
+      expect(run.date).toBe("2026-10-22");
+      expect(run.evaluated_at).toBe("2026-10-22T00:10:00Z");
+      expect(run.selection_started_at_utc).toBe("2026-10-23T00:00:00Z");
     } finally { restarted.close(); }
   } finally { app.close(); await recorded.close(); }
 });

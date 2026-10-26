@@ -39,23 +39,33 @@ export function formatExecutionReport(input: { response: unknown; health?: unkno
   const feedRows = health?.rows ?? [];
   const causes = feedRows.flatMap(feed => feed.rejection_counts.map(cause => ({ ...cause, feed_id: feed.feed_id, date: feed.date })));
   const requests = health?.request_report;
-  const known = (value: number | null, unit: string) => value === null ? "Unavailable" : `${value} ${unit}`;
+  const known = (value: number | null, unit: string) => value === null ? "Unavailable"
+    : `${value} ${value === 1 && unit.endsWith("s") ? unit.slice(0, -1) : unit}`;
+  const healthCaptures = row.api_timings.filter(span => span.operation === "feed-health-summary").length;
+  let healthCapture = 0;
+  const operationName = (operation: typeof row.api_timings[number]["operation"]) => {
+    if (operation === "feed-health-summary") return ++healthCapture === 1 && (healthCaptures > 1 || row.selection_started_at_utc === null)
+      ? "Feed health before requests" : "Fresh feed health for selection";
+    return { fetch: "Fetch and article work", parse: "HTML parsing", select: "Article selection",
+      partition: "Worker assignment", persist: "Selected output" }[operation];
+  };
+  const strategy = { "bin-pack": "work-balanced", "round-robin": "in order", none: "one worker" }[row.strategy];
   return [
     "# Feed planner run", "", `**Status: ${row.status}.** ${row.failure_code === null ? "The requested planning stages finished." : `Cause: ${escapeMarkdown(row.failure_code)}.`}`,
     "", "This is planning output, not proof of summarization or publication. Article bodies are kept only in the selected text artifact.", "",
     "## Table A - Run facts", "", "| Id | Fact | Recorded value |", "| --- | --- | --- |",
     `| A1 | Run and attempt | ${escapeMarkdown(row.run_id)}; attempt ${row.attempt} |`,
     `| A2 | Chosen articles | ${row.selected_count} articles |`,
-    `| A3 | Worker assignment | ${row.dispatch_count} partitions; ${row.strategy} |`,
+    `| A3 | Worker assignment | ${row.dispatch_count} worker groups; ${strategy} |`,
     `| A4 | Elapsed planning time | ${known(row.duration_ms, "milliseconds")} |`,
     `| A5 | Age evaluation clock | ${row.evaluated_at} UTC |`,
     `| A6 | Selection start clock | ${row.selection_started_at_utc === null ? "Selection did not run" : `${row.selection_started_at_utc} UTC`} |`,
     `| A7 | Lifecycle history | ${row.lifecycle_window_days} represented UTC days |`,
-    `| A8 | Feed-read reliability | ${row.reliability_window_days} represented UTC days; minimum factor ${row.reliability_floor}; ${row.reliability_penalty_enabled ? "enabled when measured" : "disabled"} |`,
+    `| A8 | Feed-read reliability | ${row.reliability_window_days} represented UTC days; retains at least ${row.reliability_floor * 100} percent of feed authority; ${row.reliability_penalty_enabled ? "applied when measured" : "not applied"} |`,
     `| A9 | Request report | ${row.request_report_closed_days} closed UTC calendar days, excluding the selection-start day |`,
     `| A10 | History staging time | ${staging === undefined ? "Unavailable" : `${staging} milliseconds`} |`,
     "", "## Table B - Measured operations", "", "| Id | Operation | Duration | State |", "| --- | --- | --- | --- |",
-    ...row.api_timings.map((span, index) => `| B${index + 1} | ${span.operation} | ${span.duration_ms} milliseconds | ${span.status} |`),
+    ...row.api_timings.map((span, index) => `| B${index + 1} | ${operationName(span.operation)} | ${span.duration_ms} milliseconds | ${span.status} |`),
     "", "Concurrent spans can overlap. Do not add them to estimate elapsed run time.",
     "", "## Table C - This run's feed work", "",
     "| Id | Feed | UTC work day | Feed checks | Admitted articles | Chosen articles | Feed / article / robots requests | Outcome |",
@@ -68,7 +78,7 @@ export function formatExecutionReport(input: { response: unknown; health?: unkno
     ...(requests?.feeds ?? []).map((feed, index) => `| D${index + 1} | ${escapeMarkdown(feed.feed_id)} | ${known(feed.feed_requests, "requests")} | ${known(feed.article_requests, "requests")} | ${known(feed.robots_requests, "requests")} | ${feed.counts_complete ? "Complete" : "Incomplete"} |`),
     "", "## Table E - Grouped exclusions", "", "| Id | Feed | UTC day | Subject / stage | Reason | Count | Attribution |",
     "| --- | --- | --- | --- | --- | --- | --- |",
-    ...causes.map((cause, index) => `| E${index + 1} | ${escapeMarkdown(cause.feed_id)} | ${cause.date} | ${escapeMarkdown(`${cause.subject} / ${cause.stage}`)} | ${escapeMarkdown(cause.reason_code)} | ${cause.count} decisions | ${cause.attribution ?? "Not a failure"} |`),
+    ...causes.map((cause, index) => `| E${index + 1} | ${escapeMarkdown(cause.feed_id)} | ${cause.date} | ${escapeMarkdown(`${cause.subject} / ${cause.stage}`)} | ${escapeMarkdown(cause.reason_code)} | ${known(cause.count, "decisions")} | ${cause.attribution ?? "Not a failure"} |`),
     ...(causes.length ? [] : ["", health === null ? "Exclusion evidence is unavailable." : "No exclusions were recorded."]), "",
   ].join("\n");
 }

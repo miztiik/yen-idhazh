@@ -58,7 +58,7 @@ function aWholeLedger(ledger: string): Record<string, string> {
 	};
 }
 
-test('Row16 ORACLE: nested Python-contract Parquet is staged whole and flat host paths stay unchanged', async () => {
+test('nested current planner Parquet is staged whole and flat host paths stay unchanged', async () => {
 	const source = test.info().outputPath('feed-source');
 	const site = test.info().outputPath('feed-site');
 	await buildFeedLedgers(source);
@@ -111,7 +111,7 @@ test('Row16 ORACLE: nested Python-contract Parquet is staged whole and flat host
 	expect(paths.filter((file) => file.startsWith('state/raw/'))).toEqual([]);
 });
 
-test('all six feed ledgers are explicitly published at the browser registry prefixes', () => {
+test('all four planner ledgers are explicitly published at the browser registry prefixes', () => {
 	const names = publishedLedgers();
 	const folders = ledgerFolders(names);
 	for (const ledger of FEED_LEDGERS) {
@@ -127,25 +127,25 @@ test('the disk reader resolves a nested registry prefix when reading a packed le
 	const site = test.info().outputPath('nested-ledger-site');
 	await buildFeedLedgers(source);
 	stageFeedLedgers(source, site);
-	const read = await sliceFromDisk(site, 'dispatches', {
-		columns: ['covers'], from: '2026-10-19', to: '2026-10-20'
+	const read = await sliceFromDisk(site, 'selected-articles', {
+		columns: ['date'], from: '2026-10-19', to: '2026-10-20'
 	});
 	expect(read).toMatchObject({
 		state: 'ok',
-		rows: [{ covers: '2026-10-19' }, { covers: '2026-10-20' }]
+		rows: [{ date: '2026-10-19' }, { date: '2026-10-20' }]
 	});
 });
 
 test('registry prefixes reject unsafe segments, unknown names and ambiguous mappings before path use', () => {
 	const file = test.info().outputPath('ledgers.json');
-	const entry = { name: 'dispatches', grain: 'raw-and-compact', prefix: ['feed-ingest-plan', 'dispatches'], publish_to_data_explorer: true };
+	const entry = { name: 'selected-articles', grain: 'raw-and-compact', prefix: ['feed-ingest-plan', 'selected-articles'], publish_to_data_explorer: true };
 	const registry = (entries: unknown[]) => writeFileSync(file, JSON.stringify({ families: [{
-		name: 'feed-ingest-plan', lifecycle_status: 'active', description: 'Recorded dispatches.',
+		name: 'feed-ingest-plan', lifecycle_status: 'active', description: 'Recorded selected metadata.',
 		onboarded: '2026-10-21', ledgers: entries
 	}] }));
 	for (const prefix of [[], ['..'], ['.'], ['/absolute'], ['C:'], ['feed/dispatches'], ['feed\\dispatches'], [''], ['dispatches', 1]]) {
 		registry([{ ...entry, prefix }]);
-		expect(() => ledgerFolders(['dispatches'], file)).toThrow(/prefix/);
+		expect(() => ledgerFolders(['selected-articles'], file)).toThrow(/prefix/);
 	}
 	for (const duplicate of [
 		{ ...entry, prefix: ['other'] },
@@ -153,18 +153,18 @@ test('registry prefixes reject unsafe segments, unknown names and ambiguous mapp
 		{ ...entry, name: 'other', prefix: ['feed-ingest-plan'] }
 	]) {
 		registry([entry, duplicate]);
-		expect(() => ledgerFolders(['dispatches'], file)).toThrow(/prefix|duplicate ledger/);
+		expect(() => ledgerFolders(['selected-articles'], file)).toThrow(/prefix|duplicate ledger/);
 	}
 	registry([entry]);
-	expect(() => ledgerFolders(['feed-ingest-plan-dispatches'], file)).toThrow(/does not register/);
+	expect(() => ledgerFolders(['feed-ingest-plan-selected-articles'], file)).toThrow(/does not register/);
 });
 
 test('nested compact paths retain the requested copy window', () => {
-	const folder = 'feed-ingest-plan/dispatches';
-	const tree = Object.fromEntries(Object.entries(aWholeLedger('dispatches')).map(
-		([name, text]) => [name.replace('compact/dispatches/', `compact/${folder}/`), text]
+	const folder = 'feed-ingest-plan/selected-articles';
+	const tree = Object.fromEntries(Object.entries(aWholeLedger('selected-articles')).map(
+		([name, text]) => [name.replace('compact/selected-articles/', `compact/${folder}/`), text]
 	));
-	const copy = ledgerCopy(aStateTree(tree), ['dispatches'], 'state', 365);
+	const copy = ledgerCopy(aStateTree(tree), ['selected-articles'], 'state', 365);
 	expect(copy.files).toEqual([
 		`compact/${folder}/daily/2026/09/01.parquet`,
 		`compact/${folder}/daily/2026/09/02.parquet`,
@@ -179,9 +179,9 @@ test('nested compact paths retain the requested copy window', () => {
 });
 
 test('the real staging script names the nested ledger, not its family, when a data file is missing', () => {
-	const folder = 'feed-ingest-plan/dispatches';
-	const tree = Object.fromEntries(Object.entries(aWholeLedger('dispatches')).map(
-		([name, text]) => [name.replace('compact/dispatches/', `compact/${folder}/`), text]
+	const folder = 'feed-ingest-plan/selected-articles';
+	const tree = Object.fromEntries(Object.entries(aWholeLedger('selected-articles')).map(
+		([name, text]) => [name.replace('compact/selected-articles/', `compact/${folder}/`), text]
 	));
 	delete tree[`compact/${folder}/daily/2026/09/01.parquet`];
 	const source = aStateTree(tree);
@@ -192,7 +192,7 @@ test('the real staging script names the nested ledger, not its family, when a da
 	], { cwd: frontend, encoding: 'utf8', env: {
 		...process.env, STATE_ROOT: source, DIGEST_ROOT: join(frontend, 'public', 'digest')
 	} });
-	expect(output).toContain(`file-missing dispatches state/compact/${folder}/daily/2026/09/01.parquet:`);
+	expect(output).toContain(`file-missing selected-articles state/compact/${folder}/daily/2026/09/01.parquet:`);
 	expect(output).not.toContain('file-missing feed-ingest-plan ');
 	expect(readFileSync(join(frontend, 'static', 'state', 'compact', folder, 'daily/2026/09/02.parquet'), 'utf8')).toBe('PAR1');
 });
@@ -699,16 +699,16 @@ test('publication reads consent only from the supplied validated registry', () =
 	const payload = JSON.parse(readFileSync(new URL('../../config/ledgers.json', import.meta.url), 'utf8'));
 	for (const family of payload.families) {
 		for (const entry of family.ledgers) {
-			entry.publish_to_data_explorer = entry.name === 'dispatches';
+			entry.publish_to_data_explorer = entry.name === 'selected-articles';
 		}
 	}
 	writeFileSync(registry, JSON.stringify(payload));
-	expect(publishedLedgers(registry)).toEqual(['dispatches']);
-	const nested = 'feed-ingest-plan/dispatches';
-	const tree = Object.fromEntries(Object.entries(aWholeLedger('dispatches')).map(
-		([name, text]) => [name.replace('compact/dispatches/', `compact/${nested}/`), text]
+	expect(publishedLedgers(registry)).toEqual(['selected-articles']);
+	const nested = 'feed-ingest-plan/selected-articles';
+	const tree = Object.fromEntries(Object.entries(aWholeLedger('selected-articles')).map(
+		([name, text]) => [name.replace('compact/selected-articles/', `compact/${nested}/`), text]
 	));
-	const copy = ledgerCopy(aStateTree(tree), ['dispatches'], 'state', 365, registry);
+	const copy = ledgerCopy(aStateTree(tree), ['selected-articles'], 'state', 365, registry);
 	expect(copy.files).toContain(`compact/${nested}/daily/2026/09/01.parquet`);
 	for (const family of payload.families) {
 		for (const entry of family.ledgers) entry.publish_to_data_explorer = false;

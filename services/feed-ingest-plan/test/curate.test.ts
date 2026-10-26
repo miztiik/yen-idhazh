@@ -391,6 +391,19 @@ test("real screening results compose into exact curation without losing harveste
       reason_code: "STUB_CONTENT", attribution: null, count: 1,
     });
     expect(selected.articles).toHaveLength(1);
+    const originalBatch = structuredClone(pair);
+    const owner = resolveRunContext(setup.inputs.settings, "a".repeat(40), new Date("2026-10-22T00:01:00Z"));
+    const fresh = await selectArticles(pair, setup.inputs, owner.now, undefined, owner);
+    expect(fresh.articles[0]).toMatchObject({
+      run_id: owner.run_id, date: owner.date, attempt: owner.writer.attempt,
+      age_hours: selected.articles[0]!.age_hours, timing_at: selected.articles[0]!.timing_at,
+    });
+    expect(fresh.health_rows[0]).toMatchObject({
+      run_id: owner.run_id, date: owner.date, checked_at: null, outcome: null, items: null,
+      feed_reads: 0, productive_reads: 0, failed_reads: 0, feed_requests: 0,
+      article_requests: 0, robots_requests: 0, article_candidates: 1, articles_selected: 1,
+    });
+    expect(pair).toEqual(originalBatch);
   } finally { await rm(root, { recursive: true, force: true }); }
 });
 

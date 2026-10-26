@@ -1,6 +1,6 @@
 # The ledger registry
 
-**Last Updated**: 2026-10-24
+**Last Updated**: 2026-10-26
 
 A ledger is a committed file or folder under `state/` that one run writes so that a later run can read it. A ledger exists in code only when it is registered, and registering it takes two edits. The first is one member of `LedgerName`, the ledger's one name in code. The second is one entry in `config/ledgers.json`, which puts the ledger in a family - one top-level folder under `state/` - and says where its files sit. When the code loads, it checks that the two edits agree, and the build stops if they do not.
 
@@ -120,26 +120,23 @@ The fitted merge line's row contract is `FittedSimilarityThreshold`, whose `run_
 
 ### Feed planning evidence
 
-The `feed-ingest-plan` family holds six separate row ledgers:
-`editorial-selections`, `dispatches`, `rejections`, `source-runs`,
-`article-assessments`, and `diversity`. Each has a declared row contract and
-settlement key in `ledger/keys.py`. Dispatch identity stays under
-`content.date` and `content.candidate_id`; settlement reads only these trusted,
-declared attribute paths, never a path supplied by article text.
+The `feed-ingest-plan` family has exactly four siblings:
+`discovered-articles`, `selected-articles`, `feed-health-state` and `plan-runs`.
+The TypeScript planner writes their declared current schemas through the
+shared writer. Native persistence, stored-row reads and compaction support
+their minimal file envelope without generic work-unit identity.
 
-Each row keeps its original run and attempt through daily, monthly and yearly
-packing. Settlement removes duplicates only within that run and attempt using
-the declared row key. It does not discard an older attempt when a newer attempt
-has fewer rows: source-run completion evidence later selects one complete
-attempt across all six ledgers. An explicitly empty completion has zero rows
-and no file references; absence of an output file alone proves no completion.
-Existing ledgers retain their existing settlement rules.
+Settlement uses the keys in `ledger/keys.py`. Discovery keeps the global
+earliest URL sighting. Selected, health and run rows preserve their declared
+execution and attempt facts; duplicate storage representations count once,
+and genuinely dispatched earlier attempts remain visible. Other families'
+identity and settlement protocols are unchanged.
 
-The planned TypeScript adapters in `services/feed-ingest-plan` will write
-through `packages/ledger-file-writer`. Their staging entries name these planned
-writers, with no production digest commit labels. The browser vocabulary and
-nested folder bindings are registered here; static publication and TypeScript
-byte-writing compatibility are separate delivery steps.
+Selected metadata has no article text. Its text-bearing artifact is separate
+from committed ledgers and explorer consent. The exact fields and privacy
+boundary are [the ledger reference](../../reference/feed-planner-ledgers.md).
+There is no obsolete planner ledger, snapshot head, compatibility reader or
+dual writer registered beside these formats.
 
 The TypeScript file-envelope vocabulary must name the same ledgers as Python.
 The council's import test reads only a named dependency list; registration adds
@@ -330,12 +327,11 @@ One module outside may ask, and none may carry a copy. `backend/idhazh/path_clas
 
 ## Design rationale
 
-**A compatible reader lands before the first writer.** Maintainer approval,
-2026-10-24, for the feed-ingest feedback observations. Registering the row
-contract, its cross-language binding, raw-and-compact ledger path and
-compaction task first gives a later producer a reader that already accepts the
-shape. Keep data-explorer publication disabled until a separate consent
-decision.
+**Contracts precede logic inside one coherent cutover.** The new planner's
+registration, native storage, current readers/writers and required cleanup
+change together. A registration alone cannot make a minimal new envelope
+readable. Explorer consent remains an explicit entry setting, not a side
+effect of storage registration.
 
 **The set of ledgers is a config file, not a Python set and not a glob.** Maintainer decision, 2026-09-26.
 

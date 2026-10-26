@@ -14,6 +14,7 @@ import {
   DiscoveredArticleRowContract, PlanRunRowContract, SelectedArticleRowContract,
 } from "@idhazh/common-contracts";
 import { readPlannerParquet } from "../src/read-ledger-history/read-planner-parquet";
+import { ServiceSettingsSchema } from "../src/config/service-settings";
 
 const root = fileURLToPath(new URL("../../../", import.meta.url));
 
@@ -42,6 +43,12 @@ test("CLI blanks are absent; typed API strings, nulls, unknown fields and invali
     ["--serve", "--cli"], ["--serve", "--shards=1"], ["--cli", "--shards=1", "--shards=2"], [],
   ]) expect(() => parseCliRequest(args)).toThrow();
   const inputs = await loadPlanInputs(root);
+  for (const artifact_root of ["folder with spaces", "/tmp/artifacts", "../artifacts", "a".repeat(500)]) {
+    expect(ServiceSettingsSchema.safeParse({ ...inputs.settings, inputs: { ...inputs.settings.inputs, artifact_root } }).success).toBe(false);
+  }
+  expect(ServiceSettingsSchema.parse({ ...inputs.settings, inputs: {
+    ...inputs.settings.inputs, artifact_root: "backend/var/selected-output", output_root: "local state",
+  } }).inputs.output_root).toBe("local state");
   const config = inputs.harvest.config;
   expect(resolvePlanRequest({}, config)).toMatchObject({
     article_limit: config.curate.article_limit, shards: config.partition.default_shards,

@@ -98,19 +98,6 @@ export async function commitPlannerFiles(input: Readonly<{
         }
       }
 
-      if (import.meta.main) {
-        const { RUNNER_TEMP, CURRENT_RUN_FILES } = process.env;
-        if (!RUNNER_TEMP || !CURRENT_RUN_FILES) throw new Error("Commit requires exact planner output paths");
-        const paths: unknown = JSON.parse(CURRENT_RUN_FILES);
-        if (!Array.isArray(paths) || paths.some(path => typeof path !== "string")) throw new Error("Commit output list is invalid");
-        const root = join(RUNNER_TEMP, "feed-ingest-plan");
-        const result = await commitPlannerFiles({
-          repository: process.cwd(), stateRoot: join(root, "state"), paths,
-          message: "Record feed planner outcomes", retry: await Bun.file("config/push-retry.json").json(),
-        });
-        await writeFile(join(root, "commit-result.json"), JSON.stringify(result));
-        console.log(JSON.stringify(result));
-      }
       const dayFolders = [...new Set(writes.map(write => write.path.slice(0, write.path.lastIndexOf("/"))))];
       for (const directory of dayFolders) {
         const members = new Map<string, number>();
@@ -165,4 +152,18 @@ export async function commitPlannerFiles(input: Readonly<{
   } finally {
     await rm(directory, { recursive: true, force: true });
   }
+}
+
+if (import.meta.main) {
+  const { RUNNER_TEMP, CURRENT_RUN_FILES } = process.env;
+  if (!RUNNER_TEMP || !CURRENT_RUN_FILES) throw new Error("Commit requires exact planner output paths");
+  const paths: unknown = JSON.parse(CURRENT_RUN_FILES);
+  if (!Array.isArray(paths) || paths.some(path => typeof path !== "string")) throw new Error("Commit output list is invalid");
+  const root = join(RUNNER_TEMP, "feed-ingest-plan");
+  const result = await commitPlannerFiles({
+    repository: process.cwd(), stateRoot: join(root, "state"), paths,
+    message: "Record feed planner outcomes", retry: await Bun.file("config/push-retry.json").json(),
+  });
+  await writeFile(join(root, "commit-result.json"), JSON.stringify(result));
+  console.log(JSON.stringify(result));
 }

@@ -3,6 +3,7 @@ import { expect, test } from "bun:test";
 import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
+import { fileURLToPath } from "node:url";
 import { createHash } from "node:crypto";
 import { RawDayIndexSchema, SelectedArticlesArtifactSchema } from "../../../packages/common-contracts/src/index";
 import { runFeedPlan, summarizePlan } from "../../../services/feed-ingest-plan/src/run-feed-plan";
@@ -50,8 +51,9 @@ test("actual HTTP output retains selected text separately from its strict metada
 });
 
 test("exact metadata appends through a generated bare origin with complete raw indexes and safe replay", async () => {
-  const fixture = await recordedPlan();
+  const fixture = await recordedPlan([source({ url: "https://news.example/empty.xml" })]);
   try {
+    fixture.inputs.outputRoot = join(fixture.directory, "feed-ingest-plan", "state");
     const summary = summarizePlan(await runFeedPlan({}, fixture.inputs, fixture.runtime));
     const paths: string[] = JSON.parse(createExecutionOutputs(summary, fixture.inputs.registrations).current_run_files!);
     const repository = join(fixture.directory, "checkout");
@@ -60,22 +62,34 @@ test("exact metadata appends through a generated bare origin with complete raw i
     await git(fixture.directory, ["init", "--bare", "--initial-branch=main", origin]);
     await git(repository, ["init", "--initial-branch=main"]);
     await writeFile(join(repository, "README.md"), "Generated bounded fixture.\n");
-    await git(repository, ["add", "--", "README.md"]);
+    const retry = { deadline_seconds: { default: 20 }, base_step_seconds: 0.01, ceiling_seconds: 0.1, ceiling_after: 1 };
+    await mkdir(join(repository, "config"));
+    await writeFile(join(repository, "config", "push-retry.json"), JSON.stringify(retry));
+    await git(repository, ["add", "--", "README.md", "config/push-retry.json"]);
     await git(repository, ["commit", "-m", "Create generated fixture"]);
     await git(repository, ["remote", "add", "origin", origin]);
     await git(repository, ["push", "origin", "HEAD:refs/heads/main"]);
     const head = await git(repository, ["rev-parse", "HEAD"]);
-    const input = { repository, stateRoot: fixture.inputs.outputRoot, paths,
-      message: "Record generated planner facts",
-      retry: { deadline_seconds: { default: 20 }, base_step_seconds: 0.01, ceiling_seconds: 0.1, ceiling_after: 1 } };
-    const committed = await commitPlannerFiles(input);
+    async function invokeCommit() {
+      const child = Bun.spawn([process.execPath, fileURLToPath(new URL("../feed-ingest-plan-commit.ts", import.meta.url))], {
+        cwd: repository, stdout: "pipe", stderr: "pipe", timeout: 25000,
+        env: { ...Bun.env, RUNNER_TEMP: fixture.directory, CURRENT_RUN_FILES: JSON.stringify(paths) },
+      });
+      const [output, errors] = await Promise.all([new Response(child.stdout).text(), new Response(child.stderr).text()]);
+      expect({ code: await child.exited, errors }).toEqual({ code: 0, errors: "" });
+      const result: { status: string; commit: string; files: number } = JSON.parse(output);
+      expect(JSON.parse(await readFile(join(fixture.directory, "feed-ingest-plan", "commit-result.json"), "utf8"))).toEqual(result);
+      return result;
+    }
+    const committed = await invokeCommit();
     expect(committed.status).toBe("landed");
+    expect(committed.commit).toBe(await git(fixture.directory, ["--git-dir", origin, "rev-parse", "main"]));
     expect(await git(repository, ["rev-parse", "HEAD"])).toBe(head);
     expect(await git(repository, ["status", "--porcelain"])).toBe("");
     const indexes = [...new Set(paths.map(path => `state/${path.slice(0, path.lastIndexOf("/"))}/index.json`))];
     // This tree was just built by this case; it cannot grow with repository history.
     const members = (await git(fixture.directory, ["--git-dir", origin, "ls-tree", "-r", "--name-only", "main"])).split("\n");
-    expect(members.sort()).toEqual(["README.md", ...paths.map(path => `state/${path}`), ...indexes].sort());
+    expect(members.sort()).toEqual(["README.md", "config/push-retry.json", ...paths.map(path => `state/${path}`), ...indexes].sort());
     for (const path of indexes) {
       const index = RawDayIndexSchema.parse(JSON.parse(await git(fixture.directory, ["--git-dir", origin, "show", `main:${path}`])));
       expect(index.files).toEqual(paths.filter(file => `state/${file}`.startsWith(path.slice(0, -10))).map(file => file.split("/").at(-1)!));
@@ -83,8 +97,9 @@ test("exact metadata appends through a generated bare origin with complete raw i
       if (index.bytes === null) throw new Error("The generated raw index must record actual byte counts");
       expect(index.bytes.every(value => value > 0)).toBe(true);
     }
-    expect((await commitPlannerFiles(input)).status).toBe("already-on-main");
-    await expect(commitPlannerFiles({ ...input, paths: ["raw/feed-ingest-plan/dispatches/2026/10/21/anything.parquet"] })).rejects.toThrow("current planner");
+    expect((await invokeCommit()).status).toBe("already-on-main");
+    await expect(commitPlannerFiles({ repository, stateRoot: fixture.inputs.outputRoot, retry, message: "Refuse old format",
+      paths: ["raw/feed-ingest-plan/dispatches/2026/10/21/anything.parquet"] })).rejects.toThrow("current planner");
   } finally { await fixture.close(); }
 });
 

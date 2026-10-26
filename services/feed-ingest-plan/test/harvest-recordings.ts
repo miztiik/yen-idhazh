@@ -2,7 +2,7 @@
 import { z } from "zod";
 import { loadHarvestInputs } from "../src/harvest-feeds/load-harvest-inputs";
 import type { ConfiguredSource } from "../src/harvest-feeds/load-harvest-inputs";
-import type { HarvestContext, RejectionDestination } from "../src/harvest-feeds/harvest-types";
+import type { HarvestContext } from "../src/harvest-feeds/harvest-types";
 import type { HarvestTransport, TransportRequest, TransportResponse } from "../src/harvest-feeds/transport";
 import type { ResolveAddresses } from "../src/harvest-feeds/safe-target";
 
@@ -116,17 +116,6 @@ export function context(log: HarvestContext["log"] = () => {}): HarvestContext {
     correlation_id: "recorded-harvest-700",
     clock: () => new Date("2026-10-21T23:59:59.000Z"), log,
     observation_clock: () => new Date("2026-10-21T23:59:59.000Z"),
-  };
-}
-
-export function destination(outputRoot: string): RejectionDestination {
-  return {
-    outputRoot,
-    registryEntry: {
-      name: "rejections", family: "feed-ingest-plan", grain: "raw-and-compact",
-      lifecycle_status: "active", prefix: ["feed-ingest-plan", "rejections"],
-    },
-    ledgerSettings: { format: "parquet", compression_raw: "snappy", compression_compact: "zstd" },
   };
 }
 

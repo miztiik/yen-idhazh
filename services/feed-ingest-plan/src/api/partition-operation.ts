@@ -7,19 +7,33 @@ import { resolvePartitionRequest } from "../partition-article-shards/partition-i
 import { requireStageConfiguration } from "./selection-operation";
 import { stageStore } from "./stage-store";
 import { partitionArticles } from "../partition-article-shards/shard-packer";
-import { appendDocumentTiming } from "./document-state";
+import { appendDocumentTiming, executionHasArtifact, registerStageExecution } from "./document-state";
+import { resolveRunContext } from "../resolve-run-context";
 
 export async function executePartition(raw: unknown, inputs: PlanInputs, runtime: PlanRuntime) {
   const started = performance.now();
   const request = PartitionArticlesRequestSchema.parse(raw);
-  const selected = stageStore(inputs).read("selected", request.batch_id, SelectedFeedBatchSchema);
+  const store = stageStore(inputs);
+  let selected = store.read("selected", request.batch_id, SelectedFeedBatchSchema);
   requireStageConfiguration(selected, inputs, runtime);
+  const keepOriginal = store.claimPartition(selected.batch_id) && !executionHasArtifact(inputs, selected.context);
+  if (!keepOriginal) {
+    const captured = (runtime.selection_clock ?? runtime.clock)?.() ?? new Date();
+    const context = resolveRunContext(inputs.settings, runtime.git_sha, captured);
+    registerStageExecution(inputs, context, "partition", started);
+    selected = SelectedFeedBatchSchema.parse({
+      ...selected, context, health_rows: [],
+      articles: selected.articles.map(article => ({
+        ...article, run_id: context.run_id, attempt: context.writer.attempt, date: context.date,
+      })),
+    });
+  }
   const controls = resolvePartitionRequest(inputs.harvest.config.partition, {
     ...(request.strategy === undefined ? {} : { strategy: request.strategy }),
     ...(request.shards === undefined ? {} : { shards: request.shards }),
   });
   const partition = partitionArticles(selected.articles, controls);
-  const batch = stageStore(inputs).write("partitioned", PartitionedFeedBatchSchema, {
+  const batch = store.write("partitioned", PartitionedFeedBatchSchema, {
     ...selected, batch_id: randomUUID(), selection_batch_id: selected.batch_id, ...partition,
   });
   await appendDocumentTiming(inputs, batch.context.run_id, { operation: "partition", duration_ms: Math.round(performance.now() - started), status: "completed" });

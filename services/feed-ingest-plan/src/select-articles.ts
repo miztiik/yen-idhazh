@@ -9,10 +9,12 @@ import { resolvePlanningInputs } from "./resolve-planning-inputs";
 import { readPublisherPublication } from "./read-ledger-history/read-publisher-publication";
 import { summarizeHealth, captureHealthRows } from "./read-ledger-history/health-summary";
 import type { FeedHistory } from "./read-ledger-history/read-feed-history";
+import type { RunContext } from "./resolve-run-context";
+import { inputEndpointKey } from "./read-ledger-history/health-summary";
 import { readExclusionEvidence } from "./read-ledger-history/read-exclusion-evidence";
 
 export async function selectArticles(batch: ParsedFeedBatch, inputs: PlanInputs, selectionStartedAt: string,
-  currentHealth?: Pick<FeedHistory, "sources" | "request_report">) {
+  currentHealth?: Pick<FeedHistory, "sources" | "request_report">, context: RunContext = batch.context) {
   const request = resolvePlanRequest(batch.request, inputs.harvest.config);
   const planning = resolvePlanningInputs(inputs, request);
   const healthDays = [...batch.history_days];
@@ -49,7 +51,7 @@ export async function selectArticles(batch: ParsedFeedBatch, inputs: PlanInputs,
     item_health: inputs.registrations.item_health, selections: inputs.registrations.selected_articles,
     published_days: inputs.settings.inputs.published_days, health_days: inputs.settings.inputs.settled_failure_days,
   });
-  const curation = curateArticles({ articles: screening.admitted, batch, inputs, health: health.sources, publications });
+  const curation = curateArticles({ articles: screening.admitted, batch, inputs, health: health.sources, publications, context });
   const losses: PlannerRejectionCount[] = [...batch.exclusions];
   for (const rejection of screening.rejections) losses.push({
     feed_id: rejection.source_id, subject: "article", stage: "screen-article-candidates",
@@ -67,15 +69,21 @@ export async function selectArticles(batch: ParsedFeedBatch, inputs: PlanInputs,
     if (previous === undefined) grouped.set(key, { ...exclusion });
     else previous.count += count;
   }
-  const healthRows = captureHealthRows(batch.work_rows, health.sources);
+  const originalWork = context.run_id === batch.context.run_id && context.writer.attempt === batch.context.writer.attempt;
+  const healthRows = originalWork ? captureHealthRows(batch.work_rows, health.sources) : [];
   const admitted = new Set(screening.admitted.map(article => article.candidate.candidate_id));
   for (const candidate of batch.candidates) {
     let row = healthRows.find(row => row.feed_id === candidate.source_id && row.date === selectionStartedAt.slice(0, 10));
     if (row === undefined) {
-      const prior = batch.work_rows.find(row => row.feed_id === candidate.source_id);
-      if (prior === undefined) throw new Error("Selection candidate lacks this run's actual feed work");
+      const source = planning.sources.find(source => source.id === candidate.source_id);
+      if (source === undefined) throw new Error("Selection candidate lacks its configured feed");
       row = FeedHealthStateRowSchema.parse({
-        ...prior, date: selectionStartedAt.slice(0, 10), checked_at: null, outcome: null, items: null,
+        run_id: context.run_id, attempt: context.writer.attempt, feed_id: source.id,
+        endpoint_key: inputEndpointKey(source.url), date: selectionStartedAt.slice(0, 10),
+        checked_at: null, outcome: null, items: null,
+        availability: health.sources.get(source.id)?.lifecycle ?? "unknown",
+        strikes: health.sources.get(source.id)?.strikes ?? null, rested_runs: health.sources.get(source.id)?.rested_runs ?? null,
+        reliability: health.sources.get(source.id)?.reliability ?? null,
         feed_reads: 0, productive_reads: 0, failed_reads: 0,
         feed_requests: 0, article_requests: 0, robots_requests: 0, article_candidates: 0, articles_selected: 0,
         rejection_counts: [], counts_complete: true, permission: "unknown", status: null, last_failure_code: null,

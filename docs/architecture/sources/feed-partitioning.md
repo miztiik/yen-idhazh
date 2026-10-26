@@ -1,134 +1,55 @@
-# How selected articles receive worker assignments
+# Feed article partitioning
 
-**Last Updated**: 2026-10-22
+**Last Updated**: 2026-10-26
 
-How does the isolated feed planner allocate exactly the articles that editorial
-curation selected, without fetching content again or changing its ratings?
+How are chosen articles assigned to workers without changing the selection?
+Partitioning consumes one validated selected batch and returns the same
+content and ranks with zero-based worker assignments.
 
 ## Current-run construction
 
-`readCurrentSelections` receives the actual result of `curateArticles`, the
-selection result of `persistPortfolio`, the original harvested candidates and
-the current writer and planning context. It reads the named selection Parquet
-files from the caller's output root. Their digests, rows, identities and counts
-must agree with the write result and the current curation rows. Empty curation
-has an explicit empty write result and requires no file.
+The selected batch is server-owned and complete. Duplicate URLs, missing
+content, invalid ranks, mismatched execution facts and invalid work values
+fail before packing. No file path or caller article list replaces it.
 
-The adapter checks that curation retained each selected original candidate.
-`preparePartitionInput` joins those candidates to selections by candidate
-identity. It refuses missing or repeated content, repeated ranks, a different
-run or correlation, and differences in the dispatch contract's shared fields.
-It never creates a title or article text from a selection row. Initial
-construction does not require dispatch or source-run completion records:
-those records do not exist yet.
-
-Selection retains its own decision day and effective policy. Harvested content
-retains its fetch day, correlation and original policy. Dispatch requires their
-candidate, source snapshot, URL identity and labels to agree, but does not
-rewrite or equate those stage-specific facts. The same-day, same-policy path
-continues to work. The earlier independent-input limitation is resolved in
-[feed-curation.md](feed-curation.md).
+The work estimate is explicit evidence when supplied, otherwise extracted
+word count. Words are a work proxy, not a measured execution duration.
+Unknown timing, publisher and numeric adjustments stay unchanged.
 
 ## Allocation and persistence
 
-`resolvePartitionRequest` validates `config/feed-ingest-plan.json`'s partition
-settings and optional strategy and shard count. A runner calls it before
-harvesting. Non-`none` counts must fall within the configured minimum and
-maximum; an omitted count uses the configured default. Strategy `none`
-accepts an omitted count or explicit one, always uses one worker and refuses
-an explicit larger count even if it is otherwise within the configured bounds.
+`config/feed-ingest-plan.json` supplies strategy and worker bounds.
+`bin-pack` greedily places larger work on the least-loaded worker;
+`round-robin` distributes in selected order; `none` uses one worker.
+Assignments retain the original selected order and rank.
 
-`partitionArticles` keeps output in editorial-rank order. `bin-pack` visits
-articles in decreasing recorded `estimated_work`, then editorial rank, then
-candidate identity, and assigns each to the least-loaded worker. Equal worker
-loads use the lowest worker number. Curation supplies the estimated word work;
-partitioning does not rescore it. `round-robin` assigns successive editorial
-ranks to successive workers. `none` assigns every article to worker zero.
-Empty workers remain present in the returned work totals.
-
-Each dispatch retains the exact selection, rank and original candidate,
-including their separate stage dates and policies.
-Its nested `PartitionAssignment` records the strategy, worker number and
-effective worker count. `persistDispatches` uses the public ledger writer and
-registered Parquet settings. Worker assignment never changes the writer's
-provenance shard. A paused ledger is an explicit error, not a successful empty
-write.
+`persist-selected-articles` uses the same partitioned population for strict
+metadata Parquet and the selected-text artifact. It does not reselect,
+reconstruct content from history or create a separate dispatch ledger.
+Empty selection has explicit empty metadata and an actual empty artifact.
 
 ## Named history and proof
 
-`readLedgerDay` consumes one named UTC day, explicitly supplied compact index
-paths, and either an explicit list of raw files or one named raw-day index.
-It performs no directory walk, repository scan or network fetch. A supplied
-empty raw-file list is an explicit statement by the caller that its bounded
-input is empty; absence of a raw input is missing history, not an empty day.
-Callers that cannot establish a complete list must report unavailable history.
+Current planner readers accept only the declared four-ledger format.
+Metadata and artifact must agree on execution, attempt, date, identities,
+order, ranks, scores and assignments. Native verification also checks schema,
+footer and canonical digest. A missing selected file cannot stand in for a
+verified empty result.
 
-For the requested day, yearly entries take precedence over monthly entries,
-then daily entries, then raw files. Overlapping compact periods produce a
-notice and only the coarser file is read. A packed file must agree with its
-index's byte size and row count. Empty and lost entries do not fall through
-to leftover raw files. A file beside an entry that declares no file is refused.
-A missing packed file, an expired year, and a lost day remain distinct from a
-known empty day. Missing named indexes and files produce explicit notices;
-invalid indexes or files raise errors rather than becoming empty history.
-
-`readLedgerParquet` uses native Parquet/WASM and Arrow. It validates the
-declared physical column types, envelope, file and unit identifiers, canonical
-ordered-row digest, contract rows and original row identities. Compact files
-keep each original run, attempt and unit; the compactor's identity is only in
-the envelope. Neither reader settles away older attempts.
-Identity-column availability follows the recorded envelope revision, independently
-of the payload schema stamp. Files before `2026-10-12` have no pipeline/task
-columns and a non-null legacy job. Their original stored digest is checked
-before the absent optional identity fields receive null defaults. The existing
-Python-to-TypeScript envelope binding holds the column-introduction map in step.
-
-`selectCompleteAttempt` requires source outcomes for the expected source count
-and checks each required ledger commitment against verified attempt rows.
-New receipts carry the deterministic logical proof defined in
-[audit recording](feed-ingest-audit.md#compaction-safe-attempt-proof);
-old receipts still require their original raw files, including digest and count.
-Within a run, a newer incomplete retry does
-not displace a proven older attempt. An explicitly completed zero-selection
-attempt is valid evidence, not a missing selection file. Historical full text
-comes from that attempt's recorded dispatches. `readHistoricalSelections`
-checks their exact selection identity and rank correspondence before preparing
-the original content for allocation.
-
-**Old packed history cannot prove an original raw-file commitment.**
-Compact rows lack the original raw-file membership and row order, and packing
-can remove duplicate occurrences. A compact file's own verified digest and
-aggregate counts do not repair that loss. The attempt result is explicitly
-`unverifiable` when referenced original files are unavailable, never verified
-replay. If original files were retained, the caller can supply that named raw
-evidence independently. New logical commitments survive actual daily, monthly
-and yearly packing without depending on original file boundaries or order.
-They never manufacture retrospective proof for older packed history.
+Compaction retains each original execution and attempt, using the declared
+row key rather than generic work-unit identity. See
+[planning completion](feed-ingest-audit.md#compaction-safe-attempt-proof).
+Historical production digest workers are not switched to this handoff here.
 
 ## Design rationale
 
-Editorial choice and worker allocation answer different questions. Keeping the
-selected identities and scores fixed makes a strategy change affect only
-allocation, not coverage. Greedy packing estimates work; it does not prove
-optimal balance or equal worker elapsed times.
-
-Current construction and historical replay use different evidence because
-requiring future completion records would prevent creating the first dispatch.
-Historical proof remains strict because trusting recorded hashes without
-reproducing them would make incomplete history look complete.
-
-The bounded tests use real current curation, native raw and compact writes,
-hand-computable work totals and recorded index contract fields.
-The isolated TypeScript checks need no network or backend process.
-Separately, the existing contract-tier
-`test_zero_completion_evidence_survives_without_erasing_an_earlier_complete_attempt`
-case runs the real Bun producer, actual gardener daily/monthly/yearly tasks,
-then the independent Bun selector. The main CI gate owns that cross-language
-check; native packing tests alone do not certify the Python compactor.
+Keeping assignment separate from selection allows real concurrent downstream
+work without changing which articles were chosen. One in-memory result
+prevents metadata and summarizer text from drifting into different choices.
 
 ## See also
 
-- [Feed curation](feed-curation.md)
-- [Ledger persistence](../contracts/persistence.md)
-- [Ledger compaction](../publishing/ledger-compaction.md)
-- [Running the gates](../../how-to/run-the-gates.md)
+- [Curation](feed-curation.md)
+- [Operator APIs](feed-operator-api.md)
+- [Ledger reference](../../reference/feed-planner-ledgers.md)
+- [Persistence](../contracts/persistence.md)

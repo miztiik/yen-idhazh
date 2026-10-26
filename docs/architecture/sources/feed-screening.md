@@ -1,122 +1,66 @@
 # Feed candidate screening
 
-**Last Updated**: 2026-10-24
+**Last Updated**: 2026-10-26
 
-Which harvested articles pass the isolated planner's screening checks?
-This stage does not change production planning or fetch any content.
+Which parsed articles can reach numeric selection?
+Screening validates the complete server-owned candidate batch, current
+technical observations, settled first sight and the global policy. It
+fetches nothing and writes no rejection ledger.
 
 ## Inputs and result
 
-Call `screenArticleCandidates` from
-`services/feed-ingest-plan/src/screen-article-candidates/triage-gates.ts`.
-It accepts one serializable candidate batch plus a rejection-ledger write
-context. The caller supplies the validated planning configuration and taxonomy,
-the existing `collect.max_future_hours` setting from `config/idhazh.json`,
-one fixed UTC run instant, run identity and optional freshness override.
-The stage validates these inputs again before writing.
+Candidate identities must match their supplying run, correlation and offered
+ordinal. Observations are keyed by those identities; an observation without
+a candidate fails validation. A missing observation is unknown, not HTTP
+success or proof of no paywall. Terminal harvest failures are not admitted
+again as candidates.
 
-Harvest observations are keyed by candidate ID. HTTP status and paywall evidence
-are nullable; a missing observation is unavailable, not HTTP success or proof of
-no paywall. Only observed failures cause these gates to reject. Admitted results
-retain the observation and its nulls, not a claim that unknown checks passed.
-Terminal harvest failures are not candidates and must not be offered again.
-An observation for an ID outside the supplied batch fails by name.
-The public harvesting result includes observations for terminal failures too.
-Build the keyed screening input only from entries with a candidate, not entries
-with a rejection. Screening preserves the full public observation, including
-robots, extraction, paywall evidence and failure availability.
-
-The caller supplies a bounded list of settled seen rows, written by the plan
-stage under the existing seen ledger, or explicitly marks that evidence
-unavailable. An available empty list is not the same as unavailable history.
-Available means supplied validated rows, not proof of complete history.
-For a genuinely new undated item, the caller must create and supply its real
-first-sight row at the run instant after resolving history. An absent URL in an
-arbitrary bounded list cannot establish that the item has never been seen.
-The focused reader validates the existing `SeenRow` fields from
-`backend/idhazh/contracts/seen.py`: version, URL key, first-sight UTC instant and
-first-sight run. It joins by the candidate's canonical URL key. Conflicting
-settled rows fail. This stage neither
-loads history nor creates a first sight from the latest fetch.
-
-The result contains admitted candidates, typed rejection rows and the shared
-writer's sealing result. Each admitted entry preserves the candidate, including
-its harvested policy snapshot, and separately carries the effective resolved
-policy, timing evidence and recency bonus. No candidate identity, source facts,
-labels or harvested policy is rewritten. The later engine owns loading settled
-history and constructing downstream assessments.
+The result contains admitted candidates and transient terminal exclusions.
+Only admitted candidates increment the selection-opportunity denominator in
+health C26. Exclusions are reduced to grouped counts by feed, subject, stage,
+reason and supported attribution. No full rejected population is committed
+or returned as an audit export.
 
 ## Gates and timing
 
-Before any article request, the isolated TypeScript harvester checks
-`harvest.url_exclusions` in `config/feed-ingest-plan.json`. Each validated rule
-names a host, a path prefix and whether subdomains are included. Hosts compare
-without case or one terminal DNS dot; subdomains must end at a dot boundary. Paths compare with case
-and match the prefix itself or its descendants at a slash boundary. A root
-prefix matches all paths on that host. Queries and fragments do not participate.
-Rule paths have no trailing slash except the root and cannot contain a query,
-fragment or dot segment.
+Structured URL restrictions, actual publication exclusions and settled item
+failures remain real inputs. The permitted fetch path checks them before
+article download where possible; screening rechecks them for independently
+parsed articles. An unavailable external history does not manufacture a
+publication or failure.
 
-The committed `fool.com` rule includes subdomains and `/the-ascent` descendants.
-It keeps affiliate-product pages out without rejecting unrelated articles that
-mention that address in a query. Other reporting on the host stays eligible.
-This preserves the editorial exclusion, not a new assessment of article quality.
-Changing or removing that editorial scope needs maintainer review.
+Paywall or configured HTTP blocks, category exclusions, the form-specific
+word minimum and the maximum age retain their precedence. Category matching
+uses whole trimmed, case-folded tags. One first failed gate produces one
+terminal exclusion.
 
-The harvester and the planning audit use one pure structured matcher. A match
-retains `BLOCKED_URL_MARKER`, the existing `fool.com/the-ascent/` detail and the
-unchanged canonical URL hash. It records no attempted article fetch. The rule
-also applies when harvesting is called without publication or failure history.
-This correction changes only the isolated TypeScript path. Python still reads
-its existing marker configuration; URL identity and query cleanup are unchanged.
+Age uses a trustworthy publication time, otherwise the earliest known global
+first sight by URL key. A timestamp exactly at the future tolerance is
+trusted; one beyond it is not. Age equal to the cutoff passes. Unknown time
+stays null with no invented recency bonus.
 
-Policies resolve through the existing
-[vertical policy resolver](feed-ingest-policies.md). Word thresholds use source
-form, article or abstract, never source kind. Gate precedence is paywall or
-configured HTTP block, configured category, word minimum, then maximum age.
-Categories compare whole tags after trimming and case folding, not substrings.
-The first failed gate emits one terminal rejection.
-
-Age uses a trustworthy feed date, otherwise persisted first sight. A feed date
-exactly at the configured future tolerance remains trustworthy; a later one
-does not. Age exactly equal to the resolved cutoff is admitted. Greater age
-records the measured hours and the cutoff. An unknown time stays null and earns
-zero recency bonus; an undated repeated fetch cannot restart its age.
-
-Recency scoring is independent of admission. It uses the effective policy's
-weight and half-life with negative ages clamped to zero. A run freshness
-override changes only the cutoff, not the half-life or authored configuration.
-The timing source is transiently explicit as `published_at`, `first_seen`, or
-`unknown`. The existing persisted assessment vocabulary cannot describe first
-sight. Do not serialize it as `fetched_at`; a future assessment writer must
-resolve that contract boundary before claiming persisted first-sight evidence.
+The parsed batch's saved age clock is D19. A later feedback refresh uses D22
+without changing that age clock. Signed age can be negative for an admitted
+near-future publication; only the ranking calculation floors it at zero.
+The selected metadata retains its actual timing basis and timestamp.
 
 ## Rejection persistence
 
-The caller supplies the trusted rejection registration, ledger settings, writer
-identity and state output root. Prefix and raw compression must agree with the
-planning configuration. The public `@idhazh/ledger-file-writer` API owns atomic
-Parquet writes, file identity and row identity. The rejection date and coverage
-come from the fixed UTC run instant, not a candidate's earlier fetch date.
-A failed, invalid or skipped write cannot return successful screening.
-An empty rejection batch returns the writer's explicit empty result.
+There is no standalone rejection write. A run records grouped exclusions in
+its actual UTC work-day health rows. Missing measurements remain unavailable.
+Native selected output and the text artifact are finalized later from the
+same chosen result.
 
 ## Design rationale
 
-First sight is existing persisted evidence, not another candidate field.
-Keeping it separate prevents repeated fetches from renewing old undated stories.
-The named fixtures hold the small TypeScript seen read copy to the existing
-field set and exercise settled rows without scanning committed state.
-
-Real shared-writer output is read back with TypeScript WASM and Arrow against
-bounded recorded screening cases. This checks rejection reason, details,
-identity and UTC coverage. It does not execute or certify the current Python
-reader. No test invokes Python, fetches the network or replaces the writer
-with a test double.
+Admission and ranking share one public selection operation, but keep distinct
+denominators. A stale or technically rejected candidate is not a new admitted
+opportunity. The global first-sight join prevents another feed or fetch from
+renewing an undated article's age.
 
 ## See also
 
-- [Freshness and first sight](freshness.md)
-- [Configuration concepts](../../concepts/config.md)
-- [Ledger persistence](../contracts/persistence.md)
-- [Local gates](../../how-to/run-the-gates.md)
+- [Policies](feed-ingest-policies.md)
+- [Curation](feed-curation.md)
+- [Harvesting](feed-harvesting.md)
+- [Ledger fields](../../reference/feed-planner-ledgers.md)
