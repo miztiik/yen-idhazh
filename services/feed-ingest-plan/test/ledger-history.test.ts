@@ -54,18 +54,18 @@ test("native raw and daily reads preserve another family's original writer ident
     const row = PublishedRowSchema.parse({
       version: PUBLISHED_ROW_SCHEMA_VERSION, url_key: selection().url_key, published_on: day, item_id: "recorded-item-01",
     });
-    const owner = writer(`${day}-1`, 1, 3);
+    const writerIdentity = writer(`${day}-1`, 1, 3);
     const request = {
       ledger: "published", registryEntry: registration("published"), outputRoot: root,
       ledgerSettings: settings, rowContract: publishedContract, period: { tier: "raw" as const, covers: day }, rows: [row],
     };
     await expect(persistLedger(request)).rejects.toThrow();
-    const raw = await persistLedger({ ...request, writerContext: owner });
+    const raw = await persistLedger({ ...request, writerContext: writerIdentity });
     const path = join(root, raw.files[0]!.path);
     const original = await readLedgerParquet(path, "published", publishedContract);
-    expect(original.rows[0]!.identity).toMatchObject({ attempt: 1, shard: 3, run_id: owner.run_id, unit_id: raw.files[0]!.unit_id });
+    expect(original.rows[0]!.identity).toMatchObject({ attempt: 1, shard: 3, run_id: writerIdentity.run_id, unit_id: raw.files[0]!.unit_id });
     const compact = await persistLedger({
-      ...request, writerContext: { ...owner, attempt: 9, producer: "tests.compactor" },
+      ...request, writerContext: { ...writerIdentity, attempt: 9, producer: "tests.compactor" },
       period: { tier: "compact", period: "daily", covers: day, builtFrom: 1 }, rows: original.rows,
     });
     const indexPath = join(root, "compact", "published", "index", "daily.json");
@@ -235,14 +235,14 @@ test("one named raw listing verifies filenames and sizes, and genuine publicatio
     const publisherRoot = join(root, "publisher");
     const stateRoot = join(publisherRoot, "state");
     const selected = { ...selection(), publisher_id: "recorded-publisher" };
-    const owner = writer(selected.run_id);
+    const writerIdentity = writer(selected.run_id);
     const identity = { date: day, run_id: selected.run_id, item_id: "recorded-item-01",
       url_key: selected.url_key, source_id: selected.feed_id, stage: "publish" as const, outcome: "ok" as const };
     const healthContract = { schema: ItemHealthPublicationSchema, schemaVersion: ITEM_HEALTH_ROW_SCHEMA_VERSION };
     const health = await writeRows(stateRoot, "item-health", day, healthContract,
-      [identity, identity, { ...identity, stage: "extract" }], owner);
+      [identity, identity, { ...identity, stage: "extract" }], writerIdentity);
     const publication = await writeRows(stateRoot, "published", day, publishedContract,
-      [{ version: PUBLISHED_ROW_SCHEMA_VERSION, published_on: day, url_key: selected.url_key, item_id: identity.item_id }], owner);
+      [{ version: PUBLISHED_ROW_SCHEMA_VERSION, published_on: day, url_key: selected.url_key, item_id: identity.item_id }], writerIdentity);
     const snapshots = await writeRows(stateRoot, "selected-articles", day, SelectedArticleRowContract, [selected]);
     await rawIndex(stateRoot, "selected-articles", day, snapshots);
     const localFiles = (written: PersistLedgerResult) => written.files.map(file => `state/${file.path}`);

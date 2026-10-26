@@ -148,7 +148,7 @@ def test_a_shard_lists_what_its_tasks_own_or_read_and_never_a_whole_root(tmp_pat
     config_root = a_config_with_shards(tmp_path, 2)
     settings = config.load_gardener(config_root)
     planned = gardener_shards.plan(config_root)
-    owner: dict[str, int] = {}
+    shard_of_folder: dict[str, int] = {}
     for shard in planned["shards"]:
         owned, read = gardener_publish.declared_folders(shard["task_names"], settings)
         named = [settings.tasks[name] for name in shard["task_names"]]
@@ -156,10 +156,10 @@ def test_a_shard_lists_what_its_tasks_own_or_read_and_never_a_whole_root(tmp_pat
             folder for policy in named for folder in (*(policy.owns or ()), *policy.reads)
         }
         for folder in owned:
-            assert folder not in owner, f"{folder} is owned in two shards"
-            owner[folder] = shard["index"]
+            assert folder not in shard_of_folder, f"{folder} is owned in two shards"
+            shard_of_folder[folder] = shard["index"]
         assert BARE_ROOTS.isdisjoint([*owned, *read])
-    assert owner, "no shard owns a folder, so this checks nothing"
+    assert shard_of_folder, "no shard owns a folder, so this checks nothing"
 
 
 def test_every_job_the_workflow_spells_is_a_job_a_record_can_name() -> None:
