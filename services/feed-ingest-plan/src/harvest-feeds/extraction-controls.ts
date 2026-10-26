@@ -1,4 +1,4 @@
-/** Which existing extraction settings govern measured article quality? */
+/** Which validated extraction controls may one native parser consume? */
 import { z } from "zod";
 import { FeedSemanticFallbackConfigSchema, NonEmptySchema } from "@idhazh/common-contracts";
 

@@ -218,7 +218,8 @@ test("permanent statuses do not retry; transient statuses use existing retry con
   ]);
   const timeoutTransport = new RecordedTransport(await readRecordings());
   const exhausted = await createPermittedFetcher(
-    { ...loaded.config.harvest, fetch_timeout_ms: 30 }, loaded.extraction,
+    { ...loaded.config.harvest, fetch_timeout_ms: 30,
+      request_headers: { ...loaded.config.harvest.request_headers, secondary: null } }, loaded.extraction,
     { transport: timeoutTransport, resolve: timeoutTransport.resolve },
   ).fetch("https://news.example/timeout");
   expect(exhausted.failure).toBe("timeout");
@@ -235,6 +236,22 @@ test("permanent statuses do not retry; transient statuses use existing retry con
   const fixture = await readHeaderRecovery();
   const profileInputs = await inputs();
   const target = "https://news.example/second";
+  const timeoutRecordings = await readRecordings();
+  timeoutRecordings.responses[target] = fixture.primary_timeouts;
+  const recoveredTimeoutTransport = new RecordedTransport(timeoutRecordings);
+  const recoveredTimeout = await createPermittedFetcher(
+    loaded.config.harvest, loaded.extraction,
+    { transport: recoveredTimeoutTransport, resolve: recoveredTimeoutTransport.resolve },
+  ).fetch(target);
+  expect(recoveredTimeout.failure).toBeNull();
+  expect(recoveredTimeout.body).toBe(timeoutRecordings.bodies.article);
+  expect(recoveredTimeout.attempts?.filter(attempt => attempt.phase === "target").map(attempt => ({
+    retry: attempt.retry, failure: attempt.failure,
+  }))).toEqual([{ retry: 0, failure: "timeout" }, { retry: 1, failure: "timeout" }, { retry: 0, failure: null }]);
+  const timeoutRequests = recoveredTimeoutTransport.requests.filter(request => request.url.href === target);
+  expect(timeoutRequests).toHaveLength(3);
+  expect(timeoutRequests[0]?.user_agent).toBe(timeoutRequests[1]?.user_agent);
+  expect(timeoutRequests[1]?.user_agent).not.toBe(timeoutRequests[2]?.user_agent);
   for (const vector of fixture.recoveries) {
     const recordings = await readRecordings();
     recordings.responses[target] = vector.responses;
@@ -273,6 +290,36 @@ test("permanent statuses do not retry; transient statuses use existing retry con
   const retained = await createPermittedFetcher(profileInputs.config.harvest, profileInputs.extraction,
     { transport: retainedTransport, resolve: retainedTransport.resolve }).fetch(target);
   expect(retained).toMatchObject({ body: fixture.short_content, http_status: 200, failure: null });
+  const redirectRecordings = await readRecordings();
+  redirectRecordings.responses[target] = [{ status: 200, body: fixture.short_content }, fixture.short_redirect];
+  const redirectTransport = new RecordedTransport(redirectRecordings);
+  const redirectCounts: number[] = [];
+  const redirected = await createPermittedFetcher(profileInputs.config.harvest, profileInputs.extraction,
+    { transport: redirectTransport, resolve: redirectTransport.resolve }).fetch(target,
+    async measurement => { redirectCounts.push(measurement.dispatched_request_count); });
+  expect(redirected).toMatchObject({ body: fixture.short_content, http_status: 200, failure: null });
+  expect(redirected.attempts?.filter(attempt => attempt.phase === "target").map(attempt => attempt.http_status))
+    .toEqual([200, 302, 404]);
+  expect(redirectCounts.reduce((sum, count) => sum + count, 0)).toBe(redirectTransport.requests.length);
+  redirectRecordings.responses["https://news.example/not-found"] = [{ error: "ECONNRESET" }];
+  const failedRedirectTransport = new RecordedTransport(redirectRecordings);
+  const failedRedirect = await createPermittedFetcher(profileInputs.config.harvest, profileInputs.extraction,
+    { transport: failedRedirectTransport, resolve: failedRedirectTransport.resolve }).fetch(target);
+  expect(failedRedirect).toMatchObject({ body: fixture.short_content, http_status: 200, failure: null });
+  for (const [location, failure] of [
+    ["http://127.0.0.1/secret", "unsafe-target"],
+    ["https://denied.example/story", "robots-denied"],
+    ["https://unknown.example/story", "robots-unknown"],
+  ] as const) {
+    redirectRecordings.responses[target] = [
+      { status: 200, body: fixture.short_content }, { status: 302, body: "", location },
+    ];
+    const refusedTransport = new RecordedTransport(redirectRecordings);
+    const refused = await createPermittedFetcher(profileInputs.config.harvest, profileInputs.extraction,
+      { transport: refusedTransport, resolve: refusedTransport.resolve }).fetch(target);
+    expect(refused).toMatchObject({ body: null, failure });
+    expect(refusedTransport.requests.some(request => request.url.href === location)).toBe(false);
+  }
   const noRecovery = new RecordedTransport(recordings);
   const disabled = await createPermittedFetcher({
     ...profileInputs.config.harvest, request_headers: { ...profileInputs.config.harvest.request_headers, secondary: null },

@@ -23,6 +23,7 @@ export async function readHeaderRecovery() {
   const cases = z.array(z.object({ name: z.string(), responses: z.array(ResponseSchema).min(1) }));
   return z.object({
     recoveries: cases, permanent_failures: cases, short_content: z.string(),
+    short_redirect: ResponseSchema, primary_timeouts: z.array(ResponseSchema).min(1),
   }).parse(await Bun.file(new URL("harvest-header-recovery.json", fixtures)).json());
 }
 

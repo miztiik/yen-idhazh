@@ -65,7 +65,7 @@ product, checked against the actual wire value. Profiles cannot replace it.
 These headers do not provide browser execution or bot signing.
 A denied or unknown robots result stops before any target profile is sent.
 
-Within the original operation deadline, exhausted network/status retries or
+Within one bounded operation deadline, exhausted network/status retries or
 a successful article body below `recovery_min_body_bytes` can try the secondary
 profile once per redirect hop. Only `recoverable_http_statuses` permit HTTP
 profile recovery; missing, gone and rate-limited responses do not use it by
@@ -73,6 +73,11 @@ default. Each profile keeps the existing status retry rules. Attempt
 sequence remains unique; the retry index restarts for a new profile.
 Every actual dispatch is counted. A failed recovery preserves an earlier
 real short response for normal parsing rather than inventing article text.
+This also holds when a secondary redirect ends in a download failure.
+An unsafe, denied or unknown redirect still refuses the operation.
+Each enabled profile contributes one configured attempt-and-backoff allowance
+to the deadline shared by DNS, robots and all redirect hops. Disabling the
+secondary profile keeps the original single-profile bound.
 The body-size recovery rule never applies to feeds. Short, empty and malformed
 feed downloads keep their real HTTP result and separate parse outcome.
 

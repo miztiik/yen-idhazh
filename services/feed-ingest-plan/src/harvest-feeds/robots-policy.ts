@@ -31,6 +31,7 @@ export type FetchResult = {
   attempts?: FetchAttempt[];
 };
 type RawResult = { response: TransportResponse | null; failure: FetchFailure | null; http_status: number | null; error_code?: string | null };
+type TargetResult = RawResult & { retained_response?: TransportResponse };
 type RobotDocument = ReturnType<typeof robotsParser> | null;
 type RobotResult = { document: RobotDocument; failure: FetchFailure | null; http_status: number | null; error_code?: string | null };
 export type PermittedFetcher = ReturnType<typeof createPermittedFetcher>;
@@ -61,9 +62,9 @@ export function robotsPermits(document: ReturnType<typeof parseRobots>, url: str
 }
 
 function transportFailure(error: unknown, signal: AbortSignal): FetchFailure {
-  if (signal.aborted) return "timeout";
   if (error instanceof ResponseReadError) return transportFailure(error.cause, signal);
   if (error instanceof UnsafeTargetError) return "unsafe-target";
+  if (signal.aborted) return "timeout";
   if (error instanceof BodyLimitError) return "body-too-large";
   const cause = error instanceof Error && error.cause instanceof Error ? error.cause : error;
   if (cause && typeof cause === "object" && "code" in cause && typeof cause.code === "string") {
@@ -198,7 +199,7 @@ export function createPermittedFetcher(
 
   async function readTarget(
     raw: string, signal: AbortSignal, attempts: AttemptCapture, kind: "feed" | "article",
-  ): Promise<RawResult> {
+  ): Promise<TargetResult> {
     const profiles = config.request_headers;
     const primary = await read(raw, signal, "target", attempts, profiles.primary);
     const success = (result: RawResult) => result.response !== null && result.failure === null
@@ -210,10 +211,12 @@ export function createPermittedFetcher(
           && profiles.recoverable_http_statuses.includes(primary.http_status));
     if (profiles.secondary === null || !recoverable || signal.aborted) return primary;
     const secondary = await read(raw, signal, "target", attempts, profiles.secondary);
+    if (secondary.failure === "unsafe-target") return secondary;
     // A failed recovery must not replace real, short content with a failed download.
     if (success(primary) && (!success(secondary) || bytes(secondary) <= bytes(primary))
       && !(secondary.response?.location && redirectStatus.has(secondary.response.status))) return primary;
-    return secondary;
+    return success(primary) && primary.response !== null
+      ? { ...secondary, retained_response: primary.response } : secondary;
   }
 
   async function readRobots(origin: string, signal: AbortSignal, attempts: AttemptCapture): Promise<RobotResult> {
@@ -245,6 +248,9 @@ export function createPermittedFetcher(
   ): Promise<FetchResult> {
     let target = raw;
     let observedStatus: number | null = null;
+    let retained: FetchResult | null = null;
+    const preserveResponse = (result: FetchResult): FetchResult => retained !== null && result.failure !== null
+      && ["http", "dns", "network", "timeout", "redirect-loop"].includes(result.failure) ? retained : result;
     const visited = new Set<string>();
     for (;;) {
       let url: URL;
@@ -269,10 +275,12 @@ export function createPermittedFetcher(
         return { body: null, http_status: observedStatus, failure, robots: null };
       }
       const validated = await retry(signal, "validation", attempts, current => validateTarget(target, resolve, current), () => null);
-      if (!validated.value) return {
+      if (!validated.value) return preserveResponse({
         body: null, http_status: observedStatus, failure: validated.failure, robots: null, error_code: validated.error_code,
-      };
-      if (visited.has(url.href)) return { body: null, http_status: observedStatus, failure: "redirect-loop", robots: null };
+      });
+      if (visited.has(url.href)) return preserveResponse({
+        body: null, http_status: observedStatus, failure: "redirect-loop", robots: null,
+      });
       visited.add(url.href);
       let document = documents.get(url.origin);
       if (!document) {
@@ -293,10 +301,14 @@ export function createPermittedFetcher(
         };
       }
       const result = await readTarget(url.href, signal, attempts, kind);
-      if (!result.response) return {
+      if (result.retained_response !== undefined) retained ??= {
+        body: result.retained_response.body, http_status: result.retained_response.status,
+        failure: null, robots: permission, ...robotEvidence,
+      };
+      if (!result.response) return preserveResponse({
         body: null, http_status: result.http_status ?? observedStatus, failure: result.failure, robots: permission,
         ...robotEvidence, error_code: result.error_code ?? null,
-      };
+      });
       const { response } = result;
       observedStatus = response.status;
       if (redirectStatus.has(response.status) && response.location) {
@@ -304,13 +316,13 @@ export function createPermittedFetcher(
         catch { return { body: null, http_status: response.status, failure: "unsafe-target", robots: permission }; }
         continue;
       }
-      return {
+      return preserveResponse({
         body: response.status >= 200 && response.status < 300 ? response.body : null,
         http_status: response.status,
         failure: response.status >= 200 && response.status < 300 ? null : "http",
         robots: permission,
         ...robotEvidence,
-      };
+      });
     }
   }
   async function fetch(
@@ -318,10 +330,11 @@ export function createPermittedFetcher(
   ): Promise<FetchResult> {
     const controller = new AbortController();
     const attempts: AttemptCapture = { rows: [], ...(emit === undefined ? {} : { emit }) };
-    // One operation budget includes all configured attempts and backoff, shared by DNS, robots and redirects.
+    // Enabled profiles each contribute one attempt/backoff allowance to the shared operation budget.
     const backoff = Array.from({ length: controls.max_retries }, (_, retry) =>
       controls.backoff_initial_seconds * 1000 * controls.backoff_multiplier ** retry).reduce((sum, value) => sum + value, 0);
-    const deadline = config.fetch_timeout_ms * (controls.max_retries + 1) + backoff;
+    const profileCount = [config.request_headers.primary, config.request_headers.secondary].filter(profile => profile !== null).length;
+    const deadline = (config.fetch_timeout_ms * (controls.max_retries + 1) + backoff) * profileCount;
     const timer = setTimeout(() => controller.abort(new DOMException("harvest deadline exceeded", "TimeoutError")), deadline);
     try { return { ...await fetchTarget(raw, controller.signal, attempts, kind), attempts: attempts.rows }; }
     finally { clearTimeout(timer); }

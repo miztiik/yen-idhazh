@@ -11,5 +11,7 @@
     { "name": "gone", "responses": [{"status": 410, "body": ""}] },
     { "name": "rate-limited", "responses": [{"status": 429, "body": ""}] }
   ],
-  "short_content": "<html><body><p>Real but short content remains available to the normal parser.</p></body></html>"
+  "short_content": "<html><body><p>Real but short content remains available to the normal parser.</p></body></html>",
+  "short_redirect": {"status": 302, "body": "", "location": "/not-found"},
+  "primary_timeouts": [{"error": "timeout"}, {"error": "timeout"}, {"status": 200, "fixture": "article"}]
 }
