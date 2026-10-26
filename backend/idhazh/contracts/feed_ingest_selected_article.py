@@ -6,7 +6,15 @@ from typing import Annotated, Any, ClassVar, Final, Literal, Self
 
 from pydantic import Field, StrictInt, model_validator
 
-from idhazh.contracts.base import ChangelogEntry, DateStamp, RunId, Sha256, Slug, Url, derive_url_key
+from idhazh.contracts.base import (
+    ChangelogEntry,
+    DateStamp,
+    RunId,
+    Sha256,
+    Slug,
+    Url,
+    derive_url_key,
+)
 from idhazh.contracts.feed_ingest_discovered_article import (
     PLANNER_LEDGER_VERSION,
     PlannerModel,
@@ -153,11 +161,15 @@ class SelectedArticlesArtifact(PlannerPayload):
         if not isinstance(value, dict) or value.get("schema_version") != PLANNER_LEDGER_VERSION:
             return value
         articles = value.get("articles")
-        if not isinstance(articles, list) or any(not isinstance(article, dict) for article in articles):
+        if not isinstance(articles, list) or any(
+            not isinstance(article, dict) for article in articles
+        ):
             raise ValueError("previous selected artifact requires its article list")
         return value | {
             "schema_version": SELECTED_ARTICLE_VERSION,
-            "articles": [SelectedArticleMetadata.migrate_previous_metadata(article) for article in articles],
+            "articles": [
+                SelectedArticleMetadata.migrate_previous_metadata(article) for article in articles
+            ],
         }
 
     @model_validator(mode="after")
