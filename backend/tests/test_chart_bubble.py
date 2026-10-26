@@ -49,13 +49,11 @@ def test_bubble_compiles_three_source_measures_for_each_entity() -> None:
     ):
         entity, x, y, size = (marks[mark_id] for mark_id in (entity_id, x_id, y_id, size_id))
         assert entity.element_id is not None
-        assert x.element_id is not None
-        assert y.element_id is not None
-        assert size.element_id is not None
         entity_name = source[entity.element_id].entity
-        assert {source[mark.element_id].entity for mark in (x, y, size)} == {entity_name}
         for measured in (x, y, size):
+            assert measured.element_id is not None
             element = source[measured.element_id]
+            assert element.entity == entity_name
             assert source_text[element.span_start:element.span_end] == element.span_excerpt
             assert Decimal(measured.value or "") == Decimal(element.value or "")
         assert Decimal(size.value or "") > 0
