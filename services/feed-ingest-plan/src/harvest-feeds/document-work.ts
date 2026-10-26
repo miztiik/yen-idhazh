@@ -56,7 +56,7 @@ export function documentWork(context: Context, identity: DocumentIdentity, key: 
               outcome: measurement.outcome,
               failure_code: measurement.attempt.failure,
             }, measurement.attempt.duration_ms, measurement.attempt.http_status, measurement);
-          });
+          }, scope.document_kind);
         } catch (error) {
           await save(event("fetch", cause), { outcome: "failed", failure_code: null },
             Math.round(performance.now() - started), null);

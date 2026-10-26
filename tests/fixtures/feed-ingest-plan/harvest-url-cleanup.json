@@ -1,0 +1,37 @@
+{
+  "description": "Bounded request-cleanup protocol vectors; offered identities remain independent of dispatched destinations.",
+  "allowed": [
+    {
+      "offered": "https://news.example/second?utm_source=feed&oly_enc_id=tracking",
+      "target": "https://news.example/second",
+      "canonical_url": "https://news.example/second?oly_enc_id=tracking"
+    },
+    {
+      "offered": "https://www.google.com/url?url=https%3A%2F%2Fnews.example%2Fsecond%3Futm_source%3Dfeed",
+      "target": "https://news.example/second",
+      "canonical_url": "https://google.com/url?url=https://news.example/second?utm_source=feed"
+    }
+  ],
+  "refused": [
+    {
+      "offered": "https://www.google.com/url?url=http%3A%2F%2F127.0.0.1%2Fsecret",
+      "failure": "unsafe-target",
+      "requests": []
+    },
+    {
+      "offered": "https://www.google.com/url?url=https%3A%2F%2Finward.example%2Fstory",
+      "failure": "unsafe-target",
+      "requests": []
+    },
+    {
+      "offered": "https://www.google.com/url?url=https%3A%2F%2Fdenied.example%2Fstory",
+      "failure": "robots-denied",
+      "requests": ["https://denied.example/robots.txt"]
+    },
+    {
+      "offered": "https://www.google.com/url?url=https%3A%2F%2Funknown.example%2Fstory",
+      "failure": "robots-unknown",
+      "requests": ["https://unknown.example/robots.txt"]
+    }
+  ]
+}

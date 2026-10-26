@@ -35,6 +35,13 @@ Reporting configuration does not change harvested content identity.
 Missing feed fields do not renumber later entries. Page canonical tags,
 scripts and prose never grant a new fetch destination.
 
+With `harvest.tidy_urls` enabled, TidyURL cleans actual feed and article
+request targets, including redirect destinations. The original offered URL
+still supplies `canonical_url`, `url_key` and configured source provenance.
+Cleanup does not rewrite earlier records. Each transformed address passes
+public-address validation, robots permission and pinned dispatch before use.
+An unsafe transformed address is never dispatched.
+
 Feedsmith normalizes RSS, Atom, RDF and JSON Feed entries. They retain
 categories, authors, offered ordinals and entry-level UTC dates. A feed's
 build or update time is not an article publication time. Missing, invalid
@@ -50,6 +57,30 @@ body limits. Validation occurs before dispatch. A refused or unknown
 permission cannot request the target. Actual retry and redirect dispatches
 each count; cache reuse adds no request.
 
+`harvest.request_headers` supplies primary and nullable secondary navigation
+profiles. Both feed and article targets use them; robots downloads do not.
+Each wire user agent keeps the configured crawler identity and adds its
+profile's distinct browser signature. Robots matching uses that same crawler
+product, checked against the actual wire value. Profiles cannot replace it.
+These headers do not provide browser execution or bot signing.
+A denied or unknown robots result stops before any target profile is sent.
+
+Within one bounded operation deadline, exhausted network/status retries or
+a successful article body below `recovery_min_body_bytes` can try the secondary
+profile once per redirect hop. Only `recoverable_http_statuses` permit HTTP
+profile recovery; missing, gone and rate-limited responses do not use it by
+default. Each profile keeps the existing status retry rules. Attempt
+sequence remains unique; the retry index restarts for a new profile.
+Every actual dispatch is counted. A failed recovery preserves an earlier
+real short response for normal parsing rather than inventing article text.
+This also holds when a secondary redirect ends in a download failure.
+An unsafe, denied or unknown redirect still refuses the operation.
+Each enabled profile contributes one configured attempt-and-backoff allowance
+to the deadline shared by DNS, robots and all redirect hops. Disabling the
+secondary profile keeps the original single-profile bound.
+The body-size recovery rule never applies to feeds. Short, empty and malformed
+feed downloads keep their real HTTP result and separate parse outcome.
+
 Structured configured URL exclusions, real publication history and settled
 item failures can refuse a page before download. A dated entry strictly
 older than the effective global freshness cutoff also stops before page
@@ -62,7 +93,18 @@ Defuddle's node entry produces Markdown with asynchronous source fetches
 disabled and a rejecting resource-fetch callback. The sanitizer runs after
 Markdown conversion. If that result is too short, semantic HTML elements
 can supply actual page prose; a `semantic-dom-fallback` warning records its
-use. No invented article or default URL fills a failed extraction.
+use. `harvest.semantic_fallback` configures ordered content roots, removed
+elements, paragraph elements, minimum root/paragraph characters and metadata
+sources. A short teaser does not hide a later substantial content root.
+Nested blocks and repeated paragraphs contribute their text once; block
+boundaries retain paragraph separation, including when the selected root
+is itself a prose block. Consent, ad, sharing and comment elements
+are removed before roots are measured.
+
+Title and author recovery read actual page metadata before the primary
+extractor can mutate it. Empty metadata values do not stop later sources.
+Descriptions never enter the body or increase its word count. No invented
+title, article or default URL fills a failed extraction.
 Missing, empty and refused extraction remain distinct from successful work.
 The [screening stage](feed-screening.md) applies admission to parsed candidates.
 
@@ -86,6 +128,8 @@ The existing Defuddle 0.19.5 node entry uses its installed Markdown converter;
 LinkeDOM still supplies inert documents. Undici, address and robots
 libraries retain transport control. These dependencies run in the
 build-time Bun process and workers, not the published browser bundle.
+TidyURL 1.18.3 adds its bundled URL-cleaning rules and no runtime dependencies
+for request-target cleanup. Its installed bytes remain build-time only.
 No new HTTP client, parser framework or profiler is introduced.
 
 ## Design rationale
