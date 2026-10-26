@@ -132,6 +132,7 @@ is the module being replaced.
 | `numerals_matched` | Every numeral in `title`, `caption` and `why` is one a cited element states. | A caption that converted a figure, or reached one from nowhere. |
 | `plan_version_current` | The plan met the vocabulary this build holds. | Contract drift, found rather than drawn. |
 | `stacked_bar_exhaustive` | A separately cited source quantity is the whole, distinct from the parts, and exactly equals their converted sum. | A stack that omits a part or treats a sum of the supplied parts as a declared whole. |
+| `pie_exhaustive` | The declared source quantity is independent of every part, and the parts exactly make it in one canonical measure and unit. | A pie whose parts do not exactly make its stated total or need mixed measures or units. |
 
 **Each check returns at most one refusal, carrying its own stable name.** That is a design
 constraint rather than a testing preference. A validator that answers with one string cannot say
@@ -142,7 +143,7 @@ element would trip four rules at once and the report would name the wrong cause.
 `backend/tests/test_visual_validator.py` holds **one fixture per check, each tripping only its own**,
 asserted as `[rejection.check for rejection in rejections] == [check]` rather than as a membership -
 a membership passes while three other rules are firing. Each check was also neutered in turn against
-its own fixture, and all ten left the plan accepted, so every one of them is the sole cause of the
+its own fixture, and all eleven left the plan accepted, so every one of them is the sole cause of the
 refusal it is credited with.
 
 ### Config selects requests; code owns correctness
@@ -246,9 +247,9 @@ declared, stay checked by `no_invented_values`, and are simply not drawn. Read t
 "an element may not leave `element_ids`" - the rule would ban every edge the source document lists.
 
 **Rule 2 needs the edges to carry purposes.** Each step is asked about the one
-purpose the plan started with. A failed declared-whole check has no onward bar
-edge, so neither a direct stacked request nor an upstream pie request can
-escape that refusal.
+purpose the plan started with. A failed pie whole check still sends its
+stacked-bar candidate through the stacked whole check; neither the direct
+request nor its downgrade can escape without independent whole evidence.
 
 ### The static allow-list, and the four edges it permits
 

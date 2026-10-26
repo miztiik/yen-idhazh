@@ -478,6 +478,7 @@
     "max_diagram_steps": 6,
     "max_facts": 16,
     "max_output_tokens": 400,
+    "max_pie_parts": 4,
     "min_chart_points": 3,
     "min_diagram_steps": 3,
     "number_format": {

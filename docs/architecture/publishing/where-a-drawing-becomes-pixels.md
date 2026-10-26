@@ -1,6 +1,6 @@
 # Where a drawing becomes pixels
 
-**Last Updated**: 2026-10-26
+**Last Updated**: 2026-10-27
 
 The reader's browser draws the chart and the pipeline never draws one. This page
 holds that ruling, what it cost and what it bought, where the marks are
@@ -165,6 +165,7 @@ The data and framing travel together.
 | Part | What it is |
 | --- | --- |
 | `item_id`, `type` | Which story, and which of the declarable forms. A new type costs an enum member, never a new document format. |
+| `declared_whole_element_id`, `declared_whole` | The independently cited source quantity and wording for a pie, or the source quantity named by a stacked bar's category mark. Other chart types carry nulls. |
 | `marks` | **A flat pool, not a list of rows.** Each mark carries what it says (`text`), what it measures (`value` with its `unit`), and where that came from - `element_id` for a slice of the article, or `derived` for a chain through the four-function allow-list. Exactly one of the two, checked. |
 | `encoding` | Which marks fill which channel, by id, mirroring `PlanEncodings` role for role. Every role is a key and an unused one is empty. |
 | `title`, `caption` | Nullable, sanitized plan prose. The browser writes text nodes, never markup. |
@@ -259,20 +260,26 @@ the pairing is the plan's rather than a rule invented in the compiler, and the b
 that order. Re-ranking them here would be the compiler deciding what the comparison says.
 
 **Only a supported type is compiled.** This build compiles `bar`, `dot`, `slope`,
-`line`, `scatter`, `bubble` and `stacked_bar`; a plan for any other declared type raises `CompileError` naming it
-rather than publishing a picture nobody planned.
+`line`, `scatter`, `bubble`, `stacked_bar` and `pie`; a plan for any other declared type raises
+`CompileError` naming it rather than publishing a picture nobody planned.
+
+**A pie needs a separately stated whole.** `pie_exhaustive` checks that its parts
+use one measure and unit and exactly make that independent source quantity.
+Each slice is a computed share with both its part and whole in its provenance.
+The circle has at most five parts; the visible readout names every part and
+prints the article's wording for the total.
 
 **A stacked bar needs an independently stated whole.** `stacked_bar_exhaustive`
-requires a separate source quantity and compares it with the exact sum of the
-parts after unit conversion. The whole cannot also be one of those parts, and a
-sum of the parts is never evidence that the article stated the total. The pie
-fallback re-enters the same validator, so neither direct requests nor fallback
-can skip this rule.
+compares a separate source quantity with the exact sum of its parts after unit
+conversion. The whole cannot also be one of those parts, and a sum of the parts
+is never evidence that the article stated the total. A pie downgrade re-enters
+this check; failure of the stricter pie whole check cannot be laundered by the
+replacement.
 
 The maintainer confirmed "A1 - Confirm one-row delivery" on 2026-10-26 UTC:
-one stacked row represents the whole and its parts. For a pie fallback, the
-whole's source label names that row, and the pie categories name its parts.
-Multiple category rows are refused in this phase.
+one stacked row represents the whole and its parts. In a stacked-bar downgrade,
+the source whole labels the row and the pie categories name its parts. Multiple
+category rows are refused in this phase.
 
 **The stack keeps the plan's part order.** Unlike ranked bars, its segment
 labels, source values and emphasis stay paired in the series order the plan
@@ -342,11 +349,13 @@ charts; their text remains. The old SVG read, inlining and markup checks are
 removed. No historical corpus is deleted or rewritten. This is the named
 exception to `CLAUDE.md` section 11, not a general migration policy.
 
-The current renderer stamp is `2026-10-27T01:01`. Stacked-bar data now requires
-a distinct source quantity for its whole label. A time mark carries its canonical
+The current renderer stamp is `2026-10-27T04:00`. Stacked bars name their whole
+with the source quantity on the category mark. Pies carry a separately cited
+source whole and derive each displayed slice as a share of it; the whole is
+never reconstructed by adding the slices. A time mark carries its canonical
 date or year alongside the source wording, so the compiler can order readings
 without replacing what the article wrote. The reader refuses older or malformed
-time marks rather than guessing.
+chart data rather than guessing.
 
 Bubble adds a relationship drawing without changing the fields or the meaning
 of an existing chart. Its x and y positions reuse the paired relationship

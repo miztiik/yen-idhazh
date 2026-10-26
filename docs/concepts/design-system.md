@@ -127,6 +127,9 @@ The full row and accessible reading order move together, including source values
 and emphasis. Other chart families keep their own semantic order.
 The accessible name includes the framing, the highlighted bar and original
 source figures for converted values. Missing framing takes no reserved space.
+Pies show the article's stated total and every named share in a visible list
+beside the circle where room allows, and below it when it does not. The circle
+never carries the only copy of a value or a category name.
 The [chart contract](../architecture/publishing/where-a-drawing-becomes-pixels.md#design-rationale)
 owns the dated maintainer rulings and the cost of refusing old or ambiguous charts.
 

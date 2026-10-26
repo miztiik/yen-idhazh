@@ -14,7 +14,8 @@
  */
 import { UNRECORDED_STOP } from '../machine-colour';
 import { percentOf } from '../rank';
-import type { ChartToken } from '../theme';
+import { arc, pie, type DefaultArcObject, type PieArcDatum } from 'd3-shape';
+import { PALETTE, type ChartToken } from '../theme';
 import { quantityToken, type Quantity } from '../../console/series-tokens';
 
 export interface PartsInput {
@@ -56,6 +57,56 @@ export interface PartsGeometry {
 	overlapping: boolean;
 	/** Each part in order with its hue, for the key. */
 	key: { label: string; token: ChartToken }[];
+}
+
+export interface PiePartInput {
+	label: string;
+	value: number;
+	emphasized?: boolean;
+}
+
+export interface PieSlice {
+	label: string;
+	value: number;
+	color: (typeof PALETTE)[number];
+	emphasized: boolean;
+	path: string;
+}
+
+export interface PieGeometry {
+	radius: number;
+	slices: PieSlice[];
+}
+
+/** Place each declared part on one circle, retaining source order and zero shares. */
+export function pieOfOne(parts: readonly PiePartInput[], diameter: number): PieGeometry | null {
+	if (parts.length < 2 || parts.length > PALETTE.length) {
+		throw new RangeError(`A pie needs 2 to ${PALETTE.length} parts; got ${parts.length}.`);
+	}
+	if (!Number.isFinite(diameter) || diameter <= 0) return null;
+	const labels = new Set<string>();
+	for (const part of parts) {
+		if (labels.has(part.label)) throw new Error(`A pie names "${part.label}" twice.`);
+		if (!Number.isFinite(part.value) || part.value < 0) {
+			throw new RangeError(`"${part.label}" has ${part.value}; a pie part is a magnitude.`);
+		}
+		labels.add(part.label);
+	}
+	const total = parts.reduce((sum, part) => sum + part.value, 0);
+	if (total <= 0) return null;
+	const radius = diameter / 2;
+	const sectors = pie<PiePartInput>().sort(null).value((part) => part.value)([...parts]);
+	const path = arc<DefaultArcObject & PieArcDatum<PiePartInput>>().innerRadius(0).outerRadius(radius);
+	return {
+		radius,
+		slices: sectors.map((sector, index) => ({
+			label: sector.data.label,
+			value: sector.data.value,
+			color: PALETTE[index]!,
+			emphasized: sector.data.emphasized ?? false,
+			path: path({ ...sector, innerRadius: 0, outerRadius: radius }) ?? ''
+		}))
+	};
 }
 
 /** The hues a part may take, in order: the categorical ramp up to, and never

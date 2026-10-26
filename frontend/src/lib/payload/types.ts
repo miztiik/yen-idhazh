@@ -58,6 +58,11 @@ export interface VisualEncoding {
 	event_label: string[];
 }
 
+export interface VisualWhole {
+	element_id: string;
+	text: string;
+}
+
 /** One published visual's marks, as `digest/<Y>/<M>/<D>/<item_id>.json` holds them.
  *
  * Fetched rather than inlined, and checked by `refusedVisualData` in
@@ -69,6 +74,8 @@ export interface VisualData {
 	item_id: string;
 	type: string;
 	renderer_version: string;
+	declared_whole_element_id: string | null;
+	declared_whole: VisualWhole | null;
 	title: string | null;
 	caption: string | null;
 	emphasized_mark_id: string;

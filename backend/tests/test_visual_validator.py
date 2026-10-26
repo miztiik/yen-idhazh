@@ -114,6 +114,7 @@ ONE_CHECK_EACH: Final[tuple[tuple[str, str, ValidatorCheck], ...]] = (
     ("numeral-unmatched", "wind", ValidatorCheck.NUMERALS_MATCHED),
     ("stale-vocabulary", "wind", ValidatorCheck.PLAN_VERSION_CURRENT),
     ("stacked-incomplete", "stacked-whole", ValidatorCheck.STACKED_BAR_EXHAUSTIVE),
+    ("pie-not-exhaustive", "pie-whole", ValidatorCheck.PIE_EXHAUSTIVE),
 )
 
 
@@ -135,6 +136,7 @@ def test_the_checks_are_the_ten_the_row_names() -> None:
         "numerals_matched",
         "plan_version_current",
         "stacked_bar_exhaustive",
+        "pie_exhaustive",
     }
     assert {check for _, _, check in ONE_CHECK_EACH} == set(ValidatorCheck), (
         "a check with no fixture of its own has never been shown to fire alone"
@@ -182,6 +184,32 @@ def test_stacked_whole_spans_are_cut_from_the_named_article_fixture() -> None:
     table = load_table("stacked-whole")
     text = read_text(VALIDATOR_FIXTURES / "articles" / "stacked-whole.txt")
     assert table.span_drift(text) is None
+
+
+def test_pie_parts_match_the_independently_declared_whole() -> None:
+    plan = load_plan("pie-valid")
+    table = load_table("pie-whole")
+    assert validate_plan(plan, table, visuals=committed_visuals()) == []
+
+
+def test_a_pie_cannot_omit_its_declared_whole() -> None:
+    plan = load_plan("pie-valid")
+    missing_whole = VisualPlan.model_validate(
+        plan.model_dump(mode="json") | {"declared_whole_element_id": None}
+    )
+    rejections = validate_plan(
+        missing_whole, load_table("pie-whole"), visuals=committed_visuals()
+    )
+    assert [rejection.check for rejection in rejections] == [ValidatorCheck.PIE_EXHAUSTIVE]
+
+
+def test_the_pie_part_limit_is_configured_and_separate_from_the_chart_ceiling() -> None:
+    rejections = validate_plan(
+        load_plan("pie-valid"),
+        load_table("pie-whole"),
+        visuals=tuned_visuals(max_pie_parts=3),
+    )
+    assert [rejection.check for rejection in rejections] == [ValidatorCheck.ENOUGH_DATA]
 
 
 @pytest.mark.parametrize(
