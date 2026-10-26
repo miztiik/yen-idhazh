@@ -147,6 +147,124 @@ test('pie data refuses missing or mismatched whole evidence and non-share inputs
     expect(refusedVisualData(wrongInputs)).toContain('separately stated whole');
 });
 
+test('histogram geometry keeps every recorded range and exact count at narrow and wide widths', () => {
+    const data = sourceCompiledChart('histogram-from-wind.json');
+    expect(refusedVisualData(data)).toBeNull();
+    const narrow = drawVisual(data, 360, formatNumber, numberFormat, 4, geometry);
+    const wide = drawVisual(data, 1200, formatNumber, numberFormat, 4, geometry);
+    expect(narrow.type).toBe('histogram');
+    expect(wide.type).toBe('histogram');
+    if (narrow.type !== 'histogram' || wide.type !== 'histogram') {
+        throw new Error('histogram fixture drew another chart type');
+    }
+    expect(narrow.width).toBe(360);
+    expect(narrow.height).toBe(
+        geometry.axis_band_px + 3 * (geometry.axis_band_px + geometry.row_height_px)
+    );
+    expect(narrow.unit).toBe('kW');
+    expect(narrow.valueHeading).toBe('Number of values');
+    expect(narrow.bins.map((bin) => bin.displayed)).toEqual(['2', '1', '1']);
+    expect(narrow.bins.every((bin) => bin.range.endsWith('kW'))).toBe(true);
+    expect(narrow.bins[0].width).toBeGreaterThan(narrow.bins[1].width);
+    expect(narrow.bins[1].width / narrow.bins[0].width).toBeCloseTo(0.5, 1);
+    expect(wide.bins[1].width / wide.bins[0].width).toBeCloseTo(0.5, 1);
+    expect(narrow.bins.every((bin) => bin.rangeY < bin.y)).toBe(true);
+    expect(narrow.bins.every((bin) => bin.x === 0)).toBe(true);
+    expect(narrow.bins[0].range).toContain('to less than');
+    expect(narrow.bins.at(-1)?.range).toContain('through');
+    const words = statedDrawing(narrow);
+    expect(words).toContain('Number of values');
+    for (const bin of narrow.bins) {
+        expect(words).toContain(bin.range);
+        expect(words).toContain(`${bin.displayed} values`);
+    }
+    expect(words).toBe(statedDrawing(wide));
+});
+
+test('histogram range labels retain enough precision to distinguish close edges', () => {
+    const data = sourceCompiledChart('histogram-from-wind.json');
+    for (const [index, lower, upper] of [
+        [0, 1_000_000, 1_000_001],
+        [1, 1_000_001, 1_000_002],
+        [2, 1_000_002, 1_000_003]
+    ] as const) {
+        const mark = data.marks.find(
+            (candidate) => candidate.mark_id === data.encoding.bins[index]
+        );
+        if (
+            mark === undefined || mark.derived === null ||
+            typeof mark.derived !== 'object' || Array.isArray(mark.derived)
+        ) throw new Error('histogram fixture has no derivation');
+        mark.derived = {
+            ...mark.derived,
+            bin_lower: String(lower),
+            bin_upper: String(upper)
+        };
+    }
+    const drawing = drawVisual(data, 390, formatNumber, numberFormat, 4, geometry);
+    if (drawing.type !== 'histogram') throw new Error('histogram fixture drew another chart type');
+    expect(drawing.bins.map((bin) => bin.range)).toEqual([
+        '1M to less than 1.000001M kW',
+        '1.000001M to less than 1.000002M kW',
+        '1.000002M through 1.000003M kW'
+    ]);
+});
+
+test('histogram data refuses empty bins and repeated source values', () => {
+    const valid = sourceCompiledChart('histogram-from-wind.json');
+    const emptyBin = structuredClone(valid);
+    const empty = emptyBin.marks.find(
+        (mark) => mark.mark_id === emptyBin.encoding.bins[0]
+    )!;
+    if (
+        empty.derived === null || typeof empty.derived !== 'object' ||
+        !('value' in empty.derived)
+    ) throw new Error('histogram fixture has no count provenance');
+    empty.value = '0';
+    empty.derived.value = '0';
+    expect(refusedVisualData(emptyBin)).toContain('empty or invalid histogram bin');
+
+    const repeatedInput = structuredClone(valid);
+    const first = repeatedInput.marks.find(
+        (mark) => mark.mark_id === repeatedInput.encoding.bins[0]
+    )!;
+    const second = repeatedInput.marks.find(
+        (mark) => mark.mark_id === repeatedInput.encoding.bins[1]
+    )!;
+    if (
+        first.derived === null || typeof first.derived !== 'object' ||
+        !('inputs' in first.derived) || !Array.isArray(first.derived.inputs) ||
+        typeof first.derived.inputs[0] !== 'string' ||
+        second.derived === null || typeof second.derived !== 'object' ||
+        !('inputs' in second.derived) || !Array.isArray(second.derived.inputs)
+    ) throw new Error('histogram fixture has no input provenance');
+    second.derived.inputs[0] = first.derived.inputs[0];
+    expect(refusedVisualData(repeatedInput)).toContain(
+        'repeated or invalid histogram input provenance'
+    );
+});
+
+test('the histogram component visibly prints all ranges and counts', async () => {
+    const data = sourceCompiledChart('histogram-from-wind.json');
+    const drawing = drawVisual(data, 390, formatNumber, numberFormat, 4, geometry);
+    if (drawing.type !== 'histogram') throw new Error('histogram fixture drew another chart type');
+    const modulePath = await serverCompiler(join(process.cwd(), 'test-results', 'histogram-chart'))(
+        'src/lib/visual/HistogramChart.svelte',
+        'HistogramChart',
+        []
+    );
+    const { default: HistogramChart } = await import(pathToFileURL(modulePath).href);
+    const html = renderConfigured(HistogramChart, { props: { drawing, geometry } }).body;
+    expect(html).toContain('Number of values');
+    expect(html).toContain('to less than');
+    expect(html).toContain('through');
+    expect(html.match(/<rect\b/g)).toHaveLength(3);
+    for (const bin of drawing.bins) {
+        expect(html).toContain(bin.range);
+        expect(html).toContain(bin.displayed);
+    }
+});
+
 test('the browser pie-part cap matches the configured producer limit', () => {
     const config = JSON.parse(readFileSync(join(process.cwd(), '..', 'config', 'idhazh.json'), 'utf8')) as {
         visuals: { max_pie_parts: number };
@@ -316,6 +434,8 @@ test.describe('what may not be drawn', () => {
             type: 'bar',
             declared_whole_element_id: null,
             declared_whole: null,
+            histogram_unit: null,
+            histogram_unit_table_version: null,
             marks: ['A', 'B', 'C', 'D'].flatMap((name, index) => [
                 { mark_id: `m${index * 2}`, text: name, time: null, value: null, unit: null, source_text: null, element_id: `name-${index}`, derived: null },
                 { mark_id: `m${index * 2 + 1}`, text: null, time: null, value: String(values[index]), unit: 'MW', source_text: null, element_id: `value-${index}`, derived: null }

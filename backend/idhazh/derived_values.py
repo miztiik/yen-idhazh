@@ -99,7 +99,7 @@ from idhazh.visual_vocabulary import (
 #: rule - and what every chain records. Not `UNIT_TABLE_VERSION`, which stamps
 #: the table a conversion reads and which a `convert` chain records beside this
 #: one; two inputs, two stamps, and a chain that names both can be redone.
-DERIVED_VALUE_VERSION: Final = "2026-09-09"
+DERIVED_VALUE_VERSION: Final = "2026-10-27"
 
 #: Where a share's division stops. Fixed here rather than inherited from
 #: `decimal.getcontext()`, which any caller in the process can move - a figure a
@@ -457,6 +457,25 @@ def _target_unit(elements: Sequence[Element]) -> str | None:
     return min(named, key=lambda unit: (UNIT_DIMENSIONS[unit][1], unit))
 
 
+def histogram_unit_and_version(elements: Sequence[Element]) -> tuple[str | None, str | None]:
+    """Return the deterministic unit used for a histogram's recorded edges."""
+    units = {element.unit for element in elements}
+    if not elements:
+        raise DerivedValueError(
+            ResolverCheck.SOMETHING_TO_MEASURE, "a histogram with no values has no unit"
+        )
+    if any(not commensurable(elements[0].unit, element.unit) for element in elements[1:]):
+        raise DerivedValueError(
+            ResolverCheck.UNITS_COMMENSURABLE,
+            "the bins channel does not measure one thing, which `units_convertible` refuses",
+        )
+    target = _target_unit(elements)
+    return (
+        target if target is not None else elements[0].unit,
+        UNIT_TABLE_VERSION if len(units) > 1 else None,
+    )
+
+
 def _channel(role: EncodingRole, elements: Sequence[Element]) -> list[DisplayedValue]:
     """Every mark of one measured channel, moved onto one scale where it has to be.
 
@@ -518,7 +537,25 @@ def _bars(elements: Sequence[Element], *, bins: int) -> list[DisplayedValue]:
     resolver's own and it is why this module refuses with a value rather than an
     exception.
     """
-    values = [_quantity(element) for element in elements]
+    target, _ = histogram_unit_and_version(elements)
+    values: list[Decimal] = []
+    for element in elements:
+        value = _quantity(element)
+        if target is not None and element.unit != target:
+            if element.unit is None:
+                raise DerivedValueError(
+                    ResolverCheck.UNITS_COMMENSURABLE,
+                    "the bins channel mixes a unitless value with measured quantities",
+                )
+            source_scale = UNIT_DIMENSIONS[element.unit][1]
+            target_scale = UNIT_DIMENSIONS[target][1]
+            value = value * source_scale / target_scale
+            if value * target_scale != _quantity(element) * source_scale:
+                raise DerivedValueError(
+                    ResolverCheck.CONVERSION_IS_EXACT,
+                    f"{element.unit} to {target} does not state exactly",
+                )
+        values.append(value)
     edges = bin_edges(values, bins=bins)
     drawn: list[DisplayedValue] = []
     for step in range(bins):

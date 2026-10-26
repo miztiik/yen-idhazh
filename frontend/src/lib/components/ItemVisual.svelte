@@ -55,6 +55,7 @@
 	import { numberFormatter, type NumberFormatConfig } from '$lib/number-format';
 	import { whenNear } from '$lib/reveal';
 	import type { StoryChartGeometryConfig } from '$lib/server/config';
+	import HistogramChart from '$lib/visual/HistogramChart.svelte';
 	import PartsOfOne from '$lib/charts/d3/PartsOfOne.svelte';
 	import PieChart from '$lib/visual/PieChart.svelte';
 	import { drawVisual, statedDrawing, type Drawing } from '$lib/visual/bar';
@@ -278,6 +279,8 @@
 					{#if drawing.unit}
 						<text class="unit" x="0" y={drawing.baseline + storyChartGeometry.axis_label_offset_px}>{drawing.unit}</text>
 					{/if}
+				{:else if drawing.type === 'histogram'}
+					<HistogramChart drawing={drawing} geometry={storyChartGeometry} />
 				{:else if drawing.type === 'dot'}
 					{#each drawing.dots as dot (dot.y)}
 						<text class="name" class:emphasized={dot.emphasized} x="0" y={dot.labelY}>{dot.name}</text>

@@ -35,8 +35,10 @@
     {"derived": null,"element_id": "quantity-93-99","mark_id": "m6","source_text": null,"text": null,"time": null,"unit": "mw","value": "900"},
     {"derived": null,"element_id": "quantity-112-120","mark_id": "m7","source_text": null,"text": null,"time": null,"unit": "mw","value": "2100"}
   ],
-  "renderer_version": "2026-10-27T02:00",
+  "histogram_unit": null,
+  "histogram_unit_table_version": null,
+  "renderer_version": "2026-10-27T05:00",
   "title": "Offshore wind capacity, four countries",
   "type": "dot",
-  "version": "2026-10-27T04:00"
+  "version": "2026-10-27T05:00"
 }

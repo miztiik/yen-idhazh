@@ -1,0 +1,33 @@
+{
+  "caption": "Each bar is the figure the article states for that country.",
+  "declared_whole": null,
+  "declared_whole_element_id": null,
+  "emphasized_mark_id": "m0",
+  "encoding": {
+    "bins": [
+      "m0",
+      "m1",
+      "m2"
+    ],
+    "category": [],
+    "entity": [],
+    "event_label": [],
+    "quantity": [],
+    "quantity_x": [],
+    "series": [],
+    "size": [],
+    "time": []
+  },
+  "histogram_unit": "kw",
+  "histogram_unit_table_version": "2026-09-09",
+  "item_id": "energy-4821903756",
+  "marks": [
+    {"derived": {"bin_lower": "2100","bin_upper": "1134733.333333333333333333333","function": "count","inputs": ["quantity-93-99","quantity-112-120"],"source_unit": null,"unit": null,"unit_table_version": null,"value": "2","version": "2026-10-27"},"element_id": null,"mark_id": "m0","source_text": "900 MW; 2,100 kW","text": null,"time": null,"unit": null,"value": "2"},
+    {"derived": {"bin_lower": "1134733.333333333333333333333","bin_upper": "2267366.666666666666666666666","function": "count","inputs": ["quantity-58-66"],"source_unit": null,"unit": null,"unit_table_version": null,"value": "1","version": "2026-10-27"},"element_id": null,"mark_id": "m1","source_text": "1,200 MW","text": null,"time": null,"unit": null,"value": "1"},
+    {"derived": {"bin_lower": "2267366.666666666666666666666","bin_upper": "3400000","function": "count","inputs": ["quantity-76-84"],"source_unit": null,"unit": null,"unit_table_version": null,"value": "1","version": "2026-10-27"},"element_id": null,"mark_id": "m2","source_text": "3,400 MW","text": null,"time": null,"unit": null,"value": "1"}
+  ],
+  "renderer_version": "2026-10-27T05:00",
+  "title": "Offshore wind capacity, four countries",
+  "type": "histogram",
+  "version": "2026-10-27T05:00"
+}
