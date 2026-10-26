@@ -10,8 +10,8 @@ const VISUAL_DATA_PATH =
 	/^digest\/\d{4}\/\d{2}\/\d{2}\/[a-z0-9]+(?:-[a-z0-9]+)*-(?:[0-9]{2,}|[0-9a-hjkmnp-tv-z]{16})\.json$/;
 
 /** Protocol stamp, held to the Python authority by the visual binding test. */
-export const RENDERER_VERSION = '2026-10-27T01:00';
-export const DRAWABLE = ['bar', 'dot', 'line', 'scatter', 'bubble', 'slope'] as const;
+export const RENDERER_VERSION = '2026-10-27T01:01';
+export const DRAWABLE = ['bar', 'dot', 'line', 'scatter', 'bubble', 'slope', 'stacked_bar'] as const;
 export const ENCODING_ROLES = [
 	'category', 'quantity', 'quantity_x', 'time', 'series', 'size', 'bins', 'entity', 'event_label'
 ] as const;
@@ -103,6 +103,35 @@ export function refusedVisualData(data: unknown): string | null {
 			channels.entity.length !== 0 || channels.size.length !== 0 ||
 			channels.bins.length !== 0 || channels.event_label.length !== 0
 		) return 'carries a channel this chart does not draw';
+		textChannels.push(...names, ...series);
+	} else if (data.type === 'stacked_bar') {
+		const names = channels.category;
+		const series = channels.series;
+		if (names.length !== 1 || figures.length < 2 || series.length !== figures.length) {
+			return 'does not pair one declared whole with every stacked part';
+		}
+		const whole = held.get(names[0])!;
+		if (typeof whole.element_id !== 'string' || !/^quantity-/.test(whole.element_id)) {
+			return 'does not cite a source quantity for its declared whole';
+		}
+		if (figures.some((id) => {
+			const part = held.get(id)!;
+			if (part.element_id === whole.element_id) return true;
+			return isObject(part.derived) &&
+				Array.isArray(part.derived.inputs) &&
+				part.derived.inputs.includes(whole.element_id);
+		})) return 'uses its declared whole as one of its own parts';
+		if (figures.some((id) => Number(held.get(id)?.value) < 0)) {
+			return 'carries a negative stacked part';
+		}
+		if (
+			channels.quantity_x.length !== 0 || channels.time.length !== 0 ||
+			channels.entity.length !== 0 || channels.size.length !== 0 ||
+			channels.bins.length !== 0 || channels.event_label.length !== 0
+		) return 'carries a channel this stacked bar does not draw';
+		if (new Set(series.map((id) => held.get(id)?.text)).size !== series.length) {
+			return 'stacked-bar part labels are not distinct';
+		}
 		textChannels.push(...names, ...series);
 	} else if (data.type === 'slope') {
 		const times = channels.time;

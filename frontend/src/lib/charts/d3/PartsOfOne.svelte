@@ -22,23 +22,27 @@
 		width,
 		height,
 		readout = null,
-		readoutMaxShare = 1
+		readoutMaxShare = 1,
+		separateSegments = false,
+		showTotal = true
 	}: {
 		geometry: PartsGeometry | null;
-		empty: EmptyDrawing;
+		empty: EmptyDrawing | null;
 		name: string;
 		label: string;
 		width: number;
 		height: number;
 		readout?: readonly ReadoutFacts[] | null;
 		readoutMaxShare?: number;
+		separateSegments?: boolean;
+		showTotal?: boolean;
 	} = $props();
 	let selected = $state<number | null>(null);
 	const records = $derived(readout === null ? [] : recordsOf(readout));
 </script>
 
 {#if geometry === null}
-	<EmptyState drawing={empty} {height} {width} {name} {label} />
+	{#if empty}<EmptyState drawing={empty} {height} {width} {name} {label} />{/if}
 {:else}
 	<div
 		class="parts"
@@ -60,16 +64,21 @@
 			{#each geometry.rows as row, index (row.label)}
 				<li class="parts-row" data-readout-at={readout === null ? undefined : index}>
 					<span class="parts-name">{row.label}</span>
-					<span class="parts-track" class:overlapping={geometry.overlapping}>
+					<span
+						class="parts-track"
+						class:overlapping={geometry.overlapping}
+						class:separated={separateSegments}
+					>
 						{#each row.segments as segment (segment.label)}
 							<span
 								class="parts-segment"
+								class:emphasized={segment.emphasized}
 								aria-label={`${segment.label}: ${segment.value}`}
 								style="inset-inline-start: {segment.start}; inline-size: {segment.size}; background: var({segment.token})"
 							></span>
 						{/each}
 					</span>
-					{#if row.total !== null}<span class="parts-total">{row.total}</span>{/if}
+					{#if showTotal && row.total !== null}<span class="parts-total">{row.total}</span>{/if}
 				</li>
 			{/each}
 		</ol>
@@ -138,6 +147,15 @@
 	.parts-segment {
 		position: absolute;
 		inset-block: 0;
+	}
+
+	.parts-track.separated .parts-segment {
+		border-inline-end: 1px solid var(--color-surface);
+	}
+
+	.parts-segment.emphasized {
+		outline: 2px dashed var(--color-text);
+		outline-offset: -2px;
 	}
 
 	/* A bracket each, stacked one lane apart, so a short part is never under a

@@ -29,8 +29,8 @@
     {"derived": null,"element_id": "date-71-75","mark_id": "m4","source_text": null,"text": "2024","time": "2024","unit": null,"value": null},
     {"derived": null,"element_id": "date-43-47","mark_id": "m5","source_text": null,"text": "2023","time": "2023","unit": null,"value": null}
   ],
-  "renderer_version": "2026-10-27T01:00",
+  "renderer_version": "2026-10-27T01:01",
   "title": "Offshore wind capacity over time",
   "type": "line",
-  "version": "2026-10-27T02:00"
+  "version": "2026-10-27T03:00"
 }

@@ -155,6 +155,11 @@ The plan, when the question below asks for one.
   you write all of them; a channel this picture does not draw gets an empty
   list.
 
+  "declared_whole_element_id" - null except for "stacked_bar". A stacked bar
+  must cite a source quantity that independently states the full whole, and the
+  category channel must cite that same element. Never create the whole by
+  adding the parts, and never use one of the parts as the whole.
+
   "element_ids" - every element the picture draws from, listed once.
 
   "labels" - the elements whose own words name the marks and the axes.

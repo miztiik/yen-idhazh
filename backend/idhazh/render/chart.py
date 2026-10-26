@@ -48,6 +48,44 @@ MARK_NAME_MAX: Final = 40
 #: What a screen reader gets, and the same cap `UntrustedLine` holds the
 #: decision's `alt_text` to.
 ALT_TEXT_MAX: Final = 300
+#: SI unit symbols have fixed case; normalized payload units remain unchanged.
+DISPLAY_UNIT_SYMBOLS: Final[dict[str, str]] = {
+    "w": "W",
+    "watt": "W",
+    "kw": "kW",
+    "kilowatt": "kW",
+    "mw": "MW",
+    "megawatt": "MW",
+    "gw": "GW",
+    "gigawatt": "GW",
+    "tw": "TW",
+    "terawatt": "TW",
+    "wh": "Wh",
+    "kwh": "kWh",
+    "mwh": "MWh",
+    "gwh": "GWh",
+    "twh": "TWh",
+    "g": "g",
+    "gram": "g",
+    "kg": "kg",
+    "kilogram": "kg",
+    "t": "t",
+    "tonne": "t",
+    "kt": "kt",
+    "kilotonne": "kt",
+    "mm": "mm",
+    "cm": "cm",
+    "km": "km",
+    "kilometre": "km",
+    "kilometer": "km",
+    "s": "s",
+    "second": "s",
+    "min": "min",
+    "minute": "min",
+    "hr": "h",
+    "hour": "h",
+    "day": "d",
+}
 
 
 class CompileError(RuntimeError):
@@ -94,8 +132,13 @@ class _Figure(NamedTuple):
 def can_compile(visual_type: VisualType | None) -> bool:
     """The current compiler capability, not the configurable request vocabulary."""
     return visual_type in {
-        VisualType.BAR, VisualType.DOT, VisualType.SLOPE, VisualType.LINE,
-        VisualType.SCATTER, VisualType.BUBBLE,
+        VisualType.BAR,
+        VisualType.DOT,
+        VisualType.SLOPE,
+        VisualType.LINE,
+        VisualType.SCATTER,
+        VisualType.BUBBLE,
+        VisualType.STACKED_BAR,
     }
 
 
@@ -116,9 +159,14 @@ def compile_chart(
     visual_type = plan.type
     if visual_type is None or not can_compile(visual_type):
         named = visual_type.value if visual_type is not None else "no type"
-        raise CompileError(
-            f"this build draws bar, dot, slope, line, scatter and bubble; the plan says {named}"
-        )
+        raise CompileError(f"this build cannot draw the plan's {named} type")
+
+    if visual_type is VisualType.STACKED_BAR:
+        from idhazh.visual_validator import validate_plan
+
+        if rejections := validate_plan(plan, table, visuals=visuals):
+            names = ", ".join(rejection.check.value for rejection in rejections)
+            raise CompileError(f"stacked_bar was refused on {names}")
 
     if visual_type in (VisualType.SCATTER, VisualType.BUBBLE):
         source = {element.element_id: element for element in table.elements}
@@ -182,6 +230,15 @@ def _check_channel_pairing(
             raise CompileError("category and quantity channels do not pair")
         if series and len(series) != len(quantities):
             raise CompileError("series and quantity channels do not pair")
+        return
+    if visual_type is VisualType.STACKED_BAR:
+        categories = channels[EncodingRole.CATEGORY]
+        series = channels[EncodingRole.SERIES]
+        if len(categories) != 1 or len(quantities) < 2 or len(series) != len(quantities):
+            raise CompileError("a stacked bar has one whole and one label for each part")
+        labels = [_mark_text(value, known, max_length=None) for value in series]
+        if len(set(labels)) != len(labels):
+            raise CompileError("stacked-bar part labels must remain distinct after sanitizing")
         return
 
     times = channels[EncodingRole.TIME]
@@ -264,7 +321,11 @@ def _chart_data(
                     )
                 )
             else:
-                text = _mark_text(value, known)
+                text = _mark_text(
+                    value,
+                    known,
+                    max_length=None if visual_type is VisualType.STACKED_BAR else MARK_NAME_MAX,
+                )
                 if not text:
                     raise CompileError(
                         f"a {role.value} mark has nothing after sanitizing and cannot be drawn"
@@ -342,6 +403,18 @@ def _observations(
             )
             for index in range(len(quantities))
         ]
+    if visual_type is VisualType.STACKED_BAR:
+        return [
+            (
+                [
+                    channels[EncodingRole.CATEGORY][0],
+                    quantities[index],
+                    channels[EncodingRole.SERIES][index],
+                ],
+                [mark_by_value[(EncodingRole.QUANTITY, index)]],
+            )
+            for index in range(len(quantities))
+        ]
     if visual_type is VisualType.LINE:
         times = channels[EncodingRole.TIME]
         series = channels[EncodingRole.SERIES]
@@ -406,6 +479,7 @@ def _emphasized_chart_mark(
         selected_name = {
             VisualType.BAR: "bars",
             VisualType.DOT: "dots",
+            VisualType.STACKED_BAR: "stacked-bar parts",
             VisualType.SLOPE: "slope measurements",
             VisualType.LINE: "line measurements",
             VisualType.SCATTER: "scatter points",
@@ -417,11 +491,17 @@ def _emphasized_chart_mark(
     return selected.pop()
 
 
-def _mark_text(value: DisplayedValue, known: Mapping[ElementId, Element]) -> str:
+def _mark_text(
+    value: DisplayedValue,
+    known: Mapping[ElementId, Element],
+    *,
+    max_length: int | None = MARK_NAME_MAX,
+) -> str:
     """A label taken from its own source characters and sanitized before publication."""
     if value.element_id is None:
         raise CompileError("a label has to be an element the article wrote")
-    return sanitize(known[value.element_id].span_excerpt)[:MARK_NAME_MAX]
+    text = sanitize(known[value.element_id].span_excerpt)
+    return text if max_length is None else text[:max_length]
 
 
 def _time_value(value: DisplayedValue, known: Mapping[ElementId, Element]) -> str:
@@ -476,6 +556,17 @@ def _chart_alt_text(
             for index, figure in enumerate(figures)
         ]
         return f"{name}. {'; '.join(facts)}."[:ALT_TEXT_MAX]
+    if visual_type is VisualType.STACKED_BAR:
+        row = _mark_text(channels[EncodingRole.CATEGORY][0], known, max_length=None)
+        series = channels[EncodingRole.SERIES]
+        stacked_unit = DISPLAY_UNIT_SYMBOLS.get(figures[0].unit or "", figures[0].unit or "")
+        unit_suffix = f" {stacked_unit}" if stacked_unit else ""
+        facts = [
+            f"{_mark_text(series[index], known, max_length=None)} "
+            f"{format(figure.value.normalize(), ',f')}{unit_suffix}"
+            for index, figure in enumerate(figures)
+        ]
+        return f"Stacked bar chart. {row}: {'; '.join(facts)}."[:ALT_TEXT_MAX]
 
     times = [_mark_text(value, known) for value in channels[EncodingRole.TIME]]
     entities = channels[EncodingRole.ENTITY]

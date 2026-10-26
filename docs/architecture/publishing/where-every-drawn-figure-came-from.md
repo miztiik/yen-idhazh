@@ -62,7 +62,7 @@ how a formatting rule becomes permission to state a figure the article never gav
 The line is drawn on **scale, not spelling**. `tonne` and `t` are two names for one unit, so a
 channel holding both draws them unchanged and the axis label picks a spelling - that is formatting.
 `kt` beside them is a thousand-fold difference, and moving it earns a chain. On the committed
-`units-convert` plan, which passes all nine validator checks and was not drawable before this, that
+`units-convert` plan, which passes all ten validator checks and was not drawable before this, that
 is one converted mark out of three.
 
 Nothing is lost, which is what makes conversion safe here. An element's Tier 1 `span_excerpt` is the
@@ -101,7 +101,7 @@ build naming the operator who set it. What is left for `enough_data` to ask of a
 article gave enough values to fill those bars - a floor of `visuals.histogram_bins` on the cited
 values, because fewer values than bins leaves a bin empty whatever their spread.
 
-A tenth check was weighed and refused. It would have fired on every histogram of every run for one
+A per-plan check for histogram bin count was weighed and refused. It would have fired on every histogram of every run for one
 config edit, and the reader loses nothing by its absence: the same fault is caught earlier and
 stated once. The three bounds are all `config/` knobs and none is a number chosen in code (Guardrail #6);
 no new knob was needed, because `min_chart_points` and `max_chart_points` already mean "how many
@@ -131,7 +131,7 @@ same reason - a refusal that cannot say which rule fired is a rule nobody can re
 work.
 
 **It returns rather than raises because the empty bin above is reachable on a plan the validator
-passed.** Thirteen of the fourteen refusals restate one of the nine checks, so a caller meeting one of
+passed.** Thirteen of the fourteen refusals restate one of the ten checks, so a caller meeting one of
 those resolved a plan it never validated - this run's own arithmetic being wrong. The fourteenth,
 `values_have_spread`, is the resolver's own: values crowding into one end of their own range leave a
 bar empty with a figure for every bin, and no check above refuses that. The paragraph above says the
@@ -250,7 +250,7 @@ boundary, not the invariant.
 ## See also
 
 - [visuals.md](visuals.md) - who decides a picture at all, and where the pass runs.
-- [what-a-visual-plan-may-say-and-what-happens-to-one-that-is-refused.md](what-a-visual-plan-may-say-and-what-happens-to-one-that-is-refused.md) - the nine checks a plan meets before any figure is resolved.
+- [what-a-visual-plan-may-say-and-what-happens-to-one-that-is-refused.md](what-a-visual-plan-may-say-and-what-happens-to-one-that-is-refused.md) - the ten checks a plan meets before any figure is resolved.
 - [where-a-drawing-becomes-pixels.md](where-a-drawing-becomes-pixels.md) - what the compiler does with the figures this page resolves.
 - [../extraction/elements.md](../extraction/elements.md) - the element table every Tier 1 figure is cut from.
 - [../contracts/schemas.md](../contracts/schemas.md) - `DisplayedValue` and the persisted shapes around it.

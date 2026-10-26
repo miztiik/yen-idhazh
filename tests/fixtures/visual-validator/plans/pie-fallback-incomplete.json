@@ -1,0 +1,34 @@
+{
+  "annotations": ["quantity-77-82"],
+  "caption": "The labeled parts make the declared whole.",
+  "confidence": 0.86,
+  "decision": "visual",
+  "declared_whole_element_id": "quantity-56-61",
+  "element_ids": [
+    "quantity-56-61",
+    "entity-63-67",
+    "quantity-77-82",
+    "entity-84-89",
+    "quantity-99-104",
+    "entity-110-115",
+    "quantity-125-130"
+  ],
+  "encodings": {
+    "bins": [],
+    "category": ["entity-63-67", "entity-84-89", "entity-110-115"],
+    "entity": [],
+    "event_label": [],
+    "quantity": ["quantity-77-82", "quantity-99-104", "quantity-125-130"],
+    "quantity_x": [],
+    "series": [],
+    "size": [],
+    "time": []
+  },
+  "labels": ["quantity-56-61", "entity-63-67"],
+  "plan_version": "2026-09-09",
+  "purpose": "composition",
+  "title": "Wind, solar, and hydro shares",
+  "type": "pie",
+  "version": "2026-09-09T03:11",
+  "why": "The source states the whole and each part separately."
+}

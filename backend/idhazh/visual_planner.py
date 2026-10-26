@@ -182,7 +182,7 @@ def reachable_types(table: ElementTable, *, visuals: VisualsConfig) -> tuple[Vis
     reading of the rules drifts the first time a rule moves, silently, in the
     direction that costs items their pictures.
 
-    Three of the nine checks cannot refuse a plan the gate has admitted, so the
+    Three of the ten checks cannot refuse a plan the gate has admitted, so the
     gate does not ask them. `element_exists` is satisfied by choosing from the
     table. `plan_version_current` is stamped by code. `numerals_matched` is
     about prose, and a plan can always write prose with no numeral in it.
@@ -369,6 +369,13 @@ def _restyled(plan: VisualPlan, target: VisualType) -> VisualPlan:
         role.value: (getattr(plan.encodings, role.value) if role in legal else [])
         for role in EncodingRole
     }
+    if plan.type is VisualType.PIE and target is VisualType.STACKED_BAR:
+        encodings[EncodingRole.CATEGORY.value] = (
+            [plan.declared_whole_element_id]
+            if plan.declared_whole_element_id is not None
+            else []
+        )
+        encodings[EncodingRole.SERIES.value] = list(plan.encodings.category)
     return VisualPlan.model_validate(
         plan.model_dump(mode="json") | {"type": target.value, "encodings": encodings}
     )
@@ -413,6 +420,7 @@ def downgrade(
     *,
     visuals: VisualsConfig,
     published_marks: Mapping[VisualType, Sequence[int]],
+    rejected: list[Rejection] | None = None,
 ) -> Downgrade | None:
     """The weakest legal re-drawing of this plan that still earns its place, or nothing.
 
@@ -471,7 +479,10 @@ def downgrade(
                 # worth showing. Without it depth 1 is just the default path.
                 if not candidate.annotations:
                     continue
-                if validate_plan(candidate, table, visuals=visuals):
+                candidate_rejections = validate_plan(candidate, table, visuals=visuals)
+                if candidate_rejections:
+                    if rejected is not None:
+                        rejected.extend(candidate_rejections)
                     continue
                 floor = depth_floor(published_marks.get(edge.target, ()), percentile)
                 if floor is None or _marks(candidate) < floor:

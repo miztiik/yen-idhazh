@@ -176,10 +176,10 @@ SITE_BYTES_FIRST_DAY = 54_230
 #: at all.
 SITE_BYTES_PER_DAY = 11_000
 
-# Four items carry a real visual, so the browser suite exercises the picture
+# Five items carry a real visual, so the browser suite exercises the picture
 # path rather than proving it safe by never serving one.
 #
-# Bar, line and bubble read the validator's committed plans and element tables,
+# Bar, line, bubble and stacked bar read the validator's committed plans and element tables,
 # so the browser and backend oracle hold the same source evidence. The other
 # chart is written here because its bars deliberately carry no unit.
 PLANNED_PLAN = Path("tests/fixtures/visual-validator/plans/passes.json")
@@ -188,6 +188,8 @@ LINE_PLAN = Path("tests/fixtures/visual-validator/plans/line-trend.json")
 LINE_TABLE = Path("tests/fixtures/visual-validator/tables/line-trend.json")
 BUBBLE_PLAN = Path("tests/fixtures/visual-validator/plans/bubble-relationship.json")
 BUBBLE_TABLE = Path("tests/fixtures/visual-validator/tables/scatter-relationship.json")
+STACKED_PLAN = Path("tests/fixtures/visual-validator/plans/stacked-valid.json")
+STACKED_TABLE = Path("tests/fixtures/visual-validator/tables/stacked-whole.json")
 
 #: A second chart, with no unit on its axis. Three stages of one process, which
 #: a unit would not describe, so the drawing code has to lay out an axis that
@@ -365,7 +367,7 @@ SCORED: Final[tuple[_Measured, ...]] = (
 #:
 #: **Named rather than globbed, and the naming is the point.** Every row of
 #: `SCORED` is engineered against the article at its own index, and so are
-#: `ABSTRACT_AT`, `RELABELLED_AT`, `APPEARED` and three of the visuals. The day's
+#: `ABSTRACT_AT`, `RELABELLED_AT`, `APPEARED` and four of the visuals. The day's
 #: shape is a fixture somebody designed, not a census of a directory. While this
 #: globbed, that shape depended on how many injection attacks
 #: `tests/fixtures/canaries/` happened to hold - so adding one to the boundary
@@ -604,7 +606,7 @@ def lenses_for(index: int) -> list[str]:
 def visual_for(
     index: int, item_id: str, target: Path, *, visuals: VisualsConfig
 ) -> VisualDecision | None:
-    """Publish four charts and retain one failed chart decision.
+    """Publish five charts and retain one failed chart decision.
 
     Several published charts let the browser suite prove that every
     promised picture is served - a single figure cannot show that the page draws
@@ -613,8 +615,8 @@ def visual_for(
     rendered charts rather than visuals, and a fixture where the two numbers
     agree cannot tell the two readings apart.
 
-    Bar, line and scatter go through the compiler. Their marks and alt text
-    come from committed plans and element tables.
+    Bar, line, scatter and stacked bar go through the compiler. Their marks and
+    alt text come from committed plans and element tables.
     """
     # The payload holds `digest/<Y>/<M>/<D>/...`, so the root here is the parent
     # of the digest directory - exactly as the real pipeline does it.
@@ -657,6 +659,16 @@ def visual_for(
         return render_planned_visual(
             decided(VisualKind.NONE, None, None),
             VisualPlan.read(BUBBLE_PLAN),
+            table,
+            public_root=public_root,
+            relpath=relpath,
+            visuals=visuals,
+        )
+    if index == 4:
+        table = ElementTable.read(STACKED_TABLE).model_copy(update={"item_id": item_id})
+        return render_planned_visual(
+            decided(VisualKind.NONE, None, None),
+            VisualPlan.read(STACKED_PLAN),
             table,
             public_root=public_root,
             relpath=relpath,

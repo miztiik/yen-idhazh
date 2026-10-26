@@ -1,0 +1,39 @@
+{
+  "caption": "The labeled parts make the declared whole.",
+  "emphasized_mark_id": "m1",
+  "encoding": {
+    "bins": [],
+    "category": [
+      "m0"
+    ],
+    "entity": [],
+    "event_label": [],
+    "quantity": [
+      "m1",
+      "m2",
+      "m3"
+    ],
+    "quantity_x": [],
+    "series": [
+      "m4",
+      "m5",
+      "m6"
+    ],
+    "size": [],
+    "time": []
+  },
+  "item_id": "energy-7731902044",
+  "marks": [
+    {"derived": null,"element_id": "quantity-22-29","mark_id": "m0","source_text": null,"text": "0.03 GW","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": "quantity-77-82","mark_id": "m1","source_text": null,"text": null,"time": null,"unit": "mw","value": "10"},
+    {"derived": null,"element_id": "quantity-99-104","mark_id": "m2","source_text": null,"text": null,"time": null,"unit": "mw","value": "10"},
+    {"derived": null,"element_id": "quantity-125-130","mark_id": "m3","source_text": null,"text": null,"time": null,"unit": "mw","value": "10"},
+    {"derived": null,"element_id": "entity-63-67","mark_id": "m4","source_text": null,"text": "Wind","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": "entity-84-89","mark_id": "m5","source_text": null,"text": "solar","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": "entity-110-115","mark_id": "m6","source_text": null,"text": "hydro","time": null,"unit": null,"value": null}
+  ],
+  "renderer_version": "2026-10-27T01:01",
+  "title": "Wind, solar, and hydro shares",
+  "type": "stacked_bar",
+  "version": "2026-10-27T03:00"
+}

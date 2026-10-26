@@ -98,7 +98,7 @@ this plan does not restore historical redraw or migration machinery.
 | 2 | Position and length: bar, dot, slope | 1 | B | DONE | supreme-sniffle / chart-position-and-length | #1738 | Copilot session 6c107b16-1860-4e47-9bba-c8b401dd96e7 |
 | 3 | Trend and magnitude: line, area | 2 | C | DONE | chart-trend-magnitude-row-3 | #1741 | - |
 | 4 | Relationship: scatter | 3 | D | DONE | chart-relationship-scatter | #1742 | - |
-| 5 | Parts as bars: stacked_bar, with its own question | 4 | E | PENDING | - | - | - |
+| 5 | Parts as bars: stacked_bar, with its own question | 4 | E | DONE | chart-vocabulary-row-5 | #1749 | - |
 | 6 | The two the reader asked for | 5 | F | PENDING | - | - | - |
 
 Row 1 is authorised and in flight under the
@@ -228,6 +228,7 @@ implementation/test references, not a claim that tests were run.
 | 1 | **`stacked_bar` has its own gate.** Without one, a `pie` refused for summing its whole rather than reading a declared one lands in a `stacked_bar` that never re-asks the question, and the refusal buys nothing | 12.12 G26 |
 | 2 | This is the shape the downgrade ladder's re-validation rule needs: a downgrade target with no predicate makes re-entering the validator pointless | 12.7 G8, 12.12 G26 |
 | 3 | Failed declared-whole validation produces no visual, not grouped bars | Maintainer R4 |
+| 4 | One stacked row, covered by an independently stated whole. A pie fallback uses the whole's source label as the row label and the pie categories as the parts. Several category rows are refused | Maintainer confirmation "A1 - Confirm one-row delivery", 2026-10-26 UTC |
 
 ### Rejected alternatives
 

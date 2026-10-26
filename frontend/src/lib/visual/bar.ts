@@ -30,11 +30,52 @@ import { frame, type Frame } from '../charts/frame';
 import { dateSeries, type PlacedPoint } from '../charts/d3/dateSeries';
 import { LEGACY_MODEL_RULE } from '../charts/d3/model-rule';
 import { PALETTE, type ChartPaletteToken } from '../charts/theme';
+import { UNRECORDED_STOP } from '../charts/machine-colour';
+import { factsOf, type ReadoutFacts } from '../charts/readout';
+import { partsOfOne, type PartsGeometry } from '../charts/d3/partsOfOne';
 import type { VisualData, VisualMark } from '$lib/payload/types';
 import type { NumberFormatConfig, NumberFormatter } from '$lib/number-format';
 import type { StoryChartGeometryConfig } from '$lib/server/config';
 import { drawScatter, statedScatter, type ScatterDrawing } from './scatter';
 import { drawBubble, statedBubble, type BubbleDrawing } from './bubble';
+
+const DISPLAY_UNIT_SYMBOLS: Readonly<Record<string, string>> = {
+	w: 'W',
+	watt: 'W',
+	kw: 'kW',
+	kilowatt: 'kW',
+	mw: 'MW',
+	megawatt: 'MW',
+	gw: 'GW',
+	gigawatt: 'GW',
+	tw: 'TW',
+	terawatt: 'TW',
+	wh: 'Wh',
+	kwh: 'kWh',
+	mwh: 'MWh',
+	gwh: 'GWh',
+	twh: 'TWh',
+	g: 'g',
+	gram: 'g',
+	kg: 'kg',
+	kilogram: 'kg',
+	t: 't',
+	tonne: 't',
+	kt: 'kt',
+	kilotonne: 'kt',
+	mm: 'mm',
+	cm: 'cm',
+	km: 'km',
+	kilometre: 'km',
+	kilometer: 'km',
+	s: 's',
+	second: 's',
+	min: 'min',
+	minute: 'min',
+	hr: 'h',
+	hour: 'h',
+	day: 'd'
+};
 
 /** One bar, placed. Every number here is a CSS pixel on the reader's screen. */
 export interface Bar {
@@ -135,13 +176,23 @@ export interface LineDrawing extends DrawingBase {
 	lines: Line[];
 }
 
+export interface StackedBarDrawing {
+	type: 'stacked_bar';
+	title: string | null;
+	caption: string | null;
+	width: number;
+	geometry: PartsGeometry;
+	readout: ReadoutFacts;
+}
+
 export type Drawing =
 	| BarDrawing
 	| DotDrawing
 	| SlopeDrawing
 	| LineDrawing
 	| ScatterDrawing
-	| BubbleDrawing;
+	| BubbleDrawing
+	| StackedBarDrawing;
 
 function figureOf(mark: VisualMark): number {
 	// The compiler pins `value` to the characters the article wrote, so this is
@@ -487,6 +538,62 @@ export function drawLines(
 	};
 }
 
+/** Place one source-declared whole and its measured parts on the shared stack. */
+export function drawStackedBars(
+	data: VisualData,
+	room: number,
+	formatNumber: NumberFormatter
+): StackedBarDrawing {
+	const held = new Map(data.marks.map((mark) => [mark.mark_id, mark]));
+	const mark = (id: string): VisualMark => {
+		const found = held.get(id);
+		if (found === undefined) throw new Error(`visual data draws a mark it does not carry: ${id}`);
+		return found;
+	};
+	const whole = mark(data.encoding.category[0]);
+	const quantities = data.encoding.quantity.map(mark);
+	const labels = data.encoding.series.map(mark);
+	const values = quantities.map(figureOf);
+	const parts = labels.map((label, index) => ({
+		label: label.text ?? '',
+		value: values[index],
+		emphasized: quantities[index].mark_id === data.emphasized_mark_id
+	}));
+	const hues = UNRECORDED_STOP - 1;
+	const geometry = partsOfOne(
+		[{ label: whole.text ?? '', parts }],
+		{
+			order: labels.map((label) => label.text ?? ''),
+			tokens: labels.map((_, index) => PALETTE[index % hues])
+		}
+	);
+	if (geometry === null) throw new Error('a validated stacked bar has no measurable parts');
+	const unit = quantities[0]?.unit;
+	const unitSuffix = unit ? ` ${DISPLAY_UNIT_SYMBOLS[unit] ?? unit}` : '';
+	const readout = factsOf(
+		whole.text ?? '',
+		parts.map((part, index) => ({
+			label: part.label,
+			value: [
+				`${formatNumber(values[index], { si: true })}${unitSuffix}`,
+				quantities[index].source_text
+					? `(source: ${quantities[index].source_text})`
+					: ''
+			].filter(Boolean).join(' '),
+			swatch: `var(${geometry.key[index].token})`
+		})),
+		'Not measured'
+	);
+	return {
+		type: 'stacked_bar',
+		title: data.title,
+		caption: data.caption,
+		width: Math.max(0, Math.floor(room)),
+		geometry,
+		readout
+	};
+}
+
 export function drawVisual(
 	data: VisualData,
 	room: number,
@@ -508,6 +615,8 @@ export function drawVisual(
 			return drawScatter(data, room, formatNumber, numberFormat, tickDensity, geometry);
 		case 'bubble':
 			return drawBubble(data, room, formatNumber, numberFormat, tickDensity, geometry);
+		case 'stacked_bar':
+			return drawStackedBars(data, room, formatNumber);
 		default:
 			throw new Error(`visual type is not drawn: ${data.type}`);
 	}
@@ -592,5 +701,18 @@ export function statedDrawing(drawing: Drawing): string {
 			return statedScatter(drawing);
 		case 'bubble':
 			return statedBubble(drawing);
+		case 'stacked_bar': {
+			const facts = drawing.readout.facts.map((fact) =>
+				`${fact.label} ${fact.value ?? drawing.readout.notMeasured}` +
+				`${drawing.geometry.rows[0].segments.find((segment) =>
+					segment.label === fact.label
+				)?.emphasized ? ' (highlighted)' : ''}`
+			);
+			return [
+				drawing.title,
+				`Stacked bar chart. ${drawing.geometry.rows[0].label}: ${facts.join('; ')}.`,
+				drawing.caption
+			].filter(Boolean).join(' ');
+		}
 	}
 }

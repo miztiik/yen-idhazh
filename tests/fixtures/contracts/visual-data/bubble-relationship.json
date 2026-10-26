@@ -51,8 +51,8 @@
     {"derived": null,"element_id": "entity-118-124","mark_id": "m14","source_text": null,"text": "Norway","time": null,"unit": null,"value": null},
     {"derived": null,"element_id": "entity-175-182","mark_id": "m15","source_text": null,"text": "Ireland","time": null,"unit": null,"value": null}
   ],
-  "renderer_version": "2026-10-27T01:00",
+  "renderer_version": "2026-10-27T01:01",
   "title": "Capacity, output and turbine count",
   "type": "bubble",
-  "version": "2026-10-27T02:00"
+  "version": "2026-10-27T03:00"
 }
