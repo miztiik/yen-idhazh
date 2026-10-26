@@ -571,7 +571,7 @@ def test_a_named_fixture_round_trips_without_losing_values(directory: str, name:
                     for wanted, found in zip(expected, actual, strict=True)
                 )
             )
-        return expected == actual
+        return bool(expected == actual)
 
     assert preserves_supplied_values(payload, round_tripped)
     assert contract.from_json(once) == record

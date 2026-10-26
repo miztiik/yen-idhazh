@@ -253,13 +253,8 @@ class VisualData(Contract):
         ),
         ChangelogEntry(
             version="2026-10-24",
-            change="Publish safe framing, one emphasized mark and original computed inputs.",
-            why="Framing and reading priority travel with the figures they explain.",
-        ),
-        ChangelogEntry(
-            version="2026-09-13T20:00",
-            change="Initial shape: the marks with their values and provenance, the encoding.",
-            why="The reader's browser draws the chart, so it needs the marks rather than an SVG.",
+            change="Earlier changes are in this file's git history.",
+            why="A changelog says what moved lately; git is the archive.",
         ),
     )
 
@@ -369,16 +364,15 @@ class VisualData(Contract):
             whole = by_id[channels.category[0]]
             if whole.element_id is None or not whole.element_id.startswith("quantity-"):
                 raise ValueError("a stacked bar's whole label cites a source quantity")
-            whole_inputs = {
-                element_id
-                for mark_id in channels.quantity
-                for element_id in (
-                    [by_id[mark_id].element_id]
-                    if by_id[mark_id].derived is None
-                    else by_id[mark_id].derived.inputs
-                )
-                if element_id is not None
-            }
+            whole_inputs: set[str] = set()
+            for mark_id in channels.quantity:
+                part = by_id[mark_id]
+                derived = part.derived
+                if derived is None:
+                    if part.element_id is not None:
+                        whole_inputs.add(part.element_id)
+                else:
+                    whole_inputs.update(derived.inputs)
             if whole.element_id in whole_inputs:
                 raise ValueError("a stacked bar's declared whole is separate from its parts")
             part_labels = [by_id[mark_id].text for mark_id in channels.series]

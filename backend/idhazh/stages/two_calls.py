@@ -56,7 +56,7 @@ from idhazh.stages.common import (
     silent_tracer,
 )
 from idhazh.telemetry.record import Flags, ItemRecorder
-from idhazh.visual_validator import validate_plan
+from idhazh.visual_validator import Rejection, validate_plan
 
 #: The column prefix the item's FIRST call writes under. `ItemHealthRow` names
 #: its two call slots after the calls this stage happens to make, and
@@ -256,7 +256,7 @@ def _drawn(
     drawable = plan
     reason = "the plan passed every check and this build could not draw it"
     if rejections or not can_compile(plan.type):
-        replacement_rejections = []
+        replacement_rejections: list[Rejection] = []
         cause = (
             "the plan was refused on "
             + ", ".join(rejection.check.value for rejection in rejections)

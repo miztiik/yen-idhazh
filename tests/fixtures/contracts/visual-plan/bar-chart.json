@@ -4,6 +4,7 @@
   ],
   "caption": "Each bar is the figure the article states for that country.",
   "confidence": 0.82,
+  "declared_whole_element_id": null,
   "decision": "visual",
   "element_ids": [
     "entity-1170-1177",
@@ -44,6 +45,6 @@
   "purpose": "comparison",
   "title": "Offshore wind capacity, four countries",
   "type": "bar",
-  "version": "2026-09-09T03:11",
+  "version": "2026-10-26T09:41",
   "why": "Four countries, one unit, and the lead sentence turns on which of them is largest."
 }

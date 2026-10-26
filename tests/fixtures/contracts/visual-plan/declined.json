@@ -2,6 +2,7 @@
   "annotations": [],
   "caption": null,
   "confidence": 0.91,
+  "declared_whole_element_id": null,
   "decision": "none",
   "element_ids": [],
   "encodings": {
@@ -20,6 +21,6 @@
   "purpose": null,
   "title": null,
   "type": null,
-  "version": "2026-09-09T03:11",
+  "version": "2026-10-26T09:41",
   "why": "One figure and no second one to set it against, so a chart would say less than the sentence."
 }

@@ -66,8 +66,8 @@ from idhazh.visual_vocabulary import (
     PLAN_VOCABULARY_VERSION,
     ROLE_KINDS,
     TYPE_RULES,
-    VALUE_ROLES,
     UNIT_DIMENSIONS,
+    VALUE_ROLES,
     commensurable,
 )
 
@@ -222,9 +222,11 @@ def _roles_valid_for_type(
         )
     if visual_type is VisualType.LINE:
         times = elements_by_role.get(EncodingRole.TIME, ())
-        quantities = elements_by_role.get(EncodingRole.QUANTITY, ())
-        series = elements_by_role.get(EncodingRole.SERIES, ())
-        if len(times) != len(quantities) or (series and len(series) != len(quantities)):
+        line_quantities = elements_by_role.get(EncodingRole.QUANTITY, ())
+        line_series = elements_by_role.get(EncodingRole.SERIES, ())
+        if len(times) != len(line_quantities) or (
+            line_series and len(line_series) != len(line_quantities)
+        ):
             return Rejection(
                 ValidatorCheck.ROLES_VALID_FOR_TYPE,
                 "a line pairs one date and optional series label with each quantity",
@@ -243,7 +245,7 @@ def _roles_valid_for_type(
         dates_by_series: dict[str, set[str]] = {}
         counts_by_series: dict[str, int] = {}
         for index, element in enumerate(times):
-            label = series[index].span_excerpt if series else ""
+            label = line_series[index].span_excerpt if line_series else ""
             date = element.value
             if date is None:
                 continue
@@ -261,10 +263,10 @@ def _roles_valid_for_type(
                 "each line series needs at least two dates",
             )
     if visual_type is VisualType.STACKED_BAR:
-        categories = filled.get(EncodingRole.CATEGORY, ())
-        quantities = filled.get(EncodingRole.QUANTITY, ())
-        series = filled.get(EncodingRole.SERIES, ())
-        if len(categories) != 1 or len(series) != len(quantities):
+        stacked_categories = filled.get(EncodingRole.CATEGORY, ())
+        stacked_quantities = filled.get(EncodingRole.QUANTITY, ())
+        stacked_series = filled.get(EncodingRole.SERIES, ())
+        if len(stacked_categories) != 1 or len(stacked_series) != len(stacked_quantities):
             return Rejection(
                 ValidatorCheck.ROLES_VALID_FOR_TYPE,
                 "a stacked bar has one declared whole and one series label per part",
@@ -309,7 +311,8 @@ def _stacked_bar_exhaustive(
             ValidatorCheck.STACKED_BAR_EXHAUSTIVE,
             f"{whole_id} does not state a positive whole",
         )
-    whole_dimension = UNIT_DIMENSIONS.get(whole.unit)
+    whole_unit = whole.unit
+    whole_dimension = UNIT_DIMENSIONS.get(whole_unit) if whole_unit is not None else None
     total = Fraction()
     for part in parts:
         if part.value is None or Decimal(part.value) < 0:
@@ -317,15 +320,15 @@ def _stacked_bar_exhaustive(
                 ValidatorCheck.STACKED_BAR_EXHAUSTIVE,
                 f"{part.element_id} is not a non-negative part quantity",
             )
-        if not commensurable(part.unit, whole.unit):
+        if not commensurable(part.unit, whole_unit):
             return Rejection(
                 ValidatorCheck.STACKED_BAR_EXHAUSTIVE,
                 f"{part.element_id} and {whole_id} do not measure the same thing",
             )
-        if part.unit == whole.unit:
+        if part.unit == whole_unit:
             total += Fraction(Decimal(part.value))
             continue
-        part_dimension = UNIT_DIMENSIONS.get(part.unit)
+        part_dimension = UNIT_DIMENSIONS.get(part.unit) if part.unit is not None else None
         if part_dimension is None or whole_dimension is None:
             return Rejection(
                 ValidatorCheck.STACKED_BAR_EXHAUSTIVE,
