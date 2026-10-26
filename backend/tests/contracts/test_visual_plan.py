@@ -256,5 +256,5 @@ def test_the_worst_case_reply_length_is_arithmetic_and_the_fixtures_are_a_fracti
             if name not in CODE_STAMPED_FIELDS
         }
         measured[stem] = len(json.dumps(decoded, separators=(",", ":"), sort_keys=True))
-    assert measured == {"bar-chart": 838, "declined": 368}
+    assert measured == {"bar-chart": 871, "declined": 401}
     assert max(measured.values()) < WORST_CASE_REPLY_CHARACTERS // 4

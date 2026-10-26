@@ -503,7 +503,8 @@ test.describe('the chart panel draws a NULL as no value, never as zero', () => {
 		const columns: Column[] = [{ name: 'stage', type: 'VARCHAR' }, ...['arrived', 'went', 'lost'].map((name) => ({ name, type: 'INTEGER' }))];
 		const rows: Row[] = [{ stage: 'first', arrived: '10', went: '8', lost: '2' }, { stage: 'last', arrived: '8', went: '6', lost: '2' }];
 		const bars = draw(columns, rows, 'partsOfOne');
-		const geometry = partsOfOne(rows.map((row) => ({ label: String(row.stage), parts: ['arrived', 'went', 'lost'].map((label) => ({ label, value: Number(row[label]) })) })), { order: ['arrived', 'went', 'lost'], overlapping: true, tokens: SERIES_TOKENS });
+		const order = ['arrived', 'went', 'lost'];
+		const geometry = partsOfOne(rows.map((row) => ({ label: String(row.stage), parts: order.map((label) => ({ label, value: Number(row[label]) })) })), { order, overlapping: true, tokens: SERIES_TOKENS.slice(0, order.length) });
 		expect(bars).toContain('data-parts-overlapping="yes"');
 		expect(bars).not.toContain('class="parts-total"');
 		for (const row of geometry!.rows) for (const segment of row.segments) expect(bars).toContain(`inline-size: ${segment.size}`);
