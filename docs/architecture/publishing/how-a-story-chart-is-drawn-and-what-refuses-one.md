@@ -1,6 +1,6 @@
 # How a story chart is drawn, and what refuses one
 
-**Last Updated**: 2026-10-25
+**Last Updated**: 2026-10-26
 
 A story that carries a chart carries a pointer at its marks, and the reader's
 browser is what turns those marks into a picture. This page holds that path: who
@@ -75,7 +75,7 @@ data keeps the same geometry. No reader styling change was needed to meet the
 floor; this gate protects the existing measured-width drawing.
 
 `refusedVisualData` checks the current renderer, supported type, mark references,
-paired channels for each type, canonical dates on line time marks, framing fields
+paired channels for each type, complete entity pairs on scatter, canonical dates on line time marks, framing fields
 and exactly one emphasized measured mark.
 The [compiler contract](where-a-drawing-becomes-pixels.md#design-rationale)
 owns how plan references select that mark. Invalid or older incompatible data
@@ -99,12 +99,24 @@ their units are still visible. Lines order source-backed measurements by
 canonical date, keep source wording for labels, and group only when each
 reading carries its own series label. They share date ticks, value axes and
 measured width with the Data explorer's date-series builder. One shared drawing
-component handles all four forms. A line's unit appears once at the value axis;
+component handles these forms. A line's unit appears once at the value axis;
 numeric tick labels do not repeat it. Their bounded settings live under `chart.story_geometry`, separate from the
 console chart's fixed coordinate dimensions, and reach the browser only through
 the existing typed build-time UI configuration. The dot baseline ends at the
 same measured position as its value scale, and mark outlines take their width
 from that bounded geometry.
+
+Scatter answers whether two measures move together over the same entities.
+It reuses the Data explorer's `pairedScatter` builder, but validates every pair
+before that builder can filter missing values. Both axes use shared value
+scales and number formatting. The plot has no fitted line and does not force
+zero onto either axis. Its readings below the plot name every entity and both
+values; the figure's keyboard description includes the source figures when
+unit conversion changed a displayed value. Axis units distinguish x from y.
+Scatter dimensions and margins live in the same bounded appearance settings.
+The source-derived geometry test reads the shared narrow and wide viewports
+from `tests/fixtures/visual-validator/viewports.json`; the existing reader
+journey checks the real drawing, text floor, focus and navigation.
 
 **The oracle is an equality against a token, never against a hex.** The same spec plants a probe element, sets its `background-color` to the property the stylesheet routes a mark to, and compares what the document computed with what the mark was painted. The two themes give that property two different values, so one baked colour fails one case whichever colour it is - and a test written against a literal would need editing every time the palette moves, which is how a colour test stops being one.
 

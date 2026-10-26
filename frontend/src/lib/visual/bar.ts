@@ -33,6 +33,7 @@ import { PALETTE, type ChartPaletteToken } from '../charts/theme';
 import type { VisualData, VisualMark } from '$lib/payload/types';
 import type { NumberFormatConfig, NumberFormatter } from '$lib/number-format';
 import type { StoryChartGeometryConfig } from '$lib/server/config';
+import { drawScatter, statedScatter, type ScatterDrawing } from './scatter';
 
 /** One bar, placed. Every number here is a CSS pixel on the reader's screen. */
 export interface Bar {
@@ -55,7 +56,7 @@ export interface Bar {
 }
 
 /** A whole chart, placed. */
-interface DrawingBase {
+export interface DrawingBase {
 	title: string | null;
 	caption: string | null;
 	/** The room the caller measured, which every mark below is placed inside. */
@@ -133,7 +134,7 @@ export interface LineDrawing extends DrawingBase {
 	lines: Line[];
 }
 
-export type Drawing = BarDrawing | DotDrawing | SlopeDrawing | LineDrawing;
+export type Drawing = BarDrawing | DotDrawing | SlopeDrawing | LineDrawing | ScatterDrawing;
 
 function figureOf(mark: VisualMark): number {
 	// The compiler pins `value` to the characters the article wrote, so this is
@@ -497,6 +498,8 @@ export function drawVisual(
 			return drawSlopes(data, room, formatNumber, geometry);
 		case 'line':
 			return drawLines(data, room, formatNumber, numberFormat, tickDensity, geometry);
+		case 'scatter':
+			return drawScatter(data, room, formatNumber, numberFormat, tickDensity, geometry);
 		default:
 			throw new Error(`visual type is not drawn: ${data.type}`);
 	}
@@ -577,5 +580,7 @@ export function statedDrawing(drawing: Drawing): string {
 			return statedSlopes(drawing);
 		case 'line':
 			return statedLines(drawing);
+		case 'scatter':
+			return statedScatter(drawing);
 	}
 }

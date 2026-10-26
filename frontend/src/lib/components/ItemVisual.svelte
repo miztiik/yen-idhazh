@@ -339,6 +339,41 @@
 							{drawing.unit}
 						</text>
 					{/if}
+				{:else if drawing.type === 'scatter'}
+					{#each drawing.y.ticks as tick (tick.value)}
+						<line class="grid" stroke-width={storyChartGeometry.axis_line_width_px}
+							x1={drawing.frame.left} x2={drawing.frame.right} y1={tick.at} y2={tick.at} />
+						{#if tick.text}
+							<text class="figure value-tick" text-anchor="end"
+								x={drawing.frame.left - storyChartGeometry.value_gap_px} y={tick.at}>{tick.text}</text>
+						{/if}
+					{/each}
+					<line class="axis" stroke-width={storyChartGeometry.axis_line_width_px}
+						x1={drawing.frame.left} x2={drawing.frame.right}
+						y1={drawing.frame.bottom} y2={drawing.frame.bottom} />
+					<line class="axis" stroke-width={storyChartGeometry.axis_line_width_px}
+						x1={drawing.frame.left} x2={drawing.frame.left}
+						y1={drawing.frame.top} y2={drawing.frame.bottom} />
+					{#each drawing.x.ticks as tick (tick.value)}
+						{#if tick.text}
+							<text class="figure value-tick" text-anchor="middle"
+								x={tick.at} y={drawing.frame.bottom + storyChartGeometry.axis_label_offset_px}>{tick.text}</text>
+						{/if}
+					{/each}
+					<text class="unit" x={drawing.frame.left} y={drawing.frame.top / 2}>
+						y{drawing.yUnit ? ` (${drawing.yUnit})` : ''}
+					</text>
+					<text class="unit" text-anchor="end" x={drawing.frame.right}
+						y={drawing.height - storyChartGeometry.value_gap_px}>
+						x{drawing.xUnit ? ` (${drawing.xUnit})` : ''}
+					</text>
+					{#each drawing.points as point (point.label)}
+						<circle class="scatter-point" class:emphasized={point.emphasized}
+							stroke-width={storyChartGeometry.mark_outline_width_px}
+							cx={point.cx} cy={point.cy} r={storyChartGeometry.dot_radius_px}>
+							<title>{point.label}: x {point.statedX} {drawing.xUnit ?? ''}, y {point.statedY} {drawing.yUnit ?? ''}</title>
+						</circle>
+					{/each}
 				{:else}
 					<text class="column-label" text-anchor="middle" x={drawing.leftX} y={storyChartGeometry.slope_header_band_px / 2}>
 						{drawing.leftLabel}
@@ -387,7 +422,17 @@
 					{/if}
 				{/if}
 			</svg>
-			{#if drawing.type === 'slope'}
+			{#if drawing.type === 'scatter'}
+				<ul class="scatter-readings px-3 pb-3 text-xs leading-normal text-text-secondary">
+					{#each drawing.points as point (point.label)}
+						<li class:highlighted={point.emphasized}>
+							<span class="font-semibold text-text">{point.label}</span>:
+							x {point.displayedX}{drawing.xUnit ? ` ${drawing.xUnit}` : ''},
+							y {point.displayedY}{drawing.yUnit ? ` ${drawing.yUnit}` : ''}
+						</li>
+					{/each}
+				</ul>
+			{:else if drawing.type === 'slope'}
 				<ul class="slope-legend px-3">
 					{#each drawing.slopes as slope (slope.color)}
 						<li>
@@ -501,6 +546,26 @@
 
 	.dot {
 		fill: var(--chart-1);
+	}
+
+	.scatter-point {
+		fill: var(--chart-1);
+		stroke: var(--color-surface);
+	}
+
+	.scatter-point.emphasized {
+		fill: var(--chart-2);
+		stroke: var(--color-text);
+		stroke-dasharray: var(--space-1);
+	}
+
+	.scatter-readings {
+		list-style: none;
+	}
+
+	.scatter-readings .highlighted {
+		font-weight: var(--font-weight-semibold);
+		color: var(--color-text);
 	}
 
 	.dot.emphasized,

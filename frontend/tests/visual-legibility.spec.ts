@@ -119,10 +119,10 @@ test('reader labels clear the text floor without scaling, and every mark survive
 				geometry
 			);
 			const emphasized = svg.locator(
-				'rect.bar.emphasized, circle.dot.emphasized, circle.slope-point.emphasized, circle.line-point.emphasized'
+				'rect.bar.emphasized, circle.dot.emphasized, circle.slope-point.emphasized, circle.line-point.emphasized, circle.scatter-point.emphasized'
 			);
 			await expect(emphasized).toHaveCount(1);
-			const styles = await svg.locator('rect.bar, circle.dot, line.slope-line, circle.slope-point, path.series-line, circle.line-point').evaluateAll((marks) => marks.map((mark) => {
+			const styles = await svg.locator('rect.bar, circle.dot, line.slope-line, circle.slope-point, path.series-line, circle.line-point, circle.scatter-point').evaluateAll((marks) => marks.map((mark) => {
 				const style = getComputedStyle(mark);
 				return {
 					selected: mark.classList.contains('emphasized'),
@@ -176,6 +176,16 @@ test('reader labels clear the text floor without scaling, and every mark survive
 					]),
 					...(expected.unit ? [expected.unit] : [])
 				]);
+			} else if (expected.type === 'scatter') {
+				const points = await svg.locator('circle.scatter-point').evaluateAll((marks) =>
+					marks.map((point) => ['cx', 'cy'].map((key) => Number(point.getAttribute(key))))
+				);
+				expect(points).toEqual(expected.points.map((point) => [point.cx, point.cy]));
+				for (const point of expected.points) {
+					await expect(figure.locator('.scatter-readings')).toContainText(point.label);
+					await expect(figure.locator('.scatter-readings')).toContainText(`x ${point.displayedX}`);
+					await expect(figure.locator('.scatter-readings')).toContainText(`y ${point.displayedY}`);
+				}
 			} else if (expected.type === 'line') {
 				expect(measured.valueTickBounds.length).toBeGreaterThan(0);
 				expect(measured.lines).toEqual(expected.lines.map((line) => ({
