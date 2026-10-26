@@ -29,7 +29,7 @@ in both sets.
 GTE-small has the highest observed ranking score and the shortest recorded
 encoding time. Gemma is close on ranking, but this test does not establish a
 GTE/Gemma quality winner. Jina and Gemma have not shown a clear practical gain
-over the owner's existing GTE-small and MiniLM candidates.
+over the maintainer's existing GTE-small and MiniLM candidates.
 
 ### What the numbers mean
 
@@ -457,7 +457,7 @@ multiple-comparison-adjusted significance.
 This frame can compare the four candidates against these model-written event
 decisions. It cannot establish human-validated quality, production precision,
 coverage of missing inputs, or a statistically demonstrated GTE/Gemma winner.
-GTE-small and MiniLM remain the owner's candidates. No production configuration
+GTE-small and MiniLM remain the maintainer's candidates. No production configuration
 changes. A representative sample and human review of label disagreements would
 test the remaining deployment assumptions; neither is claimed here.
 
@@ -764,7 +764,7 @@ machine-readable run plan. Its stages and approved meanings are durable.
 Batch size 20, topK 10, block size 32, random audit fraction 0.01, Bernoulli pair
 probability 0.00001, split seed and development fraction are **provisional
 engineering parameters**, not quality guarantees, labeling budgets, pair quotas
-or owner-approved acceptance targets. Acceptance remains `unapproved`.
+or maintainer-approved acceptance targets. Acceptance remains `unapproved`.
 
 ### Identity and label meaning
 
@@ -776,7 +776,7 @@ is a separate pair judgment. Shared-only-some coverage is partial overlap.
 
 The [approved B1-B10 source artifact](../story-dataset-1/approved-examples.json)
 is preserved byte-for-byte, including its earlier discussion status. The
-owner's later approval is recorded in
+maintainer's later approval is recorded in
 [seed-catalog-review.json](../story-dataset-1/seed-catalog-review.json). A1-A5
 were not used. B10's explanatory sibling-Story boundary remains unresolved;
 its earlier recorded source findings do not become a fabricated adjudication
@@ -800,7 +800,7 @@ enough because the CLI also imports the offline evaluation modules. A fresh
 environment needs the project's existing `.[dev]` extra, not new tools.
 
 ```powershell
-Set-Location 'C:\Users\kumarsnaveen\Downloads\NawiN\personal\gitrepos\yen-idhazh.worktrees\archive-story-dataset'
+Set-Location '<path-to-worktree>\archive-story-dataset'
 $Python = 'C:\Python314\python.exe'
 $env:PYTHONPATH = "$PWD\backend"
 $D = 'corpus\story-dataset-1'
@@ -1034,7 +1034,7 @@ produce portable snapshots immediately. They refuse to replace an existing
 registration; use the explicit relocation command instead. Extension imports
 also require a portable base and retain their input and model checks.
 
-The owner's 2026-10-11 ruling forbids local encoding or inference. The old
+The maintainer's 2026-10-11 ruling forbids local encoding or inference. The old
 `encode` entry points remain available for other operators, but must not be
 run for this delivery. Use the manual runner path below for unfinished rows.
 `vector-import` validates a typed downloaded extension before adding coverage.
@@ -1083,7 +1083,7 @@ registration, pinned reading or candidate, exact ordered full article evidence,
 summary-input hashes and expected model file hashes. `RunnerPackage` hashes
 the actual input and code files. Preparing that package grants no consent.
 Upload or push requires a separate approval naming the exact package,
-recipient repository and visibility. The owner's 2026-10-11 ruling selects
+recipient repository and visibility. The maintainer's 2026-10-11 ruling selects
 a public workflow in the public repository, not a private repository or runner.
 It uses the standard `ubuntu-latest` runner with four CPUs and 16 GB.
 Encoding checks actual CPU and memory before loading weights.
@@ -1156,7 +1156,7 @@ interruption, reconstructs their exact manifest and keeps incomplete files in a
 sibling ignored directory. It does not infer, encode or register incomplete
 units. The workflow excludes `.part` files from result artifacts.
 
-After approval and execution, use `runner_cli download --recipient <owner/repo>
+After approval and execution, use `runner_cli download --recipient <account/repo>
 --artifact-id <id> --name <archive-result-shard> --output <ignored-directory>`.
 It checks the exact recipient, artifact name, GitHub's archive digest,
 size and safe paths before extraction. Then use `runner_cli validate` with
@@ -1317,7 +1317,7 @@ evaluation. Status distinguishes
 visited, annotated, unresolved, catalog-pending, reviewed and unvisited rows.
 All 15,122 rows must eventually have a qualified annotation or a reasoned
 unresolved state. Quality acceptance, audit sufficiency and a meaningful minimum
-encoder difference are not yet owner-approved.
+encoder difference are not yet maintainer-approved.
 
 ```mermaid
 flowchart TD
