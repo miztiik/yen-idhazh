@@ -125,6 +125,8 @@ field/default/vocabulary bindings, full-suite and real gardener packing.
 Its site and browser jobs install Bun and the frozen shared-contract/writer
 packages for the current native planner fixtures. Cost is those existing
 test dependencies on each clean job; no new package or browser bundle bytes.
+Config bindings ignore JSON object order and union-branch order. Fields,
+bounds, types, nullability, defaults and vocabularies must still match.
 Do not dispatch `feed-ingest-plan-test.yml` to obtain those checks: it does
 live work and commits data. A conflicting PR must first merge current main
 normally, then receive CI on its exact resolved head.
