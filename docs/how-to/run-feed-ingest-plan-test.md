@@ -44,15 +44,14 @@ bun run --cwd packages/common-contracts check
 bun run --cwd packages/ledger-file-writer check
 bun run --cwd services/feed-ingest-plan check
 bun run --cwd services/feed-ingest-plan test
-bun run services/feed-ingest-plan/test/verify-recorded-compatibility.ts
 ```
 
 The service suite includes the existing workflow/report cases. Its case
 timeout bounds test execution; it is not a planner speed
 target. The workflow case compiles mandatory adapters and tests from its exact
 named sparse inputs; independent host tools retain their own checks. An
-unselected local module cannot satisfy a missing dependency. A second
-fixed-input copy runs the native verifier with no backend directory.
+unselected local module cannot satisfy a missing dependency. The local suite
+does not run a fixture-only compatibility entry point.
 
 Recorded RSS/HTML and transport facts drive the actual listener, worker
 extractor, complete public offer flow and CLI. Generated native files prove
@@ -63,8 +62,8 @@ an external feed, starts a live workflow or requires local Python.
 The generated bare-origin case executes the actual commit CLI, checks the
 new remote metadata and raw-day indexes, replays it safely and verifies that
 the checkout did not change. Helper-only coverage cannot certify this entry.
-Other-family UUID, canonical-byte and legacy native-file vectors remain
-separate compatibility checks.
+Independent writer and contract tests own native digest, identifier and
+historical ledger coverage. The workflow does not add a synthetic receipt.
 
 ## Saved output and failures
 
@@ -74,7 +73,9 @@ reporting. `services/host-probes/scripts/` owns optional controlled host tools.
 Workflow YAML calls those modules directly. `.github/scripts/` retains only
 the independent `ai-pipeline.ts` experiment and `serve-evaluator.py`; neither
 is required for the native feed APIs. Recorded compatibility drivers live in
-the service's test directory, not in the runtime verifier.
+the service's test directory only when they cover an independently maintained
+reader or writer. The runtime verifier checks actual planner files during real
+execution; it has no fixture-only entry point.
 
 The commit manifest permits exact current raw Parquet paths for the four
 planner siblings only. The committer validates bytes, appends them through a
