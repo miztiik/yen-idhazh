@@ -26,7 +26,7 @@ test("recorded index fields and vocabularies stay aligned without a backend proc
 test("index validation preserves named empty, lost and historical default meanings", async () => {
   const recorded = await fixture();
   const raw = {
-    version: "2026-10-03", ledger: "editorial-selections", date: "2026-10-21",
+    version: "2026-10-03", ledger: "feed-health", date: "2026-10-21",
     files: [recorded.filename], content_sha256: "a".repeat(64), listed_at: "2026-10-21T12:00:00Z",
   };
   expect(RawDayIndexSchema.parse(raw).bytes).toBeNull();
@@ -34,7 +34,7 @@ test("index validation preserves named empty, lost and historical default meanin
   expect(RawDayIndexSchema.safeParse({ ...raw, files: ["../escape.parquet"] }).success).toBe(false);
   expect(RawDayIndexSchema.safeParse({ ...raw, bytes: [] }).success).toBe(false);
   const base = {
-    version: "2026-10-07", ledger: "editorial-selections", period: "daily",
+    version: "2026-10-07", ledger: "feed-health", period: "daily",
     entries: [{ covers: "2026-10-21", rows: 0, bytes: 0, state: "empty" }],
   };
   expect(CompactIndexSchema.parse(base).entries[0]!.state).toBe("empty");

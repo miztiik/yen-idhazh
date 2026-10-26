@@ -1,6 +1,6 @@
 /** Which settled first sight belongs to a candidate's canonical URL key? */
 import { z } from "zod";
-import { RunIdSchema, SchemaVersionSchema, Sha256Schema, TimestampSchema } from "@idhazh/common-contracts";
+import { DiscoveredArticleRowSchema, TimestampSchema } from "@idhazh/common-contracts";
 
 export const UtcInstantSchema = TimestampSchema.refine(value => {
   const instant = Date.parse(value);
@@ -8,12 +8,7 @@ export const UtcInstantSchema = TimestampSchema.refine(value => {
 }, "must be a valid UTC instant");
 
 // Read copy of backend/idhazh/contracts/seen.py, held in step by seen-evidence.json.
-export const SeenRowSchema = z.strictObject({
-  version: SchemaVersionSchema,
-  url_key: Sha256Schema,
-  first_seen_at: UtcInstantSchema,
-  first_seen_run: RunIdSchema,
-});
+export const SeenRowSchema = DiscoveredArticleRowSchema;
 export const SeenEvidenceSchema = z.discriminatedUnion("availability", [
   z.strictObject({ availability: z.literal("available"), rows: z.array(SeenRowSchema) }),
   z.strictObject({ availability: z.literal("unavailable") }),
@@ -27,7 +22,7 @@ export function indexSeenEvidence(evidence: SeenEvidence): ReadonlyMap<string, S
   if (parsed.availability === "unavailable") return indexed;
   for (const row of parsed.rows) {
     const previous = indexed.get(row.url_key);
-    if (previous && (previous.first_seen_at !== row.first_seen_at || previous.first_seen_run !== row.first_seen_run)) {
+    if (previous && previous.first_seen_at !== row.first_seen_at) {
       throw new Error(`seen.rows.${row.url_key}: conflicting settled first sight`);
     }
     indexed.set(row.url_key, row);

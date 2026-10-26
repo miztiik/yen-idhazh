@@ -36,7 +36,6 @@ export async function loadPlanInputs(root: string, settingsPath = "config/feed-i
     readHarvestInputs({
       config: resolve(root, paths.planning), taxonomy: resolve(root, paths.taxonomy),
       sources: resolve(root, paths.sources), extraction: resolve(root, paths.extraction),
-      watchlist: resolve(root, paths.watchlist),
     }),
     Bun.file(resolve(root, paths.extraction)).json().then(value => ExtractionSettingsSchema.parse(value)),
     Bun.file(resolve(root, paths.registrations)).json().then(value => RegistrySchema.parse(value)),
@@ -51,24 +50,17 @@ export async function loadPlanInputs(root: string, settingsPath = "config/feed-i
     return { ...entry, grain: z.literal("raw-and-compact").parse(entry.grain) };
   }
   const selected = {
-    rejections: registration("rejections"), selections: registration("editorial-selections"),
-    dispatches: registration("dispatches"),
-    seen: registration("seen"), assessments: registration("article-assessments"),
-    diversity: registration("diversity"),
+    discovered_articles: registration("discovered-articles"),
+    selected_articles: registration("selected-articles"),
+    feed_health_state: registration("feed-health-state"),
+    plan_runs: registration("plan-runs"),
     published: registration("published"), item_health: registration("item-health"),
-    feed_health: registration("feed-health"),
-    document_observations: registration("document-observations"),
-    source_runs: z.object({
-      name: z.literal("source-runs"), family: z.literal("feed-ingest-plan"),
-      grain: z.literal("raw-and-compact"), lifecycle_status: z.literal("active"),
-      prefix: z.tuple([z.literal("feed-ingest-plan"), z.literal("source-runs")]),
-    }).parse(registration("source-runs")),
   };
-  for (const [entry, prefix] of [
-    [selected.rejections, harvest.config.seal.rejections_prefix],
-    [selected.dispatches, harvest.config.seal.dispatches_prefix],
-  ] as const) {
-    if (JSON.stringify(entry.prefix) !== JSON.stringify(prefix)) throw new Error(`registrations.${entry.name}.prefix differs from planning config`);
+  for (const entry of [selected.discovered_articles, selected.selected_articles, selected.feed_health_state, selected.plan_runs]) {
+    if (entry.family !== "feed-ingest-plan" || entry.lifecycle_status !== "active"
+      || JSON.stringify(entry.prefix) !== JSON.stringify(["feed-ingest-plan", entry.name])) {
+      throw new Error(`registrations.${entry.name}: requires its active planner-family prefix`);
+    }
   }
   if (extraction.ledger.compression_raw !== harvest.config.seal.compression) {
     throw new Error("ledger.compression_raw differs from planning config.seal.compression");

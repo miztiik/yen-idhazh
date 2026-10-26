@@ -1,45 +1,19 @@
-/** Which screening and scoring settings apply to one configured feed vertical? */
+/** Apply the planner's global numeric controls and explicit per-run age override. */
 import {
-  EffectiveFeedPolicySchema, FeedIngestConfigSchema,
-  FeedScreeningPolicySchema, PlanningRunOverridesSchema, PlanningTaxonomySchema,
-  SlugSchema, validatePlanningReferences,
+  EffectiveFeedPolicySchema, FeedIngestConfigSchema, FeedScreeningPolicySchema, PlanningRunOverridesSchema,
 } from "@idhazh/common-contracts";
-import type {
-  EffectiveFeedPolicy, FeedIngestConfig, PlanningRunOverrides, PlanningTaxonomy,
-} from "@idhazh/common-contracts";
+import type { EffectiveFeedPolicy, FeedIngestConfig, PlanningRunOverrides } from "@idhazh/common-contracts";
 
-export type PlanningConfig = Readonly<{ config: FeedIngestConfig; taxonomy: PlanningTaxonomy }>;
-
-export function loadPlanningConfig(config: unknown, taxonomy: unknown): PlanningConfig {
-  const loaded = {
-    config: FeedIngestConfigSchema.parse(config),
-    taxonomy: PlanningTaxonomySchema.parse(taxonomy),
-  };
-  validatePlanningReferences(loaded.config, loaded.taxonomy);
-  return loaded;
-}
-
-export function resolvePolicy(
-  loaded: PlanningConfig, vertical: string, overrides: PlanningRunOverrides = {},
-): EffectiveFeedPolicy {
-  SlugSchema.parse(vertical);
-  if (!loaded.taxonomy.verticals.some(entry => entry.id === vertical)) {
-    throw new Error(`vertical.${vertical}: unknown taxonomy vertical`);
-  }
+export type PlanningConfig = Readonly<{ config: FeedIngestConfig }>;
+export function loadPlanningConfig(config: unknown): PlanningConfig { return { config: FeedIngestConfigSchema.parse(config) }; }
+export function resolvePolicy(loaded: PlanningConfig, overrides: PlanningRunOverrides = {}): EffectiveFeedPolicy {
   const run = PlanningRunOverridesSchema.parse(overrides);
-  const patch = loaded.config.vertical_overrides[vertical];
-  const { blocked_http_statuses, ...globalTriage } = loaded.config.triage;
-  const triage = FeedScreeningPolicySchema.parse({
-    ...globalTriage,
-    ...patch?.triage,
-    ...(run.freshness_hours === undefined ? {} : { max_age_hours: run.freshness_hours }),
-  });
-  const { article_limit, source_reliability_penalty_enabled, soft_caps, exploration_slot_share, ...globalCurate } = loaded.config.curate;
+  const { blocked_http_statuses: _statuses, ...screening } = loaded.config.triage;
+  const { article_limit: _limit, source_reliability_penalty_enabled: _reliability,
+    soft_caps: _caps, exploration_slot_share: _exploration, ...curate } = loaded.config.curate;
   return EffectiveFeedPolicySchema.parse({
-    triage,
-    curate: {
-      ...globalCurate, ...patch?.curate,
-      mmr_weights: { ...globalCurate.mmr_weights, ...patch?.curate?.mmr_weights },
-    },
+    triage: FeedScreeningPolicySchema.parse({
+      ...screening, ...(run.freshness_hours === undefined ? {} : { max_age_hours: run.freshness_hours }),
+    }), curate,
   });
 }

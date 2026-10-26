@@ -472,7 +472,7 @@ const dayFile = (covers: string): string => dataPath(LEDGER, 'daily', covers);
 const bytesOf = (relative: string): Uint8Array => new Uint8Array(readFileSync(path.join(STATE, ...relative.split('/'))));
 const expectedAnswer = (name: string): Record<string, string | null>[] => JSON.parse(readFileSync(path.join(FIXTURE, 'answers', `${name}.json`), 'utf8'));
 
-test('Row16 typed query ORACLE: staged Python-contract columns and article text survive the real door', async () => {
+test('current selected metadata survives the real door without exposing article bodies', async () => {
 	const source = test.info().outputPath('feed-source');
 	const staticRoot = test.info().outputPath('static');
 	const site = path.join(staticRoot, 'state');
@@ -485,38 +485,42 @@ test('Row16 typed query ORACLE: staged Python-contract columns and article text 
 	const keeper = freshPage(fetcher);
 	for (const ledger of FEED_LEDGERS) {
 		const columns = await readColumns(keeper, [ledger], '2026-10-20', '2026-10-20', limits.max_fetch_bytes, 128);
-		expect(columns.map((column) => ({ ...column, name: column.name.slice(ledger.length + 1) })), ledger).toEqual(fixture.columns[ledger]);
+		expect(columns.map((column) => column.name.slice(ledger.length + 1)), ledger).toEqual(fixture.columns[ledger]);
+		expect(columns.some((column) => column.name.endsWith('.article_text'))).toBe(false);
 		const result = await readAsk(keeper, {
 			ledgers: [ledger], from: '2026-10-20', to: '2026-10-20', sql: `SELECT * FROM "${ledger}"`,
 			maxChars: limits.query_max_chars, maxRows: limits.max_rows, maxFetchBytes: limits.max_fetch_bytes, maxFiles: 128
 		});
 		expect(result.state, ledger).toBe('ok');
 		if (result.state !== 'ok') throw new Error(`${ledger} did not answer`);
-		expect(result.columns).toEqual(fixture.columns[ledger]);
+		expect(result.columns.map((column) => column.name)).toEqual(fixture.columns[ledger]);
 		expect(result.rows).toHaveLength(1);
+		expect(JSON.stringify(result.rows)).not.toContain('Sanitized artifact-only body.');
 	}
 	const question = {
-		ledgers: ['dispatches'] as const,
+		ledgers: ['selected-articles'] as const,
 		from: '2026-10-20', to: '2026-10-23',
-		sql: 'SELECT content.article_text AS text, content.author AS author, content.categories AS categories, ' +
-			'content.word_count AS words, selection.estimated_work AS work, selection.ratings.exploration_slot AS exploration, ' +
-			'partition.worker_assignment AS worker FROM dispatches ORDER BY covers',
+		sql: 'SELECT title, author, categories, estimated_work AS work, ratings.base_article_score AS score, ' +
+			'exploration_slot AS exploration, worker_assignment AS worker FROM "selected-articles" ORDER BY date',
 		maxChars: limits.query_max_chars, maxRows: limits.max_rows, maxFetchBytes: limits.max_fetch_bytes, maxFiles: 128
 	};
 	const answer = await readAsk(keeper, question);
 	expect(answer).toMatchObject({
 		state: 'ok',
 		columns: [
-			{ name: 'text', type: 'VARCHAR' }, { name: 'author', type: 'VARCHAR' },
-			{ name: 'categories', type: 'VARCHAR[]' }, { name: 'words', type: 'BIGINT' },
-			{ name: 'work', type: 'DOUBLE' }, { name: 'exploration', type: 'BOOLEAN' },
+			{ name: 'title', type: 'VARCHAR' }, { name: 'author', type: 'VARCHAR' },
+			{ name: 'categories', type: 'VARCHAR[]' }, { name: 'work', type: 'BIGINT' },
+			{ name: 'score', type: 'DOUBLE' }, { name: 'exploration', type: 'BOOLEAN' },
 			{ name: 'worker', type: 'BIGINT' }
 		],
 		rows: [1].map(() => ({
-			text: 'An article contains this recorded text.', author: null, categories: '[]',
-			words: '6', work: '6.0', exploration: 'false', worker: '0'
+			title: 'Caf\u00e9 \u6771\u4eac', author: null,
+			work: '180', score: '1.5', exploration: 'false', worker: '0'
 		}))
 	});
+	if (answer.state !== 'ok') throw new Error('The current selected metadata must be queryable');
+	expect(answer.rows[0].categories).toContain('world');
+	expect(answer.rows[0].categories).toContain('science');
 	expect(asked.every((one) => one.path.startsWith('compact/'))).toBe(true);
 	const quiet = await readAsk(keeper, { ...question, from: '2026-10-21', to: '2026-10-22' });
 	expect(quiet.state).toBe('quiet');
@@ -525,7 +529,7 @@ test('Row16 typed query ORACLE: staged Python-contract columns and article text 
 	const bounded = freshPage(recorded({}, site).fetcher);
 	const refused = await readAsk(bounded, { ...question, maxFetchBytes: 1, maxFiles: 128});
 	expect(refused).toMatchObject({ state: 'refused', because: { kind: 'over-ceiling' } });
-	unlinkSync(path.join(site, 'compact/feed-ingest-plan/dispatches/daily/2026/10/20.parquet'));
+	unlinkSync(path.join(site, 'compact/feed-ingest-plan/selected-articles/daily/2026/10/20.parquet'));
 	const gap = await warnings(() => readAsk(freshPage(recorded({}, site).fetcher), question));
 	expect(gap.result).toMatchObject({ state: 'unreachable', at: '2026-10-20', fault: 'file-missing' });
 });

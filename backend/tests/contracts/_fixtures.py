@@ -13,7 +13,7 @@ from support.paths import CONFIG_DIR, CONTRACT_FIXTURES_DIR, FIXTURES_DIR, REPO_
 from idhazh.contracts import CONTRACTS, canonical_json
 from idhazh.contracts.app_config import AppConfig
 from idhazh.contracts.appearance_config import AppearanceConfig
-from idhazh.contracts.base import Contract
+from idhazh.contracts.base import Contract, derive_url_key
 from idhazh.contracts.knobs.models import ModelsConfig
 from idhazh.contracts.pipeline_tests import PipelineTestsConfig
 from idhazh.contracts.sources import Sources
@@ -34,20 +34,6 @@ CONFIG_FILES: dict[str, type[Contract]] = {
 FIXTURE_FILES: Final = (
     "fetched-document/refused.json",
     "planner-operation/started.json",
-    "parsed-feed-batch/empty.json",
-    "selected-feed-batch/empty.json",
-    "partitioned-feed-batch/empty.json",
-    "feed-ingest-candidate/one-article.json",
-    "feed-ingest-dispatch/one-article.json",
-    "feed-ingest-rejection/empty-feed.json",
-    "feed-ingest-editorial-selection/one-article.json",
-    "feed-ingest-source-run/one-observation.json",
-    "feed-ingest-article-assessment/one-observation.json",
-    "feed-ingest-diversity/one-observation.json",
-    "feed-ingest-operational-state/qualified.json",
-    "feed-health-state/one-complete-snapshot.json",
-    "feed-health-state-head-index/two-snapshots.json",
-    "feed-ingest-document-observation/refused-fetch.json",
     "run-shards/unknown.json",
     "app-config/every-knob-differs-from-the-committed-config.json",
     "appearance-config/knobs-set-away-from-the-defaults.json",
@@ -266,6 +252,131 @@ def fixture_id(path: Path) -> str:
 
 def load(path: Path) -> Contract:
     return BY_STEM[path.parent.name].from_json(read_text(path))
+
+
+def planner_payload(
+    name: str, *, day: str = "2026-10-20", run: int = 1, attempt: int = 1, second: bool = False,
+) -> dict[str, Any]:
+    """Bounded current planner data; none of these facts comes from retired ledger files."""
+    at = f"{day}T10:00:00.123Z"
+    clock = f"{day}T10:00:00Z"
+    run_id = f"{day}-{run}"
+    url = f"https://example.org/article/{int(second)}"
+    selected = {
+        "run_id": run_id, "attempt": attempt, "date": day,
+        "url_key": derive_url_key(url), "feed_id": "second-feed" if second else "fixture-feed",
+        "publisher_id": None, "canonical_url": url, "title": "Caf\u00e9 \u6771\u4eac",
+        "categories": ["world", "science"], "author": None, "published_at": None,
+        "tier": 1, "weight": 1.0, "applied_tier_weight": 0.5,
+        "editorial_rank": int(second) + 1, "estimated_work": 180,
+        "worker_assignment": 0, "ratings": {
+            "base_article_score": 1.5, "marginal_score": 1.25,
+            "adjustments": [
+                {"term": "feed-reliability", "value": None},
+                {"term": "publisher-exposure", "value": 0.0},
+                {"term": "domain", "value": -0.25},
+            ],
+            "recency_score": 1.0, "feed_authority_score": 0.5,
+        },
+        "feed_allowance": 3, "exploration_slot": False, "cap_relaxations": [],
+        "timing_at": at, "timing_basis": "first_seen", "age_hours": 0.0,
+        "allowance_reasons": [],
+    }
+    if name in {"discovered-articles", "DiscoveredArticleRow"}:
+        return {"url_key": derive_url_key(url), "first_seen_at": at, "date": day}
+    if name in {"selected-articles", "SelectedArticleRow"}:
+        return selected
+    if name == "FeedIngestCandidate":
+        from idhazh.contracts.feed_ingest_candidate import derive_candidate_id
+
+        feed_id = str(selected["feed_id"])
+        return {
+            "version": "2026-10-25", "date": day, "correlation_id": "fixture-correlation",
+            "run_id": run_id, "candidate_id": derive_candidate_id(run_id, feed_id, int(second)),
+            "entry_ordinal": int(second), "source_id": feed_id,
+            "source": {
+                "source_id": feed_id, "publisher_id": None,
+                "feed_url": "https://example.org/feed", "title": "Fixture feed",
+                "kind": "reporting", "tier": 1,
+                "form": "article", "status": "active", "weight": 1.0, "applied_tier_weight": 0.5,
+            },
+            "canonical_url": url, "url_key": derive_url_key(url), "title": selected["title"],
+            "categories": [], "article_text": "An article with six recorded words.",
+            "word_count": 6, "author": None, "published_at": None, "fetched_at": clock,
+        }
+    if name in {"feed-health-state", "FeedHealthStateRow"}:
+        return {
+            "feed_id": selected["feed_id"], "endpoint_key": derive_url_key("https://example.org/feed"),
+            "checked_at": at, "permission": "allowed", "availability": "eligible",
+            "strikes": 0, "rested_runs": 0, "last_failure_code": None, "status": 200,
+            "reliability": {
+                "productive": 0, "attempted": 0, "success_fraction": None,
+                "from_day": None, "through_day": None, "production_factor": None, "complete": False,
+            },
+            "date": day, "feed_reads": 1, "productive_reads": 1, "failed_reads": 0,
+            "article_candidates": 1, "articles_selected": 1, "feed_requests": 2,
+            "article_requests": 1, "robots_requests": 0, "counts_complete": True,
+            "rejection_counts": [], "run_id": run_id, "attempt": attempt, "items": 1, "outcome": "ok",
+        }
+    if name in {"plan-runs", "PlanRunRow"}:
+        return {
+            "run_id": run_id, "started_at": at, "duration_ms": 25, "status": "completed",
+            "failure_code": None, "selected_count": 0, "strategy": "none", "dispatch_count": 0,
+            "selected_articles_artifact": None, "api_timings": [{
+                "operation": "feed-health-summary", "duration_ms": 0, "status": "completed",
+            }],
+            "date": day, "attempt": attempt, "lifecycle_window_days": 31,
+            "reliability_floor": 0.5, "reliability_penalty_enabled": True, "evaluated_at": at,
+            "request_report_closed_days": 7, "reliability_window_days": 30,
+            "selection_started_at_utc": at,
+        }
+    if name == "SelectedArticlesArtifact":
+        metadata = {key: value for key, value in selected.items() if key not in {"run_id", "attempt", "date"}}
+        return {
+            "schema_version": "2026-10-25", "run_id": run_id, "attempt": attempt, "date": day,
+            "evaluated_at": at, "articles": [metadata | {"article_text": "Sanitized artifact-only text."}],
+        }
+    if name == "PlannerFileEnvelope":
+        return {
+            "version": "2026-10-25", "row_schema_version": "2026-10-25",
+            "tier": "raw", "ledger": "selected-articles", "covers": day, "period": None,
+            "file_id": "00000000-0000-8000-8000-000000000001", "content_sha256": "a" * 64,
+            "writer": "idhazh.ledger.parquet", "writer_version": "fixture-engine",
+            "compression": "snappy", "updated_at": None,
+        }
+    context = {
+        "now": clock, "captured_at": at, "date": day, "run_id": run_id,
+        "correlation_id": "00000000-0000-4000-8000-000000000001",
+        "writer": {
+            "run_id": run_id, "attempt": attempt, "job": None,
+            "pipeline_name": "feed-ingest-plan", "task_name": "plan", "shard": 0,
+            "producer": "tests.planner", "git_sha": "a" * 40,
+        },
+    }
+    batch = {
+        "version": "2026-10-25", "batch_id": "00000000-0000-4000-8000-000000000002",
+        "config_sha256": "a" * 64, "context": context,
+    }
+    if name == "ParsedFeedBatch":
+        return batch | {
+            "request": {}, "candidates": [], "observations": {},
+            "seen": {"availability": "available", "rows": []}, "evidence": {},
+            "history_rows": [], "history_days": [], "work_rows": [], "exclusions": [],
+        }
+    batch |= {
+        "parsed_batch_id": "00000000-0000-4000-8000-000000000003",
+        "selection_started_at_utc": clock, "evaluated_at": clock,
+        "articles": [], "health_rows": [], "exclusions": [],
+        "request_report": {"from_day": day, "through_day": day, "complete": False, "feeds": []},
+    }
+    if name == "SelectedFeedBatch":
+        return batch
+    if name == "PartitionedFeedBatch":
+        return batch | {
+            "selection_batch_id": "00000000-0000-4000-8000-000000000004",
+            "strategy": "none", "dispatch_count": 1, "work": [0.0],
+        }
+    raise ValueError(f"No generated current planner payload for {name}")
 
 
 def copy_config(root: Path, *, models: dict[str, Any] | None = None) -> str:

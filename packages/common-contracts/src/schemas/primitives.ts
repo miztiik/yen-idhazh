@@ -22,6 +22,8 @@ export const PositiveSchema = FiniteSchema.positive();
 export const CountSchema = z.int().nonnegative();
 export const PositiveCountSchema = z.int().positive();
 export const NonEmptySchema = z.string().min(1);
+const relativePathSegment = "[A-Za-z0-9._-]*[A-Za-z0-9_-][A-Za-z0-9._-]*";
+export const RelPathSchema = z.string().max(512).regex(new RegExp(`^${relativePathSegment}(?:/${relativePathSegment})*$`));
 export const PlanningStageSchema = z.enum(["harvest-feeds", "screen-article-candidates", "curate-article-portfolio", "partition-article-shards", "seal-article-ledger"]);
 export const RejectionStageSchema = z.enum(["harvest-feeds", "screen-article-candidates", "curate-article-portfolio"]);
 

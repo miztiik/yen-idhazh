@@ -1,7 +1,7 @@
 /** Which observed ingestion failures have enough evidence for source or pipeline attribution? */
-import type { DocumentObservationRecord } from "@idhazh/common-contracts";
+import type { DocumentWorkFact } from "@idhazh/common-contracts";
 
-type IngestFailureEvidence = Pick<DocumentObservationRecord,
+type IngestFailureEvidence = Pick<DocumentWorkFact,
   "document_kind" | "operation" | "outcome" | "failure_code" | "http_status" | "request_phase">;
 
 function isHttpRefusal(status: number | null): boolean {
@@ -11,7 +11,7 @@ function isHttpRefusal(status: number | null): boolean {
 
 export function attributeIngestOutcome(
   evidence: IngestFailureEvidence,
-): DocumentObservationRecord["attribution"] {
+): DocumentWorkFact["attribution"] {
   if (evidence.outcome !== "failed") return null;
 
   if (evidence.failure_code === "unsafe-target"

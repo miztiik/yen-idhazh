@@ -90,8 +90,8 @@ from pathlib import Path
 from typing import NamedTuple, assert_never
 
 from idhazh import atomic_write, day_partition, ledger
-from idhazh.contracts.base import Contract
 from idhazh.contracts.collection_prune import Recovery, StopReason, stop_for
+from idhazh.contracts.feed_ingest_discovered_article import LedgerContract
 from idhazh.contracts.file_envelope import Format, Period
 from idhazh.contracts.gardener_events import (
     CompactionStep,
@@ -106,7 +106,7 @@ from idhazh.contracts.ledger_name import LedgerName
 from idhazh.gardener import error_cause, event_log, ledger_marks, named_trees
 from idhazh.gardener.error_cause import ErrorCause
 from idhazh.gardener.file_listing import FileListing, OverBudgetError
-from idhazh.ledger import StoredRow
+from idhazh.ledger import LedgerStoredRow
 from idhazh.site_weight import BYTES_PER_MB
 
 #: Each period's index as a pass holds it, by what each entry covers.
@@ -148,11 +148,11 @@ class PeriodFetch(NamedTuple):
 
 
 @dataclass(frozen=True, slots=True)
-class RawDay[C: Contract]:
+class RawDay:
     """One raw day as a pass reads it, before it decides anything about the day."""
 
     #: Each file the day is built from, oldest first, beside its rows.
-    taken: list[tuple[Path, list[StoredRow[C]]]]
+    taken: list[tuple[Path, list[LedgerStoredRow]]]
     #: Each file this build cannot read, for the pass to move aside.
     unreadable: list[Path]
     #: How many readable files wait in the folder, past the most one period is built from.
@@ -426,12 +426,12 @@ class CompactTree:
         first = ledger.compact_path(self.state_dir, self.ledger, Period.MONTHLY, f"{year}-01")
         return first.parent
 
-    def load[C: Contract](self, path: Path, *, model: type[C]) -> list[StoredRow[C]]:
+    def load[C: LedgerContract](self, path: Path, *, model: type[C]) -> list[LedgerStoredRow]:
         """One ledger file's rows beside their identity, read as the pass decides."""
         self.looked.add(path)
-        return ledger.load_stored([path], model=model)
+        return ledger.load_registered_stored([path], ledger=self.ledger, model=model)
 
-    def read_raw_day[C: Contract](self, day: str, *, most: int, model: type[C]) -> RawDay[C]:
+    def read_raw_day[C: LedgerContract](self, day: str, *, most: int, model: type[C]) -> RawDay:
         """One day's raw files read for packing, oldest first; nothing about the day is decided.
 
         A file whose envelope or rows this build cannot read is named for the
@@ -441,7 +441,7 @@ class CompactTree:
         it takes a re-run. An entry of the folder that is not a file at all is
         refused for manual action, because there is no file to move aside.
         """
-        folder = ledger.read_day_folder(self.state_dir, self.ledger, day)
+        folder = ledger.read_registered_day_folder(self.state_dir, self.ledger, day)
         for path, _why in folder.unreadable:
             if not path.is_file():
                 raise error_cause.ManualActionError(
@@ -449,7 +449,7 @@ class CompactTree:
                     "moved aside"
                 )
         unreadable = [path for path, _why in folder.unreadable]
-        taken: list[tuple[Path, list[StoredRow[C]]]] = []
+        taken: list[tuple[Path, list[LedgerStoredRow]]] = []
         for held in folder.files[:most]:
             try:
                 taken.append((held.path, self.load(held.path, model=model)))

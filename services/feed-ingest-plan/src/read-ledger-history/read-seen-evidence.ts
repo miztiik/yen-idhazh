@@ -1,159 +1,80 @@
-/** Which settled first-sight observations exist in the caller's named files? */
+/** Keep first sight global by URL key across the named planner discovery inputs. */
 import { resolve } from "node:path";
-import { readLedgerParquet } from "./read-parquet";
-import { readLedgerDay } from "./read-period";
+import { DiscoveredArticleRowContract, DiscoveredArticleRowSchema } from "@idhazh/common-contracts";
+import type { DiscoveredArticleRow } from "@idhazh/common-contracts";
 import { persistLedger } from "@idhazh/ledger-file-writer";
 import type { LedgerRegistration, LedgerSettings } from "@idhazh/ledger-file-writer";
-import type { FeedIngestCandidate } from "@idhazh/common-contracts";
 import { SeenDayInputSchema, RelativePathSchema } from "../config/service-settings";
 import type { SeenDayInput } from "../config/service-settings";
-import { SeenRowSchema, UtcInstantSchema } from "../screen-article-candidates/seen-evidence";
-import type { SeenEvidence, SeenRow } from "../screen-article-candidates/seen-evidence";
+import { UtcInstantSchema } from "../screen-article-candidates/seen-evidence";
 import type { RunContext } from "../resolve-run-context";
+import { readPlannerDay, createPlannerHistoryCache } from "./read-planner-history";
+import { readPlannerParquet } from "./read-planner-parquet";
+import { mapPool } from "../harvest-feeds/harvest-pool";
+import { defaultDayInput } from "./named-days";
 
-// The recorded SeenRow wire version, not a planning or retention control.
-const seenSchemaVersion = "2026-08-31";
-const millisecondsPerDay = 86_400_000;
-const seenContract = { schema: SeenRowSchema, schemaVersion: seenSchemaVersion };
-export type OwnSeenReceipt = Readonly<{ day: string; files: readonly string[] }>;
-
+const dayMilliseconds = 86_400_000;
+export function requiredSeenDays(now: string, lookbackDays: number): string[] {
+  UtcInstantSchema.parse(now);
+  if (!Number.isSafeInteger(lookbackDays) || lookbackDays < 0) throw new Error("Discovery window must be a nonnegative integer");
+  const midnight = Date.parse(`${now.slice(0, 10)}T00:00:00Z`);
+  return Array.from({ length: lookbackDays + 1 }, (_, index) =>
+    new Date(midnight - (lookbackDays - index) * dayMilliseconds).toISOString().slice(0, 10));
+}
 export function parseSeenDays(days: readonly SeenDayInput[]): SeenDayInput[] {
   const parsed = days.map(day => SeenDayInputSchema.parse(day));
-  for (const [index, day] of parsed.entries()) {
-    if (index > 0 && day.day <= parsed[index - 1]!.day) {
-      throw new Error("seen_days must have distinct UTC days in ascending order");
-    }
+  if (parsed.some((day, index) => index > 0 && day.day <= parsed[index - 1]!.day)) {
+    throw new Error("Discovery inputs must name distinct ascending UTC days");
   }
   return parsed;
 }
-
-export function requiredSeenDays(now: string, lookbackDays: number): string[] {
-  UtcInstantSchema.parse(now);
-  if (!Number.isSafeInteger(lookbackDays) || lookbackDays < 0) throw new Error("seen_window_days must be a nonnegative safe integer");
-  const midnight = Date.parse(`${now.slice(0, 10)}T00:00:00Z`);
-  if (!Number.isFinite(new Date(midnight - lookbackDays * millisecondsPerDay).getTime())) {
-    throw new Error("seen_window_days exceeds the UTC calendar range");
+export function foldFirstSight(rows: readonly DiscoveredArticleRow[]) {
+  const known = new Map<string, DiscoveredArticleRow>();
+  for (const candidate of rows) {
+    const row = DiscoveredArticleRowSchema.parse(candidate);
+    const prior = known.get(row.url_key);
+    if (prior === undefined || row.first_seen_at < prior.first_seen_at) known.set(row.url_key, row);
   }
-  return Array.from({ length: lookbackDays + 1 }, (_, index) =>
-    new Date(midnight - (lookbackDays - index) * millisecondsPerDay).toISOString().slice(0, 10));
+  return [...known.values()].sort((a, b) => a.url_key.localeCompare(b.url_key));
 }
-
-function foldSeen(rows: readonly SeenRow[], now?: string): SeenRow[] {
-  const settled = new Map<string, SeenRow>();
-  for (const row of rows) {
-    const parsed = SeenRowSchema.parse(row);
-    const instant = Date.parse(parsed.first_seen_at);
-    if (now !== undefined && instant > Date.parse(now)) throw new Error("seen.first_seen_at exceeds the captured run clock");
-    const previous = settled.get(parsed.url_key);
-    if (previous === undefined || instant < Date.parse(previous.first_seen_at)
-      || (instant === Date.parse(previous.first_seen_at) && parsed.first_seen_run < previous.first_seen_run)) {
-      settled.set(parsed.url_key, parsed);
-    }
-  }
-  return [...settled.values()].sort((a, b) => a.url_key.localeCompare(b.url_key));
-}
-
-export async function readSeenEvidence(
-  root: string, files: readonly string[],
-  window?: {
-    now: string; lookback_days: number; days: readonly SeenDayInput[];
-    own_receipts?: readonly OwnSeenReceipt[];
-    receipt_root?: string;
-  },
-) {
-  files.forEach(file => RelativePathSchema.parse(file));
-  if (new Set(files).size !== files.length) throw new Error("seen_files must name distinct files");
-  const required = window === undefined ? [] : requiredSeenDays(window.now, window.lookback_days);
-  const namedDays = parseSeenDays(window?.days ?? []);
-  for (const [index, day] of namedDays.entries()) {
-    if (!required.includes(day.day)) throw new Error(`seen_days.${index}.day is outside the required UTC window`);
-  }
-  const ownReceipts = window?.own_receipts ?? [];
-  if (new Set(ownReceipts.map(receipt => receipt.day)).size !== ownReceipts.length) {
-    throw new Error("own seen receipts must have distinct UTC days");
-  }
-  for (const receipt of ownReceipts) {
-    if (!required.includes(receipt.day)) throw new Error("own seen receipt is outside the required UTC window");
-    if (new Set(receipt.files).size !== receipt.files.length) throw new Error("own seen receipts must name distinct files");
-    receipt.files.forEach(file => RelativePathSchema.parse(file));
-  }
-  const loaded = await Promise.all(files.map(file => readLedgerParquet(
-    resolve(root, file), "seen", seenContract,
-  )));
-  const own = await Promise.all(ownReceipts.flatMap(receipt => receipt.files.map(async path => {
-    const file = await readLedgerParquet(resolve(window?.receipt_root ?? root, path), "seen", seenContract);
-    if (file.envelope.tier !== "raw" || file.envelope.covers !== receipt.day) {
-      throw new Error("own seen receipt does not match its actual raw file day");
-    }
-    return file;
-  })));
-  const named = new Map(namedDays.map(day => [day.day, day]));
-  const days = [];
-  for (const day of required) {
-    const input = named.get(day);
-    const held = await readLedgerDay({
-      ledger: "seen", day, contract: seenContract,
-      ...(input?.indexes === undefined ? {} : {
-        indexes: Object.fromEntries(Object.entries(input.indexes).flatMap(([period, path]) =>
-          path === undefined ? [] : [[period, resolve(root, path)]])),
-      }),
-      ...(input?.raw_files === undefined ? {} : { rawFiles: input.raw_files.map(path => resolve(root, path)) }),
-      ...(input?.raw_index === undefined ? {} : { rawIndex: resolve(root, input.raw_index) }),
-    });
-    days.push({ input: input ?? { day }, held });
-  }
-  const rows = foldSeen([
-    ...loaded.flatMap(file => file.rows.map(row => row.row)),
-    ...own.flatMap(file => file.rows.map(row => row.row)),
-    ...days.flatMap(day => day.held.rows.map(row => row.row)),
-  ], window?.now);
-  const complete = required.length > 0 && days.every(day =>
-    (day.held.status === "rows" || day.held.status === "empty")
-      && !day.held.notices.some(notice => notice.startsWith("files-set-aside:") || notice === "period-expired"));
-  const evidence: SeenEvidence = files.length > 0 || namedDays.length > 0 || ownReceipts.length > 0
-    ? { availability: "available", rows } : { availability: "unavailable" };
+export async function readSeenEvidence(input: {
+  root: string; files: readonly string[]; days: readonly SeenDayInput[];
+  registration: LedgerRegistration; now: string; lookback_days: number; concurrency: number;
+  own_rows?: readonly DiscoveredArticleRow[];
+}) {
+  const required = requiredSeenDays(input.now, input.lookback_days);
+  const named = parseSeenDays(input.days);
+  if (named.some(day => !required.includes(day.day))) throw new Error("Discovery day lies outside its configured UTC window");
+  const byDay = new Map(named.map(day => [day.day, day]));
+  const inventory = required.map(day => byDay.get(day) ?? defaultDayInput(input.registration.prefix, day));
+  const cache = createPlannerHistoryCache<DiscoveredArticleRow>();
+  const [files, days] = await Promise.all([
+    mapPool(input.files, input.concurrency, path =>
+      readPlannerParquet(resolve(input.root, RelativePathSchema.parse(path)), "discovered-articles", DiscoveredArticleRowContract)),
+    mapPool(inventory, input.concurrency, day => readPlannerDay(input.root, input.registration, day, DiscoveredArticleRowContract, cache)),
+  ]);
+  const rows = foldFirstSight([...files.flatMap(file => file.rows), ...days.flatMap(day => day.rows), ...(input.own_rows ?? [])]);
+  const complete = required.every(day => days.find(value => value.day === day)?.complete === true);
   return {
-    evidence, global_absence: "unavailable" as const,
+    evidence: rows.length > 0 || named.length > 0 || input.files.length > 0
+      ? { availability: "available" as const, rows } : { availability: "unavailable" as const },
     absence_proof: complete ? "within_configured_window" as const : "unavailable" as const,
-    files, own_receipts: ownReceipts,
-    window: window === undefined ? null : {
-      from_day: required[0]!, through_day: required[required.length - 1]!,
-      lookback_days: window.lookback_days, required_day_count: required.length,
-      days: days.map(({ input, held }) => ({
-        input, status: held.status, tier: held.tier, notices: held.notices,
-        file_evidence: held.files.map(file => ({
-          file_id: file.envelope.file_id, content_sha256: file.envelope.content_sha256, row_count: file.rows.length,
-        })),
-      })),
-    },
+    rows,
   };
 }
-export type SettledSeenEvidence = Awaited<ReturnType<typeof readSeenEvidence>>;
-
 export async function rememberFirstSight(
-  seen: SettledSeenEvidence, candidates: readonly Pick<FeedIngestCandidate, "url_key">[], context: RunContext,
-  destination: { outputRoot: string; registryEntry: LedgerRegistration; ledgerSettings: LedgerSettings },
+  existing: readonly DiscoveredArticleRow[], sightings: readonly DiscoveredArticleRow[],
+  context: RunContext, destination: { outputRoot: string; registryEntry: LedgerRegistration; ledgerSettings: LedgerSettings },
 ) {
-  const rows = seen.evidence.availability === "available" ? seen.evidence.rows : [];
-  const known = new Set(rows.map(row => row.url_key));
-  const newRows: SeenRow[] = [];
-  for (const candidate of candidates) {
-    if (known.has(candidate.url_key)) continue;
-    known.add(candidate.url_key);
-    newRows.push(SeenRowSchema.parse({
-      version: seenSchemaVersion, url_key: candidate.url_key,
-      first_seen_at: context.now, first_seen_run: context.run_id,
-    }));
-  }
-  const sealing = await persistLedger({
-    ...destination, ledger: "seen", rowContract: seenContract, writerContext: context.writer,
-    period: { tier: "raw", covers: context.date }, rows: newRows,
+  const known = new Map(existing.map(row => [row.url_key, row]));
+  const rows = foldFirstSight(sightings).filter(row => {
+    const prior = known.get(row.url_key);
+    return prior === undefined || row.first_seen_at < prior.first_seen_at;
   });
-  if (sealing.status === "skipped") throw new Error("seen: first-sight ledger write was skipped");
-  return {
-    ...seen, new_rows: newRows, sealing,
-    evidence: newRows.length === 0 ? seen.evidence : {
-      availability: "available" as const, rows: foldSeen([...rows, ...newRows], context.now),
-    },
-  };
+  const result = await persistLedger({
+    ...destination, ledger: "discovered-articles", rowContract: DiscoveredArticleRowContract,
+    writerContext: context.writer, period: { tier: "raw", covers: context.date }, rows,
+  });
+  if (result.status === "skipped") throw new Error("Planner discovery write was refused");
+  return { result, rows: foldFirstSight([...existing, ...rows]) };
 }

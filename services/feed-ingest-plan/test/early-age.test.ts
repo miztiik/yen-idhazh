@@ -1,28 +1,23 @@
-/** Do expired feed entries stop before page I/O while preserving exact audit membership? */
+/** Do expired entries stop before page I/O while retaining first sight and grouped health losses? */
 import { expect, test } from "bun:test";
-import { mkdir, rm } from "node:fs/promises";
+import { mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { tmpdir } from "node:os";
 import {
-  ArticleAssessmentRecordSchema, CandidateRejectionContract,
+  DiscoveredArticleRowContract, FeedHealthStateRowContract, SelectedArticlesArtifactSchema,
   deriveCandidateId, deriveUrlKey,
 } from "@idhazh/common-contracts";
 import { persistLedger } from "@idhazh/ledger-file-writer";
 import { harvestFeeds } from "../src/harvest-feeds/harvest-pool";
-import { readLedgerParquet } from "../src/read-ledger-history/read-parquet";
+import { readPlannerParquet } from "../src/read-ledger-history/read-planner-parquet";
 import { readExclusionEvidence } from "../src/read-ledger-history/read-exclusion-evidence";
 import { ItemHealthFailureProjectionContract, ItemHealthFailureProjectionSchema } from "../src/read-ledger-history/item-health-failure";
 import { PUBLISHED_ROW_SCHEMA_VERSION, PublishedRowSchema } from "../src/metrics/publication-evidence";
 import { loadPlanInputs } from "../src/load-plan-inputs";
-import { derivePlanningPopulation, readPlanningHistory } from "../src/metrics/planning-populations";
-import { selectCompleteAttempt } from "../src/read-ledger-history/complete-attempt";
 import { main } from "../src/index";
-import { runFeedPlan } from "../src/run-feed-plan";
-import { preparePlanningMetrics } from "../src/metrics/metrics-recorder";
-import { recordedPlan, namedPlanningFiles } from "./plan-recordings";
-import { context, destination, inputs, readRecordings, RecordedTransport, source } from "./harvest-recordings";
-import { tmpdir } from "node:os";
-import { mkdtemp } from "node:fs/promises";
+import { recordedPlan } from "./plan-recordings";
+import { context, inputs, readRecordings, RecordedTransport, source } from "./harvest-recordings";
 import type { ProgressRecord } from "../src/logging/progress-logger";
 
 function feed(items: { title?: string; path: string; date: string | null }[]) {
@@ -53,9 +48,7 @@ test("preflight uses the configured age override, strict boundary and future tol
     recordings.bodies.rss = feed(items);
     for (const item of items.slice(1)) recordings.responses[
       item.path.startsWith("https://") ? item.path : `https://news.example/${item.path}`
-    ] = [
-      { status: 200, fixture: "article" },
-    ];
+    ] = [{ status: 200, fixture: "article" }];
     const transport = new RecordedTransport(recordings);
     const planner = await loadPlanInputs(fileURLToPath(new URL("../../../", import.meta.url)));
     const publishedUrl = "https://news.example/published";
@@ -73,46 +66,38 @@ test("preflight uses the configured age override, strict boundary and future tol
     });
     const settled = await persistLedger({
       ledger: "item-health", registryEntry: planner.registrations.item_health, outputRoot: root,
-      ledgerSettings: planner.ledgerSettings,
-      rowContract: ItemHealthFailureProjectionContract,
+      ledgerSettings: planner.ledgerSettings, rowContract: ItemHealthFailureProjectionContract,
       period: { tier: "raw", covers: "2026-10-22" }, writerContext: run.writer,
       rows: [ItemHealthFailureProjectionSchema.parse({
         date: "2026-10-22", url_key: deriveUrlKey(settledUrl), outcome: "failed", code: "network_error",
       })],
     });
     const history = await readExclusionEvidence({
-      root, now: "2026-10-22T12:00:00Z", publishedWindowDays: 1,
-      settledFailureCodes: ["network_error"],
-      publishedRegistration: planner.registrations.published,
-      itemHealthRegistration: planner.registrations.item_health,
+      root, now: "2026-10-22T12:00:00Z", publishedWindowDays: 1, settledFailureCodes: ["network_error"],
+      publishedRegistration: planner.registrations.published, itemHealthRegistration: planner.registrations.item_health,
       publishedDays: [{ day: "2026-10-21", raw_files: published.files.map(file => file.path) }],
       settledFailureDays: [{ day: "2026-10-22", raw_files: settled.files.map(file => file.path) }],
     });
     run.exclusions = { ...history, published_window_days: 1 };
-    const result = await harvestFeeds(loaded, run, destination(root), { transport, resolve: transport.resolve });
-    expect(transport.requests.some(request => request.url.pathname === "/stale")).toBe(false);
+    const result = await harvestFeeds(loaded, run, { transport, resolve: transport.resolve });
     expect(result.rejections.map(row => row.drop_reason).sort()).toEqual([
       "ALREADY_PUBLISHED", "BLOCKED_URL_MARKER", "SETTLED_FAILURE", "STALE_MAX_AGE_EXCEEDED",
     ]);
     expect(history.history.published).toMatchObject({ required_day_count: 2, known_day_count: 1 });
     expect(history.history.published.missing_days).toHaveLength(1);
     expect(history.history.settled_failures).toMatchObject({ required_day_count: 1, known_day_count: 1 });
-    for (const path of ["/published", "/settled"]) {
-      expect(transport.requests.some(request => request.url.pathname === path)).toBe(false);
-    }
+    for (const path of ["/stale", "/published", "/settled"]) expect(transport.requests.some(request => request.url.pathname === path)).toBe(false);
     expect(transport.requests.some(request => request.url.href === blockedUrl)).toBe(false);
-    expect(result.articles.filter(article => article.rejection?.drop_reason === "ALREADY_PUBLISHED")[0]?.rejection)
-      .toMatchObject({ details: { matched_url_key: deriveUrlKey("https://news.example/published"),
-        published_on: "2026-10-21", history_window_days: 1 } });
-    expect(result.articles.filter(article => article.rejection?.drop_reason === "SETTLED_FAILURE")[0]?.rejection)
-      .toMatchObject({ details: { matched_url_key: deriveUrlKey("https://news.example/settled"),
-        failure_code: "network_error" } });
-    expect(result.articles.filter(article => article.rejection?.drop_reason === "BLOCKED_URL_MARKER")[0]?.rejection)
-      .toMatchObject({ url_key: deriveUrlKey(blockedUrl), details: {
-        matched_url_key: deriveUrlKey(blockedUrl), matched_url_marker: "fool.com/the-ascent/",
-      } });
+    expect(result.rejections.find(row => row.drop_reason === "ALREADY_PUBLISHED")).toMatchObject({
+      details: { matched_url_key: deriveUrlKey(publishedUrl), published_on: "2026-10-21", history_window_days: 1 },
+    });
+    expect(result.rejections.find(row => row.drop_reason === "SETTLED_FAILURE")).toMatchObject({
+      details: { matched_url_key: deriveUrlKey(settledUrl), failure_code: "network_error" },
+    });
+    expect(result.rejections.find(row => row.drop_reason === "BLOCKED_URL_MARKER")).toMatchObject({
+      url_key: deriveUrlKey(blockedUrl), details: { matched_url_key: deriveUrlKey(blockedUrl), matched_url_marker: "fool.com/the-ascent/" },
+    });
     const early = result.articles[0]!;
-    if (early.rejection === null) throw new Error("Expected expired entry rejection");
     expect(early.rejection?.details.age_hours).toBeCloseTo(12 + 1 / 3600, 8);
     expect(early.rejection?.details.max_age_hours).toBe(12);
     expect(early.observation).toMatchObject({
@@ -125,16 +110,11 @@ test("preflight uses the configured age override, strict boundary and future tol
     expect(result.first_sight_candidates.map(row => row.url_key)).toContain(deriveUrlKey(settledUrl));
     expect(result.first_sight_candidates.map(row => row.url_key)).not.toContain(deriveUrlKey(blockedUrl));
     expect(result.feed_outcomes[0]).toMatchObject({ parsed_count: 9, harvested_count: 5 });
-    const written = result.rejection_files.files[0]!;
-    const persisted = (await readLedgerParquet(join(root, written.path), "rejections", CandidateRejectionContract)).rows;
-    expect(persisted.map(row => row.row.drop_reason).sort()).toEqual([
-      "ALREADY_PUBLISHED", "BLOCKED_URL_MARKER", "SETTLED_FAILURE", "STALE_MAX_AGE_EXCEEDED",
-    ]);
-    expect(persisted.map(row => row.row)).toContainEqual(early.rejection);
+    expect(result).not.toHaveProperty("rejection_files");
   } finally { await rm(root, { recursive: true, force: true }); }
 });
 
-test("real planning records early losses once and reproduces freshness loss from native history", async () => {
+test("real planning records early losses once in native health counters without fetching stale pages", async () => {
   const fixture = await recordedPlan([source(), source({ id: "current", url: "https://atom.example/feed.xml" })]);
   try {
     const progress: ProgressRecord[] = [];
@@ -143,39 +123,26 @@ test("real planning records early losses once and reproduces freshness loss from
       { title: "Expired first", path: "stale-one", date: "2026-10-19T10:00:00Z" },
       { title: "Expired second", path: "stale-two", date: "2026-10-19T11:00:00Z" },
     ]);
-    await mkdir(fixture.inputs.outputRoot, { recursive: true });
     const summary = await main(["--cli"], { inputs: fixture.inputs, runtime: fixture.runtime, output: () => {} });
     if (!("planning_complete" in summary)) throw new Error("Expected completed recorded planning");
     expect(summary.planning_complete).toBe(true);
-    expect(summary.audited_complete).toBe(false);
-    expect(summary.first_sight.created_count).toBeGreaterThan(0);
-    const refused = progress.filter(event => event.eventType === "ARTICLE_HARVEST_COMPLETED"
-      && event.drop_reason === "STALE_MAX_AGE_EXCEEDED");
-    expect(refused).toHaveLength(2);
-    expect(refused.every(event => event.extraction_outcome === "not-attempted")).toBe(true);
     expect(fixture.transport.requests.some(request => request.url.pathname.startsWith("/stale-"))).toBe(false);
-    const history = await readPlanningHistory(namedPlanningFiles(summary, fixture.inputs.outputRoot));
-    const attempt = selectCompleteAttempt(history).selected;
-    if (attempt === null) throw new Error("Missing verified recorded attempt");
-    const population = derivePlanningPopulation(attempt);
-    expect(population.stages.input.map(row => row.source_id).sort()).toEqual(["current", "current", "recorded-news", "recorded-news"]);
-    expect(population.stages.freshness.map(row => row.source_id)).toEqual(["current", "current"]);
-    const old = summary.source_records?.find(row => row.source_id === "recorded-news");
-    expect(old).toMatchObject({ parsed_count: 2, harvested_count: 0, fresh_count: 0, eligible_count: 0, selected_count: 0 });
-    expect(old?.drop_reasons).toEqual([{ subject: "article", stage: "harvest-feeds", reason: "STALE_MAX_AGE_EXCEEDED", count: 2 }]);
-    const assessments = attempt.rows["article-assessments"].filter(row =>
-      "source_id" in row.row && row.row.source_id === "recorded-news").map(row => row.row);
-    expect(assessments).toHaveLength(2);
-    expect(assessments.every(row => "extraction_outcome" in row && row.extraction_outcome === "not_attempted"
-      && "timing_basis" in row && row.timing_basis === "published_at"
-      && "extracted_word_count" in row && row.extracted_word_count === null)).toBe(true);
-    const loss = attempt.rows.diversity.map(row => row.row).find(row =>
-      "metric" in row && row.metric === "lost_diversity_by_stage" && "stage" in row && row.stage === "freshness");
-    expect(loss).toMatchObject({ before_value: 2, after_value: 1, value: 1, item_count: 2 });
+    expect(progress.filter(event => event.eventType === "ARTICLE_HARVEST_COMPLETED" && event.output_count === 0)).toHaveLength(2);
+    const rows = (await Promise.all(summary.files.feed_health_state!.files.map(file =>
+      readPlannerParquet(join(fixture.inputs.outputRoot, file.path), "feed-health-state", FeedHealthStateRowContract)))).flatMap(file => file.rows);
+    const stale = rows.find(row => row.feed_id === "recorded-news")!;
+    expect(stale).toMatchObject({ items: 2, outcome: "ok", feed_reads: 1, productive_reads: 1, article_candidates: 0, articles_selected: 0 });
+    expect(stale.rejection_counts).toEqual([{
+      subject: "article", stage: "harvest-feeds", reason_code: "STALE_MAX_AGE_EXCEEDED", attribution: null, count: 2,
+    }]);
+    const discoveries = (await Promise.all(summary.files.discovered_articles!.files.map(file =>
+      readPlannerParquet(join(fixture.inputs.outputRoot, file.path), "discovered-articles", DiscoveredArticleRowContract)))).flatMap(file => file.rows);
+    for (const path of ["stale-one", "stale-two"]) expect(discoveries.some(row =>
+      row.url_key === deriveUrlKey(`https://news.example/${path}`))).toBe(true);
   } finally { await fixture.close(); }
 });
 
-test("empty RSS and Atom category labels never become invalid audit measurements", async () => {
+test("empty RSS and Atom category labels never become invalid selected metadata or artifact labels", async () => {
   const fixture = await recordedPlan([source(), source({ id: "atom", url: "https://atom.example/feed.xml" })]);
   try {
     fixture.transport.recordings.bodies.rss = feed([
@@ -185,40 +152,11 @@ test("empty RSS and Atom category labels never become invalid audit measurements
       "<entry>", '<entry><category term=" "/><category term=""/>',
     );
     const summary = await main(["--cli"], { inputs: fixture.inputs, runtime: fixture.runtime, output: () => {} });
-    if (!("planning_complete" in summary)) throw new Error("Expected actual planning");
+    if (!("planning_complete" in summary) || summary.selected_articles_artifact === null) throw new Error("Expected actual selected artifact");
     expect(summary.planning_complete).toBe(true);
-    const history = await readPlanningHistory(namedPlanningFiles(summary, fixture.inputs.outputRoot));
-    const attempt = selectCompleteAttempt(history).selected!;
-    expect(attempt).not.toBeNull();
-    const categories = attempt.rows["article-assessments"].map(held => ArticleAssessmentRecordSchema.parse(held.row))
-      .flatMap(row => row.categories === null ? [] : [row.categories]);
+    const artifact = SelectedArticlesArtifactSchema.parse(await Bun.file(join(fixture.directory, summary.selected_articles_artifact)).json());
+    const categories = artifact.articles.map(row => row.categories);
     expect(categories).toContainEqual(["Science"]);
-    expect(categories.every(values => Array.isArray(values) && values.every(value => typeof value === "string" && value.length > 0))).toBe(true);
-  } finally { await fixture.close(); }
-});
-
-test("audit refuses missing or changed pre-download timing and invented extraction evidence", async () => {
-  const fixture = await recordedPlan();
-  try {
-    fixture.transport.recordings.bodies.rss = feed([
-      { title: "Expired", path: "stale", date: "2026-10-19T10:00:00Z" },
-    ]);
-    const result = await runFeedPlan({}, fixture.inputs, fixture.runtime);
-    expect(() => preparePlanningMetrics(result, fixture.inputs)).not.toThrow();
-    const missing = structuredClone(result);
-    delete missing.evidence.harvest.articles[0]!.observation.preflight_freshness;
-    expect(() => preparePlanningMetrics(missing, fixture.inputs)).toThrow("preflight_freshness");
-    const changed = structuredClone(result);
-    changed.evidence.harvest.articles[0]!.observation.preflight_freshness!.age_hours += 1;
-    expect(() => preparePlanningMetrics(changed, fixture.inputs)).toThrow("preflight_clock");
-    const invented = structuredClone(result);
-    invented.evidence.harvest.articles[0]!.observation.http_status = 200;
-    expect(() => preparePlanningMetrics(invented, fixture.inputs)).toThrow("preflight_observation");
-    const assessment = structuredClone(result);
-    const event = assessment.events.find(event => event.payload.kind === "candidate_decision");
-    if (event?.payload.kind !== "candidate_decision") throw new Error("Missing actual assessment");
-    event.payload.assessment.author_present = true;
-    event.payload.assessment.attribution_status = "available";
-    expect(() => preparePlanningMetrics(assessment, fixture.inputs)).toThrow("preflight_unperformed");
+    expect(categories.every(values => values.every(value => value.length > 0))).toBe(true);
   } finally { await fixture.close(); }
 });

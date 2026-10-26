@@ -7,8 +7,12 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Final
 
-from idhazh.contracts.base import Contract
-from idhazh.contracts.file_envelope import FileEnvelope
+from idhazh.contracts.feed_ingest_discovered_article import LedgerContract
+from idhazh.contracts.file_envelope import (
+    FileEnvelope,
+    PlannerFileEnvelope,
+    envelope_from_metadata,
+)
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.ledger import keys, paths
 from idhazh.ledger.arrow_schema import ColumnType, LogicalType
@@ -119,7 +123,7 @@ def _add_history(
 
 
 def _contract_schema(
-    model: type[Contract], *, envelope_version: str | None = None
+    model: type[LedgerContract], *, envelope_version: str | None = None
 ) -> tuple[Any, dict[str, ColumnType | LogicalType]]:
     from idhazh.ledger import parquet
 
@@ -167,12 +171,12 @@ def _check_file(
     path: Path,
     ledger: LedgerName,
     contract_stamp: str,
-    model: type[Contract],
-) -> tuple[FileEnvelope, Any, list[_Fault]]:
+    model: type[LedgerContract],
+) -> tuple[FileEnvelope | PlannerFileEnvelope, Any, list[_Fault]]:
     from idhazh.ledger import parquet
 
     metadata, actual = parquet.read_footer_schema(path)
-    envelope = FileEnvelope.from_metadata(metadata)
+    envelope = envelope_from_metadata(metadata)
     expected, logical_types = _contract_schema(model, envelope_version=envelope.version)
     faults: list[_Fault] = []
     file_stamp = envelope.row_schema_version

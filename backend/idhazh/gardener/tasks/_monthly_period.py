@@ -81,9 +81,9 @@ from pathlib import Path
 from typing import Final
 
 from idhazh import ledger, month_partition
-from idhazh.contracts.base import Contract
 from idhazh.contracts.collection_prune import StopReason
-from idhazh.contracts.file_envelope import Format, Period, WriterIdentity
+from idhazh.contracts.feed_ingest_discovered_article import LedgerContract
+from idhazh.contracts.file_envelope import PLANNER_LEDGERS, Format, Period, WriterIdentity
 from idhazh.contracts.gardener_events import CompactionStep, LedgerFaultMet, StepChoice
 from idhazh.contracts.gardener_fault import GardenerFault, RecoveryNote
 from idhazh.contracts.knobs.gardener import DaysWindow, ForeverWindow, Window
@@ -260,7 +260,7 @@ def _hold(tree: CompactTree, month: str) -> tuple[Stop, ...]:
     return ()
 
 
-def _close[C: Contract](
+def _close[C: LedgerContract](
     tree: CompactTree, month: str, *, model: type[C], identity: WriterIdentity
 ) -> tuple[Stop, ...]:
     """Close one month no entry names yet, from its days or from its own file.
@@ -318,7 +318,7 @@ def _close[C: Contract](
             set_aside=set_aside,
             model=model,
         )
-    rows: list[ledger.StoredRow[C]] = []
+    rows: list[ledger.LedgerStoredRow] = []
     unreadable: list[str] = []
     for day in sorted(packed):
         try:
@@ -348,7 +348,7 @@ def _close[C: Contract](
         tree.write(built.path, built.data)
         tree.monthly[month] = CompactEntry(
             covers=month,
-            rows=len(rows),
+            rows=built.rows,
             bytes=len(built.data),
             lost_days=lost_days,
             set_aside=set_aside,
@@ -369,7 +369,7 @@ def _close[C: Contract](
     return ()
 
 
-def _keep_own[C: Contract](
+def _keep_own[C: LedgerContract](
     tree: CompactTree,
     month: str,
     own: ledger_marks.Adopted,
@@ -393,6 +393,10 @@ def _keep_own[C: Contract](
     else:
         try:
             rows = [row for path in sources for row in tree.load(path, model=model)]
+            if tree.ledger in PLANNER_LEDGERS:
+                rows = ledger.settle_registered_rows(
+                    [rows], ledger.door_key(tree.ledger), ledger=tree.ledger
+                )
             if tree.load(own.path, model=model) != rows:
                 # Its own file is at its path, no monthly entry names it, and it
                 # holds other rows than its days. Nothing is written over a

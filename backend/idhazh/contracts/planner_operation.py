@@ -53,9 +53,14 @@ class PlannerObservation(Model):
 class FetchedDocument(Contract):
     """Private fetch bytes and measured evidence, never a caller-selected path."""
 
-    version: Literal["2026-10-23", "2026-10-23T09:22"] = "2026-10-23T09:22"
+    version: Literal["2026-10-23", "2026-10-23T09:22", "2026-10-26"] = "2026-10-26"
     __schema_stem__: ClassVar[str] = "fetched-document"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-10-26",
+            change="Link fetched articles to bounded server-owned feed offers.",
+            why="A private article receipt identifies its one original feed offer.",
+        ),
         ChangelogEntry(
             version="2026-10-23T09:22",
             change="Record actual retry waits and elapsed retry time.",
@@ -82,6 +87,9 @@ class FetchedDocument(Contract):
     observation: PlannerObservation
     attempt_observations: list[PlannerObservation]
     body_sha256: Sha256 | None
+    parent_fetch_request_id: UUID4 | None = None
+    parent_batch_id: UUID4 | None = None
+    entry_ordinal: Count | None = None
 
     @model_validator(mode="after")
     def validate_document(self) -> Self:
@@ -103,9 +111,16 @@ class FetchedDocument(Contract):
 class PlannerOperation(Contract):
     """One keyed request holds its captured identity and exact completed response."""
 
-    version: Literal["2026-10-23", "2026-10-23T09:22", "2026-10-23T18:50"] = "2026-10-23T18:50"
+    version: Literal[
+        "2026-10-23", "2026-10-23T09:22", "2026-10-23T18:50", "2026-10-26"
+    ] = "2026-10-26"
     __schema_stem__: ClassVar[str] = "planner-operation"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-10-26",
+            change="Retain current fetched offer references through request replay.",
+            why="A restarted request keeps the original bounded feed-offer association.",
+        ),
         ChangelogEntry(
             version="2026-10-23T18:50",
             change="created_at retains the original captured clock precision through replay.",

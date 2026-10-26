@@ -1,460 +1,103 @@
-/** Prove live feed and selected article HTTP operations without publishing private bodies. */
-import { Database } from "bun:sqlite";
-import { constants } from "node:fs";
-import { createHash, randomUUID } from "node:crypto";
-import { copyFile, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
-import { dirname, join } from "node:path";
-import type { PersistedLedgerFile, PersistLedgerResult } from "../../packages/ledger-file-writer/src/index";
-import { FetchedDocumentSchema, PlannerObservationSchema, RequestIdSchema } from "../../services/feed-ingest-plan/src/api/operation-contracts";
-import { sha256 } from "../../services/feed-ingest-plan/src/api/operation-store";
+/** Call the real HTTP planner and retain only selected text and body-free evidence. */
+import { mkdir, writeFile } from "node:fs/promises";
+import { join } from "node:path";
+import { randomUUID } from "node:crypto";
+import { loadPlanInputs } from "../../services/feed-ingest-plan/src/load-plan-inputs";
+import type { PlanInputs } from "../../services/feed-ingest-plan/src/load-plan-inputs";
+import type { PlanRuntime } from "../../services/feed-ingest-plan/src/run-feed-plan";
+import { parseCliRequest, describePlanError } from "../../services/feed-ingest-plan/src/api/plan-request";
+import type { PlanRequest } from "../../services/feed-ingest-plan/src/api/plan-request";
 import { servePlan } from "../../services/feed-ingest-plan/src/api/server";
 import { ServiceSettingsSchema } from "../../services/feed-ingest-plan/src/config/service-settings";
-import { resolveAddresses } from "../../services/feed-ingest-plan/src/harvest-feeds/safe-target";
-import { networkTransport } from "../../services/feed-ingest-plan/src/harvest-feeds/transport";
-import { canonicalizeUrl } from "../../services/feed-ingest-plan/src/harvest-feeds/url-cleaner";
-import type { PlanInputs } from "../../services/feed-ingest-plan/src/load-plan-inputs";
-import type { ProgressRecord } from "../../services/feed-ingest-plan/src/logging/progress-logger";
-import type { PlanRuntime } from "../../services/feed-ingest-plan/src/run-feed-plan";
-import type { summarizePlan } from "../../services/feed-ingest-plan/src/run-feed-plan";
-import { ExtractionQualitySchema } from "../../packages/common-contracts/src/index";
-import { EXTRACTOR_VERSION, SANITIZER_FINGERPRINT } from "../../services/feed-ingest-plan/src/harvest-feeds/extraction-provenance";
-import { DispatchContract as nativeDispatchContract } from "../../services/feed-ingest-plan/src/metrics/audit-contracts";
-import { readLedgerParquet } from "../../services/feed-ingest-plan/src/read-ledger-history/read-parquet";
-import { verifyParquetFiles } from "./feed-ingest-plan-verification";
-import { loadConfig as loadProbeConfig, ProbeConfigSchema } from "../../services/host-probes/src/config";
+import { PlanResponseSchema } from "../../services/feed-ingest-plan/src/api/plan-response.schema";
+import { FeedHealthStateUpdateResponseSchema } from "../../services/feed-ingest-plan/src/api/feed-health-state.schema";
+import { ProbeConfigSchema } from "../../services/host-probes/src/config";
 import type { ProbeConfig } from "../../services/host-probes/src/config";
-import { TaskProfileSchema } from "../../services/host-probes/src/task-profile/profile-schema";
-import type { TaskProfile } from "../../services/host-probes/src/task-profile/profile-schema";
-import { DocumentProfilingSchema, StageProfileProofSchema } from "./feed-ingest-plan-profile-schema";
+import { stagePlannerHistory } from "./feed-ingest-plan-history";
+import { createExecutionOutputs, writeGitHubOutputs } from "./feed-ingest-plan-outputs";
+import { verifyPlanningCompletion } from "./feed-ingest-plan-verification";
+import { writePlannerReport } from "./feed-ingest-plan-report";
 
 export function configureDocumentProfiling(config: ProbeConfig, machineMemoryEnabled: boolean): ProbeConfig {
   return ProbeConfigSchema.parse({ ...config, task_profile: {
     ...config.task_profile, enabled: true, memory_enabled: true, machine_memory_enabled: machineMemoryEnabled,
   } });
 }
-
-class ProofUnavailable extends Error {
-  constructor(readonly reason: "NO_SUCCESSFUL_CONFIGURED_FEED" | "INVALID_PLANNING_COMPLETION"
-    | "DISPATCH_MEMBERSHIP_MISMATCH" | "NO_READABLE_SELECTED_ARTICLE" | "HTML_EXTRACTION_UNAVAILABLE") {
-    super(reason);
-  }
-}
-
-function record(value: unknown): Record<string, unknown> {
-  if (typeof value !== "object" || value === null || Array.isArray(value)) throw new Error("Expected an HTTP response object");
-  return value as Record<string, unknown>;
-}
-function readFetchReceipt(value: unknown) {
-  const { fetch_request_id, ...artifact } = record(value);
-  if ("body" in artifact) throw new Error("HTTP fetch response contains a private body");
-  const body_sha256 = FetchedDocumentSchema.shape.body_sha256.parse(artifact.body_sha256);
-  // HTTP omits the body. Validate the shared public fields with absent body evidence, then retain its checked digest.
-  const { body: _body, ...receipt } = FetchedDocumentSchema.parse({ ...artifact, body: null, body_sha256: null });
-  return { ...receipt, body_sha256, fetch_request_id: RequestIdSchema.parse(fetch_request_id) };
-}
-function readParseReceipt(value: unknown, kind: "feed" | "article") {
-  const receipt = record(value);
-  const fields = ["fetch_request_id", "kind", "observation", "parsed", "failure"];
-  if (Object.keys(receipt).some(key => !fields.includes(key))
-    || (kind === "feed" && receipt.parsed !== null && !Array.isArray(receipt.parsed))
-    || (receipt.failure !== null && !["malformed-feed", "missing-document-root", "dom-depth-exceeded"].includes(String(receipt.failure)))
-    || receipt.kind !== kind) throw new Error("Invalid document parse response");
-  return {
-    fetch_request_id: RequestIdSchema.parse(receipt.fetch_request_id),
-    observation: PlannerObservationSchema.parse(receipt.observation),
-    parsed: receipt.parsed, failure: receipt.failure,
-  };
-}
-export function redactProofResponse(endpoint: "fetch" | "parse", kind: "feed" | "article", bytes: Uint8Array, status: number) {
-  const text = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
-  const value: unknown = JSON.parse(text);
-  const response_sha256 = createHash("sha256").update(bytes).digest("hex");
-  if (status !== 200) {
-    const error = record(value);
-    return { response_sha256, response_json: null, response_metadata: {
-      code: error.code === "REQUEST_CONFLICT" ? "REQUEST_CONFLICT" : "HTTP_FAILURE",
-    } };
-  }
-  if (endpoint === "fetch") {
-    const receipt = readFetchReceipt(value);
-    if (receipt.kind !== kind) throw new Error("Fetch document kind differs");
-    return { response_sha256, response_json: kind === "feed" ? text : null, response_metadata: receipt };
-  }
-  const receipt = readParseReceipt(value, kind);
-  if (kind === "feed") return { response_sha256, response_json: text, response_metadata: null };
-  const parsed = receipt.parsed === null ? null : record(receipt.parsed);
-  let metadata = null;
-  if (parsed !== null) {
-    if (typeof parsed.article_text !== "string" || !Number.isSafeInteger(parsed.word_count)
-      || typeof parsed.word_count !== "number" || parsed.word_count < 0
-      || typeof parsed.paywall !== "boolean"
-      || !["none", "json-ld", "configured-marker"].includes(String(parsed.paywall_evidence))
-      || !Array.isArray(parsed.warnings) || parsed.warnings.some(warning => warning !== "malformed-json-ld")) {
-      throw new Error("Invalid article extraction metadata");
-    }
-    const quality = parsed.quality === null ? null : ExtractionQualitySchema.parse(parsed.quality);
-    if (quality !== null && (quality.word_count !== parsed.word_count || quality.source_word_count !== parsed.word_count
-      || quality.extractor_version !== EXTRACTOR_VERSION || quality.sanitizer_version !== SANITIZER_FINGERPRINT
-      || quality.token_count !== null || quality.truncated !== null || quality.truncated_at_tokens !== null)) {
-      throw new Error("Article extraction quality or provenance differs");
-    }
-    metadata = {
-      word_count: parsed.word_count, article_text_sha256: sha256(parsed.article_text),
-      article_text_length: parsed.article_text.length, paywall: parsed.paywall,
-      paywall_evidence: parsed.paywall_evidence, warnings: parsed.warnings, quality,
-    };
-  }
-  return { response_sha256, response_json: null, response_metadata: {
-    fetch_request_id: receipt.fetch_request_id, observation: receipt.observation,
-    kind, failure: receipt.failure, parsed: metadata,
-  } };
-}
-export function requireExactReplay(original: Uint8Array, replay: Uint8Array) {
-  if (!Buffer.from(original).equals(replay)) throw new Error("Restart replay changed exact private response bytes");
-}
-export function requireReadableArticle(value: unknown) {
-  const article = record(value);
-  if (typeof article.paywall !== "boolean" || typeof article.article_text !== "string") {
-    throw new Error("Invalid article extraction metadata");
-  }
-  const quality = article.quality === null ? null : ExtractionQualitySchema.parse(article.quality);
-  if (article.paywall || !article.article_text.trim() || quality === null || quality.rejected || quality.word_count === 0) {
-    throw new ProofUnavailable("HTML_EXTRACTION_UNAVAILABLE");
-  }
-}
-
-export async function selectVerifiedArticle(inputs: PlanInputs, summary: ReturnType<typeof summarizePlan>, stateRoot: string) {
-  if (!summary.planning_complete || summary.planning_completion?.status !== "complete"
-    || summary.planning_completion.run_id !== summary.run_id
-    || summary.planning_completion.correlation_id !== summary.correlation_id) {
-    throw new ProofUnavailable("INVALID_PLANNING_COMPLETION");
-  }
-  const verified = await verifyParquetFiles(stateRoot, "dispatches", summary.files.dispatches, inputs.registrations.dispatches);
-  const candidates = new Set(summary.selected_candidate_ids);
-  if (candidates.size !== summary.selected_candidate_ids.length || verified.row_count !== candidates.size) {
-    throw new ProofUnavailable("DISPATCH_MEMBERSHIP_MISMATCH");
-  }
-  let selected: null | {
-    source_id: string; canonical_url: string; article_id: string;
-    selection: { candidate_id: string; run_id: string; correlation_id: string; file_id: string; content_sha256: string };
-  } = null;
-  for (const file of summary.files.dispatches.files) {
-    const native = await readLedgerParquet(join(stateRoot, ...file.path.split("/")), "dispatches", nativeDispatchContract);
-    for (const { row: dispatch, identity } of native.rows) {
-      const { content, selection } = dispatch;
-      if (content.run_id !== summary.run_id || identity.run_id !== summary.run_id
-        || identity.attempt !== summary.planning_completion.attempt
-        || content.correlation_id !== summary.correlation_id || selection.correlation_id !== summary.correlation_id
-        || content.date !== summary.date || selection.date !== summary.date
-        || !candidates.delete(content.candidate_id)) throw new ProofUnavailable("DISPATCH_MEMBERSHIP_MISMATCH");
-      const source = inputs.harvest.sources.find(source => source.id === content.source_id && source.status === "active");
-      if (selected === null && source && content.word_count > 0 && content.article_text.trim()) {
-        selected = {
-          source_id: source.id, canonical_url: content.canonical_url, article_id: content.url_key,
-          selection: { candidate_id: content.candidate_id, run_id: content.run_id,
-            correlation_id: content.correlation_id, file_id: file.file_id, content_sha256: file.content_sha256 },
-        };
-      }
-    }
-  }
-  if (selected === null || candidates.size !== 0) throw new ProofUnavailable("NO_READABLE_SELECTED_ARTICLE");
-  return selected;
-}
-type Call = {
-  stage: string; endpoint: "fetch" | "parse"; request: Record<string, string>;
-  http_status: number; response_json: string | null; response_sha256: string;
-  response_metadata: unknown;
-  network: { dns: number; http: number };
-};
-
-export async function verifyLiveDocumentHttp(
-  inputs: PlanInputs, runtime: PlanRuntime, progress: readonly ProgressRecord[],
-  runnerTemp: string, artifactRoot: string, summary: ReturnType<typeof summarizePlan>,
-  machineMemoryEnabled: boolean,
-) {
-  const profilingConfig = configureDocumentProfiling(await loadProbeConfig(), machineMemoryEnabled);
-  if (summary.planning_completion?.attempt !== inputs.settings.run.attempt) {
-    throw new ProofUnavailable("INVALID_PLANNING_COMPLETION");
-  }
-  const evidence = {
-    scope: "live_configured_feed_and_selected_article", status: "running", stage: "select_source",
-    git_sha: runtime.git_sha, run_id: summary.run_id, attempt: inputs.settings.run.attempt,
-    correlation_id: summary.correlation_id, task_profile: profilingConfig.task_profile,
-    documents: [] as object[], error: null as string | null, reason: null as string | null,
-  };
-  const persist = () => {
-    StageProfileProofSchema.parse(evidence);
-    return writeFile(join(artifactRoot, "stage-api-proof.json"), JSON.stringify(evidence));
-  };
-  await persist();
-  const retainedObservations: PersistedLedgerFile[] = [];
+export async function invokePlannerHttp(inputs: PlanInputs, runtime: PlanRuntime, request: PlanRequest, directory: string) {
+  await mkdir(directory, { recursive: true });
+  const server = servePlan(inputs, runtime);
   try {
-    const completed = progress.find(event => event.eventType === "FEED_FETCH_COMPLETED"
-      && event.correlationId === summary.correlation_id
-      && event.fetch_status === "success" && event.parse_status === "success"
-      && inputs.harvest.sources.some(source => source.id === event.source_id && source.status === "active"));
-    const source = inputs.harvest.sources.find(source => source.id === completed?.source_id);
-    if (!source) throw new ProofUnavailable("NO_SUCCESSFUL_CONFIGURED_FEED");
-    await verifyTarget({ kind: "feed", source_id: source.id, ...canonicalizeUrl(source.url), selection: null });
-    evidence.stage = "select_verified_article";
-    await persist();
-    const article = await selectVerifiedArticle(inputs, summary, join(artifactRoot, "state"));
-    await verifyTarget({ kind: "article", ...article, url_key: article.article_id });
-    evidence.status = "complete";
-    evidence.stage = "complete";
-  } catch (error) {
-    evidence.status = "failed";
-    evidence.reason = error instanceof ProofUnavailable ? error.reason : "PROOF_CHECK_FAILED";
-    evidence.error = `Stage ${evidence.stage} failed; HTML verification is not complete unless its document proof is complete`;
-    throw new Error(evidence.error);
-  } finally { await persist(); }
-  return retainedObservations.length
-    ? { status: "written" as const, files: retainedObservations } : { status: "empty" as const, files: [] };
-
-  async function verifyTarget(target: {
-    kind: "feed" | "article"; source_id: string; canonical_url: string; url_key: string;
-    selection: Awaited<ReturnType<typeof selectVerifiedArticle>>["selection"] | null;
-  }) {
-    const proof = {
-      kind: target.kind, status: "running", stage: "create_private_directory",
-      git_sha: runtime.git_sha, source_id: null as string | null,
-      article_id: null as string | null, run_id: summary.run_id,
-      correlation_id: summary.correlation_id, calls: [] as Call[],
-      pending_request: null as null | Pick<Call, "stage" | "endpoint" | "request">,
-      journal_records_sha256: null as null | { before_restart: string; after_checks: string },
-      selection: target.selection, reason: null as string | null,
-      error: null as string | null,
-      profiling: { profiles: [] as TaskProfile[], actual_work_count: null as number | null, after_checks_count: null as number | null },
-    };
-    evidence.documents.push(proof);
-    const persist = () => {
-      evidence.stage = `${target.kind}:${proof.stage}`;
-      StageProfileProofSchema.parse(evidence);
-      return writeFile(join(artifactRoot, "stage-api-proof.json"), JSON.stringify(evidence));
-    };
-    let privateRoot: string | undefined;
-    let server: ReturnType<typeof servePlan> | undefined;
-    const observations: PersistedLedgerFile[] = [];
-    try {
-      const source = inputs.harvest.sources.find(source => source.id === target.source_id && source.status === "active");
-      if (!source) throw new Error("Active configured source is unavailable");
-      proof.source_id = source.id;
-      proof.article_id = target.url_key;
-      proof.stage = "create_private_directory";
-      await persist();
-      // This sibling directory is outside the workflow's only artifact upload root.
-      const outputRoot = await mkdtemp(join(runnerTemp, "feed-stage-api-private-"));
-      privateRoot = outputRoot;
-      const counts = { dns: 0, http: 0 };
-      const apiInputs = { ...inputs, outputRoot };
-      const apiRuntime: PlanRuntime = {
-        ...runtime,
-        on_document_observations_persisted: files => { observations.push(...files); },
-        task_profiling: {
-          config: profilingConfig,
-          report: profile => {
-            proof.profiling.profiles.push(TaskProfileSchema.parse(profile));
-            DocumentProfilingSchema.parse(proof.profiling);
-          },
-        },
-        boundary: {
-          resolve: hostname => { counts.dns++; return resolveAddresses(hostname); },
-          transport: { request: request => { counts.http++; return networkTransport.request(request); } },
-        },
-      };
-      const fetchRequest = {
-        request_id: randomUUID(), correlation_id: proof.correlation_id, source_id: source.id, kind: target.kind,
-        ...(target.kind === "article" ? { url: target.canonical_url } : {}),
-      };
-      async function post(stage: string, endpoint: Call["endpoint"], request: Record<string, string>) {
-        proof.stage = stage;
-        proof.pending_request = { stage, endpoint, request };
-        await persist();
-        if (!server) throw new Error("Actual HTTP listener is not running");
-        const before = { ...counts };
-        const response = await fetch(new URL(`/api/2026-10-20/${endpoint}`, server.url), {
-          method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(request),
-          // The enclosing workflow deadline supervises the configured operation budget.
-          timeout: false,
-        });
-        const response_bytes = Buffer.from(await response.arrayBuffer());
-        const call: Call = {
-          stage, endpoint, request, http_status: response.status, response_json: null, response_metadata: null,
-          response_sha256: createHash("sha256").update(response_bytes).digest("hex"),
-          network: { dns: counts.dns - before.dns, http: counts.http - before.http },
-        };
-        try {
-          Object.assign(call, redactProofResponse(endpoint, target.kind, response_bytes, response.status));
-        } catch (error) {
-          proof.calls.push({ ...call, response_json: null });
-          await persist();
-          throw error;
-        }
-        proof.calls.push(call);
-        proof.pending_request = null;
-        await persist();
-        // Full bytes never enter the object serialized by persist().
-        return { ...call, private_response_bytes: response_bytes };
-      }
-      function requireStatus(call: Call, expected: number) {
-        if (call.http_status !== expected) throw new Error(`${call.stage}: expected HTTP ${expected}, got ${call.http_status}`);
-      }
-      function requireOffline(call: Call) {
-        if (call.network.dns !== 0 || call.network.http !== 0) throw new Error(`${call.stage}: unexpected outbound network work`);
-      }
-      function requireProfile(operation: "fetch" | "parse", request_id: string) {
-        const matches = proof.profiling.profiles.filter(profile => profile.identity.request_id === request_id);
-        const profile = matches[0];
-        if (matches.length !== 1 || !profile || profile.identity.task_name !== operation
-          || profile.identity.run_id !== proof.run_id || profile.identity.correlation_id !== proof.correlation_id
-          || profile.outcome !== "success" || profile.processes.worker.closing.pid !== process.pid
-          || profile.processes.worker.closing.start_ticks === null
-          || profile.processes.worker.closing.memory_kb.rss === null
-          || profile.processes.worker.sampled_rss_max_kb === null
-          || (machineMemoryEnabled && (profile.machine_available_min_kb === null
-            || profile.samples.at(-1)?.memory_kb.total === null))
-          || (!machineMemoryEnabled && (profile.machine_available_min_kb !== null
-            || profile.samples.at(-1)?.unavailable["memory_kb.total"] !== "configured_off"))
-          || (profile.cpu.reason !== null && profile.cpu.reason !== "no_ticks")) {
-          throw new Error(`${operation}: live task profiling evidence is unavailable or mismatched`);
-        }
-      }
-      function requireIdentity(observation: ReturnType<typeof PlannerObservationSchema.parse>, operation: "fetch" | "parse") {
-        if (observation.article_id !== proof.article_id || observation.source_id !== source!.id
-          || observation.correlation_id !== proof.correlation_id || observation.operation !== operation
-          || observation.run_id !== proof.run_id) throw new Error(`${operation}: document identity differs`);
-      }
-      function journalDigest(parseRequestId: string) {
-        const database = new Database(join(outputRoot, "planner-operations.sqlite"), { readonly: true });
-        try {
-          const rows = database.query<{ request_id: string; record: string }, [string, string]>(
-            "SELECT request_id, record FROM operations WHERE request_id IN (?, ?) ORDER BY request_id",
-          ).all(fetchRequest.request_id, parseRequestId);
-          if (rows.length !== 2) throw new Error("Expected both completed operation receipts");
-          return sha256(JSON.stringify(rows));
-        } finally { database.close(); }
-      }
-      proof.stage = "start_listener";
-      await persist();
-      server = servePlan(apiInputs, apiRuntime);
-      const fetched = await post("fetch", "fetch", fetchRequest);
-      requireStatus(fetched, 200);
-      requireProfile("fetch", fetchRequest.request_id);
-      const receipt = readFetchReceipt(JSON.parse(fetched.private_response_bytes.toString("utf8")));
-      requireIdentity(receipt.observation, "fetch");
-      if (receipt.fetch_request_id !== fetchRequest.request_id || receipt.kind !== target.kind
-        || receipt.article_id !== proof.article_id || receipt.canonical_url !== target.canonical_url
-        || receipt.failure !== null || receipt.body_sha256 === null || fetched.network.http === 0
-        || receipt.observation.caused_by_event_id !== null) throw new Error("Fetch did not supply successful live document evidence");
-      if (receipt.attempts.length === 0 || receipt.attempts.length !== receipt.attempt_observations.length) {
-        throw new Error("Fetch attempt evidence is absent or mismatched");
-      }
-      const eventIds = new Set([receipt.observation.event_id]);
-      for (const observation of receipt.attempt_observations) {
-        if (observation.operation !== "attempt" || observation.caused_by_event_id !== receipt.observation.event_id
-          || observation.article_id !== proof.article_id || observation.source_id !== source.id
-          || observation.run_id !== proof.run_id || observation.correlation_id !== proof.correlation_id
-          || eventIds.has(observation.event_id)) throw new Error("Fetch attempt identity or cause differs");
-        eventIds.add(observation.event_id);
-      }
-      const parseRequest = {
-        request_id: randomUUID(), fetch_request_id: receipt.fetch_request_id,
-        article_id: receipt.article_id, correlation_id: proof.correlation_id,
-      };
-      const parsed = await post("parse", "parse", parseRequest);
-      requireStatus(parsed, 200);
-      requireOffline(parsed);
-      requireProfile("parse", parseRequest.request_id);
-      proof.profiling.actual_work_count = proof.profiling.profiles.length;
-      const result = readParseReceipt(JSON.parse(parsed.private_response_bytes.toString("utf8")), target.kind);
-      requireIdentity(result.observation, "parse");
-      if (result.fetch_request_id !== receipt.fetch_request_id || result.failure !== null || result.parsed === null
-        || result.observation.caused_by_event_id !== receipt.observation.event_id
-        || eventIds.has(result.observation.event_id)) throw new Error("Parse result or causal identity differs");
-      if (target.kind === "article") {
-        requireReadableArticle(result.parsed);
-      }
-      const beforeRestart = journalDigest(parseRequest.request_id);
-      proof.stage = "restart";
-      await persist();
-      await server.stop(true);
-      server = undefined;
-      server = servePlan(apiInputs, apiRuntime);
-      for (const [endpoint, request, original] of [
-        ["fetch", fetchRequest, fetched], ["parse", parseRequest, parsed],
-      ] as const) {
-        const replay = await post(`${endpoint}_replay_after_restart`, endpoint, request);
-        requireStatus(replay, original.http_status);
-        requireOffline(replay);
-        requireExactReplay(original.private_response_bytes, replay.private_response_bytes);
-      }
-      for (const [stage, endpoint, request] of [
-        ["changed_input_conflict", "fetch", { ...fetchRequest, correlation_id: randomUUID() }],
-        ["changed_operation_conflict", "parse", { ...parseRequest, request_id: fetchRequest.request_id }],
-      ] as const) {
-        const conflict = await post(stage, endpoint, request);
-        requireStatus(conflict, 409);
-        requireOffline(conflict);
-        if (JSON.parse(conflict.private_response_bytes.toString("utf8")).code !== "REQUEST_CONFLICT") throw new Error(`${stage}: wrong refusal`);
-      }
-      proof.stage = "restart_with_changed_config";
-      await persist();
-      await server.stop(true);
-      server = undefined;
-      const changedInputs = {
-        ...apiInputs, settings: ServiceSettingsSchema.parse({
-          ...inputs.settings, run: { ...inputs.settings.run, attempt: inputs.settings.run.attempt + 1 },
-        }),
-      };
-      server = servePlan(changedInputs, apiRuntime);
-      const conflict = await post("changed_config_conflict", "fetch", fetchRequest);
-      requireStatus(conflict, 409);
-      requireOffline(conflict);
-      if (JSON.parse(conflict.private_response_bytes.toString("utf8")).code !== "REQUEST_CONFLICT") throw new Error("Changed configuration: wrong refusal");
-      const afterChecks = journalDigest(parseRequest.request_id);
-      proof.profiling.after_checks_count = proof.profiling.profiles.length;
-      if (proof.profiling.actual_work_count !== 2 || proof.profiling.after_checks_count !== 2) {
-        throw new Error("Replay or refusal started a new actual-work profile");
-      }
-      proof.journal_records_sha256 = { before_restart: beforeRestart, after_checks: afterChecks };
-      if (beforeRestart !== afterChecks) throw new Error("Replay or refusal changed completed journal records");
-      proof.stage = "stop_listener";
-      await server.stop(true);
-      server = undefined;
-      proof.stage = "complete";
-      proof.status = "complete";
-    } catch (error) {
-      proof.status = "failed";
-      proof.reason = error instanceof ProofUnavailable ? error.reason : "PROOF_CHECK_FAILED";
-      // Do not serialize arbitrary exception messages, fetched bodies or private paths.
-      proof.error = `Stage ${proof.stage} failed; inspect its recorded HTTP status and body-free response`;
-      if (error instanceof ProofUnavailable) throw error;
-      throw new Error(proof.error);
-    } finally {
-      let cleanupStage = "stop_listener";
-      try {
-        if (server) await server.stop(true);
-        cleanupStage = "retain_document_observations";
-        if (privateRoot && observations.length) {
-          const written: PersistLedgerResult = { status: "written", files: observations };
-          await verifyParquetFiles(privateRoot, "document-observations", written, inputs.registrations.document_observations);
-          for (const file of observations) {
-            const target = join(artifactRoot, "state", ...file.path.split("/"));
-            await mkdir(dirname(target), { recursive: true });
-            await copyFile(join(privateRoot, ...file.path.split("/")), target, constants.COPYFILE_EXCL);
-            retainedObservations.push(file);
-          }
-        }
-        cleanupStage = "remove_private_directory";
-        // Every operation closes its database before responding; stop the listener before removing this one private root.
-        if (privateRoot) await rm(privateRoot, { recursive: true, force: true });
-      } catch {
-        proof.status = "failed";
-        proof.stage = cleanupStage;
-        proof.reason = cleanupStage === "retain_document_observations" ? "OBSERVATION_RETENTION_FAILED" : "PRIVATE_CLEANUP_FAILED";
-        proof.error = `Stage ${cleanupStage} failed; the private directory remains outside uploaded evidence`;
-        throw new Error(proof.error);
-      } finally { await persist(); }
+    const base = `http://${inputs.settings.listener.hostname}:${server.port}/api/2026-10-20`;
+    const healthResponse = await fetch(`${base}/health`);
+    const listener: unknown = await healthResponse.json();
+    if (healthResponse.status !== 200 || typeof listener !== "object" || listener === null
+      || !("planner_enabled" in listener) || listener.planner_enabled !== true) throw new Error("Planner listener is not enabled and responsive");
+    const response = await fetch(`${base}/plan`, {
+      method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(request), timeout: false,
+    });
+    const summary = PlanResponseSchema.parse(await response.json());
+    await writeFile(join(directory, "response.json"), JSON.stringify(summary));
+    await verifyPlanningCompletion(inputs.outputRoot, summary, inputs.registrations, inputs.root);
+    let health: ReturnType<typeof FeedHealthStateUpdateResponseSchema.parse> | undefined;
+    const batch = summary.batches.selection_batch_id ?? summary.batches.parsed_batch_id;
+    if (batch !== undefined) {
+      const result = await fetch(`${base}/feed-health-state`, {
+        method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ batch_id: batch, action: "summarize" }),
+      });
+      if (result.status !== 200) throw new Error("Recorded health summary could not be read");
+      health = FeedHealthStateUpdateResponseSchema.parse(await result.json());
+      await writeFile(join(directory, "health.json"), JSON.stringify(health));
     }
+    return { summary, health, outputs: createExecutionOutputs(summary, inputs.registrations), http_status: response.status };
+  } finally { await server.stop(true); }
+}
+export function readWorkflowRequest(environment: Record<string, string | undefined>) {
+  const args = ["--cli"];
+  for (const [name, flag] of [
+    ["FRESHNESS_HOURS", "--freshness-hours"], ["ARTICLE_LIMIT", "--article-limit"],
+    ["SHARDS", "--shards"], ["PARTITION_STRATEGY", "--partition-strategy"],
+  ] as const) {
+    const value = environment[name];
+    if (value !== undefined && value.trim() !== "") args.push(`${flag}=${value}`);
+  }
+  return parseCliRequest(args).request;
+}
+async function runWorkflow() {
+  const request = readWorkflowRequest(process.env);
+  const root = process.cwd();
+  const { RUNNER_TEMP, GITHUB_OUTPUT, GITHUB_RUN_ID, GITHUB_RUN_ATTEMPT, GITHUB_STEP_SUMMARY } = process.env;
+  if (!RUNNER_TEMP || !GITHUB_OUTPUT || !GITHUB_RUN_ID || !GITHUB_RUN_ATTEMPT || !GITHUB_STEP_SUMMARY) throw new Error("Workflow execution controls are missing");
+  const directory = join(RUNNER_TEMP, "feed-ingest-plan");
+  const inputs = await loadPlanInputs(root);
+  const started = performance.now();
+  const staged = await stagePlannerHistory(root, inputs, new Date().toISOString().replace(/\.\d{3}Z$/, "Z"));
+  const historyMs = Math.round(performance.now() - started);
+  inputs.settings = ServiceSettingsSchema.parse({
+    ...inputs.settings, enabled: true,
+    inputs: { ...inputs.settings.inputs, feed_health_days: staged.feed_health_days, feed_health_input_gap: staged.feed_health_input_gap },
+    run: { ...inputs.settings.run, attempt: Number(GITHUB_RUN_ATTEMPT) },
+  });
+  inputs.outputRoot = join(directory, "state");
+  const git = Bun.spawn(["git", "rev-parse", "HEAD"], { cwd: root, stdout: "pipe", stderr: "pipe" });
+  const [gitSha] = await Promise.all([new Response(git.stdout).text(), new Response(git.stderr).text()]);
+  if (await git.exited !== 0) throw new Error("Code identity could not be read");
+  const runtime: PlanRuntime = { git_sha: gitSha.trim(), run_number: GITHUB_RUN_ID, correlation_id: randomUUID() };
+  await mkdir(directory, { recursive: true });
+  await writeFile(join(directory, "history-staging-ms.json"), JSON.stringify(historyMs));
+  console.error(JSON.stringify({ event: "planner_history_staged", notices: staged.notices }));
+  const result = await invokePlannerHttp(inputs, runtime, request, directory);
+  await writeGitHubOutputs(GITHUB_OUTPUT, result.outputs);
+  await writePlannerReport({
+    config: inputs.harvest.config, summary_path: GITHUB_STEP_SUMMARY,
+    evidence: { response: result.summary, ...(result.health === undefined ? {} : { health: result.health }), historyStagingMs: historyMs },
+  });
+  if (!result.summary.planning_complete || result.http_status !== 200) process.exitCode = 2;
+}
+if (import.meta.main) {
+  try { await runWorkflow(); }
+  catch (error) {
+    const failure = describePlanError(error, process.cwd());
+    console.error(JSON.stringify({ event: "planner_workflow_failed", code: failure.code }));
+    process.exitCode = 2;
   }
 }

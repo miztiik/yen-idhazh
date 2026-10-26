@@ -1,290 +1,194 @@
-"""Do feed planning contracts and their strict TypeScript copies agree?"""
+"""Do current planner payloads and their strict TypeScript copies agree?"""
 
 from __future__ import annotations
 
-import hashlib
 import importlib
 import json
 import shutil
 import subprocess
 from pathlib import Path
 from typing import Any, cast
-from uuid import NAMESPACE_URL, uuid5
 
 import pytest
 from pydantic import ValidationError
 from support.paths import CONTRACT_FIXTURES_DIR, REPO_ROOT, read_text
 
+from ._fixtures import planner_payload
+
 pytestmark = pytest.mark.contract
 
 CONTRACT_NAMES = (
     ("feed_ingest_candidate", "FeedIngestCandidate"),
-    ("feed_ingest_dispatch", "FeedIngestDispatch"),
-    ("feed_ingest_rejection", "CandidateRejectionRecord"),
-    ("feed_ingest_source_run", "SourceRunRecord"),
-    ("feed_ingest_article_assessment", "ArticleAssessmentRecord"),
-    ("feed_ingest_diversity", "DiversityMetricRow"),
-    ("feed_ingest_editorial_selection", "EditorialSelectionRow"),
     ("planner_operation", "FetchedDocument"),
     ("planner_operation", "PlannerOperation"),
     ("planner_stage", "ParsedFeedBatch"),
     ("planner_stage", "SelectedFeedBatch"),
     ("planner_stage", "PartitionedFeedBatch"),
-    ("feed_ingest_observations", "DocumentObservationRecord"),
-    ("feed_ingest_feedback", "FeedIngestOperationalStateRow"),
-    ("feed_health_state", "FeedHealthStateSnapshot"),
-    ("feed_health_state", "FeedHealthStateHeadIndex"),
+    ("feed_ingest_discovered_article", "DiscoveredArticleRow"),
+    ("feed_ingest_selected_article", "SelectedArticleRow"),
+    ("feed_ingest_selected_article", "SelectedArticlesArtifact"),
+    ("feed_health_state", "FeedHealthStateRow"),
+    ("feed_ingest_plan_run", "PlanRunRow"),
+    ("file_envelope", "PlannerFileEnvelope"),
 )
-
 MODEL_NAMES = (
     ("feed_ingest_candidate", "SourceSnapshot"),
-    ("feed_ingest_candidate", "SourceOperationalEvidence"),
-    ("feed_ingest_candidate", "PublisherExposurePenalty"),
-    ("feed_ingest_feedback", "OperationalStateRead"),
-    ("feed_ingest_feedback", "SelectionStateCapture"),
-    ("feed_health_state", "FeedHealthStateInputIdentity"),
-    ("feed_health_state", "FeedHealthStateLifecycleDay"),
-    ("feed_health_state", "FeedHealthStateRequestDay"),
-    ("feed_health_state", "FeedHealthStateInventorySource"),
-    ("feed_health_state", "FeedHealthStateReliability"),
-    ("feed_health_state", "FeedHealthStateLifecycleResult"),
-    ("feed_health_state", "FeedHealthStateRequestResult"),
-    ("feed_health_state", "FeedHealthStateSourceResult"),
-    ("feed_health_state", "FeedHealthStateIndexIdentity"),
-    ("feed_health_state", "FeedHealthStateFileIdentity"),
-    ("feed_health_state", "FeedHealthStateSnapshotReference"),
     ("planner_stage", "PlannerStageContext"),
     ("planner_stage", "PlannerStageRequest"),
     ("planner_stage", "RecordedIdentity"),
     ("planner_stage", "PrimaryEvidence"),
     ("planner_stage", "PlannerArticleEvidence"),
-    ("planner_stage", "PlannerOpportunityEvidence"),
+    ("planner_stage", "PlannerFeedEntry"),
+    ("planner_stage", "PlannerFeedOffer"),
     ("planner_stage", "PreflightFreshness"),
     ("planner_stage", "PlannerHarvestObservation"),
     ("planner_stage", "PlannerSeenAvailable"),
     ("planner_stage", "PlannerSeenUnavailable"),
+    ("planner_stage", "PlannerRejectionCount"),
+    ("planner_stage", "PlannerHealthDay"),
+    ("planner_stage", "PlannerRequestReport"),
+    ("planner_stage", "SelectedArticleContent"),
+    ("planner_stage", "StageReferenceRequest"),
+    ("planner_stage", "PartitionArticlesRequest"),
+    ("feed_ingest_selected_article", "SelectedArticleMetadata"),
+    ("feed_ingest_selected_article", "SelectedArtifactArticle"),
+    ("feed_ingest_selected_article", "SelectedArticleRatings"),
+    ("feed_ingest_selected_article", "SelectedArticleAdjustment"),
+    ("feed_health_state", "FeedHealthReliability"),
+    ("feed_health_state", "FeedHealthRejectionCount"),
+    ("feed_ingest_plan_run", "PlanApiTiming"),
 )
 
 
 @pytest.mark.parametrize(("module", "name"), CONTRACT_NAMES)
 def test_declared_contract(module: str, name: str) -> None:
-    """The base must fail for absent behavior, not a missing test file."""
+    """The current row format is closed; retired payloads never acquire a migration."""
     import idhazh.contracts
+    from idhazh.contracts.feed_ingest_discovered_article import PlannerRow
 
     expected = Path.cwd() / "backend" / "idhazh" / "contracts"
     assert Path(idhazh.contracts.__file__).parent.resolve() == expected.resolve()
-    try:
-        loaded = importlib.import_module(f"idhazh.contracts.{module}")
-    except ModuleNotFoundError:
-        pytest.fail(f"Missing feed planning contract: {name}")
-    contract = getattr(loaded, name)
-    assert contract in idhazh.contracts.CONTRACTS
-    assert contract.schema_version() == contract.model_fields["version"].default
+    contract = getattr(importlib.import_module(f"idhazh.contracts.{module}"), name)
     assert contract.json_schema()["additionalProperties"] is False
-    if name == "DocumentObservationRecord":
-        observation = contract.from_json(
-            read_text(CONTRACT_FIXTURES_DIR / "feed-ingest-document-observation" / "refused-fetch.json")
-        )
-        attempt = observation.model_dump(mode="json") | {
-            "event_id": str(uuid5(NAMESPACE_URL, f"{observation.event_id}:attempt")),
-            "operation": "attempt",
-            "request_phase": "target",
-            "request_sequence": 0,
-            "retry": 0,
-            "request_coverage": "complete",
-            "dispatched_request_count": 0,
-        }
-        assert contract.model_validate(attempt).dispatched_request_count == 0
-        partial = attempt | {
-            "document_kind": "feed",
-            "request_phase": "robots",
-            "request_coverage": "partial",
-            "dispatched_request_count": 1,
-        }
-        partial_result = contract.model_validate(partial)
-        assert (partial_result.outcome, partial_result.attribution, partial_result.request_coverage) == (
-            "failed", "unresolved", "partial",
-        )
-        assert partial_result.dispatched_request_count == 1
-        unknown = attempt | {"request_coverage": "unknown", "dispatched_request_count": None}
-        assert contract.model_validate(unknown).dispatched_request_count is None
-        with pytest.raises(ValidationError, match="unknown request coverage"):
-            contract.model_validate(unknown | {"dispatched_request_count": 0})
-        feed_observation = observation.model_dump(mode="json") | {"document_kind": "feed"}
-        assert contract.model_validate(feed_observation).article_id == observation.article_id
-        with pytest.raises(ValidationError, match="article opportunity requires its article kind"):
-            contract.model_validate(feed_observation | {"candidate_id": "a" * 64})
-        with pytest.raises(ValidationError, match="article opportunity requires its article kind"):
-            contract.model_validate(
-                observation.model_dump(mode="json")
-                | {"candidate_id": "a" * 64, "observed_run_id": None}
-            )
-        corrected = observation.model_dump(mode="json") | {
-            "event_id": str(uuid5(NAMESPACE_URL, str(observation.event_id))),
-            "corrects_event_id": observation.event_id,
-            "correction_revision": 1,
-            "occurred_at": "2026-10-21T12:01:00Z",
-        }
-        assert contract.model_validate(corrected).corrects_event_id == observation.event_id
-        with pytest.raises(ValidationError, match="both its target event and positive revision"):
-            contract.model_validate(corrected | {"correction_revision": None})
-        with pytest.raises(ValidationError, match="cannot correct itself"):
-            contract.model_validate(
-                observation.model_dump(mode="json")
-                | {"corrects_event_id": observation.event_id, "correction_revision": 1}
-            )
-    if name == "FeedHealthStateSnapshot":
-        snapshot = contract.from_json(read_text(
-            CONTRACT_FIXTURES_DIR / "feed-health-state" / "one-complete-snapshot.json"
-        ))
-        with pytest.raises(ValidationError, match="every closed UTC day exactly once"):
-            contract.model_validate(snapshot.model_dump(mode="json") | {"request_days": []})
-        empty_roster = contract.model_validate(
-            snapshot.model_dump(mode="json")
-            | {
-                "source_inventory_sha256": hashlib.sha256(b"[]").hexdigest(),
-                "source_inventory": [],
-                "source_results": [],
-            }
-        )
-        assert empty_roster.source_inventory_complete
-        with pytest.raises(ValidationError, match="source roster digest matches"):
-            contract.model_validate(
-                snapshot.model_dump(mode="json") | {"source_inventory_sha256": "d" * 64}
-            )
-        unavailable_roster = contract.model_validate(
-            snapshot.model_dump(mode="json")
-            | {
-                "source_inventory_complete": False,
-                "source_inventory_sha256": None,
-                "source_inventory": [],
-                "source_results": [],
-            }
-        )
-        assert not unavailable_roster.source_inventory_complete
-        partial_request = snapshot.model_dump(mode="json")
-        partial_request["request_availability"] = "unavailable"
-        partial_request["request_days"][0]["read_status"] = "gap"
-        partial_request["request_days"][0]["gap_reason"] = "unreadable"
-        partial_request["source_results"][0]["requests"] |= {
-            "input_status": "unavailable",
-            "qualification_status": "unavailable",
-            "request_waste_ratio": None,
-            "request_component_penalty": None,
-        }
-        accepted_gap = contract.model_validate(partial_request)
-        assert accepted_gap.source_results[0].requests.qualification_status == "unavailable"
-        excessive_weight = snapshot.model_dump(mode="json")
-        excessive_weight["source_results"][0]["requests"]["request_component_weight"] = 1.1
+    if name == "FetchedDocument":
+        payload = json.loads(read_text(CONTRACT_FIXTURES_DIR / "fetched-document" / "refused.json"))
+        old = contract.model_validate(payload)
+        assert old.parent_fetch_request_id is None and old.parent_batch_id is None
+        assert old.entry_ordinal is None and old.version == payload["version"]
+        linked = contract.model_validate(payload | {
+            "version": "2026-10-26",
+            "parent_fetch_request_id": "00000000-0000-4000-8000-000000000010",
+            "parent_batch_id": "00000000-0000-4000-8000-000000000011",
+            "entry_ordinal": 1,
+        })
+        assert str(linked.parent_batch_id) == "00000000-0000-4000-8000-000000000011"
         with pytest.raises(ValidationError):
-            contract.model_validate(excessive_weight)
-        for field in (
-            "measured_target_requests",
-            "measured_source_wasted_requests",
-            "observed_attempted_opportunities",
-            "observed_measured_opportunities",
-            "measured_coverage",
-        ):
-            missing_support = snapshot.model_dump(mode="json")
-            missing_support["source_results"][0]["requests"][field] = None
+            contract.model_validate(payload | {"version": "2026-10-25"})
+    if name == "PlannerOperation":
+        payload = json.loads(read_text(CONTRACT_FIXTURES_DIR / "planner-operation" / "started.json"))
+        current = contract.model_validate(payload | {
+            "version": "2026-10-26", "created_at": "2026-10-20T12:00:00.123Z",
+        })
+        assert current.created_at == "2026-10-20T12:00:00.123Z"
+        assert contract.model_validate(payload | {
+            "version": "2026-10-23T18:50", "created_at": current.created_at,
+        }).created_at == current.created_at
+        with pytest.raises(ValidationError, match="whole-second"):
+            contract.model_validate(payload | {
+                "version": "2026-10-23T09:22", "created_at": current.created_at,
+            })
+    if module == "planner_stage" or name == "FeedIngestCandidate":
+        assert contract.schema_version() == "2026-10-25"
+    else:
+        assert contract in (*idhazh.contracts.CONTRACTS, *idhazh.contracts.PLANNER_CONTRACTS)
+    if name not in {"FetchedDocument", "PlannerOperation"}:
+        payload = planner_payload(name)
+        row = contract.model_validate(payload)
+        assert contract.model_validate_json(row.to_json()) == row
+        with pytest.raises(ValidationError):
+            contract.model_validate(payload | {"unexpected": {"hidden": "payload"}})
+        if issubclass(contract, PlannerRow) and name != "SelectedArticlesArtifact":
+            assert "version" not in contract.model_fields
+            for forbidden in (
+                "version", "schema_version", "ledger", "covers", "unit_id", "git_sha",
+                "identity", "job", "pipeline_name", "task_name", "shard", "producer",
+                "article_text", "evaluated_at", "vertical", "labels", "policy",
+            ):
+                if name == "PlanRunRow" and forbidden == "evaluated_at":
+                    continue
+                assert forbidden not in contract.model_fields
+                with pytest.raises(ValidationError):
+                    contract.model_validate(payload | {forbidden: "not-a-declared-cell"})
+        if module == "planner_stage" or name == "FeedIngestCandidate":
             with pytest.raises(ValidationError):
-                contract.model_validate(missing_support)
-        inconsistent_request_ratio = snapshot.model_dump(mode="json")
-        inconsistent_request_ratio["source_results"][0]["requests"]["request_waste_ratio"] = 0.5
-        with pytest.raises(ValidationError, match="request waste ratio"):
-            contract.model_validate(inconsistent_request_ratio)
-        inconsistent_coverage = snapshot.model_dump(mode="json")
-        inconsistent_coverage["source_results"][0]["requests"]["measured_coverage"] = 0.5
-        with pytest.raises(ValidationError, match="measured coverage"):
-            contract.model_validate(inconsistent_coverage)
-        unverifiable_compact = snapshot.model_dump(mode="json")
-        compact_file = next(
-            item for item in unverifiable_compact["request_days"][0]["input_identity"]["files"]
-            if item["tier"] == "compact"
-        )
-        invalid_compact_path = snapshot.model_dump(mode="json")
-        compact_file_path = next(
-            item for item in invalid_compact_path["request_days"][0]["input_identity"]["files"]
-            if item["tier"] == "compact"
-        )
-        compact_file_path["path"] = (
-            "state/compact/feed-ingest-plan/document-observations/yearly/2026/2027.parquet"
-        )
-        with pytest.raises(ValidationError, match="native yearly coverage"):
-            contract.model_validate(invalid_compact_path)
-        compact_file["file_sha256"] = None
-        with pytest.raises(ValidationError, match="indexed byte digest"):
-            contract.model_validate(unverifiable_compact)
-        lifecycle_unknown = snapshot.model_dump(mode="json")
-        lifecycle_unknown["lifecycle_days"] = []
-        lifecycle_unknown["lifecycle_availability"] = "unavailable"
-        lifecycle_unknown["lifecycle_window_start"] = None
-        lifecycle_unknown["lifecycle_window_end"] = None
-        lifecycle_unknown["source_results"][0]["lifecycle"] |= {
-            "input_status": "unavailable",
-            "lifecycle": "unknown",
-            "strikes": None,
-            "rested_runs": None,
-        }
-        accepted_lifecycle_unknown = contract.model_validate(lifecycle_unknown)
-        assert accepted_lifecycle_unknown.lifecycle_window_start is None
-    if name == "FeedHealthStateHeadIndex":
-        head = contract.from_json(read_text(
-            CONTRACT_FIXTURES_DIR / "feed-health-state-head-index" / "two-snapshots.json"
-        ))
-        duplicate = head.latest.model_dump(mode="json") | {
-            "snapshot_role": "previous", "state_revision": 3, "parent_revision": 2,
-        }
-        with pytest.raises(ValidationError, match="independent files"):
-            contract.model_validate(head.model_dump(mode="json") | {"previous": duplicate})
-        invalid_path = head.latest.model_dump(mode="json") | {
-            "path": "state/raw/feed-ingest-plan/feed-health-state/snapshots/"
-            "00000000-0000-8000-8000-000000000003.parquet",
-        }
-        with pytest.raises(ValidationError, match="native raw UTC day layout"):
-            contract.model_validate(head.model_dump(mode="json") | {"latest": invalid_path})
-    publisher_snapshot: dict[str, object] = {"publisher_id": "recorded-publication"}
-    publisher_source: dict[str, object] = {"source": publisher_snapshot}
-    previous_identity_cases: dict[tuple[str, str], tuple[str, dict[str, object]]] = {
-        ("feed_ingest_candidate", "FeedIngestCandidate"): ("2026-10-23", publisher_source),
-        ("feed_ingest_article_assessment", "ArticleAssessmentRecord"): (
-            "2026-10-24", publisher_source,
-        ),
-        ("feed_ingest_editorial_selection", "EditorialSelectionRow"): (
-            "2026-10-24", publisher_source,
-        ),
-        ("feed_ingest_dispatch", "FeedIngestDispatch"): (
-            "2026-10-24", {"content": publisher_source},
-        ),
-        ("feed_ingest_source_run", "SourceRunRecord"): ("2026-10-22T20:30", publisher_source),
-        ("planner_stage", "ParsedFeedBatch"): (
-            "2026-10-24", {"candidates": [{"source": publisher_snapshot}]},
-        ),
-        ("planner_stage", "SelectedFeedBatch"): (
-            "2026-10-24", {"selections": [{"source": publisher_snapshot}]},
-        ),
-        ("planner_stage", "PartitionedFeedBatch"): (
-            "2026-10-24",
-            {"dispatches": [{"content": publisher_source, "selection": publisher_source}]},
-        ),
-    }
-    previous = previous_identity_cases.get((module, name))
-    if previous is not None:
-        version, nested = previous
-        with pytest.raises(
-            ValidationError,
-            match="curated publisher identity requires its declared contract version",
-        ):
-            contract.model_validate({"version": version, **nested})
+                contract.model_validate(payload | {"version": "2026-10-24"})
+        if name == "ParsedFeedBatch":
+            assert row.offers == [] and row.feed_fetch_request_id is None and row.input_complete
+            source = planner_payload("FeedIngestCandidate")["source"]
+            offered = contract.model_validate(payload | {
+                "input_complete": False, "offers": [{
+                    "offer_id": "f" * 64, "source": source,
+                    "entry": {
+                        "entry_ordinal": 1, "title": None, "link": "https://example.org/offered",
+                        "categories": [], "author": None, "published_at": None,
+                    },
+                    "state": "pending", "fetch_request_id": None,
+                }],
+            })
+            assert len(offered.offers) == 1 and not offered.input_complete
+        if name == "FeedHealthStateRow":
+            work_only = payload | {
+                "date": "2026-10-21", "checked_at": None, "items": None, "outcome": None,
+                "reliability": None, "feed_reads": 0, "productive_reads": 0,
+                "feed_requests": 0, "article_requests": 2,
+            }
+            assert contract.model_validate(work_only).counts_complete
+            partial = work_only | {"counts_complete": False, "article_requests": None}
+            assert contract.model_validate(partial).article_requests is None
+            with pytest.raises(ValidationError):
+                contract.model_validate(work_only | {"article_requests": None})
+            with pytest.raises(ValidationError):
+                contract.model_validate(payload | {"feed_requests": 0.5})
+        if name == "DiscoveredArticleRow":
+            with pytest.raises(ValidationError):
+                contract.model_validate(payload | {"date": "2026-10-21"})
+        if name == "PlanRunRow":
+            assert row.selected_count == 0 and row.selected_articles_artifact is None
+            failed_before_selection = contract.model_validate(payload | {
+                "status": "failed", "failure_code": "fetch-failed", "dispatch_count": 0,
+                "selection_started_at_utc": None,
+            })
+            assert failed_before_selection.selection_started_at_utc is None
+            resumed = contract.model_validate(payload | {"duration_ms": None})
+            assert resumed.duration_ms is None
+            with pytest.raises(ValidationError, match="duration_ms"):
+                contract.model_validate({key: value for key, value in payload.items() if key != "duration_ms"})
+            with pytest.raises(ValidationError):
+                contract.model_validate(payload | {"duration_ms": 0.5})
+            for reference in (
+                "https://example.org/signed?token=secret", "/tmp/a.json",
+                "C:\\tmp\\a.json", "../a.json", "a/../a.json", "./a.json",
+                "a//b.json", "a\nb.json",
+            ):
+                with pytest.raises(ValidationError):
+                    contract.model_validate(payload | {"selected_articles_artifact": reference})
+            assert contract.model_validate(payload | {
+                "selected_articles_artifact": "backend/var/run/selected-articles.json",
+            }).selected_articles_artifact == "backend/var/run/selected-articles.json"
+        if name == "PlannerFileEnvelope":
+            for forbidden in ("identity", "unit_id", "run_id", "job", "shard", "producer", "git_sha"):
+                with pytest.raises(ValidationError):
+                    contract.model_validate(payload | {forbidden: "retired-audit-metadata"})
+            assert contract.from_metadata(row.as_metadata()) == row
+            with pytest.raises(ValueError, match="undeclared keys"):
+                contract.from_metadata(row.as_metadata() | {b"unit_id": b"retired"})
 
 
 def test_typescript_provenance_is_declared() -> None:
-    from idhazh.contracts.file_envelope import FileEnvelope
+    from idhazh.contracts.file_envelope import FileEnvelope, PlannerFileEnvelope
 
-    assert (
-        "idhazh_typescript.ledger.parquet"
-        in (FileEnvelope.json_schema()["properties"]["writer"]["enum"])
-    )
+    for model in (FileEnvelope, PlannerFileEnvelope):
+        assert "idhazh_typescript.ledger.parquet" in model.json_schema()["properties"]["writer"]["enum"]
 
 
 @pytest.fixture(scope="module")
@@ -292,11 +196,8 @@ def typescript_schemas() -> dict[str, Any]:
     bun = shutil.which("bun")
     assert bun, "Install Bun to run the shared contract binding gate"
     completed = subprocess.run(
-        [bun, "run", "test/schema-binding.ts"],
-        cwd=REPO_ROOT / "packages" / "common-contracts",
-        text=True,
-        capture_output=True,
-        check=True,
+        [bun, "run", "test/schema-binding.ts"], cwd=REPO_ROOT / "packages" / "common-contracts",
+        text=True, capture_output=True, check=True,
     )
     return cast(dict[str, Any], json.loads(completed.stdout))
 
@@ -313,72 +214,38 @@ def normalized_shape(node: dict[str, Any], root: dict[str, Any]) -> Any:
     if "const" in node:
         return ("enum", (json.dumps(node["const"]),), node.get("default", "<required>"))
     if "enum" in node:
-        return (
-            "enum",
-            tuple(sorted(json.dumps(value) for value in node["enum"])),
-            node.get("default", "<required>"),
-        )
+        return ("enum", tuple(sorted(json.dumps(value) for value in node["enum"])), node.get("default", "<required>"))
     branches = node.get("anyOf", node.get("oneOf"))
     if branches is not None:
         return (
-            "union",
-            tuple(
-                sorted(
-                    (normalized_shape(branch, root) for branch in branches),
-                    key=repr,
-                )
-            ),
+            "union", tuple(sorted((normalized_shape(branch, root) for branch in branches), key=repr)),
             node.get("default", "<required>"),
         )
     kind = node.get("type")
     if isinstance(kind, list):
-        return normalized_shape(
-            {
-                "anyOf": [{"type": value} for value in kind],
-                **{k: v for k, v in node.items() if k != "type"},
-            },
-            root,
-        )
+        return normalized_shape({
+            "anyOf": [{"type": value} for value in kind],
+            **{key: value for key, value in node.items() if key != "type"},
+        }, root)
     if kind == "object":
         if "patternProperties" in node:
             patterns = node["patternProperties"]
             if len(patterns) == 1:
                 pattern, value = next(iter(patterns.items()))
-                return (
-                    "record",
-                    pattern,
-                    normalized_shape(value, root),
-                    node.get("default", "<required>"),
-                )
+                return ("record", pattern, normalized_shape(value, root), node.get("default", "<required>"))
             return (
-                "record",
-                tuple(
-                    sorted(
-                        (
-                            pattern,
-                            normalized_shape(value, root),
-                        )
-                        for pattern, value in node["patternProperties"].items()
-                    )
-                ),
-                node.get("additionalProperties", False),
-                node.get("default", "<required>"),
+                "record", tuple(sorted((pattern, normalized_shape(value, root)) for pattern, value in patterns.items())),
+                node.get("additionalProperties", False), node.get("default", "<required>"),
             )
         if "properties" not in node and isinstance(node.get("additionalProperties"), dict):
             return (
-                "record",
-                node.get("propertyNames", {}).get("pattern"),
-                normalized_shape(node["additionalProperties"], root),
-                node.get("default", "<required>"),
+                "record", node.get("propertyNames", {}).get("pattern"),
+                normalized_shape(node["additionalProperties"], root), node.get("default", "<required>"),
             )
         assert node.get("additionalProperties") is False, "Objects must reject unknown fields"
         required = set(node.get("required", []))
         return (
-            "object",
-            {
-                name: (name in required, normalized_shape(child, root))
-                for name, child in node["properties"].items()
-            },
+            "object", {name: (name in required, normalized_shape(child, root)) for name, child in node["properties"].items()},
             node.get("default", "<required>"),
         )
     if kind == "array":
@@ -389,201 +256,111 @@ def normalized_shape(node: dict[str, Any], root: dict[str, Any]) -> Any:
 
 @pytest.mark.parametrize(
     ("module", "name"),
-    (
-        *CONTRACT_NAMES,
-        ("feed_ingest_diagnostics", "ExtractionQuality"),
-        *MODEL_NAMES,
-        ("planner_stage", "PlannerSeenEvidence"),
-    ),
+    (*CONTRACT_NAMES, ("feed_ingest_diagnostics", "ExtractionQuality"), *MODEL_NAMES, ("planner_stage", "PlannerSeenEvidence")),
 )
 def test_typescript_field_types_defaults_and_vocabularies(
-    module: str,
-    name: str,
-    typescript_schemas: dict[str, Any],
+    module: str, name: str, typescript_schemas: dict[str, Any],
 ) -> None:
     loaded = importlib.import_module(f"idhazh.contracts.{module}")
     if name == "PlannerSeenEvidence":
         from pydantic import TypeAdapter
 
-        from idhazh.contracts.planner_stage import PlannerSeenEvidence
-
-        ours = TypeAdapter(PlannerSeenEvidence).json_schema()
+        ours = TypeAdapter(loaded.PlannerSeenEvidence).json_schema()
         theirs = typescript_schemas["__planner_stage_schemas"][name]
     elif name == "ExtractionQuality" or (module, name) in MODEL_NAMES:
         ours = getattr(loaded, name).model_json_schema()
         theirs = typescript_schemas[name]
     else:
-        contract = getattr(loaded, name)
-        ours = contract.json_schema()
+        ours = getattr(loaded, name).json_schema()
         theirs = typescript_schemas[name]
     assert normalized_shape(theirs, theirs) == normalized_shape(ours, ours)
+
 
 def test_typescript_envelope_fields_and_footer_keys(typescript_schemas: dict[str, Any]) -> None:
     from idhazh.contracts import file_envelope
     from idhazh.contracts.feed_health import FeedHealthRow
     from idhazh.contracts.publication_inventory import PublicationEntry, PublicationInventory
 
-    with pytest.raises(
-        ValidationError,
-        match="curated publisher identity requires its declared contract version",
-    ):
-        FeedHealthRow.model_validate({
-            "version": "2026-10-23T18:50", "publisher_id": "recorded-publication",
-        })
-
-    for contract in (
-        file_envelope.FileEnvelope,
-        file_envelope.WriterIdentity,
-        file_envelope.RowIdentity,
-        FeedHealthRow,
-    ):
-        ours = contract.model_json_schema()
-        if contract is file_envelope.FileEnvelope:
-            ours = file_envelope.FileEnvelope.json_schema()
-        elif contract is FeedHealthRow:
-            ours = FeedHealthRow.json_schema()
-        theirs = typescript_schemas[contract.__name__]
+    # Other-family historical identity and publication bindings stay unchanged.
+    with pytest.raises(ValidationError, match="curated publisher identity requires its declared contract version"):
+        FeedHealthRow.model_validate({"version": "2026-10-23T18:50", "publisher_id": "recorded-publication"})
+    native_schemas = {
+        "FileEnvelope": file_envelope.FileEnvelope.json_schema(),
+        "PlannerFileEnvelope": file_envelope.PlannerFileEnvelope.json_schema(),
+        "WriterIdentity": file_envelope.WriterIdentity.model_json_schema(),
+        "RowIdentity": file_envelope.RowIdentity.model_json_schema(),
+        "FeedHealthRow": FeedHealthRow.json_schema(),
+    }
+    for name, ours in native_schemas.items():
+        theirs = typescript_schemas[name]
         assert normalized_shape(theirs, theirs) == normalized_shape(ours, ours)
     assert typescript_schemas["__footer_keys"] == list(file_envelope._KEYS)
-    envelope_versions = typescript_schemas["__envelope_versions"]
-    assert len(envelope_versions) == len(set(envelope_versions))
-    assert set(envelope_versions) == set(file_envelope._ENVELOPE_VERSIONS)
-    assert typescript_schemas["__file_envelope_version"] == (
-        file_envelope.FileEnvelope.schema_version()
-    )
-    assert typescript_schemas["__row_identity_column_versions"] == dict(
-        file_envelope.RowIdentity.__column_versions__
-    )
+    assert typescript_schemas["__planner_footer_keys"] == list(file_envelope.PLANNER_FOOTER_KEYS)
+    assert set(typescript_schemas["__planner_optional_footer_keys"]) == file_envelope.PLANNER_OPTIONAL_FOOTER_KEYS
+    versions = typescript_schemas["__envelope_versions"]
+    assert len(versions) == len(set(versions))
+    assert set(versions) == set(file_envelope._ENVELOPE_VERSIONS)
+    assert typescript_schemas["__file_envelope_version"] == file_envelope.FileEnvelope.schema_version()
+    assert typescript_schemas["__row_identity_column_versions"] == dict(file_envelope.RowIdentity.__column_versions__)
     projections = typescript_schemas["__publication_inputs"]
     entry = PublicationEntry.model_json_schema()
-    assert normalized_shape(projections["PublicationEntry"], projections["PublicationEntry"]) == (
-        normalized_shape(entry, entry)
-    )
+    assert normalized_shape(projections["PublicationEntry"], projections["PublicationEntry"]) == normalized_shape(entry, entry)
     native = PublicationInventory.json_schema()
     projected = projections["PublicationInventory"]
-    assert typescript_schemas["__publication_input_versions"]["PublicationInventory"] == (
-        PublicationInventory.schema_version()
-    )
+    assert typescript_schemas["__publication_input_versions"]["PublicationInventory"] == PublicationInventory.schema_version()
     assert set(projected["properties"]) == {"version", "entries"}
     for name in projected["properties"]:
         ours, theirs = native["properties"][name], projected["properties"][name]
-        assert normalized_shape(
-            {key: value for key, value in theirs.items() if key != "default"}, projected
-        ) == normalized_shape(
-            {key: value for key, value in ours.items() if key != "default"}, native
+        assert normalized_shape({key: value for key, value in theirs.items() if key != "default"}, projected) == normalized_shape(
+            {key: value for key, value in ours.items() if key != "default"}, native,
         )
 
 
-def test_recorded_pair_projection_binds_native_fields_vocabularies_and_identity_format() -> None:
-    from idhazh.contracts.base import SLUG_PATTERN
-    from idhazh.contracts.story_similarity_pair import StorySimilarityPair
-
-    bun = shutil.which("bun")
-    assert bun, "Install Bun to run the publication evidence binding gate"
-    completed = subprocess.run(
-        [
-            bun,
-            "--eval",
-            'import { z } from "zod";'
-            'import { RecordedEventPairSchema } from "./src/metrics/publication-evidence";'
-            "process.stdout.write(JSON.stringify(z.toJSONSchema(RecordedEventPairSchema)));",
-        ],
-        cwd=REPO_ROOT / "services" / "feed-ingest-plan",
-        text=True,
-        capture_output=True,
-        check=True,
-    )
-    projection = json.loads(completed.stdout)
-    native = StorySimilarityPair.json_schema()
-    fixture = json.loads(
-        read_text(REPO_ROOT / "tests" / "fixtures" / "feed-ingest-plan" / "publication-evidence.json")
-    )
-    assert list(projection["properties"]) == fixture["bindings"]["RecordedEventPair"]["fields"]
-    for name, field in projection["properties"].items():
-        source = native["properties"][name]
-        assert normalized_shape(
-            {key: value for key, value in field.items() if key != "default"}, projection
-        ) == normalized_shape(
-            {key: value for key, value in source.items() if key != "default"}, native
-        ), name
-    for name in ("scorer_model", "judge_model"):
-        for schema in (native, projection):
-            field = schema["properties"][name]
-            text = next(
-                branch for branch in field.get("anyOf", [field]) if branch.get("type") == "string"
-            )
-            assert text["pattern"] == SLUG_PATTERN
-            assert "enum" not in text and "const" not in text
-
-
 def rejection_payload() -> dict[str, Any]:
-    return cast(
-        dict[str, Any],
-        json.loads(read_text(CONTRACT_FIXTURES_DIR / "feed-ingest-rejection" / "empty-feed.json")),
-    )
+    return {
+        "reason_code": "STUB_CONTENT", "count": 1, "subject": "article",
+        "stage": "screen-article-candidates", "attribution": None,
+    }
 
 
-@pytest.mark.parametrize(
-    "change",
-    [
-        {"version": 20261020},
-        {"unknown": True},
-        {"stage": "screen-article-candidates"},
-        {"drop_reason": "FETCH_FAILED_HTTP"},
-        {"drop_reason": "FETCH_TIMEOUT"},
-        {"rejected_at": "2026-10-20T19:40:00+00:00"},
-        {"date": "2026-10-21"},
-        {"candidate_id": "a" * 64},
-        {"title": "Invented article"},
-        {"details": {"words_found": float("inf")}},
-        {"details": {"unbounded_map": {}}},
-    ],
-)
+@pytest.mark.parametrize("change", [
+    {"version": 20261020}, {"unknown": True}, {"stage": ""},
+    {"reason_code": ""}, {"count": -1}, {"count": 0.5}, {"count": None},
+    {"subject": "request"}, {"attribution": "invented"},
+    {"candidate_id": "a" * 64}, {"article_text": "must not persist"},
+    {"details": {"words_found": float("inf")}}, {"details": {"unbounded_map": {}}},
+])
 def test_rejection_refuses_invalid_evidence(change: dict[str, Any]) -> None:
-    from idhazh.contracts.feed_ingest_rejection import CandidateRejectionRecord
+    from idhazh.contracts.feed_health_state import FeedHealthRejectionCount
 
     with pytest.raises(ValidationError):
-        CandidateRejectionRecord.model_validate(rejection_payload() | change)
+        FeedHealthRejectionCount.model_validate(rejection_payload() | change)
 
 
 def test_malformed_candidate_keeps_only_available_identity() -> None:
-    from idhazh.contracts.feed_ingest_rejection import CandidateRejectionRecord
+    from idhazh.contracts.feed_health_state import FeedHealthRejectionCount
 
-    row = CandidateRejectionRecord.model_validate(
-        rejection_payload()
-        | {
-            "subject": "article",
-            "candidate_id": "a" * 64,
-            "drop_reason": "MISSING_REQUIRED_FIELDS",
-            "title": "Available title",
-        }
-    )
-    assert row.canonical_url is None and row.url_key is None
-    assert row.title == "Available title"
+    row = FeedHealthRejectionCount.model_validate(rejection_payload())
+    assert set(row.model_dump()) == {"reason_code", "count", "subject", "stage", "attribution"}
+    assert row.attribution is None
 
 
 def test_article_stub_requires_real_identity_and_threshold() -> None:
     from idhazh.contracts.feed_ingest_candidate import FeedIngestCandidate
-    from idhazh.contracts.feed_ingest_rejection import CandidateRejectionRecord
 
-    candidate = FeedIngestCandidate.from_json(
-        read_text(CONTRACT_FIXTURES_DIR / "feed-ingest-candidate" / "one-article.json")
-    )
-    payload = rejection_payload() | {
-        "subject": "article",
-        "candidate_id": candidate.candidate_id,
-        "canonical_url": candidate.canonical_url,
-        "url_key": candidate.url_key,
-        "title": candidate.title,
-        "stage": "screen-article-candidates",
-        "drop_reason": "STUB_CONTENT",
-        "details": {"words_found": candidate.word_count, "words_required": 180},
-    }
-    assert CandidateRejectionRecord.model_validate(payload).details.words_found == 6
+    candidate = FeedIngestCandidate.model_validate(planner_payload("FeedIngestCandidate"))
+    payload = candidate.model_dump(mode="json")
+    assert candidate.word_count == 6
     with pytest.raises(ValidationError, match="url_key"):
-        CandidateRejectionRecord.model_validate(payload | {"url_key": "a" * 64})
-    with pytest.raises(ValidationError, match="words_required"):
-        CandidateRejectionRecord.model_validate(payload | {"details": {"words_found": 6}})
+        FeedIngestCandidate.model_validate(payload | {"url_key": "a" * 64})
+    with pytest.raises(ValidationError, match="word_count"):
+        FeedIngestCandidate.model_validate(payload | {"word_count": -1})
+    with pytest.raises(ValidationError):
+        FeedIngestCandidate.model_validate(payload | {"policy": {"min_words_article": 180}})
+    with pytest.raises(ValidationError):
+        FeedIngestCandidate.model_validate(payload | {"vertical": "world"})
+    with pytest.raises(ValidationError):
+        FeedIngestCandidate.model_validate(payload | {"source": payload["source"] | {"vertical": "world"}})
 
 
 def test_candidate_identity_precedes_article_validation() -> None:
@@ -597,132 +374,29 @@ def test_candidate_identity_precedes_article_validation() -> None:
 
 
 def test_dispatch_keeps_selection_and_content_identity() -> None:
-    from idhazh.contracts.feed_ingest_candidate import (
-        PublisherExposurePenalty,
-        ScoreEvidence,
-        SourceReliabilityPenalty,
+    from idhazh.contracts.feed_ingest_selected_article import (
+        SelectedArticleRow,
+        SelectedArticlesArtifact,
+        selected_article_metadata,
     )
-    from idhazh.contracts.feed_ingest_dispatch import FeedIngestDispatch
-    from idhazh.contracts.feed_ingest_planning_observations import PlanningObservations
 
-    payload = json.loads(
-        read_text(CONTRACT_FIXTURES_DIR / "feed-ingest-dispatch" / "one-article.json")
-    )
-    row = FeedIngestDispatch.model_validate(payload)
-    assert row.partition.dispatch_count == 1
-    assert row.selection.ratings.source_reliability is None
-    assert row.selection.ratings.publisher_exposure is None
-    exposure = {
-        "day": row.selection.date, "publisher_id": "recorded-publisher",
-        "history_status": "available", "published_today": 2, "selected_so_far": 1,
-        "planned_slots": 2, "coefficient": 0.25, "exposure": 1, "value": 0.25,
-    }
-    assert PublisherExposurePenalty.model_validate(exposure).value == 0.25
-    scores = row.selection.ratings.model_dump() | {
-        "publisher_exposure": exposure, "source": {"available": False, "value": None},
-    }
-    assert ScoreEvidence.model_validate(scores).publisher_exposure is not None
-    with pytest.raises(ValidationError, match="replaces feed crowding"):
-        ScoreEvidence.model_validate(scores | {"source": {"available": True, "value": 0}})
-    for exposure_change in (
-        {"published_today": None}, {"history_status": "unavailable"},
-        {"exposure": 1.5}, {"value": 0.5}, {"planned_slots": 0},
-        {"selected_so_far": -1}, {"publisher_id": None}, {"coefficient": -1},
-    ):
-        with pytest.raises(ValidationError):
-            PublisherExposurePenalty.model_validate(exposure | exposure_change)
-    historical_exposure = json.loads(json.dumps(payload))
-    historical_exposure["selection"]["ratings"]["publisher_exposure"] = exposure
-    with pytest.raises(ValidationError, match="publisher exposure requires"):
-        FeedIngestDispatch.model_validate(historical_exposure)
-    for partial_feed in (False, True):
-        observations = {
-            "feed_headline": None,
-            "best_weighted_lens": None,
-            "watchlist_match": None,
-            "salience": [
-                {
-                    "feed_id": "voter",
-                    "available": not partial_feed,
-                    "voted": True,
-                    "unavailable_reason": "invalid-vote-address" if partial_feed else None,
-                },
-                {
-                    "feed_id": "missing",
-                    "available": False,
-                    "voted": None,
-                    "unavailable_reason": "feed-parse-failed",
-                },
-            ],
-            "salience_available": False,
-            "on_front_page": True,
-            "salience_unavailable_reason": "salience-feed-unavailable",
-        }
-        partial = PlanningObservations.model_validate(observations)
-        assert partial.on_front_page is True
-        assert partial.salience_available is False
-        current = row.model_dump(mode="json")
-        current["content"]["planning_observations"] = observations
-        assert FeedIngestDispatch.model_validate(current).content.planning_observations == partial
-        for missing_positive in (None, False):
-            with pytest.raises(ValidationError, match="preserve positive votes"):
-                PlanningObservations.model_validate(
-                    observations | {"on_front_page": missing_positive}
-                )
-        with pytest.raises(ValidationError, match="cannot prove an absent vote"):
-            PlanningObservations.model_validate(
-                observations
-                | {
-                    "salience": [
-                        {
-                            "feed_id": "voter",
-                            "available": False,
-                            "voted": False,
-                            "unavailable_reason": "invalid-vote-address",
-                        }
-                    ]
-                }
-            )
-    authority = (
-        row.selection.policy.source_authority_weight
-        * row.selection.source.weight
-        * row.selection.source.applied_tier_weight
-    )
-    reliability = {
-        "enabled": True,
-        "source_authority_score": authority,
-        "reliability_floor": 0.5,
-        "history": {"success_fraction": 0.25, "attempted": 4, "window_days": 7},
-        "production_factor": 0.5,
-        "value": authority * (1 - 0.5),
-    }
-    current = row.model_dump(mode="json")
-    current["selection"]["ratings"]["source_reliability"] = reliability
-    measured = FeedIngestDispatch.model_validate(current)
-    assert measured.selection.ratings.source_reliability == (
-        SourceReliabilityPenalty.model_validate(reliability)
-    )
-    assert measured.selection.ratings.base_article_score == row.selection.ratings.base_article_score
-    historical = json.loads(json.dumps(payload))
-    historical["selection"]["ratings"]["source_reliability"] = reliability
-    with pytest.raises(ValidationError, match="declared score contract version"):
-        FeedIngestDispatch.model_validate(historical)
-    for change in (
-        {"production_factor": 0.25},
-        {"value": 0},
-        {"history": None},
-        {"enabled": False},
-        {"enabled": "false", "value": 0},
-        {"history": {"success_fraction": 0.25, "attempted": 0, "window_days": 7}},
-    ):
-        with pytest.raises(ValidationError):
-            SourceReliabilityPenalty.model_validate(reliability | change)
-    assert SourceReliabilityPenalty.model_validate(
-        reliability | {"history": None, "production_factor": None, "value": None}
-    ).history is None
-    assert SourceReliabilityPenalty.model_validate(
-        reliability | {"enabled": False, "value": 0}
-    ).value == 0
-    payload["selection"]["candidate_id"] = "a" * 64
-    with pytest.raises(ValidationError, match="candidate_id"):
-        FeedIngestDispatch.model_validate(payload)
+    artifact = SelectedArticlesArtifact.model_validate(planner_payload("SelectedArticlesArtifact"))
+    original = artifact.to_json()
+    metadata = selected_article_metadata(artifact.articles[0])
+    assert "article_text" not in type(metadata).model_fields
+    row = SelectedArticleRow.model_validate(metadata.model_dump(mode="json") | {
+        "run_id": artifact.run_id, "attempt": artifact.attempt, "date": artifact.date,
+    })
+    assert row.url_key == artifact.articles[0].url_key
+    assert [term.value for term in row.ratings.adjustments] == [None, 0.0, -0.25]
+    future = SelectedArticleRow.model_validate(row.model_dump(mode="json") | {
+        "timing_at": "2026-10-20T11:00:00Z", "timing_basis": "published_at", "age_hours": -1.0,
+    })
+    assert future.age_hours == -1.0
+    with pytest.raises(ValidationError):
+        SelectedArticleRow.model_validate(row.model_dump(mode="json") | {"timing_basis": "fetched_at"})
+    metadata.categories.append("not-shared")
+    metadata.ratings.adjustments[0].value = 0.5
+    assert artifact.to_json() == original
+    with pytest.raises(ValidationError):
+        SelectedArticleRow.model_validate(row.model_dump(mode="json") | {"article_text": "must not persist"})

@@ -1,6 +1,6 @@
 /** Replay a completed keyed plan, refusing to repeat an interrupted ledger-producing run. */
 import type { PlanInputs } from "../load-plan-inputs";
-import type { PlanRuntime, RecordedFeedPlanResult } from "../run-feed-plan";
+import type { PlanRuntime, FeedPlanResult } from "../run-feed-plan";
 import { summarizePlan } from "../run-feed-plan";
 import { PlanError, resolvePlanRequest } from "./plan-request";
 import type { PlanRequest } from "./plan-request";
@@ -8,10 +8,10 @@ import { prepareOperation } from "./document-operations";
 import { RequestIdSchema } from "./operation-contracts";
 import { openOperationStore } from "./operation-store";
 
-export type CapturedPlanIdentity = Pick<PlanRuntime, "clock" | "run_number" | "correlation_id" | "captured_at">;
+export type CapturedPlanIdentity = Pick<PlanRuntime, "clock" | "run_number" | "correlation_id" | "captured_at" | "signal">;
 export async function executeKeyedPlan(
   key: string, request: PlanRequest, inputs: PlanInputs, runtime: PlanRuntime,
-  execute: (request: PlanRequest, captured?: CapturedPlanIdentity) => Promise<RecordedFeedPlanResult>,
+  execute: (request: PlanRequest, captured?: CapturedPlanIdentity) => Promise<FeedPlanResult>,
 ) {
   RequestIdSchema.parse(key);
   const effective = resolvePlanRequest(request, inputs.harvest.config);

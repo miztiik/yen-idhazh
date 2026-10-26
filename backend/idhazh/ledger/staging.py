@@ -67,66 +67,34 @@ class LedgerStaging:
 #: contract and reader registration. A planned writer may follow in a later
 #: phase, but the staging entry is never added silently after the ledger.
 REGISTRY: Final[dict[LedgerName, LedgerStaging]] = {
-    LedgerName.FEED_INGEST_PLAN_DISPATCHES: LedgerStaging(
+    LedgerName.FEED_INGEST_PLAN_DISCOVERED_ARTICLES: LedgerStaging(
         writer=(
-            "planned TypeScript services/feed-ingest-plan seal-article-ledger adapter "
-            "through packages/ledger-file-writer; no writer exists yet"
+            "TypeScript services/feed-ingest-plan discovery writer through "
+            "packages/ledger-file-writer; no Python producer symbol"
         ),
         symbol=None,
         job_labels=frozenset(),
     ),
-    LedgerName.FEED_INGEST_PLAN_EDITORIAL_SELECTIONS: LedgerStaging(
+    LedgerName.FEED_INGEST_PLAN_SELECTED_ARTICLES: LedgerStaging(
         writer=(
-            "planned TypeScript services/feed-ingest-plan seal-article-ledger adapter "
-            "through packages/ledger-file-writer; no writer exists yet"
+            "TypeScript services/feed-ingest-plan selected metadata writer through "
+            "packages/ledger-file-writer; no Python producer symbol"
         ),
         symbol=None,
         job_labels=frozenset(),
     ),
-    LedgerName.FEED_INGEST_PLAN_REJECTIONS: LedgerStaging(
+    LedgerName.FEED_INGEST_PLAN_FEED_HEALTH_STATE: LedgerStaging(
         writer=(
-            "planned TypeScript services/feed-ingest-plan seal-article-ledger adapter "
-            "through packages/ledger-file-writer; no writer exists yet"
+            "TypeScript services/feed-ingest-plan run/day health writer through "
+            "packages/ledger-file-writer; no Python producer symbol"
         ),
         symbol=None,
         job_labels=frozenset(),
     ),
-    LedgerName.FEED_INGEST_PLAN_SOURCE_RUNS: LedgerStaging(
+    LedgerName.FEED_INGEST_PLAN_PLAN_RUNS: LedgerStaging(
         writer=(
-            "planned TypeScript services/feed-ingest-plan audit adapter "
-            "through packages/ledger-file-writer; no writer exists yet"
-        ),
-        symbol=None,
-        job_labels=frozenset(),
-    ),
-    LedgerName.FEED_INGEST_PLAN_ARTICLE_ASSESSMENTS: LedgerStaging(
-        writer=(
-            "planned TypeScript services/feed-ingest-plan audit adapter "
-            "through packages/ledger-file-writer; no writer exists yet"
-        ),
-        symbol=None,
-        job_labels=frozenset(),
-    ),
-    LedgerName.FEED_INGEST_PLAN_DIVERSITY: LedgerStaging(
-        writer=(
-            "planned TypeScript services/feed-ingest-plan audit adapter "
-            "through packages/ledger-file-writer; no writer exists yet"
-        ),
-        symbol=None,
-        job_labels=frozenset(),
-    ),
-    LedgerName.FEED_INGEST_PLAN_DOCUMENT_OBSERVATIONS: LedgerStaging(
-        writer=(
-            "planned TypeScript feed-ingest-plan observation writer "
-            "through packages/ledger-file-writer; no writer exists yet"
-        ),
-        symbol=None,
-        job_labels=frozenset(),
-    ),
-    LedgerName.FEED_INGEST_PLAN_OPERATIONAL_STATE: LedgerStaging(
-        writer=(
-            "planned TypeScript feed-ingest-plan operational-state writer "
-            "through packages/ledger-file-writer; no writer exists yet"
+            "TypeScript services/feed-ingest-plan run result writer through "
+            "packages/ledger-file-writer; no Python producer symbol"
         ),
         symbol=None,
         job_labels=frozenset(),

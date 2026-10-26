@@ -1,278 +1,92 @@
 # Isolated feed harvesting
 
-**Last Updated**: 2026-10-25
+**Last Updated**: 2026-10-26
 
-How the TypeScript planner turns configured RSS/Atom entries into sanitized
-article candidates and records refusals. This path is separate from production
-discovery and extraction. It does not change production scheduling or workers.
-The [trust boundary](trust-boundary.md) owns address, robots and text controls.
+How do configured feeds become sanitized article candidates?
+This build-time path leaves production Python discovery and extraction
+unchanged. The [trust boundary](trust-boundary.md) governs fetched data.
 
 ## Public entry
 
-`@idhazh/feed-ingest-plan/harvest-feeds` exports `loadHarvestInputs`,
-`readHarvestInputs` and `harvestFeeds`. Load the authored planner configuration,
-taxonomy, sources and extraction settings before starting a run. File paths
-are explicit inputs; loading does not search directories.
+The service exports `loadHarvestInputs`, `readHarvestInputs` and
+`harvestFeeds`. Load the named planning, source, shared kind/tier and
+extraction configuration before work. The taxonomy contributes active source
+kinds and numeric tier weights, not vertical policy or article labels.
 
-`harvestFeeds(inputs, context, destination, boundary?)` takes the validated
-inputs, writer identity, correlation identity, configured future-date tolerance
-and rejection destination.
-`boundary` supplies the transport and address resolver for recorded replay;
-ordinary callers omit it to use Undici and the operating system resolver.
-The transport imports the installed `undici/index.js` request API explicitly.
-Bun's bare shim lacks a real dispatcher; the installed fetch adapter also
-fails on live response streams with an `isAborted` error and can stop servicing
-deadline timers. The request API avoids that adapter. Its supplied decompression
-interceptor handles compressed bodies before the decoded byte cap; it is marked
-experimental by Undici and adds no dependency. Validated socket DNS remains
-pinned, redirects remain manual, and a per-request dispatcher is destroyed
-after success or refusal rather than waiting for graceful draining.
-Offline tests consume actual recorded-body streams, check decoded byte limits
-and aborted-stream destruction, and open/close the real dispatcher without a
-socket. Live verification is separate and externally supervised.
-The destination takes the registered rejection prefix and ledger settings,
-not a second path policy. Rejections are actual Parquet through
-`@idhazh/ledger-file-writer`. A failed write rejects the operation. A paused
-or retired rejection registration also refuses completion when rows need to
-be written; an empty rejection set needs no file.
+The actual harvester accepts validated context plus an optional recorded
+transport/resolver boundary. Ordinary execution uses the installed Undici
+request API and operating-system resolver. The response remains pinned to
+validated addresses. Each request dispatcher closes after success or refusal.
 
-The result contains `candidates`, `rejections`, `rejection_files`, the validated
-`inputs` and `config`, `feed_outcomes`, and `articles`. Each `articles` element has exactly one
-candidate or rejection, plus its `observation`. `HarvestObservationSchema`,
-`HarvestArticleResultSchema` and their types are public exports.
-
-An observation has `candidate_id`, `http_status`, `robots`, `fetch_failure`,
-`paywall`, `paywall_evidence`, `extraction`, `observed_at` and `diagnostics`.
-HTTP status is the actual target response, or null when no target responded.
-Paywall is a boolean only after HTML was read, otherwise null. Its evidence
-names publisher JSON-LD, a configured marker, no match, or not observed.
-Robots is allowed, denied, unknown, or null before permission was established.
-Extraction is success, empty, failed, or not attempted. The observation is
-transient serializable data, not an added persisted candidate field.
-The shared [failure diagnostics](feed-failure-diagnostics.md) retain exact
-fetch causes, extraction causes, safe error codes, warnings and measured
-operation times through rejections, assessments and structured events.
-The full planner also supplies the registered
-[operation-observation writer](../contracts/feed-ingest-feedback.md#completed-unit-persistence).
-It saves each completed fetch and parse before later planning can fail.
-Embedded harvest callers supply that writer through `context.observations`;
-without it, the public harvest function retains its transient progress behavior.
-
-Build a screening observation record by selecting the successful `articles`
-and indexing their complete observations by `candidate_id`. Rejected entries
-also have observations, but do not belong in a successful-candidate record.
-There is no separate partial observation shape or invented successful status.
-
-`feed_outcomes` contains one validated existing `FeedOutcomePayload` per
-configured source, including inactive sources. It retains the source snapshot,
-actual fetch and parse outcomes, parsed entry count, successful candidate count,
-measured fetch and parse durations in milliseconds, and feed rejection reason.
-Inactive sources were not requested or parsed, so their counts and durations
-are null. Empty parsed feeds have zero counts. Failed parsing does not claim
-a parsed count. The engine, not harvesting, adds the later event envelope.
-
-Screening consumes the actual HTTP/paywall cells without fetching again.
-It supplies settled prior `seen` rows separately when an undated article needs
-its original first-seen instant. Harvesting neither reads that ledger nor
-pretends that the fetch time is a publication time.
+Independent feeds overlap within configured bounds. Article work can start
+after its supplying feed is parsed. Native workers perform the production
+DOM extraction and sanitization without blocking the listener's event loop.
+Parsing saved bytes makes no network request.
 
 ## Inputs and identity
 
-The loader reads the fields it computes on from `config/feed-ingest-plan.json`,
-`config/taxonomy.json`, `config/sources.json` and the `extract` section of
-`config/idhazh.json`. Concurrency, timeout and request identity come from the
-planner configuration. Byte limits, retries, backoff and paywall markers come
-from the existing extraction configuration.
+Candidates retain sanitized content, canonical URL identity, original offered
+ordinal and configured source facts. Those facts include nullable curated
+publisher ID, kind, form, tier, feed weight and applied tier weight.
+They contain no inferred vertical, desk, lens, entity or quality judgment.
 
-Each attempt uses `harvest.fetch_timeout_ms`. Transient DNS, transport and
-timeout failures retry, as do HTTP 408, 425, 429, 500, 502, 503 and 504.
-Unsafe targets, oversized bodies, robots denials and permanent statuses do
-not retry. DNS validation before robots uses the same retry controls.
-The whole permitted fetch, including DNS, robots, redirects and backoff,
-has one deadline: `(max_retries + 1) * fetch_timeout_ms` plus the configured
-backoff sum. Retries do not reset it. With current defaults this is 31
-seconds for one operation: four six-second attempts plus seven seconds of
-backoff, not an unlimited wait. Completed attempt records include phase,
-sequence, retry index, actual duration, HTTP status and safe error code.
-`backoff_ms` measures the actual wait after that attempt, including a wait
-cut short by the operation deadline. `retry_total_ms` measures all elapsed
-time before that attempt in its particular DNS, robots or target read.
-It includes failed attempt work and actual waits, not just configured delays.
-The first attempt has zero retry time. These are per-read retry measurements,
-not an invented sum of whole-run elapsed time.
-Older attempt records without those measurements read as null, never as a
-claim that their waits took zero time.
-Actual dispatch counts are captured at the transport boundary, separately from
-DNS validation. Observation export occurs after the fetch deadline has stopped;
-handled fetch exceptions export completed attempts as well. On a pool error,
-already-running siblings finish before the caller receives failure.
+Configuration fingerprints retain the actual content-affecting inputs.
+Reporting configuration does not change harvested content identity.
+Missing feed fields do not renumber later entries. Page canonical tags,
+scripts and prose never grant a new fetch destination.
 
-Source snapshots retain source ID, feed URL, title, vertical, kind, tier,
-form, lifecycle status, source weight and the applied registry tier weight.
-The returned source input also retains `retired_on`. Inactive sources receive
-`SOURCE_INACTIVE` without a network request.
-Non-retired sources require active registered kind and tier entries. Retired
-sources may retain historical classifications, but a source snapshot still
-requires its genuine registered tier weight; a missing historical tier is an
-explicit input error before any requests start, never a fabricated weight.
-This follows the existing source-classification rule that stable identifiers
-are retired rather than reused and a missing live weight is a named config
-error. Retired kinds and verticals need not remain current registry members.
-
-The configuration fingerprint is SHA-256 of the UTF-8 JSON serialization of
-the validated planner configuration excluding `workflow_reporting`, relevant registry fields, source list and
-extraction controls and actual extractor/sanitizer fingerprints, in that order. Each candidate carries that fingerprint
-and its resolved vertical policy. All unknown editorial labels remain null.
-Reporting settings remain available in the returned configuration, but neither
-their enabled flag nor removal text changes content identity or ledger digests.
-Content and policy settings still change the fingerprint.
-
-Candidate identity uses the shared run/source/original-entry-ordinal hash.
-A missing field does not renumber later siblings. URL identity follows the
-existing discovery rules and shared `deriveUrlKey`. The original feed entry
-URL is the request input; a page's links, canonical tags and scripts never
-supply a new request target.
-
-Before page fetch, harvesting checks the configured blocked URL markers, the
-bounded `published` ledger history, and same-UTC-day `item-health` failures
-whose codes are listed in `collect.settled_failure_codes`. These checks use
-the canonical URL key. Each refusal has its own typed reason and records the
-matched marker or ledger evidence. Missing history remains missing in the run
-summary; it is never treated as an empty ledger. A refusal has no page response,
-robots, paywall or extraction measurement.
-
-Feed categories include repeated, namespace-qualified and nested text values,
-including Atom `term` attributes. Empty or whitespace-only labels contain no
-category and are removed at parsing; real labels and repeats remain unchanged.
-Absence is an empty array. Invalid XML or an
-unrecognized feed is a parse rejection, not an empty feed. Entry dates are
-normalized to UTC, with the feed's declared date as a fallback. No declared
-date means null.
-
-Before requesting an article page, a dated entry with a usable title and URL
-uses the same publication-age calculation and effective vertical cutoff as
-screening. A run freshness override applies here too. An age strictly greater
-than that cutoff produces `STALE_MAX_AGE_EXCEEDED` at `harvest-feeds`, without
-requesting its page or robots file. The original ordinal, candidate identity,
-source, URL, publication instant, age and cutoff remain available as evidence.
-The transient observation carries `preflight_freshness`; extraction is not
-attempted and HTTP, robots, paywall, words and attribution remain unobserved.
-An exact-boundary entry is not rejected early.
-
-Missing dates and dates beyond the configured future tolerance keep the
-existing later first-sight or unknown-timing path. Harvesting invents no first
-sight. A missing title keeps the existing page-title recovery path, because
-a normal article rejection requires its title. Successful `harvested_count`
-counts actual extracted candidates, not early refusals.
-
-## Design rationale
-
-Maintainer ruling (2026-10-22): reject already-expired entries before
-page download. This deliberately makes age the first terminal reason for
-those entries, before page failure, paywall, category or substance checks.
-Those checks did not run and receive no invented measurements. The configured
-age policy is unchanged; this is not a fetch cap, a new seen-URL exclusion or
-a change to the final selection limit. No extraction worker pool is added.
-
-Maintainer ruling (2026-10-22): also refuse already-published URLs,
-same-day settled failures and configured blocked URL markers before page
-download. Each refusal keeps its actual reason and known evidence; unavailable
-history is reported as unavailable and does not become an empty-history claim.
-
-Article progress names harvesting, not extraction: `ARTICLE_HARVEST_COMPLETED`
-includes the actual `extraction_outcome`. An early age refusal reports
-`not-attempted`; a successful page extraction reports `success`. Offered-entry
-counts must not be presented as page downloads.
+RSS and Atom retain their original categories, authors and normalized UTC
+dates. Empty category labels are removed; real labels and repeats remain.
+Unrecognized or invalid XML is a typed parse failure, not an empty feed.
 
 ## Request and extraction controls
 
-Each run has one robots cache per normalized origin. Both the request header
-and rule evaluation use the configured identity. The isolated planner's
-configured header identifies `YenIdhazhBot` inside its compatible wrapper;
-the robots product is that same crawler, not `Mozilla` and not another allowed
-crawler. Production retains its separate `yen-idhazh/1.0` identity unchanged.
+The permitted fetcher retains public-address validation, socket pinning,
+robots permission, safe redirects, retries, bounded deadlines and decoded
+body limits. Validation occurs before dispatch. A refused or unknown
+permission cannot request the target. Actual retry and redirect dispatches
+each count; cache reuse adds no request.
 
-Every request validates the scheme, credentials, hostname and all resolved
-addresses. Undici receives only those pinned public addresses at socket
-lookup. Redirects are manual: each destination receives address and robots
-checks before its target is requested. Robots-file redirects receive address
-checks, while their resulting document still governs the original origin.
-Redirect cycles refuse. One configured deadline bounds DNS, permission,
-retries, redirects and body reading.
-Oversized bodies refuse without losing an HTTP status already observed.
+Structured configured URL exclusions, real publication history and settled
+item failures can refuse a page before download. A dated entry strictly
+older than the effective global freshness cutoff also stops before page
+and robots requests. Equality remains admitted. An unavailable or too-future
+date retains the later first-sight or unknown-time path.
 
-Robots 2xx responses supply rules; 4xx other than 429 supply no restrictions.
-429, 5xx, failed requests and unsafe addresses leave permission unknown and
-refuse the target. Repeated groups, longest matches, allow-on-tie, wildcards,
-end anchors and percent encoding have bounded recorded cases.
-Unreserved percent octets are normalized before the mature parser evaluates
-paths; encoded reserved separators remain encoded.
+A missing title retains page-title recovery. Actual HTML extraction keeps
+prose and byline but never executes scripts or loads page resources.
+Missing, empty and refused extraction remain distinct from successful work.
+The [screening stage](feed-screening.md) applies admission to parsed candidates.
 
-Linkedom creates an inert DOM. Defuddle runs synchronously with async fetching
-disabled and a refusing fetch function. Page resources cannot load. The
-extractor keeps full usable prose and author attribution, not feed snippets.
-The sanitizer follows `idhazh-sanitizer-3` from the existing trust boundary.
-It removes machinery, not ordinary English instructions. There is no model
-call, prompt construction, shell execution or page-derived filename here.
-Missing document roots and DOM recursion overflow produce a typed extraction
-failure and rejection without aborting sibling articles. Empty content remains
-a distinct `EXTRACT_EMPTY` rejection; typed extractor errors use
-`EXTRACT_FAILED`, never `FETCH_FAILED`. Unexpected programming failures still surface.
+## Work facts and failures
 
-The shared parser records actual [extraction quality](extraction-quality.md),
-including the configured consequences and unavailable worker measurements.
-Exact consent and blocked-player class tokens are removed before extraction.
+The harvester returns candidates and transient terminal outcomes, not native
+rejection files. Validated work facts feed the run's
+[batched health counters](../contracts/feed-ingest-feedback.md#completed-unit-persistence).
+Actual work-day clocks are separate from the saved age clock.
+
+On a pool failure, already-running siblings settle before the caller returns.
+Completed feed work remains available for partial-run finalization. No normal
+response, event export or artifact archives the full parsed/rejected population.
+Only selected article text enters the summarizer artifact.
 
 ## Dependencies and cost
 
-These are installed package-file bytes measured on Windows x64 with Bun 1.3.13,
-excluding each package's nested dependencies. They are not compressed download
-sizes, process memory or production runner measurements. All remain outside
-the published browser bundle. Transitive packages are pinned in `bun.lock`.
+Existing Undici, feed XML parsing, LinkeDOM, Defuddle, address and robots
+libraries serve the permitted transport and real extractor. They run in the
+build-time Bun process and workers, not the published browser bundle.
+No new HTTP client, parser framework or profiler is introduced.
 
-Table A
+## Design rationale
 
-| Id | Package | Beneficiary | Installed bytes |
-| --- | --- | --- | ---: |
-| A1 | defuddle 0.19.5 | Main article and author extraction | 2756053 |
-| A2 | linkedom 0.18.13 | Inert HTML DOM without resource loading | 909684 |
-| A3 | rss-parser 3.13.0 | RSS/Atom parsing through its XML parser | 1873872 |
-| A4 | undici 7.16.0 | HTTP, TLS, decompression, aborts and pinned socket lookup | 1469822 |
-| A5 | ipaddr.js 2.5.0 | Public address classification | 64424 |
-| A6 | robots-parser 3.0.1 | Robots group and rule evaluation | 46257 |
-| A7 | zod 4.6.7 | Runtime validation of authored inputs and transient evidence | 6148944 |
-| A8 | apache-arrow 21.2.0 | Shared writer and later real planner ledger readers | 5818996 |
-| A9 | parquet-wasm 0.9.0 | Shared writer and real TypeScript Parquet readback | 16264816 |
-| A10 | Local common-contracts | Existing candidate, rejection, source and identity validation | 81841 |
-| A11 | Local ledger-file-writer | Existing atomic Parquet persistence and identity | 84658 |
-
-Arrow, Parquet and Zod reuse the writer's adopted versions. Their runtime
-classification also serves later bounded history readers; this harvest does
-not implement those readers. The local package figures describe this checkout,
-not new copies of their dependencies.
-
-## Verification
-
-Run from `services/feed-ingest-plan`:
-
-```powershell
-bun run check
-bun test test\harvest.test.ts test\harvest-safety.test.ts --timeout 30000
-```
-
-The tests read named `harvest-*` fixtures and `extraction-quality.json` under
-`tests/fixtures/feed-ingest-plan/`, the four page files that quality fixture
-names, and the named authored configuration files.
-The response replay refuses an unrecorded request. No test uses live sources
-or Python. Real writer output is read through TypeScript Arrow and Parquet;
-this is not a claim that a Python reader executed.
-
-The shared selector remains unchanged. Its broader Python-backed selections
-are not local commands for this isolated TypeScript row. The later isolated
-workflow owns CI integration.
+Early factual refusals avoid downloading work the same admission rule would
+reject later. Shared production parsing and bounded native workers preserve
+the trust checks while allowing independent requests to make real progress.
+Article limits constrain output only; they are not an input truncation policy.
 
 ## See also
 
-- [Discovery](discovery.md)
-- [Trust boundary](trust-boundary.md)
-- [Run the gates](../../how-to/run-the-gates.md)
+- [Operator APIs](feed-operator-api.md)
+- [Screening](feed-screening.md)
+- [Policies](feed-ingest-policies.md)
+- [Local checks](../../how-to/run-feed-ingest-plan-test.md)
