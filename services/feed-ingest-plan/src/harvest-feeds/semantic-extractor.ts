@@ -26,7 +26,7 @@ export function validateSemanticSelectors(config: SemanticControls): void {
 }
 
 function readText(element: HTMLElement): string {
-  return sanitizeText(element.innerText ?? element.textContent ?? "").replace(/\s+/gu, " ").trim();
+  return sanitizeText(element.innerText ?? element.textContent ?? "").replace(/\n+/gu, "\n\n");
 }
 
 export function extractSemanticContent(html: string, config: SemanticControls): string {
@@ -37,7 +37,7 @@ export function extractSemanticContent(html: string, config: SemanticControls): 
   let root: HTMLElement | undefined;
   for (const selector of config.content_roots) {
     root = [...document.querySelectorAll<HTMLElement>(selector)]
-      .find(candidate => readText(candidate).length >= config.min_root_chars);
+      .find(candidate => readText(candidate).replace(/\s+/gu, " ").length >= config.min_root_chars);
     if (root) break;
   }
   root ??= document.body;
@@ -49,13 +49,14 @@ export function extractSemanticContent(html: string, config: SemanticControls): 
   for (const node of nodes) {
     let parent = node.parentElement;
     let nested = false;
-    while (node !== root && parent && parent !== root) {
+    while (node !== root && parent) {
       if (parent.matches(selector)) { nested = true; break; }
+      if (parent === root) break;
       parent = parent.parentElement;
     }
     if (nested) continue;
     const text = readText(node);
-    if (text && text.length >= config.min_paragraph_chars) paragraphs.add(text);
+    if (text && text.replace(/\s+/gu, " ").length >= config.min_paragraph_chars) paragraphs.add(text);
   }
   return [...paragraphs].join("\n\n");
 }

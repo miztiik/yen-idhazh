@@ -97,7 +97,8 @@ use. `harvest.semantic_fallback` configures ordered content roots, removed
 elements, paragraph elements, minimum root/paragraph characters and metadata
 sources. A short teaser does not hide a later substantial content root.
 Nested blocks and repeated paragraphs contribute their text once; block
-boundaries retain word separation. Consent, ad, sharing and comment elements
+boundaries retain paragraph separation, including when the selected root
+is itself a prose block. Consent, ad, sharing and comment elements
 are removed before roots are measured.
 
 Title and author recovery read actual page metadata before the primary

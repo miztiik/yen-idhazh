@@ -1,6 +1,7 @@
 /** Exercise the real offline fetch/extract boundary; losses and work facts remain transient. */
 import { expect, test } from "bun:test";
 import { createHash } from "node:crypto";
+import { parseHTML } from "linkedom";
 import {
   CandidateRejectionRecordSchema, DocumentWorkFactSchema, ExtractionQualitySchema,
   FeedIngestCandidateSchema, FeedOutcomePayloadSchema, deriveCandidateId, deriveUrlKey,
@@ -13,7 +14,7 @@ import { extractArticle } from "../src/harvest-feeds/dom-extractor";
 import { attributeIngestOutcome } from "../src/attribute-ingest-outcomes";
 import { parseDocument } from "../src/harvest-feeds/parse-document";
 import { EXTRACTOR_VERSION, SANITIZER_FINGERPRINT } from "../src/harvest-feeds/extraction-provenance";
-import { measureExtractionQuality } from "../src/harvest-feeds/extraction-quality";
+import { countWords, measureExtractionQuality } from "../src/harvest-feeds/extraction-quality";
 import { extractSemanticContent } from "../src/harvest-feeds/semantic-extractor";
 import { canonicalizeUrl, InvalidArticleUrlError } from "../src/harvest-feeds/url-cleaner";
 import { createPinnedDispatcher, readResponseBody } from "../src/harvest-feeds/transport";
@@ -412,7 +413,7 @@ test("real inert DOM extraction retains prose and author but never calls a page 
   )).text();
   const recoveredText = extractSemanticContent(semanticPage, controls.semantic_fallback);
   expect(recoveredText).toContain("Engineers reopened the bridge");
-  expect(recoveredText).toContain("journeys. The next speaker");
+  expect(recoveredText).toContain("journeys.\n\nThe next speaker");
   expect(recoveredText).toContain("Morning services will use the bridge");
   expect(recoveredText).toContain("The inspection did not change");
   expect(recoveredText.match(/Engineers reopened the bridge/g)).toHaveLength(1);
@@ -427,6 +428,23 @@ test("real inert DOM extraction retains prose and author but never calls a page 
   });
   expect(alternate).toContain("An alternative content root");
   expect(alternate).not.toContain("Engineers reopened the bridge");
+  const proseControls = {
+    ...controls, semantic_fallback: { ...controls.semantic_fallback, content_roots: [".entry-content"], min_root_chars: 0 },
+  };
+  const proseRootText = extractSemanticContent(semanticPage, proseControls.semantic_fallback);
+  expect(proseRootText).toBe(
+    "Workers checked the bridge supports before opening the road to morning traffic. "
+    + "Inspectors found no new damage during the detailed morning visit.\n\n"
+    + "The council will publish the detailed inspection report at the end of next week.",
+  );
+  expect(countWords(proseRootText)).toBe(36);
+  const proseRoot = parseHTML(semanticPage).document.querySelector("#prose-root")?.outerHTML;
+  if (!proseRoot) throw new Error("Recorded semantic page must contain its prose-root case");
+  const prosePage = semanticPage.replace(/<body>[\s\S]*<\/body>/u, `<body>${proseRoot}</body>`);
+  const proseRecovered = await parseDocument("article", prosePage, "https://news.example/second", proseControls, "article");
+  expect(proseRecovered.article_text.match(/Workers checked the bridge supports/g)).toHaveLength(1);
+  expect(proseRecovered.word_count).toBeLessThan(controls.min_source_words);
+  expect(proseRecovered.quality).toMatchObject({ too_short: true, not_prose: false, rejected: true });
   await expect(inputs([], { harvest: {
     semantic_fallback: { ...controls.semantic_fallback, content_roots: ["["] },
   } })).rejects.toThrow("harvest.semantic_fallback.content_roots[0]");
