@@ -265,11 +265,6 @@ class VisualData(Contract):
             why="Circle area shows a third measure at the measured viewport width.",
         ),
         ChangelogEntry(
-            version="2026-10-27T01:00",
-            change="Draw scatter with one entity and two source-backed measures per point.",
-            why="Partial pairs hide the actual comparison set.",
-        ),
-        ChangelogEntry(
             version="2026-10-24",
             change="Earlier changes are in git.",
             why="Git history is the archive for older contract changes.",
