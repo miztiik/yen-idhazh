@@ -22,6 +22,7 @@ import { workPool } from "../harvest-feeds/harvest-pool";
 import { profileTask } from "../../../host-probes/src/task-profile/task-profiler";
 import { fetchRejection, recordRejection } from "../harvest-feeds/record-rejection";
 import { deriveCandidateId } from "@idhazh/common-contracts";
+import { sourceSnapshot } from "../harvest-feeds/load-harvest-inputs";
 
 type FetchRequest = z.infer<typeof FetchRequestSchema>;
 const requestPools = new WeakMap<PlanInputs, ReturnType<typeof workPool>>();
@@ -60,9 +61,12 @@ export async function fetchDocument(
     document_kind: request.kind, source_id: source.id, publisher_id: source.publisher_id,
     observed_run_id: record.run_id, observed_attempt: inputs.settings.run.attempt, candidate_id: parent?.offer.offer_id ?? null,
   });
-  if (parent !== null) {
+  if (request.kind === "article") {
     const exclusions = await documentExclusions(state, inputs);
-    const prepared = prepareArticle({ source: parent.offer.source, entry: parent.offer.entry }, inputs.harvest, {
+    const offered = parent?.offer ?? { source: sourceSnapshot(inputs.harvest, source), entry: {
+      entry_ordinal: 0, title: null, link: url, categories: [], author: null, published_at: null, media_types: [],
+    } };
+    const prepared = prepareArticle(offered, inputs.harvest, {
       writer: state.context.writer, correlation_id: state.context.correlation_id,
       max_future_hours: inputs.clock_config.collect.max_future_hours, clock: () => new Date(state.context.now),
       observation_clock: runtime.observation_clock ?? (() => new Date()),
@@ -71,10 +75,10 @@ export async function fetchDocument(
     if (prepared.status === "rejected") {
       await work.skip();
       state.work.article(prepared.result);
-      updateFeedOffer(inputs, state, parent.batch.batch_id, parent.offer.offer_id, "rejected");
-      throw new PlanError("ARTICLE_EXCLUDED", prepared.result.rejection!.drop_reason, "offer_id");
+      if (parent !== null) updateFeedOffer(inputs, state, parent.batch.batch_id, parent.offer.offer_id, "rejected");
+      throw new PlanError("ARTICLE_EXCLUDED", prepared.result.rejection!.drop_reason, parent === null ? "url" : "offer_id");
     }
-    updateFeedOffer(inputs, state, parent.batch.batch_id, parent.offer.offer_id, "fetched", record.request_id);
+    if (parent !== null) updateFeedOffer(inputs, state, parent.batch.batch_id, parent.offer.offer_id, "fetched", record.request_id);
   }
   let permit = requestPools.get(inputs);
   if (permit === undefined) { permit = workPool(inputs.harvest.config.harvest.concurrency); requestPools.set(inputs, permit); }

@@ -48,6 +48,19 @@ build or update time is not an article publication time. Missing, invalid
 or zone-free entry dates remain unknown through admission.
 Empty category labels are removed; real labels and repeats remain.
 Unrecognized or invalid XML is a typed parse failure, not an empty feed.
+RSS enclosures, Atom enclosure links, RDF/other Media RSS content and JSON Feed
+attachments retain their MIME types in the current offer only. The enabled
+`content_filters.media` rule rejects configured audio/video types and
+structured host/path matches before article or article-robots requests.
+Host and path boundaries matter: a news URL mentioning a media host in its
+path or query is not a match. Excluded offers retain their original ordinal,
+actual title or null, first sight and ordinary article-exclusion accounting.
+Public offer fetches and `/plan` share this preflight; standalone article
+fetches use the same address checks. A valid supplying feed remains successful.
+Both offered identity and the configured cleaned request target are checked,
+so a known URL wrapper cannot hide a media destination. This adds no request
+and never changes `canonical_url` or `url_key`. Unsafe cleaned targets remain
+typed fetch refusals, not media exclusions.
 
 ## Request and extraction controls
 
@@ -91,7 +104,10 @@ A missing title retains page-title recovery. Actual HTML extraction keeps
 prose and byline but never executes scripts or loads page resources.
 Defuddle's node entry produces Markdown with asynchronous source fetches
 disabled and a rejecting resource-fetch callback. The sanitizer runs after
-Markdown conversion. If that result is too short, semantic HTML elements
+Markdown conversion as well as on decoded DOM text before conversion.
+The chosen article's [numeric content measurements](feed-screening.md#gates-and-timing)
+are taken between those two sanitizer passes; final text is still fully scrubbed.
+If that result is too short, semantic HTML elements
 can supply actual page prose; a `semantic-dom-fallback` warning records its
 use. `harvest.semantic_fallback` configures ordered content roots, removed
 elements, paragraph elements, minimum root/paragraph characters and metadata
@@ -131,6 +147,11 @@ build-time Bun process and workers, not the published browser bundle.
 TidyURL 1.18.3 adds its bundled URL-cleaning rules and no runtime dependencies
 for request-target cleanup. Its installed bytes remain build-time only.
 No new HTTP client, parser framework or profiler is introduced.
+The pinned Bun runtime's native Markdown parser measures labels and lists
+without another package. Turndown 7.2.4, already installed by Defuddle, is now
+declared directly for semantic-recovery measurement. It adds no installed
+runtime bytes to this dependency tree. Its type declarations are build-only.
+Neither parser nor converter executes page scripts or fetches resources.
 
 ## Design rationale
 

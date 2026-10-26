@@ -62,6 +62,36 @@
       { "host": "fool.com", "path_prefix": "/the-ascent", "include_subdomains": true }
     ]
   },
+  "content_filters": {
+    "media": {
+      "enabled": true,
+      "enclosure_type_prefixes": ["audio/", "video/"],
+      "url_rules": [
+        { "host": "youtube.com", "path_prefix": "/", "include_subdomains": true },
+        { "host": "youtu.be", "path_prefix": "/", "include_subdomains": true },
+        { "host": "spotify.com", "path_prefix": "/", "include_subdomains": true },
+        { "host": "apple.com", "path_prefix": "/podcast", "include_subdomains": true },
+        { "host": "apple.com", "path_prefix": "/podcasts", "include_subdomains": true },
+        { "host": "podcasts.apple.com", "path_prefix": "/", "include_subdomains": true },
+        { "host": "soundcloud.com", "path_prefix": "/", "include_subdomains": true },
+        { "host": "vimeo.com", "path_prefix": "/", "include_subdomains": true }
+      ]
+    },
+    "press_release": {
+      "enabled": true,
+      "sample_chars": 600,
+      "markers": [
+        "FOR IMMEDIATE RELEASE", "BUSINESS WIRE", "PR NEWSWIRE",
+        "GLOBE NEWSWIRE", "NEWS PROVIDED BY"
+      ]
+    },
+    "link_heavy": {
+      "enabled": true,
+      "max_link_density": 0.4,
+      "max_list_items": 10,
+      "list_word_limit": 150
+    }
+  },
   "triage": {
     "min_words_article": 180,
     "min_words_abstract": 60,

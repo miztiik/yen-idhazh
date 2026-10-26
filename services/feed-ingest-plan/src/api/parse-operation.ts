@@ -98,6 +98,7 @@ export async function parseFetchedDocument(
     paywall: parsed.parsed?.paywall ?? null, paywall_evidence: parsed.parsed?.paywall_evidence ?? "not-observed",
     extraction: parsed.parsed === null ? "failed" : parsed.parsed.article_text ? "success" : "empty",
     observed_at: state.context.now, diagnostics: null,
+    ...(parsed.parsed?.content_evidence == null ? {} : { content_evidence: parsed.parsed.content_evidence }),
   });
   const title = resolveArticleTitle(offer?.entry.title ?? null, parsed.parsed?.page_title ?? null);
   let candidate: FeedIngestCandidate | null = null;

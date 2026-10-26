@@ -8,7 +8,10 @@ import type { ExtractionControls } from "./extraction-controls";
 import type { ExtractionQuality } from "@idhazh/common-contracts";
 import { measureExtractionQuality, countWords } from "./extraction-quality";
 import { corroborateWords } from "./corroborated-words";
-import { extractSemanticContent } from "./semantic-extractor";
+import { extractSemanticArticle } from "./semantic-extractor";
+import { sanitizeDomText } from "./sanitize-dom";
+import { measureArticleContent } from "./content-evidence";
+import type { ArticleContentEvidence } from "@idhazh/common-contracts";
 
 export class ArticleExtractionError extends Error {
   constructor(readonly reason: "missing-document-root" | "dom-depth-exceeded") { super(reason); }
@@ -82,6 +85,7 @@ export async function extractArticle(html: string, configuredUrl: string, config
     paywall: false, paywall_evidence: "none" as const,
     warnings: [] as HarvestDiagnostics["warnings"],
     quality: null as ExtractionQuality | null,
+    content_evidence: null as ArticleContentEvidence | null,
   };
   try { return await extractDocument(html, configuredUrl, config, form); }
   catch (error) {
@@ -94,15 +98,7 @@ export async function extractArticle(html: string, configuredUrl: string, config
 
 function extractBody(document: Document, configuredUrl: string) {
   for (const node of document.querySelectorAll("script:not([type='application/ld+json']),style,template,noscript,iframe,object,embed")) node.remove();
-  document.normalize();
-  // Sanitize decoded text before Markdown can escape instruction delimiters.
-  for (const element of document.querySelectorAll("*")) {
-    if (element.tagName === "SCRIPT") continue;
-    for (const child of element.childNodes) if (child.nodeType === child.TEXT_NODE) {
-      const raw = child.textContent ?? "";
-      child.textContent = `${/^\s/u.test(raw) ? " " : ""}${sanitizeText(raw)}${/\s$/u.test(raw) ? " " : ""}`;
-    }
-  }
+  sanitizeDomText(document);
   return Defuddle(document, configuredUrl, {
     markdown: true, useAsync: false,
     fetch: Object.assign(
@@ -135,11 +131,13 @@ async function extractDocument(html: string, configuredUrl: string, config: Extr
     if (error instanceof RangeError) throw error;
     primaryError = error;
   }
-  let text = sanitizeText(extracted?.content ?? "");
+  let markdown = extracted?.content ?? "";
+  let text = sanitizeText(markdown);
   if (primaryError !== undefined || countWords(text) < config.min_source_words) {
-    const fallback = extractSemanticContent(html, config.semantic_fallback);
-    if (fallback && countWords(fallback) > countWords(text)) {
-      text = fallback;
+    const fallback = extractSemanticArticle(html, config.semantic_fallback);
+    if (fallback.article_text && countWords(fallback.article_text) > countWords(text)) {
+      text = fallback.article_text;
+      markdown = fallback.markdown;
       paywall.warnings.push("semantic-dom-fallback");
     } else if (primaryError !== undefined) throw primaryError;
   }
@@ -150,5 +148,6 @@ async function extractDocument(html: string, configuredUrl: string, config: Extr
     page_title: cleanText(extracted?.title ?? "") || recovered.page_title,
     ...paywall,
     quality: text && !paywall.paywall ? measureExtractionQuality(text, corroborated, config, form) : null,
+    content_evidence: text ? measureArticleContent(markdown, config.press_release_filter) : null,
   };
 }

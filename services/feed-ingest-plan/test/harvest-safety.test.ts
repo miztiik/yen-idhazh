@@ -15,6 +15,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { z } from "zod";
 import { canonicalizeUrl } from "../src/harvest-feeds/url-cleaner";
+import { matchMediaArticle, matchMediaOffer } from "../src/harvest-feeds/media-filter";
+import { harvestArticle } from "../src/harvest-feeds/harvest-article";
+import { sourceSnapshot } from "../src/harvest-feeds/load-harvest-inputs";
 
 test("recorded sanitizer vectors match sanitizer-3, keep prose and are idempotent", async () => {
   const fixture = await readSafety();
@@ -44,6 +47,7 @@ test("literal, encoded and named unsafe addresses fail before transport", async 
       offered: z.string(), failure: z.enum(["unsafe-target", "robots-denied", "robots-unknown"]),
       requests: z.array(z.string()),
     })),
+    media: z.array(z.object({ offered: z.string(), canonical_url: z.string(), excluded: z.boolean() })),
   }).parse(await Bun.file(new URL(
     "../../../tests/fixtures/feed-ingest-plan/harvest-url-cleanup.json", import.meta.url,
   )).json());
@@ -64,6 +68,26 @@ test("literal, encoded and named unsafe addresses fail before transport", async 
       { transport, resolve: transport.resolve }).fetch(vector.offered);
     expect(result.failure, vector.offered).toBe(vector.failure);
     expect(transport.requests.map(request => request.url.href)).toEqual(vector.requests);
+  }
+  for (const vector of fixture.media) {
+    const transport = new RecordedTransport(await readRecordings());
+    const identity = canonicalizeUrl(vector.offered);
+    expect(identity.canonical_url).toBe(vector.canonical_url);
+    const matched = matchMediaArticle(vector.offered, identity.canonical_url, [], loaded.config);
+    expect(matched !== null).toBe(vector.excluded);
+    const article = await harvestArticle({
+      source: sourceSnapshot(loaded, loaded.sources[0]!),
+      entry: { entry_ordinal: 0, title: null, link: vector.offered, categories: [], author: null, published_at: null },
+    }, loaded, createPermittedFetcher(loaded.config.harvest, loaded.extraction, { transport, resolve: transport.resolve }), context());
+    if (vector.excluded) {
+      expect(article.rejection).toMatchObject({
+        drop_reason: "MEDIA_CONTENT", canonical_url: vector.canonical_url, url_key: identity.url_key, title: null,
+      });
+      expect(transport.requests).toEqual([]);
+    } else {
+      expect(article.candidate).toMatchObject({ canonical_url: vector.canonical_url, url_key: identity.url_key });
+      expect(transport.requests.at(-1)?.url.href).toBe("https://news.example/second");
+    }
   }
   const vector = fixture.allowed[0]!;
   const recordings = await readRecordings();
@@ -87,6 +111,28 @@ test("recorded robots rules and structured URL exclusions bind configured policy
     expect(matched !== undefined, vector.name).toBe(vector.expected);
     if (matched !== undefined) expect(vector.rules ?? fixture.url_exclusions).toContainEqual(matched);
   }
+  const media = loaded.config.content_filters.media;
+  for (const rule of media.url_rules) {
+    for (const url of [
+      `https://${rule.host}${rule.path_prefix}`,
+      `https://child.${rule.host}${rule.path_prefix === "/" ? "/story" : `${rule.path_prefix}/story`}`,
+    ]) expect(matchMediaOffer(url, [], media)?.media_match).toBe("url");
+    for (const url of [
+      `https://${rule.host}.news.example${rule.path_prefix}`,
+      `https://news.example/${rule.host}${rule.path_prefix}?next=https://${rule.host}${rule.path_prefix}`,
+    ]) expect(matchMediaOffer(url, [], media)).toBeNull();
+    if (rule.path_prefix !== "/") {
+      expect(matchMediaOffer(`https://${rule.host}${rule.path_prefix}ing`, [], media)).toBeNull();
+    }
+  }
+  expect(matchMediaOffer("https://news.example/story", [" AuDiO/mpeg "], media))
+    .toMatchObject({ media_match: "enclosure", matched_media_type_prefix: "audio/" });
+  expect(matchMediaOffer("https://news.example/story", ["image/jpeg"], media)).toBeNull();
+  expect(matchMediaOffer("https://news.example/story", ["audio/mpeg"], { ...media, enabled: false })).toBeNull();
+  expect(matchMediaOffer("https://news.example/story", ["audio/mpeg"], { ...media, enclosure_type_prefixes: ["video/"] })).toBeNull();
+  expect(matchMediaOffer("https://news.example/story", [], {
+    ...media, url_rules: [{ host: "news.example", path_prefix: "/story", include_subdomains: false }],
+  })?.media_match).toBe("url");
   for (const recording of fixture.robots) {
     const document = parseRobots(recording.body, "https://news.example");
     for (const path of recording.allowed) expect(robotsPermits(document, `https://news.example${path}`, agent), `${recording.name} ${path}`).toBe(true);

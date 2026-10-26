@@ -12,6 +12,18 @@
       "canonical_url": "https://google.com/url?url=https://news.example/second?utm_source=feed"
     }
   ],
+  "media": [
+    {
+      "offered": "https://www.google.com/url?url=https%3A%2F%2Fwww.youtube.com%2Fwatch%3Fv%3Drecorded",
+      "canonical_url": "https://google.com/url?url=https://www.youtube.com/watch?v=recorded",
+      "excluded": true
+    },
+    {
+      "offered": "https://www.google.com/url?url=https%3A%2F%2Fnews.example%2Fsecond%3Futm_source%3Dfeed",
+      "canonical_url": "https://google.com/url?url=https://news.example/second?utm_source=feed",
+      "excluded": false
+    }
+  ],
   "refused": [
     {
       "offered": "https://www.google.com/url?url=http%3A%2F%2F127.0.0.1%2Fsecret",
