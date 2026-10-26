@@ -11,6 +11,7 @@ export const DropReasonSchema = z.enum([
   "SOURCE_INACTIVE", "FETCH_FAILED", "FETCH_FAILED_HTTP", "FETCH_TIMEOUT", "EXTRACT_FAILED", "EXTRACT_EMPTY",
   "ALREADY_PUBLISHED", "SETTLED_FAILURE", "BLOCKED_URL_MARKER", "PAYWALL_OR_BLOCKED", "FEED_PARSE_FAILED",
   "FEED_EMPTY", "MISSING_REQUIRED_FIELDS", "CATEGORY_EXCLUDED", "STUB_CONTENT", "STALE_MAX_AGE_EXCEEDED",
+  "MEDIA_CONTENT",
 ]);
 export type DropReason = z.infer<typeof DropReasonSchema>;
 export type RejectionStage = z.infer<typeof RejectionStageSchema>;
@@ -21,6 +22,8 @@ export const RejectionDetailsSchema = z.strictObject({
   matched_url_key: Sha256Schema.nullable().default(null), published_on: DateStampSchema.nullable().default(null),
   failure_code: ItemHealthFailureCodeSchema.nullable().default(null), matched_url_marker: NonEmptySchema.nullable().default(null),
   history_window_days: PositiveCountSchema.nullable().default(null), diagnostics: HarvestDiagnosticsSchema.nullable().default(null),
+  media_match: z.enum(["enclosure", "url"]).nullable().default(null),
+  matched_media_type_prefix: NonEmptySchema.nullable().default(null),
 });
 export const REASON_STAGES: Readonly<Record<DropReason, readonly RejectionStage[]>> = {
   SOURCE_INACTIVE: ["harvest-feeds"], FETCH_FAILED: ["harvest-feeds"], FETCH_FAILED_HTTP: ["harvest-feeds"],
@@ -30,11 +33,13 @@ export const REASON_STAGES: Readonly<Record<DropReason, readonly RejectionStage[
   SETTLED_FAILURE: ["harvest-feeds", "screen-article-candidates"], BLOCKED_URL_MARKER: ["harvest-feeds", "screen-article-candidates"],
   PAYWALL_OR_BLOCKED: ["screen-article-candidates"], CATEGORY_EXCLUDED: ["screen-article-candidates"],
   STUB_CONTENT: ["screen-article-candidates"], STALE_MAX_AGE_EXCEEDED: ["harvest-feeds", "screen-article-candidates"],
+  MEDIA_CONTENT: ["harvest-feeds", "screen-article-candidates"],
 };
 export const REQUIRED_DETAILS: Readonly<Partial<Record<DropReason, readonly (keyof z.infer<typeof RejectionDetailsSchema>)[]>>> = {
   FETCH_FAILED_HTTP: ["http_status"], FETCH_TIMEOUT: ["timeout_ms"], STUB_CONTENT: ["words_found", "words_required"],
   STALE_MAX_AGE_EXCEEDED: ["age_hours", "max_age_hours"], ALREADY_PUBLISHED: ["matched_url_key", "published_on", "history_window_days"],
   SETTLED_FAILURE: ["matched_url_key", "failure_code"], BLOCKED_URL_MARKER: ["matched_url_key", "matched_url_marker"],
+  MEDIA_CONTENT: ["media_match"],
 };
 export const CandidateRejectionRecordSchema = z.strictObject({
   version: z.literal("2026-10-25").default("2026-10-25"), date: DateStampSchema, correlation_id: NonEmptySchema,
@@ -49,7 +54,7 @@ export const CandidateRejectionRecordSchema = z.strictObject({
     if (!article && value[field] !== null) reject(ctx, `Feed exclusions have no ${field}`, [field]);
     const missingTitle = field === "title" && [
       "FETCH_FAILED", "FETCH_FAILED_HTTP", "FETCH_TIMEOUT", "EXTRACT_FAILED", "EXTRACT_EMPTY",
-      "ALREADY_PUBLISHED", "SETTLED_FAILURE", "BLOCKED_URL_MARKER",
+      "ALREADY_PUBLISHED", "SETTLED_FAILURE", "BLOCKED_URL_MARKER", "MEDIA_CONTENT",
     ].includes(value.drop_reason);
     if (article && value[field] === null && value.drop_reason !== "MISSING_REQUIRED_FIELDS" && !missingTitle) {
       reject(ctx, `Article exclusion requires ${field}`, [field]);
@@ -64,6 +69,10 @@ export const CandidateRejectionRecordSchema = z.strictObject({
   }
   for (const field of REQUIRED_DETAILS[value.drop_reason] ?? []) {
     if (value.details[field] === null) reject(ctx, `${value.drop_reason} requires details.${field}`, ["details", field]);
+  }
+  if (value.drop_reason === "MEDIA_CONTENT") {
+    const field = value.details.media_match === "enclosure" ? "matched_media_type_prefix" : "matched_url_marker";
+    if (value.details[field] === null) reject(ctx, `MEDIA_CONTENT requires details.${field}`, ["details", field]);
   }
 });
 export type CandidateRejectionRecord = z.infer<typeof CandidateRejectionRecordSchema>;

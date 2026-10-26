@@ -166,7 +166,7 @@ class PlannerArticleEvidence(Model):
 
 
 class PlannerFeedEntry(Model):
-    """One offered RSS entry, before its article fetch or technical admission."""
+    """One offered feed entry, before its article fetch or technical admission."""
 
     entry_ordinal: Count
     title: str | None
@@ -174,6 +174,9 @@ class PlannerFeedEntry(Model):
     categories: list[str]
     author: str | None
     published_at: Timestamp | None
+    media_types: list[Code] = Field(
+        default_factory=list, json_schema_extra={"default": []},
+    )
 
 
 class PlannerFeedOffer(Model):

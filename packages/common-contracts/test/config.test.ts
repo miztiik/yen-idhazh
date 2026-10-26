@@ -24,6 +24,11 @@ if (Bun.argv.includes("--emit-schemas")) {
     });
     expect(config.curate.article_limit).toBe(100);
     expect(config.harvest.tidy_urls).toBe(true);
+    expect(config.content_filters).toMatchObject({
+      media: { enabled: true, enclosure_type_prefixes: ["audio/", "video/"] },
+      press_release: { enabled: true, sample_chars: 600 },
+      link_heavy: { enabled: true, max_link_density: 0.4, max_list_items: 10, list_word_limit: 150 },
+    });
     expect(config.feedback.lifecycle_window_days).toBe(31);
     expect(config.feedback.request_report_closed_days).toBe(7);
     expect(Object.keys(config.feedback)).toEqual(["lifecycle_window_days", "request_report_closed_days"]);
@@ -67,6 +72,13 @@ if (Bun.argv.includes("--emit-schemas")) {
     [["curate", "mmr_weights", "lambda_lens"], 0],
     [["curate", "soft_caps", "max_source_share"], 0],
     [["harvest", "concurrency"], "2"],
+    [["content_filters", "media", "enabled"], "true"],
+    [["content_filters", "media", "enclosure_type_prefixes"], ["audio"]],
+    [["content_filters", "press_release", "sample_chars"], 0],
+    [["content_filters", "press_release", "markers"], []],
+    [["content_filters", "link_heavy", "max_link_density"], 1.1],
+    [["content_filters", "link_heavy", "max_list_items"], -1],
+    [["content_filters", "link_heavy", "list_word_limit"], 0],
     [["partition", "default_shards"], 9],
     [["workflow_reporting", "enabled"], "true"],
     [["metrics"], {}],

@@ -68,6 +68,7 @@ export type PlannerArticleEvidence = z.infer<typeof PlannerArticleEvidenceSchema
 export const PlannerFeedEntrySchema = z.strictObject({
   entry_ordinal: CountSchema, title: z.string().nullable(), link: UrlSchema.nullable(),
   categories: z.array(z.string()), author: z.string().nullable(), published_at: TimestampSchema.nullable(),
+  media_types: z.array(NonEmptySchema).default([]),
 });
 export const PlannerFeedOfferSchema = z.strictObject({
   offer_id: Sha256Schema, source: SourceSnapshotSchema, entry: PlannerFeedEntrySchema,

@@ -1,6 +1,6 @@
 /** Retain the complete current feed offer batch without exporting or archiving article bodies. */
 import { randomUUID } from "node:crypto";
-import { DiscoveredArticleRowSchema, ParsedFeedBatchSchema, deriveCandidateId } from "@idhazh/common-contracts";
+import { DiscoveredArticleRowSchema, ParsedFeedBatchSchema, PlannerFeedEntrySchema, deriveCandidateId } from "@idhazh/common-contracts";
 import type { ParsedFeedBatch, PlannerFeedOffer } from "@idhazh/common-contracts";
 import type { FeedEntry, HarvestArticleResult } from "../harvest-feeds/harvest-types";
 import type { PlanInputs } from "../load-plan-inputs";
@@ -41,7 +41,7 @@ export async function createParsedFeedBatch(input: {
       continue;
     }
     offers.push({ offer_id: deriveCandidateId(state.context.run_id, source.source_id, entry.entry_ordinal),
-      source, entry, state: "pending", fetch_request_id: null });
+      source, entry: PlannerFeedEntrySchema.parse(entry), state: "pending", fetch_request_id: null });
   }
   const seen = await readSeenEvidence({
     root: inputs.root, files: inputs.settings.inputs.seen_files, days: inputs.settings.inputs.seen_days,

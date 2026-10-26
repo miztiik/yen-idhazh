@@ -16,6 +16,33 @@ export const FeedUrlExclusionSchema = z.strictObject({
   "path_prefix must be an absolute path without query, fragment, dot segments or trailing slash"),
   include_subdomains: z.boolean(),
 });
+export const FeedMediaFilterSchema = z.strictObject({
+  enabled: z.boolean().describe(
+    "Exclude media offers. Remove this switch and the disabled path when this filter becomes mandatory.",
+  ),
+  enclosure_type_prefixes: z.array(NonEmptySchema.regex(/^[a-z][a-z0-9.+-]*\/$/)).min(1),
+  url_rules: z.array(FeedUrlExclusionSchema),
+});
+export const FeedPressReleaseFilterSchema = z.strictObject({
+  enabled: z.boolean().describe(
+    "Exclude opening press-release markers. Remove this switch and the disabled path when this filter becomes mandatory.",
+  ),
+  sample_chars: PositiveCountSchema,
+  markers: z.array(NonEmptySchema).min(1),
+});
+export const FeedLinkHeavyFilterSchema = z.strictObject({
+  enabled: z.boolean().describe(
+    "Exclude link-heavy articles. Remove this switch and the disabled path when this filter becomes mandatory.",
+  ),
+  max_link_density: z.number().finite().min(0).max(1),
+  max_list_items: z.int().nonnegative(),
+  list_word_limit: PositiveCountSchema,
+});
+export const FeedContentFiltersConfigSchema = z.strictObject({
+  media: FeedMediaFilterSchema,
+  press_release: FeedPressReleaseFilterSchema,
+  link_heavy: FeedLinkHeavyFilterSchema,
+});
 // Navigation metadata cannot replace request authority, credentials or crawler identity.
 const browserHeaderNames = new Set([
   "user-agent", "accept", "accept-language", "sec-ch-ua", "sec-ch-ua-mobile", "sec-ch-ua-platform",
@@ -109,6 +136,7 @@ export const FeedFeedbackConfigSchema = z.strictObject({
 export const FeedIngestConfigSchema = z.strictObject({
   version: z.literal("2026-10-20"),
   harvest: FeedHarvestConfigSchema,
+  content_filters: FeedContentFiltersConfigSchema,
   triage: FeedTriageConfigSchema,
   curate: FeedCurateConfigSchema,
   partition: FeedPartitionConfigSchema,

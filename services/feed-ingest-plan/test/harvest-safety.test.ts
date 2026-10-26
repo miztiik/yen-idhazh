@@ -15,6 +15,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { z } from "zod";
 import { canonicalizeUrl } from "../src/harvest-feeds/url-cleaner";
+import { matchMediaOffer } from "../src/harvest-feeds/media-filter";
 
 test("recorded sanitizer vectors match sanitizer-3, keep prose and are idempotent", async () => {
   const fixture = await readSafety();
@@ -87,6 +88,28 @@ test("recorded robots rules and structured URL exclusions bind configured policy
     expect(matched !== undefined, vector.name).toBe(vector.expected);
     if (matched !== undefined) expect(vector.rules ?? fixture.url_exclusions).toContainEqual(matched);
   }
+  const media = loaded.config.content_filters.media;
+  for (const rule of media.url_rules) {
+    for (const url of [
+      `https://${rule.host}${rule.path_prefix}`,
+      `https://child.${rule.host}${rule.path_prefix === "/" ? "/story" : `${rule.path_prefix}/story`}`,
+    ]) expect(matchMediaOffer(url, [], media)?.media_match).toBe("url");
+    for (const url of [
+      `https://${rule.host}.news.example${rule.path_prefix}`,
+      `https://news.example/${rule.host}${rule.path_prefix}?next=https://${rule.host}${rule.path_prefix}`,
+    ]) expect(matchMediaOffer(url, [], media)).toBeNull();
+    if (rule.path_prefix !== "/") {
+      expect(matchMediaOffer(`https://${rule.host}${rule.path_prefix}ing`, [], media)).toBeNull();
+    }
+  }
+  expect(matchMediaOffer("https://news.example/story", [" AuDiO/mpeg "], media))
+    .toMatchObject({ media_match: "enclosure", matched_media_type_prefix: "audio/" });
+  expect(matchMediaOffer("https://news.example/story", ["image/jpeg"], media)).toBeNull();
+  expect(matchMediaOffer("https://news.example/story", ["audio/mpeg"], { ...media, enabled: false })).toBeNull();
+  expect(matchMediaOffer("https://news.example/story", ["audio/mpeg"], { ...media, enclosure_type_prefixes: ["video/"] })).toBeNull();
+  expect(matchMediaOffer("https://news.example/story", [], {
+    ...media, url_rules: [{ host: "news.example", path_prefix: "/story", include_subdomains: false }],
+  })?.media_match).toBe("url");
   for (const recording of fixture.robots) {
     const document = parseRobots(recording.body, "https://news.example");
     for (const path of recording.allowed) expect(robotsPermits(document, `https://news.example${path}`, agent), `${recording.name} ${path}`).toBe(true);

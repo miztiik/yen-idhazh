@@ -48,6 +48,15 @@ build or update time is not an article publication time. Missing, invalid
 or zone-free entry dates remain unknown through admission.
 Empty category labels are removed; real labels and repeats remain.
 Unrecognized or invalid XML is a typed parse failure, not an empty feed.
+RSS enclosures, Atom enclosure links, RDF/other Media RSS content and JSON Feed
+attachments retain their MIME types in the current offer only. The enabled
+`content_filters.media` rule rejects configured audio/video types and
+structured host/path matches before article or article-robots requests.
+Host and path boundaries matter: a news URL mentioning a media host in its
+path or query is not a match. Excluded offers retain their original ordinal,
+actual title or null, first sight and ordinary article-exclusion accounting.
+Public offer fetches and `/plan` share this preflight; standalone article
+fetches use the same address checks. A valid supplying feed remains successful.
 
 ## Request and extraction controls
 

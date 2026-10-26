@@ -62,6 +62,7 @@ test("Feedsmith formats retain categories, author, ordinal and only entry-level 
   expect(rss.map(entry => entry.entry_ordinal)).toEqual([0, 1, 2]);
   expect(rss[0]?.categories).toEqual(["Science", "Energy / Research", "Nested category name", "Regional reporting"]);
   expect(rss[0]?.author).toBe("Feed Reporter");
+  expect(rss[0]?.media_types).toEqual(["image/jpeg"]);
   expect(rss[0]?.published_at).toBe("2026-10-21T09:15:00Z");
   for (const [time, zone] of [
     ["04:15:00", "EST"], ["05:15:00", "EDT"], ["03:15:00", "CST"], ["04:15:00", "CDT"],
@@ -76,6 +77,7 @@ test("Feedsmith formats retain categories, author, ordinal and only entry-level 
   const atom = await parseFeed(recordings.bodies.atom);
   expect(atom[0]?.categories).toEqual(["Science", "Research / Methods"]);
   expect(atom[0]?.author).toBe("Atom Reporter");
+  expect(atom[0]?.media_types).toEqual(["image/jpeg"]);
   expect(atom[0]?.published_at).toBe("2026-10-21T06:30:00Z");
   expect(atom[1]?.categories).toEqual([]);
   expect(atom[1]?.published_at).toBeNull();
@@ -87,19 +89,51 @@ test("Feedsmith formats retain categories, author, ordinal and only entry-level 
   )).text());
   expect(json).toEqual([
     { entry_ordinal: 0, title: "JSON feed entry", link: "https://json.example/story", categories: ["Science", "Science"],
-      author: "JSON Reporter", published_at: "2026-10-21T06:30:00Z" },
+      author: "JSON Reporter", published_at: "2026-10-21T06:30:00Z", media_types: ["image/jpeg"] },
     { entry_ordinal: 1, title: "Opaque identifier is not an article URL", link: null, categories: [],
-      author: null, published_at: null },
+      author: null, published_at: null, media_types: [] },
     { entry_ordinal: 2, title: "URL identifier", link: "https://json.example/undated", categories: [],
-      author: null, published_at: null },
+      author: null, published_at: null, media_types: [] },
   ]);
   const rdf = await parseFeed(await Bun.file(new URL(
     "../../../tests/fixtures/feed-ingest-plan/harvest-rdf.xml", import.meta.url,
   )).text());
   expect(rdf).toEqual([
     { entry_ordinal: 0, title: "RDF feed entry", link: "https://rdf.example/story", categories: ["Science"],
-      author: "RDF Reporter", published_at: "2026-10-21T06:30:00Z" },
+      author: "RDF Reporter", published_at: "2026-10-21T06:30:00Z", media_types: ["image/jpeg"] },
   ]);
+  for (const body of [
+    recordings.bodies.rss, recordings.bodies.atom,
+    await Bun.file(new URL("../../../tests/fixtures/feed-ingest-plan/harvest-json.json", import.meta.url)).text(),
+    await Bun.file(new URL("../../../tests/fixtures/feed-ingest-plan/harvest-rdf.xml", import.meta.url)).text(),
+  ]) {
+    const media = await parseFeed(body.replaceAll("image/jpeg", "AuDiO/mpeg"));
+    expect(media[0]?.media_types).toEqual(["audio/mpeg"]);
+    expect(media.map(entry => entry.entry_ordinal)).toEqual(media.map((_, index) => index));
+    const replay = await readRecordings();
+    replay.responses["https://news.example/feed.xml"] = [{ status: 200, body: body.replaceAll("image/jpeg", "video/mp4") }];
+    for (const entry of media.slice(1)) if (entry.link !== null) {
+      const url = new URL(entry.link);
+      replay.addresses[url.hostname] = [{ address: "93.184.216.34", family: 4 }];
+      replay.responses[`${url.origin}/robots.txt`] = [{ status: 200, body: "User-agent: *\nAllow: /\n" }];
+      replay.responses[url.href] = [{ status: 200, fixture: "article" }];
+    }
+    const transport = new RecordedTransport(replay);
+    const result = await harvestFeeds(await inputs(), context(), { transport, resolve: transport.resolve });
+    expect(result.articles[0]?.rejection).toMatchObject({
+      drop_reason: "MEDIA_CONTENT", title: media[0]!.title,
+      candidate_id: deriveCandidateId(context().writer.run_id, "recorded-news", 0),
+      details: { media_match: "enclosure", matched_media_type_prefix: "video/" },
+    });
+    expect(result.articles[0]?.observation).toMatchObject({
+      http_status: null, robots: null, extraction: "not-attempted",
+    });
+    expect(transport.requests.some(request => request.url.href === media[0]!.link)).toBe(false);
+    expect(result.feed_outcomes[0]).toMatchObject({ fetch_status: "success", parse_status: "success", parsed_count: media.length });
+    expect(result.first_sight_candidates.map(candidate => candidate.url_key)).toContain(canonicalizeUrl(media[0]!.link!).url_key);
+    expect(result.candidates.map(candidate => candidate.entry_ordinal))
+      .toEqual(media.slice(1).filter(entry => entry.link !== null).map(entry => entry.entry_ordinal));
+  }
   const guid = recordings.bodies.rss.replace(/<link>https:\/\/news\.example\/second<\/link>/,
     "<guid>https://news.example/second</guid>");
   expect((await parseFeed(guid))[2]?.link).toBe("https://news.example/second");

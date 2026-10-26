@@ -173,6 +173,10 @@ article validation and distinguishes two offered entries with the same URL.
 Article URL identity uses the existing `derive_url_key` function.
 Transient exclusions require the deciding stage's reason and measurements;
 feed failures have no article identity. Only grouped counts persist in health.
+Media MIME types stay in the current parsed offer, not a committed ledger.
+The existing stage binding compares this additive field and its empty-list
+default; older current offers without it still validate. Authored filter
+settings bind through the existing global configuration comparison.
 The sole TypeScript progress schema carries sparse body-free operation
 events and UUIDv4 execution correlations. Typed full stage payloads remain
 internal; they are not log records or archived event exports.

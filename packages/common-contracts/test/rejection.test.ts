@@ -128,6 +128,7 @@ describe("rejection evidence", () => {
       age_hours: 60, max_age_hours: 48,
       matched_url_key: digest, published_on: day, failure_code: "network_error",
       matched_url_marker: "blocked", history_window_days: 7,
+      media_match: "url",
       diagnostics: HarvestDiagnosticsSchema.parse({
         extraction_failure: "missing-document-root", failure_code: "unknown",
         stopped_stage: "extract", detail: "missing-document-root", fetch_ms: 1, extract_ms: 1,
