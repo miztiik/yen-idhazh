@@ -1,6 +1,6 @@
 # Where every drawn figure came from
 
-**Last Updated**: 2026-10-10
+**Last Updated**: 2026-10-26
 
 Every number a reader reads off an axis has exactly one of two origins, and this
 page is the whole of that promise: it is characters the article itself wrote, or
@@ -107,19 +107,27 @@ stated once. The three bounds are all `config/` knobs and none is a number chose
 no new knob was needed, because `min_chart_points` and `max_chart_points` already mean "how many
 marks a chart may draw" and a histogram's bars are marks.
 
-### Binning is versioned config, and where the edges fall is not
+### A histogram's bins are configured and its arithmetic is versioned
 
-A histogram's bars are counts rather than figures the article wrote, so something has to say how many
-bins its values fall into. `visuals.histogram_bins` says, and the model is the one thing that may not.
-Where the edges fall - equal width over the range the values cover, half-open except the last bin,
-which is closed so the widest value has somewhere to go - is arithmetic and lives in
-`idhazh.derived_values`, stamped by `DERIVED_VALUE_VERSION`.
+A histogram's bars are counts rather than figures the article wrote, so
+`visuals.histogram_bins` sets their number. It defaults to three and stays
+inside the existing two-to-eight mark window. The model cannot choose the bin
+count or the rule: `idhazh.derived_values` divides the range into equal-width
+bins, includes each lower edge, excludes each upper edge except the final one,
+and stamps that arithmetic with `DERIVED_VALUE_VERSION`.
+
+Each count records its edges and every distinct source quantity it counted.
+The compiler writes those edges into the published visual data, so the browser
+draws the recorded ranges rather than recalculating them. Mixed-unit values are
+converted to the smallest scale present, with a deterministic spelling tie
+break. The visual records that unit and, when conversion was needed, the
+unit-table stamp; the count chain still names the original source quantities.
 
 A bin nothing falls into refuses the drawing. Its chain would name no element, and a mark that
 resolves to nothing is the one thing this contract exists to keep off a page. The item degrades and
-publishes no picture, which is the honest answer when a knob asks for more bins than the channel has
-spread to fill. The default is `min_chart_points` rather than a textbook rule for a sample size this
-stage never sees. **What reaches that refusal is a lack of spread and nothing else**, now that
+publishes no picture, which is the honest answer when configured bins outnumber the spread of the
+channel. The default is three bins rather than a textbook rule for a sample size this stage never
+sees. **What reaches that refusal is a lack of spread and nothing else**, now that
 `enough_data` refuses a plan citing fewer values than bins: a count shortfall is a plan fault the
 validator names, and only values that crowd into one end of their own range get this far.
 

@@ -74,6 +74,8 @@ export interface VisualData {
 	item_id: string;
 	type: string;
 	renderer_version: string;
+	histogram_unit: string | null;
+	histogram_unit_table_version: string | null;
 	declared_whole_element_id: string | null;
 	declared_whole: VisualWhole | null;
 	title: string | null;

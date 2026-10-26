@@ -113,7 +113,7 @@ comparison the chart exists to make gets every pixel left once the number it com
 somewhere to stand. What a reader gives up is the tidy left-hand column of names a desktop had
 room for, and one text line of height per bar.
 
-The bar, dot, slope, line, scatter and bubble share this measured-width drawing
+The bar, dot, slope, line, scatter, bubble and histogram share this measured-width drawing
 path and the bounded `chart.story_geometry` settings in `config/appearance.json`.
 A dot ranks
 values by position on one common scale. A slope joins paired values between two
@@ -123,6 +123,13 @@ date, draws a shared value axis and keeps the source's date wording on the time
 axis. Its geometry uses the same `dateSeries` builder as the Data explorer. The
 2026-09-13 bundle measurement above predates these forms and is not a measurement
 of their added code.
+
+A histogram draws the compiler's recorded, increasing ranges as rows. Each row
+puts the complete range on its own line, then shows the count bar and exact
+count below it. This gives a narrow screen enough width for every range without
+letting labels collide with bars. The heading states "Number of values"; the
+accessible name repeats every range and count in the same order. The final
+range includes its upper edge, so the largest cited value is counted once.
 
 **What this ruling does NOT change, because each has been read as following from it.** The
 pages stay prerendered; prerendering a route and prerendering a chart are different acts and
@@ -166,7 +173,8 @@ The data and framing travel together.
 | --- | --- |
 | `item_id`, `type` | Which story, and which of the declarable forms. A new type costs an enum member, never a new document format. |
 | `declared_whole_element_id`, `declared_whole` | The independently cited source quantity and wording for a pie, or the source quantity named by a stacked bar's category mark. Other chart types carry nulls. |
-| `marks` | **A flat pool, not a list of rows.** Each mark carries what it says (`text`), what it measures (`value` with its `unit`), and where that came from - `element_id` for a slice of the article, or `derived` for a chain through the four-function allow-list. Exactly one of the two, checked. |
+| `histogram_unit`, `histogram_unit_table_version` | The unit used for histogram edges, and the unit-table stamp when mixed units needed normalization. Other chart types carry nulls. |
+| `marks` | **A flat pool, not a list of rows.** Each mark carries what it says (`text`), what it measures (`value` with its `unit`), and where that came from - `element_id` for a slice of the article, or `derived` for a chain through the four-function allow-list. Histogram counts carry their recorded edges and every source quantity they counted. Exactly one provenance form is checked. |
 | `encoding` | Which marks fill which channel, by id, mirroring `PlanEncodings` role for role. Every role is a key and an unused one is empty. |
 | `title`, `caption` | Nullable, sanitized plan prose. The browser writes text nodes, never markup. |
 | `emphasized_mark_id` | Exactly one measured mark, resolved from the plan's selected elements. Its bar has a distinct fill, a dashed outline and a stronger name. |
@@ -349,7 +357,7 @@ charts; their text remains. The old SVG read, inlining and markup checks are
 removed. No historical corpus is deleted or rewritten. This is the named
 exception to `CLAUDE.md` section 11, not a general migration policy.
 
-The current renderer stamp is `2026-10-27T04:00`. Stacked bars name their whole
+The current renderer stamp is `2026-10-27T05:00`. Stacked bars name their whole
 with the source quantity on the category mark. Pies carry a separately cited
 source whole and derive each displayed slice as a share of it; the whole is
 never reconstructed by adding the slices. A time mark carries its canonical
@@ -368,6 +376,15 @@ The maximum radius share is the validated
 The persisted contract adds the bubble type without changing existing chart
 fields or their renderer stamp. Existing payloads remain readable; older
 readers refuse only the new type they do not know.
+
+Histograms use the configured three equal-width bins by default, with both the
+bin count and cited-value floor inside the existing two-to-eight mark window.
+Each positive count carries its edges and every source quantity; the resolver
+stamps the calculation, and the published visual records the normalized unit
+and unit-table stamp when mixed units need conversion. The browser draws those
+recorded edges in increasing rows, shows every range and count, and includes
+the full readout in the chart's accessible name. The final bin includes its
+upper edge. Empty bins refuse the picture rather than suggesting a zero count.
 
 **Why the stack cycles category colours.** The shared palette has seven
 categorical hues and reserves its eighth colour for absence. Rejecting an

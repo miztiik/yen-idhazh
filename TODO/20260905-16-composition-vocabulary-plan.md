@@ -1,6 +1,6 @@
 # 16 - Parts of a whole
 
-**Last Updated**: 2026-10-26
+**Last Updated**: 2026-10-27
 **Level**: 5 for persisted composition and review contracts; 3 for the
 implementation phases.
 
@@ -52,9 +52,9 @@ rules remain unchanged.
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | 1 | How often does an article actually state a whole | - | A | DONE #654 | p16-1 | #654 | worker |
 | 2 | The four ways code may reach a number the article did not write | 1 | B | DONE #537, #538 | - | #537, #538 | worker |
-| 3 | A declared whole: pie | 2 | C | IN-FLIGHT | composition-vocabulary-row-3 | - | - |
+| 3 | A declared whole: pie | 2 | C | DONE #1753 | - | #1753 | - |
 | 4 | Three numbers at once: bubble | 2 | D | DONE #1747 | composition-vocabulary-row-4 | #1747 | - |
-| 5 | A spread of values: histogram | 2 | E | PENDING | - | - | - |
+| 5 | A spread of values: histogram | 2 | E | IN-FLIGHT | histogram-delivery | - | - |
 | 6 | Human pie and bubble keep-rate evidence | 3, 4 | F | PENDING | - | - | - |
 
 ### Current delivery evidence
@@ -67,9 +67,9 @@ facts, not claims that later rows passed.
 | --- | --- | --- | --- |
 | E1 | 1 | `#654` added the bounded measurement and benchmark record | None |
 | E2 | 2 | `#537` added the closed derived-value contract and producers; `#538` added the histogram bin and resolver corrections | No story-only producers need changing |
-| E3 | 3 | Pie is declarable, shares the pie-to-stacked-bar edge, and has resolver arithmetic | Independent whole evidence, public compiler and pie renderer remain |
+| E3 | 3 | #1753 delivered the independent whole evidence, public compiler and pie renderer | None |
 | E4 | 4 | #1747 delivered source-linked positive size, square-root area, viewport-adaptive drawing without a width cutoff, and tests | None |
-| E5 | 5 | Histogram role rules, equal-width binning, count provenance and empty-bin refusal exist | Story compiler and browser renderer remain |
+| E5 | 5 | Histogram role rules, equal-width binning, count provenance and empty-bin refusal exist | Story compiler and browser renderer are in the histogram delivery branch; checks and merge remain |
 | E6 | 6 | Machine outcomes record exact planned and delivered types | A separate human keep-rate ledger and visual join key remain |
 
 ---
