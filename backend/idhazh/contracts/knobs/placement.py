@@ -654,7 +654,7 @@ class AssembleConfig(Model):
             "this off restores the vector-only rule, which is the revert path an "
             "operator has if a shared headline ever turns out to be two stories. Ruled "
             "by Andre and the Editor, 2026-09-14, and the rounding tolerance by the "
-            "owner the same day; the reasoning is in "
+            "maintainer the same day; the reasoning is in "
             "docs/architecture/publishing/layout.md."
         ),
     )

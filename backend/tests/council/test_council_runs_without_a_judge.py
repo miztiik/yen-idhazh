@@ -208,7 +208,7 @@ def test_the_judge_contracts_that_still_cross_cannot_grow(reached: set[str]) -> 
 
     assert crossing == set(JUDGE_CONTRACTS_STILL_CROSSING), (
         "the judge contracts a council verb reaches are no longer the three the "
-        "owner agreed to. Added: "
+        "maintainer agreed to. Added: "
         f"{sorted(crossing - JUDGE_CONTRACTS_STILL_CROSSING)}; gone: "
         f"{sorted(JUDGE_CONTRACTS_STILL_CROSSING - crossing)}. A new one needs a "
         "ruling, and one that left needs this list shortened in the same commit."

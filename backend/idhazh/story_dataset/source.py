@@ -64,7 +64,9 @@ def freeze(root: Path, repository: Path, policy: StoryPolicy, examples: Path) ->
         articles=len(articles),
         first_days=sorted({row.source.first_day for row in articles.values()}),
         frozen_at=now(),
-        source_description="Owner-approved exact 45-day archive, Aug 21-Oct 5 2026; local only.",
+        source_description=(
+            "Maintainer-approved exact 45-day archive, Aug 21-Oct 5 2026; local only."
+        ),
         regression_hashes={name: file_hash(repository / name) for name in REGRESSION_FILES},
         approved_examples_sha256=file_hash(examples),
     )

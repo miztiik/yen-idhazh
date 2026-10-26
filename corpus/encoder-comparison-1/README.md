@@ -1257,6 +1257,11 @@ the current primary record, and 1,608 distinct judged pairs. Of 214 pair-review
 records, 212 pairs have a current independent review.
 The 1,026 current article-review conflicts and 96 pair-review conflicts include
 unresolved catalogue comparisons. They are not error-rate measurements.
+The catalogue revision quoted above is from before the evidence re-key. The
+re-keyed checkpoint in this repository has catalogue revision
+`0f5dcfe98aeb5214a64b0aec91791259f59948948c0591a094940baa86f263ac`. Sequence
+numbers are unchanged. Record payloads match except for local paths and the
+digests that depend on them.
 
 Quality acceptance is held. A 36-item nonblind diagnostic found one concrete
 main-body/source-scope failure, S09, and two uncertain parent identities.

@@ -27,16 +27,16 @@ export async function executePersistence(raw: unknown, inputs: PlanInputs, runti
   const request = StageReferenceRequestSchema.parse(raw);
   const store = stageStore(inputs);
   const batch = store.read("partitioned", request.batch_id, PartitionedFeedBatchSchema);
-  const owner = store.ownership(batch.batch_id);
+  const claim = store.ownership(batch.batch_id);
   requireStageConfiguration(batch, inputs, runtime);
   const path = selectedArtifactPath(inputs.settings.inputs.artifact_root, batch.context);
   const target = resolve(inputs.root, ...path.split("/"));
   const state = currentExecutionState(inputs, batch.context.run_id);
-  let finalizedHealth = owner.health_fingerprint;
+  let finalizedHealth = claim.health_fingerprint;
   if (state !== undefined) {
     const document = await state;
     finalizedHealth ??= document.health_fingerprint;
-  } else if (owner.scope !== "plan") {
+  } else if (claim.scope !== "plan") {
     registerStageExecution(inputs, batch.context, "partition", null);
   }
   if (finalizedHealth !== null && finalizedHealth !== healthFingerprint(batch.health_rows)) {
@@ -51,7 +51,7 @@ export async function executePersistence(raw: unknown, inputs: PlanInputs, runti
   const fingerprint = createHash("sha256").update(JSON.stringify({
     artifact, strategy: batch.strategy, dispatch_count: batch.dispatch_count,
   })).digest("hex");
-  const previous = finalized.get(owner);
+  const previous = finalized.get(claim);
   if (previous !== undefined) {
     if (previous.fingerprint !== fingerprint) throw new PlanError("REQUEST_CONFLICT", "This execution already finalized a different selection or partition", "batch_id");
     return previous.result;
@@ -78,7 +78,7 @@ export async function executePersistence(raw: unknown, inputs: PlanInputs, runti
     const run = await recordStandaloneRun(inputs, batch, path);
     return { files, artifact: path, selected_count: metadata.length, ...(run === undefined ? {} : { run_files: run.files, run_status: run.row.status }) };
   })();
-  finalized.set(owner, { fingerprint, result });
+  finalized.set(claim, { fingerprint, result });
   try { return await result; }
-  catch (error) { finalized.delete(owner); throw error; }
+  catch (error) { finalized.delete(claim); throw error; }
 }

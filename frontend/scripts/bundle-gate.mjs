@@ -451,7 +451,7 @@ if (over.length > 0) {
 	);
 	if (over.some(({ name }) => name.startsWith('/console/'))) {
 		console.error(
-			'\nA console route is the third case, and re-deriving IS the answer. The owner\n' +
+			'\nA console route is the third case, and re-deriving IS the answer. The maintainer\n' +
 				'ruled on 2026-08-31 that no approved feature is cut, deferred or shrunk to\n' +
 				'stay under a page-weight number. Windowing a seed the first paint does not\n' +
 				'need is still the better first move, because a saving costs the operator\n' +

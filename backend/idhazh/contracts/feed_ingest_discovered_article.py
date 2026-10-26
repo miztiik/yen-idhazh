@@ -70,9 +70,21 @@ class PlannerPayload(PlannerModel):
 class PlannerRow(PlannerPayload):
     """A ledger row whose version belongs once to its file, not to every row."""
 
+    __previous_versions__: ClassVar[tuple[str, ...]] = ()
+
     @classmethod
     def schema_version(cls) -> str:
         return cls.contract_version()
+
+    @classmethod
+    def accepts_schema_version(cls, version: str) -> bool:
+        return version == cls.schema_version() or version in cls.__previous_versions__
+
+    @classmethod
+    def read_row(cls, cells: dict[str, Any], *, schema_version: str) -> Self:
+        if not cls.accepts_schema_version(schema_version):
+            raise ValueError("incompatible planner row schema version")
+        return cls.model_validate(cells)
 
 
 class DiscoveredArticleRow(PlannerRow):

@@ -18,12 +18,12 @@
     "@idhazh/ledger-file-writer": "file:../../packages/ledger-file-writer",
     "apache-arrow": "^21.2.0",
     "defuddle": "0.19.5",
+    "feedsmith": "3.0.1",
     "hono": "^4.10.0",
     "ipaddr.js": "2.5.0",
     "linkedom": "0.18.13",
     "parquet-wasm": "^0.9.0",
     "robots-parser": "3.0.1",
-    "rss-parser": "3.13.0",
     "undici": "7.16.0",
     "zod": "^4.1.12"
   },

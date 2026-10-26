@@ -12,7 +12,8 @@ export function selectedArticle(day = "2026-10-20") {
     url_key: deriveUrlKey("https://example.org/article/1"), feed_id: "fixture-feed",
     publisher_id: null, canonical_url: "https://example.org/article/1", title: "Caf\u00e9 \u6771\u4eac",
     categories: ["world", "science"], article_text: "Sanitized artifact-only body.",
-    author: null, published_at: null, tier: 1, weight: 1, applied_tier_weight: 0.5,
+    author: null, published_at: `${day}T10:00:00.123Z`, published_at_source: "selection",
+    tier: 1, weight: 1, applied_tier_weight: 0.5,
     editorial_rank: 1, estimated_work: 180, worker_assignment: 0,
     ratings: {
       base_article_score: 1.5, marginal_score: 1.25, adjustments: [
@@ -67,7 +68,7 @@ export function plannerRecordings(day = "2026-10-20", attempt = 1, execution = 1
       row: PlanRunRowSchema.parse({
         run_id, started_at: at, duration_ms: 25, status: "completed", failure_code: null,
         selected_count: 0, strategy: "none", dispatch_count: 0, selected_articles_artifact: null,
-        api_timings: [{ operation: "feed-health-summary", duration_ms: 0, status: "completed" }],
+        api_timings: [{ operation: "feed-health-before-fetch", duration_ms: 0, status: "completed" }],
         date: day, attempt, lifecycle_window_days: 31, reliability_floor: 0.5,
         reliability_penalty_enabled: true, evaluated_at: at, request_report_closed_days: 7,
         reliability_window_days: 30, selection_started_at_utc: null,

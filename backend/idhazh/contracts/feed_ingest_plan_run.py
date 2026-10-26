@@ -6,7 +6,7 @@ from typing import ClassVar, Literal, Self
 
 from pydantic import model_validator
 
-from idhazh.contracts.base import DateStamp, RelPath, RunId
+from idhazh.contracts.base import ChangelogEntry, DateStamp, RelPath, RunId
 from idhazh.contracts.feed_ingest_discovered_article import PlannerModel, PlannerRow
 from idhazh.contracts.feed_ingest_selected_article import Code, Count, PositiveCount, Weight
 from idhazh.contracts.recorded_instant import RecordedInstant
@@ -16,7 +16,8 @@ class PlanApiTiming(PlannerModel):
     """One measured major phase, never a per-article trace tree."""
 
     operation: Literal[
-        "fetch", "parse", "select", "partition", "persist", "feed-health-summary"
+        "fetch", "parse", "select", "partition", "persist", "feed-health-summary",
+        "feed-health-before-fetch", "feed-health-for-selection",
     ]
     duration_ms: Count
     status: Literal["completed", "failed", "interrupted"]
@@ -26,6 +27,15 @@ class PlanRunRow(PlannerRow):
     """The settings and measured result of one distinct run attempt."""
 
     __schema_stem__: ClassVar[str] = "feed-ingest-plan-run"
+    __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-10-26",
+            change="Name pre-fetch and fresh selection health captures separately.",
+            why="Each measured capture records its purpose without relying on list order.",
+        ),
+        *PlannerRow.__changelog__,
+    )
+    __previous_versions__: ClassVar[tuple[str, ...]] = ("2026-10-25",)
 
     run_id: RunId
     started_at: RecordedInstant

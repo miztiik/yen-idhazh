@@ -49,7 +49,7 @@ export async function harvestArticle(
       observation: fetchedObservation,
     });
   }
-  let extracted: ReturnType<typeof extractArticle>;
+  let extracted: Awaited<ReturnType<typeof extractArticle>>;
   const extractStarted = performance.now();
   const body = fetched.body;
   const link = entry.link;

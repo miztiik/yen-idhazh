@@ -98,7 +98,10 @@ def test_declared_contract(module: str, name: str) -> None:
                 "version": "2026-10-23T09:22", "created_at": current.created_at,
             })
     if module == "planner_stage" or name == "FeedIngestCandidate":
-        assert contract.schema_version() == "2026-10-25"
+        expected_version = (
+            "2026-10-26" if name in {"SelectedFeedBatch", "PartitionedFeedBatch"} else "2026-10-25"
+        )
+        assert contract.schema_version() == expected_version
     else:
         assert contract in (*idhazh.contracts.CONTRACTS, *idhazh.contracts.PLANNER_CONTRACTS)
     if name not in {"FetchedDocument", "PlannerOperation"}:
@@ -391,6 +394,7 @@ def test_dispatch_keeps_selection_and_content_identity() -> None:
     assert [term.value for term in row.ratings.adjustments] == [None, 0.0, -0.25]
     future = SelectedArticleRow.model_validate(row.model_dump(mode="json") | {
         "timing_at": "2026-10-20T11:00:00Z", "timing_basis": "published_at", "age_hours": -1.0,
+        "published_at": "2026-10-20T11:00:00Z", "published_at_source": "source",
     })
     assert future.age_hours == -1.0
     with pytest.raises(ValidationError):

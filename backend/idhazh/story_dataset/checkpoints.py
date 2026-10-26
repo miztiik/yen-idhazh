@@ -275,6 +275,7 @@ def restore_checkpoint(
                         else record.pair_id
                     )
                     decisions.setdefault(record.submission_sha256, {})[subject] = record.decision
+                # Replays rows already saved; the save guard covers new rows only.
                 store.db.execute(
                     "INSERT INTO records(sequence,kind,id,subject,payload) VALUES(?,?,?,?,?)",
                     (row.sequence, row.kind, row.id, row.subject, canonical(record).decode()),

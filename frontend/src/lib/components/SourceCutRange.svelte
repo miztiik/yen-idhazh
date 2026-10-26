@@ -424,7 +424,7 @@
 	/* No `overflow-x`. The svg is `max-w-full`, so it scales to the panel rather
 	   than scrolling inside it, and a scroll container here would only ever show
 	   on the prerendered first frame - which is exactly when a scrollbar is worst
-	   (owner decision 3, 2026-08-31). */
+	   (maintainer decision 3, 2026-08-31). */
 	.plot {
 		padding: var(--space-4);
 		border: 1px solid var(--color-rule);

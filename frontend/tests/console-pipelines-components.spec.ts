@@ -31,9 +31,9 @@ test('every card names its rule and a caller may name its range', async ({ page 
 	await drawClient(page, code, 'KpiCard', {
 		label: 'Recorded articles', value: '8',
 		rule,
-		ruleName: 'owner-count', ruleRange: { from: '2030-06-01', to: '2030-06-02' }
+		ruleName: 'maintainer-count', ruleRange: { from: '2030-06-01', to: '2030-06-02' }
 	});
-	await expect(page.locator('[data-model-rule]')).toHaveAttribute('data-model-rule-name', 'owner-count');
+	await expect(page.locator('[data-model-rule]')).toHaveAttribute('data-model-rule-name', 'maintainer-count');
 	await expect(page.locator('[data-model-rule]')).toHaveAttribute('data-model-rule-from', '2030-06-01');
 	await expect(page.locator('[data-model-rule]')).toHaveAttribute('data-model-rule-to', '2030-06-02');
 });

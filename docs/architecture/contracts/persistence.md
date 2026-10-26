@@ -367,6 +367,8 @@ Python-reader check for each TypeScript change. The Python ledger reader
 remains the format authority, but this package gate does not claim current
 cross-runtime readback.
 
+**2026-10-26: A checkpoint names evidence by file name, never by a local path.** An evidence reference is the file a check read. A path on one person's machine names that person, so the store refuses an absolute reference on save (`backend/idhazh/story_dataset/portable_evidence.py`). Free text follows the same rule: a local file keeps its name, and a folder-only path becomes `<local folder>`. The re-key tool (`backend/utilities/rekey_checkpoint_evidence.py`) applies this to an existing checkpoint, recomputes every identity that depends on the change, and restores the result through the same reference checks a normal load runs.
+
 ## See also
 
 - [ledger-registry.md](ledger-registry.md) - the registry, the lifecycle statuses and the check every writer asks.

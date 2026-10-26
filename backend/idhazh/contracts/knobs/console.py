@@ -186,7 +186,7 @@ class ConsoleConfig(Model):
             "way past. Four hundred is a DECLARED ESTIMATE and not a measurement "
             "(CLAUDE.md Guardrail #10), and it stays one: the number it needs is the "
             "median time a payload takes to reach a READER, and a reader-facing "
-            "timing measurement is scoped out by the same owner ruling that "
+            "timing measurement is scoped out by the same maintainer ruling that "
             "authorised the fetch (2026-09-08). Everything measurable instead is "
             "localhost, where arrival is a few milliseconds and any threshold "
             "derived from it is one nobody ever crosses. What would settle it is "

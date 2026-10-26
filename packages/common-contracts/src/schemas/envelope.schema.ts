@@ -1,6 +1,6 @@
 /** Which writer and recorded format identify one immutable ledger file? */
 import { z } from "zod";
-import { PLANNER_LEDGER_VERSION } from "../version";
+import { PLANNER_LEDGER_VERSION, PLANNER_ENVELOPE_VERSION } from "../version";
 import { RecordedInstantSchema } from "./recorded-instant.schema";
 import { CommitShaSchema, CountSchema, DateStampSchema, JobNameSchema, MonthStampSchema, NonEmptySchema, PositiveCountSchema, RunIdSchema, SchemaVersionSchema, ServerJobSchema, Sha256Schema, YearStampSchema, reject } from "./primitives";
 
@@ -96,8 +96,8 @@ export const PLANNER_FOOTER_METADATA_KEYS = [
 ] as const;
 export const PLANNER_OPTIONAL_FOOTER_METADATA_KEYS = ["period", "updated_at"] as const;
 export const PlannerFileEnvelopeSchema = z.strictObject({
-  version: z.literal(PLANNER_LEDGER_VERSION).default(PLANNER_LEDGER_VERSION),
-  row_schema_version: z.literal(PLANNER_LEDGER_VERSION),
+  version: z.enum([PLANNER_LEDGER_VERSION, PLANNER_ENVELOPE_VERSION]).default(PLANNER_ENVELOPE_VERSION),
+  row_schema_version: z.enum([PLANNER_LEDGER_VERSION, PLANNER_ENVELOPE_VERSION]),
   tier: TierSchema, ledger: PlannerLedgerNameSchema,
   covers: z.union([DateStampSchema, MonthStampSchema, YearStampSchema]),
   period: PeriodSchema.nullable().default(null), file_id: UuidSchema,
@@ -106,11 +106,21 @@ export const PlannerFileEnvelopeSchema = z.strictObject({
   writer_version: NonEmptySchema, compression: CompressionSchema,
   updated_at: RecordedInstantSchema.nullable().default(null),
 }).superRefine((value, ctx) => {
+  if (value.row_schema_version === PLANNER_ENVELOPE_VERSION
+    && (value.version === PLANNER_LEDGER_VERSION || !["selected-articles", "plan-runs"].includes(value.ledger))) {
+    reject(ctx, "current row stamp requires its declared ledger and envelope");
+  }
   if ((value.tier === "compact") !== (value.period !== null)) reject(ctx, "planner compact files require a period; raw files name none");
   const stamp = value.tier === "raw" || value.period === "daily" ? DateStampSchema
     : value.period === "monthly" ? MonthStampSchema : YearStampSchema;
   if (!stamp.safeParse(value.covers).success) reject(ctx, "planner covers must match its tier and period");
   if (value.file_id[14] !== "8") reject(ctx, "planner file_id must be UUID version 8");
   if ((value.ledger === "feed-health-state") !== (value.updated_at !== null)) reject(ctx, "only feed-health-state files require updated_at");
+}).meta({
+  version: PLANNER_ENVELOPE_VERSION,
+  changelog: [
+    { version: PLANNER_ENVELOPE_VERSION, change: "Accept current and prior selected-article and run row stamps." },
+    { version: PLANNER_LEDGER_VERSION, change: "Declare planner-only file metadata without generic writer identity." },
+  ],
 });
 export type PlannerFileEnvelope = z.infer<typeof PlannerFileEnvelopeSchema>;

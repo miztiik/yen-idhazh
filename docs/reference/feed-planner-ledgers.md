@@ -93,10 +93,10 @@ independently calculated selections.
 | B5 | `publisher_id` | Article | Yes | Curated publisher identity used by selection; nullable |
 | B6 | `canonical_url` | Article | Yes | Validated article URL |
 | B7 | `title` | Article | Yes | Selected article metadata and summarizer input |
-| B8 | `categories` | Article | Yes | Original RSS category strings, not inferred classifications |
+| B8 | `categories` | Article | Yes | Original feed category strings; empty arrays remain empty arrays |
 | B9 | `article_text` | Artifact article | No | Sanitized summarizer input; never in committed Parquet or logs |
 | B10 | `author` | Article | Yes | Attribution; nullable |
-| B11 | `published_at` | Article | Yes | Actual publication time; nullable |
+| B11 | `published_at` | Article | Yes | Trusted source publication or actual selection-start UTC instant; null only in older data |
 | B12 | `tier` | Article | Yes | Configured tier used for this choice |
 | B13 | `weight` | Article | Yes | Configured feed weight actually used |
 | B14 | `applied_tier_weight` | Article | Yes | Applied tier multiplier |
@@ -119,6 +119,7 @@ independently calculated selections.
 | B31 | `evaluated_at` | Artifact header / D19 | In D19 | Save the evaluation clock once in the run ledger; include it in the self-contained artifact |
 | B32 | `allowance_reasons` | Article | Yes | Compact codes for allowance bonuses actually used; no copied witness trees |
 | B33 | `attempt` | Artifact header / Parquet row | Yes | Owning workflow/run attempt; not a selection-idempotency key |
+| B34 | `published_at_source` | Article | Yes | `source`, `selection` or `legacy-unavailable`; never infer provenance from the timestamp |
 
 The compact `adjustments` list replaces the large existing score-evidence tree.
 It distinguishes unavailable evidence from a measured zero. It does not contain
@@ -131,6 +132,26 @@ promise a complete historical replay.
 `evaluated_at` records the clock actually used. A saved parsed batch can retain
 an earlier age-evaluation clock; the artifact must not substitute upload time
 or a later API call's start time.
+
+Only an entry-level, timezone-qualified source instant can supply publication
+time. A feed's build or update date cannot date its articles. After admission
+and choice, an absent or untrusted source date uses D22, the actual captured
+selection-start UTC instant, with `published_at_source = selection`. The
+spelling stays ISO 8601 with `Z`, as for source instants. This does not change
+B27-B29, the original first sight, freshness eligibility, recency or ranking.
+The artifact and metadata projection use the same chosen values.
+
+Readers accept the four-ledger files written under `2026-10-25`. They verify
+the original physical fields and canonical digest before adding
+`legacy-unavailable` provenance in memory. They retain each original
+publication value, including null, and every original age field. They never
+fill an older missing time with a new clock or rewrite the source file.
+Older artifacts follow the same rule. This compatibility does not restore
+the retired eight-ledger formats.
+
+Empty categories stay arrays. The native Parquet and JSON comparison found
+that null increased both representations, so no nullable category shape is
+introduced.
 
 Use recency, curated tier/weight, the explicitly enabled measured feed-reliability
 adjustment and applicable feed/publisher/domain selection controls. Do not
@@ -193,7 +214,7 @@ totals or add together saved rolling reliability results.
 | C37 | `rejection_counts[].attribution` | Run counters | Feed, pipeline or unknown for failures; null for ordinary exclusions |
 | C38 | `attempt` | Feed/run/day | Retain the run attempt when compacted rows from different executions coexist |
 | C39 | `items` | Feed/run/day | Existing distinct-offered-URL count used to decide whether the feed read was productive |
-| C40 | `outcome` | Feed/run/day | Existing feed outcome, including skipped/blocked/failed cases; needed for reliability/rest settlement |
+| C40 | `outcome` | Feed/run/day | Native download/permission result, not parse success; combined with C39 for reliability/rest settlement |
 
 Retired field IDs: C3 moved to D16; C4 moved to D17; C17 moved to D21. These
 settings belong once to the run, rather than repeated on every feed row or
@@ -205,7 +226,14 @@ sum those per-run decisions; they do not claim unique articles across the day.
 Planning yield is calculated from selected/candidate counts. Request totals
 measure spend, not blame.
 
-The current writer's productivity test is `outcome == "ok"` and `items > 0`.
+`outcome` preserves the native download/permission result. An HTTP success
+can therefore record `ok` even when the feed is empty or parsing fails.
+`last_failure_code = FEED_PARSE_FAILED` identifies the latter; it does not
+rewrite the download outcome. A human-facing feed read result combines that
+outcome, the usable URL count and the failure code.
+
+The current writer's productivity test remains `outcome == "ok"` and
+`items > 0`; `ok` with zero items is a failed/nonproductive read.
 Its `items` counts distinct offered canonical URLs across candidates and
 article-level rejections. It is not automatically the raw XML-entry count,
 extracted-article count or selected count. C39-C40 preserve that distinction
@@ -252,7 +280,7 @@ failed runs.
 | D8 | `strategy` | Run | Actual partition strategy |
 | D9 | `dispatch_count` | Run | Number of worker partitions |
 | D10 | `selected_articles_artifact` | Run | Relative POSIX artifact path only; no traversal, absolute path, content or signed URL |
-| D11 | `api_timings[].operation` | Timing entry | Actual fetch, parse, select, partition, persist or feed-health-summary operation |
+| D11 | `api_timings[].operation` | Timing entry | Actual fetch, parse, select, partition, persist, feed-health-before-fetch or feed-health-for-selection operation |
 | D12 | `api_timings[].duration_ms` | Timing entry | Measured operation duration |
 | D13 | `api_timings[].status` | Timing entry | Completed, failed or interrupted |
 | D14 | `date` | Run | UTC accounting day of `started_at`; explicit day-partition/query key |
@@ -269,6 +297,12 @@ For `/plan`, timing entries describe internal phases, not HTTP self-calls.
 Record one span per major phase, not one span for every internal article
 operation. Standalone APIs record their request-level spans. There are no
 per-article trace trees.
+
+The two health captures are intentional: one supplies pre-request evidence;
+the other includes current work before selection. New rows store their
+distinct purposes, not two position-dependent copies of one name. A reader
+preserves an older `feed-health-summary` value and labels its purpose
+unrecorded; list position cannot prove which capture it was.
 
 ## E. Dates, counters and compaction
 
