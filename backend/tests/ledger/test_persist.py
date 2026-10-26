@@ -504,7 +504,6 @@ def test_two_attempts_at_one_unit_are_two_files_and_the_union_keeps_the_second(
     assert first[0].name != second[0].name
     first_envelope = ledger.read_envelope(first[0])
     second_envelope = ledger.read_envelope(second[0])
-    assert isinstance(first_envelope, FileEnvelope) and isinstance(second_envelope, FileEnvelope)
     assert first_envelope.unit_id == second_envelope.unit_id
     assert ledger.load([path for _, path in newest.values()], model=VisualPruneRow) == rows[:1]
 

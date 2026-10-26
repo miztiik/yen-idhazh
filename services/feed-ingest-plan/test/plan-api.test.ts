@@ -85,7 +85,13 @@ test("actual API and awaited CLI compose the same recorded plan and disclose the
     expect(repeated.run_id).not.toBe(summary.run_id);
     expect(await readdir(healthFolder)).toEqual(before);
     expect(selected.articles.every((article: object) => !Object.hasOwn(article, "article_text"))).toBe(true);
+    const invalidPartition = await fetch(`${url}/partition-articles`, json({
+      batch_id: selected.batch_id, strategy: "none", shards: 2,
+    }));
+    expect(invalidPartition.status).toBe(400);
+    expect((await invalidPartition.json()).code).toBe("INVALID_REQUEST");
     const partition = await (await fetch(`${url}/partition-articles`, json({ batch_id: selected.batch_id, strategy: "none" }))).json();
+    expect(partition.run_id).toBe(selected.run_id);
     const alternative = await (await fetch(`${url}/partition-articles`, json({
       batch_id: selected.batch_id, strategy: "round-robin", shards: 2,
     }))).json();

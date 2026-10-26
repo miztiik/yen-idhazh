@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import { SelectedFeedBatchSchema, PartitionedFeedBatchSchema, PartitionArticlesRequestSchema } from "@idhazh/common-contracts";
 import type { PlanInputs } from "../load-plan-inputs";
 import type { PlanRuntime } from "../run-feed-plan";
-import { resolvePartitionRequest } from "../partition-article-shards/partition-input";
+import { resolvePlanRequest } from "./plan-request";
 import { requireStageConfiguration } from "./selection-operation";
 import { stageStore } from "./stage-store";
 import { partitionArticles } from "../partition-article-shards/shard-packer";
@@ -16,6 +16,11 @@ export async function executePartition(raw: unknown, inputs: PlanInputs, runtime
   const store = stageStore(inputs);
   let selected = store.read("selected", request.batch_id, SelectedFeedBatchSchema);
   requireStageConfiguration(selected, inputs, runtime);
+  const resolved = resolvePlanRequest({
+    ...(request.strategy === undefined ? {} : { partition_strategy: request.strategy }),
+    ...(request.shards === undefined ? {} : { shards: request.shards }),
+  }, inputs.harvest.config);
+  const controls = { strategy: resolved.partition_strategy, dispatch_count: resolved.shards };
   const keepOriginal = store.claimPartition(selected.batch_id) && !executionHasArtifact(inputs, selected.context);
   if (!keepOriginal) {
     const captured = (runtime.selection_clock ?? runtime.clock)?.() ?? new Date();
@@ -28,10 +33,6 @@ export async function executePartition(raw: unknown, inputs: PlanInputs, runtime
       })),
     });
   }
-  const controls = resolvePartitionRequest(inputs.harvest.config.partition, {
-    ...(request.strategy === undefined ? {} : { strategy: request.strategy }),
-    ...(request.shards === undefined ? {} : { shards: request.shards }),
-  });
   const partition = partitionArticles(selected.articles, controls);
   const batch = store.write("partitioned", PartitionedFeedBatchSchema, {
     ...selected, batch_id: randomUUID(), selection_batch_id: selected.batch_id, ...partition,

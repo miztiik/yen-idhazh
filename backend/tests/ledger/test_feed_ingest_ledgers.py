@@ -289,7 +289,8 @@ def test_planning_keys_are_trusted_and_never_applied_to_another_ledger(tmp_path:
     assert all(path.read_bytes() == data for path, data in before.items())
     assert not ledger.compact_path(state, which, Period.DAILY, row.date).exists()
     original_seen = SeenRow(
-        url_key=row.url_key, first_seen_at="2026-10-20T10:00:00Z", first_seen_run=row.run_id,
+        version=SeenRow.schema_version(), url_key=row.url_key,
+        first_seen_at="2026-10-20T10:00:00Z", first_seen_run=row.run_id,
     )
     with pytest.raises(ValueError, match="writer identity"):
         ledger.persist(state, [original_seen], ledger=LedgerName.SEEN, covers=row.date)

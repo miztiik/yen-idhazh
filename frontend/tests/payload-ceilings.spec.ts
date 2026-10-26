@@ -1,7 +1,8 @@
 import { expect, test } from '@playwright/test';
-import { mkdirSync, statSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { weighPayloads } from '../scripts/payload-ceilings.mjs';
+import { configuredCatalog } from '../src/lib/data/configured-catalog';
 
 /**
  * Which payload keys the bundle gate weighs, which keys fail it, and which it reports as not weighed.
@@ -29,6 +30,12 @@ function onDisk(file: string): number {
 }
 
 test('published flat and nested ledgers absent from the build are not weighed, and the answer names them', () => {
+	const config = JSON.parse(readFileSync(new URL('../../config/idhazh.json', import.meta.url), 'utf8'));
+	const plannerCaps = Object.keys(config.page_weight.payload_ceilings_bytes)
+		.filter((key) => key.startsWith('state/compact/feed-ingest-plan/')).sort();
+	const planner = configuredCatalog.families.find((family) => family.name === 'feed-ingest-plan');
+	if (planner === undefined) throw new Error('The current planner family must be registered');
+	expect(plannerCaps).toEqual(planner.ledgers.map((entry) => `state/compact/${entry.prefix}/index/`).sort());
 	const build = aBuildTree({
 		'state/compact/seen/index/daily.json': 'daily',
 		'state/compact/seen/index/monthly.json': 'monthly',
