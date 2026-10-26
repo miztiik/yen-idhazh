@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { loadPlanInputs } from "../src/load-plan-inputs";
-import { RecordedTransport, inputs, readRecordings, source } from "./harvest-recordings";
+import { RecordedTransport, contentFilterPage, inputs, readContentFilters, readRecordings, source } from "./harvest-recordings";
 import type { ConfiguredSource } from "../src/harvest-feeds/load-harvest-inputs";
 import type { FeedIngestEvent } from "@idhazh/common-contracts";
 import type { PlanRuntime } from "../src/run-feed-plan";
@@ -35,6 +35,32 @@ export async function recordedPlan(sources: ConfiguredSource[] = [source()], pub
     };
   } catch (error) {
     await rm(directory, { recursive: true, force: true });
+    throw error;
+  }
+}
+
+export async function recordedContentFilterPlan() {
+  const cases = await readContentFilters();
+  const recorded = await recordedPlan([source({ form: "abstract" })]);
+  try {
+    const mediaUrl = `https://${recorded.inputs.harvest.config.content_filters.media.url_rules[0]!.host}/watch`;
+    const mimeUrl = "https://news.example/filter-media";
+    const entries = [
+      `<item><link>${mediaUrl}</link></item>`,
+      `<item><title>Recorded audio offer</title><link>${mimeUrl}</link><enclosure url="https://resources.example/audio" type="audio/mpeg" length="100"/></item>`,
+      ...cases.article_cases.map(entry => `<item><title>${entry.title}</title><link>https://news.example/${entry.path}</link></item>`),
+    ];
+    recorded.transport.recordings.responses["https://news.example/feed.xml"] = [{
+      status: 200, body: `<rss version="2.0"><channel><title>Recorded content exclusions</title>${entries.join("")}</channel></rss>`,
+    }];
+    for (const entry of cases.article_cases) {
+      recorded.transport.recordings.responses[`https://news.example/${entry.path}`] = [{
+        status: 200, body: contentFilterPage(recorded.transport.recordings.bodies.article, entry, cases.list_prose),
+      }];
+    }
+    return { ...recorded, cases, mediaUrl, mimeUrl };
+  } catch (error) {
+    await recorded.close();
     throw error;
   }
 }

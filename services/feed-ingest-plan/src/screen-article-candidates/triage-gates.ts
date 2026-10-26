@@ -9,7 +9,8 @@ import { matchUrlExclusion, urlExclusionMarker } from "../harvest-feeds/url-excl
 import { validateScreeningInput } from "./screening-input";
 import type { HarvestObservation, ScreeningInput } from "./screening-input";
 import { indexSeenEvidence } from "./seen-evidence";
-import { matchMediaOffer } from "../harvest-feeds/media-filter";
+import { matchMediaArticle } from "../harvest-feeds/media-filter";
+import { excludeArticleContent } from "./content-filters";
 
 export type ScreenedCandidate = {
   candidate: FeedIngestCandidate;
@@ -43,7 +44,8 @@ export async function screenArticleCandidates(
     const blockedUrl = matchUrlExclusion(candidate.canonical_url, planning.config.harvest.url_exclusions);
     const publishedOn = exclusions?.published_on[candidate.url_key];
     const failureCode = exclusions?.settled_failure_codes[candidate.url_key];
-    const media = matchMediaOffer(candidate.canonical_url, [], planning.config.content_filters.media);
+    const media = matchMediaArticle(candidate.canonical_url, candidate.canonical_url, [], planning.config);
+    const content = excludeArticleContent(observation?.content_evidence, candidate.word_count, planning.config.content_filters);
     if (blockedUrl !== undefined) {
       rejection = { drop_reason: "BLOCKED_URL_MARKER", details: {
         matched_url_key: candidate.url_key, matched_url_marker: urlExclusionMarker(blockedUrl),
@@ -60,6 +62,8 @@ export async function screenArticleCandidates(
       rejection = { drop_reason: "CATEGORY_EXCLUDED", details: {} };
     } else if (media !== null) {
       rejection = { drop_reason: "MEDIA_CONTENT", details: media };
+    } else if (content !== null) {
+      rejection = content;
     } else if (candidate.word_count < required) {
       rejection = { drop_reason: "STUB_CONTENT", details: { words_found: candidate.word_count, words_required: required } };
     } else if (freshness.age_hours !== null && freshness.age_hours > policy.triage.max_age_hours) {

@@ -6,12 +6,13 @@ import {
 } from "./primitives";
 import { HarvestDiagnosticsSchema } from "./harvest-diagnostics.schema";
 import { ItemHealthFailureCodeSchema } from "./item-health-failure.schema";
+import { ArticleContentEvidenceSchema } from "./content-filter-evidence.schema";
 
 export const DropReasonSchema = z.enum([
   "SOURCE_INACTIVE", "FETCH_FAILED", "FETCH_FAILED_HTTP", "FETCH_TIMEOUT", "EXTRACT_FAILED", "EXTRACT_EMPTY",
   "ALREADY_PUBLISHED", "SETTLED_FAILURE", "BLOCKED_URL_MARKER", "PAYWALL_OR_BLOCKED", "FEED_PARSE_FAILED",
   "FEED_EMPTY", "MISSING_REQUIRED_FIELDS", "CATEGORY_EXCLUDED", "STUB_CONTENT", "STALE_MAX_AGE_EXCEEDED",
-  "MEDIA_CONTENT",
+  "MEDIA_CONTENT", "PRESS_RELEASE", "LINK_HEAVY",
 ]);
 export type DropReason = z.infer<typeof DropReasonSchema>;
 export type RejectionStage = z.infer<typeof RejectionStageSchema>;
@@ -24,6 +25,11 @@ export const RejectionDetailsSchema = z.strictObject({
   history_window_days: PositiveCountSchema.nullable().default(null), diagnostics: HarvestDiagnosticsSchema.nullable().default(null),
   media_match: z.enum(["enclosure", "url"]).nullable().default(null),
   matched_media_type_prefix: NonEmptySchema.nullable().default(null),
+  content_evidence: ArticleContentEvidenceSchema.nullable().default(null),
+  sample_chars_limit: PositiveCountSchema.nullable().default(null),
+  max_link_density: z.number().finite().min(0).max(1).nullable().default(null),
+  max_list_items: CountSchema.nullable().default(null),
+  list_word_limit: PositiveCountSchema.nullable().default(null),
 });
 export const REASON_STAGES: Readonly<Record<DropReason, readonly RejectionStage[]>> = {
   SOURCE_INACTIVE: ["harvest-feeds"], FETCH_FAILED: ["harvest-feeds"], FETCH_FAILED_HTTP: ["harvest-feeds"],
@@ -34,12 +40,15 @@ export const REASON_STAGES: Readonly<Record<DropReason, readonly RejectionStage[
   PAYWALL_OR_BLOCKED: ["screen-article-candidates"], CATEGORY_EXCLUDED: ["screen-article-candidates"],
   STUB_CONTENT: ["screen-article-candidates"], STALE_MAX_AGE_EXCEEDED: ["harvest-feeds", "screen-article-candidates"],
   MEDIA_CONTENT: ["harvest-feeds", "screen-article-candidates"],
+  PRESS_RELEASE: ["screen-article-candidates"], LINK_HEAVY: ["screen-article-candidates"],
 };
 export const REQUIRED_DETAILS: Readonly<Partial<Record<DropReason, readonly (keyof z.infer<typeof RejectionDetailsSchema>)[]>>> = {
   FETCH_FAILED_HTTP: ["http_status"], FETCH_TIMEOUT: ["timeout_ms"], STUB_CONTENT: ["words_found", "words_required"],
   STALE_MAX_AGE_EXCEEDED: ["age_hours", "max_age_hours"], ALREADY_PUBLISHED: ["matched_url_key", "published_on", "history_window_days"],
   SETTLED_FAILURE: ["matched_url_key", "failure_code"], BLOCKED_URL_MARKER: ["matched_url_key", "matched_url_marker"],
   MEDIA_CONTENT: ["media_match"],
+  PRESS_RELEASE: ["content_evidence", "sample_chars_limit"],
+  LINK_HEAVY: ["content_evidence", "max_link_density", "max_list_items", "words_found", "list_word_limit"],
 };
 export const CandidateRejectionRecordSchema = z.strictObject({
   version: z.literal("2026-10-25").default("2026-10-25"), date: DateStampSchema, correlation_id: NonEmptySchema,
@@ -64,7 +73,9 @@ export const CandidateRejectionRecordSchema = z.strictObject({
   if (value.date !== value.rejected_at.slice(0, 10)) reject(ctx, "Exclusion date must match its actual UTC decision day");
   if (!REASON_STAGES[value.drop_reason].includes(value.stage)) reject(ctx, "Reason does not belong to this stage");
   if (article && ["SOURCE_INACTIVE", "FEED_PARSE_FAILED", "FEED_EMPTY"].includes(value.drop_reason)) reject(ctx, "Reason requires a feed");
-  if (!article && (value.stage !== "harvest-feeds" || ["MISSING_REQUIRED_FIELDS", "EXTRACT_FAILED", "EXTRACT_EMPTY"].includes(value.drop_reason))) {
+  if (!article && (value.stage !== "harvest-feeds" || [
+    "MISSING_REQUIRED_FIELDS", "EXTRACT_FAILED", "EXTRACT_EMPTY", "MEDIA_CONTENT", "PRESS_RELEASE", "LINK_HEAVY",
+  ].includes(value.drop_reason))) {
     reject(ctx, "Feed outcome does not describe an article exclusion");
   }
   for (const field of REQUIRED_DETAILS[value.drop_reason] ?? []) {
@@ -73,6 +84,9 @@ export const CandidateRejectionRecordSchema = z.strictObject({
   if (value.drop_reason === "MEDIA_CONTENT") {
     const field = value.details.media_match === "enclosure" ? "matched_media_type_prefix" : "matched_url_marker";
     if (value.details[field] === null) reject(ctx, `MEDIA_CONTENT requires details.${field}`, ["details", field]);
+  }
+  if (value.drop_reason === "PRESS_RELEASE" && value.details.content_evidence?.press_release_marker_index == null) {
+    reject(ctx, "PRESS_RELEASE requires a measured marker index", ["details", "content_evidence"]);
   }
 });
 export type CandidateRejectionRecord = z.infer<typeof CandidateRejectionRecordSchema>;

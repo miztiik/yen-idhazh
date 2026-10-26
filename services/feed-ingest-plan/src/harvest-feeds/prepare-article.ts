@@ -9,7 +9,7 @@ import { matchUrlExclusion, urlExclusionMarker } from "./url-exclusions";
 import { recordRejection } from "./record-rejection";
 import { calculateFreshness } from "../screen-article-candidates/freshness-decay";
 import { resolvePolicy } from "../config/resolve-policy";
-import { matchMediaOffer } from "./media-filter";
+import { matchMediaArticle } from "./media-filter";
 
 // These existing feed and extracted headline bounds define the input format.
 const feedTitleLimit = 500;
@@ -52,7 +52,7 @@ export function prepareArticle(offered: OfferedArticle, inputs: HarvestInputs, c
   });
   const failureCode = context.exclusions?.settled_failure_codes.get(identity.url_key);
   if (failureCode !== undefined) return reject("SETTLED_FAILURE", { matched_url_key: identity.url_key, failure_code: failureCode });
-  const media = matchMediaOffer(identity.canonical_url, entry.media_types ?? [], inputs.config.content_filters.media);
+  const media = matchMediaArticle(entry.link, identity.canonical_url, entry.media_types ?? [], inputs.config);
   if (media !== null) return reject("MEDIA_CONTENT", media);
   if (article.title) {
     const policy = resolvePolicy(inputs, context.overrides);

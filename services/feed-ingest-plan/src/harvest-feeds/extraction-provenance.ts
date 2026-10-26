@@ -15,15 +15,15 @@ function fingerprint(paths: readonly string[]): string {
 }
 
 const require = createRequire(import.meta.url);
-function libraryVersion(name: "defuddle" | "linkedom"): string {
-  // Both pinned libraries export their entry point from one directory below their manifest.
+function libraryVersion(name: "defuddle" | "linkedom" | "turndown"): string {
+  // These pinned libraries export their entry point one directory below their manifest.
   return z.object({ version: z.string().min(1) }).parse(JSON.parse(
     readFileSync(resolve(dirname(require.resolve(name)), "..", "package.json"), "utf8"),
   )).version;
 }
 
-export const EXTRACTOR_VERSION = `defuddle-${libraryVersion("defuddle")}-linkedom-${libraryVersion("linkedom")}-idhazh-${fingerprint([
+export const EXTRACTOR_VERSION = `defuddle-${libraryVersion("defuddle")}-linkedom-${libraryVersion("linkedom")}-turndown-${libraryVersion("turndown")}-bun-${Bun.version}-idhazh-${fingerprint([
   "dom-extractor.ts", "corroborated-words.ts", "extraction-quality.ts", "extraction-controls.ts",
-  "parse-document.ts", "extraction-provenance.ts", "semantic-extractor.ts",
+  "parse-document.ts", "extraction-provenance.ts", "semantic-extractor.ts", "sanitize-dom.ts", "content-evidence.ts",
 ])}`;
 export const SANITIZER_FINGERPRINT = `idhazh-typescript-sanitizer-3-${fingerprint(["sanitize-text.ts"])}`;

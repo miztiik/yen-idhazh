@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from decimal import ROUND_HALF_UP, Decimal
 from typing import Annotated, Any, ClassVar, Literal, Self
 
 from pydantic import UUID4, Field, StrictInt, model_validator
@@ -101,6 +102,31 @@ class PreflightFreshness(Model):
     recency_bonus: NonNegative
 
 
+class ArticleContentEvidence(Model):
+    """Bounded numeric facts about extracted Markdown, never its links or prose."""
+
+    markdown_chars: Count
+    linked_label_chars: Count
+    link_density: Annotated[float, Field(strict=True, ge=0, le=1, allow_inf_nan=False)]
+    list_items: Count
+    opening_sample_chars: Count
+    press_release_marker_index: Count | None
+
+    @model_validator(mode="after")
+    def validate_lengths(self) -> Self:
+        if self.linked_label_chars > self.markdown_chars:
+            raise ValueError("linked labels cannot exceed extracted Markdown")
+        if self.opening_sample_chars > self.markdown_chars:
+            raise ValueError("opening sample cannot exceed extracted Markdown")
+        # JavaScript rounds the binary fraction to two decimal places, with ties upward.
+        density = float(Decimal.from_float(
+            self.linked_label_chars / max(1, self.markdown_chars)
+        ).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP))
+        if self.link_density != density:
+            raise ValueError("link_density must match the rounded character counts")
+        return self
+
+
 class PlannerHarvestObservation(Model):
     """Transient fetch and extraction facts for one admitted candidate."""
 
@@ -117,12 +143,18 @@ class PlannerHarvestObservation(Model):
         default=None, validate_default=False, exclude_if=lambda value: value is None,
         json_schema_extra=_remove_optional_default,
     )
+    content_evidence: ArticleContentEvidence | None = Field(
+        default=None, validate_default=False, exclude_if=lambda value: value is None,
+        json_schema_extra=_remove_optional_default,
+    )
 
     @model_validator(mode="before")
     @classmethod
     def reject_null_preflight(cls, value: object) -> object:
         if isinstance(value, dict) and value.get("preflight_freshness", ...) is None:
             raise ValueError("preflight_freshness must be omitted rather than null")
+        if isinstance(value, dict) and value.get("content_evidence", ...) is None:
+            raise ValueError("content_evidence must be omitted rather than null")
         return value
 
 

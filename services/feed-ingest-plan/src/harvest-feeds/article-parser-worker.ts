@@ -2,7 +2,7 @@
 import { z } from "zod";
 import { extractArticle, ArticleExtractionError } from "./dom-extractor";
 import { ExtractionControlsSchema } from "./extraction-controls";
-import { CountSchema, ExtractionQualitySchema, HarvestDiagnosticsSchema, UrlSchema } from "@idhazh/common-contracts";
+import { ArticleContentEvidenceSchema, CountSchema, ExtractionQualitySchema, HarvestDiagnosticsSchema, UrlSchema } from "@idhazh/common-contracts";
 import { isMainThread } from "node:worker_threads";
 
 export const ArticleParserRequestSchema = z.strictObject({
@@ -22,6 +22,7 @@ export const ArticleParserResponseSchema = z.union([
       article_text: z.string(), word_count: CountSchema, author: z.string().nullable(), page_title: z.string().nullable(),
       paywall: z.boolean().nullable(), paywall_evidence: z.enum(["json-ld", "configured-marker", "none", "not-observed"]),
       warnings: HarvestDiagnosticsSchema.shape.warnings, quality: ExtractionQualitySchema.nullable(),
+      content_evidence: ArticleContentEvidenceSchema.nullable(),
     }),
   }),
   z.strictObject({ id: z.uuid(), phase: z.literal("completed"), ok: z.literal(false),

@@ -3,6 +3,7 @@ import { z } from "zod";
 import { FeedIngestCandidateSchema } from "./candidate.schema";
 import { WriterIdentitySchema } from "./envelope.schema";
 import { HarvestDiagnosticsSchema } from "./harvest-diagnostics.schema";
+import { ArticleContentEvidenceSchema } from "./content-filter-evidence.schema";
 import { DiscoveredArticleRowSchema } from "./discovered-article.schema";
 import { SelectedArticleRowSchema } from "./selected-article.schema";
 import { FeedHealthStateRowSchema } from "./feed-health-state.schema";
@@ -47,6 +48,7 @@ export const PlannerHarvestObservationSchema = z.strictObject({
   extraction: z.enum(["success", "empty", "failed", "not-attempted"]),
   observed_at: TimestampSchema, diagnostics: HarvestDiagnosticsSchema.nullable().default(null),
   preflight_freshness: PreflightFreshnessSchema.optional(),
+  content_evidence: ArticleContentEvidenceSchema.optional(),
 });
 export type PlannerHarvestObservation = z.infer<typeof PlannerHarvestObservationSchema>;
 export const PlannerSeenRowSchema = DiscoveredArticleRowSchema;

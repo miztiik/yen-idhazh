@@ -8,10 +8,11 @@ import { loadPlanInputs } from "../src/load-plan-inputs";
 import { fileURLToPath } from "node:url";
 import { createPlanApp, servePlan } from "../src/api/server";
 import { main } from "../src/index";
-import { recordedPlan } from "./plan-recordings";
-import { FeedHealthStateRowContract, PlanRunRowContract, SelectedArticleRowContract, SelectedArticlesArtifactSchema, selectedArticleMetadata } from "@idhazh/common-contracts";
+import { recordedContentFilterPlan, recordedPlan } from "./plan-recordings";
+import { DiscoveredArticleRowContract, FeedHealthStateRowContract, ParsedFeedBatchSchema, PlanRunRowContract, SelectedArticleRowContract, SelectedArticlesArtifactSchema, selectedArticleMetadata, deriveCandidateId, deriveUrlKey } from "@idhazh/common-contracts";
 import { readPlannerParquet } from "../src/read-ledger-history/read-planner-parquet";
 import { currentExecutionState } from "../src/api/document-state";
+import { stageStore } from "../src/api/stage-store";
 
 const prefix = "/api/2026-10-20";
 const json = (body: unknown) => ({ method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
@@ -246,6 +247,104 @@ test("actual API and awaited CLI compose the same recorded plan and disclose the
     expect(await Promise.all(closedPaths.map(path => readFile(path)))).toEqual(closedBytes);
     expect(await Promise.all(originalPaths.map(path => readFile(path)))).toEqual(originalBytes);
     expect(await Promise.all(selectedPaths.map(path => readFile(path)))).toEqual(selectedBytes);
+    const beforeStandaloneMedia = api.transport.requests.length;
+    const standaloneMedia = await fetch(`${url}/fetch`, json({
+      request_id: randomUUID(), correlation_id: randomUUID(), feed_id: "recorded-news", kind: "article",
+      url: `https://${api.inputs.harvest.config.content_filters.media.url_rules[0]!.host}/watch`,
+    }));
+    expect(standaloneMedia.status).toBe(409);
+    expect(await standaloneMedia.json()).toMatchObject({ code: "ARTICLE_EXCLUDED", issues: [{ field: "url", message: "MEDIA_CONTENT" }] });
+    expect(api.transport.requests.length).toBe(beforeStandaloneMedia);
+    const filtered = await recordedContentFilterPlan();
+    const filteredApp = createPlanApp(filtered.inputs, filtered.runtime);
+    const filteredServer = Bun.serve({ port: 0, hostname: "127.0.0.1", fetch: filteredApp.fetch });
+    try {
+      const filteredUrl = `http://127.0.0.1:${filteredServer.port}${prefix}`;
+      const plannedResponse = await fetch(`${filteredUrl}/plan`, json({}));
+      expect(plannedResponse.status).toBe(200);
+      const planned = await plannedResponse.json();
+      expect(planned.planning_complete).toBe(true);
+      expect(planned.selected_count).toBe(1);
+      expect(planned.selected_url_keys).toEqual([deriveUrlKey("https://news.example/filter-clean")]);
+      expect(filtered.transport.requests.some(request => request.url.href === filtered.mediaUrl)).toBe(false);
+      expect(filtered.transport.requests.some(request => request.url.href === filtered.mimeUrl)).toBe(false);
+      const health = (await Promise.all(planned.files.feed_health_state.files.map((file: { path: string }) =>
+        readPlannerParquet(join(filtered.inputs.outputRoot, file.path), "feed-health-state", FeedHealthStateRowContract)))).flatMap(file => file.rows);
+      expect(health).toHaveLength(1);
+      expect(health[0]).toMatchObject({
+        items: 6, outcome: "ok", feed_reads: 1, productive_reads: 1, failed_reads: 0, article_candidates: 1,
+        articles_selected: 1, feed_requests: 1, article_requests: 4, robots_requests: 1, counts_complete: true,
+      });
+      expect(health[0]!.rejection_counts).toEqual(expect.arrayContaining([
+        { subject: "article", stage: "harvest-feeds", reason_code: "MEDIA_CONTENT", attribution: null, count: 2 },
+        { subject: "article", stage: "screen-article-candidates", reason_code: "PRESS_RELEASE", attribution: null, count: 1 },
+        { subject: "article", stage: "screen-article-candidates", reason_code: "LINK_HEAVY", attribution: null, count: 2 },
+      ]));
+      expect(health[0]!.rejection_counts).toHaveLength(3);
+      expect(health[0]!.feed_requests! + health[0]!.article_requests! + health[0]!.robots_requests!)
+        .toBe(filtered.transport.requests.length);
+      const seen = (await Promise.all(planned.files.discovered_articles.files.map((file: { path: string }) =>
+        readPlannerParquet(join(filtered.inputs.outputRoot, file.path), "discovered-articles", DiscoveredArticleRowContract)))).flatMap(file => file.rows);
+      expect(seen).toHaveLength(6);
+      expect(seen.every(row => row.first_seen_at === "2026-10-21T23:59:59Z")).toBe(true);
+      const selectedArtifact = SelectedArticlesArtifactSchema.parse(await Bun.file(join(filtered.directory, planned.selected_articles_artifact)).json());
+      expect(selectedArtifact.articles[0]).toMatchObject({
+        canonical_url: "https://news.example/filter-clean", published_at_source: "selection",
+        timing_basis: "first_seen", age_hours: 0,
+      });
+      expect(selectedArtifact.articles[0]!.article_text).not.toContain("exfil.example");
+      expect(selectedArtifact.articles[0]!.article_text).not.toContain("im_start");
+      const plannedBatch = stageStore(filtered.inputs).read("parsed", planned.batches.parsed_batch_id, ParsedFeedBatchSchema);
+      expect(plannedBatch.candidates.map(candidate => candidate.entry_ordinal)).toEqual([2, 3, 4, 5]);
+      for (const observation of Object.values(plannedBatch.observations)) {
+        expect(observation.content_evidence).toBeDefined();
+        expect(Object.values(observation.content_evidence!).every(value => typeof value === "number" || value === null)).toBe(true);
+      }
+      const correlation = randomUUID();
+      const fetchedKey = randomUUID();
+      const feed = await (await fetch(`${filteredUrl}/fetch`, json({
+        request_id: fetchedKey, correlation_id: correlation, feed_id: "recorded-news", kind: "feed",
+      }))).json();
+      const offers = await (await fetch(`${filteredUrl}/parse`, json({
+        request_id: randomUUID(), fetch_request_id: fetchedKey, article_id: feed.article_id, correlation_id: correlation,
+      }))).json();
+      expect(offers.parsed_count).toBe(6);
+      expect(offers.failure).toBeNull();
+      expect(offers.offers[0].title).toBeNull();
+      for (const [index, offer] of offers.offers.entries()) {
+        expect(offer.offer_id).toBe(deriveCandidateId(offers.run_id, "recorded-news", index));
+        const key = randomUUID();
+        const before = filtered.transport.requests.length;
+        const response = await fetch(`${filteredUrl}/fetch`, json({
+          request_id: key, correlation_id: correlation, feed_id: "recorded-news", kind: "article",
+          batch_id: offers.batch_id, offer_id: offer.offer_id,
+        }));
+        if (index < 2) {
+          expect(response.status).toBe(409);
+          expect(await response.json()).toMatchObject({ code: "ARTICLE_EXCLUDED", issues: [{ field: "offer_id", message: "MEDIA_CONTENT" }] });
+          expect(filtered.transport.requests.length).toBe(before);
+          continue;
+        }
+        expect(response.status).toBe(200);
+        const fetched = await response.json();
+        const beforeParse = filtered.transport.requests.length;
+        const parsedResponse = await fetch(`${filteredUrl}/parse`, json({
+          request_id: randomUUID(), fetch_request_id: key, article_id: fetched.article_id, correlation_id: correlation,
+        }));
+        expect(parsedResponse.status).toBe(200);
+        expect(await parsedResponse.json()).toMatchObject({ batch_id: offers.batch_id, parsed_count: 1, failure: null });
+        expect(filtered.transport.requests.length).toBe(beforeParse);
+      }
+      const chosenResponse = await fetch(`${filteredUrl}/select-articles`, json({ batch_id: offers.batch_id }));
+      expect(chosenResponse.status).toBe(200);
+      const chosen = await chosenResponse.json();
+      expect(chosen.articles.map((article: { url_key: string }) => article.url_key)).toEqual(planned.selected_url_keys);
+      const stageHealth = await (await fetch(`${filteredUrl}/feed-health-state`, json({ batch_id: chosen.batch_id }))).json();
+      expect(stageHealth.rows[0]).toMatchObject({
+        items: 6, outcome: "ok", failed_reads: 0, productive_reads: 1, article_requests: 4, article_candidates: 1,
+      });
+      expect(stageHealth.rows[0].rejection_counts).toEqual(health[0]!.rejection_counts);
+    } finally { await filteredServer.stop(true); filteredApp.close(); await filtered.close(); }
   } finally { await server.stop(true); app.close(); await api.close(); await cli.close(); }
 });
 

@@ -15,7 +15,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { z } from "zod";
 import { canonicalizeUrl } from "../src/harvest-feeds/url-cleaner";
-import { matchMediaOffer } from "../src/harvest-feeds/media-filter";
+import { matchMediaArticle, matchMediaOffer } from "../src/harvest-feeds/media-filter";
+import { harvestArticle } from "../src/harvest-feeds/harvest-article";
+import { sourceSnapshot } from "../src/harvest-feeds/load-harvest-inputs";
 
 test("recorded sanitizer vectors match sanitizer-3, keep prose and are idempotent", async () => {
   const fixture = await readSafety();
@@ -45,6 +47,7 @@ test("literal, encoded and named unsafe addresses fail before transport", async 
       offered: z.string(), failure: z.enum(["unsafe-target", "robots-denied", "robots-unknown"]),
       requests: z.array(z.string()),
     })),
+    media: z.array(z.object({ offered: z.string(), canonical_url: z.string(), excluded: z.boolean() })),
   }).parse(await Bun.file(new URL(
     "../../../tests/fixtures/feed-ingest-plan/harvest-url-cleanup.json", import.meta.url,
   )).json());
@@ -65,6 +68,26 @@ test("literal, encoded and named unsafe addresses fail before transport", async 
       { transport, resolve: transport.resolve }).fetch(vector.offered);
     expect(result.failure, vector.offered).toBe(vector.failure);
     expect(transport.requests.map(request => request.url.href)).toEqual(vector.requests);
+  }
+  for (const vector of fixture.media) {
+    const transport = new RecordedTransport(await readRecordings());
+    const identity = canonicalizeUrl(vector.offered);
+    expect(identity.canonical_url).toBe(vector.canonical_url);
+    const matched = matchMediaArticle(vector.offered, identity.canonical_url, [], loaded.config);
+    expect(matched !== null).toBe(vector.excluded);
+    const article = await harvestArticle({
+      source: sourceSnapshot(loaded, loaded.sources[0]!),
+      entry: { entry_ordinal: 0, title: null, link: vector.offered, categories: [], author: null, published_at: null },
+    }, loaded, createPermittedFetcher(loaded.config.harvest, loaded.extraction, { transport, resolve: transport.resolve }), context());
+    if (vector.excluded) {
+      expect(article.rejection).toMatchObject({
+        drop_reason: "MEDIA_CONTENT", canonical_url: vector.canonical_url, url_key: identity.url_key, title: null,
+      });
+      expect(transport.requests).toEqual([]);
+    } else {
+      expect(article.candidate).toMatchObject({ canonical_url: vector.canonical_url, url_key: identity.url_key });
+      expect(transport.requests.at(-1)?.url.href).toBe("https://news.example/second");
+    }
   }
   const vector = fixture.allowed[0]!;
   const recordings = await readRecordings();

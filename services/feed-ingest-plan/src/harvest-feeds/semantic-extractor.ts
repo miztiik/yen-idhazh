@@ -2,6 +2,8 @@
 import { parseHTML } from "linkedom";
 import { sanitizeText } from "./sanitize-text";
 import type { ExtractionControls } from "./extraction-controls";
+import TurndownService from "turndown";
+import { sanitizeDomText } from "./sanitize-dom";
 
 type SemanticControls = ExtractionControls["semantic_fallback"];
 
@@ -29,7 +31,7 @@ function readText(element: HTMLElement): string {
   return sanitizeText(element.innerText ?? element.textContent ?? "").replace(/\n+/gu, "\n\n");
 }
 
-export function extractSemanticContent(html: string, config: SemanticControls): string {
+export function extractSemanticArticle(html: string, config: SemanticControls) {
   const { document } = parseHTML(html);
   for (const selector of config.remove_elements) {
     for (const node of document.querySelectorAll(selector)) node.remove();
@@ -41,11 +43,11 @@ export function extractSemanticContent(html: string, config: SemanticControls): 
     if (root) break;
   }
   root ??= document.body;
-  if (!root) return "";
+  if (!root) return { article_text: "", markdown: "" };
   const selector = config.paragraph_elements.join(",");
   const nodes = [...root.querySelectorAll<HTMLElement>(selector)];
   if (root.matches(selector)) nodes.unshift(root);
-  const paragraphs = new Set<string>();
+  const paragraphs = new Map<string, HTMLElement>();
   for (const node of nodes) {
     let parent = node.parentElement;
     let nested = false;
@@ -56,7 +58,16 @@ export function extractSemanticContent(html: string, config: SemanticControls): 
     }
     if (nested) continue;
     const text = readText(node);
-    if (text && text.replace(/\s+/gu, " ").length >= config.min_paragraph_chars) paragraphs.add(text);
+    if (text && text.replace(/\s+/gu, " ").length >= config.min_paragraph_chars && !paragraphs.has(text)) paragraphs.set(text, node);
   }
-  return [...paragraphs].join("\n\n");
+  const retained = parseHTML(`<html><body>${[...paragraphs.values()].map(node => node.outerHTML).join("\n")}</body></html>`).document;
+  sanitizeDomText(retained);
+  return {
+    article_text: [...paragraphs.keys()].join("\n\n"),
+    markdown: new TurndownService().turndown(retained.body.innerHTML),
+  };
+}
+
+export function extractSemanticContent(html: string, config: SemanticControls): string {
+  return extractSemanticArticle(html, config).article_text;
 }

@@ -20,8 +20,9 @@ import { canonicalizeUrl, InvalidArticleUrlError } from "../src/harvest-feeds/ur
 import { createPinnedDispatcher, readResponseBody } from "../src/harvest-feeds/transport";
 import { addAbortSignal, PassThrough, Readable } from "node:stream";
 import { createGunzip, gzipSync } from "node:zlib";
-import { RecordedTransport, context, inputs, readRecordings, source } from "./harvest-recordings";
+import { RecordedTransport, contentFilterPage, context, inputs, readContentFilters, readRecordings, source } from "./harvest-recordings";
 import { recordHarvestObservations } from "./observation-recordings";
+import { excludeArticleContent } from "../src/screen-article-candidates/content-filters";
 
 function expectFeedParseObservations(facts: readonly DocumentWorkFact[], parsedSources: readonly string[]) {
   const parsed = facts.filter(fact => fact.document_kind === "feed" && fact.operation === "parse" && fact.outcome !== "not_attempted");
@@ -345,12 +346,12 @@ test("real inert DOM extraction retains prose and author but never calls a page 
     boilerplate: null, contaminated: null, failure_code: null, rejected: false,
     extractor_version: EXTRACTOR_VERSION, sanitizer_version: SANITIZER_FINGERPRINT,
   });
-  expect(EXTRACTOR_VERSION).toMatch(/^defuddle-0\.19\.5-linkedom-0\.18\.13-idhazh-[a-f0-9]{64}$/);
+  expect(EXTRACTOR_VERSION).toMatch(/^defuddle-0\.19\.5-linkedom-0\.18\.13-turndown-7\.2\.4-bun-[\w.-]+-idhazh-[a-f0-9]{64}$/);
   expect(SANITIZER_FINGERPRINT).toMatch(/^idhazh-typescript-sanitizer-3-[a-f0-9]{64}$/);
   const implementation = createHash("sha256");
   for (const name of [
     "dom-extractor.ts", "corroborated-words.ts", "extraction-quality.ts", "extraction-controls.ts",
-    "parse-document.ts", "extraction-provenance.ts", "semantic-extractor.ts",
+    "parse-document.ts", "extraction-provenance.ts", "semantic-extractor.ts", "sanitize-dom.ts", "content-evidence.ts",
   ]) {
     implementation.update(name).update("\0").update(
       (await Bun.file(new URL(`../src/harvest-feeds/${name}`, import.meta.url)).text()).replace(/\r\n/g, "\n"),
@@ -492,6 +493,25 @@ test("real inert DOM extraction retains prose and author but never calls a page 
   expect(shortRecovered.article_text).not.toContain("METADATA_ONLY");
   expect(shortRecovered.word_count).toBeLessThan(controls.min_source_words);
   expect(shortRecovered.quality).toMatchObject({ too_short: true, not_prose: false, rejected: true });
+  const cases = await readContentFilters();
+  const filterConfig = (await inputs()).config.content_filters;
+  for (const entry of cases.article_cases) {
+    const body = contentFilterPage(bodies.article, entry, cases.list_prose);
+    for (const min_source_words of [controls.min_source_words, 10000]) {
+      const parsed = await extractArticle(body, `https://news.example/${entry.path}`, { ...controls, min_source_words }, "abstract");
+      expect(parsed.quality?.rejected, entry.path).toBe(false);
+      expect(parsed.content_evidence, entry.path).not.toBeNull();
+      expect(excludeArticleContent(parsed.content_evidence!, parsed.word_count, filterConfig)?.drop_reason ?? null, entry.path).toBe(entry.reason);
+      expect(parsed.article_text).not.toContain("references.example");
+      expect(parsed.article_text).not.toContain("exfil.example");
+      expect(parsed.article_text).not.toContain("im_start");
+      if (entry.mode === "links") expect(parsed.content_evidence!.link_density).toBeGreaterThan(filterConfig.link_heavy.max_link_density);
+      if (entry.mode === "list") {
+        expect(parsed.content_evidence!.list_items).toBe(cases.list_prose.length);
+        expect(parsed.word_count).toBeLessThan(filterConfig.link_heavy.list_word_limit);
+      }
+    }
+  }
 });
 
 test("URL identity uses discovery sorting, tracking removal and shared hashing", () => {

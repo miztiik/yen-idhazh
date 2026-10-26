@@ -12,7 +12,10 @@ import type { ScreeningInput } from "../src/screen-article-candidates/triage-gat
 import { indexSeenEvidence, SeenRowSchema } from "../src/screen-article-candidates/seen-evidence";
 import {
   RecordedTransport, context, inputs as harvestInputs, readRecordings, source as recordedSource,
+  readContentFilters,
 } from "./harvest-recordings";
+import { measureArticleContent } from "../src/harvest-feeds/content-evidence";
+import { excludeArticleContent } from "../src/screen-article-candidates/content-filters";
 
 const fixtureUrl = new URL("../../../tests/fixtures/feed-ingest-plan/screening-cases.json", import.meta.url);
 const seenUrl = new URL("../../../tests/fixtures/feed-ingest-plan/seen-evidence.json", import.meta.url);
@@ -101,6 +104,83 @@ test("recorded word, blocking, precedence and exact freshness boundaries", async
     if (entry.name === "one second past cutoff") expect(result.rejections[0]?.details.age_hours).toBeCloseTo(24 + 1 / 3600, 10);
   }
   expect(input).toEqual(before);
+  const filters = await readContentFilters();
+  const config = input.planning.config.content_filters;
+  for (const entry of filters.density_cases) {
+    const link = `[${"x".repeat(entry.label_chars)}](https://references.example/evidence)`;
+    const markdown = link.padEnd(entry.markdown_chars, " ");
+    const measured = measureArticleContent(markdown, config.press_release);
+    expect(measured).toMatchObject({
+      markdown_chars: entry.markdown_chars, linked_label_chars: entry.label_chars, link_density: entry.density,
+    });
+    expect(excludeArticleContent(measured, candidate.word_count, config)?.drop_reason ?? null, entry.name)
+      .toBe(entry.excluded ? "LINK_HEAVY" : null);
+    expect(excludeArticleContent(measured, candidate.word_count, {
+      ...config, link_heavy: { ...config.link_heavy, enabled: false },
+    })).toBeNull();
+    expect(excludeArticleContent(measured, candidate.word_count, {
+      ...config, link_heavy: { ...config.link_heavy, max_link_density: entry.density },
+    })).toBeNull();
+  }
+  for (const entry of filters.list_cases) {
+    const measured = measureArticleContent(Array.from({ length: entry.items }, (_, index) => `- Item ${index}`).join("\n"), config.press_release);
+    expect(measured.list_items).toBe(entry.items);
+    expect(excludeArticleContent(measured, entry.words, config)?.drop_reason ?? null, entry.name)
+      .toBe(entry.excluded ? "LINK_HEAVY" : null);
+    const article = {
+      ...candidate, article_text: candidate.article_text.split(/\s+/u).slice(0, entry.words).join(" "), word_count: entry.words,
+    };
+    for (const form of ["article", "abstract"] as const) {
+      const screened = await screenArticleCandidates({
+        ...input, candidates: [{ ...article, source: { ...article.source, form } }],
+        observations: { [article.candidate_id]: { ...observation, content_evidence: measured } },
+      });
+      expect(screened.rejections[0]?.drop_reason ?? null).toBe(entry.excluded ? "LINK_HEAVY" : form === "article" ? "STUB_CONTENT" : null);
+    }
+    expect(excludeArticleContent(measured, entry.words, {
+      ...config, link_heavy: { ...config.link_heavy, max_list_items: entry.items },
+    })).toBeNull();
+    expect(excludeArticleContent(measured, entry.words, {
+      ...config, link_heavy: { ...config.link_heavy, list_word_limit: entry.words },
+    })).toBeNull();
+  }
+  for (const entry of filters.markdown_cases) {
+    const measured = measureArticleContent(entry.markdown, config.press_release);
+    expect(measured.linked_label_chars, entry.name).toBe(entry.linked_label_chars);
+    expect(measured.list_items, entry.name).toBe(entry.list_items);
+    expect(Object.values(measured).every(value => typeof value === "number" || value === null)).toBe(true);
+  }
+  for (const [index, marker] of config.press_release.markers.entries()) {
+    const measured = measureArticleContent(`${marker.toLowerCase()}. ${candidate.article_text}`, config.press_release);
+    expect(measured.press_release_marker_index).toBe(index);
+    expect(excludeArticleContent(measured, candidate.word_count, config)?.drop_reason).toBe("PRESS_RELEASE");
+    expect(excludeArticleContent(measured, candidate.word_count, {
+      ...config, press_release: { ...config.press_release, enabled: false },
+    })).toBeNull();
+    const beyond = measureArticleContent(`${" ".repeat(config.press_release.sample_chars)}${marker}`, config.press_release);
+    expect(beyond.press_release_marker_index).toBeNull();
+    expect(measureArticleContent(`X${marker}X`, config.press_release).press_release_marker_index).toBeNull();
+    const edge = measureArticleContent(`${" ".repeat(config.press_release.sample_chars - marker.length)}${marker}`, config.press_release);
+    expect(edge.press_release_marker_index).toBe(index);
+    expect(measureArticleContent(`${" ".repeat(config.press_release.sample_chars - marker.length + 1)}${marker}`, config.press_release).press_release_marker_index).toBeNull();
+  }
+  expect(excludeArticleContent(undefined, candidate.word_count, config)).toBeNull();
+  const customPress = { ...config.press_release, markers: ["Recorded announcement"] };
+  expect(measureArticleContent("Recorded announcement.", customPress).press_release_marker_index).toBe(0);
+  expect(measureArticleContent("Recorded announcement.", { ...customPress, sample_chars: 1 }).press_release_marker_index).toBeNull();
+  const competing = measureArticleContent(`${config.press_release.markers[0]} [${"x".repeat(600)}](https://references.example/evidence)`, config.press_release);
+  for (const [paywall, categories, reason] of [
+    [true, [], "PAYWALL_OR_BLOCKED"],
+    [false, [input.planning.config.harvest.blocked_categories[0]!], "CATEGORY_EXCLUDED"],
+    [false, [], "PRESS_RELEASE"],
+  ] as const) {
+    const screened = await screenArticleCandidates({
+      ...input, candidates: [{ ...candidate, categories: [...categories], word_count: 1, article_text: "Article." }],
+      observations: { [candidate.candidate_id]: { ...observation, paywall, content_evidence: competing } },
+    });
+    expect(screened.rejections).toHaveLength(1);
+    expect(screened.rejections[0]?.drop_reason).toBe(reason);
+  }
 });
 
 test("global and run policies change only their declared gates for every feed", async () => {
