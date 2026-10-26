@@ -388,6 +388,11 @@ class StoryChartGeometryConfig(Model):
     line_axis_margin_left_px: int = Field(default=48, ge=32, le=96)
     line_axis_margin_top_px: int = Field(default=24, ge=16, le=64)
     line_width_px: float = Field(default=2.0, gt=0.0, le=5.0)
+    scatter_height_px: int = Field(default=220, ge=160, le=400)
+    scatter_margin_left_px: int = Field(default=56, ge=32, le=96)
+    scatter_margin_right_px: int = Field(default=24, ge=16, le=64)
+    scatter_margin_top_px: int = Field(default=32, ge=24, le=64)
+    scatter_margin_bottom_px: int = Field(default=48, ge=32, le=96)
     line_series_dash_arrays: tuple[str, ...] = Field(
         default=(
             "none",

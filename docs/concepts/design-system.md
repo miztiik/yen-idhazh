@@ -92,6 +92,16 @@ Apply `--measure` once to the block holding title and summary, at the prose size
 
 Draw against the actual content width in CSS pixels. Do not shrink a wide drawing until its labels are unreadable. Reserve the figure's dimensions to avoid layout shifts; choose a simpler layout when the available width cannot hold its labels.
 
+Fit the complete story figure to the visible viewport where readable content
+allows it. Measure wrapped framing, readings, spacing and any sticky filter band;
+do not resize as the reader scrolls. Bar and dot rows keep their content height.
+Line, scatter and slope plots take the remaining room, bounded below by their
+text and mark clearance, not a fixed density or chart-height budget. If the
+complete figure cannot fit, it continues in normal page flow. Never shrink text,
+clip facts, add an inner scroll area or remove a supported family to fit it.
+The [chart rationale](../architecture/publishing/how-a-story-chart-is-drawn-and-what-refuses-one.md#design-rationale)
+records the approved trade-off and replaces the inherited undefined density rule.
+
 Every SVG text string on a reader chart must resolve to at least `--text-xs`,
 with one drawn unit equal to one CSS pixel. The reader browser gate checks
 this on the canary day at 390 CSS pixels, including the figure's content width,
@@ -107,6 +117,9 @@ A chart shows its title above the marks and its optional caption below them.
 Both are untrusted text, never markup. Exactly one selected measured mark takes
 the second chart token and a visible outline; colour is not its only cue.
 Neither emphasis nor framing changes the values or their order.
+Bars rank by numeric value, largest first, with original order for equal values.
+The full row and accessible reading order move together, including source values
+and emphasis. Other chart families keep their own semantic order.
 The accessible name includes the framing, the highlighted bar and original
 source figures for converted values. Missing framing takes no reserved space.
 The [chart contract](../architecture/publishing/where-a-drawing-becomes-pixels.md#design-rationale)

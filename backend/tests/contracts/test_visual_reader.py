@@ -84,3 +84,20 @@ def test_slope_reader_rejects_duplicate_series_names_without_entities() -> None:
     data["marks"][7]["text"] = data["marks"][6]["text"]
     with pytest.raises(ValidationError, match="distinct series labels"):
         VisualData.model_validate(data)
+
+
+@pytest.mark.parametrize("change", ["missing-x", "missing-entity", "duplicate-entity"])
+def test_scatter_reader_requires_every_entity_and_both_measures(change: str) -> None:
+    data = VisualData.read(
+        CONTRACT_FIXTURES_DIR / "visual-data/scatter-relationship.json"
+    ).model_dump(mode="json")
+    if change == "duplicate-entity":
+        held = {mark["mark_id"]: mark for mark in data["marks"]}
+        entities = data["encoding"]["entity"]
+        held[entities[1]]["element_id"] = held[entities[0]]["element_id"]
+    else:
+        role = "quantity_x" if change == "missing-x" else "entity"
+        dropped = data["encoding"][role].pop()
+        data["marks"] = [mark for mark in data["marks"] if mark["mark_id"] != dropped]
+    with pytest.raises(ValidationError, match="scatter"):
+        VisualData.model_validate(data)

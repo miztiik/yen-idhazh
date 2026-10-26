@@ -45,10 +45,8 @@
 	 * token says and what a reader sees. Before this the drawing was laid out at
 	 * a fixed 720 units and stretched to fit, so a `--text-xs` string resolved at
 	 * 4.8 CSS px on a 390 px phone - the right size in a coordinate space nobody
-	 * reads. Height follows the displayed rows and labelled bands, never the
-	 * width, so the figure is its final height from the frame the marks land in
-	 * and the story cannot shift as it is read; that is the promise the `viewBox`
-	 * used to keep by holding an aspect ratio.
+	 * reads. Height follows readable content and the visible viewport, not a
+	 * fixed canvas or density budget. A short viewport uses normal page scrolling.
 	 */
 	import { base } from '$app/paths';
 	import { navigating } from '$app/state';
@@ -58,7 +56,7 @@
 	import { whenNear } from '$lib/reveal';
 	import type { StoryChartGeometryConfig } from '$lib/server/config';
 	import { drawVisual, statedDrawing, type Drawing } from '$lib/visual/bar';
-	import { whenWide } from '$lib/visual/width';
+	import { fitChartGeometry, fitChartTicks, whenChartFits, type ChartRoom } from '$lib/visual/viewport';
 
 	let {
 		visual,
@@ -89,10 +87,15 @@
 	let settled = $state<string | null>(null);
 	/** How much room the card gives the drawing, or 0 before it has been measured. */
 	let room = $state(0);
+	let chartRoom = $state<ChartRoom | null>(null);
 	const currentLoad = $derived(loaded?.file === wanted ? loaded.data : null);
+	const fittedGeometry = $derived(currentLoad && chartRoom
+		? fitChartGeometry(currentLoad, storyChartGeometry, chartRoom) : storyChartGeometry);
+	const fittedTicks = $derived(currentLoad && chartRoom
+		? fitChartTicks(currentLoad, fittedGeometry, chartRoom.textHeight, chartTickDensity) : chartTickDensity);
 	const drawing = $derived<Drawing | null>(
 		currentLoad && room > 0
-			? drawVisual(currentLoad, room, formatNumber, numberFormat, chartTickDensity, storyChartGeometry)
+			? drawVisual(currentLoad, room, formatNumber, numberFormat, fittedTicks, fittedGeometry)
 			: null
 	);
 	/** Every figure the bars are drawn at, in one sentence, for a reader who is
@@ -190,11 +193,15 @@
 	 * The figure is measured rather than the svg inside it, because the figure's
 	 * width does not depend on what it holds - so the reading is stable on the
 	 * frame the marks land in, before a mark is placed. Every chart on the page
-	 * shares one watcher, which lives in `$lib/visual/width`.
+	 * shares one watcher. Scrolling never changes this measurement.
 	 */
 	function measured(node: Element): { destroy: () => void } {
-		const forget = whenWide(node, (wide) => {
-			room = wide;
+		const forget = whenChartFits(node, (next) => {
+			room = next.width;
+			if (!chartRoom || chartRoom.width !== next.width ||
+				chartRoom.height !== next.height || chartRoom.textHeight !== next.textHeight) {
+				chartRoom = next;
+			}
 		});
 		return { destroy: forget };
 	}
@@ -339,6 +346,41 @@
 							{drawing.unit}
 						</text>
 					{/if}
+				{:else if drawing.type === 'scatter'}
+					{#each drawing.y.ticks as tick (tick.value)}
+						<line class="grid" stroke-width={storyChartGeometry.axis_line_width_px}
+							x1={drawing.frame.left} x2={drawing.frame.right} y1={tick.at} y2={tick.at} />
+						{#if tick.text}
+							<text class="figure value-tick" text-anchor="end"
+								x={drawing.frame.left - storyChartGeometry.value_gap_px} y={tick.at}>{tick.text}</text>
+						{/if}
+					{/each}
+					<line class="axis" stroke-width={storyChartGeometry.axis_line_width_px}
+						x1={drawing.frame.left} x2={drawing.frame.right}
+						y1={drawing.frame.bottom} y2={drawing.frame.bottom} />
+					<line class="axis" stroke-width={storyChartGeometry.axis_line_width_px}
+						x1={drawing.frame.left} x2={drawing.frame.left}
+						y1={drawing.frame.top} y2={drawing.frame.bottom} />
+					{#each drawing.x.ticks as tick (tick.value)}
+						{#if tick.text}
+							<text class="figure value-tick" text-anchor="middle"
+								x={tick.at} y={drawing.frame.bottom + storyChartGeometry.axis_label_offset_px}>{tick.text}</text>
+						{/if}
+					{/each}
+					<text class="unit" x={drawing.frame.left} y={drawing.frame.top / 2}>
+						y{drawing.yUnit ? ` (${drawing.yUnit})` : ''}
+					</text>
+					<text class="unit" text-anchor="end" x={drawing.frame.right}
+						y={drawing.height - storyChartGeometry.value_gap_px}>
+						x{drawing.xUnit ? ` (${drawing.xUnit})` : ''}
+					</text>
+					{#each drawing.points as point (point.label)}
+						<circle class="scatter-point" class:emphasized={point.emphasized}
+							stroke-width={storyChartGeometry.mark_outline_width_px}
+							cx={point.cx} cy={point.cy} r={storyChartGeometry.dot_radius_px}>
+							<title>{point.label}: x {point.statedX} {drawing.xUnit ?? ''}, y {point.statedY} {drawing.yUnit ?? ''}</title>
+						</circle>
+					{/each}
 				{:else}
 					<text class="column-label" text-anchor="middle" x={drawing.leftX} y={storyChartGeometry.slope_header_band_px / 2}>
 						{drawing.leftLabel}
@@ -387,7 +429,17 @@
 					{/if}
 				{/if}
 			</svg>
-			{#if drawing.type === 'slope'}
+			{#if drawing.type === 'scatter'}
+				<ul class="scatter-readings px-3 pb-3 text-xs leading-normal text-text-secondary">
+					{#each drawing.points as point (point.label)}
+						<li class:highlighted={point.emphasized}>
+							<span class="font-semibold text-text">{point.label}</span>:
+							x {point.displayedX}{drawing.xUnit ? ` ${drawing.xUnit}` : ''},
+							y {point.displayedY}{drawing.yUnit ? ` ${drawing.yUnit}` : ''}
+						</li>
+					{/each}
+				</ul>
+			{:else if drawing.type === 'slope'}
 				<ul class="slope-legend px-3">
 					{#each drawing.slopes as slope (slope.color)}
 						<li>
@@ -501,6 +553,26 @@
 
 	.dot {
 		fill: var(--chart-1);
+	}
+
+	.scatter-point {
+		fill: var(--chart-1);
+		stroke: var(--color-surface);
+	}
+
+	.scatter-point.emphasized {
+		fill: var(--chart-2);
+		stroke: var(--color-text);
+		stroke-dasharray: var(--space-1);
+	}
+
+	.scatter-readings {
+		list-style: none;
+	}
+
+	.scatter-readings .highlighted {
+		font-weight: var(--font-weight-semibold);
+		color: var(--color-text);
 	}
 
 	.dot.emphasized,

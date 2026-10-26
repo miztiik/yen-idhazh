@@ -499,6 +499,11 @@ export interface StoryChartGeometryConfig {
 	line_axis_margin_left_px: number;
 	line_axis_margin_top_px: number;
 	line_width_px: number;
+	scatter_height_px: number;
+	scatter_margin_left_px: number;
+	scatter_margin_right_px: number;
+	scatter_margin_top_px: number;
+	scatter_margin_bottom_px: number;
 	line_series_dash_arrays: readonly string[];
 }
 
@@ -557,6 +562,11 @@ const DEFAULTS: UiConfig = {
 		line_axis_margin_left_px: 48,
 		line_axis_margin_top_px: 24,
 		line_width_px: 2,
+		scatter_height_px: 220,
+		scatter_margin_left_px: 56,
+		scatter_margin_right_px: 24,
+		scatter_margin_top_px: 32,
+		scatter_margin_bottom_px: 48,
 		line_series_dash_arrays: [
 			'none',
 			'8 4',

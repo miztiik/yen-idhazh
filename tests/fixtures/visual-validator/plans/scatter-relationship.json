@@ -1,0 +1,60 @@
+{
+  "annotations": [
+    "quantity-100-106"
+  ],
+  "caption": "Each point pairs a country's capacity on x with its output on y.",
+  "confidence": 0.82,
+  "decision": "visual",
+  "element_ids": [
+    "entity-0-7",
+    "entity-59-66",
+    "entity-118-124",
+    "entity-175-182",
+    "quantity-17-24",
+    "quantity-76-83",
+    "quantity-134-140",
+    "quantity-192-199",
+    "quantity-41-47",
+    "quantity-100-106",
+    "quantity-157-163",
+    "quantity-216-222"
+  ],
+  "encodings": {
+    "bins": [],
+    "category": [],
+    "entity": [
+      "entity-0-7",
+      "entity-59-66",
+      "entity-118-124",
+      "entity-175-182"
+    ],
+    "event_label": [],
+    "quantity": [
+      "quantity-41-47",
+      "quantity-100-106",
+      "quantity-157-163",
+      "quantity-216-222"
+    ],
+    "quantity_x": [
+      "quantity-17-24",
+      "quantity-76-83",
+      "quantity-134-140",
+      "quantity-192-199"
+    ],
+    "series": [],
+    "size": [],
+    "time": []
+  },
+  "labels": [
+    "entity-0-7",
+    "entity-59-66",
+    "entity-118-124",
+    "entity-175-182"
+  ],
+  "plan_version": "2026-09-09",
+  "purpose": "relationship",
+  "title": "Capacity and output",
+  "type": "scatter",
+  "version": "2026-09-09T03:11",
+  "why": "Compare two measures over the same countries."
+}
