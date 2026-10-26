@@ -35,7 +35,8 @@ test('published flat and nested ledgers absent from the build are not weighed, a
 		.filter((key) => key.startsWith('state/compact/feed-ingest-plan/')).sort();
 	const planner = configuredCatalog.families.find((family) => family.name === 'feed-ingest-plan');
 	if (planner === undefined) throw new Error('The current planner family must be registered');
-	expect(plannerCaps).toEqual(planner.ledgers.map((entry) => `state/compact/${entry.prefix}/index/`).sort());
+	const registered = planner.ledgers.map((entry) => `state/compact/${entry.prefix}/index/`);
+	expect(plannerCaps.filter((key) => !registered.includes(key))).toEqual([]);
 	const build = aBuildTree({
 		'state/compact/seen/index/daily.json': 'daily',
 		'state/compact/seen/index/monthly.json': 'monthly',
