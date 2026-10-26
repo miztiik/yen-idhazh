@@ -98,7 +98,7 @@ this plan does not restore historical redraw or migration machinery.
 | 2 | Position and length: bar, dot, slope | 1 | B | DONE | supreme-sniffle / chart-position-and-length | #1738 | Copilot session 6c107b16-1860-4e47-9bba-c8b401dd96e7 |
 | 3 | Trend and magnitude: line, area | 2 | C | DONE | chart-trend-magnitude-row-3 | #1741 | - |
 | 4 | Relationship: scatter | 3 | D | DONE | chart-relationship-scatter | #1742 | - |
-| 5 | Parts as bars: stacked_bar, with its own question | 4 | E | PENDING | - | - | - |
+| 5 | Parts as bars: stacked_bar, with its own question | 4 | E | DONE | chart-vocabulary-row-5 | #1749 | - |
 | 6 | The two the reader asked for | 5 | F | PENDING | - | - | - |
 
 Row 1 is authorised and in flight under the
