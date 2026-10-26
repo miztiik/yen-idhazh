@@ -168,7 +168,7 @@ def _build[C: LedgerContract](
     """
     unreadable: list[str] = []
 
-    def groups(months: Sequence[str]) -> Iterator[list[LedgerStoredRow[C]]]:
+    def groups(months: Sequence[str]) -> Iterator[list[LedgerStoredRow]]:
         for month in months:
             try:
                 rows = tree.load(held[month], model=model)

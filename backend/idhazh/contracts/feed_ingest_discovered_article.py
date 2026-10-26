@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any, ClassVar, Self
+from typing import Any, ClassVar, Final, Literal, Self
 
 from pydantic import ConfigDict, model_validator
 
@@ -17,7 +17,7 @@ from idhazh.contracts.base import (
 )
 from idhazh.contracts.recorded_instant import RecordedInstant
 
-PLANNER_LEDGER_VERSION = "2026-10-25"
+PLANNER_LEDGER_VERSION: Final[Literal["2026-10-25"]] = "2026-10-25"
 
 
 class PlannerModel(Model):

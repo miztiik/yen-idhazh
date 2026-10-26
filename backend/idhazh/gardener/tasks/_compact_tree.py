@@ -148,11 +148,11 @@ class PeriodFetch(NamedTuple):
 
 
 @dataclass(frozen=True, slots=True)
-class RawDay[C: LedgerContract]:
+class RawDay:
     """One raw day as a pass reads it, before it decides anything about the day."""
 
     #: Each file the day is built from, oldest first, beside its rows.
-    taken: list[tuple[Path, list[LedgerStoredRow[C]]]]
+    taken: list[tuple[Path, list[LedgerStoredRow]]]
     #: Each file this build cannot read, for the pass to move aside.
     unreadable: list[Path]
     #: How many readable files wait in the folder, past the most one period is built from.
@@ -426,12 +426,12 @@ class CompactTree:
         first = ledger.compact_path(self.state_dir, self.ledger, Period.MONTHLY, f"{year}-01")
         return first.parent
 
-    def load[C: LedgerContract](self, path: Path, *, model: type[C]) -> list[LedgerStoredRow[C]]:
+    def load[C: LedgerContract](self, path: Path, *, model: type[C]) -> list[LedgerStoredRow]:
         """One ledger file's rows beside their identity, read as the pass decides."""
         self.looked.add(path)
-        return ledger.load_stored([path], model=model)
+        return ledger.load_registered_stored([path], ledger=self.ledger, model=model)
 
-    def read_raw_day[C: LedgerContract](self, day: str, *, most: int, model: type[C]) -> RawDay[C]:
+    def read_raw_day[C: LedgerContract](self, day: str, *, most: int, model: type[C]) -> RawDay:
         """One day's raw files read for packing, oldest first; nothing about the day is decided.
 
         A file whose envelope or rows this build cannot read is named for the
@@ -441,7 +441,7 @@ class CompactTree:
         it takes a re-run. An entry of the folder that is not a file at all is
         refused for manual action, because there is no file to move aside.
         """
-        folder = ledger.read_day_folder(self.state_dir, self.ledger, day)
+        folder = ledger.read_registered_day_folder(self.state_dir, self.ledger, day)
         for path, _why in folder.unreadable:
             if not path.is_file():
                 raise error_cause.ManualActionError(
@@ -449,7 +449,7 @@ class CompactTree:
                     "moved aside"
                 )
         unreadable = [path for path, _why in folder.unreadable]
-        taken: list[tuple[Path, list[LedgerStoredRow[C]]]] = []
+        taken: list[tuple[Path, list[LedgerStoredRow]]] = []
         for held in folder.files[:most]:
             try:
                 taken.append((held.path, self.load(held.path, model=model)))

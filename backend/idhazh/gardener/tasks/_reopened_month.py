@@ -108,13 +108,13 @@ def reopen[C: LedgerContract](
                 _STEP, month, fault=GardenerFault.PACKED_FILE_UNREADABLE, failure=refusal
             ),
         )
-    days: dict[str, list[ledger.LedgerStoredRow[C]]] = {}
+    days: dict[str, list[ledger.LedgerStoredRow]] = {}
     for row in held:
         days.setdefault(row.day, []).append(row)
     try:
         for day, raw in answered.items():
-            days[day] = ledger.settle_rows(
-                [days.get(day, []), *(rows for _path, rows in raw.taken)], key
+            days[day] = ledger.settle_registered_rows(
+                [days.get(day, []), *(rows for _path, rows in raw.taken)], key, ledger=tree.ledger
             )
         rows = [row for day in sorted(days) for row in days[day]]
         built = (

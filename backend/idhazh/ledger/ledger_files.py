@@ -68,14 +68,19 @@ from datetime import date, timedelta
 from pathlib import Path
 from typing import Final
 
-from idhazh.contracts.base import StalePayloadError
+from idhazh.contracts.base import Contract, StalePayloadError
 from idhazh.contracts.feed_ingest_discovered_article import LedgerContract
 from idhazh.contracts.file_envelope import PLANNER_LEDGERS, Format, Period
 from idhazh.contracts.ledger_fault import LedgerFault
 from idhazh.contracts.ledger_index import CompactEntry, CompactIndex, EntryState
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.ledger import keys, paths, raw_files
-from idhazh.ledger.persist import LedgerStoredRow, PlannerStoredRow, load_stored
+from idhazh.ledger.persist import (
+    LedgerStoredRow,
+    load_registered_stored,
+    load_stored,
+    rows_for_model,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -316,7 +321,9 @@ def list_ledger_files(
         or (day not in named and day[:7] not in absorbed and day[:4] not in packed)
     }
     by_day: dict[str, list[Path]] = {}
-    for held in raw_files.list_raw_files(state_dir, ledger, days=unnamed, registry=registry):
+    for held in raw_files.list_registered_raw_files(
+        state_dir, ledger, days=unnamed, registry=registry
+    ):
         by_day.setdefault(held.envelope.covers, []).append(held.path)
     sources.extend(
         Source(covers=day, period=None, paths=tuple(held)) for day, held in by_day.items()
@@ -366,18 +373,13 @@ def load_ledger_rows[C: LedgerContract](
             ",".join(found.holes),
         )
     _report_lost(ledger, found.lost)
-    stored: list[list[LedgerStoredRow[C]]] = []
+    stored: list[list[LedgerStoredRow]] = []
     for source in found.sources:
         for path in source.paths:
-            try:
-                stored.append(load_stored([path], model=model))
-            except ValueError as refusal:
-                logger.warning(
-                    "skipped a ledger file path=%s reason=%s",
-                    paths.shown(state_dir, path),
-                    refusal,
-                )
-    return [held.row for held in raw_files.settle_rows(stored, key)]
+            stored.append(_stored_or_skipped(state_dir, path, ledger=ledger, model=model))
+    return rows_for_model(
+        raw_files.settle_registered_rows(stored, key, ledger=ledger), model=model
+    )
 
 
 def month_days(month: str) -> list[str]:
@@ -445,11 +447,15 @@ def held_days(
 
 
 def _stored_or_skipped[C: LedgerContract](
-    state_dir: Path, path: Path, *, model: type[C]
-) -> list[LedgerStoredRow[C]]:
+    state_dir: Path, path: Path, *, ledger: LedgerName, model: type[C]
+) -> list[LedgerStoredRow]:
     """One file's rows beside their identity, or none with a warning naming it."""
     try:
-        return load_stored([path], model=model)
+        if ledger in PLANNER_LEDGERS:
+            return load_registered_stored([path], ledger=ledger, model=model)
+        if not issubclass(model, Contract):
+            raise ValueError("non-planner ledger requires its original row contract")
+        return [held for held in load_stored([path], model=model)]
     except ValueError as refusal:
         logger.warning(
             "skipped a ledger file path=%s reason=%s",
@@ -467,7 +473,7 @@ def _compact_rows[C: LedgerContract](
     *,
     model: type[C],
     registry: paths.DoorRegistry | None = None,
-) -> list[LedgerStoredRow[C]]:
+) -> list[LedgerStoredRow]:
     """The rows of the file a packed entry names, or none with a warning naming the fault."""
     found = compact_file(state_dir, ledger, period, covers, registry=registry)
     if found is None:
@@ -480,7 +486,7 @@ def _compact_rows[C: LedgerContract](
             covers,
         )
         return []
-    return _stored_or_skipped(state_dir, found, model=model)
+    return _stored_or_skipped(state_dir, found, ledger=ledger, model=model)
 
 
 def load_days[C: LedgerContract](
@@ -526,11 +532,13 @@ def load_days[C: LedgerContract](
         or (day[:4] not in years and day[:7] not in months and day not in compact_days)
     }
     raw_by_day: dict[str, list[Path]] = {}
-    for held in raw_files.list_raw_files(state_dir, ledger, days=raw_wanted, registry=registry):
+    for held in raw_files.list_registered_raw_files(
+        state_dir, ledger, days=raw_wanted, registry=registry
+    ):
         raw_by_day.setdefault(held.envelope.covers, []).append(held.path)
-    period_rows: dict[tuple[Period, str], list[LedgerStoredRow[C]]] = {}
+    period_rows: dict[tuple[Period, str], list[LedgerStoredRow]] = {}
 
-    def rows_of(period: Period, entry: CompactEntry) -> list[LedgerStoredRow[C]]:
+    def rows_of(period: Period, entry: CompactEntry) -> list[LedgerStoredRow]:
         """One period's rows, read once however many of its days are asked; none with no file."""
         if (period, entry.covers) not in period_rows:
             period_rows[period, entry.covers] = (
@@ -542,10 +550,10 @@ def load_days[C: LedgerContract](
             )
         return period_rows[period, entry.covers]
 
-    rows: list[C] = []
+    rows: list[LedgerStoredRow] = []
     lost: list[str] = []
     for day in wanted:
-        files: list[list[LedgerStoredRow[C]]]
+        files: list[list[LedgerStoredRow]]
         if day[:4] in years:
             period, entry = Period.YEARLY, years[day[:4]]
         elif day[:7] in months:
@@ -554,24 +562,21 @@ def load_days[C: LedgerContract](
             period, entry = Period.DAILY, compact_days[day]
         else:
             files = [
-                _stored_or_skipped(state_dir, path, model=model) for path in raw_by_day.get(day, [])
+                _stored_or_skipped(state_dir, path, ledger=ledger, model=model)
+                for path in raw_by_day.get(day, [])
             ]
-            rows.extend(held.row for held in raw_files.settle_rows(files, key))
+            rows.extend(raw_files.settle_registered_rows(files, key, ledger=ledger))
             continue
         if day in _days_lost(entry):
             lost.append(day)
         files = [[held for held in rows_of(period, entry) if held.day == day]]
         if ledger in PLANNER_LEDGERS:
             files.extend(
-                _stored_or_skipped(state_dir, path, model=model)
+                _stored_or_skipped(state_dir, path, ledger=ledger, model=model)
                 for path in raw_by_day.get(day, [])
             )
-        rows.extend(held.row for held in raw_files.settle_rows(files, key))
+        rows.extend(raw_files.settle_registered_rows(files, key, ledger=ledger))
     _report_lost(ledger, lost)
     if ledger in PLANNER_LEDGERS:
-        return [
-            held.row for held in raw_files.settle_rows(
-                [[PlannerStoredRow(row=row) for row in rows]], key
-            )
-        ]
-    return rows
+        rows = raw_files.settle_registered_rows([rows], key, ledger=ledger)
+    return rows_for_model(rows, model=model)

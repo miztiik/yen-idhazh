@@ -205,7 +205,9 @@ def _take[C: LedgerContract](
     except ValueError as refusal:
         return tree.refuse(_STEP, day, fault=GardenerFault.PACKED_FILE_UNREADABLE, failure=refusal)
     try:
-        settled = ledger.settle_rows([*kept, *(rows for _path, rows in raw.taken)], key)
+        settled = ledger.settle_registered_rows(
+            [*kept, *(rows for _path, rows in raw.taken)], key, ledger=tree.ledger
+        )
     except ValueError as refusal:
         return tree.refuse(_STEP, day, failure=refusal)
     for path in raw.unreadable:
@@ -255,7 +257,7 @@ def _advance(tree: CompactTree, day: str) -> None:
 def _record[C: LedgerContract](
     tree: CompactTree,
     day: str,
-    settled: list[ledger.LedgerStoredRow[C]],
+    settled: list[ledger.LedgerStoredRow],
     existing: Path | None,
     *,
     model: type[C],

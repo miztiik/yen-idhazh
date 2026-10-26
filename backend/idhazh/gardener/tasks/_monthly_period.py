@@ -318,7 +318,7 @@ def _close[C: LedgerContract](
             set_aside=set_aside,
             model=model,
         )
-    rows: list[ledger.LedgerStoredRow[C]] = []
+    rows: list[ledger.LedgerStoredRow] = []
     unreadable: list[str] = []
     for day in sorted(packed):
         try:
@@ -394,7 +394,9 @@ def _keep_own[C: LedgerContract](
         try:
             rows = [row for path in sources for row in tree.load(path, model=model)]
             if tree.ledger in PLANNER_LEDGERS:
-                rows = ledger.settle_rows([rows], ledger.door_key(tree.ledger))
+                rows = ledger.settle_registered_rows(
+                    [rows], ledger.door_key(tree.ledger), ledger=tree.ledger
+                )
             if tree.load(own.path, model=model) != rows:
                 # Its own file is at its path, no monthly entry names it, and it
                 # holds other rows than its days. Nothing is written over a

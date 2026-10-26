@@ -47,7 +47,6 @@ from pathlib import Path
 from typing import NamedTuple
 
 from idhazh.contracts.base import StalePayloadError
-from idhazh.contracts.feed_ingest_discovered_article import LedgerContract
 from idhazh.contracts.file_envelope import Period, Tier, WriterIdentity, covers_fits
 from idhazh.contracts.ledger_index import CompactIndex
 from idhazh.contracts.ledger_name import LedgerName
@@ -57,8 +56,8 @@ from idhazh.ledger.ledger_files import compact_file
 from idhazh.ledger.persist import (
     LedgerStoredRow,
     PeriodFile,
-    load_stored,
-    read_envelope,
+    _read_footer,
+    load_registered_stored,
     render_grouped_period,
     render_period,
 )
@@ -124,7 +123,7 @@ def find_holding_files(
     held = [
         HeldFile(path=found.path, tier=Tier.RAW, period=None, covers=day, days=(day,))
         for day in wanted
-        for found in raw_files.read_day_files(state_dir, ledger, day)
+        for found in raw_files.read_registered_day_files(state_dir, ledger, day)
     ]
     for period in Period:
         index = _index(state_dir, ledger, period)
@@ -168,7 +167,7 @@ def rebuild_without(
             f"{paths.shown(state_dir, held.path)} is a raw file: it holds one writer's "
             "rows of one day, so a day taken out takes it whole rather than rebuilt"
         )
-    envelope = read_envelope(held.path)
+    envelope, _count = _read_footer(held.path)
     if (envelope.tier, envelope.period, envelope.covers) != (
         Tier.COMPACT,
         held.period,
@@ -183,11 +182,11 @@ def rebuild_without(
     gone = set(days)
     kept = [
         stored
-        for stored in load_stored([held.path], model=model)
+        for stored in load_registered_stored([held.path], ledger=envelope.ledger, model=model)
         if stored.day not in gone
     ]
     if held.period is Period.YEARLY:
-        months: dict[str, list[LedgerStoredRow[LedgerContract]]] = {}
+        months: dict[str, list[LedgerStoredRow]] = {}
         for stored in kept:
             months.setdefault(stored.day[:7], []).append(stored)
         return render_grouped_period(

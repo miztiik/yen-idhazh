@@ -43,7 +43,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from functools import cache
 from pathlib import Path
-from typing import Any, Final, Literal, overload
+from typing import Any, Final, Literal
 
 from pydantic import ValidationError
 
@@ -99,7 +99,7 @@ _RANKED_CELLS: Final = ("attempt", "unit_id", "pipeline_name", "task_name")
 
 
 @dataclass(frozen=True, slots=True)
-class StoredRow[C: LedgerContract]:
+class StoredRow[C: Contract]:
     """One row as a ledger file holds it: the identity cells beside the contract's own."""
 
     identity: RowIdentity
@@ -112,7 +112,7 @@ class StoredRow[C: LedgerContract]:
 
 
 @dataclass(frozen=True, slots=True)
-class PlannerStoredRow[C: LedgerContract]:
+class PlannerStoredRow[C: PlannerRow]:
     """A planner row keeps its own declared identity, with no generic identity object."""
 
     row: C
@@ -122,7 +122,7 @@ class PlannerStoredRow[C: LedgerContract]:
         return str(getattr(self.row, DATE_CELL))
 
 
-type LedgerStoredRow[C: LedgerContract] = StoredRow[C] | PlannerStoredRow[C]
+type LedgerStoredRow = StoredRow[Contract] | PlannerStoredRow[PlannerRow]
 
 
 @dataclass(frozen=True, slots=True)
@@ -139,8 +139,16 @@ class PeriodFile:
 class FileFooter:
     """What one ledger file says of itself with no row read: its envelope and its row count."""
 
-    envelope: FileEnvelope | PlannerFileEnvelope
+    envelope: FileEnvelope
     #: How many rows the file holds.
+    rows: int
+
+
+@dataclass(frozen=True, slots=True)
+class PlannerFileFooter:
+    """A current planner file's strict envelope and footer row count."""
+
+    envelope: PlannerFileEnvelope
     rows: int
 
 
@@ -172,8 +180,19 @@ def _one_contract(rows: Sequence[LedgerContract]) -> type[LedgerContract]:
     return model
 
 
-def _validated_planner_rows[C: LedgerContract](
-    rows: Sequence[C], *, model: type[C]
+def _planner_model[C: LedgerContract](
+    model: type[C], *, ledger: LedgerName
+) -> type[PlannerRow]:
+    """Narrow the registered planner model once at the format boundary."""
+    from idhazh.ledger.keys import door_contract
+
+    if not issubclass(model, PlannerRow) or model is not door_contract(ledger):
+        raise ValueError("planner file requires its registered current row contract")
+    return model
+
+
+def _validated_planner_rows[C: PlannerRow](
+    rows: Sequence[LedgerContract], *, model: type[C]
 ) -> list[C]:
     """Canonical native values before hashing, including models a caller copied or changed."""
     try:
@@ -208,8 +227,8 @@ def _compression(fmt: Format, tier: Tier, knobs: LedgerConfig) -> Compression:
     return knobs.compression_raw if tier is Tier.RAW else knobs.compression_compact
 
 
-def file_columns(
-    model: type[LedgerContract], *, envelope_version: str | None = None
+def file_columns[C: LedgerContract](
+    model: type[C], *, envelope_version: str | None = None
 ) -> tuple[Column, ...]:
     """The row's columns plus writer cells declared by this envelope version."""
     own = arrow_schema.columns_of(model)
@@ -240,9 +259,9 @@ def _unit(ledger: LedgerName, covers: str, identity: WriterIdentity) -> uuid.UUI
     )
 
 
-def _envelope(
+def _envelope[C: LedgerContract](
     *,
-    model: type[LedgerContract],
+    model: type[C],
     ledger: LedgerName,
     covers: str,
     identity: WriterIdentity | None,
@@ -264,10 +283,7 @@ def _envelope(
     if planner != issubclass(model, PlannerRow):
         raise ValueError("planner ledger requires its declared metadata-only row contract")
     if planner:
-        from idhazh.ledger.keys import door_contract
-
-        if model is not door_contract(ledger):
-            raise ValueError("planner file requires its registered current row contract")
+        _planner_model(model, ledger=ledger)
     unit: uuid.UUID | None = None
     if planner:
         name = filenames.planner_file_id(written_at_ms=written_at_ms)
@@ -319,10 +335,10 @@ def _envelope(
     return name, envelope
 
 
-def _rendered(
+def _rendered[C: LedgerContract](
     stored: Sequence[Mapping[str, Any]],
     *,
-    model: type[LedgerContract],
+    model: type[C],
     ledger: LedgerName,
     covers: str,
     identity: WriterIdentity | None,
@@ -439,14 +455,13 @@ def persist(
         return []
     model = _one_contract(rows)
     if ledger in PLANNER_LEDGERS:
-        from idhazh.ledger.keys import door_contract, door_key
-        from idhazh.ledger.raw_files import settle_rows
+        from idhazh.ledger.keys import door_key
+        from idhazh.ledger.raw_files import settle_planner_rows
 
-        if model is not door_contract(ledger):
-            raise ValueError("planner raw write requires the registered current row contract")
-        rows = _validated_planner_rows(rows, model=model)
-        rows = [held.row for held in settle_rows(
-            [[PlannerStoredRow(row=row) for row in rows]], door_key(ledger)
+        planner_model = _planner_model(model, ledger=ledger)
+        planned = _validated_planner_rows(rows, model=planner_model)
+        rows = [held.row for held in settle_planner_rows(
+            [[PlannerStoredRow(row=row) for row in planned]], door_key(ledger)
         )]
     if not lifecycle.accepts_new_rows(ledger, len(rows), state_dir=state_dir, identity=identity):
         return []
@@ -531,7 +546,7 @@ def _inside(day: str, covers: str) -> bool:
 
 
 def _refuse_rows_outside_the_period[C: LedgerContract](
-    rows: Sequence[LedgerStoredRow[C]], *, model: type[C], ledger: LedgerName, covers: str
+    rows: Sequence[LedgerStoredRow], *, model: type[C], ledger: LedgerName, covers: str
 ) -> None:
     """Every row is one `model` row, filed into this ledger inside this period, or none is kept.
 
@@ -567,7 +582,7 @@ def _refuse_rows_outside_the_period[C: LedgerContract](
         )
 
 
-def _stored[C: LedgerContract](rows: Sequence[LedgerStoredRow[C]]) -> list[dict[str, Any]]:
+def _stored(rows: Sequence[LedgerStoredRow]) -> list[dict[str, Any]]:
     """Each row as the cells a file holds: its identity cells, then its contract's own."""
     return [
         (
@@ -580,7 +595,7 @@ def _stored[C: LedgerContract](rows: Sequence[LedgerStoredRow[C]]) -> list[dict[
 
 def render_period[C: LedgerContract](
     state_dir: Path,
-    rows: Sequence[LedgerStoredRow[C]],
+    rows: Sequence[LedgerStoredRow],
     *,
     model: type[C],
     ledger: LedgerName,
@@ -605,13 +620,15 @@ def render_period[C: LedgerContract](
     _refuse_rows_outside_the_period(rows, model=model, ledger=ledger, covers=covers)
     if ledger in PLANNER_LEDGERS:
         from idhazh.ledger.keys import door_key
-        from idhazh.ledger.raw_files import settle_rows
+        from idhazh.ledger.raw_files import settle_planner_rows
 
-        rows = [
+        planned = [
             PlannerStoredRow(row=row)
-            for row in _validated_planner_rows([held.row for held in rows], model=model)
+            for row in _validated_planner_rows(
+                [held.row for held in rows], model=_planner_model(model, ledger=ledger)
+            )
         ]
-        rows = settle_rows([rows], door_key(ledger))
+        rows = settle_planner_rows([planned], door_key(ledger))
     knobs = _knobs()
     chosen = knobs.format if fmt is None else fmt
     compression = _compression(chosen, Tier.COMPACT, knobs)
@@ -634,7 +651,7 @@ def render_period[C: LedgerContract](
 
 def render_grouped_period[C: LedgerContract](
     state_dir: Path,
-    groups: Iterable[Sequence[LedgerStoredRow[C]]],
+    groups: Iterable[Sequence[LedgerStoredRow]],
     *,
     model: type[C],
     ledger: LedgerName,
@@ -669,15 +686,17 @@ def render_grouped_period[C: LedgerContract](
             _refuse_rows_outside_the_period(group, model=model, ledger=ledger, covers=covers)
             if ledger in PLANNER_LEDGERS:
                 from idhazh.ledger.keys import door_key
-                from idhazh.ledger.raw_files import settle_rows
+                from idhazh.ledger.raw_files import settle_planner_rows
 
                 key = door_key(ledger)
-                group = [
+                planned = [
                     PlannerStoredRow(row=row)
-                    for row in _validated_planner_rows([held.row for held in group], model=model)
+                    for row in _validated_planner_rows(
+                        [held.row for held in group], model=_planner_model(model, ledger=ledger)
+                    )
                 ]
-                unique: list[LedgerStoredRow[C]] = []
-                for held in settle_rows([group], key):
+                unique: list[LedgerStoredRow] = []
+                for held in settle_planner_rows([planned], key):
                     record = tuple(str(getattr(held.row, name)) for name in key)
                     previous = seen.get(record)
                     payload = hashlib.sha256(held.row.to_json().encode("utf-8")).hexdigest()
@@ -734,7 +753,7 @@ def render_grouped_period[C: LedgerContract](
 
 def persist_period[C: LedgerContract](
     state_dir: Path,
-    rows: Sequence[LedgerStoredRow[C]],
+    rows: Sequence[LedgerStoredRow],
     *,
     model: type[C],
     ledger: LedgerName,
@@ -878,12 +897,49 @@ def _opened(path: Path) -> tuple[FileEnvelope | PlannerFileEnvelope, list[dict[s
     return envelope, stored
 
 
-def read_envelope(path: Path) -> FileEnvelope | PlannerFileEnvelope:
+def read_envelope(path: Path) -> FileEnvelope:
     """One file's envelope. A parquet file's comes from its footer, without touching a row."""
     return read_footer(path).envelope
 
 
 def read_footer(path: Path) -> FileFooter:
+    """Read an original-protocol footer; planner files use their own typed reader."""
+    envelope, rows = _read_footer(path)
+    if not isinstance(envelope, FileEnvelope):
+        raise ValueError(f"{path.name}: planner file requires the planner footer reader")
+    return FileFooter(envelope=envelope, rows=rows)
+
+
+def read_planner_envelope(path: Path) -> PlannerFileEnvelope:
+    """Read a current planner envelope without supplying a generic writer identity."""
+    return read_planner_footer(path).envelope
+
+
+def read_planner_footer(path: Path) -> PlannerFileFooter:
+    """Read a current planner footer; original-protocol files are refused."""
+    envelope, rows = _read_footer(path)
+    if not isinstance(envelope, PlannerFileEnvelope):
+        raise ValueError(f"{path.name}: original file requires the original footer reader")
+    return PlannerFileFooter(envelope=envelope, rows=rows)
+
+
+def read_registered_footer(
+    path: Path, *, ledger: LedgerName
+) -> FileFooter | PlannerFileFooter:
+    """Select a real typed footer reader using the registered ledger family."""
+    if ledger in PLANNER_LEDGERS:
+        return read_planner_footer(path)
+    return read_footer(path)
+
+
+def read_registered_envelope(
+    path: Path, *, ledger: LedgerName
+) -> FileEnvelope | PlannerFileEnvelope:
+    """The shared storage boundary, explicit about its two possible protocols."""
+    return read_registered_footer(path, ledger=ledger).envelope
+
+
+def _read_footer(path: Path) -> tuple[FileEnvelope | PlannerFileEnvelope, int]:
     """One file's envelope and how many rows it holds.
 
     A parquet file answers both from its footer, without touching a row. A
@@ -896,12 +952,9 @@ def read_footer(path: Path) -> FileFooter:
         from idhazh.ledger import parquet
 
         metadata, rows = parquet.read_footer(path)
-        return FileFooter(
-            envelope=envelope_from_metadata(metadata).validate_container(Format.PARQUET),
-            rows=rows,
-        )
+        return envelope_from_metadata(metadata).validate_container(Format.PARQUET), rows
     envelope, stored = _opened(path)
-    return FileFooter(envelope=envelope, rows=len(stored))
+    return envelope, len(stored)
 
 
 #: How many of a `ValidationError`'s failing fields a refusal names, oldest first.
@@ -932,25 +985,9 @@ def _refusal_facts(refusal: ValidationError, *, declared: Collection[str]) -> st
     return facts
 
 
-@overload
-def load_stored[C: Contract](paths: Sequence[Path], *, model: type[C]) -> list[StoredRow[C]]: ...
-
-
-@overload
-def load_stored[C: PlannerRow](
+def load_stored[C: Contract](
     paths: Sequence[Path], *, model: type[C]
-) -> list[PlannerStoredRow[C]]: ...
-
-
-@overload
-def load_stored[C: LedgerContract](
-    paths: Sequence[Path], *, model: type[C]
-) -> list[LedgerStoredRow[C]]: ...
-
-
-def load_stored[C: LedgerContract](
-    paths: Sequence[Path], *, model: type[C]
-) -> list[LedgerStoredRow[C]]:
+) -> list[StoredRow[C]]:
     """Read these files back as rows of one contract, each beside its identity cells.
 
     In the order the paths give, and each file's rows in file order. A file
@@ -972,31 +1009,11 @@ def load_stored[C: LedgerContract](
         added |= {column.name for column in _COUNT_PROVENANCE_COLUMNS}
     declared = {column.name for column in _IDENTITY_COLUMNS} | set(model.model_fields)
     declared |= added
-    held: list[LedgerStoredRow[C]] = []
+    held: list[StoredRow[C]] = []
     for path in paths:
         envelope, stored = _opened(path)
-        if isinstance(envelope, PlannerFileEnvelope):
-            from idhazh.ledger.keys import door_contract
-
-            if model is not door_contract(envelope.ledger):
-                raise ValueError(f"{path.name}: planner file requires its registered row contract")
-            if envelope.row_schema_version != wanted:
-                raise ValueError(f"{path.name}: incompatible planner row schema version")
-            if hashlib.sha256(json_lines.rows_bytes(stored)).hexdigest() != envelope.content_sha256:
-                raise ValueError(f"{path.name}: planner content_sha256 mismatch")
-            try:
-                for cells in stored:
-                    row = model.model_validate(cells)
-                    day = str(getattr(row, DATE_CELL))
-                    if not _inside(day, envelope.covers):
-                        raise ValueError(f"{path.name}: planner row outside its UTC period")
-                    held.append(PlannerStoredRow(row=row))
-            except ValidationError as refusal:
-                facts = _refusal_facts(refusal, declared=set(model.model_fields))
-                raise ValueError(f"{path.name} holds a row this build refuses: {facts}") from None
-            continue
-        if issubclass(model, PlannerRow):
-            raise ValueError(f"{path.name}: planner rows require their strict planner envelope")
+        if not isinstance(envelope, FileEnvelope):
+            raise ValueError(f"{path.name}: planner file requires the planner stored-row reader")
         if envelope.row_schema_version > wanted:
             raise ValueError(
                 f"{path.name} ({envelope.ledger.value}, {envelope.covers}) holds "
@@ -1082,10 +1099,70 @@ def load_stored[C: LedgerContract](
     return held
 
 
+def load_planner_stored[C: PlannerRow](
+    paths: Sequence[Path], *, model: type[C]
+) -> list[PlannerStoredRow[C]]:
+    """Read only current planner cells, preserving their own declared execution identity."""
+    wanted = model.schema_version()
+    held: list[PlannerStoredRow[C]] = []
+    for path in paths:
+        envelope, stored = _opened(path)
+        if not isinstance(envelope, PlannerFileEnvelope):
+            raise ValueError(f"{path.name}: planner rows require their strict planner envelope")
+        _planner_model(model, ledger=envelope.ledger)
+        if envelope.row_schema_version != wanted:
+            raise ValueError(f"{path.name}: incompatible planner row schema version")
+        if hashlib.sha256(json_lines.rows_bytes(stored)).hexdigest() != envelope.content_sha256:
+            raise ValueError(f"{path.name}: planner content_sha256 mismatch")
+        try:
+            for cells in stored:
+                row = model.model_validate(cells)
+                if not _inside(str(getattr(row, DATE_CELL)), envelope.covers):
+                    raise ValueError(f"{path.name}: planner row outside its UTC period")
+                held.append(PlannerStoredRow(row=row))
+        except ValidationError as refusal:
+            facts = _refusal_facts(refusal, declared=set(model.model_fields))
+            raise ValueError(f"{path.name} holds a row this build refuses: {facts}") from None
+    return held
+
+
+def load_registered_stored[C: LedgerContract](
+    paths: Sequence[Path], *, ledger: LedgerName, model: type[C]
+) -> list[LedgerStoredRow]:
+    """Dispatch shared storage reads without claiming either protocol is the other."""
+    if ledger in PLANNER_LEDGERS:
+        planner_model = _planner_model(model, ledger=ledger)
+        return [held for held in load_planner_stored(paths, model=planner_model)]
+    if not issubclass(model, Contract):
+        raise ValueError("non-planner ledger requires its original row contract")
+    return [held for held in load_stored(paths, model=model)]
+
+
+def rows_for_model[C: LedgerContract](
+    rows: Iterable[LedgerStoredRow], *, model: type[C]
+) -> list[C]:
+    """Recover the caller's concrete model type after registered-format dispatch."""
+    values: list[C] = []
+    for held in rows:
+        row = held.row
+        if not isinstance(row, model):
+            raise ValueError("stored row differs from the reader's declared model")
+        values.append(row)
+    return values
+
+
 def load[C: LedgerContract](paths: Sequence[Path], *, model: type[C]) -> list[C]:
     """Read these files back as rows of one contract, in the order the paths give.
 
-    `load_stored` with the identity cells dropped: every row is validated by
-    `model` and the door's own columns are left behind.
+    Dispatch to the model's typed stored-row reader, then return its declared
+    rows. Original writer cells stay beside original-family rows only.
     """
-    return [held.row for held in load_stored(paths, model=model)]
+    declared = model
+    stored: list[LedgerStoredRow] = []
+    if issubclass(model, PlannerRow):
+        stored.extend(load_planner_stored(paths, model=model))
+    elif issubclass(model, Contract):
+        stored.extend(load_stored(paths, model=model))
+    else:
+        raise ValueError("ledger load requires a declared row contract")
+    return rows_for_model(stored, model=declared)

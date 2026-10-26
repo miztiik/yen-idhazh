@@ -23,13 +23,16 @@ from idhazh.contracts.feed_ingest_plan_run import PlanRunRow
 from idhazh.contracts.feed_ingest_selected_article import SelectedArticleRow
 from idhazh.contracts.file_envelope import (
     PLANNER_FOOTER_KEYS,
+    FileEnvelope,
     Format,
     Period,
     PlannerFileEnvelope,
+    WriterIdentity,
 )
 from idhazh.contracts.knobs.gardener import CompactionPolicy
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.ledgers import Grain, LedgersConfig
+from idhazh.contracts.seen import SeenRow
 from idhazh.ledger import paths, stored_output
 from idhazh.ledger.persist import PlannerStoredRow
 
@@ -75,8 +78,8 @@ def _raw[C: PlannerRow](
     state: Path, which: LedgerName, model: type[C],
 ) -> list[list[PlannerStoredRow[C]]]:
     return [
-        ledger.load_stored([held.path], model=model)
-        for held in ledger.read_day_files(state, which, "2026-10-20")
+        ledger.load_planner_stored([held.path], model=model)
+        for held in ledger.read_planner_day_files(state, which, "2026-10-20")
     ]
 
 
@@ -99,13 +102,24 @@ def test_attempts_survive_real_compaction_and_late_repacking(
     ):
         ledger.persist(state, rows, ledger=which, covers="2026-10-20", fmt=Format.PARQUET)
     key = ledger.door_key(which)
-    raw = ledger.settle_rows(_raw(state, which, model), key)
+    raw = ledger.settle_planner_rows(_raw(state, which, model), key)
     expected_count = 2 if model is DiscoveredArticleRow else 3 if model is PlanRunRow else 4
     assert len(raw) == expected_count
     assert all(isinstance(held, PlannerStoredRow) for held in raw)
-    files = ledger.read_day_files(state, which, "2026-10-20")
+    assert ledger.load_current_planner_rows(
+        state, which, model=model, key=key, days={"2026-10-20"}
+    ) == [held.row for held in raw]
+    files = ledger.read_planner_day_files(state, which, "2026-10-20")
     for held in files:
         assert isinstance(held.envelope, PlannerFileEnvelope)
+        assert ledger.read_planner_envelope(held.path) == held.envelope
+        assert ledger.read_planner_footer(held.path).rows == len(
+            ledger.load_planner_stored([held.path], model=model)
+        )
+        with pytest.raises(ValueError, match="planner"):
+            ledger.read_envelope(held.path)
+        with pytest.raises(ValueError, match="planner"):
+            ledger.read_footer(held.path)
         assert {key.decode() for key in held.envelope.as_metadata()} <= set(PLANNER_FOOTER_KEYS)
         assert not hasattr(held.envelope, "identity") and not hasattr(held.envelope, "unit_id")
     assert stored_output.check_raw_day(state, which, "2026-10-20")
@@ -123,18 +137,18 @@ def test_attempts_survive_real_compaction_and_late_repacking(
     live = run_declared(task, policy, tmp_path, today=date(2026, 10, 22), first_year="2026")
     assert set(live.taken) == set(dry.taken) and set(live.written) == set(dry.written)
     packed = ledger.compact_path(state, which, Period.DAILY, "2026-10-20")
-    stored = ledger.load_stored([packed], model=model)
+    stored = ledger.load_planner_stored([packed], model=model)
     assert _snapshot(stored) == _snapshot(raw)
-    assert not ledger.read_day_files(state, which, "2026-10-20")
+    assert not ledger.read_planner_day_files(state, which, "2026-10-20")
     assert stored_output.check_compact_period(state, which, Period.DAILY, "2026-10-20")
     # Read raw/compact overlap once, but do not erase another attempt's actual work.
     ledger.persist(state, [first], ledger=which, covers="2026-10-20", fmt=Format.PARQUET)
     assert len(ledger.load_days(state, which, {"2026-10-20"}, model=model)) == expected_count
     late = _row(model, attempt=3)
     ledger.persist(state, [late], ledger=which, covers="2026-10-20", fmt=Format.PARQUET)
-    expected = ledger.settle_rows([stored, *_raw(state, which, model)], key)
+    expected = ledger.settle_planner_rows([stored, *_raw(state, which, model)], key)
     run_declared(task, policy, tmp_path, today=date(2026, 10, 23), first_year="2026")
-    assert _snapshot(ledger.load_stored([packed], model=model)) == _snapshot(expected)
+    assert _snapshot(ledger.load_planner_stored([packed], model=model)) == _snapshot(expected)
     if model is FeedHealthStateRow:
         measured = [FeedHealthStateRow.model_validate(held.row.model_dump()) for held in expected]
         assert all(row.feed_requests is not None for row in measured)
@@ -179,7 +193,7 @@ def test_attempts_survive_real_compaction_and_late_repacking(
         read = ledger.load_days(state, which, {"2026-10-19", "2026-10-20"}, model=model)
         found = next(
             row for row in read
-            if isinstance(row, DiscoveredArticleRow) and row.url_key == older.url_key
+            if row.url_key == older.url_key
         )
         assert isinstance(found, DiscoveredArticleRow)
         assert found.first_seen_at == "2026-10-19T23:59:59.999Z"
@@ -200,7 +214,9 @@ def test_zero_completion_evidence_survives_without_erasing_an_earlier_complete_a
     }
     state = generated / "state"
     expected = {
-        name: ledger.settle_rows(_raw(state, LedgerName(name), model), ledger.door_key(LedgerName(name)))
+        name: ledger.settle_planner_rows(
+            _raw(state, LedgerName(name), model), ledger.door_key(LedgerName(name))
+        )
         for name, model in PRODUCED_PLANNING_LEDGERS
     }
     assert any(
@@ -221,7 +237,10 @@ def test_zero_completion_evidence_survives_without_erasing_an_earlier_complete_a
         if tier == "reopened":
             subprocess.run([bun, str(driver), "late", str(generated)], check=True, cwd=REPO_ROOT, timeout=120)
             expected = {
-                name: ledger.settle_rows([expected[name], *_raw(state, LedgerName(name), model)], ledger.door_key(LedgerName(name)))
+                name: ledger.settle_planner_rows(
+                    [expected[name], *_raw(state, LedgerName(name), model)],
+                    ledger.door_key(LedgerName(name)),
+                )
                 for name, model in PRODUCED_PLANNING_LEDGERS
             }
         for name, model in PRODUCED_PLANNING_LEDGERS:
@@ -236,7 +255,7 @@ def test_zero_completion_evidence_survives_without_erasing_an_earlier_complete_a
             covers = "2026-10-20" if period is Period.DAILY else "2026" if period is Period.YEARLY else "2026-10"
             packed = ledger.compact_path(state, LedgerName(name), period, covers)
             assert packed.exists(), f"{name}: genuine {tier} packing did not produce a file"
-            assert _snapshot(ledger.load_stored([packed], model=model)) == _snapshot(expected[name])
+            assert _snapshot(ledger.load_planner_stored([packed], model=model)) == _snapshot(expected[name])
             assert stored_output.check_compact_period(state, LedgerName(name), period, covers)
         subprocess.run(
             [bun, str(driver), "verify", str(generated), tier], check=True, cwd=REPO_ROOT, timeout=120,
@@ -250,14 +269,17 @@ def test_planning_keys_are_trusted_and_never_applied_to_another_ledger(tmp_path:
     ledger.persist(state, [row], ledger=which, covers=row.date, fmt=Format.PARQUET)
     files = _raw(state, which, SelectedArticleRow)
     with pytest.raises(ValueError, match="declared key"):
-        ledger.settle_rows(files, ("__class__",))
+        ledger.settle_planner_rows(files, ("__class__",))
     original = files[0][0]
     changed = original.row.model_copy(update={"title": "Different title"})
     conflict = replace(original, row=changed)
     with pytest.raises(ValueError, match="conflicting duplicate"):
-        ledger.settle_rows([*files, [conflict]], ledger.door_key(which))
+        ledger.settle_planner_rows([*files, [conflict]], ledger.door_key(which))
     ledger.persist(state, [changed], ledger=which, covers=row.date, fmt=Format.PARQUET)
-    before = {held.path: held.path.read_bytes() for held in ledger.read_day_files(state, which, row.date)}
+    before = {
+        held.path: held.path.read_bytes()
+        for held in ledger.read_planner_day_files(state, which, row.date)
+    }
     task = "compact-feed-ingest-plan-selected-articles"
     refused = run_declared(
         task, config.load_gardener().tasks[task], tmp_path,
@@ -266,6 +288,24 @@ def test_planning_keys_are_trusted_and_never_applied_to_another_ledger(tmp_path:
     assert refused.stopped_because is StopReason.FAILED
     assert all(path.read_bytes() == data for path, data in before.items())
     assert not ledger.compact_path(state, which, Period.DAILY, row.date).exists()
+    original_seen = SeenRow(
+        url_key=row.url_key, first_seen_at="2026-10-20T10:00:00Z", first_seen_run=row.run_id,
+    )
+    with pytest.raises(ValueError, match="writer identity"):
+        ledger.persist(state, [original_seen], ledger=LedgerName.SEEN, covers=row.date)
+    writer = WriterIdentity(
+        run_id=row.run_id, attempt=1, job=None, pipeline_name="tests", task_name="original-format",
+        shard=0, producer="tests.ledger.feed_ingest", git_sha="a" * 40,
+    )
+    (original_path,) = ledger.persist(
+        state, [original_seen], ledger=LedgerName.SEEN, covers=row.date, identity=writer,
+    )
+    assert isinstance(ledger.read_envelope(original_path), FileEnvelope)
+    assert ledger.load_stored([original_path], model=SeenRow)[0].identity.run_id == writer.run_id
+    with pytest.raises(ValueError, match="original"):
+        ledger.read_planner_envelope(original_path)
+    with pytest.raises(ValueError, match="original"):
+        ledger.read_planner_footer(original_path)
     health = FeedHealthStateRow.model_validate(planner_payload("feed-health-state"))
     mixed = tmp_path / "mixed-health"
     with pytest.raises(ValueError, match="one run attempt"):
