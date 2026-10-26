@@ -50,15 +50,15 @@ export class StageStore {
     return held.ownership;
   }
   claimSelection(id: string) {
-    const owner = this.ownership(id);
-    if (owner.selection_claimed) return false;
-    owner.selection_claimed = true;
+    const claim = this.ownership(id);
+    if (claim.selection_claimed) return false;
+    claim.selection_claimed = true;
     return true;
   }
   claimPartition(id: string) {
-    const owner = this.ownership(id);
-    if (owner.partition_claimed) return false;
-    owner.partition_claimed = true;
+    const claim = this.ownership(id);
+    if (claim.partition_claimed) return false;
+    claim.partition_claimed = true;
     return true;
   }
   rememberHealth(runId: string, fingerprint: string) {

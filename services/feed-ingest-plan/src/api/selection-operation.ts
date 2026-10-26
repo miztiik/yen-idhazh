@@ -33,14 +33,14 @@ export async function executeSelection(raw: unknown, inputs: PlanInputs, runtime
   const selectionStartedAt = utcTimestamp(() => captured);
   const pending = currentExecutionState(inputs, parsed.context.run_id);
   const original = pending === undefined ? undefined : await pending;
-  const owner = store.ownership(parsed.batch_id);
-  owner.scope = original?.kind === "plan" ? "plan" : owner.scope;
+  const claim = store.ownership(parsed.batch_id);
+  claim.scope = original?.kind === "plan" ? "plan" : claim.scope;
   if (original?.health_fingerprint !== null && original?.health_fingerprint !== undefined) {
-    owner.health_fingerprint = original.health_fingerprint;
+    claim.health_fingerprint = original.health_fingerprint;
   }
   const hasArtifact = executionHasArtifact(inputs, parsed.context);
   const keepOriginal = originalClaim && !hasArtifact && !original?.owns_choice
-    && !original?.health_written && owner.health_fingerprint === null;
+    && !original?.health_written && claim.health_fingerprint === null;
   const context = keepOriginal ? parsed.context : resolveRunContext(inputs.settings, runtime.git_sha, captured);
   if (keepOriginal) {
     if (original !== undefined) original.owns_choice = true;
@@ -66,7 +66,7 @@ export async function executeSelection(raw: unknown, inputs: PlanInputs, runtime
     batch_id: randomUUID(), parsed_batch_id: parsed.batch_id, config_sha256: parsed.config_sha256,
     context, selection_started_at_utc: selectionStartedAt, evaluated_at: parsed.context.now, ...result,
   });
-  store.ownership(batch.batch_id).scope = keepOriginal ? owner.scope : "standalone";
+  store.ownership(batch.batch_id).scope = keepOriginal ? claim.scope : "standalone";
   await appendDocumentTiming(inputs, batch.context.run_id, { operation: "select", duration_ms: Math.round(performance.now() - started), status: "completed" });
   return { batch, health_summary_duration_ms: healthDuration };
 }
