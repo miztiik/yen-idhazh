@@ -1,6 +1,6 @@
 # 16 - Parts of a whole
 
-**Last Updated**: 2026-10-25
+**Last Updated**: 2026-10-26
 **Level**: 5 for persisted composition and review contracts; 3 for the
 implementation phases.
 
@@ -53,21 +53,22 @@ rules remain unchanged.
 | 1 | How often does an article actually state a whole | - | A | DONE #654 | p16-1 | #654 | worker |
 | 2 | The four ways code may reach a number the article did not write | 1 | B | DONE #537, #538 | - | #537, #538 | worker |
 | 3 | A declared whole: pie | 2 | C | PENDING | - | - | - |
-| 4 | Three numbers at once: bubble | 2 | D | IN PROGRESS | composition-vocabulary-row-4 | #1747 | - |
+| 4 | Three numbers at once: bubble | 2 | D | DONE #1747 | composition-vocabulary-row-4 | #1747 | - |
 | 5 | A spread of values: histogram | 2 | E | PENDING | - | - | - |
 | 6 | Human pie and bubble keep-rate evidence | 3, 4 | F | PENDING | - | - | - |
 
 ### Current delivery evidence
 
-Fowler and Susan reviewed remote main on 2026-10-25 UTC. These are inspected
-implementation facts, not claims that later rows passed.
+Fowler and Susan reviewed remote main on 2026-10-25 UTC. Row 4 delivery was
+updated after #1747 merged on 2026-10-26 UTC. These are inspected implementation
+facts, not claims that later rows passed.
 
 | ID | Row | Existing delivery | Remaining delivery |
 | --- | --- | --- | --- |
 | E1 | 1 | `#654` added the bounded measurement and benchmark record | None |
 | E2 | 2 | `#537` added the closed derived-value contract and producers; `#538` added the histogram bin and resolver corrections | No story-only producers need changing |
 | E3 | 3 | Pie is declarable, shares the pie-to-stacked-bar edge, and has resolver arithmetic | Independent whole evidence, public compiler and pie renderer remain |
-| E4 | 4 | Bubble is declarable with relationship purpose and a bubble-to-scatter edge | Source-linked positive size, square-root area, responsive story drawing and tests remain |
+| E4 | 4 | #1747 delivered source-linked positive size, square-root area, viewport-adaptive drawing without a width cutoff, and tests | None |
 | E5 | 5 | Histogram role rules, equal-width binning, count provenance and empty-bin refusal exist | Story compiler and browser renderer remain |
 | E6 | 6 | Machine outcomes record exact planned and delivered types | A separate human keep-rate ledger and visual join key remain |
 
