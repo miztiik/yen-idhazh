@@ -236,7 +236,7 @@ class Taxonomy(Contract):
         ChangelogEntry(
             version="2026-10-20",
             change="Added source-kind and source-tier registries and configured defaults.",
-            why="Membership, weights and publisher safeguards have one configuration owner.",
+            why="Membership, weights and publisher safeguards have one configuration source.",
         ),
         ChangelogEntry(
             version="2026-09-13T13:49",

@@ -88,7 +88,7 @@ class DigestVisual(Model):
     One pointer and no chart data, ever. The day payload is the record that a
     day happened and is never deleted, so anything held inside it could not age
     out and `retention.image_months` would have nothing to act on - which is why
-    the marks live in their own file and this says where (owner, 2026-09-13).
+    the marks live in their own file and this says where (maintainer, 2026-09-13).
 
     **`path` retired on 2026-09-13 and the frozen days still carry it.** It
     named the committed drawing, the drawing is deleted, and the reader's browser
