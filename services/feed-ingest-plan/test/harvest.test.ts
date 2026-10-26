@@ -105,7 +105,11 @@ test("Feedsmith formats retain categories, author, ordinal and only entry-level 
 });
 
 test("public harvest returns strict full text and streamed work facts without persisting an audit population", async () => {
-  const transport = new RecordedTransport(await readRecordings());
+  const recordings = await readRecordings();
+  for (const url of ["https://news.example/feed.xml", "https://news.example/story/?b=2&a=1#section"]) {
+    recordings.responses[url]!.unshift({ status: 403, body: "" });
+  }
+  const transport = new RecordedTransport(recordings);
   const loaded = await inputs([
     source({ publisher_id: "recorded-publication" }),
     source({ id: "recorded-atom", url: "https://atom.example/feed.xml", kind: "research",
@@ -210,6 +214,20 @@ test("public harvest returns strict full text and streamed work facts without pe
   expect(() => load([source({ status: "retired", retired_on: "2026-10-21", added_on: "2026-10-22",
     retirement_reason: "feed retired" })])).toThrow("cannot precede");
   expect(() => load([source({ retirement_reason: "Feed Retired" })])).toThrow("lowercase");
+  const offeredFeed = "https://news.example/feed.xml?utm_source=config";
+  const trackedRecordings = await readRecordings();
+  trackedRecordings.bodies.rss = trackedRecordings.bodies.rss.replace(
+    "utm_source=feed&amp;b=2", "utm_source=feed&amp;oly_enc_id=tracking&amp;b=2",
+  );
+  const trackedTransport = new RecordedTransport(trackedRecordings);
+  const trackedResult = await harvestFeeds(await inputs([source({ url: offeredFeed })]), context(),
+    { transport: trackedTransport, resolve: trackedTransport.resolve });
+  expect(trackedTransport.requests.some(request => request.url.href === "https://news.example/feed.xml")).toBe(true);
+  expect(trackedTransport.requests.some(request => request.url.href === offeredFeed)).toBe(false);
+  expect(trackedResult.candidates[0]?.source.feed_url).toBe(offeredFeed);
+  expect(trackedResult.candidates[0]?.canonical_url).toBe("https://news.example/story?a=1&b=2&oly_enc_id=tracking");
+  expect(trackedResult.candidates[0]?.url_key).toBe(deriveUrlKey("https://news.example/story?a=1&b=2&oly_enc_id=tracking"));
+  expect(trackedTransport.requests.find(request => request.url.pathname === "/story/")?.url.search).toBe("?b=2&a=1");
 });
 
 test("inactive, empty, malformed, HTTP, timeout and address failures are distinct terminal feed outcomes", async () => {
@@ -393,23 +411,6 @@ test("URL identity uses discovery sorting, tracking removal and shared hashing",
     expect(() => canonicalizeUrl(address)).toThrow(InvalidArticleUrlError);
   }
   expect(() => Reflect.apply(canonicalizeUrl, undefined, [null])).toThrow(TypeError);
-});
-
-test("configured feed targets are cleaned while candidates retain offered source and article identity", async () => {
-  const offeredFeed = "https://news.example/feed.xml?utm_source=config";
-  const recordings = await readRecordings();
-  recordings.bodies.rss = recordings.bodies.rss.replace(
-    "utm_source=feed&amp;b=2", "utm_source=feed&amp;oly_enc_id=tracking&amp;b=2",
-  );
-  const transport = new RecordedTransport(recordings);
-  const result = await harvestFeeds(await inputs([source({ url: offeredFeed })]), context(),
-    { transport, resolve: transport.resolve });
-  expect(transport.requests.some(request => request.url.href === "https://news.example/feed.xml")).toBe(true);
-  expect(transport.requests.some(request => request.url.href === offeredFeed)).toBe(false);
-  expect(result.candidates[0]?.source.feed_url).toBe(offeredFeed);
-  expect(result.candidates[0]?.canonical_url).toBe("https://news.example/story?a=1&b=2&oly_enc_id=tracking");
-  expect(result.candidates[0]?.url_key).toBe(deriveUrlKey("https://news.example/story?a=1&b=2&oly_enc_id=tracking"));
-  expect(transport.requests.find(request => request.url.pathname === "/story/")?.url.search).toBe("?b=2&a=1");
 });
 
 test("rootless extraction, empty content and article request failures do not kill valid siblings", async () => {

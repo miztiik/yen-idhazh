@@ -98,17 +98,31 @@ export function createPermittedFetcher(
   boundary: { transport?: HarvestTransport; resolve?: ResolveAddresses } = {},
   clock: () => Date = () => new Date(),
 ) {
-  crawlerProduct(config.user_agent);
+  const product = crawlerProduct(config.user_agent);
   const transport = boundary.transport ?? networkTransport;
   const resolve = boundary.resolve ?? resolveAddresses;
   const documents = new Map<string, Promise<RobotResult>>();
 
-  async function requestOnce(raw: string, signal: AbortSignal, dispatched: () => void): Promise<TransportResponse> {
+  function userAgentFor(headers: Readonly<Record<string, string>>): string {
+    const userAgent = headers["user-agent"] ? `${config.user_agent} ${headers["user-agent"]}` : config.user_agent;
+    if (crawlerProduct(userAgent) !== product) {
+      throw new Error("harvest.request_headers must preserve the configured crawler product");
+    }
+    return userAgent;
+  }
+  userAgentFor(config.request_headers.primary);
+  if (config.request_headers.secondary !== null) userAgentFor(config.request_headers.secondary);
+
+  async function requestOnce(
+    raw: string, headers: Readonly<Record<string, string>>, signal: AbortSignal, dispatched: () => void,
+  ): Promise<TransportResponse> {
     const { url, addresses } = await validateTarget(raw, resolve, signal);
     signal.throwIfAborted();
+    const user_agent = userAgentFor(headers);
     dispatched();
     const response = await transport.request({
-      url, addresses, signal, user_agent: config.user_agent, max_body_bytes: controls.max_body_bytes,
+      url, addresses, headers: { ...headers, "user-agent": user_agent }, signal, user_agent,
+      max_body_bytes: controls.max_body_bytes,
     });
     if (Buffer.byteLength(response.body, "utf8") > controls.max_body_bytes) throw new BodyLimitError(response.status);
     return response;
@@ -173,9 +187,33 @@ export function createPermittedFetcher(
     return result;
   }
 
-  async function read(raw: string, signal: AbortSignal, phase: "robots" | "target", attempts: AttemptCapture): Promise<RawResult> {
-    const result = await retry(signal, phase, attempts, (current, dispatched) => requestOnce(raw, current, dispatched), value => value.status);
+  async function read(
+    raw: string, signal: AbortSignal, phase: "robots" | "target", attempts: AttemptCapture,
+    headers: Readonly<Record<string, string>> = {},
+  ): Promise<RawResult> {
+    const result = await retry(signal, phase, attempts,
+      (current, dispatched) => requestOnce(raw, headers, current, dispatched), value => value.status);
     return { response: result.value, failure: result.failure, http_status: result.http_status, error_code: result.error_code };
+  }
+
+  async function readTarget(
+    raw: string, signal: AbortSignal, attempts: AttemptCapture, kind: "feed" | "article",
+  ): Promise<RawResult> {
+    const profiles = config.request_headers;
+    const primary = await read(raw, signal, "target", attempts, profiles.primary);
+    const success = (result: RawResult) => result.response !== null && result.failure === null
+      && result.response.status >= 200 && result.response.status < 300;
+    const bytes = (result: RawResult) => Buffer.byteLength(result.response?.body.trim() ?? "", "utf8");
+    const recoverable = success(primary) ? kind === "article" && bytes(primary) < profiles.recovery_min_body_bytes
+      : primary.failure === "network" || primary.failure === "timeout"
+        || (primary.failure === "http" && primary.http_status !== null
+          && profiles.recoverable_http_statuses.includes(primary.http_status));
+    if (profiles.secondary === null || !recoverable || signal.aborted) return primary;
+    const secondary = await read(raw, signal, "target", attempts, profiles.secondary);
+    // A failed recovery must not replace real, short content with a failed download.
+    if (success(primary) && (!success(secondary) || bytes(secondary) <= bytes(primary))
+      && !(secondary.response?.location && redirectStatus.has(secondary.response.status))) return primary;
+    return secondary;
   }
 
   async function readRobots(origin: string, signal: AbortSignal, attempts: AttemptCapture): Promise<RobotResult> {
@@ -202,7 +240,9 @@ export function createPermittedFetcher(
     }
   }
 
-  async function fetchTarget(raw: string, signal: AbortSignal, attempts: AttemptCapture): Promise<FetchResult> {
+  async function fetchTarget(
+    raw: string, signal: AbortSignal, attempts: AttemptCapture, kind: "feed" | "article",
+  ): Promise<FetchResult> {
     let target = raw;
     let observedStatus: number | null = null;
     const visited = new Set<string>();
@@ -244,14 +284,15 @@ export function createPermittedFetcher(
       const robotEvidence = {
         robots_failure: robotResult.failure, robots_http_status: robotResult.http_status,
       };
-      const permission = rules === null ? "unknown" : robotsPermits(rules, url.href, config.user_agent) ? "allowed" : "denied";
+      const permission = rules === null ? "unknown"
+        : robotsPermits(rules, url.href, userAgentFor(config.request_headers.primary)) ? "allowed" : "denied";
       if (permission !== "allowed") {
         return {
           body: null, http_status: observedStatus, failure: permission === "denied" ? "robots-denied" : "robots-unknown",
           robots: permission, ...robotEvidence, error_code: robotResult.error_code ?? null,
         };
       }
-      const result = await read(url.href, signal, "target", attempts);
+      const result = await readTarget(url.href, signal, attempts, kind);
       if (!result.response) return {
         body: null, http_status: result.http_status ?? observedStatus, failure: result.failure, robots: permission,
         ...robotEvidence, error_code: result.error_code ?? null,
@@ -272,7 +313,9 @@ export function createPermittedFetcher(
       };
     }
   }
-  async function fetch(raw: string, emit?: AttemptCapture["emit"]): Promise<FetchResult> {
+  async function fetch(
+    raw: string, emit?: AttemptCapture["emit"], kind: "feed" | "article" = "article",
+  ): Promise<FetchResult> {
     const controller = new AbortController();
     const attempts: AttemptCapture = { rows: [], ...(emit === undefined ? {} : { emit }) };
     // One operation budget includes all configured attempts and backoff, shared by DNS, robots and redirects.
@@ -280,7 +323,7 @@ export function createPermittedFetcher(
       controls.backoff_initial_seconds * 1000 * controls.backoff_multiplier ** retry).reduce((sum, value) => sum + value, 0);
     const deadline = config.fetch_timeout_ms * (controls.max_retries + 1) + backoff;
     const timer = setTimeout(() => controller.abort(new DOMException("harvest deadline exceeded", "TimeoutError")), deadline);
-    try { return { ...await fetchTarget(raw, controller.signal, attempts), attempts: attempts.rows }; }
+    try { return { ...await fetchTarget(raw, controller.signal, attempts, kind), attempts: attempts.rows }; }
     finally { clearTimeout(timer); }
   }
   return { fetch };

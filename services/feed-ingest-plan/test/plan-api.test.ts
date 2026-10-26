@@ -48,6 +48,11 @@ test("health is explicit; disabled, malformed, oversized and unknown controls ca
 test("actual API and awaited CLI compose the same recorded plan and disclose the same audit limit", async () => {
   const api = await recordedPlan();
   const cli = await recordedPlan();
+  for (const recorded of [api, cli]) {
+    for (const url of ["https://news.example/feed.xml", "https://news.example/story/?b=2&a=1#section"]) {
+      recorded.transport.recordings.responses[url]!.unshift({ status: 403, body: "" });
+    }
+  }
   const app = createPlanApp(api.inputs, api.runtime);
   const server = Bun.serve({ port: 0, hostname: "127.0.0.1", fetch: app.fetch });
   try {

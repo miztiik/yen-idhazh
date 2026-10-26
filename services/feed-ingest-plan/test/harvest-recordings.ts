@@ -19,6 +19,13 @@ const RecordingsSchema = z.object({
 });
 export type RecordedResponse = z.infer<typeof ResponseSchema>;
 
+export async function readHeaderRecovery() {
+  const cases = z.array(z.object({ name: z.string(), responses: z.array(ResponseSchema).min(1) }));
+  return z.object({
+    recoveries: cases, permanent_failures: cases, short_content: z.string(),
+  }).parse(await Bun.file(new URL("harvest-header-recovery.json", fixtures)).json());
+}
+
 export async function readRecordings() {
   const [raw, rss, atom, article] = await Promise.all([
     Bun.file(new URL("harvest-responses.json", fixtures)).json(),

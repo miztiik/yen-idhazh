@@ -1,0 +1,15 @@
+{
+  "description": "Bounded header-recovery protocol recordings, not a live browser or source-availability claim.",
+  "recoveries": [
+    { "name": "header-refusal", "responses": [{"status": 403, "body": ""}, {"status": 200, "fixture": "article"}] },
+    { "name": "empty-body", "responses": [{"status": 200, "body": ""}, {"status": 200, "fixture": "article"}] },
+    { "name": "short-body", "responses": [{"status": 200, "body": "<html><body>Temporary page</body></html>"}, {"status": 200, "fixture": "article"}] },
+    { "name": "reset", "responses": [{"error": "ECONNRESET"}, {"status": 200, "fixture": "article"}] }
+  ],
+  "permanent_failures": [
+    { "name": "missing", "responses": [{"status": 404, "body": ""}] },
+    { "name": "gone", "responses": [{"status": 410, "body": ""}] },
+    { "name": "rate-limited", "responses": [{"status": 429, "body": ""}] }
+  ],
+  "short_content": "<html><body><p>Real but short content remains available to the normal parser.</p></body></html>"
+}

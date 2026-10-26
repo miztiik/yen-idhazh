@@ -67,7 +67,6 @@ if (Bun.argv.includes("--emit-schemas")) {
     [["curate", "mmr_weights", "lambda_lens"], 0],
     [["curate", "soft_caps", "max_source_share"], 0],
     [["harvest", "concurrency"], "2"],
-    [["harvest", "tidy_urls"], "true"],
     [["partition", "default_shards"], 9],
     [["workflow_reporting", "enabled"], "true"],
     [["metrics"], {}],
@@ -103,10 +102,28 @@ if (Bun.argv.includes("--emit-schemas")) {
 
   test("global config rejects bad bounds, unknown keys, and invalid references", async () => {
     const config = await readConfig();
+    const profiles = config.harvest.request_headers;
+    expect(configs.FeedRequestHeadersSchema.parse({ ...profiles, secondary: null }).secondary).toBeNull();
+    for (const headers of [
+      {}, { host: "internal.example" },
+      { authorization: "credentials" }, { accept: "text/html\r\nhost: internal.example" },
+      { accept: "" }, { Accept: "text/html" },
+    ]) {
+      for (const name of ["primary", "secondary"]) {
+        expect(configs.FeedRequestHeadersSchema.safeParse({ ...profiles, [name]: headers }).success).toBe(false);
+      }
+    }
+    expect(configs.FeedRequestHeadersSchema.safeParse({
+      ...profiles, recoverable_http_statuses: [403, 403],
+    }).success).toBe(false);
+    expect(configs.FeedRequestHeadersSchema.safeParse({
+      ...profiles, recovery_min_body_bytes: -1,
+    }).success).toBe(false);
     for (const patch of [
       { partition: { ...config.partition, min_shards: 9 } },
       { partition: { ...config.partition, default_shards: 9 } },
       { harvest: { ...config.harvest, concurrency: "24" } },
+      { harvest: { ...config.harvest, tidy_urls: "true" } },
       { curate: { ...config.curate, article_limit: 0 } },
       { curate: { ...config.curate, article_limit: 1.5 } },
       { curate: { ...config.curate, source_reliability_penalty_enabled: "true" } },
