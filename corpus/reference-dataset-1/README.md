@@ -86,7 +86,7 @@ order moves, and then last month's number and this month's number were taken on
 different sets.
 
 **There is no `train` split.** A train split in this directory would invite
-fine-tuning on the measurement set, and that contamination is silent (owner
+fine-tuning on the measurement set, and that contamination is silent (maintainer
 decision, 2026-09-10).
 
 ## What was checked before it was written
@@ -127,7 +127,7 @@ and nothing here claims to catch it.
   fine-tuning window has to leave this set or the measurement is worthless.
 - **Faithfulness.** `labels.reference_summary` carries the labeller's own summary
   from 2026-09-13. It is a reference for classification labels and is never a
-  faithfulness reference (owner decision, 2026-09-10).
+  faithfulness reference (maintainer decision, 2026-09-10).
 - **A claim about agreement between raters.** `second_labels` is one labeller's
   alternative reading, not an independent second rating, so no Cohen's kappa may
   be computed from it.
@@ -194,8 +194,8 @@ published site is built from `frontend/public/` alone.
 
 ## Who wrote the labels
 
-**Agents wrote them, at the owner's direction and on the owner's behalf, and the
-owner ruled that the rows record `labelled_by` of `human`** (owner decision,
+**Agents wrote them, at the maintainer's direction and on the maintainer's behalf, and the
+maintainer ruled that the rows record `labelled_by` of `human`** (maintainer decision,
 2026-09-13, `CLAUDE.md` section 0). Each article was read in full from
 `articles/<url_key>.txt`; no label was taken from a title. This paragraph exists
 because who wrote a label is the single fact every number taken on this set
