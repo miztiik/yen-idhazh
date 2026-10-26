@@ -5,6 +5,7 @@
   <atom:entry>
     <atom:title>Atom entry with all categories</atom:title>
     <atom:link rel="alternate" href="https://atom.example/entry"/>
+    <atom:link rel="enclosure" href="https://resources.example/photo" type="image/jpeg"/>
     <atom:published>2026-10-21T08:30:00+02:00</atom:published>
     <atom:author><atom:name>Atom Reporter</atom:name></atom:author>
     <atom:category term="Science"/>

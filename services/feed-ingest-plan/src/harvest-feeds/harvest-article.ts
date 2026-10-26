@@ -89,6 +89,7 @@ export async function harvestArticle(
   const completeObservation = {
     ...fetchedObservation, paywall: extracted.paywall, paywall_evidence: extracted.paywall_evidence, extraction,
     diagnostics,
+    ...(extracted.content_evidence === null ? {} : { content_evidence: extracted.content_evidence }),
   };
   if (extracted.quality?.rejected) {
     diagnostics = {

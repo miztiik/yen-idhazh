@@ -37,6 +37,7 @@ export type FeedEntry = {
   categories: string[];
   author: string | null;
   published_at: string | null;
+  media_types?: string[];
 };
 export type OfferedArticle = {
   source: z.infer<typeof SourceSnapshotSchema>;

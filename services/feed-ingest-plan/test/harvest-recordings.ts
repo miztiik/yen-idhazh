@@ -5,6 +5,7 @@ import type { ConfiguredSource } from "../src/harvest-feeds/load-harvest-inputs"
 import type { HarvestContext } from "../src/harvest-feeds/harvest-types";
 import type { HarvestTransport, TransportRequest, TransportResponse } from "../src/harvest-feeds/transport";
 import type { ResolveAddresses } from "../src/harvest-feeds/safe-target";
+import { parseHTML } from "linkedom";
 
 const root = new URL("../../../", import.meta.url);
 const fixtures = new URL("tests/fixtures/feed-ingest-plan/", root);
@@ -37,6 +38,54 @@ export async function readRecordings() {
   return { ...RecordingsSchema.parse(raw), bodies: { rss, atom, article } };
 }
 export type Recordings = Awaited<ReturnType<typeof readRecordings>>;
+
+export async function readContentFilters() {
+  return z.object({
+    density_cases: z.array(z.object({
+      name: z.string(), label_chars: z.int().nonnegative(), markdown_chars: z.int().positive(),
+      density: z.number(), excluded: z.boolean(),
+    })),
+    list_cases: z.array(z.object({
+      name: z.string(), items: z.int().nonnegative(), words: z.int().positive(), excluded: z.boolean(),
+    })),
+    markdown_cases: z.array(z.object({
+      name: z.string(), markdown: z.string(), linked_label_chars: z.int().nonnegative(), list_items: z.int().nonnegative(),
+    })),
+    article_cases: z.array(z.object({
+      path: z.string(), title: z.string(), mode: z.enum(["press", "links", "list", "clean"]),
+      opening: z.string().optional(), reason: z.enum(["PRESS_RELEASE", "LINK_HEAVY"]).nullable(),
+    })),
+    list_prose: z.array(z.string()),
+  }).parse(await Bun.file(new URL("harvest-content-filters.json", fixtures)).json());
+}
+export function contentFilterPage(
+  html: string, entry: Awaited<ReturnType<typeof readContentFilters>>["article_cases"][number], listProse: readonly string[],
+) {
+  const { document } = parseHTML(html);
+  const article = document.querySelector("article");
+  if (article === null) throw new Error("Recorded content filter page requires its actual article");
+  if (entry.mode === "press") {
+    const opening = document.createElement("p");
+    opening.textContent = entry.opening!;
+    article.prepend(opening);
+  } else if (entry.mode === "links") {
+    for (const paragraph of article.querySelectorAll("p")) {
+      const link = document.createElement("a");
+      link.href = "https://references.example/evidence_(recorded)";
+      link.append(...paragraph.childNodes);
+      paragraph.append(link);
+    }
+  } else if (entry.mode === "list") {
+    const list = document.createElement("ul");
+    for (const prose of listProse) {
+      const item = document.createElement("li");
+      item.textContent = prose;
+      list.append(item);
+    }
+    article.replaceChildren(list);
+  }
+  return document.toString();
+}
 
 export class RecordedTransport implements HarvestTransport {
   readonly requests: TransportRequest[] = [];

@@ -1,0 +1,41 @@
+{
+  "density_cases": [
+    { "name": "binary halfway rounds upward", "label_chars": 125, "markdown_chars": 1000, "density": 0.13, "excluded": false },
+    { "name": "exact density limit", "label_chars": 400, "markdown_chars": 1000, "density": 0.4, "excluded": false },
+    { "name": "rounds down to equality", "label_chars": 404, "markdown_chars": 1000, "density": 0.4, "excluded": false },
+    { "name": "rounds above the limit", "label_chars": 405, "markdown_chars": 1000, "density": 0.41, "excluded": true }
+  ],
+  "list_cases": [
+    { "name": "exact list limit", "items": 10, "words": 149, "excluded": false },
+    { "name": "too many short list items", "items": 11, "words": 149, "excluded": true },
+    { "name": "exact list word limit", "items": 11, "words": 150, "excluded": false }
+  ],
+  "markdown_cases": [
+    { "name": "nested label and parenthesized destination", "markdown": "[A **bold** label](https://references.example/a_(b))", "linked_label_chars": 12, "list_items": 0 },
+    { "name": "image alt text retains prototype inclusion", "markdown": "![A chart](https://references.example/chart)", "linked_label_chars": 7, "list_items": 0 },
+    { "name": "linked image is counted once", "markdown": "[![A chart](https://references.example/chart)](https://references.example/story)", "linked_label_chars": 7, "list_items": 0 },
+    { "name": "escaped link syntax is not a link", "markdown": "\\[not linked](https://references.example/story)", "linked_label_chars": 0, "list_items": 0 },
+    { "name": "code samples do not become content links or list items", "markdown": "```\n- [not a story](https://references.example/story)\n```", "linked_label_chars": 0, "list_items": 0 },
+    { "name": "reference link has a real label", "markdown": "[Evidence][ref]\n\n[ref]: https://references.example/story", "linked_label_chars": 8, "list_items": 0 },
+    { "name": "nested list items retain their count", "markdown": "- First\n  - Nested\n- Last", "linked_label_chars": 0, "list_items": 3 }
+  ],
+  "article_cases": [
+    { "path": "filter-press", "title": "Opening press release", "mode": "press", "opening": "For immediate release.", "reason": "PRESS_RELEASE" },
+    { "path": "filter-links", "title": "Linked evidence collection", "mode": "links", "reason": "LINK_HEAVY" },
+    { "path": "filter-list", "title": "Short project checklist", "mode": "list", "reason": "LINK_HEAVY" },
+    { "path": "filter-clean", "title": "Measured progress and public evidence", "mode": "clean", "reason": null }
+  ],
+  "list_prose": [
+    "Engineers checked the northern bridge supports before the road opened.",
+    "Inspectors measured the southern joints during the early morning visit.",
+    "Bus drivers received the revised route before starting their shifts.",
+    "Council staff checked the signs beside the temporary road closure.",
+    "The transport team published the timetable for the coming week.",
+    "Residents received a letter describing the remaining work near homes.",
+    "Workers cleared the footpath before the first school buses arrived.",
+    "The project team recorded the final inspection in its report.",
+    "Maintenance staff checked the drainage after the overnight rain stopped.",
+    "Independent reviewers examined the measurements from the latest safety visit.",
+    "The council will discuss the findings at its next meeting."
+  ]
+}

@@ -6,6 +6,7 @@ export * from "./schemas/candidate.schema";
 export * from "./schemas/envelope.schema";
 export * from "./schemas/rejection.schema";
 export * from "./schemas/harvest-diagnostics.schema";
+export * from "./schemas/content-filter-evidence.schema";
 export * from "./schemas/item-health-failure.schema";
 export * from "./schemas/telemetry.schema";
 export * from "./schemas/partition.schema";

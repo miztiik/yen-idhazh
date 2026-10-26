@@ -20,8 +20,9 @@ import { canonicalizeUrl, InvalidArticleUrlError } from "../src/harvest-feeds/ur
 import { createPinnedDispatcher, readResponseBody } from "../src/harvest-feeds/transport";
 import { addAbortSignal, PassThrough, Readable } from "node:stream";
 import { createGunzip, gzipSync } from "node:zlib";
-import { RecordedTransport, context, inputs, readRecordings, source } from "./harvest-recordings";
+import { RecordedTransport, contentFilterPage, context, inputs, readContentFilters, readRecordings, source } from "./harvest-recordings";
 import { recordHarvestObservations } from "./observation-recordings";
+import { excludeArticleContent } from "../src/screen-article-candidates/content-filters";
 
 function expectFeedParseObservations(facts: readonly DocumentWorkFact[], parsedSources: readonly string[]) {
   const parsed = facts.filter(fact => fact.document_kind === "feed" && fact.operation === "parse" && fact.outcome !== "not_attempted");
@@ -62,6 +63,7 @@ test("Feedsmith formats retain categories, author, ordinal and only entry-level 
   expect(rss.map(entry => entry.entry_ordinal)).toEqual([0, 1, 2]);
   expect(rss[0]?.categories).toEqual(["Science", "Energy / Research", "Nested category name", "Regional reporting"]);
   expect(rss[0]?.author).toBe("Feed Reporter");
+  expect(rss[0]?.media_types).toEqual(["image/jpeg"]);
   expect(rss[0]?.published_at).toBe("2026-10-21T09:15:00Z");
   for (const [time, zone] of [
     ["04:15:00", "EST"], ["05:15:00", "EDT"], ["03:15:00", "CST"], ["04:15:00", "CDT"],
@@ -76,6 +78,7 @@ test("Feedsmith formats retain categories, author, ordinal and only entry-level 
   const atom = await parseFeed(recordings.bodies.atom);
   expect(atom[0]?.categories).toEqual(["Science", "Research / Methods"]);
   expect(atom[0]?.author).toBe("Atom Reporter");
+  expect(atom[0]?.media_types).toEqual(["image/jpeg"]);
   expect(atom[0]?.published_at).toBe("2026-10-21T06:30:00Z");
   expect(atom[1]?.categories).toEqual([]);
   expect(atom[1]?.published_at).toBeNull();
@@ -87,19 +90,51 @@ test("Feedsmith formats retain categories, author, ordinal and only entry-level 
   )).text());
   expect(json).toEqual([
     { entry_ordinal: 0, title: "JSON feed entry", link: "https://json.example/story", categories: ["Science", "Science"],
-      author: "JSON Reporter", published_at: "2026-10-21T06:30:00Z" },
+      author: "JSON Reporter", published_at: "2026-10-21T06:30:00Z", media_types: ["image/jpeg"] },
     { entry_ordinal: 1, title: "Opaque identifier is not an article URL", link: null, categories: [],
-      author: null, published_at: null },
+      author: null, published_at: null, media_types: [] },
     { entry_ordinal: 2, title: "URL identifier", link: "https://json.example/undated", categories: [],
-      author: null, published_at: null },
+      author: null, published_at: null, media_types: [] },
   ]);
   const rdf = await parseFeed(await Bun.file(new URL(
     "../../../tests/fixtures/feed-ingest-plan/harvest-rdf.xml", import.meta.url,
   )).text());
   expect(rdf).toEqual([
     { entry_ordinal: 0, title: "RDF feed entry", link: "https://rdf.example/story", categories: ["Science"],
-      author: "RDF Reporter", published_at: "2026-10-21T06:30:00Z" },
+      author: "RDF Reporter", published_at: "2026-10-21T06:30:00Z", media_types: ["image/jpeg"] },
   ]);
+  for (const body of [
+    recordings.bodies.rss, recordings.bodies.atom,
+    await Bun.file(new URL("../../../tests/fixtures/feed-ingest-plan/harvest-json.json", import.meta.url)).text(),
+    await Bun.file(new URL("../../../tests/fixtures/feed-ingest-plan/harvest-rdf.xml", import.meta.url)).text(),
+  ]) {
+    const media = await parseFeed(body.replaceAll("image/jpeg", "AuDiO/mpeg"));
+    expect(media[0]?.media_types).toEqual(["audio/mpeg"]);
+    expect(media.map(entry => entry.entry_ordinal)).toEqual(media.map((_, index) => index));
+    const replay = await readRecordings();
+    replay.responses["https://news.example/feed.xml"] = [{ status: 200, body: body.replaceAll("image/jpeg", "video/mp4") }];
+    for (const entry of media.slice(1)) if (entry.link !== null) {
+      const url = new URL(entry.link);
+      replay.addresses[url.hostname] = [{ address: "93.184.216.34", family: 4 }];
+      replay.responses[`${url.origin}/robots.txt`] = [{ status: 200, body: "User-agent: *\nAllow: /\n" }];
+      replay.responses[url.href] = [{ status: 200, fixture: "article" }];
+    }
+    const transport = new RecordedTransport(replay);
+    const result = await harvestFeeds(await inputs(), context(), { transport, resolve: transport.resolve });
+    expect(result.articles[0]?.rejection).toMatchObject({
+      drop_reason: "MEDIA_CONTENT", title: media[0]!.title,
+      candidate_id: deriveCandidateId(context().writer.run_id, "recorded-news", 0),
+      details: { media_match: "enclosure", matched_media_type_prefix: "video/" },
+    });
+    expect(result.articles[0]?.observation).toMatchObject({
+      http_status: null, robots: null, extraction: "not-attempted",
+    });
+    expect(transport.requests.some(request => request.url.href === media[0]!.link)).toBe(false);
+    expect(result.feed_outcomes[0]).toMatchObject({ fetch_status: "success", parse_status: "success", parsed_count: media.length });
+    expect(result.first_sight_candidates.map(candidate => candidate.url_key)).toContain(canonicalizeUrl(media[0]!.link!).url_key);
+    expect(result.candidates.map(candidate => candidate.entry_ordinal))
+      .toEqual(media.slice(1).filter(entry => entry.link !== null).map(entry => entry.entry_ordinal));
+  }
   const guid = recordings.bodies.rss.replace(/<link>https:\/\/news\.example\/second<\/link>/,
     "<guid>https://news.example/second</guid>");
   expect((await parseFeed(guid))[2]?.link).toBe("https://news.example/second");
@@ -311,12 +346,12 @@ test("real inert DOM extraction retains prose and author but never calls a page 
     boilerplate: null, contaminated: null, failure_code: null, rejected: false,
     extractor_version: EXTRACTOR_VERSION, sanitizer_version: SANITIZER_FINGERPRINT,
   });
-  expect(EXTRACTOR_VERSION).toMatch(/^defuddle-0\.19\.5-linkedom-0\.18\.13-idhazh-[a-f0-9]{64}$/);
+  expect(EXTRACTOR_VERSION).toMatch(/^defuddle-0\.19\.5-linkedom-0\.18\.13-turndown-7\.2\.4-bun-[\w.-]+-idhazh-[a-f0-9]{64}$/);
   expect(SANITIZER_FINGERPRINT).toMatch(/^idhazh-typescript-sanitizer-3-[a-f0-9]{64}$/);
   const implementation = createHash("sha256");
   for (const name of [
     "dom-extractor.ts", "corroborated-words.ts", "extraction-quality.ts", "extraction-controls.ts",
-    "parse-document.ts", "extraction-provenance.ts", "semantic-extractor.ts",
+    "parse-document.ts", "extraction-provenance.ts", "semantic-extractor.ts", "sanitize-dom.ts", "content-evidence.ts",
   ]) {
     implementation.update(name).update("\0").update(
       (await Bun.file(new URL(`../src/harvest-feeds/${name}`, import.meta.url)).text()).replace(/\r\n/g, "\n"),
@@ -458,6 +493,25 @@ test("real inert DOM extraction retains prose and author but never calls a page 
   expect(shortRecovered.article_text).not.toContain("METADATA_ONLY");
   expect(shortRecovered.word_count).toBeLessThan(controls.min_source_words);
   expect(shortRecovered.quality).toMatchObject({ too_short: true, not_prose: false, rejected: true });
+  const cases = await readContentFilters();
+  const filterConfig = (await inputs()).config.content_filters;
+  for (const entry of cases.article_cases) {
+    const body = contentFilterPage(bodies.article, entry, cases.list_prose);
+    for (const min_source_words of [controls.min_source_words, 10000]) {
+      const parsed = await extractArticle(body, `https://news.example/${entry.path}`, { ...controls, min_source_words }, "abstract");
+      expect(parsed.quality?.rejected, entry.path).toBe(false);
+      expect(parsed.content_evidence, entry.path).not.toBeNull();
+      expect(excludeArticleContent(parsed.content_evidence!, parsed.word_count, filterConfig)?.drop_reason ?? null, entry.path).toBe(entry.reason);
+      expect(parsed.article_text).not.toContain("references.example");
+      expect(parsed.article_text).not.toContain("exfil.example");
+      expect(parsed.article_text).not.toContain("im_start");
+      if (entry.mode === "links") expect(parsed.content_evidence!.link_density).toBeGreaterThan(filterConfig.link_heavy.max_link_density);
+      if (entry.mode === "list") {
+        expect(parsed.content_evidence!.list_items).toBe(cases.list_prose.length);
+        expect(parsed.word_count).toBeLessThan(filterConfig.link_heavy.list_word_limit);
+      }
+    }
+  }
 });
 
 test("URL identity uses discovery sorting, tracking removal and shared hashing", () => {

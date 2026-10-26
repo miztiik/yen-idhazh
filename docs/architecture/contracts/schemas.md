@@ -173,6 +173,19 @@ article validation and distinguishes two offered entries with the same URL.
 Article URL identity uses the existing `derive_url_key` function.
 Transient exclusions require the deciding stage's reason and measurements;
 feed failures have no article identity. Only grouped counts persist in health.
+Media MIME types stay in the current parsed offer, not a committed ledger.
+The existing stage binding compares this additive field and its empty-list
+default; older current offers without it still validate. Authored filter
+settings bind through the existing global configuration comparison.
+Current harvest observations also carry optional `ArticleContentEvidence`:
+Markdown and linked-label character counts, rounded density, list count,
+opening-sample length and nullable marker index. The existing recursive stage
+binding compares this numeric-only Pydantic/Zod copy. Older observations omit
+it rather than inventing clean evidence. Candidates, selected content and the
+four committed ledger shapes are unchanged; no persisted stamp or migration
+is needed for these memory-only observations. Exclusion details hold the
+actual numeric evidence and applied limits until grouped health counts replace
+them. Content reasons are article-only and never feed failures.
 The sole TypeScript progress schema carries sparse body-free operation
 events and UUIDv4 execution correlations. Typed full stage payloads remain
 internal; they are not log records or archived event exports.

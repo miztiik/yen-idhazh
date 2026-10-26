@@ -1,5 +1,5 @@
 /** Decode one RSS, Atom, RDF or JSON feed into sanitized discovery data. */
-import { parseFeed as decodeFeed, type AnyFeed, type RssFeed, type RdfFeed } from "feedsmith";
+import { parseFeed as decodeFeed, type AnyFeed, type RssFeed, type RdfFeed, type MediaNs } from "feedsmith";
 import { TimestampSchema } from "@idhazh/common-contracts";
 import type { FeedEntry } from "./harvest-types";
 import { cleanText } from "./dom-extractor";
@@ -12,6 +12,12 @@ function text(value: string | undefined): string | null {
 }
 function categories(values: readonly (string | undefined)[]): string[] {
   return values.flatMap(value => text(value) ?? []);
+}
+function mediaTypes(values: readonly (string | undefined)[], media?: MediaNs.ItemOrFeed): string[] {
+  return [...new Set(categories([
+    ...values, ...media?.contents?.map(content => content.type) ?? [],
+    ...media?.groups?.flatMap(group => group.contents?.map(content => content.type) ?? []) ?? [],
+  ]).map(value => value.toLowerCase()))];
 }
 // ISO 8601 offsets and RFC 822 named zones are protocol values, never host-local time.
 const EXPLICIT_TIME_ZONE = /(?:Z|[+-]\d{2}:?\d{2}|GMT|UTC|UT|EST|EDT|CST|CDT|MST|MDT|PST|PDT)$/i;
@@ -42,6 +48,10 @@ function rssEntry(entry: RssFeed.Item<string> | RdfFeed.Item<string>, entry_ordi
     published_at: publishedTimestamp([
       "pubDate" in entry ? entry.pubDate : undefined, ...entry.dc?.dates ?? [],
     ]),
+    media_types: mediaTypes([
+      ...("enclosures" in entry ? entry.enclosures?.map(enclosure => enclosure.type) ?? [] : []),
+      ...entry.atom?.links?.filter(link => link.rel === "enclosure").map(link => link.type) ?? [],
+    ], entry.media),
   };
 }
 export async function parseFeed(body: string): Promise<FeedEntry[]> {
@@ -59,6 +69,7 @@ export async function parseFeed(body: string): Promise<FeedEntry[]> {
       ]),
       author: text(entry.authors?.[0]?.name ?? entry.dc?.creators?.[0]),
       published_at: publishedTimestamp([entry.published, entry.updated, ...entry.dc?.dates ?? []]),
+      media_types: mediaTypes(entry.links?.filter(link => link.rel === "enclosure").map(link => link.type) ?? [], entry.media),
     }));
   }
   if (parsed.format === "json") {
@@ -66,6 +77,7 @@ export async function parseFeed(body: string): Promise<FeedEntry[]> {
       entry_ordinal, title: text(entry.title), link: address(entry.url) ?? identifierAddress(entry.id),
       categories: categories(entry.tags ?? []), author: text(entry.authors?.[0]?.name),
       published_at: publishedTimestamp([entry.date_published, entry.date_modified]),
+      media_types: mediaTypes(entry.attachments?.map(attachment => attachment.mime_type) ?? []),
     }));
   }
   return (parsed.feed.items ?? []).map(rssEntry);

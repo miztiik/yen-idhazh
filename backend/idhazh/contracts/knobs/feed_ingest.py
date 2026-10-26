@@ -114,6 +114,60 @@ class FeedUrlExclusion(Model):
         return value
 
 
+class FeedMediaFilter(Model):
+    """Which feed enclosures and structured addresses identify media offers?"""
+
+    enabled: bool = Field(
+        strict=True,
+        description=(
+            "Exclude media offers. Remove this switch and the disabled path "
+            "when this filter becomes mandatory."
+        ),
+    )
+    enclosure_type_prefixes: Annotated[
+        list[Annotated[str, Field(min_length=1, pattern=r"^[a-z][a-z0-9.+-]*\/$")]],
+        Field(min_length=1),
+    ]
+    url_rules: list[FeedUrlExclusion]
+
+
+class FeedPressReleaseFilter(Model):
+    """Which markers in the opening Markdown sample exclude a press release?"""
+
+    enabled: bool = Field(
+        strict=True,
+        description=(
+            "Exclude opening press-release markers. Remove this switch and the disabled "
+            "path when this filter becomes mandatory."
+        ),
+    )
+    sample_chars: PositiveCount
+    markers: Annotated[list[NonEmpty], Field(min_length=1)]
+
+
+class FeedLinkHeavyFilter(Model):
+    """Which measured link and short-list limits exclude an article?"""
+
+    enabled: bool = Field(
+        strict=True,
+        description=(
+            "Exclude link-heavy articles. Remove this switch and the disabled path "
+            "when this filter becomes mandatory."
+        ),
+    )
+    max_link_density: Annotated[float, Field(strict=True, ge=0, le=1, allow_inf_nan=False)]
+    max_list_items: Count
+    list_word_limit: PositiveCount
+
+
+class FeedContentFiltersConfig(Model):
+    """Which independent heuristic exclusions apply to article offers and content?"""
+
+    media: FeedMediaFilter
+    press_release: FeedPressReleaseFilter
+    link_heavy: FeedLinkHeavyFilter
+
+
 class FeedRequestHeaders(Model):
     """Which navigation headers can recover an otherwise permitted request?"""
 
@@ -252,6 +306,7 @@ class FeedFeedbackConfig(Model):
 class FeedIngestConfig(Model):
     version: Literal["2026-10-20"]
     harvest: FeedHarvestConfig
+    content_filters: FeedContentFiltersConfig
     triage: FeedTriageConfig
     curate: FeedCurateConfig
     partition: FeedPartitionConfig

@@ -4,6 +4,7 @@ import { createHash } from "node:crypto";
 import { z } from "zod";
 import {
   CandidateRejectionRecordSchema, FeedIngestCandidateSchema,
+  ArticleContentEvidenceSchema,
   FeedIngestEventSchema, FileEnvelopeSchema, PlannerFileEnvelopeSchema,
   REASON_STAGES, REQUIRED_DETAILS, RejectionDetailsSchema,
   SourceSnapshotSchema, WriterIdentitySchema, deriveCandidateId, deriveUrlKey, validateEnvelopeContainer,
@@ -120,6 +121,12 @@ describe("rejection evidence", () => {
     }).success).toBe(true);
     expect(CandidateRejectionRecordSchema.safeParse({ ...base, subject: "feed" }).success).toBe(false);
     expect(CandidateRejectionRecordSchema.safeParse({ ...base, canonical_url: null }).success).toBe(false);
+    for (const drop_reason of ["MEDIA_CONTENT", "PRESS_RELEASE", "LINK_HEAVY"]) {
+      expect(CandidateRejectionRecordSchema.safeParse({
+        ...base, subject: "feed", candidate_id: null, canonical_url: null, url_key: null, title: null,
+        stage: "harvest-feeds", drop_reason, details: { media_match: "url", matched_url_marker: "configured/" },
+      }).success).toBe(false);
+    }
   });
 
   test("enforces every reason's stage and required measurements", () => {
@@ -128,6 +135,12 @@ describe("rejection evidence", () => {
       age_hours: 60, max_age_hours: 48,
       matched_url_key: digest, published_on: day, failure_code: "network_error",
       matched_url_marker: "blocked", history_window_days: 7,
+      media_match: "url",
+      content_evidence: {
+        markdown_chars: 1000, linked_label_chars: 500, link_density: 0.5,
+        list_items: 11, opening_sample_chars: 600, press_release_marker_index: 0,
+      },
+      sample_chars_limit: 600, max_link_density: 0.4, max_list_items: 10, list_word_limit: 150,
       diagnostics: HarvestDiagnosticsSchema.parse({
         extraction_failure: "missing-document-root", failure_code: "unknown",
         stopped_stage: "extract", detail: "missing-document-root", fetch_ms: 1, extract_ms: 1,
@@ -155,6 +168,17 @@ describe("rejection evidence", () => {
       { ...row, rejected_at: "2026-10-20T12:00:00+00:00" },
       { ...row, date: "2026-10-19" }, { ...row, url_key: digest },
     ]) expect(CandidateRejectionRecordSchema.safeParse(changed).success).toBe(false);
+    const measured = {
+      markdown_chars: 1000, linked_label_chars: 400, link_density: 0.4,
+      list_items: 10, opening_sample_chars: 600, press_release_marker_index: null,
+    };
+    expect(ArticleContentEvidenceSchema.parse(measured)).toEqual(measured);
+    for (const invalid of [
+      { markdown_chars: -1 }, { linked_label_chars: 1001 }, { list_items: 1.5 },
+      { opening_sample_chars: 1001 }, { press_release_marker_index: -1 }, { link_density: NaN },
+      { link_density: 0.39 },
+      { link_density: 1.1 }, { link_density: "0.4" }, { raw_markdown: "untrusted" }, { href: "https://untrusted.example" },
+    ]) expect(ArticleContentEvidenceSchema.safeParse({ ...measured, ...invalid }).success).toBe(false);
   });
 
   test("hashes exact canonical URL bytes and newline-separated candidate identity", () => {

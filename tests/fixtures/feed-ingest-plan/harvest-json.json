@@ -9,6 +9,7 @@
       "content_text": "The source retains publication and category data.",
       "tags": ["Science", "Science", ""],
       "authors": [{"name": "JSON Reporter"}],
+      "attachments": [{"url": "https://resources.example/photo", "mime_type": "image/jpeg"}],
       "date_published": "2026-10-21T08:30:00+02:00"
     },
     {

@@ -63,7 +63,7 @@ const RegistrySchema = z.object({
   source_tiers: z.array(LifecycleSchema.safeExtend({ id: PositiveCountSchema, weight: WeightSchema })),
 });
 const ExtractionSchema = z.object({
-  extract: ExtractionControlsSchema.omit({ semantic_fallback: true }),
+  extract: ExtractionControlsSchema.omit({ semantic_fallback: true, press_release_filter: true }),
   summarize: z.object({ bands: z.array(z.object({ target_words_min: z.int().min(1) })).min(1) }),
   evaluation: z.object({ brief_compression_ceiling: z.number().finite().gt(0).max(1) }),
 }).superRefine((value, ctx) => {
@@ -86,6 +86,7 @@ export function loadHarvestInputs(raw: {
   const extraction_settings = ExtractionSchema.parse(raw.extraction);
   const extraction = ExtractionControlsSchema.parse({
     ...extraction_settings.extract, semantic_fallback: planning.config.harvest.semantic_fallback,
+    press_release_filter: planning.config.content_filters.press_release,
   });
   validateSemanticSelectors(extraction.semantic_fallback);
   for (const [name, ids] of [
