@@ -36,14 +36,21 @@ change planning completion or block its metadata commit.
 
 ## Local offline checks
 
-Inspect `npm run test:changed -- --list` from `frontend/`, but do not execute a
-Python-bearing local group for this work. Use the installed declared packages:
+Inspect `npm run test:changed -- --list` from `frontend/`. For service-only
+changes, use the installed declared packages rather than a full Python group:
 
 ```text
 bun run --cwd packages/common-contracts check
 bun run --cwd packages/ledger-file-writer check
 bun run --cwd services/feed-ingest-plan check
 bun run --cwd services/feed-ingest-plan test
+```
+
+For a shared contract input change, also run the named Python binding test
+with the existing Python development environment:
+
+```text
+python -m pytest backend/tests/contracts/test_feed_ingest_contracts.py
 ```
 
 The service suite includes the existing workflow/report cases. Its case

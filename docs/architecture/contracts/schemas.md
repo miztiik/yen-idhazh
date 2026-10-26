@@ -160,6 +160,11 @@ not migrated or given invented historical provenance. Unknown current timing
 evidence stays null and real selection-start fallback remains separate from
 source provenance. There is no dual writer or restored audit shape. Finite
 historical generic-envelope vectors for unrelated families remain readable.
+Python retains its historical planner readers. The named binding test narrows
+only Python's selected-input schema for the TypeScript comparison: publication
+time is required and non-null, provenance is `source` or `selection`, and the
+artifact stamp is required. All other fields, defaults and vocabularies still
+match the authoritative models, including selected content inside stage batches.
 The private fetch journal retains its separately declared finite receipt
 stamps; it does not preserve an obsolete planner ledger.
 

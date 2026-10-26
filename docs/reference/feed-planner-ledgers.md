@@ -610,6 +610,12 @@ diagnostic. Obsolete selected artifacts refuse instead of adding a historical
 provenance default. Missing age evidence remains null; a real current-run
 selection instant remains selection provenance.
 
+This is the maintainer-approved TypeScript exception to the read-side migration
+rule in `CLAUDE.md` section 11. Python's historical readers, contract authority,
+registry, gardener and publication wiring are unchanged. The binding test
+compares the current-input subset without carrying historical acceptance into
+TypeScript.
+
 Targeted deletion of the same eight obsolete ledger prefixes named in Table F
 under both `state/raw/feed-ingest-plan/` and
 `state/compact/feed-ingest-plan/` is permitted, including their compact files
