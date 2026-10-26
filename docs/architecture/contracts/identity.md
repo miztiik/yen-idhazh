@@ -89,7 +89,7 @@ typed record under `audit`; `audit_event_type` is the record's payload discrimin
 Rejection ledger rows retain their declared shape; their live progress envelope
 has its own UUID event identity.
 
-Owner ruling, 2026-10-22, kumarsnaveen: use the existing UUID logging convention
+Maintainer ruling, 2026-10-22, the maintainer: use the existing UUID logging convention
 in current planner events and correlation identities, with no TypeScript legacy
 event branch. The earlier SHA event fixtures were implementation fixtures, not
 evidence that the Python production planner wrote such events. No historical

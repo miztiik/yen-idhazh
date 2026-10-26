@@ -57,7 +57,7 @@ Three controls narrow it, and none of them closes it:
 - A label is attached to an **element identifier**, never to a free string, so it can at least be checked against that element's own unit and magnitude.
 - The model never types a value. No field of the reply schema accepts a number, so authorship is refused by the grammar rather than caught by a check.
 
-**This is a permanent property of the design, not a defect waiting for a fix.** The alternative is to draw only what a pattern can name, which produces charts whose axis reads "number" - correct, verifiable, and worth nobody's attention. A digest that will not say what a figure means is not publishing a fact, it is publishing a decoration with better provenance. Owner decision, 2026-09-04.
+**This is a permanent property of the design, not a defect waiting for a fix.** The alternative is to draw only what a pattern can name, which produces charts whose axis reads "number" - correct, verifiable, and worth nobody's attention. A digest that will not say what a figure means is not publishing a fact, it is publishing a decoration with better provenance. Maintainer decision, 2026-09-04.
 
 Note the split this implies, because it is easy to lose: **code finds and cuts every character a reader sees; the model points at where to cut and says what the cut means.** A value is never model-authored. A meaning always is.
 
@@ -182,7 +182,7 @@ The idea the measurement was taken against was that length is the discriminator:
 
 **Read the 18.2 percent as a hazard rather than a rate.** 20 of the 110 eligible items were shorter than their own band's floor on the day of the draw. It is one draw on one day, and the numbers underneath it move whenever the prompt does. It is quoted here because it was the reason the key-points question came up at all, and not as a measurement anything may be tuned against (Guardrail #10).
 
-**The field stayed in the payload for one reader, and on 2026-09-24 it went** (owner, 2026-09-19). The in-page filter was that reader; it matches the title and the summary now, and the entity tagger already read the title and the body. So the points were the only thing on the item nothing consumed, and the decode that wrote them cost about 21 seconds an item - roughly 1.75 hours off a 300-item day.
+**The field stayed in the payload for one reader, and on 2026-09-24 it went** (maintainer, 2026-09-19). The in-page filter was that reader; it matches the title and the summary now, and the entity tagger already read the title and the body. So the points were the only thing on the item nothing consumed, and the decode that wrote them cost about 21 seconds an item - roughly 1.75 hours off a 300-item day.
 
 **What a reader loses** (guardrails: a veto names the loss). On four items in twenty they lose one fact each, and on one item in twenty they lose three. What they keep is an item they can skim in one pass instead of two, a summary that is still the only thing on the item claiming to be complete, and a day that finishes.
 

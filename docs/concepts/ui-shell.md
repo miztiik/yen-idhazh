@@ -114,7 +114,7 @@ See [deployment](../how-to/ship-to-github-pages.md).
 
 ## Design rationale
 
-- Browser rendering follows the owner's no-prerender direction (2026-09-29) and [Telemetry Intent](telemetry-intent.md). A shipped implementation cannot override it.
+- Browser rendering follows the maintainer's no-prerender direction (2026-09-29) and [Telemetry Intent](telemetry-intent.md). A shipped implementation cannot override it.
 - Shared loading and validation keep error handling consistent across surfaces.
 - Readability is a requirement for operator pages too, not decoration.
 - A spinner reports neither progress nor failure. A named wait and stable panel dimensions communicate what is missing without moving content.

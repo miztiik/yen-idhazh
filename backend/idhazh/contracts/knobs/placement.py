@@ -79,7 +79,7 @@ SECONDS_A_CALL: Final = 77.6
 #: Two changed unit as well as name: the fall cap is counted in slots of
 #: `bin_width` now rather than written as a score, and the one damping weight
 #: became two because the line damps both directions. `shards` is the third and
-#: it changed owner instead - a fan-out width is a runner number the workflow
+#: it changed maintainer instead - a fan-out width is a runner number the workflow
 #: sizes its own matrix by, so its replacement is spelled as a whole path.
 SUPERSEDED_THRESHOLD_NAMES: Final[Mapping[str, str]] = MappingProxyType(
     {

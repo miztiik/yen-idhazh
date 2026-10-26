@@ -114,7 +114,7 @@ def _recorded_inputs(items_dir: Path) -> PipelineInputs | None:
 def _report_prose_change(inputs: PipelineInputs | None, previous: RunManifest | None) -> None:
     """Say when the words we asked for moved and the machine reading them did not.
 
-    The one alarm that survives the retired stamp (owner decision, 2026-09-10).
+    The one alarm that survives the retired stamp (maintainer decision, 2026-09-10).
     It reports and never blocks: the run publishes, every number is read, and
     the operator is told which input moved.
 

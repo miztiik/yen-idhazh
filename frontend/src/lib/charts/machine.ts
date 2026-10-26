@@ -457,7 +457,7 @@ export interface CostRate {
  * A counterfactual and never a bill: nothing bills us, because Actions minutes
  * are free on a public repository (Guardrail #2). What this answers is the question
  * the wall clock cannot - whether four hours of runner time was a good trade -
- * and CLAUDE.md Guardrail #10 carries the owner's carve-out for it, on the condition
+ * and CLAUDE.md Guardrail #10 carries the maintainer's carve-out for it, on the condition
  * that the rate and its source are printed beside the figure.
  */
 export function costOf(tokens: { input: number; output: number }, rate: CostRate): number {

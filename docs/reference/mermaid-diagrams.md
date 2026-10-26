@@ -59,7 +59,7 @@ do not resize its body or end caps separately.
 Use **Metrics** as the outer title. Give each metric its own inner rectangle,
 not separate label/value cells. Its text names the quantity, describes it and
 includes the unit. Distinguish measured values from fixed limits; do not insert
-live readings. Link to the setting's owner instead of copying a limit that can
+live readings. Link to the setting's maintainer instead of copying a limit that can
 become stale.
 
 An automatically maintained value goes in a nested group titled

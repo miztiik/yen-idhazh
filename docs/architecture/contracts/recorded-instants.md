@@ -87,7 +87,7 @@ files; no mock or network fixture supplies a verdict.
 
 ## Design rationale
 
-Owner approval, kumarsnaveen_microsoft, 2026-10-23, "Bug 1 - A1": use the
+Maintainer approval, 2026-10-23, "Bug 1 - A1": use the
 existing `checked_at` and keyed-request `created_at` fields with field-specific
 precision, compatible original-string reads and narrow Python/TypeScript
 capture/reader changes. No global timestamp relaxation, new column, state file

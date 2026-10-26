@@ -11,7 +11,7 @@ planner summed
 [`../../../TODO/20260905-16-composition-vocabulary-plan.md`](../../../TODO/20260905-16-composition-vocabulary-plan.md)
 row #3). Nobody had counted how often an article declares one, so the template
 was about to be sized against a guess. This is that count. It **sizes** the
-template and does not gate it: the owner has already ruled that `pie` ships
+template and does not gate it: the maintainer has already ruled that `pie` ships
 whichever way the number falls (plan 16 row #1 decision 2).
 
 **The definition is the artefact here, not the number.** A count with no
@@ -228,4 +228,4 @@ thing a person runs while waiting, not a thing that needs a job.
 - [`../pipeline-cost.md`](../pipeline-cost.md) - the instrument log, which carries the figure now in force and links here.
 - [`../../architecture/publishing/where-every-drawn-figure-came-from.md`](../../architecture/publishing/where-every-drawn-figure-came-from.md) - the declared-whole rule this count sizes, and `share_of_declared_whole`.
 - [`../../../CLAUDE.md`](../../../CLAUDE.md) Guardrail #12 - every read must have a fixed-size input.
-- [`../../../TODO/20260905-16-composition-vocabulary-plan.md`](../../../TODO/20260905-16-composition-vocabulary-plan.md) - the plan this row belongs to, and the owner decision that `pie` ships either way.
+- [`../../../TODO/20260905-16-composition-vocabulary-plan.md`](../../../TODO/20260905-16-composition-vocabulary-plan.md) - the plan this row belongs to, and the maintainer decision that `pie` ships either way.

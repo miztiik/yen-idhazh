@@ -8,7 +8,7 @@ published site and a claim it can support. This handover states the problem, the
 verified facts, and the options. It does not choose between the open ones.
 
 Non-authoritative working material (CLAUDE.md section 3). Nothing here is a
-decision except where it says the owner already made one.
+decision except where it says the maintainer already made one.
 
 ## The problem, in the reader's words
 
@@ -56,7 +56,7 @@ days, and every claim below has a command next to it for that reason.
 
 | Fact | How to re-check |
 | --- | --- |
-| The counting rule is settled: run-days count at one `scorer_version`, and `pipeline_fingerprint` is a reported stratum. **Owner decision, 2026-08-27, shipped in PR #190.** | `git log --oneline --grep="Calibrate at one scorer"` |
+| The counting rule is settled: run-days count at one `scorer_version`, and `pipeline_fingerprint` is a reported stratum. **Maintainer decision, 2026-08-27, shipped in PR #190.** | `git log --oneline --grep="Calibrate at one scorer"` |
 | 450 eligible rows, 2 of 10 run-days, and the draw fills **60 of 60** with no decile short | `python backend/utilities/label_queue.py` |
 | **0 labels.** No `state/labels.csv` is committed | `git ls-files state/labels.csv` |
 | **Nothing reads a label.** `LabelRow` is touched only by its contract, the schema export, the draw, the recording CLI and tests | `git grep -l LabelRow -- backend frontend/src` |
@@ -102,11 +102,11 @@ person said unsupported" is the only thing that can locate the cut.
 
 **The counting rule.** Run-days count at one `scorer_version`; the pipeline
 fingerprint is reported per stratum, and a stratum under
-`evaluation.label_min_stratum_rows` may not move a threshold. Owner decision,
+`evaluation.label_min_stratum_rows` may not move a threshold. Maintainer decision,
 2026-08-27. The rejected alternative - freeze the pipeline for ten days - was
 declined because the claim it buys expires at the next prompt change. Recorded
 in [`docs/concepts/evaluation.md`](../docs/concepts/evaluation.md#design-rationale).
-**Do not reopen this without the owner.**
+**Do not reopen this without the maintainer.**
 
 ### Open: what to do about the hollow middle
 

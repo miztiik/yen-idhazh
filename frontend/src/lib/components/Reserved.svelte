@@ -14,7 +14,7 @@
 	 *
 	 * There is no spinner. A spinner suits one wait, a blank page and a person
 	 * who cannot act; the console has a dozen waits and an operator who can act
-	 * from the first frame (Susan, owner decision D3).
+	 * from the first frame (Susan, maintainer decision D3).
 	 */
 	import type { Snippet } from 'svelte';
 	import { skeletonFrame } from '$lib/charts/skeleton';

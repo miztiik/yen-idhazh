@@ -270,7 +270,7 @@ carries one of `recorded`, `off`, `lost` and `none` on every build.
 
 There is exactly one money figure on this site: the counterfactual cost on
 `/console/machine/`. CLAUDE.md Guardrail #10 forbids the rest, and carries the
-owner's carve-out for that one, 2026-08-30, on conditions this section holds:
+maintainer's carve-out for that one, 2026-08-30, on conditions this section holds:
 
 - **Never a currency symbol.** `0.48 USD`, never `$0.48`. A symbol in front of a
  number is the shape a bill takes, and this is not a bill - nothing bills us,
@@ -419,7 +419,7 @@ pan, or a date span printed under the heading that already printed it.
 
 The console and digest drawing share one number formatter, so the same quantity
 does not acquire different separators or precision on different pages. The
-formatter's settings have one owner in `config/idhazh.json`; the Data explorer
+formatter's settings have one maintainer in `config/idhazh.json`; the Data explorer
 keeps engine values unchanged because operators need to read those values as
 written.
 

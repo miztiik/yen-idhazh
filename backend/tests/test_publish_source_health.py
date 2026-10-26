@@ -758,7 +758,7 @@ def _yielding(
     """A source whose fate over one prior day is exactly `published` and `lost`.
 
     Built rather than read, because the alarm has to be right on day 400 and the
-    committed record holds thirteen days (CLAUDE.md section 13, owner ruling
+    committed record holds thirteen days (CLAUDE.md section 13, maintainer ruling
     2026-09-06). A built source can also carry a shape the archive has never
     produced - nought published out of seventy-three, say.
     """

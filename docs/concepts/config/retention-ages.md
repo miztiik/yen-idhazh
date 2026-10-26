@@ -57,7 +57,7 @@ on a public repository (Guardrail #2) - so the figure is a counterfactual, and i
 labelled one everywhere it appears. What it answers is the question wall clock
 cannot: whether four hours of runner time was a good trade.
 
-CLAUDE.md Guardrail #10 carries the owner's carve-out for it, on one condition: the
+CLAUDE.md Guardrail #10 carries the maintainer's carve-out for it, on one condition: the
 page prints the rate it used and says where the rate came from. The operator may
 type a different pair into the panel, which is kept in `localStorage` and read on
 mount only, so the first paint always matches the prerendered document.
@@ -67,7 +67,7 @@ mount only, so the first paint always matches the prerendered document.
 provider's price for an 8-to-9-billion-parameter open-weights model, with output
 at three times input, taken from published list prices in August 2026. They are
 not a quote anybody gave this project, and they are the first thing to correct
-when the owner names a rate - a one-line edit to `config/idhazh.json`, with no
+when the maintainer names a rate - a one-line edit to `config/idhazh.json`, with no
 code change and no migration. Input and output are priced apart because a
 provider prices them apart; one blended rate would understate a run that wrote a
 lot and overstate one that read a lot.

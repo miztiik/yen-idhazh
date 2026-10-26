@@ -6,7 +6,7 @@
 **Chain**: previous [`20260905-21-human-judgement-plan.md`](20260905-21-human-judgement-plan.md). **Last plan of the group.**
 **Reference**: [`20260902-visual-planner-pseudo-plan.md`](20260902-visual-planner-pseudo-plan.md) - the document this row deletes, and O40 in particular.
 
-Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delegates a row where delegation pays; keep parallel N = 4 rows in flight, refilling a slot as soon as a worker returns and never waiting on a merge; consult a persona only where two answers would lead to different code; AUTO-merge on green gates; honor the ESCALATE triggers in section 0. AUTHOR-AND-STOP until the user authorizes.
+Execute per docs/how-to/execute-a-plan.md: one maintainer carries the plan and delegates a row where delegation pays; keep parallel N = 4 rows in flight, refilling a slot as soon as a worker returns and never waiting on a merge; consult a persona only where two answers would lead to different code; AUTO-merge on green gates; honor the ESCALATE triggers in section 0. AUTHOR-AND-STOP until the user authorizes.
 
 ---
 
@@ -35,12 +35,12 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 
 ## 2. Row #1 - What is durable, and where it already lives
 
-- **Unapproved documentation-check proposal:** The handover proposed a check that a decision in a working document names its owning `docs/` page and that the page links back. No such check has been implemented. The current documentation contract requires the decision to live on its owning page; it does not require a link back to a temporary document. Before this row closes, ask the owner whether a further automated check is wanted and what it must prove. This proposal does not authorize a code or `CLAUDE.md` change.
+- **Unapproved documentation-check proposal:** The handover proposed a check that a decision in a working document names its owning `docs/` page and that the page links back. No such check has been implemented. The current documentation contract requires the decision to live on its owning page; it does not require a link back to a temporary document. Before this row closes, ask the maintainer whether a further automated check is wanted and what it must prove. This proposal does not authorize a code or `CLAUDE.md` change.
 
 - **Scope:** Walk both working documents; for every durable finding, check whether the living doc already holds it, and write the ones that do not.
 - **Files touched:** `docs/concepts/digest.md`, `docs/concepts/design-system.md`, `docs/concepts/evaluation.md`, `docs/concepts/telemetry.md`, `docs/concepts/adaptive-pruning.md`, `docs/architecture/**`, `docs/reference/agent-notes.md`, `docs/reference/pipeline-cost.md`
 - **Acceptance gates:** the full suite; the docs cross-link check; `backend/tests/contracts/`'s ASCII and LF check.
-- **Oracle:** Every owner decision, correction, gap and contradiction in the pseudo-plan is accounted for by exactly one of: **implemented** (name the plan and the PR), **recorded** (name the living doc and the section), or **superseded** (name what replaced it). A table with no fourth column - because a fourth column is where a lost decision hides.
+- **Oracle:** Every maintainer decision, correction, gap and contradiction in the pseudo-plan is accounted for by exactly one of: **implemented** (name the plan and the PR), **recorded** (name the living doc and the section), or **superseded** (name what replaced it). A table with no fourth column - because a fourth column is where a lost decision hides.
 
 ### Decisions
 

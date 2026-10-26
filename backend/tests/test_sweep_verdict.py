@@ -177,7 +177,7 @@ def test_a_case_set_reports_a_difference_between_cases_instead_of_refusing_the_r
     """The whole question is whether the cases write different words.
 
     Rejecting the run for observing the effect it was dispatched to observe
-    inverts the instrument (owner decision, 2026-09-19).
+    inverts the instrument (maintainer decision, 2026-09-19).
     """
     results = [a_result(label="head_off", repeat=n, summary="off") for n in (1, 2)] + [
         a_result(label="n_max_4", repeat=n, summary="on") for n in (1, 2)

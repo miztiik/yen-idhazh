@@ -178,7 +178,7 @@ membership remain explicit missing publication evidence.
 It joins recorded URL, item, source and run identities, and takes lead membership
 from the digest. Terminal health records with conflicting unsettled values are
 refused. A recorded other run can exclude an unrelated missing item from a
-known-zero run; a legacy item with no recorded owner cannot.
+known-zero run; a legacy item with no recorded maintainer cannot.
 
 These readers alone do not seal an audit.
 `completePublicationObservations` accepts only already-complete, settled source
@@ -272,7 +272,7 @@ Logical proof preserves the facts the raw-file receipt alone loses during
 packing. Keeping both distinguishes record membership from physical file
 integrity. Requiring complete named evidence permits truthful full audit
 completion without treating generated test publication as production output.
-The service stays default-off pending a separate owner approval for use.
+The service stays default-off pending a separate maintainer approval for use.
 
 Recorded similarity evidence accepts valid model slugs without consulting
 today's selected model file. This changes no audit-row stamp or publication

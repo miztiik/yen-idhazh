@@ -64,7 +64,7 @@ from idhazh.gardener.one_at_a_time import Collection, Member
 #: the value ever being near it.
 TOKEN_ENV: Final = "GITHUB_TOKEN"
 
-#: The variable Actions sets to `owner/name` for every run.
+#: The variable Actions sets to `account/name` for every run.
 REPO_ENV: Final = "GITHUB_REPOSITORY"
 
 API_ROOT: Final = "https://api.github.com"
@@ -81,7 +81,7 @@ SEARCH_LIMIT: Final = 1000
 #: returns. UTC keeps no daylight saving, so every day has exactly this many.
 HOURS_A_DAY: Final = 24
 
-#: `owner/name`, and nothing that could steer a URL somewhere else. A repository
+#: `account/name`, and nothing that could steer a URL somewhere else. A repository
 #: slug reaches this module from the environment, and it is
 #: interpolated into a URL - so it is validated as an identity rather than
 #: trusted as text (Guardrail #11).

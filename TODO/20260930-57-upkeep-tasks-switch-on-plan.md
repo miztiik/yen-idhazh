@@ -6,7 +6,7 @@
 
 **Status**: written 2026-09-30, and no row has started. Rows 1 and 2 wait on rows of other plans (section 3).
 
-Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delegates a row where delegation pays; keep parallel N = 4 rows in flight, refilling a slot as soon as a worker returns and never waiting on a merge; consult a persona only where two answers would lead to different code; AUTO-merge on green gates; honor the ESCALATE triggers in section 0. AUTHOR-AND-STOP until the user authorizes.
+Execute per docs/how-to/execute-a-plan.md: one maintainer carries the plan and delegates a row where delegation pays; keep parallel N = 4 rows in flight, refilling a slot as soon as a worker returns and never waiting on a merge; consult a persona only where two answers would lead to different code; AUTO-merge on green gates; honor the ESCALATE triggers in section 0. AUTHOR-AND-STOP until the user authorizes.
 
 ## 0. Operating contract
 
@@ -15,7 +15,7 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 | Why this plan exists | Every upkeep task only reports, except the corpus squash and the closed-day folds of four tasks. So the console's three packed ledgers stop at 2026-09-28, old traces and raw files stay, and no plan owns switching the rest on |
 | Hard scope - in | - `dry_run: false` for `compact-scores` (row 1), and for `compact-gardener`, `compact-visual-prunes` and `compact-feed-retirements` (row 2).<br>- `dry_run: false` for each report-only retention or collection task the person approves (row 3).<br>- Each switch's `LIVE_BY_DECISION` entry, and every doc sentence the switch makes false |
 | Hard scope - out | the table below |
-| ESCALATE triggers | 1. A `dry_run` moving from `true` to `false`, or a window, series or `monthly_window` moving from `forever` to a bounded value, before the person approves that task. The first deletion a tree ever sees is the person's call, never an agent's ([docs/concepts/config/idhazh-gardener.md](../docs/concepts/config/idhazh-gardener.md)).<br>2. A row's precondition is false at dispatch.<br>3. The first scheduled wake after a merge fails the row's oracle. The owner sets that switch back to `true` in a pull request at once, then reports |
+| ESCALATE triggers | 1. A `dry_run` moving from `true` to `false`, or a window, series or `monthly_window` moving from `forever` to a bounded value, before the person approves that task. The first deletion a tree ever sees is the person's call, never an agent's ([docs/concepts/config/idhazh-gardener.md](../docs/concepts/config/idhazh-gardener.md)).<br>2. A row's precondition is false at dispatch.<br>3. The first scheduled wake after a merge fails the row's oracle. The maintainer sets that switch back to `true` in a pull request at once, then reports |
 | Chosen strategy | Every switch is approved by the person first and read at the first upkeep wake after its merge. Packing lands in two pull requests, and each retention window in one of its own. The person, 2026-09-30 |
 | Execution | autonomous orchestrator per docs/how-to/execute-a-plan.md. Parallel N = 4. Every row edits `backend/tests/contracts/test_gardener_config.py` and `docs/concepts/config/idhazh-gardener.md`, and rows in flight may share no file, so one row is in flight at a time. Merge by hand: GitHub refuses auto-merge on this repository |
 
@@ -36,11 +36,11 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 | 2 | The upkeep record, the picture cleanup's record and the feed retirements are packed live | - | A | PENDING | - | - | - |
 | 3 | The retention windows the person approves go live, one task a pull request | - | A | PENDING | - | - | - |
 
-Rows 1 and 2 also wait on rows of other plans (section 3). The plan-queue reader, `backend/utilities/plan_status.py`, cannot follow a pointer by title, so the owner checks those rows at dispatch.
+Rows 1 and 2 also wait on rows of other plans (section 3). The plan-queue reader, `backend/utilities/plan_status.py`, cannot follow a pointer by title, so the maintainer checks those rows at dispatch.
 
 ## 2. How a switch is approved, landed and read
 
-1. **Approval.** Before a row's branch is cut, the owner sends the person one message in the CLAUDE.md section 0c shape, with one lettered table. One line a task: what it owns, its window, what a live pass would delete at the next wake, and a recommendation. The numbers are the task's own row in the newest upkeep record - `selected`, `deleted`, `bytes_freed` and `until`, in the files of the newest day under `state/raw/gardener/`. The person answers by row id. No answer, no branch.
+1. **Approval.** Before a row's branch is cut, the maintainer sends the person one message in the CLAUDE.md section 0c shape, with one lettered table. One line a task: what it owns, its window, what a live pass would delete at the next wake, and a recommendation. The numbers are the task's own row in the newest upkeep record - `selected`, `deleted`, `bytes_freed` and `until`, in the files of the newest day under `state/raw/gardener/`. The person answers by row id. No answer, no branch.
 2. **One pull request a row, and one a task in row 3.** It holds each declaration's `dry_run`, its entry in `LIVE_BY_DECISION` in `backend/tests/contracts/test_gardener_config.py` with the reason in plain words and no plan number, and every doc sentence the switch makes false. The pull request body names the approval and its date. Step 5 of "Turning state cleanup on" in `docs/how-to/run-the-pipeline.md` asks for a commit that changes nothing else; it is older than that test, and the first row to merge corrects it.
 3. **The doc sentences** are the hits of `git grep -n -i -E "report-only|only reports?\b|dry_run: true|ships in dry run|until a person turns|until they run live" -- docs` that name the task, re-run at dispatch.
 4. **Merge window.** No `idhazh-gardener.yml` run is queued or running (`gh run list --workflow idhazh-gardener.yml --repo miztiik/yen-idhazh`), so the next wake is the first to read the switch.
@@ -85,7 +85,7 @@ Rows 1 and 2 also wait on rows of other plans (section 3). The plan-queue reader
 
 ### Row #3 - The retention windows the person approves go live, one task a pull request
 
-- **Scope:** the owner first sends the person section 2's message for every report-only retention and collection task, then switches on only the tasks the person approves, one pull request a task, one at a time.
+- **Scope:** the maintainer first sends the person section 2's message for every report-only retention and collection task, then switches on only the tasks the person approves, one pull request a task, one at a time.
 - **Precondition:** the person's answer. A task the person does not approve stays report-only. Each pull request leaves the row `IN-FLIGHT`, and the last approved task's pull request marks it `DONE`.
 - **Files touched, a pull request:** `config/gardener/<task>.json`; `backend/tests/contracts/test_gardener_config.py`; `docs/concepts/config/idhazh-gardener.md`; `docs/how-to/run-the-pipeline.md`; `docs/concepts/config/retention-ages.md`; this plan's Reckoner line; and the pages that say that task only reports: `docs/how-to/prune-a-collection.md` and `docs/architecture/publishing/idhazh-gardener.md` for `workflow-artifacts` and `workflow-runs`, that second page for the four tasks with a fold, `docs/architecture/sources/health.md` for `feed-health`, `docs/architecture/publishing/telemetry-series.md` and `docs/concepts/growing-reads.md` for `telemetry-aggregate`, and `docs/concepts/evaluation.md` for `scores`.
 - **Acceptance gates:** as row 1, for each pull request.

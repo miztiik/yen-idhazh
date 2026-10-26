@@ -39,7 +39,7 @@ decides the picture and `work` draws it while it still holds the text.
 **It was two stages on two models until 2026-09-13.** `idhazh visuals` ran a Qwen3-4B after the
 summarizer had finished, decided a picture from the summary, and rendered it in a job of its own.
 Plan 11 row #6 deleted that stage, the job, the model and the flag that switched between the two
-paths, in one commit (owner ruling 2026-09-13: move forward, no rollback). The reason the pass
+paths, in one commit (maintainer ruling 2026-09-13: move forward, no rollback). The reason the pass
 moved is that a second pass decides from a **summary of** the article rather than from the
 article, and both payloads validate - so nothing would say it had happened. What that stage cost
 while it ran is in
@@ -394,7 +394,7 @@ configuration, production evidence and refusal rules are defined on the
 The existing item ledger carries terminal measurements so requested forms
 remain visible through both replacement and refusal. A failed file write is
 not delivery, and a useful replacement is still an unmet original request.
-Owner approval: kumarsnaveen, 2026-10-25 UTC.
+Maintainer approval: 2026-10-25 UTC.
 
 **Why the model picks an index instead of writing a spec.** The obvious design is to ask the model
 for a Vega-Lite object. It is also the design where a hallucinated axis value is one sampling

@@ -68,7 +68,7 @@ A near-duplicate the two collections hold under two different addresses is a
 different problem, and none of these checks claims to catch it.
 
 **There is no `train/` split.** A train split in the same directory invites
-fine-tuning on the measurement set, and that contamination is silent (owner
+fine-tuning on the measurement set, and that contamination is silent (maintainer
 decision, 2026-09-10).
 
 ## Building it
@@ -133,8 +133,8 @@ All 641 rows were labelled on 2026-09-13 against `config/taxonomy.json` version
 `2026-09-12`, through `backend/utilities/label_reference_dataset.py`, which
 refuses any value the committed vocabulary does not name.
 
-**Agents wrote those labels, at the owner's direction and on the owner's behalf,
-and the owner ruled the rows record `labelled_by` of `human`** (owner decision,
+**Agents wrote those labels, at the maintainer's direction and on the maintainer's behalf,
+and the maintainer ruled the rows record `labelled_by` of `human`** (maintainer decision,
 2026-09-13, `CLAUDE.md` section 0). Every article was read in full. What that
 costs a measurement is on the set's own datasheet under "Who wrote the labels",
 and it is the first thing to read before quoting a figure taken here.

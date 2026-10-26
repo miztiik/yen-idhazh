@@ -53,7 +53,7 @@ The prerequisite has no custom timeout and inherits the Actions 6-hour ceiling,
 at which GitHub kills the job. This costs one additional runner startup and
 checkout on the path before planning, with no new CI job or dependency.
 
-This is the structural production follow-on authorized by kumarsnaveen on
+This is the structural production follow-on authorized by the maintainer on
 2026-10-24 while completing the behavior-test review: the two existing
 30-minute job deadlines become independently configurable without weakening
 them to step deadlines. The page stays whole because these settings govern the
@@ -241,7 +241,7 @@ legal: the family may still serve readers and other writers.
 
 ### Design rationale: a new judge starts paused
 
-Owner decision, 2026-10-11: a new judge lands paused with its file and package.
+Maintainer decision, 2026-10-11: a new judge lands paused with its file and package.
 A person switches it to active in a commit whose message names the activation
 decision. The commit log is the record; no named-decision test enforces it.
 The existing content-similarity judge remains active, so its nights do not change.
@@ -313,7 +313,7 @@ its draw of pairs, at its own measured per-pair cost, against the window below.
 The number is that judge's reading, so the check is that judge's too. Until
 2026-09-21 it was a validator on `AppConfig`, which put one judge's measurement
 in the import closure of every module that reads config - the council's own
-included. Owner ruling, 2026-09-21.
+included. Maintainer ruling, 2026-09-21.
 
 ### What holds the seam open, and the three shapes that still cross
 
@@ -347,7 +347,7 @@ from; `story_similarity_distribution` arrives through the placement knob block
 `app_config` composes, which the registry loads to ask a tenant whether it can
 finish the night. **No judge CODE is on that list and none may join it** - these
 are declarations a deleted judge would take with it, which is what makes the
-exception survivable. The owner agreed those three on 2026-09-21, and a second
+exception survivable. The maintainer agreed those three on 2026-09-21, and a second
 assertion fails the moment a fourth appears, so the exception limits itself
 rather than inviting the next one. Cutting either carrier means moving a shape
 every stage and the digest pipeline read, and that is a row of its own.
@@ -552,7 +552,7 @@ schedule. A bound derived from a measured per-pair cost would be the coupling
 this page exists to refuse, one layer down: a second judge with different
 economics would move a number that is not its to move. A tenant that cannot fit
 inside the window is refused by its own fit check, raised when the planning job
-resolves it. Owner ruling, 2026-09-21.
+resolves it. Maintainer ruling, 2026-09-21.
 
 **Nothing in the council checks the instant it handed over.** Only the tenant
 knows what a unit of work is and where stopping leaves a readable result, so the
@@ -569,7 +569,7 @@ a second time.
 
 ## Design rationale: named for the room, not for this month's job
 
-Owner ruling, 2026-09-18. The shards split a list today and never confer, so
+Maintainer ruling, 2026-09-18. The shards split a list today and never confer, so
 `judges` is the more literal word for what is on disk right now.
 
 **What is coming is not one question.** This loop argues a case, and a case needs
@@ -591,7 +591,7 @@ case is heard.
 
 **The council runs one judge or many - in sequence, in parallel, or chained -
 and depends on none of them.** A judge's development does not wait on the
-council, and the council's does not wait on a judge. Owner ruling, 2026-09-21.
+council, and the council's does not wait on a judge. Maintainer ruling, 2026-09-21.
 
 `backend/idhazh/council/` is where that sentence is kept true. Nothing under it
 imports a judge or names one: a judge is reached through the protocol in
@@ -795,7 +795,7 @@ venue's record of a unit depend on a tenant's diligence: a judge that forgot the
 line, or died before reaching it, left nothing behind at the one moment the
 record mattered. The council owns the invocation, so it owns the outcome - the
 row is filed on the protected exit path, and it survives anything that goes wrong after the
-tenant handed its result back. Owner ruling, 2026-09-21.
+tenant handed its result back. Maintainer ruling, 2026-09-21.
 
 **`judge_id` is in the settlement key**, beside the date, the run and the unit
 number. One council run has one run id, so on a night hosting two tenants,
@@ -878,7 +878,7 @@ ledgers carry both across time: the judged pairs and the fitted lines. On
 2026-09-21 that was 82 pair rows and 1 fitted row, all under
 `2026-09-18-35339202390`.
 
-The **`version` stamp every row already carries is the discriminator** (owner
+The **`version` stamp every row already carries is the discriminator** (maintainer
 ruling, 2026-09-21). It costs nothing, because the row carries it either way.
 
 There is a second test that needs no stamp at all, and it is exact rather than

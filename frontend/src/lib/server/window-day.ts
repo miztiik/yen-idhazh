@@ -1,6 +1,6 @@
 /** Which day does every console window end on?
  *
- * The newest day the site published a digest, `latestDate()`. The owner ruled on
+ * The newest day the site published a digest, `latestDate()`. The maintainer ruled on
  * 2026-10-05 that every console window ends there, so two builds of the same data
  * draw the same windows, and a record whose rows stop leaves its panels empty for
  * the window rather than moving the window back to its own last rows. The build

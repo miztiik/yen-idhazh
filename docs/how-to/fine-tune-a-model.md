@@ -206,7 +206,7 @@ What it costs, said rather than implied:
 - A commit SHA older than the boundary stops resolving, so a link to one dies.
 - A clone taken before a prune has to be re-fetched.
 
-Owner decision, 2026-08-28, taken over the alternative of keeping the corpus on a
+Maintainer decision, 2026-08-28, taken over the alternative of keeping the corpus on a
 branch nobody works from.
 
 **The prune never forces over a commit it did not read.** A force push is a
@@ -241,7 +241,7 @@ lock against another one. The hour still lowers the odds; the lease is what
 makes losing that bet cost another squash, or at worst a day, rather than
 another run's commits.
 
-Owner decision, 2026-09-22; the lease and the retry are the person's ruling of
+Maintainer decision, 2026-09-22; the lease and the retry are the person's ruling of
 2026-09-29.
 
 **No data is lost, only deltas.** `git checkout --orphan` at the boundary
@@ -293,7 +293,7 @@ history, and say so here.
 **Before adding a tag, answer two questions in the commit that adds it.** What
 does it hold that nothing else holds, and does the tree under it carry article
 text? A tag that cannot answer the first is a bookmark and belongs in a link. A
-tag that answers yes to the second needs an owner decision, because it is a
+tag that answers yes to the second needs a maintainer decision, because it is a
 standing exception to section 8.
 
 ## Looking at the corpus
@@ -366,7 +366,7 @@ only way they differ:
  2026-08-29 over the 2,791 committed ledger rows: 89 of them are exactly this
  case. **Key points were in the digested payload until 2026-09-24**, so no row
  scored before then can recompute and the refill finds nothing to join for
- those days. That break was accepted rather than migrated (owner, 2026-09-19):
+ those days. That break was accepted rather than migrated (maintainer, 2026-09-19):
  rewriting every committed digest is a join of its own, and the window refills
  from days written since.
  2. **Nothing about the page is reconstructed.** The body goes through the same

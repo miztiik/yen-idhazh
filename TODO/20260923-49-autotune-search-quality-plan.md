@@ -4,7 +4,7 @@
 
 **Level**: 5. Row 4 mints a persisted contract and a new committed ledger, so it stops before its pull request opens. Rows 1, 2 and 3 are Level 2 or 3 and run AUTO once the user authorizes.
 
-Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delegates a row where delegation pays; keep parallel N = 1 row in flight, refilling a slot as soon as a worker returns and never waiting on a merge; consult a persona only where two answers would lead to different code; AUTO-merge on green gates; honor the ESCALATE triggers in section 0. AUTHOR-AND-STOP until the user authorizes.
+Execute per docs/how-to/execute-a-plan.md: one maintainer carries the plan and delegates a row where delegation pays; keep parallel N = 1 row in flight, refilling a slot as soon as a worker returns and never waiting on a merge; consult a persona only where two answers would lead to different code; AUTO-merge on green gates; honor the ESCALATE triggers in section 0. AUTHOR-AND-STOP until the user authorizes.
 
 **One row is one place.** Everything a worker needs for a row - the shapes, the exact names, the file list, the gates, the oracle - is in that row's own section. No row sends a worker to another row to find its own contract.
 
@@ -18,7 +18,7 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 | Hard scope - in | The entity-query floor stops being a literal and becomes a knob. Precision at the filled slots becomes a gated number beside recall, on the frozen key where it has a baseline. The self-hydrating key gains a caller over the window a reader actually searches, reading the day payloads so the tags survive. The pipeline writes one reading per question per run into a new committed ledger after the index is built. |
 | Hard scope - out | Table A below. Six things, each with what leaving it out costs and what would bring it in. |
 | Runner budget | Section 0d. Measured 2026-09-23: the whole reading is 11.0 s to 29.1 s of compute on the authoring laptop, which is 0.05 to 0.14 percent of the 6 h job. The site moves by zero bytes, because `state/` is not published. |
-| ESCALATE triggers | Row 4 is Level 5 and stops before its pull request opens. Row 2 carries one question back to the owner (Table C). Any row that would set a bar on the self-hydrating number STOPS. Any row that would move `assist.similarity_floor` STOPS. |
+| ESCALATE triggers | Row 4 is Level 5 and stops before its pull request opens. Row 2 carries one question back to the maintainer (Table C). Any row that would set a bar on the self-hydrating number STOPS. Any row that would move `assist.similarity_floor` STOPS. |
 | Chosen strategy | Build the instrument bottom-up and let it write for two weeks before anybody argues a bar. Fowler ruled the order and ruled that no shape is frozen ahead of its writer. |
 | Execution | `autonomous orchestrator per docs/how-to/execute-a-plan.md. Parallel N = 1.` One, because every row edits `backend/tests/test_retrieval_eval.py` and three of the four edit `backend/idhazh/contracts/knobs/assist.py`. Rows that share one surface do not parallelise, and a claimed width here would buy four hand resolutions. |
 
@@ -71,9 +71,9 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 
 **Row 4 mints a persisted contract and a new committed ledger, so it stops before its pull request opens** (CLAUDE.md section 6, Level 5). It is cheap to write and expensive to reverse: a shape a run has already written is a shape every later correction has to migrate.
 
-**A worker reaching it stops and reports**: the fields it wrote and what each one lets somebody decide, the bytes a day costs, what a later correction would cost, and the one design decision the research page left open (Section 5c, decision 3). It does not open the pull request. The owner rules, and the ruling lands as a dated `## Design rationale` line in the living doc the row edits.
+**A worker reaching it stops and reports**: the fields it wrote and what each one lets somebody decide, the bytes a day costs, what a later correction would cost, and the one design decision the research page left open (Section 5c, decision 3). It does not open the pull request. The maintainer rules, and the ruling lands as a dated `## Design rationale` line in the living doc the row edits.
 
-**Rows 1, 2 and 3 do not pause.** Row 2 carries a question to the owner in its report (Table C) without stopping: the work it ships is complete on its own.
+**Rows 1, 2 and 3 do not pause.** Row 2 carries a question to the maintainer in its report (Table C) without stopping: the work it ships is complete on its own.
 
 ## Section 1 - Status Reckoner
 
@@ -112,7 +112,7 @@ Taken 2026-09-23 against `origin/main` at `b31e8a537`, with the committed config
 | D9 | Precision at the filled slots, frozen key | 0.3447 +/- 0.0225; two standard errors below is 0.2997 |
 | D10 | Unjudged share of filled slots, frozen key | 66.6 percent |
 
-**D9 read against D10 is the finding that shapes row 2.** Precision on the frozen key is 0.345 because two thirds of every filled slot holds a story nobody judged, and an unjudged story counts as wrong. The number is still the right instrument for the failure the owner named - a change that fills slots with junk drives it down and drives recall up - but the bar it can carry is 0.30, and that bar is two-thirds blind.
+**D9 read against D10 is the finding that shapes row 2.** Precision on the frozen key is 0.345 because two thirds of every filled slot holds a story nobody judged, and an unjudged story counts as wrong. The number is still the right instrument for the failure the maintainer named - a change that fills slots with junk drives it down and drives recall up - but the bar it can carry is 0.30, and that bar is two-thirds blind.
 
 ## Section 2 - Row 1: the entity-query floor becomes a knob
 
@@ -188,7 +188,7 @@ Its description says what it selects and what moving it does: how many published
 
 **Level 3.** Waits on row 1's files, not on its logic.
 
-**Why.** Nothing gates precision today. Recall rewards showing more, so a change that drops the floor and fills every slot with near-misses raises the gated number and fails nothing. Precision at the filled slots is what falls when that happens, and the owner ruled it is the failure that matters: no results is fine, bad results are not.
+**Why.** Nothing gates precision today. Recall rewards showing more, so a change that drops the floor and fills every slot with near-misses raises the gated number and fails nothing. Precision at the filled slots is what falls when that happens, and the maintainer ruled it is the failure that matters: no results is fine, bad results are not.
 
 ### Section 3a - The shapes this row needs
 
@@ -202,9 +202,9 @@ Its description says what it selects and what moving it does: how many published
 
 **The gate.** `test_the_ranking_clears_its_bar` asserts the precision bar alongside the recall bar it already asserts. The failure message names both numbers and the unjudged share, because 0.30 read without 66.6 percent is a number that looks like a verdict on search.
 
-### Section 3b - Table C: the half of the ruling this row holds for the owner
+### Section 3b - Table C: the half of the ruling this row holds for the maintainer
 
-The owner ruled that precision becomes the gated number **and recall becomes reported-only**. This row ships the first half. It holds the second, because the measurement says what removing the recall gate costs, and that cost was not priced when the ruling was made. This is a finding handed back, not a ruling overturned (CLAUDE.md section 0d). **A worker does not resolve it by deleting the recall assertion.**
+The maintainer ruled that precision becomes the gated number **and recall becomes reported-only**. This row ships the first half. It holds the second, because the measurement says what removing the recall gate costs, and that cost was not priced when the ruling was made. This is a finding handed back, not a ruling overturned (CLAUDE.md section 0d). **A worker does not resolve it by deleting the recall assertion.**
 
 | id | Option | What it costs | What it gives up |
 | --- | --- | --- | --- |
@@ -248,7 +248,7 @@ Restore from the commit, never from the working tree, and put both numbers in th
 | 1 | The bar is 0.30 - two standard errors below the measured 0.3447 +/- 0.0225 over the pinned corpus, which is the rule `recall_min` was set by | Andre |
 | 2 | The mean is macro over the queries that filled a slot. An empty list is excluded rather than scored zero, because the empty state is a promise rather than a failure, and the excluded count is printed | Andre |
 | 3 | The unjudged share is printed on the same line as the precision figure. 0.30 read without 66.6 percent beside it reads as a verdict on search | Reader |
-| 4 | `recall_min` keeps gating. The second half of the ruling is held for the owner in Table C, and a worker does not settle it by deleting the assertion | Andre priced it; the owner rules |
+| 4 | `recall_min` keeps gating. The second half of the ruling is held for the maintainer in Table C, and a worker does not settle it by deleting the assertion | Andre priced it; the maintainer rules |
 | 5 | The pin stays. `eval_corpus_through` is what stops either bar expiring on the publishing rate | Andre |
 
 ### Section 3g - Rejected alternatives
@@ -348,15 +348,15 @@ And the window rule holds: the newest month alone answers 3 days, under the floo
 
 ### Section 5a - The ledger, the filename, and the writer
 
-**Where.** `state/search-quality/<YYYY>/<MM>/<DD>/`, named for the ranker rather than for one of its two surfaces. The same code serves the front page search box and the archive search, so `archive-search-quality` would claim half of what it measures. Owner ruling, 2026-09-23.
+**Where.** `state/search-quality/<YYYY>/<MM>/<DD>/`, named for the ranker rather than for one of its two surfaces. The same code serves the front page search box and the archive search, so `archive-search-quality` would claim half of what it measures. Maintainer ruling, 2026-09-23.
 
-**The filename follows the one-writer-per-path rule.** `ledger.segment_name` spells `<run_id>-<attempt>-<job>-<shard>.csv` and `ledger.day_shard_path` builds the path. `idhazh.path_classes.is_written_once` reads it back, and it passes on `SEGMENT_NAME` alone with no list to join. **The mechanism may change later; this ledger follows whatever it becomes rather than inventing a second scheme.** Owner ruling, 2026-09-23.
+**The filename follows the one-writer-per-path rule.** `ledger.segment_name` spells `<run_id>-<attempt>-<job>-<shard>.csv` and `ledger.day_shard_path` builds the path. `idhazh.path_classes.is_written_once` reads it back, and it passes on `SEGMENT_NAME` alone with no list to join. **The mechanism may change later; this ledger follows whatever it becomes rather than inventing a second scheme.** Maintainer ruling, 2026-09-23.
 
 **Who writes it.** `ledger.write_segment` from `stage_assemble`, with `job=ServerJob.ASSEMBLE` and `shard=ASSEMBLE_SHARD`, which is 0 because assemble runs once for the whole day. The call sits immediately after `assemble.rebuild_search_index` returns and before the manifest is built, because the reading is about the index this run just rebuilt.
 
 **It degrades rather than failing.** No committed month shard, or no encoder on disk, records nothing and the day still publishes (section 1a). A missing row is visible in the series; a day lost to a measurement that would not run is gone.
 
-**Not an operator verb and not a new workflow.** The window is gone after the prune, so a reading not taken on the day is lost, and the pipeline already loads this encoder in this job. Owner ruling, 2026-09-23.
+**Not an operator verb and not a new workflow.** The window is gone after the prune, so a reading not taken on the day is lost, and the pipeline already loads this encoder in this job. Maintainer ruling, 2026-09-23.
 
 ### Section 5b - The shape, and the one decision the pause exists for
 
@@ -366,9 +366,9 @@ And the window rule holds: the newest month alone answers 3 days, under the floo
 
 **What the grain costs.** 30 rows a run instead of 1, five runs a day. Estimated 22.5 KB a day and about 8 MB a year of checkout, from a 150 B row. That is an estimate from the cell count, **labelled one, and settled by the size of the first committed file.** `state/item-health/` already writes 400 rows a day on the committed ceiling, so this is a quarter of a ledger that already exists.
 
-**What the alternative costs.** A per-run row carrying `queries_added`, `queries_dropped` and a digest of the question ids says whether the set moved and by how much. It can never say what the number would have been over the questions both runs carried, which is the one comparison the owner named as having to survive a moving vocabulary.
+**What the alternative costs.** A per-run row carrying `queries_added`, `queries_dropped` and a digest of the question ids says whether the set moved and by how much. It can never say what the number would have been over the questions both runs carried, which is the one comparison the maintainer named as having to survive a moving vocabulary.
 
-**This is what the worker reports at the pause.** It writes the per-question grain, and the owner rules before the pull request opens.
+**This is what the worker reports at the pause.** It writes the per-question grain, and the maintainer rules before the pull request opens.
 
 ### Section 5c - The contract
 
@@ -445,22 +445,22 @@ Run the assemble stage over a fixture tree - row 3's tree with this run's inputs
 
 | # | Decision | Authority |
 | --- | --- | --- |
-| 1 | The ledger is `state/search-quality/`, named for the ranker rather than for one of its two surfaces | Owner, 2026-09-23 |
-| 2 | The filename follows `SEGMENT_NAME`, not a bare `<DD>.csv`, and follows that mechanism wherever it goes | Owner, 2026-09-23 |
-| 3 | One row per question per run, so the comparison over shared questions is computable between any two runs rather than stored by the earlier one. **This is the decision the pause exists for** | proposed by Fowler; the owner rules |
+| 1 | The ledger is `state/search-quality/`, named for the ranker rather than for one of its two surfaces | Maintainer, 2026-09-23 |
+| 2 | The filename follows `SEGMENT_NAME`, not a bare `<DD>.csv`, and follows that mechanism wherever it goes | Maintainer, 2026-09-23 |
+| 3 | One row per question per run, so the comparison over shared questions is computable between any two runs rather than stored by the earlier one. **This is the decision the pause exists for** | proposed by Fowler; the maintainer rules |
 | 4 | The contract, the enum member and the writer land in one commit. A shape with no writer makes every later correction a breaking change with a migration to write | Fowler |
 | 5 | The writer degrades: no shard or no encoder records nothing, and the day still publishes | Fowler |
 | 6 | No scheduled prune. The reading is the series, and an operator's range prune already reaches it | Carmack |
-| 7 | The write happens in the pipeline after the index, never in an operator verb and never in a workflow of its own | Owner, 2026-09-23 |
+| 7 | The write happens in the pipeline after the index, never in an operator verb and never in a workflow of its own | Maintainer, 2026-09-23 |
 
 ### Section 5i - Rejected alternatives
 
 | # | Option | Why rejected | What it would cost to take | Authority |
 | --- | --- | --- | --- | --- |
-| 1 | One row per run with `score_on_common` as a cell | The earlier of two readings cannot know which questions the later one carries, so the cell would be a comparison against whatever happened to be on disk | Nothing to take today. The cost is that a comparison across a vocabulary change becomes impossible after the fact, which is the property the owner named | Fowler |
+| 1 | One row per run with `score_on_common` as a cell | The earlier of two readings cannot know which questions the later one carries, so the cell would be a comparison against whatever happened to be on disk | Nothing to take today. The cost is that a comparison across a vocabulary change becomes impossible after the fact, which is the property the maintainer named | Fowler |
 | 2 | One JSON document a day rather than CSV rows | Two runs of one day land on one path and a JSON document merges whole. The day tree exists because a row is settled a line at a time by a machine that has never read the file | Nothing. The cost is a rebase git cannot apply on any day two runs both wrote | Fowler |
-| 3 | `<DD>.json`, one file a day | It is the scheme the one-writer rule replaced: a second attempt at one job writes the path the first attempt took | Nothing. The cost is a lost push race costing the rows instead of a merge | Owner ruling |
-| 4 | An operator verb that takes the reading on demand | Retention deletes the published day, so the window is gone and the reading cannot be recomputed | Nothing to take. The cost is that every day nobody runs the verb is a day with no reading, permanently | Owner ruling |
+| 3 | `<DD>.json`, one file a day | It is the scheme the one-writer rule replaced: a second attempt at one job writes the path the first attempt took | Nothing. The cost is a lost push race costing the rows instead of a merge | Maintainer ruling |
+| 4 | An operator verb that takes the reading on demand | Retention deletes the published day, so the window is gone and the reading cannot be recomputed | Nothing to take. The cost is that every day nobody runs the verb is a day with no reading, permanently | Maintainer ruling |
 | 5 | A workflow of its own | The pipeline already loads this encoder in this job | A second job, a second checkout, a second encoder load, and a second push racing the first | Carmack |
 | 6 | Publish the reading under `frontend/public/` so a page can fetch it | Nothing draws it (A2), and a published payload nobody reads is bytes against the 1 GB cap plus a contract to keep for ever | A published-payload contract and the console row. A2 names what would bring it in | Jony |
 

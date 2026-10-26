@@ -165,7 +165,7 @@ class LedgersConfig(Model):
 
     @property
     def data_explorer_ledgers(self) -> tuple[LedgerName, ...]:
-        """The registered ledgers whose owner enabled compact explorer reads."""
+        """The registered ledgers whose maintainer enabled compact explorer reads."""
         return tuple(
             held.name
             for family in self.families

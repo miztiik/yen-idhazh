@@ -22,11 +22,11 @@ Two ways in. They produce the same thing.
 The work job uploads one artifact per shard, named `evidence-0`.. `evidence-N`,
 kept for **14 days**. After that the day is gone and cannot be relabelled.
 
-1. Find the run: `gh run list --workflow digest.yml --repo <owner>/<repo>`.
+1. Find the run: `gh run list --workflow digest.yml --repo <account>/<repo>`.
 2. Download every evidence artifact into one directory:
 
  ```bash
- gh run download <run-id> --repo <owner>/<repo> --pattern 'evidence-*' --dir /tmp/evidence
+ gh run download <run-id> --repo <account>/<repo> --pattern 'evidence-*' --dir /tmp/evidence
  ```
 
  One directory per shard is fine. The tool reads the whole tree.

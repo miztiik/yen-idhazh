@@ -434,7 +434,7 @@ against the readings printed beside it.
 
 **Native Hardware keeps its own arithmetic.** Declared record adapters live in
 `frontend/src/lib/console/machine/records.ts`; counters, article cost and clock
-comparisons retain their actual native owners. They do not depend on a span-track
+comparisons retain their actual native maintainers. They do not depend on a span-track
 helper. A future span drawing must compute its band and marker together so two
 pieces of markup cannot disagree about the same reading.
 
@@ -740,14 +740,14 @@ Carmack, 2026-09-27.
 
 **d3-sankey lays the flow out, and the funnel's own rules are put back on it.**
 Guardrail #8 prefers a library to arithmetic this project writes itself, and
-writing our own is a person's call; on 2026-09-28 the owner took the library.
+writing our own is a person's call; on 2026-09-28 the maintainer took the library.
 d3-sankey 0.12.3 is its newest release, from 2019. It depends on `d3-array` 1 to 2
 and `d3-shape` 1, so it installs a second, older copy of each beside the ones this
 console pins - measured 2026-09-27 in a scratch install, `d3-array` 2.12.1,
 `d3-shape` 1.3.7 and `d3-path` 1.0.9, 445,686 bytes of `node_modules`. The flow
 imports the layout and not the link generator, whose stroked lines the filled
 ribbons replace, so a route that draws a flow ships about 2 KB gzipped more - the
-owner's estimate, taken without a new measurement, beside the 2,825 bytes measured
+maintainer's estimate, taken without a new measurement, beside the 2,825 bytes measured
 for both generators on 2026-09-27. **Two rules are the funnel's and not the
 library's, and the flow applies them after the library runs.** Every node sits in
 the column of its own depth, because the library's default sends a node with
@@ -758,7 +758,7 @@ off the edge the funnel is read along. `frontend/tests/chart-vocabulary.spec.ts`
 asserts both. The funnel's own cases - a drop of zero, a stage that lets more
 through than the next one counts, a narrow column, a short one - stay ours to
 handle before the library is called. The bundle gate weighs pages and data files
-and not scripts, so it cannot see a package either way. Authority: owner,
+and not scripts, so it cannot see a package either way. Authority: maintainer,
 2026-09-28, overturning Fowler, Susan and Carmack's ruling of 2026-09-27 that the
 layout be written here.
 
@@ -779,7 +779,7 @@ claims more readings than it shows.
 
 ## Design rationale
 
-Owner, 2026-10-08: these three charts carry only the shared changes they need,
+Maintainer, 2026-10-08: these three charts carry only the shared changes they need,
 through optional props. Existing callers retain their drawing. The explorer
 supplies the common readout API, so pointer, keyboard and touch read the same
 values. Native title tooltips are not a second readout; legacy callers without

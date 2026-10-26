@@ -91,7 +91,7 @@ Table C - Local configuration
 | C7 | `selection.rows_per_domain_target` | `20`, configurable. The initial allocation per group; a larger pool may exceed it when filling shortages. |
 | C8 | `selection.rows_max` | `1000`, configurable. A hard total cap, not a promise to produce this many rows. |
 | C9 | `selection.fill_shortfall` | `true`, configurable. Transfer places unavailable in small groups to groups with remaining articles. |
-| C10 | `selection.group_by` | `publisher`, approved by the owner on 2026-09-13. `source_domain` and `host` remain available as explicit alternatives. |
+| C10 | `selection.group_by` | `publisher`, approved by the maintainer on 2026-09-13. `source_domain` and `host` remain available as explicit alternatives. |
 | C11 | `selection.publisher_disambiguation` | The ordered parts appended to a publisher key that is not unique, default `["registered_name", "public_suffix", "host"]`. A unique key is never lengthened. |
 | C12 | `selection.generic_host_labels` | Leftmost labels that name a subdomain rather than an outlet, so the key falls back to the registered name. Added after the first real import read `newsletter.semianalysis.com` as `newsletter`. |
 
@@ -160,7 +160,7 @@ Table F - Status Reckoner
 | F10 | 10 | Verify and freeze the extraction | 9 | J | DONE (zero faults) | refdata2 | direct | - |
 | F11 | 11 | Select the configurable classification sample | 10 | K | DONE (1,000 articles, 52 publishers) | refdata2 | direct | - |
 | F12 | 12 | Verify the selection and hand over | 11 | L | DONE | refdata2 | direct | - |
-| F13 | 13 | Clean publisher furniture from the text | 10 | M | DONE (owner decision B3, 2026-09-13; 44,380 words removed) | refdata2 | direct | - |
+| F13 | 13 | Clean publisher furniture from the text | 10 | M | DONE (maintainer decision B3, 2026-09-13; 44,380 words removed) | refdata2 | direct | - |
 
 ## 2. Step 1 - Approve the local layout and meanings
 
@@ -168,8 +168,8 @@ Table F - Status Reckoner
 - **Files touched:** This plan only if an approved choice changes it.
 - **Acceptance gates:** Explicit user approval of those meanings; no application checks or network activity.
 - **Oracle:** Two different newsletter hosts on one platform get separate allocations, because `selection.group_by` is `publisher` and their leftmost labels differ.
-- **Decisions:** The owner approved this plan on 2026-09-13, named the collection `corpus/reference-dataset-2/`, and set grouping to the publisher prefix rather than the registered domain, with a colliding key lengthened only when it is not unique. Backend code and dataset-local settings are owner decisions of the same date; no value of 20 or 1000 is embedded in utility logic.
-- **Rejected alternatives:** A global-config extension would affect the regular pipeline for an occasional operator task; the owner refused it on 2026-09-13. Grouping on the registered domain was refused the same day because it merges every newsletter on a shared platform into one allocation.
+- **Decisions:** The maintainer approved this plan on 2026-09-13, named the collection `corpus/reference-dataset-2/`, and set grouping to the publisher prefix rather than the registered domain, with a colliding key lengthened only when it is not unique. Backend code and dataset-local settings are maintainer decisions of the same date; no value of 20 or 1000 is embedded in utility logic.
+- **Rejected alternatives:** A global-config extension would affect the regular pipeline for an occasional operator task; the maintainer refused it on 2026-09-13. Grouping on the registered domain was refused the same day because it merges every newsletter on a shared platform into one allocation.
 
 ## 3. Step 2 - Snapshot and inventory the supplied URLs
 

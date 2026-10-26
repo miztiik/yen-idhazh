@@ -1,11 +1,11 @@
 # 26 - Prerender: the guard retires, the prerendering does not
 
 **Last Updated**: 2026-10-10
-**Level**: 4 (a build-time handler is deleted, four documentation surfaces are corrected, and the plan carries a ruling only the owner may overturn)
+**Level**: 4 (a build-time handler is deleted, four documentation surfaces are corrected, and the plan carries a ruling only the maintainer may overturn)
 
 **Chain**: [`20260910-23-article-classification-plan.md`](20260910-23-article-classification-plan.md) section 26 and [`20260910-25-placement-plan.md`](20260910-25-placement-plan.md) section 18 both name prerender as a gap nobody owns, and both send its removal to "the UI shell plan". **No such plan-doc exists and none is planned.** This plan takes the gap off both of them.
 
-**The filename says `retire-prerender` and the title does not, and that is the finding rather than a slip.** The file was named before the tree was read. Having read it, the answer is that one half of the prerender surface is genuinely legacy and goes, and the other half is a decision the owner took on 2026-09-09 and 2026-09-10, wrote down next to the code, and is still true. Section 0.2 is the ruling and section 6 is what it would cost to overturn it.
+**The filename says `retire-prerender` and the title does not, and that is the finding rather than a slip.** The file was named before the tree was read. Having read it, the answer is that one half of the prerender surface is genuinely legacy and goes, and the other half is a decision the maintainer took on 2026-09-09 and 2026-09-10, wrote down next to the code, and is still true. Section 0.2 is the ruling and section 6 is what it would cost to overturn it.
 
 Execute per [`../docs/how-to/execute-a-plan.md`](../docs/how-to/execute-a-plan.md): the orchestrator dispatches one worktree-isolated worker per row; workers consult personas on ambiguity; AUTO-merge on green gates; **parallel N = 4**; honour the ESCALATE triggers in section 0. AUTHOR-AND-STOP until the user authorizes.
 
@@ -15,10 +15,10 @@ Execute per [`../docs/how-to/execute-a-plan.md`](../docs/how-to/execute-a-plan.m
 
 | Field | Value |
 | --- | --- |
-| Why this plan exists | Two plan-docs and one owner instruction call prerender legacy and unowned. Read against the tree, one of those three words is right and two are not. It is **owned** - `frontend/src/routes/+page.svelte` argues for it in eighteen lines dated 2026-09-10 - and it is **not uniformly legacy**: the dated reading routes stopped prerendering on 2026-09-09 and six routes deliberately did not. What is legacy is the guard those dated routes needed, and four documentation surfaces still telling a reader that every route is prerendered. This plan deletes the first, corrects the second, prices the third, and writes the ruling where the next person will meet it |
+| Why this plan exists | Two plan-docs and one maintainer instruction call prerender legacy and unowned. Read against the tree, one of those three words is right and two are not. It is **owned** - `frontend/src/routes/+page.svelte` argues for it in eighteen lines dated 2026-09-10 - and it is **not uniformly legacy**: the dated reading routes stopped prerendering on 2026-09-09 and six routes deliberately did not. What is legacy is the guard those dated routes needed, and four documentation surfaces still telling a reader that every route is prerendered. This plan deletes the first, corrects the second, prices the third, and writes the ruling where the next person will meet it |
 | Hard scope - in | **`frontend/prerender-guard.js` and its wiring deleted**, with its spec, its test-group entry and its one doc paragraph in the same commit; **one measurement** of what the built site weighs with prerendering on and off, written up as this repository's first benchmark record; **four false claims corrected** - two documentation pages, one gate guide and one test docstring; **the ruling recorded** in the living doc that owns the published surface; **the gap entries in plans 23 and 25 repointed** at this plan |
-| Hard scope - out | **Removing `export const prerender = true` from any route.** Section 0.2 rules against it and section 6 prices the reversal; a row may not do it and no gate here permits it. **Adding a prerendered route.** **Any change to what a document contains** - the seam, the seed, `ui.shell_seed_items` and every payload are untouched, so every page ceiling in `page_weight.ceilings_bytes` must still hold to the byte after row #2. **Any page under `docs/reference/` that names the guard only in passing** - a reference page mentioning it is a documentation question with its own owner, and settling it inside a code plan hides that decision where nobody looks for it. **`docs/concepts/ui-shell.md`**, whose prerender sentence is true today and is rewritten by plan 25 row #11 |
-| ESCALATE triggers | 1. **A row proposes to delete an `export const prerender = true`.** That is section 6, it is priced there, and only the owner may authorize it. 2. **The measurement in row #1 shows prerendering costs the published site more than 2 percent of its bytes** - the ruling was taken on the belief that six documents a build is a rounding error, and past that it is not. 3. **A row's build emits fewer than six `index.html` files outside `404.html`.** Something un-prerendered a route and nothing else in this plan would notice. 4. **Any page ceiling in `page_weight.ceilings_bytes` moves.** No row here changes a document, so a moved byte means a row did something it did not say it would. 5. A removal row proposes to leave a test, a config key, a fixture or a doc paragraph behind. 6. A row proposes to publish a `robots.txt` or a sitemap - neither exists today and adding one is a decision about the whole site, not a consequence of this plan |
+| Hard scope - out | **Removing `export const prerender = true` from any route.** Section 0.2 rules against it and section 6 prices the reversal; a row may not do it and no gate here permits it. **Adding a prerendered route.** **Any change to what a document contains** - the seam, the seed, `ui.shell_seed_items` and every payload are untouched, so every page ceiling in `page_weight.ceilings_bytes` must still hold to the byte after row #2. **Any page under `docs/reference/` that names the guard only in passing** - a reference page mentioning it is a documentation question with its own maintainer, and settling it inside a code plan hides that decision where nobody looks for it. **`docs/concepts/ui-shell.md`**, whose prerender sentence is true today and is rewritten by plan 25 row #11 |
+| ESCALATE triggers | 1. **A row proposes to delete an `export const prerender = true`.** That is section 6, it is priced there, and only the maintainer may authorize it. 2. **The measurement in row #1 shows prerendering costs the published site more than 2 percent of its bytes** - the ruling was taken on the belief that six documents a build is a rounding error, and past that it is not. 3. **A row's build emits fewer than six `index.html` files outside `404.html`.** Something un-prerendered a route and nothing else in this plan would notice. 4. **Any page ceiling in `page_weight.ceilings_bytes` moves.** No row here changes a document, so a moved byte means a row did something it did not say it would. 5. A removal row proposes to leave a test, a config key, a fixture or a doc paragraph behind. 6. A row proposes to publish a `robots.txt` or a sitemap - neither exists today and adding one is a decision about the whole site, not a consequence of this plan |
 | Chosen strategy | Measure first so the ruling can be overturned on a number rather than on prose, delete the guard whose question died, correct the four claims that are false, then write the ruling in the page a reader arrives at. Nothing a reader can see changes at any point |
 | Execution | `autonomous orchestrator per docs/how-to/execute-a-plan.md. Parallel N = 4.` |
 
@@ -106,7 +106,7 @@ npm run test:browser
 
 ### 0.2 The ruling, and the four facts it rests on
 
-**Ruled: the six prerendered routes stay. `frontend/prerender-guard.js` goes.** Authority: this plan, on the evidence below; reversal is section 6 and needs the owner.
+**Ruled: the six prerendered routes stay. `frontend/prerender-guard.js` goes.** Authority: this plan, on the evidence below; reversal is section 6 and needs the maintainer.
 
 **Fact 1 - the expensive half of prerendering was already removed, twelve days before the instruction that called it legacy.** Until 2026-09-09 the two dated reading routes were prerendered off the committed digest tree at **twelve documents per published day** - six HTML pages and six `__data.json` twins - which reached **50,598,258 bytes and 39.5 percent of the published site**, and grew with every day the pipeline wrote. Both render in the browser now. What is left reads no committed day to decide whether it exists, so it is **six documents per build and the count does not move when a day publishes**. Under `CLAUDE.md` Guardrail #12 the version that grew was the defect and the version that remains is not one.
 
@@ -116,7 +116,7 @@ npm run test:browser
 
 **Fact 4 - four surfaces still tell a reader something false, and one of them is a gate guide.** They are named in rows #3 and #4. This is the real cost of leaving prerender unowned: not the six documents, but that the last two plan-docs to touch the subject both inherited "every route is prerendered" from a page nobody corrected.
 
-**What this ruling is not.** It is not a finding that prerendering is good, and it does not defend the seven declarations individually - row #1 measures them as one setup, and section 6 is what a worker executes the day the owner says so.
+**What this ruling is not.** It is not a finding that prerendering is good, and it does not defend the seven declarations individually - row #1 measures them as one setup, and section 6 is what a worker executes the day the maintainer says so.
 
 ### 0.3 The inventory this plan is priced against
 
@@ -215,7 +215,7 @@ git status --porcelain frontend/src
 
 | # | Decision | Authority |
 | --- | --- | --- |
-| 1 | **Both setups, even though the ruling is already made.** A ruling defended only in prose can only be argued with; a ruling with a number beside it can be overturned by a better number. Section 6 is executable the day the owner wants it, and this is the row that tells them what they would be buying | `CLAUDE.md` Guardrail #10 |
+| 1 | **Both setups, even though the ruling is already made.** A ruling defended only in prose can only be argued with; a ruling with a number beside it can be overturned by a better number. Section 6 is executable the day the maintainer wants it, and this is the row that tells them what they would be buying | `CLAUDE.md` Guardrail #10 |
 | 2 | **Setup B is never merged and never pushed.** It exists for one afternoon in one worktree. The plan's hard scope forbids removing a declaration, and a branch that did it would be one merge away from doing it by accident | This plan, section 0 |
 | 3 | **The record goes under `docs/reference/benchmarks/` and the instrument log gets one line.** A run is a fact about a day and the figure it produces is in force only until the next run; appending to the log instead would leave two readings of one quantity in date order, where only the ordering says which governs | `CLAUDE.md` section 5 |
 
@@ -426,7 +426,7 @@ It removes no declaration, changes no build, and edits no other page. It does no
 
 ## 6. What retiring prerendering would take, and why this plan is not doing it
 
-**Written out in full because a rejection with no price is an opinion.** If the owner rules that the six routes go after reading section 0.2 and row #1's measurement, this is the work, and it converts into rows with no further research.
+**Written out in full because a rejection with no price is an opinion.** If the maintainer rules that the six routes go after reading section 0.2 and row #1's measurement, this is the work, and it converts into rows with no further research.
 
 | Step | What it touches |
 | --- | --- |
@@ -475,7 +475,7 @@ Named here so they are not mistaken for work this plan is doing.
 
 - [`../docs/how-to/execute-a-plan.md`](../docs/how-to/execute-a-plan.md) - resume unfinished work, check each row against the code, and update its own Reckoner.
 - [`20260911-execution-order.md`](20260911-execution-order.md) - the schedule across the five open plans. **All four rows here are unblocked today and row #2 collides with nothing anywhere in the set**, which makes this the cheapest plan to run and the one that unsticks two other plans' open gaps.
-- [`20260910-23-article-classification-plan.md`](20260910-23-article-classification-plan.md) - its section 26 named prerender as a gap and sent it to a plan that does not exist; this plan takes it, and its row #15 is the console tab the owner's 2026-09-11 ruling re-addressed to `/console/judgement/`. **Its row #P5 also writes into `docs/reference/benchmarks/`**, which row #1 here says it creates - section 0.1.
+- [`20260910-23-article-classification-plan.md`](20260910-23-article-classification-plan.md) - its section 26 named prerender as a gap and sent it to a plan that does not exist; this plan takes it, and its row #15 is the console tab the maintainer's 2026-09-11 ruling re-addressed to `/console/judgement/`. **Its row #P5 also writes into `docs/reference/benchmarks/`**, which row #1 here says it creates - section 0.1.
 - [`20260910-25-placement-plan.md`](20260910-25-placement-plan.md) - its section 0.1 and section 18 carry the same gap and the same 23-page count, and its row #12 builds `/console/judgement/`.
 - [`20260911-classification-research-record.md`](20260911-classification-research-record.md) - the research record whose 2026-09-11 reading of `frontend/prerender-guard.js` and `frontend/svelte.config.js` is where both plans' prerender paragraphs came from.
 - [`../docs/architecture/publishing/frontend.md`](../docs/architecture/publishing/frontend.md) - the living doc that owns the six routes, the 2026-09-09 split and the 2026-09-10 seam, and the page row #4 writes the ruling into.

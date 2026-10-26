@@ -2,7 +2,7 @@
 
 **Last Updated**: 2026-10-12
 
-Research record for plan 65 (Table Q, Q65), grounded in the plan's North Star. Evidence, not rulings: the owner rules on what plan 65.2 takes from it.
+Research record for plan 65 (Table Q, Q65), grounded in the plan's North Star. Evidence, not rulings: the maintainer rules on what plan 65.2 takes from it.
 
 **Correction, 2026-10-12.** Where this record gives Granite Guardian about 5 minutes per summary, that figure is the plan's nightly budget (8 summaries in 40 minutes), not a measurement. Its speed on the council's runners is still unmeasured; Stage 0 measures it.
 
@@ -167,7 +167,7 @@ Use the conservative boundary for promotion, and an always-valid test for the po
 
 **The base model.** Qwen3.5-9B is a dense hybrid: "eight blocks of three Gated DeltaNet linear-attention layers followed by one gated full-attention layer", released March 2026 under Apache 2.0 ([58](https://modal.com/library/qwen/qwen3-5-9b), [57](https://huggingface.co/Qwen/Qwen3.5-9B)).
 
-**Hardware and tools.** Unsloth lists 22 GB of VRAM for a 9B bf16 LoRA ([59](https://unsloth.ai/docs/models/qwen3.5/fine-tune)). It warns: "It is not recommended to do QLoRA (4-bit) training on the Qwen3.5 models, no matter MoE or dense, due to higher than normal quantization differences". It needs transformers v5. It exports straight to GGUF (`model.save_pretrained_gguf(..., quantization_method = "q4_k_m")`). It names a wrong chat template or EOS token as the most common cause of a worse export ([59](https://unsloth.ai/docs/models/qwen3.5/fine-tune)). So: rent a GPU with 24 GB or more. The current Colab notebook path (project record) needs a paid runtime of that size. A rented machine also has the RAM to merge, which today happens on the owner's machine (project record). [moderate]
+**Hardware and tools.** Unsloth lists 22 GB of VRAM for a 9B bf16 LoRA ([59](https://unsloth.ai/docs/models/qwen3.5/fine-tune)). It warns: "It is not recommended to do QLoRA (4-bit) training on the Qwen3.5 models, no matter MoE or dense, due to higher than normal quantization differences". It needs transformers v5. It exports straight to GGUF (`model.save_pretrained_gguf(..., quantization_method = "q4_k_m")`). It names a wrong chat template or EOS token as the most common cause of a worse export ([59](https://unsloth.ai/docs/models/qwen3.5/fine-tune)). So: rent a GPU with 24 GB or more. The current Colab notebook path (project record) needs a paid runtime of that size. A rented machine also has the RAM to merge, which today happens on the maintainer's machine (project record). [moderate]
 
 **How many examples.** LIMA tuned a 65B model on "only 1,000 carefully curated prompts and responses" ([49](https://arxiv.org/abs/2305.11206)), so format and style are learned fast. For summarization DPO, FeedSum's composite rose from 0.632 to 0.707 with 13K pairs and "nearly plateaus after 46K". 5K pairs reached 0.702, and 1K human pairs reached 0.666 ([24](https://arxiv.org/abs/2410.13116)). So 2,000 to 6,000 well-judged pairs may capture much of the gain (estimate). That result was on Llama3-8B with a 70B judge, not on this system. [low] Measure a learning curve: train on 25, 50 and 100 percent of the pairs and test each through the harness.
 
@@ -213,7 +213,7 @@ After promotion the drift judge watches with an always-valid test and rolls back
 Options that keep a person out of the loop, best first:
 1. A CI workflow calls a pay-per-second GPU function with a spend cap. The job trains, exports the GGUF or adapter, uploads it to a private store, writes a ledger row and registers a challenger.
 2. The same through a pod API, with a hard timeout.
-3. A self-hosted GPU runner that the owner maintains.
+3. A self-hosted GPU runner that the maintainer maintains.
 
 In every option, training runs outside CI's CPU runners, as the brief requires; only the trigger lives in CI (NS1).
 
@@ -229,7 +229,7 @@ In every option, training runs outside CI's CPU runners, as the brief requires; 
 | MiniCheck-Flan-T5-L | 0.8B | MIT ([51](https://huggingface.co/lytang/MiniCheck-Flan-T5-Large)) | 75.0 | 69.9 | 74.3 | Authors: "on par with GPT-4, but 400x cheaper" |
 | Bespoke-MiniCheck-7B | 7B | CC BY-NC 4.0 ([52](https://huggingface.co/bespokelabs/Bespoke-MiniCheck-7B)) | 77.4 | 65.5 | 77.8 | Not permissive: excluded |
 
-Scores are from the leaderboard ([50](https://llm-aggrefact.github.io/)). Overall rank and news rank differ. On CNN the two small MIT checkers lead Granite 3.3 by about 3 points; on XSum Granite leads by under 1 point. They are a tenth of its size or less. All are from families other than Qwen, so all meet NS4's family line, but adding one needs the owner's approval as a second model. [moderate]
+Scores are from the leaderboard ([50](https://llm-aggrefact.github.io/)). Overall rank and news rank differ. On CNN the two small MIT checkers lead Granite 3.3 by about 3 points; on XSum Granite leads by under 1 point. They are a tenth of its size or less. All are from families other than Qwen, so all meet NS4's family line, but adding one needs the maintainer's approval as a second model. [moderate]
 
 ### (b) Key-fact extraction and alignment for completeness
 

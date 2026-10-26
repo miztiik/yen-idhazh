@@ -12,7 +12,7 @@ Every ledger here has exactly one name in code: a member of `LedgerName` in `bac
 
 **The Python name is spelled from the value and the family, and from nothing else.** A ledger that is its own family is its value in upper snake case: `feed-health` is `FEED_HEALTH`. A ledger inside a family puts the family first: `metrics` under `content-similarity-judge` is `CONTENT_SIMILARITY_JUDGE_METRICS`. The registry refuses a member that breaks the rule when it loads, so a reader who knows the folder knows the name.
 
-**The value says what the ledger holds, never the kind of thing it is.** Owner decision, 2026-09-27. `telemetry-aggregate` held what is left of an item-health month, so it is `item-health-summary`. A name for a kind of thing claims every ledger of that kind: a reader cannot tell from the folder which one it holds, and the next ledger of that kind has no name left. It was renamed while it held no files, so nothing moved.
+**The value says what the ledger holds, never the kind of thing it is.** Maintainer decision, 2026-09-27. `telemetry-aggregate` held what is left of an item-health month, so it is `item-health-summary`. A name for a kind of thing claims every ledger of that kind: a reader cannot tell from the folder which one it holds, and the next ledger of that kind has no name left. It was renamed while it held no files, so nothing moved.
 
 It sits at the bottom of the contract graph rather than inside `backend/idhazh/ledger/`, because a contract may not import another part of `idhazh` (CLAUDE.md section 4) and a persisted shape is typed by it.
 
@@ -178,14 +178,14 @@ The first row is what the registry is for. The claim used to be a hand-written P
 
 **All three are claimed, so all three are protected.** The status says what a writer may do, never whether the rows survive. Deleting a family's data for good is something a person does on purpose, never a side effect of a status change.
 
-**The write path reads the status on every write.** One function decides: `accepts_new_rows` in `backend/idhazh/ledger/lifecycle.py`, which reads the family's status from the registry each time it is called. Every route that writes new rows asks it before it writes: the ledger door ([persistence.md](persistence.md)) for every raw write from a pipeline job, and the writers of the ledgers outside the door - the day record, the digest fragment, the trace sink once per shard, and the similarity judge's score distribution and archive. Two rules hold, and both are the owner's:
+**The write path reads the status on every write.** One function decides: `accepts_new_rows` in `backend/idhazh/ledger/lifecycle.py`, which reads the family's status from the registry each time it is called. Every route that writes new rows asks it before it writes: the ledger door ([persistence.md](persistence.md)) for every raw write from a pipeline job, and the writers of the ledgers outside the door - the day record, the digest fragment, the trace sink once per shard, and the similarity judge's score distribution and archive. Two rules hold, and both are the maintainer's:
 
 - A production write into a paused or retired family is skipped with one warning naming the ledger, its family, the status and the rows not written, and the run carries on. A status is a decision about one folder, and a run that stopped on it would cost every other family its rows.
 - The passes that compact closed days and age out old rows keep running over a paused or retired family. To freeze its old rows as well, pause the pass that deletes them: a status says whether new rows are written, never how long old ones are kept. Those passes never ask, and the ledger door exempts a compact-tier write and any write from `migrate`, `run-tasks` or `history`, because each of those files rows again that were already recorded - skipping one after its source was deleted would lose rows while the run reported success.
 
 **The check sits at the write, never in the path builders.** `path`, `tree_root` and `relpath` also serve readers, and a paused family is still read.
 
-**Isolated council trials are the narrow raw-write exception.** The owner
+**Isolated council trials are the narrow raw-write exception.** The maintainer
 approved it on 2026-10-11 UTC. An explicitly selected paused manual judge may
 write raw rows into a paused family only under its run/attempt/judge trial root.
 The council opens a scoped authorization during settlement; the ledger checks
@@ -206,7 +206,7 @@ into an active family unchanged. See [judge status](../publishing/llm-council.md
 
 ## Onboarding and offboarding
 
-**What a new ledger owes.** A new ledger files through the ledger door from its first row. It owes every edit below, each in the file named beside it. The reader-side contract, binding and registration must be present before its writer emits rows. Owner approval on 2026-10-24 permits the D3 observation ledger to land those reader-side pieces before producer wiring; the later writer still uses the same registered door. The check at load time, or the test named beside an edit, refuses a change while one of its required pieces is missing.
+**What a new ledger owes.** A new ledger files through the ledger door from its first row. It owes every edit below, each in the file named beside it. The reader-side contract, binding and registration must be present before its writer emits rows. Maintainer approval on 2026-10-24 permits the D3 observation ledger to land those reader-side pieces before producer wiring; the later writer still uses the same registered door. The check at load time, or the test named beside an edit, refuses a change while one of its required pieces is missing.
 
 - **Lifecycle.**
   - A family in `config/ledgers.json` with `lifecycle_status` `active`, a one-line `description` and the UTC day it is `onboarded`, holding the ledger's entry: grain `raw-and-compact`, explicit `publish_to_data_explorer` consent, and the `prefix` it files under inside `state/raw/` and `state/compact/`, which starts with the family's name and ends with the ledger's own value. A ledger that joins a family adds only its entry to that family's `ledgers`, and the family's status covers it from its first row.
@@ -219,8 +219,8 @@ into an active family unchanged. See [judge status](../publishing/llm-council.md
 - **Retention and gardener.**
   - A compaction declaration, `config/gardener/compact-<folder>.json`, where `<folder>` is its prefix with each `/` written `-`. `compaction_task` in `backend/idhazh/config.py` builds that name, and `test_a_compaction_and_a_door_ledger_come_together` refuses a door ledger without one.
   - That task's name in `task_names` of `config/idhazh_gardener.json`. The gardener loads only the declarations named there.
-  - The owner-approved retention in that declaration: live packing (`dry_run` false, `compact_after_days` 1), `daily_keep_days` 45, `monthly_keep_days` 93, a `monthly_window` of `forever`, and yearly expiry after 36 calendar months (`yearly_keep_months` 36, `yearly_prune_enable` true). `test_every_ledger_uses_the_approved_live_retention_chain` holds every compaction to it.
-  - Its entry in `backend/tests/contracts/test_gardener_config.py` - the ledger in `RETENTION_LEDGERS`, or its task in `MOVED_LEDGER_TASKS` - which `test_every_ledger_uses_the_approved_live_retention_chain` reads, so a compaction missing from both is refused. A switch ships in dry run, and the commit that turns one live names the owner's decision in its message; no test holds that list (owner ruling, 2026-10-11).
+  - The maintainer-approved retention in that declaration: live packing (`dry_run` false, `compact_after_days` 1), `daily_keep_days` 45, `monthly_keep_days` 93, a `monthly_window` of `forever`, and yearly expiry after 36 calendar months (`yearly_keep_months` 36, `yearly_prune_enable` true). `test_every_ledger_uses_the_approved_live_retention_chain` holds every compaction to it.
+  - Its entry in `backend/tests/contracts/test_gardener_config.py` - the ledger in `RETENTION_LEDGERS`, or its task in `MOVED_LEDGER_TASKS` - which `test_every_ledger_uses_the_approved_live_retention_chain` reads, so a compaction missing from both is refused. A switch ships in dry run, and the commit that turns one live names the maintainer's decision in its message; no test holds that list (maintainer ruling, 2026-10-11).
 
 **Pause or retire a family.** Change its `lifecycle_status`, and nothing else. Nothing is discovered, and nothing is a hand-list somebody can forget. The next write of new rows into it is skipped with one warning, and its old rows are read and aged as before: its compaction keeps packing them, and its yearly expiry keeps deleting what is older than its window.
 
@@ -330,14 +330,14 @@ One module outside may ask, and none may carry a copy. `backend/idhazh/path_clas
 
 ## Design rationale
 
-**A compatible reader lands before the first writer.** Owner approval,
+**A compatible reader lands before the first writer.** Maintainer approval,
 2026-10-24, for the feed-ingest feedback observations. Registering the row
 contract, its cross-language binding, raw-and-compact ledger path and
 compaction task first gives a later producer a reader that already accepts the
 shape. Keep data-explorer publication disabled until a separate consent
 decision.
 
-**The set of ledgers is a config file, not a Python set and not a glob.** Owner decision, 2026-09-26.
+**The set of ledgers is a config file, not a Python set and not a glob.** Maintainer decision, 2026-09-26.
 
 A frozen set in Python was what this replaced, and it is the defect rather than the alternative. The state cleanup of the day subtracted the set from the children of `state/` and treated the remainder as a trial run's tree, so a ledger left out of the set was a production directory it emptied. One ledger was exactly that: a real ledger, written by a stage, absent from the set - and its 90-day trial sweep emptied it well before the 14-month window its own retention knob promised. Nothing in the old design could catch it, because a missing name reads as a name that was never meant to be there.
 
@@ -345,7 +345,7 @@ A glob over `state/` was the other candidate and it fails twice. Its cost rises 
 
 The config carries where each ledger lives and each family's lifecycle status. It does not carry how the ledger's rows settle: a dedup key is a tuple and a preference is a callable, and a callable is not JSON. Merging the two into one table was considered and rejected - it re-couples two questions that change for different reasons, which is why `paths.py` imports nothing that answers the second one.
 
-**A lifecycle status belongs to a family, and an address to a ledger.** Owner decision, 2026-09-27. A status is a decision about a whole folder: pausing the similarity judge means none of its seven ledgers is written, and a status stored on each ledger made that seven edits that could disagree with each other. An address is a fact about one row shape - which folder, which grain, which file name - and two ledgers in one family still file differently. So the status is written once per folder, and the prefix keeps the whole nest so no builder has to ask the family anything.
+**A lifecycle status belongs to a family, and an address to a ledger.** Maintainer decision, 2026-09-27. A status is a decision about a whole folder: pausing the similarity judge means none of its seven ledgers is written, and a status stored on each ledger made that seven edits that could disagree with each other. An address is a fact about one row shape - which folder, which grain, which file name - and two ledgers in one family still file differently. So the status is written once per folder, and the prefix keeps the whole nest so no builder has to ask the family anything.
 
 **Flatten only the runtime lookup.** A browser or build script needs one checked
 address per name, not a second authored registry. Deriving the lookup preserves
@@ -353,7 +353,7 @@ one family-wide lifecycle decision. Consent belongs to an entry because
 registration protects storage, while publication is a separate choice; neither
 family status nor the presence of files can safely stand in for that choice.
 
-**The last three folders joined the registry rather than keep their own names.** `traces`, `day-metrics` and `digest-fragments` were built by their owning modules from directory constants, and the state cleanup of the day protected them from a list typed into the sweep beside the registry. That list was a second place to forget a folder, and each constant was a second spelling of where a ledger lives - the two defects the registry exists to remove. Each is now a one-ledger family, its owner composes its paths from the registry, and the one file name an owner minted, a digest fragment's, is minted inside the package like every other name under `state/`. None of them moved: each builder lands on the bytes it built before, and a test holds it.
+**The last three folders joined the registry rather than keep their own names.** `traces`, `day-metrics` and `digest-fragments` were built by their owning modules from directory constants, and the state cleanup of the day protected them from a list typed into the sweep beside the registry. That list was a second place to forget a folder, and each constant was a second spelling of where a ledger lives - the two defects the registry exists to remove. Each is now a one-ledger family, its maintainer composes its paths from the registry, and the one file name a maintainer minted, a digest fragment's, is minted inside the package like every other name under `state/`. None of them moved: each builder lands on the bytes it built before, and a test holds it.
 
 **No module outside the package joins a ledger's name onto a root.** A hand-joined folder is right only until the registry moves the ledger, and then it reads a folder that no longer holds anything - which reads as a ledger with no history rather than as a fault. So every folder comes from `tree_root` or `tree_relpath`. `backend/tests/contracts/test_ledger_package.py` refuses a join of a `LedgerName` member anywhere else under `backend/`, and a typed `state/<family>` string in any module that is not a test.
 
@@ -363,7 +363,7 @@ family status nor the presence of files can safely stand in for that choice.
 
 **The eval ledger is `summary-quality-evals`.** Each row measures one summary's quality; `summary-quality` stays free for fitted quality thresholds. Its ID folder, `summary-quality-evals-index`, was deleted on 2026-10-04 with the lookup it held; the [evaluation design rationale](../../concepts/evaluation.md#design-rationale) says why.
 
-**A family carries no owner field.** Owner decision, 2026-09-27. An owner would say who answers for a family. One identity commits to this repository (CLAUDE.md section 8), so the field would hold the same value on every family and tell a reader nothing. The code that answers for a family is found by a search for its `LedgerName` members, because a module that reads or writes a ledger names it by its member and by nothing else.
+**A family carries no maintainer field.** Maintainer decision, 2026-09-27. A maintainer would say who answers for a family. One identity commits to this repository (CLAUDE.md section 8), so the field would hold the same value on every family and tell a reader nothing. The code that answers for a family is found by a search for its `LedgerName` members, because a module that reads or writes a ledger names it by its member and by nothing else.
 
 **A root that tells one copy of a ledger from another is an argument to a builder, never a field on an entry.** The registry is one entry per name and the check above refuses a second, so a ledger that ends up sitting under two roots at once cannot express that as two entries - it would break the check on the first load. `prefix` is the nest a ledger sits in, and a builder that has to choose between two roots takes the choice from its caller and composes it with the same entry.
 
@@ -381,8 +381,8 @@ attempt until that reader selects one. The `document-observations` ledger also
 keeps every attempt: a partial retry cannot replace earlier immutable operation
 facts, and the later feedback reader needs both.
 
-**The candidate-model ledger and its files are removed, not retired.** Owner
-ruling, 2026-10-24. No writer or reader remains for its verdict rows. The owner
+**The candidate-model ledger and its files are removed, not retired.** Maintainer
+ruling, 2026-10-24. No writer or reader remains for its verdict rows. The maintainer
 chose to delete the 16 empty daily files and three indexes, remove the registry
 family and both language names, and advance the file-envelope contract. No
 historical decoder or compaction policy remains; the removed name is not

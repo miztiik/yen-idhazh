@@ -69,7 +69,7 @@ against being gone - and the thing it did reliably cost was a second write path.
 
 ## Design rationale
 
-**The decision, 2026-09-17.** The owner ruled that prune utilities do short
+**The decision, 2026-09-17.** The maintainer ruled that prune utilities do short
 atomic deletes rather than a range fetch followed by an attempt to delete
 everything in one go, and that any existing utility not doing atomic deletes be
 converted. `idhazh telemetry prune` was the one that was not.

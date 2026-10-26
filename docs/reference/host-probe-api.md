@@ -161,7 +161,7 @@ dependency in this lifecycle.
 ## Design rationale
 
 The commands reuse the independent task collector so synchronous work cannot
-block polling. A bounded in-memory owner prevents concurrent starts from
+block polling. A bounded in-memory maintainer prevents concurrent starts from
 oversubscribing capacity, retains idempotent stops and owns cleanup.
 Explicit pins prevent process-name discovery and PID reuse from changing
 what a profile measures. Expiry bounds abandoned handles without presenting

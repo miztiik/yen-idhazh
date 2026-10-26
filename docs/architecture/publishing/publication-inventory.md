@@ -127,7 +127,7 @@ byte or item total.
 
 ## Design rationale
 
-Owner exception, kumarsnaveen_microsoft, 2026-10-03: a missing or empty frontend
+Maintainer exception, 2026-10-03: a missing or empty frontend
 inventory degrades to an empty page selection with one warning, rather than
 stopping the build. The backend must still refuse a missing inventory so an
 update cannot silently lose older names.

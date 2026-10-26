@@ -1,6 +1,6 @@
 # Summary-fidelity judge: the hard look (review record, 2026-10-11)
 
-**Record**: the two reviews the owner asked for on 2026-10-11 - "a hard look at what matters, how we measure it, and what is measured and judged upon" - after ruling that the judge must judge summary quality across the digest, not per site. Andre (evaluation) designed what is judged, the test and the composite, on the 50 daily records under state/day-metrics/ and the research record TODO/20261011-summary-quality-metrics-research-record.md. Fowler (architecture) reviewed the structure, the split with plan 36 and the council plan's coverage of the gardener's strengths. Both are advice; the owner's rulings are in Table P of plan 65 (TODO/20261011-65-summary-fidelity-judge-plan.md).
+**Record**: the two reviews the maintainer asked for on 2026-10-11 - "a hard look at what matters, how we measure it, and what is measured and judged upon" - after ruling that the judge must judge summary quality across the digest, not per site. Andre (evaluation) designed what is judged, the test and the composite, on the 50 daily records under state/day-metrics/ and the research record TODO/20261011-summary-quality-metrics-research-record.md. Fowler (architecture) reviewed the structure, the split with plan 36 and the council plan's coverage of the gardener's strengths. Both are advice; the maintainer's rulings are in Table P of plan 65 (TODO/20261011-65-summary-fidelity-judge-plan.md).
 
 Paths beginning review/, hardlook/ or council_src/ name the reviewers' working copies of the repository files of the same name (for example hardlook/plan36.md is plan 36, TODO/20260918-36-summary-quality-autotune-plan.md until 2026-10-11 and Section 5 of plan 65 since); the analysis code is not committed.
 
@@ -8,7 +8,7 @@ Paths beginning review/, hardlook/ or council_src/ name the reviewers' working c
 
 # Hard look: what the summary-fidelity judge measures, and what it judges
 
-Andre (evaluation), 2026-10-11. Advice to the owner through the plan author. No plan file was edited.
+Andre (evaluation), 2026-10-11. Advice to the maintainer through the plan author. No plan file was edited.
 
 Evidence: the 50 day records 2026-08-21..2026-10-10 (state/day-metrics/, 2026-09-19 absent), the design of
 record (council_src/autotune-summary-quality.md), summary-metrics.md, checker.md, metrics.py, eval_row.py,
@@ -27,8 +27,8 @@ summaries).
 
 | # | Finding | Where |
 | --- | --- | --- |
-| A | The owner is right: the site is the wrong unit for judging summary quality. Judge the whole digest's summaries, per production series, over the last 7 days against the trailing 28. | 1.1, 5 |
-| B | Two corrections. The design-of-record's four metrics are Faithfulness, Coverage, Coherence and Fluency; "conciseness" is not one and no eval column measures it. Per-source extraction rot is a real reader failure that no summary metric sees at any unit; once row #1 deletes drift.py nothing watches it, so it needs an owner outside this judge. | 1.2, 1.3 |
+| A | The maintainer is right: the site is the wrong unit for judging summary quality. Judge the whole digest's summaries, per production series, over the last 7 days against the trailing 28. | 1.1, 5 |
+| B | Two corrections. The design-of-record's four metrics are Faithfulness, Coverage, Coherence and Fluency; "conciseness" is not one and no eval column measures it. Per-source extraction rot is a real reader failure that no summary metric sees at any unit; once row #1 deletes drift.py nothing watches it, so it needs a maintainer outside this judge. | 1.2, 1.3 |
 | C | Digest-level daily statistics are quiet: day-to-day spread is about what binomial sampling predicts (overdispersion 0.5 to 1.25 in r2 and r4), because the per-source cap makes each day a quota sample. The day is still the right exchangeable unit (r3 runs up to 3.4 times binomial). | 3.3, 5.2 |
 | D | Measured power, 7 vs 28 days, q 0.05: 5 or 10 percent of summaries turning unfaithful 1.00; one 10-a-day source turning unfaithful 0.86; coherence median -0.02 1.00; coverage one bucket down 1.00. No-change nights cross 4.6 to 4.9 percent of the time; 1.3 false stretches a month (0.2 at q 0.01). | 5.4, 5.6 |
 | E | The replay flags the 2026-09-07 step from 2026-09-11, on copying, not on faithfulness: the median summary copied 60 percent more 4-grams and HHEM rose with it. The step is within-source (99 shared sources: -0.101 in the not-high share against -0.103 overall), so it is a pipeline change, not mix. | 5.3 |
@@ -36,9 +36,9 @@ summaries).
 | G | Plan 36: this judge supplies the per-metric fleet alarms (one alarm per metric); plan 36 drops its fold and fit (rows 1, 2, 4, 5) and keeps the gate, G-Eval, the rejects ledger and the console. | 6 |
 | H | Autocorrelation is the main calibration risk: at lag-1 0.3 a member's false rate at the single-row BH cut (p <= 0.0033) is 0.016, about 5 times nominal; an AR(1) factor from the baseline brings it to 0.006, about 2 times. Build it in. | 4.1, 5.4 |
 
-## 1. The owner's critique
+## 1. The maintainer's critique
 
-### 1.1 Verdict on the unit: the owner is right
+### 1.1 Verdict on the unit: the maintainer is right
 
 | # | Reason | Evidence |
 | --- | --- | --- |
@@ -54,16 +54,16 @@ summaries).
 | Failure | Seen by digest-level summary metrics? | Covered today by | Verdict |
 | --- | --- | --- | --- |
 | Summariser regression (prompt, model, decode, runtime, chat template) | Yes, best case | This judge | Core job |
-| Extraction rot on one source (redesign, chrome, cookie wall, teaser text) | No, at ANY unit: the summary is faithful to the garbage, HHEM stays high (evaluation.txt, "The problem being solved") | Nothing reliable: extraction_suspect is 0 on all 50 day records; drift.py's shorter_sources and scoring_chrome are deleted by row #1; feed-health counts failed or empty reads (rest after 5 strikes), not garbage text | GAP. Needs a source-health owner (Q1) |
+| Extraction rot on one source (redesign, chrome, cookie wall, teaser text) | No, at ANY unit: the summary is faithful to the garbage, HHEM stays high (evaluation.txt, "The problem being solved") | Nothing reliable: extraction_suspect is 0 on all 50 day records; drift.py's shorter_sources and scoring_chrome are deleted by row #1; feed-health counts failed or empty reads (rest after 5 strikes), not garbage text | GAP. Needs a source-health maintainer (Q1) |
 | One source's summaries turn unfaithful (paywall stub, wrong language, broken markup) | Partly: the tail share rises by that source's share of the day | This judge, plus a per-source drill-down printed under a crossed member (a sentence, no test) | Power 0.86 for a 10-a-day source over a full week |
 | A feed stops or thins | Not a quality failure | feed-health (rest after 5 strikes), item-health census | Out of scope |
 | Mix shift (new long-form source, #1270-type page mix) | Raw statistics move; adjusted ones do not | This judge's mix note (raw vs adjusted, section 3.5) | Handled |
 | Truncation by the cap | Not a summary failure | truncation_flagged; source_words_before_cap > source_words; hhem_delta | Out of scope |
 | One source's copying shape (#970) | Digest moves by at most that source's share | Drill-down only | Accept |
 
-### 1.3 Where the owner is wrong or incomplete
+### 1.3 Where the maintainer is wrong or incomplete
 
-| # | Owner's words | Fact | Consequence |
+| # | Maintainer's words | Fact | Consequence |
 | --- | --- | --- | --- |
 | w1 | "summary quality faithfulness coherence, conciseness - the 4 standard metrics" | The design of record names four: Faithfulness (HHEM), Coverage (semantic_coverage, lexical), Coherence (MiniLM adjacent cosine), Fluency (G-Eval, not built) - SummEval's consistency, relevance, coherence, fluency. Conciseness is not among them. Conciseness is FineSurE's third dimension (faithfulness, completeness, conciseness; Song et al., ACL 2024), defined as the share of summary sentences that carry a key fact - not length. Compression "measures the article's length, not the summary's quality" at a fixed output budget (eval_row.py) | No eval column measures conciseness. Proxies until a key-fact member exists: summary length (two-sided, low weight) and self-repetition (Q6) |
 | w2 | "we shouldn't care about within (intra?) domain fidelity" | True for this judge. False for the product: a source whose extraction breaks puts 10 garbage cards a day in front of readers, and no summary metric can see it | Keep a per-source extraction check, but elsewhere (Q1) |
@@ -117,7 +117,7 @@ not a measurement.
 ### 2.3 Source length: a covariate, weight 0
 
 Dropped as a judged member and kept as the stratifier for mix adjustment (section 3.5), because: it is a property
-of the article, not the summary; the owner ruled it out; it is HHEM's main confounder (window slicing); at
+of the article, not the summary; the maintainer ruled it out; it is HHEM's main confounder (window slicing); at
 digest level its daily movement is small (median SD 19.6 words in r4) and correlates with the faithfulness tail
 weakly in r3 and r4 (|r| <= 0.35) though +0.64 in r2 (10 days) - so adjustment is a guard against a mix step, not a
 noise filter; and as an extraction-rot signal it belongs per source in another instrument (Q1).
@@ -202,7 +202,7 @@ display = S and "nights in 1,000 this high with no change" = 1000 p_S
 | Non-compensatory | Every member is its own row with its own threshold, so one collapse crosses alone; max(z, 0) means an improvement never offsets a harm (2026-09-07: HHEM up must not cancel copying up); weights act only inside S, so a mis-set weight cannot blind a member |
 | Correlation | The joint re-deal keeps every day-level dependence between members, so p_S and every p_m are valid whatever the correlation; splitting an axis's weight among its members stops a duplicated statistic doubling its axis (HHEM IQR vs p25 r -0.98); the family's effective size is reported (participation ratio 6.8 of 15 in r4). BH holds under positive dependence; under arbitrary dependence the bound is q x 3.3 at 15 rows (Benjamini-Yekutieli); the simulated no-change rate shows no inflation (5.4) |
 | Weights from config | W per axis in config/judges/summary-fidelity-judge.json; the replay scores candidate vectors on injected changes and re-dealt dates; a person commits (P17). Because every p comes from re-deals, a weight vector moves power between failure types and never the false-night rate (5.7) |
-| New metrics | A declaration names column, statistic, harm, axis, line, adjust_by, instrument key; it lands paused (p, no q, omega 0); the replay adds its injection; the owner activates it and a person commits its axis weight; the axis split renormalises |
+| New metrics | A declaration names column, statistic, harm, axis, line, adjust_by, instrument key; it lands paused (p, no q, omega 0); the replay adds its injection; the maintainer activates it and a person commits its axis weight; the axis split renormalises |
 | Simplicity | numpy only; scipy's beta-binomial and negative binomial leave with rows #5 and #6 |
 
 Measured value (5.7): the composite row changes the night's decision by 3 to 4 points of power on broad weak
@@ -407,7 +407,7 @@ cadence (the night costs seconds), and a moving p05 floor (replaced by a trailin
 | C6 | Change | The fixture becomes a digest-level mix shift (length strata and source composition move, nothing moves within a stratum); an adjusted member must not cross |
 | Row #1 | Stay | |
 | Row #2 | Change | Settings file stays; site.py, F1.9 and F1.10 go |
-| Row #3 | Change | Contract without "Site" in its name; ledger drift-evals (owner); key without site and page_type; new fields below |
+| Row #3 | Change | Contract without "Site" in its name; ledger drift-evals (maintainer); key without site and page_type; new fields below |
 | Row #4 | Change | Members with statistic, harm, axis, line, adjust_by, instrument key; one test module (day re-deal); comparisons trailing, long_baseline, combined; page_mix note -> mix note |
 | Row #5 | Go | Count kind and article_count (B4, B12) |
 | Row #6 | Go | unusually_short and page_furniture: extraction health; extraction_suspect is 0 on all 50 day records |
@@ -447,7 +447,7 @@ cadence (the night costs seconds), and a moving p05 floor (replaced by a trailin
 | H3.23 | Change | trailing, long_baseline, combined |
 | H3 new | Add | raw_value, adjusted (bool), z, lag1, inputs_changed |
 | Other H3 | Stay | |
-| H4.1 | Change | Ledger drift-evals (owner; site-drift-evals disapproved) |
+| H4.1 | Change | Ledger drift-evals (maintainer; site-drift-evals disapproved) |
 | H4.5 | Change | Key: run_id, date, member, comparison, model_id, instrument_key |
 | Other H4, H5 | Stay | |
 | G1.1, G1.4 to G1.6, G1.8, G1.9 | Stay | |
@@ -487,7 +487,7 @@ cadence (the night costs seconds), and a moving p05 floor (replaced by a trailin
 | S4 | Change | 20 articles -> 100 rows a day |
 | S5, S6 | Stay | |
 
-## 8. Open questions for the owner
+## 8. Open questions for the maintainer
 
 | Q | Question | A | B | C | Recommended |
 | --- | --- | --- | --- | --- | --- |
@@ -539,7 +539,7 @@ copying line on verbatim_run p75, and the rates on band-reason counts.
 | b | Test: keep the whole-day re-deal null and take the survey's EWMA as recency weights inside the 7-day window (lambda 0.15). Reject control limits taken from a reference window alone: in simulation they crossed 4.5 to 53 times their nominal rate (references of 56 down to 7 days); on the real series they crossed on 7 of the 8 nights where both re-deal tests found nothing. | SP4 |
 | c | Decision: every member keeps its own row; two calibrated combined rows beside them - quality_worse (positive parts, quality members) and something_changed (T2 over quality and behaviour); Benjamini-Hochberg over the night. Reading levels watch / drift / evaluator check; nothing acts. | SP5 |
 | d | Real replay: the 2026-09-07 step reads watch (copying up) from 09-09, two nights before the first pass's first crossing, and drift (something changed) from 09-12; quality_worse never crosses in 50 days (no faithfulness decline on record); 0 of 8 stable nights cross. No-change simulation: 2.4 percent of nights, 0.10 false drift events a month (q 0.05). | SP6 |
-| e | Four instrument changes outside the judge, each an owner decision with a cost: sentence-level faithfulness, entity and date checks, a second checker, a sampled key-fact judge in place of plan 36's self-judged fluency. | SP3 |
+| e | Four instrument changes outside the judge, each a maintainer decision with a cost: sentence-level faithfulness, entity and date checks, a second checker, a sampled key-fact judge in place of plan 36's self-judged fluency. | SP3 |
 | f | Approved items: P13 and P15 amended, P7 withdrawn, P14, P16, P17, P18 and P4 kept (P17 sharpened). | SP7 |
 | g | Two corrections to the survey: bootstrapping reference days does not cure the estimated-limits problem it cites (Jensen 2006); and "GPT-4-class" holds for MiniCheck and FactCG on LLM-AggreFact, not for AlignScore (70.4), only vendor-reported for HHEM, and contradicted at summary level by UniSumEval. | SP1 |
 
@@ -700,7 +700,7 @@ A new metric enters in five steps:
 3. The replay (row #8) runs it over past dates and adds its injected change to the library; prints its no-change
    crossing rate, its pooled lag-1, its power, and (quality only) a proposed combine_weight inside the
    worst-case-best vector below.
-4. The owner sets it active; a person commits rho and combine_weight.
+4. The maintainer sets it active; a person commits rho and combine_weight.
 5. A new statistic of an existing kind is config (Level 3); a new kind is a module, its tests and a review.
 
 Weights (P17): the replay starts from the axis weights and from clip(R^-1 delta-bar, 0) (R: correlation of the
@@ -882,7 +882,7 @@ review/execute-a-plan.md, review/author-a-plan.md, review/hardlook/daymetrics_se
   column written next day by another workflow, a G-Eval "leg" in a workflow that names no tenant,
   a new non-door ledger, and a history rewrite outside the gardener's history job.
 - drift-evals is legal (values are unique; none collides) but it is a "kind of thing" name, which
-  the owner's 2026-09-27 registry rule forbids. Keep it by the owner's newer ruling and write the
+  the maintainer's 2026-09-27 registry rule forbids. Keep it by the maintainer's newer ruling and write the
   dated exception into ledger-registry.md in row #3.
 - Council plan: of 30 gardener strengths, 26 are covered or deliberately deferred, 1 does not
   apply, 3 are missing or partial. Missing: a test holding every active judge to a named decision,
@@ -891,7 +891,7 @@ review/execute-a-plan.md, review/author-a-plan.md, review/hardlook/daymetrics_se
 - Rendering: two faults in the 01:09 judge plan (Table C delimiter; F1.5 extra cell), both fixed
   at 07:59:58. Zero faults now in either plan. The F1.5 fault was the worse one: it showed a wrong
   value silently.
-- Tracker: move Table Q out of the judge plan into one cross-plan file, TODO/owner-requests.md.
+- Tracker: move Table Q out of the judge plan into one cross-plan file, TODO/maintainer-requests.md.
   A plan-doc is deleted at closure, so a tracker inside one plan dies with it.
 
 ---
@@ -909,7 +909,7 @@ review/execute-a-plan.md, review/author-a-plan.md, review/hardlook/daymetrics_se
   days understates the null spread (judge U2.1).
 - Mix still matters. "Slicing costs a long article 0.40 of its score" (judge G2.4, citing
   evaluation.md): a change in the digest's length mix moves digest-level HHEM with no change in
-  quality. The owner's "should be weighted ... or even per site" is the same point.
+  quality. The maintainer's "should be weighted ... or even per site" is the same point.
 - The measured series stamp is coarse. extractiveness p50 fell around 2026-09-24, the day
   coherence and semantic_coverage arrived (plan 36 E2 says plan 35 bumps METRICS_VERSION, which is
   folded into scorer_version). Probable instrument change, not drift; verify against the eval
@@ -922,30 +922,30 @@ review/execute-a-plan.md, review/author-a-plan.md, review/hardlook/daymetrics_se
 | --- | --- | --- | --- |
 | A1 | #1 The drift review is deleted | Stays | Independent of the unit. One edit: the SUPERSEDED_APP_NAMES message (row #1 Files touched, app_config.py; E1.3) must not promise that min_articles moved, because the digest-level floors replace it; name the judge and E1.3's moved settings only |
 | A2 | #2 The judge's settings file and site identity | Collapses | Site identity deleted: site.py, test_site.py, F1.9, F1.10, F2.3 to F2.5, F3.3, F3.4. The settings file, its model, settings.py, test_settings.py and the judge's doc page merge into #4, the first row that reads a setting (judge F1 caption: each setting lands in the first row that reads it; CLAUDE.md section 10: no empty modules for later). Per-site views return only as diagnosis, which the Data explorer already serves (summary-quality-evals is in ledger.published, appconfig.txt) |
-| A3 | #3 The judge's ledger and its tenant module | Changes | Shape changes (section 2): site and page_type leave (H3.7, H3.8), the series fields are always set, the key shrinks (H4.5), the outcome and unit vocabularies change. Still Level 5, judge C1 fires. Add to Files touched: docs/architecture/contracts/ledger-registry.md, a dated line that drift-evals takes a kind name by the owner's 2026-10-11 ruling (section 2.5). Depends also on the owner's shape ruling, which should include the composite's fields so #13 needs no second Level-5 change |
+| A3 | #3 The judge's ledger and its tenant module | Changes | Shape changes (section 2): site and page_type leave (H3.7, H3.8), the series fields are always set, the key shrinks (H4.5), the outcome and unit vocabularies change. Still Level 5, judge C1 fires. Add to Files touched: docs/architecture/contracts/ledger-registry.md, a dated line that drift-evals takes a kind name by the maintainer's 2026-10-11 ruling (section 2.5). Depends also on the maintainer's shape ruling, which should include the composite's fields so #13 needs no second Level-5 change |
 | A4 | #4 Metric declarations, the kind registry and the note kind | Changes, absorbs #2's file | Declarations keep P13's form with grouping replaced by series (section 2.3). The window reader keeps day labels and the newest row per url_key, per series. The window guard (H1.8, G1.8) becomes per series with a per-day floor (thin days: 13, 75, 138, 148 summaries scored). The note kind and page_mix (H1.7) collapse: no page types, and G1.3 refuses a module no declaration uses |
 | A5 | #5 Count kind: article count from the item-health census | Collapses | Feed volume per site is not summary quality; feed-health already rests a stopped feed (judge B4); thin days are #4's guard. Judge tables I1 and I2, ruling P3, the scipy.stats.nbinom oracle and item B4 go |
-| A6 | #6 Share kinds: unusually short and page furniture | Collapses | unusually_short is an article-length property (the owner: judging on article length is wrong); page_furniture reads extraction_suspect, an extraction property (judge B1 keeps extraction out). A share-of-a-flag statistic survives only if Andre declares a digest-level one (low-band share, doubt reasons, withheld share); it then lands in #15, re-dealt by whole days. Judge tables J1 and J2, ruling P2 and the beta-binomial and Fisher oracles go: both assume exchangeable articles |
+| A6 | #6 Share kinds: unusually short and page furniture | Collapses | unusually_short is an article-length property (the maintainer: judging on article length is wrong); page_furniture reads extraction_suspect, an extraction property (judge B1 keeps extraction out). A share-of-a-flag statistic survives only if Andre declares a digest-level one (low-band share, doubt reasons, withheld share); it then lands in #15, re-dealt by whole days. Judge tables J1 and J2, ruling P2 and the beta-binomial and Fisher oracles go: both assume exchangeable articles |
 | A7 | #7 Distance kind: article length, copied phrases and faithfulness | Changes | Two-sided Wasserstein-1 (judge K1.1, judge S3) stays as one candidate statistic on summary-quality columns, re-dealt by whole days. article_length (H1.4, K1.2) goes; within-page-type rules (K1.3, K1.4) go; the earlier-series comparison (L1.2, L1.3) stays per series. Judge C6's #1270 fixture becomes a digest-level mix fixture: a length-mix shift with unchanged per-length score distributions must not cross, if Andre's tests adjust for mix |
 | A8 | #8 One false-discovery step per judged date, and the replay | Changes | Benjamini-Hochberg per (run_id, date) stays (M1.1 to M1.4). The replay re-deals whole days as its main null (the P18 arm becomes the default), injects digest-level shifts per metric (location, spread, tail) and multi-metric slips, and runs 2026-08-21 to 2026-10-10 with the 2026-08-27 model switch and the 2026-09-07 step as named events. The reading budget (judge C5, F1.12, M1.5) is re-derived for about 10 to 20 checks a night per series; it is probably never binding |
 | A9 | #9 The switch | Stays | One edit: its observation reads "peak memory on a cell with no model server", which nothing records ("No machine is recorded per unit", llm-council.md). Read run time from council-run-records seconds_spent and drop memory (recommended, Table X) |
 | A10 | #10 Scorer reference check, #11 Golden-set check | Collapsed | Unchanged (judge D3, judge B10) |
-| A11 | #12 The stored checks on a console page | Changes | Per series and per metric: the latest effect, q_value and stretch, plus the composite line; no site column; T1.3 at series level. Home stays the Model page (P5) unless the owner rules otherwise (Table T). Shares frontend/src/routes/console/model/ files with plan 36 Row 9: serialize. Re-derive at dispatch: config/idhazh.json page_weight.payload_ceilings_bytes holds one index entry per ledger in ledger.published (8 of 8 today), so drift-evals likely needs one |
+| A11 | #12 The stored checks on a console page | Changes | Per series and per metric: the latest effect, q_value and stretch, plus the composite line; no site column; T1.3 at series level. Home stays the Model page (P5) unless the maintainer rules otherwise (Table T). Shares frontend/src/routes/console/model/ files with plan 36 Row 9: serialize. Re-derive at dispatch: config/idhazh.json page_weight.payload_ceilings_bytes holds one index entry per ledger in ledger.published (8 of 8 today), so drift-evals likely needs one |
 | A12 | #13 All-sites comparison and combined-measures check | Splits | all_sites collapses: the digest is the unit, and its whole-day re-deal rule (U1.1) moves to G1 as the rule for every kind. combined stays as "The composite drift decision per model series" (U1.2 to U1.6, P15, P17 carried; contents Andre's, Q24) |
 | A13 | #14 Long-baseline comparison | Collapses to Table B (recommended, Table O) | A 52-week look needs one production series 56 weeks old; this history changed model after 6 days. A PENDING row gated on about 2027-09 also keeps the plan open a year, because closure needs every row DONE or COLLAPSED (execute-a-plan.md, Closure). Judge F1.14, F1.15 and tables V1 and V2 move into the B-item as evidence. State the blind spot: 7-against-28 trailing windows cannot see a slow decline (V2.1, P16 evidence) |
-| A14 | New #15 Location, spread and tail kinds | New | The statistics Andre names (the owner: "focus on variance of the metrics"). One module per kind with its own parameter model; may split into one row per kind |
+| A14 | New #15 Location, spread and tail kinds | New | The statistics Andre names (the maintainer: "focus on variance of the metrics"). One module per kind with its own parameter model; may split into one row per kind |
 
 ### 1.3 Table B - every judge-plan table
 
 | # | Table | Disposition |
 | --- | --- | --- |
-| B1 | A (operating contract) | Changes: A1 states the owner's 2026-10-11 unit ruling; A2 scope list loses site identity, six per-site measures, all-sites and long baseline; A5 strategy becomes the design-of-record metrics per model series plus the survey (Q23), not the 2026-10-10 per-site blueprint; A6 order follows Table C |
+| B1 | A (operating contract) | Changes: A1 states the maintainer's 2026-10-11 unit ruling; A2 scope list loses site identity, six per-site measures, all-sites and long baseline; A5 strategy becomes the design-of-record metrics per model series plus the survey (Q23), not the 2026-10-10 per-site blueprint; A6 order follows Table C |
 | B2 | B (out of scope) | Judge B1 to B3 and B5 to B9 stay; judge B4 collapses with #5; judge B10 and B11 change wording from "per site" to "per series" and drop page_furniture; add judge B12 long baseline, judge B13 per-stratum diagnosis rows (Data explorer covers it), judge B14 per-item actions at absolute floors are plan 36's |
 | B3 | C (ESCALATE) | Judge C1 to C4 and C7 to C10 stay; judge C5 re-derived per series; judge C6 rewritten as a digest-level mix fixture; add judge C11 One answer: a row would add a second alarm, a second stored score or a second console home for a summary-quality metric - stop |
 | B4 | D (Reckoner) | Changes to this report's Table C |
 | B5 | E1, E2 | Stay (E1.3's message decoupled, A1) |
 | B6 | F1 (settings) | F1.1, F1.2, F1.4, F1.6 to F1.8, F1.11, F1.12 stay; F1.3 min_articles is replaced by Andre's digest floors (days per window, summaries per day); F1.5, F1.9, F1.10 collapse; F1.13 changes form (section 2.3); F1.14, F1.15 move to judge B12 |
-| B7 | F2, F3 | F2.1, F2.2, F2.6 stay; F2.3 to F2.5 collapse; F3.1, F3.2 stay; F3.3, F3.4 collapse as moot; add a rejected alternative: sites or page types as the unit of judgment (owner, 2026-10-11) |
+| B7 | F2, F3 | F2.1, F2.2, F2.6 stay; F2.3 to F2.5 collapse; F3.1, F3.2 stay; F3.3, F3.4 collapse as moot; add a rejected alternative: sites or page types as the unit of judgment (maintainer, 2026-10-11) |
 | B8 | H1 (declarations) | Replaced by Andre's declarations; the reserved names window_rows and combined_measures stay, per series |
 | B9 | H2 (outcomes) | H2.1, H2.2, H2.4 to H2.6 stay; H2.3 too_few_articles renamed for the digest floor's unit (days or summaries) |
 | B10 | H3 (row shape) | Changes: Table E |
@@ -957,17 +957,17 @@ review/execute-a-plan.md, review/author-a-plan.md, review/hardlook/daymetrics_se
 | B16 | T1, T2 | T1.1, T2 stay; T1.2 per Table T; T1.3 per series |
 | B17 | U1, U2 | U1.1 moves to G1.10, U2.1 to G2.7; U1.2 to U1.6 and U2.2 stay with the composite, subject to Andre's redesign |
 | B18 | V1, V2 | Move into B12 as evidence |
-| B19 | P (rulings) | Judge P1, P4 to P10, P13 to P15 and P17 to P19 stay (P13 amended: grouping becomes series); judge P2, P3, P11 and P12 are superseded by the unit ruling; P16 changes (all-sites absorbed by the unit, long baseline deferred) and needs the owner; new P items for this redesign |
-| B20 | Q (requests) | Moves to TODO/owner-requests.md (section 6) |
-| B21 | R, S | Judge table R stays as history with R5 and R7 marked superseded (owner, 2026-10-11); judge S1 to S3 and S5 stay; judge S4 becomes the digest floors; judge S6 is moot |
+| B19 | P (rulings) | Judge P1, P4 to P10, P13 to P15 and P17 to P19 stay (P13 amended: grouping becomes series); judge P2, P3, P11 and P12 are superseded by the unit ruling; P16 changes (all-sites absorbed by the unit, long baseline deferred) and needs the maintainer; new P items for this redesign |
+| B20 | Q (requests) | Moves to TODO/maintainer-requests.md (section 6) |
+| B21 | R, S | Judge table R stays as history with R5 and R7 marked superseded (maintainer, 2026-10-11); judge S1 to S3 and S5 stay; judge S4 becomes the digest floors; judge S6 is moot |
 
 ### 1.4 Table C - the new row list
 
 | # | Row | Title | Depends-on | Parallel-group | Level |
 | --- | --- | --- | --- | --- | --- |
 | C1 | 1 | The drift review is deleted | - | A | 3 |
-| C2 | 2 | COLLAPSED: settings file merged into #4; site identity deleted (owner, 2026-10-11) | - | - | - |
-| C3 | 3 | The judge's ledger and its tenant module | council plan: Judges carry a status and a model need; owner ruling on the digest-level shape | A | 5 |
+| C2 | 2 | COLLAPSED: settings file merged into #4; site identity deleted (maintainer, 2026-10-11) | - | - | - |
+| C3 | 3 | The judge's ledger and its tenant module | council plan: Judges carry a status and a model need; maintainer ruling on the digest-level shape | A | 5 |
 | C4 | 4 | The settings file, metric declarations and the kind registry, per model series | 3 | B | 3 |
 | C5 | 5 | COLLAPSED: count kind (not summary quality; thin days are #4's guard) | - | - | - |
 | C6 | 6 | COLLAPSED: share kinds as declared; a flag-share kind, if declared, lands in #15 | - | - | - |
@@ -992,7 +992,7 @@ Table Q and item B8 and the council plan cite them.
 | # | Item | Was | Now | Rule that forces it |
 | --- | --- | --- | --- | --- |
 | D1 | Contract module | backend/idhazh/contracts/site_drift_eval.py | backend/idhazh/contracts/drift_eval.py | module named for its class |
-| D2 | Class | SiteDriftEval | DriftEval | owner disapproved the site prefix (Q19); unique once row #1 deletes DriftConfig |
+| D2 | Class | SiteDriftEval | DriftEval | maintainer disapproved the site prefix (Q19); unique once row #1 deletes DriftConfig |
 | D3 | Schema stem | site-drift-eval | drift-eval | __schema_stem__ pattern (council-run-record, eval-row) |
 | D4 | LedgerName member | SUMMARY_FIDELITY_JUDGE_SITE_DRIFT_EVALS | SUMMARY_FIDELITY_JUDGE_DRIFT_EVALS = "drift-evals" | family first, value in upper snake (ledgers.py _every_member_is_named_for_its_place) |
 | D5 | config/ledgers.json prefix | ["summary-fidelity-judge", "site-drift-evals"] | ["summary-fidelity-judge", "drift-evals"] | starts with the family, ends with the value (ledgers.py _every_door_prefix_names_one_safe_folder) |
@@ -1002,7 +1002,7 @@ Table Q and item B8 and the council plan cite them.
 
 House precedent, for the record: the similarity judge's generic-valued ledger "metrics" has the
 family-prefixed class ContentSimilarityJudgeMetrics (keys.py). DriftEval departs from it; that is
-acceptable while the class name is unique, and matches the owner's preference for short names.
+acceptable while the class name is unique, and matches the maintainer's preference for short names.
 
 ### 2.2 Table E - DriftEval fields (replaces judge H3)
 
@@ -1084,7 +1084,7 @@ Table G - what drift-evals costs
 | # | Cost | Size | Mitigation |
 | --- | --- | --- | --- |
 | G1 | No other family may ever name a ledger drift-evals | Every later drift ledger takes a longer name | Name it for what it holds (merge-line-drift for the similarity judge) |
-| G2 | drift-evals is itself a "kind of thing" name. registrydoc, owner decision 2026-09-27: "The value says what the ledger holds, never the kind of thing it is ... the next ledger of that kind has no name left" | A rule conflict, not a defect | CLAUDE.md section 0: amend in the same commit. Row #3 adds a dated exception line to ledger-registry.md (Table V) |
+| G2 | drift-evals is itself a "kind of thing" name. registrydoc, maintainer decision 2026-09-27: "The value says what the ledger holds, never the kind of thing it is ... the next ledger of that kind has no name left" | A rule conflict, not a defect | CLAUDE.md section 0: amend in the same commit. Row #3 adds a dated exception line to ledger-registry.md (Table V) |
 | G3 | The precedent is already paid once: the similarity judge holds the generic values metrics, archive and score-distribution | None new | - |
 | G4 | A second judge filing into drift-evals is not a way out: the ledger sits in this judge's family, and pausing that family would stop the other judge's rows (council E1.4) | - | Keep one writer |
 
@@ -1099,12 +1099,12 @@ Facts: plan 36 is authorized (2026-09-19) and unstarted. Plan 36's E1 made every
 WATCH-only fleet-rate alarm; its D4 says a displayed overall "feeds no action"; its Row 9 puts
 quality bands and a withhold panel on /console/judgement/; judge P5 put the judge's panel on the
 console Model page. The design of record says the publish gate is "a veto chain, never a
-composite". The owner's composite (Q24) and that sentence do not conflict: the gate decides one
+composite". The maintainer's composite (Q24) and that sentence do not conflict: the gate decides one
 item for a reader; the composite decides fleet drift for a person and acts on nothing (judge B2).
 
 Table H - one answer per question (recommended division, Table S)
 
-| # | Question | The one answer | Owner plan | What it replaces |
+| # | Question | The one answer | Maintainer plan | What it replaces |
 | --- | --- | --- | --- | --- |
 | H1 | Has metric X drifted for the current production model? | The judge's per-metric rows in drift-evals | Judge | plan 36 rows 1, 2, 4, 5 (adaptive watch floors) and Row 9's withhold-rate alarm |
 | H2 | Has summary quality drifted overall? | The judge's composite row per series | Judge #13 | plan 36 Row 7's optional displayed overall |
@@ -1129,7 +1129,7 @@ Table I - plan 36 rows under the division
 | I9 | 9 Console | Changes | Band charts go; the withhold panel (count, about 11 percent baseline, reasons) moves to the Model page as display; its own alarm goes (the judge's withheld-share declaration) |
 | I10 | 10 Measure a G-Eval call | Stays | Sizes the fluency tenant's own cells |
 | I11 | 11 Coherence placement | Stays | - |
-| I12 | 12 Rejects ledger | Changes, needs the owner | Must be registered, or the trials sweep empties state/rejects/ (ledgers.py docstring). Retention through a gardener declaration and history removal through the gardener's history job (CLAUDE.md section 8, History Exception), not prune_state.py and "prune.yml's force-push" (plan 36 J4). A door ledger cannot keep plan 36 J4's 30 days: its compaction absorbs a month only daily_keep_days (at least 31, knobs_gardener.py) after the month ends, and the approved chain keeps 36 months (registrydoc). So it needs a named exception (Table Y) |
+| I12 | 12 Rejects ledger | Changes, needs the maintainer | Must be registered, or the trials sweep empties state/rejects/ (ledgers.py docstring). Retention through a gardener declaration and history removal through the gardener's history job (CLAUDE.md section 8, History Exception), not prune_state.py and "prune.yml's force-push" (plan 36 J4). A door ledger cannot keep plan 36 J4's 30 days: its compaction absorbs a month only daily_keep_days (at least 31, knobs_gardener.py) after the month ends, and the approved chain keeps 36 months (registrydoc). So it needs a named exception (Table Y) |
 | I13 | 13 Retro gaps | Stays | Applies to the fluency tenant |
 
 Side effect: with Row 1 collapsed, plan 36 no longer waits on plan 34's fit core; Rows 3, 6 and 7
@@ -1140,7 +1140,7 @@ What the judge plan must change:
   item B14 (per-item actions at absolute floors are plan 36's); judge Table C adds trigger C11 One answer.
 - #4 declares hhem, semantic_coverage and coherence (the last two scored since 2026-09-24) and edits
   autotune-summary-quality.md's loop section to point at the judge's page.
-- Fluency and withheld share arrive paused from plan 36 rows 6 and 7; activation is an owner
+- Fluency and withheld share arrive paused from plan 36 rows 6 and 7; activation is a maintainer
   ruling after the judge's replay runs them (G1.5).
 - #12 stays on the Model page (P5) and serializes with plan 36 Row 9.
 
@@ -1152,7 +1152,7 @@ LLM-COUNCIL), Section 0's strategy line, 0a's transfer table, 0b D1 and D5, 0c E
 
 ## 4. Council plan - the gardener's strengths, row by row
 
-The owner asked which row brings lifecycle, logging, telemetry and the rest. Short answer:
+The maintainer asked which row brings lifecycle, logging, telemetry and the rest. Short answer:
 lifecycle is row #1; logging is row #3; the job page is row #5; telemetry is the council's
 existing record plus rows #8 and #9; permissions row #2; refusals row #4; sparse row #6 and council B4;
 own dates row #7; commit is already the shared publisher. The council plan's Table S lacks the
@@ -1197,15 +1197,15 @@ Not covered at all, and whether to add a row (none needs a new row):
 
 - Named-decision test for active judges (J4). Add inside row 1. Consumer: council E1.5's rule and
   CLAUDE.md section 1 (no agent takes an exception for itself). A table in backend/tests/council/
-  naming the owner decision beside each active entry fails a change that flips a judge active
+  naming the maintainer decision beside each active entry fails a change that flips a judge active
   without one. Same files row 1 already touches.
-- Worked lifecycle example (Table K). Add to row 1's llm-council.md edit. The owner asked for it,
+- Worked lifecycle example (Table K). Add to row 1's llm-council.md edit. The maintainer asked for it,
   and the gardener's page carries examples of this kind.
 - Per-cell telemetry on no-model cells (J22). No row. Carmack's 2026-09-21 reason (a 1.9 GiB probe
   on a 16 GB model cell) does not hold for a no-model cell, but no decision needs the reading: the
   judge reads about 10,000 to 16,000 rows (35 days at 280 to 450 a day). Fix the judge row #9
   observation instead (Table X).
-- Operator range for one judge (J12). A new council B-item, B5; brings it in: the owner wants
+- Operator range for one judge (J12). A new council B-item, B5; brings it in: the maintainer wants
   the judge's history before its switch (judge B5).
 - Retryable fault words (J19). No. No consumer: the repair window already retries a dead night,
   and the window guard row covers a thin date. Brings it in: a judge whose unit can name a
@@ -1237,7 +1237,7 @@ Table K - what each status does (council E3)
 | # | Moment | Entry | What the council does | What keeps running |
 | --- | --- | --- | --- | --- |
 | K1 | Judge row #3 merges | paused, runs_model false | Nothing: no resolve, no nights_outstanding, no cell, no model server, no council record | Family summary-fidelity-judge is active in config/ledgers.json, but nothing writes it |
-| K2 | Judge row #9, the owner's named decision | active, runs_model false | Resolves, asks nights_outstanding, one cell per date with no model server, settle files drift-evals rows | The gardener packs and ages drift-evals; the console reads it |
+| K2 | Judge row #9, the maintainer's named decision | active, runs_model false | Resolves, asks nights_outstanding, one cell per date with no model server, settle files drift-evals rows | The gardener packs and ages drift-evals; the console reads it |
 | K3 | A defect is found | paused | Stops at once; nothing is deleted | Packing, ageing, console reads; back at active it is asked only about nights inside the 7-night repair window |
 | K4 | Replaced by a successor | retired | As paused, for good; the slug is never reused, so judge_id keeps one meaning in council-run-records | DriftEval stays while the family keeps rows; the family itself may later be retired in config/ledgers.json |
 | K5 | Refused: runs_model missing | {"slug": "summary-fidelity-judge", "lifecycle_status": "active"} | Config load fails, naming the field | - |
@@ -1258,7 +1258,7 @@ Table L - findings
 
 | # | Where | Fault | Effect | Status at 07:59:58 |
 | --- | --- | --- | --- | --- |
-| L1 | Judge plan, Table C (ESCALATE triggers), 01:09 version | Header 4 cells, delimiter 3 | Not a table at all: the block renders as text full of pipes (what the owner saw) | Fixed |
+| L1 | Judge plan, Table C (ESCALATE triggers), 01:09 version | Header 4 cells, delimiter 3 | Not a table at all: the block renders as text full of pipes (what the maintainer saw) | Fixed |
 | L2 | Judge plan, Table F1 row F1.5, 01:09 version | 8 cells against 7; the cell "5 \| 6" was an unescaped pipe left by an edit (short_tail_percentile lands in row #6) | Silent wrong value: Lands in showed 5, Source showed 6, and "Blueprint section 1" disappeared | Fixed ("6", "Blueprint section 1"); the row itself collapses with the redesign |
 | L3 | Judge plan, 07:59:58 | 38 tables: no count mismatch, no pipe in a code span, no repeated row id, no glued table | - | Clean |
 | L4 | Council plan, 07:59:58 | 25 tables: as L3 | - | Clean (01:10 version read by eye, nothing seen) |
@@ -1271,34 +1271,34 @@ go. The check is about 40 lines (Appendix).
 
 ---
 
-## 6. Tracking every owner request
+## 6. Tracking every maintainer request
 
 Finding: the judge plan's Table Q is the right content in the wrong home.
 - A plan-doc is deleted at closure (execute-a-plan.md, Closure), so a tracker inside the judge plan
   dies with the judge plan. Q11, Q13, Q22, Q26 and Q27 already concern other plans and files.
 - execute-a-plan.md: "a deferral with no receiving row is a dropped decision." The tracker is where
   a deferral lives until a receiving plan names it (judge B9, B11 and the proposed B12).
-- The judge plan's Table Q mixes owner requests with items "raised by the review, not the owner" (Q26, Q27). One
+- The judge plan's Table Q mixes maintainer requests with items "raised by the review, not the maintainer" (Q26, Q27). One
   table, one question (CLAUDE.md section 1a): reviewer items are decision requests and belong in
   the owning plan's rulings table (Table P there); the tracker links to them.
 - Precedent for a cross-plan working file: TODO/execution-order.md, deleted when its last plan closes.
 
-Proposal: TODO/owner-requests.md, committed to main.
+Proposal: TODO/maintainer-requests.md, committed to main.
 
 Table M - columns
 
 | # | Column | Rule |
 | --- | --- | --- |
 | M1 | # | Q-ids continue from Q27; never reused or renumbered |
-| M2 | Date | UTC day the owner asked |
-| M3 | Request | the owner's words in double quotes; a paraphrase is marked (paraphrase) |
+| M2 | Date | UTC day the maintainer asked |
+| M3 | Request | the maintainer's words in double quotes; a paraphrase is marked (paraphrase) |
 | M4 | Status | closed words: open, planned, in-flight, done, standing, deferred, out, withdrawn |
 | M5 | Where it landed | plan file, row TITLE (never number; author-a-plan.md), table and row id; or a commit |
-| M6 | Next step | one action and who takes it (owner rules, agent builds) |
+| M6 | Next step | one action and who takes it (maintainer rules, agent builds) |
 | M7 | Closed by | the ruling id, commit or pull request; required for done, out and withdrawn |
 
 Rules:
-- Write-ahead: every owner message that asks for something gets its Q-id before work starts.
+- Write-ahead: every maintainer message that asks for something gets its Q-id before work starts.
   An item is lost when a context cut comes between the request and the write; write-ahead closes that gap.
 - At session start read the tracker first, then the plans; at session end commit it with the plans.
 - Each plan's rulings table cites the Q-id it answers; each plan's Status line points to the tracker.
@@ -1309,9 +1309,9 @@ Rules:
 
 ---
 
-## 7. Decisions for the owner
+## 7. Decisions for the maintainer
 
-Situation. The owner disapproved sites as the unit of judgment and named the ledger drift-evals.
+Situation. The maintainer disapproved sites as the unit of judgment and named the ledger drift-evals.
 Plan 36 is authorized and unstarted. No row of the judge or council plans has started, and
 drift-evals holds no row.
 
@@ -1326,7 +1326,7 @@ Table N - the judge plan's rows
 | # | Option | Benefit | Cost | Gives up |
 | --- | --- | --- | --- | --- |
 | N1 | Table C as proposed **Recommended** | 3 fewer build rows; every row tests summary quality | One plan rewrite | Per-site and per-length checks |
-| N2 | Keep rows #5 to #7, re-declared at digest level | Less rewriting | Rows that test article and extraction properties the owner rejected | Focus |
+| N2 | Keep rows #5 to #7, re-declared at digest level | Less rewriting | Rows that test article and extraction properties the maintainer rejected | Focus |
 | N3 | Start a new plan file | Clean text | Loses traceability of judge P1 to P19 and judge table R | History in one place |
 
 Table O - the long baseline (row #14)
@@ -1343,7 +1343,7 @@ Table P - a diagnosis stratum on the row
 | --- | --- | --- | --- | --- |
 | P1 | No stratum; diagnose in the Data explorer over the published eval ledger **Recommended** | No field, no key column, no extra rows | A person writes the slice | The judge naming where |
 | P2 | Optional stratum field and value, descriptive, written only for crossed checks | The panel names where | Two key columns, conditional rows | Minimal key |
-| P3 | Tested rows per stratum | Most detail | Brings back per-site multiplicity | The owner's ruling |
+| P3 | Tested rows per stratum | Most detail | Brings back per-site multiplicity | The maintainer's ruling |
 
 Table Q - the series stamp column
 
@@ -1363,8 +1363,8 @@ Table S - division of work with plan 36
 
 | # | Option | Benefit | Cost | Gives up |
 | --- | --- | --- | --- | --- |
-| S1 | The judge owns every fleet alarm and the composite; plan 36 keeps per-item actions, fluency production and rejects; plan 36 rows 1, 2, 4, 5 collapse (Tables H and I) **Recommended** | One alarm per metric; 4 fewer plan-36 rows; plan 36 stops waiting on plan 34 | Rewrite of plan 36 text; owner narrows an authorized plan | Adaptive bands drawn on the console |
-| S2 | Plan 36 owns the alarms; the judge keeps only the composite | Plan 36 stays as authorized | Uncalibrated rolling floors, which follow a slow decline by construction; the judge loses its purpose | The owner's 2026-10-11 direction |
+| S1 | The judge owns every fleet alarm and the composite; plan 36 keeps per-item actions, fluency production and rejects; plan 36 rows 1, 2, 4, 5 collapse (Tables H and I) **Recommended** | One alarm per metric; 4 fewer plan-36 rows; plan 36 stops waiting on plan 34 | Rewrite of plan 36 text; maintainer narrows an authorized plan | Adaptive bands drawn on the console |
+| S2 | Plan 36 owns the alarms; the judge keeps only the composite | Plan 36 stays as authorized | Uncalibrated rolling floors, which follow a slow decline by construction; the judge loses its purpose | The maintainer's 2026-10-11 direction |
 | S3 | Both keep their alarms | No rewrite | Two answers per question | Clarity |
 | S4 | Merge the plans | One Reckoner | Mixes an observer with a reader-safety actor | The judge B2 boundary in plain sight |
 
@@ -1387,7 +1387,7 @@ Table V - drift-evals against the 2026-09-27 naming rule
 | # | Option | Benefit | Cost | Gives up |
 | --- | --- | --- | --- | --- |
 | V1 | Keep drift-evals; row #3 writes the dated exception into ledger-registry.md **Recommended** | Honors the newer ruling; the rule stays honest | One line | - |
-| V2 | Rename to a what-it-holds name | Rule kept without exception | Reverses a ruling made today | The owner's choice |
+| V2 | Rename to a what-it-holds name | Rule kept without exception | Reverses a ruling made today | The maintainer's choice |
 
 Table W - council plan additions
 
@@ -1408,15 +1408,15 @@ Table Y - plan 36's rejects ledger retention
 
 | # | Option | Benefit | Cost | Gives up |
 | --- | --- | --- | --- | --- |
-| Y1 | A door ledger with an owner-named exception to the approved chain | Follows the born-at-door rule | Even the shortest chain keeps a row about 2 to 3 months (month end, plus at least 31 days, plus at least one month), well past the 30 days the owner set for committed source text (plan 36 J3, J4) | The 30-day bound |
-| Y2 | An exception to the born-at-door rule: a day tree with a gardener retention task, as traces is ("kept a short while so an operator can open one", registry.txt) **Recommended** | Exactly 30 days, the owner's condition for committing source text | A second tree-grain ledger delays the Grain enum's removal condition | One pattern for every new ledger |
+| Y1 | A door ledger with a maintainer-named exception to the approved chain | Follows the born-at-door rule | Even the shortest chain keeps a row about 2 to 3 months (month end, plus at least 31 days, plus at least one month), well past the 30 days the maintainer set for committed source text (plan 36 J3, J4) | The 30-day bound |
+| Y2 | An exception to the born-at-door rule: a day tree with a gardener retention task, as traces is ("kept a short while so an operator can open one", registry.txt) **Recommended** | Exactly 30 days, the maintainer's condition for committing source text | A second tree-grain ledger delays the Grain enum's removal condition | One pattern for every new ledger |
 | Y3 | Defer Row 12 | No exception now | Withheld prose is lost until it lands | Troubleshooting evidence |
 
 Table Z - the tracker home
 
 | # | Option | Benefit | Cost | Gives up |
 | --- | --- | --- | --- | --- |
-| Z1 | TODO/owner-requests.md, owner requests only (section 6) **Recommended** | Survives every plan's closure; one question per table | One file to keep | Table Q inside the judge plan |
+| Z1 | TODO/maintainer-requests.md, maintainer requests only (section 6) **Recommended** | Survives every plan's closure; one question per table | One file to keep | Table Q inside the judge plan |
 | Z2 | Keep Table Q in the judge plan | Already there | Dies when the judge plan closes; holds other plans' items | Durability |
 | Z3 | A JSON file with a utility | Machine checks | A second format; code with one reader | Plain text |
 
@@ -1429,18 +1429,18 @@ Recommendation:
 - S1: one alarm per metric, and the judge's tests are calibrated where plan 36's floors are not.
 - T1: P5 stands and the Model page already reads the ledgers involved.
 - U1: one writer per ledger, as the council's layer rule requires.
-- V1: the owner's newer ruling stands and the registry rule stays honest.
-- W1: it closes the lifecycle gap the owner asked about, inside files row 1 already touches.
+- V1: the maintainer's newer ruling stands and the registry rule stays honest.
+- W1: it closes the lifecycle gap the maintainer asked about, inside files row 1 already touches.
 - X1: no decision depends on a memory reading.
-- Y2: the 30-day bound was the owner's condition for committing source text, and traces already serves the same use.
+- Y2: the 30-day bound was the maintainer's condition for committing source text, and traces already serves the same use.
 - Z1: a tracker must outlive the plans it tracks.
 
-Not this report's to rule: which metrics and statistics (Andre: the owner's words name
+Not this report's to rule: which metrics and statistics (Andre: the maintainer's words name
 conciseness, which the design-of-record page does not; compression measures article length at a
 fixed budget, per the brief), the floors, mix adjustment, and the composite (Q20, Q23, Q24).
 Andre should also price one alternative for slow decline: comparing with the first 28 days of the
 current series. It catches a slow decline from week 5, but it is a fixed point-in-time reference,
-which the owner's standing rule forbids.
+which the maintainer's standing rule forbids.
 
 ---
 

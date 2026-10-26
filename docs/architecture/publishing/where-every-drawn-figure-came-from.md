@@ -37,7 +37,7 @@ rather than proving nobody happened to write one.
 point: the model picks the type and points at elements, and it cannot name a function, cannot supply
 an operand, and has no numeric field anywhere in its schema - `contracts/visual.py` refuses to import
 if it grows one. So the worst a prompt injection can do stays "pick the wrong elements". A fifth
-function is an owner decision and `contracts/derived.py` raises at import if one appears, which is
+function is a maintainer decision and `contracts/derived.py` raises at import if one appears, which is
 why the argument for the list being short is written beside the constant rather than only here.
 
 | Function | Reads | Produces | What its chain records beyond function, version and inputs |
@@ -241,7 +241,7 @@ boundary, not the invariant.
 
 | Option | Why rejected |
 | --- | --- |
-| A fifth derived function | The list's shortness is the guarantee. `contracts/derived.py` raises at import if one appears, so adding one is an owner decision taken in the open rather than a widening that arrives as a diff. |
+| A fifth derived function | The list's shortness is the guarantee. `contracts/derived.py` raises at import if one appears, so adding one is a maintainer decision taken in the open rather than a widening that arrives as a diff. |
 | `visuals.unit_table_version` as a config key | A stamp an operator can edit without editing the table it stamps is a stamp that lies, and every derived value that recorded it lies with it. |
 | A tenth validator check for a histogram's bin count | It would fire on every histogram of every run for one config edit. The same fault is caught once, where the config loads, and named there. |
 | Letting a derived value take another derived value as an input | A chain that nests can be complete at each hop and still name no element at the bottom, which is the one thing this contract exists to refuse. |

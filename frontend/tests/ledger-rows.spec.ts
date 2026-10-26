@@ -38,7 +38,7 @@ import { serverCompiler } from './support/server-render';
  * through the actual article and score readers. The window cases build their
  * own site and ledger the same way. Nothing here grows with the archive (`CLAUDE.md` section 13), and nothing
  * touches the network but the engine, whose first query on a machine downloads
- * its parquet add-on (owner ruling, 2026-09-28).
+ * its parquet add-on (maintainer ruling, 2026-09-28).
  */
 
 const here = path.dirname(fileURLToPath(import.meta.url));

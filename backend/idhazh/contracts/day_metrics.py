@@ -6,7 +6,7 @@ the published digest-day layout (`frontend/public/digest/<YYYY>/<MM>/<DD>/`), so
 one month's folder holds about 31 files rather than one directory that grows
 with every published day. It is never a running total: a total needs a
 decrement path for every correction, and a missed decrement is silent and
-permanent (owner, 2026-09-06). So this record is always the whole truth about
+permanent (maintainer, 2026-09-06). So this record is always the whole truth about
 the day as of the run that wrote it, and a later correction rewrites it whole.
 
 The console today rebuilds these figures by walking every committed score row,
@@ -26,7 +26,7 @@ days; the per-source rows beside it can be merged without double-counting.
 
 **No producer and no reader ship with this contract (Fowler).** The model, its
 generated schema and its round-trip test land first; the run that writes the
-file and the reducers that read it come later, against the shape the owner signs
+file and the reducers that read it come later, against the shape the maintainer signs
 off here.
 
 Every path this record could name is relative and POSIX (CLAUDE.md section 2),

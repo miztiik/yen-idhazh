@@ -13,11 +13,11 @@ it is
 
 ## The confidence signal, and the argument about it
 
-This is where Reader and the owner disagreed, and it is worth recording properly.
+This is where Reader and the maintainer disagreed, and it is worth recording properly.
 
 **Reader's objection, in their words:** a per-item confidence badge is "the project talking to itself in public". A label that changes nothing a reader does is decoration with a serious face; a page where most items are marked low "stops reading as honesty and starts reading as a confession"; and the day a `high` item is wrong, the label has actively talked the reader out of the suspicion that would have caught it.
 
-**The owner asked for a colourful confidence indicator, and owner approval supersedes an agent** ([../../../CLAUDE.md](../../../CLAUDE.md) section 0). What ships is Jony's proportionate version, which answers most of Reader's objection without discarding the ask:
+**The maintainer asked for a colourful confidence indicator, and maintainer approval supersedes an agent** ([../../../CLAUDE.md](../../../CLAUDE.md) section 0). What ships is Jony's proportionate version, which answers most of Reader's objection without discarding the ask:
 
 | Band | On the item |
 | --- | --- |
@@ -30,7 +30,7 @@ It sits **in the item's footer, after the summary and beside the source link** -
 **No stripe, no tint, no coloured card.** If two-thirds of items are medium or low, a large treatment paints two-thirds of the page as broken and the reader concludes the whole digest is. One dot and eight words stays proportionate at any distribution.
 
 **The day level carries no confidence chart, and this reverses an earlier
-ruling.** The owner asked for a colourful confidence signal, and what shipped
+ruling.** The maintainer asked for a colourful confidence signal, and what shipped
 first was a three-segment bar of the day's bands with the counts beside it. It
 was deleted on 2026-08-24 for four reasons that compound:
 
@@ -39,7 +39,7 @@ was deleted on 2026-08-24 for four reasons that compound:
 - Its legend still printed "mostly matches the source", the exact string the item level abandoned when it moved to naming what is missing. The reader met the retracted sentence first.
 - Its `aria-label` was the legend verbatim, so a screen-reader user heard the counts twice.
 
-The owner's ask is still honoured: the colour is on the item dot, where it
+The maintainer's ask is still honoured: the colour is on the item dot, where it
 varies between two items on one screen, carries a sentence naming what is
 missing, and sits beside the link that lets the reader check. **The prose
 version is refused too** - "104 of today's 586 summaries may not match their
@@ -63,7 +63,7 @@ A build-time monogram plus the publication name in type. No fetched favicon - th
 
 Unread is filled with the source's own swatch and read is hollow, with a hairline in both states - `--color-rule-strong` unread, `--color-rule` read. **The border is never the swatch**: at 1px against the card a swatch reads about 1.1:1, so a coloured ring would be a ring nobody can see. The swatch bound and why it is 1.5:1 rather than 3:1 are in [../../concepts/design-system.md](../../concepts/design-system.md).
 
-When `ui.source_mark` is off the mark is not drawn, and the read state falls back to the title's weight and colour alone. That is what turning a scanning aid off costs, and the knob's owner is the one turning it.
+When `ui.source_mark` is off the mark is not drawn, and the read state falls back to the title's weight and colour alone. That is what turning a scanning aid off costs, and the knob's maintainer is the one turning it.
 
 Reader named one thing an item did not carry that they wanted before they would share it: **what kind of source it is.** "A company said its product is faster" and "a reporter measured it" are not the same claim, and they were arriving in the same typeface. `source_kind` is now on the payload, and the item prints it beside the publication name on the eyebrow, only where the speaker has a stake worth naming.
 
@@ -208,13 +208,13 @@ Three cues, and only one of them is brightness:
 - **The title steps one down the ramp and loses a weight**, to `--color-text-secondary` and no further. A dimmed item reads as "you cannot have this" rather than "you already had this".
 - **A visually-hidden `Read.` opens the heading**, so the accessible name of a read item is `Read. <title>`. A fill and a font weight are announced to nobody.
 
-**Two older cues are gone.** The eyebrow dot encoded the state as filled-or-hollow with no legend anywhere on the page - a dot with no sentence - and the plain bullet it left behind before the desk name went with the desk name's own move to a tinted chip on 2026-09-01. The visible `Read` chip is removed by the owner, 2026-08-31; the word it printed is the one now in the heading, where a screen reader gets it and the page does not carry a second label.
+**Two older cues are gone.** The eyebrow dot encoded the state as filled-or-hollow with no legend anywhere on the page - a dot with no sentence - and the plain bullet it left behind before the desk name went with the desk name's own move to a tinted chip on 2026-09-01. The visible `Read` chip is removed by the maintainer, 2026-08-31; the word it printed is the one now in the heading, where a screen reader gets it and the page does not carry a second label.
 
 The reason the fill was needed at all: dim text plus a lighter weight is one signal twice. Both are less ink, so both fail in the same conditions, and on that page the reader had no third cue. Authority: Susan, 2026-08-31.
 
 ## Design rationale
 
-Spending the colour per item rather than at the day level is the resolution of a genuine conflict between an owner instruction and a persona's ruling, and it took two passes to land. The owner asked for a colourful confidence signal; Reader argued that per-item confidence badges are the project talking to itself. The first answer put the aggregate at the top and the proportionate signal on the item. The aggregate then had four months of data behind it and never moved, so it was deleted: colour belongs where it varies, and where a reader can click through and check. Authority: owner (section 0), designed by Jony, constrained by Reader.
+Spending the colour per item rather than at the day level is the resolution of a genuine conflict between a maintainer instruction and a persona's ruling, and it took two passes to land. The maintainer asked for a colourful confidence signal; Reader argued that per-item confidence badges are the project talking to itself. The first answer put the aggregate at the top and the proportionate signal on the item. The aggregate then had four months of data behind it and never moved, so it was deleted: colour belongs where it varies, and where a reader can click through and check. Authority: maintainer (section 0), designed by Jony, constrained by Reader.
 
 ## Rejected alternatives
 
@@ -229,8 +229,8 @@ Spending the colour per item rather than at the day level is the resolution of a
 | A colour per topic | A category-to-colour map that must be re-picked every time the taxonomy changes, carrying nothing the count does not. | Jony |
 | An estimated reading time per topic | An unmeasured number printed as a fact, and it changes nothing a reader does. | Jony, Guardrail #10 |
 | `key_points` shown alongside the summary | The same content twice, at the cost of the hierarchy and half the items per screen. Settled for good on 2026-09-24: the field left the payload, so there is nothing to show. | Jony |
-| A flat list of read ids with no date | An id that came round again greyed out an article the reader had never opened, and nothing in the list could decide which marks to drop. | owner |
-| Migrating undated read marks rather than discarding them | There is no honest way to say which day they belonged to, and a wrong mark costs a reader an article. | owner |
+| A flat list of read ids with no date | An id that came round again greyed out an article the reader had never opened, and nothing in the list could decide which marks to drop. | maintainer |
+| Migrating undated read marks rather than discarding them | There is no honest way to say which day they belonged to, and a wrong mark costs a reader an article. | maintainer |
 | A read mark that hides or demotes an item by default | Two people at the same URL would see different pages, and a shared link would stop showing the recipient what the sender saw. | Reader |
 
 ## See also

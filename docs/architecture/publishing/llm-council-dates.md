@@ -62,7 +62,7 @@ the judge's bounded named inputs from that trial tree and writes to its
 `state/`, including its own council records. Active work keeps the existing
 production scratch and state paths.
 
-The owner approved isolated raw trial writes on 2026-10-11 UTC. During a
+The maintainer approved isolated raw trial writes on 2026-10-11 UTC. During a
 selected paused judge's settlement, the council authorizes only its exact trial
 state root, run and attempt. The raw ledger door may then write a paused
 family's rows there, including council records. It still refuses retired

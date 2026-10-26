@@ -5,7 +5,7 @@ without `--commit` records forty zeros and fails nothing at all.
 
 The verbs below are declared by hand (Guardrail #3), mirroring
 `idhazh.ledger.staging.REGISTRY`'s per-ledger writers, rather than walked from
-the package's own code - a walk that cost more as the package grew (OWNER
+the package's own code - a walk that cost more as the package grew (MAINTAINER
 RULING 2026-10-03, "no read may grow with the repository"). A verb joins
 `DOOR_WRITING_VERBS` in the same commit that gives one of its reachable
 modules a `ledger.persist`/`append_*`/`write_*` call; the steps still come

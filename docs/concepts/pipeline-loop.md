@@ -197,7 +197,7 @@ The pipeline records shape. It does not judge newsworthiness. A one-line item ca
 be news, and a long article can be empty. Extract therefore records `too_short`,
 `not_prose` and `boilerplate` by default, then lets the item continue. Only a
 paywall, an unsupported form, or genuine missing text stops the item. Authority:
-Owner override O3.
+Maintainer override O3.
 
 `boilerplate` is inert: it compares a page against lines the same host printed
 elsewhere, and nothing supplies that comparison, so it says no to every page the

@@ -315,7 +315,7 @@ committed bands; every other unknown key remains an error. Settings and checker
 changes are still bounded by the widest window, with one equal-length
 predecessor search for each kind. The figures above describe the older shape,
 before the movement fields and the retirement.
-The owner suspended size studies on 2026-10-10; this change keeps the existing
+The maintainer suspended size studies on 2026-10-10; this change keeps the existing
 ceiling rather than deriving a new value from a measurement.
 
 **The band carried two numbers for two days, and the fix was to delete one.**

@@ -71,7 +71,7 @@ class VisualsConfig(Model):
             "round trip on 2026-09-05."
         ),
     )
-    type_selection_enabled: bool = Field(  # Remove after owner-approved permanent activation.
+    type_selection_enabled: bool = Field(  # Remove after maintainer-approved permanent activation.
         default=False,
         description="Apply enabled_types to the request grammar, reachability and parsed plans.",
     )
@@ -79,7 +79,7 @@ class VisualsConfig(Model):
         default_factory=lambda: list(VisualType), min_length=1, max_length=len(VisualType),
         description="Native type names the operator selects, including unruled and unbuilt forms.",
     )
-    downgrade_enabled: bool = Field(  # Remove after tested, owner-approved permanent activation.
+    downgrade_enabled: bool = Field(  # Remove after tested, maintainer-approved as permanent.
         default=False,
         description="Try supported purpose-preserving replacements using measured history.",
     )

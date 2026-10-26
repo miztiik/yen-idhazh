@@ -1,18 +1,18 @@
 # Plan 66 - Feed ingest plan engine
 
 **Last Updated**: 2026-10-24
-**Level**: 5 (source-kind/tier and persisted-contract migration requires owner approval before execution; the later planner implementation follows the approved contracts)
+**Level**: 5 (source-kind/tier and persisted-contract migration requires maintainer approval before execution; the later planner implementation follows the approved contracts)
 **Status**: The sixteen historical component rows remain DONE within their recorded acceptance scope. Expanded follow-ups remain open: genuine Phase 2 publication/lead integration and testing are OPEN (U6), and production cutover is NOT APPROVED (U7). The publisher-ID documentation contract is IN-FLIGHT (U8). The name `/select-articles` is approved; publisher-ID runtime wiring and the API input/output contract and implementation await confirmation (U9). Table V enumerates remaining nonsemantic I Feed work; unsettled controls remain DESIGN PENDING.
 
-Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delegates a row where delegation pays; keep parallel N = 4 rows in flight, refilling a slot as soon as a worker returns and never waiting on a merge; consult a persona only where two answers would lead to different code; AUTO-merge on green gates; honor the ESCALATE triggers in section 0.
+Execute per docs/how-to/execute-a-plan.md: one maintainer carries the plan and delegates a row where delegation pays; keep parallel N = 4 rows in flight, refilling a slot as soon as a worker returns and never waiting on a merge; consult a persona only where two answers would lead to different code; AUTO-merge on green gates; honor the ESCALATE triggers in section 0.
 
 ---
 
 ## 0. Operating contract
 
-### Owner correction - TypeScript-only development and verification
+### Maintainer correction - TypeScript-only development and verification
 
-Owner correction, 2026-10-22: current planner event and correlation identities
+Maintainer correction, 2026-10-22: current planner event and correlation identities
 use the existing UUID convention, not a new identifier format. Persist
 `event_id` as UUIDv5 using the existing DNS namespace
 `6ba7b810-9dad-11d1-80b4-00c04fd430c8`; the live `eventId` is
@@ -30,7 +30,7 @@ CLI execution and in-process route calls are not substitutes for this gate.
 Emit progress during work and append its records as they occur so interruption
 does not erase the only evidence of the running operation.
 
-Owner approval, 2026-10-22: the TypeScript schema is authoritative for planner
+Maintainer approval, 2026-10-22: the TypeScript schema is authoritative for planner
 audit events. Remove `backend/idhazh/contracts/feed_ingest_event.py`, its
 registration and event-specific Python comparison checks; update the
 conflicting repository rule and owning documentation. Keep current UUID
@@ -38,17 +38,17 @@ validation and event tests in TypeScript. This exception applies to planner
 events, not shared ledger payloads that Python reads or compacts, and
 supersedes the Python-first event-model requirements below.
 
-Owner selection, 2026-10-22: reject entries with valid publication dates
+Maintainer selection, 2026-10-22: reject entries with valid publication dates
 already beyond the resolved age cutoff before downloading their pages.
 Reuse the existing clock and age policy; do not introduce a fetch cap or
 reinterpret the final article selection cap. Age refusal now precedes page
 content checks for these entries, so update terminal-reason priority,
 stage counts and per-entry audit evidence explicitly. Missing and
 excessively future-dated entries retain their existing date rules; no
-first-seen date is invented for an unfetched entry. The owner selected this
+first-seen date is invented for an unfetched entry. The maintainer selected this
 work-count correction alone, not an extraction worker pool.
 
-Owner approval, 2026-10-22: @kumarsnaveen_microsoft approved delivery of
+Maintainer approval, 2026-10-22: the maintainer approved delivery of
 Table A repairs A1-A7 from the review conversation, with tests and owning
 docs updated and green changes landed on remote main. This authorizes
 compatible Python contract edits, matching TypeScript changes, read-side
@@ -62,7 +62,7 @@ Deliver in two phases: timing/count/context compatibility, then logical
 completion proof through compaction. Preserve old readable records without
 inventing missing evidence.
 
-Owner ruling, 2026-10-21: the remaining Plan 66 implementation introduces no
+Maintainer ruling, 2026-10-21: the remaining Plan 66 implementation introduces no
 Python tests, invokes no Python from TypeScript tests or development commands,
 and installs no Python packages in the isolated workflow created by this plan.
 This supersedes every Python execution or new Python-test requirement below.
@@ -79,7 +79,7 @@ Cross-row oracle correction, 2026-10-21: Row #12 found that Row #7 includes
 `workflow_reporting` in its planning-input fingerprint. Changing optional
 reporting therefore changes policy fingerprints and ledger content, contrary
 to the existing reporting-independence requirement. The original Row #7
-owner corrects only its already named loader, harvest test and harvesting
+maintainer corrects only its already named loader, harvest test and harvesting
 page: exclude reporting-only controls from the planning fingerprint while
 retaining their actual configuration for the external reporting adapter.
 Verify report flag/removal text substitutions leave the fingerprint alone
@@ -111,12 +111,12 @@ and fails two existing schedule checks after unrelated main commit
 and a history-rewrite overlap measurement for that earlier schedule.
 No writer code caused these failures. Keep Row #6 unmerged while CI is red.
 Restoring the earlier schedule gives up the three added runs; retaining them
-requires a separate measured schedule-safety repair and owner authorization
+requires a separate measured schedule-safety repair and maintainer authorization
 for changes outside this TypeScript plan. Neither was authorized when the
-owner was unavailable. Do not add Python tests or silently change production
+maintainer was unavailable. Do not add Python tests or silently change production
 scheduling to clear this blocker.
 
-Delivery continuation, 2026-10-21: the owner directed continued autonomous
+Delivery continuation, 2026-10-21: the maintainer directed continued autonomous
 implementation after this blocker was reported. Row #6 implementation and
 review are complete; its merge remains blocked. Row #4 can build in an
 isolated child on the reviewed writer branch without merging either change.
@@ -124,11 +124,11 @@ Keep the writer head stable, merge updated main before final verification,
 and retain serialized green-only merges. The separate digest-schedule session
 owns the schedule repair; do not duplicate it in a plan row.
 
-Owner correction, 2026-10-21: do not fix CI issues; other agents own them.
+Maintainer correction, 2026-10-21: do not fix CI issues; other agents own them.
 Build the remaining rows and keep them ready while those repairs proceed.
 An unrelated failed check blocks merge, not isolated implementation.
 
-Owner-directed scope change: repair the existing query-door EXPLAIN fixture
+Maintainer-directed scope change: repair the existing query-door EXPLAIN fixture
 check in a separate PR from main, not as a Plan 66 row. CI run 39608009522
 for PR #1607 passed 7185 backend tests and failed only
 `test_additional_answer_fixtures_are_recomputed_with_duckdb`: native DuckDB
@@ -146,7 +146,7 @@ implementation and all row statuses remain unchanged.
 | A2 | Hard scope - in | - Modular topology: packages/common-contracts, packages/ledger-file-writer, services/host-fingerprints, services/host-probes, and services/feed-ingest-plan.<br>- Pre-fetching full article text with linkedom and Defuddle, capturing feed item category tags with an empty array only when tags are absent.<br>- Dedicated configuration file: config/feed-ingest-plan.json for word-count thresholds, timeouts, age cutoff, recency scoring, normalization rules, and MMR weights.<br>- Candidate screening with typed drop reasons in state/raw/feed-ingest-plan/rejections/.<br>- Enrolling dispatches and rejections into config/ledgers.json for automated gardener compaction.<br>- Set-aware portfolio curation with weak configurable source-kind influence, source opportunity normalization, separate quality axes, and soft concentration caps.<br>- Configurable article partitioning.<br>- Planner REST API and one-shot CLI with structured JSONL event logging.<br>- Shared TypeScript ledger writer usable by any API or CLI, following the Python identity, envelope, digest, and atomic-write contracts.<br>- Isolated CI workflow with the inputs in Table R and optional reporting outside the production modules. |
 | A3 | Hard scope - out | Table B |
 | A4 | ESCALATE triggers | Table C |
-| A5 | Chosen strategy | Bun services with shared contract and ledger-writing packages, calendar versioning, the stage names in Table E, and Python reader compatibility before any writer or workflow cutover. The owner selected the shared ledger package; other design choices remain plan proposals, not advisor rulings. |
+| A5 | Chosen strategy | Bun services with shared contract and ledger-writing packages, calendar versioning, the stage names in Table E, and Python reader compatibility before any writer or workflow cutover. The maintainer selected the shared ledger package; other design choices remain plan proposals, not advisor rulings. |
 | A6 | Execution | Autonomous orchestrator per docs/how-to/execute-a-plan.md after explicit implementation approval. Parallel N = 4 is a ceiling, not a requirement. Dispatch by Depends-on and disjoint Files touched, not group letters: Row #15 precedes #1; #2 precedes explorer readers in #16; #16 precedes the writer in #6; #14 precedes #12; #13 follows #12. |
 | A7 | Driving principle | Host telemetry stays outside the planner. Identity creation and Parquet writing live in one reusable package with no planner or GitHub dependency. Curation is independent of partitioning. GitHub annotations and summaries live in a removable reporting adapter. Production workflows stay unchanged during this plan. |
 | A8 | State ledger layout | Every registered ledger writes raw files under `state/raw/<ledger-prefix>/` and compacted files under `state/compact/<ledger-prefix>/`. Resolve the prefix from config/ledgers.json; it can contain more than one folder. No ledger writes directly under `state/<ledger-prefix>/`. |
@@ -161,7 +161,7 @@ implementation and all row statuses remain unchanged.
 | # | What is out | What it costs to leave out | What would bring it in |
 | --- | --- | --- | --- |
 | B1 | Modifications to .github/workflows/digest.yml | Production workflow continues using existing Python plan until cutover PR | Successful verification in .github/workflows/feed-ingest-plan-test.yml |
-| B2 | Moving or renaming config/sources.json | Feed configuration remains at repository root | An owner ruling on repository-wide configuration restructuring |
+| B2 | Moving or renaming config/sources.json | Feed configuration remains at repository root | A maintainer ruling on repository-wide configuration restructuring |
 | B3 | Modifying Python backend/idhazh/stages/work.py | Existing work consumes RunPlan and still fetches articles; the new dispatch ledger is not a drop-in worker input. Python ledger readback certifies storage compatibility only, not elimination of worker fetches. | A dedicated worker adapter/migration and production cutover plan |
 | B4 | Phase 2 metrics within the Phase 1 delivery | Phase 1 captures source/article evidence and computes available per-run planning metrics. Published counts, lead selection, and cross-day publication metrics cannot be inferred from a plan. Phase 2 remains in this plan as Row #13, after Phase 1; it is not omitted from the overall capability. | Complete the Phase 1 evidence ledgers and then the post-publication reader in Row #13 |
 | B5 | Llama-server execution during plan stage | Plan stage performs deterministic heuristic curation and text extraction; no local LLM inference in plan | A requirement for semantic LLM classification prior to sharding |
@@ -174,7 +174,7 @@ implementation and all row statuses remain unchanged.
 | C2 | Feed harvesting failure rate exceeds 40% across active sources in config/sources.json | PAUSE and inspect runner DNS, proxy, or upstream connectivity |
 | C3 | Runner memory consumption in services/feed-ingest-plan exceeds 1.5 GB during pre-fetch | STOP: evaluate concurrency pool size and DOM streaming limits |
 | C4 | Isolated compatibility checks report missing columns or schema incompatibility | STOP the isolated integration and record the exact contract/type mismatch. Production remains on the Python planner; do not describe ledger readback as a worker cutover. |
-| C5 | Implementation changes a source-classification type, adds/changes a persisted row contract, or adds a TypeScript writer provenance value to FileEnvelope | PAUSE for owner approval under CLAUDE.md section 6, Level 5; plan-only approval is not implementation approval. Land compatible Python/frontend readers before new writers. |
+| C5 | Implementation changes a source-classification type, adds/changes a persisted row contract, or adds a TypeScript writer provenance value to FileEnvelope | PAUSE for maintainer approval under CLAUDE.md section 6, Level 5; plan-only approval is not implementation approval. Land compatible Python/frontend readers before new writers. |
 
 ---
 
@@ -190,9 +190,9 @@ implementation and all row statuses remain unchanged.
 | E4 | Partitioning | `partition-article-shards` | Balance selected articles across workers by estimated work. |
 | E5 | Storage | `seal-article-ledger` | Planner-specific adapter that passes rows and writer context to the shared ledger package; contains no generic serialization logic. |
 
-### Table T - Independent terms, owners, and selection controls
+### Table T - Independent terms, maintainers, and selection controls
 
-| # | Term | Canonical owner | Config control and boundary |
+| # | Term | Canonical maintainer | Config control and boundary |
 | --- | --- | --- | --- |
 | T1 | Source / feed | FeedDef in backend/idhazh/contracts/sources.py | A configured feed entry, identified by source_id. Its weight, status, allowance, and source-concentration penalty are independent controls. Preserve feed identity; do not use source_id as publisher identity. |
 | T2 | Publisher | The existing [outlet rule](../docs/architecture/publishing/autotune-content-similarity.md) and [publisher-ID contract](../docs/architecture/contracts/publisher-identity.md) | Group carrier evidence by the recorded outlet, not by feed count; retain the separate configured parent-domain concentration limit. Two feeds from one publisher are not two independent publishers. Immutable ID naming is documented, not wired into runtime or stored fields. |
@@ -300,7 +300,7 @@ Rather than adding planner knobs to `config/idhazh.json`, a dedicated configurat
 ## 3. Status Reckoner
 
 Historical component acceptance, 2026-10-22 17:29 UTC: Table D records the
-sixteen delivered rows and owner-approved repairs, not completion of the
+sixteen delivered rows and maintainer-approved repairs, not completion of the
 expanded follow-ups in Table U. Original dependency PRs #1614-#1624 landed
 before Phase 1 repair [#1627](https://github.com/miztiik/yen-idhazh/pull/1627).
 Final repair [#1628](https://github.com/miztiik/yen-idhazh/pull/1628) landed as
@@ -317,7 +317,7 @@ returned successfully; HTTP 200 arrived after 406 seconds (6 minutes 46 seconds)
 and the listener stopped normally. All 11,220 offered entries from 156 feeds
 received decisions: 9,647 already-expired entries stopped before page download,
 leaving 1,573 article paths, with 1,296 successful extractions and five empty
-extractions. The remaining paths record their failures. The owner-approved
+extractions. The remaining paths record their failures. The maintainer-approved
 early age rule, not a cap or worker pool, avoids the expired-page work.
 The external ten-minute diagnostic deadline is unchanged. Only the loopback
 POST's separate five-minute client idle timer was removed, after a real
@@ -334,7 +334,7 @@ valid UUIDv5 live identities. Early age refusals report extraction as
 
 Completion proof survives compaction, rejects conflicting duplicates before
 input deletion, and preserves original historical proof stamps and stored
-identity layouts. Current planner events use the owner-approved TypeScript
+identity layouts. Current planner events use the maintainer-approved TypeScript
 authority; shared Python ledger contracts remain. The service stays default-off,
 and this delivery does not cut production planning or workers over to it.
 Earlier failed-run checkpoints remain in Git history.
@@ -405,8 +405,8 @@ Earlier failed-run checkpoints remain in Git history.
 | --- | --- | --- |
 | 1 | Keep Pydantic as the source of persisted contracts; TypeScript copies are strict, hand-written, and bound by field-set and vocabulary tests. Version and changelog persisted changes under CLAUDE.md section 11. | CLAUDE.md sections 1a and 11; schemas.md |
 | 2 | Enforce strict Zod validation without silent stripping for candidate inputs, dispatches, and rejections | Plan proposal |
-| 3 | Declare the rejection record and reason vocabulary in Table G in Python, with strict TypeScript copies and binding tests; record all terminal rejections, not only screening failures. | Owner request; schemas.md |
-| 4 | Keep source_id, vertical, nullable assigned desk, lens IDs, content event types, event-cluster identity, and entity IDs as distinct typed fields in the new candidate/assessment contracts. Record label/matcher origin and version; do not fill one dimension by copying another. Preserve existing payload field spellings through explicit readers rather than a repository-wide rename. | Owner selected Table T's independent terminology |
+| 3 | Declare the rejection record and reason vocabulary in Table G in Python, with strict TypeScript copies and binding tests; record all terminal rejections, not only screening failures. | Maintainer request; schemas.md |
+| 4 | Keep source_id, vertical, nullable assigned desk, lens IDs, content event types, event-cluster identity, and entity IDs as distinct typed fields in the new candidate/assessment contracts. Record label/matcher origin and version; do not fill one dimension by copying another. Preserve existing payload field spellings through explicit readers rather than a repository-wide rename. | Maintainer selected Table T's independent terminology |
 | 4 | Declare Table J's event envelope and typed payload variants before stage emitters. Keep the event contract independent of its audit recorder and optional GitHub adapter. | CLAUDE.md Guardrail #3 and section 1a |
 
 ### Table G - Rejection record contract
@@ -562,7 +562,7 @@ export type CandidateRejectionRecord =
 
 | # | Option | Why rejected | What it would cost to take | Authority |
 | --- | --- | --- | --- | --- |
-| 1 | Semver or integer versioning (e.g. `20261020`) | Conflicts with the persisted date-stamp contract | Requires an owner-approved contract and reader migration | CLAUDE.md section 11 |
+| 1 | Semver or integer versioning (e.g. `20261020`) | Conflicts with the persisted date-stamp contract | Requires a maintainer-approved contract and reader migration | CLAUDE.md section 11 |
 | 2 | Independent Zod definitions as the source of persisted shapes | Creates a second authority that can drift from Python readers | Requires changing the contract ownership rule and migrating every affected reader | CLAUDE.md section 1a; schemas.md |
 
 ---
@@ -609,18 +609,18 @@ export type CandidateRejectionRecord =
 
 | # | Decision | Authority |
 | --- | --- | --- |
-| 1 | Enroll each ledger declared in Table I, Table L, and Table P under family `feed-ingest-plan`; register its row contract, settlement key, prefix, and compaction task before writing. Use `source-runs`, `article-assessments`, `diversity`, and `editorial-selections` as the new suffixes beneath the family prefix. | Owner requested the complete audit and managed retention; persistence.md |
+| 1 | Enroll each ledger declared in Table I, Table L, and Table P under family `feed-ingest-plan`; register its row contract, settlement key, prefix, and compaction task before writing. Use `source-runs`, `article-assessments`, `diversity`, and `editorial-selections` as the new suffixes beneath the family prefix. | Maintainer requested the complete audit and managed retention; persistence.md |
 | 2 | Store rejections as Parquet files under `state/raw/feed-ingest-plan/rejections/` with `FileEnvelope` footers | Plan proposal |
 | 3 | Add the new ledger-name members and row/settlement bindings, and enroll every compaction declaration in config/idhazh_gardener.json's explicit task_names list. A declaration file alone does not schedule a task. Use each full ledger prefix with slashes replaced by hyphens for the compaction name. | Verified ledger registry, keys.py, and gardener task manifest |
 | 4 | Add every new ledger to staging.py REGISTRY. Name the planned TypeScript writer explicitly, with no production digest commit labels while the isolated workflow is its only caller. The frontend derives names and prefixes from config/ledgers.json through ledger-catalog.ts; do not add per-ledger LEDGER_NAMES or LEDGER_FOLDERS lists. Public consent and delivery are covered by the row titled "Public data-explorer enrollment and nested ledger delivery." | ledger-registry.md onboarding; existing finite staging table |
-| 5 | Enroll the tasks in the named gardener retention test inventory and use the approved live chain: compact_after_days 1, daily_keep_days 45, monthly_keep_days 93, monthly_window forever, yearly_keep_months 36, yearly_prune_enable true. Follow the existing dry-run-to-live approval rule; do not invent a separate retention policy for planner text or audit rows. | ledger-registry.md onboarding; owner-approved retention chain |
+| 5 | Enroll the tasks in the named gardener retention test inventory and use the approved live chain: compact_after_days 1, daily_keep_days 45, monthly_keep_days 93, monthly_window forever, yearly_keep_months 36, yearly_prune_enable true. Follow the existing dry-run-to-live approval rule; do not invent a separate retention policy for planner text or audit rows. | ledger-registry.md onboarding; maintainer-approved retention chain |
 | 6 | Feed-ingest settlement preserves each original run/attempt and deduplicates rows only within that attempt by its declared business key; trusted dotted paths may name nested fields. Existing ledgers retain their current settlement. Table J selects the complete attempt later: an incomplete newer attempt cannot erase an older complete attempt, while an explicitly recorded complete empty attempt supersedes it. Test raw settlement and real compact/read/repack cycles. UUID contract fields use their JSON string representation in Arrow, so the reader validates their version after loading. | Table G candidate identity; reader-before-writer settlement contract; Pydantic JSON serialization |
 
 ### Rejected alternatives
 
 | # | Option | Why rejected | What it would cost to take | Authority |
 | --- | --- | --- | --- | --- |
-| 1 | Storing rejections as raw `.jsonl` files outside the ledger door | Bypasses the chosen Parquet audit and gardener compaction | Separate enrollment and lifecycle handling | Owner selected Parquet for this plan |
+| 1 | Storing rejections as raw `.jsonl` files outside the ledger door | Bypasses the chosen Parquet audit and gardener compaction | Separate enrollment and lifecycle handling | Maintainer selected Parquet for this plan |
 
 ---
 
@@ -650,9 +650,9 @@ export type CandidateRejectionRecord =
 | --- | --- | --- |
 | 1 | Decentralize planner configuration into titled `config/feed-ingest-plan.json` rather than bloating `idhazh.json` | Plan proposal; CLAUDE.md section 1a |
 | 2 | Make article and abstract word count thresholds configurable variables with defaults 180 and 60 | Plan proposal |
-| 3 | Resolve the age cutoff by Table R; keep source-kind influence limited to Table F's configurable selection penalty. Neither setting requires an article classification from summarization. | Owner clarification; FeedDef.kind |
-| 4 | `workflow_reporting.enabled` defaults to false. It controls only the external reporting adapter. Removal condition: delete this key, its adapter, tests, and workflow invocation together when development reporting is no longer needed. | Owner request; default proposed for development-only reporting |
-| 5 | Declare Table O's planning policies and Table T's independent dimensions before logic. Keep canonical definitions on their owning pages; update the plan's new names consistently, without renaming historical payload keys. Do not implement a generic rules language, label-specific branches, or arbitrary expression evaluation. | Owner selected distinct, independently configurable terms |
+| 3 | Resolve the age cutoff by Table R; keep source-kind influence limited to Table F's configurable selection penalty. Neither setting requires an article classification from summarization. | Maintainer clarification; FeedDef.kind |
+| 4 | `workflow_reporting.enabled` defaults to false. It controls only the external reporting adapter. Removal condition: delete this key, its adapter, tests, and workflow invocation together when development reporting is no longer needed. | Maintainer request; default proposed for development-only reporting |
+| 5 | Declare Table O's planning policies and Table T's independent dimensions before logic. Keep canonical definitions on their owning pages; update the plan's new names consistently, without renaming historical payload keys. Do not implement a generic rules language, label-specific branches, or arbitrary expression evaluation. | Maintainer selected distinct, independently configurable terms |
 
 ### Rejected alternatives
 
@@ -719,10 +719,10 @@ the existing host-service scope, not new persisted fields or a new algorithm.
 | --- | --- | --- |
 | 1 | Decouple host fingerprinting completely from feed planning | Plan proposal |
 | 2 | Parse `/proc/cpuinfo` directly on Linux with graceful fallback on macOS/Windows development environments | Plan proposal |
-| 3 | Persist to the caller's state root under `raw/host-fingerprint/<YYYY>/<MM>/<DD>/<file_id>.parquet`; the production root is `state/`. Keep existing compaction under `state/compact/host-fingerprint/` and the existing registry entry, following Table A's state ledger layout. | Owner correction; host-metrics.md; config/ledgers.json |
-| 4 | Use `POST /api/2026-10-20/fingerprint` for collection plus persistence and the same operation from the CLI. Return the recorded row and repository-relative file paths only after the write succeeds. Keep GET health or inspection requests free of file-write side effects. | Plan proposal implementing owner-required persistence |
+| 3 | Persist to the caller's state root under `raw/host-fingerprint/<YYYY>/<MM>/<DD>/<file_id>.parquet`; the production root is `state/`. Keep existing compaction under `state/compact/host-fingerprint/` and the existing registry entry, following Table A's state ledger layout. | Maintainer correction; host-metrics.md; config/ledgers.json |
+| 4 | Use `POST /api/2026-10-20/fingerprint` for collection plus persistence and the same operation from the CLI. Return the recorded row and repository-relative file paths only after the write succeeds. Keep GET health or inspection requests free of file-write side effects. | Plan proposal implementing maintainer-required persistence |
 | 5 | Reuse the existing HostFingerprintRow contract, versioned fingerprint algorithm, nullable measurements, and observability controls. Caller-supplied pipeline/task/run/shard context is validated separately from hardware data. Missing observations stay null, never invented values. | host-metrics.md; HostFingerprintRow |
-| 6 | Reuse the package from Row #6; do not embed another Parquet writer in the service. The caller remains responsible for committing returned files. The isolated verification workflow uses a run-local state root so it does not commit trial machine records to production. | Owner request; persistence.md |
+| 6 | Reuse the package from Row #6; do not embed another Parquet writer in the service. The caller remains responsible for committing returned files. The isolated verification workflow uses a run-local state root so it does not commit trial machine records to production. | Maintainer request; persistence.md |
 
 ### Rejected alternatives
 
@@ -831,17 +831,17 @@ correlation IDs are not undeclared file-envelope metadata.
 | 2 | Match Python `filenames.py` for UUIDv5 unit identity and UUIDv8 file identity, including generic pipeline/task context. | identity.md; filenames.py |
 | 3 | Write separate UTF-8 key-value entries matching `FileEnvelope.as_metadata`, not one JSON object. Preserve renamed metadata keys, optional-key omission, and zero-padded attempt/shard strings. Read row count from the Parquet footer, not an extra envelope key. | file_envelope.py; persistence.md |
 | 4 | Hash the stored rows, including stamped identity cells, in file order using the exact canonical JSON-lines bytes from `json_lines.rows_bytes`: sorted object keys, ASCII escaping, compact separators, and one LF per row. It is neither a hash of Parquet bytes nor an unspecified raw-row hash. Test Unicode, nested values, floats, and nullable cells against the recorded canonical-byte vector. | persist.py; json_lines.py |
-| 5 | Accept ledger, row contract, rows, output root, UTC coverage period, writer context, and ledger settings. Derive paths and identifiers inside the package. Keep feed selection, HTTP serving, and GitHub reporting outside it. Use temporary-file-plus-rename writes. | Owner selection: shared package; persistence.md |
-| 6 | Validation checks row and envelope contracts before writing. TypeScript tests read actual Parquet through WASM and Arrow, then check the footer and typed columns against bounded compatibility fixtures. The owner override prevents executing Python from this package's test and CI paths, so these checks do not claim current Python reader execution. Neither check encrypts, signs, or makes a file tamper-proof. | Clarification of the package contract; owner override |
+| 5 | Accept ledger, row contract, rows, output root, UTC coverage period, writer context, and ledger settings. Derive paths and identifiers inside the package. Keep feed selection, HTTP serving, and GitHub reporting outside it. Use temporary-file-plus-rename writes. | Maintainer selection: shared package; persistence.md |
+| 6 | Validation checks row and envelope contracts before writing. TypeScript tests read actual Parquet through WASM and Arrow, then check the footer and typed columns against bounded compatibility fixtures. The maintainer override prevents executing Python from this package's test and CI paths, so these checks do not claim current Python reader execution. Neither check encrypts, signs, or makes a file tamper-proof. | Clarification of the package contract; maintainer override |
 | 7 | Raw writes stamp row identity; compact writes preserve original row identity and record the compactor only in the envelope. Accept tier, period, and source-file count under the existing persistence rules; do not embed a compaction schedule or retention policy in the package. | persistence.md |
 
 ### Rejected alternatives
 
 | # | Option | Why rejected | What it would cost to take | Authority |
 | --- | --- | --- | --- | --- |
-| 1 | A standalone ledger-writing HTTP service | TypeScript reuse needs an import, not another running process | Server lifecycle, request validation, and filesystem authorization; worthwhile only if non-TypeScript remote callers need it | Owner selected the shared package |
+| 1 | A standalone ledger-writing HTTP service | TypeScript reuse needs an import, not another running process | Server lifecycle, request validation, and filesystem authorization; worthwhile only if non-TypeScript remote callers need it | Maintainer selected the shared package |
 | 2 | Python subprocess for each Parquet write | Keeps an extra runtime in every caller's write path | Measure paired runner writes to price startup and serialization; no timing has been measured for this plan | Plan proposal |
-| 3 | One JSON-serialized FileEnvelope value in the footer | The current reader expects separate declared metadata entries | Requires an owner-approved envelope migration across readers; unnecessary for TypeScript reuse | file_envelope.py; persistence.md |
+| 3 | One JSON-serialized FileEnvelope value in the footer | The current reader expects separate declared metadata entries | Requires a maintainer-approved envelope migration across readers; unnecessary for TypeScript reuse | file_envelope.py; persistence.md |
 
 ---
 
@@ -905,7 +905,7 @@ collision while these rows are built.
 | 2 | Extract and normalize RSS/Atom `<category>` elements into candidate records; use `[]` only when categories are absent, not when parsing fails. | Plan proposal |
 | 3 | Read `config/sources.json` at root without changing its path | Plan proposal |
 | 4 | Read extraction concurrency and timeout from the configuration in section 2 | Plan proposal |
-| 5 | Preserve every source field named by SRC-01 in Table M: tier, vertical, weight, kind, form, title, URL, and lifecycle status. Resolve status before fetching; record inactive sources without issuing a request. Preserve the source configuration snapshot used by the run for later denominators. | Owner checklist |
+| 5 | Preserve every source field named by SRC-01 in Table M: tier, vertical, weight, kind, form, title, URL, and lifecycle status. Resolve status before fetching; record inactive sources without issuing a request. Preserve the source configuration snapshot used by the run for later denominators. | Maintainer checklist |
 
 ### Rejected alternatives
 
@@ -957,7 +957,7 @@ before final checks instead of editing either file concurrently.
 
 | # | Decision | Authority |
 | --- | --- | --- |
-| 1 | Apply the same policy resolver in CLI and API execution. A vertical override may alter the feed grouping's age or word threshold; changing source kind does not alter either. Keep the original feed vertical separate from any desk assigned later by summarization. | Owner selected vertical_overrides and separate desk controls |
+| 1 | Apply the same policy resolver in CLI and API execution. A vertical override may alter the feed grouping's age or word threshold; changing source kind does not alter either. Keep the original feed vertical separate from any desk assigned later by summarization. | Maintainer selected vertical_overrides and separate desk controls |
 | 2 | Persist all rejections to Parquet under `state/raw/feed-ingest-plan/rejections/` through the reusable writer | Plan proposal |
 | 3 | Read minimum word count floors from `config/feed-ingest-plan.json` | Plan proposal |
 
@@ -1011,13 +1011,13 @@ concurrent edits to those files.
 
 | # | Decision | Authority |
 | --- | --- | --- |
-| 1 | Limit source intake before global pool to the configured base allowance plus bonuses for an uncovered event cluster, underrepresented vertical, or unique primary evidence. Desk placement remains separate and is not inferred to grant a bonus. | Owner terminology clarification |
+| 1 | Limit source intake before global pool to the configured base allowance plus bonuses for an uncovered event cluster, underrepresented vertical, or unique primary evidence. Desk placement remains separate and is not inferred to grant a bonus. | Maintainer terminology clarification |
 | 2 | Separate 3 quality axes: operational reliability, article intrinsic quality, and marginal portfolio contribution | Plan proposal |
 | 3 | Allocate 8% of planned slots for qualifying underrepresented long-tail sources | Plan proposal |
-| 4 | Persist the selected article identities, estimated work, scores, and editorial order as unsharded Parquet rows under Table P before partitioning. Do not create an unmanaged JSON file under state/raw. | Owner correction; persistence and compaction contracts |
-| 5 | Apply source kind only through Table F's weak configurable term. Keep measured source reliability, article quality, and portfolio contribution separate from that label. | Owner direction |
-| 6 | After viability screening, rank candidates within each source and admit at most the configured base allowance plus earned bonuses before global selection. Award each configured bonus type at most once per source per run, backed by distinct evidence for uncovered event clusters, underrepresented verticals, or unique primary evidence. Repeated copies cannot raise the allowance. Persist excluded candidates with the source-cap reason and the actual allowance. | NRM-01; owner requested high-volume normalization |
-| 7 | Use Table T's separate source, parent-domain, vertical, assigned-desk, lens, event-type, event-cluster, entity, and coverage terms with their own coefficients. Known labels come from named validated inputs/matchers, not an invented pre-summarization classification. Record unavailable terms explicitly and use no contribution from them in the total. Event-type and entity saturation start at zero as configurable tuning defaults; implement and test their real terms, not placeholders. Apply configured soft caps with recorded relaxation; kind has no quota to relax. | Owner requested independent config controls |
+| 4 | Persist the selected article identities, estimated work, scores, and editorial order as unsharded Parquet rows under Table P before partitioning. Do not create an unmanaged JSON file under state/raw. | Maintainer correction; persistence and compaction contracts |
+| 5 | Apply source kind only through Table F's weak configurable term. Keep measured source reliability, article quality, and portfolio contribution separate from that label. | Maintainer direction |
+| 6 | After viability screening, rank candidates within each source and admit at most the configured base allowance plus earned bonuses before global selection. Award each configured bonus type at most once per source per run, backed by distinct evidence for uncovered event clusters, underrepresented verticals, or unique primary evidence. Repeated copies cannot raise the allowance. Persist excluded candidates with the source-cap reason and the actual allowance. | NRM-01; maintainer requested high-volume normalization |
+| 7 | Use Table T's separate source, parent-domain, vertical, assigned-desk, lens, event-type, event-cluster, entity, and coverage terms with their own coefficients. Known labels come from named validated inputs/matchers, not an invented pre-summarization classification. Record unavailable terms explicitly and use no contribution from them in the total. Event-type and entity saturation start at zero as configurable tuning defaults; implement and test their real terms, not placeholders. Apply configured soft caps with recorded relaxation; kind has no quota to relax. | Maintainer requested independent config controls |
 | 8 | Record all carrier source identities for a cluster, distinct outlet count, chosen representative, similarity method/version, and duplicate evidence. Reuse the existing same-story rules where inputs are available; never label independently written coverage as independent verification of the underlying claim. A suppressed carrier records its replacement identity. | CRD-01; autotune-content-similarity.md |
 | 9 | Source-volume fixture: adding repeated low-quality or duplicate items from one feed does not raise its allowance or displace other qualifying feeds. Check stable ties, bonus evidence, cap relaxations, and minority-source exploration slots against exact selected identities. | NRM-01 acceptance oracle |
 
@@ -1109,7 +1109,7 @@ order. Packing can also settle duplicate occurrences. Consequently a reader
 cannot generally reproduce each recorded raw-file digest after raw removal.
 Current compact-file integrity and matching aggregate counts do not prove
 the original file commitments. Fowler confirmed this contract gap.
-The coordinator requested owner approval for a versioned logical-attempt
+The coordinator requested maintainer approval for a versioned logical-attempt
 commitment, with the existing Python declaration updated but never executed;
 alternatives were retaining referenced raw files or preserving full raw-file
 provenance through packing. The unavailable-user response selected none.
@@ -1144,7 +1144,7 @@ harvested under a different policy or UTC day remains unrepresentable.
 | 1 | Place partitioning behind feature flag `--partition-strategy=bin-pack|round-robin|none` | Plan proposal |
 | 2 | Use greedy bin-packing of articles ordered by decreasing `word_count` | Plan proposal |
 | 3 | Match the Python contract's Arrow type for the `shard` column; do not infer compatibility from the column name alone. | persistence.md; arrow_schema.py |
-| 4 | Resolve the selected run/attempt's editorial rows through the ledger reader, whether raw or compact. Partitioning preserves the selected identity set and editorial ranks; only worker assignment and work totals may differ. | Owner editorial-ledger correction |
+| 4 | Resolve the selected run/attempt's editorial rows through the ledger reader, whether raw or compact. Partitioning preserves the selected identity set and editorial ranks; only worker assignment and work totals may differ. | Maintainer editorial-ledger correction |
 | 5 | With strategy `none`, accept an omitted shard count or explicit one, resolve the effective count to one, and reject an explicit larger count before harvesting. Keep worker assignment separate from the ledger writer's identity shard. | Consistent Table R request/output contract |
 
 ### Rejected alternatives
@@ -1250,9 +1250,9 @@ This accepts the implementation increment, not audited completion or merge.
 
 | # | Decision | Authority |
 | --- | --- | --- |
-| 1 | Store dispatch tables under `state/raw/feed-ingest-plan/dispatches/` using the shared package | Plan proposal; owner selected package reuse |
+| 1 | Store dispatch tables under `state/raw/feed-ingest-plan/dispatches/` using the shared package | Plan proposal; maintainer selected package reuse |
 | 2 | Support dual-mode: long-lived Hono API daemon with `--serve` and one-shot CLI execution with `--cli` | Plan proposal |
-| 3 | Emit structured JSONL events with `elapsed_ms` and `step_elapsed_ms`; keep GitHub formatting outside the planner. The storage adapter adds planner context, not generic writing logic. | Owner request |
+| 3 | Emit structured JSONL events with `elapsed_ms` and `step_elapsed_ms`; keep GitHub formatting outside the planner. The storage adapter adds planner context, not generic writing logic. | Maintainer request |
 | 4 | Emit Table J's typed stage-membership and assessment events for Row #14. Record source normalization and each marginal selection step, not only the final portfolio. Row #14 integrates the recorder and final completion write before the API/CLI reports a complete audited plan; optional reporting is never on that success path. | Three-axis audit and lost-diversity metrics |
 | 5 | Expose `POST /api/2026-10-20/plan` and `GET /api/2026-10-20/health`; validate the same request contract used by the CLI before executing the pipeline. | SRV-01; calendar-version contract |
 
@@ -1333,11 +1333,11 @@ default-off controls remain unchanged.
 | # | Decision | Authority |
 | --- | --- | --- |
 | 1 | Create isolated test workflow `feed-ingest-plan-test.yml` rather than modifying `digest.yml` directly | Plan proposal |
-| 2 | Verify actual Parquet rows, native columns, envelope and digest through TypeScript and recorded compatibility fixtures. No Python install or invocation. Use Row #6's public writer and readback checks. | Owner ruling, 2026-10-21 |
-| 3 | Expose only the four inputs declared in Table R; derive the run date internally in UTC. | Owner request |
-| 4 | `.github/scripts/feed-ingest-plan-report.ts` alone formats `::notice::` annotations and Markdown for `$GITHUB_STEP_SUMMARY` from structured planner events. Escape workflow-command control characters and untrusted source strings. Invoke it as a separate workflow step only when the reporting config enables it. Core modules do not import it. | Owner request |
-| 5 | Keep required shard/matrix/path output conversion in `.github/scripts/feed-ingest-plan-outputs.ts`, separate from optional reporting, so disabling or deleting the report cannot break execution outputs. | Owner request; separation of concerns |
-| 6 | Use sparse checkout for the isolated workflow, with a named path inventory containing config, services, packages, relevant state inputs, recorded compatibility fixtures, scripts, and dependency manifests/locks. Include compact indexes and the named compact files serving the bounded history window; raw-only checkout is insufficient after compaction. Verify TypeScript compatibility and history reads without Python. | GIT-01; owner ruling, 2026-10-21 |
+| 2 | Verify actual Parquet rows, native columns, envelope and digest through TypeScript and recorded compatibility fixtures. No Python install or invocation. Use Row #6's public writer and readback checks. | Maintainer ruling, 2026-10-21 |
+| 3 | Expose only the four inputs declared in Table R; derive the run date internally in UTC. | Maintainer request |
+| 4 | `.github/scripts/feed-ingest-plan-report.ts` alone formats `::notice::` annotations and Markdown for `$GITHUB_STEP_SUMMARY` from structured planner events. Escape workflow-command control characters and untrusted source strings. Invoke it as a separate workflow step only when the reporting config enables it. Core modules do not import it. | Maintainer request |
+| 5 | Keep required shard/matrix/path output conversion in `.github/scripts/feed-ingest-plan-outputs.ts`, separate from optional reporting, so disabling or deleting the report cannot break execution outputs. | Maintainer request; separation of concerns |
+| 6 | Use sparse checkout for the isolated workflow, with a named path inventory containing config, services, packages, relevant state inputs, recorded compatibility fixtures, scripts, and dependency manifests/locks. Include compact indexes and the named compact files serving the bounded history window; raw-only checkout is insufficient after compaction. Verify TypeScript compatibility and history reads without Python. | GIT-01; maintainer ruling, 2026-10-21 |
 
 ### Rejected alternatives
 
@@ -1345,7 +1345,7 @@ default-off controls remain unchanged.
 | --- | --- | --- | --- | --- |
 | 1 | Editing `.github/workflows/digest.yml` directly during development | Risks daily publication before compatibility is established | A production cutover and rollback plan | Plan proposal |
 | 2 | Exposing low-level tuning settings in GitHub Actions UI | Duplicates configuration and obscures the run controls | More inputs to maintain and reconcile with configuration | Plan proposal |
-| 3 | Formatting GitHub annotations or summaries inside harvesting, screening, curation, partitioning, or the shared writer | Makes development reporting part of production behavior | Core source changes to disable or remove reporting | Owner request |
+| 3 | Formatting GitHub annotations or summaries inside harvesting, screening, curation, partitioning, or the shared writer | Makes development reporting part of production behavior | Core source changes to disable or remove reporting | Maintainer request |
 
 ---
 
@@ -1408,8 +1408,8 @@ stored payload, new matcher policy or model invocation.
 
 | # | Decision | Authority |
 | --- | --- | --- |
-| 1 | Use the existing published ledger, ItemHealthRow, and the named day's DigestDay as publication evidence. PublishedRow supplies URL identity and item ID; DigestDay supplies source ID and the actual leads. Join by recorded URL/item/run identity, not title or URL guesses. ItemHealthRow without publication confirmation is not publication evidence. | Existing contracts; owner requested actual publication metrics |
-| 2 | Persist diversity readings under `state/raw/feed-ingest-plan/diversity/`, and completed source observations under the source-run prefix in Table I, through the shared writer. Register both before writing; compaction uses the corresponding compact prefixes. | Owner ledger layout |
+| 1 | Use the existing published ledger, ItemHealthRow, and the named day's DigestDay as publication evidence. PublishedRow supplies URL identity and item ID; DigestDay supplies source ID and the actual leads. Join by recorded URL/item/run identity, not title or URL guesses. ItemHealthRow without publication confirmation is not publication evidence. | Existing contracts; maintainer requested actual publication metrics |
+| 2 | Persist diversity readings under `state/raw/feed-ingest-plan/diversity/`, and completed source observations under the source-run prefix in Table I, through the shared writer. Register both before writing; compaction uses the corresponding compact prefixes. | Maintainer ledger layout |
 | 3 | Deduplicate retries first. Attribute an item to its recorded publishing run when that evidence exists. For older items with no provable run match, report day-level results with run attribution unavailable; never assign them to whichever plan ran last. | Correct run-level denominators |
 | 4 | Read only the UTC days required by `rolling_window_days + max(rolling_window_days, overlap_windows_days...)`; the defaults require fourteen named days to evaluate seven days of novelty against each day's prior seven. Resolve compact indexes and only the files serving those days. No archive/tree/history scan. | CLAUDE.md Guardrail #12 |
 | 5 | A rolling reading covers the configured consecutive UTC calendar days through `as_of` on the current day; label the current day as partial until its UTC end. A known-empty day contributes zero items; an unobserved day makes history-dependent metrics unavailable with coverage counts. Never average daily ratios to obtain a window ratio. | UTC rules; truthful missing-data behavior |
@@ -1420,8 +1420,8 @@ stored payload, new matcher policy or model invocation.
 
 | # | Option | Why rejected | What it would cost to take | Authority |
 | --- | --- | --- | --- | --- |
-| 1 | Treating selected counts as published counts | A selected item can fail work, be replaced, or never reach a committed day | Requires actual publication reconciliation; no planner-only proxy can settle it | Owner requested three-axis evidence |
-| 2 | Blocking dispatch on completion of multi-day metrics | Couples selection delivery to an independent historical analysis | Carry forward Phase 1 evidence, then build this read-only observer in Phase 2 | Phase boundary retained from owner checklist |
+| 1 | Treating selected counts as published counts | A selected item can fail work, be replaced, or never reach a committed day | Requires actual publication reconciliation; no planner-only proxy can settle it | Maintainer requested three-axis evidence |
+| 2 | Blocking dispatch on completion of multi-day metrics | Couples selection delivery to an independent historical analysis | Carry forward Phase 1 evidence, then build this read-only observer in Phase 2 | Phase boundary retained from maintainer checklist |
 
 ---
 
@@ -1446,7 +1446,7 @@ stored payload, new matcher policy or model invocation.
 Preflight decision required before full completion wiring: authored `metrics.top_source_counts`
 accepts every positive integer, but `DiversityMetricRow.top_k` admits only
 `1`, `5`, and `10`. The defaults agree. Either restrict configuration to this
-declared vocabulary, which gives up other configured counts, or obtain owner
+declared vocabulary, which gives up other configured counts, or obtain maintainer
 approval to open the persisted field and update both language readers and
 binding tests. Never omit an unsupported configured count without an error.
 
@@ -1482,7 +1482,7 @@ It introduces no second persisted event shape.
 
 Incremental completion clarification, 2026-10-21: missing original packed
 file proof does not prevent proving a newly written raw attempt. After the
-publication observer increment, the metrics owner may seal a representable
+publication observer increment, the metrics maintainer may seal a representable
 current attempt using the existing `SourceRunRecord.plan_complete` phase:
 verify all five required ledgers natively, aggregate the three rejection
 file sets into one rejection receipt, and attach the exact source count
@@ -1490,9 +1490,9 @@ and shared completion evidence before writing source records. Unsupported
 timing or configured counts must still refuse the entire batch before
 audit writes. This is not permission to claim packed historical proof,
 full audit acceptance, or changed persisted meaning.
-The runner owner prepares only the existing source-run registration in
+The runner maintainer prepares only the existing source-run registration in
 `services/feed-ingest-plan/src/load-plan-inputs.ts`, its existing loader
-test and runner documentation. The metrics owner retains exclusive write
+test and runner documentation. The metrics maintainer retains exclusive write
 ownership of recorder, source-summary, metrics tests and audit documentation;
 that sealing increment starts after its current observer checkpoint.
 After source-file readback, the producer must pass its actual named files
@@ -1501,10 +1501,10 @@ representable current run is distinct from accepting the whole plan or
 proving packed history. Return that evidence for a later runner/workflow
 integration; do not retain an unconditional pending result once the actual
 run has every required write and proof. Caller status changes stay with
-their existing owners after the tested producer handoff.
+their existing maintainers after the tested producer handoff.
 Head `45f8778bd546f7f5ec13c4c6c17edebe19d6303d` implements this current-raw
 producer path, including native source readback and exact-attempt selection.
-The runner owner now integrates it normally and exposes proven planning
+The runner maintainer now integrates it normally and exposes proven planning
 completion separately from the unfinished full audit. The workflow stays
 based on the runner, verifies returned source files and completion evidence,
 and exercises publication observation only with a bounded generated published
@@ -1522,7 +1522,7 @@ broader audit is incomplete; generated publication evidence does not bypass it.
 
 Row #11 currently owns `src/index.ts`; Row #14 does not edit that file
 concurrently. Publish the tested recorder API from its own module, coordinate
-the exact in-memory result type with Row #11, then let the runner owner wire
+the exact in-memory result type with Row #11, then let the runner maintainer wire
 it in a separate integration increment. The final acceptance gates remain
 open; helper arithmetic and safe refusal are not a complete audit.
 
@@ -1531,7 +1531,7 @@ is delivered in PR #1621. Strict TypeScript and 15 named audit tests passed;
 native readback verified actual assessment and diversity receipts. Its
 whole-request preflight retains exact timing for rejected candidates as
 well as admitted candidates. It still writes no source-complete record.
-The runner owner now integrates this exact recorder through the existing
+The runner maintainer now integrates this exact recorder through the existing
 entrypoint/composition modules, exposes actual files and receipts, and keeps
 audited completion false. Unsupported observations fail explicitly rather
 than bypass the recorder. Row #13 owns the shared metrics, tests and owning
@@ -1549,7 +1549,7 @@ tests and 11 base-engine tests passed. Supported runs still report audit
 pending; unsupported timing or counts fail before any audit write and
 produce no result summary. Row #12 now integrates this tested entrypoint
 and verifies its returned files, rather than calling the recorder again.
-The workflow owner reports 19 named tests passing after that integration,
+The workflow maintainer reports 19 named tests passing after that integration,
 including native metric receipts, missing-file refusal, unsupported counts,
 known-empty assessments and report-on/off ledger digest equality. Reviewed
 head `c3428c33c2eca90a603ad2ef01b8ab2c4c7f0ab6` is delivered in ready
@@ -1560,7 +1560,7 @@ PR #1622 CI found a new dependency error before backend tests:
 `packages/common-contracts/test/verify-parquet.ts` imports the writer and
 planner runtime, but the shared-contract check installs only its own
 dependencies. This is part of Row #12, not the unrelated schedule failure.
-The workflow owner relocates that executable verifier to
+The workflow maintainer relocates that executable verifier to
 `.github/scripts/feed-ingest-plan-verification.ts`, updates its callers and
 retains the recorded-byte oracle. The common-contract package must check
 independently; do not add runtime dependencies or alter CI to hide this error.
@@ -1572,7 +1572,7 @@ remaining failures are the same two unrelated schedule assertions; 7249
 backend tests passed. The new dependency regression is resolved, but the
 candidate is not green for merge.
 The independent schedule repair, PR #1623, passed all required checks and
-merged into main as `5e65c0dad0335fa4cfbdc9a8285471f9cfe314ac`. The owner
+merged into main as `5e65c0dad0335fa4cfbdc9a8285471f9cfe314ac`. The maintainer
 directed dependent delivery to resume. Update the writer candidate normally
 against repaired main, resolve its merge conflict without changing unrelated
 work, and land the dependency chain only after each required candidate is
@@ -1599,14 +1599,14 @@ Publication review of tested increment `a58752dfd` initially questioned the
 health retry key. Reading the owning contract corrected that premise:
 an item-health row records one terminal outcome, not each processing stage.
 No multi-stage fixture or key change is justified by that concern alone.
-The publication owner checks native retry settlement before changing the
+The publication maintainer checks native retry settlement before changing the
 join. The review also checks whether the projection wrongly refuses a
 digest whose run completes after its named UTC day.
 Tested event increment `4e9ccfa2c` removes that extra date restriction and
 uses compatible recorded pair decisions for real event arithmetic; 35
 focused tests passed. Review found one remaining publication-loader issue:
 a compact index's set-aside-file notice must not become complete historical
-coverage. The owner is adding that missing-evidence case before acceptance.
+coverage. The maintainer is adding that missing-evidence case before acceptance.
 Observer checkpoint `cc137c08a` includes durable native publication metrics
 and settled planning populations; 49 focused tests passed. Review requires
 one further identity check before source publication completion or a
@@ -1617,7 +1617,7 @@ independent publication readings, never invented stage or source completion.
 Source observations also retain the proven planning attempt. Before any
 source-producing observer write, its writer attempt must match that retained
 attempt. A mismatch would write contradictory row identities and make later
-complete-attempt reads fail. The owner is adding native refusal coverage;
+complete-attempt reads fail. The maintainer is adding native refusal coverage;
 independent diversity-only observations need not reuse the planning attempt.
 Reviewed head `45f8778bd546f7f5ec13c4c6c17edebe19d6303d` implements both
 identity checks before observer writes. Its publication fixture now obtains
@@ -1628,16 +1628,16 @@ records. Strict TypeScript and 62 focused tests passed.
 
 | # | Decision | Authority |
 | --- | --- | --- |
-| 1 | Store three distinct axes under Table I; do not multiply them into one opaque quality score. A feed's fetch failures are not evidence that an otherwise valid article is uninformative. | CRQ-01; owner questions |
-| 2 | Record one source-run observation for every configured source, including inactive, skipped, unavailable, and zero-selection sources. Use the lifecycle snapshot from that run, not today's edited source list. | Owner per-source audit example |
-| 3 | Per-run arithmetic, including entropy, concentration, and Gini where its declared basis is available, is cheap and ships in Phase 1. Publication and history-dependent readings remain explicitly unavailable until Row #13 supplies their evidence. | Owner requested no unjustified metric omissions |
-| 4 | Structured events are the input to this recorder; GitHub reports consume its outputs separately. Turning reporting off cannot remove audit rows or alter selection. | Owner separation-of-concerns ruling |
+| 1 | Store three distinct axes under Table I; do not multiply them into one opaque quality score. A feed's fetch failures are not evidence that an otherwise valid article is uninformative. | CRQ-01; maintainer questions |
+| 2 | Record one source-run observation for every configured source, including inactive, skipped, unavailable, and zero-selection sources. Use the lifecycle snapshot from that run, not today's edited source list. | Maintainer per-source audit example |
+| 3 | Per-run arithmetic, including entropy, concentration, and Gini where its declared basis is available, is cheap and ships in Phase 1. Publication and history-dependent readings remain explicitly unavailable until Row #13 supplies their evidence. | Maintainer requested no unjustified metric omissions |
+| 4 | Structured events are the input to this recorder; GitHub reports consume its outputs separately. Turning reporting off cannot remove audit rows or alter selection. | Maintainer separation-of-concerns ruling |
 
 ### Rejected alternatives
 
 | # | Option | Why rejected | What it would cost to take | Authority |
 | --- | --- | --- | --- | --- |
-| 1 | Only recording dropped articles | Cannot explain eligible sources that received no slots or compare denominators across stages | Add the per-source summary and stage evidence declared here | Owner audit requirement |
+| 1 | Only recording dropped articles | Cannot explain eligible sources that received no slots or compare denominators across stages | Add the per-source summary and stage evidence declared here | Maintainer audit requirement |
 | 2 | Putting per-source counters in FileEnvelope metadata | One file can hold several sources, and the envelope refuses undeclared keys | A needless envelope migration; ordinary typed Parquet rows already support the question | Existing FileEnvelope contract |
 
 ### Table I - Audit row shapes and the three axes
@@ -1703,13 +1703,13 @@ records. Strict TypeScript and 62 focused tests passed.
 | M1 | TRI-01 | Rows #7 and #8: typed harvest, age, viability, and duplicate decisions; Row #9 records curation losses before partitioning. | 1 |
 | M2 | REJ-01 | Rows #1, #2, #6, #8: typed Parquet rejections replace the older JSONL proposal. Table I adds per-source summaries rather than replacing individual rejection evidence. | 1 |
 | M3 | CUR-01 | Row #9: independently configured source, domain, vertical, assigned-desk, lens, content-event-type, event-cluster, entity, weak-kind, and coverage terms; unavailable labels are not fabricated. | 1 |
-| M4 | CUR-02 | Row #9: configured source/domain/cluster caps and source diversity target. The earlier kind quota and kind-relaxation step are removed by the owner's weak-kind ruling; remaining relaxation follows config. | 1 |
+| M4 | CUR-02 | Row #9: configured source/domain/cluster caps and source diversity target. The earlier kind quota and kind-relaxation step are removed by the maintainer's weak-kind ruling; remaining relaxation follows config. | 1 |
 | M5 | PAR-01 | Rows #9, #10, #11: registered unsharded editorial-selection Parquet and sharded dispatch Parquet, both compacted and retained through the gardener. No loose editorial JSON. | 1 |
 | M6 | HRV-01 | Row #7: concurrent HTML fetch and real text extraction, categories, and typed extraction/fetch failures. | 1 |
 | M7 | SRV-01 | Row #11: planner API and CLI. API calendar version is `2026-10-20`, not numeric `20261020`. | 1 |
 | M8 | SRV-02 | Row #4: independent host fingerprint API/CLI and persistence in the existing host ledger. | 1 |
 | M9 | SRV-03 | Row #5: independent host CPU/memory sampling API/CLI. | 1 |
-| M10 | SRV-04 | Row #6: owner-selected shared `packages/ledger-file-writer` replaces the standalone identity API. | 1 |
+| M10 | SRV-04 | Row #6: maintainer-selected shared `packages/ledger-file-writer` replaces the standalone identity API. | 1 |
 | M11 | DIR-01 | Rows #2 and #11: raw dispatches under the registered feed-ingest-plan prefix, compacted under the corresponding compact prefix. | 1 |
 | M12 | CI-01 | Row #12: isolated compatibility and audit verification, no production workflow cutover. | 1 |
 | M13 | SRC-01 | Row #15 opens the registry-backed kind/tier contracts; Row #7 preserves all listed source metadata and its lifecycle snapshot, without moving config/sources.json. | 1 |
@@ -1795,7 +1795,7 @@ Reconciled against main on 2026-10-20: `frontend/src/lib/bands.ts` owns kind
 labels and display filters; `frontend/src/lib/source-kinds.ts` does not exist.
 `docs/architecture/sources/source-classification.md` is a new living page.
 There is no root `AGENTS.md`; `CLAUDE.md` and `docs/agents/bootstrap.md` route
-the work. Owner authorization covers this row's Level 5 migration. This worker
+the work. Maintainer authorization covers this row's Level 5 migration. This worker
 opens a ready-for-review PR and does not merge or start another row.
 The frontend reads the committed registry in `bands.ts`; its server config
 needs no change. Historical gardener and ranking fixtures remain unchanged.
@@ -1804,7 +1804,7 @@ needs no change. Historical gardener and ranking fixtures remain unchanged.
 
 Implementation and selected local gates pass. Repository-wide CI stopped at
 nine existing lint errors in `.github/scripts/serve-evaluator.py` before running
-the full backend suite. On 2026-10-20, the owner authorized a separate lint-only
+the full backend suite. On 2026-10-20, the maintainer authorized a separate lint-only
 commit in this PR to correct that script without changing its behavior. This
 is the sole approved scope addition; no later plan row starts. The correction
 and directly dependent contract bindings pass the full CI suite, site, browser
@@ -1814,7 +1814,7 @@ and robots checks. Row #15 is delivered for review; this worker does not merge.
 
 | # | Decision | Authority |
 | --- | --- | --- |
-| 1 | Adopt Table N's registry contracts and Table O's policy boundary. This is the one-time contract migration that makes later membership and parameter changes config-only. It is part of Plan 66, not deferred to a separate redesign. | Owner requested A3 and A4 within Plan 66 |
+| 1 | Adopt Table N's registry contracts and Table O's policy boundary. This is the one-time contract migration that makes later membership and parameter changes config-only. It is part of Plan 66, not deferred to a separate redesign. | Maintainer requested A3 and A4 within Plan 66 |
 | 2 | Migrate existing Python readers and frontend consumers before shared TypeScript contracts or writers depend on the open identifiers. Keep numeric tier cells and existing kind spellings, preserving Arrow int64/string types. Version/changelog affected persisted contracts; test old rows without rewriting the committed archive. | CLAUDE.md sections 6 and 11 |
 | 3 | Move the existing collect tier weights into the taxonomy registry with identical values. Remove the live fixed-name TierWeights reader and duplicate config authority in the same change. Explicit legacy readers may normalize historical config fixtures; if both old and new weights are supplied and disagree, refuse them rather than choose silently. | Single source of truth; current config parity |
 | 4 | Preserve the existing publisher warnings and announcement lead safeguards through explicit registry properties, not equality checks against kind names. These remain existing publication/display behavior, not new planner rejection gates. Add a new kind by setting those declared properties in config. | Existing assemble.py and bands.ts behavior |
@@ -1826,15 +1826,15 @@ and robots checks. Row #15 is delivered for review; this worker does not merge.
 
 | # | Option | Why rejected | What it would cost to take | Authority |
 | --- | --- | --- | --- | --- |
-| 1 | Remove only the enums from the new TypeScript planner | Existing Python payload readers, fixed tier-weight lookup, lead logic, and frontend label maps would still reject or mishandle new values | Migrate those named consumers before emitting a new identifier | Owner requested end-to-end config-only extension |
-| 2 | Eliminate source kind and tier information entirely | Removes useful provenance, configurable authority weights, and existing publisher disclosures | Requires an owner-approved change to those reader guarantees, not just a parser change | Preserve current behavior while opening membership |
+| 1 | Remove only the enums from the new TypeScript planner | Existing Python payload readers, fixed tier-weight lookup, lead logic, and frontend label maps would still reject or mishandle new values | Migrate those named consumers before emitting a new identifier | Maintainer requested end-to-end config-only extension |
+| 2 | Eliminate source kind and tier information entirely | Removes useful provenance, configurable authority weights, and existing publisher disclosures | Requires a maintainer-approved change to those reader guarantees, not just a parser change | Preserve current behavior while opening membership |
 | 3 | Store executable scoring expressions in configuration | Adds an interpreter and an instruction surface when typed values already express the requested variation | New expression validation, security, debugging, and compatibility costs | KISS; no new algorithm requested |
 
 ### Table N - Open source-classification contracts
 
 | # | Contract | Declaration and compatibility |
 | --- | --- | --- |
-| N1 | Configuration owner | Extend the existing `config/taxonomy.json` with `source_kinds`, `source_tiers`, `default_source_kind`, and `default_entity_tier`. It already owns desk/vertical membership; do not create an independent enum or a second registry in the planner. Configuration readers validate the fields they compute on. |
+| N1 | Configuration maintainer | Extend the existing `config/taxonomy.json` with `source_kinds`, `source_tiers`, `default_source_kind`, and `default_entity_tier`. It already owns desk/vertical membership; do not create an independent enum or a second registry in the planner. Configuration readers validate the fields they compute on. |
 | N2 | Source kind identifier | Replace the closed SourceKind enum with a validated open slug. A live source must reference a declared active kind; new membership is a registry edit. Historical payload readers validate the slug without requiring today's registry to retain it as active. |
 | N3 | SourceKindDefinition | Fields: id, display_name, status, retired_on, show_on_item, counts_as_reporting, and requires_reporting_for_lead. The last three are explicit booleans, not inferred from an ID. Seed the existing entries with the current label/display and lead-rule behavior. The configured default supplies an omitted kind on new source configuration and is recorded as a configured default, not an inferred article fact. |
 | N4 | Source tier identifier | Replace the closed SourceTier enum with a strict positive integer ID. Preserve existing persisted IDs 1, 2, and 3; a new ID such as 4 does not require a code member. IDs carry no ordinal meaning and no arithmetic score; look up the configured weight. |
@@ -1853,7 +1853,7 @@ and robots checks. Row #15 is delivered for review; this worker does not merge.
 | O3 | VerticalPolicyOverride | `vertical_overrides` maps IDs from taxonomy.verticals to partial triage/curate planning policies. Unknown IDs or fields fail config loading. A newly configured vertical with no override inherits global values automatically; no source or vertical name appears in a code branch. Do not retain the misleading desk_overrides key as an alias for this new, unshipped configuration. |
 | O4 | Availability and distinct controls | Before summarization, resolve the planning override using the configured feed vertical. Actual assigned desk remains separate and can be unknown. Its existing configured floor/ceiling and placement rules operate once a desk is available, never as a renamed vertical rule. Record both fields; do not rerun earlier admission retroactively. |
 | O5 | Precedence | Global defaults, then the matching vertical planning patch, then explicitly allowed run overrides. Merge typed fields; for nested coefficient objects, inherit missing coefficients individually. Omitted means inherit; zero is a real value where allowed. Null does not silently reset a field. |
-| O6 | Override boundary | Candidate-specific screening and scoring settings may vary by feed vertical. Harvest concurrency/timeouts, final portfolio-wide share limits/targets, partitioning, reporting, metrics windows, and ledger storage remain global. They are not resolved once per candidate, which would give one portfolio contradictory limits. Desk placement, lens weights, content-event matching, event-cluster grouping, and entity/watchlist settings retain their distinct owners and meanings. |
+| O6 | Override boundary | Candidate-specific screening and scoring settings may vary by feed vertical. Harvest concurrency/timeouts, final portfolio-wide share limits/targets, partitioning, reporting, metrics windows, and ledger storage remain global. They are not resolved once per candidate, which would give one portfolio contradictory limits. Desk placement, lens weights, content-event matching, event-cluster grouping, and entity/watchlist settings retain their distinct maintainers and meanings. |
 | O7 | Version and validation | Declare the Python policy models under contracts/knobs/feed_ingest.py and strict TypeScript copies in the named shared policy/config modules, with binding tests. These are authored config shapes, not a new persisted policy document. A stored effective-policy snapshot is part of its declaring persisted assessment contract and follows its version/migration rules. |
 | O8 | Substitution tests | Change only one vertical's maximum age or word threshold and verify its admission changes. Change only its authority coefficient or an allowed penalty and verify the declared component changes, with other vertical policies unchanged. Independently vary lens, entity, content-event-type, and event-cluster coefficients. For actual desk changes, use a recorded assigned-desk fixture and the real placement/selection consumer; preserve its original vertical. Add a new kind/tier through config and compare CLI/API results under the same resolved policy and fixed UTC clock. |
 
@@ -1861,7 +1861,7 @@ and robots checks. Row #15 is delivered for review; this worker does not merge.
 
 | # | Contract | Rule |
 | --- | --- | --- |
-| P1 | Artifact and owner | `EditorialSelectionRow`, declared in backend/idhazh/contracts/feed_ingest_editorial_selection.py, stores selected article identity, source_id, original vertical, nullable assigned desk, separate known Table T labels, editorial rank, estimated partition work, base ratings, marginal score/penalties, and policy/config identity. It has no worker assignment. Ordinary ledger writer shard metadata remains writer provenance, not a partition decision. |
+| P1 | Artifact and maintainer | `EditorialSelectionRow`, declared in backend/idhazh/contracts/feed_ingest_editorial_selection.py, stores selected article identity, source_id, original vertical, nullable assigned desk, separate known Table T labels, editorial rank, estimated partition work, base ratings, marginal score/penalties, and policy/config identity. It has no worker assignment. Ordinary ledger writer shard metadata remains writer provenance, not a partition decision. |
 | P2 | Raw path | Register the prefix `["feed-ingest-plan", "editorial-selections"]`; the shared writer stores immutable Parquet under `state/raw/feed-ingest-plan/editorial-selections/<YYYY>/<MM>/<DD>/<file_id>.parquet`. Do not write a loose JSON manifest alongside it. |
 | P3 | Compaction and retention | Register the matching gardener task, add it to the explicit task_names manifest, and use the compact prefix under `state/compact/feed-ingest-plan/editorial-selections/`. Use the configured raw-to-daily-to-monthly-to-yearly retention chain. Absorbed raw files are removed only after compact writes/indexes land successfully; later expiry follows the task's retention settings. No separate cleanup script or permanent unowned file. |
 | P4 | Partition input | Resolve the chosen run/attempt's selection through the shared ledger reader, whether raw or compact. Read ranks and work estimates without scoring again. Initial dispatch construction receives the validated harvested-content payload; a later full dispatch replay uses recorded content from the dispatch ledger. Missing content is reported as unavailable, never fetched again silently. Assert a bijection between selected article identities and all dispatch rows across shards, with no missing, duplicated, or added article. |
@@ -1924,30 +1924,30 @@ published bytes, dependency group, mock or substitute journey.
 
 | # | Decision | Authority |
 | --- | --- | --- |
-| 1 | Give dispatches, rejections, source-runs, article-assessments, diversity, editorial-selections, and the already registered host-fingerprint their explicit `publish_to_data_explorer` consent in `config/ledgers.json`. The consent controls explorer membership and compact site copies; no second publication list exists. | Owner requested all feed ledgers in console/data-explorer; verified registry and route wiring |
+| 1 | Give dispatches, rejections, source-runs, article-assessments, diversity, editorial-selections, and the already registered host-fingerprint their explicit `publish_to_data_explorer` consent in `config/ledgers.json`. The consent controls explorer membership and compact site copies; no second publication list exists. | Maintainer requested all feed ledgers in console/data-explorer; verified registry and route wiring |
 | 2 | Resolve compact source and site-copy paths from the committed registry prefix. The frontend catalog validates the prefix once and supplies it to both readers; invalid registry data fails at that boundary. The explorer reads compact indexes and named files only, never raw files or directory listings, and fetched text never supplies a path. | Verified nested-family delivery; CLAUDE.md Guardrails #11 and #12 |
-| 3 | Publication copies actual Parquet bytes and exposes all stored columns, including full article text in dispatches. The repository is already public; this is not a new disclosure approval gate and does not authorize silently removing text or substituting an undeclared projection. | Owner's full-ledger intent; verified public repository and byte-copy behavior |
+| 3 | Publication copies actual Parquet bytes and exposes all stored columns, including full article text in dispatches. The repository is already public; this is not a new disclosure approval gate and does not authorize silently removing text or substituting an undeclared projection. | Maintainer's full-ledger intent; verified public repository and byte-copy behavior |
 | 4 | Keep the configured explorer date reach, file and byte limits. The ordinary-panel site copy follows the widest console preset; that static window does not limit direct repository reads. A configured reach does not promise every historical day is packed. Measure real site-copy bytes and bounded queries when data exists; if a configured limit or the 1 GB site boundary prevents delivery, surface the measured cost and a concrete alternative. Do not guess performance, truncate columns, drop a ledger or broaden limits without review. | Existing delivery controls; CLAUDE.md Guardrails #2, #10 and #12 |
-| 5 | Land this reader/delivery support before Row #6's writers. Keep the existing explorer route and query interaction; no per-ledger bespoke page, second query engine, or production workflow cutover. | Reader-before-writer compatibility; bounded owner request |
+| 5 | Land this reader/delivery support before Row #6's writers. Keep the existing explorer route and query interaction; no per-ledger bespoke page, second query engine, or production workflow cutover. | Reader-before-writer compatibility; bounded maintainer request |
 
 ### Rejected alternatives
 
 | # | Option | Why rejected | What it would cost to take | Authority |
 | --- | --- | --- | --- | --- |
 | 1 | Assume registration alone grants explorer consent | The ledger would not be offered, and a duplicate frontend list could drift from the registry | Set `publish_to_data_explorer` on the registered ledger; the validated catalog supplies its name and prefix to the direct reader and compact site copy | Verified registry and reader behavior |
-| 2 | Publish only metadata without declaring another shape | Hides real columns despite the all-ledger request and creates an undeclared consumer contract | Owner-approved projection contract, producer, enrollment, retention, and tests; not needed for the current request | Owner's full-ledger intent; Guardrail #3 |
+| 2 | Publish only metadata without declaring another shape | Hides real columns despite the all-ledger request and creates an undeclared consumer contract | Maintainer-approved projection contract, producer, enrollment, retention, and tests; not needed for the current request | Maintainer's full-ledger intent; Guardrail #3 |
 
 ---
 
-## 20. Owner-expanded follow-up work
+## 20. Maintainer-expanded follow-up work
 
-Owner request, 2026-10-24, kumarsnaveen: retain the sixteen historical DONE
+Maintainer request, 2026-10-24, the maintainer: retain the sixteen historical DONE
 rows and their acceptance evidence. Track the expanded work below separately.
 Those earlier results do not close these follow-ups or approve production
 planner/worker replacement. CPU collection remains active for the whole task;
 one-second polling is a cadence, never a profiling cutoff.
 
-Owner approval, kumarsnaveen_microsoft, 2026-10-24, compatibility-gate A1:
+Maintainer approval, 2026-10-24, compatibility-gate A1:
 U4 includes the historical published-column gate correction in the
 [contract rationale](../docs/architecture/contracts/schemas.md#design-rationale).
 No Python planning/ranking runtime change, local Python run, new test function
@@ -1961,11 +1961,11 @@ or historical rewrite is authorized.
 | U2 | IN-FLIGHT | PID CPU and task-scoped host-probe HTTP start/stop | Child `5bfd52a3-9cfc-4d56-93b8-e9f4cf2a4365`, branch `task-scoped-host-profiling`, owns independent counter work; final integration depends on U1's config split. Add guarded process CPU without relabelling aggregate host CPU; expose real whole-task collection through the host-probe API with owned lifecycle, cleanup and integration tests. The current HTTP sample route is not this capability. |
 | U3 | DELIVERED; PERMITTED PMU MEASUREMENT OPEN | L3 latency and hardware cache hit/miss support | Cache delivery and combined hosted proof completed in [Plan 67 Row 20](20261024-67-feed-ingest-feedback-and-selection-plan.md#22-row-20---adopt-cache-delivery-and-finish-the-combined-hosted-proof), [run 40133676513](https://github.com/miztiik/yen-idhazh/actions/runs/40133676513). Actual artifacts were verified against landed output commit `3c3a95fb7f8afd2cd5c1781d654cb883669d411f`. Hardware performance counters (PMU) were permission-denied with null counts; the actual working-set curve is not direct L3-hit latency. A permitted-host counter measurement remains open separately under Plan 67 AU2. This delivery does not claim actual worker publication or close U6/U7. |
 | U4 | DELIVERED | Separate recorded source-reliability penalty | Merged [#1672](https://github.com/miztiik/yen-idhazh/pull/1672) as `0185035bbd8971ff15fdb8e83259b16ee942d5bc`. Exact candidate `a60abed0c0a42a513a32d415f1f2d239010f5a7c` passed all five CI checks, including the historical compatibility proof. The default-true, separately recorded operational penalty preserves TypeScript's set-aware selection; it does not change article quality or Python planning/ranking runtime. The [curation contract](../docs/architecture/sources/feed-curation.md) owns the behavior; U5-U7 remain separate. |
-| U5 | PENDING | Remaining selection improvements from the Python path | Review day-aware, data-only preferences using recorded publisher exposure and existing numeric priority; no article-quality comparison is authorized. The numeric comparison rule and preference strength remain DESIGN PENDING. No hard day caps or missing-history selection blocking. Selection bonuses remain separate owner decisions, retaining useful TypeScript selection behavior. Each approved change needs its own declared effect and integration evidence; U4 does not close these decisions. Publisher identity and the independent publisher-breadth API proposal are tracked separately in U8/U9. |
+| U5 | PENDING | Remaining selection improvements from the Python path | Review day-aware, data-only preferences using recorded publisher exposure and existing numeric priority; no article-quality comparison is authorized. The numeric comparison rule and preference strength remain DESIGN PENDING. No hard day caps or missing-history selection blocking. Selection bonuses remain separate maintainer decisions, retaining useful TypeScript selection behavior. Each approved change needs its own declared effect and integration evidence; U4 does not close these decisions. Publisher identity and the independent publisher-breadth API proposal are tracked separately in U8/U9. |
 | U6 | OPEN | Phase 2 genuine publication and lead-observer integration/testing | Integrate actual publication and lead observations with the planner's recorded identities and test the complete flow against genuine output. Generated full-audit fixtures prove the observer boundary only; they do not complete this phase or certify live publication. |
-| U7 | PENDING - NOT APPROVED | Production planner and worker cutover | Requires separate owner approval and a staged integration/test plan for real producer and consumer paths. Neither this report PR, the historical DONE rows nor generated audit fixtures authorize cutover or completion of the original plan's broader intent. |
-| U8 | IN-FLIGHT | Immutable curated publisher-ID documentation contract | Review the canonical [creation and preservation rules](../docs/architecture/contracts/publisher-identity.md), including collisions, unknown history and schema authority. Owner-approved naming option A1 authorizes documentation only. Coordinator review remains open; no catalog fields, feed assignments, persisted fields or runtime behavior are implemented by this phase. |
-| U9 | NAME APPROVED - CONTRACT PENDING | Independent post-parse `/select-articles` contract and implementation | Owner approved the name only. Confirm the typed parsed-batch/server-owned-local-reference input/output contract, publisher-group mappings, policy coefficients and runtime implementation before execution. The proposed step follows parsing and deterministic screening, before worker partitioning, using same-run validated candidates plus bounded history/configuration. Broader nonsemantic I Feed inputs/metrics remain in scope, not closed or removed by this phase. No new fetch/parse content deduplication, qualitative assessment, factual verification or semantic story-novelty/classification; bounded exact-URL newness is allowed and U5's soft-preference boundary remains. |
+| U7 | PENDING - NOT APPROVED | Production planner and worker cutover | Requires separate maintainer approval and a staged integration/test plan for real producer and consumer paths. Neither this report PR, the historical DONE rows nor generated audit fixtures authorize cutover or completion of the original plan's broader intent. |
+| U8 | IN-FLIGHT | Immutable curated publisher-ID documentation contract | Review the canonical [creation and preservation rules](../docs/architecture/contracts/publisher-identity.md), including collisions, unknown history and schema authority. Maintainer-approved naming option A1 authorizes documentation only. Coordinator review remains open; no catalog fields, feed assignments, persisted fields or runtime behavior are implemented by this phase. |
+| U9 | NAME APPROVED - CONTRACT PENDING | Independent post-parse `/select-articles` contract and implementation | Maintainer approved the name only. Confirm the typed parsed-batch/server-owned-local-reference input/output contract, publisher-group mappings, policy coefficients and runtime implementation before execution. The proposed step follows parsing and deterministic screening, before worker partitioning, using same-run validated candidates plus bounded history/configuration. Broader nonsemantic I Feed inputs/metrics remain in scope, not closed or removed by this phase. No new fetch/parse content deduplication, qualitative assessment, factual verification or semantic story-novelty/classification; bounded exact-URL newness is allowed and U5's soft-preference boundary remains. |
 
 ### Table V - Pending nonsemantic I Feed scope
 
@@ -2000,7 +2000,7 @@ This inventory authorizes no automatic settings tuner, silent fetch cap,
 qualitative assessment, semantic novelty/new-development claim, factual
 verification or content deduplication. Bounded exact-URL newness is operational
 evidence, not story novelty. Permanent retirement remains an explicit change to
-the owner-controlled source catalog.
+the maintainer-controlled source catalog.
 
 ## See also
 

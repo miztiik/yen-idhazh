@@ -41,7 +41,7 @@ Two things do not bend to this page. The 6 h job cap and the 1 GB published site
 
 ## What this page is not
 
-It is not a queue. It carries no row status beyond which intents are met, no owner and no order of work - a plan-doc under [`TODO/`](../../TODO/) carries those, in its own Status Reckoner, and a second list somebody retypes is a list that rots ([`AGENTS.md`](../../AGENTS.md)). This page says what has to be true; a plan says who does what next.
+It is not a queue. It carries no row status beyond which intents are met, no maintainer and no order of work - a plan-doc under [`TODO/`](../../TODO/) carries those, in its own Status Reckoner, and a second list somebody retypes is a list that rots ([`AGENTS.md`](../../AGENTS.md)). This page says what has to be true; a plan says who does what next.
 
 It is not a measurement either. Every figure that prices one of these - what a Parquet shard weighs, what DuckDB-Wasm costs a reader, what a prerendered route costs today - belongs in the reference tier with its hardware and its date ([`CLAUDE.md`](../../CLAUDE.md) Guardrail #10).
 

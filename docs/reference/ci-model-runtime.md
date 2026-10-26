@@ -257,7 +257,7 @@ a commit all passed it.
 
 | Value | Rule |
 | --- | --- |
-| `repo` | `<owner>/<name>`, each starting alphanumeric, then letters, digits, `.`, `_`, `-` |
+| `repo` | `<account>/<name>`, each starting alphanumeric, then letters, digits, `.`, `_`, `-` |
 | `revision` | 40 lowercase hex characters - a commit, never a branch |
 | the weights `file` | one path segment ending `.gguf` |
 | a companion `file` | the same segment rule without the suffix - it may be a projector, an adapter or a vocoder |

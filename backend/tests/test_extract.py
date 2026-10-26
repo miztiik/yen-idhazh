@@ -961,7 +961,7 @@ def read_short(form: SourceForm, config: ExtractConfig) -> Article:
 
 
 def test_a_short_item_publishes_by_default_whatever_form_declared_it() -> None:
-    """Owner override O3: a shape signal is recorded and the item continues."""
+    """Maintainer override O3: a shape signal is recorded and the item continues."""
     for form in (SourceForm.ARTICLE, SourceForm.ABSTRACT):
         article = read_short(form, ExtractConfig())
 
