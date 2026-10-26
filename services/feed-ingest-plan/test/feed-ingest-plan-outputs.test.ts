@@ -144,6 +144,7 @@ test("exact metadata appends through a generated bare origin with complete raw i
       host: { status: "disabled", reason: "observability.host_fingerprint=false" },
       profile: { status: "disabled", reason: "profile_machine_memory=false" },
     })));
+    const statusBefore = await git(repository, ["status", "--porcelain"]);
     async function invokeCommit() {
       const child = Bun.spawn([process.execPath, fileURLToPath(new URL("../scripts/feed-ingest-plan-commit.ts", import.meta.url))], {
         cwd: repository, stdout: "pipe", stderr: "pipe", timeout: 120000,
@@ -160,7 +161,7 @@ test("exact metadata appends through a generated bare origin with complete raw i
     expect(committed.status).toBe("landed");
     expect(committed.commit).toBe(await git(fixture.directory, ["--git-dir", origin, "rev-parse", "main"]));
     expect(await git(repository, ["rev-parse", "HEAD"])).toBe(head);
-    expect(await git(repository, ["status", "--porcelain"])).toBe("");
+    expect(await git(repository, ["status", "--porcelain"])).toBe(statusBefore);
     const indexes = [...new Set(paths.map(path => `state/${path.slice(0, path.lastIndexOf("/"))}/index.json`))];
     // This tree was just built by this case; it cannot grow with repository history.
     const members = (await git(fixture.directory, ["--git-dir", origin, "ls-tree", "-r", "--name-only", "main"])).split("\n");
