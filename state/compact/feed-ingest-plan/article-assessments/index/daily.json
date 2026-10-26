@@ -1,9 +1,10 @@
 {
   "entries": [
     {"bytes": 1819312,"covers": "2026-10-22","lost_days": [],"rows": 22882,"set_aside": 0,"state": "packed"},
-    {"bytes": 2660137,"covers": "2026-10-23","lost_days": [],"rows": 39483,"set_aside": 0,"state": "packed"}
+    {"bytes": 2660137,"covers": "2026-10-23","lost_days": [],"rows": 39483,"set_aside": 0,"state": "packed"},
+    {"bytes": 2227673,"covers": "2026-10-24","lost_days": [],"rows": 25813,"set_aside": 0,"state": "packed"}
   ],
   "ledger": "article-assessments",
   "period": "daily",
-  "version": "2026-10-07"
+  "version": "2026-10-25"
 }
