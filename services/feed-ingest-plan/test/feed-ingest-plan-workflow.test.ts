@@ -247,7 +247,7 @@ test("the native verifier runs from a fixed named-input copy with no backend or 
   const directory = await mkdtemp(join(tmpdir(), "planner-verifier-"));
   try {
     const common = ["index", "version", "observation-order", "schemas/primitives",
-      ...["source", "candidate", "envelope", "rejection", "harvest-diagnostics", "item-health-failure",
+      ...["source", "candidate", "envelope", "rejection", "harvest-diagnostics", "content-filter-evidence", "item-health-failure",
         "telemetry", "partition", "event", "policy", "config", "ledger-index", "host-fingerprint", "feed-health",
         "recorded-instant", "planner-operation", "planner-stage", "document-work", "feed-health-state",
         "publication-input", "discovered-article", "selected-article", "plan-run"].map(name => `schemas/${name}.schema`)];
