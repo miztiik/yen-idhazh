@@ -6,7 +6,7 @@
 	 * the wall clock alone cannot say whether four hours of runner time was a
 	 * good trade. Priced at somebody else's rate the same run gets a second unit,
 	 * and that is the one question no other panel on this site answers. CLAUDE.md
-	 * Guardrail #10 carries the owner's carve-out for it on one condition, which is
+	 * Guardrail #10 carries the maintainer's carve-out for it on one condition, which is
 	 * this control: a money figure whose basis is invisible is the exact thing
 	 * that rule exists to prevent, so the rate and its source are printed beside
 	 * every cost on the page.

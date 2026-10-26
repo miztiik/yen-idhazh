@@ -307,7 +307,7 @@ The proof pins that child's PID and start ticks, then uses the real
 host-probe start/stop HTTP commands. It requires multiple one-second polls,
 positive CPU time for the requested external PID, matching process identities,
 process and machine RAM, and actual monotonic intervals. Stop takes the closing
-observation while the child is still alive; only then does the fixture owner
+observation while the child is still alive; only then does the fixture maintainer
 close its child. `resource-proof.json` retains this as `task_profile` with
 scope `controlled_cpu_task`. It does not stand in for fast live document work.
 
@@ -412,7 +412,7 @@ Empty ledgers have no file. Read the exact returned paths, not directory scans.
 
 `contents: write` and checkout credentials permit the normal push. The
 [committing rule](../architecture/publishing/committing.md#design-rationale)
-records the owner-directed Bun exception: a separate Git index builds a
+records the maintainer-directed Bun exception: a separate Git index builds a
 candidate on fetched main without moving the checkout, index or sparse
 patterns. A rejected push retries the same immutable bytes against fresh main
 under `config/push-retry.json`; it does not rerun planning. A conflicting UUID
@@ -464,8 +464,8 @@ together when development reporting is no longer needed. The
 [policy contract](../architecture/sources/feed-ingest-policies.md) owns this
 flag and its default.
 
-The reporting default changed to true at the owner's request for a readable
-yield, timing and hardware summary (kumarsnaveen, 2026-10-22). The existing
+The reporting default changed to true at the maintainer's request for a readable
+yield, timing and hardware summary (2026-10-22). The existing
 configuration control and removal condition remain in place.
 
 ## Design rationale

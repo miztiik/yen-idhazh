@@ -156,7 +156,7 @@ or make the source responsible.
 
 ## Design rationale
 
-Owner direction (kumarsnaveen, 2026-10-22): improve failure detail and remove
+Maintainer direction (2026-10-22): improve failure detail and remove
 technical debt rather than preserve an inferior consumer interface.
 One typed diagnostic object replaces loss-prone partial mappings. Separate
 extraction rejection reasons remove the false claim that a successful HTTP

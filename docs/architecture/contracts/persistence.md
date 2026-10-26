@@ -332,7 +332,7 @@ Every job installs the same set, so whichever job saves `setup-python`'s pip cac
 Trial traces use `state/raw/traces/pipeline-tests/<case>/<YYYY>/<MM>/<DD>/` but remain JSONL spans, not ledger-door files. Their declared case folders have a separate 90-day, report-only retention task; production traces stay at `state/traces/` with a 7-day task. Neither task owns a folder inside the other's claim, and the trial trace folders sit beside the compacting ledger folders under `state/raw/pipeline-tests/`.
 
 **2026-10-21: The TypeScript ledger package uses TypeScript-only tests.** The
-owner ruled that the package's developer lifecycle and CI must not execute
+maintainer ruled that the package's developer lifecycle and CI must not execute
 Python, including from tests, and must not install Python dependencies for
 this package check. Real WASM writes are read back through `parquet-wasm` and
 Apache Arrow against bounded recorded compatibility fixtures. This avoids a

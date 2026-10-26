@@ -286,7 +286,7 @@ test.describe('the token layer', () => {
 		// blocks. Left inside one, it reads as something a theme could change and
 		// the next theme has to restate it or lose it.
 		//
-		// And a size is relative, never a hard pixel count (owner, 2026-08-31): a
+		// And a size is relative, never a hard pixel count (maintainer, 2026-08-31): a
 		// px wordmark ignores a reader who set their browser text larger, and
 		// this is the first thing on every route.
 		const scale = ['--wordmark-size', '--wordmark-leading', '--wordmark-tracking'];

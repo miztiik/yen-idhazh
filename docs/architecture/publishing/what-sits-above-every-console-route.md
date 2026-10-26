@@ -439,7 +439,7 @@ declares the chrome as data from `console.explorer_chrome`; the layout does not
 infer it from the route name. What this removes is the global verdict while the
 operator is on the Data explorer; one tab press shows it on the other routes.
 Since 2026-10-05 it also removes the site footer from that route, so the
-workbench can reach the window's bottom edge (owner request, Jony's layout); the
+workbench can reach the window's bottom edge (maintainer request, Jony's layout); the
 wordmark leads to the home page, whose footer carries the same links.
 
 **The days control rides the strip at every width, not only where the strip

@@ -23,7 +23,7 @@ The runtime-sweep utility has its own command-line options; these are not
 direct server flags. Its server launch must still use the shared argument
 builder.
 
-Owner ruling, kumarsnaveen, 2026-10-24: remove the turn-envelope, measurement
+Maintainer ruling, 2026-10-24: remove the turn-envelope, measurement
 and two-call pipeline test modules. This gives up their dedicated coverage,
 including stale tokenizer-reading checks in CI. The recorded measurements keep
 their original model identity; `backend/utilities/measure_budgets.py check`
@@ -37,7 +37,7 @@ output-limit or decoding keys. Request-builder tests own those wire details.
 
 ### Design rationale
 
-Owner approval, kumarsnaveen, 2026-10-24: a valid compatible model file must
+Maintainer approval, 2026-10-24: a valid compatible model file must
 work without a source, schema, fixture or model-list edit. The selected entry
 owns server flags, sampling, template variables and optional inline reasoning
 delimiters. `thinking_kwarg` must explicitly name a switch or be null. Null
@@ -63,7 +63,7 @@ The alternative was to add the ten missing keys to the table. It was rejected be
 
 What the splat may not do is reach a decode control. `response_format`, `json_schema` and `grammar` are how an injection is stopped from changing the shape of a reply, so each route refuses a sampling key that re-spells or disables its own control, and the set of refused keys is declared beside the control rather than in one list somebody has to remember. The refusal runs when the config loads as well as when a body is built, so an operator reads a message about the file they just edited rather than one about a request body, four hundred seconds into a run.
 
-**An output limit is not a shape control.** Owner ruling, kumarsnaveen,
+**An output limit is not a shape control.** Maintainer ruling,
 2026-10-24: `sampling.max_tokens` is accepted on every request route. The chat
 route defaults to 8,192 output tokens when the value is absent; an explicit
 value, including the active model's 4,096-token limit, wins. Rendered completions
@@ -189,7 +189,7 @@ gets is unchanged at `n_parallel: 1`, because non-unified KV divides `n_ctx` by
 the `-kvu` help text, read 2026-08-25; both behaviours appear in the run logs
 recorded at [../../reference/pipeline-cost.md](../../reference/pipeline-cost.md).
 
-A knob's presence is not evidence that it improves a run. Owner-selected
+A knob's presence is not evidence that it improves a run. Maintainer-selected
 settings remain labelled unmeasured until a runner measurement records their
 hardware, date and spread in
 [../../reference/pipeline-cost.md](../../reference/pipeline-cost.md). Setting a value

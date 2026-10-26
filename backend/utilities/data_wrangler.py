@@ -270,7 +270,7 @@ def backfill(corpus_dir: Path, settings: config.Settings, *, items_dir: Path) ->
 
     Get a directory with:
 
-        gh run download <run-id> --repo <owner/repo> --pattern 'items-*' --dir <dir>
+        gh run download <run-id> --repo <account/repo> --pattern 'items-*' --dir <dir>
 
     `items-*` carries a 1-day retention, so this reaches the last day or two of
     runs and no further. `evidence-*` lives 14 days but carries neither

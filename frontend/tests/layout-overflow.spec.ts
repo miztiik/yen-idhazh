@@ -4,7 +4,7 @@
  * A horizontal scrollbar on a reading surface is a control that hides its own
  * contents: it says nothing about how much is behind it, it is invisible until
  * a pointer arrives, and on a phone it competes with the gesture that moves
- * between pages (owner ruling 2026-08-31). The row of topic pills is the one
+ * between pages (maintainer ruling 2026-08-31). The row of topic pills is the one
  * part of a reader page whose width grows with the day, so its fold is decided
  * by `splitPills` and driven here as a pure function, with no build and no page.
  *

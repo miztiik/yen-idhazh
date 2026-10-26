@@ -83,7 +83,7 @@ declaration, and this is the order:
  fourteen-month tasks the first such day is 2027-10-01**, when `2026-08` falls
  below their windows. Before then the list is empty every day and the switch
  proves nothing.
-2. Read that run's log: `gh run view <runId> --repo <owner/repo> --job <jobId>
+2. Read that run's log: `gh run view <runId> --repo <account/repo> --job <jobId>
  --log`. Each task logs one `task-finished` line of JSON
  ([the gardener page](../architecture/publishing/idhazh-gardener.md#what-a-shard-logs)):
  `outcome` says `dry-run`, and `taken` lists every file a live pass would take.

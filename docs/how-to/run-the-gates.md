@@ -213,7 +213,7 @@ which run inside the backend group.
 
 ### Independent TypeScript packages and services
 
-Owner ruling, 2026-10-21: remaining feed-planner development and tests do not
+Maintainer ruling, 2026-10-21: remaining feed-planner development and tests do not
 invoke Python or introduce Python tests/helpers. Its isolated workflow does
 not install Python packages. Existing repository-wide backend gates remain
 unchanged.
@@ -226,7 +226,7 @@ schema, footer, identifier and canonical-digest checks. These results do not
 claim that a Python reader was executed. Persisted-contract changes still
 require the approval and compatibility rules in `CLAUDE.md`.
 
-Owner clarification, 2026-10-22: the existing contract-tier
+Maintainer clarification, 2026-10-22: the existing contract-tier
 `backend/tests/ledger/test_feed_ingest_ledgers.py::test_zero_completion_evidence_survives_without_erasing_an_earlier_complete_attempt`
 also runs the real Bun producer, actual gardener daily/monthly/yearly tasks,
 and independent Bun selector over one generated tree. It adds no Python case
@@ -254,7 +254,7 @@ no external service.
 
 ### Bounded state CSV integrity check
 
-Owner ruling: kumarsnaveen, 2026-10-23 UTC, selected the bounded commit-range
+Maintainer ruling: 2026-10-23 UTC, selected the bounded commit-range
 check instead of a growing tracked-tree scan. The existing CI `scope` job runs
 `frontend/scripts/state-csv-guard.ts` before test selection, on every change.
 Its failure is not caught by the selector's full-test fallback. No extra job,
@@ -446,7 +446,7 @@ python backend/utilities/gate_lock.py -- npm run build
 python backend/utilities/gate_lock.py -- npm run test:browser
 ```
 
-`--seats N` sets how many may run at once; the default is 5 (owner decision
+`--seats N` sets how many may run at once; the default is 5 (maintainer decision
 2026-10-02). One seat made every agent on the box queue behind every other, and
 that wait cost more than the contention it prevented. Each seat is its own lock
 file; seat 1 keeps the name `yen-idhazh-gate.lock`, so a branch that predates
@@ -936,7 +936,7 @@ expects. Serving a built ledger also switches the page's writers' tier off,
 because a built ledger has no writer's files. The archive host stays blocked
 unless the test serves it a root it built, with `serveArchiveToPage`. No test
 works out its expected answer by running the query door again over the canary
-or the committed data (owner ruling, 2026-10-05). The canary keeps only the
+or the committed data (maintainer ruling, 2026-10-05). The canary keeps only the
 explorer checks that do not depend on what it holds: layout, notices and
 browser storage.
 

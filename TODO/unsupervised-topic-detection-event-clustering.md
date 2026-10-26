@@ -74,7 +74,7 @@ Changing an edge's endpoints or type creates a new edge identity with a recorded
 
 ## Evidence production
 
-### One summary and one owner of event meaning
+### One summary and one maintainer of event meaning
 
 The operator-controlled LLM produces the standardized three-sentence summary, a candidate predicate frame, and supported time evidence in one response. Fastino GLiNER proposes typed entities and complete predicate-linked frames from the frozen summary. One resolver selects a whole supported frame; downstream stages must not independently choose different extractors.
 

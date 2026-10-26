@@ -13,7 +13,7 @@ runner.
 The check used to be derived from the package's own source with `ast` and
 `inspect`: every `*.py` under `idhazh` was read and parsed on every call, because a
 hand-written list of ledger names is the thing that went missing in the first
-place. That walk cost more every time the package grew, and OWNER RULING
+place. That walk cost more every time the package grew, and MAINTAINER RULING
 2026-10-03 ("no read may grow with the repository") forbids a sweep over
 `backend/idhazh` in production and in tests alike. `idhazh.ledger.staging.REGISTRY`
 now carries the same fact by hand instead: a writer and the commit labels whose

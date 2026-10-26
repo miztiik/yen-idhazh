@@ -148,7 +148,7 @@ def test_hhem_delta_is_rebuilt_not_trusted() -> None:
         EvalRow.model_validate(payload)
 
 
-#: The four columns the owner refused to delete on 2026-08-30, and the two things
+#: The four columns the maintainer refused to delete on 2026-08-30, and the two things
 #: each description has to carry. Every one of them is a cell a reader cannot
 #: interpret from its value: a constant that looks like a count, a derived cell
 #: that looks like a measurement, a flag that changed meaning on a fixed date, and
@@ -168,7 +168,7 @@ def test_a_kept_column_says_what_it_holds_and_who_reads_it(
 ) -> None:
     """A column kept for history still has to explain itself.
 
-    The owner asked what two of these four meant, which is what a description
+    The maintainer asked what two of these four meant, which is what a description
     that is not doing its job looks like. A test that only checks the field
     exists would have passed on every one of them.
     """

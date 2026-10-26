@@ -126,7 +126,7 @@ for the failed record, not already usable siblings. Existing month-based
 callers retain their treatment until their route migration removes it.
 
 The standing says `Fetching the record.` while delayed reads are pending.
-Size and timing studies are suspended by owner direction; the UI prints no
+Size and timing studies are suspended by maintainer direction; the UI prints no
 guessed engine-download figure and no absent reading holds the functionality.
 
 The standing's state tally is pure. It imports no query engine, and completing
@@ -157,7 +157,7 @@ choice that has one correct side.
 holds.** The first pass picked the small plain parser on the grounds that one panel
 reading one small collection does not need SQL, and it was right about that panel and
 wrong about the console. Rule 1 is why: designing the reader around the smallest
-panel guarantees a second reader arrives with the first large one. Owner ruling,
+panel guarantees a second reader arrives with the first large one. Maintainer ruling,
 2026-09-24.
 
 ## See also

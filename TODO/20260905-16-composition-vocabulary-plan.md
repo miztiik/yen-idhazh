@@ -7,7 +7,7 @@ implementation phases.
 **Chain**: previous [`20260905-15-chart-vocabulary-plan.md`](20260905-15-chart-vocabulary-plan.md) | next [`20260905-17-infographic-vocabulary-plan.md`](20260905-17-infographic-vocabulary-plan.md).
 **Reference**: [`20260902-visual-planner-pseudo-plan.md`](20260902-visual-planner-pseudo-plan.md) - O45, O47, rows 43, 44, 45, sections 7.2, 12.2 L3, 12.12 G27, M7.
 
-kumarsnaveen approved this alignment on 2026-10-25 UTC. Execute per
+The maintainer approved this alignment on 2026-10-25 UTC. Execute per
 docs/how-to/execute-a-plan.md; one meaningful implementation PR phase per
 renderer or contract. CONSULT the relevant advisor where two answers lead to
 different code; no automatic merge.
@@ -25,11 +25,11 @@ different code; no automatic merge.
 | Chosen strategy | Align the live contracts first, then deliver one type at a time - gate first, produce second, measure keep rate third; Fowler and Susan validate the contract and reader surface |
 | Execution | One meaningful PR phase per type or contract; parallel N = 4 only where the same code and contract files remain disjoint; no automatic merge authority |
 
-**Why this plan exists at all, recorded because it was nearly dropped.** Carmack proposed dropping the family on the grounds that derived values "let the planner state a number the article never did". **Overruled by the owner on 2026-09-05, and the reasoning is now O45.** The planner states nothing: every value is arithmetic **code** performs over Tier 1 elements **code** extracted, through a closed list whose members the model cannot name, cannot supply an operand to, and cannot express in its schema. The metric that objection reached for measures whether a summary bullet says something the summary prose does not - a prose instrument, unrelated to a chart's arithmetic.
+**Why this plan exists at all, recorded because it was nearly dropped.** Carmack proposed dropping the family on the grounds that derived values "let the planner state a number the article never did". **Overruled by the maintainer on 2026-09-05, and the reasoning is now O45.** The planner states nothing: every value is arithmetic **code** performs over Tier 1 elements **code** extracted, through a closed list whose members the model cannot name, cannot supply an operand to, and cannot express in its schema. The metric that objection reached for measures whether a summary bullet says something the summary prose does not - a prose instrument, unrelated to a chart's arithmetic.
 
-### Owner-approved reconciliation
+### Maintainer-approved reconciliation
 
-kumarsnaveen approved these decisions on 2026-10-25 UTC:
+The maintainer approved these decisions on 2026-10-25 UTC:
 
 | ID | Decision | Change from the September plan |
 | --- | --- | --- |
@@ -84,13 +84,13 @@ implementation facts, not claims that later rows passed.
 | # | Decision | Authority |
 | --- | --- | --- |
 | 1 | This is one command over committed data and it **sizes** the pie template rather than gating it. It has been outstanding since the design was written and nobody has taken it | M7 |
-| 2 | If the answer is small, `pie` still ships - it simply fires rarely, which is what a gate is for | Owner, O45 |
+| 2 | If the answer is small, `pie` still ships - it simply fires rarely, which is what a gate is for | Maintainer, O45 |
 
 ### Rejected alternatives
 
 | # | Option | Why rejected | Authority |
 | --- | --- | --- | --- |
-| 1 | Use this as a gate on the whole plan | The owner ruled the family ships. A measurement that sizes a template is not a veto on it | Owner |
+| 1 | Use this as a gate on the whole plan | The maintainer ruled the family ships. A measurement that sizes a template is not a veto on it | Maintainer |
 
 ---
 
@@ -115,7 +115,7 @@ implementation facts, not claims that later rows passed.
 
 | # | Option | Why rejected | Authority |
 | --- | --- | --- | --- |
-| 1 | Drop the family and the producers | The reader loses the part-of-whole read. Overruled: the objection confused a number code computed with a number a model invented | Owner, O45 |
+| 1 | Drop the family and the producers | The reader loses the part-of-whole read. Overruled: the objection confused a number code computed with a number a model invented | Maintainer, O45 |
 | 2 | Let the model choose the function | It cannot name one - the schema has no field for it. That is the design, not a check | Andre |
 
 ---
@@ -131,16 +131,16 @@ implementation facts, not claims that later rows passed.
 
 | # | Decision | Authority |
 | --- | --- | --- |
-| 1 | `pie` ships as a declarable and buildable type. Jony would build no pie at all and route composition to a stacked bar; the owner wanted the type, so **both**: pie under its gate, stacked bar as its downgrade target rather than its replacement | Row 43, section 4.F |
-| 2 | A **declared** whole, never a summed one. `declared_whole_element_id` names the independent article element, and summing the parts cannot establish it | Owner R3; Row 43 |
+| 1 | `pie` ships as a declarable and buildable type. Jony would build no pie at all and route composition to a stacked bar; the maintainer wanted the type, so **both**: pie under its gate, stacked bar as its downgrade target rather than its replacement | Row 43, section 4.F |
+| 2 | A **declared** whole, never a summed one. `declared_whole_element_id` names the independent article element, and summing the parts cannot establish it | Maintainer R3; Row 43 |
 | 3 | Five parts or fewer. Beyond that an angle is unreadable and the type is doing worse than the bar it displaced | Section 7.2 |
-| 4 | Direct and fallback composition require the same canonical measure, the same unit and independent whole evidence | Plan 15 owner R4 |
+| 4 | Direct and fallback composition require the same canonical measure, the same unit and independent whole evidence | Plan 15 maintainer R4 |
 
 ### Rejected alternatives
 
 | # | Option | Why rejected | Authority |
 | --- | --- | --- | --- |
-| 1 | No pie template, route composition to a stacked bar | Jony's position. Overruled by the owner, and recorded rather than erased | Section 4.F |
+| 1 | No pie template, route composition to a stacked bar | Jony's position. Overruled by the maintainer, and recorded rather than erased | Section 4.F |
 
 ---
 
@@ -156,15 +156,15 @@ implementation facts, not claims that later rows passed.
 | # | Decision | Authority |
 | --- | --- | --- |
 | 1 | A square-root radius scale is **mandatory**. A linear radius misstates area, which is the channel the reader is actually reading | Section 7.2 |
-| 2 | The plan keeps three measured channels: x position, y position and area; no composition purpose or declared whole is implied | Owner R1; row 44 |
+| 2 | The plan keeps three measured channels: x position, y position and area; no composition purpose or declared whole is implied | Maintainer R1; row 44 |
 | 3 | Reader's objection is recorded and not erased: three numbers judged by circle area at a narrow width are a lot to ask | Row 44 |
-| 4 | It must clear the configurable legibility floor, default 390 CSS px, and a failed floor yields no picture | Owner R2; row 44; plan 12 |
+| 4 | It must clear the configurable legibility floor, default 390 CSS px, and a failed floor yields no picture | Maintainer R2; row 44; plan 12 |
 
 ### Rejected alternatives
 
 | # | Option | Why rejected | Authority |
 | --- | --- | --- | --- |
-| 1 | Drop `bubble` on Reader's objection | The objection is about a hard case, not the type. The floor is the honest test, and it fires per visual rather than per type | Owner, O16 |
+| 1 | Drop `bubble` on Reader's objection | The objection is about a hard case, not the type. The floor is the honest test, and it fires per visual rather than per type | Maintainer, O16 |
 
 ---
 
@@ -179,7 +179,7 @@ implementation facts, not claims that later rows passed.
 
 | # | Decision | Authority |
 | --- | --- | --- |
-| 1 | The binning rule is **versioned config, never model-chosen**. The default is 3 equal-width bins with at least 3 cited values; both limits stay inside the existing mark window | Owner R5; Row 45 |
+| 1 | The binning rule is **versioned config, never model-chosen**. The default is 3 equal-width bins with at least 3 cited values; both limits stay inside the existing mark window | Maintainer R5; Row 45 |
 | 2 | Bin counts are `count` derived values and carry the same provenance as any other | Row 45 |
 | 3 | Empty or crowded bins refuse the picture rather than publishing a bar that states no source count | `idhazh.derived_values` resolver check |
 
@@ -194,7 +194,7 @@ implementation facts, not claims that later rows passed.
 ## 7. Row #6 - Human pie and bubble keep-rate evidence
 
 - **Scope:** Join published visual evidence to a separate human label ledger, then compare pie and bubble keep rates by exact type without mixing machine and human verdicts.
-- **Files touched:** The owner-approved visual identifier contract, a dedicated human visual-label contract and ledger, review queue integration, schema and fixtures, `backend/tests/**`, `docs/concepts/evaluation.md` and its owning plan references.
+- **Files touched:** The maintainer-approved visual identifier contract, a dedicated human visual-label contract and ledger, review queue integration, schema and fixtures, `backend/tests/**`, `docs/concepts/evaluation.md` and its owning plan references.
 - **Acceptance gates:** `ruff`; `mypy --strict`; export + drift; the full suite.
 - **Oracle:** Pie and bubble each have an exact type join, and a fixture keep-rate query separates them without pooling human labels with machine outcomes. A rate is not accepted without the inter-reviewer agreement required by Plan 21.
 
@@ -202,8 +202,8 @@ implementation facts, not claims that later rows passed.
 
 | # | Decision | Authority |
 | --- | --- | --- |
-| 1 | Use exact `planned_type` and `rendered_type` for machine outcomes; type fields need no new pie/bubble boolean | Owner R4 |
-| 2 | Keep human labels in a dedicated ledger and never feed them into publication gates | Owner R4; Plan 21 |
+| 1 | Use exact `planned_type` and `rendered_type` for machine outcomes; type fields need no new pie/bubble boolean | Maintainer R4 |
+| 2 | Keep human labels in a dedicated ledger and never feed them into publication gates | Maintainer R4; Plan 21 |
 | 3 | Publish pie and bubble keep rates only with their visual join key and inter-reviewer agreement | Plan 19 row 3; Plan 21 |
 
 ### Rejected alternatives

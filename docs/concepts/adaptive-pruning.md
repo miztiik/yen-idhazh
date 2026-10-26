@@ -283,7 +283,7 @@ window joins that check in the same commit. Fowler, 2026-09-13.
 `retention.image_months` was `-1` until 2026-09-13 - no age window at all - so
 this is the first age this project has put on a published asset rather than a
 tightening of one. The window first shipped with `dry_run: true`, so its
-candidate list could be reviewed before deletion. The owner authorized live
+candidate list could be reviewed before deletion. The maintainer authorized live
 visual pruning on 2026-10-25. `config/gardener/visual-prune.json` now has
 `dry_run: false`; its 390-day window and 200-file ceiling are unchanged.
 
@@ -312,7 +312,7 @@ using them; the measurement rules are in
 percent of the cap. One spread on the daily rate carried across the same window
 is 47.6 MiB, which is 5.1 months of window - the instrument is five times too
 blunt to resolve a two-month difference, so no number here can separate them.
-That leaves the owner's 13 (O8 and C20 of
+That leaves the maintainer's 13 (O8 and C20 of
 [../../TODO/20260902-visual-planner-pseudo-plan.md](../../TODO/20260902-visual-planner-pseudo-plan.md)),
 now derived rather than asserted. Carmack, 2026-09-13.
 

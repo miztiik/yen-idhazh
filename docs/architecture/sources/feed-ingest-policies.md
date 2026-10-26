@@ -42,7 +42,7 @@ bonuses, and each named coefficient in `mmr_weights`.
 
 The independent penalties cover source, source kind, parent domain, original
 vertical, assigned desk, lens, event type, event cluster, entity, and repeated
-coverage. Their meaning and evidence owners remain in
+coverage. Their meaning and evidence maintainers remain in
 [taxonomy](../../concepts/taxonomy.md) and
 [story similarity](../publishing/autotune-content-similarity.md).
 Source kind has only a configurable diversity penalty, initially at most
@@ -51,7 +51,7 @@ Source kind has only a configurable diversity penalty, initially at most
 A desk is where a story is published, not the feed's vertical. The existing
 desk floor, ceiling, and placement settings remain independent. An unknown desk
 stays unknown. Lens matcher weights, event matching, event-cluster grouping, and
-entity/watchlist rules retain their existing owners. Resolving a policy does
+entity/watchlist rules retain their existing maintainers. Resolving a policy does
 not invent labels.
 
 ## Headline observations and their consumers
@@ -78,7 +78,7 @@ empty list. No original headline or no supplied vocabulary is unknown, not a
 negative observation. Assigned desk, event types and event cluster remain
 unknown; a headline match is not a later full-article tag or classifier verdict.
 Publisher, parent domain, primary evidence and prior coverage remain unknown
-unless their existing evidence owner supplies them. The runner supplies
+unless their existing evidence maintainer supplies them. The runner supplies
 operational history from the [native feed-history reader](planner-feed-history.md);
 it does not infer source history from headline labels.
 
@@ -126,7 +126,7 @@ consumer. Selected dispatches retain them beside the full article. There is
 The best weighted lens and votes are audit evidence only, not extra score
 terms. This is real headline input wiring, not full Python ranking parity.
 Python's base ranking and the approved native recency-plus-authority formula
-remain different. The smallest further change needs an owner decision naming
+remain different. The smallest further change needs a maintainer decision naming
 the intended vote consumer; do not add a bonus or repurpose primary evidence
 or coverage to consume it.
 
@@ -163,7 +163,7 @@ selection. Adding a taxonomy vertical and its planning patch needs configuration
 edits only; a new algorithm still needs code. No label-specific branches or
 expression language are used.
 
-The source-reliability switch and its enabled default follow the owner's
+The source-reliability switch and its enabled default follow the maintainer's
 [2026-10-24 A1 approval](feed-curation.md#design-rationale). It controls one
 separate operational term, not a renamed quality weight or a source cap.
 

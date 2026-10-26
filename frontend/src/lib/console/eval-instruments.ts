@@ -70,8 +70,8 @@ export function matchTitle(windowDays?: number): string {
 
 /** Which panel answers for which ledger column.
  *
- * One owner each. A column can inform more than one surface - `band` sets a
- * card, sorts the source list and splits the model-change table - and the owner
+ * One maintainer each. A column can inform more than one surface - `band` sets a
+ * card, sorts the source list and splits the model-change table - and the maintainer
  * is the panel that is *about* it, the one an operator opens to ask how that
  * number is doing.
  */

@@ -72,6 +72,7 @@ export async function openOperationStore(outputRoot: string) {
           throw new PlanError("INVALID_RUN_CONTEXT", "Captured request differs from its prepared input", field);
         }
       }
+      // Claim once, then release the write lock before asynchronous network or parsing work.
       put(record);
       database.exec("COMMIT");
       committed = true;

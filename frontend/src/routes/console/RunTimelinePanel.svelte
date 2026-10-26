@@ -24,7 +24,7 @@
 	 * ever told by its colour that it is the failing one.
 	 *
 	 * **Hollow is unclaimed and hatched is overclaimed**, and both carry a legend
-	 * key, because the owner could not name the hatched notch on sight. The
+	 * key, because the maintainer could not name the hatched notch on sight. The
 	 * residual is signed and the sign changes the drawing rather than the colour:
 	 * positive, a hollow slice extends the bar to its full clock; negative, the
 	 * steps have already outrun the clock and the hatched notch covers the stretch

@@ -7,7 +7,7 @@ in the loop.
 
 **Status: design of record, not deployed behaviour.** Faithfulness (HHEM) ships today and is defined
 on [../../concepts/evaluation.md](../../concepts/evaluation.md#faithfulness-scored-twice). Coverage,
-coherence, fluency and the autotuning loop below are the target design. Plan 36 was to build it; on 2026-10-11 the owner moved plan 36 into
+coherence, fluency and the autotuning loop below are the target design. Plan 36 was to build it; on 2026-10-11 the maintainer moved plan 36 into
 [plan 65](../../../TODO/20261011-65-summary-fidelity-judge-plan.md), which decides, question by question, what of this design is built. The design
 reuses the `LLM-COUNCIL` workflow and the `Fit` pattern from the same-story similarity judge
 ([autotune-content-similarity.md](autotune-content-similarity.md)).
@@ -175,13 +175,13 @@ instrumented and the action is a knob, not a hardcode. The shipped defaults:
 
 So a below-0.50 faithfulness (or any unsupported number) is **withheld**; a faithfulness below its
 adaptive floor is **downgraded** with the low-confidence marker; everything else only moves an operator
-alarm. The owner can promote any metric's action on its track record.
+alarm. The maintainer can promote any metric's action on its track record.
 
 The gate reads **yesterday's** committed fitted band, so it is at most one day stale. It ships behind a
 flag, default off; while off it **stamps the decision but never suppresses**, so a person reads one
 corpus turn of what it WOULD have withheld before it is allowed to withhold. Withholding a story is a
-reader-safety decision (owner) applied to an editorial content call (Editor); the metric-to-action map
-is Editor's, the withhold floor and the standing permission are the owner's (Level 5).
+reader-safety decision (maintainer) applied to an editorial content call (Editor); the metric-to-action map
+is Editor's, the withhold floor and the standing permission are the maintainer's (Level 5).
 
 The withhold RATE is itself watched: a thin-but-true digest beats a full-but-false one, but a rising
 withhold rate is a bad-summariser day an operator must see, not a digest silently going hollow.

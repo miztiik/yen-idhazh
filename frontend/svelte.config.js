@@ -102,7 +102,7 @@ export default {
 		// halves read the one config value, so the valve opens on a config edit and
 		// not on a second source edit nobody documented. At the shipped default the
 		// list is `['self']` and this meta tag is byte-identical to what it was.
-		// The query engine's add-on host rides the same list (owner ruling, 2026-09-28).
+		// The query engine's add-on host rides the same list (maintainer ruling, 2026-09-28).
 		csp: {
 			mode: 'auto',
 			directives: {

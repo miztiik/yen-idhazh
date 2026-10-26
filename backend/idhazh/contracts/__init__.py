@@ -136,7 +136,7 @@ from idhazh.contracts.watchlist import EdgarPolicy, EntityDef, EntityFeed, Watch
 #: **A configuration file this project authors is not on this list.**
 #: `ModelsConfig` is the shape of `config/models/<name>.json`, which nothing but
 #: this repository writes and nothing but this repository reads, so a registry of
-#: persisted documents has nothing to do with it (Guardrail #3, owner ruling
+#: persisted documents has nothing to do with it (Guardrail #3, maintainer ruling
 #: 2026-09-21).
 CONTRACTS: Final[tuple[type[Contract], ...]] = (
     FetchedDocument,

@@ -116,7 +116,7 @@ none of it - which is the intended cost. See
 [../how-to/label-the-faithfulness-queue.md](../how-to/label-the-faithfulness-queue.md).
 
 **`corpus/` holds that same article text, committed, and it is the one place in
-this repository that does.** That is an owner decision taken 2026-08-28: what
+this repository that does.** That is a maintainer decision taken 2026-08-28: what
 the rule protects is the published surface, and nothing renders the corpus,
 links to it, or serves it. Two
 consequences follow and neither is hidden. This repository is public, so those

@@ -81,7 +81,7 @@ the archive has never produced.
 ## Design rationale
 
 **Why a raced chart is dropped rather than merged, refreshed, renumbered or picked between.**
-Authority: the owner, 2026-08-27. Every cheaper-looking answer publishes a wrong picture instead of
+Authority: the maintainer, 2026-08-27. Every cheaper-looking answer publishes a wrong picture instead of
 failing, which is worse than losing a day because nobody finds out. Adding the day's directory to
 `REFRESH_PATHS` made the rebuild's hand-back delete every chart this run added that the tip lacks,
 while the regenerated `digest.json` still named them, so the day published with broken images.
@@ -101,7 +101,7 @@ callback. Only the caller knows that an item's first published asset wins.
 There is no shell retry/rebase engine and no model rerun. The naming rule stays
 in `backend/idhazh/render/write.py`; Bash never learns an item id's grammar.
 
-**Two things about the 2026-08-24 repair are not in the record above.** Authority: owner,
+**Two things about the 2026-08-24 repair are not in the record above.** Authority: maintainer,
 2026-08-27.
 
 The first is that no other committed day needs it. 2026-08-21 published no visual at all,

@@ -393,7 +393,7 @@ def _fitted_similarity_threshold() -> type[Contract]:
 #: imports the contract one of its rows is read by. The rest of the door table
 #: imports its contracts as this module loads. A judge's waits for the first
 #: question about its ledger, because the council imports this module for its
-#: own row types, and the owner ruled on 2026-09-21 that no further judge
+#: own row types, and the maintainer ruled on 2026-09-21 that no further judge
 #: contract may join a council verb's imports: a judge deleted from the tree has
 #: to leave every council verb running.
 _JUDGE_DOOR_SHAPES: Final[

@@ -280,7 +280,7 @@ def test_an_entity_is_matched_by_any_of_its_aliases(
     taxonomy: Taxonomy,
     watchlist: Watchlist,
 ) -> None:
-    """The alias list is the match surface, so a product name reaches its owner."""
+    """The alias list is the match surface, so a product name reaches its maintainer."""
     by_product = tag.tagged(
         article(ArticleStatus.OK, "Claude answered the question."),
         taxonomy=taxonomy,

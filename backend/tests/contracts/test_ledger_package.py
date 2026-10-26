@@ -129,7 +129,7 @@ def test_the_facade_does_not_load_pyarrow() -> None:
 #
 # Five checks used to live here, each walking every .py file under backend/
 # (~640 files, 8.8 MB) to enforce an architectural rule by parsing the whole
-# tree on every run. Per the owner ruling of 2026-10-03 ("no read may grow
+# tree on every run. Per the maintainer ruling of 2026-10-03 ("no read may grow
 # with the repository"), a check whose cost rises with the archive rather
 # than with the code under test is forbidden, so all five were removed:
 #

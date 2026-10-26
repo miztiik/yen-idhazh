@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING, Any, Final, NamedTuple
 if TYPE_CHECKING:
     from idhazh.contracts.base import Model
 
-# The existing record key is a transport constant, not the event's owner.
+# The existing record key is a transport constant, not the event's maintainer.
 _ATTRIBUTE: Final = "gardener_event"
 _WORD_START: Final = re.compile(r"(?<!^)(?=[A-Z])")
 _PACKAGE: Final = __name__.partition(".")[0]

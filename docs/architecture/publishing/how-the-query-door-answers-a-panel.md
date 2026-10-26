@@ -496,7 +496,7 @@ before entries had a `state` is read as `packed`, as the contract reads it.
 the query engine, `@duckdb/duckdb-wasm`, taken at a caret range like every other
 dependency. Nothing pins it: the door's oracle runs against whatever version is
 installed, so an upgrade that breaks a query or the add-on below turns that test
-red on the pull request that raised the version (owner ruling, 2026-09-28).
+red on the pull request that raised the version (maintainer ruling, 2026-09-28).
 `frontend/tests/chart-vocabulary.spec.ts` holds that to one importer, holds every
 panel to `ledger.ts`, and holds `sliceFromDisk()` to the modules under
 `frontend/src/lib/server/`.
@@ -574,7 +574,7 @@ add-on's signature before loading it. `<repository>` is
 default. `engine.ts` tells the engine that address with `SET
 custom_extension_repository`, and the page's `connect-src` admits its origin
 through `engineOrigins()` in `frontend/asset-base.js`, so one edit moves both.
-Owner ruling, 2026-09-28: this is normal DuckDB-Wasm behaviour, and the site
+Maintainer ruling, 2026-09-28: this is normal DuckDB-Wasm behaviour, and the site
 allows it.
 
 Measured 2026-09-28 with a throwaway page that starts the engine the way
@@ -653,7 +653,7 @@ this engine does, and it keeps 3.2 MB off the site and a download step out of th
 build. What it costs is one more origin in `connect-src`, and the engine's
 signature check is what makes that origin safe to admit. Serving a copy from this
 site, checked against a digest in `config/`, with the native engine for the Node
-half, was the alternative weighed on 2026-09-28; the owner ruled for the normal
+half, was the alternative weighed on 2026-09-28; the maintainer ruled for the normal
 design.
 
 **Files are read by column name.** A day written before a column existed reads
@@ -678,7 +678,7 @@ reach's first day, so a new panel that forgot to clamp drew a fault for every
 young ledger. Refusing such a span as a request error was weighed too; it turns
 a normal state into an error that every caller must avoid by reading the reach
 first. The cut moves only the start, and only later: the span's end stays where
-the caller put it. Fowler, 2026-10-05, under the owner's ruling of that day that
+the caller put it. Fowler, 2026-10-05, under the maintainer's ruling of that day that
 a ledger's first day never moves a window.
 
 **How far a ledger is packed is the newest day any index names.** The packing
@@ -693,7 +693,7 @@ rows stop.** The build-time reader used to count its span back from the newest
 packed day and, when the newest packed days held no row, read further back until
 it found some, so a record that stopped writing still drew its last rows and its
 window moved into the past. Every window now ends on the site's newest published
-day (owner ruling of 2026-10-05), and the reader asks the door for that window
+day (maintainer ruling of 2026-10-05), and the reader asks the door for that window
 and nothing earlier. Where the rows stop is a fact the indexes already hold, so
 the reach names it as `lastRows` and no day before the window is read. It is a
 period, not always a day: once a record's last rows are packed into a month or a

@@ -934,7 +934,7 @@ def test_a_refused_rows_own_value_never_reaches_the_traceback(tmp_path: Path) ->
     `str(ValueError)` is not the only door: `traceback.format_exception` walks
     the chained cause and prints its text whole, which an uncaught crash or a
     `logger.exception` call would do too. The row's own value must stay out of
-    that text as well (Guardrail #11; plan owner fold, 2026-10-07).
+    that text as well (Guardrail #11; plan maintainer fold, 2026-10-07).
     """
     canary = "CANARY-9f2a-an-articles-fetched-title"
     (written,) = ledger.persist(

@@ -8,7 +8,7 @@ It carries addresses rather than digests because the rows are written to be read
 back by a person. The two address keys and the pair key are recomputed on read
 from the URLs on the row, so there is no cell that can go stale.
 
-**A judge labels this file, and `note` says which one** (owner, 2026-09-19).
+**A judge labels this file, and `note` says which one** (maintainer, 2026-09-19).
 It was specified as a person's hand-typed file and shipped empty, so the floor it
 exists to set was never on any screen. A model strong enough to be trusted with
 the call fills it instead, and some autotune paths will route a person into the

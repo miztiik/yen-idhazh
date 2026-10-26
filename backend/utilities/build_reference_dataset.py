@@ -713,7 +713,7 @@ def assign_publishers(
 
     Returns the host-to-key map and, separately, the keys that had to be
     lengthened and what settled them. A key nobody collides with keeps its short
-    form, which is the rule the owner set on 2026-09-13.
+    form, which is the rule the maintainer set on 2026-09-13.
 
     The map is computed once over the whole input and then stored, because the
     length of a key depends on which other hosts are in the pool: recomputing it

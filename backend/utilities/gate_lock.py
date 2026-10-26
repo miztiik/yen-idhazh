@@ -81,7 +81,7 @@ LOG: Final = logging.getLogger("gate_lock")
 # repository on one set of cores, so they contend on the same file.
 LOCK_FILENAME: Final = "yen-idhazh-gate.lock"
 
-# How many gates may run at once. Owner decision 2026-10-02: one seat queued
+# How many gates may run at once. Maintainer decision 2026-10-02: one seat queued
 # every agent behind every other; five is the starting point, tuned by `--seats`.
 SEATS: Final = 5
 

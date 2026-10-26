@@ -77,7 +77,7 @@ what the pass can support.** At today's recall the count is 0 on most genuinely
 multi-source stories, so a weight on it would reward the pass for having found a
 group rather than the story for having been carried. The term is computed and
 logged from the day it lands; what turns it on is a measured recall for the
-same-story pass that the owner accepts, and that measurement is the labelling
+same-story pass that the maintainer accepts, and that measurement is the labelling
 study. Until then there is no number here a person could defend.
 
 **It landed changing no published block, and that is what the shipped weights

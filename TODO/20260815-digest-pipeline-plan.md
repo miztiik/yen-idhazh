@@ -3,7 +3,7 @@
 **Last Updated**: 2026-08-23
 **Level**: 4 (structural, new subsystem) with named Level-5 ESCALATE triggers.
 
-Execute per `docs/how-to/execute-a-plan.md`, with one owner override in force (2026-08-21, `CLAUDE.md` section 0): **one agent works this repo and commits direct to `main`** - no worktree isolation, no worker-per-row fan-out and no PRs, because there is no second agent to isolate from and nobody to review a PR. Everything else stands: personas are consulted on ambiguity, rows respect the Depends-on column, gates must be green before a row is marked DONE, parallel N = 3, and the ESCALATE triggers in section 0 are honoured. A trigger that fires mid-execution is handled per `docs/how-to/handle-scope-change.md`.
+Execute per `docs/how-to/execute-a-plan.md`, with one maintainer override in force (2026-08-21, `CLAUDE.md` section 0): **one agent works this repo and commits direct to `main`** - no worktree isolation, no worker-per-row fan-out and no PRs, because there is no second agent to isolate from and nobody to review a PR. Everything else stands: personas are consulted on ambiguity, rows respect the Depends-on column, gates must be green before a row is marked DONE, parallel N = 3, and the ESCALATE triggers in section 0 are honoured. A trigger that fires mid-execution is handled per `docs/how-to/handle-scope-change.md`.
 
 ---
 
@@ -16,7 +16,7 @@ Execute per `docs/how-to/execute-a-plan.md`, with one owner override in force (2
 | Hard scope - out | Runtime backend; hosted inference anywhere; accounts; push notifications; paywalled sources; republishing article bodies; LLM-as-judge evaluation; fine-tuning; GPU runners; larger-than-9GB pipeline models; any browser model whose largest single file exceeds GitHub's 100 MB per-file hard limit; any on-device feature on the digest's critical path. |
 | ESCALATE triggers | (1) Row 7 model-validation gate fails its decision rule -> model pick is re-derived, PAUSE. (2) Any move to hosted inference - reverses the static-first premise. (3) Row 9 measurement shows images cannot fit the published budget -> the renderer is descoped, PAUSE. (4) 3x cost overrun on any row. (5) A browser model considered for row 23 has a single file over 100 MB - it cannot be committed, PAUSE. (6) Row 21 browser canaries fail against the chosen browser model. |
 | Chosen strategy | Runtime pipeline is orchestrator + disposable sharded workers, mirroring the plan-execution model: a `plan` job emits and shards the URL list, a `matrix` of workers each handles a shard on its own VM and writes one JSON per item, an `assemble` job renders the digest. Ruled by Fowler (contracts before logic) and Carmack (fresh-VM-per-job is the parallelism primitive; shard size is set by measured model-load amortization). |
-| Execution | Single agent, direct to `main` (owner override, 2026-08-21). Personas still consulted on ambiguity; row order still governed by Depends-on. Parallel N = 3 applies to how many rows may be in flight, not to worktrees. |
+| Execution | Single agent, direct to `main` (maintainer override, 2026-08-21). Personas still consulted on ambiguity; row order still governed by Depends-on. Parallel N = 3 applies to how many rows may be in flight, not to worktrees. |
 | Roster note (2026-08-20) | This plan was authored against a five-persona roster that included Palm (casual-game design) and Player. Both are gone; the roster is now Reader, Jony, Andre, Fowler, Carmack (`CLAUDE.md` section 14). Decisions already ruled stand as written and are NOT reopened. But **Andre (AI / LLM) now owns model quality, prompt strategy, constrained decoding, eval design and metric choice** - so rows 4, 6, 7 and 9 must consult him even where the existing attribution says Fowler or Carmack. The standing split: Andre owns whether a model is good enough, Carmack owns whether it fits. |
 
 ### 0.2 Capacity ceilings (platform verified 2026-08-15; corrected and extended 2026-08-20)
@@ -244,7 +244,7 @@ candidate:
 | Llama-3.2-1B-Instruct | 1179.4 MB (int8) |
 
 Every one is over, and the smallest is 3.5x the limit. Two further facts the
-owner should weigh together with that:
+maintainer should weigh together with that:
 
 - **The reader already pays 43 MB** for on-device search. A chat model takes
   that past 390 MB before it answers a single question.
@@ -319,7 +319,7 @@ than not having the feature. On-device **search** ships and stays; on-device
 - **Acceptance gates:** workflow completes on a real runner; emits `bench-llm` and `bench-image` artifacts; `docs/reference/pipeline-cost.md` carries hardware, date and stddev for every figure.
 - **Oracle:** coverage - every row currently marked "estimate" in `docs/reference/pipeline-cost.md` has a measured replacement with a stddev, or an explicit "still unmeasured" line.
 
-**The canonical ledger is now [`docs/reference/pipeline-cost.md`](../docs/reference/pipeline-cost.md).** Sections 2.1 and 2.2 below are the working record that produced it and are deleted when this row closes. The harness landed 2026-08-21 - `measure_corpus.py`, a `corpus` job, and a `cache-state.txt` that distinguishes a cache-hit run from a cache-miss one. What remains is executing the workflow on a real runner, which needs the owner to dispatch it (or to authorise the agent to push and dispatch).
+**The canonical ledger is now [`docs/reference/pipeline-cost.md`](../docs/reference/pipeline-cost.md).** Sections 2.1 and 2.2 below are the working record that produced it and are deleted when this row closes. The harness landed 2026-08-21 - `measure_corpus.py`, a `corpus` job, and a `cache-state.txt` that distinguishes a cache-hit run from a cache-miss one. What remains is executing the workflow on a real runner, which needs the maintainer to dispatch it (or to authorise the agent to push and dispatch).
 
 | # | Decision | Authority |
 | --- | --- | --- |
@@ -467,7 +467,7 @@ Derived per-article seconds (best / typical / worst):
 
 One story indexes many ways. An Nvidia supply agreement is verticals `ai` + `energy` + `business-economy`, lenses `ai-roi` + `markets`, events `deal` + `capex`, entity `nvidia`: six index entries, one fetch, one summary. That is the whole argument for lenses over verticals.
 
-### 3.2 Ratified `ai` feed list (owner sign-off 2026-08-21)
+### 3.2 Ratified `ai` feed list (maintainer sign-off 2026-08-21)
 
 36 feeds against a floor of 25, **written to `config/sources.json`**. Up to eleven may fail verification and the vertical still renders.
 
@@ -601,7 +601,7 @@ Required by the section 0 roster note. Andre owns eval design and metric choice;
 
 **Open question 3 is split by this consult.** Per-item extraction floors belong to row 4 - `min_source_words` (below it the item is not summarized at all) and a cross-page boilerplate ratio feeding `extraction_suspect`. The trend alerts belong to row 12 and must be **per-domain against that domain's own trailing median**: a global 10% month-over-month mean cannot fire for weeks when a single site breaks. The alert that names the failure directly is a domain's faithfulness staying flat or rising *while* its median source word count falls sharply.
 
-### 4.2 Owner rulings (2026-08-21)
+### 4.2 Maintainer rulings (2026-08-21)
 
 1. **Article bodies are never committed to the repo. Only summaries, and the source link for citation.** Absolute. This kills the row's original acceptance gate ("20 articles committed to `tests/fixtures/golden/`") and also kills Andre's redistributable-corpus workaround.
 2. **No content digests, no fixed-set fingerprints.** The URL is already unique and is the reference. Andre's URL-plus-content-digest golden corpus is dropped.
@@ -609,7 +609,7 @@ Required by the section 0 roster note. Andre owns eval design and metric choice;
 
 ### 4.3 Why the eval is a census (2026-08-21)
 
-The owner proposed scoring on a ~3-day interval, sampled from one or two copyright-safe sources. Andre returned REJECT. The reasoning now lives in [`docs/concepts/evaluation.md`](../docs/concepts/evaluation.md) under "Why this is a census and not a sample"; the three load-bearing points:
+The maintainer proposed scoring on a ~3-day interval, sampled from one or two copyright-safe sources. Andre returned REJECT. The reasoning now lives in [`docs/concepts/evaluation.md`](../docs/concepts/evaluation.md) under "Why this is a census and not a sample"; the three load-bearing points:
 
 - **A per-item claim to a reader cannot be backed by a sample.** Every item carries a confidence signal; if most items are unscored, the only options are to render "not measured" as "fine", caveat the whole page, or delete the signal.
 - **Sampling by source is the one axis guaranteed to bias the result**, and it disarms specific instruments - `hedge_dropped` would report 0 forever on institutional prose, and extraction rot concentrates on exactly the messy sources a clean-source sample never fetches.
@@ -1123,17 +1123,17 @@ is what makes row 14 a single `rm -r` with no second edit.
 
 | # | Question | Blocks | Needs | Resolution path |
 | --- | --- | --- | --- | --- |
-| 5 | Who curates the ~125 feeds, and in what order? Row 3 will not ship a vertical below its 25-feed floor, so the five cannot start together. | Row 3 | **OWNER ratifies** | **RESOLVED 2026-08-21.** The 36-feed `ai` list in section 3.2 is ratified and written to `config/sources.json`. The vertical stays `status: draft` until a feed-verification run confirms it clears the floor. Remaining verticals follow one per week under `draft`. |
+| 5 | Who curates the ~125 feeds, and in what order? Row 3 will not ship a vertical below its 25-feed floor, so the five cannot start together. | Row 3 | **MAINTAINER ratifies** | **RESOLVED 2026-08-21.** The 36-feed `ai` list in section 3.2 is ratified and written to `config/sources.json`. The vertical stays `status: draft` until a feed-verification run confirms it clears the floor. Remaining verticals follow one per week under `draft`. |
 | 3 | What rots at month 6? Extraction breaking silently on a site redesign is the live risk - a faithfulness score will happily reward a summary of navigation chrome. | Row 4 | agent | **RESOLVED 2026-08-21** by the row 4 Andre consult (section 4.1): per-item floors to row 4, per-domain trend alerts to row 12. |
 | 4 | Do extremely low-bit (1-2 bit) quantisations change the model fit? Published for several open-weights families; unevaluated here. | Row 7 | agent, then ESCALATE | Research + measure. Andre on whether quality survives, Carmack on whether it fits - both measured, not assumed. See `docs/how-to/set-up-local-inference.md`. |
-| 7 | `items_failed` is a subtraction, not a diagnosis. A dead link, a paywall, a thin extraction and a rejected summary all land in one number, and the per-item `failure_detail` that would separate them is written to `backend/var/`, which is gitignored. The run throws away the only record of why it failed. | Any question of the form "why was the count low?" | **OWNER ratifies** - a persisted-contract change is section 6 level 5 | Add a cause breakdown to `RunRecord`, keyed by the `ArticleStatus` / `SummaryStatus` the run already computes, with the schema `version` stamped and a `changelog` entry (section 11). Diagnosing the 2026-08-23 run needed a downloaded artifact and 9 URLs re-fetched by hand; the run should answer this itself. |
-| 8 | Shards are assigned round-robin over plan position, so the day waits on the slowest. Measured 2026-08-23: 3, 10, 11 and 13 minutes for one run - a 4.3x spread. `shard_of()` cannot balance by cost because article length is unknown until extraction, and its docstring claims a spread it does not achieve. Since 2026-08-2x `stage_work` fetches every item before it summarizes any, so the length IS known before the model runs - but the split has already happened one job earlier. | ~15% of run wall-clock, the largest single lever left | agent, then **OWNER ratifies** if it moves extraction into `plan` | Measure first: read the four `work` job durations across three runs and record the spread. If it holds, the cheap fix is to shard on a cost estimate the `plan` job can already make (feed tier and historical median words per source) rather than moving extraction. Moving extraction across the job boundary is a trust-boundary change and Level 5. |
+| 7 | `items_failed` is a subtraction, not a diagnosis. A dead link, a paywall, a thin extraction and a rejected summary all land in one number, and the per-item `failure_detail` that would separate them is written to `backend/var/`, which is gitignored. The run throws away the only record of why it failed. | Any question of the form "why was the count low?" | **MAINTAINER ratifies** - a persisted-contract change is section 6 level 5 | Add a cause breakdown to `RunRecord`, keyed by the `ArticleStatus` / `SummaryStatus` the run already computes, with the schema `version` stamped and a `changelog` entry (section 11). Diagnosing the 2026-08-23 run needed a downloaded artifact and 9 URLs re-fetched by hand; the run should answer this itself. |
+| 8 | Shards are assigned round-robin over plan position, so the day waits on the slowest. Measured 2026-08-23: 3, 10, 11 and 13 minutes for one run - a 4.3x spread. `shard_of()` cannot balance by cost because article length is unknown until extraction, and its docstring claims a spread it does not achieve. Since 2026-08-2x `stage_work` fetches every item before it summarizes any, so the length IS known before the model runs - but the split has already happened one job earlier. | ~15% of run wall-clock, the largest single lever left | agent, then **MAINTAINER ratifies** if it moves extraction into `plan` | Measure first: read the four `work` job durations across three runs and record the spread. If it holds, the cheap fix is to shard on a cost estimate the `plan` job can already make (feed tier and historical median words per source) rather than moving extraction. Moving extraction across the job boundary is a trust-boundary change and Level 5. |
 
 ### RESOLVED
 
 | # | Question | Resolution |
 | --- | --- | --- |
-| 2 | Who reads the digest? If nobody, the eval loop is the product and the digest is a test fixture. | **A general reader, the way a newspaper has one** (owner, 2026-08-21). The question was asked because a digest with no reader would make the dashboard the product; the answer inverts that. Row 11 ships, but as **operator instrumentation** - off the reading path, no design budget, obliged only to be correct - while the digest page carries the design effort (rows 13, 16, 17). The evaluation remains the product in the principle-6 sense: it is what makes the digest worth a stranger's two minutes. Recorded in `docs/concepts/vision.md`. |
+| 2 | Who reads the digest? If nobody, the eval loop is the product and the digest is a test fixture. | **A general reader, the way a newspaper has one** (maintainer, 2026-08-21). The question was asked because a digest with no reader would make the dashboard the product; the answer inverts that. Row 11 ships, but as **operator instrumentation** - off the reading path, no design budget, obliged only to be correct - while the digest page carries the design effort (rows 13, 16, 17). The evaluation remains the product in the principle-6 sense: it is what makes the digest worth a stranger's two minutes. Recorded in `docs/concepts/vision.md`. |
 | 6 | `temperature=0, seed=0` is not determinism, and eleven of sixteen drift sources were silent. | **Row 15** (2026-08-21). A `pipeline_fingerprint` stamps every input that can move an output; skip-if-exists becomes skip-if-fingerprint-matches; row 6's oracle is scoped to one runner class; a fingerprint match with unequal output is a recorded `determinism_violation` rather than a build failure. |
 | 1 | Hosted inference (GitHub Models free tier) versus local weights. | **Local weights** (2026-08-21). Settled by contract rather than measurement: CLAUDE.md section 0a makes hosted inference a non-goal anywhere - pipeline, site or browser. On-device inference over committed weights is not hosted inference and is governed by Guardrail #1. |
 | - | Which repo does this live in? Not yen-tamizh - that is a Tamil word game and this violates its CLAUDE.md scope. | **`yen-idhazh`** (2026-08-20). Own repo, own contract, own persona roster. Tamil *idhazh* = journal / magazine. |

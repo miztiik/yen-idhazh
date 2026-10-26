@@ -2,11 +2,11 @@
 
 **Last Updated**: 2026-10-23
 
-**The open defects have named owners below.** Five of them need evidence or a ruling before any code
+**The open defects have named maintainers below.** Five of them need evidence or a ruling before any code
 is worth writing; the rest are known fixes
 with named blast radiuses.
 Defect 2 needed three repairs before a person could label anything, and all three
-shipped. The owner settled the counting rule on 2026-08-27, which took the
+shipped. The maintainer settled the counting rule on 2026-08-27, which took the
 draw from 32 of 60 to 60 of 60. What is left is **60 human labels** and eight
 more run-days at one scorer, and neither is code. Defect 18 is the opposite
 shape: the code now works and the measurement it produces still cannot fire, so
@@ -173,13 +173,13 @@ named days, and the door's own `attempt` cell. That count prices this defect
 before anyone designs a fix.
 
 **A run id of its own for each re-run that plans again is the candidate
-structural fix. It is an option for a later owner ruling, not a decision.** It
+structural fix. It is an option for a later maintainer ruling, not a decision.** It
 would change the run identity that every ledger and `run.json` carry, which is
 why this defect is level 5. Recording the plan's attempt beside the shard count
 and reading only later rows was set aside on 2026-10-12, because it still
 misreads an attempt that stops before assembly.
 
-Found by Fowler's review of defect 73 and filed on 2026-10-12 with the owner's
+Found by Fowler's review of defect 73 and filed on 2026-10-12 with the maintainer's
 ruling on that defect.
 
 ## 74 - A stale-payload test assumes its scratch folder is outside the repository (OPEN)
@@ -198,7 +198,7 @@ stale-payload path helper it reads if that helper violates the contract, and
 [committing](../docs/architecture/publishing/committing.md) only if its boundary
 needs clarification. Oracle: both cases name their independently expected
 POSIX relative path, with no drive, backslash or absolute-path disclosure.
-Status: OPEN; the known-defects execution owner takes this row.
+Status: OPEN; the known-defects execution maintainer takes this row.
 
 ## 73 - The manifest shard count can differ from the dispatched worker matrix (CLOSED 2026-10-12, PR #1588)
 
@@ -218,7 +218,7 @@ the derived count and assembly does not. The native `run-shards` ledger
 deliberately records the manifest value; observed host rows are not a
 substitute.
 
-**The owner ruled on 2026-10-12.** The run records the count it dispatched, and
+**The maintainer ruled on 2026-10-12.** The run records the count it dispatched, and
 the operator keeps the one-to-eight choice. `RunRecord.shards` keeps its key,
 type and readers and holds that count from the change on. The plan step
 decides the count once and stores it on the run's plan; the fan-out, assembly
@@ -464,7 +464,7 @@ failure.**
 **The next move is a worker's: correct the docstring's example to a real plan
 path, and either make the no-install claim true by moving the import inside
 the project, or drop the claim and say what install the command needs.**
-Level 1 - a docstring and, if the owner keeps the no-install claim, one
+Level 1 - a docstring and, if the maintainer keeps the no-install claim, one
 import; a wrong version is obvious on the next run.
 
 Found by plan 62's text update after row L7, and filed on 2026-10-07.
@@ -1029,9 +1029,9 @@ is between living with it and merging on this machine under `TZ=UTC`, which
 changes how every row merges. Level 1 - a wrong offset is visible on the commit
 that carries it, and nothing depends on it.
 
-Execution owner: the repository owner for row 48; check both `%aI` and `%cI` on the next normal squash merge, and require UTC offsets or an explicit UTC-policy decision before closing the row.
+Execution maintainer: the repository maintainer for row 48; check both `%aI` and `%cI` on the next normal squash merge, and require UTC offsets or an explicit UTC-policy decision before closing the row.
 
-Found on 2026-09-28 by plan 51's owner, while merging that plan's row 5.
+Found on 2026-09-28 by plan 51's maintainer, while merging that plan's row 5.
 
 ## 47 - The Pipelines route draws no panel ids, so the pictures and gates reach 15 panels, not 26 (CLOSED 2026-10-12)
 
@@ -1140,7 +1140,7 @@ tab strip sticks and gets shorter.
 the window, not a fix inside each panel. Level 2 - every windowed section on the
 five routes, each checked by name.
 
-Execution owner: this plan's row 43 worker; changing every preset at the documented widths in both themes must leave the windowed sections' settled positions unchanged.
+Execution maintainer: this plan's row 43 worker; changing every preset at the documented widths in both themes must leave the windowed sections' settled positions unchanged.
 
 Filed on 2026-09-28 from Jony's review.
 
@@ -1168,7 +1168,7 @@ console by plan 51's row 2, which changes no panel.
 noun, used by every sentence that names the span. Level 1 - wording, and a wrong
 version is obvious on the page.
 
-Execution owner: this plan's row 41 worker; browser checks of one-day and multi-day windows must show the correct singular and plural wording on every console route.
+Execution maintainer: this plan's row 41 worker; browser checks of one-day and multi-day windows must show the correct singular and plural wording on every console route.
 
 ## 40 - The canary never writes a job in two halves, so no built page tests the merge (CLOSED 2026-10-12)
 
@@ -1367,7 +1367,7 @@ and two rows that differ only in the dropped cell start settling as one.
 fix is for one side to be derived from something other than the constant - the
 committed header, or the contract's own field list.
 
-Execution owner: this plan's row 26 worker; for each key cell, a bounded fixture pair differing only in that cell must stay separate, and dropping the cell must fail without deriving the expected answer from the key constant.
+Execution maintainer: this plan's row 26 worker; for each key cell, a bounded fixture pair differing only in that cell must stay separate, and dropping the cell must fail without deriving the expected answer from the key constant.
 
 ## 25 - `host_model` is a column nothing fills, and two rulings disagree (CLOSED 2026-10-04)
 
@@ -1465,7 +1465,7 @@ exactly; the numbers only have to agree to the coarser of the two precisions
 they were written with, so `$12.9 billion`, `$12.93 billion` and `$13 billion`
 are one acquisition while `25 percent` and `50 percent` are two figures. That
 tolerance admits twelve cross-source pairs the exact-digit rule refused and
-every one is the same acquisition - no false merge. Owner ruling 2026-09-14,
+every one is the same acquisition - no false merge. Maintainer ruling 2026-09-14,
 over Andre's narrower stop-at-punctuation. Replayed through the shipped pass
 over every committed day: **27 of the 42 were apart before, 1 after**. The
 reasoning, the flowchart of the whole rule, the two headline classes that would
@@ -1538,7 +1538,7 @@ place under a different comparison, or `truncation_flagged` reads
 `Article.truncated`, `evaluation.truncation_gap_max` is deleted as a knob
 nothing reads, and the console counter is pointed at the flag that moved. The
 second changes what a committed column means and what an operator page reports,
-so it is Level 5 and needs an owner ruling before any of it is written.
+so it is Level 5 and needs a maintainer ruling before any of it is written.
 
 ## 2 - The faithfulness thresholds have no labelled error rate (OPEN)
 
@@ -1578,7 +1578,7 @@ guaranteed one.
 
 **0 of 60 labels.** No `state/labels.csv` is committed.
 
-**2 of 10 run-days.** The owner settled the counting rule on 2026-08-27: count
+**2 of 10 run-days.** The maintainer settled the counting rule on 2026-08-27: count
 run-days at one `scorer_version`, and carry `pipeline_fingerprint` as a reported
 stratum rather than a disqualification. The pair rule it replaced was
 unreachable - the stamp digests seventeen inputs, so a reworded prompt or a

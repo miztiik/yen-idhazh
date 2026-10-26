@@ -15,7 +15,7 @@ import { BY_ROUTE } from './support/console-expect/console-nav';
  * routes with real anchors pass.
  *
  * Five things this file protects that a screenshot cannot. The labels are the
- * words the owner chose, so a paraphrase fails. The ids and the paths under
+ * words the maintainer chose, so a paraphrase fails. The ids and the paths under
  * them did NOT move when two of the labels changed on 2026-08-31, which is what
  * makes that a rename and not a route change. The strip may never take the
  * health ramp: green, amber and red on a label would say a route is failing,
@@ -24,7 +24,7 @@ import { BY_ROUTE } from './support/console-expect/console-nav';
  * overlapping another. And each route's title in the browser names that route,
  * after a tab click as well as on a page load.
  */
-/** The owner's words, and the paths they sit on. Typed out on purpose: this is
+/** The maintainer's words, and the paths they sit on. Typed out on purpose: this is
  * the copy the file exists to protect, so reading it from the source it guards
  * would only prove the page agrees with itself.
  *
@@ -37,7 +37,7 @@ import { BY_ROUTE } from './support/console-expect/console-nav';
  * `Judgement` and `Voices` joined on 2026-09-12, opened empty by the row that
  * added them; `Voices` filled on 2026-09-14 when four feed and source panels
  * moved onto it off Pipelines. `Judgement` is singular because the other three
- * name a place and this one names an act; `Voices` is the owner's word over
+ * name a place and this one names an act; `Voices` is the maintainer's word over
  * Susan's `Sources`.
  */
 const ROUTES = BAND_UNREAD.routes.flatMap((route) => {

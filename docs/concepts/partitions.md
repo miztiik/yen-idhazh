@@ -189,7 +189,7 @@ The rule binds writes to time partitions, not reads. A closed partition is
 still opened when `day_partition.days_in_window` names it. What bounds reads is
 [CLAUDE.md](../../CLAUDE.md) Guardrail #12, not whether a partition is closed.
 
-Authority: owner, 2026-09-06.
+Authority: maintainer, 2026-09-06.
 
 ## The partitioned collections
 
@@ -252,7 +252,7 @@ What day grain buys is the two properties in the first bullet, and a
 windowed read that opens exactly the days it names - where a 90-day cover over
 month shards opened files holding up to 120 days of rows.
 
-Authority: owner, 2026-09-10; [`20260910-24-day-sharded-ledgers-plan.md`](../../TODO/20260910-24-day-sharded-ledgers-plan.md)
+Authority: maintainer, 2026-09-10; [`20260910-24-day-sharded-ledgers-plan.md`](../../TODO/20260910-24-day-sharded-ledgers-plan.md)
 section 0.2.
 
 ## The four cases an append-only pattern gets wrong

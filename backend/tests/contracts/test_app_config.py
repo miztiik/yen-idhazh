@@ -1092,7 +1092,7 @@ def test_a_fresh_clone_measures_itself_and_the_committed_config_agrees() -> None
     legitimately changes it, which teaches people to edit the test.
 
     Tracing is the exception and is asserted by value, because its default is
-    the claim: it was off until 2026-09-06, when the owner turned it on by
+    the claim: it was off until 2026-09-06, when the maintainer turned it on by
     default. On or off, the committed file and a fresh clone must agree - the
     point of this test is that the shipped config never silently diverges from
     the defaults the code carries. No cleanup age is left here to diverge: each
@@ -1361,7 +1361,7 @@ def test_a_config_that_makes_the_line_rise_faster_than_it_falls_is_refused() -> 
 
 
 def test_a_config_still_spelling_a_retired_threshold_knob_is_refused() -> None:
-    """Two knobs changed unit as well as name, and one changed owner.
+    """Two knobs changed unit as well as name, and one changed maintainer.
 
     `max_down_step` was a score and `max_down_bins` is a count of slots, so an
     operator who moves 0.005 across untouched has written a step two hundred

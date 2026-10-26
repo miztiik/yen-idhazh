@@ -58,7 +58,7 @@ input error, not a reason to invent or shorten recorded history.
 
 ## Design rationale
 
-Owner ruling (kumarsnaveen_microsoft, 2026-10-23): permanent retirement
+Maintainer ruling (2026-10-23): permanent retirement
 authority for the TypeScript planner is the existing source registry,
 `config/sources.json`, through `status: retired` and `retired_on`. It is not
 the native retirement ledger. Retirement-file discovery, scanning, another
@@ -68,7 +68,7 @@ This does not delete or rewrite historical Python ledger files.
 Keep discovery and recorded facts separate. Compact indexes decide which
 tier serves a date, so a stale raw file already served by compaction is not
 read twice. Health discovery remains bounded by its existing named inputs.
-Changing the health-day counting policy requires a separate owner decision;
+Changing the health-day counting policy requires a separate maintainer decision;
 input discovery must not silently change what the existing reader selects.
 
 ## See also

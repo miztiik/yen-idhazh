@@ -85,7 +85,7 @@ inputs stay null. A missing frequency entry does not reduce the CPU count.
 Item CPU shares are unknown when the aggregate line lacks its four required
 counters, any counter resets, or the resulting shares are impossible.
 
-The work stage receives the server PID written by the model-server owner. It
+The work stage receives the server PID written by the model-server maintainer. It
 checks the PID and the kernel start-time counter before and after each server
 status read. An exited or reused PID makes server memory and fault readings
 unknown; a job with no server PID records no server process values. Server
@@ -852,7 +852,7 @@ is an immutable file through the shared ledger, and the reader settles attempts
 using the common rules in
 [Persistence](../architecture/contracts/persistence.md#the-two-identifiers).
 
-**Platform placement is an independent opt-out.** Owner ruling, kumarsnaveen,
+**Platform placement is an independent opt-out.** Maintainer ruling,
 2026-10-24: keep placement collection on by default, but let the operator stop
 the external metadata request in the selected config while local host
 collection and ledger writes continue. A caller may still opt out for one task;
