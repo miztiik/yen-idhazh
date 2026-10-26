@@ -9,14 +9,14 @@ Table A
 
 | ID | Field | Value |
 | --- | --- | --- |
-| A1 | Why this plan exists | Complete the parent plan's first phase without implementing another chart family |
-| A2 | Parent | [The whole vocabulary is declarable, and an unbuilt type steps down](20260905-15-chart-vocabulary-plan.md#2-row-1---the-whole-vocabulary-is-declarable-and-an-unbuilt-type-steps-down) |
+| A1 | Why this plan exists | Complete the initial visual-request phase without implementing another chart family |
+| A2 | Governing contract | [Visual-plan rules and refusal](../docs/architecture/publishing/what-a-visual-plan-may-say-and-what-happens-to-one-that-is-refused.md) |
 | A3 | Hard scope - in | Config selection from the full native vocabulary; compiler-aware safe replacement; measured production fallback inputs; persisted requested and delivered outcomes; bounded tests; owning documentation |
 | A4 | Hard scope - out | Table B |
-| A5 | ESCALATE triggers | Unapproved persisted design or metric; changed question or source facts; unsupported rendering; missing production input silently replaced with empty evidence; any change to the parent's approved scope |
+| A5 | ESCALATE triggers | Unapproved persisted design or metric; changed question or source facts; unsupported rendering; missing production input silently replaced with empty evidence; any change to the approved Row 1 scope |
 | A6 | Chosen strategy | Extend the existing decision and item-health path rather than introduce the later visual-attempt ledger; Fowler consultation, 2026-10-25 UTC |
 | A7 | Design approval | the maintainer approved the recorded A1 design and delivery on 2026-10-25 UTC |
-| A8 | Execution | One maintainer, one Row 1 implementation PR phase, no parallel rows and no automatic merge authority; later parent rows remain pending |
+| A8 | Execution | One maintainer, one Row 1 implementation PR phase, no parallel rows and no automatic merge authority; Rows 2-5 are complete and Row 6 is collapsed |
 
 Execute per docs/how-to/execute-a-plan.md: one maintainer carries this dependent phase; consult only on a material ambiguity; pause for Level 5 design approval; no automatic merge.
 
@@ -24,7 +24,7 @@ Table B
 
 | ID | What is out | Cost of leaving it out | What would bring it in |
 | --- | --- | --- | --- |
-| B1 | New chart renderers and text visual types | Story delivery still supports bars only | The corresponding parent implementation phase |
+| B1 | New chart renderers and text visual types | This phase adds no renderer; Rows 2-5 delivered their chart families and Row 6 was abandoned | A separately approved implementation phase |
 | B2 | A new visual-attempt ledger or dashboard | No new visual-specific historical panel | Its separately approved delivery plan; existing item-health retains this phase's outcomes |
 | B3 | Historical redraw or inferred outcome backfill | Older rows remain unmeasured | A separate maintainer-approved requirement |
 | B4 | Production activation | New policies remain off after delivery | An explicit config activation decision |
@@ -84,7 +84,6 @@ Table C
   - `tests/fixtures/contracts/visual-decision/none.json`
   - `docs/architecture/publishing/visuals.md`
   - `docs/architecture/publishing/what-a-visual-plan-may-say-and-what-happens-to-one-that-is-refused.md`
-  - `TODO/20260905-15-chart-vocabulary-plan.md`
   - `TODO/20261025-chart-vocabulary-row1-plan.md`
 - **Acceptance gates:** Locally, use `frontend`'s shared `test:changed` selector, inspect its selection, and run its lint, strict typing, contract bindings and selected tests. During implementation run the named outcome, population, request and fallback tests together. CI owns the full-suite merge gate. No published-page behavior is added in this phase.
 - **Oracle:** A bounded recorded request passes through the real request-schema and decision path, then the real ledger writer and reader: an unbuilt magnitude comparison either delivers an exactly source-derived supported replacement or a recorded refusal; a purpose mismatch cannot become bars. Recompute the requested counts and metric from delivered and refused records. This cannot establish the quality of future renderers or reader demand for them.
@@ -161,7 +160,7 @@ Table I
 | I3 | 3 | Compiler capability and final delivery accounting reach the existing item-health writer before sealing; real ledger round-trip proves persistence |
 | I4 | 4 | Bounded historical population is frozen and passed through the production shard; safe fallback and reasoned refusal use it |
 | I5 | 5 | Focused fixtures cover direct delivery, unbuilt recovery, purpose mismatch, stacked-bar refusal, empty evidence, failed write and old rows; metric is re-derived from mixed outcomes |
-| I6 | 6 | Update owning docs and only the parent's assigned row, run selected gates, inspect the intended diff and deliver this phase without starting the next |
+| I6 | 6 | Update owning docs and the assigned Row 1 record, run selected gates, inspect the intended diff and deliver this phase without starting the next |
 
 ### Rejected alternatives
 

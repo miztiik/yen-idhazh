@@ -94,6 +94,11 @@ it does not know. The dated maintainer exception for older charts lives in the
 
 ## Design rationale
 
+**Area remains deferred (2026-10-25 UTC).** The current free-form measure label
+cannot establish that a series is a stock or cumulative amount rather than a
+rate. No area chart is supported until a separately approved source-evidence
+design can make that distinction.
+
 **Maintainer ruling, 2026-10-26 UTC.** The exact direction was: "engage susan
 agent. do not want fixed numbers that is not current design pattern it should
 allow to fit device screen or viewport. mor over sort the bar graph from
