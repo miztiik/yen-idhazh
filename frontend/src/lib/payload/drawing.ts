@@ -10,9 +10,10 @@ const VISUAL_DATA_PATH =
 	/^digest\/\d{4}\/\d{2}\/\d{2}\/[a-z0-9]+(?:-[a-z0-9]+)*-(?:[0-9]{2,}|[0-9a-hjkmnp-tv-z]{16})\.json$/;
 
 /** Protocol stamp, held to the Python authority by the visual binding test. */
-export const RENDERER_VERSION = '2026-10-27T02:00';
-export const DRAWABLE = ['bar', 'dot', 'line', 'scatter', 'bubble', 'slope', 'stacked_bar', 'pie'] as const;
+export const RENDERER_VERSION = '2026-10-27T05:00';
+export const DRAWABLE = ['bar', 'dot', 'line', 'scatter', 'bubble', 'slope', 'stacked_bar', 'pie', 'histogram'] as const;
 export const MAX_PIE_PARTS = 5;
+export const MAX_MARKS_PER_CHANNEL = 8;
 export const ENCODING_ROLES = [
 	'category', 'quantity', 'quantity_x', 'time', 'series', 'size', 'bins', 'entity', 'event_label'
 ] as const;
@@ -36,6 +37,14 @@ function dateOrYear(value: unknown): value is string {
 	return Number.isFinite(date.getTime()) && date.toISOString().slice(0, 10) === value;
 }
 
+function schemaVersion(value: unknown): value is string {
+	if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}(?:T\d{2}:\d{2}(?::\d{2})?)?$/.test(value)) {
+		return false;
+	}
+	const parsed = new Date(value.length === 10 ? `${value}T00:00:00Z` : `${value}Z`);
+	return Number.isFinite(parsed.getTime()) && parsed.toISOString().startsWith(value.slice(0, 10));
+}
+
 /** Return a reason, never a repaired document or an approximate drawing. */
 export function refusedVisualData(data: unknown): string | null {
 	if (!isObject(data)) return 'is not a visual-data document';
@@ -45,6 +54,17 @@ export function refusedVisualData(data: unknown): string | null {
 		return 'carries no document identity';
 	}
 	if (!nullableText(data.title) || !nullableText(data.caption)) return 'carries invalid framing';
+	if (!nullableText(data.histogram_unit) || !nullableText(data.histogram_unit_table_version)) {
+		return 'carries invalid histogram unit provenance';
+	}
+	if (
+		data.histogram_unit_table_version !== null &&
+		!schemaVersion(data.histogram_unit_table_version)
+	) return 'carries an invalid histogram unit-table stamp';
+	if (data.type !== 'histogram' &&
+		(data.histogram_unit !== null || data.histogram_unit_table_version !== null)) {
+		return 'carries histogram unit provenance for another chart type';
+	}
 	if (
 		!nullableText(data.declared_whole_element_id) ||
 		(data.declared_whole !== null && !isObject(data.declared_whole))
@@ -75,7 +95,7 @@ export function refusedVisualData(data: unknown): string | null {
 		if (!Array.isArray(ids) || !ids.every((id): id is string => typeof id === 'string')) {
 			return 'carries a channel that is not a list of marks';
 		}
-		if (ids.length > 8) return 'carries too many marks in one channel';
+		if (ids.length > MAX_MARKS_PER_CHANNEL) return 'carries too many marks in one channel';
 		channels[role] = ids;
 		for (const id of ids) {
 			if (!held.has(id)) return 'draws a mark it does not carry';
@@ -183,6 +203,60 @@ export function refusedVisualData(data: unknown): string | null {
 		}
 		if (new Set(partIds).size !== partIds.length) return 'pie part quantities are not distinct';
 		textChannels.push(...names);
+	} else if (data.type === 'histogram') {
+		const bins = channels.bins;
+		if (bins.length < 2 || bins.length > MAX_MARKS_PER_CHANNEL) {
+			return 'carries an invalid number of histogram bins';
+		}
+		if (
+			channels.category.length !== 0 || channels.quantity.length !== 0 ||
+			channels.quantity_x.length !== 0 || channels.time.length !== 0 ||
+			channels.series.length !== 0 || channels.size.length !== 0 ||
+			channels.entity.length !== 0 || channels.event_label.length !== 0
+		) return 'carries a channel this histogram does not draw';
+		if (data.histogram_unit_table_version !== null && data.histogram_unit === null) {
+			return 'carries a unit-table stamp without a histogram unit';
+		}
+		const cited = new Set<string>();
+		let previousUpper: number | null = null;
+		let firstWidth: number | null = null;
+		for (const [index, id] of bins.entries()) {
+			const bin = held.get(id)!;
+			const derived = bin.derived;
+			if (
+				!isObject(derived) || derived.function !== 'count' ||
+				!Array.isArray(derived.inputs) || derived.inputs.length === 0 ||
+				!derived.inputs.every((input): input is string => typeof input === 'string') ||
+				typeof derived.bin_lower !== 'string' || typeof derived.bin_upper !== 'string' ||
+				bin.unit !== null || typeof bin.value !== 'string'
+			) return 'carries a histogram bin without count provenance';
+			const lower = Number(derived.bin_lower);
+			const upper = Number(derived.bin_upper);
+			const count = Number(bin.value);
+			const width = upper - lower;
+			if (
+				!Number.isFinite(lower) || !Number.isFinite(upper) || lower >= upper ||
+				!Number.isInteger(count) || count !== derived.inputs.length
+			) return 'carries an empty or invalid histogram bin';
+			if (previousUpper !== null && previousUpper !== lower) {
+				return 'carries histogram bins with gaps or overlaps';
+			}
+			if (firstWidth === null) firstWidth = width;
+			const precision = Math.max(Math.abs(firstWidth), Math.abs(width), 1) * Number.EPSILON * 16;
+			if (Math.abs(width - firstWidth) > precision) {
+				return 'carries histogram bins with unequal widths';
+			}
+			for (const input of derived.inputs) {
+				if (!/^quantity-/.test(input) || cited.has(input)) {
+					return 'carries repeated or invalid histogram input provenance';
+				}
+				cited.add(input);
+			}
+			previousUpper = upper;
+		}
+		if (!bins.every((id) => held.get(id)?.text === null)) {
+			return 'carries text on a measured histogram bin';
+		}
 	} else if (data.type === 'slope') {
 		const times = channels.time;
 		const entities = channels.entity;
@@ -314,7 +388,8 @@ export function refusedVisualData(data: unknown): string | null {
 			return 'draws a text channel without source text';
 		}
 	}
-	if (typeof data.emphasized_mark_id !== 'string' || !figures.includes(data.emphasized_mark_id)) {
+	const emphasizedChannel = data.type === 'histogram' ? channels.bins : figures;
+	if (typeof data.emphasized_mark_id !== 'string' || !emphasizedChannel.includes(data.emphasized_mark_id)) {
 		return 'emphasizes no displayed quantity';
 	}
 	return null;

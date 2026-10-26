@@ -38,44 +38,8 @@ import type { NumberFormatConfig, NumberFormatter } from '$lib/number-format';
 import type { StoryChartGeometryConfig } from '$lib/server/config';
 import { drawScatter, statedScatter, type ScatterDrawing } from './scatter';
 import { drawBubble, statedBubble, type BubbleDrawing } from './bubble';
-
-const DISPLAY_UNIT_SYMBOLS: Readonly<Record<string, string>> = {
-	w: 'W',
-	watt: 'W',
-	kw: 'kW',
-	kilowatt: 'kW',
-	mw: 'MW',
-	megawatt: 'MW',
-	gw: 'GW',
-	gigawatt: 'GW',
-	tw: 'TW',
-	terawatt: 'TW',
-	wh: 'Wh',
-	kwh: 'kWh',
-	mwh: 'MWh',
-	gwh: 'GWh',
-	twh: 'TWh',
-	g: 'g',
-	gram: 'g',
-	kg: 'kg',
-	kilogram: 'kg',
-	t: 't',
-	tonne: 't',
-	kt: 'kt',
-	kilotonne: 'kt',
-	mm: 'mm',
-	cm: 'cm',
-	km: 'km',
-	kilometre: 'km',
-	kilometer: 'km',
-	s: 's',
-	second: 's',
-	min: 'min',
-	minute: 'min',
-	hr: 'h',
-	hour: 'h',
-	day: 'd'
-};
+import { drawHistogram, statedHistogram, type HistogramDrawing } from './histogram';
+import { displayUnitSymbol } from './unit-symbol';
 
 /** One bar, placed. Every number here is a CSS pixel on the reader's screen. */
 export interface Bar {
@@ -200,7 +164,8 @@ export type Drawing =
 	| ScatterDrawing
 	| BubbleDrawing
 	| StackedBarDrawing
-	| PieDrawing;
+	| PieDrawing
+	| HistogramDrawing;
 
 function figureOf(mark: VisualMark): number {
 	// The compiler pins `value` to the characters the article wrote, so this is
@@ -577,7 +542,7 @@ export function drawStackedBars(
 	);
 	if (geometry === null) throw new Error('a validated stacked bar has no measurable parts');
 	const unit = quantities[0]?.unit;
-	const unitSuffix = unit ? ` ${DISPLAY_UNIT_SYMBOLS[unit] ?? unit}` : '';
+	const unitSuffix = unit ? ` ${displayUnitSymbol(unit)}` : '';
 	const readout = factsOf(
 		whole.text ?? '',
 		parts.map((part, index) => ({
@@ -674,6 +639,8 @@ export function drawVisual(
 			return drawStackedBars(data, room, formatNumber);
 		case 'pie':
 			return drawPie(data, room, formatNumber, availableHeight, geometry);
+		case 'histogram':
+			return drawHistogram(data, room, formatNumber, numberFormat, geometry);
 		default:
 			throw new Error(`visual type is not drawn: ${data.type}`);
 	}
@@ -780,6 +747,9 @@ export function statedDrawing(drawing: Drawing): string {
 				`Pie chart. Declared total: ${drawing.whole}. Shares: ${facts.join('; ')}.`,
 				drawing.caption
 			].filter(Boolean).join(' ');
+		}
+		case 'histogram': {
+			return statedHistogram(drawing);
 		}
 	}
 }

@@ -61,7 +61,7 @@ from idhazh.contracts.visual import (
 #: committed SVG is a fixed record of what a reader saw on a given day, and a
 #: spec plus drawing code can be redrawn differently by a later change with
 #: nothing in the payload to show it moved. This field is what shows it.
-RENDERER_VERSION: Final = "2026-10-27T02:00"
+RENDERER_VERSION: Final = "2026-10-27T05:00"
 
 #: How a mark is addressed inside its own file. Local to one visual and never an
 #: identity anything outside it holds, so it is short and positional rather than
@@ -245,6 +245,11 @@ class VisualData(Contract):
 
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-10-27T05:00",
+            change="Record the unit used for histogram edges.",
+            why="A reader can redraw normalized bins from their recorded provenance.",
+        ),
+        ChangelogEntry(
             version="2026-10-27T04:00",
             change="Publish pie slices as shares of a separately stated whole.",
             why="A pie's denominator and exact source total must reach its reader.",
@@ -258,11 +263,6 @@ class VisualData(Contract):
             version="2026-10-27T02:00",
             change="Add bubble as a source-backed relationship chart type.",
             why="Circle area shows a third measure at the measured viewport width.",
-        ),
-        ChangelogEntry(
-            version="2026-10-27T01:00",
-            change="Draw scatter with one entity and two source-backed measures per point.",
-            why="Partial pairs hide the actual comparison set.",
         ),
         ChangelogEntry(
             version="2026-10-24",
@@ -287,6 +287,14 @@ class VisualData(Contract):
             "page refuses a version it does not know, so a later change that would move "
             "pixels cannot redraw an older day without saying so."
         )
+    )
+    histogram_unit: DerivedUnit | None = Field(
+        default=None,
+        description="The unit used for histogram edges, or null for unitless values.",
+    )
+    histogram_unit_table_version: SchemaVersion | None = Field(
+        default=None,
+        description="The unit-table stamp used to normalize mixed-unit histogram values.",
     )
     declared_whole_element_id: ElementId | None = Field(
         description="The source quantity naming the denominator, or null when the visual has none."
@@ -335,11 +343,18 @@ class VisualData(Contract):
         if idle:
             raise ValueError(f"a mark no channel draws: {idle}")
         if self.emphasized_mark_id not in self.encoding.quantity:
-            raise ValueError("the emphasized mark must be a displayed quantity")
+            if self.type is not VisualType.HISTOGRAM or (
+                self.emphasized_mark_id not in self.encoding.bins
+            ):
+                raise ValueError("the emphasized mark must be a displayed quantity")
         if self.renderer_version != RENDERER_VERSION:
             raise ValueError("the renderer version is not current")
         channels = self.encoding
         by_id = {mark.mark_id: mark for mark in self.marks}
+        if self.type is not VisualType.HISTOGRAM and (
+            self.histogram_unit is not None or self.histogram_unit_table_version is not None
+        ):
+            raise ValueError("only a histogram carries histogram unit provenance")
         if self.type not in (VisualType.PIE, VisualType.STACKED_BAR) and (
             self.declared_whole_element_id is not None or self.declared_whole is not None
         ):
@@ -462,6 +477,71 @@ class VisualData(Contract):
                 )
             ):
                 raise ValueError("a pie draws only category and quantity channels")
+        elif self.type is VisualType.HISTOGRAM:
+            if not 2 <= len(channels.bins) <= MAX_IDS_PER_ROLE:
+                raise ValueError("a histogram carries between two and eight bins")
+            if any(
+                (
+                    channels.category,
+                    channels.quantity,
+                    channels.quantity_x,
+                    channels.time,
+                    channels.series,
+                    channels.size,
+                    channels.entity,
+                    channels.event_label,
+                )
+            ):
+                raise ValueError("a histogram draws only its bins channel")
+            if self.histogram_unit_table_version is not None and self.histogram_unit is None:
+                raise ValueError("a unit-table stamp requires a histogram unit")
+            bins = [by_id[mark_id] for mark_id in channels.bins]
+            edges: list[tuple[Decimal, Decimal]] = []
+            cited: list[str] = []
+            for mark in bins:
+                derived = mark.derived
+                if (
+                    derived is None
+                    or derived.function is not DerivedFunction.COUNT
+                    or derived.bin_lower is None
+                    or derived.bin_upper is None
+                    or mark.unit is not None
+                    or Decimal(mark.value or "0") <= 0
+                    or Decimal(mark.value or "0") != len(derived.inputs)
+                    or any(not element_id.startswith("quantity-") for element_id in derived.inputs)
+                ):
+                    raise ValueError(
+                        "each histogram bin is a non-empty count with bounds and inputs"
+                    )
+                edges.append((Decimal(derived.bin_lower), Decimal(derived.bin_upper)))
+                cited.extend(derived.inputs)
+            if any(
+                not lower.is_finite() or not upper.is_finite()
+                for lower, upper in edges
+            ):
+                raise ValueError("histogram bin edges are finite decimal values")
+            widths = [upper - lower for lower, upper in edges]
+            exponents = [
+                edge.as_tuple().exponent
+                for pair in edges
+                for edge in pair
+            ]
+            if any(not isinstance(exponent, int) for exponent in exponents):
+                raise ValueError("histogram bin edges are finite decimal values")
+            edge_quantum = min(
+                Decimal(1).scaleb(exponent)
+                for exponent in exponents
+                if isinstance(exponent, int)
+            )
+            if (
+                any(lower >= upper for lower, upper in edges)
+                or any(edges[index][1] != edges[index + 1][0] for index in range(len(edges) - 1))
+                or max(widths) - min(widths) > edge_quantum
+                or len(set(cited)) != len(cited)
+            ):
+                raise ValueError(
+                    "histogram bins have equal-width contiguous edges and distinct inputs"
+                )
         elif self.type is VisualType.SLOPE:
             pair_count = len(channels.quantity) // 2
             if len(channels.time) != 2 or len(channels.quantity) < 4 or len(channels.quantity) % 2:
@@ -610,7 +690,9 @@ class VisualData(Contract):
             raise ValueError("every drawn category, time, series and entity mark needs text")
         if any(
             by_id[mark_id].value is None or by_id[mark_id].text is not None
-            for mark_id in channels.quantity + channels.quantity_x + channels.size
+            for mark_id in channels.quantity + channels.quantity_x + channels.size + (
+                channels.bins if self.type is VisualType.HISTOGRAM else []
+            )
         ):
             raise ValueError("every quantity mark carries a value and no text")
         return self

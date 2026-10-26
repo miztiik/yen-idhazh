@@ -1,6 +1,6 @@
 # Design System
 
-**Last Updated**: 2026-10-12
+**Last Updated**: 2026-10-26
 
 Shared rules for typography, layout, colour, motion and controls. [Console design](console-design.md) owns panel-specific presentation; [appearance configuration](config/appearance.md) owns tunable values.
 
@@ -130,6 +130,9 @@ source figures for converted values. Missing framing takes no reserved space.
 Pies show the article's stated total and every named share in a visible list
 beside the circle where room allows, and below it when it does not. The circle
 never carries the only copy of a value or a category name.
+Histograms show every recorded range from low to high, with a count bar and its
+number at the bar's end. The heading says "Number of values", and the accessible
+name repeats all ranges and counts; no bin or count is carried by colour alone.
 The [chart contract](../architecture/publishing/where-a-drawing-becomes-pixels.md#design-rationale)
 owns the dated maintainer rulings and the cost of refusing old or ambiguous charts.
 
@@ -207,6 +210,11 @@ One token system and payload-driven states keep meaning consistent across pages 
 The digest drawing and console use one TypeScript number formatter. Its locale, SI prefix threshold and significant digits come only from `visuals.number_format` in `config/idhazh.json`, never from a reader's browser. Where a shortened figure differs from the article's text, the accessible description keeps the original characters. Maintainer ruling: 2026-10-24.
 
 Measured values, axes and dated readouts share the configured precision and SI prefixes. Exact event counts retain every digit with the same locale's grouping. Standalone component tests provide the real page's number settings through the shared server-render helper or browser component mount; a missing page context still fails rather than choosing another locale.
+
+Histogram bars, range labels and the accessible name all use the same recorded
+bin edges and counts, so a reader sees one distribution rather than two
+independently calculated versions. Range labels keep the configured precision
+unless distinct recorded edges would otherwise display as the same value.
 
 The shared footer must not depend on the latest day's data or build identity: either would change unrelated pages on every publication. The current link-only footer has limited visual hierarchy. Improve it with stable content rather than restoring those dependencies.
 
