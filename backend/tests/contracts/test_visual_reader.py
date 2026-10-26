@@ -53,10 +53,10 @@ def test_frontend_chart_vocabularies_match_the_native_contract() -> None:
 
 
 def test_frontend_stacked_unit_symbols_match_the_native_renderer() -> None:
-    source = read_text(REPO_ROOT / "frontend/src/lib/visual/bar.ts")
+    source = read_text(REPO_ROOT / "frontend/src/lib/visual/unit-symbol.ts")
     found = re.search(r"const DISPLAY_UNIT_SYMBOLS\b[^=]*= \{(.*?)\n\};", source, re.S)
     assert found is not None
-    symbols = dict(re.findall(r"^\s*(\w+): '([^']*)',?$", found[1], re.M))
+    symbols = dict(re.findall(r"^\s*(\w+): '([^']*)',?\r?$", found[1], re.M))
     assert symbols == DISPLAY_UNIT_SYMBOLS
     assert set(symbols) == set(UNIT_DIMENSIONS)
 
