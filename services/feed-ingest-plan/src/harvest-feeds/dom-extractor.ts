@@ -1,6 +1,6 @@
 /** Extract sanitized article prose and access evidence from inert HTML. */
 import { parseHTML } from "linkedom";
-import Defuddle from "defuddle";
+import { Defuddle } from "defuddle/node";
 import type { HarvestObservation } from "./harvest-types";
 import type { HarvestDiagnostics } from "@idhazh/common-contracts";
 import { sanitizeText } from "./sanitize-text";
@@ -8,6 +8,7 @@ import type { ExtractionControls } from "./extraction-controls";
 import type { ExtractionQuality } from "@idhazh/common-contracts";
 import { measureExtractionQuality, countWords } from "./extraction-quality";
 import { corroborateWords } from "./corroborated-words";
+import { extractSemanticContent } from "./semantic-extractor";
 
 export class ArticleExtractionError extends Error {
   constructor(readonly reason: "missing-document-root" | "dom-depth-exceeded") { super(reason); }
@@ -65,14 +66,14 @@ function paywallEvidence(document: Document, html: string, markers: readonly str
   return { paywall: false, paywall_evidence: "none", warnings, metadata };
 }
 
-export function extractArticle(html: string, configuredUrl: string, config: ExtractionControls, form: "article" | "abstract" = "article") {
+export async function extractArticle(html: string, configuredUrl: string, config: ExtractionControls, form: "article" | "abstract" = "article") {
   if (!html.trim()) return {
     article_text: "", word_count: 0, author: null, page_title: null,
     paywall: false, paywall_evidence: "none" as const,
     warnings: [] as HarvestDiagnostics["warnings"],
     quality: null as ExtractionQuality | null,
   };
-  try { return extractDocument(html, configuredUrl, config, form); }
+  try { return await extractDocument(html, configuredUrl, config, form); }
   catch (error) {
     if (error instanceof RangeError && /call stack|recursion/i.test(error.message)) {
       throw new ArticleExtractionError("dom-depth-exceeded");
@@ -82,22 +83,26 @@ export function extractArticle(html: string, configuredUrl: string, config: Extr
 }
 
 function extractBody(document: Document, configuredUrl: string) {
-  return new Defuddle(document, {
-    url: configuredUrl, useAsync: false,
+  for (const node of document.querySelectorAll("script:not([type='application/ld+json']),style,template,noscript,iframe,object,embed")) node.remove();
+  document.normalize();
+  // Sanitize decoded text before Markdown can escape instruction delimiters.
+  for (const element of document.querySelectorAll("*")) {
+    if (element.tagName === "SCRIPT") continue;
+    for (const child of element.childNodes) if (child.nodeType === child.TEXT_NODE) {
+      const raw = child.textContent ?? "";
+      child.textContent = `${/^\s/u.test(raw) ? " " : ""}${sanitizeText(raw)}${/\s$/u.test(raw) ? " " : ""}`;
+    }
+  }
+  return Defuddle(document, configuredUrl, {
+    markdown: true, useAsync: false,
     fetch: Object.assign(
       () => { throw new Error("DOM extraction must not request resources"); },
       { preconnect: () => { throw new Error("DOM extraction must not open connections"); } },
     ),
-  }).parse();
+  });
 }
 
-function bodyText(html: string): string {
-  const content = parseHTML(`<html><body>${html}</body></html>`).document;
-  for (const node of content.querySelectorAll("script,style,template,noscript,iframe,object,embed")) node.remove();
-  return content.body.innerText;
-}
-
-function extractDocument(html: string, configuredUrl: string, config: ExtractionControls, form: "article" | "abstract") {
+async function extractDocument(html: string, configuredUrl: string, config: ExtractionControls, form: "article" | "abstract") {
   const { document } = parseHTML(html);
   if (!document.documentElement) throw new ArticleExtractionError("missing-document-root");
   const { metadata, ...paywall } = paywallEvidence(document, html, config.paywall_markers);
@@ -105,17 +110,30 @@ function extractDocument(html: string, configuredUrl: string, config: Extraction
   if (!paywall.paywall) {
     const corroborationDocument = parseHTML(html).document;
     publisherMetadata(corroborationDocument);
-    corroborated = corroborateWords(corroborationDocument, metadata, config.corroboration_min_words,
-      container => bodyText(extractBody(parseHTML(container).document, configuredUrl).content));
+    corroborated = await corroborateWords(corroborationDocument, metadata, config.corroboration_min_words,
+      async container => sanitizeText((await extractBody(parseHTML(container).document, configuredUrl)).content));
   }
   for (const node of document.querySelectorAll(".o-em-consent,.o-em-adblock")) node.remove();
-  const extracted = extractBody(document, configuredUrl);
-  const text = sanitizeText(bodyText(extracted.content));
+  let extracted: Awaited<ReturnType<typeof extractBody>> | null = null;
+  let primaryError: unknown;
+  try { extracted = await extractBody(document, configuredUrl); }
+  catch (error) {
+    if (error instanceof RangeError) throw error;
+    primaryError = error;
+  }
+  let text = sanitizeText(extracted?.content ?? "");
+  if (primaryError !== undefined || countWords(text) < config.min_source_words) {
+    const fallback = extractSemanticContent(html);
+    if (fallback && countWords(fallback) > countWords(text)) {
+      text = fallback;
+      paywall.warnings.push("semantic-dom-fallback");
+    } else if (primaryError !== undefined) throw primaryError;
+  }
   return {
     article_text: text,
     word_count: countWords(text),
-    author: cleanText(extracted.author) || null,
-    page_title: cleanText(extracted.title) || null,
+    author: cleanText(extracted?.author ?? document.querySelector('meta[name="author"]')?.getAttribute("content") ?? "") || null,
+    page_title: cleanText(extracted?.title ?? document.querySelector("title")?.textContent ?? "") || null,
     ...paywall,
     quality: text && !paywall.paywall ? measureExtractionQuality(text, corroborated, config, form) : null,
   };

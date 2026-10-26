@@ -232,9 +232,14 @@ class VisualData(Contract):
 
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
-            version="2026-10-27T01:01",
+            version="2026-10-27T03:00",
             change="Publish one declared whole with its source-backed stacked parts.",
             why="A reader needs the declared total and every part in one current drawing.",
+        ),
+        ChangelogEntry(
+            version="2026-10-27T02:00",
+            change="Add bubble as a source-backed relationship chart type.",
+            why="Circle area shows a third measure at the measured viewport width.",
         ),
         ChangelogEntry(
             version="2026-10-27T01:00",
@@ -247,14 +252,9 @@ class VisualData(Contract):
             why="A time axis needs sortable dates without replacing the article's words.",
         ),
         ChangelogEntry(
-            version="2026-10-25",
-            change="Compile and draw bar, dot and slope charts with their source channels.",
-            why="The reader needs the full declared position-and-length vocabulary.",
-        ),
-        ChangelogEntry(
             version="2026-10-24",
-            change="Earlier changes are in this file's git history.",
-            why="A changelog says what moved lately; git is the archive.",
+            change="Earlier changes are in git.",
+            why="Git history is the archive for older contract changes.",
         ),
     )
 
@@ -438,6 +438,41 @@ class VisualData(Contract):
                 {mark.text for mark in entities}
             ) != count:
                 raise ValueError("scatter entity labels must be distinct")
+        elif self.type is VisualType.BUBBLE:
+            count = len(channels.quantity)
+            if (
+                not count
+                or len(channels.quantity_x) != count
+                or len(channels.size) != count
+                or len(channels.entity) != count
+            ):
+                raise ValueError("a bubble pairs one entity with both positions and size")
+            if channels.series and len(channels.series) != count:
+                raise ValueError("a bubble pairs one series label with every point")
+            if any(
+                (
+                    channels.category,
+                    channels.time,
+                    channels.bins,
+                    channels.event_label,
+                )
+            ):
+                raise ValueError(
+                    "a bubble carries only entity, quantity_x, quantity, size and series"
+                )
+            entities = [by_id[mark_id] for mark_id in channels.entity]
+            if any(
+                mark.element_id is None
+                or not mark.element_id.startswith(("entity-", "place-"))
+                for mark in entities
+            ):
+                raise ValueError("bubble entities need source element references")
+            if len({mark.element_id for mark in entities}) != count or len(
+                {mark.text for mark in entities}
+            ) != count:
+                raise ValueError("bubble entity labels must be distinct")
+            if any(Decimal(by_id[mark_id].value or "0") <= 0 for mark_id in channels.size):
+                raise ValueError("bubble size measures must be positive")
         elif self.type is VisualType.LINE:
             if len(channels.quantity) < 2 or len(channels.time) != len(channels.quantity):
                 raise ValueError("a line chart pairs at least two quantities with dates")
@@ -494,7 +529,7 @@ class VisualData(Contract):
             raise ValueError("every drawn category, time, series and entity mark needs text")
         if any(
             by_id[mark_id].value is None or by_id[mark_id].text is not None
-            for mark_id in channels.quantity + channels.quantity_x
+            for mark_id in channels.quantity + channels.quantity_x + channels.size
         ):
             raise ValueError("every quantity mark carries a value and no text")
         return self

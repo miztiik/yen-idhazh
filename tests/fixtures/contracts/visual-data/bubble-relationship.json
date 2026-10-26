@@ -1,0 +1,58 @@
+{
+  "caption": "Positions show capacity and output; circle area shows turbine count.",
+  "emphasized_mark_id": "m1",
+  "encoding": {
+    "bins": [],
+    "category": [],
+    "entity": [
+      "m12",
+      "m13",
+      "m14",
+      "m15"
+    ],
+    "event_label": [],
+    "quantity": [
+      "m0",
+      "m1",
+      "m2",
+      "m3"
+    ],
+    "quantity_x": [
+      "m4",
+      "m5",
+      "m6",
+      "m7"
+    ],
+    "series": [],
+    "size": [
+      "m8",
+      "m9",
+      "m10",
+      "m11"
+    ],
+    "time": []
+  },
+  "item_id": "energy-4821903756",
+  "marks": [
+    {"derived": null,"element_id": "quantity-41-47","mark_id": "m0","source_text": null,"text": null,"time": null,"unit": "gwh","value": "30"},
+    {"derived": null,"element_id": "quantity-100-106","mark_id": "m1","source_text": null,"text": null,"time": null,"unit": "gwh","value": "95"},
+    {"derived": null,"element_id": "quantity-157-163","mark_id": "m2","source_text": null,"text": null,"time": null,"unit": "gwh","value": "28"},
+    {"derived": null,"element_id": "quantity-216-222","mark_id": "m3","source_text": null,"text": null,"time": null,"unit": "gwh","value": "60"},
+    {"derived": null,"element_id": "quantity-17-24","mark_id": "m4","source_text": null,"text": null,"time": null,"unit": "mw","value": "1200"},
+    {"derived": null,"element_id": "quantity-76-83","mark_id": "m5","source_text": null,"text": null,"time": null,"unit": "mw","value": "3400"},
+    {"derived": null,"element_id": "quantity-134-140","mark_id": "m6","source_text": null,"text": null,"time": null,"unit": "mw","value": "900"},
+    {"derived": null,"element_id": "quantity-192-199","mark_id": "m7","source_text": null,"text": null,"time": null,"unit": "mw","value": "2100"},
+    {"derived": null,"element_id": "quantity-259-270","mark_id": "m8","source_text": null,"text": null,"time": null,"unit": "turbine","value": "14"},
+    {"derived": null,"element_id": "quantity-284-295","mark_id": "m9","source_text": null,"text": null,"time": null,"unit": "turbine","value": "31"},
+    {"derived": null,"element_id": "quantity-309-319","mark_id": "m10","source_text": null,"text": null,"time": null,"unit": "turbine","value": "8"},
+    {"derived": null,"element_id": "quantity-336-347","mark_id": "m11","source_text": null,"text": null,"time": null,"unit": "turbine","value": "19"},
+    {"derived": null,"element_id": "entity-0-7","mark_id": "m12","source_text": null,"text": "Denmark","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": "entity-59-66","mark_id": "m13","source_text": null,"text": "Germany","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": "entity-118-124","mark_id": "m14","source_text": null,"text": "Norway","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": "entity-175-182","mark_id": "m15","source_text": null,"text": "Ireland","time": null,"unit": null,"value": null}
+  ],
+  "renderer_version": "2026-10-27T01:01",
+  "title": "Capacity, output and turbine count",
+  "type": "bubble",
+  "version": "2026-10-27T03:00"
+}

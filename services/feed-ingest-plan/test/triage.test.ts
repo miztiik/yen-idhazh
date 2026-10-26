@@ -353,11 +353,14 @@ test("public harvesting observations compose with screening without duplicating 
     const candidate = harvested.candidates.find(row => row.candidate_id === entry.candidate.candidate_id)!;
     expect(entry.observation).toEqual(observation);
     expect(entry.candidate).toEqual(candidate);
-    if (candidate.published_at === null) throw new Error("Recorded admitted RSS entry must retain its publication time");
-    expect(entry.freshness).toMatchObject({
-      timing_source: "published_at", timing_at: candidate.published_at,
-      age_hours: (Date.parse(input.run.now) - Date.parse(candidate.published_at)) / 3_600_000,
-    });
+    if (candidate.published_at === null) {
+      expect(entry.freshness).toMatchObject({ timing_source: "unknown", timing_at: null, age_hours: null });
+    } else {
+      expect(entry.freshness).toMatchObject({
+        timing_source: "published_at", timing_at: candidate.published_at,
+        age_hours: (Date.parse(input.run.now) - Date.parse(candidate.published_at)) / 3_600_000,
+      });
+    }
   }
   expect(harvested.rejections.some(row => row.drop_reason === "MISSING_REQUIRED_FIELDS")).toBe(true);
 }, 30_000);

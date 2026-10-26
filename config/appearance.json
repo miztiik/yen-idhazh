@@ -43,6 +43,7 @@
       "scatter_margin_right_px": 24,
       "scatter_margin_top_px": 32,
       "scatter_margin_bottom_px": 48,
+      "bubble_max_radius_share": 0.25,
       "slope_column_share": 0.3,
       "slope_footer_band_px": 28,
       "slope_header_band_px": 32,

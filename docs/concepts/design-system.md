@@ -95,19 +95,24 @@ Draw against the actual content width in CSS pixels. Do not shrink a wide drawin
 Fit the complete story figure to the visible viewport where readable content
 allows it. Measure wrapped framing, readings, spacing and any sticky filter band;
 do not resize as the reader scrolls. Bar and dot rows keep their content height.
-Line, scatter and slope plots take the remaining room, bounded below by their
-text and mark clearance, not a fixed density or chart-height budget. If the
-complete figure cannot fit, it continues in normal page flow. Never shrink text,
-clip facts, add an inner scroll area or remove a supported family to fit it.
+Line, scatter, slope and bubble plots take the remaining room, bounded below by
+their text and mark clearance, not a fixed density or chart-height budget. A
+bubble plot scales to the measured plot area using the bounded
+`chart.story_geometry.bubble_max_radius_share` setting, without a minimum-width
+cutoff.
+If the complete figure cannot fit, it continues in normal page flow. Never
+shrink text, clip facts, add an inner scroll area or remove a supported family
+to fit it.
 The [chart rationale](../architecture/publishing/how-a-story-chart-is-drawn-and-what-refuses-one.md#design-rationale)
 records the approved trade-off and replaces the inherited undefined density rule.
 
 Every SVG text string on a reader chart must resolve to at least `--text-xs`,
 with one drawn unit equal to one CSS pixel. The reader browser gate checks
 this on the canary day at 390 CSS pixels, including the figure's content width,
-mark readings and stable geometry after navigation and reload. Narrow and wide
-geometry checks stay in the logic tier. This floor does not govern console
-charts or repeat the visual validator's mark-count limits.
+mark readings and stable geometry after navigation and reload. That viewport is
+a browser test case, not a minimum chart width; narrow and wide geometry checks
+stay in the logic tier. This text floor does not govern console charts or repeat
+the visual validator's mark-count limits.
 
 ### Every fact a drawing shows is reachable without a pointer
 

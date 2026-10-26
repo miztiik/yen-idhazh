@@ -51,7 +51,7 @@ test('viewport sizing preserves every supported family without a density or fixe
     for (const filename of [
         'dot-from-wind.json', 'slope-from-wind.json', 'line-from-wind.json',
         'line-multiple-series-from-wind.json',
-        'scatter-relationship.json'
+        'scatter-relationship.json', 'bubble-relationship.json'
     ]) {
         const data = sourceCompiledChart(filename);
         for (const type of data.type === 'dot' ? ['bar', 'dot'] as const : [data.type]) {
@@ -177,6 +177,62 @@ test.describe('what may not be drawn', () => {
         expect(() => drawScatter(
             invalid, 390, formatNumber, numberFormat, chartConfig().tick_density, geometry
         )).toThrow('non-finite source pair');
+    });
+    test('bubble preserves every point and makes area proportional to its source size', () => {
+        const data = sourceCompiledChart('bubble-relationship.json');
+        const viewports = JSON.parse(readFileSync(
+            join(process.cwd(), '..', 'tests', 'fixtures', 'visual-validator', 'viewports.json'), 'utf8'
+        )) as { narrow: { width: number }; wide: { width: number } };
+        const sizes = data.encoding.size.map((id) =>
+            Number(data.marks.find((mark) => mark.mark_id === id)!.value)
+        );
+        for (const room of [viewports.narrow.width, viewports.wide.width]) {
+            const drawing = drawVisual(
+                data, room, formatNumber, numberFormat, chartConfig().tick_density, geometry
+            );
+            if (drawing.type !== 'bubble') throw new Error('the bubble fixture drew another chart');
+            expect(drawing.width).toBe(room);
+            expect(drawing.points).toHaveLength(sizes.length);
+            expect(drawing.sizeRange.min).toBe(Math.min(...sizes));
+            expect(drawing.sizeRange.max).toBe(Math.max(...sizes));
+            const areaScales = drawing.points.map((point) => point.radius ** 2 / point.size);
+            expect(Math.max(...areaScales) - Math.min(...areaScales)).toBeLessThan(1e-10);
+            const smallerGeometry = {
+                ...geometry,
+                bubble_max_radius_share: geometry.bubble_max_radius_share / 2
+            };
+            const smaller = drawVisual(
+                data, room, formatNumber, numberFormat, chartConfig().tick_density, smallerGeometry
+            );
+            if (smaller.type !== 'bubble') throw new Error('the bubble fixture drew another chart');
+            expect(smaller.maxRadius).toBeLessThan(drawing.maxRadius);
+            for (const point of drawing.points) {
+                expect(point.radius).toBeLessThanOrEqual(drawing.maxRadius);
+                expect(point.cx - point.radius).toBeGreaterThanOrEqual(geometry.scatter_margin_left_px);
+                expect(point.cx + point.radius).toBeLessThanOrEqual(
+                    drawing.width - geometry.scatter_margin_right_px
+                );
+                expect(point.cy - point.radius).toBeGreaterThanOrEqual(geometry.scatter_margin_top_px);
+                expect(point.cy + point.radius).toBeLessThanOrEqual(
+                    drawing.height - geometry.scatter_margin_bottom_px
+                );
+                expect(statedDrawing(drawing)).toContain(
+                    `area ${point.statedSize} ${drawing.sizeUnit}`
+                );
+            }
+        }
+    });
+    test('bubble refuses missing or non-positive size values', () => {
+        for (const change of ['missing-size', 'zero-size', 'non-finite-size']) {
+            const data = sourceCompiledChart('bubble-relationship.json');
+            if (change === 'missing-size') data.encoding.size.pop();
+            else {
+                const id = data.encoding.size[0]!;
+                data.marks.find((mark) => mark.mark_id === id)!.value =
+                    change === 'zero-size' ? '0' : 'NaN';
+            }
+            expect(refusedVisualData(data)).not.toBeNull();
+        }
     });
     function compiled(values: readonly number[] = [10, 20, 30, 40]): VisualData {
         return {

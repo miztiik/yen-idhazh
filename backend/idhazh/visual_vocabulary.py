@@ -102,8 +102,8 @@ TYPE_RULES: Final[dict[VisualType, TypeRules]] = {
         frozenset({_R.QUANTITY_X, _R.QUANTITY, _R.ENTITY}), frozenset({_R.SERIES}), _R.QUANTITY
     ),
     _T.BUBBLE: TypeRules(
-        frozenset({_R.QUANTITY_X, _R.QUANTITY, _R.SIZE}),
-        frozenset({_R.SERIES, _R.ENTITY}),
+        frozenset({_R.QUANTITY_X, _R.QUANTITY, _R.SIZE, _R.ENTITY}),
+        frozenset({_R.SERIES}),
         _R.QUANTITY,
     ),
     _T.SLOPE: TypeRules(

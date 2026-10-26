@@ -141,3 +141,19 @@ def test_stacked_reader_requires_a_separate_source_quantity_for_its_whole() -> N
     data["marks"][1]["element_id"] = whole_id
     with pytest.raises(ValidationError, match="declared whole is separate from its parts"):
         VisualData.model_validate(data)
+
+
+@pytest.mark.parametrize("change", ["missing-size", "non-positive-size", "reused-measure"])
+def test_bubble_reader_requires_positive_size_and_complete_source_channels(change: str) -> None:
+    data = VisualData.read(
+        CONTRACT_FIXTURES_DIR / "visual-data/bubble-relationship.json"
+    ).model_dump(mode="json")
+    if change == "missing-size":
+        data["encoding"]["size"].pop()
+    elif change == "non-positive-size":
+        mark_id = data["encoding"]["size"][0]
+        next(mark for mark in data["marks"] if mark["mark_id"] == mark_id)["value"] = "0"
+    else:
+        data["encoding"]["size"][0] = data["encoding"]["quantity_x"][0]
+    with pytest.raises(ValidationError):
+        VisualData.model_validate(data)

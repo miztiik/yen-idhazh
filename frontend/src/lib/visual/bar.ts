@@ -37,6 +37,7 @@ import type { VisualData, VisualMark } from '$lib/payload/types';
 import type { NumberFormatConfig, NumberFormatter } from '$lib/number-format';
 import type { StoryChartGeometryConfig } from '$lib/server/config';
 import { drawScatter, statedScatter, type ScatterDrawing } from './scatter';
+import { drawBubble, statedBubble, type BubbleDrawing } from './bubble';
 
 const DISPLAY_UNIT_SYMBOLS: Readonly<Record<string, string>> = {
 	w: 'W',
@@ -190,6 +191,7 @@ export type Drawing =
 	| SlopeDrawing
 	| LineDrawing
 	| ScatterDrawing
+	| BubbleDrawing
 	| StackedBarDrawing;
 
 function figureOf(mark: VisualMark): number {
@@ -611,6 +613,8 @@ export function drawVisual(
 			return drawLines(data, room, formatNumber, numberFormat, tickDensity, geometry);
 		case 'scatter':
 			return drawScatter(data, room, formatNumber, numberFormat, tickDensity, geometry);
+		case 'bubble':
+			return drawBubble(data, room, formatNumber, numberFormat, tickDensity, geometry);
 		case 'stacked_bar':
 			return drawStackedBars(data, room, formatNumber);
 		default:
@@ -695,6 +699,8 @@ export function statedDrawing(drawing: Drawing): string {
 			return statedLines(drawing);
 		case 'scatter':
 			return statedScatter(drawing);
+		case 'bubble':
+			return statedBubble(drawing);
 		case 'stacked_bar': {
 			const facts = drawing.readout.facts.map((fact) =>
 				`${fact.label} ${fact.value ?? drawing.readout.notMeasured}` +

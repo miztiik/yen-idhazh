@@ -267,7 +267,8 @@ def planner_payload(
         "run_id": run_id, "attempt": attempt, "date": day,
         "url_key": derive_url_key(url), "feed_id": "second-feed" if second else "fixture-feed",
         "publisher_id": None, "canonical_url": url, "title": "Caf\u00e9 \u6771\u4eac",
-        "categories": ["world", "science"], "author": None, "published_at": None,
+        "categories": ["world", "science"], "author": None, "published_at": at,
+        "published_at_source": "selection",
         "tier": 1, "weight": 1.0, "applied_tier_weight": 0.5,
         "editorial_rank": int(second) + 1, "estimated_work": 180,
         "worker_assignment": 0, "ratings": {
@@ -324,7 +325,7 @@ def planner_payload(
             "run_id": run_id, "started_at": at, "duration_ms": 25, "status": "completed",
             "failure_code": None, "selected_count": 0, "strategy": "none", "dispatch_count": 0,
             "selected_articles_artifact": None, "api_timings": [{
-                "operation": "feed-health-summary", "duration_ms": 0, "status": "completed",
+                "operation": "feed-health-before-fetch", "duration_ms": 0, "status": "completed",
             }],
             "date": day, "attempt": attempt, "lifecycle_window_days": 31,
             "reliability_floor": 0.5, "reliability_penalty_enabled": True, "evaluated_at": at,
@@ -334,7 +335,7 @@ def planner_payload(
     if name == "SelectedArticlesArtifact":
         metadata = {key: value for key, value in selected.items() if key not in {"run_id", "attempt", "date"}}
         return {
-            "schema_version": "2026-10-25", "run_id": run_id, "attempt": attempt, "date": day,
+            "schema_version": "2026-10-26", "run_id": run_id, "attempt": attempt, "date": day,
             "evaluated_at": at, "articles": [metadata | {"article_text": "Sanitized artifact-only text."}],
         }
     if name == "PlannerFileEnvelope":
@@ -365,6 +366,7 @@ def planner_payload(
             "history_rows": [], "history_days": [], "work_rows": [], "exclusions": [],
         }
     batch |= {
+        "version": "2026-10-26",
         "parsed_batch_id": "00000000-0000-4000-8000-000000000003",
         "selection_started_at_utc": clock, "evaluated_at": clock,
         "articles": [], "health_rows": [], "exclusions": [],

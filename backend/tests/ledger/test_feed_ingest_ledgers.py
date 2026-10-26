@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import shutil
 import subprocess
@@ -60,6 +61,26 @@ def test_planning_ledger_registration(name: str, model: type[PlannerRow]) -> Non
     assert (policy.dry_run, policy.compact_after_days, policy.daily_keep_days) == (False, 1, 45)
     assert (policy.monthly_keep_days, policy.monthly_window.unit) == (93, "forever")
     assert (policy.yearly_keep_months, policy.yearly_prune_enable) == (36, True)
+    if name in {"selected-articles", "plan-runs"}:
+        fixtures = REPO_ROOT / "tests" / "fixtures" / "ledger-file-writer" / "planner-2026-10-25"
+        previous = next(
+            entry for entry in json.loads(read_text(fixtures / "files.json"))
+            if entry["ledger"] == name
+        )
+        path = fixtures / previous["path"]
+        before = path.read_bytes()
+        assert hashlib.sha256(before).hexdigest() == previous["sha256"]
+        envelope = ledger.read_planner_envelope(path)
+        assert envelope.row_schema_version == "2026-10-25"
+        assert envelope.content_sha256 == previous["content_sha256"]
+        restored = [
+            held.row.model_dump(mode="json") for held in ledger.load_planner_stored([path], model=model)
+        ]
+        expected = [
+            row | ({"published_at_source": "legacy-unavailable"} if name == "selected-articles" else {})
+            for row in previous["rows"]
+        ]
+        assert restored == expected and path.read_bytes() == before
 
 
 def test_planning_family_has_exactly_the_declared_ledgers() -> None:

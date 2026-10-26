@@ -1,6 +1,6 @@
 # 16 - Parts of a whole
 
-**Last Updated**: 2026-10-25
+**Last Updated**: 2026-10-26
 **Level**: 5 for persisted composition and review contracts; 3 for the
 implementation phases.
 
@@ -19,9 +19,9 @@ different code; no automatic merge.
 | Field | Value |
 | --- | --- |
 | Why this plan exists | Some stories are a breakdown - a vote, a budget split, a spread of values. The chart family plan 15 built cannot show a part-of-whole read or a distribution at all. This plan adds the three types that can, and with them the first producers of a value the article did not write in so many words |
-| Hard scope - in | `pie` under its gate; `bubble` as a relationship visual under its area and legibility gates; `histogram` with deterministic versioned binning; the four closed derived-value producers; a separate human keep-rate ledger that can compare pie and bubble |
+| Hard scope - in | `pie` under its gate; `bubble` as a relationship visual with source-backed size and viewport-adaptive geometry; `histogram` with deterministic versioned binning; the four closed derived-value producers; a separate human keep-rate ledger that can compare pie and bubble |
 | Hard scope - out | The Derived Value **contract** - plan 10 built it and plan 16 resolves its producers; any fifth allow-list function; diagrams; the infographic family; machine labels pooled with human labels |
-| ESCALATE triggers | 1. A derived value is produced whose provenance chain does not name its function, its version and every input element. 2. A `pie` or `stacked_bar` is drawn against a whole that was **summed** rather than independently declared. 3. `bubble` cannot clear its configured legibility floor, which means it cannot ship on the surface most readers use |
+| ESCALATE triggers | 1. A derived value is produced whose provenance chain does not name its function, its version and every input element. 2. A `pie` or `stacked_bar` is drawn against a whole that was **summed** rather than independently declared. 3. Bubble geometry cannot adapt to the measured plot area while retaining every point and its readable values |
 | Chosen strategy | Align the live contracts first, then deliver one type at a time - gate first, produce second, measure keep rate third; Fowler and Susan validate the contract and reader surface |
 | Execution | One meaningful PR phase per type or contract; parallel N = 4 only where the same code and contract files remain disjoint; no automatic merge authority |
 
@@ -29,12 +29,13 @@ different code; no automatic merge.
 
 ### Maintainer-approved reconciliation
 
-The maintainer approved these decisions on 2026-10-25 UTC:
+The maintainer approved these decisions on 2026-10-25 UTC. R2 was replaced by
+a later ruling on 2026-10-26 UTC:
 
 | ID | Decision | Change from the September plan |
 | --- | --- | --- |
 | R1 | Bubble is a relationship visual with `quantity_x`, `quantity` and `size`; the bubble-to-scatter edge remains | Removes bubble from the composition-purpose group and adds a square-root area channel |
-| R2 | The configurable bubble legibility floor defaults to 390 CSS px | Keeps the original floor as the default and moves it under config control |
+| R2 | Bubble geometry adapts to the measured chart area, with no fixed minimum width | Replaces the 390 CSS px floor with viewport-driven sizing |
 | R3 | Add `declared_whole_element_id` to the visual plan and published visual data | Gives pie and stacked bar an independent article element for the whole instead of inferring it from parts |
 | R4 | Keep exact machine requested/delivered outcomes and build a separate human pie/bubble keep-rate ledger | Does not mix human labels with machine records or duplicate machine type fields with a boolean |
 | R5 | Histogram keeps at least 3 cited values and draws 3 configurable equal-width bins by default, inside the existing 2-8 mark window | Keeps remote-main defaults and retains model-independent versioned binning |
@@ -52,21 +53,22 @@ rules remain unchanged.
 | 1 | How often does an article actually state a whole | - | A | DONE #654 | p16-1 | #654 | worker |
 | 2 | The four ways code may reach a number the article did not write | 1 | B | DONE #537, #538 | - | #537, #538 | worker |
 | 3 | A declared whole: pie | 2 | C | PENDING | - | - | - |
-| 4 | Three numbers at once: bubble | 2 | D | PENDING | - | - | - |
+| 4 | Three numbers at once: bubble | 2 | D | DONE #1747 | composition-vocabulary-row-4 | #1747 | - |
 | 5 | A spread of values: histogram | 2 | E | PENDING | - | - | - |
 | 6 | Human pie and bubble keep-rate evidence | 3, 4 | F | PENDING | - | - | - |
 
 ### Current delivery evidence
 
-Fowler and Susan reviewed remote main on 2026-10-25 UTC. These are inspected
-implementation facts, not claims that later rows passed.
+Fowler and Susan reviewed remote main on 2026-10-25 UTC. Row 4 delivery was
+updated after #1747 merged on 2026-10-26 UTC. These are inspected implementation
+facts, not claims that later rows passed.
 
 | ID | Row | Existing delivery | Remaining delivery |
 | --- | --- | --- | --- |
 | E1 | 1 | `#654` added the bounded measurement and benchmark record | None |
 | E2 | 2 | `#537` added the closed derived-value contract and producers; `#538` added the histogram bin and resolver corrections | No story-only producers need changing |
 | E3 | 3 | Pie is declarable, shares the pie-to-stacked-bar edge, and has resolver arithmetic | Independent whole evidence, public compiler and pie renderer remain |
-| E4 | 4 | Bubble is declarable with relationship purpose and a bubble-to-scatter edge | Square-root area, configurable legibility floor and story delivery remain |
+| E4 | 4 | #1747 delivered source-linked positive size, square-root area, viewport-adaptive drawing without a width cutoff, and tests | None |
 | E5 | 5 | Histogram role rules, equal-width binning, count provenance and empty-bin refusal exist | Story compiler and browser renderer remain |
 | E6 | 6 | Machine outcomes record exact planned and delivered types | A separate human keep-rate ledger and visual join key remain |
 
@@ -146,9 +148,9 @@ implementation facts, not claims that later rows passed.
 
 ## 5. Row #4 - Three numbers at once: bubble
 
-- **Scope:** `bubble` under the relationship gate, with three measured channels and a configurable legibility floor, using square-root radius for area.
-- **Files touched:** `backend/idhazh/contracts/visual.py`, `backend/idhazh/contracts/visual_data.py`, `backend/idhazh/contracts/knobs/visuals.py`, `backend/idhazh/visual_vocabulary.py`, `backend/idhazh/visual_validator.py`, `backend/idhazh/render/chart.py`, `frontend/src/lib/payload/drawing.ts`, `frontend/src/lib/payload/types.ts`, `frontend/src/lib/visual/bubble.ts`, `frontend/src/lib/components/ItemVisual.svelte`, named contract and browser fixtures/tests, `docs/architecture/publishing/**`, `docs/concepts/design-system.md`
-- **Acceptance gates:** Current frontend check and build; native-reader binding; relationship-purpose fixtures; square-root geometry over three points; narrow-width browser coverage at the configured default; section 12 smoke.
+- **Scope:** `bubble` under the relationship gate, with three measured channels and square-root radius for area. Fit the plot and bubbles to measured space; use no fixed-width cutoff.
+- **Files touched:** `config/appearance.json`, `backend/idhazh/contracts/appearance_config.py`, `backend/idhazh/relationship_evidence.py`, `backend/idhazh/contracts/visual_data.py`, `backend/idhazh/visual_vocabulary.py`, `backend/idhazh/visual_validator.py`, `backend/idhazh/render/chart.py`, `backend/utilities/build_canary_day.py`, `frontend/src/lib/server/config.ts`, `frontend/src/lib/payload/drawing.ts`, `frontend/src/lib/visual/bubble.ts`, `frontend/src/lib/visual/bar.ts`, `frontend/src/lib/visual/viewport.ts`, `frontend/src/lib/components/ItemVisual.svelte`, named contract and browser fixtures/tests, `docs/architecture/publishing/**`, `docs/concepts/design-system.md`
+- **Acceptance gates:** Current frontend check and build; native-reader binding; relationship-purpose and complete-source fixtures; square-root geometry over four points; narrow-width browser coverage at the measured content width; viewport resize; section 12 smoke.
 - **Oracle:** The drawn radius is proportional to the **square root** of the value - asserted over at least three points, because two points fit both a linear and a square-root scale.
 
 ### Decisions
@@ -158,13 +160,13 @@ implementation facts, not claims that later rows passed.
 | 1 | A square-root radius scale is **mandatory**. A linear radius misstates area, which is the channel the reader is actually reading | Section 7.2 |
 | 2 | The plan keeps three measured channels: x position, y position and area; no composition purpose or declared whole is implied | Maintainer R1; row 44 |
 | 3 | Reader's objection is recorded and not erased: three numbers judged by circle area at a narrow width are a lot to ask | Row 44 |
-| 4 | It must clear the configurable legibility floor, default 390 CSS px, and a failed floor yields no picture | Maintainer R2; row 44; plan 12 |
+| 4 | Derive bubble size from the measured plot area and retain every point; no fixed width hides the chart | Maintainer R2; row 44; plan 12 |
 
 ### Rejected alternatives
 
 | # | Option | Why rejected | Authority |
 | --- | --- | --- | --- |
-| 1 | Drop `bubble` on Reader's objection | The objection is about a hard case, not the type. The floor is the honest test, and it fires per visual rather than per type | Maintainer, O16 |
+| 1 | Drop `bubble` or hide it below a fixed width | The plot and points can shrink with the measured viewport; the complete visible readings preserve the values without an arbitrary cutoff | Maintainer R2; row 44 |
 
 ---
 

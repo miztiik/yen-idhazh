@@ -61,7 +61,7 @@ from idhazh.contracts.visual import EncodingRole, PlanDecision, VisualPlan, Visu
 # vocabulary one list rather than two.
 from idhazh.contracts.visual_telemetry import ValidatorCheck
 from idhazh.elements import read_value
-from idhazh.scatter_evidence import refuse_scatter
+from idhazh.relationship_evidence import refuse_relationship
 from idhazh.visual_vocabulary import (
     PLAN_VOCABULARY_VERSION,
     ROLE_KINDS,
@@ -539,8 +539,8 @@ def validate_plan(
         # so this narrows rather than branches.
         if plan.type is not None:
             roles = _roles_valid_for_type(plan.type, filled, drawn)
-            if roles is None and plan.type is VisualType.SCATTER:
-                detail = refuse_scatter(plan, drawn)
+            if roles is None and plan.type in (VisualType.SCATTER, VisualType.BUBBLE):
+                detail = refuse_relationship(plan, drawn)
                 if detail is not None:
                     roles = Rejection(ValidatorCheck.ROLES_VALID_FOR_TYPE, detail)
             found.append(roles)

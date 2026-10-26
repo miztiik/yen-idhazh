@@ -136,10 +136,10 @@ test('reader labels clear the text floor without scaling, and every mark survive
 				fittedGeometry
 			);
 			const emphasized = svg.locator(
-				'rect.bar.emphasized, circle.dot.emphasized, circle.slope-point.emphasized, circle.line-point.emphasized, circle.scatter-point.emphasized'
+				'rect.bar.emphasized, circle.dot.emphasized, circle.slope-point.emphasized, circle.line-point.emphasized, circle.scatter-point.emphasized, circle.bubble-point.emphasized'
 			);
 			await expect(emphasized).toHaveCount(1);
-			const styles = await svg.locator('rect.bar, circle.dot, line.slope-line, circle.slope-point, path.series-line, circle.line-point, circle.scatter-point').evaluateAll((marks) => marks.map((mark) => {
+			const styles = await svg.locator('rect.bar, circle.dot, line.slope-line, circle.slope-point, path.series-line, circle.line-point, circle.scatter-point, circle.bubble-point').evaluateAll((marks) => marks.map((mark) => {
 				const style = getComputedStyle(mark);
 				return {
 					selected: mark.classList.contains('emphasized'),
@@ -193,6 +193,20 @@ test('reader labels clear the text floor without scaling, and every mark survive
 					]),
 					...(expected.unit ? [expected.unit] : [])
 				]);
+			} else if (expected.type === 'bubble') {
+				const points = await svg.locator('circle.bubble-point').evaluateAll((marks) =>
+					marks.map((point) => ['cx', 'cy', 'r'].map((key) => Number(point.getAttribute(key))))
+				);
+				expect(points).toEqual(expected.points.map((point) => [point.cx, point.cy, point.radius]));
+				await expect(figure.locator('.bubble-size-key')).toContainText(
+					`Circle area represents ${expected.sizeUnit}`
+				);
+				for (const point of expected.points) {
+					await expect(figure.locator('.bubble-readings')).toContainText(point.label);
+					await expect(figure.locator('.bubble-readings')).toContainText(`x ${point.displayedX}`);
+					await expect(figure.locator('.bubble-readings')).toContainText(`y ${point.displayedY}`);
+					await expect(figure.locator('.bubble-readings')).toContainText(`area ${point.displayedSize}`);
+				}
 			} else if (expected.type === 'scatter') {
 				const points = await svg.locator('circle.scatter-point').evaluateAll((marks) =>
 					marks.map((point) => ['cx', 'cy'].map((key) => Number(point.getAttribute(key))))
@@ -250,19 +264,29 @@ test('reader labels clear the text floor without scaling, and every mark survive
 		await page.reload();
 		expect(await drawings(page)).toEqual(first);
 	}
-	const scatter = page.locator('figure.visual').filter({ has: page.locator('circle.scatter-point') });
-	await scatter.scrollIntoViewIfNeeded();
-	const accessible = await scatter.getAttribute('aria-label');
-	const before = await scatter.locator(':scope > svg').getAttribute('height');
+	const relationship = page.locator('figure.visual').filter({
+		has: page.locator('circle.scatter-point, circle.bubble-point')
+	});
+	await relationship.scrollIntoViewIfNeeded();
+	const accessible = await relationship.getAttribute('aria-label');
+	const before = await relationship.locator(':scope > svg').getAttribute('height');
 	await page.setViewportSize({ width: 1440, height: 360 });
-	await expect.poll(() => scatter.locator(':scope > svg').getAttribute('height')).not.toBe(before);
-	await expect(scatter).toHaveAttribute('aria-label', accessible!);
-	const shortHeight = await scatter.locator(':scope > svg').getAttribute('height');
+	await expect.poll(() => relationship.locator(':scope > svg').getAttribute('height')).not.toBe(before);
+	await expect(relationship).toHaveAttribute('aria-label', accessible!);
+	const shortHeight = await relationship.locator(':scope > svg').getAttribute('height');
 	await page.evaluate(() => window.scrollTo(0, 0));
-	await expect(scatter.locator(':scope > svg')).toHaveAttribute('height', shortHeight!);
-	expect(await scatter.evaluate((node) => node.scrollHeight <= node.clientHeight)).toBe(true);
+	await expect(relationship.locator(':scope > svg')).toHaveAttribute('height', shortHeight!);
+	expect(await relationship.evaluate((node) => node.scrollHeight <= node.clientHeight)).toBe(true);
 	await page.setViewportSize({ width: 1440, height: 900 });
-	await expect.poll(() => scatter.locator(':scope > svg').getAttribute('height')).toBe(before);
+	await expect.poll(() => relationship.locator(':scope > svg').getAttribute('height')).toBe(before);
+	const relationshipSvg = relationship.locator(':scope > svg');
+	const wideWidth = Number(await relationshipSvg.getAttribute('width'));
+	const pointCount = await relationship.locator('circle.scatter-point, circle.bubble-point').count();
+	await page.setViewportSize({ width: 390, height: 900 });
+	await expect.poll(async () => Number(await relationshipSvg.getAttribute('width')))
+		.toBeLessThan(wideWidth);
+	await expect(relationship.locator('circle.scatter-point, circle.bubble-point'))
+		.toHaveCount(pointCount);
 	expect(errors).toEqual([]);
 });
 

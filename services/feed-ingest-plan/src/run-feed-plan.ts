@@ -92,7 +92,7 @@ export async function runFeedPlan(raw: unknown, inputs: PlanInputs, runtime: Pla
   emit("plan", "started");
   try {
     const loaded = await Promise.all([
-      phase("feed-health-summary", () => prepareFeedHealthState(inputs, context.now)),
+      phase("feed-health-before-fetch", () => prepareFeedHealthState(inputs, context.now)),
       readSeenEvidence({
         root: inputs.root, files: inputs.settings.inputs.seen_files, days: inputs.settings.inputs.seen_days,
         registration: inputs.registrations.discovered_articles, now: context.now,

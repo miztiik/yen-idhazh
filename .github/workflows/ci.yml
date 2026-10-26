@@ -173,7 +173,7 @@ jobs:
 
       - name: Install optional Linux cache instruments
         if: needs.scope.outputs.code == 'true'
-        run: bash .github/scripts/install-host-cache-tools.sh
+        run: bash services/host-probes/scripts/install-host-cache-tools.sh
 
       - name: TypeScript host probes
         if: needs.scope.outputs.code == 'true'
@@ -199,15 +199,9 @@ jobs:
           bun run check
           bun run test
 
-      - name: Isolated planner workflow preflight
-        if: needs.scope.outputs.code == 'true'
-        run: |
-          bun test ./.github/scripts/tests/feed-ingest-plan-report.test.ts ./.github/scripts/tests/feed-ingest-plan-outputs.test.ts ./.github/scripts/tests/feed-ingest-plan-workflow.test.ts --timeout 30000
-          bun run .github/scripts/feed-ingest-plan-verification.ts
-
       - name: Live TypeScript RAM and optional copy proof
         if: needs.scope.outputs.code == 'true'
-        run: bun run .github/scripts/feed-ingest-plan-profile-proof.ts
+        run: bun run services/host-probes/scripts/feed-ingest-plan-profile-proof.ts
 
       - name: Preserve TypeScript resource proof
         if: ${{ always() && needs.scope.outputs.code == 'true' }}

@@ -612,14 +612,19 @@ class PlannerFileEnvelope(Contract):
     __schema_stem__: ClassVar[str] = "planner-file-envelope"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-10-26",
+            change="Accept current and prior selected-article and run row stamps.",
+            why="Compatible readers verify original bytes before normalizing old rows.",
+        ),
+        ChangelogEntry(
             version="2026-10-25",
             change="Declare planner-only file metadata without generic writer identity.",
             why="Planner rows retain their own identities and no audit identity tree.",
         ),
     )
 
-    version: Literal["2026-10-25"] = "2026-10-25"
-    row_schema_version: Literal["2026-10-25"]
+    version: Literal["2026-10-25", "2026-10-26"] = "2026-10-26"
+    row_schema_version: Literal["2026-10-25", "2026-10-26"]
     tier: Tier
     ledger: Literal[
         LedgerName.FEED_INGEST_PLAN_DISCOVERED_ARTICLES,
@@ -638,6 +643,14 @@ class PlannerFileEnvelope(Contract):
 
     @model_validator(mode="after")
     def validate_format(self) -> Self:
+        if self.row_schema_version == "2026-10-26" and (
+            self.version == "2026-10-25"
+            or self.ledger not in {
+                LedgerName.FEED_INGEST_PLAN_SELECTED_ARTICLES,
+                LedgerName.FEED_INGEST_PLAN_PLAN_RUNS,
+            }
+        ):
+            raise ValueError("current row stamp requires its declared ledger and envelope")
         if (self.tier is Tier.COMPACT) != (self.period is not None):
             raise ValueError("planner compact files require a period; raw files name none")
         if not covers_fits(self.covers, tier=self.tier, period=self.period):

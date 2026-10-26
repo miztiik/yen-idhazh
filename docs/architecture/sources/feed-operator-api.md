@@ -78,6 +78,11 @@ result that can continue through partitioning and persistence.
 
 All stage inputs are server-owned IDs. The configured article limit bounds
 output, never the number of input candidates.
+Selected metadata includes `published_at_source`. A trusted source time uses
+`source`; otherwise the actual saved selection-start UTC instant uses
+`selection`. This fallback is output metadata, not a new age or admission
+input. The [ledger reference](../../reference/feed-planner-ledgers.md#b-selected-articles)
+owns the compatible historical-read rule.
 
 Table A
 

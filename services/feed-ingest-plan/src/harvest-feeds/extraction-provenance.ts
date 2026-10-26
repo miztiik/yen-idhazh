@@ -24,6 +24,6 @@ function libraryVersion(name: "defuddle" | "linkedom"): string {
 
 export const EXTRACTOR_VERSION = `defuddle-${libraryVersion("defuddle")}-linkedom-${libraryVersion("linkedom")}-idhazh-${fingerprint([
   "dom-extractor.ts", "corroborated-words.ts", "extraction-quality.ts", "extraction-controls.ts",
-  "parse-document.ts", "extraction-provenance.ts",
+  "parse-document.ts", "extraction-provenance.ts", "semantic-extractor.ts",
 ])}`;
 export const SANITIZER_FINGERPRINT = `idhazh-typescript-sanitizer-3-${fingerprint(["sanitize-text.ts"])}`;

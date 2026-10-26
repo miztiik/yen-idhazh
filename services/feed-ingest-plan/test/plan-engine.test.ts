@@ -61,6 +61,16 @@ test("real composition separates run and selection clocks and reads native dispa
     expect(artifact.articles.every(article => article.article_text.length > 0)).toBe(true);
     expect(selected.rows.map(article => article.editorial_rank)).toEqual([1, 2]);
     expect(selected.rows.map(article => article.worker_assignment)).toEqual([0, 1]);
+    const undated = selected.rows.find(article => article.canonical_url.endsWith("/second"))!;
+    expect(undated).toMatchObject({
+      published_at: result.row.selection_started_at_utc, published_at_source: "selection",
+      timing_basis: "first_seen", timing_at: result.row.evaluated_at, age_hours: 0,
+    });
+    const dated = selected.rows.find(article => article.canonical_url.includes("/story"))!;
+    expect(dated).toMatchObject({
+      published_at: "2026-10-21T09:15:00Z", published_at_source: "source",
+      timing_basis: "published_at", timing_at: "2026-10-21T09:15:00Z",
+    });
     for (const row of selected.rows) {
       expect(Object.keys(row)).not.toContain("article_text");
       expect(Object.keys(row)).not.toContain("unit_id");
@@ -78,7 +88,10 @@ test("real composition separates run and selection clocks and reads native dispa
     expect(health.reduce((sum, row) => sum + (row.articles_selected ?? 0), 0)).toBe(2);
     const run = await readPlannerParquet(join(recorded.inputs.outputRoot, result.files.plan_runs!.files[0]!.path), "plan-runs", PlanRunRowContract);
     expect(run.rows).toEqual([result.row]);
-    expect(result.row.api_timings.some(timing => timing.operation === "feed-health-summary" && timing.status === "completed")).toBe(true);
+    expect(result.row.api_timings.filter(timing => timing.operation.startsWith("feed-health-"))
+      .map(timing => [timing.operation, timing.status])).toEqual([
+      ["feed-health-before-fetch", "completed"], ["feed-health-for-selection", "completed"],
+    ]);
   } finally { await recorded.close(); }
 });
 
@@ -110,6 +123,11 @@ test("named native first sight wins for undated articles; arbitrary empty histor
     expect(JSON.stringify(recorded.inputs.settings)).toBe(originalSettings);
     expect(fresh.batch.evaluated_at).toBe(first.row.evaluated_at);
     expect(fresh.batch.selection_started_at_utc).toBe("2026-10-22T00:10:00Z");
+    const chosenUndated = first.selected.find(article => article.canonical_url.endsWith("/second"))!;
+    expect(fresh.batch.articles.find(article => article.url_key === chosenUndated.url_key)).toMatchObject({
+      published_at: fresh.batch.selection_started_at_utc, published_at_source: "selection",
+      timing_at: chosenUndated.timing_at, timing_basis: chosenUndated.timing_basis, age_hours: chosenUndated.age_hours,
+    });
     expect(fresh.batch.request_report.through_day).toBe("2026-10-21");
     expect(fresh.batch.health_rows[0]!.reliability).toMatchObject({ productive: 1, attempted: 2, production_factor: 0.5, complete: false });
     expect(fresh.batch.articles.every(article => article.ratings.adjustments.find(adjustment => adjustment.term === "feed_reliability")!.value! < 0)).toBe(true);
@@ -123,6 +141,12 @@ test("named native first sight wins for undated articles; arbitrary empty histor
     const discovery = await readPlannerParquet(join(recorded.inputs.outputRoot, first.files.discovered_articles!.files[0]!.path),
       "discovered-articles", DiscoveredArticleRowContract);
     expect(discovery.rows.map(row => row.url_key).sort()).toEqual(first.selected.map(article => article.url_key).sort());
+    recorded.runtime.run_number = "702";
+    recorded.runtime.clock = () => new Date("2026-10-24T00:10:00Z");
+    recorded.runtime.selection_clock = recorded.runtime.clock;
+    const expired = await runFeedPlan({}, recorded.inputs, recorded.runtime);
+    expect(expired.selected).toEqual([]);
+    expect(expired.files.discovered_articles).toEqual({ status: "empty", files: [] });
   } finally { await recorded.close(); }
 });
 

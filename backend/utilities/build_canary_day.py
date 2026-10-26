@@ -179,16 +179,15 @@ SITE_BYTES_PER_DAY = 11_000
 # Five items carry a real visual, so the browser suite exercises the picture
 # path rather than proving it safe by never serving one.
 #
-# Bar, line, scatter and stacked bar read the validator's committed plans and
-# element tables, so the browser and backend oracle hold the same source
-# evidence. The other chart is written here because its bars deliberately carry
-# no unit.
+# Bar, line, bubble and stacked bar read the validator's committed plans and element tables,
+# so the browser and backend oracle hold the same source evidence. The other
+# chart is written here because its bars deliberately carry no unit.
 PLANNED_PLAN = Path("tests/fixtures/visual-validator/plans/passes.json")
 PLANNED_TABLE = Path("tests/fixtures/visual-validator/tables/wind.json")
 LINE_PLAN = Path("tests/fixtures/visual-validator/plans/line-trend.json")
 LINE_TABLE = Path("tests/fixtures/visual-validator/tables/line-trend.json")
-SCATTER_PLAN = Path("tests/fixtures/visual-validator/plans/scatter-relationship.json")
-SCATTER_TABLE = Path("tests/fixtures/visual-validator/tables/scatter-relationship.json")
+BUBBLE_PLAN = Path("tests/fixtures/visual-validator/plans/bubble-relationship.json")
+BUBBLE_TABLE = Path("tests/fixtures/visual-validator/tables/scatter-relationship.json")
 STACKED_PLAN = Path("tests/fixtures/visual-validator/plans/stacked-valid.json")
 STACKED_TABLE = Path("tests/fixtures/visual-validator/tables/stacked-whole.json")
 
@@ -656,10 +655,10 @@ def visual_for(
             visuals=visuals,
         )
     if index == 7:
-        table = ElementTable.read(SCATTER_TABLE).model_copy(update={"item_id": item_id})
+        table = ElementTable.read(BUBBLE_TABLE).model_copy(update={"item_id": item_id})
         return render_planned_visual(
             decided(VisualKind.NONE, None, None),
-            VisualPlan.read(SCATTER_PLAN),
+            VisualPlan.read(BUBBLE_PLAN),
             table,
             public_root=public_root,
             relpath=relpath,

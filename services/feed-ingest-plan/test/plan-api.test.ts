@@ -60,8 +60,11 @@ test("actual API and awaited CLI compose the same recorded plan and disclose the
     const summary = await response.json();
     const requests = api.transport.requests.length;
     expect(summary.selected_count).toBe(1);
-    expect(summary.api_timings.filter((timing: { operation: string }) => timing.operation === "feed-health-summary"))
-      .toMatchObject([{ status: "completed" }, { status: "completed" }]);
+    expect(summary.api_timings.filter((timing: { operation: string }) => timing.operation.startsWith("feed-health-")))
+      .toMatchObject([
+        { operation: "feed-health-before-fetch", status: "completed" },
+        { operation: "feed-health-for-selection", status: "completed" },
+      ]);
     const replay = await (await fetch(`${url}/plan`, { ...json({ article_limit: 1 }), headers: {
       "content-type": "application/json", "Idempotency-Key": key,
     } })).json();
@@ -115,7 +118,7 @@ test("actual API and awaited CLI compose the same recorded plan and disclose the
       run_id: selected.run_id, date: "2026-10-22", selected_count: 1, strategy: "none",
       evaluated_at: summary.evaluated_at, selection_started_at_utc: "2026-10-22T00:01:00Z",
     });
-    expect(selectedRun.api_timings.map(timing => timing.operation)).toEqual(["feed-health-summary", "select", "partition", "persist"]);
+    expect(selectedRun.api_timings.map(timing => timing.operation)).toEqual(["feed-health-for-selection", "select", "partition", "persist"]);
     const selectedArtifactBytes = await readFile(join(api.directory, selectedSaved.artifact));
     const selectedPaths: string[] = [join(api.directory, selectedSaved.artifact)];
     for (const saved of [selectedSaved.files, selectedSaved.run_files, decisionHealth.files]) {
@@ -266,16 +269,19 @@ test("a required source write failure returns an API error, not proven planning 
       };
       const failed = await (await failedApp.request(`${prefix}/plan`, json({}))).json();
       expect(failed.status).toBe("partial");
-      const healthTimings = failed.api_timings.filter((timing: { operation: string }) => timing.operation === "feed-health-summary");
-      expect(healthTimings).toMatchObject([{ status: "completed" }, { status: "failed" }]);
+      const healthTimings = failed.api_timings.filter((timing: { operation: string }) => timing.operation.startsWith("feed-health-"));
+      expect(healthTimings).toMatchObject([
+        { operation: "feed-health-before-fetch", status: "completed" },
+        { operation: "feed-health-for-selection", status: "failed" },
+      ]);
       expect(healthTimings.every((timing: { duration_ms: number }) => Number.isSafeInteger(timing.duration_ms) && timing.duration_ms >= 0)).toBe(true);
       const requestCount = failedCapture.transport.requests.length;
       failedCapture.runtime.run_number = "701";
       delete failedCapture.runtime.progress;
       const failedBeforeWork = await (await failedApp.request(`${prefix}/plan`, json({}))).json();
       expect(failedBeforeWork.status).toBe("failed");
-      expect(failedBeforeWork.api_timings.filter((timing: { operation: string }) => timing.operation === "feed-health-summary"))
-        .toMatchObject([{ status: "failed" }]);
+      expect(failedBeforeWork.api_timings.filter((timing: { operation: string }) => timing.operation.startsWith("feed-health-")))
+        .toMatchObject([{ operation: "feed-health-before-fetch", status: "failed" }]);
       expect(failedCapture.transport.requests.length).toBe(requestCount);
     } finally { failedApp.close(); await failedCapture.close(); }
   } finally { app.close(); await recorded.close(); }

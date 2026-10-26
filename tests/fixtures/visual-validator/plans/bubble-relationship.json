@@ -1,0 +1,69 @@
+{
+  "annotations": [
+    "quantity-100-106"
+  ],
+  "caption": "Positions show capacity and output; circle area shows turbine count.",
+  "confidence": 0.82,
+  "decision": "visual",
+  "element_ids": [
+    "entity-0-7",
+    "entity-59-66",
+    "entity-118-124",
+    "entity-175-182",
+    "quantity-17-24",
+    "quantity-41-47",
+    "quantity-76-83",
+    "quantity-100-106",
+    "quantity-134-140",
+    "quantity-157-163",
+    "quantity-192-199",
+    "quantity-216-222",
+    "quantity-259-270",
+    "quantity-284-295",
+    "quantity-309-319",
+    "quantity-336-347"
+  ],
+  "encodings": {
+    "bins": [],
+    "category": [],
+    "entity": [
+      "entity-0-7",
+      "entity-59-66",
+      "entity-118-124",
+      "entity-175-182"
+    ],
+    "event_label": [],
+    "quantity": [
+      "quantity-41-47",
+      "quantity-100-106",
+      "quantity-157-163",
+      "quantity-216-222"
+    ],
+    "quantity_x": [
+      "quantity-17-24",
+      "quantity-76-83",
+      "quantity-134-140",
+      "quantity-192-199"
+    ],
+    "series": [],
+    "size": [
+      "quantity-259-270",
+      "quantity-284-295",
+      "quantity-309-319",
+      "quantity-336-347"
+    ],
+    "time": []
+  },
+  "labels": [
+    "entity-0-7",
+    "entity-59-66",
+    "entity-118-124",
+    "entity-175-182"
+  ],
+  "plan_version": "2026-09-09",
+  "purpose": "relationship",
+  "title": "Capacity, output and turbine count",
+  "type": "bubble",
+  "version": "2026-09-09T03:11",
+  "why": "Show how capacity and output vary across countries, with turbine count encoded by area."
+}
