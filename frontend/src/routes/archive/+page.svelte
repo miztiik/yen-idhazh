@@ -378,6 +378,7 @@
 								{item}
 								numberFormat={data.ui.number_format}
 								storyChartGeometry={data.ui.story_chart_geometry}
+								chartTickDensity={data.ui.chart_tick_density}
 								verticalName={data.verticalNames[item.vertical] ?? item.vertical}
 								level={3}
 								showVertical={false}

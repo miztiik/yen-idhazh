@@ -1,0 +1,36 @@
+{
+  "caption": "Each point is the capacity the source reports for that year.",
+  "emphasized_mark_id": "m1",
+  "encoding": {
+    "bins": [],
+    "category": [],
+    "entity": [],
+    "event_label": [],
+    "quantity": [
+      "m0",
+      "m1",
+      "m2"
+    ],
+    "quantity_x": [],
+    "series": [],
+    "size": [],
+    "time": [
+      "m3",
+      "m4",
+      "m5"
+    ]
+  },
+  "item_id": "energy-01",
+  "marks": [
+    {"derived": null,"element_id": "quantity-88-95","mark_id": "m0","source_text": null,"text": null,"time": null,"unit": "mw","value": "2400"},
+    {"derived": null,"element_id": "quantity-60-67","mark_id": "m1","source_text": null,"text": null,"time": null,"unit": "mw","value": "1800"},
+    {"derived": null,"element_id": "quantity-32-39","mark_id": "m2","source_text": null,"text": null,"time": null,"unit": "mw","value": "1200"},
+    {"derived": null,"element_id": "date-99-103","mark_id": "m3","source_text": null,"text": "2025","time": "2025","unit": null,"value": null},
+    {"derived": null,"element_id": "date-71-75","mark_id": "m4","source_text": null,"text": "2024","time": "2024","unit": null,"value": null},
+    {"derived": null,"element_id": "date-43-47","mark_id": "m5","source_text": null,"text": "2023","time": "2023","unit": null,"value": null}
+  ],
+  "renderer_version": "2026-10-27",
+  "title": "Offshore wind capacity over time",
+  "type": "line",
+  "version": "2026-10-27"
+}

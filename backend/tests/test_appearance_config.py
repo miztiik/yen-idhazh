@@ -107,6 +107,20 @@ def test_story_chart_geometry_is_bounded_and_committed() -> None:
         {"dot_radius_px": 1},
         {"mark_outline_width_px": 0},
         {"slope_column_share": 0.1},
+        {"line_series_dash_arrays": ("none",) * 8},
+        {"line_series_dash_arrays": ("none",)},
+        {
+            "line_series_dash_arrays": (
+                "none",
+                "0 2",
+                "2 3",
+                "8 2 2 2",
+                "1 3",
+                "12 3",
+                "4 2 1 2",
+                "3 1 1 1",
+            )
+        },
     ):
         with pytest.raises(ValidationError):
             StoryChartGeometryConfig.model_validate(invalid)

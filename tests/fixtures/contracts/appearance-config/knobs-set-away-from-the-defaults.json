@@ -46,7 +46,21 @@
       "slope_min_height_px": 144,
       "slope_column_share": 0.35,
       "slope_line_width_px": 2.5,
-      "slope_highlight_line_width_px": 4
+      "slope_highlight_line_width_px": 4,
+      "line_min_height_px": 192,
+      "line_axis_margin_left_px": 56,
+      "line_axis_margin_top_px": 32,
+      "line_width_px": 2.5,
+      "line_series_dash_arrays": [
+        "none",
+        "7 3",
+        "3 4",
+        "9 2 3 2",
+        "2 4",
+        "11 4",
+        "5 2 2 2",
+        "4 1 2 1"
+      ]
     }
   },
   "console": {

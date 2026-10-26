@@ -34,9 +34,10 @@
     {"bytes": 0,"covers": "2026-10-20","lost_days": [],"rows": 0,"set_aside": 0,"state": "empty"},
     {"bytes": 0,"covers": "2026-10-21","lost_days": [],"rows": 0,"set_aside": 0,"state": "empty"},
     {"bytes": 0,"covers": "2026-10-22","lost_days": [],"rows": 0,"set_aside": 0,"state": "empty"},
-    {"bytes": 0,"covers": "2026-10-23","lost_days": [],"rows": 0,"set_aside": 0,"state": "empty"}
+    {"bytes": 0,"covers": "2026-10-23","lost_days": [],"rows": 0,"set_aside": 0,"state": "empty"},
+    {"bytes": 0,"covers": "2026-10-24","lost_days": [],"rows": 0,"set_aside": 0,"state": "empty"}
   ],
   "ledger": "holdout-pairs",
   "period": "daily",
-  "version": "2026-10-07"
+  "version": "2026-10-25"
 }

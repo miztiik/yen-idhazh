@@ -61,17 +61,15 @@ nobody will have it in mind when it fires. The ASSEMBLE publication policy
 keeps the asset already committed for that item and rebuilds the derived day
 ([one-visual-one-file-and-the-race-between-two-runs.md](one-visual-one-file-and-the-race-between-two-runs.md)).
 
-**What the reading page now carries, measured rather than estimated** (Guardrail #8). Two d3
-modules reach a reader and no others: `d3-scale` places bar rows, maps dot values onto one
-shared scale, and places slope values between two labelled columns; `d3-array` supplies the
-`range` and `InternMap` that those scales use. Both were already installed for the operator
-console's chart frame, so this row adds no dependency or install step. `d3-selection`,
-`d3-axis` and `d3-shape` are **not installed**, which is the control rather than a preference -
-a package that is not in the lockfile cannot be imported onto a reading page. Nothing here
-joins, enters or exits, so `d3-selection` would buy a join engine and use only its append path;
-`d3-axis` writes a 10px axis font, which is below `--text-xs` at every root size this site uses,
-so it would be imported in order to be undone; and `d3-shape` waits for a row that draws a path
-(Carmack, 2026-09-13).
+**What the reading page now carries, measured rather than estimated** (Guardrail #8). The
+reader reuses the shared `dateSeries` builder for line charts; it uses `d3-shape` to form the
+line path and `d3-scale` for value placement. `d3-array` supplies the `range` and `InternMap`
+those scales use. All three packages were already installed for the operator console, so this
+row adds no dependency or install step; the current bundle gate checks the reader's shipped
+bytes. `d3-selection` and `d3-axis` are **not installed**, which is the control rather than a
+preference - nothing here joins, enters or exits, so `d3-selection` would buy a join engine and
+use only its append path; `d3-axis` writes a 10px axis font, below `--text-xs` at every root size
+this site uses, so it would be imported in order to be undone (Carmack, 2026-09-13).
 
 Measured on the development box (Windows 11, 8 vCPU, node 24.12.0), 2026-09-13, control build
 at `origin/main` against this branch, same machine and same toolchain: the reading route's
@@ -115,12 +113,15 @@ comparison the chart exists to make gets every pixel left once the number it com
 somewhere to stand. What a reader gives up is the tidy left-hand column of names a desktop had
 room for, and one text line of height per bar.
 
-The bar, dot and slope share this measured-width drawing path and the bounded
-`chart.story_geometry` settings in `config/appearance.json`. A dot ranks values
-by position on one common scale. A slope joins paired values between two
+The bar, dot, slope and line share this measured-width drawing path and the
+bounded `chart.story_geometry` settings in `config/appearance.json`. A dot ranks
+values by position on one common scale. A slope joins paired values between two
 labelled time columns, without an axis; its units remain visible and in the
-accessible description. The 2026-09-13 bundle measurement above predates these
-two forms and is not a measurement of their added code.
+accessible description. A line orders source-backed readings by canonical
+date, draws a shared value axis and keeps the source's date wording on the time
+axis. Its geometry uses the same `dateSeries` builder as the Data explorer. The
+2026-09-13 bundle measurement above predates these forms and is not a measurement
+of their added code.
 
 **What this ruling does NOT change, because each has been read as following from it.** The
 pages stay prerendered; prerendering a route and prerendering a chart are different acts and
@@ -229,7 +230,7 @@ and now selects a per-item `.json`, because the file the browser fetches has to 
 bundle. `visuals.asset_base_url` still switches both halves together - where a visual is asked
 for and whether it also ships cannot disagree.
 
-## One plan becomes one set of marks, and `compile_bar` is the only thing that makes them
+## One plan becomes one set of marks, and `compile_chart` is the only thing that makes them
 
 `backend/idhazh/render/chart.py` holds the compiler the plan contract was written for. It takes one
 validated `VisualPlan` and one article's `ElementTable`, resolves every mark through
@@ -256,12 +257,12 @@ back to several of them. Nothing in the compiler can reach a number from anywher
 the pairing is the plan's rather than a rule invented in the compiler, and the bars are drawn in
 that order. Re-ranking them here would be the compiler deciding what the comparison says.
 
-**One type, and a second is refused by name.** `bar` is what this build compiles. Compiling a `line`
-plan into bars because bars are what we have would publish a picture nobody planned, so every other
-member of the vocabulary raises `CompileError` naming itself. Other plan types are not implemented by this compiler.
+**Only a supported type is compiled.** This build compiles `bar`, `dot`, `slope`
+and `line`; a plan for any other declared type raises `CompileError` naming it
+rather than publishing a picture nobody planned.
 
 **The browser's accessible name includes every original figure, the title, the caption and
-which bar is highlighted.** Converted figures also carry their original source text in
+which measured mark is highlighted.** Converted figures also carry their original source text in
 `VisualMark.source_text`. The compiler's shorter alt text remains on the decision, but is
 not the browser's complete description. Without JavaScript no chart is drawn.
 
@@ -281,15 +282,15 @@ promotes it to a `chart` through the contract's own validation, and a caller nev
 compiles the committed `bar` plan and asserts every published figure equals the one its element
 states, in the plan's own channel order; a second case doubles one element's figure and requires that
 one mark to double with the other three untouched, which is what an equality on a single table
-cannot say. The browser's half is `frontend/tests/item-visual.spec.ts`, which reads the same numbers
-back off a real page and checks each bar's length is its figure in proportion to the longest.
+cannot say. The browser's half is `frontend/tests/visual-legibility.spec.ts`, which checks that
+source-backed marks, visible readings and the accessible description reach the reader together.
 
-**The canary day carries one compiled visual and one written by hand**, built by
-`backend/utilities/build_canary_day.py` from the same committed plan and table, so the browser suite
+**The canary day carries two compiled visuals and one written by hand**, built by
+`backend/utilities/build_canary_day.py` from committed plans and tables, so the browser suite
 reads back the marks the backend oracle compiled. Driven from the canary and never from
 `frontend/public/digest/`, because a test may not cost more as the archive grows (Guardrail #12).
 The hand-written one carries the case a compiled plan cannot - bars with no unit on their axis - and
-a third story is planned with no file, which is what keeps a visual that is not a published chart on
+a fourth story is planned with no file, which is what keeps a visual that is not a published chart on
 the day.
 
 ## Design rationale
@@ -301,6 +302,11 @@ Older incompatible chart data is refused and those stories remain without
 charts; their text remains. The old SVG read, inlining and markup checks are
 removed. No historical corpus is deleted or rewritten. This is the named
 exception to `CLAUDE.md` section 11, not a general migration policy.
+
+The current renderer stamp is `2026-10-27`. A time mark carries its canonical
+date or year alongside the source wording, so the compiler can order readings
+without replacing what the article wrote. The reader refuses older or malformed
+time marks rather than guessing.
 
 Maintainer ruling, 2026-10-24 UTC: omit a chart unless the plan selects
 exactly one distinct displayed bar. Resolve every annotation through category,
@@ -330,7 +336,7 @@ or null path remains the same chartless payload older days already carry.
 | A list of rows in `VisualData` instead of a flat mark pool | A row is a geometry decision, so the contract grows a case per type and stops being data - and a row list cannot express four names against three figures, which is the mis-shaped payload the reader's page has to refuse. |
 | State `renderer_version` in a second place | `spec_format` carried the same idea twice, the two disagreed on 2026-09-05T18:00, and nothing downstream can tell which of two versions to believe. |
 | A visual placeholder when a drawing refuses | It makes "we correctly decided this needed no picture" look identical to a failed image, and 94.7 percent of stories already have no visual. |
-| Install `d3-selection`, `d3-axis` or `d3-shape` for the reading page | Nothing here joins, enters or exits; `d3-axis` writes a 10px font that would be imported in order to be undone; `d3-shape` has no rect generator. A package absent from the lockfile cannot be imported onto a reading page. |
+| Install `d3-selection` or `d3-axis` for the reading page | Nothing here joins, enters or exits; `d3-axis` writes a 10px font that would be imported in order to be undone. A package absent from the lockfile cannot be imported onto a reading page. |
 | Keep the name in a column beside its bar | A name column has to hold 40 of the article's characters, about 250 CSS px, against roughly 300 px of card on a phone - so either the bars or the names lose, and the old drawing hid that by scaling the type until the names fitted. |
 | Back-fill the 495 deleted drawings as marks | It means re-fetching 495 source pages that have since moved, and a chart compiled from today's page under an old day's date is a record of nothing. |
 

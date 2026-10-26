@@ -176,21 +176,21 @@ SITE_BYTES_FIRST_DAY = 54_230
 #: at all.
 SITE_BYTES_PER_DAY = 11_000
 
-# Two items carry a real visual, so the browser suite exercises the picture path
-# rather than proving it safe by never serving one.
+# Three items carry a real visual, so the browser suite exercises the picture
+# path rather than proving it safe by never serving one.
 #
-# **The first is compiled, and the second is written out here.** The first is
-# the one end-to-end visual the fixture holds: a committed plan and a committed
-# element table go through `compile_bar`, so every bar on that story can be
-# re-derived from the article's own figures and a browser can check the picture
-# says what the table says. The second is written here because it carries a case
-# a compiled plan cannot - bars with no unit on their axis.
+# **The first and third are compiled, and the second is written out here.** The
+# first is a committed bar plan and element table, so every bar can be
+# re-derived from its source. The third is a committed line plan and element
+# table, so the browser exercises dated marks as well. The second is written
+# here because it carries a case a compiled plan cannot - bars with no unit.
 #
-# The compiled one reads the validator's own fixtures rather than a second copy
-# of them, so the marks the browser reads back and the plan the backend oracle
-# compiles are one file. Editing either fixture moves both, which is the point.
+# Both compiled charts read the validator's own fixtures rather than a second
+# copy of them, so the browser and backend oracle hold the same source evidence.
 PLANNED_PLAN = Path("tests/fixtures/visual-validator/plans/passes.json")
 PLANNED_TABLE = Path("tests/fixtures/visual-validator/tables/wind.json")
+LINE_PLAN = Path("tests/fixtures/visual-validator/plans/line-trend.json")
+LINE_TABLE = Path("tests/fixtures/visual-validator/tables/line-trend.json")
 
 #: A second chart, with no unit on its axis. Three stages of one process, which
 #: a unit would not describe, so the drawing code has to lay out an axis that
@@ -643,6 +643,16 @@ def visual_for(
             decided(VisualKind.NONE, None, None),
             VisualPlan.read(PLANNED_PLAN),
             ElementTable.read(PLANNED_TABLE),
+            public_root=public_root,
+            relpath=relpath,
+            visuals=visuals,
+        )
+    if index == 6:
+        table = ElementTable.read(LINE_TABLE).model_copy(update={"item_id": item_id})
+        return render_planned_visual(
+            decided(VisualKind.NONE, None, None),
+            VisualPlan.read(LINE_PLAN),
+            table,
             public_root=public_root,
             relpath=relpath,
             visuals=visuals,
