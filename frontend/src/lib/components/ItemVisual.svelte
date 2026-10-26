@@ -56,6 +56,7 @@
 	import { whenNear } from '$lib/reveal';
 	import type { StoryChartGeometryConfig } from '$lib/server/config';
 	import PartsOfOne from '$lib/charts/d3/PartsOfOne.svelte';
+	import PieChart from '$lib/visual/PieChart.svelte';
 	import { drawVisual, statedDrawing, type Drawing } from '$lib/visual/bar';
 	import { fitChartGeometry, fitChartTicks, whenChartFits, type ChartRoom } from '$lib/visual/viewport';
 
@@ -96,7 +97,10 @@
 		? fitChartTicks(currentLoad, fittedGeometry, chartRoom.textHeight, chartTickDensity) : chartTickDensity);
 	const drawing = $derived<Drawing | null>(
 		currentLoad && room > 0
-			? drawVisual(currentLoad, room, formatNumber, numberFormat, fittedTicks, fittedGeometry)
+			? drawVisual(
+					currentLoad, room, formatNumber, numberFormat, fittedTicks, fittedGeometry,
+					chartRoom?.height ?? fittedGeometry.line_min_height_px
+				)
 			: null
 	);
 	/** Every figure the bars are drawn at, in one sentence, for a reader who is
@@ -225,7 +229,9 @@
 			{#if drawing.title}
 				<div class="chart-title px-3 pt-3 text-sm font-semibold leading-snug text-text">{drawing.title}</div>
 			{/if}
-			{#if drawing.type === 'stacked_bar'}
+			{#if drawing.type === 'pie'}
+				<PieChart drawing={drawing} />
+			{:else if drawing.type === 'stacked_bar'}
 				<div class="px-3 py-3">
 					<PartsOfOne
 						geometry={drawing.geometry}

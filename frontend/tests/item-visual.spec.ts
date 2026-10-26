@@ -1,7 +1,10 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { expect, test } from '@playwright/test';
-import { isVisualData, publishedVisualData, refusedVisualData, RENDERER_VERSION } from '../src/lib/payload/drawing';
+import { renderConfigured } from './support/server-render';
+import { serverCompiler } from './support/server-render';
+import { isVisualData, MAX_PIE_PARTS, publishedVisualData, refusedVisualData, RENDERER_VERSION } from '../src/lib/payload/drawing';
 import { drawBars, drawDots, drawLines, drawSlopes, drawVisual, statedBars, statedDots, statedLines, statedSlopes, statedDrawing } from '../src/lib/visual/bar';
 import { formatNumber, numberFormat, valueAxis } from './support/number-format';
 import { frame } from '../src/lib/charts/frame';
@@ -81,6 +84,74 @@ test('viewport sizing preserves every supported family without a density or fixe
             }
         }
     }
+});
+
+test('pie geometry and its visible readout preserve every share and the stated total', () => {
+    const data = sourceCompiledChart('pie-from-declared-whole.json');
+    expect(refusedVisualData(data)).toBeNull();
+    const narrow = drawVisual(data, 360, formatNumber, numberFormat, 4, geometry, 420);
+    const wide = drawVisual(data, 1200, formatNumber, numberFormat, 4, geometry, 700);
+    expect(narrow.type).toBe('pie');
+    expect(wide.type).toBe('pie');
+    if (narrow.type !== 'pie' || wide.type !== 'pie') throw new Error('pie fixture drew another chart type');
+    expect(narrow.geometry.slices).toHaveLength(4);
+    expect(narrow.geometry.slices.map((slice) => slice.label)).toEqual(['Wind', 'solar', 'hydro', 'tidal']);
+    expect(narrow.geometry.slices.every((slice) => slice.path.length > 0)).toBe(true);
+    expect(narrow.geometry.radius).toBeLessThanOrEqual(180);
+    expect(wide.geometry.radius).toBeGreaterThan(narrow.geometry.radius);
+    const words = statedDrawing(narrow);
+    expect(words).toContain('Declared total: 76 MW');
+    for (const label of ['Wind', 'solar', 'hydro', 'tidal']) expect(words).toContain(label);
+    expect(words).toBe(statedDrawing(wide));
+});
+
+test('the pie component visibly prints the source total and each named share', async () => {
+    const data = sourceCompiledChart('pie-from-declared-whole.json');
+    const drawing = drawVisual(data, 390, formatNumber, numberFormat, 4, geometry, 640);
+    if (drawing.type !== 'pie') throw new Error('pie fixture drew another chart type');
+    const modulePath = await serverCompiler(join(process.cwd(), 'test-results', 'pie-chart'))(
+        'src/lib/visual/PieChart.svelte',
+        'PieChart',
+        []
+    );
+    const { default: PieChart } = await import(pathToFileURL(modulePath).href);
+    const html = renderConfigured(PieChart, { props: { drawing } }).body;
+    expect(html).toContain('Declared total: 76 MW');
+    expect(html).toContain('Wind');
+    expect(html).toContain('solar');
+    expect(html).toContain('hydro');
+    expect(html).toContain('tidal');
+    expect(html.match(/<path\b/g)).toHaveLength(4);
+    expect(html).toContain('11.8%');
+});
+
+test('pie data refuses missing or mismatched whole evidence and non-share inputs', () => {
+    const valid = sourceCompiledChart('pie-from-declared-whole.json');
+    expect(refusedVisualData(valid)).toBeNull();
+    const missingWhole = structuredClone(valid);
+    missingWhole.declared_whole = null;
+    expect(refusedVisualData(missingWhole)).toContain('declared whole');
+    const mismatchedWhole = structuredClone(valid);
+    mismatchedWhole.declared_whole_element_id = 'quantity-999-1000';
+    expect(refusedVisualData(mismatchedWhole)).toContain('declared whole');
+    const wrongUnit = structuredClone(valid);
+    wrongUnit.marks.find((mark) => mark.mark_id === wrongUnit.encoding.quantity[0])!.unit = 'mw';
+    expect(refusedVisualData(wrongUnit)).toContain('separately stated whole');
+    const wrongInputs = structuredClone(valid);
+    const part = wrongInputs.marks.find((mark) => mark.mark_id === wrongInputs.encoding.quantity[0])!;
+    if (
+        part.derived === null || typeof part.derived !== 'object' ||
+        !('inputs' in part.derived) || !Array.isArray(part.derived.inputs)
+    ) throw new Error('pie fixture has no derivation');
+    part.derived.inputs[1] = 'quantity-999-1000';
+    expect(refusedVisualData(wrongInputs)).toContain('separately stated whole');
+});
+
+test('the browser pie-part cap matches the configured producer limit', () => {
+    const config = JSON.parse(readFileSync(join(process.cwd(), '..', 'config', 'idhazh.json'), 'utf8')) as {
+        visuals: { max_pie_parts: number };
+    };
+    expect(MAX_PIE_PARTS).toBe(config.visuals.max_pie_parts);
 });
 
 test.describe('what may not be drawn', () => {
@@ -243,6 +314,8 @@ test.describe('what may not be drawn', () => {
             emphasized_mark_id: 'm3',
             item_id: 'energy-4821903756',
             type: 'bar',
+            declared_whole_element_id: null,
+            declared_whole: null,
             marks: ['A', 'B', 'C', 'D'].flatMap((name, index) => [
                 { mark_id: `m${index * 2}`, text: name, time: null, value: null, unit: null, source_text: null, element_id: `name-${index}`, derived: null },
                 { mark_id: `m${index * 2 + 1}`, text: null, time: null, value: String(values[index]), unit: 'MW', source_text: null, element_id: `value-${index}`, derived: null }

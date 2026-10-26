@@ -45,6 +45,7 @@ from idhazh.contracts.visual import (
     widest_json_characters,
 )
 from idhazh.contracts.visual_decision import NoneReason, VisualDecision, VisualKind
+from idhazh.contracts.visual_telemetry import ValidatorCheck
 from idhazh.extract import approx_tokens
 from idhazh.llm.server import Completion
 from idhazh.render.chart import can_compile
@@ -59,7 +60,7 @@ from idhazh.visual_planner import (
     refused_by_the_validator,
     suppressed_by_the_gate,
 )
-from idhazh.visual_validator import validate_plan
+from idhazh.visual_validator import Rejection, validate_plan
 from idhazh.visual_vocabulary import TYPE_RULES, UNRULED_TYPES
 
 pytestmark = pytest.mark.visual
@@ -511,6 +512,30 @@ class TestTheDowngradeLadder:
         )
 
         assert made is None, "a composition reached a comparison"
+
+    def test_a_failed_pie_whole_reenters_the_stacked_whole_check(self) -> None:
+        plan = VisualPlan.from_json(
+            read_text(VALIDATOR_FIXTURES / "plans" / "pie-not-exhaustive.json")
+        )
+        table = ElementTable.from_json(
+            read_text(VALIDATOR_FIXTURES / "tables" / "pie-whole.json")
+        )
+        rejected: list[Rejection] = []
+        made = downgrade(
+            plan,
+            table,
+            visuals=committed_visuals(
+                downgrade_enabled=True, downgrade_floor_percentiles=[50, 75]
+            ),
+            published_marks={VisualType.STACKED_BAR: [3, 4, 5, 8]},
+            rejected=rejected,
+        )
+
+        assert made is None
+        assert any(
+            rejection.check is ValidatorCheck.STACKED_BAR_EXHAUSTIVE
+            for rejection in rejected
+        )
 
     def test_invariance_three_a_floor_that_cannot_be_computed_is_not_cleared(self) -> None:
         """Waiving it would make depth 1 publish on the validator alone, which is

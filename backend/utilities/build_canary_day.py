@@ -738,6 +738,8 @@ def _unitless_bars(item_id: str) -> VisualData:
         item_id=item_id,
         type=VisualType.BAR,
         renderer_version=RENDERER_VERSION,
+        declared_whole_element_id=None,
+        declared_whole=None,
         title=None,
         caption=None,
         emphasized_mark_id=f"m{len(SECOND_CHART_MARKS)}",

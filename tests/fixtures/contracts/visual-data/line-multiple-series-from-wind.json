@@ -1,4 +1,6 @@
 {
+  "declared_whole": null,
+  "declared_whole_element_id": null,
   "caption": "Each line joins a country's figures across two years.",
   "emphasized_mark_id": "m1",
   "encoding": {
@@ -42,8 +44,8 @@
     {"derived": null,"element_id": "date-23-27","mark_id": "m10","source_text": null,"text": "2024","time": "2024","unit": null,"value": null},
     {"derived": null,"element_id": "date-43-47","mark_id": "m11","source_text": null,"text": "2025","time": "2025","unit": null,"value": null}
   ],
-  "renderer_version": "2026-10-27T01:01",
+  "renderer_version": "2026-10-27T02:00",
   "title": "Offshore wind capacity, Denmark and Germany",
   "type": "line",
-  "version": "2026-10-27T03:00"
+  "version": "2026-10-27T04:00"
 }

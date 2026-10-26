@@ -10,8 +10,9 @@ const VISUAL_DATA_PATH =
 	/^digest\/\d{4}\/\d{2}\/\d{2}\/[a-z0-9]+(?:-[a-z0-9]+)*-(?:[0-9]{2,}|[0-9a-hjkmnp-tv-z]{16})\.json$/;
 
 /** Protocol stamp, held to the Python authority by the visual binding test. */
-export const RENDERER_VERSION = '2026-10-27T01:01';
-export const DRAWABLE = ['bar', 'dot', 'line', 'scatter', 'bubble', 'slope', 'stacked_bar'] as const;
+export const RENDERER_VERSION = '2026-10-27T02:00';
+export const DRAWABLE = ['bar', 'dot', 'line', 'scatter', 'bubble', 'slope', 'stacked_bar', 'pie'] as const;
+export const MAX_PIE_PARTS = 5;
 export const ENCODING_ROLES = [
 	'category', 'quantity', 'quantity_x', 'time', 'series', 'size', 'bins', 'entity', 'event_label'
 ] as const;
@@ -44,6 +45,10 @@ export function refusedVisualData(data: unknown): string | null {
 		return 'carries no document identity';
 	}
 	if (!nullableText(data.title) || !nullableText(data.caption)) return 'carries invalid framing';
+	if (
+		!nullableText(data.declared_whole_element_id) ||
+		(data.declared_whole !== null && !isObject(data.declared_whole))
+	) return 'carries invalid declared-whole evidence';
 
 	const marks = data.marks;
 	if (!Array.isArray(marks) || marks.length === 0 || marks.length > 72) return 'carries an invalid number of marks';
@@ -85,6 +90,10 @@ export function refusedVisualData(data: unknown): string | null {
 		}
 	}
 	if (drawn.size !== held.size) return 'carries marks it does not draw';
+	if (
+		data.type !== 'pie' && data.type !== 'stacked_bar' &&
+		(data.declared_whole_element_id !== null || data.declared_whole !== null)
+	) return 'carries a declared whole for a chart that has none';
 	const figures = channels.quantity;
 	for (const id of [...figures, ...channels.quantity_x, ...(data.type === 'bubble' ? channels.size : [])]) {
 		const value = held.get(id)?.value;
@@ -114,6 +123,9 @@ export function refusedVisualData(data: unknown): string | null {
 		if (typeof whole.element_id !== 'string' || !/^quantity-/.test(whole.element_id)) {
 			return 'does not cite a source quantity for its declared whole';
 		}
+		if (data.declared_whole_element_id !== whole.element_id || data.declared_whole !== null) {
+			return 'does not identify its declared whole consistently';
+		}
 		if (figures.some((id) => {
 			const part = held.get(id)!;
 			if (part.element_id === whole.element_id) return true;
@@ -133,6 +145,44 @@ export function refusedVisualData(data: unknown): string | null {
 			return 'stacked-bar part labels are not distinct';
 		}
 		textChannels.push(...names, ...series);
+	} else if (data.type === 'pie') {
+		const names = channels.category;
+		const wholeId = data.declared_whole_element_id;
+		const whole = data.declared_whole;
+		if (
+			names.length < 2 || names.length > MAX_PIE_PARTS || names.length !== figures.length ||
+			typeof wholeId !== 'string' || !/^quantity-/.test(wholeId) ||
+			!isObject(whole) || whole.element_id !== wholeId ||
+			typeof whole.text !== 'string' || !whole.text.trim()
+		) return 'does not pair each pie part with a declared whole';
+		if (
+			channels.quantity_x.length !== 0 || channels.time.length !== 0 ||
+			channels.series.length !== 0 || channels.entity.length !== 0 ||
+			channels.size.length !== 0 || channels.bins.length !== 0 ||
+			channels.event_label.length !== 0
+		) return 'carries a channel this pie does not draw';
+		const categories = names.map((id) => held.get(id)!);
+		if (categories.some((mark) =>
+			typeof mark.element_id !== 'string' || !/^(entity|place|date)-/.test(mark.element_id)
+		)) return 'pie categories need source labels';
+		if (new Set(categories.map((mark) => mark.text)).size !== names.length) {
+			return 'pie category names are not distinct';
+		}
+		const partIds: string[] = [];
+		for (const id of figures) {
+			const part = held.get(id)!;
+			const derived = part.derived;
+			if (
+				part.unit !== '%' || Number(part.value) < 0 || Number(part.value) > 100 ||
+				!isObject(derived) || derived.function !== 'share_of_declared_whole' ||
+				!Array.isArray(derived.inputs) || derived.inputs.length !== 2 ||
+				derived.inputs[1] !== wholeId || typeof derived.inputs[0] !== 'string' ||
+				!/^quantity-/.test(derived.inputs[0]) || derived.inputs[0] === wholeId
+			) return 'pie parts must be shares of their separately stated whole';
+			partIds.push(derived.inputs[0]);
+		}
+		if (new Set(partIds).size !== partIds.length) return 'pie part quantities are not distinct';
+		textChannels.push(...names);
 	} else if (data.type === 'slope') {
 		const times = channels.time;
 		const entities = channels.entity;

@@ -1,0 +1,133 @@
+{
+  "candidates_found": {
+    "entity": 4,
+    "quantity": 5
+  },
+  "canonical_url": "https://example.org/energy/pie-whole",
+  "elements": [
+    {
+      "element_id": "quantity-21-26",
+      "kind": "quantity",
+      "span_start": 21,
+      "span_end": 26,
+      "span_excerpt": "76 MW",
+      "value": "76",
+      "unit": "mw",
+      "sentence_index": 0,
+      "extractor": "regex",
+      "measure": "generation",
+      "measure_canonical": "generation",
+      "label_source": "fixture",
+      "ledger_version": "2026-10-27"
+    },
+    {
+      "element_id": "entity-28-32",
+      "kind": "entity",
+      "span_start": 28,
+      "span_end": 32,
+      "span_excerpt": "Wind",
+      "value": null,
+      "unit": null,
+      "sentence_index": 1,
+      "extractor": "model"
+    },
+    {
+      "element_id": "quantity-43-47",
+      "kind": "quantity",
+      "span_start": 43,
+      "span_end": 47,
+      "span_excerpt": "9 MW",
+      "value": "9",
+      "unit": "mw",
+      "sentence_index": 1,
+      "extractor": "regex",
+      "measure": "generation",
+      "measure_canonical": "generation",
+      "label_source": "fixture",
+      "ledger_version": "2026-10-27"
+    },
+    {
+      "element_id": "entity-49-54",
+      "kind": "entity",
+      "span_start": 49,
+      "span_end": 54,
+      "span_excerpt": "solar",
+      "value": null,
+      "unit": null,
+      "sentence_index": 1,
+      "extractor": "model"
+    },
+    {
+      "element_id": "quantity-65-70",
+      "kind": "quantity",
+      "span_start": 65,
+      "span_end": 70,
+      "span_excerpt": "22 MW",
+      "value": "22",
+      "unit": "mw",
+      "sentence_index": 1,
+      "extractor": "regex",
+      "measure": "generation",
+      "measure_canonical": "generation",
+      "label_source": "fixture",
+      "ledger_version": "2026-10-27"
+    },
+    {
+      "element_id": "entity-72-77",
+      "kind": "entity",
+      "span_start": 72,
+      "span_end": 77,
+      "span_excerpt": "hydro",
+      "value": null,
+      "unit": null,
+      "sentence_index": 1,
+      "extractor": "model"
+    },
+    {
+      "element_id": "quantity-88-93",
+      "kind": "quantity",
+      "span_start": 88,
+      "span_end": 93,
+      "span_excerpt": "15 MW",
+      "value": "15",
+      "unit": "mw",
+      "sentence_index": 1,
+      "extractor": "regex",
+      "measure": "generation",
+      "measure_canonical": "generation",
+      "label_source": "fixture",
+      "ledger_version": "2026-10-27"
+    },
+    {
+      "element_id": "entity-99-104",
+      "kind": "entity",
+      "span_start": 99,
+      "span_end": 104,
+      "span_excerpt": "tidal",
+      "value": null,
+      "unit": null,
+      "sentence_index": 1,
+      "extractor": "model"
+    },
+    {
+      "element_id": "quantity-115-120",
+      "kind": "quantity",
+      "span_start": 115,
+      "span_end": 120,
+      "span_excerpt": "30 MW",
+      "value": "30",
+      "unit": "mw",
+      "sentence_index": 1,
+      "extractor": "regex",
+      "measure": "generation",
+      "measure_canonical": "generation",
+      "label_source": "fixture",
+      "ledger_version": "2026-10-27"
+    }
+  ],
+  "item_id": "energy-7731902044",
+  "source_text_hash": "0b1fdbffc34d2e174987b20033daf23d4acebaf193fbe61a0aaf1bc996c32fa4",
+  "source_text_length": 121,
+  "url_key": "d8a8720ed3c1ce9e1debfbc29fad75df18dbeefcc5c22b6d324acb84107662c8",
+  "version": "2026-09-15T19:40"
+}

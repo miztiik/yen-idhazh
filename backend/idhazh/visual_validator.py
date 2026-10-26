@@ -271,6 +271,20 @@ def _roles_valid_for_type(
                 ValidatorCheck.ROLES_VALID_FOR_TYPE,
                 "a stacked bar has one declared whole and one series label per part",
             )
+    if visual_type is VisualType.PIE:
+        pie_categories = elements_by_role.get(EncodingRole.CATEGORY, ())
+        pie_quantities = elements_by_role.get(EncodingRole.QUANTITY, ())
+        if len(pie_categories) != len(pie_quantities):
+            return Rejection(
+                ValidatorCheck.ROLES_VALID_FOR_TYPE,
+                "a pie pairs one category with each part quantity",
+            )
+        names = [element.span_excerpt.strip().casefold() for element in pie_categories]
+        if len(names) != len(set(names)):
+            return Rejection(
+                ValidatorCheck.ROLES_VALID_FOR_TYPE,
+                "pie category names remain distinct after sanitizing",
+            )
     return None
 
 
@@ -282,56 +296,111 @@ def _stacked_bar_exhaustive(
     """Does one row's source-backed parts exactly state its separate whole?"""
     if plan.type is not VisualType.STACKED_BAR:
         return None
+    return _composition_exhaustive(
+        plan,
+        drawn,
+        known,
+        check=ValidatorCheck.STACKED_BAR_EXHAUSTIVE,
+        whole_is_row_label=True,
+        require_same_measure_and_unit=False,
+    )
+
+
+def _pie_exhaustive(
+    plan: VisualPlan,
+    drawn: Mapping[EncodingRole, list[Element]],
+    known: Mapping[str, Element],
+) -> Rejection | None:
+    if plan.type is not VisualType.PIE:
+        return None
+    return _composition_exhaustive(
+        plan,
+        drawn,
+        known,
+        check=ValidatorCheck.PIE_EXHAUSTIVE,
+        whole_is_row_label=False,
+        require_same_measure_and_unit=True,
+    )
+
+
+def _composition_exhaustive(
+    plan: VisualPlan,
+    drawn: Mapping[EncodingRole, list[Element]],
+    known: Mapping[str, Element],
+    *,
+    check: ValidatorCheck,
+    whole_is_row_label: bool,
+    require_same_measure_and_unit: bool,
+) -> Rejection | None:
+    """Apply the same source, measure, unit and total checks to either composition."""
     whole_id = plan.declared_whole_element_id
     if whole_id is None:
         return Rejection(
-            ValidatorCheck.STACKED_BAR_EXHAUSTIVE,
-            "the stacked bar has no independently declared whole",
+            check,
+            "the composition has no independently declared whole",
         )
     whole = known.get(whole_id)
     if whole is None or whole.kind is not ElementKind.QUANTITY or whole.value is None:
         return Rejection(
-            ValidatorCheck.STACKED_BAR_EXHAUSTIVE,
+            check,
             f"{whole_id} is not a source-declared quantity for the whole",
         )
-    categories = drawn.get(EncodingRole.CATEGORY, ())
-    if len(categories) != 1 or categories[0].element_id != whole_id:
-        return Rejection(
-            ValidatorCheck.STACKED_BAR_EXHAUSTIVE,
-            "the single stacked row must be labelled by its declared whole",
-        )
+    if whole_is_row_label:
+        categories = drawn.get(EncodingRole.CATEGORY, ())
+        if len(categories) != 1 or categories[0].element_id != whole_id:
+            return Rejection(
+                check,
+                "the single stacked row must be labelled by its declared whole",
+            )
     parts = drawn.get(EncodingRole.QUANTITY, ())
     if whole_id in {part.element_id for part in parts}:
         return Rejection(
-            ValidatorCheck.STACKED_BAR_EXHAUSTIVE,
+            check,
             "the declared whole must be separate from every part quantity",
         )
     if Decimal(whole.value) <= 0:
         return Rejection(
-            ValidatorCheck.STACKED_BAR_EXHAUSTIVE,
+            check,
             f"{whole_id} does not state a positive whole",
         )
-    whole_unit = whole.unit
-    whole_dimension = UNIT_DIMENSIONS.get(whole_unit) if whole_unit is not None else None
+    if require_same_measure_and_unit and whole.measure_canonical is None:
+        return Rejection(
+            check,
+            f"{whole_id} has no canonical measure",
+        )
     total = Fraction()
     for part in parts:
         if part.value is None or Decimal(part.value) < 0:
             return Rejection(
-                ValidatorCheck.STACKED_BAR_EXHAUSTIVE,
+                check,
                 f"{part.element_id} is not a non-negative part quantity",
             )
-        if not commensurable(part.unit, whole_unit):
+        if require_same_measure_and_unit:
+            if part.measure_canonical != whole.measure_canonical:
+                return Rejection(
+                    check,
+                    f"{part.element_id} and {whole_id} do not state the same canonical measure",
+                )
+            if part.unit != whole.unit:
+                return Rejection(
+                    check,
+                    f"{part.element_id} and {whole_id} do not state the same unit",
+                )
+            total += Fraction(Decimal(part.value))
+            continue
+        if not commensurable(part.unit, whole.unit):
             return Rejection(
-                ValidatorCheck.STACKED_BAR_EXHAUSTIVE,
+                check,
                 f"{part.element_id} and {whole_id} do not measure the same thing",
             )
-        if part.unit == whole_unit:
+        if part.unit == whole.unit:
             total += Fraction(Decimal(part.value))
             continue
         part_dimension = UNIT_DIMENSIONS.get(part.unit) if part.unit is not None else None
+        whole_dimension = UNIT_DIMENSIONS.get(whole.unit) if whole.unit is not None else None
         if part_dimension is None or whole_dimension is None:
             return Rejection(
-                ValidatorCheck.STACKED_BAR_EXHAUSTIVE,
+                check,
                 f"{part.element_id} cannot be converted exactly to {whole_id}'s unit",
             )
         total += (
@@ -341,7 +410,7 @@ def _stacked_bar_exhaustive(
         )
     if total != Fraction(Decimal(whole.value)):
         return Rejection(
-            ValidatorCheck.STACKED_BAR_EXHAUSTIVE,
+            check,
             f"{whole_id} does not equal the exact sum of its part quantities",
         )
     return None
@@ -389,11 +458,12 @@ def _enough_data(
             f"{cited} marks in the {rules.marks.value} channel, against a floor of "
             f"{visuals.min_chart_points}",
         )
-    if cited > visuals.max_chart_points:
+    ceiling = visuals.max_pie_parts if visual_type is VisualType.PIE else visuals.max_chart_points
+    if cited > ceiling:
         return Rejection(
             ValidatorCheck.ENOUGH_DATA,
             f"{cited} marks in the {rules.marks.value} channel, against a ceiling of "
-            f"{visuals.max_chart_points}",
+            f"{ceiling}",
         )
     return None
 
@@ -545,6 +615,7 @@ def validate_plan(
                     roles = Rejection(ValidatorCheck.ROLES_VALID_FOR_TYPE, detail)
             found.append(roles)
             found.append(_stacked_bar_exhaustive(plan, drawn, known))
+            found.append(_pie_exhaustive(plan, drawn, known))
             found.append(_enough_data(plan.type, filled, visuals=visuals))
         found += [
             _no_duplicate_in_role(filled),

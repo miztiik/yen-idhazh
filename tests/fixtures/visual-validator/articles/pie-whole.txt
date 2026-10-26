@@ -1,0 +1,1 @@
+Total generation was 76 MW. Wind generated 9 MW, solar generated 22 MW, hydro generated 15 MW, and tidal generated 30 MW.

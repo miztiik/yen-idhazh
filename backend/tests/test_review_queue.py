@@ -56,6 +56,8 @@ def _drawing(item_id: str) -> str:
             "item_id": item_id,
             "type": VisualType.BAR,
             "renderer_version": RENDERER_VERSION,
+            "declared_whole_element_id": None,
+            "declared_whole": None,
             "title": None,
             "caption": None,
             "emphasized_mark_id": encoding[EncodingRole.QUANTITY.value][0],

@@ -37,6 +37,7 @@ from idhazh.contracts.visual_decision import (
     VisualDecision,
     VisualKind,
 )
+from idhazh.contracts.visual_telemetry import ValidatorCheck
 from idhazh.elements import (
     read_value,
 )
@@ -456,6 +457,10 @@ def downgrade(
         or plan.type not in visuals.select_types()
     ):
         return None
+    pie_whole_rejected = plan.type is VisualType.PIE and any(
+        rejection.check is ValidatorCheck.PIE_EXHAUSTIVE
+        for rejection in validate_plan(plan, table, visuals=visuals)
+    )
     frontier: list[VisualType] = [plan.type]
     walked: set[VisualType] = {plan.type}
     for depth, percentile in enumerate(rungs, start=1):
@@ -483,6 +488,8 @@ def downgrade(
                 if candidate_rejections:
                     if rejected is not None:
                         rejected.extend(candidate_rejections)
+                    continue
+                if source is VisualType.PIE and pie_whole_rejected:
                     continue
                 floor = depth_floor(published_marks.get(edge.target, ()), percentile)
                 if floor is None or _marks(candidate) < floor:
