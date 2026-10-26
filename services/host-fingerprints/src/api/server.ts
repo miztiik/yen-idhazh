@@ -2,6 +2,7 @@
 import type { ServiceConfig, SelectedSettings } from "../config";
 import type { PersistenceOptions } from "../persist-fingerprint";
 import { postFingerprint } from "./routes/fingerprint.route";
+import { FingerprintHealthSchema } from "./fingerprint-response";
 
 // Calendar-versioned routes identify the API protocol, not operator controls.
 export const FINGERPRINT_PATH = "/api/2026-10-20/fingerprint";
@@ -10,7 +11,9 @@ export function createFingerprintHandler(config: ServiceConfig, settings: Select
   return async (request: Request): Promise<Response> => {
     const path = new URL(request.url).pathname;
     if (path === HEALTH_PATH && request.method === "GET") {
-      return Response.json({ status: "ok", enabled: settings.observability.host_telemetry_enabled && settings.observability.host_fingerprint }, { headers: { "Cache-Control": "no-store" } });
+      return Response.json(FingerprintHealthSchema.parse({
+        status: "ok", enabled: settings.observability.host_telemetry_enabled && settings.observability.host_fingerprint,
+      }), { headers: { "Cache-Control": "no-store" } });
     }
     if (path !== FINGERPRINT_PATH && path !== HEALTH_PATH) return Response.json({ error: "Not found" }, { status: 404 });
     if (path === FINGERPRINT_PATH && request.method === "POST") return postFingerprint(request, config, settings, options);

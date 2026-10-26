@@ -1,6 +1,6 @@
 # GitHub Actions Workflows
 
-**Last Updated**: 2026-10-24
+**Last Updated**: 2026-10-26
 
 Which workflows run, when they run, and what they may publish.
 The [workflow declarations](../../.github/workflows/) are authoritative.
@@ -18,6 +18,7 @@ All schedules and run dates are UTC. Every workflow supports manual dispatch.
 | `idhazh-gardener.yml` | `Idhazh Gardener` | `40 0 * * *` | Retention and history maintenance |
 | `backfill.yml` | `Vector backfill` | none | Repair closed days' vectors |
 | `idhazh-pipeline-tests.yaml` | `Pipeline tests` | none | Check a model with real articles |
+| `feed-ingest-plan-test.yml` | `Feed ingest plan test` | none | Run the real planner HTTP API and publish its completed planner and host metadata |
 | `yen-ai-pipeline.yml` | `Yen-AI-Pipeline` | none | Run the independent summarizer API |
 | `ai-pipeline-tests.yml` | `Yen-Summarizers` | none | Run independent TypeScript inference and its existing audit |
 
@@ -52,6 +53,25 @@ Assemble after worker failures if planning succeeded and the run was not cancell
 Keep successful items and commit failure records; annotate a planned run that
 publishes nothing. Overlapping runs use distinct writer identities and the
 [commit protocol](../architecture/publishing/committing.md), not a shared queue.
+
+## Manual feed planner
+
+`feed-ingest-plan-test.yml` calls both real HTTP services on its own runner.
+The host service uses committed telemetry, placement and task-selected copy
+controls. It returns one completed raw host Parquet file, or an explicit
+disabled result. The caller validates it and combines it with the current
+planner metadata for the [bounded commit adapter](../architecture/publishing/committing.md#design-rationale).
+Only the four planner ledgers maintain their existing raw-day indexes.
+There is no host index, remote host service or direct collector call.
+
+Publication may retain completed diagnostics after planner failure; it never
+changes the planner's failed result. Unpublished valid files join the existing
+metadata recovery artifact even when no planner response was saved.
+`resources.json` retains host receipts and separate live planner CPU/RAM
+observations. L3 and total RAM capacity are displayed in MiB, without changing
+the stored byte-valued cache field. Optional controlled copy/cache evidence
+remains separate from those live planner measurements.
+See [host metrics](host-metrics.md) for each instrument and unavailable reason.
 
 ## Pages publication
 

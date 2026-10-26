@@ -4,6 +4,7 @@ import { FingerprintRequestSchema } from "../../config";
 import type { ServiceConfig, SelectedSettings } from "../../config";
 import { persistFingerprint } from "../../persist-fingerprint";
 import type { PersistenceOptions } from "../../persist-fingerprint";
+import { FingerprintResponseSchema } from "../fingerprint-response";
 
 export async function postFingerprint(request: Request, config: ServiceConfig, settings: SelectedSettings, options: PersistenceOptions): Promise<Response> {
   let input: unknown;
@@ -31,7 +32,7 @@ export async function postFingerprint(request: Request, config: ServiceConfig, s
     if (!(error instanceof SyntaxError || error instanceof z.ZodError)) throw error;
     return Response.json({ error: error.message }, { status: 400 });
   }
-  return Response.json(await persistFingerprint(input, config, settings, options), {
+  return Response.json(FingerprintResponseSchema.parse(await persistFingerprint(input, config, settings, options)), {
     headers: { "Cache-Control": "no-store" },
   });
 }

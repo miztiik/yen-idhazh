@@ -174,6 +174,19 @@ export async function readExecutionEvidence(directory: string): Promise<Executio
 export async function readExecutionReport(directory: string) {
   return formatExecutionReport(await readExecutionEvidence(directory));
 }
+export function formatUnavailableExecutionReport(input: {
+  resources?: unknown; independent?: unknown; profileRequested?: boolean;
+}): PlannerReport {
+  const message = "No planner HTTP result was saved. Planning completion, feed work, request spend and exclusions are unavailable; see the retained runtime log.";
+  const resources = formatResourceSummary(input.resources, input.independent, input.profileRequested);
+  return {
+    summary: `# Feed planner run\n\n**Planning result unavailable.** ${message}\n\n${resources.summary}`,
+    annotations: [
+      `::warning title=${escapeParameter("Feed planner outcome")}::${escapeCommand(message)}`,
+      `::notice title=${escapeParameter("Resources")}::${escapeCommand(resources.notice)}`,
+    ],
+  };
+}
 if (import.meta.main) {
   const { RUNNER_TEMP, GITHUB_STEP_SUMMARY } = process.env;
   const config = FeedIngestConfigSchema.parse(await Bun.file("config/feed-ingest-plan.json").json());
@@ -182,11 +195,15 @@ if (import.meta.main) {
     const directory = join(RUNNER_TEMP, "feed-ingest-plan");
     const response = Bun.file(join(directory, "response.json"));
     if (!await response.exists()) {
-      const message = "No planner HTTP result was saved. Planning completion, feed work, request spend and exclusions are unavailable; see the retained runtime log.";
-      const summary = `# Feed planner run\n\n**Planning result unavailable.** ${message}\n`;
-      await appendFile(GITHUB_STEP_SUMMARY, summary, "utf8");
-      await writeFile(join(directory, "report.md"), summary);
-      console.log(`::warning title=${escapeParameter("Feed planner outcome")}::${escapeCommand(message)}`);
+      const resourceFile = Bun.file(join(directory, "resources.json"));
+      const proofFile = Bun.file(join("test-results", "host-probes", "resource-proof.json"));
+      const report = formatUnavailableExecutionReport({
+        resources: await resourceFile.exists() ? await resourceFile.json() : undefined,
+        independent: await proofFile.exists() ? await proofFile.json() : undefined,
+      });
+      await appendFile(GITHUB_STEP_SUMMARY, report.summary, "utf8");
+      await writeFile(join(directory, "report.md"), report.summary);
+      for (const annotation of report.annotations) console.log(annotation);
     } else {
       const evidence = await readExecutionEvidence(directory);
       const independent = Bun.file(join("test-results", "host-probes", "resource-proof.json"));

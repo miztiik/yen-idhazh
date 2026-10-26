@@ -1,14 +1,16 @@
 /** Which exact run receipts can be retained without copying private stage or article populations? */
-import { copyFile, mkdir, readFile, writeFile } from "node:fs/promises";
+import { copyFile, mkdir, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { z } from "zod";
 import { WriterIdentitySchema } from "../../../packages/common-contracts/src/index";
-import { PlanResponseSchema } from "../src/api/plan-response.schema";
-import { verifyPlanningCompletion } from "./feed-ingest-plan-verification";
+import { collectWorkflowFiles, readWorkflowPublicationContext } from "./feed-ingest-plan-current-files";
+import type { ExecutionIdentity, MetadataRegistrations } from "./feed-ingest-plan-metadata";
+import { MetadataCommitResultSchema } from "./feed-ingest-plan-commit-result";
 import { writeGitHubOutputs } from "./feed-ingest-plan-outputs";
 
 export async function prepareWorkflowArtifacts(input: {
   root: string; directory: string; runNumber: string; attempt: number; outputPath?: string;
+  identity?: ExecutionIdentity; registrations?: MetadataRegistrations;
 }) {
   // Actions run numbers and attempt numbers form filenames, never fetched text.
   const run = z.string().regex(/^\d+$/).parse(input.runNumber);
@@ -35,21 +37,16 @@ export async function prepareWorkflowArtifacts(input: {
   ] as const) await retain(key, join(input.directory, name), name);
   await retain("independent", join(input.root, "test-results", "host-probes", "resource-proof.json"), "controlled-host-proof.json");
   const responsePath = join(input.directory, "response.json");
-  if (!await Bun.file(responsePath).exists()) return outputs;
-  const response = PlanResponseSchema.parse(JSON.parse(await readFile(responsePath, "utf8")));
-  const registration = (name: string) => ({ name, family: "feed-ingest-plan", prefix: ["feed-ingest-plan", name],
-    grain: "raw-and-compact" as const, lifecycle_status: "active" as const });
-  const verified = await verifyPlanningCompletion(join(input.directory, "state"), response, {
-    discovered_articles: registration("discovered-articles"), selected_articles: registration("selected-articles"),
-    feed_health_state: registration("feed-health-state"), plan_runs: registration("plan-runs"),
-  }, input.root);
-  const paths = Object.values(verified).flatMap(result => result?.files ?? []);
+  if (!await Bun.file(responsePath).exists() && !await Bun.file(join(input.directory, "resources.json")).exists()) return outputs;
+  const context = input.identity !== undefined && input.registrations !== undefined
+    ? { identity: input.identity, registrations: input.registrations } : await readWorkflowPublicationContext(input);
+  const { paths, response, failures } = await collectWorkflowFiles({ ...input, ...context });
   const commitFile = Bun.file(join(input.directory, "commit-result.json"));
-  const commit = await commitFile.exists() ? z.object({
-    status: z.enum(["landed", "already-on-main", "no-changes", "failed"]),
-    commit: z.string().regex(/^[a-f0-9]{40}$/).nullable(), files: z.int().nonnegative(),
-  }).parse(await commitFile.json()) : null;
+  let commit: ReturnType<typeof MetadataCommitResultSchema.parse> | null = null;
+  try { if (await commitFile.exists()) commit = MetadataCommitResultSchema.parse(await commitFile.json()); }
+  catch (error) { failures.push(error); }
   const confirmed = commit !== null && commit.files === paths.length
+    && [...commit.paths].sort().join("\n") === [...paths].sort().join("\n")
     && (commit.status === "landed" || commit.status === "already-on-main") && commit.commit !== null;
   if (!confirmed && paths.length > 0) {
     const recovery = `artifacts/uncommitted-metadata-${run}-${attempt}`;
@@ -63,9 +60,10 @@ export async function prepareWorkflowArtifacts(input: {
     console.error(JSON.stringify({ event: "planner_uncommitted_metadata_retained", files: paths.length,
       commit_status: commit?.status ?? "not_recorded" }));
   }
-  if (response.selected_articles_artifact !== null) {
+  if (response !== undefined && response.selected_articles_artifact !== null) {
     await retain("selected", join(input.root, response.selected_articles_artifact), "selected-articles.json");
   }
+  if (failures.length) throw new AggregateError(failures, "Workflow metadata validation failed; valid completed files retained");
   return outputs;
 }
 

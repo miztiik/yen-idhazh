@@ -79,7 +79,7 @@ jobs:
           bun run --cwd packages/common-contracts check
           bun run --cwd packages/ledger-file-writer check
           bun run --cwd services/feed-ingest-plan check
-          bun test ./services/feed-ingest-plan/test/feed-ingest-plan-report.test.ts ./services/feed-ingest-plan/test/feed-ingest-plan-outputs.test.ts ./services/feed-ingest-plan/test/feed-ingest-plan-workflow.test.ts --timeout 30000
+          bun test ./services/feed-ingest-plan/test/feed-ingest-plan-report.test.ts ./services/feed-ingest-plan/test/feed-ingest-plan-outputs.test.ts ./services/feed-ingest-plan/test/feed-ingest-plan-workflow.test.ts ./services/feed-ingest-plan/test/feed-ingest-plan-host.test.ts ./services/feed-ingest-plan/test/feed-ingest-plan-publication.test.ts --timeout 30000
           bun run services/feed-ingest-plan/test/verify-recorded-compatibility.ts
 
       - name: Read named history and call the real HTTP planner
@@ -95,7 +95,7 @@ jobs:
           set -o pipefail
           bun run services/feed-ingest-plan/scripts/feed-ingest-plan-http-proof.ts 2>&1 | tee "$RUNNER_TEMP/feed-ingest-plan/runtime.log"
 
-      - name: Commit exact current planner metadata
+      - name: Commit exact current planner and host metadata
         if: ${{ !cancelled() && steps.plan.outputs.current_run_files != '' }}
         env:
           CURRENT_RUN_FILES: ${{ steps.plan.outputs.current_run_files }}
