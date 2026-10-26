@@ -11,18 +11,13 @@ import { servePlan } from "../../services/feed-ingest-plan/src/api/server";
 import { ServiceSettingsSchema } from "../../services/feed-ingest-plan/src/config/service-settings";
 import { PlanResponseSchema } from "../../services/feed-ingest-plan/src/api/plan-response.schema";
 import { FeedHealthStateUpdateResponseSchema } from "../../services/feed-ingest-plan/src/api/feed-health-state.schema";
-import { ProbeConfigSchema } from "../../services/host-probes/src/config";
-import type { ProbeConfig } from "../../services/host-probes/src/config";
 import { stagePlannerHistory } from "./feed-ingest-plan-history";
 import { createExecutionOutputs, writeGitHubOutputs } from "./feed-ingest-plan-outputs";
 import { verifyPlanningCompletion } from "./feed-ingest-plan-verification";
-import { writePlannerReport } from "./feed-ingest-plan-report";
+import { WorkflowMachineMemorySchema } from "./feed-ingest-plan-profile-schema";
+import { WorkflowPolicySchema } from "./feed-ingest-plan-policy-report";
+import { observeWorkflowResources } from "./feed-ingest-plan-workflow-resources";
 
-export function configureDocumentProfiling(config: ProbeConfig, machineMemoryEnabled: boolean): ProbeConfig {
-  return ProbeConfigSchema.parse({ ...config, task_profile: {
-    ...config.task_profile, enabled: true, memory_enabled: true, machine_memory_enabled: machineMemoryEnabled,
-  } });
-}
 export async function invokePlannerHttp(inputs: PlanInputs, runtime: PlanRuntime, request: PlanRequest, directory: string) {
   await mkdir(directory, { recursive: true });
   const server = servePlan(inputs, runtime);
@@ -65,8 +60,9 @@ export function readWorkflowRequest(environment: Record<string, string | undefin
 async function runWorkflow() {
   const request = readWorkflowRequest(process.env);
   const root = process.cwd();
-  const { RUNNER_TEMP, GITHUB_OUTPUT, GITHUB_RUN_ID, GITHUB_RUN_ATTEMPT, GITHUB_STEP_SUMMARY } = process.env;
-  if (!RUNNER_TEMP || !GITHUB_OUTPUT || !GITHUB_RUN_ID || !GITHUB_RUN_ATTEMPT || !GITHUB_STEP_SUMMARY) throw new Error("Workflow execution controls are missing");
+  const { RUNNER_TEMP, GITHUB_OUTPUT, GITHUB_RUN_ID, GITHUB_RUN_ATTEMPT } = process.env;
+  if (!RUNNER_TEMP || !GITHUB_OUTPUT || !GITHUB_RUN_ID || !GITHUB_RUN_ATTEMPT) throw new Error("Workflow execution controls are missing");
+  const profileRequested = WorkflowMachineMemorySchema.parse(process.env.PROFILE_MACHINE_MEMORY);
   const directory = join(RUNNER_TEMP, "feed-ingest-plan");
   const inputs = await loadPlanInputs(root);
   const started = performance.now();
@@ -81,17 +77,29 @@ async function runWorkflow() {
   const git = Bun.spawn(["git", "rev-parse", "HEAD"], { cwd: root, stdout: "pipe", stderr: "pipe" });
   const [gitSha] = await Promise.all([new Response(git.stdout).text(), new Response(git.stderr).text()]);
   if (await git.exited !== 0) throw new Error("Code identity could not be read");
-  const runtime: PlanRuntime = { git_sha: gitSha.trim(), run_number: GITHUB_RUN_ID, correlation_id: randomUUID() };
+  const captured = new Date();
+  const correlationId = randomUUID();
+  const runtime: PlanRuntime = { git_sha: gitSha.trim(), run_number: GITHUB_RUN_ID, correlation_id: correlationId,
+    clock: () => captured, selection_clock: () => new Date() };
   await mkdir(directory, { recursive: true });
   await writeFile(join(directory, "history-staging-ms.json"), JSON.stringify(historyMs));
+  await writeFile(join(directory, "workflow-policy.json"), JSON.stringify(WorkflowPolicySchema.parse({
+    config: inputs.harvest.config, request, history: inputs.clock_config.collect,
+    parser_concurrency: inputs.settings.listener.parser_concurrency,
+  })));
   console.error(JSON.stringify({ event: "planner_history_staged", notices: staged.notices }));
-  const result = await invokePlannerHttp(inputs, runtime, request, directory);
-  await writeGitHubOutputs(GITHUB_OUTPUT, result.outputs);
-  await writePlannerReport({
-    config: inputs.harvest.config, summary_path: GITHUB_STEP_SUMMARY,
-    evidence: { response: result.summary, ...(result.health === undefined ? {} : { health: result.health }), historyStagingMs: historyMs },
+  const closeResources = await observeWorkflowResources({
+    root, directory, profileRequested, gitSha: runtime.git_sha, attempt: inputs.settings.run.attempt,
+    identity: { pipeline_name: "feed-ingest-plan", task_name: "planner-http-request",
+      run_id: `${captured.toISOString().slice(0, 10)}-${GITHUB_RUN_ID}`, correlation_id: correlationId, request_id: randomUUID() },
   });
-  if (!result.summary.planning_complete || result.http_status !== 200) process.exitCode = 2;
+  let outcome: "success" | "error" = "error";
+  try {
+    const result = await invokePlannerHttp(inputs, runtime, request, directory);
+    await writeGitHubOutputs(GITHUB_OUTPUT, result.outputs);
+    if (!result.summary.planning_complete || result.http_status !== 200) process.exitCode = 2;
+    else outcome = "success";
+  } finally { await closeResources(outcome); }
 }
 if (import.meta.main) {
   try { await runWorkflow(); }

@@ -29,7 +29,7 @@ on:
           - round-robin
           - none
       profile_machine_memory:
-        description: Run independent optional host CPU/RAM tools; does not gate planning
+        description: Profile the live planner CPU/RAM and separate controlled host tools; default off
         required: false
         default: false
         type: boolean
@@ -59,6 +59,10 @@ jobs:
             /.github/scripts/feed-ingest-plan-commit.ts
             /.github/scripts/feed-ingest-plan-report.ts
             /.github/scripts/feed-ingest-plan-report-format.ts
+            /.github/scripts/feed-ingest-plan-policy-report.ts
+            /.github/scripts/feed-ingest-plan-resource-summary.ts
+            /.github/scripts/feed-ingest-plan-workflow-resources.ts
+            /.github/scripts/feed-ingest-plan-artifacts.ts
             /.github/scripts/feed-ingest-plan-verification.ts
             /.github/scripts/feed-ingest-plan-http-proof.ts
             /.github/scripts/feed-ingest-plan-profile-proof.ts
@@ -108,34 +112,19 @@ jobs:
           ARTICLE_LIMIT: ${{ inputs.article_limit }}
           SHARDS: ${{ inputs.shards }}
           PARTITION_STRATEGY: ${{ inputs.partition_strategy }}
-        run: bun run .github/scripts/feed-ingest-plan-http-proof.ts
+          PROFILE_MACHINE_MEMORY: ${{ inputs.profile_machine_memory }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/feed-ingest-plan"
+          set -o pipefail
+          bun run .github/scripts/feed-ingest-plan-http-proof.ts 2>&1 | tee "$RUNNER_TEMP/feed-ingest-plan/runtime.log"
 
       - name: Commit exact current planner metadata
         if: ${{ !cancelled() && steps.plan.outputs.current_run_files != '' }}
         env:
           CURRENT_RUN_FILES: ${{ steps.plan.outputs.current_run_files }}
-        run: bun run .github/scripts/feed-ingest-plan-commit.ts
-
-      - name: Preserve selected text for the summarizer
-        if: ${{ always() && steps.plan.outputs.selected_articles_artifact != '' }}
-        uses: actions/upload-artifact@v7
-        with:
-          name: selected-articles-${{ github.run_id }}-${{ github.run_attempt }}
-          path: ${{ steps.plan.outputs.selected_articles_artifact }}
-          if-no-files-found: error
-
-      - name: Preserve body-free planner evidence
-        if: ${{ always() }}
-        uses: actions/upload-artifact@v7
-        with:
-          name: feed-ingest-plan-evidence
-          path: |
-            ${{ runner.temp }}/feed-ingest-plan/response.json
-            ${{ runner.temp }}/feed-ingest-plan/health.json
-            ${{ runner.temp }}/feed-ingest-plan/history-staging-ms.json
-            ${{ runner.temp }}/feed-ingest-plan/commit-result.json
-            ${{ runner.temp }}/feed-ingest-plan/state/raw/feed-ingest-plan/
-          if-no-files-found: warn
+        run: |
+          set -o pipefail
+          bun run .github/scripts/feed-ingest-plan-commit.ts 2>&1 | tee "$RUNNER_TEMP/feed-ingest-plan/commit.log"
 
       - name: Install optional host instruments
         if: ${{ !cancelled() && inputs.profile_machine_memory }}
@@ -147,13 +136,111 @@ jobs:
         continue-on-error: true
         run: bun run .github/scripts/feed-ingest-plan-profile-proof.ts
 
-      - name: Preserve independent host evidence
-        if: ${{ always() && inputs.profile_machine_memory }}
+      - name: Write the public planner summary and grouped annotations
+        if: ${{ always() }}
+        run: bun run .github/scripts/feed-ingest-plan-report.ts
+
+      - name: Prepare exact individual evidence and uncommitted metadata recovery
+        id: evidence
+        if: ${{ always() }}
+        run: bun run .github/scripts/feed-ingest-plan-artifacts.ts
+
+      # For unarchived uploads the filename is the artifact name; each path is one file.
+      - name: Preserve selected text for the summarizer
+        if: ${{ always() && steps.evidence.outputs.selected != '' }}
         uses: actions/upload-artifact@v7
         with:
-          name: independent-host-evidence
-          path: test-results/host-probes/resource-proof.json
-          if-no-files-found: warn
+          archive: false
+          path: ${{ runner.temp }}/feed-ingest-plan/${{ steps.evidence.outputs.selected }}
+          if-no-files-found: error
+
+      - name: Preserve planner response
+        if: ${{ always() && steps.evidence.outputs.response != '' }}
+        uses: actions/upload-artifact@v7
+        with:
+          archive: false
+          path: ${{ runner.temp }}/feed-ingest-plan/${{ steps.evidence.outputs.response }}
+          if-no-files-found: error
+
+      - name: Preserve feed work and request evidence
+        if: ${{ always() && steps.evidence.outputs.health != '' }}
+        uses: actions/upload-artifact@v7
+        with:
+          archive: false
+          path: ${{ runner.temp }}/feed-ingest-plan/${{ steps.evidence.outputs.health }}
+          if-no-files-found: error
+
+      - name: Preserve measured history staging time
+        if: ${{ always() && steps.evidence.outputs.history != '' }}
+        uses: actions/upload-artifact@v7
+        with:
+          archive: false
+          path: ${{ runner.temp }}/feed-ingest-plan/${{ steps.evidence.outputs.history }}
+          if-no-files-found: error
+
+      - name: Preserve metadata commit result
+        if: ${{ always() && steps.evidence.outputs.commit != '' }}
+        uses: actions/upload-artifact@v7
+        with:
+          archive: false
+          path: ${{ runner.temp }}/feed-ingest-plan/${{ steps.evidence.outputs.commit }}
+          if-no-files-found: error
+
+      - name: Preserve real planner and listener logs
+        if: ${{ always() && steps.evidence.outputs.runtime_log != '' }}
+        uses: actions/upload-artifact@v7
+        with:
+          archive: false
+          path: ${{ runner.temp }}/feed-ingest-plan/${{ steps.evidence.outputs.runtime_log }}
+          if-no-files-found: error
+
+      - name: Preserve real metadata commit logs
+        if: ${{ always() && steps.evidence.outputs.commit_log != '' }}
+        uses: actions/upload-artifact@v7
+        with:
+          archive: false
+          path: ${{ runner.temp }}/feed-ingest-plan/${{ steps.evidence.outputs.commit_log }}
+          if-no-files-found: error
+
+      - name: Preserve effective workflow settings
+        if: ${{ always() && steps.evidence.outputs.policy != '' }}
+        uses: actions/upload-artifact@v7
+        with:
+          archive: false
+          path: ${{ runner.temp }}/feed-ingest-plan/${{ steps.evidence.outputs.policy }}
+          if-no-files-found: error
+
+      - name: Preserve actual host and live planner resources
+        if: ${{ always() && steps.evidence.outputs.resources != '' }}
+        uses: actions/upload-artifact@v7
+        with:
+          archive: false
+          path: ${{ runner.temp }}/feed-ingest-plan/${{ steps.evidence.outputs.resources }}
+          if-no-files-found: error
+
+      - name: Preserve independent controlled host evidence
+        if: ${{ always() && steps.evidence.outputs.independent != '' }}
+        uses: actions/upload-artifact@v7
+        with:
+          archive: false
+          path: ${{ runner.temp }}/feed-ingest-plan/${{ steps.evidence.outputs.independent }}
+          if-no-files-found: error
+
+      - name: Preserve the public Markdown report
+        if: ${{ always() && steps.evidence.outputs.report != '' }}
+        uses: actions/upload-artifact@v7
+        with:
+          archive: false
+          path: ${{ runner.temp }}/feed-ingest-plan/${{ steps.evidence.outputs.report }}
+          if-no-files-found: error
+
+      - name: Preserve uncommitted metadata recovery only
+        if: ${{ always() && steps.evidence.outputs.metadata_recovery != '' }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: uncommitted-metadata-recovery-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/feed-ingest-plan/${{ steps.evidence.outputs.metadata_recovery }}
+          if-no-files-found: error
 
       - name: Require completed planning
         if: ${{ !cancelled() }}

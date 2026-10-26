@@ -54,24 +54,39 @@ test("manual controls commit only current metadata and keep optional host tools 
   expect(controls.partition_strategy!.options).toEqual(PlanRequestSchema.shape.partition_strategy.unwrap().options);
   expect(controls.profile_machine_memory!.default).toBe((await loadProbeConfig()).task_profile.machine_memory_enabled);
   const plan = steps.find(step => step.id === "plan")!;
-  expect(plan.run).toBe("bun run .github/scripts/feed-ingest-plan-http-proof.ts");
+  expect(plan.run).toContain("set -o pipefail");
+  expect(plan.run).toContain('bun run .github/scripts/feed-ingest-plan-http-proof.ts 2>&1 | tee "$RUNNER_TEMP/feed-ingest-plan/runtime.log"');
   expect(plan.env).toEqual({
     FRESHNESS_HOURS: "${{ inputs.freshness_hours }}", ARTICLE_LIMIT: "${{ inputs.article_limit }}",
     SHARDS: "${{ inputs.shards }}", PARTITION_STRATEGY: "${{ inputs.partition_strategy }}",
+    PROFILE_MACHINE_MEMORY: "${{ inputs.profile_machine_memory }}",
   });
   expect(plan.run).not.toContain("${{");
   const commit = steps.find(step => step.name === "Commit exact current planner metadata")!;
   expect(commit.if).toContain("!cancelled()");
   expect(commit.if).toContain("current_run_files");
   expect(commit.if).not.toContain("planning_complete");
+  expect(commit.run).toContain("set -o pipefail");
+  expect(commit.run).toContain('tee "$RUNNER_TEMP/feed-ingest-plan/commit.log"');
   const textArtifact = steps.find(step => step.name === "Preserve selected text for the summarizer")!;
-  expect(textArtifact.with?.path).toBe("${{ steps.plan.outputs.selected_articles_artifact }}");
-  const metadata = steps.find(step => step.name === "Preserve body-free planner evidence")!;
-  expect(String(metadata.with?.path).trim().split("\n")).toEqual([
-    "${{ runner.temp }}/feed-ingest-plan/response.json", "${{ runner.temp }}/feed-ingest-plan/health.json",
-    "${{ runner.temp }}/feed-ingest-plan/history-staging-ms.json", "${{ runner.temp }}/feed-ingest-plan/commit-result.json",
-    "${{ runner.temp }}/feed-ingest-plan/state/raw/feed-ingest-plan/",
-  ]);
+  expect(textArtifact.with?.path).toBe("${{ runner.temp }}/feed-ingest-plan/${{ steps.evidence.outputs.selected }}");
+  const individual = steps.filter(step => step.uses === "actions/upload-artifact@v7" && step.with?.archive === false);
+  expect(individual).toHaveLength(11);
+  for (const artifact of individual) {
+    expect(artifact.with?.name).toBeUndefined();
+    expect(String(artifact.with?.path)).not.toMatch(/[\n*]/);
+    expect(artifact.if).toContain("always()");
+    expect(artifact.with?.["if-no-files-found"]).toBe("error");
+  }
+  const recovery = steps.find(step => step.name === "Preserve uncommitted metadata recovery only")!;
+  expect(recovery.with?.name).toBe("uncommitted-metadata-recovery-${{ github.run_id }}-${{ github.run_attempt }}");
+  expect(recovery.with?.path).toBe("${{ runner.temp }}/feed-ingest-plan/${{ steps.evidence.outputs.metadata_recovery }}");
+  expect(steps.find(step => step.id === "evidence")?.if).toContain("always()");
+  const report = steps.findIndex(step => step.name === "Write the public planner summary and grouped annotations");
+  expect(report).toBeGreaterThan(steps.findIndex(step => step.name === "Run independent optional host proof"));
+  expect(steps[report]?.run).toBe("bun run .github/scripts/feed-ingest-plan-report.ts");
+  expect(steps[report]?.if).toContain("always()");
+  expect(text).not.toContain("/state/raw/feed-ingest-plan/");
   const optional = steps.filter(step => step["continue-on-error"]);
   expect(optional).toHaveLength(2);
   expect(optional.every(step => step.if?.includes("inputs.profile_machine_memory"))).toBe(true);
@@ -192,6 +207,7 @@ test("strict-checks the exact named sparse adapter and test inventory in one com
       ".github/scripts/feed-ingest-plan-http-proof.ts", ".github/scripts/feed-ingest-plan-commit.ts",
       ".github/scripts/feed-ingest-plan-verification.ts", ".github/scripts/tests/feed-ingest-plan-outputs.test.ts",
       ".github/scripts/tests/feed-ingest-plan-report.test.ts", ".github/scripts/tests/feed-ingest-plan-workflow.test.ts",
+      ".github/scripts/feed-ingest-plan-artifacts.ts", ".github/scripts/feed-ingest-plan-profile-proof.ts",
     ]);
     const adapters: string[] = [];
     for (const entry of selection.trim().split("\n").map(value => value.trim())) {

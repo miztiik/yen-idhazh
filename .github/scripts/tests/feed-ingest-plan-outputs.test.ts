@@ -1,7 +1,7 @@
 /** Do actual HTTP results, native files and selected artifacts survive the isolated handoff? */
 import { expect, test } from "bun:test";
 import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { createHash } from "node:crypto";
@@ -15,7 +15,9 @@ import { invokePlannerHttp } from "../feed-ingest-plan-http-proof";
 import { commitPlannerFiles } from "../feed-ingest-plan-commit";
 import { verifyParquetFiles, verifyPlanningCompletion, verifyRecordedCompatibility } from "../feed-ingest-plan-verification";
 import { createExecutionOutputs, writeGitHubOutputs } from "../feed-ingest-plan-outputs";
-import { formatExecutionReport, readExecutionReport, writePlannerReport } from "../feed-ingest-plan-report";
+import { formatExecutionOutcome, formatExecutionReport, readExecutionReport, writePlannerReport } from "../feed-ingest-plan-report";
+import { prepareWorkflowArtifacts } from "../feed-ingest-plan-artifacts";
+import { observeWorkflowResources, WorkflowResourcesSchema } from "../feed-ingest-plan-workflow-resources";
 
 async function git(directory: string, args: string[]) {
   const child = Bun.spawn(["git", ...args], { cwd: directory, stdout: "pipe", stderr: "pipe", env: {
@@ -32,7 +34,31 @@ test("actual HTTP output retains selected text separately from its strict metada
   try {
     fixture.inputs.settings.listener.port = 0;
     const directory = join(fixture.directory, "evidence");
-    const result = await invokePlannerHttp(fixture.inputs, fixture.runtime, { article_limit: 1 }, directory);
+    const resourceConfig = join(fixture.directory, "resource-config");
+    await mkdir(join(resourceConfig, "config"), { recursive: true });
+    const settings = await Bun.file(new URL("../../../config/idhazh.json", import.meta.url)).json();
+    await writeFile(join(resourceConfig, "config", "idhazh.json"), JSON.stringify({ ...settings,
+      observability: { ...settings.observability, host_fingerprint: false, host_fingerprint_placement_enabled: false } }));
+    await writeFile(join(resourceConfig, "config", "host-probes.json"),
+      await Bun.file(new URL("../../../config/host-probes.json", import.meta.url)).text());
+    await mkdir(directory, { recursive: true });
+    const closeResources = await observeWorkflowResources({
+      root: resourceConfig, directory, profileRequested: true, gitSha: fixture.runtime.git_sha, attempt: 1,
+      identity: { pipeline_name: "feed-ingest-plan", task_name: "planner-http-request",
+        run_id: "2026-10-21-700", correlation_id: fixture.runtime.correlation_id!, request_id: crypto.randomUUID() },
+    });
+    let result: Awaited<ReturnType<typeof invokePlannerHttp>>;
+    let outcome: "success" | "error" = "error";
+    try {
+      result = await invokePlannerHttp(fixture.inputs, fixture.runtime, { article_limit: 1 }, directory);
+      if (result.summary.planning_complete) outcome = "success";
+    } finally { await closeResources(outcome); }
+    const resources = WorkflowResourcesSchema.parse(await Bun.file(join(directory, "resources.json")).json());
+    expect(resources.host.status).toBe("disabled");
+    expect(resources.profile.status).toBe("recorded");
+    if (resources.profile.status !== "recorded") throw new Error("The real optional planner profile must close");
+    expect(resources.profile.value.identity.task_name).toBe("planner-http-request");
+    expect(resources.profile.value.processes.server.closing.pid).toBeNull();
     expect(result.http_status).toBe(200);
     expect(result.summary.planning_complete).toBe(true);
     const paths: string[] = JSON.parse(result.outputs.current_run_files!);
@@ -47,6 +73,32 @@ test("actual HTTP output retains selected text separately from its strict metada
       expect(evidence).not.toContain(artifact.articles[0]!.article_text);
     }
     expect(JSON.parse(await readFile(join(directory, "response.json"), "utf8"))).toEqual(result.summary);
+    await mkdir(join(directory, "state"), { recursive: true });
+    for (const path of paths) {
+      await mkdir(dirname(join(directory, "state", path)), { recursive: true });
+      await Bun.write(join(directory, "state", path), await readFile(join(fixture.inputs.outputRoot, path)));
+    }
+    await writeFile(join(directory, "runtime.log"), fixture.events.map(event => JSON.stringify(event)).join("\n"));
+    const retained = await prepareWorkflowArtifacts({ root: fixture.directory, directory, runNumber: "700", attempt: 1 });
+    expect(retained.selected).toBe("artifacts/700-1-selected-articles.json");
+    expect(SelectedArticlesArtifactSchema.parse(await Bun.file(join(directory, retained.selected!)).json())).toEqual(artifact);
+    const recovery = join(directory, retained.metadata_recovery!);
+    expect(await Bun.file(join(recovery, "current-run-files.json")).json()).toEqual(paths);
+    for (const path of paths) expect(await readFile(join(recovery, path))).toEqual(await readFile(join(fixture.inputs.outputRoot, path)));
+    const log = await Bun.file(join(directory, retained.runtime_log!)).text();
+    expect(log).not.toContain(artifact.articles[0]!.article_text);
+    expect(log).not.toContain("article_text");
+    await writeFile(join(directory, "commit-result.json"), JSON.stringify({ status: "landed", commit: "a".repeat(40), files: paths.length }));
+    const confirmed = await prepareWorkflowArtifacts({ root: fixture.directory, directory, runNumber: "700", attempt: 2 });
+    expect(confirmed.metadata_recovery).toBeUndefined();
+    expect(confirmed.selected).toBe("artifacts/700-2-selected-articles.json");
+    expect(confirmed.selected).not.toBe(retained.selected);
+    await expect(prepareWorkflowArtifacts({ root: fixture.directory, directory, runNumber: "../injected", attempt: 1 })).rejects.toThrow();
+    await writeFile(join(directory, "response.json"), "invalid JSON");
+    const published = join(directory, "artifact-outputs");
+    await expect(prepareWorkflowArtifacts({ root: fixture.directory, directory, runNumber: "700", attempt: 3,
+      outputPath: published })).rejects.toThrow();
+    expect(await readFile(published, "utf8")).toContain("runtime_log<<");
   } finally { await fixture.close(); }
 });
 
@@ -55,6 +107,7 @@ test("exact metadata appends through a generated bare origin with complete raw i
   try {
     fixture.inputs.outputRoot = join(fixture.directory, "feed-ingest-plan", "state");
     const summary = summarizePlan(await runFeedPlan({}, fixture.inputs, fixture.runtime));
+    await writeFile(join(fixture.directory, "feed-ingest-plan", "response.json"), JSON.stringify(summary));
     const paths: string[] = JSON.parse(createExecutionOutputs(summary, fixture.inputs.registrations).current_run_files!);
     const repository = join(fixture.directory, "checkout");
     const origin = join(fixture.directory, "origin.git");
@@ -100,6 +153,24 @@ test("exact metadata appends through a generated bare origin with complete raw i
     expect((await invokeCommit()).status).toBe("already-on-main");
     await expect(commitPlannerFiles({ repository, stateRoot: fixture.inputs.outputRoot, retry, message: "Refuse old format",
       paths: ["raw/feed-ingest-plan/dispatches/2026/10/21/anything.parquet"] })).rejects.toThrow("current planner");
+    await writeFile(join(repository, "config", "push-retry.json"), "{}");
+    const failed = Bun.spawn([process.execPath, fileURLToPath(new URL("../feed-ingest-plan-commit.ts", import.meta.url))], {
+      cwd: repository, stdout: "pipe", stderr: "pipe",
+      env: { ...Bun.env, RUNNER_TEMP: fixture.directory, CURRENT_RUN_FILES: JSON.stringify(paths) },
+    });
+    const [failedOutput, failedErrors, exit] = await Promise.all([
+      new Response(failed.stdout).text(), new Response(failed.stderr).text(), failed.exited,
+    ]);
+    expect(exit).toBe(2);
+    expect(failedOutput).toBe("");
+    expect(JSON.parse(failedErrors)).toMatchObject({ event: "planner_metadata_commit_failed", status: "failed",
+      reason: "push retry requires deadline_seconds.default" });
+    expect(await Bun.file(join(fixture.directory, "feed-ingest-plan", "commit-result.json")).json())
+      .toEqual({ status: "failed", commit: null, files: paths.length });
+    const recovered = await prepareWorkflowArtifacts({ root: fixture.directory, directory: join(fixture.directory, "feed-ingest-plan"),
+      runNumber: "700", attempt: 3 });
+    expect(recovered.metadata_recovery).toBeDefined();
+    for (const path of paths) expect(await readFile(join(fixture.inputs.outputRoot, path))).toBeInstanceOf(Buffer);
   } finally { await fixture.close(); }
 });
 
@@ -113,7 +184,10 @@ test("one real result and every native file stay unchanged through both report m
     const outputs = createExecutionOutputs(response, fixture.inputs.registrations);
     const paths: string[] = JSON.parse(outputs.current_run_files!);
     const bytes = await Promise.all(paths.map(path => readFile(join(fixture.inputs.outputRoot, path))));
-    const evidence = { response, health, historyStagingMs: 3 };
+    const evidence = { response, health, historyStagingMs: 3, policy: {
+      config: fixture.inputs.harvest.config, request: {}, history: fixture.inputs.clock_config.collect,
+      parser_concurrency: fixture.inputs.settings.listener.parser_concurrency,
+    } };
     const summary = join(fixture.directory, "summary.md");
     const annotations: string[] = [];
     await writePlannerReport({ config: { ...fixture.inputs.harvest.config, workflow_reporting: {
@@ -123,12 +197,40 @@ test("one real result and every native file stay unchanged through both report m
     await writePlannerReport({ config: fixture.inputs.harvest.config, evidence, summary_path: summary,
       annotate: line => annotations.push(line) });
     expect(await readFile(summary, "utf8")).toBe(formatExecutionReport(evidence));
-    expect(annotations).toEqual([]);
+    expect(annotations).toEqual([...formatExecutionOutcome(evidence).annotations]);
+    expect(annotations.map(line => line.slice(0, line.indexOf("::", 2)))).toEqual([
+      "::notice title=Resources", "::notice title=This run's feed work", "::notice title=Closed-day request spend",
+      "::notice title=Grouped exclusions", "::notice title=Policy used",
+    ]);
+    const rendered = Bun.markdown.html(await readFile(summary, "utf8"));
+    expect((rendered.match(/<table>/g) ?? [])).toHaveLength(7);
+    for (const table of rendered.matchAll(/<table>[\s\S]*?<\/table>/g)) {
+      const header = table[0].match(/<thead>[\s\S]*?<\/thead>/)?.[0] ?? "";
+      const columns = (header.match(/<th>/g) ?? []).length;
+      expect(columns).toBeGreaterThan(0);
+      for (const row of table[0].matchAll(/<tr>([\s\S]*?)<\/tr>/g)) {
+        const cells = (row[1]!.match(/<(?:th|td)>/g) ?? []).length;
+        expect(cells).toBe(columns);
+      }
+    }
+    const reason = "MISSING_REQUIRED_FIELDS";
+    const firstHealth = health.rows[0]!;
+    const changed = { ...evidence, health: { ...health, rows: [{ ...firstHealth, rejection_counts: [
+      ...firstHealth.rejection_counts, { reason_code: reason, count: 1, subject: "article", stage: "harvest-feeds", attribution: null },
+      { reason_code: "HOSTILE\r\n::error title=unsafe::% <script>", count: 1, subject: "article", stage: "harvest-feeds", attribution: null },
+    ] }] } };
+    const escaped = formatExecutionOutcome(changed);
+    expect(escaped.summary).toContain("It does not mean a feed configuration field is missing.");
+    expect(escaped.annotations[3]).toContain("which field failed");
+    expect(escaped.annotations.every(line => !line.includes("\n") && !line.includes("\r"))).toBe(true);
+    expect(escaped.annotations[3]).toContain("%0A");
+    expect(Bun.markdown.html(escaped.summary)).not.toContain("<script>");
     const directory = join(fixture.directory, "evidence");
     await mkdir(directory);
     await writeFile(join(directory, "response.json"), JSON.stringify(response));
     await writeFile(join(directory, "health.json"), JSON.stringify(health));
     await writeFile(join(directory, "history-staging-ms.json"), "3");
+    await writeFile(join(directory, "workflow-policy.json"), JSON.stringify(evidence.policy));
     expect(await readExecutionReport(directory)).toBe(formatExecutionReport(evidence));
     for (const [index, path] of paths.entries()) expect(await readFile(join(fixture.inputs.outputRoot, path))).toEqual(bytes[index]!);
     await verifyPlanningCompletion(fixture.inputs.outputRoot, response, fixture.inputs.registrations, fixture.directory);
