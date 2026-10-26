@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import replace
 from pathlib import Path
 
+from contracts._fixtures import planner_payload
 from pytest import CaptureFixture, mark
 from support.ledger import writer_identity
 from support.paths import CONTRACT_FIXTURES_DIR, read_text
@@ -12,11 +13,11 @@ from support.paths import CONTRACT_FIXTURES_DIR, read_text
 from idhazh import ledger
 from idhazh.contracts.base import ServerJob
 from idhazh.contracts.feed_health import FeedHealthRow
-from idhazh.contracts.feed_ingest_editorial_selection import EditorialSelectionRow
-from idhazh.contracts.feed_ingest_source_run import SourceRunRecord
+from idhazh.contracts.feed_ingest_selected_article import SelectedArticleRow
 from idhazh.contracts.file_envelope import Compression, FileEnvelope, Format, Period, WriterIdentity
 from idhazh.contracts.host_fingerprint import HostFingerprintRow
 from idhazh.contracts.ledger_name import LedgerName
+from idhazh.contracts.run_plan import RunPlan
 from idhazh.ledger import parquet, published_columns
 from idhazh.ledger.arrow_schema import Column, ColumnType, LogicalType
 from idhazh.ledger.persist import file_columns
@@ -107,6 +108,13 @@ def test_current_published_columns_pass(tmp_path: Path, capsys: CaptureFixture[s
     assert capsys.readouterr().out == (
         "published-columns host-fingerprint: checked 2 file(s), current 2, history none\n"
     )
+    planner = SelectedArticleRow.model_validate(planner_payload("selected-articles"))
+    ledger.persist(
+        site_tree / "state", [planner], ledger=LedgerName.FEED_INGEST_PLAN_SELECTED_ARTICLES,
+        covers=planner.date, fmt=Format.PARQUET,
+    )
+    assert published_columns.check(site_tree, [LedgerName.FEED_INGEST_PLAN_SELECTED_ARTICLES]) == 0
+    assert [column.name for column in file_columns(SelectedArticleRow)] == list(SelectedArticleRow.model_fields)
 
 
 @mark.parametrize(
@@ -177,24 +185,21 @@ def test_older_file_lacking_a_newer_column_passes_and_prints(
     )
     cases: tuple[
         tuple[
-            type[EditorialSelectionRow] | type[SourceRunRecord],
+            type[RunPlan],
             LedgerName, str, str, str, bool,
         ], ...
     ] = (
         (
-            EditorialSelectionRow, LedgerName.FEED_INGEST_PLAN_EDITORIAL_SELECTIONS,
-            "feed-ingest-editorial-selection/one-article.json",
-            "ratings", "source_reliability", True,
+            RunPlan, LedgerName.RUN_PLAN, "run-plan/one-day.json",
+            "items", "authority_score", True,
         ),
         (
-            SourceRunRecord, LedgerName.FEED_INGEST_PLAN_SOURCE_RUNS,
-            "feed-ingest-source-run/one-observation.json",
-            "completion_evidence", "logical", True,
+            RunPlan, LedgerName.RUN_PLAN, "run-plan/one-day.json",
+            "items", "feed_reliability", True,
         ),
         (
-            EditorialSelectionRow, LedgerName.FEED_INGEST_PLAN_EDITORIAL_SELECTIONS,
-            "feed-ingest-editorial-selection/one-article.json",
-            "ratings", "base_article_score", False,
+            RunPlan, LedgerName.RUN_PLAN, "run-plan/one-day.json",
+            "items", "rank_score", False,
         ),
     )
     for index, (model, which, fixture, column_name, absent, compatible) in enumerate(cases):
@@ -222,11 +227,11 @@ def test_older_file_lacking_a_newer_column_passes_and_prints(
             replace(held, type=older_type) if held.name == column_name else held
             for held in columns
         )
-        _rewrite_file(nested_file, columns=older_columns, schema_version="2026-10-20")
+        _rewrite_file(nested_file, columns=older_columns, schema_version="2026-01-01")
         assert published_columns.check(nested_tree, [which]) == (0 if compatible else 1)
         printed = capsys.readouterr().out
         expected_line = (
-            "history 2026-10-20:" if compatible else f"FAIL F2 ledger={which.value}"
+            "history 2026-01-01:" if compatible else f"FAIL F2 ledger={which.value}"
         )
         assert expected_line in printed
         _rewrite_file(nested_file, columns=older_columns, schema_version=model.schema_version())
@@ -278,34 +283,28 @@ def test_f2_shared_column_with_changed_type_fails_and_prints(
         "a new version, CLAUDE.md section 11, or re-pack the file"
     ) in printed
     nested_tree = tmp_path / "nested-type-change"
-    row = EditorialSelectionRow.from_json(read_text(
-        CONTRACT_FIXTURES_DIR / "feed-ingest-editorial-selection/one-article.json"
-    ))
+    row = RunPlan.from_json(read_text(CONTRACT_FIXTURES_DIR / "run-plan/one-day.json"))
     (nested_file,) = ledger.persist(
-        nested_tree / "state", [row], ledger=LedgerName.FEED_INGEST_PLAN_EDITORIAL_SELECTIONS,
+        nested_tree / "state", [row], ledger=LedgerName.RUN_PLAN,
         covers=row.date, identity=_identity(), fmt=Format.PARQUET,
     )
-    columns = file_columns(EditorialSelectionRow)
-    ratings = next(column for column in columns if column.name == "ratings")
-    assert isinstance(ratings.type, LogicalType)
-    source = next(field for field in ratings.type.fields if field.name == "source")
-    changed_source = replace(source, type=replace(
-        source.type, fields=tuple(
+    columns = file_columns(RunPlan)
+    items = next(column for column in columns if column.name == "items")
+    assert isinstance(items.type, LogicalType) and items.type.item_type is not None
+    changed_items = replace(items.type, item_type=replace(
+        items.type.item_type, fields=tuple(
             replace(field, type=replace(field.type, scalar="string"))
-            if field.name == "value" else field for field in source.type.fields
+            if field.name == "authority_score" else field for field in items.type.item_type.fields
         ),
     ))
-    changed_ratings = replace(ratings.type, fields=tuple(
-        changed_source if field.name == "source" else field for field in ratings.type.fields
-    ))
     _rewrite_file(nested_file, columns=tuple(
-        replace(column, type=changed_ratings) if column.name == "ratings" else column
+        replace(column, type=changed_items) if column.name == "items" else column
         for column in columns
-    ), schema_version="2026-10-20")
+    ), schema_version="2026-01-01")
     assert published_columns.check(
-        nested_tree, [LedgerName.FEED_INGEST_PLAN_EDITORIAL_SELECTIONS],
+        nested_tree, [LedgerName.RUN_PLAN],
     ) == 1
-    assert "column=ratings" in capsys.readouterr().out
+    assert "column=items" in capsys.readouterr().out
 
 
 def test_f3_newer_file_fails_and_prints(

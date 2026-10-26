@@ -38,10 +38,10 @@ test('a reader loads real ledgers, queries them, and draws the answer', async ({
 	await openExplorer(page, PINNED);
 	await chooseExplorerQuestion(
 		page,
-		['dispatches', 'host-fingerprint'],
-		'SELECT d.covers AS date, count(*) AS rows, max(h.cores) AS cores, ' +
-			'max(d.content.article_text) AS text FROM dispatches d CROSS JOIN "host-fingerprint" h ' +
-			'GROUP BY d.covers ORDER BY d.covers'
+		['selected-articles', 'host-fingerprint'],
+		'SELECT d.date, count(*) AS rows, max(h.cores) AS cores, ' +
+			'max(d.title) AS title FROM "selected-articles" d CROSS JOIN "host-fingerprint" h ' +
+			'GROUP BY d.date ORDER BY d.date'
 	);
 	await expect(page.locator('[data-ledger-name] input[type="checkbox"]')).toHaveCount(0);
 	await expect(page.locator('[data-workbench-region="ledgers"]')).not.toContainText('availability not established');
@@ -52,8 +52,8 @@ test('a reader loads real ledgers, queries them, and draws the answer', async ({
 	await runExplorer(page);
 	await expectAnswer(page, 'table');
 	expect(await tableRows(page)).toEqual([
-		['2026-10-19', '1', '4', 'An article contains this recorded text.'],
-		['2026-10-20', '1', '4', 'An article contains this recorded text.']
+		['2026-10-19', '1', '4', 'Caf\u00e9 \u6771\u4eac'],
+		['2026-10-20', '1', '4', 'Caf\u00e9 \u6771\u4eac']
 	]);
 	for (const ledger of FEED_LEDGERS) {
 		await expect(page.locator(`[data-ledger-name="${ledger}"]`)).toBeVisible();

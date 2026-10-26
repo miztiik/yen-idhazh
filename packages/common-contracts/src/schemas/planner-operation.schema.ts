@@ -4,9 +4,10 @@ import { CountSchema, NonEmptySchema, RunIdSchema, Sha256Schema, SlugSchema, Tim
 import { FetchFailureSchema } from "./harvest-diagnostics.schema";
 import { RecordedInstantSchema } from "./recorded-instant.schema";
 
-export const OPERATION_VERSION = "2026-10-23T09:22";
-const OperationVersionSchema = z.enum(["2026-10-23", OPERATION_VERSION]).default(OPERATION_VERSION);
-export const PLANNER_OPERATION_VERSION = "2026-10-23T18:50";
+export const OPERATION_VERSION = "2026-10-26";
+const OperationVersionSchema = z.enum(["2026-10-23", "2026-10-23T09:22", OPERATION_VERSION]).default(OPERATION_VERSION);
+export const PLANNER_OPERATION_VERSION = "2026-10-26";
+const capturedInstantVersion = "2026-10-23T18:50";
 export const RequestIdSchema = z.uuid({ version: "v4" });
 export const FetchAttemptSchema = z.strictObject({
   phase: z.enum(["validation", "robots", "target"]), sequence: CountSchema, retry: CountSchema,
@@ -32,6 +33,9 @@ export const FetchedDocumentSchema = z.strictObject({
   robots_http_status: z.int().min(100).max(599).nullable(),
   attempts: z.array(FetchAttemptSchema), observation: PlannerObservationSchema,
   attempt_observations: z.array(PlannerObservationSchema), body_sha256: Sha256Schema.nullable(),
+  parent_fetch_request_id: RequestIdSchema.nullable().default(null),
+  parent_batch_id: RequestIdSchema.nullable().default(null),
+  entry_ordinal: CountSchema.nullable().default(null),
 }).superRefine((value, ctx) => {
   if (value.body === null ? value.body_sha256 !== null : value.body_sha256 === null) {
     ctx.addIssue({ code: "custom", message: "body and body digest must be available together" });
@@ -41,24 +45,29 @@ export const FetchedDocumentSchema = z.strictObject({
     ctx.addIssue({ code: "custom", message: "fetch observation must retain document identity" });
   }
   if (value.attempts.length !== value.attempt_observations.length
-    || value.attempts.some((attempt, index) => attempt.sequence !== index)) {
+    || value.attempts.some((attempt, index) => attempt.sequence !== index)
+    || value.attempt_observations.some(observation => observation.operation !== "attempt"
+      || observation.source_id !== value.source_id || observation.article_id !== value.article_id
+      || observation.run_id !== value.observation.run_id || observation.correlation_id !== value.observation.correlation_id
+      || observation.caused_by_event_id !== value.observation.event_id)) {
     ctx.addIssue({ code: "custom", message: "attempt observations must match the ordered attempts" });
   }
 }).meta({
   version: OPERATION_VERSION,
   changelog: [
-    { version: OPERATION_VERSION, change: "Record actual retry waits and elapsed retry time." },
+    { version: OPERATION_VERSION, change: "Link fetched articles to bounded server-owned feed offers." },
+    { version: "2026-10-23T09:22", change: "Record actual retry waits and elapsed retry time." },
     { version: "2026-10-23", change: "Declare durable fetched documents and causal observations." },
   ],
 });
 export const PlannerOperationSchema = z.strictObject({
-  version: z.enum(["2026-10-23", OPERATION_VERSION, PLANNER_OPERATION_VERSION]).default(PLANNER_OPERATION_VERSION),
+  version: z.enum(["2026-10-23", "2026-10-23T09:22", capturedInstantVersion, PLANNER_OPERATION_VERSION]).default(PLANNER_OPERATION_VERSION),
   request_id: RequestIdSchema, operation: z.enum(["fetch", "parse", "plan"]),
   input_sha256: Sha256Schema, config_sha256: Sha256Schema, run_id: RunIdSchema,
   correlation_id: RequestIdSchema, created_at: RecordedInstantSchema, state: z.enum(["started", "complete"]),
   response_json: z.string().nullable(), artifact: FetchedDocumentSchema.nullable(),
 }).superRefine((value, ctx) => {
-  if (value.created_at.includes(".") && value.version < PLANNER_OPERATION_VERSION) {
+  if (value.created_at.includes(".") && value.version < capturedInstantVersion) {
     ctx.addIssue({ code: "custom", message: "legacy operations use whole-second created_at" });
   }
   if (value.state === "started" && (value.response_json !== null || value.artifact !== null)) {
@@ -75,8 +84,9 @@ export const PlannerOperationSchema = z.strictObject({
 }).meta({
   version: PLANNER_OPERATION_VERSION,
   changelog: [
-    { version: PLANNER_OPERATION_VERSION, change: "Retain the original captured clock precision through replay." },
-    { version: OPERATION_VERSION, change: "Retain measured retry waits on fetched artifacts." },
+    { version: PLANNER_OPERATION_VERSION, change: "Retain current fetched offer references through request replay." },
+    { version: capturedInstantVersion, change: "Retain the original captured clock precision through replay." },
+    { version: "2026-10-23T09:22", change: "Retain measured retry waits on fetched artifacts." },
     { version: "2026-10-23", change: "Declare durable keyed operator request replay." },
   ],
 });
@@ -85,12 +95,14 @@ export type FetchedDocument = z.infer<typeof FetchedDocumentSchema>;
 
 export const FetchRequestSchema = z.strictObject({
   request_id: RequestIdSchema, correlation_id: RequestIdSchema,
-  source_id: SlugSchema, kind: z.enum(["feed", "article"]), url: UrlSchema.optional(),
+  feed_id: SlugSchema, kind: z.enum(["feed", "article"]), url: UrlSchema.optional(),
+  batch_id: RequestIdSchema.optional(), offer_id: Sha256Schema.optional(),
   caused_by_event_id: z.uuid({ version: "v5" }).optional(),
-}).refine(value => value.kind === "article" || value.url === undefined, {
+}).refine(value => value.kind === "article" || (value.url === undefined && value.batch_id === undefined && value.offer_id === undefined), {
   message: "feed URLs come only from the configured source", path: ["url"],
-}).refine(value => value.kind === "feed" || value.url !== undefined, {
-  message: "article fetch requires an operator-owned URL", path: ["url"],
+}).refine(value => value.kind === "feed" || (value.url !== undefined
+  ? value.batch_id === undefined && value.offer_id === undefined : value.batch_id !== undefined && value.offer_id !== undefined), {
+  message: "article fetch requires an operator URL or a complete server-owned offer reference", path: ["url"],
 });
 export const ParseRequestSchema = z.strictObject({
   request_id: RequestIdSchema, fetch_request_id: RequestIdSchema,

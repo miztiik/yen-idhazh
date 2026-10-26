@@ -1,6 +1,6 @@
 # Ledger compaction
 
-**Last Updated**: 2026-10-23
+**Last Updated**: 2026-10-26
 
 How a ledger's daily, monthly and yearly files are packed and dropped. The
 gardener runs a compaction like any other task; how a wake runs its tasks and
@@ -22,7 +22,7 @@ and nothing newer, so a finished day reaches it within about 48 hours while
 the daily wakes succeed. `item-health` and `host-fingerprint` pack a month
 45 days after it ends, as `summary-quality-evals` and `feed-health` do.
 Report-only packing cannot refresh a packed-only reader.
-**All nineteen ledgers pack live and use the same retention chain:** days
+**Registered live compactions use the declared retention chain:** days
 become months 45 whole days after the month ends; months become years 93 whole
 days after the year ends; indexed years expire 36 calendar months after their
 UTC end.
@@ -197,15 +197,20 @@ Days go in order, each on its own. For each one the pass reads every raw file of
 the day and settles the rows: one file's rows per work unit - the last file of
 its highest attempt - then the first row of each key. It writes the day's day
 file and no raw listing.
-The six feed-planning ledgers instead retain each original run and attempt,
-then deduplicate by their declared business key. Identical records count once;
-conflicting records refuse the day before set-aside actions, writes, indexes
-or source deletion. A reopened month applies the same refusal before changes.
-Ordinary monthly and yearly packing preserves settled lower-tier rows.
-The diversity key includes measurement unit, keeping count and ratio rows
-distinct. New completion receipts commit logical record membership independent
-of file boundaries; their encoding and old raw-only limitation are defined in
-[feed planning audit recording](../sources/feed-ingest-audit.md#compaction-safe-attempt-proof).
+The four current planner ledgers instead use their declared row identities
+and minimal native envelope. They never add generic `unit_id`, Git SHA or
+writer-identity columns. Discovery retains the global earliest URL sighting.
+Selected, health and run rows retain distinct actual execution/attempt facts;
+identical raw/compact copies count once and conflicting records refuse the
+period before destructive changes.
+
+Daily, monthly, reopened-month and grouped yearly rendering all use the same
+native planner settlement. Readers include late raw planner work beside
+compact coverage; another family keeps its existing compact-first rule.
+Packing preserves captured reliability and score values rather than summing
+them. Run counters can be aggregated later, once per fact.
+The row identities and missing-data rules are
+[the planner reference](../../reference/feed-planner-ledgers.md#e-dates-counters-and-compaction).
 After all stages decide their files, the pass writes each final index once,
 in yearly, monthly, daily order, then deletes source files. Monthly absorption
 and new days share one final daily index. Index bytes grow linearly with the

@@ -9,7 +9,7 @@ from support.paths import CONTRACT_FIXTURES_DIR, read_text
 
 from idhazh import ledger
 from idhazh.contracts.base import ServerJob
-from idhazh.contracts.feed_ingest_rejection import CandidateRejectionRecord
+from idhazh.contracts.feed_health import FeedHealthRow
 from idhazh.contracts.file_envelope import (
     Compression,
     FileEnvelope,
@@ -35,8 +35,8 @@ def test_older_envelope_footer_roundtrip(version: str) -> None:
 
 def test_typescript_provenance_readback(tmp_path: Path) -> None:
     """PyArrow provides bytes here; engine compatibility is deliberately Row 6's gate."""
-    row = CandidateRejectionRecord.from_json(
-        read_text(CONTRACT_FIXTURES_DIR / "feed-ingest-rejection" / "empty-feed.json")
+    row = FeedHealthRow.from_json(
+        read_text(CONTRACT_FIXTURES_DIR / "feed-health-row" / "answered.json")
     )
     identity = WriterIdentity(
         run_id="2026-10-20-1",
@@ -63,10 +63,10 @@ def test_typescript_provenance_readback(tmp_path: Path) -> None:
         }
     )
     _, stored = parquet.read(path.read_bytes())
-    columns = arrow_schema.columns_of(CandidateRejectionRecord) + tuple(
+    columns = arrow_schema.columns_of(FeedHealthRow) + tuple(
         column
         for column in arrow_schema.columns_of(RowIdentity)
-        if column.name not in CandidateRejectionRecord.model_fields
+        if column.name not in FeedHealthRow.model_fields
     )
     path.write_bytes(
         parquet.render(
@@ -76,7 +76,7 @@ def test_typescript_provenance_readback(tmp_path: Path) -> None:
             compression=Compression.SNAPPY,
         )
     )
-    assert ledger.load([path], model=CandidateRejectionRecord) == [row]
+    assert ledger.load([path], model=FeedHealthRow) == [row]
     read = ledger.read_envelope(path)
     assert read.writer == "idhazh_typescript.ledger.parquet"
     assert read.content_sha256 == envelope.content_sha256

@@ -221,7 +221,7 @@ def test_explorer_catalog_derives_eligible_names_from_registry_order() -> None:
     families = list(reversed(payload["families"]))
     selected = {
         LedgerName.ITEM_HEALTH.value,
-        LedgerName.FEED_INGEST_PLAN_EDITORIAL_SELECTIONS.value,
+        LedgerName.FEED_INGEST_PLAN_SELECTED_ARTICLES.value,
     }
     for family in families:
         for entry in family["ledgers"]:
@@ -230,7 +230,7 @@ def test_explorer_catalog_derives_eligible_names_from_registry_order() -> None:
     registry = LedgersConfig.model_validate(payload | {"families": families})
     assert registry.data_explorer_ledgers == (
         LedgerName.ITEM_HEALTH,
-        LedgerName.FEED_INGEST_PLAN_EDITORIAL_SELECTIONS,
+        LedgerName.FEED_INGEST_PLAN_SELECTED_ARTICLES,
     )
 
 

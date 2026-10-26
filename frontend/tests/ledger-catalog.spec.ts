@@ -29,8 +29,10 @@ test('the catalog preserves grouped ownership and normalizes each checked prefix
 	expect(Object.isFrozen(catalog.entries)).toBe(true);
 	expect(Object.isFrozen(catalog.families[0].ledgers)).toBe(true);
 	expect(Object.isFrozen(catalog.entries[0])).toBe(true);
+	const first = payload.families[0].ledgers[0].name;
+	const original = catalog.require(first).prefix;
 	payload.families[0].ledgers[0].prefix[0] = 'changed-after-parsing';
-	expect(catalog.require('dispatches').prefix).toBe('feed-ingest-plan/dispatches');
+	expect(catalog.require(first).prefix).toBe(original);
 });
 
 test('native Node and browser-compatible imports validate the same committed catalog', () => {
@@ -98,10 +100,12 @@ test('duplicates, overlapping paths and family disagreements are refused before 
 	duplicateLedger.families[0].ledgers.push(duplicateLedger.families[0].ledgers[0]);
 	expect(() => parseLedgerCatalog(duplicateLedger)).toThrow(/duplicate ledger/);
 	const overlap = registry();
-	overlap.families[0].ledgers[1].prefix = ['feed-ingest-plan', 'editorial-selections', 'dispatches'];
+	overlap.families[0].ledgers[1].prefix = [
+		...overlap.families[0].ledgers[0].prefix, overlap.families[0].ledgers[1].name
+	];
 	expect(() => parseLedgerCatalog(overlap)).toThrow(/overlapping prefixes/);
 	const misplaced = registry();
-	misplaced.families[0].ledgers[1].prefix = ['elsewhere', 'dispatches'];
+	misplaced.families[0].ledgers[1].prefix = ['elsewhere', misplaced.families[0].ledgers[1].name];
 	expect(() => parseLedgerCatalog(misplaced)).toThrow(/family/);
 	const wrongEnd = registry();
 	wrongEnd.families[0].ledgers[1].prefix = ['feed-ingest-plan', 'wrong-name'];
@@ -136,12 +140,12 @@ test('paused and retired consent stays readable while disabled selections are re
 		const payload = registry();
 		payload.families[0].lifecycle_status = status;
 		const catalog = parseLedgerCatalog(payload);
-		expect(consentedSelection(catalog, ['dispatches'])).toEqual({ names: ['dispatches'], notice: null });
-		payload.families[0].ledgers[1].publish_to_data_explorer = false;
+		expect(consentedSelection(catalog, ['selected-articles'])).toEqual({ names: ['selected-articles'], notice: null });
+		payload.families[0].ledgers.find((entry: { name: string }) => entry.name === 'selected-articles').publish_to_data_explorer = false;
 		const refreshed = parseLedgerCatalog(payload);
-		expect(consentedSelection(refreshed, ['dispatches', 'host-fingerprint'])).toEqual({
+		expect(consentedSelection(refreshed, ['selected-articles', 'host-fingerprint'])).toEqual({
 			names: ['host-fingerprint'],
-			notice: 'Removed ledgers not enabled for the Data explorer: dispatches.'
+			notice: 'Removed ledgers not enabled for the Data explorer: selected-articles.'
 		});
 		expect(consentedSelection(refreshed, ['unregistered-ledger']).names).toEqual([]);
 	}

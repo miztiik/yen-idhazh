@@ -74,6 +74,11 @@ def test_fixture_round_trips_without_losing_values(path: Path) -> None:
             }
         elif "publisher_id" in contract.model_fields and "publisher_id" not in original:
             expected = {**original, "publisher_id": None}
+        elif contract.__schema_stem__ == "fetched-document":
+            expected = {
+                "parent_fetch_request_id": None, "parent_batch_id": None,
+                "entry_ordinal": None, **original,
+            }
         assert json.loads(once) == expected
     else:
         assert original["version"] < record.version

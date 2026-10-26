@@ -1,7 +1,7 @@
-/** Route the versioned operator API and apply configured request limits. */
+/** Route independent validated requests without a listener-wide run queue. */
 import { Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
-import { describePlanError, PlanError } from "./plan-request";
+import { describePlanError } from "./plan-request";
 import { healthRoute } from "./routes/health.route";
 import { planRoute } from "./routes/plan.route";
 import type { PlanningBindings } from "./routes/plan.route";
@@ -9,110 +9,49 @@ import { writeJsonLine } from "../logging/structured-logger";
 import type { PlanInputs } from "../load-plan-inputs";
 import { runFeedPlan } from "../run-feed-plan";
 import type { PlanRuntime } from "../run-feed-plan";
-import type { PlanRequest } from "./plan-request";
-import { parseSeenDays, requiredSeenDays } from "../read-ledger-history/read-seen-evidence";
-import { RelativePathSchema } from "../config/service-settings";
-import { recordFeedPlan } from "../record-feed-plan";
 import { documentRoute } from "./routes/document.route";
-import type { CapturedPlanIdentity } from "./plan-operation";
-import { retainFeedReceipts } from "./feed-history-receipts";
 import { stagesRoute } from "./routes/stages.route";
+import { feedHealthStateRoute } from "./routes/feed-health-state.route";
+import { ArticleParserPool } from "../harvest-feeds/article-parser-pool";
 
-// Calendar-versioned HTTP protocol paths are not runtime planning controls.
 const apiPrefix = "/api/2026-10-20";
-
 export function createPlanApp(inputs: PlanInputs, runtime: PlanRuntime) {
   const app = new Hono<{ Bindings: PlanningBindings }>();
-  const feedReceipts = retainFeedReceipts(inputs, runtime.feed_history_receipts);
-  const ownFiles = new Map<string, Set<string>>();
-  for (const receipt of runtime.seen_receipts ?? []) {
-    if (ownFiles.has(receipt.day) || new Set(receipt.files).size !== receipt.files.length) {
-      throw new PlanError("INVALID_INPUT", "own seen receipts must have distinct days and files", "seen_receipts");
-    }
-    ownFiles.set(receipt.day, new Set(receipt.files.map(file => RelativePathSchema.parse(file))));
-  }
-  const acceptedDays = new Map<string, string>();
-  let lastRunAt: number | undefined;
-  let ready = Promise.resolve();
-  const execute = (request: PlanRequest, captured?: CapturedPlanIdentity) => {
-    const result = ready.then(async () => {
-      const now = (captured?.clock ?? runtime.clock)?.() ?? new Date();
-      if (!Number.isFinite(now.getTime())) {
-        throw new PlanError("INVALID_RUN_CONTEXT", "listener run clock must be a valid UTC instant", "now");
-      }
-      if (lastRunAt !== undefined && now.getTime() < lastRunAt) {
-        throw new PlanError("INVALID_RUN_CONTEXT", "listener run clock moved backwards", "now");
-      }
-      lastRunAt = now.getTime();
-      const selectionClock = runtime.selection_clock ?? runtime.clock;
-      const required = new Set(requiredSeenDays(
-        now.toISOString().replace(/\.\d{3}Z$/, "Z"), inputs.clock_config.collect.seen_window_days,
-      ));
-      for (const day of ownFiles.keys()) if (!required.has(day)) ownFiles.delete(day);
-      const authoredDays = parseSeenDays(inputs.settings.inputs.seen_days);
-      const firstRequired = required.values().next().value!;
-      const seenDays = authoredDays.filter(day =>
-        day.day >= firstRequired || acceptedDays.get(day.day) !== JSON.stringify(day));
-      const result = await runFeedPlan(request, inputs, {
-        ...runtime, ...captured, clock: () => now,
-        ...(selectionClock === undefined ? {} : { selection_clock: selectionClock }),
-        seen_days: seenDays,
-        seen_receipts: [...ownFiles].map(([day, files]) => ({ day, files: [...files] })),
-        feed_history_receipts: feedReceipts.read(),
-        on_feed_history_persisted: receipt => {
-          feedReceipts.remember(receipt);
-          runtime.on_feed_history_persisted?.(receipt);
-        },
-        on_seen_persisted: receipt => {
-          const paths = ownFiles.get(receipt.day) ?? new Set<string>();
-          for (const file of receipt.files) paths.add(RelativePathSchema.parse(file.path));
-          ownFiles.set(receipt.day, paths);
-          runtime.on_seen_persisted?.(receipt);
-        },
-      });
-      const configured = new Set(authoredDays.map(day => day.day));
-      for (const day of acceptedDays.keys()) if (!configured.has(day)) acceptedDays.delete(day);
-      for (const day of seenDays) acceptedDays.set(day.day, JSON.stringify(day));
-      return recordFeedPlan(result, inputs, runtime);
-    });
-    // The caller still receives the failure; only the listener queue is released.
-    ready = result.then(() => undefined, () => undefined);
-    return result;
-  };
+  const parserPool = runtime.parser_pool ?? new ArticleParserPool(inputs.settings.listener.parser_concurrency);
+  const requestRuntime = () => ({ ...runtime, parser_pool: parserPool });
   app.use(`${apiPrefix}/*`, bodyLimit({
     maxSize: inputs.settings.listener.max_body_bytes,
-    onError: c => c.json({
-      code: "BODY_TOO_LARGE", issues: [{ field: "body", message: "body exceeds configured max_body_bytes" }],
-    }, 413),
+    onError: c => c.json({ code: "BODY_TOO_LARGE", issues: [{ field: "body", message: "Body exceeds configured max_body_bytes" }] }, 413),
   }));
-  app.route(apiPrefix, healthRoute(inputs, runtime.observe_publication !== undefined));
-  app.route(apiPrefix, planRoute(execute, inputs, runtime));
-  app.route(apiPrefix, documentRoute(inputs, runtime));
-  app.route(apiPrefix, stagesRoute(inputs, runtime));
+  app.route(apiPrefix, healthRoute(inputs));
+  app.route(apiPrefix, planRoute((request, captured) => runFeedPlan(request, inputs, { ...requestRuntime(), ...captured }), inputs, requestRuntime));
+  app.route(apiPrefix, documentRoute(inputs, requestRuntime));
+  app.route(apiPrefix, stagesRoute(inputs, requestRuntime));
+  app.route(apiPrefix, feedHealthStateRoute(inputs, requestRuntime));
   app.notFound(c => c.json({ code: "NOT_FOUND", issues: [{ field: "route", message: "Unknown API route" }] }, 404));
   app.onError((error, c) => {
     const failure = describePlanError(error, inputs.root);
-    writeJsonLine({ event: "planner_error", ...failure });
+    writeJsonLine({ event: "planner_error", code: failure.code });
     const status = failure.code === "PLANNER_DISABLED" ? 503
-      : failure.code === "INVALID_INPUT" || failure.code === "INVALID_REQUEST" ? 400
-      : ["REQUEST_BUSY", "REQUEST_CONFLICT", "REQUEST_INCOMPLETE", "FETCH_UNAVAILABLE"].includes(failure.code) ? 409
+      : ["INVALID_INPUT", "INVALID_REQUEST"].includes(failure.code) ? 400
+      : ["REQUEST_BUSY", "REQUEST_CONFLICT", "REQUEST_INCOMPLETE", "FETCH_UNAVAILABLE", "BATCH_INCOMPLETE", "ARTICLE_EXCLUDED"].includes(failure.code) ? 409
       : failure.code === "ARTIFACT_NOT_FOUND" ? 404 : 500;
     return c.json(failure, status);
   });
-  return app;
+  return Object.assign(app, { close() { if (runtime.parser_pool === undefined) parserPool.close(); } });
 }
-
 export function servePlan(inputs: PlanInputs, runtime: PlanRuntime) {
   const app = createPlanApp(inputs, runtime);
-  return Bun.serve({
-    hostname: inputs.settings.listener.hostname,
-    port: inputs.settings.listener.port,
+  const server = Bun.serve({
+    hostname: inputs.settings.listener.hostname, port: inputs.settings.listener.port,
     idleTimeout: inputs.settings.listener.idle_timeout_seconds,
     fetch(request, server) {
-      return app.fetch(request, {
-        // Keep the receive timeout until the bounded body and controls validate.
-        beginPlanning: () => server.timeout(request, 0),
-      });
+      return app.fetch(request, { beginPlanning: () => server.timeout(request, 0) });
     },
   });
+  return {
+    get port() { return server.port; },
+    get hostname() { return server.hostname; },
+    async stop(force = false) { await server.stop(force); app.close(); },
+  };
 }

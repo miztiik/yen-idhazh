@@ -1,4 +1,4 @@
-"""Which authored settings control feed planning and its per-vertical policy patches?"""
+"""Which authored global settings control the isolated feed planner?"""
 
 from __future__ import annotations
 
@@ -17,7 +17,6 @@ Count = Annotated[int, Field(strict=True, ge=0, le=MAX_JSON_INTEGER)]
 Positive = Annotated[float, Field(strict=True, gt=0, allow_inf_nan=False)]
 NonNegative = Annotated[float, Field(strict=True, ge=0, allow_inf_nan=False)]
 Share = Annotated[float, Field(strict=True, gt=0, le=1, allow_inf_nan=False)]
-Slug = Annotated[str, Field(pattern=r"^[a-z0-9]+(?:-[a-z0-9]+)*$")]
 NonEmpty = Annotated[str, Field(min_length=1)]
 Relaxation = Literal["distinct_sources", "source_share"]
 
@@ -38,13 +37,6 @@ class FeedPenaltyWeights(Model):
     lambda_source: NonNegative
     lambda_source_kind: NonNegative
     lambda_domain: NonNegative
-    lambda_vertical: NonNegative
-    lambda_desk: NonNegative
-    lambda_lens: NonNegative
-    lambda_event_type: NonNegative
-    lambda_event_cluster: NonNegative
-    lambda_entity: NonNegative
-    lambda_coverage: NonNegative
 
 
 class FeedCurationPolicy(Model):
@@ -52,8 +44,6 @@ class FeedCurationPolicy(Model):
 
     source_authority_weight: NonNegative
     base_source_allowance: Count
-    bonus_uncovered_event_cluster: Count
-    bonus_underrepresented_vertical: Count
     bonus_unique_evidence: Count
     mmr_weights: FeedPenaltyWeights
 
@@ -67,10 +57,11 @@ def describe_patch_input(schema: dict[str, Any]) -> None:
             field.update(branches[0] if len(branches) == 1 else {"anyOf": branches})
 
 
-class PolicyPatch(Model):
-    """An omitted field inherits; an explicit null is invalid."""
+class PlanningRunOverrides(Model):
+    """Only an explicit freshness value overrides the planner's global policy."""
 
     model_config = ConfigDict(json_schema_extra=describe_patch_input)
+    freshness_hours: Positive | None = None
 
     @model_validator(mode="before")
     @classmethod
@@ -80,46 +71,6 @@ class PolicyPatch(Model):
                 if field is None:
                     raise ValueError(f"{name} must be omitted to inherit, not null")
         return value
-
-
-# None is only the in-memory marker for a field absent from authored JSON.
-class FeedScreeningPatch(PolicyPatch):
-    min_words_article: PositiveCount | None = None
-    min_words_abstract: PositiveCount | None = None
-    max_age_hours: Positive | None = None
-    recency_half_life_hours: Positive | None = None
-    recency_weight: NonNegative | None = None
-
-
-class FeedPenaltyWeightsPatch(PolicyPatch):
-    lambda_source: NonNegative | None = None
-    lambda_source_kind: NonNegative | None = None
-    lambda_domain: NonNegative | None = None
-    lambda_vertical: NonNegative | None = None
-    lambda_desk: NonNegative | None = None
-    lambda_lens: NonNegative | None = None
-    lambda_event_type: NonNegative | None = None
-    lambda_event_cluster: NonNegative | None = None
-    lambda_entity: NonNegative | None = None
-    lambda_coverage: NonNegative | None = None
-
-
-class FeedCurationPatch(PolicyPatch):
-    source_authority_weight: NonNegative | None = None
-    base_source_allowance: Count | None = None
-    bonus_uncovered_event_cluster: Count | None = None
-    bonus_underrepresented_vertical: Count | None = None
-    bonus_unique_evidence: Count | None = None
-    mmr_weights: FeedPenaltyWeightsPatch | None = None
-
-
-class VerticalPolicyOverride(PolicyPatch):
-    triage: FeedScreeningPatch | None = None
-    curate: FeedCurationPatch | None = None
-
-
-class PlanningRunOverrides(PolicyPatch):
-    freshness_hours: Positive | None = None
 
 
 class EffectiveFeedPolicy(Model):
@@ -174,7 +125,6 @@ class FeedTriageConfig(FeedScreeningPolicy):
 class FeedSoftCaps(Model):
     max_source_share: Share
     max_parent_domain_share: Share
-    max_event_cluster_items: PositiveCount
     min_distinct_sources: PositiveCount
     relaxation_order: list[Relaxation]
 
@@ -215,8 +165,6 @@ class FeedPartitionConfig(Model):
 
 
 class FeedSealConfig(Model):
-    dispatches_prefix: Annotated[list[Slug], Field(min_length=1)]
-    rejections_prefix: Annotated[list[Slug], Field(min_length=1)]
     compression: Literal["snappy", "zstd", "none"]
 
 
@@ -232,55 +180,9 @@ class FeedWorkflowReportingConfig(Model):
     removal_condition: NonEmpty
 
 
-class FeedMetricsConfig(Model):
-    rolling_window_days: PositiveCount
-    overlap_windows_days: Annotated[list[PositiveCount], Field(min_length=1)]
-    top_source_counts: Annotated[list[PositiveCount], Field(min_length=1)]
-
-
-class FeedOperationalComponentWeights(Model):
-    """How much each equally supported cost can reduce source authority."""
-
-    cpu: NonNegative = 1 / 3
-    private_memory: NonNegative = 1 / 3
-    requests: NonNegative = 1 / 3
-
-    @model_validator(mode="after")
-    def require_unit_total(self) -> Self:
-        if abs(self.cpu + self.private_memory + self.requests - 1) > 1e-9:
-            raise ValueError("operational component weights must sum to one")
-        return self
-
-
 class FeedFeedbackConfig(Model):
     lifecycle_window_days: PositiveCount = 31
-    window_days: PositiveCount = 7
-    minimum_measured_opportunities: PositiveCount = 20
-    minimum_measured_coverage: Annotated[
-        float, Field(strict=True, ge=0, le=1, allow_inf_nan=False)
-    ] = 0.8
-    component_weights: FeedOperationalComponentWeights = Field(
-        default_factory=FeedOperationalComponentWeights, json_schema_extra={"default": {}},
-    )
-
-
-class PlanningVertical(Model):
-    model_config = ConfigDict(extra="ignore")
-    id: Slug
-
-
-class PlanningTaxonomy(Model):
-    """Read only the taxonomy fields this configuration reader computes on."""
-
-    model_config = ConfigDict(extra="ignore")
-    verticals: Annotated[list[PlanningVertical], Field(min_length=1)]
-
-    @model_validator(mode="after")
-    def refuse_duplicate_verticals(self) -> Self:
-        ids = [vertical.id for vertical in self.verticals]
-        if len(set(ids)) != len(ids):
-            raise ValueError("verticals contains duplicate ids")
-        return self
+    request_report_closed_days: PositiveCount = 7
 
 
 class FeedIngestConfig(Model):
@@ -288,18 +190,9 @@ class FeedIngestConfig(Model):
     harvest: FeedHarvestConfig
     triage: FeedTriageConfig
     curate: FeedCurateConfig
-    vertical_overrides: dict[Slug, VerticalPolicyOverride]
     partition: FeedPartitionConfig
     seal: FeedSealConfig
     workflow_reporting: FeedWorkflowReportingConfig
-    metrics: FeedMetricsConfig
     feedback: FeedFeedbackConfig = Field(
         default_factory=FeedFeedbackConfig, json_schema_extra={"default": {}},
     )
-
-    def validate_verticals(self, taxonomy: PlanningTaxonomy) -> None:
-        """Refuse a planning patch that names an unconfigured vertical."""
-        ids = {vertical.id for vertical in taxonomy.verticals}
-        for vertical in self.vertical_overrides:
-            if vertical not in ids:
-                raise ValueError(f"vertical_overrides.{vertical}: unknown taxonomy vertical")

@@ -1,7 +1,12 @@
 /** Validates registry, period, contract, and writer settings before a ledger write. */
-import { DateStampSchema, LedgerNameSchema, WriterIdentitySchema } from "@idhazh/common-contracts";
+import {
+  DateStampSchema, DiscoveredArticleRowContract, FeedHealthStateRowContract,
+  LedgerNameSchema, PlanRunRowContract, PlannerLedgerNameSchema,
+  SelectedArticleRowContract, WriterIdentitySchema,
+} from "@idhazh/common-contracts";
 import type { WriterIdentity } from "@idhazh/common-contracts";
 import { resolve } from "node:path";
+import { z } from "zod";
 import { appendIdentityColumns, describeObjectSchema } from "./row-schema";
 import type {
   LedgerPeriod,
@@ -9,6 +14,13 @@ import type {
   PersistLedgerInput,
   ValidatedLedgerWrite,
 } from "./ledger-types";
+
+const PLANNER_CONTRACTS = {
+  "discovered-articles": DiscoveredArticleRowContract,
+  "selected-articles": SelectedArticleRowContract,
+  "feed-health-state": FeedHealthStateRowContract,
+  "plan-runs": PlanRunRowContract,
+} as const;
 
 function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -73,7 +85,22 @@ export function validateLedgerInput<T extends object>(
   validatePeriod(input.period);
   if ("partition_date" in input && input.partition_date !== undefined) DateStampSchema.parse(input.partition_date);
   const ledger = LedgerNameSchema.parse(input.ledger);
-  const writerContext = WriterIdentitySchema.parse(input.writerContext);
+  const plannerName = PlannerLedgerNameSchema.safeParse(ledger);
+  const planner = plannerName.success;
+  const writerContext = planner ? null : WriterIdentitySchema.parse(input.writerContext);
+  let rowSchema: z.ZodType<object> = input.rowContract.schema;
+  if (plannerName.success) {
+    const declared = PLANNER_CONTRACTS[plannerName.data];
+    rowSchema = declared.schema;
+    if (input.registryEntry.family !== "feed-ingest-plan"
+      || input.registryEntry.prefix.join("/") !== `feed-ingest-plan/${ledger}`) {
+      throw new Error(`${ledger} requires its registered planner family prefix`);
+    }
+    if (input.rowContract.schemaVersion !== declared.schemaVersion
+      || JSON.stringify(z.toJSONSchema(input.rowContract.schema)) !== JSON.stringify(z.toJSONSchema(declared.schema))) {
+      throw new Error(`${ledger} requires its declared current planner row contract`);
+    }
+  }
   if (!/^\d{4}-\d{2}-\d{2}(?:T\d{2}:\d{2}(?::\d{2})?)?$/.test(input.rowContract.schemaVersion)) {
     throw new Error("row schema version must be a date-stamp");
   }
@@ -85,13 +112,15 @@ export function validateLedgerInput<T extends object>(
       throw new Error(`unsupported ledger compression: ${compression}`);
     }
   }
-  const { fields } = describeObjectSchema(input.rowContract.schema);
-  const columns = appendIdentityColumns(fields);
+  const { fields } = describeObjectSchema(rowSchema);
+  const columns = planner ? fields : appendIdentityColumns(fields);
   if (!input.outputRoot || input.outputRoot.includes("\0")) throw new Error("outputRoot must be a valid path");
   return {
     input,
     ledger,
     writerContext,
+    planner,
+    rowSchema,
     outputRoot: resolve(input.outputRoot),
     columns,
   };

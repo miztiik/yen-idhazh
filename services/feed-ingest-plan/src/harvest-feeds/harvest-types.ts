@@ -5,12 +5,12 @@ import {
   SourceSnapshotSchema, TimestampSchema,
   FetchFailureSchema, PlannerHarvestObservationSchema,
 } from "@idhazh/common-contracts";
-import type { FeedIngestConfig, FeedOutcomePayload, ItemHealthFailureCode, PolicyIdentity, WriterIdentity } from "@idhazh/common-contracts";
-import type { LedgerRegistration, LedgerSettings, PersistLedgerResult } from "@idhazh/ledger-file-writer";
+import type { FeedIngestConfig, FeedOutcomePayload, ItemHealthFailureCode, WriterIdentity } from "@idhazh/common-contracts";
 import type { HarvestInputs } from "./load-harvest-inputs";
 import type { ProgressDetails, ProgressEventType } from "../logging/progress-logger";
 import type { SourceHistoryEvidence } from "../read-ledger-history/read-feed-history";
 import type { IngestObservations } from "../ingest-observations";
+import type { ArticleParserPool } from "./article-parser-pool";
 
 export { FetchFailureSchema } from "@idhazh/common-contracts";
 export type FetchFailure = z.infer<typeof FetchFailureSchema>;
@@ -41,7 +41,6 @@ export type FeedEntry = {
 export type OfferedArticle = {
   source: z.infer<typeof SourceSnapshotSchema>;
   entry: FeedEntry;
-  policy: PolicyIdentity;
 };
 export type HarvestContext = {
   writer: WriterIdentity;
@@ -57,13 +56,12 @@ export type HarvestContext = {
   clock?: () => Date;
   observation_clock?: () => Date;
   observations?: IngestObservations;
+  parser_pool?: ArticleParserPool;
+  parser_options?: Parameters<ArticleParserPool["parse"]>[4];
+  on_feed?: (outcome: FeedOutcomePayload, entries: readonly FeedEntry[], checked_at: string) => void;
+  on_article?: (result: HarvestArticleResult) => void;
   log?: (record: z.infer<typeof CandidateRejectionRecordSchema>) => void;
   progress?: (event: ProgressEventType, details?: ProgressDetails) => void;
-};
-export type RejectionDestination = {
-  outputRoot: string;
-  registryEntry: LedgerRegistration;
-  ledgerSettings: LedgerSettings;
 };
 export type HarvestResult = {
   inputs: HarvestInputs;
@@ -74,7 +72,6 @@ export type HarvestResult = {
   salience: { feed_id: string; available: boolean; unavailable_reason: string | null }[];
   candidates: z.infer<typeof FeedIngestCandidateSchema>[];
   rejections: z.infer<typeof CandidateRejectionRecordSchema>[];
-  rejection_files: PersistLedgerResult;
 };
 
 export function utcTimestamp(clock: () => Date = () => new Date()): string {

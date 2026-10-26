@@ -1,12 +1,9 @@
-/** Does optional reporting preserve evidence and refuse unsafe or unsupported claims? */
+/** Does optional reporting preserve body-free observations without inventing saved output? */
 import { test, expect } from "bun:test";
-import { mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { fileURLToPath } from "node:url";
-import {
-  ArticleAssessmentContract, FEED_INGEST_EVENT_VERSION, readFeedIngestEvent,
-} from "../../../packages/common-contracts/src/index";
+import { readFeedIngestEvent } from "../../../packages/common-contracts/src/index";
 import { formatPlannerReport, writePlannerReport } from "../feed-ingest-plan-report";
 
 async function fixture() {
@@ -16,109 +13,76 @@ async function fixture() {
   return rows.map(readFeedIngestEvent);
 }
 
-test("reads current UUID events and refuses undeclared identities without inventing facts", async () => {
-  const raw: unknown[] = await Bun.file(
-    new URL("../../../tests/fixtures/feed-ingest-plan/report-events.json", import.meta.url),
-  ).json();
-  expect(raw.map(readFeedIngestEvent).every(row => row.version === FEED_INGEST_EVENT_VERSION)).toBe(true);
-  expect(formatPlannerReport(raw)).toEqual(formatPlannerReport(await fixture()));
-  const recorded = await Bun.file(
-    new URL("../../../tests/fixtures/contracts/feed-ingest-event/one-observation.json", import.meta.url),
-  ).json();
-  const before = structuredClone(recorded);
-  const current = readFeedIngestEvent(recorded);
-  expect(recorded).toEqual(before);
-  expect(current.version).toBe(FEED_INGEST_EVENT_VERSION);
-  if (current.payload.kind !== "candidate_decision") throw new Error("Expected a recorded candidate decision");
-  expect(current.payload.assessment).toMatchObject({
-    version: ArticleAssessmentContract.schemaVersion, timing_basis: "unavailable",
-    timing_at: null, age_hours: null, diagnostics: null, score_evidence: null,
-  });
-  expect(formatPlannerReport([recorded])).toEqual(formatPlannerReport([current]));
-  const known = structuredClone(recorded);
-  known.payload.assessment.age_hours = 1;
-  known.payload.assessment.max_age_hours = 48;
-  known.payload.assessment.timing_basis = "published_at";
-  known.payload.assessment.timing_at = "2026-10-20T07:00:00Z";
-  const measured = readFeedIngestEvent(known);
-  if (measured.payload.kind !== "candidate_decision") throw new Error("Expected a measured candidate decision");
-  expect(measured.payload.assessment).toMatchObject({
-    timing_basis: "published_at", timing_at: "2026-10-20T07:00:00Z", age_hours: 1, max_age_hours: 48,
-  });
-  const missing = structuredClone(recorded);
-  delete missing.payload.assessment.timing_at;
-  expect(() => formatPlannerReport([missing])).toThrow();
-  expect(() => formatPlannerReport([{ ...recorded, headers: { authorization: "private" } }])).toThrow();
-  expect(() => formatPlannerReport([{ ...recorded, candidate_id: "a".repeat(64) }])).toThrow();
-  expect(() => formatPlannerReport([{ ...recorded, version: "2026-10-20" }])).toThrow();
-  expect(() => formatPlannerReport([{ ...recorded, event_id: "c".repeat(64) }])).toThrow();
-  expect(() => formatPlannerReport([{ ...recorded, correlation_id: "old-run-label" }])).toThrow();
+test("reads current sparse progress and refuses hidden article or audit payloads", async () => {
+  const events = await fixture();
+  const before = structuredClone(events);
+  expect(formatPlannerReport(events)).toEqual(formatPlannerReport(before));
+  expect(events.every(event => event.version === "2026-10-25")).toBe(true);
+  for (const changed of [
+    { ...events[0], headers: { authorization: "private" } },
+    { ...events[0], article_text: "Private article body" },
+    { ...events[0], payload: { kind: "candidate_decision" } },
+    { ...events[0], event_id: "a".repeat(64) },
+    { ...events[0], correlation_id: "old-run-label" },
+    { ...events[0], version: "2026-10-20" },
+  ]) expect(() => formatPlannerReport([changed])).toThrow();
+  expect(events).toEqual(before);
 });
 
-test("reports explicit empty outcomes without certifying durable audit or publication", async () => {
+test("absent progress stays unavailable and zero counts do not certify publication", async () => {
   const events = await fixture();
   const before = JSON.stringify(events);
   const report = formatPlannerReport(events);
-  expect(report.summary).toContain("| A1 | recorded&#45;source | Recorded RSS source | success / empty | 0 | 0 | FEED_EMPTY |");
-  expect(report.summary).toContain("| B1 | harvest&#45;feeds | 1 | 0 | 1 | 0.012 |");
-  expect(report.summary).toContain("**Audit completion: unavailable.**");
-  expect(report.annotations).toHaveLength(1);
+  expect(report.summary).toContain("Progress does not prove saved output or publication.");
+  expect(report.annotations).toEqual([]);
   expect(JSON.stringify(events)).toBe(before);
-  expect(formatPlannerReport([]).summary).toContain("No events supplied");
+  const empty = formatPlannerReport([]);
+  expect(empty.summary).toContain("No progress was supplied. The result is unavailable.");
+  expect(empty.annotations).toEqual([]);
+  const zero = formatPlannerReport([{ ...events[0], phase: "completed", output_count: 0, duration_ms: 0 }]);
+  expect(zero.summary).toContain("0 milliseconds");
+  expect(zero.summary).not.toContain("publication completed");
 });
 
-test("escapes source text and excludes URLs, headers and arbitrary event fields", async () => {
+test("escapes command data and refuses URLs or arbitrary progress fields", async () => {
   const events = await fixture();
-  const feed = events[0]!;
-  if (feed.payload.kind !== "feed_outcome") throw new Error("fixture requires feed_outcome");
-  feed.payload.source.title = "bad\r\n::error title=pwn::run | [click](javascript:evil) <script>` %\u0085";
-  feed.payload.source.feed_url = "https://news.example/feed?token=private";
-  const report = formatPlannerReport(events);
-  expect(report.summary).not.toContain("\n::error");
-  expect(report.summary).not.toContain("| [click]");
-  expect(report.summary).not.toContain("<script>");
-  expect(report.summary).not.toContain("token=private");
-  expect(report.summary).toContain("&#124;");
-  expect(report.summary).toContain("&#58;&#58;error");
-  expect(report.annotations.join("\n")).not.toContain("pwn");
-  expect(() => formatPlannerReport([{ ...feed, headers: { authorization: "private" } }])).toThrow();
+  const report = formatPlannerReport([{ ...events[0], phase: "failed",
+    failure_code: "NETWORK\r\n::error title=pwn::run | <script>` %" }]);
+  expect(report.annotations).toHaveLength(1);
+  expect(report.annotations[0]).not.toContain("\n");
+  expect(report.annotations[0]).not.toContain("\r");
+  expect(report.annotations[0]).toContain("%0A");
+  expect(report.annotations[0]).toContain("%25");
+  expect(() => formatPlannerReport([{ ...events[0], feed_id: "https://news.example/feed?token=private" }])).toThrow();
+  expect(() => formatPlannerReport([{ ...events[0], url: "https://news.example/private" }])).toThrow();
 });
 
-test("rejects invalid events and mixed or unordered attempts rather than summarizing them", async () => {
+test("refuses mixed executions but permits concurrent stage ordering without fabricated sequence fields", async () => {
   const events = await fixture();
-  expect(() => formatPlannerReport([{ ...events[0], audit_event_type: "candidate_decision" }])).toThrow();
-  expect(() => formatPlannerReport([events[1], events[0]])).toThrow("sequence");
-  expect(() => formatPlannerReport([events[0], { ...events[1], attempt: 2 }])).toThrow("attempt");
-  expect(() => formatPlannerReport([events[0], { ...events[1], event_id: events[0]!.event_id }])).toThrow("event_id");
+  expect(() => formatPlannerReport([events[0], { ...events[1], run_id: "2026-10-21-999" }])).toThrow("more than one run");
+  expect(() => formatPlannerReport([events[0], { ...events[1], correlation_id: "040345df-230e-4bf9-8efc-d0d823fcde3b" }])).toThrow("more than one run");
+  expect(() => formatPlannerReport([{ ...events[0], sequence: 1 }])).toThrow();
+  expect(() => formatPlannerReport([events[1], events[0]])).not.toThrow();
 });
 
-test("disabled reporting performs no writes or annotations and does not require evidence", async () => {
+test("disabled reporting reads no evidence and enabled reporting requires an explicit output path", async () => {
   const root = await mkdtemp(join(tmpdir(), "feed-report-"));
   try {
-    const summaryPath = join(root, "summary.md");
+    const config = await Bun.file(new URL("../../../config/feed-ingest-plan.json", import.meta.url)).json();
+    const summary = join(root, "summary.md");
     const lines: string[] = [];
-    await writePlannerReport({ enabled: false, events: undefined, summaryPath, annotate: line => lines.push(line),
-      get resourceReport(): never { throw new Error("Disabled reporting must not inspect resource evidence"); },
+    await writePlannerReport({
+      config: { ...config, workflow_reporting: { ...config.workflow_reporting, enabled: false } },
+      summary_path: summary, annotate: line => lines.push(line),
+      get events(): never { throw new Error("Disabled reporting must not inspect progress"); },
     });
     expect(lines).toEqual([]);
-    await expect(stat(summaryPath)).rejects.toMatchObject({ code: "ENOENT" });
+    await expect(stat(summary)).rejects.toMatchObject({ code: "ENOENT" });
     const events = await fixture();
-    await writePlannerReport({ enabled: true, events, summaryPath, annotate: line => lines.push(line) });
-    expect(await readFile(summaryPath, "utf8")).toBe(formatPlannerReport(events).summary);
+    const enabled = { ...config, workflow_reporting: { ...config.workflow_reporting, enabled: true } };
+    await writePlannerReport({ config: enabled, events, summary_path: summary, annotate: line => lines.push(line) });
+    expect(await readFile(summary, "utf8")).toBe(formatPlannerReport(events).summary);
     expect(lines).toEqual([...formatPlannerReport(events).annotations]);
-    await expect(writePlannerReport({ enabled: true, events, annotate: () => {} })).rejects.toThrow("GITHUB_STEP_SUMMARY");
-    const config = await Bun.file(new URL("../../../config/feed-ingest-plan.json", import.meta.url)).json();
-    const configPath = join(root, "reporting-disabled.json");
-    const disabledSummary = join(root, "disabled-summary.md");
-    await writeFile(configPath, JSON.stringify({ ...config, workflow_reporting: { ...config.workflow_reporting, enabled: false } }));
-    const child = Bun.spawn([process.execPath, fileURLToPath(new URL("../feed-ingest-plan-report.ts", import.meta.url)), configPath], {
-      stdout: "pipe", stderr: "pipe",
-      env: { ...Bun.env, GITHUB_STEP_SUMMARY: disabledSummary, PROFILE_MACHINE_MEMORY: "invalid unused input" },
-    });
-    const [output, errors] = await Promise.all([new Response(child.stdout).text(), new Response(child.stderr).text()]);
-    expect({ exit: await child.exited, output, errors }).toEqual({ exit: 0, output: "", errors: "" });
-    await expect(stat(disabledSummary)).rejects.toMatchObject({ code: "ENOENT" });
-  } finally {
-    await rm(root, { recursive: true, force: true });
-  }
+    await expect(writePlannerReport({ config: enabled, events, annotate: () => {} })).rejects.toThrow("summary output path");
+  } finally { await rm(root, { recursive: true, force: true }); }
 });

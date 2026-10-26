@@ -1,15 +1,15 @@
-/** Route configured sources and their original entries through the bounded harvest stages. */
-import { FeedOutcomePayloadSchema, WriterIdentitySchema, NonEmptySchema, PositiveCountSchema, NonNegativeSchema } from "@idhazh/common-contracts";
-import type { HarvestContext, HarvestResult, OfferedArticle, RejectionDestination } from "./harvest-types";
+/** Overlap independent feed reads and article work within the configured request bound. */
+import { FeedOutcomePayloadSchema, PositiveCountSchema, WriterIdentitySchema } from "@idhazh/common-contracts";
+import type { HarvestContext, HarvestResult, OfferedArticle } from "./harvest-types";
+import { utcTimestamp } from "./harvest-types";
 import type { HarvestInputs } from "./load-harvest-inputs";
-import { harvestPolicy, sourceSnapshot } from "./load-harvest-inputs";
+import { sourceSnapshot } from "./load-harvest-inputs";
 import { feedDocumentWork, readFeed } from "./feed-client";
 import { harvestArticle } from "./harvest-article";
-import { persistHarvestRejections } from "./record-rejection";
 import { createPermittedFetcher } from "./robots-policy";
 import type { HarvestTransport } from "./transport";
 import type { ResolveAddresses } from "./safe-target";
-import { readSalienceFeed } from "./salience-votes";
+import { ArticleParserPool } from "./article-parser-pool";
 
 export { loadHarvestInputs, readHarvestInputs } from "./load-harvest-inputs";
 export type { HarvestInputs } from "./load-harvest-inputs";
@@ -25,104 +25,90 @@ export async function mapPool<T, R>(items: readonly T[], concurrency: number, ex
       const index = next++;
       if (index >= items.length) return;
       const item = items[index];
-      if (item === undefined) throw new Error("pool received a sparse input");
+      if (item === undefined) throw new Error("Pool received a sparse input");
       output[index] = await execute(item);
     }
   }));
   const failures = workers.flatMap(worker => worker.status === "rejected" ? [worker.reason] : []);
-  if (failures.length) throw new AggregateError(failures, "harvest pool failed; completed work is retained");
+  if (failures.length) throw new AggregateError(failures, "Work pool failed; completed work is retained");
   return output;
 }
 
+export function workPool(concurrency: number) {
+  PositiveCountSchema.parse(concurrency);
+  let active = 0;
+  const waiting: (() => void)[] = [];
+  return async <T>(execute: () => Promise<T>): Promise<T> => {
+    if (active >= concurrency) await new Promise<void>(resolve => waiting.push(resolve));
+    else active++;
+    try { return await execute(); }
+    finally {
+      const next = waiting.shift();
+      if (next === undefined) active--;
+      else next();
+    }
+  };
+}
+
 export async function harvestFeeds(
-  inputs: HarvestInputs, context: HarvestContext, destination: RejectionDestination,
+  inputs: HarvestInputs, context: HarvestContext,
   boundary: { transport?: HarvestTransport; resolve?: ResolveAddresses } = {},
 ): Promise<HarvestResult> {
   WriterIdentitySchema.parse(context.writer);
-  NonEmptySchema.parse(context.correlation_id);
-  NonNegativeSchema.parse(context.max_future_hours);
-  context.progress?.("FEED_DISCOVERY_STARTED", { input_count: inputs.sources.length });
   const fetcher = createPermittedFetcher(inputs.config.harvest, inputs.extraction, boundary, context.observation_clock);
-  const responses = new Map<string, ReturnType<typeof fetcher.fetch>>();
-  const feedFetcher: Pick<typeof fetcher, "fetch"> = { fetch: (url, emit) => {
-    let result = responses.get(url);
-    if (result === undefined) { result = fetcher.fetch(url, emit); responses.set(url, result); }
-    return result;
-  } };
-  const feeds = await mapPool(inputs.sources, inputs.config.harvest.concurrency, async configured => {
-    const source = sourceSnapshot(inputs, configured);
-    const history = context.feed_history?.get(source.source_id);
-    if (source.status === "active" && history?.lifecycle === "resting") {
-      await feedDocumentWork(source, context).skip();
-      context.observations?.assertSaved();
-      return {
-        offered: [], rejection: null,
-        outcome: FeedOutcomePayloadSchema.parse({
-          kind: "feed_outcome", source, fetch_status: "not_requested", parse_status: "not_attempted",
-          parsed_count: null, harvested_count: null, fetch_duration_ms: null, parse_duration_ms: null,
-          rejection_reason: null,
-        }),
-      };
-    }
-    context.progress?.("FEED_FETCH_STARTED", { source_id: source.source_id });
-    const started = performance.now();
-    const result = await readFeed(source, feedFetcher, context, inputs.config.harvest.fetch_timeout_ms);
-    context.observations?.assertSaved();
-    context.progress?.("FEED_FETCH_COMPLETED", {
-      source_id: source.source_id, fetch_status: result.outcome.fetch_status,
-      parse_status: result.outcome.parse_status, output_count: result.entries.length,
-      drop_reason: result.outcome.rejection_reason,
-      diagnostics: result.outcome.diagnostics,
-      duration_ms: Math.round(performance.now() - started),
-    });
-    const offered: OfferedArticle[] = [];
-    if (result.entries.length) {
-      const policy = harvestPolicy(inputs, source.vertical, context.overrides);
-      offered.push(...result.entries.map(entry => ({ source, policy, entry })));
-    }
-    return { offered, rejection: result.rejection, outcome: result.outcome };
-  });
-  const salience = await mapPool(inputs.salience ?? [], inputs.config.harvest.concurrency,
-    feed => readSalienceFeed(feed, feedFetcher, context));
-  const articles = await mapPool(feeds.flatMap(feed => feed.offered), inputs.config.harvest.concurrency,
-    async offered => {
-      context.progress?.("ARTICLE_HARVEST_STARTED", { source_id: offered.source.source_id });
-      const started = performance.now();
-      const result = await harvestArticle(offered, inputs, fetcher, context, salience);
-      context.observations?.assertSaved();
-      context.progress?.("ARTICLE_HARVEST_COMPLETED", {
-        source_id: offered.source.source_id, candidate_id: result.observation.candidate_id,
-        output_count: result.candidate === null ? 0 : 1, drop_reason: result.rejection?.drop_reason ?? null,
-        extraction_outcome: result.observation.extraction,
-        diagnostics: result.observation.diagnostics,
-        duration_ms: Math.round(performance.now() - started),
-      });
-      return result;
-    });
-  const rejections = [
-    ...feeds.flatMap(feed => feed.rejection ? [feed.rejection] : []),
-    ...articles.flatMap(article => article.rejection ? [article.rejection] : []),
-  ];
-  const rejection_files = await persistHarvestRejections(rejections, context, destination);
-  const harvestedCounts = new Map<string, number>();
-  for (const article of articles) {
-    if (article.candidate) harvestedCounts.set(article.candidate.source_id, (harvestedCounts.get(article.candidate.source_id) ?? 0) + 1);
-  }
-  const feed_outcomes = feeds.map(({ outcome }) => FeedOutcomePayloadSchema.parse({
-    ...outcome,
-    harvested_count: outcome.parse_status === "success" ? harvestedCounts.get(outcome.source.source_id) ?? 0 : outcome.harvested_count,
-  }));
-  return {
-    inputs, config: inputs.config, articles, feed_outcomes, rejections, rejection_files,
-    salience: salience.map(reading => ({
-      feed_id: reading.feed_id, available: reading.url_keys !== null && reading.unavailable_reason === null,
-      unavailable_reason: reading.unavailable_reason,
-    })),
-    first_sight_candidates: articles.flatMap(article => {
-      if (article.rejection?.drop_reason === "BLOCKED_URL_MARKER") return [];
-      const url_key = article.candidate?.url_key ?? article.rejection?.url_key;
-      return url_key === null || url_key === undefined ? [] : [{ url_key }];
-    }),
-    candidates: articles.flatMap(article => article.candidate ? [article.candidate] : []),
+  const permit = workPool(inputs.config.harvest.concurrency);
+  const boundedFetcher: Pick<typeof fetcher, "fetch"> = {
+    fetch: (url, emit) => permit(() => fetcher.fetch(url, emit)),
   };
+  const ownedPool = context.parser_pool ?? new ArticleParserPool(inputs.config.harvest.concurrency);
+  const runContext = { ...context, parser_pool: ownedPool };
+  try {
+    const feeds = await mapPool(inputs.sources, inputs.config.harvest.concurrency, async configured => {
+      const source = sourceSnapshot(inputs, configured);
+      const history = context.feed_history?.get(source.source_id);
+      if (source.status === "active" && history?.lifecycle === "resting") {
+        await feedDocumentWork(source, runContext).skip();
+        const outcome = FeedOutcomePayloadSchema.parse({
+          kind: "feed_outcome", source, fetch_status: "not_requested", parse_status: "not_attempted",
+          parsed_count: null, harvested_count: null, fetch_duration_ms: null, parse_duration_ms: null, rejection_reason: null,
+        });
+        context.on_feed?.(outcome, [], utcTimestamp(context.observation_clock));
+        return { outcome, articles: [], rejection: null };
+      }
+      context.progress?.("FEED_FETCH_STARTED", { source_id: source.source_id });
+      const feed = await readFeed(source, boundedFetcher, runContext, inputs.config.harvest.fetch_timeout_ms);
+      context.on_feed?.(feed.outcome, feed.entries, utcTimestamp(context.observation_clock));
+      context.progress?.("FEED_FETCH_COMPLETED", { source_id: source.source_id, output_count: feed.entries.length });
+      const articles = await mapPool(feed.entries, inputs.config.harvest.concurrency, async entry => {
+        const offered: OfferedArticle = { source, entry };
+        context.progress?.("ARTICLE_HARVEST_STARTED", { source_id: source.source_id });
+        const result = await harvestArticle(offered, inputs, boundedFetcher, runContext);
+        context.on_article?.(result);
+        context.progress?.("ARTICLE_HARVEST_COMPLETED", {
+          source_id: source.source_id, output_count: result.candidate === null ? 0 : 1,
+        });
+        return result;
+      });
+      const outcome = FeedOutcomePayloadSchema.parse({
+        ...feed.outcome, harvested_count: feed.outcome.parse_status === "success"
+          ? articles.filter(article => article.candidate !== null).length : feed.outcome.harvested_count,
+      });
+      return { outcome, articles, rejection: feed.rejection };
+    });
+    const articles = feeds.flatMap(feed => feed.articles);
+    const rejections = [
+      ...feeds.flatMap(feed => feed.rejection ? [feed.rejection] : []),
+      ...articles.flatMap(article => article.rejection ? [article.rejection] : []),
+    ];
+    return {
+      inputs, config: inputs.config, articles, feed_outcomes: feeds.map(feed => feed.outcome),
+      rejections, salience: [],
+      first_sight_candidates: articles.flatMap(article => {
+        if (article.rejection?.drop_reason === "BLOCKED_URL_MARKER") return [];
+        const key = (article.candidate ?? article.rejection)?.url_key;
+        return key === null || key === undefined ? [] : [{ url_key: key }];
+      }),
+      candidates: articles.flatMap(article => article.candidate ? [article.candidate] : []),
+    };
+  } finally { if (context.parser_pool === undefined) ownedPool.close(); }
 }

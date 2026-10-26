@@ -1,12 +1,15 @@
 # The ledgers under state/
 
-**Last Updated**: 2026-10-25
+**Last Updated**: 2026-10-26
 
 `state/` is the only memory this pipeline has. Every run starts on a fresh machine with a fresh checkout, so anything one run needs to tell the next is committed (CLAUDE.md Guardrail #1). This page says what each committed ledger answers and why it files at the grain it does.
 
 Three neighbours own the rest of the question. [schemas.md](schemas.md) owns the shape of a row and the rule that decides a grain. [../../concepts/partitions.md](../../concepts/partitions.md) owns what counts as a day file and a month name. [ledger-registry.md](ledger-registry.md) owns which ledgers exist, where each one sits, and the check that stops the build when the code and `config/ledgers.json` disagree. This page is the per-ledger answer: this ledger, this grain, this reason.
 
-Every ledger here is append-only except `state/day-metrics/`, which rewrites one day's record when that day is corrected, and `feed-health-state`, which rotates a fixed pair of complete snapshots. The item-health summary is derived from a whole month, but it is filed through the ledger door as raw daily summary rows and packed later.
+Every raw ledger here is append-only; `state/day-metrics/` instead rewrites a
+day's record when that day is corrected. Planner health records run/work-day
+facts, not rotating snapshots. The item-health summary is derived from a whole
+month, then filed as raw daily summary rows and packed later.
 
 ## A ledger partitions only when its read carries a time window
 
@@ -29,8 +32,10 @@ A window lets the reader name the files it wants and skip the rest. Without one 
 | `state/raw/run-plan/<YYYY>/<MM>/<DD>/<file_id>.parquet` | What plan did the day hand to its later stages? One row per plan execution | raw and compact | the named UTC day |
 | `state/raw/run-shards/<YYYY>/<MM>/<DD>/<file_id>.parquet` | How many shards did the manifest record for this run? Only date, run identity and nullable count | raw and compact | the widest console window |
 | `state/raw/council-run-records/<YYYY>/<MM>/<DD>/<file_id>.parquet` | Which step ran for each hosted judge, how it ended and what it cost | raw and compact | the judged UTC day |
-| `state/raw/feed-ingest-plan/operational-state/<YYYY>/<MM>/<DD>/<file_id>.parquet` | Which qualified per-source request estimate was derived from the named evidence window and policy revision? | raw and compact | the configured evidence window |
-| `state/raw/feed-ingest-plan/feed-health-state/<YYYY>/<MM>/<DD>/<file_id>.parquet` | What complete lifecycle and request state did selection read? | raw and compact | the two snapshot references in the fixed head metadata |
+| `state/raw/feed-ingest-plan/discovered-articles/<YYYY>/<MM>/<DD>/<file_id>.parquet` | When was this canonical URL first seen globally? | raw and compact | configured named discovery days |
+| `state/raw/feed-ingest-plan/selected-articles/<YYYY>/<MM>/<DD>/<file_id>.parquet` | Which metadata, scores and assignments did one selection produce? No article bodies | raw and compact | named run/day |
+| `state/raw/feed-ingest-plan/feed-health-state/<YYYY>/<MM>/<DD>/<file_id>.parquet` | What actual work did one run/attempt/feed do on this UTC day? | raw and compact | independent lifecycle, reliability and request windows |
+| `state/raw/feed-ingest-plan/plan-runs/<YYYY>/<MM>/<DD>/<file_id>.parquet` | What did one execution finish, including empty or partial results? | raw and compact | named run/day |
 
 The seen ledger has no published mirror at all, so unlike the two health ledgers there is no second grain anywhere near it.
 
@@ -53,21 +58,12 @@ no fault. Exception details are not persisted. The
 [council's recording rule](../publishing/llm-council.md#the-venue-keeps-its-own-record-of-every-unit-it-ran)
 owns collection, recording failures and isolated trials.
 
-The earlier `operational-state` row is a request-only estimate contract. The
-new `feed-health-state` contract is the complete derived authority: it stores
-the source roster, saved lifecycle and request results, bounded causal evidence
-and both evidence windows. Runtime writing and selection consumption remain
-deferred; no updater or writer is added in the contract phase.
-
-The state head is metadata at
-`state/metadata/feed-ingest-plan/feed-health-state/head/index-a.json` and
-`index-b.json`, not another ledger. The existing ledger writer places each
-snapshot in its normal raw UTC-day folder using the snapshot write date. A
-successful head rotation removes the former previous snapshot in the same
-commit, so ordinary operation retains two files. The compactor protects the
-references in one valid head copy; if two valid copies disagree, or neither
-validates, it defers pruning this ledger rather than guessing. This bounded
-exception does not disable normal yearly pruning for the observation ledgers.
+The four planner formats have no snapshot head, revision chain or separate
+score ledger. [The field reference](../../reference/feed-planner-ledgers.md)
+defines their identities, captured values, counters and independent windows.
+One selected-text artifact supplies summarizer input but is not a fifth
+committed ledger. The global Python health family and its public JSON remain
+unchanged.
 
 The run-shards ledger publishes `RunRecord.shards` exactly. Assemble files the
 counts after its final manifest write. An absent count stays null; observed

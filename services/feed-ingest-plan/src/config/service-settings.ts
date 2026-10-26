@@ -1,6 +1,7 @@
 /** Which authored settings bound the operator listener and its named input files? */
 import { z } from "zod";
 import { DateStampSchema, NonEmptySchema, PositiveCountSchema } from "@idhazh/common-contracts";
+import { ArtifactRootSchema } from "../selected-artifact-path";
 
 export const RelativePathSchema = NonEmptySchema.refine(
   value => !value.includes("\\") && !value.includes(":") && !value.startsWith("/")
@@ -21,24 +22,27 @@ export const SeenDayInputSchema = z.strictObject({
 export type SeenDayInput = z.infer<typeof SeenDayInputSchema>;
 export const ServiceSettingsSchema = z.strictObject({
   enabled: z.boolean().default(false).describe(
-    "Remove when complete-attempt audit writes and verification are integrated and approved.",
+    "Remove when the planner is approved for production use.",
   ),
   removal_condition: NonEmptySchema,
   listener: z.strictObject({
     hostname: NonEmptySchema, port: PositiveCountSchema.max(65535),
     idle_timeout_seconds: PositiveCountSchema.max(255),
     max_body_bytes: PositiveCountSchema,
+    max_stage_batches: PositiveCountSchema.default(128),
+    parser_concurrency: PositiveCountSchema.default(4),
   }),
   inputs: z.strictObject({
     planning: RelativePathSchema, taxonomy: RelativePathSchema, sources: RelativePathSchema,
-    watchlist: RelativePathSchema,
     extraction: RelativePathSchema, registrations: RelativePathSchema,
     output_root: RelativePathSchema, seen_files: z.array(RelativePathSchema),
+    artifact_root: ArtifactRootSchema.default("backend/var/feed-ingest-plan"),
+    health_period_limit: PositiveCountSchema.default(32),
+    feed_health_input_gap: z.boolean().default(false),
     seen_days: z.array(SeenDayInputSchema).default([]),
     published_days: z.array(SeenDayInputSchema).default([]),
     settled_failure_days: z.array(SeenDayInputSchema).default([]),
     feed_health_days: z.array(SeenDayInputSchema).default([]),
-    document_observation_days: z.array(SeenDayInputSchema).default([]),
   }),
   run: z.strictObject({ attempt: PositiveCountSchema, producer: NonEmptySchema }),
 });

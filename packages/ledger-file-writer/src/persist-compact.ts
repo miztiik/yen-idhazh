@@ -5,7 +5,7 @@ import type { PersistLedgerInput, PersistLedgerResult } from "./ledger-types";
 import { writeAtomically } from "./atomic-file";
 import { buildCompactPath, checkTrustedParent, toRelativePath } from "./ledger-paths";
 import { validateLedgerInput } from "./registration";
-import { buildStoredCompactRow } from "./row-identity";
+import { buildPlannerCompactRow, buildStoredCompactRow, settlePlannerRows } from "./row-identity";
 import { renderLedgerFile } from "./render-ledger-file";
 
 export async function persistCompactLedger<T extends object>(
@@ -13,8 +13,9 @@ export async function persistCompactLedger<T extends object>(
 ): Promise<PersistLedgerResult> {
   const context = validateLedgerInput(input);
   const compactPeriod = input.period;
-  const compactRows = input.rows.map((candidate) =>
-    buildStoredCompactRow(
+  const compactRows = input.rows.map((candidate) => context.planner
+    ? buildPlannerCompactRow(candidate, context.rowSchema, compactPeriod)
+    : buildStoredCompactRow(
       candidate,
       input.rowContract.schema,
       context.ledger,
@@ -22,7 +23,7 @@ export async function persistCompactLedger<T extends object>(
     ),
   );
   const result = await renderLedgerFile(
-    compactRows,
+    context.planner ? settlePlannerRows(compactRows, context.ledger) : compactRows,
     context.columns,
     context,
     compactPeriod.covers,

@@ -1,134 +1,128 @@
-/** Which unsharded selection and terminal losses does one screened run produce? */
-import {
-  ArticleAssessmentRecordSchema, CandidateRejectionContract,
-  EditorialSelectionContract, EditorialSelectionRowSchema, NonNegativeSchema,
-} from "@idhazh/common-contracts";
-import type { CandidateRejectionRecord, ScoreEvidence, WriterIdentity } from "@idhazh/common-contracts";
-import { persistLedger } from "@idhazh/ledger-file-writer";
-import type { LedgerRegistration, LedgerSettings, PersistLedgerResult } from "@idhazh/ledger-file-writer";
-import type { PlanningConfig } from "../config/resolve-policy";
-import { validateOpportunity, validatePortfolioArticles } from "./portfolio-input";
-import type { OpportunityEvidence, PortfolioArticle } from "./portfolio-input";
-import { groupCarriers } from "./carrier-cluster";
-import { normalizeOpportunity } from "./quota-normalizer";
-import { choosePortfolio } from "./mmr-portfolio";
-import { measureArticle, recordAssessment } from "./quality-decoupler";
-import { recordRejection } from "./record-rejection";
-import { validatePublisherHistory } from "./publisher-exposure";
+/** Choose articles using recorded time, configured authority and measured numeric set controls. */
+import { SelectedArticleContentSchema } from "@idhazh/common-contracts";
+import type { ParsedFeedBatch, SelectedArticleRow } from "@idhazh/common-contracts";
+import type { ScreenedCandidate } from "../screen-article-candidates/triage-gates";
+import type { PlanInputs } from "../load-plan-inputs";
+import type { SourceHistoryEvidence } from "../read-ledger-history/read-feed-history";
 import type { PublisherPublicationHistory } from "./publisher-exposure";
+import type { RunContext } from "../resolve-run-context";
 
-export function curateArticles(input: Readonly<{
-  articles: readonly PortfolioArticle[];
-  planning: PlanningConfig;
-  opportunity: OpportunityEvidence;
-  observed_at: string;
-  reliability_floor: number;
-  publication_history?: PublisherPublicationHistory;
-}>) {
-  validateOpportunity(input.opportunity);
-  const articles = validatePortfolioArticles(input.articles, input.planning, input.observed_at);
-  const publicationHistory = input.publication_history ?? {
-    day: input.observed_at.slice(0, 10), availability: "unavailable", counts: new Map<string, number>(),
+export function curateArticles(input: {
+  articles: readonly ScreenedCandidate[]; batch: ParsedFeedBatch; inputs: PlanInputs;
+  health: ReadonlyMap<string, SourceHistoryEvidence>; publications: PublisherPublicationHistory;
+  context?: RunContext;
+}) {
+  const context = input.context ?? input.batch.context;
+  const config = input.inputs.harvest.config.curate;
+  const sourceEvidence = input.batch.evidence;
+  const score = (article: ScreenedCandidate) => {
+    const recency = article.freshness.recency_bonus;
+    const authority = article.policy.curate.source_authority_weight
+      * article.candidate.source.weight * article.candidate.source.applied_tier_weight;
+    const reliability = input.health.get(article.candidate.source_id)?.reliability;
+    const adjustment = reliability?.production_factor == null ? null : config.source_reliability_penalty_enabled
+      ? -authority * (1 - reliability.production_factor) : 0;
+    return { recency, authority, adjustment, base: recency + authority, priority: recency + authority + (adjustment ?? 0) };
   };
-  validatePublisherHistory(publicationHistory, input.observed_at);
-  const controls = {
-    enabled: input.planning.config.curate.source_reliability_penalty_enabled,
-    reliability_floor: NonNegativeSchema.max(1).parse(input.reliability_floor),
-  };
-  const carriers = groupCarriers(articles, controls);
-  const normalization = normalizeOpportunity(carriers.representatives, input.opportunity, controls, articles);
-  const portfolio = choosePortfolio(
-    normalization.admitted, input.planning.config.curate, normalization.allowances,
-    carriers.groups, input.opportunity, controls, publicationHistory,
-  );
-  const rejections: CandidateRejectionRecord[] = [
-    ...carriers.suppressed.map(suppression => recordRejection(
-      suppression.article, input.observed_at, suppression.reason,
-      { matched_url_key: suppression.representative.candidate.url_key },
-    )),
-    ...normalization.rejected.map(rejection => recordRejection(
-      rejection.article, input.observed_at, "SOURCE_QUOTA_EXCEEDED",
-      { observed_value: rejection.position, limit: rejection.allowance.allowance },
-    )),
-    ...portfolio.cutoffs.map(cutoff => recordRejection(
-      cutoff.article, input.observed_at, "MMR_PORTFOLIO_CUTOFF",
-      { observed_value: cutoff.controls[0]!.observed_value, limit: cutoff.controls[0]!.limit },
-    )),
-  ];
-  const choices = new Map(portfolio.choices.map(choice => [choice.candidate_id, choice]));
-  const rows = portfolio.selected.map(article => {
-    const candidate = article.candidate;
-    const choice = choices.get(candidate.candidate_id)!;
-    return EditorialSelectionRowSchema.parse({
-      date: input.observed_at.slice(0, 10),
-      correlation_id: candidate.correlation_id, candidate_id: candidate.candidate_id,
-      source_id: candidate.source_id, vertical: candidate.vertical, source: candidate.source,
-      canonical_url: candidate.canonical_url, url_key: candidate.url_key,
-      labels: candidate.labels, editorial_rank: choice.editorial_rank,
-      estimated_work: article.evidence.estimated_work, ratings: choice.scores,
-      policy: recordAssessment(article, input.observed_at).policy,
+  const compare = (a: ScreenedCandidate, b: ScreenedCandidate) => score(b).priority - score(a).priority
+    || a.candidate.candidate_id.localeCompare(b.candidate.candidate_id);
+  const losses: { article: ScreenedCandidate; reason: string }[] = [];
+  const urls = new Set<string>();
+  const counts = new Map<string, number>();
+  const allowances = new Map<string, { value: number; reasons: string[] }>();
+  for (const article of input.articles) {
+    const own = sourceEvidence[article.candidate.candidate_id]?.primary_evidence;
+    const unique = own !== null && own !== undefined && own.ids.some(id => !input.articles.some(other =>
+      other.candidate.source_id !== article.candidate.source_id
+        && sourceEvidence[other.candidate.candidate_id]?.primary_evidence?.ids.includes(id)));
+    const bonus = unique ? article.policy.curate.bonus_unique_evidence : 0;
+    const prior = allowances.get(article.candidate.source_id);
+    const value = article.policy.curate.base_source_allowance + bonus;
+    if (prior === undefined || value > prior.value) allowances.set(article.candidate.source_id, {
+      value, reasons: bonus > 0 ? ["unique_evidence"] : [],
     });
-  });
-  const reasons = new Map(rejections.map(rejection => [rejection.candidate_id, rejection.drop_reason]));
-  const scores = new Map<string, ScoreEvidence>();
-  for (const step of portfolio.trace) {
-    for (const entry of step.evaluated) scores.set(entry.candidate_id, entry.scores);
   }
-  const assessments = articles.map(article => {
-    const id = article.candidate.candidate_id;
-    const reason = reasons.get(id) ?? null;
-    const score = choices.get(id)?.scores ?? scores.get(id) ?? null;
-    return ArticleAssessmentRecordSchema.parse({
-      ...recordAssessment(article, input.observed_at),
-      decision: reason === null ? "selected" : "rejected", reason,
-      score_evidence: score, score_evidence_status: score === null ? "not_assessed" : "assessed",
+  const remaining: ScreenedCandidate[] = [];
+  for (const article of [...input.articles].sort(compare)) {
+    const feed = article.candidate.source_id;
+    if (urls.has(article.candidate.url_key)) { losses.push({ article, reason: "DUPLICATE_URL" }); continue; }
+    urls.add(article.candidate.url_key);
+    const used = counts.get(feed) ?? 0;
+    if (used >= allowances.get(feed)!.value) { losses.push({ article, reason: "SOURCE_QUOTA_EXCEEDED" }); continue; }
+    counts.set(feed, used + 1);
+    remaining.push(article);
+  }
+  const target = Math.min(input.batch.request.article_limit ?? config.article_limit ?? remaining.length, remaining.length);
+  const chosen: ScreenedCandidate[] = [];
+  const articles: z.infer<typeof SelectedArticleContentSchema>[] = [];
+  const relaxations: string[] = [];
+  const sourceMaximum = Math.ceil(target * config.soft_caps.max_source_share);
+  const domainMaximum = Math.ceil(target * config.soft_caps.max_parent_domain_share);
+  const explorationSlots = Math.floor(target * config.exploration_slot_share);
+  while (chosen.length < target && remaining.length > 0) {
+    const feeds = new Set(chosen.map(article => article.candidate.source_id));
+    const exploring = chosen.length >= target - explorationSlots && remaining.some(article => !feeds.has(article.candidate.source_id));
+    const evaluated = remaining.map(article => {
+      const candidate = article.candidate;
+      const weights = article.policy.curate.mmr_weights;
+      const domain = sourceEvidence[candidate.candidate_id]?.parent_domain?.value;
+      const publisher = candidate.source.publisher_id;
+      const exposure = publisher === null ? null : Math.min(1,
+        ((input.publications.availability === "available" ? input.publications.counts.get(publisher) ?? 0 : 0)
+          + chosen.filter(previous => previous.candidate.source.publisher_id === publisher).length) / target);
+      const measured = score(article);
+      const adjustments: SelectedArticleRow["ratings"]["adjustments"] = [
+        { term: "feed_reliability", value: measured.adjustment },
+        { term: input.publications.availability === "available" ? "publisher_exposure" : "publisher_exposure_current_run",
+          value: exposure === null ? null : -weights.lambda_source * exposure },
+        { term: "source_kind", value: -weights.lambda_source_kind * (chosen.length === 0 ? 0
+          : chosen.filter(previous => previous.candidate.source.kind === candidate.source.kind).length / chosen.length) },
+        { term: "domain", value: domain === undefined ? null : -weights.lambda_domain * (chosen.length === 0 ? 0
+          : chosen.filter(previous => sourceEvidence[previous.candidate.candidate_id]?.parent_domain?.value === domain).length / chosen.length) },
+      ].map(adjustment => ({ ...adjustment, value: adjustment.value === 0 ? 0 : adjustment.value }));
+      const blocked: string[] = [];
+      if (!relaxations.includes("distinct_sources") && feeds.size < Math.min(config.soft_caps.min_distinct_sources, target)
+        && feeds.has(candidate.source_id)) blocked.push("distinct_sources");
+      if (!relaxations.includes("source_share")
+        && chosen.filter(previous => previous.candidate.source_id === candidate.source_id).length >= sourceMaximum) blocked.push("source_share");
+      if (domain !== undefined && chosen.filter(previous =>
+        sourceEvidence[previous.candidate.candidate_id]?.parent_domain?.value === domain).length >= domainMaximum) blocked.push("domain_share");
+      return { article, adjustments, measured, blocked, marginal: measured.base
+        + adjustments.reduce((total, adjustment) => total + (adjustment.value ?? 0), 0) };
     });
-  });
-  if (articles.length !== rows.length + rejections.length) throw new Error("Curation terminal decisions do not reconcile");
-  return {
-    input: articles, opportunity: structuredClone(input.opportunity), reliability_controls: controls,
-    selected: portfolio.selected, rows, rejections, assessments, cutoffs: portfolio.cutoffs,
-    choices: portfolio.choices, trace: portfolio.trace,
-    carriers, normalization, quality: articles.map(article => ({
-      candidate_id: article.candidate.candidate_id, ...measureArticle(article),
-    })),
-  };
-}
-
-export type CurationResult = ReturnType<typeof curateArticles>;
-export type CurationPersistence = Readonly<{
-  outputRoot: string; writerContext: WriterIdentity; ledgerSettings: LedgerSettings;
-  registrations: Readonly<{ selections: LedgerRegistration; rejections: LedgerRegistration }>;
-  date: string;
-}>;
-
-function requireDurable(result: PersistLedgerResult): PersistLedgerResult {
-  if (result.status === "skipped") throw new Error(`Curation ledger unavailable: ${result.warning.ledger}`);
-  return result;
-}
-
-export async function persistPortfolio(result: CurationResult, context: CurationPersistence) {
-  if (context.ledgerSettings.format !== "parquet") throw new Error("Curation requires Parquet ledger storage");
-  if (context.writerContext.shard !== 0) throw new Error("Unsharded curation requires writer provenance shard 0");
-  if (context.registrations.selections.name !== "editorial-selections"
-    || context.registrations.rejections.name !== "rejections") throw new Error("Wrong curation ledger registration");
-  for (const article of result.input) {
-    if (article.candidate.run_id !== context.writerContext.run_id) throw new Error("Writer run differs from curated candidate run");
+    const viable = evaluated.filter(value => value.blocked.length === 0);
+    const exploration = exploring ? viable.filter(value => !feeds.has(value.article.candidate.source_id)) : [];
+    const available = exploration.length ? exploration : viable;
+    available.sort((a, b) => b.marginal - a.marginal || compare(a.article, b.article));
+    const winner = available[0];
+    if (winner === undefined) {
+      const next = config.soft_caps.relaxation_order.find(limit => !relaxations.includes(limit)
+        && evaluated.some(value => value.blocked.includes(limit)));
+      if (next === undefined) break;
+      relaxations.push(next);
+      continue;
+    }
+    const { candidate, freshness } = winner.article;
+    const allowance = allowances.get(candidate.source_id)!;
+    articles.push(SelectedArticleContentSchema.parse({
+      run_id: context.run_id, attempt: context.writer.attempt, date: context.date,
+      url_key: candidate.url_key, feed_id: candidate.source_id, publisher_id: candidate.source.publisher_id,
+      canonical_url: candidate.canonical_url, title: candidate.title, categories: candidate.categories,
+      article_text: candidate.article_text, author: candidate.author, published_at: candidate.published_at,
+      tier: candidate.source.tier, weight: candidate.source.weight, applied_tier_weight: candidate.source.applied_tier_weight,
+      editorial_rank: articles.length + 1, estimated_work: sourceEvidence[candidate.candidate_id]?.estimated_work ?? candidate.word_count,
+      worker_assignment: null, feed_allowance: allowance.value, exploration_slot: exploration.length > 0,
+      cap_relaxations: [...relaxations], allowance_reasons: allowance.reasons,
+      timing_at: freshness.timing_at, timing_basis: freshness.timing_source === "unknown" ? "unavailable" : freshness.timing_source,
+      age_hours: freshness.age_hours, ratings: {
+        base_article_score: winner.measured.base, marginal_score: winner.marginal, adjustments: winner.adjustments,
+        recency_score: winner.measured.recency, feed_authority_score: winner.measured.authority,
+      },
+    }));
+    chosen.push(winner.article);
+    remaining.splice(remaining.indexOf(winner.article), 1);
   }
-  if ([...result.rows, ...result.rejections].some(row => row.date !== context.date)) throw new Error("Writer day differs from curation day");
-  const common = {
-    outputRoot: context.outputRoot, writerContext: context.writerContext,
-    ledgerSettings: context.ledgerSettings, period: { tier: "raw" as const, covers: context.date },
-  };
-  const rejections = requireDurable(await persistLedger({
-    ...common, ledger: "rejections", registryEntry: context.registrations.rejections,
-    rowContract: CandidateRejectionContract,
-    rows: result.rejections,
-  }));
-  const selections = requireDurable(await persistLedger({
-    ...common, ledger: "editorial-selections", registryEntry: context.registrations.selections,
-    rowContract: EditorialSelectionContract,
-    rows: result.rows,
-  }));
-  return { selections, rejections };
+  losses.push(...remaining.map(article => ({ article, reason: "PORTFOLIO_CUTOFF" })));
+  return { articles, losses };
 }
+import type { z } from "zod";

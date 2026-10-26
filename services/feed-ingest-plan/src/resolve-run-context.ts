@@ -3,6 +3,7 @@ import { RecordedInstantSchema, WriterIdentitySchema } from "@idhazh/common-cont
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import type { ServiceSettings } from "./config/service-settings";
+import { selectedArtifactPath } from "./selected-artifact-path";
 
 export function resolveRunContext(
   settings: ServiceSettings, gitSha: string, now: Date,
@@ -20,6 +21,7 @@ export function resolveRunContext(
     run_id, attempt: settings.run.attempt, job: null, pipeline_name: "feed-ingest-plan",
     task_name: "plan", shard: 0, producer: settings.run.producer, git_sha: gitSha,
   });
+  selectedArtifactPath(settings.inputs.artifact_root, { run_id, writer });
   return {
     now: occurred_at, captured_at, date, run_id, correlation_id: z.uuid({ version: "v4" }).parse(correlationId),
     writer,

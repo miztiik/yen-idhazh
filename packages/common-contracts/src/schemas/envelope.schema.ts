@@ -1,5 +1,7 @@
 /** Which writer and recorded format identify one immutable ledger file? */
 import { z } from "zod";
+import { PLANNER_LEDGER_VERSION } from "../version";
+import { RecordedInstantSchema } from "./recorded-instant.schema";
 import { CommitShaSchema, CountSchema, DateStampSchema, JobNameSchema, MonthStampSchema, NonEmptySchema, PositiveCountSchema, RunIdSchema, SchemaVersionSchema, ServerJobSchema, Sha256Schema, YearStampSchema, reject } from "./primitives";
 
 export const LedgerNameSchema = z.enum([
@@ -8,8 +10,7 @@ export const LedgerNameSchema = z.enum([
   "counterfactual-scores", "scored-pairs", "fitted-thresholds", "holdout-pairs", "score-distribution",
   "archive", "metrics", "merge-line-holdout-scores", "traces", "day-metrics", "digest-fragments",
   "gardener", "run-plan", "run-shards", "council-run-records",
-  "editorial-selections", "dispatches", "rejections", "source-runs", "article-assessments", "diversity",
-  "document-observations", "operational-state",
+  "discovered-articles", "selected-articles", "feed-health-state", "plan-runs",
 ]);
 export const TierSchema = z.enum(["raw", "compact"]);
 export const PeriodSchema = z.enum(["daily", "monthly", "yearly"]);
@@ -61,6 +62,7 @@ export const FileEnvelopeSchema = z.strictObject({
   writer_version: NonEmptySchema, compression: CompressionSchema,
   built_from: CountSchema.nullable().default(null),
 }).superRefine((value, ctx) => {
+  if (PlannerLedgerNameSchema.safeParse(value.ledger).success) reject(ctx, "planner ledgers require their minimal file envelope");
   if ((value.tier === "compact") !== (value.period !== null)) reject(ctx, "compact files need a period; raw files name no period");
   if (value.tier === "raw" && value.built_from !== null) reject(ctx, "raw files carry no built_from");
   const stamp = value.tier === "raw" || value.period === "daily" ? DateStampSchema : value.period === "monthly" ? MonthStampSchema : YearStampSchema;
@@ -84,3 +86,31 @@ export function validateEnvelopeContainer(envelope: z.input<typeof FileEnvelopeS
 export type FileEnvelope = z.infer<typeof FileEnvelopeSchema>;
 export type WriterIdentity = z.infer<typeof WriterIdentitySchema>;
 export type RowIdentity = z.infer<typeof RowIdentitySchema>;
+
+export const PlannerLedgerNameSchema = z.enum([
+  "discovered-articles", "selected-articles", "feed-health-state", "plan-runs",
+]);
+export const PLANNER_FOOTER_METADATA_KEYS = [
+  "envelope_version", "schema_version", "tier", "ledger", "covers", "period",
+  "file_id", "content_sha256", "writer", "writer_version", "compression", "updated_at",
+] as const;
+export const PLANNER_OPTIONAL_FOOTER_METADATA_KEYS = ["period", "updated_at"] as const;
+export const PlannerFileEnvelopeSchema = z.strictObject({
+  version: z.literal(PLANNER_LEDGER_VERSION).default(PLANNER_LEDGER_VERSION),
+  row_schema_version: z.literal(PLANNER_LEDGER_VERSION),
+  tier: TierSchema, ledger: PlannerLedgerNameSchema,
+  covers: z.union([DateStampSchema, MonthStampSchema, YearStampSchema]),
+  period: PeriodSchema.nullable().default(null), file_id: UuidSchema,
+  content_sha256: Sha256Schema,
+  writer: z.enum(["idhazh.ledger.parquet", "idhazh_typescript.ledger.parquet"]),
+  writer_version: NonEmptySchema, compression: CompressionSchema,
+  updated_at: RecordedInstantSchema.nullable().default(null),
+}).superRefine((value, ctx) => {
+  if ((value.tier === "compact") !== (value.period !== null)) reject(ctx, "planner compact files require a period; raw files name none");
+  const stamp = value.tier === "raw" || value.period === "daily" ? DateStampSchema
+    : value.period === "monthly" ? MonthStampSchema : YearStampSchema;
+  if (!stamp.safeParse(value.covers).success) reject(ctx, "planner covers must match its tier and period");
+  if (value.file_id[14] !== "8") reject(ctx, "planner file_id must be UUID version 8");
+  if ((value.ledger === "feed-health-state") !== (value.updated_at !== null)) reject(ctx, "only feed-health-state files require updated_at");
+});
+export type PlannerFileEnvelope = z.infer<typeof PlannerFileEnvelopeSchema>;

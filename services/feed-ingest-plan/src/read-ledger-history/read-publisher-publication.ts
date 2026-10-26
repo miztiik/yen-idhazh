@@ -1,5 +1,5 @@
 /** Which actual publications today have an unambiguous recorded publisher identity? */
-import { EditorialSelectionContract } from "@idhazh/common-contracts";
+import { SelectedArticleRowContract } from "@idhazh/common-contracts";
 import type { LedgerRegistration } from "@idhazh/ledger-file-writer";
 import type { SeenDayInput } from "../config/service-settings";
 import { ItemHealthPublicationSchema } from "../metrics/publication-evidence";
@@ -10,6 +10,7 @@ import type { PublisherPublicationHistory } from "../curate-article-portfolio/pu
 import { writeJsonLine } from "../logging/structured-logger";
 import { classifyPublicationHistoryError } from "./classify-publication-history-error";
 import { LedgerHistoryReadError } from "./ledger-history-error";
+import { readPlannerDay } from "./read-planner-history";
 
 type PublisherPublicationInput = Readonly<{
   root: string; day: string;
@@ -43,16 +44,19 @@ async function readConfirmedPublication(input: PublisherPublicationInput) {
         schema: ItemHealthPublicationSchema, schemaVersion: ITEM_HEALTH_ROW_SCHEMA_VERSION,
         projectedFields: ["date", "run_id", "item_id", "url_key", "source_id", "stage", "outcome"],
       }),
-      readNamedDays(input.root, input.selections,
-        [defaultDayInput(input.selections.prefix, input.day)], EditorialSelectionContract),
+      Promise.all([readPlannerDay(input.root, input.selections,
+        defaultDayInput(input.selections.prefix, input.day), SelectedArticleRowContract)]),
     ]);
-    identityHistory = historyCoverage(selections);
+    identityHistory = {
+      availability: selections.every(day => day.complete) ? "available" : "unavailable",
+      days: selections.map(day => ({ day: day.day, status: day.rows.length ? "rows" : day.complete ? "empty" : "missing", notices: [], files: [] })),
+    };
     healthHistory = historyCoverage(health);
-    if (!health.every(usableDay) || !selections.every(usableDay)) gaps.push("publication_identity_history_unavailable");
+    if (!health.every(usableDay) || !selections.every(day => day.complete)) gaps.push("publication_identity_history_unavailable");
     for (const day of health) for (const { row } of day.rows) {
       if (row.date !== input.day) throw new LedgerHistoryReadError("Publication health differs from its named UTC day");
     }
-    for (const day of selections) for (const { row } of day.rows) {
+    for (const day of selections) for (const row of day.rows) {
       if (row.date !== input.day) throw new LedgerHistoryReadError("Publisher snapshot differs from its named UTC day");
     }
     for (const [url, item] of publications) {
@@ -61,9 +65,9 @@ async function readConfirmedPublication(input: PublisherPublicationInput) {
         .map(({ row }) => [JSON.stringify([row.run_id, row.source_id]), row]));
       if (owners.size !== 1) { gaps.push("publication_owner_unavailable"); continue; }
       const owner = [...owners.values()][0]!;
-      const snapshots = selections.flatMap(day => day.rows).filter(({ row, identity }) =>
-        row.url_key === url && row.source_id === owner.source_id && identity.run_id === owner.run_id);
-      const publishers = new Set(snapshots.map(({ row }) => row.source.publisher_id));
+      const snapshots = selections.flatMap(day => day.rows).filter(row =>
+        row.url_key === url && row.feed_id === owner.source_id && row.run_id === owner.run_id);
+      const publishers = new Set(snapshots.map(row => row.publisher_id));
       const publisher = publishers.size === 1 ? [...publishers][0] : null;
       if (publisher === null || publisher === undefined) { gaps.push("recorded_publisher_unavailable"); continue; }
       counts.set(publisher, (counts.get(publisher) ?? 0) + 1);

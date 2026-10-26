@@ -28,7 +28,7 @@ export type LedgerRowProjectionContract<T extends object> = Readonly<{
   projectedFields: readonly string[];
 }>;
 
-function normalize(value: unknown): unknown {
+export function normalize(value: unknown): unknown {
   if (typeof value === "bigint") {
     const number = Number(value);
     if (!Number.isSafeInteger(number)) throw new LedgerHistoryReadError("Ledger integer exceeds the safe numeric range");
@@ -54,7 +54,7 @@ function checkType(field: Field, expected: LogicalType): void {
     || (expected.scalar === "bool" && DataType.isBool(type))
   ))) throw new LedgerHistoryReadError(`Arrow type differs at ${field.name}`);
 }
-function checkFields(fields: readonly Field[], expected: readonly LogicalField[]): void {
+export function checkFields(fields: readonly Field[], expected: readonly LogicalField[]): void {
   if (fields.length !== expected.length || new Set(fields.map(field => field.name)).size !== fields.length) {
     throw new LedgerHistoryReadError(`Arrow columns differ from the declared stored schema: expected ${expected.map(field => field.name).join(",")}; received ${fields.map(field => field.name).join(",")}`);
   }

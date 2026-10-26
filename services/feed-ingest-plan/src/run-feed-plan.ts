@@ -1,330 +1,263 @@
-/** Which real stages produce dispatches and pending audit evidence for one run? */
-import { ParsedFeedBatchSchema } from "@idhazh/common-contracts";
-import type { FeedIngestEvent } from "@idhazh/common-contracts";
+/** Execute one isolated planner run and finalize its four-ledger result even after later work fails. */
 import { randomUUID } from "node:crypto";
-import type { PersistedLedgerFile } from "@idhazh/ledger-file-writer";
+import {
+  DiscoveredArticleRowSchema, ParsedFeedBatchSchema, PlannerWorkEventSchema,
+} from "@idhazh/common-contracts";
+import type { FeedIngestEvent, PlannerArticleEvidence, DiscoveredArticleRow, PlanRunRow } from "@idhazh/common-contracts";
+import type { PersistLedgerResult } from "@idhazh/ledger-file-writer";
 import { harvestFeeds } from "./harvest-feeds/harvest-pool";
-import { harvestPolicy, sourceSnapshot } from "./harvest-feeds/load-harvest-inputs";
-import type { ArticleEvidence, OpportunityEvidence } from "./curate-article-portfolio/portfolio-input";
-import { resolveOperationalHistory } from "./curate-article-portfolio/portfolio-input";
+import { sourceSnapshot } from "./harvest-feeds/load-harvest-inputs";
+import { ArticleParserPool } from "./harvest-feeds/article-parser-pool";
 import { resolveRunContext } from "./resolve-run-context";
-import { readSeenEvidence, rememberFirstSight } from "./read-ledger-history/read-seen-evidence";
+import { readSeenEvidence, rememberFirstSight, requiredSeenDays, foldFirstSight } from "./read-ledger-history/read-seen-evidence";
 import { readExclusionEvidence } from "./read-ledger-history/read-exclusion-evidence";
-import { readFeedHistory, observeFeedReliability } from "./read-ledger-history/read-feed-history";
-import { readDailyPublication } from "./read-ledger-history/read-daily-publication";
-import { readIngestEvidence } from "./read-ledger-history/read-ingest-evidence";
-import { estimateOperationalFeedback } from "./estimate-operational-feedback";
-import { recordFeedHealth } from "./read-ledger-history/record-feed-health";
-import type { OwnFeedReceipt, FeedWriteReceipt } from "./read-ledger-history/own-feed-receipts";
-import type { OwnSeenReceipt } from "./read-ledger-history/read-seen-evidence";
 import { resolvePlanRequest, PlanError } from "./api/plan-request";
-import { createStageLogger, resolveRunPolicy, writeAuditEvent } from "./logging/structured-logger";
-import { harvestAssessments, screeningAssessments } from "./logging/stage-assessments";
-import { readCurrentSelections } from "./partition-article-shards/read-editorial-selection";
-import { resolvePlanningInputs } from "./resolve-planning-inputs";
-import { writeStageBatch } from "./api/stage-store";
+import { createStageLogger } from "./logging/structured-logger";
+import { stageStore } from "./api/stage-store";
 import { operationConfigFingerprint } from "./api/document-operations";
 import { executeSelection } from "./api/selection-operation";
 import { executePartition } from "./api/partition-operation";
 import { executePersistence } from "./api/persistence-operation";
+import { prepareFeedHealthState, recordFeedHealthState } from "./api/feed-health-state-operation";
 import type { PlanInputs } from "./load-plan-inputs";
-import type { PlanningMetricsResult, PublicationMetricsResult, PublicationRecorderInput } from "./metrics/metrics-recorder";
-import { createProgressLogger } from "./logging/progress-logger";
 import type { ProgressRecord } from "./logging/progress-logger";
 import type { TaskProfiling } from "../../host-probes/src/task-profile/task-profiler";
 import { createIngestObservations } from "./ingest-observations";
+import { createRunHealth } from "./run-health";
+import { plannerMemory } from "./planner-memory";
+import { recordPlanRun } from "./record-plan-run";
+import { registerStageExecution } from "./api/document-state";
 
 export type PlanRuntime = {
-  git_sha: string;
-  run_number?: string;
-  correlation_id?: string;
-  clock?: () => Date;
-  selection_clock?: () => Date;
-  captured_at?: string;
-  observation_clock?: () => Date;
-  on_document_observations_persisted?: (files: readonly PersistedLedgerFile[]) => void;
-  boundary?: NonNullable<Parameters<typeof harvestFeeds>[3]>;
-  log?: (event: FeedIngestEvent) => void;
-  progress?: (record: ProgressRecord) => void;
+  git_sha: string; run_number?: string; correlation_id?: string; clock?: () => Date;
+  selection_clock?: () => Date; captured_at?: string; observation_clock?: () => Date;
+  boundary?: NonNullable<Parameters<typeof harvestFeeds>[2]>;
+  log?: (event: FeedIngestEvent) => void; progress?: (record: ProgressRecord) => void;
   task_profiling?: TaskProfiling;
-  evidence?: ReadonlyMap<string, ArticleEvidence>;
-  opportunity?: OpportunityEvidence;
-  seen_receipts?: readonly OwnSeenReceipt[];
-  seen_days?: PlanInputs["settings"]["inputs"]["seen_days"];
-  feed_history_receipts?: readonly OwnFeedReceipt[];
-  on_feed_history_persisted?: (receipt: FeedWriteReceipt) => void;
-  on_seen_persisted?: (receipt: { day: string; files: readonly PersistedLedgerFile[] }) => void;
-  observe_publication?: (plan: FeedPlanResult, metrics: PlanningMetricsResult) => Promise<PublicationRecorderInput>;
+  parser_pool?: ArticleParserPool;
+  signal?: AbortSignal;
+  evidence?: ReadonlyMap<string, PlannerArticleEvidence>;
 };
-
 export async function runFeedPlan(raw: unknown, inputs: PlanInputs, runtime: PlanRuntime) {
-  const captured = runtime.clock?.() ?? new Date();
   const request = resolvePlanRequest(raw, inputs.harvest.config);
+  if (!inputs.settings.enabled) throw new PlanError("PLANNER_DISABLED", "Planner is disabled", "enabled");
+  const captured = runtime.clock?.() ?? new Date();
   const context = resolveRunContext(inputs.settings, runtime.git_sha, captured,
     runtime.run_number, runtime.correlation_id, runtime.captured_at);
-  if (!inputs.settings.enabled) throw new PlanError("PLANNER_DISABLED", "Planner is disabled by service settings", "enabled");
-  for (const entry of [
-    inputs.registrations.rejections, inputs.registrations.selections,
-    inputs.registrations.dispatches, inputs.registrations.seen,
-    inputs.registrations.published, inputs.registrations.item_health,
-    inputs.registrations.feed_health,
-    inputs.registrations.document_observations,
-  ]) {
-    if (entry.lifecycle_status !== "active") throw new PlanError("LEDGER_INACTIVE", `Required ledger ${entry.name} is not active`, entry.name);
-  }
-  // Recompute the effective input fingerprint instead of changing a harvested policy later.
-  const harvestInputs = resolvePlanningInputs(inputs, request);
-  const overrides = request.freshness_hours === undefined ? {} : { freshness_hours: request.freshness_hours };
-  const fallbackPolicy = resolveRunPolicy(harvestInputs, request.freshness_hours);
-  for (const source of harvestInputs.sources) {
-    if (source.status !== "retired") harvestPolicy(harvestInputs, source.vertical, overrides);
-  }
-  const logger = createStageLogger(context, runtime.log ?? writeAuditEvent);
-  const progress = createProgressLogger(context.correlation_id, runtime.progress);
-  progress("PIPELINE_STARTED");
-  const complete = (stage: FeedIngestEvent["stage"], input_count: number, output_count: number,
-    terminal_rejection_count: number, source_count: number | null = null) => {
-    progress("STAGE_COMPLETED", { stage, input_count, output_count, rejection_count: terminal_rejection_count });
-    return logger.emit(stage, {
-      kind: "stage_completion", stage, input_count, output_count, terminal_rejection_count, source_count,
-    }, fallbackPolicy);
+  const started = performance.now();
+  registerStageExecution(inputs, context, "plan", started);
+  const emit = createStageLogger(context, runtime.log);
+  const timings: PlanRunRow["api_timings"] = [];
+  const files: Partial<Record<"discovered_articles" | "selected_articles" | "feed_health_state" | "plan_runs", PersistLedgerResult>> = {};
+  const batches: { parsed_batch_id?: string; selection_batch_id?: string; partition_batch_id?: string } = {};
+  let selected: Awaited<ReturnType<typeof executeSelection>>["batch"] | undefined;
+  let partitioned: Awaited<ReturnType<typeof executePartition>>["batch"] | undefined;
+  let artifact: string | null = null;
+  let failureCode: string | null = null;
+  let selectionStartedAt: string | null = null;
+  let healthAttempted = false;
+  const memory = plannerMemory(inputs);
+  const sources = inputs.harvest.sources.map(source => sourceSnapshot(inputs.harvest, source));
+  let parseStarted: number | undefined;
+  let parseFinished: number | undefined;
+  let parseFailed = false;
+  const parserActivity = (phase: "started" | "completed" | "failed") => {
+    const now = performance.now();
+    if (phase === "started") parseStarted ??= now;
+    else parseFinished = now;
+    if (phase === "failed") parseFailed = true;
+    emit("parse", phase);
   };
-  progress("HISTORY_READ_STARTED");
-  const history = await readSeenEvidence(inputs.root, inputs.settings.inputs.seen_files, {
-    now: context.now, lookback_days: inputs.clock_config.collect.seen_window_days,
-    days: runtime.seen_days ?? inputs.settings.inputs.seen_days,
-    receipt_root: inputs.outputRoot,
-    ...(runtime.seen_receipts === undefined ? {} : { own_receipts: runtime.seen_receipts }),
-  });
-  const exclusionEvidence = {
-    ...await readExclusionEvidence({
-    root: inputs.root, now: context.now,
-    publishedWindowDays: inputs.clock_config.collect.published_window_days,
-    settledFailureCodes: inputs.clock_config.collect.settled_failure_codes,
-    publishedRegistration: inputs.registrations.published, itemHealthRegistration: inputs.registrations.item_health,
-    publishedDays: inputs.settings.inputs.published_days,
-    settledFailureDays: inputs.settings.inputs.settled_failure_days,
-    }),
-    published_window_days: inputs.clock_config.collect.published_window_days,
-  };
-  const feedHistory = await readFeedHistory({
-    root: inputs.root, now: context.captured_at, run_id: context.run_id,
-    sources: harvestInputs.sources.map(source => sourceSnapshot(harvestInputs, source)),
-    policy: inputs.clock_config.collect,
-    lifecycle_window_days: harvestInputs.config.feedback.lifecycle_window_days,
-    health: inputs.registrations.feed_health,
-    health_days: inputs.settings.inputs.feed_health_days,
-    own_receipts: runtime.feed_history_receipts ?? [], receipt_root: inputs.outputRoot,
-  });
-  const dailyPublication = await readDailyPublication({
-    root: inputs.root, day: context.date, registration: inputs.registrations.item_health,
-    days: inputs.settings.inputs.settled_failure_days,
-  });
-  const articleEvidence = await readIngestEvidence({
-    root: inputs.root, now: context.now,
-    window_days: harvestInputs.config.feedback.window_days,
-    registration: inputs.registrations.document_observations,
-    days: inputs.settings.inputs.document_observation_days,
-  });
-  const operationalFeedback = estimateOperationalFeedback(
-    articleEvidence, harvestInputs.config.feedback,
-  );
-  progress("HISTORY_READ_COMPLETED");
-  logger.startStep();
-  const observations = createIngestObservations({
-    writer: context.writer, outputRoot: inputs.outputRoot,
-    registration: inputs.registrations.document_observations, settings: inputs.ledgerSettings,
-    ...(runtime.on_document_observations_persisted === undefined ? {} : { on_persisted: runtime.on_document_observations_persisted }),
-  });
-  const harvest = await harvestFeeds(harvestInputs, {
-    writer: context.writer, correlation_id: context.correlation_id,
-    max_future_hours: inputs.clock_config.collect.max_future_hours,
-    exclusions: exclusionEvidence,
-    feed_history: feedHistory.sources,
-    overrides, clock: () => new Date(context.now), progress,
-    observations, observation_clock: runtime.observation_clock ?? (() => new Date()),
-    log: record => progress(record.subject === "feed" ? "FEED_REJECTED" : "ARTICLE_REJECTED", {
-      source_id: record.source_id, ...(record.candidate_id === null ? {} : { candidate_id: record.candidate_id }),
-      drop_reason: record.drop_reason,
-      diagnostics: record.details.diagnostics,
-    }),
-  }, {
-    outputRoot: inputs.outputRoot, registryEntry: inputs.registrations.rejections,
-    ledgerSettings: inputs.ledgerSettings,
-  }, runtime.boundary);
-  const feedFiles = await recordFeedHealth({
-    outcomes: harvest.feed_outcomes, articles: harvest.articles, history: feedHistory, now: context.captured_at,
-    writer: context.writer, outputRoot: inputs.outputRoot, settings: inputs.ledgerSettings,
-    health: inputs.registrations.feed_health,
-    ...(runtime.on_feed_history_persisted === undefined ? {} : { on_persisted: runtime.on_feed_history_persisted }),
-  });
-  observeFeedReliability(feedHistory, feedFiles.rows, inputs.clock_config.collect);
-  const seen = await rememberFirstSight(history, harvest.first_sight_candidates, context, {
-    outputRoot: inputs.outputRoot, registryEntry: inputs.registrations.seen, ledgerSettings: inputs.ledgerSettings,
-  });
-  if (seen.sealing.files.length > 0) runtime.on_seen_persisted?.({ day: context.date, files: seen.sealing.files });
-  for (const outcome of harvest.feed_outcomes) {
-    const sourceHistory = feedHistory.sources.get(outcome.source.source_id)!;
-    outcome.history = {
-      ...sourceHistory,
-      daily_published: {
-        day: context.date, observed_count: dailyPublication.counts.get(outcome.source.source_id) ?? 0,
-        availability: dailyPublication.history.availability,
+  const parserPool = runtime.parser_pool ?? new ArticleParserPool(inputs.settings.listener.parser_concurrency);
+  let work: ReturnType<typeof createRunHealth> | undefined;
+  let history: Awaited<ReturnType<typeof prepareFeedHealthState>> | undefined;
+  let discovery: Awaited<ReturnType<typeof readSeenEvidence>> | undefined;
+  const sightings: DiscoveredArticleRow[] = [];
+  async function phase<T>(operation: PlanRunRow["api_timings"][number]["operation"], execute: () => Promise<T>): Promise<T> {
+    const begin = performance.now();
+    emit(operation, "started");
+    try {
+      const result = await execute();
+      const duration_ms = Math.round(performance.now() - begin);
+      timings.push({ operation, duration_ms, status: "completed" });
+      emit(operation, "completed", { duration_ms });
+      return result;
+    } catch (error) {
+      const duration_ms = Math.round(performance.now() - begin);
+      timings.push({ operation, duration_ms, status: "failed" });
+      emit(operation, "failed", { duration_ms, failure_code: "PLANNER_PHASE_FAILED" });
+      throw error;
+    }
+  }
+  emit("plan", "started");
+  try {
+    const loaded = await Promise.all([
+      phase("feed-health-summary", () => prepareFeedHealthState(inputs, context.now)),
+      readSeenEvidence({
+        root: inputs.root, files: inputs.settings.inputs.seen_files, days: inputs.settings.inputs.seen_days,
+        registration: inputs.registrations.discovered_articles, now: context.now,
+        lookback_days: inputs.clock_config.collect.seen_window_days, concurrency: inputs.harvest.config.harvest.concurrency,
+        own_rows: memory.discoveries(),
+      }),
+      readExclusionEvidence({
+        root: inputs.root, now: context.now, publishedWindowDays: inputs.clock_config.collect.published_window_days,
+        settledFailureCodes: inputs.clock_config.collect.settled_failure_codes,
+        publishedRegistration: inputs.registrations.published, itemHealthRegistration: inputs.registrations.item_health,
+        publishedDays: inputs.settings.inputs.published_days, settledFailureDays: inputs.settings.inputs.settled_failure_days,
+        concurrency: inputs.harvest.config.harvest.concurrency,
+      }),
+    ]);
+    const initialHistory = loaded[0];
+    history = initialHistory;
+    discovery = loaded[1];
+    // The measured initial capture already includes bounded in-memory evidence and its summary.
+    // Selection performs a separate fresh capture; no membership/index cache crosses that boundary.
+    const historyRows = initialHistory.rows;
+    work = createRunHealth(context, sources, initialHistory.sources);
+    const currentWork = work;
+    const observations = createIngestObservations(currentWork.observe);
+    const harvest = await phase("fetch", () => harvestFeeds(inputs.harvest, {
+      writer: context.writer, correlation_id: context.correlation_id,
+      max_future_hours: inputs.clock_config.collect.max_future_hours,
+      exclusions: { ...loaded[2], published_window_days: inputs.clock_config.collect.published_window_days },
+      feed_history: initialHistory.sources, observations, parser_pool: parserPool,
+      parser_options: { activity: parserActivity, ...(runtime.signal === undefined ? {} : { signal: runtime.signal }) },
+      overrides: request.freshness_hours === undefined ? {} : { freshness_hours: request.freshness_hours },
+      clock: () => new Date(context.now), observation_clock: runtime.observation_clock ?? (() => new Date()),
+      log: () => {},
+      on_feed: (outcome, entries, checkedAt) => {
+        currentWork.feed(outcome, entries, checkedAt);
+        for (const entry of entries) {
+          if (entry.link === null) continue;
+          let identity;
+          try { identity = canonicalizeUrl(entry.link); }
+          catch { continue; }
+          if (matchUrlExclusion(identity.canonical_url, inputs.harvest.config.harvest.url_exclusions) !== undefined) continue;
+          sightings.push(DiscoveredArticleRowSchema.parse({
+            url_key: identity.url_key, first_seen_at: checkedAt, date: checkedAt.slice(0, 10),
+          }));
+        }
       },
-      health_coverage: feedHistory.history.health.availability,
-      reliability_coverage: feedHistory.history.reliability.availability,
-    };
-    logger.emit("harvest-feeds", outcome, outcome.source.status === "active"
-      ? harvestPolicy(harvestInputs, outcome.source.vertical, overrides) : fallbackPolicy, outcome.source.source_id);
+      on_article: currentWork.article,
+      progress: (eventType, details) => runtime.progress?.({
+        eventType, feed_id: details?.source_id ?? null, output_count: details?.output_count ?? null,
+      }),
+    }, runtime.boundary));
+    const seenRows = memory.rememberDiscoveries([...discovery.rows, ...sightings],
+      requiredSeenDays(context.now, inputs.clock_config.collect.seen_window_days)[0]!);
+    const saved = await rememberFirstSight(discovery.rows, seenRows, context, {
+      outputRoot: inputs.outputRoot, registryEntry: inputs.registrations.discovered_articles, ledgerSettings: inputs.ledgerSettings,
+    });
+    files.discovered_articles = saved.result;
+    const parsed = stageStore(inputs).write("parsed", ParsedFeedBatchSchema, {
+      batch_id: randomUUID(), config_sha256: operationConfigFingerprint(inputs, runtime), context,
+      request: {
+        ...(request.freshness_hours === undefined ? {} : { freshness_hours: request.freshness_hours }),
+        ...(request.article_limit === null ? {} : { article_limit: request.article_limit }),
+        shards: request.shards, partition_strategy: request.partition_strategy,
+      },
+      candidates: harvest.candidates,
+      observations: Object.fromEntries(harvest.articles.filter(article => article.candidate !== null)
+        .map(article => [article.candidate!.candidate_id, article.observation])),
+      seen: { availability: "available", rows: foldFirstSight([...seenRows, ...memory.discoveries()]) },
+      evidence: Object.fromEntries(harvest.candidates.flatMap(candidate => {
+        const supplied = runtime.evidence?.get(candidate.candidate_id);
+        return supplied === undefined ? [] : [[candidate.candidate_id, supplied]];
+      })),
+      history_rows: historyRows, history_days: history.days, work_rows: currentWork.rows(), exclusions: currentWork.exclusions(),
+    });
+    PlannerWorkEventSchema.parse({ stage: "parsed", payload: parsed });
+    batches.parsed_batch_id = parsed.batch_id;
+    selectionStartedAt = utcTimestamp(runtime.selection_clock ?? runtime.clock);
+    const selectionClock = selectionStartedAt;
+    const selection = await phase("select", () => executeSelection({ batch_id: parsed.batch_id }, inputs,
+      { ...runtime, selection_clock: () => new Date(selectionClock) }, timing => { timings.push(timing); }));
+    selected = selection.batch;
+    PlannerWorkEventSchema.parse({ stage: "selected", payload: selected });
+    batches.selection_batch_id = selected.batch_id;
+    const chosen = selected;
+    const settled = await Promise.allSettled([
+      phase("partition", () => executePartition({
+        batch_id: chosen.batch_id, strategy: request.partition_strategy, shards: request.shards,
+      }, inputs, runtime)),
+      (async () => {
+        healthAttempted = true;
+        files.feed_health_state = await recordFeedHealthState(chosen.health_rows, context, inputs);
+        memory.rememberHealth(chosen.health_rows);
+      })(),
+    ]);
+    const partitionResult = settled[0];
+    if (partitionResult.status === "fulfilled") {
+      partitioned = partitionResult.value.batch;
+      PlannerWorkEventSchema.parse({ stage: "partitioned", payload: partitioned });
+      batches.partition_batch_id = partitioned.batch_id;
+    }
+    if (partitioned !== undefined) {
+      const persisted = await phase("persist", () => executePersistence({ batch_id: partitioned!.batch_id }, inputs, runtime));
+      files.selected_articles = persisted.files;
+      artifact = persisted.artifact;
+    }
+    const rejected = settled.filter(result => result.status === "rejected");
+    if (rejected.length) {
+      failureCode = settled[1].status === "rejected" ? "FEED_HEALTH_WRITE_FAILED" : "PARTITION_FAILED";
+      emit("plan", "failed", { failure_code: failureCode });
+    }
+  } catch (error) {
+    failureCode = error instanceof PlanError ? error.code : "PLANNER_EXECUTION_FAILED";
+    emit("plan", "failed", { failure_code: failureCode });
+    if (work !== undefined && !healthAttempted) {
+      healthAttempted = true;
+      try {
+        files.feed_health_state = await recordFeedHealthState(work.rows(), context, inputs);
+        memory.rememberHealth(work.rows());
+      } catch {
+        failureCode = "FEED_HEALTH_WRITE_FAILED";
+        emit("persist", "failed", { failure_code: failureCode });
+      }
+    }
+    if (discovery !== undefined && files.discovered_articles === undefined) {
+      try {
+        const saved = await rememberFirstSight(discovery.rows, sightings, context, {
+          outputRoot: inputs.outputRoot, registryEntry: inputs.registrations.discovered_articles, ledgerSettings: inputs.ledgerSettings,
+        });
+        files.discovered_articles = saved.result;
+      } catch {
+        failureCode = "DISCOVERY_WRITE_FAILED";
+        emit("persist", "failed", { failure_code: failureCode });
+      }
+    }
+  } finally {
+    if (runtime.parser_pool === undefined) parserPool.close();
+    if (parseStarted !== undefined) timings.push({
+      operation: "parse", duration_ms: Math.round((parseFinished ?? performance.now()) - parseStarted),
+      status: parseFailed ? "failed" : "completed",
+    });
   }
-  for (const assessment of harvestAssessments({ harvest, context, overrides, evidence: runtime.evidence })) logger.emit(
-    "harvest-feeds", { kind: "candidate_decision", assessment },
-    assessment.policy, assessment.source_id, assessment.candidate_id,
-  );
-  complete("harvest-feeds", harvest.candidates.length + harvest.rejections.length, harvest.candidates.length,
-    harvest.rejections.length, harvest.feed_outcomes.length);
-  logger.startStep();
-  const parsedBatch = await writeStageBatch(inputs.outputRoot, "parsed", ParsedFeedBatchSchema, {
-    batch_id: randomUUID(), config_sha256: operationConfigFingerprint(inputs, runtime),
-    context, request,
-    candidates: harvest.candidates,
-    observations: Object.fromEntries(harvest.articles.filter(article => article.candidate !== null)
-      .map(article => [article.observation.candidate_id, article.observation])),
-    seen: seen.evidence, rejections: harvest.rejections,
-    evidence: Object.fromEntries(runtime.evidence ?? []),
-    operational_history: Object.fromEntries([...feedHistory.sources].map(([id, history]) =>
-      [id, resolveOperationalHistory(id, null, history.reliability)])),
-    opportunity: runtime.opportunity ?? {
-      covered_event_clusters: null, underrepresented_verticals: null, origin: null,
-    },
+  const recorded = await recordPlanRun(inputs, context, {
+    duration_ms: Math.round(performance.now() - started), status: failureCode === null ? "completed"
+      : work !== undefined && work.rows().some(row => row.checked_at !== null) ? "partial" : "failed",
+    failure_code: failureCode, selected_count: selected?.articles.length ?? 0,
+    strategy: partitioned?.strategy ?? request.partition_strategy, dispatch_count: partitioned?.dispatch_count ?? 0,
+    selected_articles_artifact: artifact, api_timings: timings,
+    evaluated_at: selected?.evaluated_at ?? context.now,
+    selection_started_at_utc: selectionStartedAt,
   });
-  const selection = await executeSelection({ batch_id: parsedBatch.batch_id }, inputs, runtime, screening => {
-    for (const assessment of screeningAssessments({
-      harvest, screening, context, overrides, seen: seen.evidence,
-      maxFutureHours: inputs.clock_config.collect.max_future_hours, evidence: runtime.evidence,
-    })) logger.emit(
-      "screen-article-candidates", { kind: "candidate_decision", assessment },
-      assessment.policy, assessment.source_id, assessment.candidate_id,
-    );
-    complete("screen-article-candidates", harvest.candidates.length, screening.admitted.length, screening.rejections.length);
-    logger.startStep();
-  });
-  const { screening, curation, portfolio } = selection;
-  for (const assessment of curation.assessments) logger.emit(
-    "curate-article-portfolio", { kind: "candidate_decision", assessment },
-    assessment.policy, assessment.source_id, assessment.candidate_id,
-  );
-  for (const step of curation.trace) {
-    if (step.choice === null) continue;
-    const article = curation.selected.find(article => article.candidate.candidate_id === step.choice!.candidate_id)!;
-    logger.emit("curate-article-portfolio", step.choice, article.candidate.policy,
-      article.candidate.source_id, article.candidate.candidate_id);
-  }
-  complete("curate-article-portfolio", screening.admitted.length, curation.rows.length, curation.rejections.length);
-  logger.startStep();
-  await readCurrentSelections({
-    curation, persisted: portfolio.selections, candidates: harvest.candidates,
-    writer: context.writer, outputRoot: inputs.outputRoot, context,
-  });
-  const partitioned = await executePartition({
-    batch_id: selection.batch.batch_id, strategy: request.partition_strategy, shards: request.shards,
-  }, inputs, runtime);
-  const { partition } = partitioned;
-  complete("partition-article-shards", curation.rows.length, partition.dispatches.length, 0);
-  logger.startStep();
-  const dispatches = await executePersistence({ batch_id: partitioned.batch.batch_id }, inputs, runtime);
-  complete("seal-article-ledger", partition.dispatches.length, partition.dispatches.length, 0);
-  progress("PLANNING_STAGES_COMPLETED", { output_count: partition.dispatches.length });
-  return {
-    status: "dispatches_persisted_audit_pending" as const,
-    context, request, events: logger.events,
-    batches: {
-      parsed_batch_id: parsedBatch.batch_id,
-      selection_batch_id: selection.batch.batch_id,
-      partition_batch_id: partitioned.batch.batch_id,
-    },
-    files: {
-      harvest_rejections: harvest.rejection_files,
-      screening_rejections: screening.sealing,
-      selections: portfolio.selections, curation_rejections: portfolio.rejections,
-      dispatches,
-      seen: seen.sealing,
-      feed_health: feedFiles.health,
-      document_observations: observations.result(),
-    },
-    evidence: { harvest, screening, curation, seen, exclusions: exclusionEvidence, partition,
-      feed_history: feedHistory, daily_publication: dailyPublication,
-      publisher_publication: selection.publisher_publication, article_evidence: articleEvidence,
-      operational_feedback: operationalFeedback },
-  };
+  const row = recorded.row;
+  files.plan_runs = recorded.files;
+  if (failureCode === null) emit("plan", "completed", { output_count: row.selected_count, duration_ms: row.duration_ms });
+  return { context, row, batches, files, selected: partitioned?.articles ?? selected?.articles ?? [] };
 }
 export type FeedPlanResult = Awaited<ReturnType<typeof runFeedPlan>>;
-export type RecordedFeedPlanResult = FeedPlanResult & { metrics: PlanningMetricsResult; publication?: PublicationMetricsResult };
-
-export function summarizePlan(result: FeedPlanResult & { metrics?: PlanningMetricsResult; publication?: PublicationMetricsResult }) {
-  const planningCompletion = result.metrics?.planning_completion ?? null;
-  const planningComplete = planningCompletion?.status === "complete";
-  const publication = result.publication ?? null;
-  const auditedComplete = planningComplete && publication?.audited_complete === true;
-  if (publication !== null && (publication.run_id !== result.context.run_id
-    || publication.attempt !== result.context.writer.attempt || publication.correlation_id !== result.context.correlation_id)) {
-    throw new Error("Publication audit differs from this planning attempt");
-  }
+export function summarizePlan(result: FeedPlanResult) {
   return {
-    status: auditedComplete ? "audit_complete" as const : planningComplete ? "planning_complete_audit_pending" as const : result.status,
-    planning_complete: planningComplete, audited_complete: auditedComplete, publication,
-    planning_completion: planningCompletion,
-    source_records: result.metrics?.source_records ?? null,
-    run_id: result.context.run_id, correlation_id: result.context.correlation_id,
-    date: result.context.date, observed_at: result.context.now, request: result.request,
-    batches: result.batches,
-    strategy: result.evidence.partition.strategy, dispatch_count: result.evidence.partition.dispatch_count,
-    selected_candidate_ids: result.evidence.curation.rows.map(row => row.candidate_id),
-    assignments: result.evidence.partition.dispatches.map(dispatch => ({
-      candidate_id: dispatch.content.candidate_id, partition: dispatch.partition,
+    ...result.row, planning_complete: result.row.status === "completed",
+    correlation_id: result.context.correlation_id, batches: result.batches, files: result.files,
+    selected_url_keys: result.selected.map(article => article.url_key),
+    assignments: result.selected.map(article => ({
+      url_key: article.url_key, editorial_rank: article.editorial_rank, worker_assignment: article.worker_assignment,
     })),
-    files: { ...result.files, ...(result.metrics === undefined ? {} : { source_runs: result.metrics.files.source_runs }) },
-    metrics: result.metrics,
-    first_sight: {
-      absence_proof: result.evidence.seen.absence_proof,
-      global_absence: result.evidence.seen.global_absence,
-      window: result.evidence.seen.window,
-      own_receipts: result.evidence.seen.own_receipts,
-      created_count: result.evidence.seen.new_rows.length,
-    },
-    exclusions: {
-      already_published: result.evidence.harvest.rejections.filter(row => row.drop_reason === "ALREADY_PUBLISHED").length,
-      settled_failure: result.evidence.harvest.rejections.filter(row => row.drop_reason === "SETTLED_FAILURE").length,
-      blocked_url_marker: result.evidence.harvest.rejections.filter(row => row.drop_reason === "BLOCKED_URL_MARKER").length,
-      history: result.evidence.exclusions.history,
-    },
-    feed_history: {
-      ...result.evidence.feed_history.history,
-      daily_publication: result.evidence.daily_publication.history,
-      publisher_publication: {
-        day: result.evidence.publisher_publication.day,
-        availability: result.evidence.publisher_publication.availability,
-        gaps: result.evidence.publisher_publication.gaps,
-        history: result.evidence.publisher_publication.history,
-      },
-    },
-    article_evidence: result.evidence.article_evidence,
-    operational_feedback: result.evidence.operational_feedback,
-    editorial_inputs: {
-      headline_consumer: "existing_mmr_lens_entity_penalties",
-      bonus_consumer: null,
-      unavailable_consumers: ["salience_vote", "watchlist_bonus", "lens_weight_bonus"],
-      salience: result.evidence.harvest.salience,
-      candidates: result.evidence.harvest.candidates.map(candidate => ({
-        candidate_id: candidate.candidate_id, url_key: candidate.url_key, labels: candidate.labels,
-        planning_observations: candidate.planning_observations,
-      })),
-    },
-    audit: {
-      status: auditedComplete ? "complete" : result.metrics === undefined ? "unavailable" : "assessment_diversity_recorded_audit_pending",
-      reason: auditedComplete ? null : planningComplete
-        ? "Current planning is verified; publication and complete historical audit remain outside this result"
-        : "Current planning completion has not been verified",
-    },
   };
 }
+import { canonicalizeUrl } from "./harvest-feeds/url-cleaner";
+import { matchUrlExclusion } from "./harvest-feeds/url-exclusions";
+import { utcTimestamp } from "./harvest-feeds/harvest-types";

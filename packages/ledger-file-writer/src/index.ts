@@ -1,5 +1,7 @@
 /** Public entry point for writing ledger files and creating their identities. */
 export { persistLedger } from "./persist-ledger";
+export { persistRawLedger } from "./persist-raw";
+export { persistCompactLedger } from "./persist-compact";
 export type {
   LedgerPeriod,
   LedgerRegistration,
