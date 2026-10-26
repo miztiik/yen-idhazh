@@ -35,19 +35,20 @@ test('published flat and nested ledgers absent from the build are not weighed, a
 		.filter((key) => key.startsWith('state/compact/feed-ingest-plan/')).sort();
 	const planner = configuredCatalog.families.find((family) => family.name === 'feed-ingest-plan');
 	if (planner === undefined) throw new Error('The current planner family must be registered');
-	const registered = planner.ledgers.map((entry) => `state/compact/${entry.prefix}/index/`);
-	expect(plannerCaps.filter((key) => !registered.includes(key))).toEqual([]);
+	const registered = [...planner.ledgers].sort((left, right) => left.prefix.localeCompare(right.prefix));
+	expect(plannerCaps).toEqual(registered.map((entry) => `state/compact/${entry.prefix}/index/`));
 	const build = aBuildTree({
 		'state/compact/seen/index/daily.json': 'daily',
 		'state/compact/seen/index/monthly.json': 'monthly',
 		'state/compact/seen/index/yearly.json': 'yearly'
 	});
 	const ceilings = {
-		'state/compact/feed-ingest-plan/selected-articles/index/': 2200,
+		...Object.fromEntries(plannerCaps.map((key) => [key, config.page_weight.payload_ceilings_bytes[key]])),
 		'state/compact/item-health/index/': 2200,
 		'state/compact/seen/index/': 2200
 	};
-	expect(weighPayloads(build, ceilings, ['selected-articles', 'item-health', 'seen'], '', onDisk)).toEqual({
+	const published = [...registered.map((entry) => entry.name), 'item-health', 'seen'];
+	expect(weighPayloads(build, ceilings, published, '', onDisk)).toEqual({
 		weighed: [
 			{ key: 'state/compact/seen/index/', path: 'state/compact/seen/index/monthly.json', bytes: 7, ceiling: 2200 },
 			{ key: 'state/compact/seen/index/', path: 'state/compact/seen/index/yearly.json', bytes: 6, ceiling: 2200 },
@@ -56,12 +57,12 @@ test('published flat and nested ledgers absent from the build are not weighed, a
 		over: [],
 		namesNothing: [],
 		notWeighed: [
-			{
-				key: 'state/compact/feed-ingest-plan/selected-articles/index/',
+			...registered.map(({ name, prefix }) => ({
+				key: `state/compact/${prefix}/index/`,
 				reason:
-					'selected-articles is not packed yet, so the build holds none of its files. ' +
-					'If it was packed before, restore state/compact/feed-ingest-plan/selected-articles/ from git history.'
-			},
+					`${name} is not packed yet, so the build holds none of its files. ` +
+					`If it was packed before, restore state/compact/${prefix}/ from git history.`
+			})),
 			{
 				key: 'state/compact/item-health/index/',
 				reason:
@@ -70,7 +71,13 @@ test('published flat and nested ledgers absent from the build are not weighed, a
 			}
 		]
 	});
-
+	const retired = [
+		'article-assessments', 'dispatches', 'diversity',
+		'editorial-selections', 'rejections', 'source-runs'
+	].map((name) => `state/compact/feed-ingest-plan/${name}/index/`).sort();
+	expect(weighPayloads(build, {
+		...ceilings, ...Object.fromEntries(retired.map((key) => [key, 2200]))
+	}, published, '', onDisk).namesNothing).toEqual(retired.map((key) => ({ key, ceiling: 2200 })));
 });
 
 test('a nested ledger index is weighed at its registered path and still fails above its ceiling', () => {

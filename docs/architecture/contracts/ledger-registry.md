@@ -138,12 +138,13 @@ boundary are [the ledger reference](../../reference/feed-planner-ledgers.md).
 There is no obsolete planner ledger, snapshot head, compatibility reader or
 dual writer registered beside these formats.
 
-Payload-size caps for the six removed planner indexes are removed with their
-formats. The replacement family has no production packed output at cutover,
-so it has no predeclared index-size cap over a nonexistent build file.
-Add a current-family cap only with an actual built payload; do not create
-empty indexes or retain obsolete data to satisfy the bundle gate. Other
-payload limits are unchanged.
+The four current index prefixes replace the six removed planner index
+budgets without increasing their limits. A consented ledger with no compact
+folder is reported as not weighed by the existing bundle gate; registration
+does not require fabricated empty indexes. Once compact files exist, missing
+indexes fail the gate, as does a stale or unregistered payload key. The native
+retention-size check still requires and validates every consented ledger's
+index cap. Other payload limits are unchanged.
 
 The TypeScript file-envelope vocabulary must name the same ledgers as Python.
 The council's import test reads only a named dependency list; registration adds

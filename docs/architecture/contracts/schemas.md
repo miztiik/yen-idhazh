@@ -134,6 +134,8 @@ including required keys, defaults and vocabularies. The report and runtime
 use those real schemas, not hand-built export copies. Native CI also reads
 real Bun output through daily, monthly, reopened-month and yearly packing.
 The TypeScript package checks do not claim that local Python ran.
+Contract input bindings use `Contract.json_schema()`, which includes its
+read-time version default; nested models use `model_json_schema()`.
 
 Current planner batches and ledger rows reject the replaced formats. There
 is no old planner migrator, compatibility alias or dual writer. Finite

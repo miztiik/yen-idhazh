@@ -278,6 +278,7 @@ def test_typescript_field_types_defaults_and_vocabularies(
 
 def test_typescript_envelope_fields_and_footer_keys(typescript_schemas: dict[str, Any]) -> None:
     from idhazh.contracts import file_envelope
+    from idhazh.contracts.base import Contract
     from idhazh.contracts.feed_health import FeedHealthRow
     from idhazh.contracts.publication_inventory import PublicationEntry, PublicationInventory
 
@@ -288,7 +289,7 @@ def test_typescript_envelope_fields_and_footer_keys(typescript_schemas: dict[str
         file_envelope.FileEnvelope, file_envelope.PlannerFileEnvelope,
         file_envelope.WriterIdentity, file_envelope.RowIdentity, FeedHealthRow,
     ):
-        ours = contract.model_json_schema()
+        ours = contract.json_schema() if issubclass(contract, Contract) else contract.model_json_schema()
         theirs = typescript_schemas[contract.__name__]
         assert normalized_shape(theirs, theirs) == normalized_shape(ours, ours)
     assert typescript_schemas["__footer_keys"] == list(file_envelope._KEYS)
