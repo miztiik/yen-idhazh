@@ -1,316 +1,95 @@
-/** Which source and stage outcomes can validated planner events actually prove? */
+/** Render a body-free planner outcome without claiming summary quality or publication. */
 import { appendFile, readFile } from "node:fs/promises";
-import { DropReasonCountSchema, FeedIngestConfigSchema, HarvestDiagnosticsSchema, HostFingerprintRowSchema, RunIdSchema, SourceRunRecordSchema, WriterIdentitySchema, readFeedIngestEvent } from "../../packages/common-contracts/src/index";
-import type { DropReasonCount, FeedIngestEvent, HarvestDiagnostics } from "../../packages/common-contracts/src/index";
 import { join } from "node:path";
-import { escapeCommand, escapeParameter, escapeMarkdown } from "./feed-ingest-plan-report-format";
-import { WorkflowMachineMemorySchema } from "./feed-ingest-plan-profile-schema";
-import { formatResourceReport } from "./feed-ingest-plan-resource-report";
-import type { ResourceReportControls } from "./feed-ingest-plan-resource-report";
+import {
+  FeedIngestConfigSchema, PlanRunRowSchema, readFeedIngestEvent,
+} from "../../packages/common-contracts/src/index";
+import { PlanResponseSchema } from "../../services/feed-ingest-plan/src/api/plan-response.schema";
+import { FeedHealthStateUpdateResponseSchema } from "../../services/feed-ingest-plan/src/api/feed-health-state.schema";
+import { escapeCommand, escapeMarkdown, escapeParameter } from "./feed-ingest-plan-report-format";
 
-export type PlannerReport = Readonly<{ annotations: readonly string[]; summary: string }>;
-
-function validateEvents(input: unknown): FeedIngestEvent[] {
-  if (!Array.isArray(input)) throw new Error("events must be an array");
+export type PlannerReport = { annotations: readonly string[]; summary: string };
+export function formatPlannerReport(input: unknown): PlannerReport {
+  if (!Array.isArray(input)) throw new Error("Progress must be an explicit array");
   const events = input.map(readFeedIngestEvent);
   const first = events[0];
-  const identities = new Set<string>();
-  let sequence = -1;
-  for (const event of events) {
-    if (event.run_id !== first?.run_id || event.attempt !== first.attempt
-      || event.correlation_id !== first.correlation_id) {
-      throw new Error("events.run_id, attempt and correlation_id must identify one planning attempt");
-    }
-    if (event.sequence <= sequence || identities.has(event.event_id)) {
-      throw new Error("events.sequence and event_id must be unique and ordered");
-    }
-    identities.add(event.event_id);
-    sequence = event.sequence;
+  if (events.some(event => event.run_id !== first!.run_id || event.correlation_id !== first!.correlation_id)) {
+    throw new Error("Progress belongs to more than one run");
   }
-  return events;
-}
-
-export function formatPlannerReport(input: unknown): PlannerReport {
-  const events = validateEvents(input);
-  const first = events[0];
-  const annotations: string[] = [];
-  const sourceRows: string[] = [];
-  const stageRows: string[] = [];
-  const decisions = new Map<string, number>();
-  for (const event of events) {
-    const payload = event.payload;
-    if (payload.kind === "feed_outcome") {
-      const outcome = `${payload.fetch_status} / ${payload.parse_status}`;
-      annotations.push(`::notice title=${escapeParameter("Feed ingest source outcome")}::${escapeCommand(
-        `${payload.source.source_id}: ${outcome}; harvested ${payload.harvested_count ?? "unavailable"} articles`,
-      )}`);
-      sourceRows.push(`| A${sourceRows.length + 1} | ${escapeMarkdown(payload.source.source_id)} | ${escapeMarkdown(payload.source.title)} | ${escapeMarkdown(outcome)} | ${payload.parsed_count ?? "Unavailable"} | ${payload.harvested_count ?? "Unavailable"} | ${payload.rejection_reason ?? "None recorded"} |`);
-    } else if (payload.kind === "stage_completion") {
-      stageRows.push(`| B${stageRows.length + 1} | ${escapeMarkdown(payload.stage)} | ${payload.input_count} | ${payload.output_count} | ${payload.terminal_rejection_count} | ${(event.step_elapsed_ms / 1000).toFixed(3)} |`);
-    } else if (payload.kind === "candidate_decision") {
-      const assessment = payload.assessment;
-      const key = `${assessment.stage}: ${assessment.decision} / ${assessment.reason ?? "no rejection reason"}`;
-      decisions.set(key, (decisions.get(key) ?? 0) + 1);
-    }
-  }
-  const summary = [
-    "# Feed ingest plan report",
-    "",
-    first === undefined ? "No events supplied. Source and stage evidence is unavailable."
-      : `Run: ${escapeMarkdown(first.run_id)}. Attempt: ${first.attempt}. First observation: ${escapeMarkdown(first.occurred_at)} (UTC).`,
-    "",
-    "**Audit completion: unavailable.** These stage events do not prove that required audit files were written. This report does not certify a complete plan or publication.",
-    "",
-    "## Table A - Source outcomes",
-    "",
-    "| Id | Source | Title | Fetch / parse | Parsed articles | Harvested articles | Rejection reason |",
-    "| --- | --- | --- | --- | --- | --- | --- |",
-    ...sourceRows,
-    ...(sourceRows.length === 0 ? ["", "Source outcomes unavailable."] : []),
-    "",
-    "## Table B - Observed stage completions",
-    "",
-    "| Id | Stage | Input count | Output count | Terminal rejections | Step time (seconds) |",
-    "| --- | --- | --- | --- | --- | --- |",
-    ...stageRows,
-    ...(stageRows.length === 0 ? ["", "Stage completion evidence unavailable."] : []),
-    "",
-    "## Candidate decisions",
-    "",
-    ...[...decisions].map(([decision, count]) => `- ${escapeMarkdown(decision)}: ${count} observations.`),
-    ...(decisions.size === 0 ? ["Candidate decision evidence unavailable."] : []),
-    "",
-    "Counts describe only supplied events, not a reconciled audit. Article text, source URLs, request headers and full event payloads are not included.",
-    "",
-  ].join("\n");
-  return { annotations, summary };
-}
-
-function object(value: unknown): Record<string, unknown> {
-  if (typeof value !== "object" || value === null || Array.isArray(value)) throw new Error("Expected report evidence object");
-  return value as Record<string, unknown>;
-}
-
-export function formatExecutionReport(input: Readonly<{
-  response: unknown; host: unknown; progress: readonly unknown[]; historyStagingMs: unknown;
-}>): string {
-  const response = object(input.response);
-  const runId = RunIdSchema.parse(response.run_id);
-  const completion = object(response.planning_completion);
-  if (typeof completion.attempt !== "number" || !Number.isSafeInteger(completion.attempt) || completion.attempt < 1
-    || typeof response.correlation_id !== "string" || response.correlation_id.length === 0) {
-    throw new Error("Report requires the completed planning attempt identity");
-  }
-  if (!Array.isArray(response.source_records)) throw new Error("Report requires actual source records");
-  const sources = response.source_records.map(row => SourceRunRecordSchema.parse(row));
-  const host = input.host === null ? null : HostFingerprintRowSchema.parse(object(input.host).row);
-  if (sources.some(source => source.run_id !== runId || source.attempt !== completion.attempt
-    || source.correlation_id !== response.correlation_id)) throw new Error("Report source evidence differs from the planning attempt");
-  if (host !== null) {
-    const writer = WriterIdentitySchema.parse(object(input.host).writer);
-    if (writer.run_id !== runId || writer.attempt !== completion.attempt || writer.producer !== "telemetry.silicon"
-      || host.run_id !== writer.run_id || host.date !== response.date
-      || host.pipeline_name !== writer.pipeline_name || host.task_name !== writer.task_name || host.shard !== writer.shard) {
-      throw new Error("Report host evidence differs from the planning attempt");
-    }
-  }
-  const request = object(response.request);
-  const limit = request.article_limit;
-  if (limit !== null && (typeof limit !== "number" || !Number.isSafeInteger(limit) || limit <= 0)) {
-    throw new Error("Report requires the resolved requested article limit");
-  }
-  const sum = (key: "parsed_count" | "harvested_count" | "fresh_count" | "duplicate_count" | "eligible_count" | "normalized_count" | "selected_count") => {
-    const measured = sources.filter(source => source[key] !== null);
-    return `${measured.reduce((total, source) => total + source[key]!, 0)} articles; ${measured.length}/${sources.length} sources measured`;
-  };
-  const progress = input.progress.map((value): Record<string, unknown> & { diagnostics: HarvestDiagnostics | null | undefined } => {
-    const entry = object(value);
-    return { ...entry, diagnostics: entry.diagnostics === undefined || entry.diagnostics === null
-      ? entry.diagnostics : HarvestDiagnosticsSchema.parse(entry.diagnostics) };
-  });
-  for (const entry of progress) {
-    if (typeof entry.eventType !== "string" || typeof entry.elapsedMs !== "number"
-      || !Number.isFinite(entry.elapsedMs) || entry.elapsedMs < 0) throw new Error("Invalid progress timing evidence");
-    if (entry.correlationId !== response.correlation_id) throw new Error("Report progress evidence differs from the planning attempt");
-  }
-  function duration(start: string, end: string): string {
-    const first = progress.find(entry => entry.eventType === start);
-    const last = progress.findLast(entry => entry.eventType === end);
-    if (first === undefined || last === undefined) return "Unavailable";
-    const milliseconds = Number(last.elapsedMs) - Number(first.elapsedMs);
-    if (milliseconds < 0) throw new Error("Progress timing endpoints are reversed");
-    return `${(milliseconds / 1000).toFixed(3)} seconds`;
-  }
-  const drops = new Map<string, DropReasonCount>();
-  for (const source of sources) for (const drop of source.drop_reasons) {
-    const key = `${drop.subject} / ${drop.stage} / ${drop.reason}`;
-    drops.set(key, { ...drop, count: (drops.get(key)?.count ?? 0) + drop.count });
-  }
-  const refusalFields = DropReasonCountSchema.shape;
-  const orderedDrops = [...drops.values()].sort((left, right) =>
-    refusalFields.subject.options.indexOf(left.subject) - refusalFields.subject.options.indexOf(right.subject)
-    || refusalFields.stage.options.indexOf(left.stage) - refusalFields.stage.options.indexOf(right.stage)
-    || right.count - left.count
-    || left.reason.localeCompare(right.reason));
-  const observedEntries = sources.reduce((total, source) => total + (source.parsed_count ?? 0), 0);
-  const feedAttempts = sources.filter(source => source.fetch_status !== "not_requested").length;
-  const feedFailures = sources.filter(source => !["success", "not_requested"].includes(source.fetch_status)).length;
-  const articleStarts = progress.filter(entry => entry.eventType === "ARTICLE_HARVEST_STARTED").length;
-  const articleEnds = progress.filter(entry => entry.eventType === "ARTICLE_HARVEST_COMPLETED");
-  const measuredArticles = articleEnds.filter(entry => entry.diagnostics !== undefined);
-  const fetchedArticles = measuredArticles.filter(entry => entry.diagnostics?.fetch_ms !== null && entry.diagnostics?.fetch_ms !== undefined);
-  const extractedArticles = measuredArticles.filter(entry => entry.diagnostics?.extract_ms !== null && entry.diagnostics?.extract_ms !== undefined);
-  const earlyRefusals = measuredArticles.filter(entry => entry.diagnostics === null && typeof entry.drop_reason === "string");
-  const targetResponses = fetchedArticles.filter(entry => entry.diagnostics?.http_status !== null);
-  const measuredFeeds = progress.filter(entry => entry.eventType === "FEED_FETCH_COMPLETED" && entry.diagnostics != null);
-  const diagnosticArticles = measuredArticles.filter(entry => entry.diagnostics !== null);
-  const operationFailures = new Map<string, number>();
-  for (const entry of progress.filter(entry => ["FEED_FETCH_COMPLETED", "ARTICLE_HARVEST_COMPLETED"].includes(String(entry.eventType)))) {
-    const diagnostics = entry.diagnostics;
-    if (diagnostics === undefined || diagnostics === null) continue;
-    const subject = entry.eventType === "FEED_FETCH_COMPLETED" ? "feed" : "article";
-    for (const key of ["fetch_failure", "extraction_failure", "robots_failure", "error_code", "failure_code", "http_status", "robots", "robots_http_status"] as const) {
-      const value = diagnostics[key];
-      if (value === null) continue;
-      const label = `${subject} / ${key} / ${value}`;
-      operationFailures.set(label, (operationFailures.get(label) ?? 0) + 1);
-    }
-    for (const warning of diagnostics.warnings) {
-      const label = `${subject} / warning / ${warning}`;
-      operationFailures.set(label, (operationFailures.get(label) ?? 0) + 1);
-    }
-  }
-  function operationTime(entries: typeof fetchedArticles, key: "fetch_ms" | "extract_ms"): string {
-    if (entries.length === 0) return "Unavailable (no measured operations)";
-    const total = entries.reduce((sum, entry) => sum + entry.diagnostics![key]!, 0);
-    return `${(total / 1000).toFixed(3)} seconds summed over ${entries.length} measured operations; not elapsed wall time`;
-  }
-  const extraction = (outcome: string) => articleEnds.filter(entry => entry.extraction_outcome === outcome).length;
-  const staging = typeof input.historyStagingMs === "number" && Number.isFinite(input.historyStagingMs) && input.historyStagingMs >= 0
-    ? `${(input.historyStagingMs / 1000).toFixed(3)} seconds` : "Unavailable";
-  return [
-    "## Table C - Live yield",
-    "",
-    "| Id | Observation | Recorded result |",
-    "| --- | --- | --- |",
-    `| C1 | Offered feed entries | ${sum("parsed_count")} |`,
-    `| C2 | Fresh entries | ${sum("fresh_count")} |`,
-    `| C3 | Harvested candidates | ${sum("harvested_count")} |`,
-    `| C4 | Duplicates | ${sum("duplicate_count")} |`,
-    `| C5 | Screened eligible | ${sum("eligible_count")} |`,
-    `| C6 | Normalized candidates | ${sum("normalized_count")} |`,
-    `| C7 | Selected; requested limit ${limit ?? "uncapped"} | ${sum("selected_count")} |`,
-    `| C8 | Feed fetch failures | ${feedFailures}/${feedAttempts} attempted feeds |`,
-    `| C9 | Article harvest operations | ${progress.length === 0 ? "Unavailable" : `${articleEnds.length}/${articleStarts} started operations completed; not a page-request count`} |`,
-    `| C10 | Extraction outcomes | ${progress.length === 0 ? "Unavailable" : `${extraction("success")} success; ${extraction("empty")} empty; ${extraction("failed")} failed; ${extraction("not-attempted")} not attempted; denominator ${articleEnds.length} completed operations`} |`,
-    `| C11 | Refused before permitted fetching | ${measuredArticles.length === 0 ? "Unavailable" : `${earlyRefusals.length}/${measuredArticles.length} article completions with declared diagnostics`} |`,
-    `| C12 | Permitted article fetch operations | ${measuredArticles.length === 0 ? "Unavailable" : `${fetchedArticles.length}/${measuredArticles.length} article completions with declared diagnostics; ${targetResponses.length} recorded target responses`} |`,
-    `| C13 | Extraction operations | ${measuredArticles.length === 0 ? "Unavailable" : `${extractedArticles.length}/${fetchedArticles.length} measured fetch operations reached extraction`} |`,
-    "",
-    "A permitted fetch includes DNS, robots, retries and redirects; it is not a count of outbound HTTP requests. Target responses include recorded error or redirect statuses. Null diagnostics identify an operation that was not performed; absent historical diagnostics are unavailable. Screened eligible does not mean previously unpublished.",
-    "",
-    "## Table D - Refusals",
-    "",
-    "| Id | Subject | Stage | Reason | Count and denominator |",
-    "| --- | --- | --- | --- | --- |",
-    ...orderedDrops.map((drop, index) => `| D${index + 1} | ${escapeMarkdown(drop.subject)} | ${escapeMarkdown(drop.stage.replaceAll("-", " "))} | ${escapeMarkdown(drop.reason)} | ${drop.count}/${drop.subject === "feed" ? sources.length : observedEntries} ${drop.subject === "feed" ? "configured sources" : "observed parsed entries"} |`),
-    ...(drops.size === 0 ? ["No recorded refusals."] : []),
-    "",
-    "Refusals are grouped by subject and stage, then sorted by count from largest to smallest within each group; equal counts use alphabetical reason order. Feed and article counts are not ranked together.",
-    "",
-    "Feed decisions use all configured sources, including inactive sources that were not fetched. Article reasons use observed parsed entries, not all feeds. Failed feed parses have no known entry count. Early refusals occur before article fetching; later refusals must not be subtracted again.",
-    "",
-    "## Table E - Measured elapsed time",
-    "",
-    "| Id | Work | Elapsed time |",
-    "| --- | --- | --- |",
-    `| E1 | Named history staging and input loading | ${staging} |`,
-    `| E2 | Planner history read | ${duration("HISTORY_READ_STARTED", "HISTORY_READ_COMPLETED")} |`,
-    `| E3 | Planning stages | ${duration("PIPELINE_STARTED", "PLANNING_STAGES_COMPLETED")} |`,
-    `| E4 | Audit recording | ${duration("AUDIT_RECORDING_STARTED", "AUDIT_RECORDING_COMPLETED")} |`,
-    `| E5 | HTTP listener through response | ${duration("HTTP_LISTENER_STARTED", "HTTP_RESPONSE_RECEIVED")} |`,
-    `| E6 | Job start through host observation | ${host?.job_seconds === null || host === null ? "Unavailable" : `${host.job_seconds} seconds`} |`,
-    `| E7 | Article permitted fetch work | ${operationTime(fetchedArticles, "fetch_ms")} |`,
-    `| E8 | Article extraction work | ${operationTime(extractedArticles, "extract_ms")} |`,
-    "",
-    "Elapsed intervals overlap; do not add them. The job observation excludes the later report, commit and artifact upload.",
-    "",
-    "## Table F - Actual host",
-    "",
-    "| Id | Observation | Recorded result |",
-    "| --- | --- | --- |",
-    `| F1 | Hardware fingerprint | ${host?.fingerprint ?? "Unavailable"} |`,
-    `| F2 | CPU | ${escapeMarkdown(host?.cpu_model ?? "Unavailable")} |`,
-    `| F3 | Logical / allowed processors | ${host?.cpu_logical_processors ?? "Unavailable"} / ${host?.cpu_allowed_processors ?? "Unavailable"} |`,
-    `| F4 | CPU quota | ${host?.cpu_quota_state === "finite" ? `${host.cpu_quota_cores} cores` : host?.cpu_quota_state ?? "Unavailable"} |`,
-    `| F5 | L3 cache | ${host?.l3_cache_bytes === null || host === null ? "Unavailable" : `${host.l3_cache_bytes} bytes`} |`,
-    `| F6 | Pipeline / task | ${escapeMarkdown(host?.pipeline_name ?? "Unavailable")} / ${escapeMarkdown(host?.task_name ?? "Unavailable")} |`,
-    "",
-    "## Table G - Recorded operation diagnostics",
-    "",
-    "| Id | Subject / observation / value | Count and denominator |",
-    "| --- | --- | --- |",
-    ...[...operationFailures].map(([label, count], index) => `| G${index + 1} | ${escapeMarkdown(label)} | ${count}/${label.startsWith("feed /") ? measuredFeeds.length : diagnosticArticles.length} ${label.startsWith("feed /") ? "feed" : "article"} completions with recorded operation diagnostics |`),
-    ...(operationFailures.size === 0 ? ["Operation diagnostic observations unavailable."] : []),
-    "",
-    "Each diagnostic field is counted separately; one operation can appear in several rows. Do not add these rows as failures. Null values remain unavailable, not zero.",
-    "",
-    `Planning completion: ${response.planning_complete === true ? "verified" : "unavailable"}. Publication audit completion: ${response.audited_complete === true ? "verified" : "pending"}. Git commit status is reported by the separate exact-file commit step.`,
-    "",
-  ].join("\n");
-}
-
-export async function writePlannerReport(input: Readonly<{
-  enabled: boolean; events: unknown; summaryPath?: string; annotate: (line: string) => void; executionSummary?: string;
-  resourceReport?: PlannerReport;
-}>): Promise<void> {
-  if (!input.enabled) return;
-  const report = formatPlannerReport(input.events);
-  if (input.summaryPath === undefined || input.summaryPath.length === 0) {
-    throw new Error("GITHUB_STEP_SUMMARY is required when workflow reporting is enabled");
-  }
-  await appendFile(input.summaryPath, report.summary + (input.executionSummary ?? "") + (input.resourceReport?.summary ?? ""), "utf8");
-  for (const line of [...report.annotations, ...(input.resourceReport?.annotations ?? [])]) input.annotate(line);
-}
-
-export async function readExecutionReport(directory: string, controls: ResourceReportControls = {}) {
-  const response: unknown = await Bun.file(join(directory, "response.json")).json();
+  const annotations = events.filter(event => event.phase === "failed").map(event =>
+    `::warning title=${escapeParameter("Planner operation failed")}::${escapeCommand(`${event.operation}: ${event.failure_code ?? "Cause unavailable"}`)}`);
   return {
-    executionSummary: formatExecutionReport({
-      response,
-      host: await Bun.file(join(directory, "host.json")).exists() ? await Bun.file(join(directory, "host.json")).json() : null,
-      progress: (await readFile(join(directory, "progress.jsonl"), "utf8")).trim().split("\n").filter(Boolean).map(line => JSON.parse(line)),
-      historyStagingMs: await Bun.file(join(directory, "history-staging-ms.json")).json(),
-    }),
-    resourceReport: formatResourceReport({
-      response, ...controls,
-      stageProof: await Bun.file(join(directory, "stage-api-proof.json")).exists()
-        ? await Bun.file(join(directory, "stage-api-proof.json")).json() : null,
-      resourceProof: await Bun.file(join(directory, "resource-proof.json")).exists()
-        ? await Bun.file(join(directory, "resource-proof.json")).json() : null,
-    }),
+    annotations, summary: [
+      "# Feed planner progress", "", "Progress does not prove saved output or publication.", "",
+      "## Table A - Observed work", "", "| Id | Operation | State | Feed | Measured duration |",
+      "| --- | --- | --- | --- | --- |",
+      ...events.map((event, index) => `| A${index + 1} | ${event.operation} | ${event.phase} | ${escapeMarkdown(event.feed_id ?? "Unavailable")} | ${event.duration_ms === null ? "Unavailable" : `${event.duration_ms} milliseconds`} |`),
+      ...(events.length ? [] : ["", "No progress was supplied. The result is unavailable."]), "",
+    ].join("\n"),
   };
 }
-
-if (import.meta.main) {
-  const configPath = process.argv[2];
-  if (configPath === undefined) throw new Error("config path is required");
-  const config = FeedIngestConfigSchema.parse(JSON.parse(await readFile(configPath, "utf8")));
-  if (config.workflow_reporting.enabled) {
-    const eventsPath = process.argv[3];
-    if (eventsPath === undefined) throw new Error("events path is required when workflow reporting is enabled");
-    const directory = process.argv[4];
-    const execution = directory === undefined ? undefined : await readExecutionReport(directory, {
-      machineMemoryEnabled: WorkflowMachineMemorySchema.parse(process.env.PROFILE_MACHINE_MEMORY),
-      ...(process.env.GITHUB_SHA === undefined ? {} : { gitSha: process.env.GITHUB_SHA }),
-      ...(process.env.GITHUB_RUN_ID === undefined ? {} : { runNumber: process.env.GITHUB_RUN_ID }),
-      ...(process.env.GITHUB_RUN_ATTEMPT === undefined ? {} : { runAttempt: process.env.GITHUB_RUN_ATTEMPT }),
-    });
-    await writePlannerReport({
-      enabled: true, events: JSON.parse(await readFile(eventsPath, "utf8")),
-      ...(process.env.GITHUB_STEP_SUMMARY === undefined ? {} : { summaryPath: process.env.GITHUB_STEP_SUMMARY }),
-      annotate: line => console.log(line),
-      ...(execution === undefined ? {} : execution),
-    });
-  }
+export function formatExecutionReport(input: { response: unknown; health?: unknown; historyStagingMs?: unknown }): string {
+  const response = PlanResponseSchema.parse(input.response);
+  const row = PlanRunRowSchema.parse(Object.fromEntries(Object.keys(PlanRunRowSchema.shape).map(key =>
+    [key, response[key as keyof typeof response]])));
+  const health = input.health == null ? null : FeedHealthStateUpdateResponseSchema.parse(input.health);
+  if (health !== null && health.rows.some(feed => feed.run_id !== row.run_id || feed.attempt !== row.attempt)) throw new Error("Health report belongs to another execution");
+  const staging = input.historyStagingMs;
+  if (staging !== undefined && (typeof staging !== "number" || !Number.isSafeInteger(staging) || staging < 0)) throw new Error("History staging duration must be a measured nonnegative integer");
+  const feedRows = health?.rows ?? [];
+  const causes = feedRows.flatMap(feed => feed.rejection_counts.map(cause => ({ ...cause, feed_id: feed.feed_id, date: feed.date })));
+  const requests = health?.request_report;
+  const known = (value: number | null, unit: string) => value === null ? "Unavailable" : `${value} ${unit}`;
+  return [
+    "# Feed planner run", "", `**Status: ${row.status}.** ${row.failure_code === null ? "The requested planning stages finished." : `Cause: ${escapeMarkdown(row.failure_code)}.`}`,
+    "", "This is planning output, not proof of summarization or publication. Article bodies are kept only in the selected text artifact.", "",
+    "## Table A - Run facts", "", "| Id | Fact | Recorded value |", "| --- | --- | --- |",
+    `| A1 | Run and attempt | ${escapeMarkdown(row.run_id)}; attempt ${row.attempt} |`,
+    `| A2 | Chosen articles | ${row.selected_count} articles |`,
+    `| A3 | Worker assignment | ${row.dispatch_count} partitions; ${row.strategy} |`,
+    `| A4 | Elapsed planning time | ${known(row.duration_ms, "milliseconds")} |`,
+    `| A5 | Age evaluation clock | ${row.evaluated_at} UTC |`,
+    `| A6 | Selection start clock | ${row.selection_started_at_utc === null ? "Selection did not run" : `${row.selection_started_at_utc} UTC`} |`,
+    `| A7 | Lifecycle history | ${row.lifecycle_window_days} represented UTC days |`,
+    `| A8 | Feed-read reliability | ${row.reliability_window_days} represented UTC days; minimum factor ${row.reliability_floor}; ${row.reliability_penalty_enabled ? "enabled when measured" : "disabled"} |`,
+    `| A9 | Request report | ${row.request_report_closed_days} closed UTC calendar days, excluding the selection-start day |`,
+    `| A10 | History staging time | ${staging === undefined ? "Unavailable" : `${staging} milliseconds`} |`,
+    "", "## Table B - Measured operations", "", "| Id | Operation | Duration | State |", "| --- | --- | --- | --- |",
+    ...row.api_timings.map((span, index) => `| B${index + 1} | ${span.operation} | ${span.duration_ms} milliseconds | ${span.status} |`),
+    "", "Concurrent spans can overlap. Do not add them to estimate elapsed run time.",
+    "", "## Table C - This run's feed work", "",
+    "| Id | Feed | UTC work day | Feed checks | Admitted articles | Chosen articles | Feed / article / robots requests | Outcome |",
+    "| --- | --- | --- | --- | --- | --- | --- | --- |",
+    ...feedRows.map((feed, index) => `| C${index + 1} | ${escapeMarkdown(feed.feed_id)} | ${feed.date} | ${known(feed.feed_reads, "checks")} | ${known(feed.article_candidates, "articles")} | ${known(feed.articles_selected, "articles")} | ${[feed.feed_requests, feed.article_requests, feed.robots_requests].map(value => known(value, "requests")).join(" / ")} | ${feed.outcome ?? "Unavailable"} |`),
+    ...(feedRows.length ? [] : ["", health === null ? "Feed work is unavailable." : "The supplied run has zero recorded feed rows."]),
+    "", "## Table D - Closed-day request spend", "",
+    requests === undefined ? "Request evidence is unavailable." : `Window: ${requests.from_day} through ${requests.through_day} UTC. Coverage: ${requests.complete ? "complete" : "incomplete"}. This is spend, not waste or a ranking penalty.`,
+    "", "| Id | Feed | Feed requests | Article requests | Robots requests | Accounting |", "| --- | --- | --- | --- | --- | --- |",
+    ...(requests?.feeds ?? []).map((feed, index) => `| D${index + 1} | ${escapeMarkdown(feed.feed_id)} | ${known(feed.feed_requests, "requests")} | ${known(feed.article_requests, "requests")} | ${known(feed.robots_requests, "requests")} | ${feed.counts_complete ? "Complete" : "Incomplete"} |`),
+    "", "## Table E - Grouped exclusions", "", "| Id | Feed | UTC day | Subject / stage | Reason | Count | Attribution |",
+    "| --- | --- | --- | --- | --- | --- | --- |",
+    ...causes.map((cause, index) => `| E${index + 1} | ${escapeMarkdown(cause.feed_id)} | ${cause.date} | ${escapeMarkdown(`${cause.subject} / ${cause.stage}`)} | ${escapeMarkdown(cause.reason_code)} | ${cause.count} decisions | ${cause.attribution ?? "Not a failure"} |`),
+    ...(causes.length ? [] : ["", health === null ? "Exclusion evidence is unavailable." : "No exclusions were recorded."]), "",
+  ].join("\n");
+}
+export async function writePlannerReport(input: {
+  config: unknown; evidence?: Parameters<typeof formatExecutionReport>[0]; events?: unknown;
+  summary_path?: string; annotate?: (line: string) => void;
+}) {
+  if (!FeedIngestConfigSchema.parse(input.config).workflow_reporting.enabled) return { status: "disabled" as const };
+  if (!input.summary_path) throw new Error("Enabled reporting requires a summary output path");
+  const report = input.evidence === undefined ? formatPlannerReport(input.events) : { annotations: [], summary: formatExecutionReport(input.evidence) };
+  await appendFile(input.summary_path, report.summary, "utf8");
+  for (const annotation of report.annotations) (input.annotate ?? console.log)(annotation);
+  return { status: "written" as const, annotations: report.annotations.length };
+}
+export async function readExecutionReport(directory: string) {
+  const response: unknown = JSON.parse(await readFile(join(directory, "response.json"), "utf8"));
+  const healthPath = join(directory, "health.json");
+  const stagingPath = join(directory, "history-staging-ms.json");
+  return formatExecutionReport({
+    response,
+    ...(await Bun.file(healthPath).exists() ? { health: await Bun.file(healthPath).json() } : {}),
+    ...(await Bun.file(stagingPath).exists() ? { historyStagingMs: await Bun.file(stagingPath).json() } : {}),
+  });
 }
