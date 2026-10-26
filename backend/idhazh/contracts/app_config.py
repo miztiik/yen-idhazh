@@ -8,7 +8,7 @@ reads two.
 weighed a judge's draw against the council's clock, and it lived here until
 2026-09-21 - which put that judge's measured per-pair cost in the import closure
 of every module that reads config. A rule belongs here when neither block owns
-the number it turns on; when one of them does, the rule goes to that owner and
+the number it turns on; when one of them does, the rule goes to that maintainer and
 asks the other side for its figure.
 
 A knob is something a reasonable operator might want set differently without

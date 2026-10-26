@@ -5,7 +5,7 @@ cleanup read, key by key, before the ones that moved left for the declarations o
 the tasks that read them. Each is read back here out of the declaration that took
 it in the recorded pre-expiry config, and the three that stayed in
 `config/idhazh.json` are read back from there as well. This checks the original
-move, not the owner's later change to finite yearly retention.
+move, not the maintainer's later change to finite yearly retention.
 
 A window whose declaration went when its ledger moved to the ledger door is read
 from where it went: feed health's months from its compaction's monthly window in

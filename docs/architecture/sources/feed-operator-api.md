@@ -157,7 +157,7 @@ external work.
 This API keeps ordinary feed fetching. It does not send validators, cache feed
 bodies for reuse or handle `304` responses. Repeated polls can transfer the
 same body again, using more network bytes and time. Reducing that cost needs a
-separate owner-approved design and replay contract.
+separate maintainer-approved design and replay contract.
 
 ## Selection, partition and persistence APIs
 
@@ -386,7 +386,7 @@ saved result. No caller uses an HTTP loopback.
 ## Design rationale
 
 Separate endpoints let an operator inspect a real fetch before parsing it.
-Owner direction, 2026-10-24 UTC: screening and ranking share `/select-articles`;
+Maintainer direction, 2026-10-24 UTC: screening and ranking share `/select-articles`;
 partitioning and persistence are separate APIs. The full planner uses the same
 operations to avoid HTTP loopback and duplicate algorithms. A saved batch gets
 its own identity because a run can have several independently selected or

@@ -4,7 +4,7 @@ name: LLM-COUNCIL
 # active in `judge_names` in `config/llm_council.json` to pick its work for the day, fans out over one job a
 # tenant a shard, and settles what came back.
 #
-# **Council, not judges, and the name is about where this goes** (owner,
+# **Council, not judges, and the name is about where this goes** (maintainer,
 # 2026-09-18). Today the units shard a list and never confer, so on today's
 # shape `judges` would be the more literal word. What is coming is not one
 # question: autotune argues a case and needs something to adjudicate it - a

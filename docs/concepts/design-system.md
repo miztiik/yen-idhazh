@@ -110,7 +110,7 @@ only cue. Neither emphasis nor framing changes the values or their order.
 The accessible name includes the framing, the highlighted bar and original
 source figures for converted values. Missing framing takes no reserved space.
 The [chart contract](../architecture/publishing/where-a-drawing-becomes-pixels.md#design-rationale)
-owns the dated owner rulings and the cost of refusing old or ambiguous charts.
+owns the dated maintainer rulings and the cost of refusing old or ambiguous charts.
 
 ### A control that needs a script is not left on the page without one
 
@@ -183,7 +183,7 @@ Do not introduce an engine that prerenders charts or requires a runtime server. 
 
 One token system and payload-driven states keep meaning consistent across pages and themes. A measured prose block preserves reading comfort without wasting dashboard width. Browser-drawn charts adapt to the actual device. Shared drawing data keeps marks, descriptions and narrow layouts consistent.
 
-The digest drawing and console use one TypeScript number formatter. Its locale, SI prefix threshold and significant digits come only from `visuals.number_format` in `config/idhazh.json`, never from a reader's browser. Where a shortened figure differs from the article's text, the accessible description keeps the original characters. Owner ruling: kumarsnaveen, 2026-10-24.
+The digest drawing and console use one TypeScript number formatter. Its locale, SI prefix threshold and significant digits come only from `visuals.number_format` in `config/idhazh.json`, never from a reader's browser. Where a shortened figure differs from the article's text, the accessible description keeps the original characters. Maintainer ruling: 2026-10-24.
 
 Measured values, axes and dated readouts share the configured precision and SI prefixes. Exact event counts retain every digit with the same locale's grouping. Standalone component tests provide the real page's number settings through the shared server-render helper or browser component mount; a missing page context still fails rather than choosing another locale.
 

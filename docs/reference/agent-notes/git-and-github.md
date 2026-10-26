@@ -12,7 +12,7 @@ Checks for agents using Git and GitHub. Follow the
 - Do not use `git branch --merged` as proof after a squash merge: the original branch tip is not an ancestor of `main`.
 - A failed removal can delete tracked files before a locked generated executable stops it. Inspect both `git worktree list --porcelain` and the remaining directory before retrying. Leave the residue when its process cannot safely be stopped; do not force deletion or terminate another task.
 - **A merge succeeds but cleanup reports `Filename too long`.** The merge and local worktree removal are separate operations. Confirm the pull request's `state` and `mergeCommit` with `gh pr view` before retrying anything. Inspect the remaining worktree and preserve it if cleanup cannot safely finish; a cleanup error is not proof that the merge failed.
-- **`gh pr merge --delete-branch` also removes the worktree that holds the merged branch** (seen twice on 2026-10-06 with gh 2.101.0). Afterwards the folder is gone and `git worktree list` does not name it. A later `cd` into that folder fails, and the next command then runs in the shell's own checkout. Copy out anything you need first, and do not chain a `cd` into that worktree after the merge. Run from a folder that is not a git checkout, with `--repo owner/name`, the same command merged and deleted the remote branch and left the worktree and its local branch in place (seen twice on 2026-10-05 with gh 2.101.0). Use that form when a worktree must outlive its merge, such as one an app session works in.
+- **`gh pr merge --delete-branch` also removes the worktree that holds the merged branch** (seen twice on 2026-10-06 with gh 2.101.0). Afterwards the folder is gone and `git worktree list` does not name it. A later `cd` into that folder fails, and the next command then runs in the shell's own checkout. Copy out anything you need first, and do not chain a `cd` into that worktree after the merge. Run from a folder that is not a git checkout, with `--repo account/name`, the same command merged and deleted the remote branch and left the worktree and its local branch in place (seen twice on 2026-10-05 with gh 2.101.0). Use that form when a worktree must outlive its merge, such as one an app session works in.
 
 ## The moving base
 
@@ -44,7 +44,7 @@ Checks for agents using Git and GitHub. Follow the
   if (Test-Path Env:GIT_CONFIG_PARAMETERS) { Remove-Item Env:GIT_CONFIG_PARAMETERS }
   git -c credential.helper= -c credential.helper='!gh auth git-credential' push
   ```
-- After an interrupted push or merge, verify remote state before retrying: `git ls-remote` for a branch; `gh pr view <number> --repo <owner/repo> --json state,mergeCommit` for a pull request.
+- After an interrupted push or merge, verify remote state before retrying: `git ls-remote` for a branch; `gh pr view <number> --repo <account/repo> --json state,mergeCommit` for a pull request.
 - Treat `UNKNOWN` and missing checks as unresolved, not success. Check mergeability and workflow triggers before waiting.
 - When the user changes a merge precondition, update the pending command before executing it. Record the authorized exception without extending it, retain the other checks, and use `--match-head-commit` to bind the merge to the verified head.
 

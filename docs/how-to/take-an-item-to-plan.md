@@ -4,7 +4,7 @@
 
 The procedure for turning one line on a to-do list into a plan a worker can code against without asking a question. Intent settles first, the way to achieve it second, the contracts third, the sequence last ([CLAUDE.md](../../CLAUDE.md) section 0d).
 
-This page owns the three steps that had no owner. Step 4 hands to [author-a-plan.md](author-a-plan.md), which already writes the plan-doc.
+This page owns the three steps that had no maintainer. Step 4 hands to [author-a-plan.md](author-a-plan.md), which already writes the plan-doc.
 
 ASCII only in agent/customization Markdown: "-", "->", ">=", "section".
 
@@ -18,7 +18,7 @@ The list is a Markdown file the user names when they invoke. Nothing here reads 
 
 ## The chain
 
-| # | Question this step answers | Owner |
+| # | Question this step answers | Maintainer |
 | --- | --- | --- |
 | 1 | What does the user want to be true when this is done? | this page |
 | 2 | What is the best way to achieve that intent? | this page |

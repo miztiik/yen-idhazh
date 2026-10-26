@@ -6,7 +6,7 @@
 **Chain**: previous [`20260905-20-visual-console-plan.md`](20260905-20-visual-console-plan.md) | next [`20260905-22-distil-and-close-plan.md`](20260905-22-distil-and-close-plan.md).
 **Reference**: [`20260902-visual-planner-pseudo-plan.md`](20260902-visual-planner-pseudo-plan.md) - O12, O16, O41, rows 64, 65, 66, 67, 68, sections 12.10, 12.13 G34, G38, 12.14 G41, G42, G44, E1, M6.
 
-Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delegates a row where delegation pays; keep parallel N = 4 rows in flight, refilling a slot as soon as a worker returns and never waiting on a merge; consult a persona only where two answers would lead to different code; AUTO-merge on green gates; honor the ESCALATE triggers in section 0. AUTHOR-AND-STOP until the user authorizes.
+Execute per docs/how-to/execute-a-plan.md: one maintainer carries the plan and delegates a row where delegation pays; keep parallel N = 4 rows in flight, refilling a slot as soon as a worker returns and never waiting on a merge; consult a persona only where two answers would lead to different code; AUTO-merge on green gates; honor the ESCALATE triggers in section 0. AUTHOR-AND-STOP until the user authorizes.
 
 ---
 
@@ -86,7 +86,7 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 | # | Option | Why rejected | Authority |
 | --- | --- | --- | --- |
 | 1 | One ledger with a flag | A flag is dropped by the first join somebody writes in a hurry, and then the ground truth is contaminated with no way to separate it again | Fowler |
-| 2 | No machine verdicts at all | Then the queue is bounded by human hours from day one, which is the risk M6 already names | Owner, O12 |
+| 2 | No machine verdicts at all | Then the queue is bounded by human hours from day one, which is the risk M6 already names | Maintainer, O12 |
 
 ---
 

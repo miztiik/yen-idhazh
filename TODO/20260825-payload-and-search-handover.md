@@ -95,7 +95,7 @@ These are deletions. They can ship before any of the questions below are answere
 
 Everything else follows from that answer. If the search has its own index, the archive page carries a list - about 60 bytes a day - and fetches a day's committed `digest.json` only when a reader opens it. Guardrail #1 explicitly permits fetching our own committed files at runtime, and every day payload is already a static file on the origin.
 
-### The owner's hypothesis, to be tested rather than assumed
+### The maintainer's hypothesis, to be tested rather than assumed
 
 - DuckDB-WASM, accepting a high one-time load.
 - A monthly archive index; the last N days (N-1 or N-7) served directly, everything older queried through wasm.

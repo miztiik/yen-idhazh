@@ -751,9 +751,9 @@ this list and remains `raised`.
 
 **Council CSV retirement while current writers continue.** CSV retirement needs
 a fresh source-cell proof through the normal reader, not only successful
-packing. An owner may explicitly accept the risk of an obsolete writer
+packing. A maintainer may explicitly accept the risk of an obsolete writer
 returning; this does not authorize cancelling runs or disabling workflows.
-On 2026-10-07, owner @kumarsnaveen_microsoft ruled that the legacy council run
+On 2026-10-07, maintainer ruled that the legacy council run
 would not be rerun ("it wont be run just do your job deliver") and waived the
 rerun-window wait for council CSV retirement. Old branch and open-PR writers
 are information, not blockers under that ruling. The council converter and CSV
@@ -849,7 +849,7 @@ lost. The person's ruling, 2026-10-04 (recovery theme), on Fowler's design.
 
 | # | Option | Why rejected | What it would cost to take |
 | --- | --- | --- | --- |
-| 1 | Fill a ledger's first month from the 1st with zero-row days | Files that say nothing, which the owner ruled waste | Up to 30 files a ledger, once |
+| 1 | Fill a ledger's first month from the 1st with zero-row days | Files that say nothing, which the maintainer ruled waste | Up to 30 files a ledger, once |
 | 2 | Keep failing with `day-missing` and ask a person to restore the day | A red run and manual work for a gap the gardener can record | Nothing to build; a red run per hole |
 | 3 | The planner reads the marks and names every path a step will read | The step rules in two places, and one ledger's fault fails the whole shard | A second pass over the marks |
 
@@ -872,7 +872,7 @@ claim. The person's rulings, 2026-10-04, on Fowler's design.
 | # | Option | Why rejected | What it would cost to take |
 | --- | --- | --- | --- |
 | 1 | New days limited to the months of the planner's window | It stopped every compaction from packing new days | Nothing to build; no new day packed |
-| 2 | A zero-row day file for each quiet day | Files that say nothing, which the owner ruled waste | About 5 KB a day |
+| 2 | A zero-row day file for each quiet day | Files that say nothing, which the maintainer ruled waste | About 5 KB a day |
 | 3 | Take again only the days inside the 30-day re-run span | A month held for an older day's raw files would never close | Nothing to build; a month that waits for ever |
 
 **2026-10-04: a range never makes the month step skip a month, and a month's
@@ -930,7 +930,7 @@ the bundle gate's line of 2,200 gzipped bytes for a file under
 155th entry crosses it). The bundle gate is the alarm: it fails the build when
 an index file crosses that line. It covers only a ledger the site publishes.
 `compact-run-plan` also packs years and is not published, so its yearly index
-has no alarm yet. Fowler review, 2026-10-04; owner to confirm.
+has no alarm yet. Fowler review, 2026-10-04; maintainer to confirm.
 
 | # | Option | Why rejected | What it would cost to take |
 | --- | --- | --- | --- |
@@ -969,7 +969,7 @@ that no entry names has nothing to re-open, so its day is still refused: left
 raw, its rows would vanish from every reader once its year packs, and taken as
 a day, it would leave an entry no step ever clears. A re-opened month counts
 once against the cap, so a month is never half re-opened and never waits for
-ever. The owner's ruling, 2026-10-04, that a late file re-opens its month;
+ever. The maintainer's ruling, 2026-10-04, that a late file re-opens its month;
 Fowler's rulings, 2026-10-05.
 
 | # | Option | Why rejected | What it would cost to take |
@@ -1025,8 +1025,8 @@ written last and stayed behind. Now its marks have moved, so a person restores
 the ledger from git; a runner lands a whole pass in one commit, so `main` is
 never left that way. A monthly window whose deletes only report keeps its old
 months, so a rebuild looks for them as it does under a window kept for ever.
-The owner's ruling, 2026-10-04 (recovery theme); Fowler's rulings, 2026-10-04
-and 2026-10-06. Dropping the local recovery is a decision the owner may
+The maintainer's ruling, 2026-10-04 (recovery theme); Fowler's rulings, 2026-10-04
+and 2026-10-06. Dropping the local recovery is a decision the maintainer may
 overturn.
 
 | # | Option | Why rejected | What it would cost to take |
@@ -1037,12 +1037,12 @@ overturn.
 
 **2026-10-07: a rebuild names one folder a year, so it needs no exception.**
 Named one path per period, the rebuild of a window that keeps every month named
-twelve more paths each year, beyond the bound the owner approved on 2026-10-04:
+twelve more paths each year, beyond the bound the maintainer approved on 2026-10-04:
 at most 31 named paths a month, and the yearly part one more a year. A rebuild
 that hides no kept month has to read each kept month's own file, so no design
 reads fewer files; what can be bounded is what it names. So it names each
 year's folder once, and git lists the files inside. Its downloads are what a
-packed year costs: one year's rows a year. If the owner counts that bound in
+packed year costs: one year's rows a year. If the maintainer counts that bound in
 files downloaded instead, option 4 below is the next move. A ledger whose
 compact folder the commit lacks has packed nothing, so its rebuild reads
 nothing: the dry-run ledgers no longer pay three listings each wake to find no
@@ -1058,14 +1058,14 @@ and nothing would drop it once the task went live. Fowler, 2026-10-07.
 | 3 | Look only inside the window | Hides months nobody approved deleting, and no later pass drops them | Nothing to build |
 | 4 | Adopt one year folder a wake | Every wake pays a check for a rare fault, and each older year stays hidden until its own wake | A check every wake, and the most code |
 
-**Owner decision: @kumarsnaveen_microsoft, 2026-10-07.** All fourteen ledgers
+**Maintainer decision: 2026-10-07.** All fourteen ledgers
 pack live with 45-day monthly packing, 93-day yearly packing and 36 calendar
-months of retention after UTC year-end. The owner accepts the loss of older
+months of retention after UTC year-end. The maintainer accepts the loss of older
 published-address deduplication and evaluation history. A retained yearly index
 with `expired_through` preserves progress without keeping an entry for every
 deleted year. The manual prune refusal still protects recent history; scheduled
 expiry follows the reviewed yearly policy. A ledger moved onto the door since
-takes the same chain with it, because the owner directed on 2026-10-05 that a
+takes the same chain with it, because the maintainer directed on 2026-10-05 that a
 moved ledger takes its retention and upkeep with it; the merge line's holdout
 score is one, and the hand marks a person harvests for it are another.
 
@@ -1084,7 +1084,7 @@ range that starts after a ready period
 (`no-month-to-reopen`), and a packed day or month file that a re-run or a late
 file would be settled into and that cannot be read or is not there
 (`packed-file-unreadable`) each end the pass `deferred` with that word, and the
-job stays green (the owner, 2026-10-04 and 2026-10-06; words by Fowler,
+job stays green (the maintainer, 2026-10-04 and 2026-10-06; words by Fowler,
 2026-10-07). At that date every other refusal was `raised`; the 2026-10-09
 decision below separates the recognized manual cases. A step
 that a fault stopped holds the daily mark below its day whichever way it stops,
@@ -1102,7 +1102,7 @@ payloads, missing read migrations and every unnamed failure remain `raised`.
 Both faults are paired with `failed` and log errors. The three retryable faults
 above remain deferred and green. A period larger than the whole download
 budget is one of the eight; the synthetic shard aggregate overrun remains a
-defect because it means a task bypassed the per-period choice (owner approval
+defect because it means a task bypassed the per-period choice (maintainer approval
 and Fowler review, 2026-10-09).
 
 ## See also

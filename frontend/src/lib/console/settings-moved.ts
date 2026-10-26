@@ -339,7 +339,7 @@ export function namesMovedShort(settings: readonly string[]): string {
  * cannot express: a setting moved on a day nobody was measuring, so the
  * readings either side of it are a before-and-after across a change that is
  * invisible on the plot. A chart that only drew rules where it had columns
- * would be silent about exactly the days an owner most needs before trusting a
+ * would be silent about exactly the days a maintainer most needs before trusting a
  * comparison.
  *
  * `days` are the dates the chart covers but drew nothing for, newest last.

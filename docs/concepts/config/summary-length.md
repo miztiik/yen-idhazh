@@ -26,7 +26,7 @@ Extraction has three shape and access control groups:
 
 Three enforcement switches default to false: `extract.reject_not_prose`,
 `extract.reject_boilerplate` and `extract.reject_too_short`. False means record
-the signal and publish, which is Owner override O3. True means reject the item.
+the signal and publish, which is Maintainer override O3. True means reject the item.
 There were two until 2026-09-17, and the third's absence was an asymmetry nobody
 chose rather than a decision anybody took.
 

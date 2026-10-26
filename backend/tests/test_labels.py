@@ -427,7 +427,7 @@ def _committed_ledger() -> bytes | None:
     """The committed ground truth as it stands, or `None` if no sitting has happened.
 
     Compared before and after a run rather than asserted absent, so the day the
-    owner labels sixty rows and commits them this still checks the same thing.
+    maintainer labels sixty rows and commits them this still checks the same thing.
     """
     path = REPO_ROOT / labels.LEDGER_RELPATH
     return path.read_bytes() if path.exists() else None

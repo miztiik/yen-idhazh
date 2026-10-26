@@ -153,7 +153,7 @@ def test_no_page_number_names_a_route_that_grows_when_a_run_publishes() -> None:
 
     So the assertion is now on absence. `/404` stays, because it
     passes the test in the name: it moves only when a person edits source, never
-    when a run appends a day. Owner ruling, 2026-09-10.
+    when a run appends a day. Maintainer ruling, 2026-09-10.
     """
     committed = AppConfig.from_json(read_text(CONFIG_DIR / "idhazh.json"))
     ceilings = committed.page_weight.ceilings_bytes

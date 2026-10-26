@@ -73,7 +73,7 @@ memory. Under `frontend/public/` it is a **collection**, because nothing does -
 not a fact one run left for the next. The two words are not interchangeable and
 the test is the reader, never the shape on disk.
 
-Owner decision, 2026-09-26. The word is gone from the repository and a test
+Maintainer decision, 2026-09-26. The word is gone from the repository and a test
 refuses it by name, because sweeping it out once was not enough - it was swept
 out of the plan-docs and came back with the next draft.
 
@@ -92,7 +92,7 @@ nothing to drift from: if a row disagrees with the page it links to, the row is
 wrong and the fix is one line.
 
 **Why the machinery words needed this and the story words did not.** The words
-put on a story already had an owner page ([taxonomy.md](taxonomy.md)) because a
+put on a story already had a maintainer page ([taxonomy.md](taxonomy.md)) because a
 model is told what each one means, so they had to be written down to be useful.
 The machinery words never got that forcing function. When this page was made,
 `shard`, `segment`, `ledger`, `canary`, `work order` and `trial run` had no

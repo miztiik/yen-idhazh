@@ -31,7 +31,7 @@ name: Idhazh Gardener
 # `state/` as well as `corpus/`. After a squash `git blame` and `git bisect`
 # reach back the `window` of `config/gardener/corpus-squash.json`, a commit SHA
 # older than the boundary stops resolving, and a clone taken before the squash
-# has to be re-fetched. Owner decision, 2026-08-28.
+# has to be re-fetched. Maintainer decision, 2026-08-28.
 #
 # Wired to nothing. A job that rewrites history must not sit inside the digest
 # pipeline, which runs for hours and must not be put at risk by a maintenance
@@ -294,7 +294,7 @@ jobs:
       # the job reads the clock once. The run id is the plan job's, so every
       # record of one run carries one id even when the run crosses 00:00 UTC.
       # This job makes its own only when the plan job failed and left none. The
-      # owner's ruling, 2026-10-04.
+      # maintainer's ruling, 2026-10-04.
       - name: Squash the history, record the run and push it
         if: steps.due.outputs.due == 'true'
         env:

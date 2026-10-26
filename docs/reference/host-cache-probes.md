@@ -40,7 +40,7 @@ SIGINT to its own perf process. The pinned perf release re-raises SIGINT
 after printing final counters. That exit is accepted only when this
 acknowledged adapter stop sent the signal; cancellation, timeout, output
 overflow and unexpected termination still refuse the result.
-Exit, PID reuse and a different owner produce explicit unavailable results.
+Exit, PID reuse and a different maintainer produce explicit unavailable results.
 Only the probe's own perf subprocess can be stopped; the target is never
 signalled.
 

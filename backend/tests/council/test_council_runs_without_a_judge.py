@@ -76,7 +76,7 @@ JUDGE_CONTRACT_MODULES: Final = (
 )
 
 #: The three judge contracts a council verb still reaches, and the routes they
-#: arrive on. Measured by a fresh walk on 2026-09-21, and the owner's ruling the
+#: arrive on. Measured by a fresh walk on 2026-09-21, and the maintainer's ruling the
 #: same day is that these three may cross and nothing else may.
 #:
 #: **Why they are here rather than cut.** Both carriers are modules the two sides
@@ -199,7 +199,7 @@ def test_the_judge_contracts_that_still_cross_cannot_grow(reached: set[str]) -> 
     """The exception is self-limiting, or it is an invitation.
 
     Three judge contracts arrive through two modules both sides share, and the
-    owner ruled on 2026-09-21 that those three may cross while the routes are
+    maintainer ruled on 2026-09-21 that those three may cross while the routes are
     priced. A list with no upper edge is one the next person extends, so what is
     held here is the exact set: a fourth fails, and so does a third that was cut
     without the list being cut with it.

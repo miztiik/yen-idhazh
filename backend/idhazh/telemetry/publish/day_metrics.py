@@ -10,7 +10,7 @@ holds, so a reader loads one small file instead.
 One writer, at the existing publication step (`stages.assemble.stage_assemble`), never a
 second stage (Fowler). A republished day rewrites its record whole rather than
 adding to a running total: a total needs a decrement path for every correction,
-and a missed decrement is silent and permanent (owner, 2026-09-06).
+and a missed decrement is silent and permanent (maintainer, 2026-09-06).
 
 The record carries counts and facts about a day and never a line of article
 text. Every path it could name is relative and POSIX (CLAUDE.md

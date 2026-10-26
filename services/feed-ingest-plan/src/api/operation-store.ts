@@ -72,7 +72,7 @@ export async function openOperationStore(outputRoot: string) {
           throw new PlanError("INVALID_RUN_CONTEXT", "Captured request differs from its prepared input", field);
         }
       }
-      // Commit identity first; another process may win the next lock, but only its owner can do work.
+      // Commit identity first; another process may win the next lock, but only its maintainer can do work.
       put(record);
       database.exec("COMMIT");
       try { database.exec("BEGIN IMMEDIATE"); }

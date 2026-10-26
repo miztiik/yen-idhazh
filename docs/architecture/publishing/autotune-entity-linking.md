@@ -18,7 +18,7 @@ chose. Matching is by term, so an alias nobody wrote down is an entity nobody
 finds. [../sources/discovery.md](../sources/discovery.md) owns how the match
 reaches the ranking arithmetic.
 
-## Relationships have no owner yet, and that is the larger gap
+## Relationships have no maintainer yet, and that is the larger gap
 
 Nothing in `docs/` says what a relationship between two entities **is** - what
 writes one, what it means, or whether a reader ever sees one. **That definition

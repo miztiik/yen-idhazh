@@ -375,7 +375,7 @@ def stage_work(
         model.id,
     )
     flags = Flags.of(settings.app.logging    )
-    # The workflow passes the PID written by the model-server owner. Looking
+    # The workflow passes the PID written by the model-server maintainer. Looking
     # through the process table could select an unrelated server.
     shard_facts = (
         host.host_facts(job=ServerJob.WORK) if collect_host

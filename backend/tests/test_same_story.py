@@ -573,7 +573,7 @@ def test_one_outlet_running_one_headline_twice_is_still_not_a_group() -> None:
 
 
 def test_two_desks_rounding_one_price_are_one_group() -> None:
-    """The owner's ruling, 2026-09-14, end to end rather than on the key alone.
+    """The maintainer's ruling, 2026-09-14, end to end rather than on the key alone.
 
     Two decimal places are not a reason to print the same acquisition twice.
     This is the 2026-09-03 Nvidia pair, at vectors that cannot form the group.
@@ -824,7 +824,7 @@ def test_a_headline_that_reduces_to_nothing_is_not_a_key() -> None:
 # --- the numbers in a headline ----------------------------------------------
 #
 # The words have to match exactly; a number only has to agree to the coarser of
-# the two precisions it was written with. Owner ruling, 2026-09-14: two desks
+# the two precisions it was written with. Maintainer ruling, 2026-09-14: two desks
 # rounding one figure differently are still reporting one story, and a rule
 # that split them would cost the reader a group for two decimal places.
 # Measured the same day over the twenty-five committed days, the rule admits

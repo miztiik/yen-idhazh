@@ -228,7 +228,7 @@ exposure = min(1, (published_today + selected_so_far) / planned_slots)
 adjustment = -lambda_source * exposure
 ```
 
-The owner approved reusing the current `lambda_source` value of 0.25 and
+The maintainer approved reusing the current `lambda_source` value of 0.25 and
 replacing the feed-crowding term rather than charging both. The approved
 normalizer is actual publications today plus items already selected, divided
 by planned slots and capped at 1. Known-empty history contributes zero.
@@ -243,11 +243,11 @@ an extraction success, a past shadow selection or an item-health retry alone
 is not a publication. Each distinct published URL counts once.
 
 The bounded reader joins that membership to successful publish-stage health
-records by item and URL, requiring one recorded run/source owner. It then
+records by item and URL, requiring one recorded run/source maintainer. It then
 requires one publisher identity across the selection snapshots with that
 run, source and URL. Identity comes only from the saved `source.publisher_id`,
 never the current catalog, caller attribution text, feed title or domain.
-Conflicting snapshots, an unknown publisher, a missing owner or incomplete
+Conflicting snapshots, an unknown publisher, a missing maintainer or incomplete
 history make publication history unavailable. Partial known counts are not
 used as a complete census. Known-empty publication membership needs no
 identity join.
@@ -288,13 +288,13 @@ set. Combining them into one quality product would conceal which fact changed
 a decision. Returning the exact greedy trace lets the later audit stage
 record each answer without inventing evidence or recomputing history.
 
-Owner approval, kumarsnaveen_microsoft, 2026-10-24, A1: reuse Python's
+Maintainer approval, 2026-10-24, A1: reuse Python's
 source-authority ranking effect as this separately recorded penalty, on by
 default for the isolated TypeScript planner. Keep article quality and diversity
 selection distinct. This does not require identical Python and TypeScript
 selection and does not change the production Python planner or digest.
 
-Owner ruling, kumarsnaveen_microsoft, 2026-10-24 UTC: replace the isolated
+Maintainer ruling, 2026-10-24 UTC: replace the isolated
 TypeScript planner's RSS reliability penalty with a normalized penalty for
 cost from operations that failed to produce usable material for a supported
 source-side reason. Preserve curated source weight and tier. Apply the new
@@ -303,10 +303,10 @@ reliability. This supersedes the earlier penalty choice above. It does not
 change production Python planning. The formula and evidence
 thresholds are proposed in
 [feed-ingest feedback](../contracts/feed-ingest-feedback.md); their provisional
-window, support, coverage and weight defaults are owner-approved. Producer
+window, support, coverage and weight defaults are maintainer-approved. Producer
 fields and exact operation-to-cost bindings remain open in D3.
 
-Owner ruling, kumarsnaveen_microsoft, 2026-10-24 UTC: reuse the existing
+Maintainer ruling, 2026-10-24 UTC: reuse the existing
 `lambda_source` value of 0.25 for the soft publisher-exposure preference and
 replace the feed-crowding term. Do not stack both. Count actual publications
 on the current UTC day plus the publisher's already-selected items, divide by

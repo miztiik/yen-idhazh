@@ -15,10 +15,10 @@ Table A
 | A4 | Hard scope - out | Table B |
 | A5 | ESCALATE triggers | Unapproved persisted design or metric; changed question or source facts; unsupported rendering; missing production input silently replaced with empty evidence; any change to the parent's approved scope |
 | A6 | Chosen strategy | Extend the existing decision and item-health path rather than introduce the later visual-attempt ledger; Fowler consultation, 2026-10-25 UTC |
-| A7 | Design approval | kumarsnaveen approved the recorded A1 design and delivery on 2026-10-25 UTC |
-| A8 | Execution | One owner, one Row 1 implementation PR phase, no parallel rows and no automatic merge authority; later parent rows remain pending |
+| A7 | Design approval | the maintainer approved the recorded A1 design and delivery on 2026-10-25 UTC |
+| A8 | Execution | One maintainer, one Row 1 implementation PR phase, no parallel rows and no automatic merge authority; later parent rows remain pending |
 
-Execute per docs/how-to/execute-a-plan.md: one owner carries this dependent phase; consult only on a material ambiguity; pause for Level 5 design approval; no automatic merge.
+Execute per docs/how-to/execute-a-plan.md: one maintainer carries this dependent phase; consult only on a material ambiguity; pause for Level 5 design approval; no automatic merge.
 
 Table B
 
@@ -26,7 +26,7 @@ Table B
 | --- | --- | --- | --- |
 | B1 | New chart renderers and text visual types | Story delivery still supports bars only | The corresponding parent implementation phase |
 | B2 | A new visual-attempt ledger or dashboard | No new visual-specific historical panel | Its separately approved delivery plan; existing item-health retains this phase's outcomes |
-| B3 | Historical redraw or inferred outcome backfill | Older rows remain unmeasured | A separate owner-approved requirement |
+| B3 | Historical redraw or inferred outcome backfill | Older rows remain unmeasured | A separate maintainer-approved requirement |
 | B4 | Production activation | New policies remain off after delivery | An explicit config activation decision |
 
 ## 1. Status Reckoner
@@ -104,12 +104,12 @@ Table E
 
 | ID | Decision | Authority |
 | --- | --- | --- |
-| E1 | Add Table D fields to `VisualDecision` and append their projection to `ItemHealthRow`. The final decision computes them once; the worker copies them before sealing the item record | Fowler design; kumarsnaveen approval, 2026-10-25 UTC |
+| E1 | Add Table D fields to `VisualDecision` and append their projection to `ItemHealthRow`. The final decision computes them once; the worker copies them before sealing the item record | Fowler design; the maintainer approval, 2026-10-25 UTC |
 | E2 | Defaults are null. Historical payloads remain readable and unmeasured; never infer their requested type, success, depth or count from a historical spec | CLAUDE.md section 11; Fowler proposal |
 | E3 | All fields are null without a known typed request. A measured refusal has a requested type and a depth but no delivered type or marks. Direct delivery has equal types and zero depth; replacement delivery has different types and positive depth. A selected depth survives later compile/write failure | Approved design |
 | E4 | Existing `rationale`, `none_reason` and `failure_detail` record the cause. A replacement's rationale states the original refusal, the replacement and applied floor; no new free-text reason column | Parent R3; Fowler proposal |
 | E5 | Stamp and changelog both changed payload contracts. Keep their old fields readable and synchronise the frontend column-name copy and its bindings | CLAUDE.md sections 9 and 11 |
-| E6 | `wasted_decode_rate`: typed measured requests not delivered in their requested form divided by all typed measured requests. A different delivered type or no delivered type counts; empty denominator is null. Exclude declines, unknown/cut/unparseable types and historical unmeasured rows | Owner selected A1, 2026-10-25 UTC |
+| E6 | `wasted_decode_rate`: typed measured requests not delivered in their requested form divided by all typed measured requests. A different delivered type or no delivered type counts; empty denominator is null. Exclude declines, unknown/cut/unparseable types and historical unmeasured rows | Maintainer selected A1, 2026-10-25 UTC |
 | E7 | Compute the metric and requested-type counts from terminal item records in the shard report; do not persist a second derived measurement or introduce a dashboard | Approved design |
 
 ### Config and bounded evidence
@@ -118,9 +118,9 @@ Table F
 
 | ID | Config key | Default and behavior |
 | --- | --- | --- |
-| F1 | `visuals.type_selection_enabled` | `false`; off preserves today's complete grammar and reachability behavior; remove only after owner approval makes selection unconditional |
+| F1 | `visuals.type_selection_enabled` | `false`; off preserves today's complete grammar and reachability behavior; remove only after maintainer approval makes selection unconditional |
 | F2 | `visuals.enabled_types` | Every native `VisualType` value in enum order; nonempty and unique; unruled and unbuilt names remain valid selections |
-| F3 | `visuals.downgrade_enabled` | `false`; off performs no history read and no rescue; remove only after owner approval makes rescue unconditional |
+| F3 | `visuals.downgrade_enabled` | `false`; off performs no history read and no rescue; remove only after maintainer approval makes rescue unconditional |
 | F4 | `visuals.downgrade_floor_percentiles` | `[50, 75]`: median mark count at the first replacement depth and the 75th percentile at the second; strictly increasing, nonempty when rescue is on |
 | F5 | `visuals.downgrade_lookback_days` | `30` preceding UTC days, excluding the current publication day |
 | F6 | `visuals.downgrade_max_samples_per_type` | `256` most recent qualifying rows per target type; positive and config-driven |
@@ -145,7 +145,7 @@ Table H
 | --- | --- | --- |
 | H1 | Consult the same explicit compiler capability used by compilation; only bar is supported in this phase. Trigger rescue for a rejected request or a valid request without a compiler | Parent Row 1 |
 | H2 | A supported target must preserve purpose and source references, pass the unchanged universal validator, satisfy its annotation requirement and clear the measured floor. If selection is active, its target must also be selected | Parent R1 and R3 |
-| H3 | Remove `stacked_bar -> bar`; a refused declared-whole request must not escape through direct or chained bar fallback | Owner R4, already approved |
+| H3 | Remove `stacked_bar -> bar`; a refused declared-whole request must not escape through direct or chained bar fallback | Maintainer R4, already approved |
 | H4 | Add `dot -> bar` only for magnitude comparison, without discarded grouping or another undisplayed channel. It provides a real valid-but-unbuilt recovery case without implementing dot rendering | Approved design |
 | H5 | Keep other existing purpose-preserving edges only where their actual target remains safe and supported; an unsupported intermediate cannot be returned as drawable | Parent Row 1 |
 | H6 | Keep source identity, quantities, ordering, labels and annotations. Do not fill missing channels, invent values, retry the model or force diversity | Parent operating contract |
@@ -170,7 +170,7 @@ Table J
 | ID | Option | Why rejected | Cost to take | Authority |
 | --- | --- | --- | --- | --- |
 | J1 | New visual-attempt ledger | The existing committed item ledger already carries terminal outcomes | Register and publish a new ledger and add its complete retention/reader path | Fowler sizing |
-| J2 | Only count requests yielding no picture as decode waste | Successful fallback would conceal demand for unbuilt requested forms | Owner would change the approved metric intent | Owner selected A1 |
-| J3 | Seed the floor with synthetic or inferred history | It would report unmeasured evidence as published direct outcomes | Owner must approve replacing the inherited empirical floor contract | Existing floor contract |
-| J4 | Default-on behavior or a shared feature list | It contradicts the reconciled activation ruling | Owner must change R2 | Owner R2 |
-| J5 | Build a replacement chart family in this phase | It combines separate parent outcomes and changes the approved order | Owner must approve the enlarged phase | Parent execution contract |
+| J2 | Only count requests yielding no picture as decode waste | Successful fallback would conceal demand for unbuilt requested forms | Maintainer would change the approved metric intent | Maintainer selected A1 |
+| J3 | Seed the floor with synthetic or inferred history | It would report unmeasured evidence as published direct outcomes | Maintainer must approve replacing the inherited empirical floor contract | Existing floor contract |
+| J4 | Default-on behavior or a shared feature list | It contradicts the reconciled activation ruling | Maintainer must change R2 | Maintainer R2 |
+| J5 | Build a replacement chart family in this phase | It combines separate parent outcomes and changes the approved order | Maintainer must approve the enlarged phase | Parent execution contract |

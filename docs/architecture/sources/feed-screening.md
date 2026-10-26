@@ -61,7 +61,7 @@ The committed `fool.com` rule includes subdomains and `/the-ascent` descendants.
 It keeps affiliate-product pages out without rejecting unrelated articles that
 mention that address in a query. Other reporting on the host stays eligible.
 This preserves the editorial exclusion, not a new assessment of article quality.
-Changing or removing that editorial scope needs owner review.
+Changing or removing that editorial scope needs maintainer review.
 
 The harvester and the planning audit use one pure structured matcher. A match
 retains `BLOCKED_URL_MARKER`, the existing `fool.com/the-ascent/` detail and the

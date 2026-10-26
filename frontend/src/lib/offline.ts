@@ -200,7 +200,7 @@ async function retireOfflineReader(worker: string): Promise<void> {
 		const script = new URL(worker, location.href).href;
 		for (const registration of await navigator.serviceWorker.getRegistrations()) {
 			// Only ours. `getRegistrations()` answers for the whole origin, and on a
-			// project path that origin is shared with every other site the owner
+			// project path that origin is shared with every other site the maintainer
 			// publishes there.
 			if (registration.active?.scriptURL === script) await registration.unregister();
 		}

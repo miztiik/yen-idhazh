@@ -1,6 +1,6 @@
 # Evaluating LLM-written news summaries without references: dimensions, metrics, composite decisions and drift monitoring
 
-**Record**: research for plan 65, the summary-fidelity judge (TODO/20261011-65-summary-fidelity-judge-plan.md), made on 2026-10-11 at the owner's request to survey recent research on news and long-form summary metrics and on combining metrics into one decision. Written by a research agent; every cited work was checked to exist; quotations are kept short and the rest is summarised. It is evidence for the owner's rulings, not a ruling.
+**Record**: research for plan 65, the summary-fidelity judge (TODO/20261011-65-summary-fidelity-judge-plan.md), made on 2026-10-11 at the maintainer's request to survey recent research on news and long-form summary metrics and on combining metrics into one decision. Written by a research agent; every cited work was checked to exist; quotations are kept short and the rest is summarised. It is evidence for the maintainer's rulings, not a ruling.
 
 Research review for the yen-idhazh summary-fidelity judge ("hard look"), 2026-10-11.
 
@@ -82,7 +82,7 @@ Recent work on evaluating summaries has moved away from SummEval's four axes (co
 
 **Relevance (SummEval) has been split in two.** FineSurE and UniSumEval separate it into completeness (did the summary include what matters?) and conciseness (did it leave out what does not?).
 
-**On the owner's "four standard metrics".**
+**On the maintainer's "four standard metrics".**
 - In the literature the four are SummEval's: coherence, consistency, fluency and relevance.
 - The LLM-era replacements are faithfulness, completeness and conciseness.
 - Your current four (faithfulness, coverage, coherence, fluency) keep two axes that recent work demotes (coherence and fluency), and they do not measure conciseness.
@@ -350,7 +350,7 @@ All figures here are estimates; benchmark them before relying on them. Volume is
 
 Ranked options:
 
-1. **Weighted composite with known direction (matches the owner's request).**
+1. **Weighted composite with known direction (matches the maintainer's request).**
   - Let $z_{d,k}$ be the standardised daily residual of metric $k$ on day $d$, oriented so that positive means worse.
   - Compute the composite for day $d$, where $w_k$ is the weight of metric $k$ and $R$ is the correlation matrix of the $z$ values in the reference window:
 
@@ -365,7 +365,7 @@ Ranked options:
 
 ### 6.3 Design rules for a setting with no golden set and trailing windows
 
-**Unit of judgement.** The unit is the day, across all summaries, not the site. Sites enter only as a covariate, consistent with the owner's ruling.
+**Unit of judgement.** The unit is the day, across all summaries, not the site. Sites enter only as a covariate, consistent with the maintainer's ruling.
 
 **What to adjust for.**
 - Adjust for input-side covariates only: article length, page type, the cut flag, language, the source (as a random effect) and optionally a topic cluster.
@@ -463,7 +463,7 @@ Ranked options:
   - For each, take the day's mean of per-summary residuals (observed minus expected given the input covariates).
   - Standardise by the between-day SD in the reference window.
 4. **Two combined statistics.**
-  - **"Quality got worse"** (the owner's weighted composite): $C_d = \frac{\sum_k w_k z_{d,k}}{\sqrt{w^\top R w}}$ (section 6.2), smoothed with an EWMA and tested one-sided. The weights are tunable.
+  - **"Quality got worse"** (the maintainer's weighted composite): $C_d = \frac{\sum_k w_k z_{d,k}}{\sqrt{w^\top R w}}$ (section 6.2), smoothed with an EWMA and tested one-sided. The weights are tunable.
   - **"Something changed"**: MEWMA plus Hotelling $T^2$ ([Lowry 1992](https://doi.org/10.1080/00401706.1992.10485232)).
   - If you instead compute many per-metric tests, combine them with the Cauchy test and apply BH within strata.
 5. **Decision levels.** None of these actions is automatic; a person decides (your P15).
@@ -651,7 +651,7 @@ Notes: [vendor] marks a vendor document, [preprint] a paper not peer-reviewed at
 
 **Internal context (not literature)**
 
-75. yen-idhazh, plan 65, the summary-fidelity judge (TODO/20261011-65-summary-fidelity-judge-plan.md) and the daily records under state/day-metrics/: source for the 2026-09-07 step, the owner's rulings and the P14, P15 and P17 references.
+75. yen-idhazh, plan 65, the summary-fidelity judge (TODO/20261011-65-summary-fidelity-judge-plan.md) and the daily records under state/day-metrics/: source for the 2026-09-07 step, the maintainer's rulings and the P14, P15 and P17 references.
 76. yen-idhazh, "What one summary number means": docs/concepts/summary-metrics.md. Source for the statement that `hhem` is the best of overlapping windows.
 
 (+) These papers' existence and bibliographic details were confirmed by web search during this review. The DOI links themselves could not be click-tested from the sandbox, which has no network access. Lucas & Saccucci, Hawkins, Jensen et al. and Derringer & Suich had their DOI or stable URL confirmed in search results.

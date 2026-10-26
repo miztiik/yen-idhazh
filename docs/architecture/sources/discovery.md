@@ -79,7 +79,7 @@ An entity matches by the same one-sentence rule, with `aliases` in `config/watch
 
 **`watchlist_bonus` pays the candidates whose feed title matches an alias.** The title, not the article text, and the asymmetry is deliberate: a plan runs before a single page is fetched, so the title is all it has. An article whose body names an entity its title does not still earns the published tag at Extract. **The tag says what the item is about, the bonus says what we were already watching for.** Those are different questions and they are allowed to disagree.
 
-**A bonus that starts firing reorders every future day and no past one.** That makes wiring one a live ranking change and an owner's decision rather than a defect fix. The published ledger stops an already-published address being planned again, so no day a reader has already seen moves.
+**A bonus that starts firing reorders every future day and no past one.** That makes wiring one a live ranking change and a maintainer's decision rather than a defect fix. The published ledger stops an already-published address being planned again, so no day a reader has already seen moves.
 
 **An entry is an organisation or a subject, and only the second kind has a gap worth measuring.** `EntityDef.kind` defaults to `organisation`. A company is in the news most weeks, so the time between our own mentions of it is near zero; a running story - a pandemic, a tournament, an export-control regime - goes quiet between instalments. The field exists so the second kind can enter the vocabulary at all, which an organisation-only registry could not allow. A subject carries no SEC filer id and the contract refuses one.
 
@@ -395,7 +395,7 @@ publisher can allow every ordinary crawler and name a list of AI training bots i
 refuses. We are none of those user agents, so the fetch is allowed - but `corpus/`
 commits article text as training samples, so the
 publisher's stated intent and one of our uses point in opposite directions. This
-is recorded rather than resolved: the owner takes that call, and if it goes the
+is recorded rather than resolved: the maintainer takes that call, and if it goes the
 other way the fix is one `retired_on`.
 
 ### The feed floor counts feeds, not working feeds
@@ -450,7 +450,7 @@ kind nor today's format vocabulary describes every future format. These are
 design constraints for new selection logic, not a claim that the current
 ranker implements a new term.
 
-**The affiliate-page control sits at collection, not at the score.** An affiliate review that summarizes faithfully separates "the summary is wrong" from "the item should not be here" - every instrument in the eval ledger compares our summary to the article, and all of them pass. Collection is also the cheapest place a rejection can happen: a blocked address is never fetched, never summarized and never scored (Guardrail #2). Authority: owner, 2026-08-24, closing known defect 7.
+**The affiliate-page control sits at collection, not at the score.** An affiliate review that summarizes faithfully separates "the summary is wrong" from "the item should not be here" - every instrument in the eval ledger compares our summary to the article, and all of them pass. Collection is also the cheapest place a rejection can happen: a blocked address is never fetched, never summarized and never scored (Guardrail #2). Authority: maintainer, 2026-08-24, closing known defect 7.
 
 Segmenting by subject is a source-diversity problem, not a compute one. The pipeline had spare capacity long before it had spare sources, so the binding constraint was never how many items could be summarized - it was how many were worth summarizing, and whether they covered more than one subject.
 

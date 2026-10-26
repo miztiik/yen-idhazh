@@ -137,8 +137,8 @@ AT_THE_BASE: Final[dict[str, tuple[str | None, str | None, str | None]]] = {
     ),
 }
 
-#: What each of those three owners built for one fixed writer on `A_DAY`, file
-#: name included, read by calling the owner's own function before it was pointed
+#: What each of those three maintainers built for one fixed writer on `A_DAY`, file
+#: name included, read by calling the maintainer's own function before it was pointed
 #: at the registry.
 A_RUN: Final = "2026-09-18-35786586868"
 OWNER_BUILT_AT_THE_BASE: Final[dict[str, str]] = {
@@ -530,7 +530,7 @@ def test_the_claimed_roots_differ_from_the_base_only_by_the_names_given() -> Non
 
 
 def test_the_three_owners_build_the_paths_they_built_before() -> None:
-    """Each owner now composes its address from the registry, and lands on the same bytes.
+    """Each maintainer now composes its address from the registry, and lands on the same bytes.
 
     The parity table above holds each ledger's directory. This holds the whole
     file name as well, because two of the three mint a name inside that

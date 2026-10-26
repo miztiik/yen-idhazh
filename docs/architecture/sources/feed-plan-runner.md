@@ -134,7 +134,7 @@ usable evidence. Unreadable named files and corrupt evidence still fail the
 run. Undated candidates without settled or current first-sight evidence retain
 unknown timing and no invented recency bonus.
 
-Owner ruling (kumarsnaveen, 2026-10-22): match the Python first-sight behavior
+Maintainer ruling (2026-10-22): match the Python first-sight behavior
 without inventing older evidence. A missing day cannot prevent recording that
 an eligible URL was actually observed now, but it must stay visible as missing
 and must not be described as proof that the URL was absent from the full

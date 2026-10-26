@@ -159,7 +159,7 @@ export function encoderOrigins() {
  *
  * `ledger.engine_extension_repository`, the same key the engine is told. The
  * engine checks each add-on's signature before loading it, which is what makes
- * this origin safe to admit (owner ruling, 2026-09-28).
+ * this origin safe to admit (maintainer ruling, 2026-09-28).
  *
  * @returns {string[]}
  */

@@ -97,7 +97,7 @@ Checks before trusting a test or build result. Commands belong in [run-the-gates
   ```
 
 - **A build through a linked `node_modules` fails on a missing package; the
-  code is fine, the linked install changed under you.** Its owner can run
+  code is fine, the linked install changed under you.** Its maintainer can run
   `npm ci` or switch branches while you use it. On 2026-10-07, on this Windows
   machine with Node 24.12.0, vite failed with `Rollup failed to resolve import
   "@duckdb/duckdb-wasm"` after two builds through the same link had passed.

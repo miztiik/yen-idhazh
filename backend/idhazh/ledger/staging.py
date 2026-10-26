@@ -2,7 +2,7 @@
 
 Both facts used to be derived: walked out of the package's own source with
 `ast`/`inspect` so a hand-written list could not drift from the code. The walk
-cost grew with the package (OWNER RULING 2026-10-03, "no read may grow with the
+cost grew with the package (MAINTAINER RULING 2026-10-03, "no read may grow with the
 repository") and two of its tests ran to several seconds each on CI. A writer
 joins this package in the same change that gives a ledger its first row
 (CLAUDE.md Guardrail #3), so the fact is already known the day the code is

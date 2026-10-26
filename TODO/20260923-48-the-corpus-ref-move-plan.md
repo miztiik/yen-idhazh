@@ -13,7 +13,7 @@
 | Field | Value |
 | --- | --- |
 | **Intent** | `corpus/` stops being a directory on `main`, so the bytes it adds to every clone leave with it, and the reason `main`'s history is rewritten leaves with them. |
-| **Where it came from** | Row 17 of `20260922-46-no-file-has-two-writers-plan.md`. That plan closed with every other row DONE and its file was deleted on 2026-09-23; git holds it. Row 7 of that plan carried this title until 2026-09-22 and never carried the work, so the owner split them: the force-push rule shipped, and this half is priced here. |
+| **Where it came from** | Row 17 of `20260922-46-no-file-has-two-writers-plan.md`. That plan closed with every other row DONE and its file was deleted on 2026-09-23; git holds it. Row 7 of that plan carried this title until 2026-09-22 and never carried the work, so the maintainer split them: the force-push rule shipped, and this half is priced here. |
 | **What changes for the reader** | Nothing, under every option below. The corpus is a training input and no published page reads it. |
 | **Hard scope - in** | Where the corpus lives, how a run reaches it, what happens to the two path constants that spell it, what the prune becomes afterwards, and what replaces the join between a corpus row and the code that produced it. |
 | **Hard scope - out** | Table E. |
@@ -107,13 +107,13 @@ Row 2 is Level 5, so it pauses for a design consultation before any code (`CLAUD
 
 | id | Question | Authority |
 | --- | --- | --- |
-| D1 | **Where does the ref live, and what is it called?** A branch on this repository, an orphan branch, or a second repository are three answers with three different permission stories | Owner |
+| D1 | **Where does the ref live, and what is it called?** A branch on this repository, an orphan branch, or a second repository are three answers with three different permission stories | Maintainer |
 | D2 | **How does the daily run reach it without paying for it every run?** The harvest runs weekly and the digest runs five times a day, so a fetch on every run pays for a corpus four days out of five for nothing | Carmack |
 | D3 | **Does `corpus/` stay in `main`'s working tree as a fetched artifact, or leave entirely?** Staying keeps every reader's path and moves only the history. Leaving is the only version that also removes the bytes from a `main` clone. They are not the same change, and only one of them is what the prune exists for | Fowler |
 | D4 | **What replaces `CORPUS_ROOT_RELPATH`?** A config knob is the obvious answer and it is not free: `config/idhazh.json` has a schema, and a path that varies is a path a test has to be given rather than assume | Fowler |
 | D5 | **What happens to the test that reads the committed corpus?** `CLAUDE.md` section 13 gives it three fates - move, become a fixture, or become an operator tool under `backend/utilities/` - and no fourth. Doing nothing is not one, because after the move there is nothing on `main` for it to read | Fowler |
 | D6 | **How does a person running `data_wrangler.py` get a corpus to point at?** Whatever replaces "the directory is simply there" has to be one documented step, or the tools stop being used | Reader |
-| D7 | **Does the prune still exist afterwards, and does it still force-push?** If the corpus leaves `main`, the reason `main`'s history is rewritten leaves with it - and the tip check is then guarding a job that may not need to run at all | Owner |
+| D7 | **Does the prune still exist afterwards, and does it still force-push?** If the corpus leaves `main`, the reason `main`'s history is rewritten leaves with it - and the tip check is then guarding a job that may not need to run at all | Maintainer |
 
 ---
 
@@ -123,7 +123,7 @@ Row 2 is Level 5, so it pauses for a design consultation before any code (`CLAUD
 
 | id | Option | Why not | What it would cost to take | Authority |
 | --- | --- | --- | --- | --- |
-| E1 | Ship the move inside the force-push rule | That row was Level 4 and named five files, one of which did not exist. The move reaches the surface in Table B | A Level 5 change merged without the consultation Level 5 requires | Owner, 2026-09-22 |
+| E1 | Ship the move inside the force-push rule | That row was Level 4 and named five files, one of which did not exist. The move reaches the surface in Table B | A Level 5 change merged without the consultation Level 5 requires | Maintainer, 2026-09-22 |
 | E2 | Move the path behind a config knob first, and decide the ref later | It looks like a safe first step and it is a second writer of the same question: a knob whose only value is `corpus` is a knob nobody reads, and the readers still have to be found either way | One schema change and a knob that answers nothing until D1 is settled | Fowler |
 | E3 | Stop pruning and let the history grow | The corpus commits article text and git history is append-only, so deleting a row does not delete its bytes | An unbounded repository, which is the reason the prune exists | Fowler |
 | E4 | Re-price this on the first force push rather than on a share | One force push is one event, and the thing being weighed is a standing cost. A3 becomes a measurement on 2026-10-19 and that makes the argument cheaper to have, not different | Nothing. The share is still the number that decides it | Fowler, 2026-09-23 |

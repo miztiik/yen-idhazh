@@ -878,11 +878,11 @@ reads files the clone never downloaded (Carmack).
 
 **2026-10-04: `workflow-runs` keeps its mark on its own record row.** A mark
 file of its own under `state/raw/gardener/` would sit in a folder
-`compact-gardener` owns, and the loader refuses two owners of one folder; a new
-folder outside `state/raw/` was not where the owner asked for it. The record
+`compact-gardener` owns, and the loader refuses two maintainers of one folder; a new
+folder outside `state/raw/` was not where the maintainer asked for it. The record
 lands at every wake anyway, so the mark costs one cell, `handled_through`. A
 date filter with no mark was rejected: in a dry run, or with a backlog, it reads
-the same runs again at every wake (the owner, decisions O1 and O2).
+the same runs again at every wake (the maintainer, decisions O1 and O2).
 
 **2026-10-04: the first walk of the runs starts from days, never from a count.**
 `total_count` says how many runs there are and nothing of the day the oldest one
@@ -900,7 +900,7 @@ Read from the end, a delete moves only runs already read (Fowler).
 checked by UTC day.** Reading every page front to back took 17 requests on
 2026-10-05, and a live pass that deleted while it read would step over
 artifacts it never read. Reading from the last page back, with a mark on the
-record as `workflow-runs` keeps one, read 3 pages that day (the owner,
+record as `workflow-runs` keeps one, read 3 pages that day (the maintainer,
 2026-10-04). The order was first to be checked by the instant each artifact was
 created. GitHub orders by id, and across the 1,613 artifacts it listed on
 2026-10-05 an id and its instant disagreed by up to 76 minutes: that check
@@ -937,7 +937,7 @@ the raw days and the compact files, because a month may sit in either (Fowler).
 
 **2026-09-30: a later task of a shard sees what an earlier one changed.** Two
 tasks of one shard can share a folder now, one owning it and one reading it. A
-listing read once would hand the reader files the owner had already deleted, and
+listing read once would hand the reader files the maintainer had already deleted, and
 the reader would fetch them and fail. So the listing takes in each task's writes
 and deletions, and a fetch widens the checkout only by the folders that bring a
 file it lacks.
@@ -959,7 +959,7 @@ work through a red job, with `raised` for a code defect or unclassified failure
 and, since 2026-10-09, `manual-action` for one of the eight recognized
 refusals. The word is closed, and the sentence a person reads is rendered from
 it, because a stored free-text reason could carry fetched text into the record
-and no reader can act on prose (the owner, decision S2 and the recovery theme,
+and no reader can act on prose (the maintainer, decision S2 and the recovery theme,
 2026-10-04; manual-action decision, 2026-10-09). Exception text is never stored
 for the same reason (Fowler, 2026-10-04). There is no word for an interruption:
 both wrappers catch every error, so an unclassified code failure is `raised`
@@ -984,11 +984,11 @@ and a refused period's event level comes from that stop, so both failed faults
 are errors and every deferred fault is a warning. A period larger than the
 whole download budget is manual action at its named refusal site. The
 after-the-run aggregate budget check remains `raised`, because it means a task
-bypassed that site (owner approval and Fowler review, 2026-10-09).
+bypassed that site (maintainer approval and Fowler review, 2026-10-09).
 
 **2026-10-07: every line a task logs is one event, and nothing beside it says
 the same thing in prose.** JSON lines, so a program and a person read one line
-the same way (the owner, decision T2, 2026-10-04). A readable line beside each
+the same way (the maintainer, decision T2, 2026-10-04). A readable line beside each
 event was rejected as a second rendering to keep in step by hand (Fowler,
 2026-10-04), and the per-task report the runner printed was exactly that, so it
 went: `task-finished` carries its list of members, why the pass stopped, and

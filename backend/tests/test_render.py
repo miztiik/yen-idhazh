@@ -1,7 +1,7 @@
 """The chart compiler, and the rule that a picture never costs an item its place.
 
 **Nothing in this repository draws a chart.** The reader's browser draws it and
-the pipeline never does (owner ruling, 2026-09-13,
+the pipeline never does (maintainer ruling, 2026-09-13,
 `docs/architecture/publishing/visuals.md`), so what this module checks is the
 last thing the pipeline writes for a picture: the marks, and where they land.
 
