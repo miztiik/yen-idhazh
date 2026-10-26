@@ -326,7 +326,7 @@ def _main(argv: Sequence[str] | None = None) -> int:
         "--server-pid",
         type=_positive_int,
         default=None,
-        help="PID written by the model-server owner, for process-scoped host readings.",
+        help="PID written by the model-server, for process-scoped host readings.",
     )
     parser.add_argument(
         "--execution",

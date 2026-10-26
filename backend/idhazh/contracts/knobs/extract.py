@@ -51,7 +51,7 @@ class ExtractConfig(Model):
         default=False,
         description=(
             "If true, a too_short signal rejects the item. Default records and "
-            "publishes, which is Owner override O3. **A feed a curator declared "
+            "publishes, which is Maintainer override O3. **A feed a curator declared "
             "`abstract` is never rejected by this, whatever it is set to.** That "
             "feed publishes abstracts because a person said so, and abstracts are "
             "short by definition - rejecting one would delete a source on the "

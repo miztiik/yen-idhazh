@@ -204,8 +204,8 @@ def build(examples_path: Path, vector_root: Path, repository: Path) -> None:
     review = CatalogReview(
         expected_revision=empty_catalog().revision,
         reviewer="gpt-6.1-sol approved B1-B10 fixture transcriber",
-        reason="Owner approved B1-B10 meanings in parent task; original artifact status preserved. "
-        "B10 disputed explanatory sibling is NOT seeded.",
+        reason="Maintainer approved B1-B10 meanings in parent task; original artifact status "
+        "preserved. B10 disputed explanatory sibling is NOT seeded.",
         entities=list(entities.values()),
     )
     write_model(root / "seed-catalog-review.json", review)
@@ -214,7 +214,7 @@ def build(examples_path: Path, vector_root: Path, repository: Path) -> None:
         ApprovedFixtures(
             approved_examples_sha256=original_hash,
             approval_reference=(
-                "Owner approved B1-B10 task, 2026-10-09; fixtures, not primary records."
+                "Maintainer approved B1-B10 task, 2026-10-09; fixtures, not primary records."
             ),
             catalog=review,
             examples=worked,

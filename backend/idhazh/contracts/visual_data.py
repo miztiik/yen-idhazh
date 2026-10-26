@@ -220,7 +220,7 @@ class VisualData(Contract):
     is what every other published collection uses and what a reader fetches. The chart
     data is kept out of `digest.json` because the day payload is never deleted,
     so anything inside it would be undeletable and `retention.image_months` would
-    have nothing to act on (owner, 2026-09-13).
+    have nothing to act on (maintainer, 2026-09-13).
     """
 
     __schema_stem__: ClassVar[str] = "visual-data"

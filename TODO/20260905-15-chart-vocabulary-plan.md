@@ -46,7 +46,7 @@ The maintainer approved these decisions on 2026-10-25 UTC in this session:
 | R5 | Focused integration checks plus representative browser coverage | Replaces every-type browser checks at both widths; retain source-derived correctness and width behavior checks below the browser tier |
 | R6 | Bounded mixed fixture only | Removes the real committed-day diversity demonstration and its release evidence step |
 | R7 | D3.js; no prerendering; shared reusable patterns; no magic numbers | Explicit user requirements. No separate chart engine, build-time drawing, per-page special cases or source-fixed tunables |
-| R8 | Row 3 delivers `line` only; `area` is deferred to a separately approved phase | Owner decision 2026-10-25; the current free-form measure label cannot prove stock or cumulative magnitude rather than a rate |
+| R8 | Row 3 delivers `line` only; `area` is deferred to a separately approved phase | Maintainer decision 2026-10-25; the current free-form measure label cannot prove stock or cumulative magnitude rather than a rate |
 
 No other scope or functionality change is approved. Existing current-renderer-only
 chart compatibility follows the maintainer ruling already in CLAUDE.md section 11;
@@ -173,7 +173,7 @@ implementation/test references, not a claim that tests were run.
 
 ## 4. Row #3 - Trend and magnitude: line, area
 
-- **Scope:** `line` for a trend over time. Complete source evidence, validation, compilation and browser drawing using shared D3 date/series patterns. `area` is deferred to a separately approved phase under owner decision R8.
+- **Scope:** `line` for a trend over time. Complete source evidence, validation, compilation and browser drawing using shared D3 date/series patterns. `area` is deferred to a separately approved phase under maintainer decision R8.
 - **Current files:** `backend/idhazh/visual_vocabulary.py`, `backend/idhazh/visual_validator.py`, `backend/idhazh/render/chart.py`, applicable native contracts, `frontend/src/lib/charts/d3/dateSeries.ts`, shared reader/drawing components, named fixtures/tests and current chart docs.
 - **Acceptance gates:** as row 2.
 - **Oracle:** A line plan with unordered categories or a non-date time element is refused by the validator; a valid date/quantity series compiles to source-backed marks and draws in the browser.
@@ -183,13 +183,13 @@ implementation/test references, not a claim that tests were run.
 | # | Decision | Authority |
 | --- | --- | --- |
 | 1 | A time axis needs the `date` kind, which plan 08 built. A trend over unordered categories is a bar | Plan 08 |
-| 2 | `area` may draw only when source evidence proves a stock or cumulative measure, never a rate. This evidence rule is not implemented in Row 3 | Section 7.2; owner decision R8 |
+| 2 | `area` may draw only when source evidence proves a stock or cumulative measure, never a rate. This evidence rule is not implemented in Row 3 | Section 7.2; maintainer decision R8 |
 
 ### Rejected alternatives
 
 | # | Option | Why rejected | Authority |
 | --- | --- | --- | --- |
-| 1 | Infer the area gate from the current free-form measure label | It cannot prove that a measure is a stock or cumulative total, or catch every rate | Owner decision R8 |
+| 1 | Infer the area gate from the current free-form measure label | It cannot prove that a measure is a stock or cumulative total, or catch every rate | Maintainer decision R8 |
 
 ---
 

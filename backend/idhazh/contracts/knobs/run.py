@@ -24,7 +24,7 @@ class RunConfig(Model):
             "only ever refuses - it never chooses content, ranks it, or reorders it. "
             "It began as a crash guard against a mis-parsed feed and supply overtook "
             "it: items_planned has been exactly this number on every run since "
-            "2026-08-25. Owner decision, 2026-09-05: 80, down from 160. What it is "
+            "2026-08-25. Maintainer decision, 2026-09-05: 80, down from 160. What it is "
             "NOT is a bound on the day - the day runs five times, so 80 here publishes "
             "about 400. safety_ceiling_per_day is the one that answers that."
         ),
@@ -42,7 +42,7 @@ class RunConfig(Model):
             "The default is the arithmetic of the design that already ships - five "
             "runs at safety_ceiling_per_run - so turning it on changes no day that has "
             "ever been published and only refuses a runaway. Lowering it is an "
-            "editorial decision about how long a day should be, and it is the owner's."
+            "editorial decision about how long a day should be, and it is the maintainer's."
         ),
     )
     shard_size: int = Field(
@@ -125,7 +125,7 @@ class RunConfig(Model):
             "`state/<name>/<case>/` when `run.trial_case_dirname` is set - the seen "
             "ledger, feed health, item health, the published ledger, the traces and the "
             "rollups, all of them, because a run that split them would put half a trial "
-            "in the published series. Owner decision, 2026-09-15: a run that "
+            "in the published series. Maintainer decision, 2026-09-15: a run that "
             "exists to exercise production's code path must not be readable as a "
             "production day. The gardener's trials task is what empties it again."
         ),

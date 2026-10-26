@@ -24,7 +24,8 @@ from idhazh.story_dataset.workers import latest_annotations
 
 LIMITATIONS = [
     "Model labels are not human labels; review agreement is not accuracy.",
-    "No owner-approved random-audit rate, quality acceptance bound or minimum model difference.",
+    "No maintainer-approved random-audit rate, quality acceptance bound or minimum model "
+    "difference.",
     "Representative and challenge pair streams are reported separately, even when IDs overlap.",
     "Recall/NDCG cover only the completely judged candidate universe, not archive retrieval.",
     "This report cannot qualify adoption, fine-tuning or full-archive completion.",

@@ -63,7 +63,7 @@ class ReferenceSplit(StrEnum):
 
     **There is no `train`.** A train split in the same directory invites
     fine-tuning on the measurement set, and that contamination is silent - the
-    numbers get better and nothing says why (owner, 2026-09-10).
+    numbers get better and nothing says why (maintainer, 2026-09-10).
     """
 
     DEV = "dev"
@@ -90,7 +90,7 @@ class ReferenceLabels(Model):
     `reference_summary` **has a writer from 2026-09-13** and it is the labeller.
     It is a reference for classification labels and is **never** a faithfulness
     reference - the human faithfulness ledger was dropped and only its contract
-    kept (owner, 2026-09-10).
+    kept (maintainer, 2026-09-10).
     """
 
     desk: Slug | None = Field(
@@ -450,7 +450,7 @@ class ReferenceDatasetLocalConfig(Contract):
     It is deliberately not a block of `config/idhazh.json`. This collection is
     built by hand once or twice a year and the pipeline runs every day, so a
     knob that only this tool reads does not belong in the file every stage
-    loads (owner decision, 2026-09-13).
+    loads (maintainer decision, 2026-09-13).
 
     Paths are relative to the repository root, POSIX-separated, with no `..`
     segment (`CLAUDE.md` section 2). A path relative to this file would have to

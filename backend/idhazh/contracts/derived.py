@@ -248,6 +248,6 @@ if {member.value for member in DerivedFunction} != ALLOW_LIST:
         "the allow-list is closed and its shortness is the guarantee (O45, O47) - "
         f"ALLOW_LIST holds {sorted(ALLOW_LIST)} and DerivedFunction declares "
         f"{sorted(member.value for member in DerivedFunction)}. A fifth function is not "
-        "this contract's to add; it is an owner decision, because the list being short is "
+        "this contract's to add; it is a maintainer decision, because the list being short is "
         "the whole argument that a plan cannot ask for arbitrary arithmetic"
     )

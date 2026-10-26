@@ -49,24 +49,24 @@ def test_a_reference_reaches_hugging_face_only_at_a_pinned_commit() -> None:
     """A branch is re-pointed on every upload, so a bench that names one cannot
     be repeated: the bytes move and no recorded number says they did (Guardrail #10).
     """
-    ref = ModelRef("owner/repo", "c" * 40, "model.gguf")
+    ref = ModelRef("account/repo", "c" * 40, "model.gguf")
 
-    assert ref.url == f"https://huggingface.co/owner/repo/resolve/{'c' * 40}/model.gguf"
-    assert ref.tree_url == f"https://huggingface.co/api/models/owner/repo/tree/{'c' * 40}"
+    assert ref.url == f"https://huggingface.co/account/repo/resolve/{'c' * 40}/model.gguf"
+    assert ref.tree_url == f"https://huggingface.co/api/models/account/repo/tree/{'c' * 40}"
     assert "/main" not in ref.url + ref.tree_url
 
 
 @pytest.mark.parametrize(
     "value",
     [
-        "../owner/repo@" + "a" * 40 + ":model.gguf",
-        "owner/repo@" + "a" * 40 + ":../model.gguf",
-        "owner/repo@" + "a" * 40 + ":model.bin",
-        "owner/repo@" + "a" * 40 + ":model.gguf,other/repo@" + "b" * 40 + ":model.gguf",
-        "owner/repo@" + "a" * 40,
-        "owner/repo:model.gguf",
-        "owner/repo@main:model.gguf",
-        "owner/repo@" + "a" * 39 + ":model.gguf",
+        "../account/repo@" + "a" * 40 + ":model.gguf",
+        "account/repo@" + "a" * 40 + ":../model.gguf",
+        "account/repo@" + "a" * 40 + ":model.bin",
+        "account/repo@" + "a" * 40 + ":model.gguf,other/repo@" + "b" * 40 + ":model.gguf",
+        "account/repo@" + "a" * 40,
+        "account/repo:model.gguf",
+        "account/repo@main:model.gguf",
+        "account/repo@" + "a" * 39 + ":model.gguf",
     ],
 )
 def test_model_refs_reject_unsafe_or_ambiguous_values(value: str) -> None:
@@ -128,7 +128,7 @@ def test_external_paths_are_reduced_before_they_leave_the_process(
 
 
 def test_remote_file_uses_the_lfs_identity() -> None:
-    ref = ModelRef("owner/repo", "a" * 40, "model.gguf")
+    ref = ModelRef("account/repo", "a" * 40, "model.gguf")
 
     assert remote_file_from_tree(
         ref,
@@ -153,7 +153,7 @@ def test_existing_file_must_match_the_requested_remote_identity(tmp_path: Path) 
 
     with pytest.raises(ValueError, match="existing file does not match"):
         download(
-            ModelRef("owner/repo", "a" * 40, "model.gguf"),
+            ModelRef("account/repo", "a" * 40, "model.gguf"),
             RemoteFile(bytes=17, sha256="0" * 64),
             tmp_path,
         )
@@ -167,7 +167,7 @@ def test_the_bench_refuses_bytes_the_dispatch_did_not_declare() -> None:
     the wrong model. A benchmark filed under a model that never ran is worse
     than no benchmark (Guardrail #10).
     """
-    ref = ModelRef("owner/repo", "a" * 40, "model.gguf")
+    ref = ModelRef("account/repo", "a" * 40, "model.gguf")
 
     assert check_declared_digest(ref, RemoteFile(bytes=17, sha256="b" * 64), "b" * 64) is None
 
@@ -185,7 +185,7 @@ def test_a_bench_call_that_names_no_digest_is_refused_at_the_flag(
     day a second caller appears. The parser refuses before anything downloads.
     """
     monkeypatch.setattr(
-        sys, "argv", ["measure_llm.py", "bench", "--models", "owner/repo@" + "a" * 40 + ":m.gguf"]
+        sys, "argv", ["measure_llm.py", "bench", "--models", "account/repo@" + "a" * 40 + ":m.gguf"]
     )
 
     with pytest.raises(SystemExit) as refused:

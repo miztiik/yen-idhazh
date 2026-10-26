@@ -220,10 +220,10 @@ def test_every_declared_query_uses_a_published_ledger_and_its_actual_row() -> No
 
 
 def test_each_declared_item_and_host_column_has_exactly_the_first_query_owner() -> None:
-    owners = {"item-health": ITEM_READERS, "host-fingerprint": HOST_READERS}
+    readers_by_ledger = {"item-health": ITEM_READERS, "host-fingerprint": HOST_READERS}
     seen: set[tuple[str, str]] = set()
     for query in load_queries():
-        if query.ledger not in owners:
+        if query.ledger not in readers_by_ledger:
             continue
         for column in query.columns:
             if query.ledger == "host-fingerprint" and column in LEGACY_HOST_INPUT_COLUMNS:
@@ -232,7 +232,7 @@ def test_each_declared_item_and_host_column_has_exactly_the_first_query_owner() 
             if key in seen:
                 continue
             seen.add(key)
-            readers = [reader for reader, names in owners[query.ledger].items() if column in names]
+            readers = [reader for reader, names in readers_by_ledger[query.ledger].items() if column in names]
             assert readers == [f"{QUERY_ROOT}/{query.module}.ts"], (query.name, column, readers)
 
 

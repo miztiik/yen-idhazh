@@ -226,7 +226,7 @@ class UiConfig(Model):
             "at today's recall the count is 0 on most genuinely multi-source stories, "
             "so a weight on it would reward the pass for finding a group rather than "
             "the story for being carried. Turn it on when the same-story pass has a "
-            "measured recall the owner accepts - that measurement is the labelling "
+            "measured recall the maintainer accepts - that measurement is the labelling "
             "study, and until it exists this knob has no number a person could defend. "
             "Removal condition (Guardrail #6): it stops being a placeholder the day "
             "that study sets it above zero."

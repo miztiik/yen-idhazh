@@ -763,13 +763,13 @@ def judge_tree(facts: TreeFacts, rows: Sequence[Row]) -> Note:
     tree = facts.tree
     claimed = rows_for_tree(tree, rows)
     if claimed:
-        owner = ", ".join(row.name for row in claimed)
+        claimant = ", ".join(row.name for row in claimed)
     elif tree.branch is None:
-        owner = "detached, so no plan row can claim it"
+        claimant = "detached, so no plan row can claim it"
     else:
-        owner = "no plan row names it"
+        claimant = "no plan row names it"
 
-    parts = [owner]
+    parts = [claimant]
     if facts.uncommitted:
         noun = "file" if facts.uncommitted == 1 else "files"
         parts.append(f"{facts.uncommitted} uncommitted {noun}")
@@ -827,9 +827,9 @@ def open_pull_notes(
             if row.pull == pull.number
             or EMPHASIS.sub("", row.worktree).strip().lower() == pull.head.lower()
         ]
-        owner = ", ".join(claimed) if claimed else "no plan row records it"
+        claimant = ", ".join(claimed) if claimed else "no plan row records it"
         where = "a worktree still holds its branch" if pull.head in held else "no worktree holds it"
-        notes.append(Note(f"#{pull.number}", f"{owner}; {where}; {pull.title}"))
+        notes.append(Note(f"#{pull.number}", f"{claimant}; {where}; {pull.title}"))
     return notes
 
 
