@@ -781,16 +781,16 @@ test("one named raw listing verifies its ordered filename digest, sizes and miss
       source: { ...held.curation.rows[0]!.source, publisher_id: "recorded-publisher" },
     };
     const day = held.fixture.date;
-    const owner = writer(held.fixture.run_id);
-    const identity = { date: day, run_id: owner.run_id, item_id: "recorded-item-01",
+    const writerIdentity = writer(held.fixture.run_id);
+    const identity = { date: day, run_id: writerIdentity.run_id, item_id: "recorded-item-01",
       url_key: selected.url_key, source_id: selected.source_id, stage: "publish" as const, outcome: "ok" as const };
     const health = await writeRows(stateRoot, "item-health", day, ItemHealthPublicationSchema,
-      [identity, identity, { ...identity, stage: "extract" }], owner, ITEM_HEALTH_ROW_SCHEMA_VERSION);
+      [identity, identity, { ...identity, stage: "extract" }], writerIdentity, ITEM_HEALTH_ROW_SCHEMA_VERSION);
     const publication = await writeRows(stateRoot, "published", day, PublishedRowSchema,
       [{ version: PUBLISHED_ROW_SCHEMA_VERSION, published_on: day, url_key: selected.url_key, item_id: identity.item_id }],
-      owner, PUBLISHED_ROW_SCHEMA_VERSION);
+      writerIdentity, PUBLISHED_ROW_SCHEMA_VERSION);
     const snapshots = await writeRows(stateRoot, "editorial-selections", day, EditorialSelectionRowSchema,
-      [selected], owner, EditorialSelectionContract.schemaVersion);
+      [selected], writerIdentity, EditorialSelectionContract.schemaVersion);
     const writeIndex = async (files: PersistLedgerResult["files"]) => {
       const file = files[0]!;
       const path = join(stateRoot, file.path);
@@ -823,12 +823,12 @@ test("one named raw listing verifies its ordered filename digest, sizes and miss
     expect((await readPublisherPublication(request)).availability).toBe("unavailable");
     await rm(compact.indexPath);
     const differentRun = await writeRows(stateRoot, "editorial-selections", day, EditorialSelectionRowSchema,
-      [selected], { ...owner, run_id: `${day}-999999` }, selectionContract.schemaVersion);
+      [selected], { ...writerIdentity, run_id: `${day}-999999` }, selectionContract.schemaVersion);
     await writeIndex(differentRun.files);
     expect((await readPublisherPublication(request)).gaps).toContain("recorded_publisher_unavailable");
     const previousDay = new Date(Date.parse(`${day}T00:00:00Z`) - 86_400_000).toISOString().slice(0, 10);
     await writeRows(stateRoot, "editorial-selections", previousDay, EditorialSelectionRowSchema,
-      [{ ...selected, date: previousDay }], { ...owner, run_id: `${previousDay}-1` }, selectionContract.schemaVersion);
+      [{ ...selected, date: previousDay }], { ...writerIdentity, run_id: `${previousDay}-1` }, selectionContract.schemaVersion);
     await rm(join(dirname(join(stateRoot, differentRun.files[0]!.path)), "index.json"));
     const crossDay = await readPublisherPublication(request);
     expect(crossDay.availability).toBe("unavailable");
@@ -840,7 +840,7 @@ test("one named raw listing verifies its ordered filename digest, sizes and miss
       const rows = snapshot.source.publisher_id === null ? [snapshot]
         : [snapshot, { ...snapshot, source: { ...snapshot.source, publisher_id: "conflicting-publisher" } }];
       const ambiguous = await writeRows(stateRoot, "editorial-selections", day, EditorialSelectionRowSchema,
-        rows, { ...owner, attempt: 2 }, selectionContract.schemaVersion);
+        rows, { ...writerIdentity, attempt: 2 }, selectionContract.schemaVersion);
       await writeIndex(ambiguous.files);
       const gap = await readPublisherPublication(request);
       expect(gap.availability).toBe("unavailable");

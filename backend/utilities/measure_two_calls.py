@@ -505,11 +505,11 @@ def report_call(name: str, completion: Completion) -> None:
 def report_spend(spend: Spend, measured: int, *, question: int | None) -> None:
     """Print the split, and the floor under the share row #3e can move."""
     print()
-    print(f"  {'where the re-prefilled tokens went':<46}{'tokens':>8}{'share':>8}  owner")
-    for label, field, owner in CAUSES:
+    print(f"  {'where the re-prefilled tokens went':<46}{'tokens':>8}{'share':>8}  handled by")
+    for label, field, handled_by in CAUSES:
         value = getattr(spend, field)
         share = (100.0 * value / spend.total) if spend.total else 0.0
-        print(f"    {label:<44}{value:>8}{share:>7.1f}%  {owner}")
+        print(f"    {label:<44}{value:>8}{share:>7.1f}%  {handled_by}")
     print(f"    {'total':<44}{spend.total:>8}{100.0 if spend.total else 0.0:>7.1f}%")
     print(f"  the two calls re-prefilled {measured}, the three causes {spend.total}")
     if question is not None:

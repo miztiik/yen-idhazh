@@ -46,7 +46,7 @@ def download_artifact(
     expected_digest: str | None = None,
 ) -> str:
     if not re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", repository):
-        raise ValueError("recipient must be an exact owner/repository name")
+        raise ValueError("recipient must be an exact account/repository name")
     if not identity.isdecimal():
         raise ValueError("artifact identity must be numeric")
     endpoint = f"repos/{repository}/actions/artifacts/{identity}"

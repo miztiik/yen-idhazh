@@ -102,9 +102,9 @@ export function reconcilePublication(input: PublicationInput): PublicationOutcom
   for (const row of rows) {
     const item = digest.items.find(item => item.item_id === row.item_id);
     if (item === undefined) {
-      const owners = new Set(healthRows.filter(held => held.item_id === row.item_id && held.url_key === row.url_key
+      const publishedRunIds = new Set(healthRows.filter(held => held.item_id === row.item_id && held.url_key === row.url_key
         && held.stage === "publish" && held.outcome === "ok").map(held => held.run_id));
-      if (owners.size !== 1 || owners.has(run)) missing.push(row.item_id);
+      if (publishedRunIds.size !== 1 || publishedRunIds.has(run)) missing.push(row.item_id);
       continue;
     }
     if (deriveUrlKey(item.source_url) !== row.url_key) throw new Error("Published item and digest URL identities disagree");
@@ -120,11 +120,11 @@ export function reconcilePublication(input: PublicationInput): PublicationOutcom
       throw new Error("Published health and digest run identities disagree");
     }
     if (healthRuns.size > 1) throw new Error("Published item has ambiguous recorded run identities");
-    const owner = reference.run_id ?? candidates[0]?.run_id;
-    if (owner === undefined) { missing.push(row.item_id); continue; }
-    if (owner !== run) continue;
+    const publishedRun = reference.run_id ?? candidates[0]?.run_id;
+    if (publishedRun === undefined) { missing.push(row.item_id); continue; }
+    if (publishedRun !== run) continue;
     articles.push({
-      date: day, run_id: owner, item_id: row.item_id, url_key: row.url_key,
+      date: day, run_id: publishedRun, item_id: row.item_id, url_key: row.url_key,
       source_id: item.source_id, source_kind: item.source_kind ?? null,
       lead: digest.leads.some(lead => lead.item_id === row.item_id),
     });

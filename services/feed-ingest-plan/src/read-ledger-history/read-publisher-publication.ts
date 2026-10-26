@@ -56,13 +56,13 @@ async function readConfirmedPublication(input: PublisherPublicationInput) {
       if (row.date !== input.day) throw new LedgerHistoryReadError("Publisher snapshot differs from its named UTC day");
     }
     for (const [url, item] of publications) {
-      const owners = new Map(health.flatMap(day => day.rows).filter(({ row }) =>
+      const publishRows = new Map(health.flatMap(day => day.rows).filter(({ row }) =>
         row.item_id === item && row.url_key === url && row.stage === "publish" && row.outcome === "ok")
         .map(({ row }) => [JSON.stringify([row.run_id, row.source_id]), row]));
-      if (owners.size !== 1) { gaps.push("publication_owner_unavailable"); continue; }
-      const owner = [...owners.values()][0]!;
+      if (publishRows.size !== 1) { gaps.push("publication_owner_unavailable"); continue; }
+      const publishRow = [...publishRows.values()][0]!;
       const snapshots = selections.flatMap(day => day.rows).filter(({ row, identity }) =>
-        row.url_key === url && row.source_id === owner.source_id && identity.run_id === owner.run_id);
+        row.url_key === url && row.source_id === publishRow.source_id && identity.run_id === publishRow.run_id);
       const publishers = new Set(snapshots.map(({ row }) => row.source.publisher_id));
       const publisher = publishers.size === 1 ? [...publishers][0] : null;
       if (publisher === null || publisher === undefined) { gaps.push("recorded_publisher_unavailable"); continue; }

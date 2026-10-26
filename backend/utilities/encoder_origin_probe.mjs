@@ -93,11 +93,11 @@ function localDigests(opts) {
 }
 
 function targetsFor(name, opts) {
-	const [owner, repo] = opts.repo.split('/');
+	const [account, repo] = opts.repo.split('/');
 	if (name === 'raw') {
 		return FILES.map((f) => ({
 			asset: f.asset,
-			url: `https://raw.githubusercontent.com/${owner}/${repo}/${opts.ref}/${opts.weights}/${f.path}`
+			url: `https://raw.githubusercontent.com/${account}/${repo}/${opts.ref}/${opts.weights}/${f.path}`
 		}));
 	}
 	if (name === 'huggingface') {
