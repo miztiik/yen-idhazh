@@ -64,6 +64,44 @@ representations while retaining distinct real attempts. The same validated
 facts serve all three windows; no snapshot head, revision chain or fifth
 summary ledger is required.
 
+### Recovery-state gap (proposal only)
+
+The current [health](../../../backend/idhazh/contracts/feed_health_state.py)
+and [run](../../../backend/idhazh/contracts/feed_ingest_plan_run.py)
+declarations cannot distinguish ordinary from recovery checks, retain a pause
+deadline and recovery progress beyond bounded evidence, or represent TRIAL
+(limited trial access, not catalog membership). Do not hide these meanings in
+`rested_runs`, failure codes or reliability. Current run-count rest is not
+[D5 enforcement](../../../TODO/20261024-67-feed-ingest-feedback-and-selection-plan.md#table-d---required-design-decisions-and-stop-conditions).
+
+The smallest proposal is one optional typed access-policy record in health
+(C), using the existing feed/endpoint/run/attempt/day identity, and one optional
+applied-policy record in runs (D). C would capture ordinary/recovery/neither
+purpose, whether a real check occurred, a confirmed success, confirmed source
+failure, pipeline error or unknown result, resulting ordinary/restricted/TRIAL phase,
+UTC pause deadline, recovery streak, first/latest successful UTC dates, and
+known/total outcomes with completeness. D would capture the trusted evaluation
+clock, activation, actual approved parameters and explicit configured-window
+binding and unit. Initial consecutive confirmed failures would be recomputed
+from bounded configured evidence, not unlimited failure history.
+
+To carry finite state beyond the [lifecycle window](../../reference/feed-planner-ledgers.md#l-lookback-summaries),
+the proposal would emit actual access decisions for participating restricted
+scopes even when not due or a recovery slot is deferred. When no reads or
+requests occurred, their actual counters are zero. Carry policy state, not old rows
+or cumulative work totals. Reuse must validate endpoint, applied settings and
+temporal order. Missing or refused prior policy state is not proof of recovery.
+
+Any approved extension must be additive and read-compatible: native Pydantic
+first, version/changelog, named TypeScript field/vocabulary binding cases, and
+absent policy read as UNKNOWN, never ordinary or TRIAL. Existing four-family
+records must stay readable; the prior eight-prefix deletion permission does
+not authorize another clean break. Packing would retain captured policy state
+without summing it or adding snapshots. A/B and artifact-only article text stay
+unchanged. These are proposed records, not approved field names or a ruling;
+the [open decisions in Row 1](../../../TODO/20261024-67-feed-ingest-feedback-and-selection-plan.md#3-row-1---settle-remaining-trial-polling-and-review-policy)
+must be settled before declarations, implementation or activation.
+
 ## See also
 
 - [Feed history](../sources/planner-feed-history.md)
