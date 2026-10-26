@@ -1,5 +1,10 @@
 import type { VisualData } from '$lib/payload/types';
-import type { NumberFormatter } from '$lib/number-format';
+import {
+	MAX_SIGNIFICANT_DIGITS,
+	numberFormatter,
+	type NumberFormatConfig,
+	type NumberFormatter
+} from '$lib/number-format';
 import type { StoryChartGeometryConfig } from '$lib/server/config';
 import type { DrawingBase } from './bar';
 import { displayUnitSymbol } from './unit-symbol';
@@ -28,6 +33,7 @@ export function drawHistogram(
 	data: VisualData,
 	room: number,
 	formatNumber: NumberFormatter,
+	numberFormat: NumberFormatConfig,
 	geometry: StoryChartGeometryConfig
 ): HistogramDrawing {
 	const held = new Map(data.marks.map((mark) => [mark.mark_id, mark]));
@@ -46,18 +52,37 @@ export function drawHistogram(
 		if (!Number.isFinite(lower) || !Number.isFinite(upper) || !Number.isFinite(value)) {
 			throw new Error(`histogram bin ${id} has non-finite geometry`);
 		}
-		const last = index === data.encoding.bins.length - 1;
-		const unit = data.histogram_unit
-			? ` ${displayUnitSymbol(data.histogram_unit)}`
-			: '';
-		return {
-			mark,
-			value,
-			range: `${formatNumber(lower, { si: true })} ${
-				last ? 'through' : 'to less than'
-			} ${formatNumber(upper, { si: true })}${unit}`
-		};
+		return { mark, value, lower, upper, last: index === data.encoding.bins.length - 1 };
 	});
+	const distinctEdges = [...new Set(bins.flatMap(({ lower, upper }) => [lower, upper]))];
+	let edgeFormatter = formatNumber;
+	for (
+		let digits = numberFormat.significant_digits;
+		digits <= MAX_SIGNIFICANT_DIGITS;
+		digits += 1
+	) {
+		const candidate = digits === numberFormat.significant_digits
+			? formatNumber
+			: numberFormatter({ ...numberFormat, significant_digits: digits });
+		const labels = distinctEdges.map((edge) => candidate(edge, { si: true }));
+		if (new Set(labels).size === distinctEdges.length) {
+			edgeFormatter = candidate;
+			break;
+		}
+		if (digits === MAX_SIGNIFICANT_DIGITS) {
+			throw new RangeError('Histogram range edges cannot be distinguished.');
+		}
+	}
+	const rangeUnit = data.histogram_unit
+		? ` ${displayUnitSymbol(data.histogram_unit)}`
+		: '';
+	const rangedBins = bins.map(({ mark, value, lower, upper, last }) => ({
+		mark,
+		value,
+		range: `${edgeFormatter(lower, { si: true })} ${
+			last ? 'through' : 'to less than'
+		} ${edgeFormatter(upper, { si: true })}${rangeUnit}`
+	}));
 	const width = Math.max(0, Math.floor(room));
 	const countWidth = Math.round(width * geometry.value_gutter_share);
 	const plotWidth = Math.max(
@@ -81,7 +106,7 @@ export function drawHistogram(
 		height: headingHeight + bins.length * binHeight,
 		unit,
 		valueHeading: 'Number of values',
-		bins: bins.map(({ mark, value, range }, index) => {
+		bins: rangedBins.map(({ mark, value, range }, index) => {
 			const barWidth = maximum > 0 ? Math.round((value / maximum) * plotWidth) : 0;
 			const binY = headingHeight + index * binHeight;
 			const y = binY + headingHeight + (rowHeight - barHeight) / 2;

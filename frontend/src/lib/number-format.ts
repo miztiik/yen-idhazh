@@ -13,6 +13,9 @@ export interface NumberFormatOptions {
 	exact?: boolean;
 }
 
+/** Intl.NumberFormat accepts at most 21 significant digits. */
+export const MAX_SIGNIFICANT_DIGITS = 21;
+
 export type NumberFormatter = (value: number, options?: NumberFormatOptions) => string;
 
 const SI_PREFIXES: Readonly<Record<number, string>> = {

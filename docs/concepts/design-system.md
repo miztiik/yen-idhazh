@@ -213,7 +213,8 @@ Measured values, axes and dated readouts share the configured precision and SI p
 
 Histogram bars, range labels and the accessible name all use the same recorded
 bin edges and counts, so a reader sees one distribution rather than two
-independently calculated versions.
+independently calculated versions. Range labels keep the configured precision
+unless distinct recorded edges would otherwise display as the same value.
 
 The shared footer must not depend on the latest day's data or build identity: either would change unrelated pages on every publication. The current link-only footer has limited visual hierarchy. Improve it with stable content rather than restoring those dependencies.
 

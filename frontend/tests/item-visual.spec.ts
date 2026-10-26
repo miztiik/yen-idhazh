@@ -181,6 +181,35 @@ test('histogram geometry keeps every recorded range and exact count at narrow an
     expect(words).toBe(statedDrawing(wide));
 });
 
+test('histogram range labels retain enough precision to distinguish close edges', () => {
+    const data = sourceCompiledChart('histogram-from-wind.json');
+    for (const [index, lower, upper] of [
+        [0, 1_000_000, 1_000_001],
+        [1, 1_000_001, 1_000_002],
+        [2, 1_000_002, 1_000_003]
+    ] as const) {
+        const mark = data.marks.find(
+            (candidate) => candidate.mark_id === data.encoding.bins[index]
+        );
+        if (
+            mark === undefined || mark.derived === null ||
+            typeof mark.derived !== 'object' || Array.isArray(mark.derived)
+        ) throw new Error('histogram fixture has no derivation');
+        mark.derived = {
+            ...mark.derived,
+            bin_lower: String(lower),
+            bin_upper: String(upper)
+        };
+    }
+    const drawing = drawVisual(data, 390, formatNumber, numberFormat, 4, geometry);
+    if (drawing.type !== 'histogram') throw new Error('histogram fixture drew another chart type');
+    expect(drawing.bins.map((bin) => bin.range)).toEqual([
+        '1M to less than 1.000001M kW',
+        '1.000001M to less than 1.000002M kW',
+        '1.000002M through 1.000003M kW'
+    ]);
+});
+
 test('histogram data refuses empty bins and repeated source values', () => {
     const valid = sourceCompiledChart('histogram-from-wind.json');
     const emptyBin = structuredClone(valid);

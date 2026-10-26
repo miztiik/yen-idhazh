@@ -640,7 +640,7 @@ export function drawVisual(
 		case 'pie':
 			return drawPie(data, room, formatNumber, availableHeight, geometry);
 		case 'histogram':
-			return drawHistogram(data, room, formatNumber, geometry);
+			return drawHistogram(data, room, formatNumber, numberFormat, geometry);
 		default:
 			throw new Error(`visual type is not drawn: ${data.type}`);
 	}
