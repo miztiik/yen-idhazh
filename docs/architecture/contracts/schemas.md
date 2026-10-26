@@ -137,9 +137,12 @@ The TypeScript package checks do not claim that local Python ran.
 Contract input bindings use `Contract.json_schema()`, which includes its
 read-time version default; nested models use `model_json_schema()`.
 
-Current planner batches and ledger rows reject the replaced formats. There
-is no old planner migrator, compatibility alias or dual writer. Replaced
-row and stage version exports are removed with their schemas. Finite
+Current planner batches and ledger rows reject the retired eight-ledger
+formats. The current four-ledger rows from `2026-10-25` remain readable:
+original fields and canonical bytes are checked before selected provenance
+is added in memory. Unknown historical publication times stay null, and
+historical health timing purposes are not guessed from list order.
+There is no dual writer or restored audit shape. Finite
 historical generic-envelope vectors for unrelated families remain readable.
 The private fetch journal retains its separately declared finite receipt
 stamps; it does not preserve an obsolete planner ledger.

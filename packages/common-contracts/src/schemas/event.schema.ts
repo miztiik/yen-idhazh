@@ -5,21 +5,34 @@ import { RecordedInstantSchema } from "./recorded-instant.schema";
 import { SourceSnapshotSchema } from "./source.schema";
 import { HarvestDiagnosticsSchema } from "./harvest-diagnostics.schema";
 import { ParsedFeedBatchSchema, SelectedFeedBatchSchema, PartitionedFeedBatchSchema } from "./planner-stage.schema";
+import { PlanApiTimingSchema } from "./plan-run.schema";
 
 export const FeedIngestEventSchema = z.strictObject({
-  version: z.literal("2026-10-25").default("2026-10-25"),
+  version: z.literal("2026-10-26").default("2026-10-26"),
   run_id: RunIdSchema, correlation_id: z.uuid({ version: "v4" }),
   occurred_at: RecordedInstantSchema,
-  operation: z.enum(["history", "fetch", "parse", "select", "partition", "persist", "feed-health-summary", "plan"]),
+  operation: z.enum(["history", ...PlanApiTimingSchema.shape.operation.options, "plan"]),
   phase: z.enum(["started", "completed", "failed"]),
   feed_id: SlugSchema.nullable(), input_count: CountSchema.nullable(), output_count: CountSchema.nullable(),
   duration_ms: CountSchema.nullable(), failure_code: NonEmptySchema.nullable(),
 }).meta({
-  version: "2026-10-25",
-  changelog: [{ version: "2026-10-25", change: "Emit sparse body-free progress instead of article audit histories." }],
+  version: "2026-10-26",
+  changelog: [
+    { version: "2026-10-26", change: "Name pre-fetch and selection health captures separately." },
+    { version: "2026-10-25", change: "Emit sparse body-free progress instead of article audit histories." },
+  ],
 });
 export type FeedIngestEvent = z.infer<typeof FeedIngestEventSchema>;
-export const readFeedIngestEvent = (raw: unknown) => FeedIngestEventSchema.parse(raw);
+const PreviousFeedIngestEventSchema = FeedIngestEventSchema.extend({
+  version: z.literal("2026-10-25"),
+  operation: FeedIngestEventSchema.shape.operation.exclude(["feed-health-before-fetch", "feed-health-for-selection"]),
+});
+export function readFeedIngestEvent(raw: unknown): FeedIngestEvent {
+  if (typeof raw === "object" && raw !== null && "version" in raw && raw.version === "2026-10-25") {
+    return FeedIngestEventSchema.parse({ ...PreviousFeedIngestEventSchema.parse(raw), version: "2026-10-26" });
+  }
+  return FeedIngestEventSchema.parse(raw);
+}
 export const PlannerWorkEventSchema = z.discriminatedUnion("stage", [
   z.strictObject({ stage: z.literal("parsed"), payload: ParsedFeedBatchSchema }),
   z.strictObject({ stage: z.literal("selected"), payload: SelectedFeedBatchSchema }),

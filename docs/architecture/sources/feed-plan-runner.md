@@ -48,6 +48,10 @@ The [shared health operation](planner-feed-history.md) captures pre-fetch
 rest evidence and refreshes current feedback before selection. Its complete
 measured cost belongs in `plan-runs`, without per-candidate history reads
 or a persistent summary cache.
+New timing entries name these purposes `feed-health-before-fetch` and
+`feed-health-for-selection`. Their names, not their positions, identify them.
+Selected publication fallback uses the same saved selection-start instant,
+after admission; the older saved age clock and first sight are unchanged.
 
 ## Concurrency and ownership
 

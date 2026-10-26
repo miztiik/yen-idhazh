@@ -267,6 +267,10 @@ test("the native verifier runs from a fixed named-input copy with no backend or 
       "services/feed-ingest-plan/src/selected-artifact-path.ts",
       "services/feed-ingest-plan/src/api/plan-response.schema.ts", "services/feed-ingest-plan/src/api/stage-response.schema.ts",
       "tests/fixtures/ledger-file-writer/legacy-seen-day.parquet",
+      ...["files.json", "selected-articles.json",
+        "selected-articles/01a1784a-c003-8632-81aa-6a128dd12634.parquet",
+        "plan-runs/01a1784a-c0bb-8f81-8af7-b0a59c1e7da6.parquet",
+      ].map(path => `tests/fixtures/ledger-file-writer/planner-2026-10-25/${path}`),
     ];
     for (const path of named) {
       const target = join(directory, ...path.split("/"));
@@ -288,7 +292,7 @@ test("the native verifier runs from a fixed named-input copy with no backend or 
     const [output, errors] = await Promise.all([new Response(child.stdout).text(), new Response(child.stderr).text()]);
     expect({ exit: await child.exited, errors }).toEqual({ exit: 0, errors: "" });
     const verified = JSON.parse(output);
-    expect(verified).toMatchObject({ status: "verified", planner_row_count: 4 });
+    expect(verified).toMatchObject({ status: "verified", planner_row_count: 4, legacy_planner_row_count: 2 });
     expect(verified.legacy_seen_row_count).toBeGreaterThan(0);
   } finally { await rm(directory, { recursive: true, force: true }); }
 });

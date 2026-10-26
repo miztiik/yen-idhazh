@@ -5,7 +5,7 @@ import { isAbsolute, relative, resolve } from "node:path";
 import { z } from "zod";
 import {
   DateStampSchema, DiscoveredArticleRowContract, FeedHealthStateRowContract, PlanRunRowContract,
-  SelectedArticleRowContract, SelectedArticlesArtifactSchema, selectedArticleMetadata,
+  SelectedArticleRowContract, readSelectedArticlesArtifact, selectedArticleMetadata,
 } from "../../../packages/common-contracts/src/index";
 import type { LedgerRegistration, LedgerRowContract, PersistLedgerResult } from "../../../packages/ledger-file-writer/src/index";
 import { readPlannerParquet } from "../src/read-ledger-history/read-planner-parquet";
@@ -88,7 +88,7 @@ export async function verifyPlanningCompletion(
     const path = resolve(repositoryRoot, RelativePathSchema.parse(summary.selected_articles_artifact));
     const local = relative(await realpath(repositoryRoot), await realpath(path));
     if (isAbsolute(local) || local === ".." || local.startsWith(`..\\`) || local.startsWith("../")) throw new Error("Selected artifact escapes its repository");
-    const artifact = SelectedArticlesArtifactSchema.parse(JSON.parse(await readFile(path, "utf8")));
+    const artifact = readSelectedArticlesArtifact(JSON.parse(await readFile(path, "utf8")));
     if (artifact.run_id !== summary.run_id || artifact.attempt !== summary.attempt || artifact.date !== summary.date
       || artifact.evaluated_at !== summary.evaluated_at || artifact.articles.length !== summary.selected_count) {
       throw new Error("Selected artifact header or count differs from its run");

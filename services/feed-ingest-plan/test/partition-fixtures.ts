@@ -101,7 +101,7 @@ export async function fixtureInput(root: string, options: { count?: number; fres
     history_rows: [], history_days: [], work_rows: [], exclusions: [],
   });
   const curation = curateArticles({
-    articles: screening.admitted, batch, inputs, health: new Map(),
+    articles: screening.admitted, batch, inputs, health: new Map(), selectionStartedAt: context.now,
     publications: { day: fixture.date, availability: "unavailable", counts: new Map() },
   });
   const written = await persistLedger({

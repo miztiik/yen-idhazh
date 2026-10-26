@@ -13,9 +13,11 @@ function text(value: string | undefined): string | null {
 function categories(values: readonly (string | undefined)[]): string[] {
   return values.flatMap(value => text(value) ?? []);
 }
+// ISO 8601 offsets and RFC 822 named zones are protocol values, never host-local time.
+const EXPLICIT_TIME_ZONE = /(?:Z|[+-]\d{2}:?\d{2}|GMT|UTC|UT|EST|EDT|CST|CDT|MST|MDT|PST|PDT)$/i;
 function publishedTimestamp(values: readonly (string | undefined)[]): string | null {
   const value = values.find(value => value !== undefined
-    && /(?:Z|[+-]\d{2}:?\d{2}|GMT|UTC|UT)$/i.test(value.trim()) && Number.isFinite(Date.parse(value)));
+    && EXPLICIT_TIME_ZONE.test(value.trim()) && Number.isFinite(Date.parse(value)));
   if (value === undefined) return null;
   const timestamp = new Date(value).toISOString().replace(/\.\d{3}Z$/, "Z");
   const parsed = TimestampSchema.safeParse(timestamp);

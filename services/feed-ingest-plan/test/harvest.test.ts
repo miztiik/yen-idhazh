@@ -61,6 +61,13 @@ test("Feedsmith formats retain categories, author, ordinal and only entry-level 
   expect(rss[0]?.categories).toEqual(["Science", "Energy / Research", "Nested category name", "Regional reporting"]);
   expect(rss[0]?.author).toBe("Feed Reporter");
   expect(rss[0]?.published_at).toBe("2026-10-21T09:15:00Z");
+  for (const [time, zone] of [
+    ["04:15:00", "EST"], ["05:15:00", "EDT"], ["03:15:00", "CST"], ["04:15:00", "CDT"],
+    ["02:15:00", "MST"], ["03:15:00", "MDT"], ["01:15:00", "PST"], ["02:15:00", "PDT"],
+  ]) {
+    const zoned = recordings.bodies.rss.replace("Wed, 21 Oct 2026 09:15:00 GMT", `Wed, 21 Oct 2026 ${time} ${zone}`);
+    expect((await parseFeed(zoned))[0]?.published_at).toBe("2026-10-21T09:15:00Z");
+  }
   expect(rss[1]?.link).toBeNull();
   expect(rss[2]?.categories).toEqual([]);
   expect(rss[2]?.published_at).toBeNull();

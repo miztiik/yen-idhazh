@@ -210,6 +210,16 @@ test("one real result and every native file stay unchanged through both report m
       "::notice title=Grouped exclusions", "::notice title=Policy used",
     ]);
     const rendered = Bun.markdown.html(await readFile(summary, "utf8"));
+    expect(rendered).toContain("Feed health before requests");
+    expect(rendered).toContain("Fresh feed health for selection");
+    const legacyTiming = formatExecutionReport({ ...evidence, response: {
+      ...response, api_timings: response.api_timings.map(timing => ({
+        ...timing, operation: timing.operation.startsWith("feed-health-") ? "feed-health-summary" : timing.operation,
+      })),
+    } });
+    expect(legacyTiming).toContain("Legacy feed-health capture (purpose not recorded)");
+    expect(legacyTiming).not.toContain("| Feed health before requests |");
+    expect(legacyTiming).not.toContain("| Fresh feed health for selection |");
     expect((rendered.match(/<table>/g) ?? [])).toHaveLength(7);
     expect(rendered).toContain("<th>Feed read result</th>");
     expect(rendered).not.toContain("<th>Outcome</th>");

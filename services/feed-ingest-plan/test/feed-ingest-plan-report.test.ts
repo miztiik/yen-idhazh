@@ -24,7 +24,7 @@ test("reads current sparse progress and refuses hidden article or audit payloads
   const events = await fixture();
   const before = structuredClone(events);
   expect(formatPlannerReport(events)).toEqual(formatPlannerReport(before));
-  expect(events.every(event => event.version === "2026-10-25")).toBe(true);
+  expect(events.every(event => event.version === "2026-10-26")).toBe(true);
   for (const changed of [
     { ...events[0], headers: { authorization: "private" } },
     { ...events[0], article_text: "Private article body" },

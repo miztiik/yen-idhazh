@@ -1,17 +1,50 @@
 /** Verify named compatibility fixtures without making the workflow depend on them. */
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { createHash } from "node:crypto";
+import { isDeepStrictEqual } from "node:util";
 import { z } from "zod";
-import { Sha256Schema, RunIdSchema, TimestampSchema, SchemaVersionSchema } from "@idhazh/common-contracts";
+import {
+  Sha256Schema, RunIdSchema, TimestampSchema, SchemaVersionSchema, RelPathSchema,
+  readSelectedArticlesArtifact, migratePreviousSelectedMetadata,
+} from "@idhazh/common-contracts";
 import { createFileId, createUnitId, digestRows, persistLedger } from "@idhazh/ledger-file-writer";
 import type { LedgerRegistration, LogicalField } from "@idhazh/ledger-file-writer";
 import { plannerRecordings } from "../../../packages/ledger-file-writer/test/planner-recordings";
 import { readLedgerParquet } from "../src/read-ledger-history/read-parquet";
-import { verifyParquetFiles } from "../scripts/feed-ingest-plan-verification";
+import { plannerContracts, verifyParquetFiles } from "../scripts/feed-ingest-plan-verification";
+import { readPlannerParquet } from "../src/read-ledger-history/read-planner-parquet";
 
 export async function verifyRecordedCompatibility() {
+  const fixtures = new URL("../../../tests/fixtures/ledger-file-writer/planner-2026-10-25/", import.meta.url);
+  const previousFiles = z.array(z.strictObject({
+    ledger: z.enum(["selected-articles", "plan-runs"]), path: RelPathSchema,
+    sha256: Sha256Schema, content_sha256: Sha256Schema, rows: z.array(z.record(z.string(), z.unknown())),
+  })).length(2).parse(await Bun.file(new URL("files.json", fixtures)).json());
+  let previousCount = 0;
+  for (const fixture of previousFiles) {
+    const path = fileURLToPath(new URL(fixture.path, fixtures));
+    const before = await readFile(path);
+    if (createHash("sha256").update(before).digest("hex") !== fixture.sha256) throw new Error("Previous planner fixture bytes changed");
+    const contract = plannerContracts[fixture.ledger];
+    const read = await readPlannerParquet<object>(path, fixture.ledger, contract);
+    const expected = fixture.ledger === "selected-articles"
+      ? fixture.rows.map(migratePreviousSelectedMetadata) : fixture.rows;
+    if (read.envelope.row_schema_version !== "2026-10-25" || read.envelope.content_sha256 !== fixture.content_sha256
+      || !isDeepStrictEqual(read.rows, expected) || !before.equals(await readFile(path))) {
+      throw new Error("Previous planner rows lost their original digest, fields or age evidence");
+    }
+    previousCount += read.rows.length;
+  }
+  const previousArtifact = await Bun.file(new URL("selected-articles.json", fixtures)).json();
+  const artifact = readSelectedArticlesArtifact(previousArtifact);
+  const previousArticles = z.array(z.record(z.string(), z.unknown())).parse(previousArtifact.articles);
+  if (!isDeepStrictEqual(artifact.articles, previousArticles.map(migratePreviousSelectedMetadata))
+    || artifact.articles.some(article => article.published_at !== null || article.published_at_source !== "legacy-unavailable")) {
+    throw new Error("Previous artifact publication or age evidence changed");
+  }
   const seenSchema = z.strictObject({
     version: SchemaVersionSchema, url_key: Sha256Schema,
     first_seen_at: TimestampSchema, first_seen_run: RunIdSchema,
@@ -66,7 +99,11 @@ export async function verifyRecordedCompatibility() {
       });
       count += (await verifyParquetFiles(directory, fixture.name, written, registration, [fixture.row])).row_count;
     }
-    return { status: "verified", canonical_content_sha256: reading, planner_row_count: count, legacy_seen_row_count: legacySeen.rows.length };
+    return {
+      status: "verified", canonical_content_sha256: reading, planner_row_count: count,
+      legacy_seen_row_count: legacySeen.rows.length, legacy_planner_row_count: previousCount,
+      legacy_planner_files: previousFiles.map(({ ledger, path, sha256, content_sha256 }) => ({ ledger, path, sha256, content_sha256 })),
+    };
   } finally { await rm(directory, { recursive: true, force: true }); }
 }
 if (import.meta.main) console.log(JSON.stringify(await verifyRecordedCompatibility()));

@@ -62,14 +62,13 @@ export function formatExecutionOutcome(input: ExecutionReportEvidence): PlannerR
   const requests = health?.request_report;
   const known = (value: number | null, unit: string) => value === null ? "Unavailable"
     : `${value} ${value === 1 && unit.endsWith("s") ? unit.slice(0, -1) : unit}`;
-  const healthCaptures = row.api_timings.filter(span => span.operation === "feed-health-summary").length;
-  let healthCapture = 0;
-  const operationName = (operation: typeof row.api_timings[number]["operation"]) => {
-    if (operation === "feed-health-summary") return ++healthCapture === 1 && (healthCaptures > 1 || row.selection_started_at_utc === null)
-      ? "Feed health before requests" : "Fresh feed health for selection";
-    return { fetch: "Fetch and article work", parse: "HTML parsing", select: "Article selection",
-      partition: "Worker assignment", persist: "Selected output" }[operation];
-  };
+  const operationName = (operation: typeof row.api_timings[number]["operation"]) => ({
+    "feed-health-before-fetch": "Feed health before requests",
+    "feed-health-for-selection": "Fresh feed health for selection",
+    "feed-health-summary": "Legacy feed-health capture (purpose not recorded)",
+    fetch: "Fetch and article work", parse: "HTML parsing", select: "Article selection",
+    partition: "Worker assignment", persist: "Selected output",
+  })[operation];
   const strategy = { "bin-pack": "work-balanced", "round-robin": "in order", none: "one worker" }[row.strategy];
   const policy = formatPolicyTable(input.policy, row.selection_started_at_utc !== null);
   const resources = formatResourceSummary(input.resources, input.independent, input.profileRequested);

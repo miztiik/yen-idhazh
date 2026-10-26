@@ -199,12 +199,6 @@ jobs:
           bun run check
           bun run test
 
-      - name: Isolated planner workflow preflight
-        if: needs.scope.outputs.code == 'true'
-        run: |
-          bun test ./services/feed-ingest-plan/test/feed-ingest-plan-report.test.ts ./services/feed-ingest-plan/test/feed-ingest-plan-outputs.test.ts ./services/feed-ingest-plan/test/feed-ingest-plan-workflow.test.ts --timeout 30000
-          bun run services/feed-ingest-plan/test/verify-recorded-compatibility.ts
-
       - name: Live TypeScript RAM and optional copy proof
         if: needs.scope.outputs.code == 'true'
         run: bun run services/host-probes/scripts/feed-ingest-plan-profile-proof.ts
