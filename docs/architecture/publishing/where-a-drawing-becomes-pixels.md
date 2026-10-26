@@ -113,8 +113,9 @@ comparison the chart exists to make gets every pixel left once the number it com
 somewhere to stand. What a reader gives up is the tidy left-hand column of names a desktop had
 room for, and one text line of height per bar.
 
-The bar, dot, slope, line and scatter share this measured-width drawing path and the
-bounded `chart.story_geometry` settings in `config/appearance.json`. A dot ranks
+The bar, dot, slope, line, scatter and bubble share this measured-width drawing
+path and the bounded `chart.story_geometry` settings in `config/appearance.json`.
+A dot ranks
 values by position on one common scale. A slope joins paired values between two
 labelled time columns, without an axis; its units remain visible and in the
 accessible description. A line orders source-backed readings by canonical
@@ -258,20 +259,24 @@ the pairing is the plan's rather than a rule invented in the compiler, and the b
 that order. Re-ranking them here would be the compiler deciding what the comparison says.
 
 **Only a supported type is compiled.** This build compiles `bar`, `dot`, `slope`,
-`line` and `scatter`; a plan for any other declared type raises `CompileError` naming it
+`line`, `scatter` and `bubble`; a plan for any other declared type raises `CompileError` naming it
 rather than publishing a picture nobody planned.
 
-**Scatter keeps complete entity pairs.** Its plan must have `relationship`
+**Scatter and bubble keep complete relationship points.** Their plans must have `relationship`
 purpose. The validator requires an entity element, an x measure and a y measure
-for each point. All three must carry the same existing Tier 2 entity label:
+for each point; bubble also requires one positive size measure. All measures
+must carry the same existing Tier 2 entity label:
 the label pass writes that tracked entity name on the element table on disk.
 An unknown entity, a missing label, different entity sets, duplicate entities,
 or a mismatched order is refused; array position alone is not evidence of a
-relationship. The compiler repeats this check at its own boundary. It publishes
-the three source references through the ordinary flat mark pool and counts both
-numeric channels in chart evidence, never coordinates. The shared scatter
-builder's legitimate missing-value filtering remains unchanged for its other
-consumers. The story passes its whole validated set and refuses any lost point.
+relationship. The compiler repeats this check at its own boundary. Both chart
+types publish their source references through the ordinary flat mark pool.
+Bubble counts all three numeric channels in chart evidence, never coordinates.
+Its radius follows the square root of the positive size value, so circle area
+shows the value. The largest radius comes from the measured plot area; there is
+no fixed width cutoff. The shared scatter builder's legitimate missing-value
+filtering remains unchanged for its other consumers. A story passes its whole
+validated set and refuses any lost point.
 
 **The browser's accessible name includes every original figure, the title, the caption and
 which measured mark is highlighted.** Converted figures also carry their original source text in
@@ -319,6 +324,18 @@ The current renderer stamp is `2026-10-27T01:00`. A time mark carries its canoni
 date or year alongside the source wording, so the compiler can order readings
 without replacing what the article wrote. The reader refuses older or malformed
 time marks rather than guessing.
+
+Bubble adds a relationship drawing without changing the fields or the meaning
+of an existing chart. Its x and y positions reuse the paired relationship
+geometry; its radius is proportional to the square root of the positive size
+value. The largest radius comes from the measured plot area, so the complete
+chart adapts to the available width instead of using a minimum-width cutoff.
+The maximum radius share is the validated
+`chart.story_geometry.bubble_max_radius_share` setting in
+`config/appearance.json`.
+The persisted contract adds the bubble type without changing existing chart
+fields or their renderer stamp. Existing payloads remain readable; older
+readers refuse only the new type they do not know.
 
 Maintainer ruling, 2026-10-24 UTC: omit a chart unless the plan selects
 exactly one distinct displayed bar. Resolve every annotation through category,

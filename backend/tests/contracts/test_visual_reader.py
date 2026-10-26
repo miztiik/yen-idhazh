@@ -101,3 +101,19 @@ def test_scatter_reader_requires_every_entity_and_both_measures(change: str) -> 
         data["marks"] = [mark for mark in data["marks"] if mark["mark_id"] != dropped]
     with pytest.raises(ValidationError, match="scatter"):
         VisualData.model_validate(data)
+
+
+@pytest.mark.parametrize("change", ["missing-size", "non-positive-size", "reused-measure"])
+def test_bubble_reader_requires_positive_size_and_complete_source_channels(change: str) -> None:
+    data = VisualData.read(
+        CONTRACT_FIXTURES_DIR / "visual-data/bubble-relationship.json"
+    ).model_dump(mode="json")
+    if change == "missing-size":
+        data["encoding"]["size"].pop()
+    elif change == "non-positive-size":
+        mark_id = data["encoding"]["size"][0]
+        next(mark for mark in data["marks"] if mark["mark_id"] == mark_id)["value"] = "0"
+    else:
+        data["encoding"]["size"][0] = data["encoding"]["quantity_x"][0]
+    with pytest.raises(ValidationError):
+        VisualData.model_validate(data)

@@ -393,6 +393,15 @@ class StoryChartGeometryConfig(Model):
     scatter_margin_right_px: int = Field(default=24, ge=16, le=64)
     scatter_margin_top_px: int = Field(default=32, ge=24, le=64)
     scatter_margin_bottom_px: int = Field(default=48, ge=32, le=96)
+    bubble_max_radius_share: float = Field(
+        default=0.25,
+        gt=0.0,
+        lt=0.5,
+        description=(
+            "Maximum bubble radius as a share of the smaller measured plot dimension; "
+            "leaves room for both relationship axes."
+        ),
+    )
     line_series_dash_arrays: tuple[str, ...] = Field(
         default=(
             "none",
