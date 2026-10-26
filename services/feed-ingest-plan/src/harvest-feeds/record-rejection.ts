@@ -1,10 +1,9 @@
-/** Validate one harvest rejection and persist the run's rows through the shared writer. */
+/** Validate one transient harvest rejection without writing or logging its article population. */
 import {
-  CandidateRejectionRecordSchema, RejectionDetailsSchema, CandidateRejectionContract,
+  CandidateRejectionRecordSchema, RejectionDetailsSchema,
 } from "@idhazh/common-contracts";
 import type { CandidateRejectionRecord, DropReason, HarvestDiagnostics, RejectionDetails, SourceSnapshot } from "@idhazh/common-contracts";
-import { persistLedger } from "@idhazh/ledger-file-writer";
-import type { HarvestContext, RejectionDestination } from "./harvest-types";
+import type { HarvestContext } from "./harvest-types";
 import { utcTimestamp } from "./harvest-types";
 import type { FetchResult } from "./robots-policy";
 
@@ -28,7 +27,7 @@ export function recordRejection(
     title: string | null; categories: string[];
   } | null = null,
 ): CandidateRejectionRecord {
-  const rejected_at = utcTimestamp(context.clock);
+  const rejected_at = utcTimestamp(context.observation_clock ?? context.clock);
   const row = CandidateRejectionRecordSchema.parse({
     date: rejected_at.slice(0, 10), correlation_id: context.correlation_id,
     source_id: source.source_id, feed_url: source.feed_url,
@@ -38,22 +37,6 @@ export function recordRejection(
     title: article?.title ?? null, categories: article?.categories ?? [],
     stage: "harvest-feeds", drop_reason: reason, details: RejectionDetailsSchema.parse(details), rejected_at,
   });
-  (context.log ?? (record => console.error(JSON.stringify(record))))(row);
+  context.log?.(row);
   return row;
-}
-
-export async function persistHarvestRejections(
-  rows: readonly CandidateRejectionRecord[], context: HarvestContext, destination: RejectionDestination,
-) {
-  if (destination.ledgerSettings.format !== "parquet") throw new Error("harvest rejections require Parquet");
-  const result = await persistLedger({
-    ledger: "rejections",
-    rowContract: CandidateRejectionContract,
-    rows, ...destination, writerContext: context.writer,
-    period: { tier: "raw", covers: context.writer.run_id.slice(0, 10) },
-  });
-  if (rows.length && result.status === "skipped") {
-    throw new Error(`harvest rejection persistence refused: rejections registry is ${result.warning.lifecycle_status}`);
-  }
-  return result;
 }

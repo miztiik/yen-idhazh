@@ -1,5 +1,5 @@
 /** Which harvested candidates pass the configured evidence-backed screening gates? */
-import { CandidateRejectionRecordSchema, WriterIdentitySchema } from "@idhazh/common-contracts";
+import { CandidateRejectionRecordSchema } from "@idhazh/common-contracts";
 import type { CandidateRejectionRecord, EffectiveFeedPolicy, FeedIngestCandidate, RejectionDetails } from "@idhazh/common-contracts";
 import { resolvePolicy } from "../config/resolve-policy";
 import { findBlockedCategory } from "./category-guard";
@@ -8,8 +8,6 @@ import type { FreshnessEvidence } from "./freshness-decay";
 import { validateScreeningInput } from "./screening-input";
 import type { HarvestObservation, ScreeningInput } from "./screening-input";
 import { indexSeenEvidence } from "./seen-evidence";
-import { sealRejections } from "./rejection-sealer";
-import type { RejectionLedgerContext } from "./rejection-sealer";
 
 export type ScreenedCandidate = {
   candidate: FeedIngestCandidate;
@@ -21,24 +19,14 @@ export type ScreenedCandidate = {
 export type ScreeningResult = {
   admitted: ScreenedCandidate[];
   rejections: CandidateRejectionRecord[];
-  sealing: Awaited<ReturnType<typeof sealRejections>>;
 };
 export type { ScreeningInput, HarvestObservation } from "./screening-input";
-export type { RejectionLedgerContext } from "./rejection-sealer";
 export type { FreshnessEvidence } from "./freshness-decay";
 
 export async function screenArticleCandidates(
-  input: ScreeningInput, ledger: RejectionLedgerContext,
+  input: ScreeningInput,
 ): Promise<ScreeningResult> {
   const { candidates, observations, seen, planning, run, maxFutureHours } = validateScreeningInput(input);
-  const writer = WriterIdentitySchema.parse(ledger.writerContext);
-  if (writer.run_id !== run.run_id) throw new Error("writerContext.run_id must match run.run_id");
-  if (JSON.stringify(ledger.registryEntry.prefix) !== JSON.stringify(planning.config.seal.rejections_prefix)) {
-    throw new Error("registryEntry.prefix must match config.seal.rejections_prefix");
-  }
-  if (ledger.ledgerSettings.compression_raw !== planning.config.seal.compression) {
-    throw new Error("ledgerSettings.compression_raw must match config.seal.compression");
-  }
   const seenByUrl = indexSeenEvidence(seen);
   const admitted: ScreenedCandidate[] = [];
   const rejections: CandidateRejectionRecord[] = [];
@@ -75,6 +63,5 @@ export async function screenArticleCandidates(
       }));
     }
   }
-  const sealing = await sealRejections(rejections, run.now.slice(0, 10), ledger);
-  return { admitted, rejections, sealing };
+  return { admitted, rejections };
 }

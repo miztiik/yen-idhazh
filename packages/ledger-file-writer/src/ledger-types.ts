@@ -38,20 +38,24 @@ export type LedgerWriteContext<T extends object> = {
   ledger: string;
   rowContract: LedgerRowContract<T>;
   outputRoot: string;
-  writerContext: WriterIdentity;
+  writerContext?: WriterIdentity;
+  /** Actual health-file finalization clock; never copied onto a planner row. */
+  updatedAt?: string;
   registryEntry: LedgerRegistration;
   ledgerSettings: LedgerSettings;
 };
 
 export type PersistLedgerInput<T extends object> = LedgerWriteContext<T> & (
   | { period: Extract<LedgerPeriod, { tier: "raw" }>; partition_date?: string; rows: readonly T[] }
-  | { period: Extract<LedgerPeriod, { tier: "compact" }>; rows: readonly StoredLedgerRow<T>[] }
+  | { period: Extract<LedgerPeriod, { tier: "compact" }>; rows: readonly (StoredLedgerRow<T> | T)[] }
 );
 
 export type ValidatedLedgerWrite<T extends object> = {
   input: PersistLedgerInput<T>;
   ledger: string;
-  writerContext: WriterIdentity;
+  writerContext: WriterIdentity | null;
+  planner: boolean;
+  rowSchema: z.ZodType<object>;
   outputRoot: string;
   columns: ArrowColumn[];
 };
@@ -59,7 +63,8 @@ export type ValidatedLedgerWrite<T extends object> = {
 export type PersistedLedgerFile = {
   path: string;
   file_id: string;
-  unit_id: string;
+  /** Other families retain their work-unit identity; planner files have none. */
+  unit_id?: string;
   covers: string;
   content_sha256: string;
   row_count: number;

@@ -2,11 +2,11 @@
 import { createHash } from "node:crypto";
 import { z } from "zod";
 import {
-  DateStampSchema, LifecycleStatusSchema, NonEmptySchema, PolicyIdentitySchema,
+  DateStampSchema, LifecycleStatusSchema, NonEmptySchema,
   PositiveCountSchema, SlugSchema, SourceFormSchema, SourceSnapshotSchema, UrlSchema,
 } from "@idhazh/common-contracts";
-import type { PlanningRunOverrides, PolicyIdentity, SourceSnapshot } from "@idhazh/common-contracts";
-import { loadPlanningConfig, resolvePolicy } from "../config/resolve-policy";
+import type { SourceSnapshot } from "@idhazh/common-contracts";
+import { loadPlanningConfig } from "../config/resolve-policy";
 import { ExtractionControlsSchema } from "./extraction-controls";
 import { EXTRACTOR_VERSION, SANITIZER_FINGERPRINT } from "./extraction-provenance";
 import { PublisherDefinitionSchema, validatePublisherReferences } from "../publisher-catalog";
@@ -50,30 +50,17 @@ const SourceConfigSchema = LifecycleSchema.safeExtend({
     });
   }
 });
-const SalienceConfigSchema = LifecycleSchema.safeExtend({
-  id: SlugSchema, url: ConfiguredUrlSchema, title: NonEmptySchema,
-});
 const SourcesSchema = z.object({
   feeds: z.array(SourceConfigSchema),
-  salience: z.array(SalienceConfigSchema).nullable().default(null),
   retired: z.array(SourceConfigSchema.refine(source => source.status === "retired", {
     message: "retired entries must have retired status and a retirement date",
   })).default([]),
   publishers: z.array(PublisherDefinitionSchema).default([]),
 });
-const WatchlistSchema = z.object({
-  entities: z.array(LifecycleSchema.safeExtend({
-    id: SlugSchema, aliases: z.array(z.string()).default([]),
-  })),
-});
 const RegistrySchema = z.object({
   verticals: z.array(z.object({ id: SlugSchema })),
   source_kinds: z.array(LifecycleSchema.safeExtend({ id: SlugSchema })),
   source_tiers: z.array(LifecycleSchema.safeExtend({ id: PositiveCountSchema, weight: WeightSchema })),
-  lenses: z.array(LifecycleSchema.safeExtend({
-    id: SlugSchema, keywords: z.array(z.string().min(2).regex(/^[A-Za-z0-9][A-Za-z0-9 '/&.-]*$/)).default([]),
-    weight: z.number().finite().nonnegative().default(0),
-  })).optional(),
 });
 const ExtractionSchema = z.object({
   extract: ExtractionControlsSchema,
@@ -90,21 +77,18 @@ export type ConfiguredSource = z.infer<typeof SourceConfigSchema>;
 export type HarvestInputs = ReturnType<typeof loadHarvestInputs>;
 
 export function loadHarvestInputs(raw: {
-  config: unknown; taxonomy: unknown; sources: unknown; extraction: unknown; watchlist?: unknown;
+  config: unknown; taxonomy: unknown; sources: unknown; extraction: unknown;
 }) {
   const planning = loadPlanningConfig(raw.config, raw.taxonomy);
   const registry = RegistrySchema.parse(raw.taxonomy);
-  const { feeds: sources, salience, retired, publishers } = SourcesSchema.parse(raw.sources);
+  const { feeds: sources, retired, publishers } = SourcesSchema.parse(raw.sources);
   validatePublisherReferences(publishers, [...sources, ...retired]);
-  const watchlist = raw.watchlist === undefined ? null : WatchlistSchema.parse(raw.watchlist);
   const extraction_settings = ExtractionSchema.parse(raw.extraction);
   const extraction = extraction_settings.extract;
   for (const [name, ids] of [
-    ["source", [...sources, ...retired, ...salience ?? []].map(source => source.id)],
+    ["source", [...sources, ...retired].map(source => source.id)],
     ["source kind", registry.source_kinds.map(kind => kind.id)],
     ["source tier", registry.source_tiers.map(tier => tier.id)],
-    ["lens", (registry.lenses ?? []).map(lens => lens.id)],
-    ["entity", (watchlist?.entities ?? []).map(entity => entity.id)],
   ] as const) {
     if (new Set<string | number>(ids).size !== ids.length) throw new Error(`${name} ids must be distinct`);
   }
@@ -128,22 +112,21 @@ export function loadHarvestInputs(raw: {
   // This digest covers every validated input that can change harvested content or provenance.
   const { workflow_reporting, ...contentConfig } = planning.config;
   const snapshot = {
-    config: contentConfig, registry, sources, retired, salience, publishers, watchlist, extraction,
+    config: contentConfig, registry, sources, retired, publishers, extraction,
     extractor_version: EXTRACTOR_VERSION, sanitizer_version: SANITIZER_FINGERPRINT,
   };
   const config_sha256 = createHash("sha256").update(JSON.stringify(snapshot)).digest("hex");
-  return { ...planning, registry, sources, retired_sources: retired, salience, publishers, watchlist, extraction, extraction_settings, config_sha256 };
+  return { ...planning, registry, sources, retired_sources: retired, publishers, extraction, extraction_settings, config_sha256 };
 }
 
 export async function readHarvestInputs(paths: {
-  config: string; taxonomy: string; sources: string; extraction: string; watchlist: string;
+  config: string; taxonomy: string; sources: string; extraction: string;
 }): Promise<HarvestInputs> {
-  const [config, taxonomy, sources, extraction, watchlist] = await Promise.all([
+  const [config, taxonomy, sources, extraction] = await Promise.all([
     Bun.file(paths.config).json(), Bun.file(paths.taxonomy).json(),
     Bun.file(paths.sources).json(), Bun.file(paths.extraction).json(),
-    Bun.file(paths.watchlist).json(),
   ]);
-  return loadHarvestInputs({ config, taxonomy, sources, extraction, watchlist });
+  return loadHarvestInputs({ config, taxonomy, sources, extraction });
 }
 
 export function sourceSnapshot(inputs: HarvestInputs, source: ConfiguredSource): SourceSnapshot {
@@ -153,16 +136,5 @@ export function sourceSnapshot(inputs: HarvestInputs, source: ConfiguredSource):
     source_id: source.id, feed_url: source.url, title: source.title, vertical: source.vertical,
     publisher_id: source.publisher_id, kind: source.kind, tier: source.tier, form: source.form, status: source.status,
     weight: source.weight, applied_tier_weight: tier.weight,
-  });
-}
-
-export function harvestPolicy(
-  inputs: HarvestInputs, vertical: string, overrides: PlanningRunOverrides = {},
-): PolicyIdentity {
-  const resolved = resolvePolicy(inputs, vertical, overrides);
-  const { mmr_weights, ...curate } = resolved.curate;
-  return PolicyIdentitySchema.parse({
-    policy_version: inputs.config.version, config_sha256: inputs.config_sha256,
-    ...resolved.triage, ...curate, ...mmr_weights,
   });
 }

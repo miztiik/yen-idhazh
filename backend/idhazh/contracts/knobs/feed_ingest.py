@@ -38,13 +38,6 @@ class FeedPenaltyWeights(Model):
     lambda_source: NonNegative
     lambda_source_kind: NonNegative
     lambda_domain: NonNegative
-    lambda_vertical: NonNegative
-    lambda_desk: NonNegative
-    lambda_lens: NonNegative
-    lambda_event_type: NonNegative
-    lambda_event_cluster: NonNegative
-    lambda_entity: NonNegative
-    lambda_coverage: NonNegative
 
 
 class FeedCurationPolicy(Model):
@@ -52,8 +45,6 @@ class FeedCurationPolicy(Model):
 
     source_authority_weight: NonNegative
     base_source_allowance: Count
-    bonus_uncovered_event_cluster: Count
-    bonus_underrepresented_vertical: Count
     bonus_unique_evidence: Count
     mmr_weights: FeedPenaltyWeights
 
@@ -95,20 +86,11 @@ class FeedPenaltyWeightsPatch(PolicyPatch):
     lambda_source: NonNegative | None = None
     lambda_source_kind: NonNegative | None = None
     lambda_domain: NonNegative | None = None
-    lambda_vertical: NonNegative | None = None
-    lambda_desk: NonNegative | None = None
-    lambda_lens: NonNegative | None = None
-    lambda_event_type: NonNegative | None = None
-    lambda_event_cluster: NonNegative | None = None
-    lambda_entity: NonNegative | None = None
-    lambda_coverage: NonNegative | None = None
 
 
 class FeedCurationPatch(PolicyPatch):
     source_authority_weight: NonNegative | None = None
     base_source_allowance: Count | None = None
-    bonus_uncovered_event_cluster: Count | None = None
-    bonus_underrepresented_vertical: Count | None = None
     bonus_unique_evidence: Count | None = None
     mmr_weights: FeedPenaltyWeightsPatch | None = None
 
@@ -174,7 +156,6 @@ class FeedTriageConfig(FeedScreeningPolicy):
 class FeedSoftCaps(Model):
     max_source_share: Share
     max_parent_domain_share: Share
-    max_event_cluster_items: PositiveCount
     min_distinct_sources: PositiveCount
     relaxation_order: list[Relaxation]
 
@@ -215,8 +196,6 @@ class FeedPartitionConfig(Model):
 
 
 class FeedSealConfig(Model):
-    dispatches_prefix: Annotated[list[Slug], Field(min_length=1)]
-    rejections_prefix: Annotated[list[Slug], Field(min_length=1)]
     compression: Literal["snappy", "zstd", "none"]
 
 
@@ -232,36 +211,9 @@ class FeedWorkflowReportingConfig(Model):
     removal_condition: NonEmpty
 
 
-class FeedMetricsConfig(Model):
-    rolling_window_days: PositiveCount
-    overlap_windows_days: Annotated[list[PositiveCount], Field(min_length=1)]
-    top_source_counts: Annotated[list[PositiveCount], Field(min_length=1)]
-
-
-class FeedOperationalComponentWeights(Model):
-    """How much each equally supported cost can reduce source authority."""
-
-    cpu: NonNegative = 1 / 3
-    private_memory: NonNegative = 1 / 3
-    requests: NonNegative = 1 / 3
-
-    @model_validator(mode="after")
-    def require_unit_total(self) -> Self:
-        if abs(self.cpu + self.private_memory + self.requests - 1) > 1e-9:
-            raise ValueError("operational component weights must sum to one")
-        return self
-
-
 class FeedFeedbackConfig(Model):
     lifecycle_window_days: PositiveCount = 31
-    window_days: PositiveCount = 7
-    minimum_measured_opportunities: PositiveCount = 20
-    minimum_measured_coverage: Annotated[
-        float, Field(strict=True, ge=0, le=1, allow_inf_nan=False)
-    ] = 0.8
-    component_weights: FeedOperationalComponentWeights = Field(
-        default_factory=FeedOperationalComponentWeights, json_schema_extra={"default": {}},
-    )
+    request_report_closed_days: PositiveCount = 7
 
 
 class PlanningVertical(Model):
@@ -292,7 +244,6 @@ class FeedIngestConfig(Model):
     partition: FeedPartitionConfig
     seal: FeedSealConfig
     workflow_reporting: FeedWorkflowReportingConfig
-    metrics: FeedMetricsConfig
     feedback: FeedFeedbackConfig = Field(
         default_factory=FeedFeedbackConfig, json_schema_extra={"default": {}},
     )

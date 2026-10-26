@@ -89,6 +89,8 @@ from idhazh.ledger.paths import (
 from idhazh.ledger.persist import (
     FileFooter,
     PeriodFile,
+    PlannerStoredRow,
+    LedgerStoredRow,
     StoredRow,
     load,
     load_stored,
@@ -158,6 +160,8 @@ __all__ = [  # noqa: RUF022
     # persist.py: the one door a contract payload takes to disk, and back.
     "FileFooter",
     "PeriodFile",
+    "PlannerStoredRow",
+    "LedgerStoredRow",
     "StoredRow",
     "load",
     "load_stored",

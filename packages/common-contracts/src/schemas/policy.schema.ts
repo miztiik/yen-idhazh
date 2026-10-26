@@ -14,20 +14,11 @@ export const FeedPenaltyWeightsSchema = z.strictObject({
   lambda_source: NonNegativeSchema,
   lambda_source_kind: NonNegativeSchema,
   lambda_domain: NonNegativeSchema,
-  lambda_vertical: NonNegativeSchema,
-  lambda_desk: NonNegativeSchema,
-  lambda_lens: NonNegativeSchema,
-  lambda_event_type: NonNegativeSchema,
-  lambda_event_cluster: NonNegativeSchema,
-  lambda_entity: NonNegativeSchema,
-  lambda_coverage: NonNegativeSchema,
 });
 
 export const FeedCurationPolicySchema = z.strictObject({
   source_authority_weight: NonNegativeSchema,
   base_source_allowance: CountSchema,
-  bonus_uncovered_event_cluster: CountSchema,
-  bonus_underrepresented_vertical: CountSchema,
   bonus_unique_evidence: CountSchema,
   mmr_weights: FeedPenaltyWeightsSchema,
 });

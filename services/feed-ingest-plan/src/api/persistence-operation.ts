@@ -1,35 +1,49 @@
-/** Which validated saved assignments are written to the registered dispatch ledger? */
-import { isDeepStrictEqual } from "node:util";
+/** Serialize one selected result into an artifact and an explicit body-free Parquet projection. */
+import { randomUUID } from "node:crypto";
+import { mkdir, rename, rm, writeFile } from "node:fs/promises";
+import { join, relative, resolve } from "node:path";
 import {
-  ParsedFeedBatchSchema, SelectedFeedBatchSchema, PartitionedFeedBatchSchema, StageReferenceRequestSchema,
-  readParsedFeedBatch, readSelectedFeedBatch, readPartitionedFeedBatch,
+  PartitionedFeedBatchSchema, StageReferenceRequestSchema, SelectedArticleRowContract,
+  SelectedArticlesArtifactSchema, selectedArticleMetadata,
 } from "@idhazh/common-contracts";
+import { persistLedger } from "@idhazh/ledger-file-writer";
 import type { PlanInputs } from "../load-plan-inputs";
 import type { PlanRuntime } from "../run-feed-plan";
-import { partitionArticles, persistDispatches } from "../partition-article-shards/shard-packer";
 import { requireStageConfiguration } from "./selection-operation";
-import { readStageBatch } from "./stage-store";
+import { stageStore } from "./stage-store";
+import { RelativePathSchema } from "../config/service-settings";
 
 export async function executePersistence(raw: unknown, inputs: PlanInputs, runtime: PlanRuntime) {
   const request = StageReferenceRequestSchema.parse(raw);
-  const batch = await readStageBatch(inputs.outputRoot, "partitioned", request.batch_id, PartitionedFeedBatchSchema, readPartitionedFeedBatch);
+  const batch = stageStore(inputs).read("partitioned", request.batch_id, PartitionedFeedBatchSchema);
   requireStageConfiguration(batch, inputs, runtime);
-  const selected = await readStageBatch(inputs.outputRoot, "selected", batch.selection_batch_id, SelectedFeedBatchSchema, readSelectedFeedBatch);
-  requireStageConfiguration(selected, inputs, runtime);
-  const parsed = await readStageBatch(inputs.outputRoot, "parsed", selected.parsed_batch_id, ParsedFeedBatchSchema, readParsedFeedBatch);
-  requireStageConfiguration(parsed, inputs, runtime);
-  const expected = partitionArticles({
-    selections: selected.selections, candidates: parsed.candidates,
-    context: selected.context, settings: inputs.harvest.config.partition,
-    request: { strategy: batch.strategy, shards: batch.dispatch_count },
+  const artifact = SelectedArticlesArtifactSchema.parse({
+    schema_version: SelectedArticleRowContract.schemaVersion,
+    run_id: batch.context.run_id, attempt: batch.context.writer.attempt,
+    date: batch.context.date, evaluated_at: batch.evaluated_at,
+    articles: batch.articles.map(article => ({ ...selectedArticleMetadata(article), article_text: article.article_text })),
   });
-  if (!isDeepStrictEqual(expected.dispatches, batch.dispatches) || !isDeepStrictEqual(expected.work, batch.work)
-    || !isDeepStrictEqual(batch.context, selected.context) || !isDeepStrictEqual(parsed.context, selected.context)) {
-    throw new Error("Saved partition does not preserve its original selection, content and worker assignments");
-  }
-  return persistDispatches(expected, {
-    outputRoot: inputs.outputRoot, writerContext: batch.context.writer,
-    ledgerSettings: inputs.ledgerSettings, registration: inputs.registrations.dispatches,
-    date: batch.context.date, correlation_id: batch.context.correlation_id,
+  const metadata = batch.articles.map(article => ({
+    ...selectedArticleMetadata(article), run_id: batch.context.run_id, attempt: batch.context.writer.attempt, date: batch.context.date,
+  }));
+  const directory = resolve(inputs.root, inputs.settings.inputs.artifact_root, batch.context.run_id, String(batch.context.writer.attempt));
+  const target = join(directory, `${batch.batch_id}.json`);
+  const temporary = `${target}.${randomUUID()}.tmp`;
+  await mkdir(directory, { recursive: true });
+  try {
+    await writeFile(temporary, JSON.stringify(artifact), { flag: "wx" });
+    await rename(temporary, target);
+  } finally { await rm(temporary, { force: true }); }
+  const files = await persistLedger({
+    ledger: "selected-articles", rowContract: SelectedArticleRowContract, rows: metadata,
+    registryEntry: inputs.registrations.selected_articles, outputRoot: inputs.outputRoot,
+    writerContext: batch.context.writer, ledgerSettings: inputs.ledgerSettings,
+    period: { tier: "raw", covers: batch.context.date },
   });
+  if (files.status === "skipped") throw new Error("Selected metadata write was refused");
+  return {
+    files,
+    artifact: RelativePathSchema.parse(relative(inputs.root, target).replaceAll("\\", "/")),
+    selected_count: metadata.length,
+  };
 }

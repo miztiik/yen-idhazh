@@ -49,18 +49,13 @@ from idhazh.contracts.element import ElementTable
 from idhazh.contracts.eval_row import ConfidenceBand, EvalRow
 from idhazh.contracts.evidence import EvidenceItem
 from idhazh.contracts.feed_health import FeedHealthRow
-from idhazh.contracts.feed_health_state import FeedHealthStateHeadIndex, FeedHealthStateSnapshot
-from idhazh.contracts.feed_ingest_article_assessment import ArticleAssessmentRecord
+from idhazh.contracts.feed_health_state import FeedHealthStateRow
+from idhazh.contracts.feed_ingest_discovered_article import DiscoveredArticleRow, PlannerPayload
+from idhazh.contracts.feed_ingest_plan_run import PlanRunRow
+from idhazh.contracts.feed_ingest_selected_article import SelectedArticleRow, SelectedArticlesArtifact
 from idhazh.contracts.feed_ingest_candidate import FeedIngestCandidate
-from idhazh.contracts.feed_ingest_dispatch import FeedIngestDispatch
-from idhazh.contracts.feed_ingest_diversity import DiversityMetricRow
-from idhazh.contracts.feed_ingest_editorial_selection import EditorialSelectionRow
-from idhazh.contracts.feed_ingest_feedback import FeedIngestOperationalStateRow
-from idhazh.contracts.feed_ingest_observations import DocumentObservationRecord
-from idhazh.contracts.feed_ingest_rejection import CandidateRejectionRecord
-from idhazh.contracts.feed_ingest_source_run import SourceRunRecord
 from idhazh.contracts.feed_retirement import FeedRetirementRow
-from idhazh.contracts.file_envelope import FileEnvelope
+from idhazh.contracts.file_envelope import FileEnvelope, PlannerFileEnvelope
 from idhazh.contracts.fingerprint import PipelineInputs
 from idhazh.contracts.fitted_similarity_threshold import FittedSimilarityThreshold
 from idhazh.contracts.host_fingerprint import HostFingerprintRow
@@ -143,20 +138,6 @@ from idhazh.contracts.watchlist import EdgarPolicy, EntityDef, EntityFeed, Watch
 CONTRACTS: Final[tuple[type[Contract], ...]] = (
     FetchedDocument,
     PlannerOperation,
-    ParsedFeedBatch,
-    SelectedFeedBatch,
-    PartitionedFeedBatch,
-    ArticleAssessmentRecord,
-    CandidateRejectionRecord,
-    DiversityMetricRow,
-    EditorialSelectionRow,
-    FeedIngestCandidate,
-    FeedIngestDispatch,
-    FeedIngestOperationalStateRow,
-    FeedHealthStateSnapshot,
-    FeedHealthStateHeadIndex,
-    DocumentObservationRecord,
-    SourceRunRecord,
     AppConfig,
     AppearanceConfig,
     Article,
@@ -222,13 +203,19 @@ CONTRACTS: Final[tuple[type[Contract], ...]] = (
     Watchlist,
 )
 
+# Planner rows have no per-row version field. Their native storage and binding
+# tests use this registry instead of forcing them through the unrelated format.
+PLANNER_CONTRACTS: Final[tuple[type[PlannerPayload] | type[PlannerFileEnvelope], ...]] = (
+    DiscoveredArticleRow, SelectedArticleRow, FeedHealthStateRow, PlanRunRow,
+    SelectedArticlesArtifact, PlannerFileEnvelope,
+)
+
 __all__ = [
     "CONTRACTS",
+    "PLANNER_CONTRACTS",
     "AppConfig",
     "Article",
-    "ArticleAssessmentRecord",
     "ArticleStatus",
-    "CandidateRejectionRecord",
     "ChangelogEntry",
     "CompactEntry",
     "CompactIndex",
@@ -244,20 +231,19 @@ __all__ = [
     "DigestViewItem",
     "DigestViewVisual",
     "DigestVisual",
-    "DiversityMetricRow",
-    "DocumentObservationRecord",
     "EdgarPolicy",
-    "EditorialSelectionRow",
     "EntityDef",
     "EntityFeed",
     "EvalRow",
     "EventDef",
     "FeedDef",
-    "FeedHealthStateHeadIndex",
-    "FeedHealthStateSnapshot",
+    "FeedHealthStateRow",
+    "DiscoveredArticleRow",
+    "PlanRunRow",
+    "PlannerFileEnvelope",
+    "SelectedArticleRow",
+    "SelectedArticlesArtifact",
     "FeedIngestCandidate",
-    "FeedIngestDispatch",
-    "FeedIngestOperationalStateRow",
     "FetchedDocument",
     "FileEnvelope",
     "LedgerName",
@@ -284,7 +270,6 @@ __all__ = [
     "SourceForm",
     "SourceKind",
     "SourceKindDefinition",
-    "SourceRunRecord",
     "SourceTier",
     "SourceTierDefinition",
     "Sources",

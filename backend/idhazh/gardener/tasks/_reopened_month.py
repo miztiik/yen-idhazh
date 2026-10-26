@@ -40,7 +40,7 @@ from __future__ import annotations
 from typing import Final
 
 from idhazh import ledger
-from idhazh.contracts.base import Contract
+from idhazh.contracts.feed_ingest_discovered_article import LedgerContract
 from idhazh.contracts.collection_prune import StopReason
 from idhazh.contracts.file_envelope import Period, WriterIdentity
 from idhazh.contracts.gardener_events import CompactionStep
@@ -54,7 +54,7 @@ from idhazh.gardener.tasks._compact_tree import CompactTree, PeriodFetch, Stop
 _STEP: Final = CompactionStep.REOPEN_MONTHS
 
 
-def reopen[C: Contract](
+def reopen[C: LedgerContract](
     tree: CompactTree,
     month: str,
     *,
@@ -108,9 +108,9 @@ def reopen[C: Contract](
                 _STEP, month, fault=GardenerFault.PACKED_FILE_UNREADABLE, failure=refusal
             ),
         )
-    days: dict[str, list[ledger.StoredRow[C]]] = {}
+    days: dict[str, list[ledger.LedgerStoredRow[C]]] = {}
     for row in held:
-        days.setdefault(row.identity.covers, []).append(row)
+        days.setdefault(row.day, []).append(row)
     try:
         for day, raw in answered.items():
             days[day] = ledger.settle_rows(
@@ -147,7 +147,7 @@ def reopen[C: Contract](
         tree.write(built.path, built.data)
         tree.monthly[month] = CompactEntry(
             covers=month,
-            rows=len(rows),
+            rows=built.rows,
             bytes=len(built.data),
             lost_days=[day for day in entry.lost_days if day not in answered],
             set_aside=entry.set_aside + moved,

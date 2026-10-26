@@ -1,7 +1,7 @@
 /** Verifies both identifier forms against recorded ledger identity vectors. */
 import { describe, expect, test } from "bun:test";
 import { createUnitId } from "../src/uuid/unit-id";
-import { createFileId } from "../src/uuid/file-id";
+import { createFileId, createPlannerFileId } from "../src/uuid/file-id";
 
 describe("recorded ledger identity vectors", () => {
   test("uses the repository UUIDv5 namespace and generic pipeline identity", () => {
@@ -36,5 +36,9 @@ describe("recorded ledger identity vectors", () => {
       attempt: 3,
       writtenAtMs: 1792497600000,
     })).toBe("01a1592e-c600-84d0-96e4-7bb01708ce01");
+    const plannerIds = Array.from({ length: 16 }, () => createPlannerFileId(1792497600000));
+    expect(new Set(plannerIds).size).toBe(16);
+    expect(plannerIds.every(id => /^01a1592e-c600-8[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(id))).toBe(true);
+    expect(() => createPlannerFileId(-1)).toThrow();
   });
 });

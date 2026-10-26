@@ -66,7 +66,7 @@ from pathlib import Path
 from typing import Final
 
 from idhazh import ledger
-from idhazh.contracts.base import Contract
+from idhazh.contracts.feed_ingest_discovered_article import LedgerContract
 from idhazh.contracts.collection_prune import StopReason
 from idhazh.contracts.file_envelope import Period, WriterIdentity
 from idhazh.contracts.gardener_events import CompactionStep, StepChoice
@@ -78,7 +78,7 @@ from idhazh.gardener.error_cause import ManualActionError
 from idhazh.gardener.file_listing import OverBudgetError
 from idhazh.gardener.tasks._compact_tree import CompactTree, PeriodFetch, Stop
 from idhazh.gardener.tasks._monthly_period import days_of
-from idhazh.ledger import StoredRow
+from idhazh.ledger import LedgerStoredRow
 
 #: The step a year this module refuses is named under. Its yearly mark stays.
 _STEP: Final = CompactionStep.PACK_YEARS
@@ -151,7 +151,7 @@ def _left_of(tree: CompactTree, months: Sequence[str]) -> list[str]:
     ]
 
 
-def _build[C: Contract](
+def _build[C: LedgerContract](
     tree: CompactTree,
     year: str,
     held: dict[str, Path],
@@ -168,7 +168,7 @@ def _build[C: Contract](
     """
     unreadable: list[str] = []
 
-    def groups(months: Sequence[str]) -> Iterator[list[StoredRow[C]]]:
+    def groups(months: Sequence[str]) -> Iterator[list[LedgerStoredRow[C]]]:
         for month in months:
             try:
                 rows = tree.load(held[month], model=model)

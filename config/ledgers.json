@@ -3,70 +3,38 @@
     {
       "name": "feed-ingest-plan",
       "lifecycle_status": "active",
-      "description": "Feed planning selections, dispatches, rejections and evidence, separate from production digest planning.",
+      "description": "Global article discovery, selected metadata, per-run feed health and planner run results.",
       "onboarded": "2026-10-21",
       "ledgers": [
         {
-          "name": "editorial-selections",
+          "name": "discovered-articles",
           "publish_to_data_explorer": true,
           "grain": "raw-and-compact",
-          "prefix": ["feed-ingest-plan", "editorial-selections"],
+          "prefix": ["feed-ingest-plan", "discovered-articles"],
           "stem": null,
           "suffix": null
         },
         {
-          "name": "dispatches",
+          "name": "selected-articles",
           "publish_to_data_explorer": true,
           "grain": "raw-and-compact",
-          "prefix": ["feed-ingest-plan", "dispatches"],
+          "prefix": ["feed-ingest-plan", "selected-articles"],
           "stem": null,
           "suffix": null
         },
         {
-          "name": "rejections",
+          "name": "feed-health-state",
           "publish_to_data_explorer": true,
           "grain": "raw-and-compact",
-          "prefix": ["feed-ingest-plan", "rejections"],
+          "prefix": ["feed-ingest-plan", "feed-health-state"],
           "stem": null,
           "suffix": null
         },
         {
-          "name": "source-runs",
+          "name": "plan-runs",
           "publish_to_data_explorer": true,
           "grain": "raw-and-compact",
-          "prefix": ["feed-ingest-plan", "source-runs"],
-          "stem": null,
-          "suffix": null
-        },
-        {
-          "name": "article-assessments",
-          "publish_to_data_explorer": true,
-          "grain": "raw-and-compact",
-          "prefix": ["feed-ingest-plan", "article-assessments"],
-          "stem": null,
-          "suffix": null
-        },
-        {
-          "name": "diversity",
-          "publish_to_data_explorer": true,
-          "grain": "raw-and-compact",
-          "prefix": ["feed-ingest-plan", "diversity"],
-          "stem": null,
-          "suffix": null
-        },
-        {
-          "name": "document-observations",
-          "publish_to_data_explorer": false,
-          "grain": "raw-and-compact",
-          "prefix": ["feed-ingest-plan", "document-observations"],
-          "stem": null,
-          "suffix": null
-        },
-        {
-          "name": "operational-state",
-          "publish_to_data_explorer": false,
-          "grain": "raw-and-compact",
-          "prefix": ["feed-ingest-plan", "operational-state"],
+          "prefix": ["feed-ingest-plan", "plan-runs"],
           "stem": null,
           "suffix": null
         }

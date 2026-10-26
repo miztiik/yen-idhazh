@@ -14,9 +14,6 @@ import { resolvePolicy } from "../config/resolve-policy";
 import { fetchDiagnostics } from "./fetch-diagnostics";
 import { parseDocument } from "./parse-document";
 import { documentWork, describeArticleParse } from "./document-work";
-import { matchHeadline } from "./headline-matches";
-import { observeSalience } from "./salience-votes";
-import type { SalienceReading } from "./salience-votes";
 
 // Existing discovery/extraction headline bounds, not editorial selection thresholds.
 const FEED_TITLE_MAX_CHARS = 500;
@@ -24,9 +21,8 @@ const PAGE_TITLE_MAX_CHARS = 200;
 
 export async function harvestArticle(
   offered: OfferedArticle, inputs: HarvestInputs, fetcher: PermittedFetcher, context: HarvestContext,
-  salience: readonly SalienceReading[] = [],
 ): Promise<HarvestArticleResult> {
-  const { source, entry, policy } = offered;
+  const { source, entry } = offered;
   const candidate_id = deriveCandidateId(context.writer.run_id, source.source_id, entry.entry_ordinal);
   let identity: ReturnType<typeof canonicalizeUrl> | null = null;
   if (entry.link) {
@@ -46,7 +42,6 @@ export async function harvestArticle(
     document_kind: "article", source_id: source.source_id, publisher_id: source.publisher_id,
     candidate_id, observed_run_id: context.writer.run_id, observed_attempt: context.writer.attempt,
   });
-  const headline = matchHeadline(article.title, inputs);
   const observation = {
     candidate_id, http_status: null, robots: null, fetch_failure: null,
     paywall: null, paywall_evidence: "not-observed", extraction: "not-attempted",
@@ -131,7 +126,7 @@ export async function harvestArticle(
   const body = fetched.body;
   const link = entry.link;
   const parsed = await work.parse(
-    () => parseDocument("article", body, link, inputs.extraction, source.form), fetchedEvent.event_id, describeArticleParse,
+    () => parseDocument("article", body, link, inputs.extraction, source.form, context.parser_pool), fetchedEvent.event_id, describeArticleParse,
   );
   if (parsed.parsed === null) {
     diagnostics = {
@@ -196,13 +191,6 @@ export async function harvestArticle(
       title: article.title, categories: article.categories,
       article_text: extracted.article_text, word_count: extracted.word_count,
       author: extracted.author ?? entry.author, published_at: entry.published_at,
-      labels: headline.labels,
-      planning_observations: {
-        feed_headline: headline.feed_headline, best_weighted_lens: headline.best_weighted_lens,
-        watchlist_match: headline.watchlist_match,
-        ...observeSalience(identity.url_key, inputs.salience, salience),
-      },
-      policy,
     }),
     rejection: null, observation: completeObservation,
   });

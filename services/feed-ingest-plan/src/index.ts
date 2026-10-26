@@ -7,7 +7,6 @@ import { servePlan } from "./api/server";
 import { runFeedPlan, summarizePlan } from "./run-feed-plan";
 import type { PlanRuntime } from "./run-feed-plan";
 import { writeJsonLine } from "./logging/structured-logger";
-import { recordFeedPlan } from "./record-feed-plan";
 import { loadConfig as loadProbeConfig } from "../../host-probes/src/config";
 
 export async function main(args: readonly string[], options: {
@@ -32,7 +31,7 @@ export async function main(args: readonly string[], options: {
   }
   if (mode === "serve") return servePlan(inputs, runtime);
   const plan = await runFeedPlan(request, inputs, runtime);
-  const result = summarizePlan(await recordFeedPlan(plan, inputs, runtime));
+  const result = summarizePlan(plan);
   (options.output ?? (value => console.log(JSON.stringify(value))))(result);
   return result;
 }

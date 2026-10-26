@@ -87,7 +87,7 @@ from pathlib import Path
 from typing import Final
 
 from idhazh import ledger
-from idhazh.contracts.base import Contract
+from idhazh.contracts.feed_ingest_discovered_article import LedgerContract
 from idhazh.contracts.collection_prune import StopReason
 from idhazh.contracts.file_envelope import Period, WriterIdentity
 from idhazh.contracts.gardener_events import CompactionStep, StepChoice
@@ -153,7 +153,7 @@ def _days_from(first: str, last: str) -> list[str]:
     return [(start + timedelta(days=step)).isoformat() for step in range((end - start).days + 1)]
 
 
-def _take[C: Contract](
+def _take[C: LedgerContract](
     tree: CompactTree,
     policy: CompactionPolicy,
     day: str,
@@ -252,10 +252,10 @@ def _advance(tree: CompactTree, day: str) -> None:
         tree.daily_through = day
 
 
-def _record[C: Contract](
+def _record[C: LedgerContract](
     tree: CompactTree,
     day: str,
-    settled: list[ledger.StoredRow[C]],
+    settled: list[ledger.LedgerStoredRow[C]],
     existing: Path | None,
     *,
     model: type[C],
@@ -290,7 +290,7 @@ def _record[C: Contract](
         tree.delete(existing)
     tree.write(built.path, built.data)
     tree.daily[day] = CompactEntry(
-        covers=day, rows=len(settled), bytes=len(built.data), set_aside=set_aside
+        covers=day, rows=built.rows, bytes=len(built.data), set_aside=set_aside
     )
 
 

@@ -24,24 +24,18 @@ if (Bun.argv.includes("--emit-schemas")) {
     });
     expect(config.curate.article_limit).toBe(100);
     expect(config.feedback.lifecycle_window_days).toBe(31);
-    expect(config.feedback.window_days).toBe(7);
-    expect(config.feedback.minimum_measured_opportunities).toBe(20);
-    expect(config.feedback.minimum_measured_coverage).toBe(0.8);
-    expect(config.feedback.component_weights).toEqual({
-      cpu: 1 / 3, private_memory: 1 / 3, requests: 1 / 3,
-    });
+    expect(config.feedback.request_report_closed_days).toBe(7);
+    expect(Object.keys(config.feedback)).toEqual(["lifecycle_window_days", "request_report_closed_days"]);
     const { feedback: _feedback, ...legacyConfig } = config;
-    expect(configs.FeedIngestConfigSchema.parse(legacyConfig).feedback.window_days).toBe(7);
+    expect(configs.FeedIngestConfigSchema.parse(legacyConfig).feedback.request_report_closed_days).toBe(7);
     expect(configs.FeedIngestConfigSchema.parse({
-      ...config, feedback: { window_days: 2 },
+      ...config, feedback: { request_report_closed_days: 2 },
     }).feedback).toMatchObject({
-      lifecycle_window_days: 31, window_days: 2, minimum_measured_opportunities: 20,
-      minimum_measured_coverage: 0.8,
-      component_weights: { cpu: 1 / 3, private_memory: 1 / 3, requests: 1 / 3 },
+      lifecycle_window_days: 31, request_report_closed_days: 2,
     });
-    expect(configs.FeedIngestConfigSchema.parse({
-      ...config, feedback: { component_weights: { cpu: 0.2, private_memory: 0.2, requests: 0.6 } },
-    }).feedback.component_weights).toEqual({ cpu: 0.2, private_memory: 0.2, requests: 0.6 });
+    for (const retired of ["window_days", "minimum_measured_opportunities", "minimum_measured_coverage", "component_weights"]) {
+      expect(configs.FeedIngestConfigSchema.safeParse({ ...config, feedback: { ...config.feedback, [retired]: 1 } }).success).toBe(false);
+    }
     expect(config.curate.source_reliability_penalty_enabled).toBe(true);
     const { source_reliability_penalty_enabled: _enabled, ...previousCurate } = config.curate;
     expect(configs.FeedCurateConfigSchema.parse(previousCurate).source_reliability_penalty_enabled).toBe(true);
@@ -68,7 +62,8 @@ if (Bun.argv.includes("--emit-schemas")) {
     { curate: { source_authority_weight: Infinity } },
     { curate: { source_reliability_penalty_enabled: false } },
     { curate: { base_source_allowance: -1 } },
-    { curate: { mmr_weights: { lambda_lens: NaN } } },
+    { curate: { mmr_weights: { lambda_domain: NaN } } },
+    { curate: { mmr_weights: { lambda_lens: 0 } } },
     { curate: { soft_caps: { max_source_share: 0.2 } } },
     { harvest: { concurrency: 2 } },
     { partition: { default_shards: 2 } },
@@ -78,9 +73,9 @@ if (Bun.argv.includes("--emit-schemas")) {
     { desk_overrides: {} },
     { feedback: { lifecycle_window_days: 0 } },
     { feedback: { lifecycle_window_days: 1.5 } },
-    { feedback: { window_days: 0 } },
-    { feedback: { window_days: 1.5 } },
-    { feedback: { window_days: null } },
+    { feedback: { request_report_closed_days: 0 } },
+    { feedback: { request_report_closed_days: 1.5 } },
+    { feedback: { request_report_closed_days: null } },
     { feedback: { minimum_measured_opportunities: 0 } },
     { feedback: { minimum_measured_coverage: 1.1 } },
     { feedback: { component_weights: { requests: -0.1 } } },
@@ -114,6 +109,8 @@ if (Bun.argv.includes("--emit-schemas")) {
       } },
       { triage: { ...config.triage, min_words_article: true } },
       { triage: { ...config.triage, max_age_hours: Infinity } },
+      { seal: { ...config.seal, dispatches_prefix: ["feed-ingest-plan", "dispatches"] } },
+      { metrics: {} },
       { desk_overrides: {} },
       { vertical_overrides: { ai: { triage: { blocked_http_statuses: [] } } } },
     ]) {

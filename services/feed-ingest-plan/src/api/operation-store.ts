@@ -63,8 +63,8 @@ export async function openOperationStore(outputRoot: string) {
         committed = true;
         return previous;
       }
-      if (previous?.operation === "plan") {
-        throw new PlanError("REQUEST_INCOMPLETE", "Interrupted plan requires inspection of its recorded run before a new request", "request_id");
+      if (previous !== null) {
+        throw new PlanError("REQUEST_INCOMPLETE", "Started or interrupted request requires inspection before using a new request key", "request_id");
       }
       const record = previous ?? ("capture" in proposed ? proposed.capture() : proposed);
       for (const field of ["request_id", "operation", "input_sha256", "config_sha256"] as const) {
@@ -72,21 +72,14 @@ export async function openOperationStore(outputRoot: string) {
           throw new PlanError("INVALID_RUN_CONTEXT", "Captured request differs from its prepared input", field);
         }
       }
-      // Commit identity first; another process may win the next lock, but only its owner can do work.
       put(record);
       database.exec("COMMIT");
+      committed = true;
+      const result = await work(record);
+      const complete = PlannerOperationSchema.parse({ ...record, ...result, state: "complete" });
       try { database.exec("BEGIN IMMEDIATE"); }
       catch (error) { refuseBusy(error); }
-      // A competing process may have completed the request while this connection released its first lock.
-      const current = readRequest(proposed);
-      if (current === null) throw new PlanError("REQUEST_INCOMPLETE", "Captured request disappeared before work", "request_id");
-      if (current.state === "complete") {
-        database.exec("COMMIT");
-        committed = true;
-        return current;
-      }
-      const result = await work(current);
-      const complete = PlannerOperationSchema.parse({ ...current, ...result, state: "complete" });
+      committed = false;
       put(complete);
       database.exec("COMMIT");
       committed = true;

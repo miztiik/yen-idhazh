@@ -113,7 +113,7 @@ and causal-score briefs are not executable.
 | E19 | 19 | Review operational regressions and prove the live loop | 22, 9, 12, 13, 21 | N | PENDING (review policy remains open) | - | - | - |
 | E20 | 20 | Adopt cache delivery and finish the combined hosted proof | - | Z | DONE | potential-fiesta | [#1671](https://github.com/miztiik/yen-idhazh/pull/1671), [#1707](https://github.com/miztiik/yen-idhazh/pull/1707) | 6a57ff1e-bdfc-4248-86f8-cd5b17c8bde2 |
 | E21 | 21 | Review and reuse configured numeric priorities | 22, 9 | O | PENDING (approve each new numeric term first) | - | - | - |
-| E22 | 22 | Replace planner ledgers and APIs in one atomic cutover | - (docs must first be on remote main) | P | PENDING (execution authorized) | - | - | - |
+| E22 | 22 | Replace planner ledgers and APIs in one atomic cutover | - (docs must first be on remote main) | P | IN-FLIGHT (runtime checkpoint; full cutover gates pending) | four-ledger-planner-cutover | - | 939acb2f |
 | E23 | 23 | Migrate the feed-planning ledger family | 22 | P | COLLAPSED into Row 22; no compatibility phase | - | - | - |
 | E24 | 24 | Incrementally update and read feed-health state | 22 | P | COLLAPSED into Row 22; no snapshot/cache phase | - | - | - |
 | E25 | 25 | Remove redundant TypeScript state paths | 22 | P | COLLAPSED into Row 22; required cleanup is atomic | - | - | - |

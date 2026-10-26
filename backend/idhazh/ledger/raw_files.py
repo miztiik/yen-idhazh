@@ -41,38 +41,33 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Collection, Sequence
+from datetime import datetime
 from pathlib import Path
-from typing import NamedTuple, cast
+from typing import NamedTuple, cast, overload
 
 from idhazh import day_partition
 from idhazh.contracts.base import Contract
-from idhazh.contracts.file_envelope import FileEnvelope, Tier
+from idhazh.contracts.feed_ingest_discovered_article import LedgerContract, PlannerRow
+from idhazh.contracts.file_envelope import FileEnvelope, PlannerFileEnvelope, Tier
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.run_shards import RunShards
 from idhazh.ledger import paths
 from idhazh.ledger.keys import door_key, preference_for
-from idhazh.ledger.persist import StoredRow, load_stored, read_envelope
+from idhazh.ledger.persist import (
+    LedgerStoredRow,
+    PlannerStoredRow,
+    StoredRow,
+    load_stored,
+    read_envelope,
+)
 
 logger = logging.getLogger(__name__)
-
-# These ledgers preserve each run and attempt before settling duplicate row keys.
-_ATTEMPT_PRESERVING_LEDGERS = frozenset({
-    LedgerName.FEED_INGEST_PLAN_DISPATCHES,
-    LedgerName.FEED_INGEST_PLAN_EDITORIAL_SELECTIONS,
-    LedgerName.FEED_INGEST_PLAN_REJECTIONS,
-    LedgerName.FEED_INGEST_PLAN_SOURCE_RUNS,
-    LedgerName.FEED_INGEST_PLAN_ARTICLE_ASSESSMENTS,
-    LedgerName.FEED_INGEST_PLAN_DIVERSITY,
-    LedgerName.FEED_INGEST_PLAN_DOCUMENT_OBSERVATIONS,
-    LedgerName.FEED_INGEST_PLAN_OPERATIONAL_STATE,
-})
-
 
 class RawFile(NamedTuple):
     """One raw file, and the envelope that says what it holds."""
 
     path: Path
-    envelope: FileEnvelope
+    envelope: FileEnvelope | PlannerFileEnvelope
 
 
 class DayFolder(NamedTuple):
@@ -119,7 +114,11 @@ def _day_folders(state_dir: Path, root: Path) -> list[tuple[str, Path]]:
 
 def _order(held: RawFile) -> tuple[str, int, str]:
     """Oldest first: the day covered, then the write instant, then the file's own id."""
-    return (held.envelope.covers, held.envelope.written_at_ms, str(held.envelope.file_id))
+    return (
+        held.envelope.covers,
+        held.envelope.written_at_ms if isinstance(held.envelope, FileEnvelope) else 0,
+        str(held.envelope.file_id),
+    )
 
 
 def raw_days(
@@ -146,6 +145,8 @@ def _held(ledger: LedgerName, covers: str, path: Path) -> RawFile:
     if not path.is_file():
         raise ValueError("not a file")
     envelope = read_envelope(path)
+    if isinstance(envelope, PlannerFileEnvelope) and path.name != f"{envelope.file_id}.parquet":
+        raise ValueError("planner raw filename must match its declared UUIDv8 file identity")
     if (envelope.ledger, envelope.tier, envelope.covers) != (ledger, Tier.RAW, covers):
         raise ValueError(
             f"its envelope says {envelope.tier.value} {envelope.ledger.value} "
@@ -227,7 +228,7 @@ def read_day_files(
     return found.files
 
 
-def _cells(row: Contract) -> dict[str, str]:
+def _cells(row: LedgerContract) -> dict[str, str]:
     """A row's cells as a CSV line spells them, which is what a preference rule reads."""
     spelled = getattr(row, "csv_row", None)
     if callable(spelled):
@@ -238,7 +239,9 @@ def _cells(row: Contract) -> dict[str, str]:
     }
 
 
-def _say_what_was_dropped(record: tuple[str, ...], kept: Contract, dropped: Contract) -> None:
+def _say_what_was_dropped(
+    record: tuple[str, ...], kept: LedgerContract, dropped: LedgerContract
+) -> None:
     """Name each cell the dropped row filled and the kept row left empty.
 
     A settlement keeps whole rows, so a cell only the dropped row carried goes
@@ -254,9 +257,27 @@ def _say_what_was_dropped(record: tuple[str, ...], kept: Contract, dropped: Cont
             )
 
 
+@overload
 def settle_rows[C: Contract](
     files: Sequence[Sequence[StoredRow[C]]], key: tuple[str, ...]
-) -> list[StoredRow[C]]:
+) -> list[StoredRow[C]]: ...
+
+
+@overload
+def settle_rows[C: PlannerRow](
+    files: Sequence[Sequence[PlannerStoredRow[C]]], key: tuple[str, ...]
+) -> list[PlannerStoredRow[C]]: ...
+
+
+@overload
+def settle_rows[C: LedgerContract](
+    files: Sequence[Sequence[LedgerStoredRow[C]]], key: tuple[str, ...]
+) -> list[LedgerStoredRow[C]]: ...
+
+
+def settle_rows[C: LedgerContract](
+    files: Sequence[Sequence[LedgerStoredRow[C]]], key: tuple[str, ...]
+) -> list[LedgerStoredRow[C]]:
     """The current rows of a union of files, in the order given: one file per unit, then key.
 
     `files` holds each file's rows, oldest file first. For each work unit the
@@ -276,36 +297,53 @@ def settle_rows[C: Contract](
     kept or dropped whole, and a cell only the dropped row filled is named in a
     warning.
 
-    Feed planning rows retain every original run and attempt instead: related
-    source-run completion evidence, not a partial file, selects a whole attempt
-    later. Document observations also retain every attempt because each row is
-    an immutable operation fact. Only their declared row keys may use nested
-    attribute paths.
+    Planner rows settle only by their declared row identities. Identical
+    storage copies count once; distinct attempts retain their actual work.
+    Discovery alone keeps the earliest global URL timestamp.
     """
     # Count corrections must not inherit the first-wins rule of run-plan,
     # whose business key is also (date, run_id).
-    ledgers = {held.identity.ledger for rows in files for held in rows}
-    if ledgers & _ATTEMPT_PRESERVING_LEDGERS:
-        if len(ledgers) != 1:
-            raise ValueError("attempt-preserving settlement requires rows from only one ledger")
-        which = next(iter(ledgers))
+    planner = [held for rows in files for held in rows if isinstance(held, PlannerStoredRow)]
+    if planner:
+        if any(not isinstance(held, PlannerStoredRow) for rows in files for held in rows):
+            raise ValueError("planner settlement requires only declared planner rows")
+        from idhazh.contracts.file_envelope import PLANNER_LEDGERS
+        from idhazh.ledger.keys import door_contract
+
+        model = type(planner[0].row)
+        which = next((name for name in PLANNER_LEDGERS if door_contract(name) is model), None)
+        if which is None or any(type(held.row) is not model for held in planner):
+            raise ValueError("planner settlement requires one registered row contract")
         if key != door_key(which):
-            raise ValueError(
-                f"attempt-preserving settlement requires the declared key for {which.value}"
-            )
-        return _settle_planning_rows(files, key)
+            raise ValueError(f"planner settlement requires the declared key for {which.value}")
+        kept_planner: dict[tuple[str, ...], PlannerStoredRow[C]] = {}
+        for held in planner:
+            record = tuple(str(getattr(held.row, name)) for name in key)
+            incumbent = kept_planner.get(record)
+            if incumbent is None:
+                kept_planner[record] = held
+            elif which is LedgerName.FEED_INGEST_PLAN_DISCOVERED_ARTICLES:
+                later = datetime.fromisoformat(getattr(held.row, "first_seen_at"))
+                earlier = datetime.fromisoformat(getattr(incumbent.row, "first_seen_at"))
+                if later < earlier:
+                    kept_planner[record] = held
+            elif incumbent.row.to_json() != held.row.to_json():
+                raise ValueError(f"conflicting duplicate {which.value} record")
+        return list(kept_planner.values())
+    legacy = cast("Sequence[Sequence[StoredRow[C]]]", files)
+    ledgers = {held.identity.ledger for rows in legacy for held in rows}
     if LedgerName.RUN_SHARDS in ledgers:
         if ledgers != {LedgerName.RUN_SHARDS}:
             raise ValueError("count settlement requires only run-shards rows")
-        return _settle_run_shards(files, key)
+        return list(_settle_run_shards(legacy, key))
     prefers = preference_for(key)
     current: dict[str, tuple[int, int]] = {}
-    for position, rows in enumerate(files):
+    for position, rows in enumerate(legacy):
         for held in rows:
             rank = (held.identity.attempt, position)
             current[held.identity.unit_id] = max(current.get(held.identity.unit_id, rank), rank)
     kept: dict[tuple[str, ...], StoredRow[C]] = {}
-    for position, rows in enumerate(files):
+    for position, rows in enumerate(legacy):
         for held in rows:
             if current[held.identity.unit_id] != (held.identity.attempt, position):
                 continue
@@ -321,32 +359,7 @@ def settle_rows[C: Contract](
     return list(kept.values())
 
 
-def _settle_planning_rows[C: Contract](
-    files: Sequence[Sequence[StoredRow[C]]], key: tuple[str, ...]
-) -> list[StoredRow[C]]:
-    """Keep each run attempt until related completion evidence chooses a whole attempt."""
-    kept: dict[tuple[str, ...], StoredRow[C]] = {}
-    for rows in files:
-        for held in rows:
-            cells = [held.identity.run_id, str(held.identity.attempt)]
-            for name in key:
-                value: object = held.row
-                for segment in name.split("."):
-                    value = getattr(value, segment)
-                cells.append(str(value))
-            record = tuple(cells)
-            incumbent = kept.get(record)
-            if incumbent is None:
-                kept[record] = held
-            elif (
-                incumbent.identity.covers != held.identity.covers
-                or incumbent.row.to_json() != held.row.to_json()
-            ):
-                raise ValueError(f"conflicting duplicate planning record: {record}")
-    return list(kept.values())
-
-
-def _settle_run_shards[C: Contract](
+def _settle_run_shards[C: LedgerContract](
     files: Sequence[Sequence[StoredRow[C]]], key: tuple[str, ...]
 ) -> list[StoredRow[C]]:
     """Last filed numeric count, using original envelope order through every packing.
@@ -375,7 +388,7 @@ def _settle_run_shards[C: Contract](
     return list(kept.values())
 
 
-def load_current_rows[C: Contract](
+def load_current_rows[C: LedgerContract](
     state_dir: Path,
     ledger: LedgerName,
     *,
@@ -389,7 +402,7 @@ def load_current_rows[C: Contract](
     file is read on its own, so one file this build cannot read costs the rows
     in it and never the rows in the files beside it.
     """
-    stored: list[list[StoredRow[C]]] = []
+    stored: list[list[LedgerStoredRow[C]]] = []
     for held in list_raw_files(state_dir, ledger, days=days):
         try:
             stored.append(load_stored([held.path], model=model))

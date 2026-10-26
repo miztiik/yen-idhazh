@@ -46,7 +46,8 @@ from collections.abc import Collection
 from pathlib import Path
 from typing import NamedTuple
 
-from idhazh.contracts.base import Contract, StalePayloadError
+from idhazh.contracts.base import StalePayloadError
+from idhazh.contracts.feed_ingest_discovered_article import LedgerContract
 from idhazh.contracts.file_envelope import Period, Tier, WriterIdentity, covers_fits
 from idhazh.contracts.ledger_index import CompactIndex
 from idhazh.contracts.ledger_name import LedgerName
@@ -55,7 +56,7 @@ from idhazh.ledger.keys import door_contract
 from idhazh.ledger.ledger_files import compact_file
 from idhazh.ledger.persist import (
     PeriodFile,
-    StoredRow,
+    LedgerStoredRow,
     load_stored,
     read_envelope,
     render_grouped_period,
@@ -183,12 +184,12 @@ def rebuild_without(
     kept = [
         stored
         for stored in load_stored([held.path], model=model)
-        if stored.identity.covers not in gone
+        if stored.day not in gone
     ]
     if held.period is Period.YEARLY:
-        months: dict[str, list[StoredRow[Contract]]] = {}
+        months: dict[str, list[LedgerStoredRow[LedgerContract]]] = {}
         for stored in kept:
-            months.setdefault(stored.identity.covers[:7], []).append(stored)
+            months.setdefault(stored.day[:7], []).append(stored)
         return render_grouped_period(
             state_dir,
             [months[month] for month in sorted(months)],

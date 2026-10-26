@@ -1,4 +1,4 @@
-/** Reads real writer output through WASM and Arrow against bounded fixtures. */
+/** Read real writer bytes through WASM and Arrow without changing other families' protocol. */
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
@@ -6,18 +6,13 @@ import { tmpdir } from "node:os";
 import { describe, expect, test } from "bun:test";
 import { tableFromIPC } from "apache-arrow";
 import {
-  ArticleAssessmentContract, ArticleAssessmentRecordSchema,
-  DiversityMetricRowSchema,
-  FileEnvelopeSchema,
-  FOOTER_METADATA_KEYS,
-  OPTIONAL_FOOTER_METADATA_KEYS,
-  FeedIngestDispatchSchema,
-  readFeedIngestDispatch, PreviousFeedIngestDispatchSchema,
-  RowIdentitySchema,
-  WriterIdentitySchema,
-  validateEnvelopeContainer,
+  DateStampSchema, FileEnvelopeSchema, FOOTER_METADATA_KEYS, OPTIONAL_FOOTER_METADATA_KEYS,
+  PLANNER_FOOTER_METADATA_KEYS, PLANNER_OPTIONAL_FOOTER_METADATA_KEYS,
+  PlannerFileEnvelopeSchema, PlannerLedgerNameSchema, RowIdentitySchema, WriterIdentitySchema,
+  SelectedArticlesArtifactSchema, SelectedArticleRowSchema,
+  selectedArticleMetadata, validateEnvelopeContainer,
 } from "@idhazh/common-contracts";
-import type { FileEnvelope } from "@idhazh/common-contracts";
+import type { FileEnvelope, PlannerFileEnvelope } from "@idhazh/common-contracts";
 import { readMetadata, readParquet } from "parquet-wasm/esm";
 import type { Field } from "apache-arrow";
 import { z } from "zod";
@@ -27,861 +22,388 @@ import { appendIdentityColumns, describeObjectSchema } from "../src/row-schema";
 import { digestRows, serializeRowsBytes } from "../src/parquet/row-digest";
 import { buildArrowTable } from "../src/parquet/arrow-builder";
 import { initializeParquetWasm } from "../src/parquet/wasm-serializer";
+import { plannerRecordings, selectedArticle } from "./planner-recordings";
 
-const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const repositoryRoot = resolve(packageRoot, "..", "..");
-const compression: LedgerSettings = {
-  format: "parquet",
-  compression_raw: "snappy",
-  compression_compact: "zstd",
-};
-
+const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
+const compression: LedgerSettings = { format: "parquet", compression_raw: "snappy", compression_compact: "zstd" };
 const writerContext = WriterIdentitySchema.parse({
-  run_id: "2026-10-21-123",
-  attempt: 3,
-  job: null,
-  pipeline_name: "plan",
-  task_name: "seal-article-ledger",
-  shard: 2,
-  producer: "tests.ledger-file-writer",
-  git_sha: "a".repeat(40),
+  run_id: "2026-10-21-123", attempt: 3, job: null, pipeline_name: "plan",
+  task_name: "seal-article-ledger", shard: 2, producer: "tests.ledger-file-writer", git_sha: "a".repeat(40),
 });
-
-function registration(ledger: string, lifecycleStatus: LedgerRegistration["lifecycle_status"] = "active"): LedgerRegistration {
-  return {
-    name: ledger,
-    family: "feed-ingest-plan",
-    grain: "raw-and-compact",
-    lifecycle_status: lifecycleStatus,
-    prefix: ["feed-ingest-plan", ledger],
-  };
-}
-
-function policy() {
-  return {
-    policy_version: "feed-ingest-plan-test",
-    config_sha256: "b".repeat(64),
-    min_words_article: 180,
-    min_words_abstract: 60,
-    max_age_hours: 1e20,
-    recency_half_life_hours: 1e-7,
-    recency_weight: 1.0,
-    source_authority_weight: 1.0,
-    base_source_allowance: 3,
-    bonus_uncovered_event_cluster: 0,
-    bonus_underrepresented_vertical: 0,
-    bonus_unique_evidence: 0,
-    lambda_source: 0.0,
-    lambda_source_kind: 0.0,
-    lambda_domain: 0.0,
-    lambda_vertical: 0.0,
-    lambda_desk: 0.0,
-    lambda_lens: 0.0,
-    lambda_event_type: 0.0,
-    lambda_event_cluster: 0.0,
-    lambda_entity: 0.0,
-    lambda_coverage: 0.0,
-  };
-}
-
+// A generic-format fixture, not a planner payload or a substitute persisted contract.
+const NestedSchema = z.strictObject({
+  date: DateStampSchema, title: z.string(), categories: z.array(z.string()).nullable(),
+  score: z.number().finite(), count: z.int().nonnegative(),
+  evidence: z.strictObject({
+    value: z.number().finite().nullable(), known: z.boolean(), tags: z.array(z.string()),
+  }).nullable(),
+});
+const CountRowSchema = z.strictObject({ date: DateStampSchema, count: z.int().nonnegative(), factor: z.number().finite().nullable() });
 function assessment(day: string, categories: string[] | null) {
-  const observedAt = `${day}T10:00:00Z`;
-  return ArticleAssessmentRecordSchema.parse({
-    date: day,
-    correlation_id: "2026-10-21-123",
-    candidate_id: "c".repeat(64),
-    source_id: "fixture-source",
-    source: {
-      source_id: "fixture-source",
-      feed_url: "https://example.org/feed.xml",
-      title: "Caf\u00e9 \u6771\u4eac",
-      vertical: "world",
-      kind: "reporting",
-      tier: 1,
-      form: "article",
-      status: "active",
-      weight: 1.0,
-      applied_tier_weight: 1e-7,
-    },
-    labels: {
-      assigned_desk: "world",
-      lenses: ["world"],
-      event_types: ["release"],
-      event_cluster_id: null,
-      entities: [],
-      origin: "fixture",
-      matcher_version: "fixture-1",
-    },
-    canonical_url: null,
-    url_key: null,
-    stage: "harvest-feeds",
-    decision: "admitted",
-    reason: null,
-    observed_at: observedAt,
-    policy: policy(),
-    timing_at: observedAt,
-    timing_basis: "published_at",
-    age_hours: -0.0,
-    max_age_hours: 1e20,
-    extracted_word_count: 180,
-    source_form: "article",
-    extraction_outcome: "success",
-    word_threshold: 180,
-    author_present: false,
-    publisher_identity: "\u00c9diteur",
-    attribution_status: "available",
-    paywall: categories === null ? null : false,
-    categories,
-    required_fields_present: categories === null ? null : true,
-    suitability_status: categories === null ? "unavailable" : "available",
-    informative_verdict_status: "not_assessed",
-    informative_verdict: null,
-    informative_evaluator_version: null,
-    suitability_verdict_status: "not_assessed",
-    suitability_verdict: null,
-    suitability_evaluator_version: null,
-    score_evidence: null,
-    score_evidence_status: "not_assessed",
+  return NestedSchema.parse({
+    date: day, title: "Caf\u00e9 \u6771\u4eac", categories, score: -0.0, count: 3,
+    evidence: categories === null ? null : { value: 1e-7, known: false, tags: [] },
   });
 }
-
 function diversity() {
-  return DiversityMetricRowSchema.parse({
-    date: "2026-10-21",
-    correlation_id: "2026-10-21-123",
-    run_id: "2026-10-21-123",
-    metric: "lost_diversity_by_stage",
-    basis: "stage",
-    as_of: "2026-10-21T10:00:00Z",
-    window_start: null,
-    window_end: null,
-    dimension: "source",
-    stage: "selection",
-    window_days: null,
-    dimension_value: null,
-    value: -0.0,
-    unit: "source_difference",
-    before_value: 1.0,
-    after_value: 1.0,
-    numerator: null,
-    denominator: null,
-    item_count: null,
-    source_count: null,
-    history_coverage_days: null,
-    history_required_days: null,
-    algorithm_version: "fixture-1",
-    config_sha256: "d".repeat(64),
-    availability: "available",
-    unavailable_reason: null,
-    top_k: null,
-  });
+  return CountRowSchema.parse({ date: "2026-10-21", count: 0, factor: null });
 }
-
+function registration(ledger: string, lifecycle_status: LedgerRegistration["lifecycle_status"] = "active"): LedgerRegistration {
+  const planner = PlannerLedgerNameSchema.safeParse(ledger).success;
+  return {
+    name: ledger, family: planner ? "feed-ingest-plan" : ledger, grain: "raw-and-compact",
+    lifecycle_status, prefix: planner ? ["feed-ingest-plan", ledger] : [ledger],
+  };
+}
 function normalizeArrowValue(value: unknown): unknown {
   if (typeof value === "bigint") return Number(value);
   if (Array.isArray(value)) return value.map(normalizeArrowValue);
   if (typeof value !== "object" || value === null) return value;
-  if ("toJSON" in value && typeof value.toJSON === "function") {
-    return normalizeArrowValue(value.toJSON());
-  }
-  return Object.fromEntries(
-    Object.entries(value).map(([key, child]) => [key, normalizeArrowValue(child)]),
-  );
+  if ("toJSON" in value && typeof value.toJSON === "function") return normalizeArrowValue(value.toJSON());
+  return Object.fromEntries(Object.entries(value).map(([key, child]) => [key, normalizeArrowValue(child)]));
 }
-
 function requiredFooterValue(metadata: ReadonlyMap<string, string>, key: string): string {
   const value = metadata.get(key);
   if (value === undefined) throw new Error(`Parquet footer is missing ${key}`);
   return value;
 }
-
-function parseFooterEnvelope(metadata: ReadonlyMap<string, string>) {
-  return validateEnvelopeContainer(FileEnvelopeSchema.parse({
+function parseFooterEnvelope(metadata: ReadonlyMap<string, string>): FileEnvelope | PlannerFileEnvelope {
+  const common = {
     version: requiredFooterValue(metadata, "envelope_version"),
     row_schema_version: requiredFooterValue(metadata, "schema_version"),
-    tier: requiredFooterValue(metadata, "tier"),
-    ledger: requiredFooterValue(metadata, "ledger"),
-    covers: requiredFooterValue(metadata, "covers"),
-    period: metadata.get("period") ?? null,
-    written_at_ms: Number(requiredFooterValue(metadata, "written_at_ms")),
+    tier: requiredFooterValue(metadata, "tier"), ledger: requiredFooterValue(metadata, "ledger"),
+    covers: requiredFooterValue(metadata, "covers"), period: metadata.get("period") ?? null,
+    file_id: requiredFooterValue(metadata, "file_id"), content_sha256: requiredFooterValue(metadata, "content_sha256"),
+    writer: requiredFooterValue(metadata, "writer"), writer_version: requiredFooterValue(metadata, "writer_version"),
+    compression: requiredFooterValue(metadata, "compression"),
+  };
+  if (PlannerLedgerNameSchema.safeParse(common.ledger).success) {
+    return PlannerFileEnvelopeSchema.parse({ ...common, updated_at: metadata.get("updated_at") ?? null });
+  }
+  return validateEnvelopeContainer(FileEnvelopeSchema.parse({
+    ...common, written_at_ms: Number(requiredFooterValue(metadata, "written_at_ms")),
     identity: {
-      run_id: requiredFooterValue(metadata, "run_id"),
-      attempt: Number(requiredFooterValue(metadata, "attempt")),
-      job: metadata.get("job") ?? null,
-      pipeline_name: metadata.get("pipeline_name") ?? null,
-      task_name: metadata.get("task_name") ?? null,
-      shard: Number(requiredFooterValue(metadata, "shard")),
-      producer: requiredFooterValue(metadata, "producer"),
-      git_sha: requiredFooterValue(metadata, "git_sha"),
+      run_id: requiredFooterValue(metadata, "run_id"), attempt: Number(requiredFooterValue(metadata, "attempt")),
+      job: metadata.get("job") ?? null, pipeline_name: metadata.get("pipeline_name") ?? null,
+      task_name: metadata.get("task_name") ?? null, shard: Number(requiredFooterValue(metadata, "shard")),
+      producer: requiredFooterValue(metadata, "producer"), git_sha: requiredFooterValue(metadata, "git_sha"),
     },
     unit_id: requiredFooterValue(metadata, "unit_id"),
-    file_id: requiredFooterValue(metadata, "file_id"),
-    content_sha256: requiredFooterValue(metadata, "content_sha256"),
-    writer: requiredFooterValue(metadata, "writer"),
-    writer_version: requiredFooterValue(metadata, "writer_version"),
-    compression: requiredFooterValue(metadata, "compression"),
     built_from: metadata.has("built_from") ? Number(metadata.get("built_from")) : null,
   }), "parquet");
 }
-
 async function readActualParquet(path: string) {
   await initializeParquetWasm();
   const bytes = await readFile(path);
   const metadata = readMetadata(bytes);
   const fileMetadata = metadata.fileMetadata();
-  const footer = new Map(
-    [...fileMetadata.keyValueMetadata()].map(([key, value]) => [String(key), String(value)]),
-  );
+  const footer = new Map([...fileMetadata.keyValueMetadata()].map(([key, value]) => [String(key), String(value)]));
   const footerRowCount = fileMetadata.numRows();
+  fileMetadata.free();
   metadata.free();
-
-  const wasmTable = readParquet(bytes);
-  const table = tableFromIPC(wasmTable.intoIPCStream());
-  const rows = table.toArray().map((row) =>
-    normalizeArrowValue(row) as Record<string, unknown>,
-  );
+  const table = tableFromIPC(readParquet(bytes).intoIPCStream());
   return {
-    footer,
-    footerRowCount,
-    rows,
-    fields: table.schema.fields,
+    footer, footerRowCount, fields: table.schema.fields,
+    rows: table.toArray().map(row => normalizeArrowValue(row) as Record<string, unknown>),
   };
 }
-
-type NativeColumnRecord = [path: string, type: string, nullable: boolean];
-
-function describeNativeFields(fields: readonly Field[]): NativeColumnRecord[] {
-  const records: NativeColumnRecord[] = [];
-  const visit = (field: Field, path: string) => {
-    const renderedType = field.type.toString();
-    const type = renderedType.startsWith("Struct<")
-      ? "Struct"
-      : renderedType.startsWith("List<")
-        ? "List"
-        : renderedType;
-    records.push([path, type, field.nullable]);
-    const children = field.type.children ?? [];
-    for (const child of children) {
-      const childPath = type === "List" ? `${path}[]` : `${path}.${child.name}`;
-      visit(child, childPath);
-    }
-  };
-  for (const field of fields) visit(field, field.name);
-  return records;
-}
-
 async function checkParquetReadback<T extends object>(
-  ledger: FileEnvelope["ledger"],
-  root: string,
-  files: readonly PersistedLedgerFile[],
-  schema: z.ZodType<T>,
+  ledger: string, root: string, files: readonly PersistedLedgerFile[], schema: z.ZodType<T>,
 ) {
-  const columns = appendIdentityColumns(describeObjectSchema(schema).fields);
+  const planner = PlannerLedgerNameSchema.safeParse(ledger).success;
+  const fields = describeObjectSchema(schema).fields;
+  const columns = planner ? fields : appendIdentityColumns(fields);
   const expectedSchema = buildArrowTable(columns, []).schema;
-  const expectedKeys = [
-    ...FOOTER_METADATA_KEYS.filter((key) =>
-    !OPTIONAL_FOOTER_METADATA_KEYS.includes(key as typeof OPTIONAL_FOOTER_METADATA_KEYS[number]),
-    ),
-    "ARROW:schema",
-  ];
-  const checkedFiles = [];
+  const checked = [];
   for (const file of files) {
-    const path = resolve(root, ...file.path.split("/"));
-    const actual = await readActualParquet(path);
+    const actual = await readActualParquet(resolve(root, ...file.path.split("/")));
     const envelope = parseFooterEnvelope(actual.footer);
-    const actualKeys = [...actual.footer.keys()].sort();
-    const declaredKeys = [
-      ...expectedKeys,
-      ...OPTIONAL_FOOTER_METADATA_KEYS.filter((key) => actual.footer.has(key)),
-    ].sort();
-    expect(actualKeys).toEqual(declaredKeys);
-    expect(actual.fields.map((field) => [field.name, field.type.toString(), field.nullable]))
-      .toEqual(expectedSchema.fields.map((field: Field) => [
-        field.name,
-        field.type.toString(),
-        field.nullable,
-      ]));
+    const keys = planner ? PLANNER_FOOTER_METADATA_KEYS : FOOTER_METADATA_KEYS;
+    const optional: readonly string[] = planner ? PLANNER_OPTIONAL_FOOTER_METADATA_KEYS : OPTIONAL_FOOTER_METADATA_KEYS;
+    expect([...actual.footer.keys()].sort()).toEqual([
+      ...keys.filter(key => !optional.includes(key) || actual.footer.has(key)), "ARROW:schema",
+    ].sort());
+    expect(actual.fields.map(field => [field.name, field.type.toString(), field.nullable])).toEqual(
+      expectedSchema.fields.map((field: Field) => [field.name, field.type.toString(), field.nullable]),
+    );
     expect(actual.rows.length).toBe(actual.footerRowCount);
     expect(actual.footerRowCount).toBe(file.row_count);
-    expect(envelope.ledger).toBe(ledger);
+    expect(String(envelope.ledger)).toBe(ledger);
     expect(envelope.file_id).toBe(file.file_id);
-    expect(envelope.unit_id).toBe(file.unit_id);
     expect(digestRows(actual.rows, columns)).toBe(envelope.content_sha256);
-    checkedFiles.push({
-      covers: envelope.covers,
-      tier: envelope.tier,
-      period: envelope.period,
-      row_count: actual.footerRowCount,
-      content_sha256: envelope.content_sha256,
-      identity: envelope.identity,
-      rows: actual.rows,
-      nativeColumns: describeNativeFields(actual.fields),
+    if (planner) {
+      expect(file).not.toHaveProperty("unit_id");
+      expect(actual.fields.map(field => field.name)).toEqual(Object.keys(z.toJSONSchema(schema).properties!));
+    } else {
+      if (!("unit_id" in envelope) || file.unit_id === undefined) {
+        throw new Error("ordinary ledger readback lost its original work-unit identity");
+      }
+      expect(envelope.unit_id).toBe(file.unit_id);
+    }
+    checked.push({
+      ...actual, envelope, covers: envelope.covers, tier: envelope.tier, period: envelope.period,
+      row_count: actual.footerRowCount, identity: "identity" in envelope ? envelope.identity : null,
     });
   }
-  return { files: checkedFiles };
+  return { files: checked };
 }
-
-type LedgerRegistryFile = {
-  families: {
-    name: string;
-    lifecycle_status: LedgerRegistration["lifecycle_status"];
-    ledgers: { name: string; grain: string; prefix: string[] }[];
-  }[];
-};
-
-async function registeredEntry(ledger: string): Promise<LedgerRegistration> {
-  const registry = JSON.parse(
-    await readFile(join(repositoryRoot, "config", "ledgers.json"), "utf8"),
-  ) as LedgerRegistryFile;
+async function registeredEntry(name: string): Promise<LedgerRegistration> {
+  const registry = JSON.parse(await readFile(join(repositoryRoot, "config", "ledgers.json"), "utf8")) as {
+    families: { name: string; lifecycle_status: LedgerRegistration["lifecycle_status"]; ledgers: { name: string; prefix: string[] }[] }[];
+  };
   for (const family of registry.families) {
-    const entry = family.ledgers.find((candidate) => candidate.name === ledger);
-    if (entry !== undefined) {
-      if (entry.grain !== "raw-and-compact") throw new Error(`${ledger} fixture is not a raw-and-compact ledger`);
-      return {
-        name: entry.name,
-        family: family.name,
-        grain: "raw-and-compact",
-        lifecycle_status: family.lifecycle_status,
-        prefix: entry.prefix,
-      };
-    }
+    const entry = family.ledgers.find(candidate => candidate.name === name);
+    if (entry) return { ...registration(name), family: family.name, lifecycle_status: family.lifecycle_status, prefix: entry.prefix };
   }
-  throw new Error(`${ledger} is absent from the named ledger registry`);
+  throw new Error(`${name} is absent from the named registry`);
 }
-
 async function readLedgerFixture(name: string): Promise<unknown> {
-  return JSON.parse(
-    await readFile(join(repositoryRoot, "tests", "fixtures", "ledger-file-writer", name), "utf8"),
-  );
+  return JSON.parse(await readFile(join(repositoryRoot, "tests", "fixtures", "ledger-file-writer", name), "utf8"));
 }
-
 async function withOutputRoot<T>(run: (root: string) => Promise<T>): Promise<T> {
   const root = await mkdtemp(join(tmpdir(), "ledger-file-writer-"));
-  try {
-    return await run(root);
-  } finally {
-    await rm(root, { recursive: true, force: true });
-  }
+  try { return await run(root); } finally { await rm(root, { recursive: true, force: true }); }
 }
 
 describe("ledger Parquet readback", () => {
   test("serializes the recorded canonical compatibility vector", () => {
     const schema = z.object({
-      big: z.number(),
-      float_one: z.number(),
-      list: z.array(z.string()),
-      maybe: z.string().nullable(),
-      negative_zero: z.number(),
-      nested: z.object({
-        items: z.array(z.string()),
-        value: z.number().int().nullable(),
-      }),
-      small: z.number(),
-      "z-unicode": z.string(),
+      big: z.number(), float_one: z.number(), list: z.array(z.string()),
+      maybe: z.string().nullable(), negative_zero: z.number(),
+      nested: z.object({ items: z.array(z.string()), value: z.number().int().nullable() }),
+      small: z.number(), "z-unicode": z.string(),
     });
     const row = {
-      big: 1e20,
-      float_one: 1.0,
-      list: ["na\u00efve", "\u6771\u4eac"],
-      maybe: null,
-      negative_zero: -0.0,
-      nested: { items: ["\u00c9diteur"], value: null },
-      small: 1e-7,
-      "z-unicode": "Caf\u00e9 \u6771\u4eac",
+      big: 1e20, float_one: 1.0, list: ["na\u00efve", "\u6771\u4eac"], maybe: null,
+      negative_zero: -0.0, nested: { items: ["\u00c9diteur"], value: null },
+      small: 1e-7, "z-unicode": "Caf\u00e9 \u6771\u4eac",
     };
     const fields = describeObjectSchema(schema).fields;
-    const bytes = serializeRowsBytes([row], fields);
-    expect(bytes.toString("ascii")).toBe(
+    expect(serializeRowsBytes([row], fields).toString("ascii")).toBe(
       "{\"big\":1e+20,\"float_one\":1.0,\"list\":[\"na\\u00efve\",\"\\u6771\\u4eac\"],\"maybe\":null,\"negative_zero\":-0.0,\"nested\":{\"items\":[\"\\u00c9diteur\"],\"value\":null},\"small\":1e-07,\"z-unicode\":\"Caf\\u00e9 \\u6771\\u4eac\"}\n",
     );
-    expect(digestRows([row], fields)).toBe(
-      "9514b5931807b27fbaf18c43c7371ada4bab45fd745ff4b3564dad032cdad67e",
-    );
+    expect(digestRows([row], fields)).toBe("9514b5931807b27fbaf18c43c7371ada4bab45fd745ff4b3564dad032cdad67e");
   });
 
   test("writes raw day groups and compact rows through one registered contract", async () => {
-    await withOutputRoot(async (root) => {
+    await withOutputRoot(async root => {
       const rows = [assessment("2026-10-20", ["na\u00efve", "\u6771\u4eac"]), assessment("2026-10-21", null)];
-      const raw = await persistLedger({
-        ledger: "article-assessments",
-        rowContract: { schema: ArticleAssessmentRecordSchema, schemaVersion: ArticleAssessmentContract.schemaVersion },
-        rows,
-        outputRoot: root,
-        period: { tier: "raw", covers: "2026-10-21" },
-        writerContext,
-        ledgerSettings: compression,
-        registryEntry: registration("article-assessments"),
-      });
-      expect(raw.status).toBe("written");
+      const context = {
+        ledger: "feed-health", outputRoot: root, writerContext, ledgerSettings: compression,
+        registryEntry: registration("feed-health"), rowContract: { schema: NestedSchema, schemaVersion: "2026-10-20" },
+      };
+      const raw = await persistLedger({ ...context, rows, period: { tier: "raw", covers: "2026-10-21" } });
       if (raw.status !== "written") throw new Error("raw rows were not written");
-      expect(raw.files.map((file) => file.covers)).toEqual(["2026-10-20", "2026-10-21"]);
-
-      const rawReadback = await checkParquetReadback(
-        "article-assessments",
-        root,
-        raw.files,
-        ArticleAssessmentRecordSchema,
-      );
-      expect(rawReadback.files.map((file) => file.row_count)).toEqual([1, 1]);
-      expect(rawReadback.files.every((file) => file.tier === "raw" && file.period === null)).toBe(true);
-      for (const file of rawReadback.files) {
-        const expectedRow = rows.find((row) => row.date === file.covers);
-        if (expectedRow === undefined) throw new Error(`no input row covers ${file.covers}`);
-        expect(file.rows[0]).toMatchObject(expectedRow);
-      }
-
-      const identities = raw.files.map((file) => RowIdentitySchema.parse({
-        ledger: "article-assessments",
-        covers: file.covers,
-        run_id: writerContext.run_id,
-        attempt: writerContext.attempt,
-        job: writerContext.job,
-        pipeline_name: writerContext.pipeline_name,
-        task_name: writerContext.task_name,
-        shard: writerContext.shard,
-        unit_id: file.unit_id,
-      }));
-      const compactRows = rows.map((row, index) => {
-        const identity = identities[index];
-        if (identity === undefined) throw new Error(`raw writer omitted identity ${index}`);
-        return { identity, row };
-      });
-      const compact = await persistLedger({
-        ledger: "article-assessments",
-        rowContract: { schema: ArticleAssessmentRecordSchema, schemaVersion: ArticleAssessmentContract.schemaVersion },
-        rows: compactRows,
-        outputRoot: root,
-        period: { tier: "compact", period: "monthly", covers: "2026-10", builtFrom: raw.files.length },
-        writerContext: WriterIdentitySchema.parse({
-          run_id: "2026-10-21-456",
-          attempt: 9,
-          job: "assemble",
-          pipeline_name: null,
-          task_name: null,
-          shard: 7,
-          producer: "tests.ledger-compactor",
-          git_sha: "b".repeat(40),
+      expect(raw.files.map(file => file.covers)).toEqual(["2026-10-20", "2026-10-21"]);
+      const rawReadback = await checkParquetReadback("feed-health", root, raw.files, NestedSchema);
+      expect(rawReadback.files.map(file => file.row_count)).toEqual([1, 1]);
+      const compactRows = rows.map((row, index) => ({
+        row, identity: RowIdentitySchema.parse({
+          ledger: "feed-health", covers: row.date, run_id: writerContext.run_id,
+          attempt: writerContext.attempt, job: writerContext.job, pipeline_name: writerContext.pipeline_name,
+          task_name: writerContext.task_name, shard: writerContext.shard, unit_id: raw.files[index]!.unit_id,
         }),
-        ledgerSettings: compression,
-        registryEntry: registration("article-assessments"),
+      }));
+      const compact = await persistLedger({
+        ...context, rows: compactRows, period: { tier: "compact", period: "monthly", covers: "2026-10", builtFrom: 2 },
+        writerContext: WriterIdentitySchema.parse({ ...writerContext, attempt: 9, shard: 7 }),
       });
-      expect(compact.status).toBe("written");
       if (compact.status !== "written") throw new Error("compact rows were not written");
-      const compactReadback = await checkParquetReadback(
-        "article-assessments",
-        root,
-        compact.files,
-        ArticleAssessmentRecordSchema,
-      );
-      expect(compactReadback.files[0]?.row_count).toBe(2);
-      expect(compactReadback.files[0]?.tier).toBe("compact");
-      expect(compactReadback.files[0]?.period).toBe("monthly");
-      expect(compactReadback.files[0]?.rows).toEqual(rawReadback.files.flatMap((file) => file.rows));
-      expect(compactReadback.files[0]?.identity).toMatchObject({
-        run_id: "2026-10-21-456",
-        job: "assemble",
-        shard: 7,
-      });
+      const readback = await checkParquetReadback("feed-health", root, compact.files, NestedSchema);
+      expect(readback.files[0]!.rows).toEqual(rawReadback.files.flatMap(file => file.rows));
+      expect(readback.files[0]!.identity?.shard).toBe(7);
     });
   });
 
   test("writes a second registered contract and preserves its original compact identity", async () => {
-    await withOutputRoot(async (root) => {
+    await withOutputRoot(async root => {
       const row = diversity();
-      const raw = await persistLedger({
-        ledger: "diversity",
-        rowContract: { schema: DiversityMetricRowSchema, schemaVersion: "2026-10-20" },
-        rows: [row],
-        outputRoot: root,
-        period: { tier: "raw", covers: row.date },
-        writerContext,
-        ledgerSettings: compression,
-        registryEntry: registration("diversity"),
-      });
-      if (raw.status !== "written") throw new Error("diversity row was not written");
-      const rawReadback = await checkParquetReadback(
-        "diversity",
-        root,
-        raw.files,
-        DiversityMetricRowSchema,
-      );
-      expect(rawReadback.files[0]?.rows[0]).toMatchObject(row);
-      const rawFile = raw.files[0];
-      if (rawFile === undefined) throw new Error("raw writer omitted its file metadata");
+      const context = {
+        ledger: "seen", outputRoot: root, writerContext, ledgerSettings: compression,
+        registryEntry: registration("seen"), rowContract: { schema: CountRowSchema, schemaVersion: "2026-10-20" },
+      };
+      const raw = await persistLedger({ ...context, rows: [row], period: { tier: "raw", covers: row.date } });
+      if (raw.status !== "written") throw new Error("count row was not written");
+      const first = await checkParquetReadback("seen", root, raw.files, CountRowSchema);
       const identity = RowIdentitySchema.parse({
-        ledger: "diversity",
-        covers: rawFile.covers,
-        run_id: writerContext.run_id,
-        attempt: writerContext.attempt,
-        job: writerContext.job,
-        pipeline_name: writerContext.pipeline_name,
-        task_name: writerContext.task_name,
-        shard: writerContext.shard,
-        unit_id: rawFile.unit_id,
+        ledger: "seen", covers: row.date, run_id: writerContext.run_id, attempt: writerContext.attempt,
+        job: writerContext.job, pipeline_name: writerContext.pipeline_name, task_name: writerContext.task_name,
+        shard: writerContext.shard, unit_id: raw.files[0]!.unit_id,
       });
-
       const compact = await persistLedger({
-        ledger: "diversity",
-        rowContract: { schema: DiversityMetricRowSchema, schemaVersion: "2026-10-20" },
-        rows: [{ identity, row }],
-        outputRoot: root,
-        period: { tier: "compact", period: "daily", covers: row.date, builtFrom: 1 },
-        writerContext: WriterIdentitySchema.parse({
-          run_id: "2026-10-21-457",
-          attempt: 8,
-          job: "assemble",
-          pipeline_name: null,
-          task_name: null,
-          shard: 6,
-          producer: "tests.ledger-compactor",
-          git_sha: "b".repeat(40),
-        }),
-        ledgerSettings: compression,
-        registryEntry: registration("diversity"),
+        ...context, rows: [{ identity, row }], period: { tier: "compact", period: "daily", covers: row.date, builtFrom: 1 },
       });
-      if (compact.status !== "written") throw new Error("compact diversity row was not written");
-      const compactReadback = await checkParquetReadback(
-        "diversity",
-        root,
-        compact.files,
-        DiversityMetricRowSchema,
-      );
-      expect(compactReadback.files[0]?.rows).toEqual(rawReadback.files[0]?.rows);
-      expect(compactReadback.files[0]?.identity).toMatchObject({
-        run_id: "2026-10-21-457",
-        job: "assemble",
-        shard: 6,
-      });
+      if (compact.status !== "written") throw new Error("count row was not compacted");
+      const readback = await checkParquetReadback("seen", root, compact.files, CountRowSchema);
+      expect(readback.files[0]!.rows).toEqual(first.files[0]!.rows);
     });
   });
 
   test("keeps empty raw output absent and writes a typed empty compact file", async () => {
-    await withOutputRoot(async (root) => {
-      const base = {
-        ledger: "diversity",
-        rowContract: { schema: DiversityMetricRowSchema, schemaVersion: "2026-10-20" },
-        outputRoot: root,
-        writerContext,
-        ledgerSettings: compression,
-        registryEntry: registration("diversity"),
-      };
-      const raw = await persistLedger({
-        ...base,
-        rows: [],
-        period: { tier: "raw", covers: "2026-10-21" },
-      });
-      expect(raw).toEqual({ status: "empty", files: [] });
-
-      const compact = await persistLedger({
-        ...base,
-        rows: [],
-        period: { tier: "compact", period: "daily", covers: "2026-10-21", builtFrom: 0 },
-      });
-      if (compact.status !== "written") throw new Error("empty compact period was not written");
-      const readback = await checkParquetReadback("diversity", root, compact.files, DiversityMetricRowSchema);
-      expect(readback.files[0]?.row_count).toBe(0);
-      expect(readback.files[0]?.tier).toBe("compact");
+    await withOutputRoot(async root => {
+      const recording = plannerRecordings().find(row => row.name === "plan-runs")!;
+      const context = { ledger: recording.name, outputRoot: root, rowContract: recording.contract, ledgerSettings: compression, registryEntry: registration(recording.name) };
+      expect(await persistLedger({ ...context, rows: [], period: { tier: "raw", covers: "2026-10-20" } })).toEqual({ status: "empty", files: [] });
+      const compact = await persistLedger({ ...context, rows: [], period: { tier: "compact", period: "daily", covers: "2026-10-20", builtFrom: 0 } });
+      if (compact.status !== "written") throw new Error("typed empty planner compact file was not written");
+      expect((await checkParquetReadback(recording.name, root, compact.files, recording.contract.schema)).files[0]!.row_count).toBe(0);
     });
   });
 
   test("writes a narrowed host-fingerprint identity row without claiming hardware retention", async () => {
-    await withOutputRoot(async (root) => {
-      const HostFingerprintIdentityCollisionSchema = z.object({
-        version: z.string(),
-        date: z.string(),
-        run_id: z.string(),
-        job: z.string(),
-        pipeline_name: z.string().nullable(),
-        task_name: z.string().nullable(),
-        shard: z.number().int(),
-        flags: z.string(),
+    await withOutputRoot(async root => {
+      const schema = z.object({
+        version: z.string(), date: z.string(), run_id: z.string(), job: z.string(),
+        pipeline_name: z.string().nullable(), task_name: z.string().nullable(),
+        shard: z.number().int(), flags: z.string(),
       });
       const fixture = await readLedgerFixture("host-fingerprint-row.json");
       expect(fixture).toHaveProperty("cpu_model");
-      const row = HostFingerprintIdentityCollisionSchema.parse(fixture);
-      expect(row).not.toHaveProperty("cpu_model");
+      const row = schema.parse(fixture);
       const hostWriter = WriterIdentitySchema.parse({
-        run_id: "2026-10-21-777",
-        attempt: 4,
-        job: "operator",
-        pipeline_name: null,
-        task_name: null,
-        shard: 7,
-        producer: "tests.host-fingerprint",
-        git_sha: "c".repeat(40),
+        run_id: "2026-10-21-777", attempt: 4, job: "operator", shard: 7,
+        producer: "tests.host-fingerprint", git_sha: "c".repeat(40),
       });
-      const registrationEntry = await registeredEntry("host-fingerprint");
-      expect(registrationEntry.prefix).toEqual(["host-fingerprint"]);
       const raw = await persistLedger({
-        ledger: "host-fingerprint",
-        rowContract: {
-          schema: HostFingerprintIdentityCollisionSchema,
-          schemaVersion: "2026-10-14",
-        },
-        rows: [row],
-        outputRoot: root,
-        period: { tier: "raw", covers: "2026-10-21" },
-        writerContext: hostWriter,
-        ledgerSettings: compression,
-        registryEntry: registrationEntry,
+        ledger: "host-fingerprint", rowContract: { schema, schemaVersion: "2026-10-14" },
+        rows: [row], outputRoot: root, period: { tier: "raw", covers: "2026-10-21" },
+        writerContext: hostWriter, ledgerSettings: compression, registryEntry: await registeredEntry("host-fingerprint"),
       });
       if (raw.status !== "written") throw new Error("host fingerprint row was not written");
-      const readback = await checkParquetReadback(
-        "host-fingerprint",
-        root,
-        raw.files,
-        HostFingerprintIdentityCollisionSchema,
-      );
-      expect(readback.files[0]?.identity).toMatchObject({ job: "operator", shard: 7 });
-      expect(readback.files[0]?.rows[0]).toMatchObject({
-        run_id: "2026-10-21-555",
-        job: "work",
-        pipeline_name: null,
-        task_name: null,
-        shard: 1,
-      });
-      expect(readback.files[0]?.rows[0]).toMatchObject(row);
-      expect(readback.files[0]?.rows[0]).not.toHaveProperty("cpu_model");
+      const readback = await checkParquetReadback("host-fingerprint", root, raw.files, schema);
+      expect(readback.files[0]!.identity).toMatchObject({ job: "operator", shard: 7 });
+      expect(readback.files[0]!.rows[0]).toMatchObject({ run_id: "2026-10-21-555", job: "work", shard: 1 });
+      expect(readback.files[0]!.rows[0]).not.toHaveProperty("cpu_model");
     });
   });
 
   test("writes a real dispatch with worker assignment distinct from writer shard", async () => {
-    await withOutputRoot(async (root) => {
-      const recorded = await readLedgerFixture("feed-ingest-dispatch-row.json");
-      const previous = PreviousFeedIngestDispatchSchema.parse(recorded);
-      const migrated = readFeedIngestDispatch(recorded);
-      expect(migrated.selection.ratings.source_reliability).toBeNull();
-      expect(migrated.selection.ratings.publisher_exposure).toBeNull();
-      const authority = migrated.selection.policy.source_authority_weight
-        * migrated.selection.source.weight * migrated.selection.source.applied_tier_weight;
-      const dispatch = FeedIngestDispatchSchema.parse({
-        ...migrated, selection: { ...migrated.selection, ratings: {
-          ...migrated.selection.ratings, marginal_score: migrated.selection.ratings.base_article_score - authority * 0.5,
-          source: { available: false, value: null },
-          publisher_exposure: {
-            day: migrated.selection.date, publisher_id: null, history_status: "unavailable",
-            published_today: null, selected_so_far: 0, planned_slots: 2,
-            coefficient: 0.25, exposure: null, value: null,
-          },
-          source_reliability: {
-            enabled: true, source_authority_score: authority, reliability_floor: 0.5,
-            history: { success_fraction: 0.5, attempted: 4, window_days: 7 },
-            production_factor: 0.5, value: authority * 0.5,
-          },
-        } },
+    await withOutputRoot(async root => {
+      const article = selectedArticle();
+      const before = structuredClone(article);
+      const metadata = selectedArticleMetadata(article);
+      const artifact = SelectedArticlesArtifactSchema.parse({
+        run_id: "2026-10-20-1", attempt: 1, date: "2026-10-20", evaluated_at: "2026-10-20T10:00:00.123Z", articles: [article],
       });
-      expect(dispatch.partition.worker_assignment).not.toBe(writerContext.shard);
+      expect(article).toEqual(before);
+      expect(metadata).not.toHaveProperty("article_text");
+      expect(artifact.articles[0]!.article_text).toBe(before.article_text);
+      for (const recording of plannerRecordings()) {
+        const context = { ledger: recording.name, rowContract: recording.contract, outputRoot: root, ledgerSettings: compression, registryEntry: await registeredEntry(recording.name) };
+        const raw = await persistLedger({
+          ...context, rows: [recording.row, recording.row], period: { tier: "raw", covers: "2026-10-20" },
+          ...(recording.name === "feed-health-state" ? { updatedAt: "2026-10-21T00:00:00.001Z" } : {}),
+        });
+        if (raw.status !== "written") throw new Error(`${recording.name} was not written`);
+        const readback = await checkParquetReadback(recording.name, root, raw.files, recording.contract.schema);
+        expect(readback.files[0]!.rows).toEqual([recording.row]);
+        expect(readback.files[0]!.rows[0]).not.toHaveProperty("article_text");
+        expect(readback.files[0]!.footer.has("run_id")).toBe(false);
+        expect(readback.files[0]!.footer.has("unit_id")).toBe(false);
+        expect(readback.files[0]!.footer.has("git_sha")).toBe(false);
+        if (recording.name === "feed-health-state") expect(readback.files[0]!.footer.get("updated_at")).toBe("2026-10-21T00:00:00.001Z");
+        for (const [period, covers] of [["daily", "2026-10-20"], ["monthly", "2026-10"], ["yearly", "2026"]] as const) {
+          const retry = plannerRecordings("2026-10-20", 2).find(row => row.name === recording.name)!.row;
+          const compact = await persistLedger({ ...context, rows: [recording.row, recording.row, retry], period: { tier: "compact", period, covers, builtFrom: 2 } });
+          if (compact.status !== "written") throw new Error("planner compact file was not written");
+          const packed = await checkParquetReadback(recording.name, root, compact.files, recording.contract.schema);
+          expect(packed.files[0]!.row_count).toBe(recording.name === "discovered-articles" ? 1 : 2);
+          if (recording.name === "feed-health-state") expect(packed.files[0]!.rows.reduce((sum, row) => sum + Number(row.article_requests), 0)).toBe(2);
+        }
+      }
+      const discovery = plannerRecordings()[0]!;
       const raw = await persistLedger({
-        ledger: "dispatches",
-        rowContract: { schema: FeedIngestDispatchSchema, schemaVersion: dispatch.version },
-        rows: [dispatch],
-        outputRoot: root,
-        period: { tier: "raw", covers: dispatch.content.date },
-        writerContext,
-        ledgerSettings: compression,
-        registryEntry: await registeredEntry("dispatches"),
+        ledger: discovery.name, rowContract: discovery.contract,
+        rows: [{ ...discovery.row, first_seen_at: "2026-10-21T10:00:00Z", date: "2026-10-21" }, discovery.row],
+        outputRoot: root, ledgerSettings: compression, registryEntry: registration(discovery.name),
+        period: { tier: "raw", covers: "2026-10-21" },
       });
-      if (raw.status !== "written") throw new Error("dispatch row was not written");
-      const readback = await checkParquetReadback(
-        "dispatches",
-        root,
-        raw.files,
-        FeedIngestDispatchSchema,
-      );
-      const recordedSchema = z.object({
-        version: z.string(),
-        columns: z.array(z.tuple([z.string(), z.string(), z.boolean()])),
-      }).parse(await readLedgerFixture("dispatch-arrow-schema.json"));
-      const previousSchema = PreviousFeedIngestDispatchSchema.extend({ version: z.literal(previous.version) });
-      const historical = await persistLedger({
-        ledger: "dispatches", rowContract: { schema: previousSchema, schemaVersion: previous.version },
-        rows: [previous], outputRoot: root, period: { tier: "raw", covers: previous.content.date },
-        writerContext, ledgerSettings: compression, registryEntry: await registeredEntry("dispatches"),
-      });
-      if (historical.status !== "written") throw new Error("historical dispatch row was not written");
-      const historicalReadback = await checkParquetReadback("dispatches", root, historical.files, previousSchema);
-      expect(historicalReadback.files[0]!.nativeColumns).toEqual(recordedSchema.columns);
-      expect(historicalReadback.files[0]!.rows[0]).toMatchObject(previous);
-      const columns = readback.files[0]!.nativeColumns;
-      expect(columns.filter(([name]) => !name.startsWith("content.planning_observations")
-        && !name.startsWith("selection.ratings.source_reliability")
-        && !name.startsWith("selection.ratings.publisher_exposure")
-        && !name.startsWith("selection.ratings.source_operational")
-        && name !== "content.source.publisher_id" && name !== "selection.source.publisher_id"))
-        .toEqual(recordedSchema.columns);
-      expect(columns).toContainEqual(["content.source.publisher_id", "Utf8", true]);
-      expect(columns).toContainEqual(["selection.source.publisher_id", "Utf8", true]);
-      expect(columns.filter(([name]) => name.startsWith("selection.ratings.publisher_exposure"))).toEqual([
-        ["selection.ratings.publisher_exposure", "Struct", true],
-        ["selection.ratings.publisher_exposure.day", "Utf8", false],
-        ["selection.ratings.publisher_exposure.publisher_id", "Utf8", true],
-        ["selection.ratings.publisher_exposure.history_status", "Utf8", false],
-        ["selection.ratings.publisher_exposure.published_today", "Int64", true],
-        ["selection.ratings.publisher_exposure.selected_so_far", "Int64", false],
-        ["selection.ratings.publisher_exposure.planned_slots", "Int64", false],
-        ["selection.ratings.publisher_exposure.coefficient", "Float64", false],
-        ["selection.ratings.publisher_exposure.exposure", "Float64", true],
-        ["selection.ratings.publisher_exposure.value", "Float64", true],
-      ]);
-      expect(columns.filter(([name]) => name.startsWith("selection.ratings.source_reliability"))).toEqual([
-        ["selection.ratings.source_reliability", "Struct", true],
-        ["selection.ratings.source_reliability.enabled", "Bool", false],
-        ["selection.ratings.source_reliability.source_authority_score", "Float64", false],
-        ["selection.ratings.source_reliability.reliability_floor", "Float64", false],
-        ["selection.ratings.source_reliability.history", "Struct", true],
-        ["selection.ratings.source_reliability.history.success_fraction", "Float64", false],
-        ["selection.ratings.source_reliability.history.attempted", "Int64", false],
-        ["selection.ratings.source_reliability.history.window_days", "Int64", false],
-        ["selection.ratings.source_reliability.production_factor", "Float64", true],
-        ["selection.ratings.source_reliability.value", "Float64", true],
-      ]);
-      expect(columns).toContainEqual(["content.planning_observations", "Struct", true]);
-      expect(columns).toContainEqual(["content.planning_observations.salience[].voted", "Bool", true]);
-      expect(readback.files[0]?.identity.shard).toBe(writerContext.shard);
-      expect(readback.files[0]?.rows[0]?.partition).toEqual(dispatch.partition);
-      expect(readback.files[0]?.rows[0]?.content).toEqual(dispatch.content);
-      expect(readback.files[0]?.rows[0]?.selection).toEqual(dispatch.selection);
-      expect(readback.files[0]?.rows[0]).toMatchObject(dispatch);
+      if (raw.status !== "written") throw new Error("global discovery minimum was not written");
+      expect(raw.files.map(file => file.covers)).toEqual(["2026-10-20"]);
     });
   });
 
   test("rejects invalid rows without writing any file", async () => {
-    await withOutputRoot(async (root) => {
-      const invalid = { ...assessment("2026-10-21", null), source_id: "different-source" };
+    await withOutputRoot(async root => {
+      const recording = plannerRecordings().find(row => row.name === "selected-articles")!;
+      const context = { ledger: recording.name, outputRoot: root, rowContract: recording.contract, registryEntry: registration(recording.name), ledgerSettings: compression, period: { tier: "raw" as const, covers: "2026-10-20" } };
+      for (const change of [{ article_text: "not allowed" }, { unit_id: "not allowed" }, { estimated_work: 0.5 }]) {
+        await expect(persistLedger({ ...context, rows: [{ ...recording.row, ...change }] })).rejects.toThrow();
+      }
+      await expect(persistLedger({ ...context, rows: [recording.row], rowContract: {
+        schema: SelectedArticleRowSchema.safeExtend({ article_text: z.string().optional() }), schemaVersion: "2026-10-25",
+      } })).rejects.toThrow("declared current planner row contract");
+      await expect(persistLedger({ ...context, rows: [recording.row, { ...recording.row, title: "Conflicting copy" }] })).rejects.toThrow("conflicting duplicate");
       await expect(persistLedger({
-        ledger: "article-assessments",
-        rowContract: { schema: ArticleAssessmentRecordSchema, schemaVersion: ArticleAssessmentContract.schemaVersion },
-        rows: [invalid],
-        outputRoot: root,
-        period: { tier: "raw", covers: "2026-10-21" },
-        writerContext,
-        ledgerSettings: compression,
-        registryEntry: registration("article-assessments"),
+        ...context, rows: [{ ...recording.row, url_key: "f".repeat(64) }],
+        rowContract: { schema: z.strictObject(SelectedArticleRowSchema.shape), schemaVersion: "2026-10-25" },
       })).rejects.toThrow();
+      const health = plannerRecordings().find(row => row.name === "feed-health-state")!;
+      await expect(persistLedger({
+        ...context, ledger: health.name, registryEntry: registration(health.name),
+        rowContract: health.contract, rows: [health.row, { ...health.row, attempt: 2 }],
+      })).rejects.toThrow("one run attempt");
       expect(await readdir(root)).toEqual([]);
     });
   });
 
   test("rejects a registry prefix that can escape the output root", async () => {
-    await withOutputRoot(async (root) => {
-      const unsafeRegistration: LedgerRegistration = {
-        ...registration("article-assessments"),
-        prefix: ["feed-ingest-plan", "..", "article-assessments"],
-      };
+    await withOutputRoot(async root => {
       await expect(persistLedger({
-        ledger: "article-assessments",
-        rowContract: { schema: ArticleAssessmentRecordSchema, schemaVersion: ArticleAssessmentContract.schemaVersion },
-        rows: [assessment("2026-10-21", null)],
-        outputRoot: root,
-        period: { tier: "raw", covers: "2026-10-21" },
-        writerContext,
-        ledgerSettings: compression,
-        registryEntry: unsafeRegistration,
+        ledger: "feed-health", rowContract: { schema: NestedSchema, schemaVersion: "2026-10-20" },
+        rows: [assessment("2026-10-21", null)], outputRoot: root, period: { tier: "raw", covers: "2026-10-21" },
+        writerContext, ledgerSettings: compression, registryEntry: { ...registration("feed-health"), prefix: ["feed-health", "..", "feed-health"] },
       })).rejects.toThrow("unsafe path segment");
       expect(await readdir(root)).toEqual([]);
     });
   });
 
   test("preflights every raw destination before writing the first file", async () => {
-    await withOutputRoot(async (root) => {
-      const blockedDay = resolve(root, "raw", "feed-ingest-plan", "article-assessments", "2026", "10", "21");
-      await mkdir(dirname(blockedDay), { recursive: true });
-      await writeFile(blockedDay, "not a directory");
-
+    await withOutputRoot(async root => {
+      const blocked = resolve(root, "raw", "feed-health", "2026", "10", "21");
+      await mkdir(dirname(blocked), { recursive: true });
+      await writeFile(blocked, "not a directory");
       await expect(persistLedger({
-        ledger: "article-assessments",
-        rowContract: { schema: ArticleAssessmentRecordSchema, schemaVersion: ArticleAssessmentContract.schemaVersion },
+        ledger: "feed-health", rowContract: { schema: NestedSchema, schemaVersion: "2026-10-20" },
         rows: [assessment("2026-10-20", null), assessment("2026-10-21", null)],
-        outputRoot: root,
-        period: { tier: "raw", covers: "2026-10-21" },
-        writerContext,
-        ledgerSettings: compression,
-        registryEntry: registration("article-assessments"),
+        outputRoot: root, period: { tier: "raw", covers: "2026-10-21" }, writerContext,
+        ledgerSettings: compression, registryEntry: registration("feed-health"),
       })).rejects.toThrow();
-
-      const firstDay = resolve(root, "raw", "feed-ingest-plan", "article-assessments", "2026", "10", "20");
-      expect(await readdir(firstDay)).toEqual([]);
+      expect(await readdir(resolve(root, "raw", "feed-health", "2026", "10", "20"))).toEqual([]);
     });
   });
 
   test("skips new raw rows for inactive ledgers but still compacts stored rows", async () => {
-    await withOutputRoot(async (root) => {
+    await withOutputRoot(async root => {
       const row = diversity();
-      for (const lifecycleStatus of ["paused", "retired"] as const) {
-        const skipped = await persistLedger({
-          ledger: "diversity",
-          rowContract: { schema: DiversityMetricRowSchema, schemaVersion: "2026-10-20" },
-          rows: [row],
-          outputRoot: root,
-          period: { tier: "raw", covers: row.date },
-          writerContext,
-          ledgerSettings: compression,
-          registryEntry: registration("diversity", lifecycleStatus),
-        });
-        expect(skipped).toMatchObject({
-          status: "skipped",
-          reason: "ledger_not_active",
-          warning: { ledger: "diversity", lifecycle_status: lifecycleStatus, row_count: 1 },
-          files: [],
-        });
+      const context = { ledger: "seen", rowContract: { schema: CountRowSchema, schemaVersion: "2026-10-20" }, outputRoot: root, writerContext, ledgerSettings: compression };
+      for (const lifecycle of ["paused", "retired"] as const) {
+        const skipped = await persistLedger({ ...context, rows: [row], period: { tier: "raw", covers: row.date }, registryEntry: registration("seen", lifecycle) });
+        expect(skipped).toMatchObject({ status: "skipped", reason: "ledger_not_active", files: [] });
       }
       expect(await readdir(root)).toEqual([]);
-
       for (const job of ["migrate", "run-tasks", "history"] as const) {
-        for (const lifecycleStatus of ["paused", "retired"] as const) {
+        for (const lifecycle of ["paused", "retired"] as const) {
           const maintained = await persistLedger({
-            ledger: "diversity",
-            rowContract: { schema: DiversityMetricRowSchema, schemaVersion: "2026-10-20" },
-            rows: [row],
-            outputRoot: root,
-            period: { tier: "raw", covers: row.date },
-            writerContext: WriterIdentitySchema.parse({
-              ...writerContext,
-              job,
-              pipeline_name: null,
-              task_name: null,
-              producer: `tests.${job}`,
-            }),
-            ledgerSettings: compression,
-            registryEntry: registration("diversity", lifecycleStatus),
+            ...context, rows: [row], period: { tier: "raw", covers: row.date },
+            writerContext: WriterIdentitySchema.parse({ ...writerContext, job, pipeline_name: null, task_name: null }),
+            registryEntry: registration("seen", lifecycle),
           });
           expect(maintained.status).toBe("written");
         }
       }
-
       const identity = RowIdentitySchema.parse({
-        ledger: "diversity",
-        covers: row.date,
-        run_id: writerContext.run_id,
-        attempt: writerContext.attempt,
-        job: writerContext.job,
-        pipeline_name: writerContext.pipeline_name,
-        task_name: writerContext.task_name,
-        shard: writerContext.shard,
-        unit_id: createUnitId({
-          ledger: "diversity",
-          covers: row.date,
-          runId: writerContext.run_id,
-          job: writerContext.job,
-          pipelineName: writerContext.pipeline_name,
-          taskName: writerContext.task_name,
-          shard: writerContext.shard,
-          producer: writerContext.producer,
+        ledger: "seen", covers: row.date, run_id: writerContext.run_id, attempt: writerContext.attempt,
+        job: writerContext.job, pipeline_name: writerContext.pipeline_name, task_name: writerContext.task_name,
+        shard: writerContext.shard, unit_id: createUnitId({
+          ledger: "seen", covers: row.date, runId: writerContext.run_id, job: writerContext.job,
+          pipelineName: writerContext.pipeline_name, taskName: writerContext.task_name,
+          shard: writerContext.shard, producer: writerContext.producer,
         }),
       });
-      const compact = await persistLedger({
-        ledger: "diversity",
-        rowContract: { schema: DiversityMetricRowSchema, schemaVersion: "2026-10-20" },
-        rows: [{ identity, row }],
-        outputRoot: root,
-        period: { tier: "compact", period: "daily", covers: row.date, builtFrom: 1 },
-        writerContext,
-        ledgerSettings: compression,
-        registryEntry: registration("diversity", "paused"),
-      });
-      if (compact.status !== "written") throw new Error("paused ledger did not compact its stored row");
-      const readback = await checkParquetReadback("diversity", root, compact.files, DiversityMetricRowSchema);
-      expect(readback.files[0]?.row_count).toBe(1);
+      const compact = await persistLedger({ ...context, rows: [{ identity, row }], period: { tier: "compact", period: "daily", covers: row.date, builtFrom: 1 }, registryEntry: registration("seen", "paused") });
+      if (compact.status !== "written") throw new Error("paused ordinary ledger did not compact");
+      expect((await checkParquetReadback("seen", root, compact.files, CountRowSchema)).files[0]!.row_count).toBe(1);
     });
   });
 });
