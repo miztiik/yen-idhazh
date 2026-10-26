@@ -146,6 +146,7 @@ FIXTURE_FILES: Final = (
     "visual-attempt-row/published-chart.json",
     "visual-attempt-row/refused-by-the-validator.json",
     "visual-data/bars-from-the-committed-plan.json",
+    "visual-data/stacked-bar-from-whole.json",
     "visual-decision/chart-render-failed.json",
     "visual-decision/chart-rendered.json",
     "visual-decision/none-the-gate-refused.json",

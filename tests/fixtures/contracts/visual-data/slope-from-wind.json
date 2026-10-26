@@ -34,8 +34,8 @@
     {"derived": null,"element_id": "entity-0-7","mark_id": "m6","source_text": null,"text": "Denmark","time": null,"unit": null,"value": null},
     {"derived": null,"element_id": "entity-49-56","mark_id": "m7","source_text": null,"text": "Germany","time": null,"unit": null,"value": null}
   ],
-  "renderer_version": "2026-10-27T01:00",
+  "renderer_version": "2026-10-27T01:01",
   "title": "Offshore wind capacity, four countries",
   "type": "slope",
-  "version": "2026-10-27T02:00"
+  "version": "2026-10-27T03:00"
 }

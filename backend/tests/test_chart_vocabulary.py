@@ -32,10 +32,16 @@ from idhazh.contracts.article import Article
 from idhazh.contracts.element import ElementTable
 from idhazh.contracts.item_health import ItemHealthRow
 from idhazh.contracts.ledger_name import LedgerName
-from idhazh.contracts.summary import Summary
+from idhazh.contracts.summary import Summary, SummaryStatus
 from idhazh.contracts.visual import VisualPlan, VisualType
 from idhazh.contracts.visual_data import VisualData
-from idhazh.contracts.visual_decision import VisualDecision, VisualState
+from idhazh.contracts.visual_decision import (
+    PAYLOAD_SUFFIX,
+    NoneReason,
+    VisualDecision,
+    VisualKind,
+    VisualState,
+)
 from idhazh.fetch import FetchResult
 from idhazh.render import asset_relpath
 from idhazh.stages import common
@@ -297,3 +303,53 @@ def test_real_shard_projects_outcomes_before_sealing_and_reuses_its_starting_pop
         "measured_requests": len(rows),
         "wasted_decode_rate": 1.0,
     }
+
+
+def test_real_shard_keeps_story_when_pie_fallback_parts_do_not_match_its_whole(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    isolate_ledgers(tmp_path, monkeypatch)
+    run_plan = fixture_plan(item_count=1)
+    reply = json.loads(DRAWS_SUMMARIZE_AND_PLAN.read_bytes())
+    content = json.loads(reply["choices"][0]["message"]["content"])
+    visual = content["visual"]
+    categories = visual["encodings"]["category"][1:]
+    quantities = visual["encodings"]["quantity"]
+    whole, parts = quantities[0], quantities[1:]
+    visual.update(
+        purpose="composition",
+        type="pie",
+        declared_whole_element_id=whole,
+        element_ids=[whole, *categories, *parts],
+        labels=[whole, *categories],
+        annotations=[parts[0]],
+    )
+    visual["encodings"]["category"] = categories
+    visual["encodings"]["quantity"] = parts
+    reply["choices"][0]["message"]["content"] = json.dumps(content)
+    knobs = settings(
+        downgrade_enabled=True,
+        type_selection_enabled=True,
+        enabled_types=["pie", "stacked_bar"],
+    )
+
+    with RecordedEndpoint(200, DRAWS_LABEL.read_bytes(), json.dumps(reply).encode()) as server:
+        stage_work(
+            run_plan,
+            settings=knobs,
+            scorer=None,
+            fetcher=drawable_article_fetch,
+            model_endpoint=server.endpoint,
+        )
+
+    item = run_plan.items[0]
+    items_dir = common._run_dir(run_plan.date) / "items"
+    summary = Summary.read(items_dir / f"{item.item_id}.summary.json")
+    decision = VisualDecision.read(items_dir / f"{item.item_id}{PAYLOAD_SUFFIX}")
+    assert summary.status is SummaryStatus.OK and summary.summary
+    assert decision.kind is VisualKind.NONE
+    assert decision.none_reason is NoneReason.VALIDATION_FAILED
+    assert decision.planned_type is VisualType.PIE and decision.rendered_type is None
+    assert decision.spec is None and decision.data_path is None
+    assert decision.rationale and "stacked_bar_exhaustive" in decision.rationale

@@ -47,7 +47,7 @@ from idhazh.contracts.visual_decision import (
     VisualKind,
     VisualState,
 )
-from idhazh.render.chart import CompileError, compile_bar
+from idhazh.render.chart import CompileError, compile_bar, compile_chart
 from idhazh.render.write import (
     asset_relpath,
     render_planned_visual,
@@ -63,6 +63,9 @@ PLAN_FIXTURES: Final = FIXTURES_DIR / "visual-validator" / "plans"
 TABLE_FIXTURES: Final = FIXTURES_DIR / "visual-validator" / "tables"
 BAR_PLAN: Final = PLAN_FIXTURES / "passes.json"
 BAR_TABLE: Final = TABLE_FIXTURES / "wind.json"
+STACKED_PLAN: Final = PLAN_FIXTURES / "stacked-valid.json"
+STACKED_TABLE: Final = TABLE_FIXTURES / "stacked-whole.json"
+STACKED_DATA: Final = CONTRACT_FIXTURES_DIR / "visual-data" / "stacked-bar-from-whole.json"
 
 DAY: Final = "digest/2026/08/22"
 MARKS: Final = f"{DAY}/ai-01.json"
@@ -266,6 +269,29 @@ class TestPublishedData:
             ElementTable.read(BAR_TABLE),
             visuals=committed_visuals(),
         ).data
+
+    def test_stack_compilation_preserves_the_declared_whole_and_source_parts(self) -> None:
+        plan = VisualPlan.read(STACKED_PLAN)
+        table = ElementTable.read(STACKED_TABLE)
+        compiled = compile_chart(plan, table, visuals=committed_visuals())
+        expected = VisualData.read(STACKED_DATA)
+
+        assert compiled.data.to_json() == expected.to_json()
+        assert compiled.alt_text == (
+            "Stacked bar chart. 0.03 GW: Wind 10 MW; solar 10 MW; hydro 10 MW."
+        )
+        assert compiled.data.type is VisualType.STACKED_BAR
+        assert len(compiled.data.encoding.category) == 1
+        assert len(compiled.data.encoding.series) == len(compiled.data.encoding.quantity) == 3
+        assert "30" not in compiled.alt_text
+
+    def test_incomplete_stack_cannot_be_compiled_directly(self) -> None:
+        with pytest.raises(CompileError, match="stacked_bar_exhaustive"):
+            compile_chart(
+                VisualPlan.read(PLAN_FIXTURES / "stacked-incomplete.json"),
+                ElementTable.read(STACKED_TABLE),
+                visuals=committed_visuals(),
+            )
 
     def test_the_published_data_carries_safe_framing_and_none_of_the_geometry(self) -> None:
         """Framing is sanitized data; appearance is still not model-authored."""

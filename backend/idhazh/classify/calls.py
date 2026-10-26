@@ -1291,18 +1291,14 @@ def summarize_and_plan_budget_tokens(
     the brake and the recovery is the seatbelt. A budget large enough to be an
     unbreakable ceiling would leave no window for the article it is summarising.
 
-    Measured against the committed bounds on 2026-09-14, the whole reply is
-    11,692 characters at its widest: 7,848 of prose, which is 891 tokens at
-    1.3628 a word, and 3,844 of structure, of which the plan alone is 3,767. So
-    the budget is 4,735 tokens and it is mostly the picture. **It was 4,694 at
-    1.3 a word** - the ratio stopped being a judgement and became a reading on
-    2026-09-14 (`measured.TOKENS_A_WORD_AT_THE_CUT`), and 41 tokens is what the
-    denser vocabulary costs the ceiling.
+    The committed bounds give a 4,213-token budget for the full reply and 371
+    tokens for the summary-only reply. The shape and both budgets are derived
+    below; the measure is the current computed value, not a historical reading.
 
     **The suppressed budget is the same arithmetic over the narrower shape**,
     not that number minus the plan's. Subtracting would be a second way of
     computing one quantity, and the two disagree the first time a bound moves.
-    It loses the plan's slack with the plan: today the picture's 3,767
+    It loses the plan's slack with the plan: today the picture's 3,820
     structural characters sit behind the summary and absorb a prose overrun the
     prose half's sizing did not predict, and with them gone a cut can land
     inside the summary, where `recovered_completion` has nothing to recover.
@@ -1318,10 +1314,10 @@ def summarize_and_plan_budget_tokens(
 #: `visual.WORST_CASE_REPLY_CHARACTERS` is the precedent and the reason is the
 #: same: a number that only exists inside a function is a number nobody
 #: re-derives, and a bound can then move without anybody seeing what it cost.
-SUMMARIZE_AND_PLAN_BUDGET_TOKENS: Final = 4160
+SUMMARIZE_AND_PLAN_BUDGET_TOKENS: Final = 4213
 #: The same arithmetic with the plan off the grammar. The gap between the two is
 #: what the reachability gate saves per item, and it is a decode rather than a
-#: call (O43): 3,789 tokens off a 4,160-token ceiling, which is 91 percent of it.
+#: call (O43): 3,842 tokens off a 4,213-token ceiling, which is 91 percent of it.
 #: A ceiling is not a measurement of seconds - an ordinary reply's plan half was
 #: measured at 176 tokens of 327, which is 29.3 s at the summarizer's decode
 #: rate. The working is in `docs/architecture/publishing/visuals.md`.

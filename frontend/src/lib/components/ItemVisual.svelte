@@ -55,6 +55,7 @@
 	import { numberFormatter, type NumberFormatConfig } from '$lib/number-format';
 	import { whenNear } from '$lib/reveal';
 	import type { StoryChartGeometryConfig } from '$lib/server/config';
+	import PartsOfOne from '$lib/charts/d3/PartsOfOne.svelte';
 	import { drawVisual, statedDrawing, type Drawing } from '$lib/visual/bar';
 	import { fitChartGeometry, fitChartTicks, whenChartFits, type ChartRoom } from '$lib/visual/viewport';
 
@@ -224,6 +225,21 @@
 			{#if drawing.title}
 				<div class="chart-title px-3 pt-3 text-sm font-semibold leading-snug text-text">{drawing.title}</div>
 			{/if}
+			{#if drawing.type === 'stacked_bar'}
+				<div class="px-3 py-3">
+					<PartsOfOne
+						geometry={drawing.geometry}
+						empty={null}
+						name={`story-${currentLoad.item_id}`}
+						label={stated}
+						width={drawing.width}
+						height={chartRoom?.height ?? 0}
+						readout={[drawing.readout]}
+						separateSegments={true}
+						showTotal={false}
+					/>
+				</div>
+			{:else}
 			<svg
 				viewBox="0 0 {drawing.width} {drawing.height}"
 				width={drawing.width}
@@ -503,6 +519,7 @@
 						</li>
 					{/each}
 				</ul>
+			{/if}
 			{/if}
 			{#if drawing.caption}
 				<figcaption class="px-3 pb-3 text-xs leading-normal text-text-secondary">{drawing.caption}</figcaption>

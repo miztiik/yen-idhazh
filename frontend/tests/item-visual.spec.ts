@@ -69,6 +69,11 @@ test('viewport sizing preserves every supported family without a density or fixe
             const shortDrawing = drawVisual(data, 360, formatNumber, numberFormat, 4, short);
             const tallDrawing = drawVisual(data, 360, formatNumber, numberFormat, 4, tall);
             expect(statedDrawing(shortDrawing)).toBe(statedDrawing(tallDrawing));
+            if (shortDrawing.type === 'stacked_bar' || tallDrawing.type === 'stacked_bar') {
+                expect(shortDrawing.type).toBe('stacked_bar');
+                expect(tallDrawing.type).toBe('stacked_bar');
+                continue;
+            }
             if (type === 'bar' || type === 'dot') {
                 expect(shortDrawing.height).toBe(tallDrawing.height);
             } else {
@@ -79,6 +84,25 @@ test('viewport sizing preserves every supported family without a density or fixe
 });
 
 test.describe('what may not be drawn', () => {
+    test('a stack names a separate source quantity as its whole', () => {
+        const valid = sourceCompiledChart('stacked-bar-from-whole.json');
+        expect(refusedVisualData(valid)).toBeNull();
+
+        const wrongKind = sourceCompiledChart('stacked-bar-from-whole.json');
+        wrongKind.marks.find((mark) => mark.mark_id === wrongKind.encoding.category[0])!.element_id =
+            'entity-22-29';
+        expect(refusedVisualData(wrongKind)).toContain('source quantity for its declared whole');
+
+        const reusedWhole = sourceCompiledChart('stacked-bar-from-whole.json');
+        const whole = reusedWhole.marks.find(
+            (mark) => mark.mark_id === reusedWhole.encoding.category[0]
+        )!.element_id;
+        reusedWhole.marks.find(
+            (mark) => mark.mark_id === reusedWhole.encoding.quantity[0]
+        )!.element_id = whole;
+        expect(refusedVisualData(reusedWhole)).toContain('declared whole as one of its own parts');
+    });
+
     test('scatter places every source entity and both quantities at narrow and wide widths', () => {
         const data = sourceCompiledChart('scatter-relationship.json');
         const fixtureRoot = join(process.cwd(), '..', 'tests', 'fixtures', 'visual-validator');

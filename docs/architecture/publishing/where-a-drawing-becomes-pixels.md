@@ -259,8 +259,30 @@ the pairing is the plan's rather than a rule invented in the compiler, and the b
 that order. Re-ranking them here would be the compiler deciding what the comparison says.
 
 **Only a supported type is compiled.** This build compiles `bar`, `dot`, `slope`,
-`line`, `scatter` and `bubble`; a plan for any other declared type raises `CompileError` naming it
+`line`, `scatter`, `bubble` and `stacked_bar`; a plan for any other declared type raises `CompileError` naming it
 rather than publishing a picture nobody planned.
+
+**A stacked bar needs an independently stated whole.** `stacked_bar_exhaustive`
+requires a separate source quantity and compares it with the exact sum of the
+parts after unit conversion. The whole cannot also be one of those parts, and a
+sum of the parts is never evidence that the article stated the total. The pie
+fallback re-enters the same validator, so neither direct requests nor fallback
+can skip this rule.
+
+The maintainer confirmed "A1 - Confirm one-row delivery" on 2026-10-26 UTC:
+one stacked row represents the whole and its parts. For a pie fallback, the
+whole's source label names that row, and the pie categories name its parts.
+Multiple category rows are refused in this phase.
+
+**The stack keeps the plan's part order.** Unlike ranked bars, its segment
+labels, source values and emphasis stay paired in the series order the plan
+declared. The shared `PartsOfOne` drawing hides its computed total; the label,
+every source-backed part value and emphasis remain in the reader's description.
+It cycles the seven categorical hues for an eighth part and separates adjacent
+segments with the page-surface token; the reserved absence colour is not used.
+The data keeps normalized unit keys for comparison; the stacked reader labels
+map supported units to standard symbols and leave other normalized spellings
+unchanged.
 
 **Scatter and bubble keep complete relationship points.** Their plans must have `relationship`
 purpose. The validator requires an entity element, an x measure and a y measure
@@ -320,7 +342,8 @@ charts; their text remains. The old SVG read, inlining and markup checks are
 removed. No historical corpus is deleted or rewritten. This is the named
 exception to `CLAUDE.md` section 11, not a general migration policy.
 
-The current renderer stamp is `2026-10-27T01:00`. A time mark carries its canonical
+The current renderer stamp is `2026-10-27T01:01`. Stacked-bar data now requires
+a distinct source quantity for its whole label. A time mark carries its canonical
 date or year alongside the source wording, so the compiler can order readings
 without replacing what the article wrote. The reader refuses older or malformed
 time marks rather than guessing.
@@ -336,6 +359,12 @@ The maximum radius share is the validated
 The persisted contract adds the bubble type without changing existing chart
 fields or their renderer stamp. Existing payloads remain readable; older
 readers refuse only the new type they do not know.
+
+**Why the stack cycles category colours.** The shared palette has seven
+categorical hues and reserves its eighth colour for absence. Rejecting an
+otherwise valid eight-part chart would contradict the configured chart limit.
+Repeating hues with a visible segment boundary preserves the ordered labels and
+readout as the reader's identity cues without giving an absence colour to data.
 
 Maintainer ruling, 2026-10-24 UTC: omit a chart unless the plan selects
 exactly one distinct displayed bar. Resolve every annotation through category,

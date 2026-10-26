@@ -8,7 +8,7 @@ does not hold, a bar measured in one thing beside a bar measured in another, a
 role the type cannot draw, a figure whose own characters do not read as the
 figure.
 
-**Nine checks, and each one refuses alone.** That is a design constraint rather
+**Ten checks, and each one refuses alone.** That is a design constraint rather
 than a testing preference. A validator that reports one string cannot say which
 rule fired, so a rule can never be retired, tuned or trusted; and a fixture that
 trips three rules at once proves none of them. So every check returns at most
@@ -48,13 +48,14 @@ from __future__ import annotations
 import re
 from collections.abc import Mapping, Sequence
 from decimal import Decimal, InvalidOperation
+from fractions import Fraction
 from typing import Final, NamedTuple
 
-from idhazh.contracts.element import Element, ElementTable
+from idhazh.contracts.element import Element, ElementKind, ElementTable
 from idhazh.contracts.knobs.visuals import VisualsConfig
 from idhazh.contracts.visual import EncodingRole, PlanDecision, VisualPlan, VisualType
 
-# The nine checks were declared here with a note saying they move into
+# The checks were declared here with a note saying they move into
 # `contracts/` on the day something persists them. `VisualAttemptRow` persists
 # one as `rejection_reason`, so they moved; this import is what keeps the
 # vocabulary one list rather than two.
@@ -65,6 +66,7 @@ from idhazh.visual_vocabulary import (
     PLAN_VOCABULARY_VERSION,
     ROLE_KINDS,
     TYPE_RULES,
+    UNIT_DIMENSIONS,
     VALUE_ROLES,
     commensurable,
 )
@@ -128,7 +130,12 @@ def _element_exists(plan: VisualPlan, known: Mapping[str, Element]) -> Rejection
     )
 
 
-def _semantically_compatible(drawn: Mapping[EncodingRole, list[Element]]) -> Rejection | None:
+def _semantically_compatible(
+    drawn: Mapping[EncodingRole, list[Element]],
+    *,
+    visual_type: VisualType | None,
+    declared_whole_id: str | None,
+) -> Rejection | None:
     """Does each element's kind fit the channel it fills?
 
     A quantity drawn on a naming axis is a bar labelled with a number nobody
@@ -138,6 +145,13 @@ def _semantically_compatible(drawn: Mapping[EncodingRole, list[Element]]) -> Rej
     """
     for role, elements in sorted(drawn.items(), key=lambda pair: pair[0].value):
         for element in elements:
+            if (
+                visual_type is VisualType.STACKED_BAR
+                and role is EncodingRole.CATEGORY
+                and element.element_id == declared_whole_id
+                and element.kind is ElementKind.QUANTITY
+            ):
+                continue
             if element.kind not in ROLE_KINDS[role]:
                 allowed = ", ".join(sorted(kind.value for kind in ROLE_KINDS[role]))
                 return Rejection(
@@ -208,9 +222,11 @@ def _roles_valid_for_type(
         )
     if visual_type is VisualType.LINE:
         times = elements_by_role.get(EncodingRole.TIME, ())
-        quantities = elements_by_role.get(EncodingRole.QUANTITY, ())
-        series = elements_by_role.get(EncodingRole.SERIES, ())
-        if len(times) != len(quantities) or (series and len(series) != len(quantities)):
+        line_quantities = elements_by_role.get(EncodingRole.QUANTITY, ())
+        line_series = elements_by_role.get(EncodingRole.SERIES, ())
+        if len(times) != len(line_quantities) or (
+            line_series and len(line_series) != len(line_quantities)
+        ):
             return Rejection(
                 ValidatorCheck.ROLES_VALID_FOR_TYPE,
                 "a line pairs one date and optional series label with each quantity",
@@ -229,7 +245,7 @@ def _roles_valid_for_type(
         dates_by_series: dict[str, set[str]] = {}
         counts_by_series: dict[str, int] = {}
         for index, element in enumerate(times):
-            label = series[index].span_excerpt if series else ""
+            label = line_series[index].span_excerpt if line_series else ""
             date = element.value
             if date is None:
                 continue
@@ -246,6 +262,88 @@ def _roles_valid_for_type(
                 ValidatorCheck.ROLES_VALID_FOR_TYPE,
                 "each line series needs at least two dates",
             )
+    if visual_type is VisualType.STACKED_BAR:
+        stacked_categories = filled.get(EncodingRole.CATEGORY, ())
+        stacked_quantities = filled.get(EncodingRole.QUANTITY, ())
+        stacked_series = filled.get(EncodingRole.SERIES, ())
+        if len(stacked_categories) != 1 or len(stacked_series) != len(stacked_quantities):
+            return Rejection(
+                ValidatorCheck.ROLES_VALID_FOR_TYPE,
+                "a stacked bar has one declared whole and one series label per part",
+            )
+    return None
+
+
+def _stacked_bar_exhaustive(
+    plan: VisualPlan,
+    drawn: Mapping[EncodingRole, list[Element]],
+    known: Mapping[str, Element],
+) -> Rejection | None:
+    """Does one row's source-backed parts exactly state its separate whole?"""
+    if plan.type is not VisualType.STACKED_BAR:
+        return None
+    whole_id = plan.declared_whole_element_id
+    if whole_id is None:
+        return Rejection(
+            ValidatorCheck.STACKED_BAR_EXHAUSTIVE,
+            "the stacked bar has no independently declared whole",
+        )
+    whole = known.get(whole_id)
+    if whole is None or whole.kind is not ElementKind.QUANTITY or whole.value is None:
+        return Rejection(
+            ValidatorCheck.STACKED_BAR_EXHAUSTIVE,
+            f"{whole_id} is not a source-declared quantity for the whole",
+        )
+    categories = drawn.get(EncodingRole.CATEGORY, ())
+    if len(categories) != 1 or categories[0].element_id != whole_id:
+        return Rejection(
+            ValidatorCheck.STACKED_BAR_EXHAUSTIVE,
+            "the single stacked row must be labelled by its declared whole",
+        )
+    parts = drawn.get(EncodingRole.QUANTITY, ())
+    if whole_id in {part.element_id for part in parts}:
+        return Rejection(
+            ValidatorCheck.STACKED_BAR_EXHAUSTIVE,
+            "the declared whole must be separate from every part quantity",
+        )
+    if Decimal(whole.value) <= 0:
+        return Rejection(
+            ValidatorCheck.STACKED_BAR_EXHAUSTIVE,
+            f"{whole_id} does not state a positive whole",
+        )
+    whole_unit = whole.unit
+    whole_dimension = UNIT_DIMENSIONS.get(whole_unit) if whole_unit is not None else None
+    total = Fraction()
+    for part in parts:
+        if part.value is None or Decimal(part.value) < 0:
+            return Rejection(
+                ValidatorCheck.STACKED_BAR_EXHAUSTIVE,
+                f"{part.element_id} is not a non-negative part quantity",
+            )
+        if not commensurable(part.unit, whole_unit):
+            return Rejection(
+                ValidatorCheck.STACKED_BAR_EXHAUSTIVE,
+                f"{part.element_id} and {whole_id} do not measure the same thing",
+            )
+        if part.unit == whole_unit:
+            total += Fraction(Decimal(part.value))
+            continue
+        part_dimension = UNIT_DIMENSIONS.get(part.unit) if part.unit is not None else None
+        if part_dimension is None or whole_dimension is None:
+            return Rejection(
+                ValidatorCheck.STACKED_BAR_EXHAUSTIVE,
+                f"{part.element_id} cannot be converted exactly to {whole_id}'s unit",
+            )
+        total += (
+            Fraction(Decimal(part.value))
+            * Fraction(part_dimension[1])
+            / Fraction(whole_dimension[1])
+        )
+    if total != Fraction(Decimal(whole.value)):
+        return Rejection(
+            ValidatorCheck.STACKED_BAR_EXHAUSTIVE,
+            f"{whole_id} does not equal the exact sum of its part quantities",
+        )
     return None
 
 
@@ -430,7 +528,11 @@ def validate_plan(
         cited = [known[one] for one in plan.element_ids if one in known]
         found = [
             _element_exists(plan, known),
-            _semantically_compatible(drawn),
+            _semantically_compatible(
+                drawn,
+                visual_type=plan.type,
+                declared_whole_id=plan.declared_whole_element_id,
+            ),
             _units_convertible(drawn),
         ]
         # The contract refuses a plan that proposes a visual and states no type,
@@ -442,6 +544,7 @@ def validate_plan(
                 if detail is not None:
                     roles = Rejection(ValidatorCheck.ROLES_VALID_FOR_TYPE, detail)
             found.append(roles)
+            found.append(_stacked_bar_exhaustive(plan, drawn, known))
             found.append(_enough_data(plan.type, filled, visuals=visuals))
         found += [
             _no_duplicate_in_role(filled),
