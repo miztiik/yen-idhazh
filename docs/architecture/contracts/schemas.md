@@ -62,7 +62,13 @@ and the two closed sets `SERVER_JOB` and `WATCHED_FLAG`. It owns types and
 vocabularies, not a record loader. What each field means stays on the Pydantic
 model.
 
-The host row is stamped `2026-10-10`. Native questions in
+The host row is stamped `2026-10-26`. Its optional
+`machine_memory_total_mib` records total kernel-visible RAM in MiB, not task
+memory. Older rows retain their version and leave unmeasured capacity null;
+the hardware hash and existing timing/model fields are unchanged. The
+[host collection boundary](../../reference/host-metrics.md#design-rationale)
+records why the HTTP API does not accept those timing/model inputs.
+Native questions in
 `frontend/src/lib/console/queries/machine.ts` request the finite legacy CPU
 columns beside the corrected columns. `frontend/src/lib/data/host-fingerprint.ts`
 validates the source version and removes the legacy names before a panel uses
@@ -95,6 +101,14 @@ export type ServerJob = (typeof SERVER_JOB)[number];
 The arrays and their union types live in `host-types.ts`. `watchedFlags()`
 returns a copy of `WATCHED_FLAG` for the machine cards. The binding tests below
 hold both vocabularies to the Python enums, including their order.
+
+`packages/common-contracts/src/schemas/host-fingerprint.schema.ts` is the strict
+native host-row copy used by the fingerprint service. Its Bun checks validate
+the named `tests/fixtures/host-fingerprints/host-schema.json` snapshot and real
+Parquet readback. `backend/tests/contracts/test_host_fingerprint_snapshot.py`
+compares that same snapshot with the authoritative model's field order, column
+types, nullability, version and complete row. This binding runs in the existing
+backend gate; the isolated TypeScript checks do not invoke Python.
 
 **An optional field is copied optional.** Pydantic marks a field with a default as not required, so `cpu_model?: string | null` is what the contract says: the key may be absent, and present-but-null is the reading nobody took. A reader that fills every key says so by deriving from the copied type - `Required<HostFingerprintRow>` - rather than by declaring a second interface.
 

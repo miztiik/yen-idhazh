@@ -3,7 +3,7 @@ import { createHash } from "node:crypto";
 import { z } from "zod";
 import { JobNameSchema, RunIdSchema, reject } from "./primitives";
 
-export const HOST_FINGERPRINT_VERSION = "2026-10-14";
+export const HOST_FINGERPRINT_VERSION = "2026-10-26";
 export const WATCHED_FLAGS = [
   "amx_bf16", "amx_int8", "amx_tile", "avx2", "avx512_bf16",
   "avx512_fp16", "avx512_vnni", "avx512f", "avx_vnni", "f16c", "fma", "sse4_2",
@@ -46,7 +46,7 @@ export function fingerprintV2(row: Hardware): string | null {
 }
 
 export const HostFingerprintRowSchema = z.strictObject({
-  version: z.enum(["2026-10-10", "2026-10-12", HOST_FINGERPRINT_VERSION]).default(HOST_FINGERPRINT_VERSION),
+  version: z.enum(["2026-10-10", "2026-10-12", "2026-10-14", HOST_FINGERPRINT_VERSION]).default(HOST_FINGERPRINT_VERSION),
   date: z.iso.date(), run_id: RunIdSchema,
   job: JobNameSchema.nullable().default("work"),
   pipeline_name: JobNameSchema.nullable().default(null),
@@ -64,6 +64,7 @@ export const HostFingerprintRowSchema = z.strictObject({
   cpu_quota_state: z.enum(["finite", "unlimited", "unavailable"]).nullable().default(null),
   cpu_target_measured_at: instant,
   l3_cache_bytes: count.nullable().default(null),
+  machine_memory_total_mib: number.positive().nullable().default(null),
   cpu_observed_mhz: number.positive().nullable().default(null),
   cpu_reported_max_mhz: number.positive().nullable().default(null),
   flags: z.string().default(""), boot_seconds: number.nonnegative().nullable().default(null),

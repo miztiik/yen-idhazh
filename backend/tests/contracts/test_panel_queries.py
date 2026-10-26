@@ -331,7 +331,7 @@ def test_real_unread_map_still_refuses_failed_field_without_rejecting_failed_rul
 
 def test_query_registry_tracks_the_current_host_schema() -> None:
     assert ItemHealthRow.schema_version() == "2026-10-25"
-    assert HostFingerprintRow.schema_version() == "2026-10-14"
+    assert HostFingerprintRow.schema_version() == "2026-10-26"
     assert "response headers" in (ItemHealthRow.model_fields["fetch_ttfb_ms"].description or "")
 
 
@@ -339,7 +339,7 @@ def test_query_registry_tracks_the_current_host_schema() -> None:
     ("model", "expected"),
     (
         (ItemHealthRow, "236201236be25bcec14818a78ee3d6e767270df43b39ceb2fdd266ed8ebd3f79"),
-        (HostFingerprintRow, "67c9f942e3e8f0b2c3d044e408ec7d261f1247712e1b15e2cfa93b26beaf7f96"),
+        (HostFingerprintRow, "04a248a34a14c1165e7c19d577b6cf9e9a31e9753e1fcaf7113d9df9b137fc47"),
     ),
 )
 def test_registry_tracks_the_declared_persisted_shape(model: type[ItemHealthRow] | type[HostFingerprintRow], expected: str) -> None:

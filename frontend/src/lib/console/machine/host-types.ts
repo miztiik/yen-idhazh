@@ -57,6 +57,7 @@ export interface HostFingerprintRow {
 	cpu_quota_state?: string | null;
 	cpu_target_measured_at?: string | null;
 	l3_cache_bytes?: number | null;
+	machine_memory_total_mib?: number | null;
 	cpu_observed_mhz?: number | null;
 	cpu_reported_max_mhz?: number | null;
 	flags?: string;

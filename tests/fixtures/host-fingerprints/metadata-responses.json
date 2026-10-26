@@ -1,0 +1,16 @@
+{
+  "provenance": "Bounded metadata response and transport-failure cases replayed through native Response bodies; no live metadata request.",
+  "responses": [
+    { "name": "non-200 success", "status": 201, "body": "{}", "reason": "metadata_http_201" },
+    { "name": "unreachable endpoint response", "status": 503, "body": "unavailable", "reason": "metadata_http_503" },
+    { "name": "missing body", "status": 200, "body": null, "reason": "metadata_invalid" },
+    { "name": "invalid JSON", "status": 200, "body": "not JSON", "reason": "metadata_invalid" },
+    { "name": "invalid fields", "status": 200, "body": "{\"vmSize\":123}", "reason": "metadata_invalid" }
+  ],
+  "failures": [
+    { "name": "TimeoutError", "reason": "metadata_timeout" },
+    { "name": "AbortError", "reason": "metadata_timeout" },
+    { "name": "TypeError", "reason": "metadata_unavailable" },
+    { "name": "ECONNREFUSED", "reason": "metadata_unavailable" }
+  ]
+}

@@ -1,5 +1,5 @@
 {
-  "authority": "backend/idhazh/contracts/host_fingerprint.py: HostFingerprintRow, version 2026-10-14; field/type transcript reviewed without running Python",
+  "authority": "backend/idhazh/contracts/host_fingerprint.py: HostFingerprintRow, version 2026-10-26; named contract binding checks this field/type transcript",
   "columns": {
     "version": "string", "date": "string", "run_id": "string", "job": "string",
     "pipeline_name": "string", "task_name": "string", "shard": "int64",
@@ -9,7 +9,7 @@
     "cpu_physical_cores": "int64", "cpu_logical_processors": "int64",
     "cpu_allowed_processors": "int64", "cpu_quota_cores": "float64",
     "cpu_quota_state": "string", "cpu_target_measured_at": "string",
-    "l3_cache_bytes": "int64", "cpu_observed_mhz": "float64",
+    "l3_cache_bytes": "int64", "machine_memory_total_mib": "float64", "cpu_observed_mhz": "float64",
     "cpu_reported_max_mhz": "float64", "flags": "string", "boot_seconds": "float64",
     "memcpy_gib_s": "float64", "memcpy_probe_mib": "int64",
     "vm_size": "string", "vm_location": "string", "vm_zone": "string",
@@ -19,7 +19,7 @@
   },
   "required": ["version", "date", "run_id", "shard", "flags"],
   "row": {
-    "version": "2026-10-14",
+    "version": "2026-10-26",
     "date": "2026-10-21",
     "run_id": "2026-10-21-123",
     "job": null,
@@ -41,6 +41,7 @@
     "cpu_quota_state": "finite",
     "cpu_target_measured_at": "2026-10-21T18:00:01Z",
     "l3_cache_bytes": 50331648,
+    "machine_memory_total_mib": 16383.75,
     "cpu_observed_mhz": 2600,
     "cpu_reported_max_mhz": 3600,
     "flags": "avx2 avx512f f16c fma sse4_2",

@@ -1,10 +1,11 @@
 /** Finite host-row read migration shared by disk and direct slice consumers. */
 
-export const HOST_SCHEMA_VERSION = '2026-10-14';
+export const HOST_SCHEMA_VERSION = '2026-10-26';
 
 const CORRECTED_VERSIONS = new Set([
 	'2026-10-10',
 	'2026-10-12',
+	'2026-10-14',
 	HOST_SCHEMA_VERSION
 ]);
 
@@ -39,6 +40,7 @@ export const CORRECTED_HOST_COLUMNS = [
 	'cpu_quota_state',
 	'cpu_target_measured_at',
 	'l3_cache_bytes',
+	'machine_memory_total_mib',
 	'cpu_observed_mhz',
 	'cpu_reported_max_mhz',
 	'flags',

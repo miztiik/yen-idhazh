@@ -20,6 +20,7 @@ export const SelectedSettingsSchema = z.object({
     host_telemetry_enabled: z.boolean(),
     host_fingerprint: z.boolean(),
     host_fingerprint_frequency_enabled: z.boolean(),
+    host_fingerprint_placement_enabled: z.boolean(),
     host_fingerprint_bandwidth_jobs: z.array(z.string()),
     host_fingerprint_bandwidth_floor_mib: z.int().nonnegative(),
     host_fingerprint_bandwidth_cache_multiple: z.int().positive(),
@@ -30,15 +31,17 @@ export const SelectedSettingsSchema = z.object({
     compression_compact: z.enum(["snappy", "zstd", "none"]),
   }),
 });
-export const CaptureContextSchema = z.strictObject({
+export const FingerprintRequestSchema = z.strictObject({
   date: z.iso.date(),
-  writer: WriterIdentitySchema,
+  writer: WriterIdentitySchema.superRefine((writer, ctx) => {
+    if (writer.producer !== "telemetry.silicon") ctx.addIssue({ code: "custom", message: "host producer must be telemetry.silicon", path: ["producer"] });
+  }),
+});
+export const CaptureContextSchema = FingerprintRequestSchema.extend({
   model_load_ms: z.number().finite().nonnegative().nullable().default(null),
   job_seconds: z.int().nonnegative().nullable().default(null),
   server_prompt_tokens: z.int().nonnegative().nullable().default(null),
   server_prompt_seconds: z.number().finite().nonnegative().nullable().default(null),
-}).superRefine((value, ctx) => {
-  if (value.writer.producer !== "telemetry.silicon") ctx.addIssue({ code: "custom", message: "host producer must be telemetry.silicon", path: ["writer", "producer"] });
 });
 export type ServiceConfig = z.infer<typeof ServiceConfigSchema>;
 export type SelectedSettings = z.infer<typeof SelectedSettingsSchema>;
