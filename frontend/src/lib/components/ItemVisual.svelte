@@ -45,10 +45,8 @@
 	 * token says and what a reader sees. Before this the drawing was laid out at
 	 * a fixed 720 units and stretched to fit, so a `--text-xs` string resolved at
 	 * 4.8 CSS px on a 390 px phone - the right size in a coordinate space nobody
-	 * reads. Height follows the displayed rows and labelled bands, never the
-	 * width, so the figure is its final height from the frame the marks land in
-	 * and the story cannot shift as it is read; that is the promise the `viewBox`
-	 * used to keep by holding an aspect ratio.
+	 * reads. Height follows readable content and the visible viewport, not a
+	 * fixed canvas or density budget. A short viewport uses normal page scrolling.
 	 */
 	import { base } from '$app/paths';
 	import { navigating } from '$app/state';
@@ -58,7 +56,7 @@
 	import { whenNear } from '$lib/reveal';
 	import type { StoryChartGeometryConfig } from '$lib/server/config';
 	import { drawVisual, statedDrawing, type Drawing } from '$lib/visual/bar';
-	import { whenWide } from '$lib/visual/width';
+	import { fitChartGeometry, fitChartTicks, whenChartFits, type ChartRoom } from '$lib/visual/viewport';
 
 	let {
 		visual,
@@ -89,10 +87,15 @@
 	let settled = $state<string | null>(null);
 	/** How much room the card gives the drawing, or 0 before it has been measured. */
 	let room = $state(0);
+	let chartRoom = $state<ChartRoom | null>(null);
 	const currentLoad = $derived(loaded?.file === wanted ? loaded.data : null);
+	const fittedGeometry = $derived(currentLoad && chartRoom
+		? fitChartGeometry(currentLoad, storyChartGeometry, chartRoom) : storyChartGeometry);
+	const fittedTicks = $derived(currentLoad && chartRoom
+		? fitChartTicks(currentLoad, fittedGeometry, chartRoom.textHeight, chartTickDensity) : chartTickDensity);
 	const drawing = $derived<Drawing | null>(
 		currentLoad && room > 0
-			? drawVisual(currentLoad, room, formatNumber, numberFormat, chartTickDensity, storyChartGeometry)
+			? drawVisual(currentLoad, room, formatNumber, numberFormat, fittedTicks, fittedGeometry)
 			: null
 	);
 	/** Every figure the bars are drawn at, in one sentence, for a reader who is
@@ -190,11 +193,15 @@
 	 * The figure is measured rather than the svg inside it, because the figure's
 	 * width does not depend on what it holds - so the reading is stable on the
 	 * frame the marks land in, before a mark is placed. Every chart on the page
-	 * shares one watcher, which lives in `$lib/visual/width`.
+	 * shares one watcher. Scrolling never changes this measurement.
 	 */
 	function measured(node: Element): { destroy: () => void } {
-		const forget = whenWide(node, (wide) => {
-			room = wide;
+		const forget = whenChartFits(node, (next) => {
+			room = next.width;
+			if (!chartRoom || chartRoom.width !== next.width ||
+				chartRoom.height !== next.height || chartRoom.textHeight !== next.textHeight) {
+				chartRoom = next;
+			}
 		});
 		return { destroy: forget };
 	}

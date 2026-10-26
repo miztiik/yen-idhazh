@@ -12,7 +12,7 @@ become markup in our own origin. The routes this drawing arrives on are
 
 ## The browser draws the chart, so the chart reads the page it is printed on
 
-**The reader's browser draws the chart and the pipeline never draws one** (maintainer ruling, 2026-09-13, [where-a-drawing-becomes-pixels.md](where-a-drawing-becomes-pixels.md)). A story arrives carrying a pointer at its marks; [ItemVisual.svelte](../../../frontend/src/lib/components/ItemVisual.svelte) fetches that file when the story comes near, [drawing.ts](../../../frontend/src/lib/payload/drawing.ts) refuses anything that does not fit the type it names, and [visual/bar.ts](../../../frontend/src/lib/visual/bar.ts) places bar, dot, slope and line marks. Line marks use the shared D3 date-series builder. Svelte writes them, so the marks are ordinary elements in the component's own subtree and take the page's tokens through plain scoped CSS.
+**The reader's browser draws the chart and the pipeline never draws one** (maintainer ruling, 2026-09-13, [where-a-drawing-becomes-pixels.md](where-a-drawing-becomes-pixels.md)). A story arrives carrying a pointer at its marks; [ItemVisual.svelte](../../../frontend/src/lib/components/ItemVisual.svelte) fetches that file when the story comes near, [drawing.ts](../../../frontend/src/lib/payload/drawing.ts) refuses anything that does not fit the type it names, and [visual/bar.ts](../../../frontend/src/lib/visual/bar.ts) dispatches bar, dot, slope, line and scatter geometry. Line and scatter marks use shared D3 builders. Svelte writes them, so the marks are ordinary elements in the component's own subtree and take the page's tokens through plain scoped CSS.
 
 **Two carriers preceded it and both are worth keeping on the page, because the second one is why the tokens below exist.** Until 2026-09-05 every published chart shipped inside an `img`. An SVG in an `img` is a separate document: it reads none of the page's custom properties, so the only colours it could ever have are the ones the renderer baked in - black axis type, `#888` ticks, `#ddd` grid lines and a `#4c6ef5` bar, fine on white and on the dark theme black type on a near-black card. **It was the loudest reader-facing defect on the site and no gate could see it**, because every check the drawing had was about whether the file was served. From 2026-09-05 the build read the committed SVG off disk for the stories a prerendered document carried and inlined it, so the page could repaint it; that carrier went on 2026-09-13 with the renderer that filled it.
 
@@ -30,7 +30,7 @@ become markup in our own origin. The routes this drawing arrives on are
 `refusedVisualData` in [../../../frontend/src/lib/payload/drawing.ts](../../../frontend/src/lib/payload/drawing.ts) is the guard: it refuses a path that is not a published visual, a document whose `renderer_version` this page does not hold, a type it cannot draw, and a shape that does not fit that type - four names against three figures, a channel naming a mark that is not carried, a bar with no figure. A refusal costs the story its picture and nothing else. **The build checks none of it**, because the build draws nothing: every chart on the site is checked on the device of the reader who opens that day. That is the same trade `check-publication` records on [frontend.md](frontend.md) - the build stopped being the place a bad day is found, and it is written down rather than assumed.
 
 **Before the position-and-length charts landed, every published visual was a bar.** The
-compiler now draws `bar`, `dot`, `slope` and `line` from source-backed channels. The historical
+compiler now draws `bar`, `dot`, `slope`, `line` and `scatter` from source-backed channels. The historical
 forty-three drawings on 2026-08-31 - the heaviest committed day, 43 across 601 stories - were
 all bars, which is why this chart family was needed.
 
@@ -91,6 +91,37 @@ it does not know. The dated maintainer exception for older charts lives in the
 **The mis-shaped cases are built in the spec rather than committed, and that is a constraint.** Every file under `tests/fixtures/contracts/` is round-tripped through its model by the backend suite, and a mis-shaped document will not load - so a committed one fails that gate before it reaches this one. [item-visual.spec.ts](../../../frontend/tests/item-visual.spec.ts) accepts the fitting bar control, then changes one named condition per refusal case. Dot, slope and line fixtures come from bounded element-table sources and are checked against native compilation; the geometry tests use those same files at narrow and wide widths.
 
 ## Design rationale
+
+**Maintainer ruling, 2026-10-26 UTC.** The exact direction was: "engage susan
+agent. do not want fixed numbers that is not current design pattern it should
+allow to fit device screen or viewport. mor over sort the bar graph from
+ascending or descending choose one." The rejected fixed density proposal was
+an editorial budget, not a measured readability result. It is not a gate.
+The follow-up choice was "A1 - Fit where possible; allow normal page scrolling".
+This replaces the inherited undefined density obligation for bar, dot, slope,
+line and scatter. The existing text floor remains.
+
+The browser measures the visible viewport, the sticky filter band and all
+figure content outside the plot. Bar and dot rows retain content-sized height;
+the other plots use the remaining room or the height needed for readable text
+and marks, whichever is larger. Slope endpoints also reserve separation for
+distinct values within each column; coincident readings remain coincident.
+These are layout measurements, not a marks-per-height threshold or a claim
+that readability has a measured numerical limit. Fixed line/scatter heights
+are not the responsive minimum. Measurements change with viewport size,
+wrapping and font loading, not the figure's position during scrolling.
+The requested axis tick count is capped by measured plot span and text
+clearance, within the existing configured maximum. This reduces grid guides
+as well as labels on short plots; it never removes source marks.
+When the readable complete figure exceeds one screen, normal page scrolling
+preserves its chart and facts. No supported family silently disappears.
+Failure to find readable geometry returns to the maintainer rather than
+silently narrowing the comparison.
+
+Bars sort descending by numeric value. Equal values retain source order.
+Each category moves with its quantity, source text and emphasis; the keyboard
+description uses this same sorted drawing. Ranking is not applied to dates
+or to the two sides of a relationship.
 
 Bars stay horizontal at narrow widths so category names remain readable. Dots
 use one shared value scale when position compares items better than length.

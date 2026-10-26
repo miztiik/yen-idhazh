@@ -79,10 +79,12 @@ this plan does not restore historical redraw or migration machinery.
   contract-consistency obligation. CI owns the full-suite merge gate.
 - Browser rendering and interaction use representative coverage under
   CLAUDE.md section 13, plus section 12 smoke when the site changes.
-- The inherited legibility and density floors remain obligations. Resolve their
-  current canonical definitions before implementation; do not invent a density
-  threshold or substitute a minimum point count. Removing or changing either
-  floor requires maintainer approval.
+- The inherited text legibility floor remains. Maintainer ruling, 2026-10-26 UTC:
+  the undefined density floor is replaced by measured viewport fit for bar,
+  dot, slope, line and scatter, with normal page scrolling when complete readable
+  content cannot fit one screen. No fixed density threshold is approved.
+  The [living chart rationale](../docs/architecture/publishing/how-a-story-chart-is-drawn-and-what-refuses-one.md#design-rationale)
+  records the exact ruling, descending stable bars and the approved trade-off.
 - Other inherited whole-day correctness obligations remain. Maintainer R6 removes
   the real-day diversity proof, not unrelated publication or correctness rules.
 
@@ -95,7 +97,7 @@ this plan does not restore historical redraw or migration machinery.
 | 1 | The whole vocabulary is declarable, and an unbuilt type steps down | - | A | DONE | chart-vocabulary-plan | - | - |
 | 2 | Position and length: bar, dot, slope | 1 | B | DONE | supreme-sniffle / chart-position-and-length | #1738 | Copilot session 6c107b16-1860-4e47-9bba-c8b401dd96e7 |
 | 3 | Trend and magnitude: line, area | 2 | C | DONE | chart-trend-magnitude-row-3 | #1741 | - |
-| 4 | Relationship: scatter | 3 | D | IN-FLIGHT | chart-relationship-scatter | - | - |
+| 4 | Relationship: scatter | 3 | D | DONE | chart-relationship-scatter | #1742 | - |
 | 5 | Parts as bars: stacked_bar, with its own question | 4 | E | PENDING | - | - | - |
 | 6 | The two the reader asked for | 5 | F | PENDING | - | - | - |
 
@@ -150,7 +152,7 @@ implementation/test references, not a claim that tests were run.
 
 - **Scope:** Complete bar, dot and slope through source data, validation, compilation and browser rendering. Reuse the existing story bar and shared D3 patterns instead of three bespoke page implementations.
 - **Current files:** `backend/idhazh/render/chart.py`, `backend/idhazh/visual_vocabulary.py`, applicable native published contracts, `frontend/src/lib/payload/drawing.ts`, `frontend/src/lib/visual/bar.ts`, `frontend/src/lib/charts/d3/`, `frontend/src/lib/components/ItemVisual.svelte`, named tests and current chart/design docs.
-- **Acceptance gates:** Current frontend check, build and bundle gate; native-reader bindings; both inherited legibility/density floors; representative browser coverage and section 12 smoke.
+- **Acceptance gates:** Current frontend check, build and bundle gate; native-reader bindings; text legibility and approved measured viewport fit; representative browser coverage and section 12 smoke.
 - **Oracle:** For each type, focused integration tests re-derive geometry from bounded source elements and check drawn attributes and narrow/wide behavior. Representative browser evidence checks actual browser integration. Do not multiply browser cases by type and width (maintainer R5).
 
 ### Decisions

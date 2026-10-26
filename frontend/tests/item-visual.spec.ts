@@ -2,10 +2,11 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { expect, test } from '@playwright/test';
 import { isVisualData, publishedVisualData, refusedVisualData, RENDERER_VERSION } from '../src/lib/payload/drawing';
-import { drawBars, drawDots, drawLines, drawSlopes, statedBars, statedDots, statedLines, statedSlopes } from '../src/lib/visual/bar';
+import { drawBars, drawDots, drawLines, drawSlopes, drawVisual, statedBars, statedDots, statedLines, statedSlopes, statedDrawing } from '../src/lib/visual/bar';
 import { formatNumber, numberFormat, valueAxis } from './support/number-format';
 import { frame } from '../src/lib/charts/frame';
 import { drawScatter, statedScatter } from '../src/lib/visual/scatter';
+import { fitChartGeometry, fitChartTicks } from '../src/lib/visual/viewport';
 import type { VisualData } from '../src/lib/payload/types';
 import {
     chartConfig,
@@ -45,6 +46,37 @@ function sourceQuantities(data: VisualData): number[] {
         return Number(mark.value);
     });
 }
+
+test('viewport sizing preserves every supported family without a density or fixed-height floor', () => {
+    for (const filename of [
+        'dot-from-wind.json', 'slope-from-wind.json', 'line-from-wind.json',
+        'line-multiple-series-from-wind.json',
+        'scatter-relationship.json'
+    ]) {
+        const data = sourceCompiledChart(filename);
+        for (const type of data.type === 'dot' ? ['bar', 'dot'] as const : [data.type]) {
+            data.type = type;
+            const short = fitChartGeometry(data, geometry, { height: 0, textHeight: 18 });
+            const tall = fitChartGeometry(data, geometry, { height: 700, textHeight: 18 });
+            expect(short.row_height_px).toBeGreaterThanOrEqual(geometry.row_height_px);
+            expect(tall.line_min_height_px).toBeGreaterThanOrEqual(700);
+            expect(tall.scatter_height_px).toBeGreaterThanOrEqual(700);
+            expect(tall.slope_min_height_px).toBeGreaterThanOrEqual(700);
+            expect(short.line_min_height_px).toBeLessThan(geometry.line_min_height_px);
+            expect(short.scatter_height_px).toBeLessThan(geometry.scatter_height_px);
+            expect(fitChartTicks(data, short, 18, 8)).toBe(1);
+            expect(fitChartTicks(data, tall, 18, 8)).toBe(8);
+            const shortDrawing = drawVisual(data, 360, formatNumber, numberFormat, 4, short);
+            const tallDrawing = drawVisual(data, 360, formatNumber, numberFormat, 4, tall);
+            expect(statedDrawing(shortDrawing)).toBe(statedDrawing(tallDrawing));
+            if (type === 'bar' || type === 'dot') {
+                expect(shortDrawing.height).toBe(tallDrawing.height);
+            } else {
+                expect(shortDrawing.height).toBeLessThan(tallDrawing.height);
+            }
+        }
+    }
+});
 
 test.describe('what may not be drawn', () => {
     test('scatter places every source entity and both quantities at narrow and wide widths', () => {
@@ -154,9 +186,24 @@ test.describe('what may not be drawn', () => {
         const drawing = drawBars(data, 390, formatNumber, geometry);
         expect(drawing.title).toBe(data.title);
         expect(drawing.caption).toBe(data.caption);
-        expect(drawing.bars.map((bar) => bar.emphasized)).toEqual([false, true, false, false]);
+        expect(drawing.bars.map((bar) => bar.emphasized)).toEqual([false, false, true, false]);
         expect(statedBars(drawing)).toContain('B 20 MW (highlighted) (source: 0.02 GW)');
         expect(statedBars(drawing)).toContain(data.caption);
+    });
+    test('descending bars keep equal-value source order, provenance and accessible order together', () => {
+        const data = compiled([20, 40, 40, 10]);
+        data.marks[3].source_text = '0.04 GW';
+        const drawing = drawBars(data, 360, formatNumber, geometry);
+        expect(drawing.bars.map(({ name, stated, emphasized, sourceText }) =>
+            ({ name, stated, emphasized, sourceText }))).toEqual([
+            { name: 'B', stated: '40', emphasized: true, sourceText: '0.04 GW' },
+            { name: 'C', stated: '40', emphasized: false, sourceText: null },
+            { name: 'A', stated: '20', emphasized: false, sourceText: null },
+            { name: 'D', stated: '10', emphasized: false, sourceText: null }
+        ]);
+        expect(statedBars(drawing)).toContain(
+            'B 40 MW (highlighted) (source: 0.04 GW); C 40 MW; A 20 MW; D 10 MW'
+        );
     });
     test('narrow and wide drawings keep every mark inside the measured width without changing their readings', () => {
         const data = compiled();
@@ -188,7 +235,7 @@ test.describe('what may not be drawn', () => {
             });
             for (const tick of consoleAxis.ticks.filter((tick) => tick.text !== '')) {
                 const digestTick = drawBars(compiled([tick.value, 20, 30, 40]), 600, formatNumber, geometry);
-                expect(digestTick.bars[0].displayed).toBe(tick.text);
+                expect(digestTick.bars.find((bar) => bar.name === 'A')!.displayed).toBe(tick.text);
             }
             expect(drawing.bars[0].displayed).toBe(formatNumber(value));
             expect(drawing.bars[0].stated).toBe(String(value));

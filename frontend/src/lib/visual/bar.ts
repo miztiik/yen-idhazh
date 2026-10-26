@@ -146,9 +146,8 @@ function figureOf(mark: VisualMark): number {
 /**
  * Place every bar of one published visual.
  *
- * **Category `i` names quantity `i`**, which is the plan's own order carried
- * through the compiler. Re-ranking here would be the drawing code deciding what
- * the comparison says.
+ * Categories and quantities are paired before stable descending ranking.
+ * Equal values retain their source order; emphasis never changes the order.
  *
  * **The measured axis is anchored at zero and scaled to the longest bar.** A
  * bar chart whose axis starts anywhere else exaggerates every difference on it,
@@ -189,8 +188,11 @@ export function drawBars(
 		if (found === undefined) throw new Error(`visual data draws a mark it does not carry: ${id}`);
 		return found;
 	};
-	const names = data.encoding.category.map(mark);
-	const figures = data.encoding.quantity.map(mark);
+	const rows = data.encoding.category.map((id, index) => ({
+		name: mark(id), figure: mark(data.encoding.quantity[index]), index
+	})).sort((a, b) => figureOf(b.figure) - figureOf(a.figure) || a.index - b.index);
+	const names = rows.map((row) => row.name);
+	const figures = rows.map((row) => row.figure);
 
 	const band = scaleBand<string>()
 		.domain(names.map((_, index) => String(index)))
@@ -325,10 +327,7 @@ export function drawSlopes(
 	const maximum = Math.max(...finite);
 	const count = quantities.length / 2;
 	const width = Math.max(0, Math.floor(room));
-	const height = Math.max(
-		geometry.slope_min_height_px,
-		geometry.slope_header_band_px + count * geometry.row_height_px + geometry.slope_footer_band_px
-	);
+	const height = geometry.slope_min_height_px;
 	const top = geometry.slope_header_band_px;
 	const bottom = height - geometry.slope_footer_band_px;
 	const y = scaleLinear()

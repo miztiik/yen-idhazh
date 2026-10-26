@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import type { DigestDay, VisualData } from '../src/lib/payload/types';
 import { drawVisual, statedDrawing } from '../src/lib/visual/bar';
 import { chartConfig, storyChartGeometryConfig } from '../src/lib/server/config';
+import { fitChartGeometry, fitChartTicks } from '../src/lib/visual/viewport';
 import { dayReady } from './support/day-ready';
 import { formatNumber, numberFormat } from './support/number-format';
 import { CANARY, newestDate, payloadOf } from './support/published';
@@ -73,6 +74,20 @@ test('reader labels clear the text floor without scaling, and every mark survive
 					drawnHeight: svg.viewBox.baseVal.height,
 					scale: [transform.a, transform.b, transform.c, transform.d],
 					floor,
+					plotRoom: (() => {
+						const figure = svg.parentElement!;
+						const style = getComputedStyle(figure);
+						const shell = document.querySelector('[data-filter-bar]');
+						const shellStyle = shell ? getComputedStyle(shell) : null;
+						const occlusion = shell && shellStyle?.position === 'sticky'
+							? shell.getBoundingClientRect().height + (parseFloat(shellStyle.top) || 0) : 0;
+						const furniture = figure.getBoundingClientRect().height - svg.getBoundingClientRect().height +
+							parseFloat(style.marginTop) + parseFloat(style.marginBottom);
+						return {
+							height: Math.max(0, (window.visualViewport?.height ?? window.innerHeight) - occlusion - furniture),
+							textHeight: svg.querySelector<SVGTextElement>('text')!.getBBox().height
+						};
+					})(),
 					text: [...svg.querySelectorAll('text')].map((text) => ({
 						value: text.textContent,
 						size: parseFloat(getComputedStyle(text).fontSize),
@@ -110,13 +125,14 @@ test('reader labels clear the text floor without scaling, and every mark survive
 				expect(bounds.y + bounds.height, `${id}: value tick clears the bottom edge`)
 					.toBeLessThanOrEqual(measured.drawnHeight);
 			}
+			const fittedGeometry = fitChartGeometry(data, geometry, measured.plotRoom);
 			const expected = drawVisual(
 				data,
 				measured.width,
 				formatNumber,
 				numberFormat,
-				chartConfig().tick_density,
-				geometry
+				fitChartTicks(data, fittedGeometry, measured.plotRoom.textHeight, chartConfig().tick_density),
+				fittedGeometry
 			);
 			const emphasized = svg.locator(
 				'rect.bar.emphasized, circle.dot.emphasized, circle.slope-point.emphasized, circle.line-point.emphasized, circle.scatter-point.emphasized'
@@ -233,6 +249,19 @@ test('reader labels clear the text floor without scaling, and every mark survive
 		await page.reload();
 		expect(await drawings(page)).toEqual(first);
 	}
+	const scatter = page.locator('figure.visual').filter({ has: page.locator('circle.scatter-point') });
+	await scatter.scrollIntoViewIfNeeded();
+	const accessible = await scatter.getAttribute('aria-label');
+	const before = await scatter.locator(':scope > svg').getAttribute('height');
+	await page.setViewportSize({ width: 1440, height: 360 });
+	await expect.poll(() => scatter.locator(':scope > svg').getAttribute('height')).not.toBe(before);
+	await expect(scatter).toHaveAttribute('aria-label', accessible!);
+	const shortHeight = await scatter.locator(':scope > svg').getAttribute('height');
+	await page.evaluate(() => window.scrollTo(0, 0));
+	await expect(scatter.locator(':scope > svg')).toHaveAttribute('height', shortHeight!);
+	expect(await scatter.evaluate((node) => node.scrollHeight <= node.clientHeight)).toBe(true);
+	await page.setViewportSize({ width: 1440, height: 900 });
+	await expect.poll(() => scatter.locator(':scope > svg').getAttribute('height')).toBe(before);
 	expect(errors).toEqual([]);
 });
 
