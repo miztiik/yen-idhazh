@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-from typing import Annotated, ClassVar, Literal, Self
+from typing import ClassVar, Literal, Self
 
-from pydantic import Field, model_validator
+from pydantic import model_validator
 
-from idhazh.contracts.base import DateStamp, RunId
+from idhazh.contracts.base import DateStamp, RelPath, RunId
 from idhazh.contracts.feed_ingest_discovered_article import PlannerModel, PlannerRow
 from idhazh.contracts.feed_ingest_selected_article import Code, Count, PositiveCount, Weight
 from idhazh.contracts.recorded_instant import RecordedInstant
@@ -35,7 +35,7 @@ class PlanRunRow(PlannerRow):
     selected_count: Count
     strategy: Literal["bin-pack", "round-robin", "none"]
     dispatch_count: Count
-    selected_articles_artifact: Annotated[str, Field(min_length=1)] | None
+    selected_articles_artifact: RelPath | None
     api_timings: list[PlanApiTiming]
     date: DateStamp
     attempt: PositiveCount
@@ -51,9 +51,4 @@ class PlanRunRow(PlannerRow):
     def validate_run_day(self) -> Self:
         if self.date != self.started_at[:10] or not self.run_id.startswith(f"{self.date}-"):
             raise ValueError("run date and run_id must match the UTC day of started_at")
-        reference = self.selected_articles_artifact
-        if reference is not None and (
-            "://" in reference or any(ord(char) < 32 or ord(char) == 127 for char in reference)
-        ):
-            raise ValueError("artifact reference must not contain a URL or artifact content")
         return self

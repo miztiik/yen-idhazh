@@ -50,7 +50,12 @@ from pydantic import ValidationError
 from idhazh import atomic_write, config
 from idhazh.contracts.app_config import AppConfig
 from idhazh.contracts.base import Contract, PeriodStamp
-from idhazh.contracts.feed_ingest_discovered_article import LedgerContract, PlannerRow
+from idhazh.contracts.feed_health_state import FeedHealthStateRow
+from idhazh.contracts.feed_ingest_discovered_article import (
+    DiscoveredArticleRow,
+    LedgerContract,
+    PlannerRow,
+)
 from idhazh.contracts.file_envelope import (
     PLANNER_LEDGERS,
     Compression,
@@ -454,10 +459,14 @@ def persist(
     built: list[tuple[Path, bytes]] = []
     for day, batch in sorted(_by_day(rows, model=model, covers=covers).items()):
         if ledger in PLANNER_LEDGERS:
-            if ledger is LedgerName.FEED_INGEST_PLAN_FEED_HEALTH_STATE and len({
-                (getattr(row, "run_id"), getattr(row, "attempt")) for row in batch
-            }) != 1:
-                raise ValueError("a raw health file contains one run attempt and UTC work day")
+            if ledger is LedgerName.FEED_INGEST_PLAN_FEED_HEALTH_STATE:
+                executions = set()
+                for row in batch:
+                    if not isinstance(row, FeedHealthStateRow):
+                        raise ValueError("health write requires its declared row contract")
+                    executions.add((row.run_id, row.attempt))
+                if len(executions) != 1:
+                    raise ValueError("a raw health file contains one run attempt and UTC work day")
             health_updated = (
                 updated_at
                 or datetime.now(UTC).isoformat(timespec="milliseconds").replace("+00:00", "Z")
@@ -672,18 +681,18 @@ def render_grouped_period[C: LedgerContract](
                     record = tuple(str(getattr(held.row, name)) for name in key)
                     previous = seen.get(record)
                     payload = hashlib.sha256(held.row.to_json().encode("utf-8")).hexdigest()
+                    first_sight = held.day
+                    if ledger is LedgerName.FEED_INGEST_PLAN_DISCOVERED_ARTICLES:
+                        if not isinstance(held.row, DiscoveredArticleRow):
+                            raise ValueError("discovery write requires its declared row contract")
+                        first_sight = held.row.first_seen_at
                     if previous is None:
                         unique.append(held)
-                        seen[record] = (
-                            payload,
-                            str(getattr(held.row, "first_seen_at"))
-                            if ledger is LedgerName.FEED_INGEST_PLAN_DISCOVERED_ARTICLES
-                            else held.day,
-                        )
+                        seen[record] = (payload, first_sight)
                     elif ledger is LedgerName.FEED_INGEST_PLAN_DISCOVERED_ARTICLES:
                         # Year groups arrive in chronological month order; a later
                         # first-sight date cannot precede an already rendered month.
-                        if datetime.fromisoformat(getattr(held.row, "first_seen_at")) < (
+                        if datetime.fromisoformat(first_sight) < (
                             datetime.fromisoformat(previous[1])
                         ):
                             raise ValueError("discovery groups must follow UTC date order")

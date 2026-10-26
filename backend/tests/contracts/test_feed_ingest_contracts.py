@@ -165,8 +165,16 @@ def test_declared_contract(module: str, name: str) -> None:
                 contract.model_validate({key: value for key, value in payload.items() if key != "duration_ms"})
             with pytest.raises(ValidationError):
                 contract.model_validate(payload | {"duration_ms": 0.5})
-            with pytest.raises(ValidationError):
-                contract.model_validate(payload | {"selected_articles_artifact": "https://example.org/signed?token=secret"})
+            for reference in (
+                "https://example.org/signed?token=secret", "/tmp/a.json",
+                "C:\\tmp\\a.json", "../a.json", "a/../a.json", "./a.json",
+                "a//b.json", "a\nb.json",
+            ):
+                with pytest.raises(ValidationError):
+                    contract.model_validate(payload | {"selected_articles_artifact": reference})
+            assert contract.model_validate(payload | {
+                "selected_articles_artifact": "backend/var/run/selected-articles.json",
+            }).selected_articles_artifact == "backend/var/run/selected-articles.json"
         if name == "PlannerFileEnvelope":
             for forbidden in ("identity", "unit_id", "run_id", "job", "shard", "producer", "git_sha"):
                 with pytest.raises(ValidationError):
@@ -364,7 +372,9 @@ def test_candidate_identity_precedes_article_validation() -> None:
 
 def test_dispatch_keeps_selection_and_content_identity() -> None:
     from idhazh.contracts.feed_ingest_selected_article import (
-        SelectedArticleRow, SelectedArticlesArtifact, selected_article_metadata,
+        SelectedArticleRow,
+        SelectedArticlesArtifact,
+        selected_article_metadata,
     )
 
     artifact = SelectedArticlesArtifact.model_validate(planner_payload("SelectedArticlesArtifact"))

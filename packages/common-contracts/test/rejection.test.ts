@@ -250,7 +250,12 @@ describe("current planner contracts", () => {
     const { selected_count: _count, ...missing } = row;
     expect(PlanRunRowSchema.safeParse(missing).success).toBe(false);
     expect(PlanRunRowSchema.safeParse({ ...row, completion_evidence: [] }).success).toBe(false);
-    expect(PlanRunRowSchema.safeParse({ ...row, selected_articles_artifact: "https://example.org/signed?token=secret" }).success).toBe(false);
+    for (const reference of ["https://example.org/signed?token=secret", "/tmp/a.json", "C:\\tmp\\a.json",
+      "../a.json", "a/../a.json", "./a.json", "a//b.json", "a\nb.json"]) {
+      expect(PlanRunRowSchema.safeParse({ ...row, selected_articles_artifact: reference }).success).toBe(false);
+    }
+    expect(PlanRunRowSchema.parse({ ...row, selected_articles_artifact: "backend/var/run/selected-articles.json" }).selected_articles_artifact)
+      .toBe("backend/var/run/selected-articles.json");
     expect(PlanRunRowSchema.safeParse({ ...row, duration_ms: 0.5 }).success).toBe(false);
     expect(PlanRunRowSchema.parse({ ...row, duration_ms: null }).duration_ms).toBeNull();
     const { duration_ms: _duration, ...missingDuration } = row;

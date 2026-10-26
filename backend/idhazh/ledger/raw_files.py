@@ -47,7 +47,11 @@ from typing import NamedTuple, cast, overload
 
 from idhazh import day_partition
 from idhazh.contracts.base import Contract
-from idhazh.contracts.feed_ingest_discovered_article import LedgerContract, PlannerRow
+from idhazh.contracts.feed_ingest_discovered_article import (
+    DiscoveredArticleRow,
+    LedgerContract,
+    PlannerRow,
+)
 from idhazh.contracts.file_envelope import FileEnvelope, PlannerFileEnvelope, Tier
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.run_shards import RunShards
@@ -323,8 +327,12 @@ def settle_rows[C: LedgerContract](
             if previous_planned is None:
                 kept_planner[record] = planned
             elif which is LedgerName.FEED_INGEST_PLAN_DISCOVERED_ARTICLES:
-                later = datetime.fromisoformat(getattr(planned.row, "first_seen_at"))
-                earlier = datetime.fromisoformat(getattr(previous_planned.row, "first_seen_at"))
+                if not isinstance(planned.row, DiscoveredArticleRow) or not isinstance(
+                    previous_planned.row, DiscoveredArticleRow
+                ):
+                    raise ValueError("discovery settlement requires its declared row contract")
+                later = datetime.fromisoformat(planned.row.first_seen_at)
+                earlier = datetime.fromisoformat(previous_planned.row.first_seen_at)
                 if later < earlier:
                     kept_planner[record] = planned
             elif previous_planned.row.to_json() != planned.row.to_json():

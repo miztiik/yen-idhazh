@@ -1,7 +1,7 @@
 /** What did one planner execution finish, including empty and failed runs? */
 import { z } from "zod";
 import { PLANNER_LEDGER_VERSION } from "../version";
-import { CountSchema, DateStampSchema, FiniteSchema, NonEmptySchema, PositiveCountSchema, RunIdSchema, reject } from "./primitives";
+import { CountSchema, DateStampSchema, FiniteSchema, NonEmptySchema, PositiveCountSchema, RelPathSchema, RunIdSchema, reject } from "./primitives";
 import { RecordedInstantSchema } from "./recorded-instant.schema";
 
 export const PlanApiTimingSchema = z.strictObject({
@@ -12,7 +12,7 @@ export const PlanRunRowSchema = z.strictObject({
   run_id: RunIdSchema, started_at: RecordedInstantSchema, duration_ms: CountSchema.nullable(),
   status: z.enum(["completed", "partial", "failed"]), failure_code: NonEmptySchema.nullable(),
   selected_count: CountSchema, strategy: z.enum(["bin-pack", "round-robin", "none"]),
-  dispatch_count: CountSchema, selected_articles_artifact: NonEmptySchema.nullable(),
+  dispatch_count: CountSchema, selected_articles_artifact: RelPathSchema.nullable(),
   api_timings: z.array(PlanApiTimingSchema), date: DateStampSchema, attempt: PositiveCountSchema,
   lifecycle_window_days: PositiveCountSchema, reliability_floor: FiniteSchema.min(0).max(1),
   reliability_penalty_enabled: z.boolean(), evaluated_at: RecordedInstantSchema,
@@ -21,9 +21,6 @@ export const PlanRunRowSchema = z.strictObject({
 }).superRefine((value, ctx) => {
   if (value.date !== value.started_at.slice(0, 10) || !value.run_id.startsWith(`${value.date}-`)) {
     reject(ctx, "run date and run_id must match the UTC day of started_at");
-  }
-  if (value.selected_articles_artifact !== null && /:\/\/|[\x00-\x1f\x7f]/.test(value.selected_articles_artifact)) {
-    reject(ctx, "artifact reference must not contain a URL or artifact content", ["selected_articles_artifact"]);
   }
 });
 export type PlanRunRow = z.infer<typeof PlanRunRowSchema>;

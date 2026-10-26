@@ -5,8 +5,8 @@ from __future__ import annotations
 from dataclasses import replace
 from pathlib import Path
 
-from pytest import CaptureFixture, mark
 from contracts._fixtures import planner_payload
+from pytest import CaptureFixture, mark
 from support.ledger import writer_identity
 from support.paths import CONTRACT_FIXTURES_DIR, read_text
 

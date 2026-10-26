@@ -106,7 +106,7 @@ def test_attempts_survive_real_compaction_and_late_repacking(
     files = ledger.read_day_files(state, which, "2026-10-20")
     for held in files:
         assert isinstance(held.envelope, PlannerFileEnvelope)
-        assert set(key.decode() for key in held.envelope.as_metadata()) <= set(PLANNER_FOOTER_KEYS)
+        assert {key.decode() for key in held.envelope.as_metadata()} <= set(PLANNER_FOOTER_KEYS)
         assert not hasattr(held.envelope, "identity") and not hasattr(held.envelope, "unit_id")
     assert stored_output.check_raw_day(state, which, "2026-10-20")
     task = f"compact-feed-ingest-plan-{name}"
@@ -136,7 +136,9 @@ def test_attempts_survive_real_compaction_and_late_repacking(
     run_declared(task, policy, tmp_path, today=date(2026, 10, 23), first_year="2026")
     assert _snapshot(ledger.load_stored([packed], model=model)) == _snapshot(expected)
     if model is FeedHealthStateRow:
-        assert sum(getattr(held.row, "feed_requests") for held in expected) == 10
+        measured = [FeedHealthStateRow.model_validate(held.row.model_dump()) for held in expected]
+        assert all(row.feed_requests is not None for row in measured)
+        assert sum(row.feed_requests for row in measured if row.feed_requests is not None) == 10
         # Both public native readers must include late work beside every compact tier.
         retry = FeedHealthStateRow.model_validate(planner_payload(name, attempt=2))
         phases = (
@@ -172,10 +174,15 @@ def test_attempts_survive_real_compaction_and_late_repacking(
         older = model.model_validate(planner_payload(name) | {
             "first_seen_at": "2026-10-19T23:59:59.999Z", "date": "2026-10-19",
         })
+        assert isinstance(older, DiscoveredArticleRow)
         ledger.persist(state, [older], ledger=which, covers="2026-10-19", fmt=Format.PARQUET)
         read = ledger.load_days(state, which, {"2026-10-19", "2026-10-20"}, model=model)
-        found = next(row for row in read if getattr(row, "url_key") == getattr(older, "url_key"))
-        assert getattr(found, "first_seen_at") == "2026-10-19T23:59:59.999Z"
+        found = next(
+            row for row in read
+            if isinstance(row, DiscoveredArticleRow) and row.url_key == older.url_key
+        )
+        assert isinstance(found, DiscoveredArticleRow)
+        assert found.first_seen_at == "2026-10-19T23:59:59.999Z"
 
 
 def test_zero_completion_evidence_survives_without_erasing_an_earlier_complete_attempt(
@@ -196,8 +203,16 @@ def test_zero_completion_evidence_survives_without_erasing_an_earlier_complete_a
         name: ledger.settle_rows(_raw(state, LedgerName(name), model), ledger.door_key(LedgerName(name)))
         for name, model in PRODUCED_PLANNING_LEDGERS
     }
-    assert any(getattr(held.row, "selected_count") == 0 for held in expected["plan-runs"])
-    health_spend = sum(getattr(held.row, "article_requests") or 0 for held in expected["feed-health-state"])
+    assert any(
+        isinstance(held.row, PlanRunRow) and held.row.selected_count == 0
+        for held in expected["plan-runs"]
+    )
+    health_rows = [
+        FeedHealthStateRow.model_validate(held.row.model_dump())
+        for held in expected["feed-health-state"]
+    ]
+    assert all(row.article_requests is not None for row in health_rows)
+    health_spend = sum(row.article_requests for row in health_rows if row.article_requests is not None)
     assert health_spend > 0
     for tier, today in (
         ("daily", date(2026, 10, 23)), ("monthly", date(2026, 11, 3)),
