@@ -1,7 +1,8 @@
 import { expect, test } from '@playwright/test';
-import { mkdirSync, statSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { weighPayloads } from '../scripts/payload-ceilings.mjs';
+import { configuredCatalog } from '../src/lib/data/configured-catalog';
 
 /**
  * Which payload keys the bundle gate weighs, which keys fail it, and which it reports as not weighed.
@@ -29,17 +30,25 @@ function onDisk(file: string): number {
 }
 
 test('published flat and nested ledgers absent from the build are not weighed, and the answer names them', () => {
+	const config = JSON.parse(readFileSync(new URL('../../config/idhazh.json', import.meta.url), 'utf8'));
+	const plannerCaps = Object.keys(config.page_weight.payload_ceilings_bytes)
+		.filter((key) => key.startsWith('state/compact/feed-ingest-plan/')).sort();
+	const planner = configuredCatalog.families.find((family) => family.name === 'feed-ingest-plan');
+	if (planner === undefined) throw new Error('The current planner family must be registered');
+	const registered = [...planner.ledgers].sort((left, right) => left.prefix.localeCompare(right.prefix));
+	expect(plannerCaps).toEqual(registered.map((entry) => `state/compact/${entry.prefix}/index/`));
 	const build = aBuildTree({
 		'state/compact/seen/index/daily.json': 'daily',
 		'state/compact/seen/index/monthly.json': 'monthly',
 		'state/compact/seen/index/yearly.json': 'yearly'
 	});
 	const ceilings = {
-		'state/compact/feed-ingest-plan/dispatches/index/': 2200,
+		...Object.fromEntries(plannerCaps.map((key) => [key, config.page_weight.payload_ceilings_bytes[key]])),
 		'state/compact/item-health/index/': 2200,
 		'state/compact/seen/index/': 2200
 	};
-	expect(weighPayloads(build, ceilings, ['dispatches', 'item-health', 'seen'], '', onDisk)).toEqual({
+	const published = [...registered.map((entry) => entry.name), 'item-health', 'seen'];
+	expect(weighPayloads(build, ceilings, published, '', onDisk)).toEqual({
 		weighed: [
 			{ key: 'state/compact/seen/index/', path: 'state/compact/seen/index/monthly.json', bytes: 7, ceiling: 2200 },
 			{ key: 'state/compact/seen/index/', path: 'state/compact/seen/index/yearly.json', bytes: 6, ceiling: 2200 },
@@ -48,12 +57,12 @@ test('published flat and nested ledgers absent from the build are not weighed, a
 		over: [],
 		namesNothing: [],
 		notWeighed: [
-			{
-				key: 'state/compact/feed-ingest-plan/dispatches/index/',
+			...registered.map(({ name, prefix }) => ({
+				key: `state/compact/${prefix}/index/`,
 				reason:
-					'dispatches is not packed yet, so the build holds none of its files. ' +
-					'If it was packed before, restore state/compact/feed-ingest-plan/dispatches/ from git history.'
-			},
+					`${name} is not packed yet, so the build holds none of its files. ` +
+					`If it was packed before, restore state/compact/${prefix}/ from git history.`
+			})),
 			{
 				key: 'state/compact/item-health/index/',
 				reason:
@@ -62,14 +71,20 @@ test('published flat and nested ledgers absent from the build are not weighed, a
 			}
 		]
 	});
-
+	const retired = [
+		'article-assessments', 'dispatches', 'diversity',
+		'editorial-selections', 'rejections', 'source-runs'
+	].map((name) => `state/compact/feed-ingest-plan/${name}/index/`).sort();
+	expect(weighPayloads(build, {
+		...ceilings, ...Object.fromEntries(retired.map((key) => [key, 2200]))
+	}, published, '', onDisk).namesNothing).toEqual(retired.map((key) => ({ key, ceiling: 2200 })));
 });
 
 test('a nested ledger index is weighed at its registered path and still fails above its ceiling', () => {
-	const key = 'state/compact/feed-ingest-plan/dispatches/index/';
+	const key = 'state/compact/feed-ingest-plan/selected-articles/index/';
 	const build = aBuildTree({ [`${key}daily.json`]: 'daily' });
 	const file = { key, path: `${key}daily.json`, bytes: 5, ceiling: 4 };
-	expect(weighPayloads(build, { [key]: 4 }, ['dispatches'], '', onDisk)).toEqual({
+	expect(weighPayloads(build, { [key]: 4 }, ['selected-articles'], '', onDisk)).toEqual({
 		weighed: [file], over: [file], namesNothing: [], notWeighed: []
 	});
 });
@@ -98,7 +113,7 @@ const filesWithNoIndex: Record<string, Record<string, string>> = {
 	'a compact data file': { 'state/compact/item-health/daily/2026/10/01.parquet': 'PAR1' }
 };
 
-for (const [ledger, folder] of [['item-health', 'item-health'], ['dispatches', 'feed-ingest-plan/dispatches']] as const) {
+for (const [ledger, folder] of [['item-health', 'item-health'], ['selected-articles', 'feed-ingest-plan/selected-articles']] as const) {
 	for (const [held, files] of Object.entries(filesWithNoIndex)) {
 		test(`published ${ledger} with ${held} in the build and nothing at its index key still fails`, () => {
 			const build = aBuildTree(Object.fromEntries(

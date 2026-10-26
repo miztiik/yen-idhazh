@@ -1,10 +1,10 @@
 /** Which authored planner settings and vertical references are valid before a run? */
 import { z } from "zod";
 import {
-  NonEmptySchema, NonNegativeSchema, PositiveCountSchema, PositiveSchema, SlugSchema, reject,
+  NonEmptySchema, PositiveCountSchema, PositiveSchema, reject,
 } from "./primitives";
 import {
-  FeedCurationPolicySchema, FeedScreeningPolicySchema, VerticalPolicyOverrideSchema,
+  FeedCurationPolicySchema, FeedScreeningPolicySchema,
 } from "./policy.schema";
 
 export const FeedUrlExclusionSchema = z.strictObject({
@@ -29,7 +29,6 @@ export const FeedTriageConfigSchema = FeedScreeningPolicySchema.extend({
 export const FeedSoftCapsSchema = z.strictObject({
   max_source_share: PositiveSchema.max(1),
   max_parent_domain_share: PositiveSchema.max(1),
-  max_event_cluster_items: PositiveCountSchema,
   min_distinct_sources: PositiveCountSchema,
   relaxation_order: z.array(z.enum(["distinct_sources", "source_share"])),
 }).superRefine((value, ctx) => {
@@ -57,8 +56,6 @@ export const FeedPartitionConfigSchema = z.strictObject({
   }
 });
 export const FeedSealConfigSchema = z.strictObject({
-  dispatches_prefix: z.array(SlugSchema).min(1),
-  rejections_prefix: z.array(SlugSchema).min(1),
   compression: z.enum(["snappy", "zstd", "none"]),
 });
 export const FeedWorkflowReportingConfigSchema = z.strictObject({
@@ -67,39 +64,18 @@ export const FeedWorkflowReportingConfigSchema = z.strictObject({
   ),
   removal_condition: NonEmptySchema,
 });
-export const FeedMetricsConfigSchema = z.strictObject({
-  rolling_window_days: PositiveCountSchema,
-  overlap_windows_days: z.array(PositiveCountSchema).min(1),
-  top_source_counts: z.array(PositiveCountSchema).min(1),
-});
-export const FeedOperationalComponentWeightsSchema = z.strictObject({
-  cpu: NonNegativeSchema.default(1 / 3),
-  private_memory: NonNegativeSchema.default(1 / 3),
-  requests: NonNegativeSchema.default(1 / 3),
-}).superRefine((value, ctx) => {
-  if (Math.abs(value.cpu + value.private_memory + value.requests - 1) > 1e-9) {
-    reject(ctx, "operational component weights must sum to one", ["component_weights"]);
-  }
-});
 export const FeedFeedbackConfigSchema = z.strictObject({
   lifecycle_window_days: PositiveCountSchema.default(31),
-  window_days: PositiveCountSchema.default(7),
-  minimum_measured_opportunities: PositiveCountSchema.default(20),
-  minimum_measured_coverage: z.number().finite().min(0).max(1).default(0.8),
-  component_weights: FeedOperationalComponentWeightsSchema.default(
-    FeedOperationalComponentWeightsSchema.parse({}),
-  ).meta({ default: {}, type: "object", additionalProperties: false }),
+  request_report_closed_days: PositiveCountSchema.default(7),
 });
 export const FeedIngestConfigSchema = z.strictObject({
   version: z.literal("2026-10-20"),
   harvest: FeedHarvestConfigSchema,
   triage: FeedTriageConfigSchema,
   curate: FeedCurateConfigSchema,
-  vertical_overrides: z.record(SlugSchema, VerticalPolicyOverrideSchema),
   partition: FeedPartitionConfigSchema,
   seal: FeedSealConfigSchema,
   workflow_reporting: FeedWorkflowReportingConfigSchema,
-  metrics: FeedMetricsConfigSchema,
   feedback: FeedFeedbackConfigSchema.default(
     FeedFeedbackConfigSchema.parse({}),
   ).meta({
@@ -107,19 +83,4 @@ export const FeedIngestConfigSchema = z.strictObject({
   }),
 });
 
-// Only the taxonomy fields this reader computes on are declared here.
-export const PlanningTaxonomySchema = z.object({
-  verticals: z.array(z.object({ id: SlugSchema })).min(1),
-}).superRefine((value, ctx) => {
-  const ids = value.verticals.map(vertical => vertical.id);
-  if (new Set(ids).size !== ids.length) reject(ctx, "verticals contains duplicate ids", ["verticals"]);
-});
 export type FeedIngestConfig = z.infer<typeof FeedIngestConfigSchema>;
-export type PlanningTaxonomy = z.infer<typeof PlanningTaxonomySchema>;
-
-export function validatePlanningReferences(config: FeedIngestConfig, taxonomy: PlanningTaxonomy): void {
-  const ids = new Set(taxonomy.verticals.map(vertical => vertical.id));
-  for (const id of Object.keys(config.vertical_overrides)) {
-    if (!ids.has(id)) throw new Error(`vertical_overrides.${id}: unknown taxonomy vertical`);
-  }
-}

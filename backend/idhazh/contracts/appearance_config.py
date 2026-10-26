@@ -26,7 +26,7 @@ from __future__ import annotations
 from enum import StrEnum
 from typing import ClassVar, Final, Self
 
-from pydantic import Field, model_validator
+from pydantic import Field, field_validator, model_validator
 
 from idhazh.contracts.app_config import refuse_an_archive_window_no_preset_offers
 from idhazh.contracts.base import ChangelogEntry, Contract, Model
@@ -384,6 +384,40 @@ class StoryChartGeometryConfig(Model):
     slope_column_share: float = Field(default=0.3, ge=0.25, le=0.45)
     slope_line_width_px: float = Field(default=2.0, gt=0.0, le=5.0)
     slope_highlight_line_width_px: float = Field(default=3.0, gt=0.0, le=6.0)
+    line_min_height_px: int = Field(default=176, ge=120, le=320)
+    line_axis_margin_left_px: int = Field(default=48, ge=32, le=96)
+    line_axis_margin_top_px: int = Field(default=24, ge=16, le=64)
+    line_width_px: float = Field(default=2.0, gt=0.0, le=5.0)
+    line_series_dash_arrays: tuple[str, ...] = Field(
+        default=(
+            "none",
+            "8 4",
+            "2 3",
+            "8 2 2 2",
+            "1 3",
+            "12 3",
+            "4 2 1 2",
+            "3 1 1 1",
+        ),
+        min_length=8,
+        max_length=8,
+        description="Distinct non-colour cues for the chart's ordered line series.",
+    )
+
+    @field_validator("line_series_dash_arrays")
+    @classmethod
+    def _line_series_dash_arrays_are_distinct(cls, values: tuple[str, ...]) -> tuple[str, ...]:
+        if len(set(values)) != len(values):
+            raise ValueError("line_series_dash_arrays must be distinct")
+        for value in values:
+            if value == "none":
+                continue
+            parts = value.split(" ")
+            if " ".join(parts) != value or any(
+                not part.isascii() or not part.isdigit() or int(part) < 1 for part in parts
+            ):
+                raise ValueError("line_series_dash_arrays must contain valid SVG dash arrays")
+        return values
 
 
 class ChartConfig(Model):

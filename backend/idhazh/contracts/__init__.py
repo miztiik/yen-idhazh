@@ -4,10 +4,10 @@ This package is the bottom of the dependency graph and MUST NOT import any other
 subpackage of `idhazh` (CLAUDE.md section 4). A contract that imports a stage is
 a contract that cannot be loaded by a test of that stage.
 
-`CONTRACTS` below is the registry: every top-level persisted document this
-project writes. It is what a check over all of them iterates - the stamped read
-boundary, the fixture map, the changelog shape. A shape that is not on it is not
-a document a run persists.
+`CONTRACTS` registers version-bearing documents. `PLANNER_CONTRACTS` registers
+the planner's file-versioned rows, artifact and minimal envelope. Their bounded
+fixture and binding checks cover each protocol without adding a version column
+to planner rows.
 """
 
 from typing import Final
@@ -49,18 +49,16 @@ from idhazh.contracts.element import ElementTable
 from idhazh.contracts.eval_row import ConfidenceBand, EvalRow
 from idhazh.contracts.evidence import EvidenceItem
 from idhazh.contracts.feed_health import FeedHealthRow
-from idhazh.contracts.feed_health_state import FeedHealthStateHeadIndex, FeedHealthStateSnapshot
-from idhazh.contracts.feed_ingest_article_assessment import ArticleAssessmentRecord
+from idhazh.contracts.feed_health_state import FeedHealthStateRow
 from idhazh.contracts.feed_ingest_candidate import FeedIngestCandidate
-from idhazh.contracts.feed_ingest_dispatch import FeedIngestDispatch
-from idhazh.contracts.feed_ingest_diversity import DiversityMetricRow
-from idhazh.contracts.feed_ingest_editorial_selection import EditorialSelectionRow
-from idhazh.contracts.feed_ingest_feedback import FeedIngestOperationalStateRow
-from idhazh.contracts.feed_ingest_observations import DocumentObservationRecord
-from idhazh.contracts.feed_ingest_rejection import CandidateRejectionRecord
-from idhazh.contracts.feed_ingest_source_run import SourceRunRecord
+from idhazh.contracts.feed_ingest_discovered_article import DiscoveredArticleRow, PlannerPayload
+from idhazh.contracts.feed_ingest_plan_run import PlanRunRow
+from idhazh.contracts.feed_ingest_selected_article import (
+    SelectedArticleRow,
+    SelectedArticlesArtifact,
+)
 from idhazh.contracts.feed_retirement import FeedRetirementRow
-from idhazh.contracts.file_envelope import FileEnvelope
+from idhazh.contracts.file_envelope import FileEnvelope, PlannerFileEnvelope
 from idhazh.contracts.fingerprint import PipelineInputs
 from idhazh.contracts.fitted_similarity_threshold import FittedSimilarityThreshold
 from idhazh.contracts.host_fingerprint import HostFingerprintRow
@@ -143,20 +141,6 @@ from idhazh.contracts.watchlist import EdgarPolicy, EntityDef, EntityFeed, Watch
 CONTRACTS: Final[tuple[type[Contract], ...]] = (
     FetchedDocument,
     PlannerOperation,
-    ParsedFeedBatch,
-    SelectedFeedBatch,
-    PartitionedFeedBatch,
-    ArticleAssessmentRecord,
-    CandidateRejectionRecord,
-    DiversityMetricRow,
-    EditorialSelectionRow,
-    FeedIngestCandidate,
-    FeedIngestDispatch,
-    FeedIngestOperationalStateRow,
-    FeedHealthStateSnapshot,
-    FeedHealthStateHeadIndex,
-    DocumentObservationRecord,
-    SourceRunRecord,
     AppConfig,
     AppearanceConfig,
     Article,
@@ -222,13 +206,19 @@ CONTRACTS: Final[tuple[type[Contract], ...]] = (
     Watchlist,
 )
 
+# Planner rows have no per-row version field. Their native storage and binding
+# tests use this registry instead of forcing them through the unrelated format.
+PLANNER_CONTRACTS: Final[tuple[type[PlannerPayload] | type[PlannerFileEnvelope], ...]] = (
+    DiscoveredArticleRow, SelectedArticleRow, FeedHealthStateRow, PlanRunRow,
+    SelectedArticlesArtifact, PlannerFileEnvelope,
+)
+
 __all__ = [
     "CONTRACTS",
+    "PLANNER_CONTRACTS",
     "AppConfig",
     "Article",
-    "ArticleAssessmentRecord",
     "ArticleStatus",
-    "CandidateRejectionRecord",
     "ChangelogEntry",
     "CompactEntry",
     "CompactIndex",
@@ -244,20 +234,15 @@ __all__ = [
     "DigestViewItem",
     "DigestViewVisual",
     "DigestVisual",
-    "DiversityMetricRow",
-    "DocumentObservationRecord",
+    "DiscoveredArticleRow",
     "EdgarPolicy",
-    "EditorialSelectionRow",
     "EntityDef",
     "EntityFeed",
     "EvalRow",
     "EventDef",
     "FeedDef",
-    "FeedHealthStateHeadIndex",
-    "FeedHealthStateSnapshot",
+    "FeedHealthStateRow",
     "FeedIngestCandidate",
-    "FeedIngestDispatch",
-    "FeedIngestOperationalStateRow",
     "FetchedDocument",
     "FileEnvelope",
     "LedgerName",
@@ -270,7 +255,9 @@ __all__ = [
     "ParsedFeedBatch",
     "PartitionedFeedBatch",
     "PipelineInputs",
+    "PlanRunRow",
     "PlannedItem",
+    "PlannerFileEnvelope",
     "PlannerOperation",
     "PublicationInventory",
     "RawDayIndex",
@@ -280,11 +267,12 @@ __all__ = [
     "RunShards",
     "RunStatus",
     "SalienceFeedDef",
+    "SelectedArticleRow",
+    "SelectedArticlesArtifact",
     "SelectedFeedBatch",
     "SourceForm",
     "SourceKind",
     "SourceKindDefinition",
-    "SourceRunRecord",
     "SourceTier",
     "SourceTierDefinition",
     "Sources",

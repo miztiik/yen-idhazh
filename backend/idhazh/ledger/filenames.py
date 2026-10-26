@@ -179,6 +179,12 @@ def file_id(*, unit: uuid.UUID, attempt: int, written_at_ms: int) -> uuid.UUID:
     )
 
 
+def planner_file_id(*, written_at_ms: int) -> uuid.UUID:
+    """Mint a physical UUIDv8 without inventing a planner work-unit identity."""
+    random = uuid.uuid4().int
+    return _pack_v8(written_at_ms, random >> _RAND_B_BITS, random)
+
+
 def _pack_v8(unix_ms: int, rand_a: int, rand_b: int) -> uuid.UUID:
     """Pack RFC 9562 version 8: 48 bits of clock, 12 free bits, 62 free bits.
 

@@ -174,7 +174,7 @@ def adopt(
     if found is None:
         return None
     listing.fetch_within_budget(beside=[found])
-    footer = ledger.read_footer(found)
+    footer = ledger.read_registered_footer(found, ledger=ledger_name)
     said = footer.envelope
     if (said.tier, said.ledger, said.period, said.covers) != (
         Tier.COMPACT,

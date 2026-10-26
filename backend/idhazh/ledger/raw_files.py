@@ -40,32 +40,30 @@ file for it would read as a ledger with no history.
 from __future__ import annotations
 
 import logging
-from collections.abc import Collection, Sequence
+from collections.abc import Callable, Collection, Sequence
+from datetime import datetime
 from pathlib import Path
 from typing import NamedTuple, cast
 
 from idhazh import day_partition
 from idhazh.contracts.base import Contract
-from idhazh.contracts.file_envelope import FileEnvelope, Tier
+from idhazh.contracts.feed_ingest_discovered_article import DiscoveredArticleRow, PlannerRow
+from idhazh.contracts.file_envelope import PLANNER_LEDGERS, FileEnvelope, PlannerFileEnvelope, Tier
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.run_shards import RunShards
 from idhazh.ledger import paths
 from idhazh.ledger.keys import door_key, preference_for
-from idhazh.ledger.persist import StoredRow, load_stored, read_envelope
+from idhazh.ledger.persist import (
+    LedgerStoredRow,
+    PlannerStoredRow,
+    StoredRow,
+    load_planner_stored,
+    load_stored,
+    read_envelope,
+    read_planner_envelope,
+)
 
 logger = logging.getLogger(__name__)
-
-# These ledgers preserve each run and attempt before settling duplicate row keys.
-_ATTEMPT_PRESERVING_LEDGERS = frozenset({
-    LedgerName.FEED_INGEST_PLAN_DISPATCHES,
-    LedgerName.FEED_INGEST_PLAN_EDITORIAL_SELECTIONS,
-    LedgerName.FEED_INGEST_PLAN_REJECTIONS,
-    LedgerName.FEED_INGEST_PLAN_SOURCE_RUNS,
-    LedgerName.FEED_INGEST_PLAN_ARTICLE_ASSESSMENTS,
-    LedgerName.FEED_INGEST_PLAN_DIVERSITY,
-    LedgerName.FEED_INGEST_PLAN_DOCUMENT_OBSERVATIONS,
-    LedgerName.FEED_INGEST_PLAN_OPERATIONAL_STATE,
-})
 
 
 class RawFile(NamedTuple):
@@ -75,12 +73,26 @@ class RawFile(NamedTuple):
     envelope: FileEnvelope
 
 
+class PlannerRawFile(NamedTuple):
+    """One current planner raw file, without a generic writer identity."""
+
+    path: Path
+    envelope: PlannerFileEnvelope
+
+
 class DayFolder(NamedTuple):
     """One raw day folder as a reader finds it: the files it can read, and those it cannot."""
 
     #: Every file whose envelope this build reads, oldest first.
     files: list[RawFile]
     #: Every other entry of the folder, in name order, beside why it cannot be read.
+    unreadable: list[tuple[Path, str]]
+
+
+class PlannerDayFolder(NamedTuple):
+    """One planner work day's readable files and its refused entries."""
+
+    files: list[PlannerRawFile]
     unreadable: list[tuple[Path, str]]
 
 
@@ -117,9 +129,13 @@ def _day_folders(state_dir: Path, root: Path) -> list[tuple[str, Path]]:
     return found
 
 
-def _order(held: RawFile) -> tuple[str, int, str]:
+def _order(held: RawFile | PlannerRawFile) -> tuple[str, int, str]:
     """Oldest first: the day covered, then the write instant, then the file's own id."""
-    return (held.envelope.covers, held.envelope.written_at_ms, str(held.envelope.file_id))
+    return (
+        held.envelope.covers,
+        held.envelope.written_at_ms if isinstance(held.envelope, FileEnvelope) else 0,
+        str(held.envelope.file_id),
+    )
 
 
 def raw_days(
@@ -141,17 +157,22 @@ def raw_days(
     ]
 
 
-def _held(ledger: LedgerName, covers: str, path: Path) -> RawFile:
+def _held[E: FileEnvelope | PlannerFileEnvelope, F: RawFile | PlannerRawFile](
+    ledger: LedgerName, covers: str, path: Path, *,
+    reader: Callable[[Path], E], file_type: Callable[[Path, E], F],
+) -> F:
     """One raw file and its envelope, or a `ValueError` saying why it is not one of this day's."""
     if not path.is_file():
         raise ValueError("not a file")
-    envelope = read_envelope(path)
+    envelope = reader(path)
+    if isinstance(envelope, PlannerFileEnvelope) and path.name != f"{envelope.file_id}.parquet":
+        raise ValueError("planner raw filename must match its declared UUIDv8 file identity")
     if (envelope.ledger, envelope.tier, envelope.covers) != (ledger, Tier.RAW, covers):
         raise ValueError(
             f"its envelope says {envelope.tier.value} {envelope.ledger.value} "
             f"{envelope.covers}, and it sits in the raw {ledger.value} folder for {covers}"
         )
-    return RawFile(path, envelope)
+    return file_type(path, envelope)
 
 
 def list_raw_files(
@@ -169,7 +190,34 @@ def list_raw_files(
     names another ledger, another tier or another day than the folder it sits in
     was filed by something other than the door, and is skipped as unreadable.
     """
-    found: list[RawFile] = []
+    if ledger in PLANNER_LEDGERS:
+        raise ValueError("planner raw files require the planner raw-file reader")
+    return _list_raw_files(
+        state_dir, ledger, days=days, registry=registry,
+        reader=read_envelope, file_type=RawFile,
+    )
+
+
+def list_planner_raw_files(
+    state_dir: Path, ledger: LedgerName, *, days: Collection[str] | None = None,
+    registry: paths.DoorRegistry | None = None,
+) -> list[PlannerRawFile]:
+    """List only the named planner family's raw files, with planner-typed envelopes."""
+    if ledger not in PLANNER_LEDGERS:
+        raise ValueError("original raw files require the original raw-file reader")
+    return _list_raw_files(
+        state_dir, ledger, days=days, registry=registry,
+        reader=read_planner_envelope, file_type=PlannerRawFile,
+    )
+
+
+def _list_raw_files[E: FileEnvelope | PlannerFileEnvelope, F: RawFile | PlannerRawFile](
+    state_dir: Path, ledger: LedgerName, *, days: Collection[str] | None,
+    registry: paths.DoorRegistry | None,
+    reader: Callable[[Path], E], file_type: Callable[[Path, E], F],
+) -> list[F]:
+    """The shared directory walk and refusal policy, behind the two typed readers."""
+    found: list[F] = []
     root = paths.raw_root(state_dir, ledger, registry=registry)
     folders = (
         [(day, root.joinpath(*paths._day_segments(day))) for day in sorted(set(days))]
@@ -181,7 +229,7 @@ def list_raw_files(
             continue
         for path in sorted(folder.iterdir()):
             try:
-                found.append(_held(ledger, covers, path))
+                found.append(_held(ledger, covers, path, reader=reader, file_type=file_type))
             except ValueError as refusal:
                 _skip(state_dir, path, refusal)
     return sorted(found, key=_order)
@@ -196,19 +244,46 @@ def read_day_folder(
     delete it unread, and packs the rest of the day. A day with no folder holds
     nothing.
     """
+    if ledger in PLANNER_LEDGERS:
+        raise ValueError("planner day folders require the planner day-folder reader")
+    files, unreadable = _read_day_folder(
+        state_dir, ledger, day, registry=registry, reader=read_envelope, file_type=RawFile,
+    )
+    return DayFolder(files=files, unreadable=unreadable)
+
+
+def read_planner_day_folder(
+    state_dir: Path, ledger: LedgerName, day: str, *, registry: paths.DoorRegistry | None = None
+) -> PlannerDayFolder:
+    """Read a planner work day's folder without pretending it carries legacy identities."""
+    if ledger not in PLANNER_LEDGERS:
+        raise ValueError("original day folders require the original day-folder reader")
+    files, unreadable = _read_day_folder(
+        state_dir, ledger, day, registry=registry,
+        reader=read_planner_envelope, file_type=PlannerRawFile,
+    )
+    return PlannerDayFolder(files=files, unreadable=unreadable)
+
+
+def _read_day_folder[E: FileEnvelope | PlannerFileEnvelope, F: RawFile | PlannerRawFile](
+    state_dir: Path, ledger: LedgerName, day: str, *,
+    registry: paths.DoorRegistry | None,
+    reader: Callable[[Path], E], file_type: Callable[[Path, E], F],
+) -> tuple[list[F], list[tuple[Path, str]]]:
+    """Share the bounded day read, preserving each format's typed file constructor."""
     folder = paths.raw_root(state_dir, ledger, registry=registry).joinpath(
         day[:4], day[5:7], day[8:10]
     )
     if not folder.is_dir():
-        return DayFolder(files=[], unreadable=[])
-    found: list[RawFile] = []
+        return [], []
+    found: list[F] = []
     unreadable: list[tuple[Path, str]] = []
     for path in sorted(folder.iterdir()):
         try:
-            found.append(_held(ledger, day, path))
+            found.append(_held(ledger, day, path, reader=reader, file_type=file_type))
         except ValueError as refusal:
             unreadable.append((path, str(refusal)))
-    return DayFolder(files=sorted(found, key=_order), unreadable=unreadable)
+    return sorted(found, key=_order), unreadable
 
 
 def read_day_files(
@@ -227,6 +302,47 @@ def read_day_files(
     return found.files
 
 
+def read_planner_day_files(
+    state_dir: Path, ledger: LedgerName, day: str, *, registry: paths.DoorRegistry | None = None
+) -> list[PlannerRawFile]:
+    """One planner work day, refusing any file that could otherwise be deleted unread."""
+    found = read_planner_day_folder(state_dir, ledger, day, registry=registry)
+    if found.unreadable:
+        path, why = found.unreadable[0]
+        raise ValueError(f"{paths.shown(state_dir, path)} cannot be read: {why}")
+    return found.files
+
+
+def list_registered_raw_files(
+    state_dir: Path, ledger: LedgerName, *, days: Collection[str] | None = None,
+    registry: paths.DoorRegistry | None = None,
+) -> list[RawFile | PlannerRawFile]:
+    """Dispatch shared storage enumeration by its registered format."""
+    if ledger in PLANNER_LEDGERS:
+        return list(list_planner_raw_files(
+            state_dir, ledger, days=days, registry=registry
+        ))
+    return list(list_raw_files(state_dir, ledger, days=days, registry=registry))
+
+
+def read_registered_day_folder(
+    state_dir: Path, ledger: LedgerName, day: str, *, registry: paths.DoorRegistry | None = None
+) -> DayFolder | PlannerDayFolder:
+    """The gardener's explicit two-format folder boundary."""
+    if ledger in PLANNER_LEDGERS:
+        return read_planner_day_folder(state_dir, ledger, day, registry=registry)
+    return read_day_folder(state_dir, ledger, day, registry=registry)
+
+
+def read_registered_day_files(
+    state_dir: Path, ledger: LedgerName, day: str, *, registry: paths.DoorRegistry | None = None
+) -> list[RawFile | PlannerRawFile]:
+    """The shared deleting reader, preserving each format's refusal behavior."""
+    if ledger in PLANNER_LEDGERS:
+        return list(read_planner_day_files(state_dir, ledger, day, registry=registry))
+    return list(read_day_files(state_dir, ledger, day, registry=registry))
+
+
 def _cells(row: Contract) -> dict[str, str]:
     """A row's cells as a CSV line spells them, which is what a preference rule reads."""
     spelled = getattr(row, "csv_row", None)
@@ -238,7 +354,9 @@ def _cells(row: Contract) -> dict[str, str]:
     }
 
 
-def _say_what_was_dropped(record: tuple[str, ...], kept: Contract, dropped: Contract) -> None:
+def _say_what_was_dropped(
+    record: tuple[str, ...], kept: Contract, dropped: Contract
+) -> None:
     """Name each cell the dropped row filled and the kept row left empty.
 
     A settlement keeps whole rows, so a cell only the dropped row carried goes
@@ -252,6 +370,41 @@ def _say_what_was_dropped(record: tuple[str, ...], kept: Contract, dropped: Cont
                 ",".join(record),
                 name,
             )
+
+
+def settle_planner_rows[C: PlannerRow](
+    files: Sequence[Sequence[PlannerStoredRow[C]]], key: tuple[str, ...]
+) -> list[PlannerStoredRow[C]]:
+    """Settle current planner facts by their declared key, never by generic work-unit identity."""
+    from idhazh.ledger.keys import door_contract
+
+    planner = [held for rows in files for held in rows]
+    if not planner:
+        return []
+    model = type(planner[0].row)
+    which = next((name for name in PLANNER_LEDGERS if door_contract(name) is model), None)
+    if which is None or any(type(held.row) is not model for held in planner):
+        raise ValueError("planner settlement requires one registered row contract")
+    if key != door_key(which):
+        raise ValueError(f"planner settlement requires the declared key for {which.value}")
+    kept: dict[tuple[str, ...], PlannerStoredRow[C]] = {}
+    for planned in planner:
+        record = tuple(str(getattr(planned.row, name)) for name in key)
+        previous = kept.get(record)
+        if previous is None:
+            kept[record] = planned
+        elif which is LedgerName.FEED_INGEST_PLAN_DISCOVERED_ARTICLES:
+            if not isinstance(planned.row, DiscoveredArticleRow) or not isinstance(
+                previous.row, DiscoveredArticleRow
+            ):
+                raise ValueError("discovery settlement requires its declared row contract")
+            later = datetime.fromisoformat(planned.row.first_seen_at)
+            earlier = datetime.fromisoformat(previous.row.first_seen_at)
+            if later < earlier:
+                kept[record] = planned
+        elif previous.row.to_json() != planned.row.to_json():
+            raise ValueError(f"conflicting duplicate {which.value} record")
+    return list(kept.values())
 
 
 def settle_rows[C: Contract](
@@ -276,28 +429,15 @@ def settle_rows[C: Contract](
     kept or dropped whole, and a cell only the dropped row filled is named in a
     warning.
 
-    Feed planning rows retain every original run and attempt instead: related
-    source-run completion evidence, not a partial file, selects a whole attempt
-    later. Document observations also retain every attempt because each row is
-    an immutable operation fact. Only their declared row keys may use nested
-    attribute paths.
+    Planner files use the separate `settle_planner_rows` boundary.
     """
     # Count corrections must not inherit the first-wins rule of run-plan,
     # whose business key is also (date, run_id).
     ledgers = {held.identity.ledger for rows in files for held in rows}
-    if ledgers & _ATTEMPT_PRESERVING_LEDGERS:
-        if len(ledgers) != 1:
-            raise ValueError("attempt-preserving settlement requires rows from only one ledger")
-        which = next(iter(ledgers))
-        if key != door_key(which):
-            raise ValueError(
-                f"attempt-preserving settlement requires the declared key for {which.value}"
-            )
-        return _settle_planning_rows(files, key)
     if LedgerName.RUN_SHARDS in ledgers:
         if ledgers != {LedgerName.RUN_SHARDS}:
             raise ValueError("count settlement requires only run-shards rows")
-        return _settle_run_shards(files, key)
+        return list(_settle_run_shards(files, key))
     prefers = preference_for(key)
     current: dict[str, tuple[int, int]] = {}
     for position, rows in enumerate(files):
@@ -318,31 +458,6 @@ def settle_rows[C: Contract](
             winner, loser = (held, incumbent) if later_wins else (incumbent, held)
             kept[record] = winner
             _say_what_was_dropped(record, winner.row, loser.row)
-    return list(kept.values())
-
-
-def _settle_planning_rows[C: Contract](
-    files: Sequence[Sequence[StoredRow[C]]], key: tuple[str, ...]
-) -> list[StoredRow[C]]:
-    """Keep each run attempt until related completion evidence chooses a whole attempt."""
-    kept: dict[tuple[str, ...], StoredRow[C]] = {}
-    for rows in files:
-        for held in rows:
-            cells = [held.identity.run_id, str(held.identity.attempt)]
-            for name in key:
-                value: object = held.row
-                for segment in name.split("."):
-                    value = getattr(value, segment)
-                cells.append(str(value))
-            record = tuple(cells)
-            incumbent = kept.get(record)
-            if incumbent is None:
-                kept[record] = held
-            elif (
-                incumbent.identity.covers != held.identity.covers
-                or incumbent.row.to_json() != held.row.to_json()
-            ):
-                raise ValueError(f"conflicting duplicate planning record: {record}")
     return list(kept.values())
 
 
@@ -375,6 +490,31 @@ def _settle_run_shards[C: Contract](
     return list(kept.values())
 
 
+def settle_registered_rows(
+    files: Sequence[Sequence[LedgerStoredRow]], key: tuple[str, ...], *, ledger: LedgerName
+) -> list[LedgerStoredRow]:
+    """Choose the registered settlement rule, refusing rows of the other physical protocol."""
+    if ledger in PLANNER_LEDGERS:
+        planner_files: list[list[PlannerStoredRow[PlannerRow]]] = []
+        for rows in files:
+            planned: list[PlannerStoredRow[PlannerRow]] = []
+            for held in rows:
+                if not isinstance(held, PlannerStoredRow):
+                    raise ValueError("planner settlement requires only declared planner rows")
+                planned.append(held)
+            planner_files.append(planned)
+        return list(settle_planner_rows(planner_files, key))
+    legacy_files: list[list[StoredRow[Contract]]] = []
+    for rows in files:
+        original: list[StoredRow[Contract]] = []
+        for held in rows:
+            if not isinstance(held, StoredRow):
+                raise ValueError("original settlement requires its original stored identities")
+            original.append(held)
+        legacy_files.append(original)
+    return list(settle_rows(legacy_files, key))
+
+
 def load_current_rows[C: Contract](
     state_dir: Path,
     ledger: LedgerName,
@@ -396,3 +536,17 @@ def load_current_rows[C: Contract](
         except ValueError as refusal:
             _skip(state_dir, held.path, refusal)
     return [held.row for held in settle_rows(stored, key)]
+
+
+def load_current_planner_rows[C: PlannerRow](
+    state_dir: Path, ledger: LedgerName, *, model: type[C], key: tuple[str, ...],
+    days: Collection[str] | None = None,
+) -> list[C]:
+    """Read current planner raw facts through their typed loading and settlement boundaries."""
+    stored: list[list[PlannerStoredRow[C]]] = []
+    for held in list_planner_raw_files(state_dir, ledger, days=days):
+        try:
+            stored.append(load_planner_stored([held.path], model=model))
+        except ValueError as refusal:
+            _skip(state_dir, held.path, refusal)
+    return [held.row for held in settle_planner_rows(stored, key)]

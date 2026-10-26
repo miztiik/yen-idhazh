@@ -126,7 +126,7 @@ def _refuse_raw_file(path: Path, relative: str, root: Path) -> list[str]:
     if built != path:
         return [f"{relative} is not named {built.name}, the name the door gives this file"]
     try:
-        ledger.load_stored([path], model=model)
+        ledger.load_registered_stored([path], ledger=which, model=model)
     except ValueError as refusal:
         return [f"{relative} does not read back as {which.value}: {refusal}"]
     return []

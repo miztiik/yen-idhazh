@@ -112,8 +112,8 @@ and causal-score briefs are not executable.
 | E18 | 18 | Connect actual downstream outcomes to the observer | 2, 10, 17 | M | DEFERRED | - | - | - |
 | E19 | 19 | Review operational regressions and prove the live loop | 22, 9, 12, 13, 21 | N | PENDING (review policy remains open) | - | - | - |
 | E20 | 20 | Adopt cache delivery and finish the combined hosted proof | - | Z | DONE | potential-fiesta | [#1671](https://github.com/miztiik/yen-idhazh/pull/1671), [#1707](https://github.com/miztiik/yen-idhazh/pull/1707) | 6a57ff1e-bdfc-4248-86f8-cd5b17c8bde2 |
-| E21 | 21 | Review and reuse configured numeric priorities | 22, 9 | O | PENDING (approve each new numeric term first) | - | - | - |
-| E22 | 22 | Replace planner ledgers and APIs in one atomic cutover | - (docs must first be on remote main) | P | PENDING (execution authorized) | - | - | - |
+| E21 | 21 | Review and reuse configured numeric priorities | 22, 9 | O | PENDING (bounded review complete; D12 approval pending) | - | - | - |
+| E22 | 22 | Replace planner ledgers and APIs in one atomic cutover | - (docs must first be on remote main) | P | DONE (cutover delivered; coordinator merge pending) | four-ledger-planner-cutover | [#1740](https://github.com/miztiik/yen-idhazh/pull/1740) | 939acb2f |
 | E23 | 23 | Migrate the feed-planning ledger family | 22 | P | COLLAPSED into Row 22; no compatibility phase | - | - | - |
 | E24 | 24 | Incrementally update and read feed-health state | 22 | P | COLLAPSED into Row 22; no snapshot/cache phase | - | - | - |
 | E25 | 25 | Remove redundant TypeScript state paths | 22 | P | COLLAPSED into Row 22; required cleanup is atomic | - | - | - |
@@ -226,7 +226,7 @@ deferred.
 
 ## 3. Row #1 - Settle remaining trial, polling and review policy
 
-- **Scope:** Settle only the still-open D5 trial total-cost acceptance, adaptive-polling formula and operational-review caller/cadence/authority before their affected capabilities.
+- **Scope:** Settle only the still-open D5 recovery-state contract, trial total-cost acceptance, adaptive-polling formula and operational-review caller/cadence/authority before their affected capabilities.
 - **Level:** 5 for those unresolved policies; the clean-break Row 22 direction is already authorized and does not wait for this row.
 - **Files touched:**
   - `docs/architecture/contracts/publisher-identity.md`
@@ -236,6 +236,11 @@ deferred.
   - `docs/architecture/sources/i-feed.md`
 - **Acceptance gates:** Local: bounded named-link/anchor checks and ASCII/whitespace; no application suite for a documentation-only decision. CI: documentation-selected checks. Record each unresolved policy's input, default, actual authority and cost on its living page. Preserve already approved restriction/recovery thresholds, the report-only request component and all three window meanings. Do not restart old arithmetic, state revisions or migration work.
 - **Oracle:** For each newly settled policy, a recorded fixture and its configured values determine the permitted action without an invented threshold or authority; this does not prove long-term effectiveness or complete its implementation.
+
+- **OPEN - Recovery-state contract:** Decide whether to adopt the [optional C/D policy records](../docs/architecture/contracts/feed-ingest-feedback.md#recovery-state-gap-proposal-only), then choose the minimal typed fields and additive carry/read semantics. No proposed field, persisted meaning or activation is approved by this finding.
+- **OPEN - Known outcomes:** Define the numerator/denominator cohort for D5's >=80 percent known outcomes and when that cohort resets. Keep the approved 80 percent threshold; no interval is chosen here.
+- **OPEN - State continuity:** Decide first enablement and missing/refused prior-state behavior, including a scope absent beyond retained history. Settle the guarantee for carrying finite state through not-due or deferred recovery decisions without inventing work, ordinary access or a source failure.
+- **Ordering unchanged:** A2's five-age-band article sampler is not an inherent prerequisite for source/endpoint recovery checks. E12 still depends on E11; a split or reordering needs a recorded maintainer decision.
 
 ### Table I - Decisions
 
@@ -921,26 +926,30 @@ publication from dispatch-Parquet creation alone.
 ## 23. Row #21 - Review and reuse configured numeric priorities
 
 - **Scope:** Review useful Python watchlist, theme and carrier-priority behavior against recorded TypeScript inputs, then implement only explicitly approved numeric terms while preserving the distinct reliability and publisher-exposure adjustments.
+- **Status:** The [bounded priority review](../docs/architecture/sources/feed-curation.md#configured-priority-review) is complete. D12 approval of any new term, matcher or default remains pending; no new term is implemented or enabled. The row remains open.
 - **Level:** 5 for the policy/evidence proposal; no new bonus or changed persisted meaning before D12 approval.
-- **Files touched:**
+- **Files touched in this review:**
+  - `docs/architecture/sources/feed-curation.md`
+  - `TODO/20261024-67-feed-ingest-feedback-and-selection-plan.md` (Row 21 only)
+- **Current code references (read only):**
   - `config/feed-ingest-plan.json`
   - `packages/common-contracts/src/schemas/config.schema.ts`
-  - `packages/common-contracts/src/schemas/source.schema.ts`
-  - `backend/idhazh/contracts/feed_ingest_candidate.py`
-  - `services/feed-ingest-plan/src/curate-article-portfolio/quality-decoupler.ts`
-  - `services/feed-ingest-plan/src/curate-article-portfolio/carrier-cluster.ts`
-  - `services/feed-ingest-plan/src/curate-article-portfolio/quota-normalizer.ts`
+  - `packages/common-contracts/src/schemas/candidate.schema.ts`
+  - `packages/common-contracts/src/schemas/planner-stage.schema.ts`
+  - `packages/common-contracts/src/schemas/selected-article.schema.ts`
+  - `backend/idhazh/contracts/feed_ingest_selected_article.py`
+  - `services/feed-ingest-plan/src/curate-article-portfolio/editorial-selection.ts`
+  - `services/feed-ingest-plan/src/curate-article-portfolio/publisher-exposure.ts`
   - `services/feed-ingest-plan/test/curate.test.ts`
-  - `services/feed-ingest-plan/test/article-assessments.test.ts`
-  - `docs/architecture/sources/feed-curation.md`
-- **Acceptance gates:** Local: compare the named rules in `backend/idhazh/rank.py` with existing recorded headline matches, carrier witnesses and TypeScript scoring. Record adopted and rejected terms with reasons before seeking D12 approval. For approved terms, land compatible enclosing readers before writers, update the exact binding/migration footprint, and extend existing curation/assessment cases for config substitution, unknown evidence and duplicate carriers. CI: strict types, binding/native decision replay and historical compatibility. Do not change Python ranking runtime or assume its exact selections are the target.
+- **Acceptance gates - review:** Compare `backend/idhazh/rank.py`, headline matching in `backend/idhazh/stages/plan.py` through `backend/idhazh/tag.py`, and their maintainer-authored config with current TypeScript scoring and declared batch inputs. Record adopted behavior and unapproved recommendations in the living curation doc; raw titles/categories are not recorded theme/entity matches, and URL identities are not carrier witnesses. Check the docs with the shared selector and bounded named-link, ASCII and whitespace checks; no application suite is needed for this docs-only phase.
+- **Acceptance gates - approved implementation:** Implementation remains blocked on D12. For an approved term, name the exact current contract/binding footprint, declare any new persisted meaning and update readers before writers; extend existing curation/binding cases for config substitution, unknown evidence, score readback and duplicate carriers. CI then checks strict types and current native/TypeScript bindings and readback. Do not restore removed assessment/classification paths, change Python ranking runtime or assume its exact selections are the target.
 - **Oracle:** Varying one approved configured priority with the same recorded input changes only its declared score contribution and actual selection trace, without repeated carrier charges or inferred qualitative verdicts; this cannot establish that a higher numeric priority means a better story.
 
 ### Table AW - Decisions
 
 | Id | Decision | Authority |
 | --- | --- | --- |
-| AW1 | Reuse useful explicit inputs, not the entire Python algorithm. Current configured theme/entity matches remain observations until an independently approved scoring rule consumes them. Preserve TypeScript opportunity normalization, set-aware choices and exploration. | Maintainer's requested priority-review task and D12. |
+| AW1 | Reuse useful explicit inputs, not the entire Python algorithm. Current candidates carry title and feed facts, not recorded theme/entity matches or carrier witnesses. Preserve feed allowances, choices recomputed against the chosen set and exploration. The review's recommendations do not grant D12 approval. | Maintainer's requested priority-review task and D12. |
 
 ### Table AX - Rejected alternatives
 

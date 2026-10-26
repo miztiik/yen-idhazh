@@ -1,18 +1,14 @@
 # Feed planner ledgers
 
-**Last Updated**: 2026-10-25
+**Last Updated**: 2026-10-26
 
 Which planner data is retained, and where is it stored?
 
-**Status**: Working proposal for the
-[Plan 67 simplification review](../../TODO/20261024-67-feed-ingest-feedback-and-selection-plan.md),
-with an approved clean-break delivery direction, not an implemented contract.
-Fields and runtime recommendations remain under review except for the explicit
-confirmed decisions below. Execution is authorized: declare and validate the
-minimal four-ledger contracts before logic within the same atomic cutover.
-There is no separate approval or contracts-only PR gate. The superseded
-compatibility and state branches remain paused; saving this proposal implements
-no schema or runtime change.
+**Status**: Current four-ledger contract for the isolated TypeScript planner.
+[Plan 67](../../TODO/20261024-67-feed-ingest-feedback-and-selection-plan.md)
+tracks delivery and the separately deferred policy, worker and console work.
+Native Pydantic declarations own persisted data; named binding cases keep the
+TypeScript copies in step. The planner-only progress event remains TypeScript-owned.
 
 **Scope**: Simplify the storage and audit portions of
 [Plan 66](../../TODO/20261020-66-feed-ingest-plan.md) and
@@ -33,7 +29,7 @@ Breaking format changes and removal of old planner-family raw and compact
 ledgers are approved within the
 [clean-break boundary](#approved-clean-break-delivery). New-family shared-ledger
 storage support is in scope; the Python news pipeline remains unchanged. This
-page describes the proposed design, not implemented behavior.
+page defines the retained formats and their current readers and writers.
 
 Use section letters and field IDs when reviewing, for example "C20" or "B12-B14".
 Keep IDs stable during iteration; do not reuse a removed field's ID.
@@ -69,7 +65,7 @@ articles never selected.
 | A3 | `first_seen_at` | Row | Establish age for undated articles; never reset on rediscovery |
 | A4 | `date` | Row | UTC date of first discovery; explicit day-partition/query key |
 
-No `feed_id` or `publisher_id` in this proposal: the first-sight reader does not
+No `feed_id` or `publisher_id`: the first-sight reader does not
 need them. Feed attribution belongs in health and selected output; publisher
 identity belongs in selected metadata and the curated registry.
 
@@ -139,7 +135,7 @@ or a later API call's start time.
 Use recency, curated tier/weight, the explicitly enabled measured feed-reliability
 adjustment and applicable feed/publisher/domain selection controls. Do not
 infer verticals, desks, lenses or article-quality verdicts here. Removing those
-classification-based controls is part of this proposed runtime simplification,
+classification-based controls is part of the runtime cutover,
 not merely a column rename.
 
 Existing genuine publication inputs may still support an already-declared
@@ -183,7 +179,7 @@ totals or add together saved rolling reliability results.
 | C23 | `feed_reads` | Run counters | Logical feed checks represented by this row, not retry requests |
 | C24 | `productive_reads` | Run counters | Productive checks under the existing outcome/items rule |
 | C25 | `failed_reads` | Run counters | Failed feed checks represented by this row |
-| C26 | `article_candidates` | Run counters | Article opportunities reaching selection in this run/day |
+| C26 | `article_candidates` | Run counters | Articles passing admission and reaching numeric selection in this run/day |
 | C27 | `articles_selected` | Run counters | Selected opportunities from this feed in this run/day |
 | C28 | `feed_requests` | Run counters | Actual feed requests, including retries/redirects |
 | C29 | `article_requests` | Run counters | Actual article requests |
@@ -224,9 +220,10 @@ logical-read settlement and skip rules. Missing evidence remains unavailable,
 not perfect reliability. Feed titles, configuration and retirement settings are
 joined from the registry.
 
-The TypeScript replacement for `frontend/public/source-health.json` gets its
-operational data from this ledger. Any generated public JSON is a view, not
-another authority. Planning cannot supply publication statistics.
+The global Python health ledger and `frontend/public/source-health.json` remain
+unchanged. A future TypeScript health view must derive its operational data
+from this ledger, not create another authority. Planning cannot supply
+publication statistics.
 
 No publication counts, publication-based retirement countdown, article text or
 individual request history.
@@ -248,13 +245,13 @@ failed runs.
 | D1 | `schema_version` | Metadata | Identify the format |
 | D2 | `run_id` | Run | Identify the execution |
 | D3 | `started_at` | Run | UTC start time, stored once |
-| D4 | `duration_ms` | Run | Total elapsed time; no redundant end timestamp |
+| D4 | `duration_ms` | Run | Measured monotonic elapsed time; null when a restarted stage chain has no recoverable start; no redundant end timestamp |
 | D5 | `status` | Run | Completed, partial or failed |
 | D6 | `failure_code` | Run | Explain a run-level failure; nullable |
 | D7 | `selected_count` | Run | Explicit result, including zero; a missing selected file is not an empty result |
 | D8 | `strategy` | Run | Actual partition strategy |
 | D9 | `dispatch_count` | Run | Number of worker partitions |
-| D10 | `selected_articles_artifact` | Run | Artifact reference only, not its content or a signed URL |
+| D10 | `selected_articles_artifact` | Run | Relative POSIX artifact path only; no traversal, absolute path, content or signed URL |
 | D11 | `api_timings[].operation` | Timing entry | Actual fetch, parse, select, partition, persist or feed-health-summary operation |
 | D12 | `api_timings[].duration_ms` | Timing entry | Measured operation duration |
 | D13 | `api_timings[].status` | Timing entry | Completed, failed or interrupted |
@@ -414,22 +411,22 @@ in the main tables; other generic identity columns are not added.
 ## K. API inventory
 
 These are local operator services, not a backend for the published site.
-The current route registrations implement 13 HTTP operations across the three
-services; one feedback operation is planned. Renaming the persistence operation
-replaces it; it does not create an additional permanent compatibility API.
+The route registrations implement 14 HTTP operations across three local
+services. The selected persistence operation replaces the old route; there is
+no permanent compatibility API.
 
 ### Table K - Plan 66/67 HTTP operations
 
-| ID | Service | Method and full path | Current implementation / proposed simplified role |
+| ID | Service | Method and full path | Current role |
 | --- | --- | --- | --- |
 | K1 | Feed planner | `GET /api/2026-10-20/health` | Implemented: listener/enablement check only, not a feed-reliability query |
-| K2 | Feed planner | `POST /api/2026-10-20/plan` | Implemented orchestration; adapt outputs to the four ledgers and article artifact |
+| K2 | Feed planner | `POST /api/2026-10-20/plan` | Runs the shared stages and finalizes the four ledgers and selected text artifact |
 | K3 | Feed planner | `POST /api/2026-10-20/fetch` | Implemented fetch for either a configured feed or an explicitly permitted article |
-| K4 | Feed planner | `POST /api/2026-10-20/parse` | Implemented parse for fetched feed XML or article HTML; no separate parse-feeds route |
+| K4 | Feed planner | `POST /api/2026-10-20/parse` | Parses one saved feed or article without network calls; feed parsing returns body-free offers and a server-owned batch |
 | K5 | Feed planner | `POST /api/2026-10-20/select-articles` | Implemented combined admission/ranking; no selection-idempotency requirement or input-count cap |
 | K6 | Feed planner | `POST /api/2026-10-20/partition-articles` | Implemented worker assignment/bin packing; does not reselect |
-| K7 | Feed planner | `POST /api/2026-10-20/persist-dispatches` | Implemented old persistence route. Proposed replacement: `POST /api/2026-10-20/persist-selected-articles`, writing B without text and producing its text-bearing artifact |
-| K8 | Feed planner | `POST /api/2026-10-20/feed-health-state` | Planned contract, not a registered route yet. Adapt it to the simplified health recording/lookback operation in L, not the superseded snapshot/head format |
+| K7 | Feed planner | `POST /api/2026-10-20/persist-selected-articles` | Writes B without text and produces its text-bearing artifact; the removed persistence route returns ordinary HTTP 404 |
+| K8 | Feed planner | `POST /api/2026-10-20/feed-health-state` | Explicit `summarize` or `record` for a server-owned batch; returns C, request spend, the reliability window and actual write receipts when recorded |
 | K9 | Host fingerprints | `GET /api/2026-10-20/health` | Implemented separate service health check |
 | K10 | Host fingerprints | `POST /api/2026-10-20/fingerprint` | Implemented optional machine collection/persistence; not mandatory planner evidence |
 | K11 | Host probes | `GET /api/2026-10-20/sample` | Implemented standalone machine CPU/RAM sample |
@@ -442,23 +439,23 @@ HTTP proof uses K11; it is not another RAM API. The ledger writer is a library
 and CLI, not an additional HTTP service. No `GET /feeds` or read-only
 `GET /feed-health-state` route currently exists.
 
-K8 must have its strict request/response contract revised for the four-ledger
-format before implementation. Its presence in the old contract documentation
-does not mean a working route exists.
+K3 uses `feed_id`, not an old `source_id` alias. Article work can reference a
+server-owned `batch_id` and `offer_id`; an explicit operator URL remains a
+separate permitted control. K5 waits until every offer is terminal. K8 checks
+the default-off service flag before reading a batch or private SQLite store.
 
 ## L. Lookback summaries
 
-The current TypeScript reliability computation is an internal native reader.
-It is not K1's listener health response. K8 was planned to expose the feedback
-operation, but its runtime route was not implemented.
+The shared TypeScript health operation reads native planner rows and supplies
+K8 and selection. It is not K1's listener health response.
 
 ### Table L - Independent windows
 
-| ID | Component | Current default and unit | Proposed retained meaning |
+| ID | Component | Current default and unit | Retained meaning |
 | --- | --- | --- | --- |
 | L1 | Lifecycle/rest | `feedback.lifecycle_window_days = 31` represented UTC days | Use the newest named represented days, not 31 fabricated consecutive dates; preserve endpoint and native rest ordering |
 | L2 | Feed-read reliability | `collect.reliability_window_days = 30` represented days; `collect.reliability_floor = 0.5` | Productive / evidence-bearing feed reads, with the configured floor; keep the existing feed metric and expose incomplete evidence |
-| L3 | Request-spend report | Existing `feedback.window_days = 7` closed UTC calendar days | Rename the setting to `feedback.request_report_closed_days`; sum observed feed/article/robots request spend, not a waste score or ranking penalty |
+| L3 | Request-spend report | `feedback.request_report_closed_days = 7` closed UTC calendar days | Sum observed feed/article/robots request spend, not a waste score or ranking penalty |
 
 **Confirmed decision:** Retain the seven-day component as a feed request-spend
 report only. Remove the qualified causal request-waste score. Its
@@ -468,11 +465,20 @@ fallback when request data is unavailable.
 
 All three windows use UTC. The 31-day lifecycle and seven-day request windows
 are not interchangeable reliability windows. The 30-day feed-read window
-already exists in current configuration. This proposal keeps those meanings
+already exists in current configuration. The cutover keeps those meanings
 rather than changing 30 to 31 or using the seven-day request window for
 feed-read scoring.
 
-The shared operation will:
+Represented membership follows native coverage. A daily entry contributes its
+day only when it has rows. A nonempty monthly or yearly entry contributes
+every calendar day in that declared cover, including a covered day with no
+feed row. This is named evidence, not padding outside the inventory.
+Covered membership never invents a feed check or request; denominators and
+counters still come only from actual rows. Known-empty daily entries are not
+lifecycle or reliability members. Missing, refused or lost evidence stays
+explicitly incomplete.
+
+The shared operation:
 
 1. Capture the trusted selection/feedback clock once in D22. Ordinary age
    evaluation may retain the earlier parsed-batch clock in D19.
@@ -500,14 +506,15 @@ These are direct stage calls, not HTTP self-calls. Standalone
 `/select-articles` does not acquire an implicit update side effect; K8 remains
 an explicit operator operation.
 
-The same successfully saved health data can supply the TypeScript health-view
-projection. The browser does not derive a second competing reliability verdict.
-All of this is proposed runtime behavior; current code and the old K8 DTO are
-not claimed to have been migrated.
+Each capture shares its named-index and Parquet reads in memory. Pre-fetch
+health governs rest before requests start. Selection refreshes health at D22
+after the complete input arrives, so a saved parsed batch does not freeze
+feedback or window membership. D11-D13 include the measured cost of both
+captures. There is no per-candidate history read or persistent result cache.
 
 ## Shared rules and removals
 
-- No article text in committed ledgers, repository files or normal-run logs.
+- No article text in committed ledgers, committed repository files or normal-run logs.
 - Counts and durations use integers. Genuine two-state facts use booleans.
   Ratios and weights remain numeric. Unknown is not zero or false.
 - Schema versions are date stamps stored once per file.
@@ -515,7 +522,7 @@ not claimed to have been migrated.
   column. `date`, `run_id` and `attempt` are retained where required by the
   explicit main tables, not injected as a generic identity tree.
 - No Git SHA, `unit_id`, revision chains, duplicate head files or hidden generic
-  writer identity columns in these proposed formats.
+  writer identity columns in these formats.
 - Replace the old assessment, rejection, diversity, editorial-selection,
   dispatch, operation-history and operational-score formats with the four
   declared ledgers. Keep selected metadata in B, not separate duplicate
@@ -543,7 +550,7 @@ not claimed to have been migrated.
 
 The field lists, old-to-new mappings, API inventory and window definitions
 answer one question: which planner data is retained and where. They remain
-together so each proposed field can be reviewed against its old source and
+together so each retained field can be reviewed against its old source and
 consumer without losing the stable review IDs. Plan 67 tracks removal or
 splitting of obsolete duplicated prose after the replacement contracts are
 settled and the affected consumers are migrated.
@@ -570,7 +577,7 @@ minimal four contracts before their logic within that cohesive change; do not
 land a compatibility phase.
 
 Registration alone cannot make the native file reader and compactor accept
-the proposed minimal metadata. Include new-family native file-format,
+the declared minimal metadata. Include new-family native file-format,
 readback, settlement and daily/monthly/yearly packing support, plus the
 TypeScript Parquet reader. Do not restore `unit_id` or hidden generic identity
 fields to fit the existing infrastructure. Keep every other family's current
@@ -585,20 +592,18 @@ for selection. Health recording and reporting may overlap partitioning after
 selection. Do not serialize all runs through one global queue. Existing fetch
 safety checks and the artifact-only article-text boundary remain unchanged.
 
-### Compute the lookbacks once per run
+### Share each bounded health capture
 
-**Provisional recommendation, not a measured runtime claim:** Do not add a
-fifth summary ledger, a separate summary service or another API. Reuse the
-planned `feed-health-state` shared operation, compute the bounded lookbacks
-once per run and share the result among consumers in memory. The captured
-reliability fields in C record what that run used; they are not a cache proved
-fresh enough for a later run.
+The pre-fetch decision and fresh selection feedback answer different questions
+at different instants. A run needs both when work or external evidence changes
+between them. Each capture derives lifecycle, reliability and request spend
+together and shares bounded file reads among its consumers. The run records
+the full measured health-summary cost through D11-D13, not only its last
+refresh. This is a measured operation cost, not a claim of a speed improvement.
 
-**Estimate:** Simple feed/day counters should be cheap to aggregate, but no
-timing of the proposed format exists and file I/O may dominate. When the real
-implementation exists, record the actual `feed-health-summary` duration through
-the existing `plan-runs` API/phase timing fields D11-D13. This does not require
-host fingerprints, cache benchmarks or process profiling.
+Captured reliability in C records what selection used. It is not a result cache
+proved fresh for another request. No fifth summary ledger, separate summary
+service, new API or profiler gate is needed.
 
 Consider an incremental persisted cache only if representative runner evidence
 changes that recommendation. First consider keeping any justified cache in
@@ -609,7 +614,7 @@ shows a need.
 ## See also
 
 - [Plan 66](../../TODO/20261020-66-feed-ingest-plan.md) - the delivered planner and unfinished follow-up scope.
-- [Plan 67](../../TODO/20261024-67-feed-ingest-feedback-and-selection-plan.md) - replacement review, paused implementation and deferred cleanup.
+- [Plan 67](../../TODO/20261024-67-feed-ingest-feedback-and-selection-plan.md) - cutover delivery and separately deferred work.
 - [Selection rules](../architecture/sources/feed-curation.md) - current selection behavior.
 - [Feed history and reliability](../architecture/sources/planner-feed-history.md) - current native readers and represented-day rules.
 - [Operator API](../architecture/sources/feed-operator-api.md) - current planner routes and contracts.

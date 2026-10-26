@@ -27,7 +27,7 @@ from idhazh import config, ledger
 from idhazh.config import GardenerSettings
 from idhazh.contracts.base import ServerJob
 from idhazh.contracts.collection_prune import CollectionPruneRow, StopReason
-from idhazh.contracts.file_envelope import Period, WriterIdentity
+from idhazh.contracts.file_envelope import FileEnvelope, Period, WriterIdentity
 from idhazh.contracts.gardener_events import TaskFinished, TaskOutcome, TaskPlanned
 from idhazh.contracts.gardener_fault import GardenerFault
 from idhazh.contracts.host_fingerprint import HostFingerprintRow
@@ -248,7 +248,11 @@ def test_a_shard_records_the_machine_it_drew_and_names_it_among_its_writes(
         checkout / ledger.STATE_DIRNAME, LedgerName.HOST_FINGERPRINT, days={WAKE.date().isoformat()}
     )
     assert {held.path.relative_to(checkout).as_posix() for held in files} == named
-    assert {held.envelope.identity.attempt for held in files} == {1}
+    attempts = set()
+    for held in files:
+        assert isinstance(held.envelope, FileEnvelope)
+        attempts.add(held.envelope.identity.attempt)
+    assert attempts == {1}
 
 
 def test_a_shard_uses_its_loaded_fingerprint_switch(
@@ -392,6 +396,7 @@ def test_trial_compaction_runs_each_root_and_leaves_production_rows_unchanged(
             compact = ledger.compact_file(root, LedgerName.ITEM_HEALTH, Period.DAILY, day)
             assert compact is not None and compact.is_file()
             envelope = ledger.read_envelope(compact)
+            assert isinstance(envelope, FileEnvelope)
             assert envelope.identity.run_id == "2026-10-04-9001"
             assert envelope.identity.job is ServerJob.RUN_TASKS
             assert envelope.identity.git_sha == "b" * 40

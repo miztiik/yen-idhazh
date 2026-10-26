@@ -1,6 +1,6 @@
 # How completed output reaches the repository
 
-**Last Updated**: 2026-10-11
+**Last Updated**: 2026-10-26
 
 Start here when an agent adds a workflow that commits generated files.
 Gardener, council, digest and the additional clients below use one publisher:
@@ -180,19 +180,27 @@ enable the expensive memory copy. Only jobs selected by its config knob copy.
 
 ## Design rationale
 
-Maintainer-directed narrow exception (2026-10-22): the manual
-TypeScript planner workflow commits only its genuine current-run raw UUID
-Parquet files and the real host collector's returned file paths. Its Bun
-adapter uses only ASSEMBLE's append-only Git mechanism: a private
-`GIT_INDEX_FILE`, fetched main, exact immutable blobs, a candidate parented
-on that main and a normal non-force push. It retries the same completed bytes
-against fresh main within `config/push-retry.json`'s deadline and backoff.
-A different blob at the same path is refused. The checkout, staged work and
-sparse patterns do not move. This exception does not add a second general
-publisher: no deletion, preparation, inventory, site update or producer rerun.
-Generated audit fixtures never enter the commit list. Commit failure keeps the
-workflow red and retains artifacts. Other workflows retain the shared Python
-publisher rule above.
+The manual TypeScript planner commits only exact current raw UUID Parquet
+files for its four registered siblings. The Bun adapter validates each file
+before hashing it, uses a private `GIT_INDEX_FILE`, fetches main and builds a
+candidate parented on that tip. A normal non-force push preserves completed
+bytes; different committed bytes at the same UUID are refused. The checkout,
+staged work and sparse patterns do not move.
+
+The same commit also maintains each affected planner UTC day's existing
+native `index.json`. This mutable index is required by the current-format
+named reader. The adapter lists only that exact registered day at the fetched
+tip, combines its immutable members with the validated current files, sorts
+names and records actual byte counts and the filename digest. On a lost push,
+it fetches again and rebuilds those day indexes from the new tip before
+retrying. Replaying identical output leaves an unchanged index alone.
+
+This is the Row 22 native-format handoff, not a second general publisher.
+The adapter performs no deletion, other-family write, publication/site
+inventory update, site deploy or producer rerun. Selected text stays in its
+separate artifact. Partial completed metadata may land with its explicit run
+outcome; commit failure keeps the workflow red and retains evidence.
+Other workflows retain the shared Python publisher rule above.
 
 Maintainer-approved on 2026-10-09: reuse gardener's private-index, exact-change,
 sparse-safe publication, with three actual policies rather than a generic

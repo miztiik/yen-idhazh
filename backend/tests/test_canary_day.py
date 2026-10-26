@@ -29,6 +29,8 @@ from idhazh.contracts.eval_row import ConfidenceBand, EvalRow
 from idhazh.contracts.knobs.evaluation import EvaluationConfig
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.sources import SourceForm
+from idhazh.contracts.visual import VisualType
+from idhazh.contracts.visual_data import VisualData
 from utilities import build_canary_day
 
 
@@ -99,6 +101,32 @@ def test_the_eight_item_day_has_a_rendered_chart_after_the_canary_seed(tmp_path:
     assert item.visual.state == "rendered"
     assert item.visual.data_path == "digest/2026/08/20/ai-04.json"
     assert (tmp_path / item.visual.data_path).is_file()
+
+
+def test_the_canary_line_is_compiled_from_the_named_source_fixture(tmp_path: Path) -> None:
+    settings = config.load()
+    day = build_canary_day.build(tmp_path / "digest", settings.app.evaluation, settings.app.visuals)
+    item = day.items[6]
+    assert item.visual is not None
+    assert item.visual.state == "rendered"
+    assert item.visual.data_path is not None
+
+    data = VisualData.read(tmp_path / item.visual.data_path)
+    assert data.item_id == item.item_id
+    assert data.type is VisualType.LINE
+    marks = {mark.mark_id: mark for mark in data.marks}
+    assert [
+        (
+            marks[time_id].time,
+            marks[quantity_id].element_id,
+            str(marks[quantity_id].value),
+        )
+        for time_id, quantity_id in zip(data.encoding.time, data.encoding.quantity, strict=True)
+    ] == [
+        ("2025", "quantity-88-95", "2400"),
+        ("2024", "quantity-60-67", "1800"),
+        ("2023", "quantity-32-39", "1200"),
+    ]
 
 
 def test_the_fixture_covers_every_confidence_band() -> None:

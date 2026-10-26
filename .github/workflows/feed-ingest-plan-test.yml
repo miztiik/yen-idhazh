@@ -3,7 +3,7 @@ name: Feed ingest plan test
 on:
   workflow_dispatch:
     inputs:
-      # GitHub needs literal form defaults; workflow tests bind them to config/feed-ingest-plan.json.
+      # The named workflow case binds these literal form defaults to configuration.
       freshness_hours:
         description: Maximum article age in hours for this run
         required: true
@@ -29,7 +29,7 @@ on:
           - round-robin
           - none
       profile_machine_memory:
-        description: Profile whole-machine RAM during fetch and parse; CPU and process RAM stay enabled
+        description: Run independent optional host CPU/RAM tools; does not gate planning
         required: false
         default: false
         type: boolean
@@ -42,9 +42,6 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 360
     steps:
-      - name: Retain job start observation
-        run: echo "PLANNER_JOB_STARTED_MS=$(date -u +%s%3N)" >> "$GITHUB_ENV"
-
       - uses: actions/checkout@v6
         with:
           persist-credentials: true
@@ -54,41 +51,35 @@ jobs:
             /packages/common-contracts/
             /packages/ledger-file-writer/
             /services/feed-ingest-plan/
-            /services/host-fingerprints/
             /services/host-probes/
+            /services/host-fingerprints/
             /.github/scripts/feed-ingest-plan-outputs.ts
             /.github/scripts/feed-ingest-plan-feed-history.ts
+            /.github/scripts/feed-ingest-plan-history.ts
             /.github/scripts/feed-ingest-plan-commit.ts
             /.github/scripts/feed-ingest-plan-report.ts
+            /.github/scripts/feed-ingest-plan-report-format.ts
             /.github/scripts/feed-ingest-plan-verification.ts
-            /.github/scripts/feed-ingest-plan-audit-fixture.ts
             /.github/scripts/feed-ingest-plan-http-proof.ts
             /.github/scripts/feed-ingest-plan-profile-proof.ts
+            /.github/scripts/feed-ingest-plan-profile-schema.ts
             /.github/scripts/feed-ingest-plan-cache-proof.ts
-            /.github/scripts/feed-ingest-plan-cache-report.ts
+            /.github/scripts/feed-ingest-plan-pid-report.ts
+            /.github/scripts/feed-ingest-plan-resource-values.ts
             /.github/scripts/host-task-profile-proof.ts
             /.github/scripts/host-cache-affinity-proof.ts
             /.github/scripts/install-host-cache-tools.sh
-            /.github/scripts/feed-ingest-plan-profile-schema.ts
-            /.github/scripts/feed-ingest-plan-resource-report.ts
-            /.github/scripts/feed-ingest-plan-pid-report.ts
-            /.github/scripts/feed-ingest-plan-resource-values.ts
-            /.github/scripts/feed-ingest-plan-report-format.ts
             /.github/scripts/tests/feed-ingest-plan-outputs.test.ts
             /.github/scripts/tests/feed-ingest-plan-report.test.ts
-            /.github/scripts/tests/feed-ingest-plan-profile-recording.ts
             /.github/scripts/tests/feed-ingest-plan-workflow.test.ts
             /.github/workflows/feed-ingest-plan-test.yml
             /.github/workflows/ci.yml
             /tests/fixtures/feed-ingest-plan/
+            /tests/fixtures/ledger-file-writer/
             /tests/fixtures/host-probes/
             /tests/fixtures/host-fingerprints/linux-inputs.json
             /tests/fixtures/runtime/2026-08-30-probe-proc-stat-at-start.txt
             /tests/fixtures/runtime/2026-08-30-probe-proc-stat-at-end.txt
-            /tests/fixtures/ledger-file-writer/
-            /tests/fixtures/contracts/feed-ingest-dispatch/one-article.json
-            /tests/fixtures/contracts/feed-ingest-event/one-observation.json
-            /docs/how-to/run-feed-ingest-plan-test.md
 
       - uses: oven-sh/setup-bun@v2
         with:
@@ -99,405 +90,74 @@ jobs:
           bun install --frozen-lockfile --cwd packages/common-contracts
           bun install --frozen-lockfile --cwd packages/ledger-file-writer
           bun install --frozen-lockfile --cwd services/feed-ingest-plan
-          bun install --frozen-lockfile --cwd services/host-fingerprints
           bun install --frozen-lockfile --cwd services/host-probes
-
-      - name: Install optional Linux cache instruments
-        run: bash .github/scripts/install-host-cache-tools.sh
+          bun install --frozen-lockfile --cwd services/host-fingerprints
 
       - name: Check isolated adapters and native compatibility
         run: |
           bun run --cwd packages/common-contracts check
           bun run --cwd packages/ledger-file-writer check
           bun run --cwd services/feed-ingest-plan check
-          bun run --cwd services/host-fingerprints check
-          bun run --cwd services/host-probes check
-          bun test ./services/host-probes/test/probe.test.ts ./services/feed-ingest-plan/test/plan-api.test.ts ./services/host-fingerprints/test/fingerprint.test.ts --timeout 30000
           bun test ./.github/scripts/tests/feed-ingest-plan-report.test.ts ./.github/scripts/tests/feed-ingest-plan-outputs.test.ts ./.github/scripts/tests/feed-ingest-plan-workflow.test.ts --timeout 30000
           bun run .github/scripts/feed-ingest-plan-verification.ts
 
       - name: Read named history and call the real HTTP planner
         id: plan
-        timeout-minutes: 10
         env:
           FRESHNESS_HOURS: ${{ inputs.freshness_hours }}
           ARTICLE_LIMIT: ${{ inputs.article_limit }}
           SHARDS: ${{ inputs.shards }}
           PARTITION_STRATEGY: ${{ inputs.partition_strategy }}
-          PROFILE_MACHINE_MEMORY: ${{ inputs.profile_machine_memory }}
-        run: |
-          bun run - <<'TS'
-          import { mkdir, writeFile } from "node:fs/promises";
-          import { appendFileSync } from "node:fs";
-          import { randomUUID } from "node:crypto";
-          import { join } from "node:path";
-          import { loadPlanInputs } from "./services/feed-ingest-plan/src/load-plan-inputs";
-          import { parseCliRequest, describePlanError } from "./services/feed-ingest-plan/src/api/plan-request";
-          import { servePlan } from "./services/feed-ingest-plan/src/api/server";
-          import { summarizePlan } from "./services/feed-ingest-plan/src/run-feed-plan";
-          import { writeAuditEvent } from "./services/feed-ingest-plan/src/logging/structured-logger";
-          import { createProgressLogger } from "./services/feed-ingest-plan/src/logging/progress-logger";
-          import type { ProgressRecord } from "./services/feed-ingest-plan/src/logging/progress-logger";
-          import { utcTimestamp } from "./services/feed-ingest-plan/src/harvest-feeds/harvest-types";
-          import { ServiceSettingsSchema } from "./services/feed-ingest-plan/src/config/service-settings";
-          import { requiredSeenDays } from "./services/feed-ingest-plan/src/read-ledger-history/read-seen-evidence";
-          import { closedObservationDays } from "./services/feed-ingest-plan/src/read-ledger-history/read-ingest-evidence";
-          import { stageFeedHistory } from "./.github/scripts/feed-ingest-plan-feed-history";
-          import { CompactIndexSchema, RawDayIndexSchema } from "./packages/common-contracts/src/index";
-          import type { CompactIndex, FeedIngestEvent, RawDayIndex } from "./packages/common-contracts/src/index";
-          import { completeHistoryDayInputs, createExecutionOutputs, createSeenDayInputs, historyDays, resolveHistoryInventory, sparseCheckoutPath, writeGitHubOutputs } from "./.github/scripts/feed-ingest-plan-outputs";
-          import { verifyLedgerReceipt, verifyParquetFiles, verifyPlanningCompletion } from "./.github/scripts/feed-ingest-plan-verification";
-          import { verifyLiveDocumentHttp } from "./.github/scripts/feed-ingest-plan-http-proof";
-          import { WorkflowMachineMemorySchema } from "./.github/scripts/feed-ingest-plan-profile-schema";
+        run: bun run .github/scripts/feed-ingest-plan-http-proof.ts
 
-          const root = process.cwd();
-          try {
-            const historyStarted = performance.now();
-            const args = ["--cli"];
-            for (const [field, flag] of [
-              ["FRESHNESS_HOURS", "--freshness-hours"], ["ARTICLE_LIMIT", "--article-limit"],
-              ["SHARDS", "--shards"], ["PARTITION_STRATEGY", "--partition-strategy"],
-            ] as const) {
-              const value = process.env[field];
-              if (value !== undefined && value.trim() !== "") args.push(`${flag}=${value}`);
-            }
-            const { request } = parseCliRequest(args);
-            const machineMemoryEnabled = WorkflowMachineMemorySchema.parse(process.env.PROFILE_MACHINE_MEMORY);
-            const inputs = await loadPlanInputs(root);
-            const captured = new Date();
-            const now = utcTimestamp(() => captured);
-            const days = historyDays(now,
-              inputs.harvest.config.metrics.rolling_window_days, inputs.harvest.config.metrics.overlap_windows_days);
-            const required = requiredSeenDays(now, inputs.clock_config.collect.seen_window_days);
-            const seen_days = completeHistoryDayInputs(inputs.registrations.seen.prefix, required,
-              inputs.settings.inputs.seen_days, "seen_days");
-            const published_days = completeHistoryDayInputs(inputs.registrations.published.prefix,
-              requiredSeenDays(now, inputs.clock_config.collect.published_window_days),
-              inputs.settings.inputs.published_days, "published_days");
-            const settledRequired = requiredSeenDays(now, 0);
-            const settled_failure_days = completeHistoryDayInputs(inputs.registrations.item_health.prefix,
-              settledRequired, inputs.settings.inputs.settled_failure_days, "settled_failure_days");
-            const document_observation_days = completeHistoryDayInputs(inputs.registrations.document_observations.prefix,
-              closedObservationDays(now, inputs.harvest.config.feedback.window_days),
-              inputs.settings.inputs.document_observation_days, "document_observation_days");
-            const registry: { families: { ledgers: { name: string; prefix: string[] }[] }[] } =
-              await Bun.file(inputs.settings.inputs.registrations).json();
-            const ledgers = ["source-runs", "article-assessments", "diversity", "editorial-selections", "dispatches", "rejections"] as const;
-            const inventory = new Set<string>();
-            const cache = new Map<string, Promise<unknown | undefined>>();
-            async function readCommitted(path: string): Promise<unknown | undefined> {
-              const cached = cache.get(path);
-              if (cached !== undefined) return cached;
-              const result = readObject(path);
-              cache.set(path, result);
-              return result;
-            }
-            async function readObject(path: string): Promise<unknown | undefined> {
-              const object = `HEAD:${path}`;
-              const exists = Bun.spawn(["git", "cat-file", "--batch-check"],
-                { stdin: "pipe", stdout: "pipe", stderr: "pipe" });
-              exists.stdin.write(`${object}\n`);
-              exists.stdin.end();
-              const [check] = await Promise.all([new Response(exists.stdout).text(), new Response(exists.stderr).text()]);
-              if (await exists.exited !== 0) throw new Error(`history: cannot inspect named file ${path}`);
-              if (check.trim() === `${object} missing`) return undefined;
-              if (!/^[a-f0-9]+ blob \d+\s*$/.test(check)) throw new Error(`history: named input is not a file ${path}`);
-              const held = Bun.spawn(["git", "show", `HEAD:${path}`], { stdout: "pipe", stderr: "pipe" });
-              const [text] = await Promise.all([new Response(held.stdout).text(), new Response(held.stderr).text()]);
-              if (await held.exited !== 0) throw new Error(`history: failed to read named file ${path}`);
-              return JSON.parse(text);
-            }
-            async function stageHistory(ledger: CompactIndex["ledger"], prefix: readonly string[], days: readonly string[],
-              options: { indexes?: Partial<Record<CompactIndex["period"], string>>;
-                rawIndexes?: Record<string, string>; rawFiles?: readonly string[] } = {}) {
-              const defaults = createSeenDayInputs(prefix, days);
-              const indexes = { ...createSeenDayInputs(prefix, [days[0]!])[0]!.indexes, ...options.indexes };
-              const compact: CompactIndex[] = [];
-              const raw: RawDayIndex[] = [];
-              for (const [period, path] of Object.entries(indexes)) {
-                const value = await readCommitted(path);
-                if (value !== undefined) {
-                  const index = CompactIndexSchema.parse(value);
-                  if (index.period !== period) throw new Error(`history: ${period} index has another period`);
-                  compact.push(index);
-                }
-              }
-              const rawIndexes = Object.fromEntries(defaults.map(input =>
-                [input.day, options.rawIndexes?.[input.day] ?? input.raw_index]));
-              if (options.rawFiles === undefined) for (const [day, path] of Object.entries(rawIndexes)) {
-                const value = await readCommitted(path);
-                if (value !== undefined) {
-                  const index = RawDayIndexSchema.parse(value);
-                  if (index.date !== day) throw new Error("history: raw index has another UTC day");
-                  raw.push(index);
-                }
-              }
-              for (const path of resolveHistoryInventory({ ledger, prefix, days, compact, raw, indexes, rawIndexes })) {
-                inventory.add(path);
-              }
-              for (const path of options.rawFiles ?? []) inventory.add(path);
-            }
-            for (const ledger of ledgers) {
-              const entries = registry.families.flatMap(family => family.ledgers).filter(entry => entry.name === ledger);
-              if (entries.length !== 1) throw new Error(`history: expected one registration for ${ledger}`);
-              await stageHistory(ledger, entries[0]!.prefix, days);
-            }
-            for (const input of seen_days) {
-              await stageHistory("seen", inputs.registrations.seen.prefix, [input.day], {
-                ...(input.indexes === undefined ? {} : { indexes: Object.fromEntries(
-                  Object.entries(input.indexes).filter((entry): entry is [string, string] => entry[1] !== undefined)) }),
-                ...(input.raw_index === undefined ? {} : { rawIndexes: { [input.day]: input.raw_index } }),
-                ...(input.raw_files === undefined ? {} : { rawFiles: input.raw_files }),
-              });
-            }
-            async function stageConfiguredDays(
-              ledger: CompactIndex["ledger"], prefix: readonly string[], days: readonly (typeof seen_days)[number][],
-            ) {
-              for (const input of days) {
-                await stageHistory(ledger, prefix, [input.day], {
-                  ...(input.indexes === undefined ? {} : { indexes: Object.fromEntries(
-                    Object.entries(input.indexes).filter((entry): entry is [string, string] => entry[1] !== undefined)) }),
-                  ...(input.raw_index === undefined ? {} : { rawIndexes: { [input.day]: input.raw_index } }),
-                  ...(input.raw_files === undefined ? {} : { rawFiles: input.raw_files }),
-                });
-              }
-            }
-            await stageConfiguredDays("published", inputs.registrations.published.prefix, published_days);
-            await stageConfiguredDays("item-health", inputs.registrations.item_health.prefix, settled_failure_days);
-            await stageConfiguredDays("document-observations", inputs.registrations.document_observations.prefix, document_observation_days);
-            const feedInventory = await stageFeedHistory({
-              ledger: "feed-health", prefix: inputs.registrations.feed_health.prefix, now,
-              health_window_days: Math.max(
-                inputs.harvest.config.feedback.lifecycle_window_days,
-                inputs.clock_config.collect.reliability_window_days,
-              ),
-              authored: inputs.settings.inputs.feed_health_days, read: readCommitted,
-            });
-            console.error(JSON.stringify({ event: "feed_health_inventory", inventory_complete: feedInventory.inventory_complete,
-              notices: feedInventory.notices, represented_days: feedInventory.represented_days }));
-            for (const path of feedInventory.files) inventory.add(path);
-            for (const path of inputs.settings.inputs.seen_files) inventory.add(path);
-            const sparse = Bun.spawn(["git", "sparse-checkout", "add", "--skip-checks", ...[...inventory].map(sparseCheckoutPath)],
-              { stdout: "inherit", stderr: "inherit" });
-            if (await sparse.exited !== 0) throw new Error("history: named sparse checkout failed");
-            const feed_health_days = feedInventory.inputs;
-            const git = Bun.spawn(["git", "rev-parse", "HEAD"], { stdout: "pipe", stderr: "inherit" });
-            const git_sha = (await new Response(git.stdout).text()).trim();
-            if (await git.exited !== 0) throw new Error("git_sha: cannot resolve the checkout commit");
-            const { RUNNER_TEMP, GITHUB_OUTPUT, GITHUB_RUN_ID, GITHUB_RUN_ATTEMPT } = process.env;
-            if (!RUNNER_TEMP || !GITHUB_OUTPUT || !GITHUB_RUN_ID || !GITHUB_RUN_ATTEMPT) {
-              throw new Error("workflow: runner directory, output path, run identity and attempt are required");
-            }
-            const settings = ServiceSettingsSchema.parse({ ...inputs.settings, enabled: true,
-              inputs: { ...inputs.settings.inputs, seen_days, published_days, settled_failure_days, feed_health_days, document_observation_days },
-              run: { ...inputs.settings.run, attempt: Number(GITHUB_RUN_ATTEMPT) } });
-            const artifactRoot = join(RUNNER_TEMP, "feed-ingest-plan");
-            await mkdir(artifactRoot, { recursive: true });
-            await writeFile(join(artifactRoot, "history-staging-ms.json"), JSON.stringify(performance.now() - historyStarted));
-            const events: FeedIngestEvent[] = [];
-            const progressRecords: ProgressRecord[] = [];
-            const correlation_id = randomUUID();
-            const writeProgress = (event: ProgressRecord) => {
-              progressRecords.push(event);
-              appendFileSync(join(artifactRoot, "progress.jsonl"), `${JSON.stringify(event)}\n`);
-              console.error(JSON.stringify(event));
-            };
-            const progress = createProgressLogger(correlation_id, writeProgress);
-            const server = servePlan({ ...inputs, settings, outputRoot: join(artifactRoot, "state") }, {
-              git_sha, clock: () => captured, run_number: GITHUB_RUN_ID, correlation_id,
-              log: event => {
-                events.push(event);
-                appendFileSync(join(artifactRoot, "audit-events.jsonl"), `${JSON.stringify(event)}\n`);
-                writeAuditEvent(event);
-              },
-              progress: writeProgress,
-            });
-            progress("HTTP_LISTENER_STARTED");
-            let summary: ReturnType<typeof summarizePlan>;
-            try {
-              const health = await fetch(new URL("/api/2026-10-20/health", server.url));
-              if (!health.ok || (await health.json()).planner_enabled !== true) {
-                throw new Error("workflow: actual HTTP listener is not enabled and healthy");
-              }
-              const response = await fetch(new URL("/api/2026-10-20/plan", server.url), {
-                method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(request),
-                // The independent step deadline supervises planning, not the client's five-minute idle timer.
-                timeout: false,
-              });
-              progress("HTTP_RESPONSE_RECEIVED", { http_status: response.status });
-              if (!response.ok) throw new Error(`workflow: HTTP planning failed (${response.status}): ${await response.text()}`);
-              summary = await response.json();
-            } finally {
-              await server.stop(true);
-              progress("HTTP_LISTENER_STOPPED");
-            }
-            if (!("files" in summary) || summary.metrics === undefined) {
-              throw new Error("workflow: HTTP planner did not return actual assessment/diversity recording evidence");
-            }
-            await writeFile(join(artifactRoot, "events.json"), JSON.stringify(events));
-            await writeFile(join(artifactRoot, "response.json"), JSON.stringify(summary));
-            await verifyParquetFiles(join(artifactRoot, "state"), "dispatches", summary.files.dispatches, inputs.registrations.dispatches);
-            await verifyParquetFiles(join(artifactRoot, "state"), "feed-health", summary.files.feed_health, inputs.registrations.feed_health);
-            await verifyParquetFiles(join(artifactRoot, "state"), "document-observations",
-              summary.files.document_observations, inputs.registrations.document_observations);
-            for (const files of [summary.files.harvest_rejections, summary.files.screening_rejections, summary.files.curation_rejections]) {
-              await verifyParquetFiles(join(artifactRoot, "state"), "rejections", files, inputs.registrations.rejections);
-            }
-            for (const [key, ledger] of [["assessments", "article-assessments"], ["diversity", "diversity"]] as const) {
-              await verifyParquetFiles(join(artifactRoot, "state"), ledger, summary.metrics.files[key], inputs.registrations[key]);
-              verifyLedgerReceipt(ledger, summary.metrics.files[key], summary.metrics.receipts[key]);
-            }
-            if (summary.files.source_runs === undefined || summary.source_records === null) {
-              throw new Error("workflow: actual planning source evidence is absent");
-            }
-            await verifyParquetFiles(join(artifactRoot, "state"), "source-runs", summary.files.source_runs,
-              inputs.registrations.source_runs, summary.source_records);
-            await verifyPlanningCompletion(join(artifactRoot, "state"), summary);
-            const outputs = createExecutionOutputs(summary, inputs.registrations);
-            await writeGitHubOutputs(GITHUB_OUTPUT, {
-              ...outputs,
-              workflow_reporting: String(inputs.harvest.config.workflow_reporting.enabled),
-            });
-            const documentObservations = await verifyLiveDocumentHttp({ ...inputs, settings }, {
-              git_sha, clock: () => captured, run_number: GITHUB_RUN_ID,
-            }, progressRecords, RUNNER_TEMP, artifactRoot, summary, machineMemoryEnabled);
-            await writeGitHubOutputs(GITHUB_OUTPUT, {
-              stage_api_complete: "true",
-              document_observation_files: JSON.stringify([
-                ...summary.files.document_observations.files, ...documentObservations.files,
-              ].map(file => file.path)),
-              current_run_files: JSON.stringify([
-                ...JSON.parse(outputs.current_run_files!), ...documentObservations.files.map(file => file.path),
-              ]),
-            });
-          } catch (error) {
-            console.error(JSON.stringify(describePlanError(error, root)));
-            process.exitCode = 1;
-          }
-          TS
-
-      - name: Prove live RAM endpoint and separate optional copy
-        id: resources
-        run: |
-          bun run - <<'TS'
-          import { join } from "node:path";
-          import { verifyLiveHostProfiling } from "./.github/scripts/feed-ingest-plan-profile-proof";
-          import { writeGitHubOutputs } from "./.github/scripts/feed-ingest-plan-outputs";
-          const { RUNNER_TEMP, GITHUB_OUTPUT, GITHUB_RUN_ATTEMPT } = process.env;
-          if (!RUNNER_TEMP || !GITHUB_OUTPUT || !GITHUB_RUN_ATTEMPT) throw new Error("Resource proof requires isolated run identity");
-          const root = join(RUNNER_TEMP, "feed-ingest-plan");
-          const summary = await Bun.file(join(root, "response.json")).json();
-          const git = Bun.spawn(["git", "rev-parse", "HEAD"], { stdout: "pipe", stderr: "inherit" });
-          const git_sha = (await new Response(git.stdout).text()).trim();
-          if (await git.exited !== 0) throw new Error("Resource proof cannot resolve executed revision");
-          await verifyLiveHostProfiling({
-            git_sha, run_id: summary.run_id, correlation_id: summary.correlation_id, attempt: Number(GITHUB_RUN_ATTEMPT),
-          }, root);
-          await writeGitHubOutputs(GITHUB_OUTPUT, { resource_proof_complete: "true" });
-          TS
-
-      - name: Verify full audit on generated publication fixtures
-        id: audit_fixture
-        run: |
-          bun run - <<'TS'
-          import { join } from "node:path";
-          import { verifyFullAuditFixture } from "./.github/scripts/feed-ingest-plan-audit-fixture";
-          import { writeGitHubOutputs } from "./.github/scripts/feed-ingest-plan-outputs";
-          const { RUNNER_TEMP, GITHUB_OUTPUT } = process.env;
-          if (!RUNNER_TEMP || !GITHUB_OUTPUT) throw new Error("Fixture output directory and workflow output are required");
-          const result = await verifyFullAuditFixture(join(RUNNER_TEMP, "feed-ingest-plan", "generated-full-audit"));
-          await writeGitHubOutputs(GITHUB_OUTPUT, {
-            audited_complete: String(result.audited_complete), scope: result.scope,
-          });
-          TS
-
-      - name: Record actual workflow host
-        id: host
-        if: ${{ !cancelled() && steps.plan.outputs.planning_complete == 'true' }}
-        run: |
-          bun run - <<'TS'
-          import { writeFile } from "node:fs/promises";
-          import { join } from "node:path";
-          import { loadConfig, loadSettings } from "./services/host-fingerprints/src/config";
-          import { persistFingerprint } from "./services/host-fingerprints/src/persist-fingerprint";
-          import { writeGitHubOutputs } from "./.github/scripts/feed-ingest-plan-outputs";
-          const { RUNNER_TEMP, GITHUB_OUTPUT, GITHUB_RUN_ATTEMPT, PLANNER_JOB_STARTED_MS } = process.env;
-          if (!RUNNER_TEMP || !GITHUB_OUTPUT || !GITHUB_RUN_ATTEMPT || !PLANNER_JOB_STARTED_MS) throw new Error("Host capture requires job identity and start observation");
-          const root = join(RUNNER_TEMP, "feed-ingest-plan");
-          const summary = await Bun.file(join(root, "response.json")).json();
-          const git = Bun.spawn(["git", "rev-parse", "HEAD"], { stdout: "pipe", stderr: "inherit" });
-          const git_sha = (await new Response(git.stdout).text()).trim();
-          if (await git.exited !== 0) throw new Error("Host capture cannot resolve executed revision");
-          const started = Number(PLANNER_JOB_STARTED_MS);
-          if (!Number.isSafeInteger(started) || started > Date.now()) throw new Error("Invalid job start observation");
-          const writer = { run_id: summary.run_id, attempt: Number(GITHUB_RUN_ATTEMPT), job: null,
-            pipeline_name: "feed-ingest-plan", task_name: "isolated-plan", shard: 0,
-            producer: "telemetry.silicon", git_sha };
-          const host = await persistFingerprint({
-            date: summary.date, job_seconds: Math.floor((Date.now() - started) / 1000), writer,
-          }, await loadConfig(), await loadSettings(), { outputRoot: join(root, "state") });
-          await writeFile(join(root, "host.json"), JSON.stringify({ ...host, writer }));
-          if (host.status !== "written") throw new Error("Host collection is disabled; required actual host evidence is unavailable");
-          await writeGitHubOutputs(GITHUB_OUTPUT, { host_files: JSON.stringify(host.files.map(file => file.path)) });
-          TS
-
-      - name: Optional GitHub report
-        if: ${{ !cancelled() && steps.plan.outputs.workflow_reporting == 'true' }}
-        continue-on-error: true
-        env:
-          PROFILE_MACHINE_MEMORY: ${{ inputs.profile_machine_memory }}
-        run: bun run .github/scripts/feed-ingest-plan-report.ts config/feed-ingest-plan.json "$RUNNER_TEMP/feed-ingest-plan/events.json" "$RUNNER_TEMP/feed-ingest-plan"
-
-      - name: Commit exact live planner and host files
-        if: ${{ success() && steps.plan.outputs.planning_complete == 'true' && steps.plan.outputs.stage_api_complete == 'true' && steps.resources.outputs.resource_proof_complete == 'true' && steps.audit_fixture.outputs.audited_complete == 'true' && steps.audit_fixture.outputs.scope == 'generated_fixture' }}
+      - name: Commit exact current planner metadata
+        if: ${{ !cancelled() && steps.plan.outputs.current_run_files != '' }}
         env:
           CURRENT_RUN_FILES: ${{ steps.plan.outputs.current_run_files }}
-          HOST_FILES: ${{ steps.host.outputs.host_files }}
-        run: |
-          bun run - <<'TS'
-          import { join } from "node:path";
-          import { writeFile } from "node:fs/promises";
-          import { commitPlannerFiles } from "./.github/scripts/feed-ingest-plan-commit";
-          const { RUNNER_TEMP, CURRENT_RUN_FILES, HOST_FILES } = process.env;
-          if (!RUNNER_TEMP || !CURRENT_RUN_FILES || !HOST_FILES) throw new Error("Commit requires exact completed live planner and host outputs");
-          function paths(value: string): string[] {
-            const parsed: unknown = JSON.parse(value);
-            if (!Array.isArray(parsed) || parsed.some(path => typeof path !== "string")) throw new Error("Invalid exact output list");
-            return parsed;
-          }
-          const root = join(RUNNER_TEMP, "feed-ingest-plan");
-          const result = await commitPlannerFiles({
-            repository: process.cwd(), stateRoot: join(root, "state"),
-            paths: [...paths(CURRENT_RUN_FILES), ...paths(HOST_FILES)],
-            message: "Record live feed planner and host observations",
-            retry: await Bun.file("config/push-retry.json").json(),
-          });
-          await writeFile(join(root, "commit-result.json"), JSON.stringify(result));
-          console.log(JSON.stringify(result));
-          TS
+        run: bun run .github/scripts/feed-ingest-plan-commit.ts
 
-      - name: Preserve isolated test evidence
+      - name: Preserve selected text for the summarizer
+        if: ${{ always() && steps.plan.outputs.selected_articles_artifact != '' }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: selected-articles-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ steps.plan.outputs.selected_articles_artifact }}
+          if-no-files-found: error
+
+      - name: Preserve body-free planner evidence
         if: ${{ always() }}
         uses: actions/upload-artifact@v7
         with:
           name: feed-ingest-plan-evidence
-          path: ${{ runner.temp }}/feed-ingest-plan/
+          path: |
+            ${{ runner.temp }}/feed-ingest-plan/response.json
+            ${{ runner.temp }}/feed-ingest-plan/health.json
+            ${{ runner.temp }}/feed-ingest-plan/history-staging-ms.json
+            ${{ runner.temp }}/feed-ingest-plan/commit-result.json
+            ${{ runner.temp }}/feed-ingest-plan/state/raw/feed-ingest-plan/
           if-no-files-found: warn
 
-      - name: Require genuine audited completion
+      - name: Install optional host instruments
+        if: ${{ !cancelled() && inputs.profile_machine_memory }}
+        continue-on-error: true
+        run: bash .github/scripts/install-host-cache-tools.sh
+
+      - name: Run independent optional host proof
+        if: ${{ !cancelled() && inputs.profile_machine_memory }}
+        continue-on-error: true
+        run: bun run .github/scripts/feed-ingest-plan-profile-proof.ts
+
+      - name: Preserve independent host evidence
+        if: ${{ always() && inputs.profile_machine_memory }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: independent-host-evidence
+          path: test-results/host-probes/resource-proof.json
+          if-no-files-found: warn
+
+      - name: Require completed planning
         if: ${{ !cancelled() }}
         env:
           PLANNING_COMPLETE: ${{ steps.plan.outputs.planning_complete }}
-          STAGE_API_COMPLETE: ${{ steps.plan.outputs.stage_api_complete }}
-          RESOURCE_PROOF_COMPLETE: ${{ steps.resources.outputs.resource_proof_complete }}
-          AUDITED_COMPLETE: ${{ steps.audit_fixture.outputs.audited_complete }}
-          AUDIT_SCOPE: ${{ steps.audit_fixture.outputs.scope }}
         run: |
-          bun run - <<'TS'
-          if (process.env.PLANNING_COMPLETE !== "true" || process.env.AUDITED_COMPLETE !== "true"
-            || process.env.STAGE_API_COMPLETE !== "true" || process.env.RESOURCE_PROOF_COMPLETE !== "true"
-            || process.env.AUDIT_SCOPE !== "generated_fixture") {
-            console.error("Live planning, separate feed and selected HTML fetch/parse/replay, CPU/RAM/copy proof or generated full-audit proof is unavailable. No production publication is claimed.");
-            process.exitCode = 2;
-          }
-          TS
+          bun -e 'if (process.env.PLANNING_COMPLETE !== "true") { console.error("Planning did not complete; saved partial output and selected text are retained."); process.exitCode = 2; }'

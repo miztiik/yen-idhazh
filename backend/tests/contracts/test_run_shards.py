@@ -9,7 +9,7 @@ from support.paths import CONTRACT_FIXTURES_DIR
 
 from idhazh import config, ledger
 from idhazh.contracts.base import ServerJob
-from idhazh.contracts.file_envelope import WriterIdentity
+from idhazh.contracts.file_envelope import FileEnvelope, WriterIdentity
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.run_manifest import RunManifest
 from idhazh.contracts.run_shards import RunShards
@@ -120,7 +120,9 @@ def test_count_business_identity_is_not_the_backfill_writer_identity(tmp_path: P
     assert held.row.shards is None
     assert held.identity.ledger is LedgerName.RUN_SHARDS
     assert held.identity.unit_id
-    assert paths[0].envelope.identity.producer == "test"
+    envelope = paths[0].envelope
+    assert isinstance(envelope, FileEnvelope)
+    assert envelope.identity.producer == "test"
 
 
 def test_repeated_backfill_leaves_raw_files_immutable_and_packed_rows_unchanged(tmp_path: Path) -> None:

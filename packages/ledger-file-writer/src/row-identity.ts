@@ -90,3 +90,39 @@ export function buildStoredCompactRow<T extends object>(
   validateStoredIdentity(stored);
   return stored;
 }
+
+const PLANNER_ROW_KEYS: Readonly<Record<string, readonly string[]>> = {
+  "discovered-articles": ["url_key"],
+  "selected-articles": ["run_id", "attempt", "url_key"],
+  "feed-health-state": ["run_id", "attempt", "feed_id", "endpoint_key", "date"],
+  "plan-runs": ["run_id", "attempt"],
+};
+
+export function settlePlannerRows(
+  rows: readonly Record<string, unknown>[], ledger: string,
+): Record<string, unknown>[] {
+  const fields = PLANNER_ROW_KEYS[ledger];
+  if (fields === undefined) throw new Error("planner settlement requires a declared planner ledger");
+  const kept = new Map<string, Record<string, unknown>>();
+  for (const row of rows) {
+    const key = JSON.stringify(fields.map((field) => row[field]));
+    const incumbent = kept.get(key);
+    if (incumbent === undefined) kept.set(key, row);
+    else if (ledger === "discovered-articles") {
+      if (Date.parse(String(row.first_seen_at)) < Date.parse(String(incumbent.first_seen_at))) kept.set(key, row);
+    } else if (JSON.stringify(incumbent) !== JSON.stringify(row)) {
+      throw new Error(`conflicting duplicate ${ledger} record`);
+    }
+  }
+  return [...kept.values()];
+}
+
+export function buildPlannerCompactRow<T extends object>(
+  input: unknown, contract: z.ZodType<T>, period: Extract<LedgerPeriod, { tier: "compact" }>,
+): Record<string, unknown> {
+  const row = contract.parse(input);
+  if (!isObject(row) || typeof row.date !== "string" || !isInsidePeriod(row.date, period)) {
+    throw new Error("planner compact row must belong to the requested UTC period");
+  }
+  return row;
+}

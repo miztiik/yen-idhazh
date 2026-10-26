@@ -1,11 +1,13 @@
-/** Are source and article progress visible before the harvest batch finishes? */
+/** Are real feed/article updates visible before completion without retaining audit payloads? */
 import { expect, test } from "bun:test";
+import { FeedIngestEventSchema, ParsedFeedBatchSchema } from "@idhazh/common-contracts";
 import { runFeedPlan } from "../src/run-feed-plan";
 import type { ProgressRecord } from "../src/logging/progress-logger";
+import { stageStore } from "../src/api/stage-store";
 import { recordedPlan } from "./plan-recordings";
 import { parseFeed } from "../src/harvest-feeds/feed-client";
 
-test("live progress uses the documented UUID envelope before buffered audit and native completion", async () => {
+test("live progress precedes completion and the structured event stream stays sparse and body-free", async () => {
   const recorded = await recordedPlan();
   const first = (await parseFeed(recorded.transport.recordings.bodies.rss))[0]!;
   if (first.link === null) throw new Error("Recorded entry must identify its target");
@@ -17,44 +19,42 @@ test("live progress uses the documented UUID envelope before buffered audit and 
   let earlyFeed = false;
   recorded.runtime.progress = event => {
     progress.push(event);
-    if (event.eventType === "FEED_FETCH_COMPLETED") earlyFeed = recorded.events.length === 0;
+    if (event.eventType === "FEED_FETCH_COMPLETED") {
+      earlyFeed = !recorded.events.some(event => event.operation === "plan" && event.phase === "completed");
+    }
   };
   try {
     const result = await runFeedPlan({ article_limit: 1, partition_strategy: "none" }, recorded.inputs, recorded.runtime);
+    expect(result.row.status).toBe("completed");
     expect(earlyFeed).toBe(true);
-    expect(progress[0]!.eventType).toBe("PIPELINE_STARTED");
     const types = progress.map(event => event.eventType);
-    expect(types).toContain("FEED_DISCOVERY_STARTED");
+    expect(types[0]).toBe("FEED_FETCH_STARTED");
     expect(types.indexOf("FEED_FETCH_COMPLETED")).toBeLessThan(types.indexOf("ARTICLE_HARVEST_STARTED"));
     expect(types).toContain("ARTICLE_HARVEST_COMPLETED");
-    const warning = progress.find(event => event.eventType === "ARTICLE_EXTRACTION_WARNING")!;
-    if (!warning?.diagnostics) throw new Error("Extraction warning must retain diagnostic evidence");
-    expect(warning.level).toBe("WARN");
-    expect(warning.source_id).toBe("recorded-news");
-    expect(warning.diagnostics?.warnings).toEqual(["malformed-json-ld"]);
-    const article = result.evidence.harvest.articles.find(item => item.observation.candidate_id === warning.candidate_id)!;
-    expect(article.candidate).not.toBeNull();
-    expect(article.observation.diagnostics).toEqual(warning.diagnostics);
-    expect(result.events.some(event => event.payload.kind === "candidate_decision"
-      && event.payload.assessment.candidate_id === warning.candidate_id
-      && event.payload.assessment.diagnostics?.warnings.includes("malformed-json-ld"))).toBe(true);
-    expect(types.at(-1)).toBe("PLANNING_STAGES_COMPLETED");
-    expect(new Set(progress.map(event => event.eventId)).size).toBe(progress.length);
+    expect(types).toContain("ARTICLE_EXTRACTION_WARNING");
+    const batch = stageStore(recorded.inputs).read("parsed", result.batches.parsed_batch_id!, ParsedFeedBatchSchema);
+    expect(Object.values(batch.observations).some(observation =>
+      observation.diagnostics?.warnings.includes("malformed-json-ld"))).toBe(true);
     for (const event of progress) {
-      expect(event.eventId).toMatch(/^evt_[0-9a-f]{8}-[0-9a-f]{4}-5[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
-      expect(event.correlationId).toBe(result.context.correlation_id);
-      expect(event.correlationId).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
-      expect(event.message).toBe(`Pipeline Event: ${event.eventType}`);
-      expect(event.timestamp).toMatch(/Z$/);
-      if (["FEED_FETCH_COMPLETED", "ARTICLE_HARVEST_COMPLETED"].includes(event.eventType)) {
-        expect(event.durationMs).toBeGreaterThanOrEqual(0);
-        expect(event).toHaveProperty("diagnostics");
-        if (event.diagnostics !== null) expect(event.diagnostics?.fetch_ms).toBeGreaterThanOrEqual(0);
-      } else expect(event.durationMs).toBeNull();
+      expect(Object.keys(event).sort()).toEqual(["eventType", "feed_id", "output_count"]);
+      expect(event.feed_id).toBe("recorded-news");
+      if (event.eventType === "FEED_FETCH_COMPLETED") expect(event.output_count).toBe(3);
     }
-    for (const event of result.events) {
-      expect(event.event_id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-5[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
+    expect(recorded.events.at(-1)).toMatchObject({ operation: "plan", phase: "completed", output_count: 1 });
+    for (const event of recorded.events) {
+      expect(FeedIngestEventSchema.parse(event)).toEqual(event);
+      expect(event.run_id).toBe(result.context.run_id);
       expect(event.correlation_id).toBe(result.context.correlation_id);
+      expect(event.occurred_at).toMatch(/Z$/);
+      expect(event).not.toHaveProperty("payload");
+      expect(event).not.toHaveProperty("article_text");
+      expect(event).not.toHaveProperty("policy");
+      expect(event).not.toHaveProperty("source_id");
+      expect(FeedIngestEventSchema.safeParse({ ...event, source_id: event.feed_id }).success).toBe(false);
+      if (event.duration_ms !== null) expect(event.duration_ms).toBeGreaterThanOrEqual(0);
     }
+    expect(result).not.toHaveProperty("events");
+    expect(JSON.stringify(progress)).not.toContain(result.selected[0]!.article_text);
+    expect(JSON.stringify(recorded.events)).not.toContain(result.selected[0]!.article_text);
   } finally { await recorded.close(); }
 });

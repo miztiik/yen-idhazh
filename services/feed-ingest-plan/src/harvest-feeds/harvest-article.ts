@@ -1,43 +1,23 @@
 /** Turn one original feed entry into a validated candidate or one terminal rejection. */
-import { FeedIngestCandidateSchema, deriveCandidateId } from "@idhazh/common-contracts";
+import { FeedIngestCandidateSchema } from "@idhazh/common-contracts";
 import type { HarvestDiagnostics } from "@idhazh/common-contracts";
 import type { HarvestContext, OfferedArticle, HarvestArticleResult } from "./harvest-types";
-import { HarvestArticleResultSchema, utcTimestamp } from "./harvest-types";
+import { HarvestArticleResultSchema } from "./harvest-types";
 import type { HarvestInputs } from "./load-harvest-inputs";
 import type { PermittedFetcher } from "./robots-policy";
 import { extractArticle } from "./dom-extractor";
-import { canonicalizeUrl } from "./url-cleaner";
-import { matchUrlExclusion, urlExclusionMarker } from "./url-exclusions";
 import { fetchRejection, recordRejection } from "./record-rejection";
-import { calculateFreshness } from "../screen-article-candidates/freshness-decay";
-import { resolvePolicy } from "../config/resolve-policy";
 import { fetchDiagnostics } from "./fetch-diagnostics";
 import { parseDocument } from "./parse-document";
 import { documentWork, describeArticleParse } from "./document-work";
-import { matchHeadline } from "./headline-matches";
-import { observeSalience } from "./salience-votes";
-import type { SalienceReading } from "./salience-votes";
-
-// Existing discovery/extraction headline bounds, not editorial selection thresholds.
-const FEED_TITLE_MAX_CHARS = 500;
-const PAGE_TITLE_MAX_CHARS = 200;
+import { prepareArticle, resolveArticleTitle } from "./prepare-article";
 
 export async function harvestArticle(
   offered: OfferedArticle, inputs: HarvestInputs, fetcher: PermittedFetcher, context: HarvestContext,
-  salience: readonly SalienceReading[] = [],
 ): Promise<HarvestArticleResult> {
-  const { source, entry, policy } = offered;
-  const candidate_id = deriveCandidateId(context.writer.run_id, source.source_id, entry.entry_ordinal);
-  let identity: ReturnType<typeof canonicalizeUrl> | null = null;
-  if (entry.link) {
-    try { identity = canonicalizeUrl(entry.link); }
-    catch { /* Invalid addresses are preserved as missing identity, never requested. */ }
-  }
-  const article = {
-    candidate_id, canonical_url: identity?.canonical_url ?? null, url_key: identity?.url_key ?? null,
-    title: entry.title ? [...entry.title].slice(0, FEED_TITLE_MAX_CHARS).join("").trim() : null,
-    categories: entry.categories,
-  };
+  const { source, entry } = offered;
+  const prepared = prepareArticle(offered, inputs, context);
+  const { candidate_id, identity, article, observation } = prepared;
   const eventIdentity = {
     run_id: context.writer.run_id, correlation_id: context.correlation_id,
     article_id: identity?.url_key ?? null, source_id: source.source_id,
@@ -46,72 +26,15 @@ export async function harvestArticle(
     document_kind: "article", source_id: source.source_id, publisher_id: source.publisher_id,
     candidate_id, observed_run_id: context.writer.run_id, observed_attempt: context.writer.attempt,
   });
-  const headline = matchHeadline(article.title, inputs);
-  const observation = {
-    candidate_id, http_status: null, robots: null, fetch_failure: null,
-    paywall: null, paywall_evidence: "not-observed", extraction: "not-attempted",
-    observed_at: utcTimestamp(context.clock),
-    diagnostics: null,
-  } satisfies HarvestArticleResult["observation"];
-  if (!identity || !entry.link) {
+  if (prepared.status === "rejected") {
     await work.skip();
-    return HarvestArticleResultSchema.parse({
-      candidate: null, rejection: recordRejection(source, context, "MISSING_REQUIRED_FIELDS", {}, article), observation,
-    });
+    return prepared.result;
   }
-  const blockedRule = matchUrlExclusion(identity.canonical_url, inputs.config.harvest.url_exclusions);
-  if (blockedRule !== undefined) {
-    await work.skip();
-    return HarvestArticleResultSchema.parse({
-      candidate: null,
-      rejection: recordRejection(source, context, "BLOCKED_URL_MARKER", {
-        matched_url_key: identity.url_key, matched_url_marker: urlExclusionMarker(blockedRule),
-      }, article),
-      observation,
-    });
-  }
-  const publishedOn = context.exclusions?.published_on.get(identity.url_key);
-  if (publishedOn !== undefined) {
-    await work.skip();
-    return HarvestArticleResultSchema.parse({
-      candidate: null,
-      rejection: recordRejection(source, context, "ALREADY_PUBLISHED", {
-        matched_url_key: identity.url_key, published_on: publishedOn,
-        history_window_days: context.exclusions!.published_window_days,
-      }, article),
-      observation,
-    });
-  }
-  const failureCode = context.exclusions?.settled_failure_codes.get(identity.url_key);
-  if (failureCode !== undefined) {
-    await work.skip();
-    return HarvestArticleResultSchema.parse({
-      candidate: null,
-      rejection: recordRejection(source, context, "SETTLED_FAILURE", {
-        matched_url_key: identity.url_key, failure_code: failureCode,
-      }, article),
-      observation,
-    });
-  }
-  if (article.title) {
-    const effectivePolicy = resolvePolicy(inputs, source.vertical, context.overrides);
-    const freshness = calculateFreshness(entry, undefined, observation.observed_at, context.max_future_hours, effectivePolicy);
-    if (freshness.timing_source === "published_at" && freshness.age_hours !== null
-      && freshness.age_hours > effectivePolicy.triage.max_age_hours) {
-      await work.skip();
-      return HarvestArticleResultSchema.parse({
-        candidate: null,
-        rejection: recordRejection(source, context, "STALE_MAX_AGE_EXCEEDED", {
-          age_hours: freshness.age_hours, max_age_hours: effectivePolicy.triage.max_age_hours,
-        }, article),
-        observation: { ...observation, preflight_freshness: freshness },
-      });
-    }
-  }
+  if (identity === null || entry.link === null) throw new Error("Admitted article lacks its validated discovery address");
   const fetchStarted = performance.now();
   const { fetched, observation: fetchedEvent } = await work.fetch(fetcher, entry.link);
   let diagnostics = fetchDiagnostics(fetched, Math.round(performance.now() - fetchStarted));
-  const fetched_at = utcTimestamp(context.clock);
+  const fetched_at = fetchedEvent.occurred_at;
   const fetchedObservation = {
     ...observation, http_status: fetched.http_status, robots: fetched.robots,
     fetch_failure: fetched.failure, observed_at: fetched_at,
@@ -131,7 +54,7 @@ export async function harvestArticle(
   const body = fetched.body;
   const link = entry.link;
   const parsed = await work.parse(
-    () => parseDocument("article", body, link, inputs.extraction, source.form), fetchedEvent.event_id, describeArticleParse,
+    () => parseDocument("article", body, link, inputs.extraction, source.form, context.parser_pool, context.parser_options), fetchedEvent.event_id, describeArticleParse,
   );
   if (parsed.parsed === null) {
     diagnostics = {
@@ -149,8 +72,7 @@ export async function harvestArticle(
   }
   extracted = parsed.parsed;
   const extract_ms = Math.round(performance.now() - extractStarted);
-  const pageTitle = extracted.page_title && [...extracted.page_title].length <= PAGE_TITLE_MAX_CHARS ? extracted.page_title : null;
-  article.title ??= pageTitle;
+  article.title = resolveArticleTitle(article.title, extracted.page_title);
   const extraction = extracted.article_text ? "success" : "empty";
   const extraction_failure = !extracted.article_text ? "empty-content" : !article.title ? "missing-title" : null;
   diagnostics = {
@@ -192,17 +114,10 @@ export async function harvestArticle(
       date: fetched_at.slice(0, 10), fetched_at,
       correlation_id: context.correlation_id, run_id: context.writer.run_id,
       candidate_id, entry_ordinal: entry.entry_ordinal,
-      source_id: source.source_id, vertical: source.vertical, source, ...identity,
+      source_id: source.source_id, source, ...identity,
       title: article.title, categories: article.categories,
       article_text: extracted.article_text, word_count: extracted.word_count,
       author: extracted.author ?? entry.author, published_at: entry.published_at,
-      labels: headline.labels,
-      planning_observations: {
-        feed_headline: headline.feed_headline, best_weighted_lens: headline.best_weighted_lens,
-        watchlist_match: headline.watchlist_match,
-        ...observeSalience(identity.url_key, inputs.salience, salience),
-      },
-      policy,
     }),
     rejection: null, observation: completeObservation,
   });

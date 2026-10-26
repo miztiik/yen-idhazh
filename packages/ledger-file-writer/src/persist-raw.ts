@@ -6,7 +6,7 @@ import type { PersistLedgerInput, PersistLedgerResult } from "./ledger-types";
 import { writeAtomically } from "./atomic-file";
 import { buildRawPath, checkTrustedParent, toRelativePath } from "./ledger-paths";
 import { validateLedgerInput, isMaintenanceJob } from "./registration";
-import { buildStoredRawRow } from "./row-identity";
+import { buildStoredRawRow, settlePlannerRows } from "./row-identity";
 import { renderLedgerFile } from "./render-ledger-file";
 import { createUnitId } from "./uuid/unit-id";
 import type { PersistedLedgerFile } from "./ledger-types";
@@ -21,7 +21,7 @@ export async function persistRawLedger<T extends object>(
   const context = validateLedgerInput(input);
   if (input.rows.length === 0) return { status: "empty", files: [] };
   const registration = input.registryEntry;
-  if (registration.lifecycle_status !== "active" && !isMaintenanceJob(context.writerContext.job)) {
+  if (registration.lifecycle_status !== "active" && !isMaintenanceJob(context.writerContext?.job ?? null)) {
     const warning = {
       event: "ledger_write_skipped" as const,
       ledger: context.ledger,
@@ -34,15 +34,23 @@ export async function persistRawLedger<T extends object>(
   }
 
   const validated = input.rows.map((candidate) => {
-    const row = input.rowContract.schema.parse(candidate);
+    const row = context.rowSchema.parse(candidate);
     if (!isObject(row)) throw new TypeError("ledger row contract did not produce an object");
     return row;
   });
   const groups = new Map<string, Record<string, unknown>[]>();
-  for (const row of validated) {
+  for (const row of context.planner ? settlePlannerRows(validated, context.ledger) : validated) {
     const day = input.partition_date ?? (Object.hasOwn(row, "date") ? row.date : input.period.covers);
     const covers = DateStampSchema.parse(day);
+    if (context.planner) {
+      if (covers !== row.date) {
+        throw new Error("planner raw write must name the row's actual UTC accounting day");
+      }
+      groups.set(covers, [...(groups.get(covers) ?? []), row]);
+      continue;
+    }
     const unit = context.writerContext;
+    if (unit === null) throw new Error("non-planner raw writes require writer identity");
     const generatedUnitId = createUnitId({
       ledger: context.ledger,
       covers,
@@ -53,13 +61,20 @@ export async function persistRawLedger<T extends object>(
       shard: unit.shard,
       producer: unit.producer,
     });
-    const stored = buildStoredRawRow(row, context.ledger, covers, context.writerContext, generatedUnitId);
+    const stored = buildStoredRawRow(row, context.ledger, covers, unit, generatedUnitId);
     groups.set(covers, [...(groups.get(covers) ?? []), stored]);
   }
 
   const rendered: { file: PersistedLedgerFile; data: Uint8Array; target: string }[] = [];
   for (const [covers, rows] of [...groups.entries()].sort(([left], [right]) => left.localeCompare(right))) {
-    const result = await renderLedgerFile(rows, context.columns, context, covers, "raw");
+    if (context.ledger === "feed-health-state"
+      && new Set(rows.map(row => JSON.stringify([row.run_id, row.attempt]))).size !== 1) {
+      throw new Error("a raw health file contains one run attempt and UTC work day");
+    }
+    const result = await renderLedgerFile(
+      context.planner ? settlePlannerRows(rows, context.ledger) : rows,
+      context.columns, context, covers, "raw",
+    );
     const filePath = buildRawPath(context.outputRoot, registration.prefix, covers, result.file.file_id);
     const relativePath = toRelativePath(context.outputRoot, filePath);
     rendered.push({

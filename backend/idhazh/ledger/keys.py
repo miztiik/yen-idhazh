@@ -25,14 +25,10 @@ from idhazh.contracts.council_run_record import CouncilRunRecord
 from idhazh.contracts.counterfactual_score import CounterfactualScoreRow
 from idhazh.contracts.eval_row import EvalRow
 from idhazh.contracts.feed_health import FeedHealthRow, supersedes
-from idhazh.contracts.feed_ingest_article_assessment import ArticleAssessmentRecord
-from idhazh.contracts.feed_ingest_dispatch import FeedIngestDispatch
-from idhazh.contracts.feed_ingest_diversity import DiversityMetricRow
-from idhazh.contracts.feed_ingest_editorial_selection import EditorialSelectionRow
-from idhazh.contracts.feed_ingest_feedback import FeedIngestOperationalStateRow
-from idhazh.contracts.feed_ingest_observations import DocumentObservationRecord
-from idhazh.contracts.feed_ingest_rejection import CandidateRejectionRecord
-from idhazh.contracts.feed_ingest_source_run import SourceRunRecord
+from idhazh.contracts.feed_health_state import FeedHealthStateRow
+from idhazh.contracts.feed_ingest_discovered_article import DiscoveredArticleRow, LedgerContract
+from idhazh.contracts.feed_ingest_plan_run import PlanRunRow
+from idhazh.contracts.feed_ingest_selected_article import SelectedArticleRow
 from idhazh.contracts.feed_retirement import FeedRetirementRow
 from idhazh.contracts.host_fingerprint import HostFingerprintRow
 from idhazh.contracts.item_health import ItemHealthRow
@@ -203,18 +199,6 @@ RUN_PLAN_KEY: Final = ("date", "run_id")
 
 # Planning settlement retains each run/attempt before applying these row keys.
 # Dispatch identity stays inside content rather than copying persisted fields.
-FEED_INGEST_DISPATCH_KEY: Final = ("content.date", "content.candidate_id")
-FEED_INGEST_SELECTION_KEY: Final = ("date", "candidate_id")
-FEED_INGEST_REJECTION_KEY: Final = ("date", "source_id", "subject", "candidate_id", "stage")
-FEED_INGEST_SOURCE_RUN_KEY: Final = ("date", "source_id", "observation_phase")
-FEED_INGEST_ASSESSMENT_KEY: Final = ("date", "candidate_id", "stage")
-FEED_INGEST_DIVERSITY_KEY: Final = (
-    "date", "metric", "basis", "unit", "dimension", "dimension_value", "stage",
-    "window_days", "window_start", "window_end", "top_k",
-)
-FEED_INGEST_OPERATIONAL_STATE_KEY: Final = ("state_revision", "source_id")
-
-
 #: What makes two eval rows the same measurement. The address says which article,
 #: the digest says which words came out, and the scorer version says which
 #: instrument read them. Change any one and the row is a new measurement worth
@@ -328,7 +312,7 @@ class _DoorShape(NamedTuple):
     """One door ledger's answer to "what settles two of its rows, and who reads one"."""
 
     key: tuple[str, ...]
-    model: type[Contract]
+    model: type[LedgerContract]
 
 
 #: What settles two rows of each ledger the door files under the two roots, and
@@ -337,29 +321,17 @@ class _DoorShape(NamedTuple):
 #: cannot disagree about which row of a key survives. A new door ledger gets its
 #: row here in the change that registers it.
 _DOOR_SHAPES: Final[dict[LedgerName, _DoorShape]] = {
-    LedgerName.FEED_INGEST_PLAN_DISPATCHES: _DoorShape(
-        FEED_INGEST_DISPATCH_KEY, FeedIngestDispatch
+    LedgerName.FEED_INGEST_PLAN_DISCOVERED_ARTICLES: _DoorShape(
+        ("url_key",), DiscoveredArticleRow
     ),
-    LedgerName.FEED_INGEST_PLAN_EDITORIAL_SELECTIONS: _DoorShape(
-        FEED_INGEST_SELECTION_KEY, EditorialSelectionRow
+    LedgerName.FEED_INGEST_PLAN_SELECTED_ARTICLES: _DoorShape(
+        ("run_id", "attempt", "url_key"), SelectedArticleRow
     ),
-    LedgerName.FEED_INGEST_PLAN_REJECTIONS: _DoorShape(
-        FEED_INGEST_REJECTION_KEY, CandidateRejectionRecord
+    LedgerName.FEED_INGEST_PLAN_FEED_HEALTH_STATE: _DoorShape(
+        ("run_id", "attempt", "feed_id", "endpoint_key", "date"), FeedHealthStateRow
     ),
-    LedgerName.FEED_INGEST_PLAN_SOURCE_RUNS: _DoorShape(
-        FEED_INGEST_SOURCE_RUN_KEY, SourceRunRecord
-    ),
-    LedgerName.FEED_INGEST_PLAN_ARTICLE_ASSESSMENTS: _DoorShape(
-        FEED_INGEST_ASSESSMENT_KEY, ArticleAssessmentRecord
-    ),
-    LedgerName.FEED_INGEST_PLAN_DIVERSITY: _DoorShape(
-        FEED_INGEST_DIVERSITY_KEY, DiversityMetricRow
-    ),
-    LedgerName.FEED_INGEST_PLAN_DOCUMENT_OBSERVATIONS: _DoorShape(
-        ("event_id",), DocumentObservationRecord
-    ),
-    LedgerName.FEED_INGEST_PLAN_OPERATIONAL_STATE: _DoorShape(
-        FEED_INGEST_OPERATIONAL_STATE_KEY, FeedIngestOperationalStateRow
+    LedgerName.FEED_INGEST_PLAN_PLAN_RUNS: _DoorShape(
+        ("run_id", "attempt"), PlanRunRow
     ),
     LedgerName.GARDENER: _DoorShape(COLLECTION_PRUNE_KEY, CollectionPruneRow),
     LedgerName.VISUAL_PRUNES: _DoorShape(VISUAL_PRUNE_KEY, VisualPruneRow),
@@ -469,7 +441,7 @@ def _door_shape(ledger: LedgerName) -> _DoorShape:
     return held
 
 
-def door_contract(ledger: LedgerName) -> type[Contract]:
+def door_contract(ledger: LedgerName) -> type[LedgerContract]:
     """The contract one row of this door ledger is read by."""
     return _door_shape(ledger).model
 

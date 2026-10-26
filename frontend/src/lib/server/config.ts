@@ -83,6 +83,8 @@ export interface UiConfig {
 	story_chart_geometry: StoryChartGeometryConfig;
 }
 
+export type ReaderUiConfig = UiConfig & { chart_tick_density: number };
+
 /** What the console needs to say whether a run went well. */
 export interface RunConfig {
 	success_floor_pct: number;
@@ -493,6 +495,11 @@ export interface StoryChartGeometryConfig {
 	slope_column_share: number;
 	slope_line_width_px: number;
 	slope_highlight_line_width_px: number;
+	line_min_height_px: number;
+	line_axis_margin_left_px: number;
+	line_axis_margin_top_px: number;
+	line_width_px: number;
+	line_series_dash_arrays: readonly string[];
 }
 
 export interface IconsConfig {
@@ -545,7 +552,21 @@ const DEFAULTS: UiConfig = {
 		slope_min_height_px: 128,
 		slope_column_share: 0.3,
 		slope_line_width_px: 2,
-		slope_highlight_line_width_px: 3
+		slope_highlight_line_width_px: 3,
+		line_min_height_px: 176,
+		line_axis_margin_left_px: 48,
+		line_axis_margin_top_px: 24,
+		line_width_px: 2,
+		line_series_dash_arrays: [
+			'none',
+			'8 4',
+			'2 3',
+			'8 2 2 2',
+			'1 3',
+			'12 3',
+			'4 2 1 2',
+			'3 1 1 1'
+		]
 	}
 };
 
@@ -952,14 +973,15 @@ export function numberFormatConfig(): NumberFormatConfig {
 	return { ...NUMBER_FORMAT_DEFAULTS, ...(raw().visuals?.number_format ?? {}) };
 }
 
-export function uiConfig(): UiConfig & { number_format: NumberFormatConfig } {
+export function uiConfig(): ReaderUiConfig {
 	const ui = mergeLayers(DEFAULTS, raw().ui, appearance().digest) as DigestBlock;
 	// These share the block and must not ride along - see BUILD_ONLY_KEYS.
 	for (const key of BUILD_ONLY_KEYS) delete ui[key];
 	return {
 		...ui as UiConfig,
 		number_format: numberFormatConfig(),
-		story_chart_geometry: storyChartGeometryConfig()
+		story_chart_geometry: storyChartGeometryConfig(),
+		chart_tick_density: chartConfig().tick_density
 	};
 }
 

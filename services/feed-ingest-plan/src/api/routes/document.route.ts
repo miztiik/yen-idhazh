@@ -7,7 +7,7 @@ import { executeDocumentOperation } from "../document-operations";
 import { FetchRequestSchema, ParseRequestSchema } from "../operation-contracts";
 import { PlanError } from "../plan-request";
 
-export function documentRoute(inputs: PlanInputs, runtime: PlanRuntime) {
+export function documentRoute(inputs: PlanInputs, runtime: () => PlanRuntime) {
   const app = new Hono<{ Bindings: PlanningBindings }>();
   for (const operation of ["fetch", "parse"] as const) app.post(`/${operation}`, async c => {
     let raw: unknown;
@@ -18,7 +18,7 @@ export function documentRoute(inputs: PlanInputs, runtime: PlanRuntime) {
     }
     const request = operation === "fetch" ? FetchRequestSchema.parse(raw) : ParseRequestSchema.parse(raw);
     c.env?.beginPlanning?.();
-    return c.body(await executeDocumentOperation(operation, request, inputs, runtime, c.req.raw.signal), 200, {
+    return c.body(await executeDocumentOperation(operation, request, inputs, runtime(), c.req.raw.signal), 200, {
       "Content-Type": "application/json",
     });
   });

@@ -1,4 +1,4 @@
-"""Do Python and TypeScript accept the same authored planning policies?"""
+"""Do Python and TypeScript accept the same global planner settings?"""
 
 from __future__ import annotations
 
@@ -18,12 +18,11 @@ pytestmark = pytest.mark.contract
 
 MODEL_NAMES = (
     "FeedScreeningPolicy", "FeedPenaltyWeights", "FeedCurationPolicy",
-    "FeedScreeningPatch", "FeedPenaltyWeightsPatch", "FeedCurationPatch",
-    "VerticalPolicyOverride", "PlanningRunOverrides", "EffectiveFeedPolicy",
+    "PlanningRunOverrides", "EffectiveFeedPolicy",
     "FeedUrlExclusion", "FeedHarvestConfig", "FeedTriageConfig", "FeedSoftCaps", "FeedCurateConfig",
     "FeedPartitionConfig", "FeedSealConfig", "FeedWorkflowReportingConfig",
-    "FeedMetricsConfig", "FeedFeedbackConfig",
-    "FeedIngestConfig", "PlanningTaxonomy",
+    "FeedFeedbackConfig",
+    "FeedIngestConfig",
 )
 
 
@@ -117,6 +116,7 @@ def config_payload() -> dict[str, Any]:
 
 
 def test_python_authored_config_and_config_only_vertical_extension() -> None:
+    """Global settings apply to every feed; retired vertical overrides are refused."""
     payload = config_payload()
     payload["triage"].update({
         "min_words_article": 181,
@@ -125,10 +125,7 @@ def test_python_authored_config_and_config_only_vertical_extension() -> None:
         "recency_half_life_hours": 19,
     })
     payload["curate"]["article_limit"] = 101
-    taxonomy_payload = json.loads(read_text(REPO_ROOT / "config" / "taxonomy.json"))
-    taxonomy = feed_ingest.PlanningTaxonomy.model_validate(taxonomy_payload)
     config = feed_ingest.FeedIngestConfig.model_validate(payload)
-    config.validate_verticals(taxonomy)
     assert config.triage.min_words_article == payload["triage"]["min_words_article"]
     assert config.triage.min_words_abstract == payload["triage"]["min_words_abstract"]
     assert config.triage.max_age_hours == payload["triage"]["max_age_hours"]
@@ -136,17 +133,16 @@ def test_python_authored_config_and_config_only_vertical_extension() -> None:
     assert config.workflow_reporting.enabled
     assert config.curate.article_limit == payload["curate"]["article_limit"]
     assert config.feedback.lifecycle_window_days == 31
-    assert config.feedback.window_days == 7
-    assert config.feedback.minimum_measured_opportunities == 20
-    assert config.feedback.minimum_measured_coverage == 0.8
-    assert config.feedback.component_weights.model_dump() == {
-        "cpu": 1 / 3,
-        "private_memory": 1 / 3,
-        "requests": 1 / 3,
-    }
+    assert config.feedback.request_report_closed_days == 7
+    assert set(config.feedback.model_dump()) == {"lifecycle_window_days", "request_report_closed_days"}
     assert feed_ingest.FeedIngestConfig.model_validate(
         {key: value for key, value in payload.items() if key != "feedback"}
     ).feedback.lifecycle_window_days == 31
+    for retired in ("window_days", "minimum_measured_opportunities", "minimum_measured_coverage", "component_weights"):
+        with pytest.raises(ValidationError):
+            feed_ingest.FeedIngestConfig.model_validate(payload | {
+                "feedback": dict(payload["feedback"], **{retired: 1}),
+            })
     assert config.curate.source_reliability_penalty_enabled
     previous = dict(payload["curate"])
     previous.pop("source_reliability_penalty_enabled")
@@ -155,39 +151,37 @@ def test_python_authored_config_and_config_only_vertical_extension() -> None:
         payload["curate"] | {"source_reliability_penalty_enabled": False}
     ).source_reliability_penalty_enabled
 
-    taxonomy_payload["verticals"].append(dict(taxonomy_payload["verticals"][0], id="oceans"))
-    payload["vertical_overrides"] = {
-        "oceans": {"triage": {"max_age_hours": 12}, "curate": {"mmr_weights": {"lambda_lens": 0}}},
-    }
-    extended = feed_ingest.FeedIngestConfig.model_validate(payload)
-    extended.validate_verticals(feed_ingest.PlanningTaxonomy.model_validate(taxonomy_payload))
-    assert extended.vertical_overrides["oceans"].model_dump(exclude_unset=True) == {
-        "triage": {"max_age_hours": 12}, "curate": {"mmr_weights": {"lambda_lens": 0}},
-    }
-    with pytest.raises(ValueError, match=r"vertical_overrides\.oceans"):
-        extended.validate_verticals(taxonomy)
+    assert "vertical_overrides" not in config.model_dump()
+    with pytest.raises(ValidationError, match="vertical_overrides"):
+        feed_ingest.FeedIngestConfig.model_validate(payload | {"vertical_overrides": {}})
 
 
-@pytest.mark.parametrize("patch", [
-    {"triage": {"min_words_article": 0}},
-    {"triage": {"min_words_article": "180"}},
-    {"triage": {"min_words_abstract": 1.5}},
-    {"triage": {"max_age_hours": None}},
-    {"triage": {"max_age_hours": float("inf")}},
-    {"triage": {"recency_weight": -1}},
-    {"curate": {"source_authority_weight": True}},
-    {"curate": {"mmr_weights": {"lambda_lens": float("nan")}}},
-    {"curate": {"mmr_weights": {"lambda_lens": None}}},
-    {"curate": {"base_source_allowance": -1}},
-    {"curate": {"soft_caps": {"max_source_share": 0.2}}},
-    {"curate": {"source_reliability_penalty_enabled": False}},
-    {"triage": {"blocked_http_statuses": []}},
-    {"harvest": {"concurrency": 1}},
-    {"desk_overrides": {}},
+@pytest.mark.parametrize(("path", "value"), [
+    (("triage", "min_words_article"), 0),
+    (("triage", "min_words_article"), "180"),
+    (("triage", "min_words_abstract"), 1.5),
+    (("triage", "max_age_hours"), None),
+    (("triage", "max_age_hours"), float("inf")),
+    (("triage", "recency_weight"), -1),
+    (("curate", "source_authority_weight"), True),
+    (("curate", "mmr_weights", "lambda_domain"), float("nan")),
+    (("curate", "mmr_weights", "lambda_domain"), None),
+    (("curate", "mmr_weights", "lambda_lens"), 0),
+    (("curate", "base_source_allowance"), -1),
+    (("curate", "soft_caps", "max_source_share"), 0),
+    (("curate", "source_reliability_penalty_enabled"), None),
+    (("harvest", "concurrency"), "1"),
+    (("vertical_overrides",), {}),
+    (("desk_overrides",), {}),
 ])
-def test_python_refuses_invalid_or_global_only_patch(patch: dict[str, Any]) -> None:
+def test_python_refuses_invalid_or_global_only_patch(path: tuple[str, ...], value: Any) -> None:
+    payload = config_payload()
+    leaf = payload
+    for segment in path[:-1]:
+        leaf = leaf[segment]
+    leaf[path[-1]] = value
     with pytest.raises(ValidationError):
-        feed_ingest.VerticalPolicyOverride.model_validate(patch)
+        feed_ingest.FeedIngestConfig.model_validate(payload)
 
 
 @pytest.mark.parametrize("value", [0, -1, "12", None, True, float("nan"), float("inf")])
@@ -209,6 +203,8 @@ def test_python_refuses_invalid_global_settings_and_duplicate_references() -> No
         {"curate": dict(payload["curate"], source_reliability_penalty_enabled="true")},
         {"curate": dict(payload["curate"], source_reliability_penalty_enabled=None)},
         {"harvest": dict(payload["harvest"], concurrency="24")},
+        {"seal": dict(payload["seal"], dispatches_prefix=["feed-ingest-plan", "dispatches"])},
+        {"metrics": {}},
         {"desk_overrides": {}},
     )
     for patch in patches:
@@ -222,5 +218,5 @@ def test_python_refuses_invalid_global_settings_and_duplicate_references() -> No
             feed_ingest.FeedUrlExclusion.model_validate(rule)
     for rule in safety["url_exclusions"]:
         feed_ingest.FeedUrlExclusion.model_validate(rule)
-    with pytest.raises(ValidationError, match="duplicate ids"):
-        feed_ingest.PlanningTaxonomy.model_validate({"verticals": [{"id": "ai"}, {"id": "ai"}]})
+    with pytest.raises(ValidationError, match="vertical_overrides"):
+        feed_ingest.FeedIngestConfig.model_validate(payload | {"vertical_overrides": {}})

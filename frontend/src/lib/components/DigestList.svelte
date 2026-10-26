@@ -58,7 +58,7 @@
 		revealed,
 		shortlist
 	} from '$lib/day-shape';
-	import type { UiConfig } from '$lib/server/config';
+	import type { ReaderUiConfig } from '$lib/server/config';
 	import type { DayForPage, DigestCoverage, DigestItem } from '$lib/payload/types';
 	import { forgetAll, loadHideRead, loadRead, markRead, setHideRead } from '$lib/readstate';
 	import { onMount, tick } from 'svelte';
@@ -78,7 +78,7 @@
 		 * is the one moment a story that is on its way looks like a story that was
 		 * never here. */
 		settled?: boolean;
-		ui: UiConfig;
+		ui: ReaderUiConfig;
 	} = $props();
 
 	let query = $state('');
@@ -499,6 +499,7 @@
 				{verticalNames}
 				numberFormat={ui.number_format}
 				storyChartGeometry={ui.story_chart_geometry}
+				chartTickDensity={ui.chart_tick_density}
 				onClear={clearSearch}
 			/>
 		{:else if found !== null}
@@ -545,6 +546,7 @@
 						{item}
 						numberFormat={ui.number_format}
 						storyChartGeometry={ui.story_chart_geometry}
+						chartTickDensity={ui.chart_tick_density}
 						verticalName={verticalNames[deskOf(item)] ?? deskOf(item)}
 						showMark={ui.source_mark}
 						stack={stackOf(item)}
