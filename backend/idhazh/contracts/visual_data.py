@@ -60,7 +60,7 @@ from idhazh.contracts.visual import (
 #: committed SVG is a fixed record of what a reader saw on a given day, and a
 #: spec plus drawing code can be redrawn differently by a later change with
 #: nothing in the payload to show it moved. This field is what shows it.
-RENDERER_VERSION: Final = "2026-10-27"
+RENDERER_VERSION: Final = "2026-10-27T01:00"
 
 #: How a mark is addressed inside its own file. Local to one visual and never an
 #: identity anything outside it holds, so it is short and positional rather than
@@ -231,6 +231,11 @@ class VisualData(Contract):
 
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-10-27T01:00",
+            change="Draw scatter with one entity and two source-backed measures per point.",
+            why="Partial pairs hide the actual comparison set.",
+        ),
+        ChangelogEntry(
             version="2026-10-27",
             change="Carry a canonical date beside source wording for time marks.",
             why="A time axis needs sortable dates without replacing the article's words.",
@@ -368,6 +373,26 @@ class VisualData(Contract):
                 raise ValueError(
                     "a slope chart needs distinct series labels when entity labels are absent"
                 )
+        elif self.type is VisualType.SCATTER:
+            count = len(channels.quantity)
+            if not count or len(channels.quantity_x) != count or len(channels.entity) != count:
+                raise ValueError("a scatter pairs one entity with both measures")
+            if channels.series and len(channels.series) != count:
+                raise ValueError("a scatter pairs one series label with every point")
+            if any((channels.category, channels.time, channels.size,
+                    channels.bins, channels.event_label)):
+                raise ValueError("a scatter carries only entity, quantity_x, quantity and series")
+            entities = [by_id[mark_id] for mark_id in channels.entity]
+            if any(
+                mark.element_id is None
+                or not mark.element_id.startswith(("entity-", "place-"))
+                for mark in entities
+            ):
+                raise ValueError("scatter entities need source element references")
+            if len({mark.element_id for mark in entities}) != count or len(
+                {mark.text for mark in entities}
+            ) != count:
+                raise ValueError("scatter entity labels must be distinct")
         elif self.type is VisualType.LINE:
             if len(channels.quantity) < 2 or len(channels.time) != len(channels.quantity):
                 raise ValueError("a line chart pairs at least two quantities with dates")
@@ -424,7 +449,7 @@ class VisualData(Contract):
             raise ValueError("every drawn category, time, series and entity mark needs text")
         if any(
             by_id[mark_id].value is None or by_id[mark_id].text is not None
-            for mark_id in channels.quantity
+            for mark_id in channels.quantity + channels.quantity_x
         ):
             raise ValueError("every quantity mark carries a value and no text")
         return self

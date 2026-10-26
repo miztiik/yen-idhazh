@@ -39,7 +39,8 @@ from idhazh.contracts.visual_data import (
 )
 from idhazh.derived_values import measure_displayed_values, resolve_displayed_values
 from idhazh.sanitize import sanitize
-from idhazh.visual_vocabulary import VALUE_ROLES
+from idhazh.scatter_evidence import refuse_scatter
+from idhazh.visual_vocabulary import TYPE_RULES, VALUE_ROLES
 
 #: How many of an element's own characters name one bar. The drawn label is the
 #: article's text, so it is cut rather than reworded.
@@ -92,7 +93,9 @@ class _Figure(NamedTuple):
 
 def can_compile(visual_type: VisualType | None) -> bool:
     """The current compiler capability, not the configurable request vocabulary."""
-    return visual_type in {VisualType.BAR, VisualType.DOT, VisualType.SLOPE, VisualType.LINE}
+    return visual_type in {
+        VisualType.BAR, VisualType.DOT, VisualType.SLOPE, VisualType.LINE, VisualType.SCATTER
+    }
 
 
 def compile_chart(
@@ -103,35 +106,34 @@ def compile_chart(
     Bar and dot pair categories and optional series labels with quantities.
     Slope pairs two time labels with consecutive quantity pairs and one entity
     or series label per line. Line pairs each quantity with a date and optional
-    series label. The validator refuses other source channels rather than
-    approximating them.
+    series label. Scatter pairs both measures with a source-labelled entity.
+    Unsupported source channels are refused rather than approximated.
     """
     if plan.decision is not PlanDecision.VISUAL:
         raise CompileError("this plan asks for no picture, so there is nothing to compile")
     visual_type = plan.type
     if visual_type is None or not can_compile(visual_type):
         named = visual_type.value if visual_type is not None else "no type"
-        raise CompileError(f"this build draws bar, dot, slope and line, and the plan says {named}")
+        raise CompileError(
+            f"this build draws bar, dot, slope, line and scatter; the plan says {named}"
+        )
+
+    if visual_type is VisualType.SCATTER:
+        source = {element.element_id: element for element in table.elements}
+        detail = refuse_scatter(plan, {
+            role: [source[cited] for cited in ids if cited in source]
+            for role, ids in plan.encodings.filled().items()
+        })
+        if detail is not None:
+            raise CompileError(detail)
 
     resolved = resolve_displayed_values(plan, table, visuals=visuals)
     if resolved.refusal is not None:
         raise CompileError(f"{resolved.refusal.check.value}: {resolved.refusal.detail}")
 
     known = {element.element_id: element for element in table.elements}
-    allowed = (
-        {EncodingRole.CATEGORY, EncodingRole.QUANTITY, EncodingRole.SERIES}
-        if visual_type in (VisualType.BAR, VisualType.DOT)
-        else (
-            {EncodingRole.TIME, EncodingRole.QUANTITY, EncodingRole.SERIES}
-            if visual_type is VisualType.LINE
-            else {
-                EncodingRole.TIME,
-                EncodingRole.QUANTITY,
-                EncodingRole.SERIES,
-                EncodingRole.ENTITY,
-            }
-        )
-    )
+    rules = TYPE_RULES[visual_type]
+    allowed = rules.required | rules.optional
     channels = {
         role: [value for value in resolved.values if value.role is role] if role in allowed else []
         for role in EncodingRole
@@ -141,7 +143,9 @@ def compile_chart(
     return CompiledChart(
         _chart_alt_text(visual_type, channels, figures, known),
         data,
-        measure_displayed_values(channels[EncodingRole.QUANTITY], table),
+        measure_displayed_values(
+            [value for role in VALUE_ROLES for value in channels[role]], table
+        ),
     )
 
 
@@ -162,6 +166,11 @@ def _check_channel_pairing(
 ) -> None:
     """Refuse a channel shape that cannot be drawn without losing values."""
     quantities = channels[EncodingRole.QUANTITY]
+    if visual_type is VisualType.SCATTER:
+        names = [_mark_text(value, known) for value in channels[EncodingRole.ENTITY]]
+        if len(set(names)) != len(names):
+            raise CompileError("scatter entity labels must remain distinct after sanitizing")
+        return
     if visual_type in (VisualType.BAR, VisualType.DOT):
         categories = channels[EncodingRole.CATEGORY]
         series = channels[EncodingRole.SERIES]
@@ -220,7 +229,7 @@ def _chart_data(
 ) -> tuple[VisualData, list[_Figure]]:
     """Write each filled source channel once, keeping its role in the payload."""
     marks: list[VisualMark] = []
-    figures: list[_Figure] = []
+    quantity_figures: dict[str, _Figure] = {}
     encoded: dict[str, list[str]] = {role.value: [] for role in EncodingRole}
     mark_by_value: dict[tuple[EncodingRole, int], str] = {}
     for role in EncodingRole:
@@ -229,7 +238,8 @@ def _chart_data(
             mark_by_value[(role, index)] = mark_id
             if role in VALUE_ROLES:
                 figure = _figure(value, known)
-                figures.append(figure)
+                if role is EncodingRole.QUANTITY:
+                    quantity_figures[mark_id] = figure
                 marks.append(
                     VisualMark(
                         mark_id=mark_id,
@@ -285,8 +295,7 @@ def _chart_data(
         encoding=VisualEncoding(**encoded),
     )
     quantity_ids = encoded[EncodingRole.QUANTITY.value]
-    figure_by_mark = dict(zip(quantity_ids, figures, strict=True))
-    return data, [figure_by_mark[mark_id] for mark_id in quantity_ids]
+    return data, [quantity_figures[mark_id] for mark_id in quantity_ids]
 
 
 def _observations(
@@ -295,6 +304,20 @@ def _observations(
     mark_by_value: Mapping[tuple[EncodingRole, int], str],
 ) -> list[tuple[list[DisplayedValue], list[str]]]:
     quantities = channels[EncodingRole.QUANTITY]
+    if visual_type is VisualType.SCATTER:
+        return [
+            (
+                [
+                    quantities[index],
+                    channels[EncodingRole.QUANTITY_X][index],
+                    channels[EncodingRole.ENTITY][index],
+                    *([channels[EncodingRole.SERIES][index]]
+                      if channels[EncodingRole.SERIES] else []),
+                ],
+                [mark_by_value[(EncodingRole.QUANTITY, index)]],
+            )
+            for index in range(len(quantities))
+        ]
     if visual_type in (VisualType.BAR, VisualType.DOT):
         return [
             (
@@ -377,6 +400,7 @@ def _emphasized_chart_mark(
             VisualType.DOT: "dots",
             VisualType.SLOPE: "slope measurements",
             VisualType.LINE: "line measurements",
+            VisualType.SCATTER: "scatter points",
         }[visual_type]
         raise CompileError(
             f"annotations select {len(selected)} distinct {selected_name}; exactly one is required"
@@ -409,6 +433,16 @@ def _chart_alt_text(
 ) -> str:
     """State every visible label and figure from the source channels."""
     unit = f" {figures[0].unit}" if figures and figures[0].unit else ""
+    if visual_type is VisualType.SCATTER:
+        facts = []
+        for index, figure in enumerate(figures):
+            horizontal = _figure(channels[EncodingRole.QUANTITY_X][index], known)
+            label = _mark_text(channels[EncodingRole.ENTITY][index], known)
+            facts.append(
+                f"{label}: x {horizontal.stated} {horizontal.unit or ''}, "
+                f"y {figure.stated}{unit}"
+            )
+        return f"Scatter chart. {'; '.join(facts)}."[:ALT_TEXT_MAX]
     if visual_type in (VisualType.BAR, VisualType.DOT):
         categories = channels[EncodingRole.CATEGORY]
         series = channels[EncodingRole.SERIES]
