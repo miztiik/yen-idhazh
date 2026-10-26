@@ -35,6 +35,7 @@ from idhazh.contracts.item_health import FailureCode
 from idhazh.contracts.summary import Summary, SummaryStatus
 from idhazh.contracts.visual import PlanDecision, VisualPlan, VisualType
 from idhazh.contracts.visual_decision import VisualDecision
+from idhazh.contracts.visual_telemetry import ValidatorCheck
 from idhazh.fingerprint import (
     text_digest,
 )
@@ -255,6 +256,7 @@ def _drawn(
     drawable = plan
     reason = "the plan passed every check and this build could not draw it"
     if rejections or not can_compile(plan.type):
+        replacement_rejections = []
         cause = (
             "the plan was refused on "
             + ", ".join(rejection.check.value for rejection in rejections)
@@ -262,11 +264,23 @@ def _drawn(
         )
         step = (
             visual_planner.downgrade(
-                plan, table, visuals=visuals, published_marks=published_marks
+                plan,
+                table,
+                visuals=visuals,
+                published_marks=published_marks,
+                rejected=replacement_rejections,
             )
             if published_marks is not None and visuals.downgrade_enabled else None
         )
         if step is None:
+            if any(
+                rejection.check is ValidatorCheck.STACKED_BAR_EXHAUSTIVE
+                for rejection in replacement_rejections
+            ):
+                cause += (
+                    "; stacked_bar fallback was refused on "
+                    f"{ValidatorCheck.STACKED_BAR_EXHAUSTIVE.value}"
+                )
             refused = visual_planner.not_drawable_here(
                 summary,
                 why=f"{cause}; no safe supported replacement cleared validation and its floor"

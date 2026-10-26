@@ -18,7 +18,7 @@ Six pages, one question each. Arrive at the one holding your question and stop.
 | Page | The question it answers |
 | --- | --- |
 | this one | Which pass decides a picture, which gate refuses, and what every `none` is called |
-| [what-a-visual-plan-may-say-and-what-happens-to-one-that-is-refused.md](what-a-visual-plan-may-say-and-what-happens-to-one-that-is-refused.md) | What shape the model decodes into, the nine checks it must clear, and the ladder a refused plan may step down |
+| [what-a-visual-plan-may-say-and-what-happens-to-one-that-is-refused.md](what-a-visual-plan-may-say-and-what-happens-to-one-that-is-refused.md) | What shape the model decodes into, the ten checks it must clear, and the ladder a refused plan may step down |
 | [where-every-drawn-figure-came-from.md](where-every-drawn-figure-came-from.md) | This number is on a bar - is it the article's own characters, or arithmetic over them, and what chain proves it |
 | [where-a-drawing-becomes-pixels.md](where-a-drawing-becomes-pixels.md) | Who draws the chart, what the compiler publishes, and what a reader receives |
 | [one-visual-one-file-and-the-race-between-two-runs.md](one-visual-one-file-and-the-race-between-two-runs.md) | What the file is called, and what happens when two overlapping runs write it |
@@ -151,7 +151,7 @@ table alone: is every required channel fillable by some element of a kind that c
 the channel the type counts its marks in reach the floor, and - where that channel is drawn on a
 measured axis - do enough of those marks measure the same thing.
 
-Three of the nine checks cannot refuse a plan the gate admitted, so the gate does not ask them.
+Three of the ten checks cannot refuse a plan the gate admitted, so the gate does not ask them.
 `element_exists` is satisfied by choosing from the table. `plan_version_current` is stamped by code.
 `numerals_matched` is about prose, and a plan can always write prose with no numeral in it. One
 check does the opposite and is asked early: an element whose cell disagrees with its own characters
@@ -172,14 +172,14 @@ expensive.
 | What the gate changes about the summarize-and-plan call | Before | Gated |
 | --- | --- | --- |
 | The decoder shape | `{summary, visual}` | the summary draft alone |
-| The output budget | 4,735 tokens | 946 tokens |
+| The output budget | 4,213 tokens | 371 tokens |
 | The trailing user turn | 2,555 characters | 961 characters |
 | The system turn, the article, the label call's reply | unchanged | unchanged |
 
 Both budgets are derived from the reply shape's own bounds by the same arithmetic rather than one
 being the other minus the plan's - two ways of computing one quantity disagree the first time a
-bound moves, and the one that is wrong is the one nobody reads. The saving is 3,789 tokens off the
-ceiling, which is 80 percent of it.
+bound moves, and the one that is wrong is the one nobody reads. The saving is 3,842 tokens off the
+ceiling, which is 91 percent of it.
 
 **A ceiling is not a measurement of seconds, so here is one.** The "21 measured seconds" this page
 used to quote was a saving for skipping a whole call, which cannot happen, and that figure is
@@ -371,8 +371,8 @@ flowchart TD
 |---|---|
 | `CP` | Code reads first and the model never sees a raw article without a candidate table beside it. It emits `element_id`, `kind`, `surface`, `span_start`, `span_end`, `value`, `unit`, `sentence_index`, `extractor` |
 | `C1` | The model's whole numeric vocabulary is `0..len(candidates)-1`. **It cannot write a number because no field of the schema accepts one**, which is a property of the grammar rather than a check somebody remembered to add |
-| `VP` | `decision`, `purpose`, `type`, `encodings`, `element_ids`, `labels`, `annotations`, `why`, `title`, `caption`, `confidence`, `plan_version`. Four prohibitions: no geometry, no literal value, no authored text, no `alt_text` |
-| `VV` | Nine checks: elements exist; semantically compatible; units convertible; roles valid for the type; enough data; no duplicate in a role; no invented values; numerals matched; plan version current |
+| `VP` | `decision`, `purpose`, `type`, `encodings`, `declared_whole_element_id`, `element_ids`, `labels`, `annotations`, `why`, `title`, `caption`, `confidence`, `plan_version`. Four prohibitions: no geometry, no literal value, no authored text, no `alt_text` |
+| `VV` | Ten checks: elements exist; semantically compatible; units convertible; roles valid for the type; enough data; no duplicate in a role; no invented values; numerals matched; plan version current; stacked parts equal a separate declared whole |
 | `VC` | The one place the picture's numbers come into being, and every one of them is arithmetic over Tier 1 elements through a closed four-function allow-list - `count`, `sum`, `share_of_declared_whole`, `convert` |
 | `DJ` | The day's text, and for each item a pointer: the visual's `kind`, its `state`, and where its file is. **No chart data, ever** |
 | `VJ` | One visual, as `VisualData`: `item_id`, `type`, `renderer_version`, a flat `marks` pool each carrying `text`, `value`, `unit` and its provenance, and an `encoding` saying which marks fill which channel |
@@ -465,7 +465,7 @@ chain; each child keeps one of the others. The cost is real and is the usual one
 page nobody can guess now costs a table lookup, where before it cost a long scroll
 ([../../reference/documentation-structure.md](../../reference/documentation-structure.md)). One
 correction travelled with the split: the flow drawing's node table said the validator holds eight
-checks and it holds nine - `plan_version_current` was added after the drawing was made.
+checks and it holds ten - `plan_version_current` and `stacked_bar_exhaustive` were added after the drawing was made.
 Authority: Fowler.
 
 ## Rejected alternatives
@@ -486,7 +486,7 @@ Authority: Fowler.
 
 ## See also
 
-- [what-a-visual-plan-may-say-and-what-happens-to-one-that-is-refused.md](what-a-visual-plan-may-say-and-what-happens-to-one-that-is-refused.md) - the shape and the nine checks.
+- [what-a-visual-plan-may-say-and-what-happens-to-one-that-is-refused.md](what-a-visual-plan-may-say-and-what-happens-to-one-that-is-refused.md) - the shape and the ten checks.
 - [where-every-drawn-figure-came-from.md](where-every-drawn-figure-came-from.md) - where every number on an axis came from.
 - [where-a-drawing-becomes-pixels.md](where-a-drawing-becomes-pixels.md) - who draws the chart, and what the compiler publishes.
 - [one-visual-one-file-and-the-race-between-two-runs.md](one-visual-one-file-and-the-race-between-two-runs.md) - the file's name, and the race it ended.

@@ -2,7 +2,7 @@
 
 **Last Updated**: 2026-10-25
 
-The shape the model decodes into, the four things it may not carry, the nine
+The shape the model decodes into, the four things it may not carry, the ten
 deterministic checks a plan has to clear, and the ladder a refused plan may step
 down before it becomes no picture at all. Nothing here calls a model: every
 check is code over the article's own element table. Where the figures on the
@@ -15,7 +15,7 @@ who decides a picture at all is [visuals.md](visuals.md).
 `VisualPlan` in [`backend/idhazh/contracts/visual.py`](../../../backend/idhazh/contracts/visual.py)
 is the shape a planner decodes into and the only thing a compiler is allowed to read. It carries
 element references and closed vocabularies: a decision, a purpose, a type, one channel per encoding
-role, the elements it draws from, which of them name the marks and which one lands first, one
+role, the separately declared whole for a stacked bar, the elements it draws from, which of them name the marks and which one lands first, one
 sentence of reasoning, a title, a caption, a confidence and the vocabulary date-stamp it
 was planned against. It lands ahead of its producers, so nothing writes one yet (Guardrail #3).
 
@@ -50,7 +50,7 @@ its own hedge back as evidence. Last but one it records what the model thought a
 
 **Every array has a `maxItems` and every decoded string a `maxLength`, so the worst-case reply length
 is arithmetic.** At the bounds the contract declares, the longest plan the decoder can produce is
-**3,767 characters** - and a token spans at least one character, so that is also a ceiling of 3,767
+**3,820 characters** - and a token spans at least one character, so that is also a ceiling of 3,820
 tokens. The two committed fixtures measure 838 characters for a four-bar plan citing eight elements
 and 368 for one that declines, between a fifth and a tenth of the ceiling. The derivation is field
 by field in the module docstring, it is recomputed from the generated schema, and the module refuses
@@ -107,7 +107,7 @@ them all.
 ## The validator refuses, and each check refuses on its own
 
 `backend/idhazh/visual_validator.py` reads one plan and one article's element table and returns the
-checks that did not hold. An empty answer means the plan may be drawn. Nine checks, all of them
+checks that did not hold. An empty answer means the plan may be drawn. Ten checks, all of them
 deterministic code over committed data - **no check calls a model, and a test reads the module's own
 imports so none can start to**. `CLAUDE.md` section 1a now permits a model verdict to decide what
 publishes; this validator still refuses to be one, because every check it needs is a comparison
@@ -131,6 +131,7 @@ is the module being replaced.
 | `no_invented_values` | Every figure reads out of the characters its element names. | A table cell that disagrees with its own excerpt. |
 | `numerals_matched` | Every numeral in `title`, `caption` and `why` is one a cited element states. | A caption that converted a figure, or reached one from nowhere. |
 | `plan_version_current` | The plan met the vocabulary this build holds. | Contract drift, found rather than drawn. |
+| `stacked_bar_exhaustive` | A separately cited source quantity is the whole, distinct from the parts, and exactly equals their converted sum. | A stack that omits a part or treats a sum of the supplied parts as a declared whole. |
 
 **Each check returns at most one refusal, carrying its own stable name.** That is a design
 constraint rather than a testing preference. A validator that answers with one string cannot say
@@ -141,7 +142,7 @@ element would trip four rules at once and the report would name the wrong cause.
 `backend/tests/test_visual_validator.py` holds **one fixture per check, each tripping only its own**,
 asserted as `[rejection.check for rejection in rejections] == [check]` rather than as a membership -
 a membership passes while three other rules are firing. Each check was also neutered in turn against
-its own fixture, and all nine left the plan accepted, so every one of them is the sole cause of the
+its own fixture, and all ten left the plan accepted, so every one of them is the sole cause of the
 refusal it is credited with.
 
 ### Config selects requests; code owns correctness
@@ -391,6 +392,13 @@ are independent. The existing item ledger supplies bounded, measured
 history, so no new ledger or fabricated seed is required. A refusal keeps the
 summary, not a forced bar, and stacked parts cannot bypass their declared
 whole. Maintainer approval: 2026-10-25 UTC.
+
+**A stacked bar needs evidence beyond its parts.** Its plan cites a distinct
+source quantity that states the whole. The validator compares that quantity
+with the exact sum of the parts after unit conversion; adding the parts does
+not prove that the article stated their total. The same check runs on direct
+requests and on pie fallbacks. A mismatch records the refusal and leaves the
+story text without a chart.
 
 ## Rejected alternatives
 

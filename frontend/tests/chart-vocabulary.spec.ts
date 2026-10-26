@@ -20,6 +20,7 @@ import { partsOfOne } from '../src/lib/charts/d3/partsOfOne';
 import { rankedList } from '../src/lib/charts/d3/rankedList';
 import { bandScale, linearScale, timeScale } from '../src/lib/charts/d3/scale';
 import { tileStrip } from '../src/lib/charts/d3/tileStrip';
+import { PALETTE } from '../src/lib/charts/theme';
 import { CHART_VOCABULARY_PAGE } from '../scripts/doc-test-inputs';
 import { inZone } from './support/in-zone';
 import {
@@ -572,6 +573,23 @@ test.describe('the nine types', () => {
 		expect(stacked?.key.map((part) => part.token)).not.toContain(`--chart-${UNRECORDED_STOP}`);
 		expect(() => partsOfOne([{ label: 'r', parts: [{ label: 'other', value: 1 }] }], { order: ['early'] })).toThrow(/does not name/);
 		expect(partsOfOne([{ label: 'r', parts: [{ label: 'early', value: 0 }] }], { order: ['early'] })).toBeNull();
+	});
+
+	test('a stack can repeat category hues beyond the distinct palette without using the absence token', () => {
+		const order = Array.from({ length: UNRECORDED_STOP }, (_, index) => `part-${index + 1}`);
+		const tokens = order.map((_, index) => PALETTE[index % (UNRECORDED_STOP - 1)]);
+		const geometry = partsOfOne(
+			[{ label: 'whole', parts: order.map((label) => ({ label, value: 1 })) }],
+			{ order, tokens }
+		);
+		expect(geometry?.rows[0].segments.map((segment) => segment.label)).toEqual(order);
+		expect(geometry?.key.map((part) => part.token)).toEqual(tokens);
+		expect(geometry?.key.at(-1)?.token).toBe(geometry?.key[0].token);
+		expect(geometry?.key.map((part) => part.token)).not.toContain(`--chart-${UNRECORDED_STOP}`);
+		expect(() => partsOfOne(
+			[{ label: 'whole', parts: order.map((label) => ({ label, value: 1 })) }],
+			{ order, tokens: tokens.slice(0, -1) }
+		)).toThrow(/one colour for each/);
 	});
 
 	test('tileStrip keeps three states and never passes an absence off as a quiet day', () => {

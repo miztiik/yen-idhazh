@@ -19,7 +19,7 @@ import { quantityToken, type Quantity } from '../../console/series-tokens';
 
 export interface PartsInput {
 	label: string;
-	parts: readonly { label: string; value: number }[];
+	parts: readonly { label: string; value: number; emphasized?: boolean }[];
 }
 
 export interface PartsOptions {
@@ -35,6 +35,7 @@ export interface PartSegment {
 	label: string;
 	value: number;
 	token: ChartToken;
+	emphasized: boolean;
 	/** Where the part starts along the track, as a CSS length. */
 	start: string;
 	/** How long it is along the same track. */
@@ -63,11 +64,14 @@ export interface PartsGeometry {
 export function partsOfOne(rows: readonly PartsInput[], opts: PartsOptions): PartsGeometry | null {
 	const overlapping = opts.overlapping ?? false;
 	const hues = UNRECORDED_STOP - 1;
-	if (opts.order.length > hues) {
+	if (opts.order.length > hues && opts.tokens === undefined) {
 		throw new RangeError(`A row splits into at most ${hues} parts, one hue each; the order names ${opts.order.length}.`);
 	}
 	const place = new Map(opts.order.map((label, index) => [label, index]));
 	if (opts.tokens !== undefined && opts.quantityByLabel !== undefined) throw new Error('Parts colours cannot carry both tokens and quantityByLabel.');
+	if (opts.tokens !== undefined && opts.tokens.length !== opts.order.length) {
+		throw new RangeError(`A row names ${opts.order.length} parts and needs one colour for each; got ${opts.tokens.length}.`);
+	}
 	const tokenByLabel = new Map(opts.order.map((label, index) => {
 		const quantity = opts.quantityByLabel?.[label];
 		if (opts.quantityByLabel !== undefined && quantity === undefined) throw new Error(`No quantity is named for "${label}".`);
@@ -111,6 +115,7 @@ export function partsOfOne(rows: readonly PartsInput[], opts: PartsOptions): Par
 						label: part.label,
 						value: part.value,
 						token: chooseToken(part.label),
+						emphasized: part.emphasized ?? false,
 						start: percentOf(at / max),
 						size: percentOf(part.value / max)
 					};

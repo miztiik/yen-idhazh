@@ -42,8 +42,8 @@
     {"derived": null,"element_id": "entity-118-124","mark_id": "m10","source_text": null,"text": "Norway","time": null,"unit": null,"value": null},
     {"derived": null,"element_id": "entity-175-182","mark_id": "m11","source_text": null,"text": "Ireland","time": null,"unit": null,"value": null}
   ],
-  "renderer_version": "2026-10-27T01:00",
+  "renderer_version": "2026-10-27T01:01",
   "title": "Capacity and output",
   "type": "scatter",
-  "version": "2026-10-27T01:00"
+  "version": "2026-10-27T01:01"
 }

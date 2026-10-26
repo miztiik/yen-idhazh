@@ -50,7 +50,7 @@ from idhazh.contracts.visual_decision import NoneReason, VisualState
 
 
 class ValidatorCheck(StrEnum):
-    """The nine checks, in the order the validator runs them.
+    """The ten checks, in the order the validator runs them.
 
     Each member is the property that must HOLD, not the failure - the same way
     `span_integrity_pass` and `derived_provenance_complete` are named.
@@ -72,6 +72,8 @@ class ValidatorCheck(StrEnum):
     UNITS_CONVERTIBLE = "units_convertible"
     #: The filled roles are the ones this type declares.
     ROLES_VALID_FOR_TYPE = "roles_valid_for_type"
+    #: Stacked parts exactly make a separate source-declared whole.
+    STACKED_BAR_EXHAUSTIVE = "stacked_bar_exhaustive"
     #: The marks fit between the two committed chart-point knobs - and for a
     #: histogram, whose marks are its bins, there is a value for every bin.
     ENOUGH_DATA = "enough_data"
@@ -222,6 +224,11 @@ class VisualAttemptRow(Contract):
 
     __schema_stem__: ClassVar[str] = "visual-attempt-row"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-10-26T09:41",
+            change="Name the stacked-bar exhaustiveness refusal in attempt records.",
+            why="A refused chart must say which check stopped it.",
+        ),
         ChangelogEntry(
             version="2026-09-13T23:50",
             change="Initial shape: one row per attempt at a visual, carrying the eight terms.",
@@ -390,6 +397,11 @@ class VisualAggregateRow(Contract):
 
     __schema_stem__: ClassVar[str] = "visual-aggregate-row"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-10-26T09:41",
+            change="Accept the stacked-bar exhaustiveness check in folded attempt rows.",
+            why="A refused chart must keep its cause after the full-grain shard folds.",
+        ),
         ChangelogEntry(
             version="2026-09-13T23:50",
             change="Initial shape: one row per eight-term group, folded from a month of attempts.",

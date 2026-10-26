@@ -102,6 +102,7 @@ quotes. An array of `n` of them costs `25n + 1`.
 | `decision` | 11 | `"visual"` | 19 |
 | `purpose` | 10 | `"distribution"` | 24 |
 | `type` | 7 | `"stacked_bar"` | 20 |
+| `declared_whole_element_id` | 28 | a maximum-length element id | 24 |
 | `encodings` | 12 | 9 required role keys (88) + 9 arrays of 8 (1809) + 8 commas + 2 braces | 1919 |
 | `element_ids` | 14 | 32 ids | 815 |
 | `labels` | 9 | 10 ids | 260 |
@@ -111,8 +112,8 @@ quotes. An array of `n` of them costs `25n + 1`.
 | `caption` | 10 | 200 characters | 212 |
 | `confidence` | 13 | 20 characters of decimal | 33 |
 
-3,755 for the fields, 10 commas between them and 2 braces around them:
-**3,767 characters, and therefore at most 3,767 tokens.** `worst_case_reply_characters`
+3,807 for the fields, 11 commas between them and 2 braces around them:
+**3,820 characters, and therefore at most 3,820 tokens.** `worst_case_reply_characters`
 recomputes that from the generated schema and this module refuses to import if it
 and `WORST_CASE_REPLY_CHARACTERS` disagree, so a bound cannot move without the
 ceiling moving with it.
@@ -182,7 +183,7 @@ _NUMBER_MAX_CHARACTERS: Final = 20
 #: checked against the generated schema at import. Written down as well as
 #: computed because it is what the planner's output budget is derived from, and
 #: a number nobody can read off the module is a number nobody re-derives.
-WORST_CASE_REPLY_CHARACTERS: Final = 3767
+WORST_CASE_REPLY_CHARACTERS: Final = 3820
 
 #: `<kind>-<span_start>-<span_end>` at its longest, and `ELEMENT_ID_PATTERN`
 #: already admits no more than that - the pattern bounds every one of its own
@@ -336,6 +337,11 @@ class VisualPlan(Contract):
     __schema_stem__: ClassVar[str] = "visual-plan"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-10-26T09:41",
+            change="Plans may name one independently declared whole for composition charts.",
+            why="A sum of parts is not evidence that the source declared those parts exhaustive.",
+        ),
+        ChangelogEntry(
             version="2026-09-15T19:40",
             change="Every element-id field now carries a self-bounding pattern.",
             why="These are every string the constrained decoder sees, and it cannot compile one.",
@@ -366,6 +372,13 @@ class VisualPlan(Contract):
         description=(
             "The form, from the full declarable vocabulary. Null on a plan that declines."
         )
+    )
+    declared_whole_element_id: _PlanElementId | None = Field(
+        default=None,
+        description=(
+            "The source quantity stating the whole for a pie or stacked bar. It is "
+            "independent of the part quantities; code checks exact exhaustiveness."
+        ),
     )
     encodings: PlanEncodings = Field(
         description=(
@@ -476,6 +489,8 @@ class VisualPlan(Contract):
         }
         for role, role_ids in self.encodings.filled().items():
             cited[f"encodings.{role.value}"] = set(role_ids)
+        if self.declared_whole_element_id is not None:
+            cited["declared_whole_element_id"] = {self.declared_whole_element_id}
         for where, ids in cited.items():
             unknown = sorted(ids - declared)
             if unknown:

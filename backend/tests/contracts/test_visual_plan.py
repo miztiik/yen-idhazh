@@ -247,7 +247,7 @@ def test_the_worst_case_reply_length_is_arithmetic_and_the_fixtures_are_a_fracti
     committed plans are measured beside it, because a ceiling nothing is
     compared against says nothing about what a reply actually costs.
     """
-    assert worst_case_reply_characters() == WORST_CASE_REPLY_CHARACTERS == 3767
+    assert worst_case_reply_characters() == WORST_CASE_REPLY_CHARACTERS == 3820
     measured = {}
     for stem in ("bar-chart", "declined"):
         decoded = {

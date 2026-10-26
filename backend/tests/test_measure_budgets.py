@@ -564,7 +564,7 @@ def test_a_definition_longer_than_the_bound_is_still_refused() -> None:
 def test_the_plan_reply_ceiling_did_not_move() -> None:
     from idhazh.contracts.visual import WORST_CASE_REPLY_CHARACTERS
 
-    assert WORST_CASE_REPLY_CHARACTERS == 3767
+    assert WORST_CASE_REPLY_CHARACTERS == 3820
 
 
 def test_the_ratio_is_the_retaken_one() -> None:

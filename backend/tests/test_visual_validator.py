@@ -36,7 +36,7 @@ from idhazh.contracts.visual import (
 )
 from idhazh.contracts.visual_telemetry import ValidatorCheck
 from idhazh.render.chart import can_compile
-from idhazh.visual_validator import Rejection, validate_plan
+from idhazh.visual_validator import Rejection, _stacked_bar_exhaustive, validate_plan
 from idhazh.visual_vocabulary import (
     DOWNGRADE_EDGES,
     DOWNGRADE_TABLE_VERSION,
@@ -113,11 +113,12 @@ ONE_CHECK_EACH: Final[tuple[tuple[str, str, ValidatorCheck], ...]] = (
     ("passes", "misread-quantity", ValidatorCheck.NO_INVENTED_VALUES),
     ("numeral-unmatched", "wind", ValidatorCheck.NUMERALS_MATCHED),
     ("stale-vocabulary", "wind", ValidatorCheck.PLAN_VERSION_CURRENT),
+    ("stacked-incomplete", "stacked-whole", ValidatorCheck.STACKED_BAR_EXHAUSTIVE),
 )
 
 
-def test_the_checks_are_the_nine_the_row_names() -> None:
-    """Nine checks, and a tenth arrives with a fixture that trips only it.
+def test_the_checks_are_the_ten_the_row_names() -> None:
+    """Ten checks, each with a fixture that trips only that check.
 
     The set below is the row's own list. It is asserted rather than trusted
     because the same list is what section 14.5 gate 3 quotes, and every
@@ -133,6 +134,7 @@ def test_the_checks_are_the_nine_the_row_names() -> None:
         "no_invented_values",
         "numerals_matched",
         "plan_version_current",
+        "stacked_bar_exhaustive",
     }
     assert {check for _, _, check in ONE_CHECK_EACH} == set(ValidatorCheck), (
         "a check with no fixture of its own has never been shown to fire alone"
@@ -140,8 +142,46 @@ def test_the_checks_are_the_nine_the_row_names() -> None:
 
 
 def test_a_plan_of_cited_elements_and_legal_roles_passes_every_check() -> None:
-    """The happy path, without which the nine refusals below prove nothing."""
+    """The happy path, without which the refusals below prove nothing."""
     assert refuse("passes", "wind") == []
+
+
+def test_stacked_parts_match_the_independently_declared_whole_after_unit_conversion() -> None:
+    """The parts use MW while their separately stated whole uses GW."""
+    assert refuse("stacked-valid", "stacked-whole") == []
+
+
+def test_stacked_whole_comparison_does_not_round_long_contract_values() -> None:
+    plan = load_plan("stacked-valid")
+    table = load_table("stacked-whole")
+    whole_id = plan.declared_whole_element_id
+    assert whole_id is not None
+    values = {
+        whole_id: "12345678901234567890123456789",
+        "quantity-77-82": "12345678901234567890123456788",
+        "quantity-99-104": "1",
+        "quantity-125-130": "0",
+    }
+    known = {
+        element.element_id: element.model_copy(
+            update={"value": values[element.element_id], "unit": "mw"}
+        )
+        if element.element_id in values
+        else element
+        for element in table.elements
+    }
+    drawn = {
+        role: [known[element_id] for element_id in ids]
+        for role, ids in plan.encodings.filled().items()
+    }
+
+    assert _stacked_bar_exhaustive(plan, drawn, known) is None
+
+
+def test_stacked_whole_spans_are_cut_from_the_named_article_fixture() -> None:
+    table = load_table("stacked-whole")
+    text = read_text(VALIDATOR_FIXTURES / "articles" / "stacked-whole.txt")
+    assert table.span_drift(text) is None
 
 
 @pytest.mark.parametrize(
@@ -453,6 +493,7 @@ def test_no_check_can_reach_a_model(module: str) -> None:
         "collections.abc",
         "decimal",
         "enum",
+        "fractions",
         "idhazh.contracts.element",
         "idhazh.contracts.knobs.visuals",
         "idhazh.contracts.visual",
@@ -484,13 +525,18 @@ def test_every_role_and_every_value_role_is_declared() -> None:
         ("plans", "kind-mismatched"),
         ("plans", "numeral-unmatched"),
         ("plans", "passes"),
+        ("plans", "pie-fallback-incomplete"),
+        ("plans", "pie-fallback-valid"),
         ("plans", "role-not-for-type"),
+        ("plans", "stacked-incomplete"),
+        ("plans", "stacked-valid"),
         ("plans", "stale-vocabulary"),
         ("plans", "too-few-marks"),
         ("plans", "units-convert"),
         ("plans", "units-disagree"),
         ("tables", "capacity-and-headcount"),
         ("tables", "misread-quantity"),
+        ("tables", "stacked-whole"),
         ("tables", "tonnes-and-kilotonnes"),
         ("tables", "wind"),
     ],
@@ -508,7 +554,26 @@ def test_a_named_fixture_round_trips_without_losing_values(directory: str, name:
     contract = ElementTable if directory == "tables" else VisualPlan
     record = contract.from_json(read_text(path))
     once = record.to_json()
-    assert json.loads(once) == payload
+    round_tripped = json.loads(once)
+
+    def preserves_supplied_values(expected: Any, actual: Any) -> bool:
+        if isinstance(expected, dict):
+            return isinstance(actual, dict) and all(
+                key in actual and preserves_supplied_values(value, actual[key])
+                for key, value in expected.items()
+            )
+        if isinstance(expected, list):
+            return (
+                isinstance(actual, list)
+                and len(actual) == len(expected)
+                and all(
+                    preserves_supplied_values(wanted, found)
+                    for wanted, found in zip(expected, actual, strict=True)
+                )
+            )
+        return expected == actual
+
+    assert preserves_supplied_values(payload, round_tripped)
     assert contract.from_json(once) == record
 
 

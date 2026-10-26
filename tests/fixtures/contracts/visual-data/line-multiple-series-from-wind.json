@@ -42,8 +42,8 @@
     {"derived": null,"element_id": "date-23-27","mark_id": "m10","source_text": null,"text": "2024","time": "2024","unit": null,"value": null},
     {"derived": null,"element_id": "date-43-47","mark_id": "m11","source_text": null,"text": "2025","time": "2025","unit": null,"value": null}
   ],
-  "renderer_version": "2026-10-27T01:00",
+  "renderer_version": "2026-10-27T01:01",
   "title": "Offshore wind capacity, Denmark and Germany",
   "type": "line",
-  "version": "2026-10-27T01:00"
+  "version": "2026-10-27T01:01"
 }

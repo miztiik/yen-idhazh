@@ -1,0 +1,102 @@
+{
+  "candidates_found": {
+    "entity": 3,
+    "quantity": 5
+  },
+  "canonical_url": "https://example.org/energy/declared-whole",
+  "elements": [
+    {
+      "element_id": "quantity-22-29",
+      "kind": "quantity",
+      "span_start": 22,
+      "span_end": 29,
+      "span_excerpt": "0.03 GW",
+      "value": "0.03",
+      "unit": "gw",
+      "sentence_index": 0,
+      "extractor": "regex"
+    },
+    {
+      "element_id": "quantity-56-61",
+      "kind": "quantity",
+      "span_start": 56,
+      "span_end": 61,
+      "span_excerpt": "31 MW",
+      "value": "31",
+      "unit": "mw",
+      "sentence_index": 1,
+      "extractor": "regex"
+    },
+    {
+      "element_id": "entity-63-67",
+      "kind": "entity",
+      "span_start": 63,
+      "span_end": 67,
+      "span_excerpt": "Wind",
+      "value": null,
+      "unit": null,
+      "sentence_index": 2,
+      "extractor": "model"
+    },
+    {
+      "element_id": "quantity-77-82",
+      "kind": "quantity",
+      "span_start": 77,
+      "span_end": 82,
+      "span_excerpt": "10 MW",
+      "value": "10",
+      "unit": "mw",
+      "sentence_index": 2,
+      "extractor": "regex"
+    },
+    {
+      "element_id": "entity-84-89",
+      "kind": "entity",
+      "span_start": 84,
+      "span_end": 89,
+      "span_excerpt": "solar",
+      "value": null,
+      "unit": null,
+      "sentence_index": 2,
+      "extractor": "model"
+    },
+    {
+      "element_id": "quantity-99-104",
+      "kind": "quantity",
+      "span_start": 99,
+      "span_end": 104,
+      "span_excerpt": "10 MW",
+      "value": "10",
+      "unit": "mw",
+      "sentence_index": 2,
+      "extractor": "regex"
+    },
+    {
+      "element_id": "entity-110-115",
+      "kind": "entity",
+      "span_start": 110,
+      "span_end": 115,
+      "span_excerpt": "hydro",
+      "value": null,
+      "unit": null,
+      "sentence_index": 2,
+      "extractor": "model"
+    },
+    {
+      "element_id": "quantity-125-130",
+      "kind": "quantity",
+      "span_start": 125,
+      "span_end": 130,
+      "span_excerpt": "10 MW",
+      "value": "10",
+      "unit": "mw",
+      "sentence_index": 2,
+      "extractor": "regex"
+    }
+  ],
+  "item_id": "energy-7731902044",
+  "source_text_hash": "26e0ee61893d7ec0aef0ebcb0e7d14f650230c5225ff897f3a7234d67a723683",
+  "source_text_length": 132,
+  "url_key": "0f9d697031f0a4d5250dde3c33f439b7858489c08573935689b821774453eaa6",
+  "version": "2026-09-08T18:00"
+}

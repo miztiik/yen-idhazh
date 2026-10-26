@@ -15,7 +15,8 @@ from idhazh.contracts.visual_data import (
     VisualEncoding,
     VisualMark,
 )
-from idhazh.render.chart import can_compile
+from idhazh.render.chart import DISPLAY_UNIT_SYMBOLS, can_compile
+from idhazh.visual_vocabulary import UNIT_DIMENSIONS
 
 pytestmark = pytest.mark.contract
 
@@ -49,6 +50,15 @@ def test_frontend_chart_vocabularies_match_the_native_contract() -> None:
         found = re.search(rf"export const {name} = \[(.*?)\] as const;", source, re.S)
         assert found is not None
         assert re.findall(r"'([^']*)'", found[1]) == expected
+
+
+def test_frontend_stacked_unit_symbols_match_the_native_renderer() -> None:
+    source = read_text(REPO_ROOT / "frontend/src/lib/visual/bar.ts")
+    found = re.search(r"const DISPLAY_UNIT_SYMBOLS\b[^=]*= \{(.*?)\n\};", source, re.S)
+    assert found is not None
+    symbols = dict(re.findall(r"^\s*(\w+): '([^']*)',?$", found[1], re.M))
+    assert symbols == DISPLAY_UNIT_SYMBOLS
+    assert set(symbols) == set(UNIT_DIMENSIONS)
 
 
 @pytest.mark.parametrize("change", ["old-renderer", "missing-emphasis", "category-emphasis"])
@@ -100,4 +110,34 @@ def test_scatter_reader_requires_every_entity_and_both_measures(change: str) -> 
         dropped = data["encoding"][role].pop()
         data["marks"] = [mark for mark in data["marks"] if mark["mark_id"] != dropped]
     with pytest.raises(ValidationError, match="scatter"):
+        VisualData.model_validate(data)
+
+
+def test_stacked_reader_accepts_the_compiled_whole_and_rejects_a_missing_part_label() -> None:
+    data = VisualData.read(
+        CONTRACT_FIXTURES_DIR / "visual-data/stacked-bar-from-whole.json"
+    )
+    assert data.type is VisualType.STACKED_BAR
+
+    payload = data.model_dump(mode="json")
+    dropped = payload["encoding"]["series"].pop()
+    payload["marks"] = [mark for mark in payload["marks"] if mark["mark_id"] != dropped]
+    with pytest.raises(ValidationError, match="one series label per part"):
+        VisualData.model_validate(payload)
+
+
+def test_stacked_reader_requires_a_separate_source_quantity_for_its_whole() -> None:
+    data = VisualData.read(
+        CONTRACT_FIXTURES_DIR / "visual-data/stacked-bar-from-whole.json"
+    ).model_dump(mode="json")
+    data["marks"][0]["element_id"] = "entity-22-29"
+    with pytest.raises(ValidationError, match="whole label cites a source quantity"):
+        VisualData.model_validate(data)
+
+    data = VisualData.read(
+        CONTRACT_FIXTURES_DIR / "visual-data/stacked-bar-from-whole.json"
+    ).model_dump(mode="json")
+    whole_id = data["marks"][0]["element_id"]
+    data["marks"][1]["element_id"] = whole_id
+    with pytest.raises(ValidationError, match="declared whole is separate from its parts"):
         VisualData.model_validate(data)

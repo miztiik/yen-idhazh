@@ -32,6 +32,7 @@ test('reader labels clear the text floor without scaling, and every mark survive
 			: []
 	);
 	expect(visuals.length, 'the fixture must exercise an actual drawing').toBeGreaterThan(0);
+	const axisCharts = visuals.filter(({ data }) => data.type !== 'stacked_bar');
 
 	async function drawings(page: Page) {
 		await dayReady(page);
@@ -45,7 +46,7 @@ test('reader labels clear the text floor without scaling, and every mark survive
 		await expect(stories).toHaveCount(day.items.length);
 		await page.evaluate(() => document.fonts.ready);
 		const snapshots = [];
-		for (const { id, data } of visuals) {
+		for (const { id, data } of axisCharts) {
 			const story = page.locator('article.item').and(page.locator(`[id="${id}"]`));
 			await story.scrollIntoViewIfNeeded();
 			const figure = story.getByRole('img');
@@ -354,4 +355,97 @@ test('the reader surface stays still as it loads and gains no page animation und
 	await page.emulateMedia({ reducedMotion: 'reduce' });
 	await page.reload();
 	expect(await runningAnimations(page)).toBe(0);
+});
+
+test('the published stacked bar stays readable inside a short, narrow story card', async ({ page }) => {
+	const date = newestDate();
+	const day = payloadOf(date) as unknown as DigestDay;
+	const item = day.items.find((entry) => {
+		if (entry.visual?.state !== 'rendered' || !entry.visual.data_path) return false;
+		const data = JSON.parse(readFileSync(join(CANARY, '..', entry.visual.data_path), 'utf8')) as VisualData;
+		return data.type === 'stacked_bar';
+	});
+	if (!item?.visual?.data_path) throw new Error('the canary day has no published stacked bar');
+	const data = JSON.parse(readFileSync(join(CANARY, '..', item.visual.data_path), 'utf8')) as VisualData;
+	if (data.type !== 'stacked_bar') throw new Error('the canary stack has the wrong chart family');
+	const labels = data.encoding.series.map((id) => {
+		const text = data.marks.find((mark) => mark.mark_id === id)?.text;
+		if (!text) throw new Error(`stacked-bar series ${id} has no source label`);
+		return text;
+	});
+	const expectedSegments = data.encoding.quantity.map((id, index) => {
+		const mark = data.marks.find((candidate) => candidate.mark_id === id);
+		if (mark?.value === null || mark?.value === undefined) {
+			throw new Error(`stacked-bar quantity ${id} has no source value`);
+		}
+		return `${labels[index]}: ${mark.value}`;
+	});
+
+	for (const viewport of [
+		{ width: 390, height: 360 },
+		{ width: 1440, height: 360 }
+	]) {
+		await page.setViewportSize(viewport);
+		await page.goto(`/${date}/`);
+		await dayReady(page);
+		await page.evaluate(() => document.fonts.ready);
+		const stories = page.locator('article.item');
+		for (let remaining = day.items.length; remaining > 0; remaining--) {
+			if (await stories.count() === day.items.length) break;
+			const before = await stories.count();
+			await page.locator('[data-pager-scripted]').click();
+			await expect.poll(() => stories.count()).toBeGreaterThan(before);
+		}
+		await expect(stories).toHaveCount(day.items.length);
+		const story = page.locator('article.item').and(page.locator(`[id="${item.item_id}"]`));
+		await story.scrollIntoViewIfNeeded();
+		const figure = story.getByRole('img');
+		await expect(figure).toBeVisible();
+		await expect(figure.locator('.parts-rows > li')).toHaveCount(1);
+		await expect(figure.locator('.parts-segment')).toHaveCount(data.encoding.quantity.length);
+		await expect(figure.locator('.parts-total')).toHaveCount(0);
+		expect(await figure.locator('.parts-segment').evaluateAll((segments) =>
+			segments.map((segment) => segment.getAttribute('aria-label'))
+		)).toEqual(expectedSegments);
+		expect(await figure.locator('.parts-segment.emphasized').count()).toBe(1);
+		for (const part of labels) {
+			await expect(figure.locator(`[data-readout-row="${part}"]`)).toContainText(/10 MW/);
+		}
+		const label = await figure.getAttribute('aria-label');
+		expect(label).toBeTruthy();
+		for (const part of labels) expect(label).toContain(part);
+		const measured = await figure.evaluate((node) => {
+			const probe = document.createElement('span');
+			probe.style.fontSize = 'var(--text-xs)';
+			node.append(probe);
+			const floor = parseFloat(getComputedStyle(probe).fontSize);
+			probe.remove();
+			const track = node.querySelector('.parts-track')!.getBoundingClientRect();
+			const text = [...node.querySelectorAll('.parts-name, .readout-label, .readout-value')];
+			return {
+				floor,
+				textSizes: text.map((part) => parseFloat(getComputedStyle(part).fontSize)),
+				segmentsFit: [...node.querySelectorAll<HTMLElement>('.parts-segment')].map((part) => {
+					const bounds = part.getBoundingClientRect();
+					return bounds.left >= track.left && bounds.right <= track.right;
+				}),
+				segmentBoundaries: [...node.querySelectorAll<HTMLElement>('.parts-segment')].map((part) => ({
+					width: getComputedStyle(part).borderInlineEndWidth,
+					style: getComputedStyle(part).borderInlineEndStyle
+				})),
+				widthFits: node.scrollWidth <= node.clientWidth,
+				heightFits: node.scrollHeight <= node.clientHeight
+			};
+		});
+		expect(measured.textSizes.length).toBeGreaterThan(0);
+		expect(measured.textSizes.every((size) => size >= measured.floor)).toBe(true);
+		expect(measured.segmentsFit).toEqual([true, true, true]);
+		expect(measured.segmentBoundaries).toEqual([
+			{ width: '1px', style: 'solid' },
+			{ width: '1px', style: 'solid' },
+			{ width: '1px', style: 'solid' }
+		]);
+		expect(measured.widthFits).toBe(true);
+		expect(measured.heightFits).toBe(true);
+	}
 });

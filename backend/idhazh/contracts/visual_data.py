@@ -27,6 +27,7 @@ disagree with it (`visual_decision.py`, 2026-09-05T18:00).
 
 from __future__ import annotations
 
+from decimal import Decimal
 from typing import Annotated, ClassVar, Final, Self
 
 from pydantic import Field, StringConstraints, model_validator
@@ -60,7 +61,7 @@ from idhazh.contracts.visual import (
 #: committed SVG is a fixed record of what a reader saw on a given day, and a
 #: spec plus drawing code can be redrawn differently by a later change with
 #: nothing in the payload to show it moved. This field is what shows it.
-RENDERER_VERSION: Final = "2026-10-27T01:00"
+RENDERER_VERSION: Final = "2026-10-27T01:01"
 
 #: How a mark is addressed inside its own file. Local to one visual and never an
 #: identity anything outside it holds, so it is short and positional rather than
@@ -231,6 +232,11 @@ class VisualData(Contract):
 
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-10-27T01:01",
+            change="Publish one declared whole with its source-backed stacked parts.",
+            why="A reader needs the declared total and every part in one current drawing.",
+        ),
+        ChangelogEntry(
             version="2026-10-27T01:00",
             change="Draw scatter with one entity and two source-backed measures per point.",
             why="Partial pairs hide the actual comparison set.",
@@ -338,6 +344,51 @@ class VisualData(Contract):
                 raise ValueError(
                     "bar and dot charts draw only category, quantity and series channels"
                 )
+        elif self.type is VisualType.STACKED_BAR:
+            if (
+                len(channels.category) != 1
+                or len(channels.quantity) < 2
+                or len(channels.series) != len(channels.quantity)
+            ):
+                raise ValueError(
+                    "a stacked bar has one whole label and one series label per part"
+                )
+            if any(
+                (
+                    channels.quantity_x,
+                    channels.time,
+                    channels.entity,
+                    channels.size,
+                    channels.bins,
+                    channels.event_label,
+                )
+            ):
+                raise ValueError(
+                    "a stacked bar draws only category, quantity and series channels"
+                )
+            whole = by_id[channels.category[0]]
+            if whole.element_id is None or not whole.element_id.startswith("quantity-"):
+                raise ValueError("a stacked bar's whole label cites a source quantity")
+            whole_inputs = {
+                element_id
+                for mark_id in channels.quantity
+                for element_id in (
+                    [by_id[mark_id].element_id]
+                    if by_id[mark_id].derived is None
+                    else by_id[mark_id].derived.inputs
+                )
+                if element_id is not None
+            }
+            if whole.element_id in whole_inputs:
+                raise ValueError("a stacked bar's declared whole is separate from its parts")
+            part_labels = [by_id[mark_id].text for mark_id in channels.series]
+            if len(set(part_labels)) != len(part_labels):
+                raise ValueError("stacked-bar part labels must remain distinct")
+            if any(
+                Decimal(by_id[mark_id].value or "0") < 0
+                for mark_id in channels.quantity
+            ):
+                raise ValueError("stacked-bar parts are non-negative quantities")
         elif self.type is VisualType.SLOPE:
             pair_count = len(channels.quantity) // 2
             if len(channels.time) != 2 or len(channels.quantity) < 4 or len(channels.quantity) % 2:

@@ -129,6 +129,38 @@ def test_the_canary_line_is_compiled_from_the_named_source_fixture(tmp_path: Pat
     ]
 
 
+def test_the_canary_stack_is_compiled_from_its_separately_declared_whole(
+    tmp_path: Path,
+) -> None:
+    settings = config.load()
+    day = build_canary_day.build(tmp_path / "digest", settings.app.evaluation, settings.app.visuals)
+    item = day.items[4]
+    assert item.item_id == "ai-05"
+    assert item.visual is not None
+    assert item.visual.state == "rendered"
+    assert item.visual.data_path == "digest/2026/08/20/ai-05.json"
+
+    data = VisualData.read(tmp_path / item.visual.data_path)
+    assert data.item_id == item.item_id
+    assert data.type is VisualType.STACKED_BAR
+    marks = {mark.mark_id: mark for mark in data.marks}
+    assert [marks[mark_id].element_id for mark_id in data.encoding.category] == [
+        "quantity-22-29"
+    ]
+    assert [
+        (
+            marks[series_id].text,
+            str(marks[quantity_id].value),
+            marks[quantity_id].unit,
+        )
+        for series_id, quantity_id in zip(data.encoding.series, data.encoding.quantity, strict=True)
+    ] == [
+        ("Wind", "10", "mw"),
+        ("solar", "10", "mw"),
+        ("hydro", "10", "mw"),
+    ]
+
+
 def test_the_fixture_covers_every_confidence_band() -> None:
     assert {row.band for row in scored()} == set(ConfidenceBand)
 
