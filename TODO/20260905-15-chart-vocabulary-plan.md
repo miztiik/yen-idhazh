@@ -94,7 +94,7 @@ this plan does not restore historical redraw or migration machinery.
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | 1 | The whole vocabulary is declarable, and an unbuilt type steps down | - | A | DONE | chart-vocabulary-plan | - | - |
 | 2 | Position and length: bar, dot, slope | 1 | B | DONE | supreme-sniffle / chart-position-and-length | #1738 | Copilot session 6c107b16-1860-4e47-9bba-c8b401dd96e7 |
-| 3 | Trend and magnitude: line, area | 2 | C | PENDING | - | - | - |
+| 3 | Trend and magnitude: line, area | 2 | C | DONE | chart-trend-magnitude-row-3 | #1741 | - |
 | 4 | Relationship: scatter | 3 | D | PENDING | - | - | - |
 | 5 | Parts as bars: stacked_bar, with its own question | 4 | E | PENDING | - | - | - |
 | 6 | The two the reader asked for | 5 | F | PENDING | - | - | - |
