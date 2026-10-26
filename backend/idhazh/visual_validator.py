@@ -178,7 +178,9 @@ def _units_convertible(drawn: Mapping[EncodingRole, list[Element]]) -> Rejection
 
 
 def _roles_valid_for_type(
-    visual_type: VisualType, filled: Mapping[EncodingRole, Sequence[str]]
+    visual_type: VisualType,
+    filled: Mapping[EncodingRole, Sequence[str]],
+    elements_by_role: Mapping[EncodingRole, Sequence[Element]],
 ) -> Rejection | None:
     """Are the filled channels the ones this type declares?
 
@@ -203,6 +205,46 @@ def _roles_valid_for_type(
             ValidatorCheck.ROLES_VALID_FOR_TYPE,
             f"a {visual_type.value} has no {extra[0]} channel",
         )
+    if visual_type is VisualType.LINE:
+        times = elements_by_role.get(EncodingRole.TIME, ())
+        quantities = elements_by_role.get(EncodingRole.QUANTITY, ())
+        series = elements_by_role.get(EncodingRole.SERIES, ())
+        if len(times) != len(quantities) or (series and len(series) != len(quantities)):
+            return Rejection(
+                ValidatorCheck.ROLES_VALID_FOR_TYPE,
+                "a line pairs one date and optional series label with each quantity",
+            )
+        if any(element.value is None for element in times):
+            return Rejection(
+                ValidatorCheck.ROLES_VALID_FOR_TYPE,
+                "a line time has no contract-validated date or year",
+            )
+        precisions = {len(element.value or "") for element in times}
+        if len(precisions) > 1:
+            return Rejection(
+                ValidatorCheck.ROLES_VALID_FOR_TYPE,
+                "a line cannot mix year and day precision",
+            )
+        dates_by_series: dict[str, set[str]] = {}
+        counts_by_series: dict[str, int] = {}
+        for index, element in enumerate(times):
+            label = series[index].span_excerpt if series else ""
+            date = element.value
+            if date is None:
+                continue
+            dates = dates_by_series.setdefault(label, set())
+            if date in dates:
+                return Rejection(
+                    ValidatorCheck.ROLES_VALID_FOR_TYPE,
+                    "a line has two readings for one series and date",
+                )
+            dates.add(date)
+            counts_by_series[label] = counts_by_series.get(label, 0) + 1
+        if any(count < 2 for count in counts_by_series.values()):
+            return Rejection(
+                ValidatorCheck.ROLES_VALID_FOR_TYPE,
+                "each line series needs at least two dates",
+            )
     return None
 
 
@@ -393,7 +435,7 @@ def validate_plan(
         # The contract refuses a plan that proposes a visual and states no type,
         # so this narrows rather than branches.
         if plan.type is not None:
-            found.append(_roles_valid_for_type(plan.type, filled))
+            found.append(_roles_valid_for_type(plan.type, filled, drawn))
             found.append(_enough_data(plan.type, filled, visuals=visuals))
         found += [
             _no_duplicate_in_role(filled),

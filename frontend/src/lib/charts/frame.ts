@@ -375,9 +375,10 @@ export function dayTicks(dates: readonly string[], options: DayAxisOptions): Day
 	const days = dates.length;
 	if (days === 0) return [];
 	const { density, columns, fontSize = AXIS_LABEL_PX, gap = AXIS_LABEL_GAP_PX } = options;
+	const labelDate = (date: string) => /^\d{4}$/.test(date) ? date : shortDate(date);
 	const ceiling = Math.max(1, Math.min(days, Math.floor(density)));
 	if (ceiling === 1) {
-		return [{ index: 0, date: dates[0], text: shortDate(dates[0]), anchor: 'middle' }];
+		return [{ index: 0, date: dates[0], text: labelDate(dates[0]), anchor: 'middle' }];
 	}
 
 	// Every column the ceiling allows. These carry a tick mark whichever labels
@@ -388,7 +389,7 @@ export function dayTicks(dates: readonly string[], options: DayAxisOptions): Day
 	const xs = marks.map((index) => columns[index] ?? 0);
 	// The longest form of every label, so the fit is decided before the year rule
 	// shortens any of them. A shorter label can only ever help.
-	const widest = marks.map((index) => shortDate(dates[index]));
+	const widest = marks.map((index) => labelDate(dates[index]));
 	const [left, right] = options.bounds ?? [xs[0], xs[xs.length - 1]];
 	const anchorOf = (at: number): TickAnchor => {
 		const width = labelWidth(widest[at], fontSize);
@@ -425,7 +426,11 @@ export function dayTicks(dates: readonly string[], options: DayAxisOptions): Day
 	return marks.map((index, at) => {
 		const date = dates[index];
 		if (!labelled.has(at)) return { index, date, text: '', anchor: anchorOf(at) };
-		const text = date.slice(0, 4) === carried ? dayMonth(date) : shortDate(date);
+		const text = date.length === 4
+			? date
+			: date.slice(0, 4) === carried
+				? dayMonth(date)
+				: shortDate(date);
 		carried = date.slice(0, 4);
 		return { index, date, text, anchor: anchorOf(at) };
 	});

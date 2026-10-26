@@ -63,11 +63,13 @@
 	let {
 		visual,
 		numberFormat,
-		storyChartGeometry
+		storyChartGeometry,
+		chartTickDensity
 	}: {
 		visual: DigestVisual | null;
 		numberFormat: NumberFormatConfig;
 		storyChartGeometry: StoryChartGeometryConfig;
+		chartTickDensity: number;
 	} = $props();
 	const formatNumber = $derived(numberFormatter(numberFormat));
 
@@ -90,7 +92,7 @@
 	const currentLoad = $derived(loaded?.file === wanted ? loaded.data : null);
 	const drawing = $derived<Drawing | null>(
 		currentLoad && room > 0
-			? drawVisual(currentLoad, room, formatNumber, storyChartGeometry)
+			? drawVisual(currentLoad, room, formatNumber, numberFormat, chartTickDensity, storyChartGeometry)
 			: null
 	);
 	/** Every figure the bars are drawn at, in one sentence, for a reader who is
@@ -271,6 +273,72 @@
 					{#if drawing.unit}
 						<text class="unit" x="0" y={drawing.baseline + storyChartGeometry.axis_label_offset_px}>{drawing.unit}</text>
 					{/if}
+				{:else if drawing.type === 'line'}
+					{#each drawing.axis.ticks as tick (tick.value)}
+						<line
+							class="grid"
+							stroke-width={storyChartGeometry.axis_line_width_px}
+							x1={drawing.frame.left}
+							y1={tick.at}
+							x2={drawing.frame.right}
+							y2={tick.at}
+						/>
+						{#if tick.text}
+							<text
+								class="figure value-tick"
+								text-anchor="end"
+								x={drawing.frame.left - storyChartGeometry.value_gap_px}
+								y={tick.at}
+							>{tick.text}</text>
+						{/if}
+					{/each}
+					<line
+						class="axis"
+						stroke-width={storyChartGeometry.axis_line_width_px}
+						x1={drawing.frame.left}
+						y1={drawing.frame.bottom}
+						x2={drawing.frame.right}
+						y2={drawing.frame.bottom}
+					/>
+					{#each drawing.lines as line (line.name)}
+						<path
+							class={`series-line chart-${line.color}`}
+							d={line.path}
+							stroke-dasharray={line.dasharray}
+							stroke-width={storyChartGeometry.line_width_px}
+						/>
+						{#each line.points as point (`${line.name}-${point.date}`)}
+							<circle
+								class={`line-point chart-${line.color}`}
+								class:emphasized={point.emphasized}
+								stroke-width={storyChartGeometry.mark_outline_width_px}
+								cx={point.x}
+								cy={point.y}
+								r={storyChartGeometry.dot_radius_px}
+							/>
+						{/each}
+					{/each}
+					{#each drawing.ticks as tick (tick.index)}
+						<line
+							class="axis"
+							stroke-width={storyChartGeometry.axis_line_width_px}
+							x1={drawing.columns[tick.index]}
+							y1={drawing.frame.bottom}
+							x2={drawing.columns[tick.index]}
+							y2={drawing.frame.bottom + storyChartGeometry.axis_line_width_px * 4}
+						/>
+						<text
+							class="date-label"
+							text-anchor={tick.anchor}
+							x={drawing.columns[tick.index]}
+							y={drawing.frame.bottom + storyChartGeometry.axis_label_offset_px}
+						>{tick.text}</text>
+					{/each}
+					{#if drawing.unit}
+						<text class="unit" x="0" y={storyChartGeometry.line_axis_margin_top_px / 2}>
+							{drawing.unit}
+						</text>
+					{/if}
 				{:else}
 					<text class="column-label" text-anchor="middle" x={drawing.leftX} y={storyChartGeometry.slope_header_band_px / 2}>
 						{drawing.leftLabel}
@@ -325,6 +393,24 @@
 						<li>
 							<span class={`legend-mark chart-${slope.color}`} aria-hidden="true"></span>
 							<span>{slope.name}</span>
+						</li>
+					{/each}
+				</ul>
+			{:else if drawing.type === 'line' && drawing.lines.length > 1}
+				<ul class="line-legend px-3">
+					{#each drawing.lines as line (line.name)}
+						<li>
+							<svg class={`line-legend-mark chart-${line.color}`} viewBox="0 0 24 4" aria-hidden="true">
+								<line
+									x1="0"
+									x2="24"
+									y1="2"
+									y2="2"
+									stroke-dasharray={line.dasharray}
+									stroke-width={storyChartGeometry.line_width_px}
+								/>
+							</svg>
+							<span>{line.name}</span>
 						</li>
 					{/each}
 				</ul>
@@ -386,6 +472,18 @@
 		stroke: var(--chart-axis);
 	}
 
+	.grid {
+		stroke: var(--chart-grid);
+		stroke-dasharray: var(--space-1);
+	}
+
+	.date-label {
+		dominant-baseline: middle;
+		fill: var(--color-text-secondary);
+		font-family: inherit;
+		font-size: var(--text-xs);
+	}
+
 	.bar {
 		fill: var(--chart-1);
 	}
@@ -411,6 +509,21 @@
 		stroke: var(--color-text);
 	}
 
+	.series-line {
+		fill: none;
+		stroke-linecap: round;
+		stroke-linejoin: round;
+	}
+
+	.line-point {
+		fill: var(--color-surface);
+	}
+
+	.line-point.emphasized {
+		fill: var(--chart-2);
+		stroke: var(--color-text);
+	}
+
 	.column-label {
 		dominant-baseline: middle;
 		fill: var(--color-text);
@@ -427,6 +540,10 @@
 	.chart-2 { color: var(--chart-2); stroke: var(--chart-2); }
 	.chart-3 { color: var(--chart-3); stroke: var(--chart-3); }
 	.chart-4 { color: var(--chart-4); stroke: var(--chart-4); }
+	.chart-5 { color: var(--chart-5); stroke: var(--chart-5); }
+	.chart-6 { color: var(--chart-6); stroke: var(--chart-6); }
+	.chart-7 { color: var(--chart-7); stroke: var(--chart-7); }
+	.chart-8 { color: var(--chart-8); stroke: var(--chart-8); }
 
 	.slope-point {
 		fill: var(--color-surface);
@@ -451,6 +568,28 @@
 	.legend-mark {
 		width: var(--space-4);
 		border-top: 2px solid;
+	}
+
+	.line-legend {
+		display: flex;
+		flex-wrap: wrap;
+		gap: var(--space-2) var(--space-4);
+		padding-bottom: var(--space-2);
+		list-style: none;
+	}
+
+	.line-legend li {
+		display: flex;
+		align-items: center;
+		gap: var(--space-2);
+		font-size: var(--text-xs);
+		color: var(--color-text-secondary);
+	}
+
+	.line-legend-mark {
+		width: var(--space-4);
+		height: var(--space-1);
+		overflow: visible;
 	}
 
 	/* Stated rather than left to an empty box, so nothing a later rule does to a

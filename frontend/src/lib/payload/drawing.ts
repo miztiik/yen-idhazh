@@ -10,8 +10,8 @@ const VISUAL_DATA_PATH =
 	/^digest\/\d{4}\/\d{2}\/\d{2}\/[a-z0-9]+(?:-[a-z0-9]+)*-(?:[0-9]{2,}|[0-9a-hjkmnp-tv-z]{16})\.json$/;
 
 /** Protocol stamp, held to the Python authority by the visual binding test. */
-export const RENDERER_VERSION = '2026-10-25';
-export const DRAWABLE = ['bar', 'dot', 'slope'] as const;
+export const RENDERER_VERSION = '2026-10-27';
+export const DRAWABLE = ['bar', 'dot', 'line', 'slope'] as const;
 export const ENCODING_ROLES = [
 	'category', 'quantity', 'quantity_x', 'time', 'series', 'size', 'bins', 'entity', 'event_label'
 ] as const;
@@ -26,6 +26,13 @@ function isObject(value: unknown): value is Record<string, unknown> {
 
 function nullableText(value: unknown): boolean {
 	return value === null || typeof value === 'string';
+}
+
+function dateOrYear(value: unknown): value is string {
+	if (typeof value !== 'string' || !/^\d{4}(?:-\d{2}-\d{2})?$/.test(value)) return false;
+	if (value.length === 4) return true;
+	const date = new Date(`${value}T00:00:00Z`);
+	return Number.isFinite(date.getTime()) && date.toISOString().slice(0, 10) === value;
 }
 
 /** Return a reason, never a repaired document or an approximate drawing. */
@@ -49,6 +56,9 @@ export function refusedVisualData(data: unknown): string | null {
 		if (!nullableText(mark.source_text) || !nullableText(mark.unit) || !nullableText(mark.text)) {
 			return 'carries invalid mark text or unit';
 		}
+		if (mark.time !== undefined && mark.time !== null && !dateOrYear(mark.time)) {
+			return 'carries an invalid canonical date or year';
+		}
 		held.set(mark.mark_id, mark);
 	}
 	const encoding = data.encoding;
@@ -66,6 +76,12 @@ export function refusedVisualData(data: unknown): string | null {
 			if (!held.has(id)) return 'draws a mark it does not carry';
 			if (drawn.has(id)) return 'draws a mark twice';
 			drawn.add(id);
+		}
+	}
+	const timeIds = new Set(channels.time);
+	for (const [markId, mark] of held) {
+		if (timeIds.has(markId) !== dateOrYear(mark.time)) {
+			return 'canonical dates appear only on time marks';
 		}
 	}
 	if (drawn.size !== held.size) return 'carries marks it does not draw';
@@ -105,9 +121,13 @@ export function refusedVisualData(data: unknown): string | null {
 			channels.event_label.length !== 0
 		) return 'carries a channel this chart does not draw';
 		const timeLabels = times.map((id) => held.get(id)?.text);
+		const canonicalTimes = times.map((id) => held.get(id)?.time);
 		if (
 			timeLabels.some((text) => typeof text !== 'string' || !text.trim()) ||
-			timeLabels[0] === timeLabels[1]
+			timeLabels[0] === timeLabels[1] ||
+			!dateOrYear(canonicalTimes[0]) ||
+			!dateOrYear(canonicalTimes[1]) ||
+			canonicalTimes[0] === canonicalTimes[1]
 		) {
 			return 'has invalid or repeated slope time labels';
 		}
@@ -115,6 +135,47 @@ export function refusedVisualData(data: unknown): string | null {
 			return 'slope lines need distinct series labels';
 		}
 		textChannels.push(...times, ...entities, ...series);
+	} else if (data.type === 'line') {
+		const times: string[] = [];
+		for (const id of channels.time) {
+			const value = held.get(id)?.time;
+			if (!dateOrYear(value)) return 'a line time has no canonical date or year';
+			times.push(value);
+		}
+		if (times.length < 2 || times.length !== figures.length) {
+			return 'does not pair at least two quantities with dates';
+		}
+		if (channels.series.length !== 0 && channels.series.length !== figures.length) {
+			return 'series labels do not pair with line quantities';
+		}
+		if (
+			channels.category.length !== 0 || channels.quantity_x.length !== 0 ||
+			channels.entity.length !== 0 || channels.size.length !== 0 ||
+			channels.bins.length !== 0 || channels.event_label.length !== 0
+		) return 'carries a channel this line does not draw';
+		if (new Set(times.map((value) => value.length)).size !== 1) {
+			return 'mixes year and day precision';
+		}
+		const names: string[] = [];
+		for (const id of channels.series) {
+			const name = held.get(id)?.text;
+			if (typeof name !== 'string') return 'draws a text channel without source text';
+			names.push(name);
+		}
+		const datesBySeries = new Map<string, Set<string>>();
+		const countsBySeries = new Map<string, number>();
+		for (const [index, date] of times.entries()) {
+			const name = names[index] ?? '';
+			const dates = datesBySeries.get(name) ?? new Set<string>();
+			if (dates.has(date)) return 'has two readings for one series and date';
+			dates.add(date);
+			datesBySeries.set(name, dates);
+			countsBySeries.set(name, (countsBySeries.get(name) ?? 0) + 1);
+		}
+		if ([...countsBySeries.values()].some((count) => count < 2)) {
+			return 'each line series needs at least two dates';
+		}
+		textChannels.push(...channels.time, ...channels.series);
 	} else {
 		return 'names a type this page cannot draw';
 	}

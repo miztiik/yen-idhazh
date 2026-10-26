@@ -1,13 +1,13 @@
-/** What is changing: one to five series over the days of a window, as lines or as stacked bars.
+/** What is changing: one to five series over dated points, as lines or as stacked bars.
  *
  * Lines are for reading each series on its own; stacked bars are for the mix
  * of one total, one bar a day. Both shapes come out of this one call over the
  * same days and the same value axis, so switching between them re-draws the
  * same numbers and derives nothing new.
  *
- * **A missing day is a gap, never a zero.** A line breaks across it and a stack
+ * **A missing date is a gap, never a zero.** A line breaks across it and a stack
  * draws no segment for it, because a zero says the reading was taken and came
- * back nothing - a claim about a day nobody measured.
+ * back nothing - a claim about a date nobody measured.
  *
  * **The dates on the axis come from `dayTicks`**, the one rule this console has
  * for a date axis, and never from an axis generator.
@@ -22,8 +22,8 @@ import { checkedRule, LEGACY_MODEL_RULE, ruleBoundaries, ruleEvents, type ModelR
 import { readoutOf, type Readout, type ReadoutInput } from '../readout';
 import { formatNumber, type NumberFormatConfig } from '../../number-format';
 
-/** One reading: a UTC day as `YYYY-MM-DD`, and its value or null where none
- * was recorded. */
+/** One reading: a calendar year (`YYYY`) or UTC date (`YYYY-MM-DD`), and its
+ * value or null where none was recorded. */
 export interface SeriesPoint {
 	date: string;
 	value: number | null;
@@ -144,7 +144,14 @@ export interface SeriesGeometry {
 	};
 }
 
-const DAY = /^\d{4}-\d{2}-\d{2}$/;
+const DATE_OR_YEAR = /^\d{4}(?:-\d{2}-\d{2})?$/;
+
+function validDateOrYear(value: string): boolean {
+	if (!DATE_OR_YEAR.test(value)) return false;
+	if (value.length === 4) return true;
+	const date = new Date(`${value}T00:00:00Z`);
+	return Number.isFinite(date.getTime()) && date.toISOString().slice(0, 10) === value;
+}
 
 /** Each series' readings keyed by day, refusing what cannot be one reading a day. */
 function byDay(series: readonly SeriesInput[]): Map<string, number | null>[] {
@@ -154,7 +161,9 @@ function byDay(series: readonly SeriesInput[]): Map<string, number | null>[] {
 		labels.add(entry.label);
 		const days = new Map<string, number | null>();
 		for (const point of entry.points) {
-			if (!DAY.test(point.date)) throw new Error(`"${point.date}" is not a UTC day written YYYY-MM-DD.`);
+			if (!validDateOrYear(point.date)) {
+				throw new Error(`"${point.date}" is not a UTC date written YYYY-MM-DD or a year written YYYY.`);
+			}
 			if (days.has(point.date)) throw new Error(`"${entry.label}" has two readings for ${point.date}.`);
 			days.set(point.date, point.value !== null && Number.isFinite(point.value) ? point.value : null);
 		}

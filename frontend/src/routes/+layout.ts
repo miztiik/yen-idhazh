@@ -1,4 +1,4 @@
-import type { UiConfig } from '$lib/server/config';
+import type { ReaderUiConfig } from '$lib/server/config';
 
 export const trailingSlash = 'always';
 
@@ -26,6 +26,6 @@ export const trailingSlash = 'always';
  * holds goes stale for a reason that has nothing to do with what it says. The
  * config is what is left, and it moves only when a person edits it.
  */
-export function load(): { ui: UiConfig } {
+export function load(): { ui: ReaderUiConfig } {
 	return { ui: __UI_CONFIG__ };
 }

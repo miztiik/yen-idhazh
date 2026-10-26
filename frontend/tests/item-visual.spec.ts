@@ -1,12 +1,16 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { expect, test } from '@playwright/test';
-import { isVisualData, publishedVisualData, refusedVisualData } from '../src/lib/payload/drawing';
-import { drawBars, drawDots, drawSlopes, statedBars, statedDots, statedSlopes } from '../src/lib/visual/bar';
-import { formatNumber, valueAxis } from './support/number-format';
+import { isVisualData, publishedVisualData, refusedVisualData, RENDERER_VERSION } from '../src/lib/payload/drawing';
+import { drawBars, drawDots, drawLines, drawSlopes, statedBars, statedDots, statedLines, statedSlopes } from '../src/lib/visual/bar';
+import { formatNumber, numberFormat, valueAxis } from './support/number-format';
 import { frame } from '../src/lib/charts/frame';
 import type { VisualData } from '../src/lib/payload/types';
-import { storyChartGeometryConfig, type StoryChartGeometryConfig } from '../src/lib/server/config';
+import {
+    chartConfig,
+    storyChartGeometryConfig,
+    type StoryChartGeometryConfig
+} from '../src/lib/server/config';
 
 const geometry = storyChartGeometryConfig();
 
@@ -45,15 +49,15 @@ test.describe('what may not be drawn', () => {
     function compiled(values: readonly number[] = [10, 20, 30, 40]): VisualData {
         return {
             version: '2026-10-25',
-            renderer_version: '2026-10-25',
+            renderer_version: RENDERER_VERSION,
             title: 'A comparison',
             caption: null,
             emphasized_mark_id: 'm3',
             item_id: 'energy-4821903756',
             type: 'bar',
             marks: ['A', 'B', 'C', 'D'].flatMap((name, index) => [
-                { mark_id: `m${index * 2}`, text: name, value: null, unit: null, source_text: null, element_id: `name-${index}`, derived: null },
-                { mark_id: `m${index * 2 + 1}`, text: null, value: String(values[index]), unit: 'MW', source_text: null, element_id: `value-${index}`, derived: null }
+                { mark_id: `m${index * 2}`, text: name, time: null, value: null, unit: null, source_text: null, element_id: `name-${index}`, derived: null },
+                { mark_id: `m${index * 2 + 1}`, text: null, time: null, value: String(values[index]), unit: 'MW', source_text: null, element_id: `value-${index}`, derived: null }
             ]),
             encoding: {
                 category: [0, 1, 2, 3].map((index) => `m${index * 2}`),
@@ -195,6 +199,46 @@ test.describe('what may not be drawn', () => {
         expect(statedSlopes(narrow)).toContain('2024 1200 mw');
         expect(statedSlopes(narrow)).toContain('2025 1500 mw (highlighted)');
     });
+    test('line geometry orders source readings by date and keeps every series value', () => {
+        const data = sourceCompiledChart('line-from-wind.json');
+        expect(refusedVisualData(data)).toBeNull();
+        const narrow = drawLines(
+            data, 360, formatNumber, numberFormat, chartConfig().tick_density, geometry
+        );
+        const wide = drawLines(
+            data, 1440, formatNumber, numberFormat, chartConfig().tick_density, geometry
+        );
+        const readings = (drawing: ReturnType<typeof drawLines>) =>
+            drawing.lines.map((line) => [
+                line.name,
+                line.points.map(({ timeLabel, stated, displayed }) => [timeLabel, stated, displayed])
+            ]);
+        expect(narrow.unit).toBe('mw');
+        expect(readings(narrow)).toEqual([
+            ['', [
+                ['2023', '1200', formatNumber(1200)],
+                ['2024', '1800', formatNumber(1800)],
+                ['2025', '2400', formatNumber(2400)]
+            ]]
+        ]);
+        expect(readings(wide)).toEqual(readings(narrow));
+        expect(narrow.lines[0].points[0].x).toBeLessThan(narrow.lines[0].points[1].x);
+        expect(narrow.lines[0].points[1].x).toBeLessThan(narrow.lines[0].points[2].x);
+        expect(narrow.lines[0].dasharray).toBe(geometry.line_series_dash_arrays[0]);
+        expect(statedLines(narrow)).toContain('2023 1200 mw');
+        expect(statedLines(narrow)).toContain('2024 1800 mw (highlighted)');
+    });
+    test('multi-series line cues follow source order without relying on colour', () => {
+        const data = sourceCompiledChart('line-multiple-series-from-wind.json');
+        expect(refusedVisualData(data)).toBeNull();
+        const drawing = drawLines(
+            data, 360, formatNumber, numberFormat, chartConfig().tick_density, geometry
+        );
+        expect(drawing.lines.map((line) => line.name)).toEqual(['Denmark', 'Germany']);
+        expect(drawing.lines.map((line) => line.dasharray)).toEqual(
+            geometry.line_series_dash_arrays.slice(0, 2)
+        );
+    });
     test('the browser reader refuses repeated slope times and unnamed repeated lines', () => {
         const repeatedTime = sourceCompiledChart('slope-from-wind.json');
         const firstTime = repeatedTime.marks.find((mark) => mark.mark_id === repeatedTime.encoding.time[0]);
@@ -211,6 +255,26 @@ test.describe('what may not be drawn', () => {
         if (firstSeries === undefined || secondSeries === undefined) throw new Error('slope fixture lacks series marks');
         secondSeries.text = firstSeries.text;
         expect(refusedVisualData(repeatedSeries)).toContain('slope lines need distinct series labels');
+    });
+    test('the browser reader refuses a line without dates or with a repeated series date', () => {
+        const invalidDate = sourceCompiledChart('line-from-wind.json');
+        const time = invalidDate.marks.find(
+            (mark) => mark.mark_id === invalidDate.encoding.time[0]
+        );
+        if (time === undefined) throw new Error('line fixture lacks its first time mark');
+        time.time = 'not-a-date';
+        expect(refusedVisualData(invalidDate)).toContain('invalid canonical date or year');
+
+        const repeatedDate = sourceCompiledChart('line-from-wind.json');
+        const first = repeatedDate.marks.find(
+            (mark) => mark.mark_id === repeatedDate.encoding.time[0]
+        );
+        const third = repeatedDate.marks.find(
+            (mark) => mark.mark_id === repeatedDate.encoding.time[2]
+        );
+        if (first === undefined || third === undefined) throw new Error('line fixture lacks a series date pair');
+        third.time = first.time;
+        expect(refusedVisualData(repeatedDate)).toContain('two readings for one series and date');
     });
     for (const [name, path] of [
         ['a walk out of the digest tree', 'digest/2026/08/20/../../../../etc/passwd'],
