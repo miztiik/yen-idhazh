@@ -392,7 +392,10 @@ class VisualData(Contract):
             whole = by_id[channels.category[0]]
             if whole.element_id is None or not whole.element_id.startswith("quantity-"):
                 raise ValueError("a stacked bar's whole label cites a source quantity")
-            if self.declared_whole_element_id != whole.element_id or self.declared_whole is not None:
+            if (
+                self.declared_whole_element_id != whole.element_id
+                or self.declared_whole is not None
+            ):
                 raise ValueError("a stacked bar's category mark is its declared whole")
             whole_inputs: set[str] = set()
             for mark_id in channels.quantity:

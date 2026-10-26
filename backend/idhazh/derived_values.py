@@ -78,7 +78,7 @@ contract and by `elements.max_per_article` (Guardrail #12).
 from __future__ import annotations
 
 from collections.abc import Sequence
-from decimal import Decimal, DivisionByZero, InvalidOperation, localcontext
+from decimal import Decimal, InvalidOperation, localcontext
 from enum import StrEnum
 from typing import Final, NamedTuple
 
