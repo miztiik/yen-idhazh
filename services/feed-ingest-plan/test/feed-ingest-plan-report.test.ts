@@ -11,7 +11,7 @@ import { configureWorkflowProfiling, observeWorkflowResources, WorkflowResources
 import { loadConfig as loadProbeConfig } from "../../host-probes/src/config";
 import { ResourceProofSchema } from "../../host-probes/scripts/feed-ingest-plan-profile-schema";
 import { fixture as hostFixture } from "../../host-fingerprints/test/fixture";
-import { collectFingerprint } from "../../host-fingerprints/src/collect-fingerprint";
+import { captureLocalFingerprint } from "../../host-fingerprints/src/api/local-fingerprint";
 
 async function fixture() {
   const rows: unknown[] = await Bun.file(
@@ -58,8 +58,11 @@ test("absent progress stays unavailable and zero counts do not certify publicati
     new URL("../../../tests/fixtures/host-probes/cache-resource-proof.json", import.meta.url)).json());
   const f = await hostFixture();
   try {
-    const host = await collectFingerprint(f.capture, f.config, f.settings, f.inspection);
-    const resources = { profile_requested: true, host: { status: "recorded", ...host },
+    const host = await captureLocalFingerprint(f.apiInput, { ...f.config, listen_port: 0 }, f.settings, {
+      outputRoot: join(f.directory, "state"), inspection: f.inspection,
+    });
+    if (host.status !== "written") throw new Error("A report fixture requires completed host Parquet");
+    const resources = { host_request: f.apiInput, profile_requested: true, host: { ...host, status: "recorded" },
       profile: { status: "recorded", value: proof.task_profile!.profile } };
     const resource = formatResourceSummary(resources, proof, true);
     expect(resource.notice).toContain("Actual host:");
@@ -75,7 +78,7 @@ test("absent progress stays unavailable and zero counts do not certify publicati
     expect(rendered).not.toContain("GiB");
     expect(rendered).not.toContain("Server not configured");
     for (const reason of ["profile_machine_memory=false", "observability.host_telemetry_enabled=false"]) {
-      const off = formatResourceSummary({ profile_requested: false,
+      const off = formatResourceSummary({ ...resources, profile_requested: false,
         host: { status: "disabled", reason }, profile: { status: "disabled", reason } }, undefined, false);
       expect(off.notice).toContain(reason);
       expect(off.notice).toContain("not requested");
@@ -151,12 +154,12 @@ test("disabled reporting reads no evidence and enabled reporting requires an exp
     expect(policy.notice).not.toContain("24 hours");
     expect(formatWorkflowPolicy(undefined, false).notice).toContain("defaults do not prove");
     await mkdir(join(root, "config"));
-    const input = { root, directory: root, profileRequested: false, gitSha: "a".repeat(40), attempt: 1,
+    const input = { root, directory: root, stateRoot: join(root, "state"), profileRequested: false, gitSha: "a".repeat(40), attempt: 1,
       identity: { pipeline_name: "feed-ingest-plan", task_name: "planner-http-request",
         run_id: events[0]!.run_id, correlation_id: events[0]!.correlation_id, request_id: crypto.randomUUID() } };
     await writeFile(join(root, "config", "idhazh.json"), JSON.stringify({ ...settings,
       observability: { ...settings.observability, host_telemetry_enabled: true, host_fingerprint: true } }));
-    await (await observeWorkflowResources(input))("success");
+    await (await observeWorkflowResources(input)).close("success");
     const failed = WorkflowResourcesSchema.parse(await Bun.file(join(root, "resources.json")).json());
     expect(failed.host.status).toBe("failed");
     if (failed.host.status !== "failed") throw new Error("Missing collector configuration must remain a failed observation");
@@ -164,7 +167,7 @@ test("disabled reporting reads no evidence and enabled reporting requires an exp
     expect(failed.host.reason).not.toContain(root);
     await writeFile(join(root, "config", "idhazh.json"), JSON.stringify({ ...settings,
       observability: { ...settings.observability, host_telemetry_enabled: false } }));
-    await (await observeWorkflowResources({ ...input, profileRequested: true }))("success");
+    await (await observeWorkflowResources({ ...input, profileRequested: true })).close("success");
     const off = WorkflowResourcesSchema.parse(await Bun.file(join(root, "resources.json")).json());
     expect(off.host).toEqual({ status: "disabled", reason: "observability.host_telemetry_enabled=false" });
     expect(off.profile).toEqual({ status: "disabled", reason: "observability.host_telemetry_enabled=false" });

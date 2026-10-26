@@ -58,13 +58,26 @@ stops placement reads in both collectors when false. A Python caller's
 `ask_placement=False` remains a narrower opt-out; neither choice stops local
 fingerprint collection or its ledger write.
 
-The manual feed planner workflow uses the existing Bun collector for its
-actual-host report. The caller is pipeline `feed-ingest-plan`, task
-`isolated-plan`, shard 0. This observation does not run the copy benchmark,
-invent job timing or write a host ledger. Its Resources section shows the
-hardware fingerprint, CPU model, visible/allowed processors, quota and L3.
-Missing hardware remains unavailable with its reason. Only the planner's
-four current metadata ledgers join its append-only main commit.
+The manual feed planner workflow starts the fingerprint HTTP service on the
+same runner, checks its versioned health endpoint, and posts only date and
+writer identity. The caller is pipeline `feed-ingest-plan`, task
+`isolated-plan`, shard 0. It uses the committed instrument, placement and
+task-selected copy controls without overriding the copy-task list. A
+disabled instrument is an explicit skip, with no listener or host write.
+The listener stops after success or failure.
+
+The API writes its raw Parquet under the caller's run state root.
+`resources.json` retains the exact request, validated row, unavailable reasons
+and completed file receipts. The caller checks those receipts against actual
+Parquet before adding the host file to the four planner metadata ledgers'
+publication and recovery path. Host persistence or validation failure remains
+failed evidence, not a fabricated row. Missing hardware stays unavailable.
+The Resources report shows L3 and total machine RAM capacity in MiB; stored
+`l3_cache_bytes` and the hardware hash do not change. Live task RAM profiling
+remains a separate instrument. The independent copy/cache proof also uses the
+HTTP API, but its temporary host files are removed rather than published as
+real-run observations. See the [commit policy](../architecture/publishing/committing.md#design-rationale)
+for validation, retries and the four planner-only day indexes.
 
 Whole-instrument off and memory-only off are different controls. Their exact
 configuration, overrides and effects are in [Controls and precedence](#controls-and-precedence).
@@ -232,7 +245,8 @@ complete value. The named backend contract check
 `backend/tests/contracts/test_host_fingerprint_snapshot.py` binds that
 snapshot to the actual Pydantic model in CI. The Bun checks use the recorded
 snapshot without a Python prerequisite; they do not claim that Python ran.
-No test contacts a network: placement replays bounded native response bodies
+No test contacts an external service: loopback checks use the real HTTP listener,
+placement replays bounded native response bodies
 and transport failures; the CLI placement read is explicitly off. The live-Linux
 test runs only on Linux and reports its machine separately; Windows fixture
 results do not certify Linux collection or live cloud metadata access.

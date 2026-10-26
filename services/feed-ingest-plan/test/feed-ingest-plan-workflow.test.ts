@@ -62,7 +62,7 @@ test("manual controls commit only current metadata and keep optional host tools 
     PROFILE_MACHINE_MEMORY: "${{ inputs.profile_machine_memory }}",
   });
   expect(plan.run).not.toContain("${{");
-  const commit = steps.find(step => step.name === "Commit exact current planner metadata")!;
+  const commit = steps.find(step => step.name === "Commit exact current planner and host metadata")!;
   expect(commit.if).toContain("!cancelled()");
   expect(commit.if).toContain("current_run_files");
   expect(commit.if).not.toContain("planning_complete");
@@ -209,6 +209,7 @@ test("strict-checks the exact named sparse adapter and test inventory in one com
       "services/feed-ingest-plan/scripts/feed-ingest-plan-verification.ts", "services/feed-ingest-plan/test/feed-ingest-plan-outputs.test.ts",
       "services/feed-ingest-plan/test/feed-ingest-plan-report.test.ts", "services/feed-ingest-plan/test/feed-ingest-plan-workflow.test.ts",
       "services/feed-ingest-plan/scripts/feed-ingest-plan-artifacts.ts", "services/host-probes/scripts/feed-ingest-plan-profile-proof.ts",
+      "services/feed-ingest-plan/test/feed-ingest-plan-host.test.ts", "services/feed-ingest-plan/test/feed-ingest-plan-publication.test.ts",
       "services/feed-ingest-plan/test/verify-recorded-compatibility.ts",
     ]);
     const adapters: string[] = [];
@@ -251,7 +252,7 @@ test("the native verifier runs from a fixed named-input copy with no backend or 
         "telemetry", "partition", "event", "policy", "config", "ledger-index", "host-fingerprint", "feed-health",
         "recorded-instant", "planner-operation", "planner-stage", "document-work", "feed-health-state",
         "publication-input", "discovered-article", "selected-article", "plan-run"].map(name => `schemas/${name}.schema`)];
-    const writer = ["atomic-file", "index", "ledger-paths", "ledger-types", "persist-compact", "persist-ledger",
+    const writer = ["atomic-file", "index", "ledger-paths", "ledger-types", "ledger-file-receipt", "persist-compact", "persist-ledger",
       "persist-raw", "registration", "render-ledger-file", "row-identity", "row-schema",
       "parquet/arrow-builder", "parquet/envelope-footer", "parquet/row-digest", "parquet/wasm-serializer",
       "uuid/file-id", "uuid/unit-id", "uuid/name-id"];
