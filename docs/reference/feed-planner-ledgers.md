@@ -11,9 +11,9 @@ TypeScript owns planner settings, events, requests, private receipts, stage
 payloads, ledgers and their file validation. Python keeps the gardener
 scheduler, which delegates planner row validation and compaction to TypeScript.
 
-**Scope**: Simplify the storage and audit portions of
-[Plan 66](../../TODO/20261020-66-feed-ingest-plan.md) and
-[Plan 67](../../TODO/20261024-67-feed-ingest-feedback-and-selection-plan.md).
+**Scope**: Retained storage and audit contracts for the isolated planner.
+These formats do not authorize production worker integration or prove
+publication; see [planning completion](../architecture/sources/feed-ingest-audit.md#partial-results-and-boundaries).
 
 **Five committed ledgers**, all under `state/raw/feed-ingest-plan/`:
 
@@ -782,7 +782,6 @@ shows a need.
 
 ## See also
 
-- [Plan 66](../../TODO/20261020-66-feed-ingest-plan.md) - the delivered planner and unfinished follow-up scope.
 - [Plan 67](../../TODO/20261024-67-feed-ingest-feedback-and-selection-plan.md) - cutover delivery and separately deferred work.
 - [Selection rules](../architecture/sources/feed-curation.md) - current selection behavior.
 - [Feed history and reliability](../architecture/sources/planner-feed-history.md) - current native readers and represented-day rules.

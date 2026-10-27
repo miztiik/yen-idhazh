@@ -1,20 +1,23 @@
 # Plan 67 - Feed ingestion feedback and publisher selection
 
-**Last Updated**: 2026-10-25
+**Last Updated**: 2026-10-27
 **Level**: 5 - the clean-break replacement is authorized; declare its minimal contracts before logic in the same cohesive cutover.
 
-**Status**: Documentation-first delivery is authorized. The complete
-[planner ledger proposal](../docs/reference/feed-planner-ledgers.md) is the
-durable review page for retained fields, old-to-new mappings, API inventory and
-independent lookback windows. The coordinator must first verify this docs-only
-change is merged into remote `main`; no implementation session starts before
-that gate. Superseded compatibility and state work stays paused:
-[#1737](https://github.com/miztiik/yen-idhazh/pull/1737) stays a draft at
-`664e26fe5fe84ab00990a312ca1119a909d44ab0`, and superseded
-[#1720](https://github.com/miztiik/yen-idhazh/pull/1720) stays paused.
-This document delivers no runtime feature. The active execution sequence is
-Table E and the replacement brief in Row 22; old compatibility, snapshot/head
-and causal-score briefs are not executable.
+**Status**: The isolated planner now uses the current
+[five-ledger contract](../docs/reference/feed-planner-ledgers.md) and
+[selection rules](../docs/architecture/sources/feed-curation.md).
+The completed selection plan was distilled and deleted in
+[#1770](https://github.com/miztiik/yen-idhazh/pull/1770), verified on remote
+`main`. [Table BA](#table-ba---plan-66-closure-disposition) records the
+user-directed Plan 66 closure and scope transfers. Trial, recovery, polling
+and review work retain their unresolved gates; genuine downstream proof is
+deferred and production worker cutover is not approved.
+
+Earlier row briefs and delivery records below do not override the current
+contracts or restart completed selection work. Superseded compatibility,
+snapshot/head and causal-score work remains non-executable. This
+documentation closure implements no runtime feature and grants no new
+implementation or cutover permission.
 
 ## 0. Operating contract
 
@@ -22,7 +25,7 @@ and causal-score briefs are not executable.
 
 | Id | Field | Contract |
 | --- | --- | --- |
-| A1 | Why this plan exists | Replace the planner's storage and API/runtime paths with the [four-ledger design](../docs/reference/feed-planner-ledgers.md), then complete the remaining approved nonsemantic work from [Plan 66](20261020-66-feed-ingest-plan.md) without claiming worker publication from planner output. |
+| A1 | Why this plan exists | Track the isolated planner delivery and remaining approved nonsemantic [I Feed work](../docs/architecture/sources/i-feed.md#continuing-this-work) without claiming worker publication from planner output. Current fields and APIs live in the [ledger reference](../docs/reference/feed-planner-ledgers.md); Table BA records the closed predecessor's scope disposition. |
 | A2 | Confirmed direction | User approval, 2026-10-25 UTC: make a clean break, delete the same eight named obsolete planner-family prefixes under both raw and compact roots, and replace the real API code with asynchronous typed-event execution and bounded concurrency. No old-to-new migrators, compatibility readers, aliases or dual writers. The seven-day component is a spend report, not a ranking penalty. |
 | A3 | In scope | Row 22's atomic contracts/storage/API/runtime/cleanup cutover; remaining technical admission, restrictions/recovery, polling, publisher and configured-priority work in Table B, subject only to their unresolved policy decisions. Field lists, dates, windows and APIs are declared once in the [proposal](../docs/reference/feed-planner-ledgers.md). |
 | A4 | Current readiness and first gate | First merge and verify this docs-only change on remote `main`. Then start Row 22 from that head; its contracts precede logic inside one cohesive PR. The earlier compatibility B2 design is not a prerequisite. Unresolved trial, polling and review decisions block only their affected work, not Row 22. |
@@ -905,7 +908,6 @@ publication from dispatch-Parquet creation alone.
   - Existing bounded workflow test (regression for the hosted sparse selection)
   - `docs/how-to/run-feed-ingest-plan-test.md` (sparse preflight requirements)
   - `TODO/20261024-67-feed-ingest-feedback-and-selection-plan.md` (this row's status)
-  - `TODO/20261020-66-feed-ingest-plan.md` (only the corresponding expanded-follow-up status, after verified delivery)
 - **Completed proof:** Run `2026-10-24-40133676513`, correlation `792986e7-d810-403d-817c-a1d1de6f971d`, used `freshness_hours=24` and `profile_machine_memory=true`; other overrides were omitted. The coordinator inspected downloaded actual artifacts and compared SHA-256 hashes of all 11 native/host output files with their exact Git blobs in landed [output commit `3c3a95fb7f8afd2cd5c1781d654cb883669d411f`](https://github.com/miztiik/yen-idhazh/commit/3c3a95fb7f8afd2cd5c1781d654cb883669d411f). That run's catalog contained 156 active feed IDs: 11,030 parsed items, 915 harvested, 679 eligible, 121 normalized and 100 selected.
 - **Acceptance evidence:** Configured feed `bbc-tech` and selected HTML from `cgtn-opnion` were proved separately; dispatch receipt `01a16fd0-0cf6-8f14-a30e-1660c0dbd191` bound candidate `bc4d37262ad56fdc1112a6ae27d488fef22645271ce2da433aac15d0d4daa02f` to worker 2 of 4 with 990 words. Actual replay, journal, private HTTP 409 conflict handling and no extra network work were verified, as were CPU/PID RAM, independent machine RAM, reports, native bytes and the scoped no-Python audit. Restricted affinity `[1,3]` selected CPU 1; owned cancellation preserved the target. Hardware performance counters (PMU) reported `permission_denied` with null counts; the measured working-set curve is not direct L3-hit latency. A permitted-host counter measurement remains open separately under AU2, not as a Row 20 blocker. Live evidence retained `audited_complete=false` and `publication=null`, distinct from the `generated_fixture` audit; this proof makes no actual worker-publication claim.
 - **Oracle:** The actual hosted feed/selected-HTML/native-output proof and resource report agree on their real work and identities, with denied counters null and working-set latency correctly labelled; this cannot measure direct L3-hit latency or successful PMU events on a denied host.
@@ -1260,8 +1262,28 @@ publication from dispatch-Parquet creation alone.
 
 ## 31. Row #29 - Remove obsolete duplicated planning and feedback prose
 
-- **Scope:** Remove or split obsolete duplicated prose in Plans 66 and 67 and the feedback documentation. Keep each settled rule on its owning living page and repair links; do not create a separate note or decision record.
+- **Scope:** Remove or split obsolete duplicated prose in this plan and the feedback documentation. Plan 66 is distilled and deleted; its closure is recorded below. Keep each settled rule on its owning living page and repair links; do not create a separate note or decision record.
 - **Dependencies:** Complete Row 22's replacement contracts and active-reader/writer cutover, then migrate any remaining dependant of the prose being removed. Any affected deferred work in Rows 26-28 remains a prerequisite for its own obsolete definition.
-- **Files touched:** `TODO/20261020-66-feed-ingest-plan.md`, this plan, `docs/reference/feed-planner-ledgers.md`, and the affected living feedback/API/history pages.
+- **Files touched:** This plan, `docs/reference/feed-planner-ledgers.md`, and the affected living feedback/API/history pages.
 - **Acceptance gates:** Confirm that no active dependant relies on each obsolete definition before removing it. Preserve the complete field mapping and API inventory during the current row-by-row review. Remove duplicate definitions rather than archiving them, and keep unfinished trial, recovery, polling, Python and console work explicitly unfinished.
 - **Oracle:** Each settled rule has one current home and its dependants use the replacement; this cleanup does not deliver or approve any pending feature.
+
+### Table BA - Plan 66 closure disposition
+
+The user directed Plan 66 distillation and deletion on 2026-10-27 UTC, with
+U5/U6/U7 outside its responsibility. Its sixteen original component rows
+closed only within their recorded acceptance scope; this does not certify
+genuine publication. Current rules stay in the linked living pages, not the
+deleted execution narrative.
+
+| Id | Former scope | Disposition and current home |
+| --- | --- | --- |
+| BA1 | U1/U2 resource reports and PID profiling | Delivered instruments, not feed-health ledgers. Whole-task collection, independent RAM controls and process CPU are defined in [host metrics](../docs/reference/host-metrics.md#whole-task-typescript-samples); [host HTTP commands](../docs/reference/host-probe-api.md) define pinned-process start/stop. Row 20 records combined hosted proof. |
+| BA2 | U3 cache probes | Delivered; Row 20 records hosted proof. Actual permitted hardware-counter measurement remains open under AU2. A denied counter is not a measurement; the [cache reference](../docs/reference/host-cache-probes.md) defines the limits. |
+| BA3 | U4 reliability adjustment | Historical delivery is not a second current ranking path. [Current curation](../docs/architecture/sources/feed-curation.md) uses technical article-pass evidence separately from feed-read reliability and request spend. |
+| BA4 | U5 selection reuse | Not Plan 66 responsibility. Superseded by the completed `20261026-feed-quality-selection-plan.md`, deleted after distillation in [#1770](https://github.com/miztiik/yen-idhazh/pull/1770). [Curation](../docs/architecture/sources/feed-curation.md) owns current behavior; do not carry the old proposal as separate scope. Further numeric terms still require approval. |
+| BA5 | U6 genuine publication and leads | Not Plan 66 responsibility. Deferred under Rows 17/18 and D10, not completed. [Planning completion](../docs/architecture/sources/feed-ingest-audit.md#partial-results-and-boundaries) distinguishes generated observer fixtures from genuine downstream proof. |
+| BA6 | U7 production planner/worker cutover | Not Plan 66 responsibility. Separately unapproved; requires a later decision and staged producer/consumer integration proof. Rows 17/18 and the deferred Python/console work retain their existing gates. |
+| BA7 | U8 publisher identity | The naming contract and curated catalog are delivered; [publisher identity](../docs/architecture/contracts/publisher-identity.md) owns creation and preservation rules. Uncertain mappings remain unknown. |
+| BA8 | U9 selection API | Delivered, not name-only approval. [Operator APIs](../docs/architecture/sources/feed-operator-api.md) own the complete parsed-batch selection, partition and persistence flow. |
+| BA9 | Table V nonsemantic follow-ups | Continue only through this plan's current decisions and the [I Feed design](../docs/architecture/sources/i-feed.md#continuing-this-work). Current observations and summaries live in the [feedback contract](../docs/architecture/contracts/feed-ingest-feedback.md). Admission, recovery, polling, review and URL-identity decisions remain gated; conditional HTTP remains excluded by D7. V12 follows BA5/BA6, not a new Plan 66 obligation. |

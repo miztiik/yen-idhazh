@@ -1,6 +1,6 @@
 # Intelligent F.E.E.D - I Feed
 
-**Last Updated**: 2026-10-25
+**Last Updated**: 2026-10-27
 
 **Status: design proposal and guidelines, not deployed behavior.**
 F.E.E.D expands to Feed Evaluation & Execution Decider. Intelligent F.E.E.D -
@@ -9,12 +9,11 @@ I Feed is the project name for this design. The maintainer supplied the intent o
 methods can change as we learn. No scoring values have been calibrated, and no
 improvement has yet been measured.
 
-Plan 67's D3 observation scope and D4 settlement behavior are maintainer-approved.
-The observation and operational-state contracts have compatible readers, and
-the planner reports a requests-first estimate from measured evidence. The
-derived-state writer and next-selection consumer are not deployed, so this
-estimate does not change ranking. D5 restriction and recovery thresholds are
-approved but inactive pending their policy-state contract and implementation;
+The isolated planner's current observations, bounded summaries and next-selection
+inputs are defined in the [feedback contract](../contracts/feed-ingest-feedback.md)
+and [selection rules](feed-curation.md), not the earlier operational-state
+proposal. Request spend is report-only. Plan 67's D5 restriction and recovery
+thresholds are approved but inactive pending their policy-state contract and implementation;
 adaptive polling and operational review remain open. Recommendations below do
 not activate those controls; see the
 [feedback contract](../contracts/feed-ingest-feedback.md).
@@ -891,17 +890,20 @@ changing catalog. Worker startup stays with the catalog-scale section above and
 with [throughput](../summarize/throughput.md), so an execution experiment does
 not block the score-update path.
 
-Maintainer ruling, 2026-10-24 UTC: in the isolated
-TypeScript planner, cost from an operation that failed to produce usable
-material for a supported source-side reason may reduce the operational part of
-priority once its evidence qualifies. Keep CPU, memory and HTTP request costs
-separate until each has a declared unit and source attribution; combine only
-their normalized values. Preserve curated source weight and tier, and replace
-rather than stack the existing RSS reliability penalty. This does not change
-production Python planning or permit semantic assessment. See the
-[feedback contract proposal](../contracts/feed-ingest-feedback.md); its
-provisional window, support, coverage and component weights are maintainer-approved.
-Producer fields and exact operation-to-cost bindings remain open in D3.
+The isolated TypeScript planner records HTTP request spend as a report, not a
+ranking penalty. Its [current selection rules](feed-curation.md) use technical
+article-pass evidence separately from feed-read reliability; neither is an
+article-quality verdict. [Host and process profiling](../../reference/host-metrics.md#whole-task-typescript-samples)
+measures resources independently and does not populate feed-health scores.
+The [feedback contract](../contracts/feed-ingest-feedback.md) defines current
+recording, while Plan 67 retains unresolved admission, recovery, polling and
+review work. These are not completed by resource reports or by deleting an
+earlier plan.
+
+Genuine worker/model-cost, publication and lead integration remain deferred;
+production planner/worker cutover is not approved. The
+[planning completion boundary](feed-ingest-audit.md#partial-results-and-boundaries)
+separates isolated output proof from those downstream responsibilities.
 
 ### What the next design pass must settle
 
@@ -952,7 +954,7 @@ to rerun live feed probes or the application suite to edit these documents.
 ## See also
 
 - [../../concepts/feed.md](../../concepts/feed.md) - the earned-feed concept.
-- [../contracts/publisher-identity.md](../contracts/publisher-identity.md) - approved publisher-ID creation and preservation rules; implementation awaits confirmation.
+- [../contracts/publisher-identity.md](../contracts/publisher-identity.md) - curated publisher-ID creation and preservation rules.
 - [../publishing/autotune-feed-reliability.md](../publishing/autotune-feed-reliability.md) - **a feed's `tier` and `weight` are set by hand when it is added, and nothing re-reads them against how it has since behaved.** That page is where the automatic-tuning row above would be argued; it is a stub today.
 - [../../concepts/config.md](../../concepts/config.md) - configuration and generated contracts.
 - [../../concepts/evaluation.md](../../concepts/evaluation.md) - existing article and summary measurements.
