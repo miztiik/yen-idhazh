@@ -41,12 +41,11 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Collection, Sequence
-from datetime import datetime
 from pathlib import Path
 from typing import NamedTuple, cast
 
 from idhazh import day_partition
-from idhazh.contracts.base import Contract, LedgerContract
+from idhazh.contracts.base import Contract
 from idhazh.contracts.file_envelope import FileEnvelope, Tier
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.run_shards import RunShards
@@ -204,13 +203,13 @@ def read_day_folder(
 def _read_day_folder(
     state_dir: Path, ledger: LedgerName, day: str, *,
     registry: paths.DoorRegistry | None,
-) -> tuple[list[RawFile], list[tuple[Path, str]]]:
+) -> DayFolder:
     """Read one bounded native day and name any entries this build cannot read."""
     folder = paths.raw_root(state_dir, ledger, registry=registry).joinpath(
         day[:4], day[5:7], day[8:10]
     )
     if not folder.is_dir():
-        return [], []
+        return DayFolder(files=[], unreadable=[])
     found: list[RawFile] = []
     unreadable: list[tuple[Path, str]] = []
     for path in sorted(folder.iterdir()):
@@ -218,7 +217,7 @@ def _read_day_folder(
             found.append(_held(ledger, day, path))
         except ValueError as refusal:
             unreadable.append((path, str(refusal)))
-    return sorted(found, key=_order), unreadable
+    return DayFolder(files=sorted(found, key=_order), unreadable=unreadable)
 
 
 def read_day_files(

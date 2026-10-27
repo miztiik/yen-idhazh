@@ -49,8 +49,7 @@ from pydantic import ValidationError
 
 from idhazh import atomic_write, config
 from idhazh.contracts.app_config import AppConfig
-from idhazh.contracts.base import Contract, PeriodStamp
-from idhazh.contracts.base import LedgerContract
+from idhazh.contracts.base import Contract, LedgerContract, PeriodStamp
 from idhazh.contracts.file_envelope import (
     Compression,
     FileEnvelope,

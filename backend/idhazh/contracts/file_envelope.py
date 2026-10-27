@@ -33,7 +33,7 @@ from enum import StrEnum
 from types import MappingProxyType
 from typing import Annotated, ClassVar, Final, Literal, Self, assert_never, cast
 
-from pydantic import ConfigDict, Field, StringConstraints, ValidationError, model_validator
+from pydantic import ConfigDict, Field, StringConstraints, model_validator
 
 from idhazh.contracts.base import (
     DATE_PATTERN,
