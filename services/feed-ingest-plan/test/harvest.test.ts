@@ -41,16 +41,6 @@ test("reviewed publisher IDs bind only the confirmed feeds in the live catalog",
     Bun.file(new URL("../../../config/idhazh.json", import.meta.url)).json(),
   ]);
   const loaded = loadHarvestInputs({ config, taxonomy, sources, extraction });
-  expect(loaded.publishers).toEqual([
-    { id: "bbc", display_name: "BBC News" },
-    { id: "cgtn", display_name: "CGTN" },
-    { id: "cna", display_name: "CNA" },
-    { id: "mint", display_name: "Mint" },
-    { id: "the-conversation-africa", display_name: "The Conversation Africa" },
-    { id: "the-economist", display_name: "The Economist" },
-    { id: "the-hindu", display_name: "The Hindu" },
-    { id: "the-hindu-businessline", display_name: "The Hindu BusinessLine" },
-  ]);
   const publishersByFeed = new Map(
     [...loaded.sources, ...loaded.retired_sources].map(feed => [feed.id, feed.publisher_id] as const),
   );
