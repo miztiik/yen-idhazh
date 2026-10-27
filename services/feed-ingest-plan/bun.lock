@@ -6,6 +6,7 @@
       "name": "@idhazh/feed-ingest-plan",
       "dependencies": {
         "@idhazh/common-contracts": "file:../../packages/common-contracts",
+        "@idhazh/data-delivery": "file:../../packages/data-delivery",
         "@idhazh/ledger-file-writer": "file:../../packages/ledger-file-writer",
         "apache-arrow": "^21.2.0",
         "defuddle": "0.19.5",
@@ -30,6 +31,8 @@
   },
   "packages": {
     "@idhazh/common-contracts": ["@idhazh/common-contracts@file:../../packages/common-contracts", { "dependencies": { "zod": "^4.1.12" }, "devDependencies": { "@types/bun": "^1.3.0", "typescript": "^5.9.3" } }],
+
+    "@idhazh/data-delivery": ["@idhazh/data-delivery@file:../../packages/data-delivery", { "dependencies": { "zod": "^4.1.12" }, "devDependencies": { "@types/bun": "^1.3.0", "typescript": "^5.9.3" } }],
 
     "@idhazh/ledger-file-writer": ["@idhazh/ledger-file-writer@file:../../packages/ledger-file-writer", { "dependencies": { "@idhazh/common-contracts": "file:../common-contracts", "apache-arrow": "^21.2.0", "parquet-wasm": "^0.9.0", "zod": "^4.1.12" }, "devDependencies": { "@types/bun": "^1.3.0", "typescript": "^5.9.3" } }],
 
