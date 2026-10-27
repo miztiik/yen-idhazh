@@ -111,6 +111,7 @@ from idhazh.contracts.taxonomy import (
 from idhazh.contracts.visual import VisualPlan
 from idhazh.contracts.visual_data import VisualData
 from idhazh.contracts.visual_decision import VisualDecision, VisualKind, VisualState
+from idhazh.contracts.visual_label import VisualLabel, VisualLabelDraw, VisualLabelRow
 from idhazh.contracts.visual_prune import VisualPruneRow
 from idhazh.contracts.visual_telemetry import VisualAggregateRow, VisualAttemptRow
 from idhazh.contracts.watchlist import EdgarPolicy, EntityDef, EntityFeed, Watchlist
@@ -183,6 +184,8 @@ CONTRACTS: Final[tuple[type[Contract], ...]] = (
     VisualAggregateRow,
     VisualAttemptRow,
     VisualData,
+    VisualLabelDraw,
+    VisualLabelRow,
     VisualPlan,
     VisualPruneRow,
     Watchlist,
@@ -248,6 +251,9 @@ __all__ = [
     "VerticalPlan",
     "VisualDecision",
     "VisualKind",
+    "VisualLabel",
+    "VisualLabelDraw",
+    "VisualLabelRow",
     "VisualState",
     "Watchlist",
     "canonical_json",

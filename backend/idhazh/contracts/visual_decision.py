@@ -17,7 +17,16 @@ from typing import ClassVar, Final, Self
 from pydantic import Field, model_validator
 
 from idhazh.contracts.article import UntrustedLine
-from idhazh.contracts.base import ChangelogEntry, Contract, ItemId, RelPath, Slug, Timestamp, UrlKey
+from idhazh.contracts.base import (
+    ChangelogEntry,
+    Contract,
+    ItemId,
+    RelPath,
+    Slug,
+    Timestamp,
+    UrlKey,
+    derive_text_digest,
+)
 from idhazh.contracts.chart_evidence import ChartEvidence
 from idhazh.contracts.visual_outcome import validate_visual_outcome
 from idhazh.contracts.visual_type import VisualType
@@ -26,6 +35,7 @@ from idhazh.contracts.visual_type import VisualType
 #: The writer, the reader and the workflow's upload glob all spell it, and a run
 #: where they disagree uploads an empty artifact and publishes with no pictures.
 PAYLOAD_SUFFIX: Final = ".visual.json"
+_VISUAL_ID_FORMAT: Final = "visual-id-v1"
 
 
 class VisualKind(StrEnum):
@@ -218,6 +228,13 @@ class VisualDecision(Contract):
             if (self.rendered_type is not None) != (self.visual_state is VisualState.RENDERED):
                 raise ValueError("a measured rendered type and rendered state arrive together")
         return self
+
+    @property
+    def visual_id(self) -> str:
+        """Stable join key from fields every current and historical decision holds."""
+        return derive_text_digest(
+            "\0".join((_VISUAL_ID_FORMAT, self.item_id, self.url_key, self.decided_at))
+        )
 
     @model_validator(mode="after")
     def _a_published_chart_was_drafted_as_one(self) -> Self:

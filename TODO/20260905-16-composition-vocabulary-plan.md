@@ -55,7 +55,7 @@ rules remain unchanged.
 | 3 | A declared whole: pie | 2 | C | DONE #1753 | - | #1753 | - |
 | 4 | Three numbers at once: bubble | 2 | D | DONE #1747 | composition-vocabulary-row-4 | #1747 | - |
 | 5 | A spread of values: histogram | 2 | E | DONE #1757 | - | #1757 | - |
-| 6 | Human pie and bubble keep-rate evidence | 3, 4 | F | PENDING | - | - | - |
+| 6 | Human pie and bubble keep-rate evidence | 3, 4 | F | IN-FLIGHT | row-6-visual-labels | #1764 | - |
 
 ### Current delivery evidence
 
@@ -197,8 +197,8 @@ facts, not claims that later rows passed.
 
 - **Scope:** Join published visual evidence to a separate human label ledger, then compare pie and bubble keep rates by exact type without mixing machine and human verdicts.
 - **Files touched:** The maintainer-approved visual identifier contract, a dedicated human visual-label contract and ledger, review queue integration, schema and fixtures, `backend/tests/**`, `docs/concepts/evaluation.md` and its owning plan references.
-- **Acceptance gates:** `ruff`; `mypy --strict`; export + drift; the full suite.
-- **Oracle:** Pie and bubble each have an exact type join, and a fixture keep-rate query separates them without pooling human labels with machine outcomes. A rate is not accepted without the inter-reviewer agreement required by Plan 21.
+- **Acceptance gates:** `ruff`; `mypy --strict`; the selected local checks from [`docs/how-to/run-the-gates.md`](../docs/how-to/run-the-gates.md); the full merge-candidate suite in CI.
+- **Oracle:** Human labels join only published, rendered queue rows by exact `rendered_type`; a planned pie that rendered as another type is excluded. The report keeps machine counts separate, counts each `(visual_id, reviewer_id)` answer once, and quotes a rate only when at least one visual has two named reviewers. It prints raw pairwise agreement without setting a numeric threshold.
 
 ### Decisions
 
@@ -206,7 +206,7 @@ facts, not claims that later rows passed.
 | --- | --- | --- |
 | 1 | Use exact `planned_type` and `rendered_type` for machine outcomes; type fields need no new pie/bubble boolean | Maintainer R4 |
 | 2 | Keep human labels in a dedicated ledger and never feed them into publication gates | Maintainer R4; Plan 21 |
-| 3 | Publish pie and bubble keep rates only with their visual join key and inter-reviewer agreement | Plan 19 row 3; Plan 21 |
+| 3 | Count the kept share of unique reviewer answers; print overlap and raw pairwise agreement, and do not quote a rate without overlap | Plan 21 Q5 |
 
 ### Rejected alternatives
 

@@ -533,12 +533,13 @@ _BY_TYPE: Final[Mapping[type, object]] = {bool: True, int: 1, float: 1.0, str: "
 
 #: Columns this fetch-failure fixture cannot carry, and why they are empty.
 #: A failed fetch stops before visual planning, so no requested type, delivered
-#: type, replacement depth or mark count exists on this row.
+#: type, replacement depth, mark count or decision identity exists on this row.
 UNFILLED: Final[Mapping[str, str]] = {
     "planned_type": "The item failed before it could request a visual.",
     "rendered_type": "The item failed before a visual could be delivered.",
     "downgrade_depth": "The item failed before a visual could be selected.",
     "marks": "The item failed before a visual could be delivered.",
+    "visual_id": "The item failed before visual planning, so no decision identity exists.",
 }
 
 

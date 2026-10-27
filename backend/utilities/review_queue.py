@@ -371,6 +371,9 @@ def build(
                     rationale=decision.rationale,
                     alt_text=decision.alt_text,
                     asset_relpath=asset_relpath,
+                    visual_id=decision.visual_id,
+                    planned_type=decision.planned_type,
+                    rendered_type=decision.rendered_type,
                 )
             )
 
