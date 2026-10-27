@@ -21,6 +21,8 @@ from __future__ import annotations
 
 import ast
 import json
+import subprocess
+import sys
 from decimal import Decimal
 from pathlib import Path
 from typing import Any, Final
@@ -78,6 +80,17 @@ def plan_payload(stem: str) -> dict[str, Any]:
 def elements_of(table: ElementTable, *ids: str) -> list[Element]:
     known = {element.element_id: element for element in table.elements}
     return [known[one] for one in ids]
+
+
+def mixed_unit_wind_table() -> ElementTable:
+    """Make one wind value a same-amount kilowatt reading for mixed-unit tests."""
+    payload = json.loads(read_text(VALIDATOR_FIXTURES / "tables" / "wind.json"))
+    for element in payload["elements"]:
+        if element["element_id"] == "quantity-112-120":
+            element["span_excerpt"] = "2.1e6 kW"
+            element["value"] = "2100000"
+            element["unit"] = "kw"
+    return ElementTable.model_validate(payload)
 
 
 def resolve(plan: VisualPlan, table: ElementTable) -> list[DisplayedValue]:
@@ -441,6 +454,70 @@ def test_a_histogram_resolves_to_bin_counts_and_the_bins_come_from_config() -> N
         for cited in one.derived.inputs
     }
     assert named == set(WIND_QUANTITIES)
+
+
+def test_mixed_units_use_recorded_edges_and_repeat_in_a_fresh_process() -> None:
+    table = mixed_unit_wind_table()
+    plan = built_plan(VisualType.HISTOGRAM, bins=list(WIND_QUANTITIES))
+    visuals = committed_visuals()
+    assert visuals.histogram_bins == 3
+    resolution = resolve_displayed_values(plan, table, visuals=visuals)
+    assert resolution.refusal is None
+    in_process: list[tuple[str | None, str | None, str, list[str]]] = [
+        (
+            value.derived.bin_lower,
+            value.derived.bin_upper,
+            value.derived.value,
+            value.derived.inputs,
+        )
+        for value in resolution.values
+        if value.derived is not None
+    ]
+    assert len(in_process) == visuals.histogram_bins
+    assert all(lower is not None and upper is not None for lower, upper, _, _ in in_process)
+    assert [count for _, _, count, _ in in_process] == ["2", "1", "1"]
+    assert {cited for _, _, _, inputs in in_process for cited in inputs} == set(WIND_QUANTITIES)
+    assert all(
+        value.derived is not None and value.derived.version == DERIVED_VALUE_VERSION
+        for value in resolution.values
+    )
+
+    script = """
+import json
+import sys
+from idhazh.contracts.element import ElementTable
+from idhazh.contracts.knobs.visuals import VisualsConfig
+from idhazh.contracts.visual import VisualPlan
+from idhazh.derived_values import resolve_displayed_values
+table = ElementTable.model_validate_json(sys.argv[1])
+plan = VisualPlan.model_validate_json(sys.argv[2])
+visuals = VisualsConfig.model_validate_json(sys.argv[3])
+result = resolve_displayed_values(plan, table, visuals=visuals)
+if result.refusal is not None:
+    raise SystemExit(result.refusal.detail)
+print(json.dumps([
+    [value.derived.bin_lower, value.derived.bin_upper, value.derived.value, value.derived.inputs]
+    for value in result.values if value.derived is not None
+]))
+"""
+    fresh = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            script,
+            table.model_dump_json(),
+            plan.model_dump_json(),
+            visuals.model_dump_json(),
+        ],
+        cwd=DERIVED_MODULE.parents[1],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert fresh.returncode == 0, fresh.stderr
+    assert json.loads(fresh.stdout) == [
+        [lower, upper, count, inputs] for lower, upper, count, inputs in in_process
+    ]
 
 
 def test_the_bin_edges_are_equal_width_and_the_widest_value_lands_inside() -> None:

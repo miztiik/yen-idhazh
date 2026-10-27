@@ -38,7 +38,11 @@ from idhazh.contracts.visual_data import (
     VisualMark,
     VisualWhole,
 )
-from idhazh.derived_values import measure_displayed_values, resolve_displayed_values
+from idhazh.derived_values import (
+    histogram_unit_and_version,
+    measure_displayed_values,
+    resolve_displayed_values,
+)
 from idhazh.relationship_evidence import refuse_relationship
 from idhazh.sanitize import sanitize
 from idhazh.visual_vocabulary import TYPE_RULES, VALUE_ROLES
@@ -141,6 +145,7 @@ def can_compile(visual_type: VisualType | None) -> bool:
         VisualType.BUBBLE,
         VisualType.STACKED_BAR,
         VisualType.PIE,
+        VisualType.HISTOGRAM,
     }
 
 
@@ -163,7 +168,7 @@ def compile_chart(
         named = visual_type.value if visual_type is not None else "no type"
         raise CompileError(f"this build cannot draw the plan's {named} type")
 
-    if visual_type in (VisualType.STACKED_BAR, VisualType.PIE):
+    if visual_type in (VisualType.STACKED_BAR, VisualType.PIE, VisualType.HISTOGRAM):
         from idhazh.visual_validator import validate_plan
 
         if rejections := validate_plan(plan, table, visuals=visuals):
@@ -193,7 +198,14 @@ def compile_chart(
     _check_channel_pairing(visual_type, channels, known)
     data, figures = _chart_data(table.item_id, channels, plan, visual_type, known)
     return CompiledChart(
-        _chart_alt_text(visual_type, channels, figures, known, data.declared_whole),
+        _chart_alt_text(
+            visual_type,
+            channels,
+            figures,
+            known,
+            data.declared_whole,
+            data.histogram_unit,
+        ),
         data,
         measure_displayed_values(
             [value for role in VALUE_ROLES for value in channels[role]], table
@@ -250,6 +262,16 @@ def _check_channel_pairing(
         if len(set(labels)) != len(labels):
             raise CompileError("pie category names must remain distinct after sanitizing")
         return
+    if visual_type is VisualType.HISTOGRAM:
+        if not 2 <= len(channels[EncodingRole.BINS]) <= 8:
+            raise CompileError("a histogram needs between two and eight configured bins")
+        if any(
+            channels[role]
+            for role in EncodingRole
+            if role is not EncodingRole.BINS
+        ):
+            raise CompileError("a histogram draws only its bins channel")
+        return
 
     times = channels[EncodingRole.TIME]
     entities = channels[EncodingRole.ENTITY]
@@ -300,7 +322,7 @@ def _chart_data(
 ) -> tuple[VisualData, list[_Figure]]:
     """Write each filled source channel once, keeping its role in the payload."""
     marks: list[VisualMark] = []
-    quantity_figures: dict[str, _Figure] = {}
+    measured_figures: dict[str, _Figure] = {}
     encoded: dict[str, list[str]] = {role.value: [] for role in EncodingRole}
     mark_by_value: dict[tuple[EncodingRole, int], str] = {}
     for role in EncodingRole:
@@ -309,8 +331,10 @@ def _chart_data(
             mark_by_value[(role, index)] = mark_id
             if role in VALUE_ROLES:
                 figure = _figure(value, known)
-                if role is EncodingRole.QUANTITY:
-                    quantity_figures[mark_id] = figure
+                if role is EncodingRole.QUANTITY or (
+                    visual_type is VisualType.HISTOGRAM and role is EncodingRole.BINS
+                ):
+                    measured_figures[mark_id] = figure
                 marks.append(
                     VisualMark(
                         mark_id=mark_id,
@@ -368,11 +392,18 @@ def _chart_data(
         if visual_type is VisualType.PIE and plan.declared_whole_element_id is not None
         else None
     )
+    histogram_unit, histogram_unit_table_version = (
+        histogram_unit_and_version([known[cited] for cited in plan.encodings.bins])
+        if visual_type is VisualType.HISTOGRAM
+        else (None, None)
+    )
     data = VisualData(
         version=VisualData.schema_version(),
         item_id=item_id,
         type=visual_type,
         renderer_version=RENDERER_VERSION,
+        histogram_unit=histogram_unit,
+        histogram_unit_table_version=histogram_unit_table_version,
         declared_whole_element_id=whole_id,
         declared_whole=(
             VisualWhole(
@@ -388,8 +419,13 @@ def _chart_data(
         marks=marks,
         encoding=VisualEncoding(**encoded),
     )
-    quantity_ids = encoded[EncodingRole.QUANTITY.value]
-    return data, [quantity_figures[mark_id] for mark_id in quantity_ids]
+    figure_role = (
+        EncodingRole.BINS
+        if visual_type is VisualType.HISTOGRAM
+        else EncodingRole.QUANTITY
+    )
+    figure_ids = encoded[figure_role.value]
+    return data, [measured_figures[mark_id] for mark_id in figure_ids]
 
 
 def _observations(
@@ -451,6 +487,12 @@ def _observations(
                 [mark_by_value[(EncodingRole.QUANTITY, index)]],
             )
             for index in range(len(quantities))
+        ]
+    if visual_type is VisualType.HISTOGRAM:
+        bins = channels[EncodingRole.BINS]
+        return [
+            ([value], [mark_by_value[(EncodingRole.BINS, index)]])
+            for index, value in enumerate(bins)
         ]
     if visual_type is VisualType.LINE:
         times = channels[EncodingRole.TIME]
@@ -521,6 +563,7 @@ def _emphasized_chart_mark(
             VisualType.LINE: "line measurements",
             VisualType.SCATTER: "scatter points",
             VisualType.BUBBLE: "bubbles",
+            VisualType.HISTOGRAM: "histogram bins",
         }[visual_type]
         raise CompileError(
             f"annotations select {len(selected)} distinct {selected_name}; exactly one is required"
@@ -557,6 +600,7 @@ def _chart_alt_text(
     figures: Sequence[_Figure],
     known: Mapping[ElementId, Element],
     declared_whole: VisualWhole | None,
+    histogram_unit: str | None,
 ) -> str:
     """State every visible label and figure from the source channels."""
     unit = f" {figures[0].unit}" if figures and figures[0].unit else ""
@@ -618,6 +662,19 @@ def _chart_alt_text(
             f"Pie chart. Declared total: {declared_whole.text}. "
             f"{'; '.join(facts)}."
         )[:ALT_TEXT_MAX]
+    if visual_type is VisualType.HISTOGRAM:
+        facts = []
+        for index, value in enumerate(channels[EncodingRole.BINS]):
+            derived = value.derived
+            if derived is None or derived.bin_lower is None or derived.bin_upper is None:
+                raise CompileError("a histogram bin has no recorded edges")
+            closing = "]" if index == len(channels[EncodingRole.BINS]) - 1 else ")"
+            facts.append(
+                f"[{derived.bin_lower}, {derived.bin_upper}{closing} "
+                f"{figures[index].stated}"
+            )
+        unit_suffix = f" {DISPLAY_UNIT_SYMBOLS.get(histogram_unit or '', histogram_unit or '')}"
+        return f"Histogram chart. {'; '.join(facts)}{unit_suffix}."[:ALT_TEXT_MAX]
 
     times = [_mark_text(value, known) for value in channels[EncodingRole.TIME]]
     entities = channels[EncodingRole.ENTITY]

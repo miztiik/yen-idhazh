@@ -47,12 +47,14 @@ from idhazh.contracts.visual_decision import (
     VisualKind,
     VisualState,
 )
+from idhazh.derived_values import DERIVED_VALUE_VERSION
 from idhazh.render.chart import CompileError, compile_bar, compile_chart
 from idhazh.render.write import (
     asset_relpath,
     render_planned_visual,
     write_charts_from_decisions,
 )
+from idhazh.visual_vocabulary import UNIT_TABLE_VERSION
 
 pytestmark = pytest.mark.visual
 
@@ -69,6 +71,7 @@ STACKED_DATA: Final = CONTRACT_FIXTURES_DIR / "visual-data" / "stacked-bar-from-
 PIE_PLAN: Final = PLAN_FIXTURES / "pie-valid.json"
 PIE_TABLE: Final = TABLE_FIXTURES / "pie-whole.json"
 PIE_DATA: Final = CONTRACT_FIXTURES_DIR / "visual-data" / "pie-from-declared-whole.json"
+HISTOGRAM_DATA: Final = CONTRACT_FIXTURES_DIR / "visual-data" / "histogram-from-wind.json"
 
 DAY: Final = "digest/2026/08/22"
 MARKS: Final = f"{DAY}/ai-01.json"
@@ -77,6 +80,33 @@ MARKS: Final = f"{DAY}/ai-01.json"
 def committed_visuals() -> VisualsConfig:
     """The knobs the pipeline ships, never a number typed here (Guardrail #6)."""
     return AppConfig.from_json(read_text(CONFIG_DIR / "idhazh.json")).visuals
+
+
+def histogram_plan() -> VisualPlan:
+    """Build the plan shape from the committed article's four source quantities."""
+    base = VisualPlan.read(BAR_PLAN)
+    bins = base.encodings.quantity
+    payload = base.model_dump(mode="json")
+    payload["type"] = VisualType.HISTOGRAM.value
+    payload["encodings"] = {role.value: [] for role in EncodingRole}
+    payload["encodings"][EncodingRole.BINS.value] = bins
+    payload["element_ids"] = bins
+    payload["labels"] = []
+    payload["annotations"] = [bins[-1]]
+    return VisualPlan.model_validate(payload)
+
+
+def mixed_unit_wind_table() -> ElementTable:
+    """Use one value in kilowatts while retaining the same source amount."""
+    table = ElementTable.read(BAR_TABLE)
+    payload = table.model_dump(mode="json")
+    payload["elements"] = [
+        element
+        | ({"span_excerpt": "2,100 kW", "unit": "kw"}
+           if element["element_id"] == "quantity-112-120" else {})
+        for element in payload["elements"]
+    ]
+    return ElementTable.model_validate(payload)
 
 
 def _decision(kind: VisualKind, spec: str | None) -> VisualDecision:
@@ -266,6 +296,49 @@ class TestCompiledBar:
             and mark.derived.inputs[1] == "quantity-21-26"
             for mark in compiled.data.marks
             if mark.mark_id in compiled.data.encoding.quantity
+        )
+
+    def test_a_histogram_compiles_mixed_units_with_recorded_bin_edges(self) -> None:
+        compiled = compile_chart(
+            histogram_plan(),
+            mixed_unit_wind_table(),
+            visuals=committed_visuals(),
+        )
+        data = compiled.data
+        expected = VisualData.read(HISTOGRAM_DATA)
+        assert data.type is VisualType.HISTOGRAM
+        assert data.histogram_unit == "kw"
+        assert data.histogram_unit_table_version == UNIT_TABLE_VERSION
+        assert data.to_json() == expected.to_json()
+        bins = [mark for mark in data.marks if mark.mark_id in data.encoding.bins]
+        assert [mark.value for mark in bins] == ["2", "1", "1"]
+        assert all(
+            mark.derived is not None and mark.derived.version == DERIVED_VALUE_VERSION
+            for mark in bins
+        )
+        assert [
+            (mark.derived.bin_lower, mark.derived.bin_upper)
+            for mark in bins
+            if mark.derived is not None
+        ] == [
+            (mark.derived.bin_lower, mark.derived.bin_upper)
+            for mark in expected.marks
+            if mark.mark_id in expected.encoding.bins
+            and mark.derived is not None
+        ]
+        cited = [
+            element_id
+            for mark in bins
+            if mark.derived is not None
+            for element_id in mark.derived.inputs
+        ]
+        assert set(cited) == set(histogram_plan().encodings.bins)
+        assert len(cited) == len(set(cited))
+        assert "Histogram chart." in compiled.alt_text
+        assert all(
+            f"[{mark.derived.bin_lower}, {mark.derived.bin_upper}" in compiled.alt_text
+            for mark in bins
+            if mark.derived is not None
         )
 
     def test_a_plan_the_resolver_refuses_never_becomes_a_picture(self) -> None:
