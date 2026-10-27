@@ -23,6 +23,12 @@ Deliver publisher identities first, then use them in the TypeScript article-sele
 | A9 | Integration ownership | This session owns the remaining planner schema-authority, catalog, ledger-consumer and validation integration when implementation is authorized. It is not blocked on assigning another owner. Preserve unrelated consumers and checks; do not build Python schema mirrors or silently bypass validation. |
 | A10 | ESCALATE | Stop for a user decision if work needs a persisted shape/meaning outside the approved contracts, changes selection policy/scope or unrelated consumers, adds compatibility/backfill or qualitative assessment, or meets a trust/platform boundary. Do not weaken the trust boundary or exceed the six-hour job/one-GB site limits: they cause job termination/deployment refusal. No silent scope or validation bypass. |
 
+On 2026-10-27 UTC the user authorized a separate nested child to implement the
+reusable TypeScript `safe_persist_data` API, its contracts, tests and planner
+delivery integration. Selection rows 3 and 4 continue here while that child
+works. The child owns removal of the planner-specific Git implementation and
+its redundant delivery tests; these are not duplicated in the selection PRs.
+
 ### Table B - Implementation requirements
 
 | Id | Surface | Required behavior |
@@ -149,8 +155,8 @@ flowchart TD
 | Id | Row | PR outcome | Depends-on | Status | Readiness condition | Worktree | PR | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | D1 | 1 | Deliver reviewed publisher IDs | - | DONE | Eight reviewed publisher IDs now bind 20 active and retired feeds; unreviewed entries remain unknown. | feed-selection-delivery | #1762 | - |
-| D2 | 2 | Finish TypeScript contract and ledger-IO integration | 1 | IN PROGRESS | Raw-day membership tests pass locally; PR checks must pass before row 3. | feed-selection-delivery | #1763 | - |
-| D3 | 3 | Remove feed labels and rename article/discovery controls | 2 | PENDING | Sole TypeScript contract authority is available. | - | - | - |
+| D2 | 2 | Finish TypeScript contract and ledger-IO integration | 1 | DONE | Raw-day membership tests and all required PR checks passed; the change is merged. | feed-selection-delivery | #1763 | - |
+| D3 | 3 | Remove feed labels and rename article/discovery controls | 2 | IN PROGRESS | Sole TypeScript contract authority is available. | feed-selection-controls | - | - |
 | D4 | 4 | Implement allocation, freshness, cutoff and rejection persistence | 1, 2, 3 | PENDING | Consume PR1's catalog and the verified integration; policy is settled. | - | - | - |
 
 Implementation gates, not this documentation delivery: inspect `npm run test:changed -- --list` from `frontend/`, run the selected checks, and run each row's named Bun cases. Type-check affected packages with `bun run --cwd <package> check`. CI runs the full merge-candidate suite once. No row requires a live feed probe or a workflow dispatch.

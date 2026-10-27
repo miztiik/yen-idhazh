@@ -7,8 +7,8 @@ import {
 } from "../../../packages/common-contracts/src/index";
 import type { CompactIndex } from "../../../packages/common-contracts/src/index";
 import type { LedgerRegistration } from "../../../packages/ledger-file-writer/src/index";
-import { RelativePathSchema, SeenDayInputSchema } from "../src/config/service-settings";
-import type { SeenDayInput } from "../src/config/service-settings";
+import { LedgerDayInputSchema, RelativePathSchema } from "../src/config/service-settings";
+import type { LedgerDayInput } from "../src/config/service-settings";
 import { validateLedgerFilePath } from "./feed-ingest-plan-verification";
 import { PlanResponseSchema } from "../src/api/plan-response.schema";
 import { LedgerHistoryReadError } from "../src/read-ledger-history/ledger-history-error";
@@ -54,7 +54,7 @@ export function sparseCheckoutPath(path: string) {
   RelativePathSchema.parse(path);
   return `/${path.replace(/[\\*?[\]!#]/g, character => `\\${character}`)}`;
 }
-export function createSeenDayInputs(prefix: readonly string[], days: readonly string[]) {
+export function createHistoryDayInputs(prefix: readonly string[], days: readonly string[]) {
   const indexes = resolveHistoryIndexes(prefix);
   return days.map(day => ({
     day: DateStampSchema.parse(day), indexes,
@@ -63,16 +63,16 @@ export function createSeenDayInputs(prefix: readonly string[], days: readonly st
     }),
   }));
 }
-export function completeHistoryDayInputs(prefix: readonly string[], required: readonly string[], authored: readonly SeenDayInput[], name: string): SeenDayInput[] {
-  const byDay = new Map<string, SeenDayInput>();
+export function completeHistoryDayInputs(prefix: readonly string[], required: readonly string[], authored: readonly LedgerDayInput[], name: string): LedgerDayInput[] {
+  const byDay = new Map<string, LedgerDayInput>();
   for (const [index, raw] of authored.entries()) {
-    const day = SeenDayInputSchema.parse(raw);
+    const day = LedgerDayInputSchema.parse(raw);
     if ((index > 0 && day.day <= authored[index - 1]!.day) || !required.includes(day.day)) throw new Error(`${name} requires distinct ascending configured UTC days`);
     byDay.set(day.day, day);
   }
-  return createSeenDayInputs(prefix, required).map(day => byDay.get(day.day) ?? day);
+  return createHistoryDayInputs(prefix, required).map(day => byDay.get(day.day) ?? day);
 }
-export function resolveHistoryIndexes(prefix: readonly string[], overrides?: SeenDayInput["indexes"]) {
+export function resolveHistoryIndexes(prefix: readonly string[], overrides?: LedgerDayInput["indexes"]) {
   const defaults = historyIndexPaths(prefix, []);
   return { yearly: overrides?.yearly ?? defaults[0]!, monthly: overrides?.monthly ?? defaults[1]!,
     daily: overrides?.daily ?? defaults[2]! };
@@ -89,7 +89,7 @@ export function resolveHistoryInventory(input: {
   ledger: CompactIndex["ledger"]; prefix: readonly string[]; days: readonly string[];
   compact: readonly CompactIndex[]; rawFiles?: readonly string[];
   raw?: readonly unknown[]; rawIndexes?: Readonly<Record<string, string>>;
-  indexes?: SeenDayInput["indexes"];
+  indexes?: LedgerDayInput["indexes"];
 }) {
   const indexes = resolveHistoryIndexes(input.prefix, input.indexes);
   const paths = new Set(Object.values(indexes));

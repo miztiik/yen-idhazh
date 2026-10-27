@@ -133,7 +133,7 @@ export class RecordedTransport implements HarvestTransport {
 export function source(patch: Partial<ConfiguredSource> = {}): ConfiguredSource {
   return {
     id: "recorded-news", url: "https://news.example/feed.xml", title: "Configured science news",
-    kind: "reporting", tier: 2, form: "article",
+    tier: 2,
     weight: 0.8, status: "active", retired_on: null, added_on: null,
     retirement_reason: null, publisher_id: null, ...patch,
   };
@@ -148,11 +148,20 @@ export async function inputs(sources: unknown[] = [source()], overrides: {
     Bun.file(new URL("config/taxonomy.json", root)).json(),
     Bun.file(new URL("config/idhazh.json", root)).json(),
   ]);
+  const activeTier = taxonomy.source_tiers.find((tier: { status: string }) => tier.status === "active");
+  if (!activeTier) throw new Error("taxonomy.source_tiers: an active tier is required for recorded sources");
+  const configuredSources = sources.map(value => {
+    if (value === null || typeof value !== "object" || !("tier" in value) || typeof value.tier !== "number") return value;
+    const tier = taxonomy.source_tiers.find((entry: { id: number }) => entry.id === value.tier);
+    const retired = "status" in value && value.status === "retired";
+    if (tier !== undefined && (retired || tier.status === "active")) return value;
+    return { ...value, tier: activeTier.id };
+  });
   return loadHarvestInputs({
     config: { ...config, harvest: { ...config.harvest, concurrency: 2, fetch_timeout_ms: 200, ...overrides.harvest } },
     taxonomy: { ...taxonomy, ...(overrides.lenses === undefined ? {} : { lenses: overrides.lenses }) },
     sources: {
-      feeds: sources,
+      feeds: configuredSources,
       ...(overrides.salience === undefined ? {} : { salience: overrides.salience }),
       ...(overrides.publishers === undefined ? {} : { publishers: overrides.publishers }),
     },

@@ -9,7 +9,7 @@ import type { ExecutionIdentity, MetadataRegistrations } from "./feed-ingest-pla
 import { verifyHostFingerprint } from "./feed-ingest-plan-host-verification";
 import { verifyPlanningCompletion } from "./feed-ingest-plan-verification";
 
-export async function readWorkflowPublicationContext(input: {
+export async function readWorkflowDeliveryContext(input: {
   root: string; directory: string; runNumber: string; attempt: number;
 }) {
   const resources = z.object({ host_request: WorkflowResourcesSchema.shape.host_request })

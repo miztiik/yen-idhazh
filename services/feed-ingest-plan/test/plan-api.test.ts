@@ -161,7 +161,7 @@ test("actual API and awaited CLI compose the same recorded plan and disclose the
     const feedKey = randomUUID();
     const feedCorrelation = randomUUID();
     const feed = await (await fetch(`${url}/fetch`, json({
-      request_id: feedKey, correlation_id: feedCorrelation, feed_id: "recorded-news", kind: "feed",
+      request_id: feedKey, correlation_id: feedCorrelation, feed_id: "recorded-news", fetch_item_type: "feed",
     }))).json();
     expect(Object.hasOwn(feed, "body")).toBe(false);
     const beforeFeedParse = api.transport.requests.length;
@@ -176,7 +176,7 @@ test("actual API and awaited CLI compose the same recorded plan and disclose the
       const key = randomUUID();
       const fetched = await (await fetch(`${url}/fetch`, json({
         request_id: key, correlation_id: feedCorrelation, feed_id: "recorded-news",
-        kind: "article", batch_id: offered.batch_id, offer_id: offer.offer_id,
+          fetch_item_type: "article", batch_id: offered.batch_id, offer_id: offer.offer_id,
       }))).json();
       return { key, fetched };
     }));
@@ -219,7 +219,7 @@ test("actual API and awaited CLI compose the same recorded plan and disclose the
     const earlyCorrelation = randomUUID();
     const earlyFetch = await (await fetch(`${url}/fetch`, json({
       request_id: earlyKey, correlation_id: earlyCorrelation, feed_id: "recorded-news",
-      kind: "article", url: "https://news.example/second",
+      fetch_item_type: "article", url: "https://news.example/second",
     }))).json();
     const earlyParsed = await (await fetch(`${url}/parse`, json({
       request_id: randomUUID(), fetch_request_id: earlyKey, article_id: earlyFetch.article_id, correlation_id: earlyCorrelation,
@@ -249,7 +249,7 @@ test("actual API and awaited CLI compose the same recorded plan and disclose the
     expect(await Promise.all(selectedPaths.map(path => readFile(path)))).toEqual(selectedBytes);
     const beforeStandaloneMedia = api.transport.requests.length;
     const standaloneMedia = await fetch(`${url}/fetch`, json({
-      request_id: randomUUID(), correlation_id: randomUUID(), feed_id: "recorded-news", kind: "article",
+      request_id: randomUUID(), correlation_id: randomUUID(), feed_id: "recorded-news", fetch_item_type: "article",
       url: `https://${api.inputs.harvest.config.content_filters.media.url_rules[0]!.host}/watch`,
     }));
     expect(standaloneMedia.status).toBe(409);
@@ -283,10 +283,10 @@ test("actual API and awaited CLI compose the same recorded plan and disclose the
       expect(health[0]!.rejection_counts).toHaveLength(3);
       expect(health[0]!.feed_requests! + health[0]!.article_requests! + health[0]!.robots_requests!)
         .toBe(filtered.transport.requests.length);
-      const seen = (await Promise.all(planned.files.discovered_articles.files.map((file: { path: string }) =>
+      const discovered = (await Promise.all(planned.files.discovered_articles.files.map((file: { path: string }) =>
         readPlannerParquet(join(filtered.inputs.outputRoot, file.path), "discovered-articles", DiscoveredArticleRowContract)))).flatMap(file => file.rows);
-      expect(seen).toHaveLength(6);
-      expect(seen.every(row => row.first_seen_at === "2026-10-21T23:59:59Z")).toBe(true);
+      expect(discovered).toHaveLength(6);
+      expect(discovered.every(row => row.first_seen_at === "2026-10-21T23:59:59Z")).toBe(true);
       const selectedArtifact = SelectedArticlesArtifactSchema.parse(await Bun.file(join(filtered.directory, planned.selected_articles_artifact)).json());
       expect(selectedArtifact.articles[0]).toMatchObject({
         canonical_url: "https://news.example/filter-clean", published_at_source: "selection",
@@ -303,7 +303,7 @@ test("actual API and awaited CLI compose the same recorded plan and disclose the
       const correlation = randomUUID();
       const fetchedKey = randomUUID();
       const feed = await (await fetch(`${filteredUrl}/fetch`, json({
-        request_id: fetchedKey, correlation_id: correlation, feed_id: "recorded-news", kind: "feed",
+        request_id: fetchedKey, correlation_id: correlation, feed_id: "recorded-news", fetch_item_type: "feed",
       }))).json();
       const offers = await (await fetch(`${filteredUrl}/parse`, json({
         request_id: randomUUID(), fetch_request_id: fetchedKey, article_id: feed.article_id, correlation_id: correlation,
@@ -316,7 +316,7 @@ test("actual API and awaited CLI compose the same recorded plan and disclose the
         const key = randomUUID();
         const before = filtered.transport.requests.length;
         const response = await fetch(`${filteredUrl}/fetch`, json({
-          request_id: key, correlation_id: correlation, feed_id: "recorded-news", kind: "article",
+          request_id: key, correlation_id: correlation, feed_id: "recorded-news", fetch_item_type: "article",
           batch_id: offers.batch_id, offer_id: offer.offer_id,
         }));
         if (index < 2) {
@@ -421,7 +421,7 @@ test("one listener retains durable seen receipts from an output root outside the
     expect((await fetch(`${url}/health`)).status).toBe(200);
     expect(activeParsers).toBeGreaterThan(0);
     const independent = await fetch(`${url}/fetch`, json({
-      request_id: randomUUID(), correlation_id: randomUUID(), feed_id: "recorded-news", kind: "feed",
+      request_id: randomUUID(), correlation_id: randomUUID(), feed_id: "recorded-news", fetch_item_type: "feed",
     }));
     expect(independent.status).toBe(200);
     expect(activeParsers).toBeGreaterThan(0);
@@ -441,7 +441,7 @@ test("one listener retains durable seen receipts from an output root outside the
   } finally { await server.stop(true); await recorded.close(); }
 });
 
-test("a later dispatch failure does not lose already durable first sight from this listener", async () => {
+test("a later dispatch failure does not lose discovery already persisted by this listener", async () => {
   const recorded = await recordedPlan();
   const app = createPlanApp(recorded.inputs, recorded.runtime);
   try {
@@ -458,7 +458,7 @@ test("a later dispatch failure does not lose already durable first sight from th
     const fetchKey = randomUUID();
     const correlationId = randomUUID();
     const fetched = await (await app.request(`${prefix}/fetch`, json({
-      request_id: fetchKey, correlation_id: correlationId, feed_id: "recorded-news", kind: "article", url: "https://news.example/second",
+      request_id: fetchKey, correlation_id: correlationId, feed_id: "recorded-news", fetch_item_type: "article", url: "https://news.example/second",
     }))).json();
     app.close();
     const loaded = await loadPlanInputs(fileURLToPath(new URL("../../../", import.meta.url)));

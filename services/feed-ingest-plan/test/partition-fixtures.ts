@@ -43,15 +43,15 @@ export async function fixtureInput(root: string, options: { count?: number; fres
   ]);
   const planning = loadPlanningConfig({
     ...loaded.harvest.config,
-    triage: { ...loaded.harvest.config.triage, min_words_article: 1 },
-    curate: {
-      ...loaded.harvest.config.curate, article_limit: null, exploration_slot_share: 0,
-      source_authority_weight: 0, base_source_allowance: 20, bonus_unique_evidence: 0,
+    triage: { ...loaded.harvest.config.triage, min_words: 1 },
+    curate_articles: {
+      ...loaded.harvest.config.curate_articles, article_limit: null, exploration_slot_share: 0,
+      source_authority_weight: 0, base_source_allowance: 20,
       soft_caps: {
-        ...loaded.harvest.config.curate.soft_caps, max_source_share: 1,
-        max_parent_domain_share: 1, min_distinct_sources: 1,
+        ...loaded.harvest.config.curate_articles.soft_caps, max_source_share: 1,
+        max_website_group_share: 1, min_distinct_sources: 1,
       },
-      mmr_weights: { lambda_source: 0, lambda_source_kind: 0, lambda_domain: 0 },
+      mmr_weights: { lambda_source: 0, lambda_website_group: 0 },
     },
   });
   const inputs = {
@@ -73,7 +73,7 @@ export async function fixtureInput(root: string, options: { count?: number; fres
       source_id: sourceId,
       source: {
         source_id: sourceId, feed_url: "https://example.org/feed", title: "Recorded source",
-        kind: "reporting", tier: 1, form: "article", status: "active",
+        tier: 1, status: "active",
         weight: 1, applied_tier_weight: 1,
       },
       canonical_url: url, url_key: deriveUrlKey(url), title: `Recorded article ${ordinal}`,
@@ -83,7 +83,7 @@ export async function fixtureInput(root: string, options: { count?: number; fres
     });
   });
   const screening = await screenArticleCandidates({
-    candidates, observations: {}, seen: { availability: "unavailable" }, planning,
+    candidates, observations: {}, discovered: { availability: "unavailable" }, planning,
     clock_config: { collect: { max_future_hours: 1 } },
     run: { now: fixture.observed_at, run_id: context.run_id, correlation_id: context.correlation_id, overrides },
   });
@@ -94,9 +94,9 @@ export async function fixtureInput(root: string, options: { count?: number; fres
       candidate_id: candidate.candidate_id, http_status: 200, paywall: false, robots: "allowed",
       fetch_failure: null, extraction: "success", paywall_evidence: "none", observed_at: context.now,
     }])),
-    seen: { availability: "unavailable" },
+    discovered: { availability: "unavailable" },
     evidence: Object.fromEntries(candidates.map(candidate => [candidate.candidate_id, {
-      parent_domain: null, primary_evidence: null, estimated_work: candidate.word_count,
+      website_group: null, estimated_work: candidate.word_count,
     }])),
     history_rows: [], history_days: [], work_rows: [], exclusions: [],
   });

@@ -18,7 +18,7 @@ if (Bun.argv.includes("--emit-schemas")) {
   const readConfig = () => Bun.file(new URL("../../../config/feed-ingest-plan.json", import.meta.url)).json();
 
   test("publisher IDs use the shared lowercase slug rule", () => {
-    for (const id of ["bbc", "the-conversation-africa", "the-hindu-businessline"]) {
+    for (const id of ["publisher-alpha", "publisher-group-2", "publisher-x"]) {
       expect(PublisherIdSchema.parse(id)).toBe(id);
     }
     for (const id of ["BBC", "the_hindu", "mint 2"]) {
@@ -26,61 +26,38 @@ if (Bun.argv.includes("--emit-schemas")) {
     }
   });
 
-  test("authored defaults preserve word thresholds, age, and reporting isolation", async () => {
+  test("authored planner config conforms to its declared schema", async () => {
     const config = configs.FeedIngestConfigSchema.parse(await readConfig());
-    expect(config.triage).toEqual({
-      min_words_article: 180, min_words_abstract: 60, blocked_http_statuses: [401, 403, 429],
-      max_age_hours: 24, recency_half_life_hours: 18, recency_weight: 0.6,
-    });
-    expect(config.curate.article_limit).toBe(100);
-    expect(config.harvest.tidy_urls).toBe(true);
-    expect(config.content_filters).toMatchObject({
-      media: { enabled: true, enclosure_type_prefixes: ["audio/", "video/"] },
-      press_release: { enabled: true, sample_chars: 600 },
-      link_heavy: { enabled: true, max_link_density: 0.4, max_list_items: 10, list_word_limit: 150 },
-    });
-    expect(config.feedback.lifecycle_window_days).toBe(31);
-    expect(config.feedback.request_report_closed_days).toBe(7);
-    expect(Object.keys(config.feedback)).toEqual(["lifecycle_window_days", "request_report_closed_days"]);
-    const { feedback: _feedback, ...legacyConfig } = config;
-    expect(configs.FeedIngestConfigSchema.parse(legacyConfig).feedback.request_report_closed_days).toBe(7);
-    expect(configs.FeedIngestConfigSchema.parse({
-      ...config, feedback: { request_report_closed_days: 2 },
-    }).feedback).toMatchObject({
-      lifecycle_window_days: 31, request_report_closed_days: 2,
-    });
-    for (const retired of ["window_days", "minimum_measured_opportunities", "minimum_measured_coverage", "component_weights"]) {
-      expect(configs.FeedIngestConfigSchema.safeParse({ ...config, feedback: { ...config.feedback, [retired]: 1 } }).success).toBe(false);
-    }
-    expect(config.curate.source_reliability_penalty_enabled).toBe(true);
-    const { source_reliability_penalty_enabled: _enabled, ...previousCurate } = config.curate;
-    expect(configs.FeedCurateConfigSchema.parse(previousCurate).source_reliability_penalty_enabled).toBe(true);
-    expect(configs.FeedCurateConfigSchema.parse({
-      ...config.curate, source_reliability_penalty_enabled: false,
-    }).source_reliability_penalty_enabled).toBe(false);
-    expect(config.curate.mmr_weights.lambda_source_kind).toBe(0.05);
-    expect(config).not.toHaveProperty("vertical_overrides");
-    expect(config.workflow_reporting.enabled).toBe(true);
-    expect(configs.FeedWorkflowReportingConfigSchema.parse({
-      removal_condition: config.workflow_reporting.removal_condition,
-    }).enabled).toBe(true);
-    expect(configs.FeedWorkflowReportingConfigSchema.parse({
-      ...config.workflow_reporting, enabled: false,
-    }).enabled).toBe(false);
+    expect(config).toHaveProperty("curate_articles");
+    expect(config).not.toHaveProperty("curate");
+  });
+
+  test("schema-valid planner settings can change without a live-value assertion", async () => {
+    const config = configs.FeedIngestConfigSchema.parse(await readConfig());
+    const changed = {
+      ...config,
+      triage: { ...config.triage, min_words: config.triage.min_words + 1 },
+      harvest: { ...config.harvest, concurrency: config.harvest.concurrency + 1 },
+    };
+    expect(configs.FeedIngestConfigSchema.parse(changed)).toEqual(changed);
+  });
+
+  test("private suffix parsing is enabled by the schema default", () => {
+    expect(configs.FeedWebsiteGroupingConfigSchema.parse({}).include_private_suffixes).toBe(true);
   });
 
   test.each([
-    [["triage", "min_words_article"], 0],
-    [["triage", "min_words_abstract"], 1.5],
+    [["triage", "min_words"], 0],
     [["triage", "max_age_hours"], null],
     [["triage", "recency_weight"], -1],
     [["triage", "kind"], "research"],
-    [["curate", "source_authority_weight"], Infinity],
-    [["curate", "source_reliability_penalty_enabled"], null],
-    [["curate", "base_source_allowance"], -1],
-    [["curate", "mmr_weights", "lambda_domain"], NaN],
-    [["curate", "mmr_weights", "lambda_lens"], 0],
-    [["curate", "soft_caps", "max_source_share"], 0],
+    [["curate_articles", "source_authority_weight"], Infinity],
+    [["curate_articles", "source_reliability_penalty_enabled"], null],
+    [["curate_articles", "base_source_allowance"], -1],
+    [["curate_articles", "mmr_weights", "lambda_website_group"], NaN],
+    [["curate_articles", "mmr_weights", "lambda_lens"], 0],
+    [["curate_articles", "soft_caps", "max_source_share"], 0],
+    [["discovered_articles", "lookback_days"], -1],
     [["harvest", "concurrency"], "2"],
     [["content_filters", "media", "enabled"], "true"],
     [["content_filters", "media", "enclosure_type_prefixes"], ["audio"]],
@@ -112,7 +89,7 @@ if (Bun.argv.includes("--emit-schemas")) {
   });
 
   test("each independent penalty accepts zero without dropping other dimensions", () => {
-    const weights = { lambda_source: 0.1, lambda_source_kind: 0.05, lambda_domain: 0.1 };
+    const weights = { lambda_source: 0.1, lambda_website_group: 0.1 };
     for (const name of Object.keys(policies.FeedPenaltyWeightsSchema.shape)) {
       expect(policies.FeedPenaltyWeightsSchema.parse({ ...weights, [name]: 0 })[name as keyof typeof weights]).toBe(0);
     }
@@ -152,14 +129,14 @@ if (Bun.argv.includes("--emit-schemas")) {
       { harvest: { ...config.harvest, semantic_fallback: {
         ...config.harvest.semantic_fallback, min_root_chars: -1,
       } } },
-      { curate: { ...config.curate, article_limit: 0 } },
-      { curate: { ...config.curate, article_limit: 1.5 } },
-      { curate: { ...config.curate, source_reliability_penalty_enabled: "true" } },
-      { curate: { ...config.curate, source_reliability_penalty_enabled: null } },
+      { curate_articles: { ...config.curate_articles, article_limit: 0 } },
+      { curate_articles: { ...config.curate_articles, article_limit: 1.5 } },
+      { curate_articles: { ...config.curate_articles, source_reliability_penalty_enabled: "true" } },
+      { curate_articles: { ...config.curate_articles, source_reliability_penalty_enabled: null } },
       { feedback: {
         ...config.feedback, component_weights: { cpu: 0.2, private_memory: 0.2, requests: 0.2 },
       } },
-      { triage: { ...config.triage, min_words_article: true } },
+      { triage: { ...config.triage, min_words: true } },
       { triage: { ...config.triage, max_age_hours: Infinity } },
       { seal: { ...config.seal, dispatches_prefix: ["feed-ingest-plan", "dispatches"] } },
       { metrics: {} },

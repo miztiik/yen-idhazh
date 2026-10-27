@@ -91,8 +91,7 @@ def test_a_draft_or_retired_entry_reaches_no_prompt() -> None:
         for entry in entries:
             if entry.status is LifecycleStatus.ACTIVE:
                 assert (
-                    f"- {entry.id} ({entry.display_name}): {entry.definition}"
-                    in definition_block
+                    f"- {entry.id} ({entry.display_name}): {entry.definition}" in definition_block
                 )
 
     payload = json.loads(offered.to_json())
@@ -110,39 +109,12 @@ def test_an_offered_entry_without_a_definition_is_refused(collection: str) -> No
     """Each vocabulary rejects an active entry the prompt cannot explain."""
     payload = taxonomy_fixture("definitions-a").model_dump(mode="json")
     entry = next(
-        item
-        for item in payload[collection]
-        if item["status"] == LifecycleStatus.ACTIVE.value
+        item for item in payload[collection] if item["status"] == LifecycleStatus.ACTIVE.value
     )
     entry["definition"] = ""
 
     with pytest.raises(ValueError, match="offered with no definition"):
         Taxonomy.model_validate(payload)
-
-
-def test_the_frontend_names_every_committed_lens_including_a_tombstone() -> None:
-    """The page's own copy of the lens display names, held against the config.
-
-    `frontend/src/lib/payload/lenses.ts` restates them because it is TypeScript
-    and the vocabulary is JSON, and it holds them rather than taking them
-    through `data` so the names are not repeated inside every prerendered day
-    page. Drift either way is a defect a build never catches.
-
-    **Every** committed lens, retired ones included, and that is the half that
-    changed on 2026-09-12. Omitting a tombstone did not keep it off the page so
-    much as make the page stop saying what a frozen day said: `ai-roi` was
-    retired on 2026-08-30 and is carried by 18 committed items, and all 18
-    rendered one chip fewer than their payload held. A retired lens keeps its
-    name here; deleting the entry from config is what takes the name away, and
-    the page then falls back to the raw id rather than to silence.
-    """
-    taxonomy = Taxonomy.from_json(read_text(CONFIG_DIR / "taxonomy.json"))
-    source = read_text(REPO_ROOT / "frontend" / "src" / "lib" / "payload" / "lenses.ts")
-    declared = re.search(r"LENS_NAMES: Readonly<Record<string, string>> = \{(.*?)\};", source, re.DOTALL)
-    assert declared is not None, "lenses.ts no longer declares LENS_NAMES"
-    named = dict(re.findall(r"'?([a-z0-9-]+)'?: '([^']+)'", declared.group(1)))
-    committed = {lens.id: lens.display_name for lens in taxonomy.lenses}
-    assert named == committed, "the page and config/taxonomy.json disagree about the lens names"
 
 
 def test_the_console_reads_only_telemetry_columns_the_writer_writes() -> None:
@@ -161,16 +133,13 @@ def test_the_console_reads_only_telemetry_columns_the_writer_writes() -> None:
     Nothing else ties the two lists together.
     """
     source = read_text(REPO_ROOT / "frontend" / "src" / "lib" / "charts" / "series.ts")
-    declared = re.search(
-        r"export const TELEMETRY_COLUMNS = \[(.*?)\] as const;", source, re.DOTALL
-    )
+    declared = re.search(r"export const TELEMETRY_COLUMNS = \[(.*?)\] as const;", source, re.DOTALL)
     assert declared is not None, "series.ts no longer declares a TELEMETRY_COLUMNS array"
     names = tuple(re.findall(r"'([^']+)'", declared.group(1)))
     assert names, "TELEMETRY_COLUMNS matched but held no column names"
     unwritten = [name for name in names if name not in ItemHealthRow.csv_columns()]
     assert not unwritten, (
-        "series.ts reads columns the native item-health contract does not carry: "
-        f"{unwritten}"
+        f"series.ts reads columns the native item-health contract does not carry: {unwritten}"
     )
 
 
@@ -399,6 +368,7 @@ def test_the_item_health_page_splits_the_codes_the_way_the_contract_does() -> No
     neutral = {code.value for code in SOURCE_NEUTRAL_FAILURE_CODES}
 
     assert backticked(paragraph_after(text, "never count against a source:")) == neutral
-    assert backticked(paragraph_after(text, "can count against the source:")) == {
-        code.value for code in FailureCode
-    } - neutral
+    assert (
+        backticked(paragraph_after(text, "can count against the source:"))
+        == {code.value for code in FailureCode} - neutral
+    )

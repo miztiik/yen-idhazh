@@ -98,7 +98,7 @@ export async function documentState(record: PlannerOperation, inputs: PlanInputs
     if (saved.state !== "complete" || saved.operation !== "fetch" || state.recovered.has(saved.request_id)) continue;
     const artifact = checkFetchedDocument(saved, inputs);
     state.work.restoreRequests(artifact);
-    if (artifact.kind === "feed") state.work.pendingFeed(artifact.source_id, artifact, artifact.observation.occurred_at);
+    if (artifact.fetch_item_type === "feed") state.work.pendingFeed(artifact.source_id, artifact, artifact.observation.occurred_at);
     state.recovered.add(saved.request_id);
   }
   return state;

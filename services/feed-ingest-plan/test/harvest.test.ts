@@ -152,7 +152,7 @@ test("Feedsmith formats retain categories, author, ordinal and only entry-level 
     });
     expect(transport.requests.some(request => request.url.href === media[0]!.link)).toBe(false);
     expect(result.feed_outcomes[0]).toMatchObject({ fetch_status: "success", parse_status: "success", parsed_count: media.length });
-    expect(result.first_sight_candidates.map(candidate => candidate.url_key)).toContain(canonicalizeUrl(media[0]!.link!).url_key);
+    expect(result.discovered_candidates.map(candidate => candidate.url_key)).toContain(canonicalizeUrl(media[0]!.link!).url_key);
     expect(result.candidates.map(candidate => candidate.entry_ordinal))
       .toEqual(media.slice(1).filter(entry => entry.link !== null).map(entry => entry.entry_ordinal));
   }
@@ -170,8 +170,7 @@ test("public harvest returns strict full text and streamed work facts without pe
   const transport = new RecordedTransport(recordings);
   const loaded = await inputs([
     source({ publisher_id: "recorded-publication" }),
-    source({ id: "recorded-atom", url: "https://atom.example/feed.xml", kind: "research",
-      tier: 1, form: "abstract", publisher_id: "recorded-publication" }),
+    source({ id: "recorded-atom", url: "https://atom.example/feed.xml", publisher_id: "recorded-publication" }),
     source({ id: "retired-source", status: "retired", retired_on: "2026-10-20" }),
   ], { publishers: [{ id: "recorded-publication", display_name: "Recorded Publication" }] });
   const logged: unknown[] = [];
@@ -190,11 +189,7 @@ test("public harvest returns strict full text and streamed work facts without pe
   expect(logged).toEqual(expect.arrayContaining(result.rejections));
   const first = result.candidates[0]!;
   expect(FeedIngestCandidateSchema.parse(first)).toEqual(first);
-  expect(first.source).toEqual({
-    source_id: "recorded-news", feed_url: "https://news.example/feed.xml", title: "Configured science news",
-    publisher_id: "recorded-publication", kind: "reporting", tier: 2, form: "article", status: "active",
-    weight: 0.8, applied_tier_weight: 0.6,
-  });
+  expect(first.source).toEqual(sourceSnapshot(loaded, loaded.sources[0]!));
   expect(result.candidates.find(candidate => candidate.source_id === "recorded-atom")?.source.publisher_id)
     .toBe("recorded-publication");
   expect(first.canonical_url).toBe("https://news.example/story?a=1&b=2");
@@ -385,7 +380,7 @@ test("real inert DOM extraction retains prose and author but never calls a page 
     { truncated_at_tokens: controls.truncation_cap_tokens }, { rejected: true },
     { failure_code: "too_short" }, { boilerplate: true },
   ]) expect(ExtractionQualitySchema.safeParse({ ...extracted.quality, ...invalid }).success).toBe(false);
-  const parsed = await parseDocument("article", bodies.article, "https://news.example/story", controls, "article");
+  const parsed = await parseDocument("article", bodies.article, "https://news.example/story", controls);
   expect(parsed.article_text).toBe(extracted.article_text);
   if (parsed.quality === null) throw new Error("Recorded article must retain measured extraction evidence");
   expect(ExtractionQualitySchema.parse(parsed.quality)).toEqual(parsed.quality);
@@ -430,23 +425,21 @@ test("real inert DOM extraction retains prose and author but never calls a page 
   }
   const lineHeavy = `${extracted.article_text}\n${extracted.page_title!.split(/\s+/u).join("\n")}`;
   const shapeControls = { ...controls, prose_sentence_min: 1, prose_line_count_min: 1, prose_line_ratio_min: 0 };
-  expect(measureExtractionQuality(lineHeavy, null, shapeControls, "article").not_prose).toBe(false);
-  expect(measureExtractionQuality(lineHeavy, null, { ...shapeControls, prose_line_ratio_min: 1 }, "article").not_prose).toBe(true);
+  expect(measureExtractionQuality(lineHeavy, null, shapeControls).not_prose).toBe(false);
+  expect(measureExtractionQuality(lineHeavy, null, { ...shapeControls, prose_line_ratio_min: 1 }).not_prose).toBe(true);
   expect(measureExtractionQuality(lineHeavy, null, {
     ...shapeControls, prose_line_ratio_min: 1, prose_line_count_min: lineHeavy.split("\n").length + 1,
-  }, "article").not_prose).toBe(false);
+  }).not_prose).toBe(false);
   expect(measureExtractionQuality(extracted.article_text, null, {
     ...controls, prose_sentence_words_min: extracted.word_count + 1,
-  }, "article").not_prose).toBe(true);
+  }).not_prose).toBe(true);
   expect(measureExtractionQuality(extracted.article_text, null, {
     ...controls, min_source_words: extracted.word_count,
-  }, "article").too_short).toBe(false);
-  for (const form of ["article", "abstract"] as const) {
-    const short = await extractArticle(bodies.article, "https://news.example/story", {
-      ...controls, min_source_words: extracted.word_count * 2, reject_too_short: true,
-    }, form);
-    expect(short.quality).toMatchObject({ failure_code: "too_short", too_short: true, rejected: form === "article" });
-  }
+  }).too_short).toBe(false);
+  const short = await extractArticle(bodies.article, "https://news.example/story", {
+    ...controls, min_source_words: extracted.word_count * 2, reject_too_short: true,
+  });
+  expect(short.quality).toMatchObject({ failure_code: "too_short", too_short: true, rejected: true });
   const capChanged = await extractArticle(bodies.article, "https://news.example/story", { ...controls, truncation_cap_tokens: 256 });
   expect(capChanged.article_text).toBe(extracted.article_text);
   expect(capChanged.quality).toMatchObject({ token_count: null, truncated: null, truncation_cap_tokens: 256 });
@@ -497,7 +490,7 @@ test("real inert DOM extraction retains prose and author but never calls a page 
   const proseRoot = parseHTML(semanticPage).document.querySelector("#prose-root")?.outerHTML;
   if (!proseRoot) throw new Error("Recorded semantic page must contain its prose-root case");
   const prosePage = semanticPage.replace(/<body>[\s\S]*<\/body>/u, `<body>${proseRoot}</body>`);
-  const proseRecovered = await parseDocument("article", prosePage, "https://news.example/second", proseControls, "article");
+  const proseRecovered = await parseDocument("article", prosePage, "https://news.example/second", proseControls);
   expect(proseRecovered.article_text.match(/Workers checked the bridge supports/g)).toHaveLength(1);
   expect(proseRecovered.word_count).toBeLessThan(controls.min_source_words);
   expect(proseRecovered.quality).toMatchObject({ too_short: true, not_prose: false, rejected: true });
@@ -508,7 +501,7 @@ test("real inert DOM extraction retains prose and author but never calls a page 
     "<body><div class='post-content'><p>Workers checked the bridge supports before opening the road. "
     + "Inspectors found no new damage during the morning visit. "
     + "The council will publish the detailed inspection report next week.</p></div></body>");
-  const shortRecovered = await parseDocument("article", shortPage, "https://news.example/second", controls, "article");
+  const shortRecovered = await parseDocument("article", shortPage, "https://news.example/second", controls);
   expect(shortRecovered.page_title).toBe("Bridge inspection restores the morning bus route");
   expect(shortRecovered.author).toBe("Recorded Reporter");
   expect(shortRecovered.article_text).not.toContain("METADATA_ONLY");
@@ -518,19 +511,19 @@ test("real inert DOM extraction retains prose and author but never calls a page 
   const filterConfig = (await inputs()).config.content_filters;
   for (const entry of cases.article_cases) {
     const body = contentFilterPage(bodies.article, entry, cases.list_prose);
-    for (const min_source_words of [controls.min_source_words, 10000]) {
-      const parsed = await extractArticle(body, `https://news.example/${entry.path}`, { ...controls, min_source_words }, "abstract");
-      expect(parsed.quality?.rejected, entry.path).toBe(false);
-      expect(parsed.content_evidence, entry.path).not.toBeNull();
-      expect(excludeArticleContent(parsed.content_evidence!, parsed.word_count, filterConfig)?.drop_reason ?? null, entry.path).toBe(entry.reason);
-      expect(parsed.article_text).not.toContain("references.example");
-      expect(parsed.article_text).not.toContain("exfil.example");
-      expect(parsed.article_text).not.toContain("im_start");
-      if (entry.mode === "links") expect(parsed.content_evidence!.link_density).toBeGreaterThan(filterConfig.link_heavy.max_link_density);
-      if (entry.mode === "list") {
-        expect(parsed.content_evidence!.list_items).toBe(cases.list_prose.length);
-        expect(parsed.word_count).toBeLessThan(filterConfig.link_heavy.list_word_limit);
-      }
+    const parsed = await extractArticle(body, `https://news.example/${entry.path}`, {
+      ...controls, min_source_words: 1, reject_too_short: false,
+    });
+    expect(parsed.quality?.rejected, entry.path).toBe(false);
+    expect(parsed.content_evidence, entry.path).not.toBeNull();
+    expect(excludeArticleContent(parsed.content_evidence!, parsed.word_count, filterConfig)?.drop_reason ?? null, entry.path).toBe(entry.reason);
+    expect(parsed.article_text).not.toContain("references.example");
+    expect(parsed.article_text).not.toContain("exfil.example");
+    expect(parsed.article_text).not.toContain("im_start");
+    if (entry.mode === "links") expect(parsed.content_evidence!.link_density).toBeGreaterThan(filterConfig.link_heavy.max_link_density);
+    if (entry.mode === "list") {
+      expect(parsed.content_evidence!.list_items).toBe(cases.list_prose.length);
+      expect(parsed.word_count).toBeLessThan(filterConfig.link_heavy.list_word_limit);
     }
   }
 });
@@ -643,30 +636,33 @@ test("report settings remain available without changing the planning fingerprint
   })).toThrow("extract.min_source_words");
 });
 
-test("live and draft sources require active catalog kinds and tiers; retired sources preserve history", async () => {
+test("planner inputs ignore added feed labels while configured tiers retain their lifecycle", async () => {
   const baseline = await inputs();
+  const configured = baseline.sources[0]!;
+  const label = `planner-test-${configured.id}`;
+  const labelled = { ...configured, kind: label, form: `${label}-form` };
+  const relabelled = loadHarvestInputs({
+    config: baseline.config, taxonomy: baseline.registry,
+    sources: { feeds: [labelled] }, extraction: baseline.extraction_settings,
+  });
+  expect(relabelled.config_sha256).toBe(baseline.config_sha256);
+  expect(relabelled.sources[0]).toEqual(baseline.sources[0]);
+
+  const tierId = baseline.sources[0]!.tier;
   for (const status of ["active", "draft"] as const) for (const registryStatus of ["draft", "retired"] as const) {
-    const taxonomy = {
-      ...baseline.registry, source_kinds: baseline.registry.source_kinds.map(kind => kind.id === "reporting"
-        ? { ...kind, status: registryStatus, retired_on: registryStatus === "retired" ? "2026-10-20" : null } : kind),
-    };
-    expect(() => loadHarvestInputs({
-      config: baseline.config, taxonomy, sources: { feeds: [source({ status })] }, extraction: baseline.extraction_settings,
-    })).toThrow("source kind must be active and registered");
     const tierTaxonomy = {
-      ...baseline.registry, source_tiers: baseline.registry.source_tiers.map(tier => tier.id === 2
+      ...baseline.registry, source_tiers: baseline.registry.source_tiers.map(tier => tier.id === tierId
         ? { ...tier, status: registryStatus, retired_on: registryStatus === "retired" ? "2026-10-20" : null } : tier),
     };
     expect(() => loadHarvestInputs({
       config: baseline.config, taxonomy: tierTaxonomy, sources: { feeds: [source({ status })] }, extraction: baseline.extraction_settings,
     })).toThrow("source tier must be active and registered");
   }
-  const historical = source({
-    status: "retired", retired_on: "2026-10-20", kind: "historical-kind", tier: 42,
-  });
+  const historicalTierId = Math.max(...baseline.registry.source_tiers.map(tier => tier.id)) + 1;
+  const historical = source({ status: "retired", retired_on: "2026-10-20", tier: historicalTierId });
   const historicalTaxonomy = {
     ...baseline.registry, source_tiers: [...baseline.registry.source_tiers,
-      { id: 42, weight: 0.6, status: "retired", retired_on: "2026-10-20" }],
+      { id: historicalTierId, weight: baseline.registry.source_tiers[0]!.weight, status: "retired", retired_on: "2026-10-20" }],
   };
   const loaded = loadHarvestInputs({
     config: baseline.config, taxonomy: historicalTaxonomy, sources: { feeds: [historical] }, extraction: baseline.extraction_settings,
@@ -674,13 +670,13 @@ test("live and draft sources require active catalog kinds and tiers; retired sou
   expect(loaded.sources[0]).toEqual(historical);
   expect(() => loadHarvestInputs({
     config: baseline.config, taxonomy: baseline.registry, sources: { feeds: [historical] }, extraction: baseline.extraction_settings,
-  })).toThrow("source.recorded-news.tier: missing registered snapshot weight");
+  })).toThrow(/source\.[a-z0-9]+(?:-[a-z0-9]+)*\.tier: missing registered snapshot weight/u);
   const transport = new RecordedTransport(await readRecordings());
   const result = await harvestFeeds(loaded, context(), { transport, resolve: transport.resolve });
   expect(transport.requests).toEqual([]);
   expect(result.rejections[0]?.drop_reason).toBe("SOURCE_INACTIVE");
   expect(result.feed_outcomes[0]?.source).toMatchObject({
-    kind: "historical-kind", tier: 42, applied_tier_weight: 0.6,
+    tier: historicalTierId, applied_tier_weight: historicalTaxonomy.source_tiers.at(-1)!.weight,
   });
   expect(() => loadHarvestInputs({
     config: baseline.config, taxonomy: baseline.registry, sources: { feeds: [source({ url: "******news.example/feed" })] },

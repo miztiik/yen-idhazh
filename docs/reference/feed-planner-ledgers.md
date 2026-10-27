@@ -56,7 +56,7 @@ is listed below; there are no hidden policy or assessment payloads.
 
 ## A. discovered-articles
 
-**Committed ledger.** Records first sight globally across feeds, including
+**Committed ledger.** Records earliest discovery globally across feeds, including
 articles never selected.
 
 ### Table A - Discovery fields
@@ -68,9 +68,13 @@ articles never selected.
 | A3 | `first_seen_at` | Row | Establish age for undated articles; never reset on rediscovery |
 | A4 | `date` | Row | UTC date of first discovery; explicit day-partition/query key |
 
-No `feed_id` or `publisher_id`: the first-sight reader does not
+No `feed_id` or `publisher_id`: the discovery reader does not
 need them. Feed attribution belongs in health and selected output; publisher
 identity belongs in selected metadata and the curated registry.
+
+The planner reads the configured `discovered_articles.lookback_days` of prior
+UTC days plus today. This setting belongs to the TypeScript planner; it does
+not replace the native pipeline's separate `collect.seen_window_days`.
 
 ## B. selected-articles
 

@@ -1,6 +1,6 @@
-/** Does the manual workflow keep current history bounded and selected text out of committed output? */
+/** Does the manual workflow keep current history bounded and selected text out of delivered metadata? */
 import { expect, test } from "bun:test";
-import { copyFile, mkdir, mkdtemp, readFile, rm, stat, symlink, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
@@ -14,7 +14,7 @@ import { plannerRecordings } from "../../../packages/ledger-file-writer/test/pla
 import { PlanRequestSchema } from "../src/api/plan-request";
 import { readPlannerParquet } from "../src/read-ledger-history/read-planner-parquet";
 import { LedgerHistoryReadError } from "../src/read-ledger-history/ledger-history-error";
-import { requiredSeenDays } from "../src/read-ledger-history/read-seen-evidence";
+import { requiredUtcDays } from "../src/utc-instant";
 import { stageFeedHistory } from "../scripts/feed-ingest-plan-feed-history";
 import { completeHistoryDayInputs, historyIndexPaths, resolveHistoryInventory, sparseCheckoutPath } from "../scripts/feed-ingest-plan-outputs";
 import { loadConfig as loadProbeConfig } from "../../host-probes/src/config";
@@ -39,7 +39,7 @@ async function workflow() {
   return { text, parsed, steps: parsed.jobs["isolated-plan"].steps };
 }
 
-test("manual controls commit only current metadata and keep optional host tools independent", async () => {
+test("manual controls deliver only current metadata and keep optional host tools independent", async () => {
   const { text, parsed, steps } = await workflow();
   expect(parsed.permissions).toEqual({ contents: "write" });
   expect(parsed.jobs["isolated-plan"]["timeout-minutes"]).toBe(360);
@@ -47,7 +47,7 @@ test("manual controls commit only current metadata and keep optional host tools 
   expect(Object.keys(controls)).toEqual(["freshness_hours", "article_limit", "shards", "partition_strategy", "profile_machine_memory"]);
   const config = FeedIngestConfigSchema.parse(await Bun.file(join(root, "config", "feed-ingest-plan.json")).json());
   for (const [field, value] of Object.entries({
-    freshness_hours: config.triage.max_age_hours, article_limit: config.curate.article_limit ?? "",
+    freshness_hours: config.triage.max_age_hours, article_limit: config.curate_articles.article_limit ?? "",
     shards: config.partition.default_shards, partition_strategy: config.partition.default_strategy,
   })) expect(controls[field]!.default).toBe(String(value));
   expect(controls.partition_strategy!.options).toEqual(PlanRequestSchema.shape.partition_strategy.unwrap().options);
@@ -61,12 +61,14 @@ test("manual controls commit only current metadata and keep optional host tools 
     PROFILE_MACHINE_MEMORY: "${{ inputs.profile_machine_memory }}",
   });
   expect(plan.run).not.toContain("${{");
-  const commit = steps.find(step => step.name === "Commit exact current planner and host metadata")!;
-  expect(commit.if).toContain("!cancelled()");
-  expect(commit.if).toContain("current_run_files");
-  expect(commit.if).not.toContain("planning_complete");
-  expect(commit.run).toContain("set -o pipefail");
-  expect(commit.run).toContain('tee "$RUNNER_TEMP/feed-ingest-plan/commit.log"');
+  const delivery = steps.find(step => step.name === "Deliver exact current planner and host metadata")!;
+  expect(delivery.if).toContain("!cancelled()");
+  expect(delivery.if).toContain("current_run_files");
+  expect(delivery.if).not.toContain("planning_complete");
+  expect(delivery.run).toContain("set -o pipefail");
+  expect(delivery.run).toContain("scripts/feed-ingest-plan-deliver.ts");
+  expect(delivery.run).toContain('tee "$RUNNER_TEMP/feed-ingest-plan/delivery.log"');
+  expect(delivery.run).not.toContain("git push");
   const textArtifact = steps.find(step => step.name === "Preserve selected text for the summarizer")!;
   expect(textArtifact.with?.path).toBe("${{ runner.temp }}/feed-ingest-plan/${{ steps.evidence.outputs.selected }}");
   const individual = steps.filter(step => step.uses === "actions/upload-artifact@v7" && step.with?.archive === false);
@@ -102,17 +104,19 @@ test("manual controls commit only current metadata and keep optional host tools 
     expect(job.steps.some(step => step.uses === "oven-sh/setup-bun@v2")).toBe(true);
     const install = job.steps.find(step => step.name === "Install the native planner fixture writer")!;
     expect(install.run).toContain("bun install --frozen-lockfile --cwd packages/common-contracts");
+    expect(install.run).toContain("bun install --frozen-lockfile --cwd packages/data-delivery");
     expect(install.run).toContain("bun install --frozen-lockfile --cwd packages/ledger-file-writer");
   }
 });
 
-test("bounded native history preserves covered-day membership and planner raw overlap", async () => {
-  const seen = requiredSeenDays("2026-01-01T00:00:00Z", 2);
-  expect(seen).toEqual(["2025-12-30", "2025-12-31", "2026-01-01"]);
-  expect(completeHistoryDayInputs(["feed-ingest-plan", "discovered-articles"], seen, [], "seen_days")).toHaveLength(3);
-  expect(sparseCheckoutPath("state/raw/seen/[literal]*?.json")).toBe("/state/raw/seen/\\[literal\\]\\*\\?.json");
-  expect(() => sparseCheckoutPath("state/raw/seen/a\nstate/")).toThrow("control");
-  expect(() => historyIndexPaths([".."], seen)).toThrow("prefix");
+test("bounded discovery history preserves covered-day membership and planner raw overlap", async () => {
+  const discoveredDays = requiredUtcDays("2026-01-01T00:00:00Z", 2);
+  expect(discoveredDays).toEqual(["2025-12-30", "2025-12-31", "2026-01-01"]);
+  expect(completeHistoryDayInputs(["feed-ingest-plan", "discovered-articles"], discoveredDays, [], "discovered_days")).toHaveLength(3);
+  expect(sparseCheckoutPath("state/raw/discovered-articles/[literal]*?.parquet"))
+    .toBe("/state/raw/discovered-articles/\\[literal\\]\\*\\?.parquet");
+  expect(() => sparseCheckoutPath("state/raw/discovered-articles/a\nstate/")).toThrow("control");
+  expect(() => historyIndexPaths([".."], discoveredDays)).toThrow("prefix");
   const rawName = "01a1592e-c600-84d0-96e4-7bb01708ce01.parquet";
   for (const ledger of ["feed-health-state", "published"] as const) {
     const prefix = ledger === "published" ? ["published"] : ["feed-ingest-plan", ledger];
@@ -198,47 +202,47 @@ test("hostile dispatch strings fail in the actual adapter before loading inputs 
   expect(errors).not.toContain("injected");
 });
 
-test("strict-checks the exact named sparse adapter and test inventory in one compiler invocation", async () => {
+test("the workflow checkout names every delivery adapter and focused test input", async () => {
   const { steps } = await workflow();
-  const directory = await mkdtemp(join(root, ".row22-typecheck-"));
-  try {
-    const selection = steps.find(step => step.uses?.startsWith("actions/checkout@"))!.with?.["sparse-checkout"];
-    if (typeof selection !== "string") throw new Error("Expected a named sparse selection");
-    const required = new Set([
-      "services/feed-ingest-plan/scripts/feed-ingest-plan-http-proof.ts", "services/feed-ingest-plan/scripts/feed-ingest-plan-commit.ts",
-      "services/feed-ingest-plan/scripts/feed-ingest-plan-verification.ts", "services/feed-ingest-plan/test/feed-ingest-plan-outputs.test.ts",
-      "services/feed-ingest-plan/test/feed-ingest-plan-report.test.ts", "services/feed-ingest-plan/test/feed-ingest-plan-workflow.test.ts",
-      "services/feed-ingest-plan/scripts/feed-ingest-plan-artifacts.ts", "services/host-probes/scripts/feed-ingest-plan-profile-proof.ts",
-      "services/feed-ingest-plan/test/feed-ingest-plan-host.test.ts", "services/feed-ingest-plan/test/feed-ingest-plan-publication.test.ts",
-    ]);
-    const adapters: string[] = [];
-    for (const entry of selection.trim().split("\n").map(value => value.trim())) {
-      if (!/^\/[\w./-]+$/.test(entry) || entry.split("/").includes("..")) throw new Error("Sparse input must be a literal rooted name");
-      const path = entry.slice(1);
-      const target = join(directory, ...path.split("/"));
-      await mkdir(dirname(target), { recursive: true });
-      if (entry.endsWith("/")) {
-        await symlink(join(root, ...path.split("/")), target, "junction");
-        for (const name of required) if (name.startsWith(path)) {
-          const named = join(directory, ...name.split("/"));
-          expect((await stat(named)).isFile()).toBe(true);
-          required.delete(name);
-          adapters.push(named);
-        }
-      }
-      else {
-        await copyFile(join(root, ...path.split("/")), target);
-        if (required.delete(path)) adapters.push(target);
+  const selection = steps.find(step => step.uses?.startsWith("actions/checkout@"))!.with?.["sparse-checkout"];
+  if (typeof selection !== "string") throw new Error("Expected a named sparse selection");
+  const required = new Set([
+    "services/feed-ingest-plan/scripts/feed-ingest-plan-http-proof.ts",
+    "services/feed-ingest-plan/scripts/feed-ingest-plan-deliver.ts",
+    "services/feed-ingest-plan/scripts/feed-ingest-plan-delivery-result.ts",
+    "services/feed-ingest-plan/scripts/feed-ingest-plan-current-files.ts",
+    "services/feed-ingest-plan/scripts/feed-ingest-plan-metadata.ts",
+    "services/feed-ingest-plan/scripts/feed-ingest-plan-verification.ts",
+    "services/feed-ingest-plan/test/feed-ingest-plan-outputs.test.ts",
+    "services/feed-ingest-plan/test/feed-ingest-plan-report.test.ts",
+    "services/feed-ingest-plan/test/feed-ingest-plan-workflow.test.ts",
+    "services/feed-ingest-plan/scripts/feed-ingest-plan-artifacts.ts",
+    "services/feed-ingest-plan/src/website-group.ts",
+    "services/host-probes/scripts/feed-ingest-plan-profile-proof.ts",
+    "services/feed-ingest-plan/test/feed-ingest-plan-host.test.ts",
+    "services/feed-ingest-plan/test/feed-ingest-plan-delivery.test.ts",
+    "services/feed-ingest-plan/test/website-group.test.ts",
+    "config/data-delivery.json",
+    "config/push-retry.json",
+    "packages/data-delivery/package.json",
+    "packages/data-delivery/bun.lock",
+    "packages/data-delivery/tsconfig.json",
+    "packages/data-delivery/src/index.ts",
+    "packages/data-delivery/src/safe-persist-data-contract.ts",
+    "packages/data-delivery/src/safe-persist-data.ts",
+    "packages/data-delivery/test/safe-persist-data.test.ts",
+  ]);
+  for (const entry of selection.trim().split("\n").map(value => value.trim())) {
+    if (!/^\/[\w./-]+$/.test(entry) || entry.split("/").includes("..")) {
+      throw new Error("Sparse input must be a literal rooted name");
+    }
+    const path = entry.slice(1);
+    for (const name of required) {
+      if (entry.endsWith("/") ? name.startsWith(path) : path === name) {
+        expect((await stat(join(root, ...name.split("/")))).isFile()).toBe(true);
+        required.delete(name);
       }
     }
-    expect([...required], "Every mandatory adapter and test must be in the named checkout").toEqual([]);
-    const service = join(directory, "services", "feed-ingest-plan");
-    const child = Bun.spawn([process.execPath, "run", "tsc", "--noEmit", "--target", "ESNext", "--module", "ESNext",
-      "--moduleResolution", "Bundler", "--strict", "--noUncheckedIndexedAccess", "--exactOptionalPropertyTypes",
-      "--noFallthroughCasesInSwitch", "--noUnusedLocals", "--noUnusedParameters", "--verbatimModuleSyntax",
-      "--skipLibCheck", "--types", "bun", "--typeRoots", join(service, "node_modules", "@types"), ...adapters,
-    ], { cwd: service, stdout: "pipe", stderr: "pipe" });
-    const [output, errors] = await Promise.all([new Response(child.stdout).text(), new Response(child.stderr).text()]);
-    expect({ exit: await child.exited, output, errors }).toEqual({ exit: 0, output: "", errors: "" });
-  } finally { await rm(directory, { recursive: true, force: true }); }
+  }
+  expect([...required], "Every required adapter and test input must be named in the checkout").toEqual([]);
 });

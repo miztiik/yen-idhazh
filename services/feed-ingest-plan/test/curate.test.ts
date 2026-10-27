@@ -30,7 +30,7 @@ import { plannerRecordings } from "../../../packages/ledger-file-writer/test/pla
 import { source } from "./harvest-recordings";
 
 type CandidateCase = {
-  name: string; source: string; ordinal: number; kind: string;
+  name: string; source: string; ordinal: number;
   domain: string; publisher_id: string | null; title: string; published_at: string;
 };
 type OperationalEvidence = { success_fraction: number; attempted: number; window_days: number };
@@ -45,7 +45,7 @@ type Fixture = {
   }[];
   expected: { baseline: string[]; base_scores: Record<string, number>; selected_ranks: number[] };
 };
-type Knobs = FeedIngestConfig["curate"];
+type Knobs = FeedIngestConfig["curate_articles"];
 async function inputs(patch: Partial<Knobs> = {}) {
   const [fixture, loaded] = await Promise.all([
     Bun.file(new URL("../../../tests/fixtures/feed-ingest-plan/portfolio-cases.json", import.meta.url)).json() as Promise<Fixture>,
@@ -54,13 +54,13 @@ async function inputs(patch: Partial<Knobs> = {}) {
   const planning = loadPlanningConfig({
     ...loaded.harvest.config,
     triage: { ...loaded.harvest.config.triage, max_age_hours: 72, recency_half_life_hours: 18, recency_weight: 1 },
-    curate: {
-      ...loaded.harvest.config.curate, article_limit: 2, base_source_allowance: 3, bonus_unique_evidence: 0,
+    curate_articles: {
+      ...loaded.harvest.config.curate_articles, article_limit: 2, base_source_allowance: 3,
       source_authority_weight: 0, exploration_slot_share: 0,
       soft_caps: {
-        ...loaded.harvest.config.curate.soft_caps, max_source_share: 1, max_parent_domain_share: 1, min_distinct_sources: 1,
+        ...loaded.harvest.config.curate_articles.soft_caps, max_source_share: 1, max_website_group_share: 1, min_distinct_sources: 1,
       },
-      mmr_weights: { lambda_source: 0, lambda_source_kind: 0, lambda_domain: 0 }, ...patch,
+      mmr_weights: { lambda_source: 0, lambda_website_group: 0 }, ...patch,
     },
   });
   const context = resolveRunContext(loaded.settings, "a".repeat(40), new Date(fixture.observed_at),
@@ -77,8 +77,8 @@ function article(spec: CandidateCase, setup: Setup): ScreenedCandidate {
     source_id: spec.source,
     source: {
       source_id: spec.source, publisher_id: spec.publisher_id, feed_url: `https://${spec.domain}/feed`,
-      title: `${spec.source} configured feed`, kind: spec.kind,
-      tier: 1, form: "article", status: "active", weight: 1, applied_tier_weight: 1,
+      title: `${spec.source} configured feed`,
+      tier: 1, status: "active", weight: 1, applied_tier_weight: 1,
     },
     canonical_url: url, url_key: deriveUrlKey(url), title: spec.title, categories: ["feed-category"],
     article_text: "Recorded factual report. ".repeat(100).trim(), word_count: 300,
@@ -86,7 +86,7 @@ function article(spec: CandidateCase, setup: Setup): ScreenedCandidate {
   });
   const policy = resolvePolicy(planning);
   return {
-    candidate, policy, observation: null, seen_availability: "unavailable",
+    candidate, policy, observation: null, discovered_availability: "unavailable",
     freshness: calculateFreshness(candidate, undefined, fixture.observed_at, 6, policy),
   };
 }
@@ -105,10 +105,10 @@ function selectionInput(setup: Setup, articles: ScreenedCandidate[], options: {
         candidate_id: candidate.candidate_id, http_status: 200, paywall: false, robots: "allowed",
         fetch_failure: null, extraction: "success", paywall_evidence: "none", observed_at: setup.context.now,
       }])),
-      seen: { availability: "unavailable" },
+      discovered: { availability: "unavailable" },
       evidence: options.evidence ?? Object.fromEntries(articles.map(({ candidate }) => [candidate.candidate_id, {
-        parent_domain: { value: new URL(candidate.canonical_url).hostname, origin: "recorded-parent-domain" },
-        primary_evidence: null, estimated_work: candidate.word_count,
+        website_group: { value: new URL(candidate.canonical_url).hostname, origin: "canonical_url" },
+        estimated_work: candidate.word_count,
       }])),
       history_rows: [], history_days: [], work_rows: [], exclusions: [],
     }),
@@ -143,22 +143,20 @@ test("fixed real stage selects exact identities, ranks, components and preserves
 });
 
 test("every retained saturation coefficient substitutes independently at each actual choice", async () => {
-  for (const term of ["source_kind", "domain"] as const) {
-    const setup = await inputs();
-    setup.planning.config.curate.mmr_weights[`lambda_${term}`] = 1;
-    expect(names(run(setup))).toEqual(["first", "alternative"]);
-    setup.planning.config.curate.article_limit = 3;
-    const final = run(setup).articles.find(row => new URL(row.canonical_url).pathname === "/middle")!;
-    expect(adjustment(final, term)).toBe(-0.5);
-    expect(final.ratings.marginal_score).toBe(0);
-    setup.planning.config.curate.mmr_weights[`lambda_${term}`] = 0;
-    expect(names(run(setup)).slice(0, 2)).toEqual(["first", "middle"]);
-  }
   const setup = await inputs();
-  for (const recorded of setup.fixture.publisher_exposure_cases) {
-    setup.planning.config.curate.mmr_weights.lambda_source = recorded.coefficient;
-    const result = run(setup, setup.fixture.candidates, {
-      publications: { day: setup.context.date, availability: recorded.availability, counts: new Map([["one-news", recorded.published]]) },
+  setup.planning.config.curate_articles.mmr_weights.lambda_website_group = 1;
+  expect(names(run(setup))).toEqual(["first", "alternative"]);
+  setup.planning.config.curate_articles.article_limit = 3;
+  const final = run(setup).articles.find(row => new URL(row.canonical_url).pathname === "/middle")!;
+  expect(adjustment(final, "website_group")).toBe(-0.5);
+  expect(final.ratings.marginal_score).toBe(0);
+  setup.planning.config.curate_articles.mmr_weights.lambda_website_group = 0;
+  expect(names(run(setup)).slice(0, 2)).toEqual(["first", "middle"]);
+  const publisherSetup = await inputs();
+  for (const recorded of publisherSetup.fixture.publisher_exposure_cases) {
+    publisherSetup.planning.config.curate_articles.mmr_weights.lambda_source = recorded.coefficient;
+    const result = run(publisherSetup, publisherSetup.fixture.candidates, {
+      publications: { day: publisherSetup.context.date, availability: recorded.availability, counts: new Map([["one-news", recorded.published]]) },
     });
     const first = result.articles.find(row => new URL(row.canonical_url).pathname === "/first")!;
     const term = recorded.availability === "available" ? "publisher_exposure" : "publisher_exposure_current_run";
@@ -175,23 +173,14 @@ test("unavailable numeric evidence stays null while a measured zero stays zero",
   const setup = await inputs();
   const offered = article(setup.fixture.candidates[0]!, setup);
   const absent = curateArticles(selectionInput(setup, [offered], { evidence: {} })).articles[0]!;
-  expect(adjustment(absent, "domain")).toBeNull();
+  expect(adjustment(absent, "website_group")).toBeNull();
   expect(adjustment(absent, "feed_reliability")).toBeNull();
   const known = run(setup).articles[0]!;
-  expect(adjustment(known, "domain") === 0).toBe(true);
+  expect(adjustment(known, "website_group") === 0).toBe(true);
   const unknownPublisher = run(setup, [{ ...setup.fixture.candidates[0]!, publisher_id: null }]).articles[0]!;
   expect(adjustment(unknownPublisher, "publisher_exposure_current_run")).toBeNull();
   expect(known.ratings.base_article_score).toBe(absent.ratings.base_article_score);
   expect(known.ratings.marginal_score).toBe(absent.ratings.marginal_score);
-});
-
-test("kind relabel changes no allowance, viability, or authority; zero disables its influence", async () => {
-  const setup = await inputs();
-  const baseline = run(setup);
-  const relabelled = run(setup, setup.fixture.candidates.map(spec => ({ ...spec, kind: "new-configured-kind" })));
-  expect(relabelled.articles).toEqual(baseline.articles);
-  expect(relabelled.losses.map(loss => loss.reason)).toEqual(baseline.losses.map(loss => loss.reason));
-  expect(relabelled.articles.every(row => row.feed_allowance === 3)).toBe(true);
 });
 
 test("flooding duplicates cannot buy allowance or displace another qualifying source", async () => {
@@ -212,42 +201,19 @@ test("flooding duplicates cannot buy allowance or displace another qualifying so
   expect(flooded.articles.every(row => row.feed_allowance === 1)).toBe(true);
 });
 
-test("the explicit unique-evidence bonus requires an unshared witness and is granted at most once", async () => {
-  const setup = await inputs({ article_limit: null, base_source_allowance: 1, bonus_unique_evidence: 1 });
-  const specs = Array.from({ length: 5 }, (_, ordinal) => ({ ...setup.fixture.candidates[0]!, name: `alpha-${ordinal}`, ordinal }));
-  const articles = specs.map(spec => article(spec, setup));
-  const supplied = selectionInput(setup, articles);
-  for (const [index, value] of articles.entries()) supplied.batch.evidence[value.candidate.candidate_id]!.primary_evidence = {
-    ids: [`record-${index}`], origin: "recorded-primary-document",
-  };
-  const bonus = curateArticles(supplied);
-  expect(bonus.articles).toHaveLength(2);
-  expect(bonus.articles.every(row => row.feed_allowance === 2 && JSON.stringify(row.allowance_reasons) === '["unique_evidence"]')).toBe(true);
-  expect(run(setup, specs).articles).toHaveLength(1);
-  const sibling = article(setup.fixture.candidates[2]!, setup);
-  const shared = selectionInput(setup, [...articles, sibling]);
-  for (const evidence of Object.values(shared.batch.evidence)) evidence.primary_evidence = { ids: ["same-document"], origin: "recorded-primary-document" };
-  const noBonus = curateArticles(shared);
-  expect(noBonus.articles).toHaveLength(2);
-  expect(noBonus.articles.every(row => row.feed_allowance === 1 && row.allowance_reasons.length === 0)).toBe(true);
-  setup.planning.config.curate.bonus_unique_evidence = 0;
-  for (const value of supplied.articles) value.policy = resolvePolicy(setup.planning);
-  expect(curateArticles(supplied).articles).toHaveLength(1);
-});
-
 test("soft caps relax only in configured order and parent-domain limits remain effective", async () => {
   const setup = await inputs({ article_limit: null });
-  setup.planning.config.curate.soft_caps = {
-    max_source_share: 0.2, max_parent_domain_share: 1, min_distinct_sources: 3,
+  setup.planning.config.curate_articles.soft_caps = {
+    max_source_share: 0.2, max_website_group_share: 1, min_distinct_sources: 3,
     relaxation_order: ["distinct_sources", "source_share"],
   };
   const result = run(setup);
   expect(names(result)).toEqual(["first", "alternative", "middle"]);
   expect(result.articles[2]!.cap_relaxations).toEqual(["distinct_sources", "source_share"]);
-  setup.planning.config.curate.soft_caps.max_parent_domain_share = 0.2;
+  setup.planning.config.curate_articles.soft_caps.max_website_group_share = 0.2;
   expect(run(setup).articles).toHaveLength(2);
-  setup.planning.config.curate.soft_caps.max_parent_domain_share = 1;
-  setup.planning.config.curate.soft_caps.relaxation_order = ["source_share", "distinct_sources"];
+  setup.planning.config.curate_articles.soft_caps.max_website_group_share = 1;
+  setup.planning.config.curate_articles.soft_caps.relaxation_order = ["source_share", "distinct_sources"];
   expect(run(setup).articles[2]!.cap_relaxations).toEqual(["source_share", "distinct_sources"]);
 });
 
@@ -255,27 +221,27 @@ test("exploration reserves configured slots only for viable unseen sources", asy
   const setup = await inputs({ exploration_slot_share: 0.5 });
   expect(names(run(setup))).toEqual(["first", "alternative"]);
   expect(run(setup).articles.map(row => row.exploration_slot)).toEqual([false, true]);
-  setup.planning.config.curate.exploration_slot_share = 1;
+  setup.planning.config.curate_articles.exploration_slot_share = 1;
   expect(names(run(setup))).toEqual(["first", "alternative"]);
-  setup.planning.config.curate.exploration_slot_share = 0;
+  setup.planning.config.curate_articles.exploration_slot_share = 0;
   expect(names(run(setup))).toEqual(["first", "middle"]);
 });
 
-test("unknown timing stays unknown; first-seen keeps its own basis and timestamp", async () => {
+test("unknown timing stays unknown; first discovery keeps its own basis and timestamp", async () => {
   const setup = await inputs();
   const original = article(setup.fixture.candidates[0]!, setup);
   original.candidate.published_at = null;
   const firstSeenAt = "2026-10-20T11:00:00Z";
-  for (const seen of [undefined, { url_key: original.candidate.url_key, first_seen_at: firstSeenAt, date: "2026-10-20" }]) {
-    const offered = { ...original, freshness: calculateFreshness(original.candidate, seen, setup.fixture.observed_at, 6, original.policy) };
+  for (const discovered of [undefined, { url_key: original.candidate.url_key, first_seen_at: firstSeenAt, date: "2026-10-20" }]) {
+    const offered = { ...original, freshness: calculateFreshness(original.candidate, discovered, setup.fixture.observed_at, 6, original.policy) };
     const row = curateArticles(selectionInput(setup, [offered])).articles[0]!;
     expect(row.published_at).toBe(setup.context.now);
     expect(row.published_at_source).toBe("selection");
     expect(original.candidate.published_at).toBeNull();
-    expect(row.timing_basis).toBe(seen === undefined ? "unavailable" : "first_seen");
-    expect(row.timing_at).toBe(seen === undefined ? null : firstSeenAt);
-    expect(row.age_hours).toBe(seen === undefined ? null : 25);
-    expect(row.ratings.recency_score).toBe(seen === undefined ? 0 : 0.5 ** (25 / 18));
+    expect(row.timing_basis).toBe(discovered === undefined ? "unavailable" : "first_seen");
+    expect(row.timing_at).toBe(discovered === undefined ? null : firstSeenAt);
+    expect(row.age_hours).toBe(discovered === undefined ? null : 25);
+    expect(row.ratings.recency_score).toBe(discovered === undefined ? 0 : 0.5 ** (25 / 18));
   }
 });
 
@@ -294,7 +260,7 @@ test("admitted future timing preserves its signed observation and floors only th
   });
 });
 
-test("operational history, length, byline and kind never become model verdicts or a quality product", async () => {
+test("operational history, length and byline never become model verdicts or a quality product", async () => {
   const setup = await inputs({ source_authority_weight: 2 });
   const original = article(setup.fixture.candidates[0]!, setup);
   const changed = { ...original, candidate: { ...original.candidate, word_count: 600, author: "Recorded Writer" } };
@@ -340,7 +306,7 @@ test("stable ties, null article limit and global source authority substitution u
   expect(run(setup, [...specs].reverse()).articles).toEqual(forward.articles);
   const ordered = specs.map(spec => article(spec, setup).candidate).sort((a, b) => a.candidate_id.localeCompare(b.candidate_id));
   expect(forward.articles.map(row => row.url_key)).toEqual(ordered.map(row => row.url_key));
-  setup.planning.config.curate.source_authority_weight = 2;
+  setup.planning.config.curate_articles.source_authority_weight = 2;
   expect(run(setup).articles.map(row => row.ratings.base_article_score)).toEqual([3, 2.5, 2.25]);
 });
 
@@ -349,7 +315,7 @@ test("run freshness overrides remain separate from the unchanged harvested conte
   const candidates = setup.fixture.candidates.map(spec => article(spec, setup).candidate);
   const before = structuredClone(candidates);
   const screened = await screenArticleCandidates({
-    candidates, observations: {}, seen: { availability: "unavailable" }, planning: setup.planning,
+    candidates, observations: {}, discovered: { availability: "unavailable" }, planning: setup.planning,
     clock_config: { collect: { max_future_hours: 0 } },
     run: { now: setup.context.now, run_id: setup.context.run_id, correlation_id: setup.context.correlation_id, overrides: { freshness_hours: 6 } },
   });
@@ -365,7 +331,7 @@ test("real screening results compose into exact curation without losing harveste
   const short = { ...article({ ...setup.fixture.candidates[0]!, name: "short", ordinal: 99 }, setup).candidate,
     word_count: 3, article_text: "Too little substance" };
   const screened = await screenArticleCandidates({
-    candidates: [...candidates, short], observations: {}, seen: { availability: "unavailable" }, planning: setup.planning,
+    candidates: [...candidates, short], observations: {}, discovered: { availability: "unavailable" }, planning: setup.planning,
     clock_config: { collect: { max_future_hours: 0 } },
     run: { now: setup.context.now, run_id: setup.context.run_id, correlation_id: setup.context.correlation_id, overrides: {} },
   });
@@ -381,7 +347,7 @@ test("real screening results compose into exact curation without losing harveste
     const first = article(setup.fixture.candidates[0]!, setup);
     setup.inputs.harvest.sources = [source({
       id: first.candidate.source_id, url: first.candidate.source.feed_url,
-      title: first.candidate.source.title, kind: first.candidate.source.kind,
+      title: first.candidate.source.title,
       tier: first.candidate.source.tier, weight: first.candidate.source.weight,
       publisher_id: first.candidate.source.publisher_id,
     })];
@@ -424,7 +390,7 @@ test("screening and packing retain the owning run day even when evaluation happe
   const original = article(setup.fixture.candidates[0]!, setup).candidate;
   for (const now of [setup.context.now, "2026-10-22T00:00:00Z"]) {
     const screened = await screenArticleCandidates({
-      candidates: [original], observations: {}, seen: { availability: "unavailable" }, planning: setup.planning,
+      candidates: [original], observations: {}, discovered: { availability: "unavailable" }, planning: setup.planning,
       clock_config: { collect: { max_future_hours: 0 } },
       run: { now, run_id: setup.context.run_id, correlation_id: setup.context.correlation_id, overrides: {} },
     });

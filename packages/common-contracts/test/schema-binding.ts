@@ -9,13 +9,13 @@ import {
   FetchedDocumentSchema, PlannerOperationSchema, ExtractionQualitySchema,
   ParsedFeedBatchSchema, SelectedFeedBatchSchema, PartitionedFeedBatchSchema,
   PlannerStageContextSchema, PlannerStageRequestSchema, PlannerArticleEvidenceSchema,
-  PlannerHarvestObservationSchema, PlannerSeenEvidenceSchema, PlannerSeenRowSchema,
-  PlannerSeenAvailableSchema, PlannerSeenUnavailableSchema, PreflightFreshnessSchema,
+  PlannerHarvestObservationSchema, PlannerDiscoveredEvidenceSchema, PlannerDiscoveredRowSchema,
+  PlannerDiscoveredAvailableSchema, PlannerDiscoveredUnavailableSchema, PreflightFreshnessSchema,
   StageReferenceRequestSchema, PartitionArticlesRequestSchema,
   PlannerRejectionCountSchema, PlannerHealthDaySchema, PlannerRequestReportSchema,
   PlannerFeedEntrySchema, PlannerFeedOfferSchema,
   SelectedArticleContentSchema, PlanRunRowSchema, PlanApiTimingSchema,
-  PlannerFileEnvelopeSchema, RecordedIdentitySchema, PrimaryEvidenceSchema,
+  PlannerFileEnvelopeSchema, RecordedIdentitySchema,
   RowIdentitySchema,
   ROW_IDENTITY_COLUMN_VERSIONS, SourceSnapshotSchema, WriterIdentitySchema,
   SelectedArticleRowSchema, SelectedArticleRatingsSchema, SelectedArticleAdjustmentSchema,
@@ -30,10 +30,10 @@ export const runtimeSchemas = {
   FetchedDocument: FetchedDocumentSchema, PlannerOperation: PlannerOperationSchema,
   ExtractionQuality: ExtractionQualitySchema, PlannerStageContext: PlannerStageContextSchema,
   PlannerStageRequest: PlannerStageRequestSchema, PlannerArticleEvidence: PlannerArticleEvidenceSchema,
-  RecordedIdentity: RecordedIdentitySchema, PrimaryEvidence: PrimaryEvidenceSchema,
+  RecordedIdentity: RecordedIdentitySchema,
   PlannerHarvestObservation: PlannerHarvestObservationSchema,
-  PlannerSeenRow: PlannerSeenRowSchema, PlannerSeenAvailable: PlannerSeenAvailableSchema,
-  PlannerSeenUnavailable: PlannerSeenUnavailableSchema, PreflightFreshness: PreflightFreshnessSchema,
+  PlannerDiscoveredRow: PlannerDiscoveredRowSchema, PlannerDiscoveredAvailable: PlannerDiscoveredAvailableSchema,
+  PlannerDiscoveredUnavailable: PlannerDiscoveredUnavailableSchema, PreflightFreshness: PreflightFreshnessSchema,
   ParsedFeedBatch: ParsedFeedBatchSchema, SelectedFeedBatch: SelectedFeedBatchSchema,
   PartitionedFeedBatch: PartitionedFeedBatchSchema, StageReferenceRequest: StageReferenceRequestSchema,
   PartitionArticlesRequest: PartitionArticlesRequestSchema,
@@ -55,7 +55,7 @@ export const schemas = Object.fromEntries(
 );
 export default schemas;
 export const plannerStageSchemas = {
-  PlannerSeenEvidence: z.toJSONSchema(PlannerSeenEvidenceSchema, { io: "input" }),
+  PlannerDiscoveredEvidence: z.toJSONSchema(PlannerDiscoveredEvidenceSchema, { io: "input" }),
 };
 export const footerKeys = FOOTER_METADATA_KEYS;
 export const optionalFooterKeys = OPTIONAL_FOOTER_METADATA_KEYS;

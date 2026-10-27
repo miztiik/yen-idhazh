@@ -1,34 +1,26 @@
-/** Keep first sight global by URL key across the named planner discovery inputs. */
+/** Keep first discovery global by URL key across the named planner inputs. */
 import { resolve } from "node:path";
 import { DiscoveredArticleRowContract, DiscoveredArticleRowSchema } from "@idhazh/common-contracts";
 import type { DiscoveredArticleRow } from "@idhazh/common-contracts";
 import { persistLedger } from "@idhazh/ledger-file-writer";
 import type { LedgerRegistration, LedgerSettings } from "@idhazh/ledger-file-writer";
-import { SeenDayInputSchema, RelativePathSchema } from "../config/service-settings";
-import type { SeenDayInput } from "../config/service-settings";
-import { UtcInstantSchema } from "../screen-article-candidates/seen-evidence";
+import { LedgerDayInputSchema, RelativePathSchema } from "../config/service-settings";
+import type { LedgerDayInput } from "../config/service-settings";
+import { requiredUtcDays } from "../utc-instant";
 import type { RunContext } from "../resolve-run-context";
 import { readPlannerDay, createPlannerHistoryCache } from "./read-planner-history";
 import { readPlannerParquet } from "./read-planner-parquet";
 import { mapPool } from "../harvest-feeds/harvest-pool";
 import { defaultDayInput } from "./named-days";
 
-const dayMilliseconds = 86_400_000;
-export function requiredSeenDays(now: string, lookbackDays: number): string[] {
-  UtcInstantSchema.parse(now);
-  if (!Number.isSafeInteger(lookbackDays) || lookbackDays < 0) throw new Error("Discovery window must be a nonnegative integer");
-  const midnight = Date.parse(`${now.slice(0, 10)}T00:00:00Z`);
-  return Array.from({ length: lookbackDays + 1 }, (_, index) =>
-    new Date(midnight - (lookbackDays - index) * dayMilliseconds).toISOString().slice(0, 10));
-}
-export function parseSeenDays(days: readonly SeenDayInput[]): SeenDayInput[] {
-  const parsed = days.map(day => SeenDayInputSchema.parse(day));
+export function parseDiscoveredDays(days: readonly LedgerDayInput[]): LedgerDayInput[] {
+  const parsed = days.map(day => LedgerDayInputSchema.parse(day));
   if (parsed.some((day, index) => index > 0 && day.day <= parsed[index - 1]!.day)) {
     throw new Error("Discovery inputs must name distinct ascending UTC days");
   }
   return parsed;
 }
-export function foldFirstSight(rows: readonly DiscoveredArticleRow[]) {
+export function foldDiscoveryHistory(rows: readonly DiscoveredArticleRow[]) {
   const known = new Map<string, DiscoveredArticleRow>();
   for (const candidate of rows) {
     const row = DiscoveredArticleRowSchema.parse(candidate);
@@ -37,37 +29,37 @@ export function foldFirstSight(rows: readonly DiscoveredArticleRow[]) {
   }
   return [...known.values()].sort((a, b) => a.url_key.localeCompare(b.url_key));
 }
-export async function readSeenEvidence(input: {
-  root: string; files: readonly string[]; days: readonly SeenDayInput[];
+export async function readDiscoveredEvidence(input: {
+  root: string; discovered_files: readonly string[]; discovered_days: readonly LedgerDayInput[];
   registration: LedgerRegistration; now: string; lookback_days: number; concurrency: number;
   own_rows?: readonly DiscoveredArticleRow[];
 }) {
-  const required = requiredSeenDays(input.now, input.lookback_days);
-  const named = parseSeenDays(input.days);
+  const required = requiredUtcDays(input.now, input.lookback_days);
+  const named = parseDiscoveredDays(input.discovered_days);
   if (named.some(day => !required.includes(day.day))) throw new Error("Discovery day lies outside its configured UTC window");
   const byDay = new Map(named.map(day => [day.day, day]));
   const inventory = required.map(day => byDay.get(day) ?? defaultDayInput(input.registration.prefix, day));
   const cache = createPlannerHistoryCache<DiscoveredArticleRow>();
   const [files, days] = await Promise.all([
-    mapPool(input.files, input.concurrency, path =>
+    mapPool(input.discovered_files, input.concurrency, path =>
       readPlannerParquet(resolve(input.root, RelativePathSchema.parse(path)), "discovered-articles", DiscoveredArticleRowContract)),
     mapPool(inventory, input.concurrency, day => readPlannerDay(input.root, input.registration, day, DiscoveredArticleRowContract, cache)),
   ]);
-  const rows = foldFirstSight([...files.flatMap(file => file.rows), ...days.flatMap(day => day.rows), ...(input.own_rows ?? [])]);
+  const rows = foldDiscoveryHistory([...files.flatMap(file => file.rows), ...days.flatMap(day => day.rows), ...(input.own_rows ?? [])]);
   const complete = required.every(day => days.find(value => value.day === day)?.complete === true);
   return {
-    evidence: rows.length > 0 || named.length > 0 || input.files.length > 0
+    discovered: rows.length > 0 || named.length > 0 || input.discovered_files.length > 0
       ? { availability: "available" as const, rows } : { availability: "unavailable" as const },
     absence_proof: complete ? "within_configured_window" as const : "unavailable" as const,
     rows,
   };
 }
-export async function rememberFirstSight(
+export async function rememberDiscoveries(
   existing: readonly DiscoveredArticleRow[], sightings: readonly DiscoveredArticleRow[],
   context: RunContext, destination: { outputRoot: string; registryEntry: LedgerRegistration; ledgerSettings: LedgerSettings },
 ) {
   const known = new Map(existing.map(row => [row.url_key, row]));
-  const rows = foldFirstSight(sightings).filter(row => {
+  const rows = foldDiscoveryHistory(sightings).filter(row => {
     const prior = known.get(row.url_key);
     return prior === undefined || row.first_seen_at < prior.first_seen_at;
   });
@@ -76,5 +68,5 @@ export async function rememberFirstSight(
     writerContext: context.writer, period: { tier: "raw", covers: context.date }, rows,
   });
   if (result.status === "skipped") throw new Error("Planner discovery write was refused");
-  return { result, rows: foldFirstSight([...existing, ...rows]) };
+  return { result, rows: foldDiscoveryHistory([...existing, ...rows]) };
 }

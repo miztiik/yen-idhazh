@@ -7,7 +7,7 @@ export function resolvePlanningInputs(
   inputs: PlanInputs, request: ReturnType<typeof resolvePlanRequest>,
 ) {
   return loadHarvestInputs({
-    config: { ...inputs.harvest.config, curate: { ...inputs.harvest.config.curate, article_limit: request.article_limit } },
+    config: { ...inputs.harvest.config, curate_articles: { ...inputs.harvest.config.curate_articles, article_limit: request.article_limit } },
     taxonomy: inputs.harvest.registry,
     sources: {
       feeds: inputs.harvest.sources, retired: inputs.harvest.retired_sources,
