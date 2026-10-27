@@ -6,6 +6,11 @@ How does the isolated planner choose articles from the admitted batch?
 It uses configured numeric rules and explicit factual evidence, not a model
 or an inferred subject classification.
 
+These rules supersede the earlier proposal to reuse Python ranking choices;
+that proposal is not a separate unfinished selection requirement. The
+production Python ranking path is unchanged, and further numeric priority
+terms still need their own approval.
+
 ## Inputs and independent evidence
 
 Curation receives admitted candidates, their global effective policy,
