@@ -38,7 +38,17 @@ from idhazh.contracts.visual_decision import (
     VisualKind,
     VisualState,
 )
+from idhazh.contracts.visual_label import VisualLabel
+from idhazh.evals.visual_labels import summarize_visual_labels
 from utilities import review_queue
+from utilities.visual_labels import (
+    append_visual_label,
+    create_visual_label_draw,
+    load_named_visual_label_rows,
+    next_unlabelled_visual,
+    published_item_url,
+    read_visual_label_draw,
+)
 
 pytestmark = pytest.mark.visual
 
@@ -80,6 +90,21 @@ def _drawing(item_id: str) -> str:
     ).to_json()
 
 
+def _drawing_for_type(item_id: str, visual_type: VisualType | None) -> str:
+    """Use a real visual-data fixture when a test needs a non-bar publication."""
+    if visual_type not in {VisualType.PIE, VisualType.BUBBLE}:
+        return _drawing(item_id)
+    fixture_name = (
+        "pie-from-declared-whole.json"
+        if visual_type is VisualType.PIE
+        else "bubble-relationship.json"
+    )
+    data = VisualData.from_json(
+        read_text(CONTRACT_FIXTURES_DIR / "visual-data" / fixture_name)
+    )
+    return data.model_copy(update={"item_id": item_id}).to_json()
+
+
 def _decision(item_id: str, **changes: object) -> VisualDecision:
     """One committed decision, moved to this day and this item."""
     base = VisualDecision.from_json(
@@ -109,6 +134,25 @@ def _rendered(item_id: str) -> VisualDecision:
         item_id,
         visual_state=VisualState.RENDERED,
         data_path=f"digest/2026/08/21/{item_id}.json",
+    )
+
+
+def _measured_rendered(
+    item_id: str,
+    *,
+    planned_type: VisualType,
+    rendered_type: VisualType,
+    downgrade_depth: int,
+) -> VisualDecision:
+    decision = _rendered(item_id)
+    return VisualDecision.model_validate(
+        decision.model_dump(mode="json")
+        | {
+            "planned_type": planned_type.value,
+            "rendered_type": rendered_type.value,
+            "downgrade_depth": downgrade_depth,
+            "marks": 4,
+        }
     )
 
 
@@ -212,7 +256,9 @@ def build_a_day(
         )
         if decision.data_path is not None:
             (digest_root.parent / decision.data_path).write_text(
-                _drawing(item_id), encoding="utf-8", newline="\n"
+                _drawing_for_type(item_id, decision.rendered_type),
+                encoding="utf-8",
+                newline="\n",
             )
     return digest_root, run_root
 
@@ -406,3 +452,235 @@ def test_a_day_inside_its_budget_keeps_everything(tmp_path: Path) -> None:
     queue = _build(tmp_path)
     assert all(entry.kept == entry.seen for entry in queue.census)
     assert queue.bytes_written > 0
+
+
+def test_published_pie_and_bubble_queue_links_labels_and_reports_by_exact_type(
+    tmp_path: Path,
+) -> None:
+    """The real queue, dated links and local labels keep machine and human evidence apart."""
+    decisions = {
+        "ai-31": _measured_rendered(
+            "ai-31",
+            planned_type=VisualType.PIE,
+            rendered_type=VisualType.PIE,
+            downgrade_depth=0,
+        ),
+        "ai-32": _measured_rendered(
+            "ai-32",
+            planned_type=VisualType.BUBBLE,
+            rendered_type=VisualType.BUBBLE,
+            downgrade_depth=0,
+        ),
+        "ai-33": _measured_rendered(
+            "ai-33",
+            planned_type=VisualType.PIE,
+            rendered_type=VisualType.BAR,
+            downgrade_depth=1,
+        ),
+    }
+    digest_root, run_root = build_a_day(tmp_path, decisions=decisions)
+    queue_path = tmp_path / "review" / DATE / "queue.json"
+    queue = review_queue.build(
+        date=DATE,
+        digest_root=digest_root,
+        run_root=run_root,
+        out_root=tmp_path / "review",
+        budget_bytes=5_000_000,
+    )
+    draw_root = tmp_path / "backend" / "var" / "visual-labels"
+    bundle = create_visual_label_draw(
+        queue_path,
+        published_base_url="https://published.example/",
+        root=draw_root,
+    )
+    resumed_bundle = create_visual_label_draw(
+        queue_path,
+        published_base_url="https://published.example/",
+        root=draw_root,
+    )
+    pie = next(row for row in queue.rows if row.item_id == "ai-31")
+    bubble = next(row for row in queue.rows if row.item_id == "ai-32")
+    downgraded = next(row for row in queue.rows if row.item_id == "ai-33")
+
+    assert pie.visual_id is not None
+    assert bubble.visual_id is not None
+    assert downgraded.visual_id is not None
+    assert pie.visual_id == decisions["ai-31"].visual_id
+    assert pie.planned_type is VisualType.PIE
+    assert pie.rendered_type is VisualType.PIE
+    assert bubble.visual_id == decisions["ai-32"].visual_id
+    assert bubble.rendered_type is VisualType.BUBBLE
+    assert downgraded.planned_type is VisualType.PIE
+    assert downgraded.rendered_type is VisualType.BAR
+    assert resumed_bundle.draw == bundle.draw
+    assert published_item_url(bundle, pie.visual_id) == (
+        f"https://published.example/{DATE}/#ai-31"
+    )
+    with pytest.raises(ValueError, match="not in this draw"):
+        published_item_url(bundle, downgraded.visual_id)
+    with pytest.raises(ValueError, match="not in this draw"):
+        append_visual_label(
+            draw_root,
+            draw_id=bundle.draw.draw_id,
+            reviewer_id="reviewer-one",
+            visual_id=downgraded.visual_id,
+            label=VisualLabel.KEEP,
+            labelled_at="2026-10-27T11:32:00Z",
+            page_is_live=True,
+        )
+
+    labelled_at = "2026-10-27T11:32:00Z"
+    answers_by_item = {
+        "ai-31": (VisualLabel.KEEP, VisualLabel.DISCARD),
+        "ai-32": (VisualLabel.KEEP, VisualLabel.KEEP),
+    }
+    for reviewer_number, reviewer_id in enumerate(("reviewer-one", "reviewer-two")):
+        while candidate := next_unlabelled_visual(
+            draw_root, bundle, reviewer_id=reviewer_id
+        ):
+            _, visual_id, row = candidate
+            assert append_visual_label(
+                draw_root,
+                draw_id=bundle.draw.draw_id,
+                reviewer_id=reviewer_id,
+                visual_id=visual_id,
+                label=answers_by_item[row.item_id][reviewer_number],
+                labelled_at=labelled_at,
+                page_is_live=True,
+            )
+        assert next_unlabelled_visual(draw_root, bundle, reviewer_id=reviewer_id) is None
+
+    assert not append_visual_label(
+        draw_root,
+        draw_id=bundle.draw.draw_id,
+        reviewer_id="reviewer-one",
+        visual_id=pie.visual_id,
+        label=VisualLabel.KEEP,
+        labelled_at=labelled_at,
+        page_is_live=True,
+    )
+    with pytest.raises(ValueError, match="cannot change a label"):
+        append_visual_label(
+            draw_root,
+            draw_id=bundle.draw.draw_id,
+            reviewer_id="reviewer-one",
+            visual_id=pie.visual_id,
+            label=VisualLabel.DISCARD,
+            labelled_at=labelled_at,
+            page_is_live=True,
+        )
+
+    (draw_root / bundle.draw.draw_id / "not-requested.csv").write_text(
+        "not,a,label,file\n", encoding="utf-8"
+    )
+    labels = load_named_visual_label_rows(
+        draw_root,
+        draw_id=bundle.draw.draw_id,
+        reviewer_ids=("reviewer-one", "reviewer-two"),
+    )
+    evidence = summarize_visual_labels(
+        bundle.queue,
+        labels,
+        draw_id=bundle.draw.draw_id,
+        reviewer_ids=("reviewer-one", "reviewer-two"),
+    )
+
+    pie_result, bubble_result = evidence
+    assert pie_result.machine_planned == 2
+    assert pie_result.machine_rendered == 1
+    assert pie_result.keep_rate == 0.5
+    assert (
+        pie_result.overlap_visuals,
+        pie_result.agreeing_pairs,
+        pie_result.reviewer_pairs,
+    ) == (1, 0, 1)
+    assert bubble_result.machine_planned == 1
+    assert bubble_result.machine_rendered == 1
+    assert bubble_result.keep_rate == 1.0
+    assert (
+        bubble_result.overlap_visuals,
+        bubble_result.agreeing_pairs,
+        bubble_result.reviewer_pairs,
+    ) == (1, 1, 1)
+
+
+def test_a_draw_directory_cannot_be_read_as_a_different_draw(tmp_path: Path) -> None:
+    queue_path = CONTRACT_FIXTURES_DIR / "review-queue" / "published-pie-and-bubble.json"
+    first = create_visual_label_draw(
+        queue_path,
+        published_base_url="https://published.example",
+        root=tmp_path,
+    )
+    second = create_visual_label_draw(
+        queue_path,
+        published_base_url="https://elsewhere.example",
+        root=tmp_path,
+    )
+    first_dir = tmp_path / first.draw.draw_id
+    second_dir = tmp_path / second.draw.draw_id
+    (second_dir / "draw.json").write_bytes((first_dir / "draw.json").read_bytes())
+    (second_dir / "queue.json").write_bytes((first_dir / "queue.json").read_bytes())
+
+    with pytest.raises(ValueError, match="does not match the requested draw"):
+        read_visual_label_draw(tmp_path, second.draw.draw_id)
+
+
+def test_a_human_rate_is_not_quotable_without_reviewer_overlap(tmp_path: Path) -> None:
+    decision = _measured_rendered(
+        "ai-34",
+        planned_type=VisualType.PIE,
+        rendered_type=VisualType.PIE,
+        downgrade_depth=0,
+    )
+    digest_root, run_root = build_a_day(tmp_path, decisions={"ai-34": decision})
+    queue = review_queue.build(
+        date=DATE,
+        digest_root=digest_root,
+        run_root=run_root,
+        out_root=tmp_path / "review",
+        budget_bytes=5_000_000,
+    )
+    queue_path = tmp_path / "review" / DATE / "queue.json"
+    draw_root = tmp_path / "labels"
+    bundle = create_visual_label_draw(
+        queue_path,
+        published_base_url="https://published.example",
+        root=draw_root,
+    )
+    row = queue.rows[0]
+    assert row.visual_id is not None
+    with pytest.raises(ValueError, match="exact published page is live"):
+        append_visual_label(
+            draw_root,
+            draw_id=bundle.draw.draw_id,
+            reviewer_id="reviewer-one",
+            visual_id=row.visual_id,
+            label=VisualLabel.KEEP,
+            labelled_at="2026-10-27T11:32:00Z",
+            page_is_live=False,
+        )
+    assert append_visual_label(
+        draw_root,
+        draw_id=bundle.draw.draw_id,
+        reviewer_id="reviewer-one",
+        visual_id=row.visual_id,
+        label=VisualLabel.KEEP,
+        labelled_at="2026-10-27T11:32:00Z",
+        page_is_live=True,
+    )
+
+    labels = load_named_visual_label_rows(
+        draw_root,
+        draw_id=bundle.draw.draw_id,
+        reviewer_ids=("reviewer-one", "reviewer-two"),
+    )
+    evidence = summarize_visual_labels(
+        bundle.queue,
+        labels,
+        draw_id=bundle.draw.draw_id,
+        reviewer_ids=("reviewer-one", "reviewer-two"),
+    )
+
+    assert evidence[0].overlap_visuals == 0
+    assert evidence[0].reviewer_pairs == 0
+    assert evidence[0].keep_rate is None

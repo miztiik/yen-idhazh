@@ -52,11 +52,13 @@ from idhazh.contracts.base import (
     ItemId,
     Model,
     RelPath,
+    Sha256,
     Timestamp,
     Url,
     UrlKey,
 )
 from idhazh.contracts.visual_decision import NoneReason, VisualState
+from idhazh.contracts.visual_type import VisualType
 
 
 class ReviewPopulation(StrEnum):
@@ -104,6 +106,21 @@ class ReviewRow(Model):
             "on every row that carries no drawing."
         ),
     )
+    visual_id: Sha256 | None = Field(
+        default=None,
+        description=(
+            "The decision's canonical human-label join key. Null on older queue rows "
+            "that do not carry the source decision fields."
+        ),
+    )
+    planned_type: VisualType | None = Field(
+        default=None,
+        description="The exact visual type requested by the machine decision, when recorded.",
+    )
+    rendered_type: VisualType | None = Field(
+        default=None,
+        description="The exact visual type published for this row, when recorded.",
+    )
 
     @model_validator(mode="after")
     def _a_drawing_and_a_population_cannot_disagree(self) -> Self:
@@ -143,6 +160,11 @@ class ReviewQueue(Contract):
 
     __schema_stem__: ClassVar[str] = "review-queue"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-10-27T11:32",
+            change="Carry machine types and the visual join key in each row.",
+            why="Human labels must join a published visual without a type fallback.",
+        ),
         ChangelogEntry(
             version="2026-09-13",
             change="Initial shape: the three populations that have a producer, one row an item.",

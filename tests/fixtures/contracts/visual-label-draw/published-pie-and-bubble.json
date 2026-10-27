@@ -1,0 +1,12 @@
+{
+  "created_at": "2026-10-27T11:32:00Z",
+  "draw_id": "d0640c25f8f23ab43cb43b1600ac06cdbf41a4d1c5d0e386dd682f6adc7f93c3",
+  "published_base_url": "https://news.example",
+  "queue_date": "2026-10-27",
+  "queue_sha256": "6c53d1114774f6bdd5d9833d815e9b0ea517dcb3e1833048606a6cfec4e52f5a",
+  "version": "2026-10-27T11:32",
+  "visual_types": [
+    "pie",
+    "bubble"
+  ]
+}

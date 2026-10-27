@@ -246,8 +246,8 @@ def test_a_class_of_cells_counts_and_the_contract_that_declares_the_row_does_not
     """The fetch timings are five dataclass fields handed over by field name.
 
     No static read resolves that dict's keys, and the class is the only place
-    the five names appear. The contract holds all 119 the same way and fills
-    none of them, so it is left out by name.
+    the five names appear. The contract holds every column the same way and
+    fills none of them, so it is left out by name.
     """
     module(
         tmp_path,

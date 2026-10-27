@@ -1,6 +1,6 @@
 # Evaluation
 
-**Last Updated**: 2026-10-10
+**Last Updated**: 2026-10-27
 
 How a published summary is judged, and how the judgement is kept honest. This page fixes the vocabulary; the tunable bands live in [config/summary-length.md](config/summary-length.md).
 
@@ -629,6 +629,61 @@ population's tail would produce an artifact that looks complete and is a biased
 sample, which is worse than a smaller honest one because nobody can see it
 happened.
 
+### Human labels for published pie and bubble charts
+
+The contact sheet is a queue, not the chart to judge. Its copied drawings are
+not the published renderer. A label is recorded only after the reviewer opens
+the exact dated page and confirms that it is live. The label tool prints that
+page and never fetches or redraws it.
+
+Create a draw from the exact day's queue and the published base URL:
+
+```powershell
+$queuePath = Read-Host "Path to that day's review queue"
+$publishedBaseUrl = Read-Host "Published site base URL"
+python backend/utilities/visual_labels.py draw --queue $queuePath --published-base-url $publishedBaseUrl
+```
+
+The draw id binds the queue bytes, date, base URL and pie/bubble scope. The tool
+saves its queue snapshot and manifest under
+`backend/var/visual-labels/<draw-id>/`. Reviewer files in that directory stay
+local under `backend/var/`, which Git ignores.
+
+Run this for each reviewer:
+
+```powershell
+$drawId = Read-Host "Draw id printed by draw"
+$reviewerId = Read-Host "Reviewer id"
+python backend/utilities/visual_labels.py label --draw-id $drawId --reviewer $reviewerId --next
+```
+
+The tool prints the next unanswered visual's dated link. Open that exact page
+and type `LIVE` only after confirming the chart is published. Then choose `k`
+to keep it, `d` to discard it, `s` to skip it for this pass, or `q` to stop.
+Answers are written atomically to
+`backend/var/visual-labels/<draw-id>/<reviewer-id>.csv`. The same command
+resumes after saved answers; a skipped visual returns on the next pass.
+
+The visual id is a stable identifier made from the decision's item id, source
+URL key and decision time. New queue and item-health rows carry it unchanged.
+The attempt-row contract accepts the same optional identifier. Reading older
+queue or attempt rows does not invent one.
+
+```powershell
+$drawId = Read-Host "Draw id"
+$reviewerOne = Read-Host "First reviewer id"
+$reviewerTwo = Read-Host "Second reviewer id"
+python backend/utilities/visual_labels.py report --draw-id $drawId --reviewer $reviewerOne --reviewer $reviewerTwo
+```
+
+The keep rate is kept answers divided by all recorded keep/discard answers.
+Each `(visual_id, reviewer_id)` counts once. The report prints answer and
+visual counts, overlap, and raw pairwise agreement counts. It does not quote a
+rate until at least one visual has answers from two named reviewers. This is a
+rate over human answers, not a share of all published visuals. Machine planned
+and rendered counts remain separate, and human labels do not affect
+publication.
+
 ## The band says what is missing, not how good the item is
 
 A band on its own is a grade. `medium` used to print "Mostly matches the source",
@@ -807,6 +862,21 @@ regressions protect extraction code; they do not replace a scheduled model
 benchmark or prove that every live source still has the captured layout.
 
 ## Design rationale
+
+**A visual label belongs to the exact published page (2026-10-27).** The review
+tree is a queue; its copied drawings are not the published chart. A draw pins
+the queue bytes and published base URL, and each label is saved only after a
+reviewer confirms that exact dated page is live. The labels stay in local,
+ignored files and never enter machine outcomes or publication gates.
+
+**The visual keep rate counts human answers, not charts (2026-10-27).** The
+denominator is the number of unique `(visual_id, reviewer_id)` keep/discard
+answers, and the numerator is the keep answers. This direct count does not
+invent a majority rule when reviewers disagree or when some answers are
+missing. The report prints the raw pairwise agreement beside the rate. At
+least one visual must have two named reviewers before a rate is quotable; this
+means agreement can be measured, not that it meets a threshold. No numerical
+agreement threshold is set here. Authority: Plan 16 row 6 and Plan 21 Q5.
 
 **The band is one function (2026-08-23).** The old code had one function for rows with a faithfulness score and another function for rows without one. Only the first path wrote the eval row, so the counterweights were measured and then ignored by the reader-facing band. One function removes that split. Authority: Fowler.
 

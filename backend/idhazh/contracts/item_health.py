@@ -24,6 +24,7 @@ from idhazh.contracts.base import (
     PipelineName,
     RunId,
     ServerJob,
+    Sha256,
     Slug,
     TaskName,
     Timestamp,
@@ -333,6 +334,9 @@ UNREAD_CELLS: Final[Mapping[str, tuple[str, ...]]] = MappingProxyType(
         "which rule refused a reply, and on which field": (
             "failed_field",
         ),
+        "which visual decision this item-health row identifies for human review": (
+            "visual_id",
+        ),
     }
 )
 
@@ -622,6 +626,11 @@ class ItemHealthRow(Contract):
     __schema_stem__: ClassVar[str] = "item-health-row"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-10-27T11:32",
+            change="Append the visual decision join key.",
+            why="A human review label needs to identify the exact decision.",
+        ),
+        ChangelogEntry(
             version="2026-10-25",
             change="Append requested and delivered visual types, replacement depth and marks.",
             why="The existing item ledger retains visual refusals and fallback evidence.",
@@ -635,11 +644,6 @@ class ItemHealthRow(Contract):
             version="2026-10-14",
             change="Allow machine pipeline and task identity without a legacy job value.",
             why="Items resolve shared host rows through separate identity columns.",
-        ),
-        ChangelogEntry(
-            version="2026-09-29",
-            change="job and shard are machine_job and machine_shard.",
-            why="The ledger's own job and shard name the writer; these name the machine.",
         ),
         ChangelogEntry(
             version="2026-09-21",
@@ -1316,6 +1320,13 @@ class ItemHealthRow(Contract):
     )
     marks: int | None = Field(
         default=None, ge=1, description="The final decision's delivered mark count."
+    )
+    visual_id: Sha256 | None = Field(
+        default=None,
+        description=(
+            "The final decision's canonical human-label join key. Null when no visual "
+            "decision was recorded, and on older rows."
+        ),
     )
 
     @model_validator(mode="after")
