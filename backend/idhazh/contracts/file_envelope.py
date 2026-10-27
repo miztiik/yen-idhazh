@@ -613,8 +613,8 @@ class PlannerFileEnvelope(Contract):
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
             version="2026-10-26",
-            change="Accept current and prior selected-article and run row stamps.",
-            why="Compatible readers verify original bytes before normalizing old rows.",
+            change="Require the current row stamp for selected articles and plan runs.",
+            why="Each planner ledger accepts only the row format it currently writes.",
         ),
         ChangelogEntry(
             version="2026-10-25",
@@ -643,13 +643,15 @@ class PlannerFileEnvelope(Contract):
 
     @model_validator(mode="after")
     def validate_format(self) -> Self:
-        if self.row_schema_version == "2026-10-26" and (
-            self.version == "2026-10-25"
-            or self.ledger not in {
-                LedgerName.FEED_INGEST_PLAN_SELECTED_ARTICLES,
-                LedgerName.FEED_INGEST_PLAN_PLAN_RUNS,
-            }
-        ):
+        current_row_schema = {
+            LedgerName.FEED_INGEST_PLAN_DISCOVERED_ARTICLES: "2026-10-25",
+            LedgerName.FEED_INGEST_PLAN_SELECTED_ARTICLES: "2026-10-26",
+            LedgerName.FEED_INGEST_PLAN_FEED_HEALTH_STATE: "2026-10-25",
+            LedgerName.FEED_INGEST_PLAN_PLAN_RUNS: "2026-10-26",
+        }
+        if self.row_schema_version != current_row_schema[self.ledger]:
+            raise ValueError("planner row schema must be the current stamp for its ledger")
+        if self.row_schema_version == "2026-10-26" and self.version == "2026-10-25":
             raise ValueError("current row stamp requires its declared ledger and envelope")
         if (self.tier is Tier.COMPACT) != (self.period is not None):
             raise ValueError("planner compact files require a period; raw files name none")

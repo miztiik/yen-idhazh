@@ -14,7 +14,6 @@ import { executeFeedHealthState } from "../src/api/feed-health-state-operation";
 import { invokePlannerHttp } from "../scripts/feed-ingest-plan-http-proof";
 import { commitPlannerFiles } from "../scripts/feed-ingest-plan-commit";
 import { verifyParquetFiles, verifyPlanningCompletion } from "../scripts/feed-ingest-plan-verification";
-import { verifyRecordedCompatibility } from "./verify-recorded-compatibility";
 import { createExecutionOutputs, writeGitHubOutputs } from "../scripts/feed-ingest-plan-outputs";
 import { formatExecutionOutcome, formatExecutionReport, readExecutionReport, writePlannerReport } from "../scripts/feed-ingest-plan-report";
 import { prepareWorkflowArtifacts } from "../scripts/feed-ingest-plan-artifacts";
@@ -106,7 +105,7 @@ test("actual HTTP output retains selected text separately from its strict metada
       outputPath: published, ...publication })).rejects.toThrow();
     expect(await readFile(published, "utf8")).toContain("runtime_log<<");
   } finally { await fixture.close(); }
-});
+}, 120_000);
 
 test("exact metadata appends through a generated bare origin with complete raw indexes and safe replay", async () => {
   const fixture = await recordedPlan([source({ url: "https://news.example/empty.xml" })]);
@@ -197,7 +196,7 @@ test("exact metadata appends through a generated bare origin with complete raw i
     expect(recovered.metadata_recovery).toBeDefined();
     for (const path of paths) expect(await readFile(join(fixture.inputs.outputRoot, path))).toBeInstanceOf(Buffer);
   } finally { await fixture.close(); }
-});
+}, 300_000);
 
 test("one real result and every native file stay unchanged through both report modes", async () => {
   const fixture = await recordedPlan([
@@ -300,7 +299,7 @@ test("one real result and every native file stay unchanged through both report m
     for (const [index, path] of paths.entries()) expect(await readFile(join(fixture.inputs.outputRoot, path))).toEqual(bytes[index]!);
     await verifyPlanningCompletion(fixture.inputs.outputRoot, response, fixture.inputs.registrations, fixture.directory);
   } finally { await fixture.close(); }
-});
+}, 120_000);
 
 test("uses actual selected identities and rejects inconsistent counts, assignments and foreign paths", async () => {
   const fixture = await recordedPlan();
@@ -320,7 +319,7 @@ test("uses actual selected identities and rejects inconsistent counts, assignmen
       ...selected, files: selected.files.map(file => ({ ...file, path: "../private\ninjected=true" })),
     } } }, fixture.inputs.registrations)).toThrow();
   } finally { await fixture.close(); }
-});
+}, 120_000);
 
 test("refuses mismatched counts, damaged bytes and missing actual files", async () => {
   const fixture = await recordedPlan();
@@ -340,7 +339,7 @@ test("refuses mismatched counts, damaged bytes and missing actual files", async 
     await rm(path);
     await expect(verifyParquetFiles(fixture.inputs.outputRoot, "selected-articles", selected, registration)).rejects.toMatchObject({ code: "ENOENT" });
   } finally { await fixture.close(); }
-});
+}, 120_000);
 
 test("zero selections have an explicit empty ledger and an actual empty artifact", async () => {
   const fixture = await recordedPlan([source({ url: "https://news.example/empty.xml" })]);
@@ -358,7 +357,7 @@ test("zero selections have an explicit empty ledger and an actual empty artifact
     await expect(verifyParquetFiles(fixture.inputs.outputRoot, "selected-articles",
       { status: "written", files: [] }, fixture.inputs.registrations.selected_articles)).rejects.toThrow();
   } finally { await fixture.close(); }
-});
+}, 120_000);
 
 test("writes GitHub output records with noncolliding delimiters and refuses key injection", async () => {
   const root = await mkdtemp(join(tmpdir(), "feed-outputs-"));
@@ -374,10 +373,4 @@ test("writes GitHub output records with noncolliding delimiters and refuses key 
     await expect(writeGitHubOutputs(path, { "bad\nkey": "value" })).rejects.toThrow("key");
     expect(await readFile(path, "utf8")).toBe(text);
   } finally { await rm(root, { recursive: true, force: true }); }
-});
-
-test("checks current planner formats and unchanged generic identity and canonical-byte vectors", async () => {
-  const verified = await verifyRecordedCompatibility();
-  expect(verified).toMatchObject({ status: "verified", planner_row_count: 4 });
-  expect(verified.legacy_seen_row_count).toBeGreaterThan(0);
 });

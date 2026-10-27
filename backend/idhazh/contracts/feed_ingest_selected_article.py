@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Annotated, Any, ClassVar, Final, Literal, Self
+from typing import Annotated, ClassVar, Final, Literal, Self
 
 from pydantic import Field, StrictInt, model_validator
 
@@ -16,7 +16,6 @@ from idhazh.contracts.base import (
     derive_url_key,
 )
 from idhazh.contracts.feed_ingest_discovered_article import (
-    PLANNER_LEDGER_VERSION,
     PlannerModel,
     PlannerPayload,
     PlannerRow,
@@ -35,10 +34,9 @@ SELECTED_ARTICLE_VERSION: Final[Literal["2026-10-26"]] = "2026-10-26"
 SELECTED_ARTICLE_CHANGELOG: Final = (
     ChangelogEntry(
         version=SELECTED_ARTICLE_VERSION,
-        change="Record source or selection-start publication time with explicit provenance.",
+        change="Require source or selection provenance and a UTC instant; no legacy provenance.",
         why="Unknown source dates must not change the age used for admission.",
     ),
-    *PlannerRow.__changelog__,
 )
 
 
@@ -70,7 +68,7 @@ class SelectedArticleMetadata(PlannerModel):
     categories: list[str]
     author: str | None
     published_at: RecordedInstant | None
-    published_at_source: Literal["source", "selection", "legacy-unavailable"]
+    published_at_source: Literal["source", "selection"]
     tier: PositiveCount
     weight: Weight
     applied_tier_weight: Weight
@@ -95,7 +93,7 @@ class SelectedArticleMetadata(PlannerModel):
             raise ValueError("unavailable timing has no instant or age")
         if not unavailable and (self.timing_at is None or self.age_hours is None):
             raise ValueError("available timing requires its measured instant and age")
-        if self.published_at_source != "legacy-unavailable" and self.published_at is None:
+        if self.published_at is None:
             raise ValueError("source or selection publication time requires a UTC instant")
         if self.published_at_source == "source" and (
             self.timing_basis != "published_at" or self.published_at != self.timing_at
@@ -105,29 +103,16 @@ class SelectedArticleMetadata(PlannerModel):
             raise ValueError("selection time must not replace the original age basis")
         return self
 
-    @staticmethod
-    def migrate_previous_metadata(cells: dict[str, Any]) -> dict[str, Any]:
-        if "published_at_source" in cells:
-            raise ValueError("previous selected metadata must not contain publication provenance")
-        return cells | {"published_at_source": "legacy-unavailable"}
-
 
 class SelectedArticleRow(SelectedArticleMetadata, PlannerRow):
     """One selected opportunity in its actual execution and accounting day."""
 
     __schema_stem__: ClassVar[str] = "feed-ingest-selected-article"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = SELECTED_ARTICLE_CHANGELOG
-    __previous_versions__: ClassVar[tuple[str, ...]] = (PLANNER_LEDGER_VERSION,)
 
     run_id: RunId
     attempt: PositiveCount
     date: DateStamp
-
-    @classmethod
-    def read_row(cls, cells: dict[str, Any], *, schema_version: str) -> Self:
-        if schema_version == PLANNER_LEDGER_VERSION:
-            cells = cls.migrate_previous_metadata(cells)
-        return super().read_row(cells, schema_version=schema_version)
 
     @model_validator(mode="after")
     def validate_accounting_day(self) -> Self:
@@ -148,29 +133,12 @@ class SelectedArticlesArtifact(PlannerPayload):
     __schema_stem__: ClassVar[str] = "feed-ingest-selected-articles-artifact"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = SELECTED_ARTICLE_CHANGELOG
 
-    schema_version: Literal["2026-10-26"] = SELECTED_ARTICLE_VERSION
+    schema_version: Literal["2026-10-26"]
     run_id: RunId
     attempt: PositiveCount
     date: DateStamp
     evaluated_at: RecordedInstant
     articles: list[SelectedArtifactArticle]
-
-    @model_validator(mode="before")
-    @classmethod
-    def migrate_previous_artifact(cls, value: object) -> object:
-        if not isinstance(value, dict) or value.get("schema_version") != PLANNER_LEDGER_VERSION:
-            return value
-        articles = value.get("articles")
-        if not isinstance(articles, list) or any(
-            not isinstance(article, dict) for article in articles
-        ):
-            raise ValueError("previous selected artifact requires its article list")
-        return value | {
-            "schema_version": SELECTED_ARTICLE_VERSION,
-            "articles": [
-                SelectedArticleMetadata.migrate_previous_metadata(article) for article in articles
-            ],
-        }
 
     @model_validator(mode="after")
     def validate_accounting_day(self) -> Self:

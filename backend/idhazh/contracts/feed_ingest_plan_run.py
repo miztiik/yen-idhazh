@@ -35,7 +35,6 @@ class PlanRunRow(PlannerRow):
         ),
         *PlannerRow.__changelog__,
     )
-    __previous_versions__: ClassVar[tuple[str, ...]] = ("2026-10-25",)
 
     run_id: RunId
     started_at: RecordedInstant

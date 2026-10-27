@@ -6,7 +6,6 @@ import initializeParquet, { readMetadata, readParquet } from "parquet-wasm/esm";
 import {
   PlannerFileEnvelopeSchema, PLANNER_FOOTER_METADATA_KEYS, PLANNER_OPTIONAL_FOOTER_METADATA_KEYS,
   PLANNER_LEDGER_VERSION, SELECTED_ARTICLE_VERSION, PLAN_RUN_VERSION,
-  PreviousSelectedArticleRowSchema, migratePreviousSelectedMetadata,
 } from "@idhazh/common-contracts";
 import type { PlannerFileEnvelope } from "@idhazh/common-contracts";
 import { describeObjectSchema, digestRows } from "@idhazh/ledger-file-writer";
@@ -45,6 +44,22 @@ export async function readPlannerParquet<T extends object>(
         throw new LedgerHistoryReadError(`Planner footer is missing ${key}`);
       }
     }
+    const footerLedger = values.get("ledger");
+    const rowSchemaVersion = values.get("schema_version");
+    const currentSchemaVersions: Partial<Record<PlannerFileEnvelope["ledger"], string>> = {
+      "discovered-articles": PLANNER_LEDGER_VERSION,
+      "selected-articles": SELECTED_ARTICLE_VERSION,
+      "feed-health-state": PLANNER_LEDGER_VERSION,
+      "plan-runs": PLAN_RUN_VERSION,
+    };
+    if (footerLedger !== undefined && rowSchemaVersion !== undefined) {
+      const currentSchema = currentSchemaVersions[footerLedger as PlannerFileEnvelope["ledger"]];
+      if (currentSchema !== undefined && rowSchemaVersion !== currentSchema) {
+        throw new LedgerHistoryReadError(
+          `Planner ${footerLedger} uses unsupported row schema ${rowSchemaVersion}; current row schema is ${currentSchema}`,
+        );
+      }
+    }
     envelope = PlannerFileEnvelopeSchema.parse({
       version: values.get("envelope_version"), row_schema_version: values.get("schema_version"),
       tier: values.get("tier"), ledger: values.get("ledger"), covers: values.get("covers"),
@@ -53,18 +68,14 @@ export async function readPlannerParquet<T extends object>(
       writer_version: values.get("writer_version"), compression: values.get("compression"), updated_at: values.get("updated_at") ?? null,
     });
   } finally { footer.free(); metadata.free(); }
-  const previous = envelope.row_schema_version === PLANNER_LEDGER_VERSION
-    && ((ledger === "selected-articles" && contract.schemaVersion === SELECTED_ARTICLE_VERSION)
-      || (ledger === "plan-runs" && contract.schemaVersion === PLAN_RUN_VERSION));
-  if (envelope.ledger !== ledger || (envelope.row_schema_version !== contract.schemaVersion && !previous)) {
+  if (envelope.ledger !== ledger || envelope.row_schema_version !== contract.schemaVersion) {
     throw new LedgerHistoryReadError("Planner file does not match its current ledger contract");
   }
   if (envelope.tier === "raw" && basename(path) !== `${envelope.file_id}.parquet`) {
     throw new LedgerHistoryReadError("Planner raw filename differs from its file identity");
   }
   const table = tableFromIPC(parseContainer(() => readParquet(bytes)).intoIPCStream());
-  const sourceSchema = previous && ledger === "selected-articles" ? PreviousSelectedArticleRowSchema : contract.schema;
-  const columns = describeObjectSchema(sourceSchema).fields;
+  const columns = describeObjectSchema(contract.schema).fields;
   checkFields(table.schema.fields, columns);
   const records = table.toArray().map(value => {
     const row = normalize(value);
@@ -72,8 +83,7 @@ export async function readPlannerParquet<T extends object>(
     return row as Record<string, unknown>;
   });
   if (digestRows(records, columns) !== envelope.content_sha256) throw new LedgerHistoryReadError("Planner row digest differs from its footer");
-  const rows = records.map(record => contract.schema.parse(previous && ledger === "selected-articles"
-    ? migratePreviousSelectedMetadata(PreviousSelectedArticleRowSchema.parse(record)) : record));
+  const rows = records.map(record => contract.schema.parse(record));
   for (const row of rows) {
     if (!("date" in row) || typeof row.date !== "string" || !(row.date === envelope.covers
       || (envelope.tier === "compact" && row.date.startsWith(`${envelope.covers}-`)))) {

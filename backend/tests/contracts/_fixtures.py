@@ -340,7 +340,7 @@ def planner_payload(
         }
     if name == "PlannerFileEnvelope":
         return {
-            "version": "2026-10-25", "row_schema_version": "2026-10-25",
+            "version": "2026-10-26", "row_schema_version": "2026-10-26",
             "tier": "raw", "ledger": "selected-articles", "covers": day, "period": None,
             "file_id": "00000000-0000-8000-8000-000000000001", "content_sha256": "a" * 64,
             "writer": "idhazh.ledger.parquet", "writer_version": "fixture-engine",
