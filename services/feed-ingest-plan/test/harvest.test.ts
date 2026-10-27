@@ -23,6 +23,7 @@ import { createGunzip, gzipSync } from "node:zlib";
 import { RecordedTransport, contentFilterPage, context, inputs, readContentFilters, readRecordings, source } from "./harvest-recordings";
 import { recordHarvestObservations } from "./observation-recordings";
 import { excludeArticleContent } from "../src/screen-article-candidates/content-filters";
+import { PublisherDefinitionSchema, validatePublisherReferences } from "../src/publisher-catalog";
 
 function expectFeedParseObservations(facts: readonly DocumentWorkFact[], parsedSources: readonly string[]) {
   const parsed = facts.filter(fact => fact.document_kind === "feed" && fact.operation === "parse" && fact.outcome !== "not_attempted");
@@ -32,6 +33,26 @@ function expectFeedParseObservations(facts: readonly DocumentWorkFact[], parsedS
       && fetch.source_id === fact.source_id && fetch.run_id === fact.run_id && fetch.outcome === "success")).toBe(true);
   }
 }
+
+test("publisher reference validation accepts shared, distinct and unknown identities", () => {
+  const publishers = PublisherDefinitionSchema.array().parse([
+    { id: "publisher-alpha", display_name: "Publisher Alpha" },
+    { id: "publisher-beta", display_name: "Publisher Beta" },
+  ]);
+  const feeds = [
+    { id: "section-one", publisher_id: "publisher-alpha" },
+    { id: "section-two", publisher_id: "publisher-alpha" },
+    { id: "independent-source", publisher_id: "publisher-beta" },
+    { id: "unreviewed-source", publisher_id: null },
+  ];
+  expect(() => validatePublisherReferences(publishers, feeds)).not.toThrow();
+  expect(PublisherDefinitionSchema.safeParse({
+    id: "Publisher Alpha", display_name: "Publisher Alpha",
+  }).success).toBe(false);
+  expect(() => validatePublisherReferences(publishers, [
+    { id: "unreviewed-source", publisher_id: "unlisted-publisher" },
+  ])).toThrow("unknown publisher");
+});
 
 test("the live transport owns a real closable pinned dispatcher without opening a connection", async () => {
   expect(() => createPinnedDispatcher([])).toThrow("no address");
