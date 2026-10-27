@@ -330,7 +330,7 @@ def test_real_unread_map_still_refuses_failed_field_without_rejecting_failed_rul
 
 
 def test_query_registry_tracks_the_current_host_schema() -> None:
-    assert ItemHealthRow.schema_version() == "2026-10-25"
+    assert ItemHealthRow.schema_version() == "2026-10-27T11:32"
     assert HostFingerprintRow.schema_version() == "2026-10-26"
     assert "response headers" in (ItemHealthRow.model_fields["fetch_ttfb_ms"].description or "")
 
@@ -338,7 +338,7 @@ def test_query_registry_tracks_the_current_host_schema() -> None:
 @pytest.mark.parametrize(
     ("model", "expected"),
     (
-        (ItemHealthRow, "236201236be25bcec14818a78ee3d6e767270df43b39ceb2fdd266ed8ebd3f79"),
+        (ItemHealthRow, "d752d2f507b2546061e24d4156eba211e40ab909de9926308bb7d83cb21411c7"),
         (HostFingerprintRow, "04a248a34a14c1165e7c19d577b6cf9e9a31e9753e1fcaf7113d9df9b137fc47"),
     ),
 )

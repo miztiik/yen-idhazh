@@ -9,7 +9,7 @@ Run it from the repository root:
     python backend/utilities/item_health_provenance.py --source <file> --ledger <file>
 
 **What it settles.** Every column of `ItemHealthRow.csv_columns()` is printed
-exactly once, under exactly one of the nine groups below, and the run exits 1
+exactly once, under exactly one of the ten groups below, and the run exits 1
 when the groups do not partition that list - so a column minted without a group
 cannot pass unnoticed, and the pasted table cannot drift into holding a column
 twice or dropping one.
@@ -48,7 +48,7 @@ RECORD_SINK: Final = ItemRecorder.note.__name__
 
 #: The module that declares the row. It names every column by construction and
 #: produces none of them - a contract says what a cell may be, never what it
-#: is - so the class rule below would otherwise make it the answer to all 119.
+#: is - so the class rule below would otherwise make it the answer to every column.
 CONTRACT_MODULE: Final = ItemHealthRow.__module__.replace(".", "/") + ".py"
 
 
@@ -185,6 +185,11 @@ GROUPS: Final[tuple[Group, ...]] = (
         "What visual form was requested, what was delivered, how far it stepped "
         "down, and how many marks it carried.",
         ("planned_type", "rendered_type", "downgrade_depth", "marks"),
+    ),
+    Group(
+        "The visual review key",
+        "Which exact visual decision this item-health row identifies for human review.",
+        ("visual_id",),
     ),
     Group(
         "The item clock",
@@ -585,7 +590,7 @@ def report(root: Path, sources: Sequence[str], ledgers: Sequence[str]) -> int:
     columns = ItemHealthRow.csv_columns()
     fault = partition_fault(GROUPS, columns)
     if fault is not None:
-        print(f"the eight groups do not cover the contract: {fault}", file=sys.stderr)
+        print(f"the groups do not cover the contract: {fault}", file=sys.stderr)
         return 1
 
     reading = read(root, sources, ledgers)
