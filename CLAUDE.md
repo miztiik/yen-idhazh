@@ -260,6 +260,12 @@ The commands behind these gates are in [`docs/how-to/run-the-gates.md`](docs/how
 
 **This section is scoped to a persisted payload a later run reads.** A configuration file this project authors is out: nothing but this repository writes one, and a file a person edits in place has no older copy for a later build to read. (Maintainer ruling 2026-09-21.)
 
+**TypeScript planner exception (2026-10-26 UTC):** The maintainer-approved
+[current-format cutover](docs/reference/feed-planner-ledgers.md#typescript-current-format-refusal)
+removes prior-format ledger and selected-artifact acceptance without a read-side
+migration. Python's contracts and historical readers remain unchanged. Other
+families retain their existing compatibility rules.
+
 Every such payload is declared before logic is written, under the native contract ownership in Guardrail #3 and section 1a. Its JSON Schema is computed from that declaration on demand. The planner-only event exception does not change the four versioning rules below.
 
 - `version` is a `YYYY-MM-DD` date-stamp - never an integer, never an epoch. It answers the question a reader of an old payload actually has: how old is this shape?

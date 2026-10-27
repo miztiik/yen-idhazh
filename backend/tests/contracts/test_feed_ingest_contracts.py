@@ -6,6 +6,7 @@ import importlib
 import json
 import shutil
 import subprocess
+from copy import deepcopy
 from pathlib import Path
 from typing import Any, cast
 
@@ -257,6 +258,23 @@ def normalized_shape(node: dict[str, Any], root: dict[str, Any]) -> Any:
     return (kind, node.get("default", "<required>"))
 
 
+def current_planner_input_schema(schema: dict[str, Any]) -> dict[str, Any]:
+    """Bind current selected inputs without importing Python's historical read allowance."""
+    from idhazh.contracts.feed_ingest_selected_article import SELECTED_ARTICLE_VERSION
+
+    schema = deepcopy(schema)
+    for node in (schema, *schema.get("$defs", {}).values()):
+        fields = node.get("properties", {})
+        if "published_at_source" in fields:
+            assert fields["published_at_source"]["enum"] == ["source", "selection", "legacy-unavailable"]
+            fields["published_at_source"]["enum"] = ["source", "selection"]
+        stamp = fields.get("schema_version", {})
+        if stamp.get("const") == SELECTED_ARTICLE_VERSION:
+            assert stamp.pop("default") == SELECTED_ARTICLE_VERSION
+            node["required"] = [*node["required"], "schema_version"]
+    return schema
+
+
 @pytest.mark.parametrize(
     ("module", "name"),
     (*CONTRACT_NAMES, ("feed_ingest_diagnostics", "ExtractionQuality"), *MODEL_NAMES, ("planner_stage", "PlannerSeenEvidence")),
@@ -276,6 +294,7 @@ def test_typescript_field_types_defaults_and_vocabularies(
     else:
         ours = getattr(loaded, name).json_schema()
         theirs = typescript_schemas[name]
+    ours = current_planner_input_schema(ours)
     assert normalized_shape(theirs, theirs) == normalized_shape(ours, ours)
 
 

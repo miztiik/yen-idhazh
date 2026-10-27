@@ -14,7 +14,7 @@ from __future__ import annotations
 import copy
 import json
 import re
-from typing import Any, Final, NamedTuple
+from typing import Any, Final, Literal, NamedTuple
 from urllib.parse import urlsplit
 
 import trafilatura
@@ -35,7 +35,7 @@ from idhazh.sanitize import SANITIZER_VERSION, sanitize
 
 #: Bumped when extraction changes shape. It is a fingerprint input, because a
 #: different extractor over the same page is a different input to the model.
-EXTRACTOR_VERSION: Final = f"trafilatura-{trafilatura.__version__}-idhazh-3"
+EXTRACTOR_VERSION: Final = f"trafilatura-{trafilatura.__version__}-idhazh-4"
 
 #: How long a page's own `<title>` may be and still be a headline. A feed
 #: headline is bounded by editorial practice before it reaches us and keeps
@@ -304,8 +304,7 @@ def _json_ld_words(html: str) -> int:
 def _microdata_words(tree: Any) -> int:
     """Words in the longest microdata `articleBody` the page marks up."""
     counts = [
-        len(str(node.text_content()).split())
-        for node in tree.xpath("//*[@itemprop='articleBody']")
+        len(str(node.text_content()).split()) for node in tree.xpath("//*[@itemprop='articleBody']")
     ]
     return max(counts, default=0)
 
@@ -403,14 +402,8 @@ def _is_false(value: object) -> bool:
 def _declares_paywall(payload: object) -> bool:
     nodes = [node for node in _json_ld_values(payload) if isinstance(node, dict)]
     for node in nodes:
-        if not _is_false(node.get("isAccessibleForFree")):
-            continue
-        parts = _json_ld_values(node.get("hasPart"))
-        for part in parts:
-            if isinstance(part, dict) and part.get("cssSelector") and _is_false(
-                part.get("isAccessibleForFree")
-            ):
-                return True
+        if _is_false(node.get("isAccessibleForFree")):
+            return True
     return False
 
 
@@ -432,9 +425,21 @@ def _marker_paywall(html: str, markers: list[str]) -> bool:
     return any(marker.lower() in normalized or marker.lower() in compact for marker in markers)
 
 
+PaywallEvidence = Literal["json-ld", "configured-marker", "none"]
+
+
+def paywall_evidence(html: str, config: ExtractConfig) -> PaywallEvidence:
+    """Name the paywall signal present in one fetched page."""
+    if declares_paywall(html):
+        return "json-ld"
+    if _marker_paywall(html, config.paywall_markers):
+        return "configured-marker"
+    return "none"
+
+
 def is_paywalled(html: str, config: ExtractConfig) -> bool:
     """Paywall detection is deterministic, with JSON-LD first."""
-    return declares_paywall(html) or _marker_paywall(html, config.paywall_markers)
+    return paywall_evidence(html, config) != "none"
 
 
 def prose_sentence_count(text: str, *, min_words: int) -> int:

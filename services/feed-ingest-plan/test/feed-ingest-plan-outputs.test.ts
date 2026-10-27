@@ -13,7 +13,6 @@ import { executeFeedHealthState } from "../src/api/feed-health-state-operation";
 import { invokePlannerHttp } from "../scripts/feed-ingest-plan-http-proof";
 import { commitPlannerFiles } from "../scripts/feed-ingest-plan-commit";
 import { verifyParquetFiles, verifyPlanningCompletion } from "../scripts/feed-ingest-plan-verification";
-import { verifyRecordedCompatibility } from "./verify-recorded-compatibility";
 import { createExecutionOutputs, writeGitHubOutputs } from "../scripts/feed-ingest-plan-outputs";
 import { formatExecutionOutcome, formatExecutionReport, readExecutionReport, writePlannerReport } from "../scripts/feed-ingest-plan-report";
 import { prepareWorkflowArtifacts } from "../scripts/feed-ingest-plan-artifacts";
@@ -369,10 +368,4 @@ test("writes GitHub output records with noncolliding delimiters and refuses key 
     await expect(writeGitHubOutputs(path, { "bad\nkey": "value" })).rejects.toThrow("key");
     expect(await readFile(path, "utf8")).toBe(text);
   } finally { await rm(root, { recursive: true, force: true }); }
-});
-
-test("checks current planner formats and unchanged generic identity and canonical-byte vectors", async () => {
-  const verified = await verifyRecordedCompatibility();
-  expect(verified).toMatchObject({ status: "verified", planner_row_count: 4 });
-  expect(verified.legacy_seen_row_count).toBeGreaterThan(0);
 });

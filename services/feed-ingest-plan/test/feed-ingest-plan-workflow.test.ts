@@ -86,6 +86,8 @@ test("manual controls commit only current metadata and keep optional host tools 
   expect(steps[report]?.run).toBe("bun run services/feed-ingest-plan/scripts/feed-ingest-plan-report.ts");
   expect(steps[report]?.if).toContain("always()");
   expect(text).not.toContain("/state/raw/feed-ingest-plan/");
+  expect(steps.some(step => step.name === "Check isolated adapters")).toBe(true);
+  expect(steps.some(step => step.name?.includes("native compatibility"))).toBe(false);
   const optional = steps.filter(step => step["continue-on-error"]);
   expect(optional).toHaveLength(2);
   expect(optional.every(step => step.if?.includes("inputs.profile_machine_memory"))).toBe(true);
@@ -208,7 +210,6 @@ test("strict-checks the exact named sparse adapter and test inventory in one com
       "services/feed-ingest-plan/test/feed-ingest-plan-report.test.ts", "services/feed-ingest-plan/test/feed-ingest-plan-workflow.test.ts",
       "services/feed-ingest-plan/scripts/feed-ingest-plan-artifacts.ts", "services/host-probes/scripts/feed-ingest-plan-profile-proof.ts",
       "services/feed-ingest-plan/test/feed-ingest-plan-host.test.ts", "services/feed-ingest-plan/test/feed-ingest-plan-publication.test.ts",
-      "services/feed-ingest-plan/test/verify-recorded-compatibility.ts",
     ]);
     const adapters: string[] = [];
     for (const entry of selection.trim().split("\n").map(value => value.trim())) {
@@ -239,59 +240,5 @@ test("strict-checks the exact named sparse adapter and test inventory in one com
     ], { cwd: service, stdout: "pipe", stderr: "pipe" });
     const [output, errors] = await Promise.all([new Response(child.stdout).text(), new Response(child.stderr).text()]);
     expect({ exit: await child.exited, output, errors }).toEqual({ exit: 0, output: "", errors: "" });
-  } finally { await rm(directory, { recursive: true, force: true }); }
-});
-
-test("the native verifier runs from a fixed named-input copy with no backend or Python", async () => {
-  const directory = await mkdtemp(join(tmpdir(), "planner-verifier-"));
-  try {
-    const common = ["index", "version", "observation-order", "schemas/primitives",
-      ...["source", "candidate", "envelope", "rejection", "harvest-diagnostics", "content-filter-evidence", "item-health-failure",
-        "telemetry", "partition", "event", "policy", "config", "ledger-index", "host-fingerprint", "feed-health",
-        "recorded-instant", "planner-operation", "planner-stage", "document-work", "feed-health-state",
-        "publication-input", "discovered-article", "selected-article", "plan-run"].map(name => `schemas/${name}.schema`)];
-    const writer = ["atomic-file", "index", "ledger-paths", "ledger-types", "ledger-file-receipt", "persist-compact", "persist-ledger",
-      "persist-raw", "registration", "render-ledger-file", "row-identity", "row-schema",
-      "parquet/arrow-builder", "parquet/envelope-footer", "parquet/row-digest", "parquet/wasm-serializer",
-      "uuid/file-id", "uuid/unit-id", "uuid/name-id"];
-    const named = [
-      ...common.map(name => `packages/common-contracts/src/${name}.ts`),
-      ...writer.map(name => `packages/ledger-file-writer/src/${name}.ts`),
-      "packages/common-contracts/package.json", "packages/ledger-file-writer/package.json",
-      "packages/ledger-file-writer/test/planner-recordings.ts", "services/feed-ingest-plan/scripts/feed-ingest-plan-verification.ts",
-      "services/feed-ingest-plan/test/verify-recorded-compatibility.ts",
-      ...["read-parquet", "read-planner-parquet", "ledger-history-error"].map(name =>
-        `services/feed-ingest-plan/src/read-ledger-history/${name}.ts`),
-      "services/feed-ingest-plan/src/config/service-settings.ts",
-      "services/feed-ingest-plan/src/selected-artifact-path.ts",
-      "services/feed-ingest-plan/src/api/plan-response.schema.ts", "services/feed-ingest-plan/src/api/stage-response.schema.ts",
-      "tests/fixtures/ledger-file-writer/legacy-seen-day.parquet",
-      ...["files.json", "selected-articles.json",
-        "selected-articles/01a1784a-c003-8632-81aa-6a128dd12634.parquet",
-        "plan-runs/01a1784a-c0bb-8f81-8af7-b0a59c1e7da6.parquet",
-      ].map(path => `tests/fixtures/ledger-file-writer/planner-2026-10-25/${path}`),
-    ];
-    for (const path of named) {
-      const target = join(directory, ...path.split("/"));
-      await mkdir(dirname(target), { recursive: true });
-      await copyFile(join(root, ...path.split("/")), target);
-    }
-    const modules = join(directory, "node_modules");
-    await mkdir(join(modules, "@idhazh"), { recursive: true });
-    for (const name of ["common-contracts", "ledger-file-writer"]) {
-      await symlink(join(directory, "packages", name), join(modules, "@idhazh", name), "junction");
-      await symlink(modules, join(directory, "packages", name, "node_modules"), "junction");
-    }
-    for (const name of ["apache-arrow", "parquet-wasm", "zod"]) await symlink(
-      join(root, "packages", "ledger-file-writer", "node_modules", name), join(modules, name), "junction");
-    await expect(stat(join(directory, "backend"))).rejects.toMatchObject({ code: "ENOENT" });
-    const child = Bun.spawn([process.execPath, join(directory, "services", "feed-ingest-plan", "test", "verify-recorded-compatibility.ts")], {
-      cwd: directory, stdout: "pipe", stderr: "pipe",
-    });
-    const [output, errors] = await Promise.all([new Response(child.stdout).text(), new Response(child.stderr).text()]);
-    expect({ exit: await child.exited, errors }).toEqual({ exit: 0, errors: "" });
-    const verified = JSON.parse(output);
-    expect(verified).toMatchObject({ status: "verified", planner_row_count: 4, legacy_planner_row_count: 2 });
-    expect(verified.legacy_seen_row_count).toBeGreaterThan(0);
   } finally { await rm(directory, { recursive: true, force: true }); }
 });

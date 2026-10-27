@@ -1,6 +1,8 @@
 /** Which writer and recorded format identify one immutable ledger file? */
 import { z } from "zod";
-import { PLANNER_LEDGER_VERSION, PLANNER_ENVELOPE_VERSION } from "../version";
+import {
+  PLANNER_LEDGER_VERSION, PLANNER_ENVELOPE_VERSION, PLAN_RUN_VERSION, SELECTED_ARTICLE_VERSION,
+} from "../version";
 import { RecordedInstantSchema } from "./recorded-instant.schema";
 import { CommitShaSchema, CountSchema, DateStampSchema, JobNameSchema, MonthStampSchema, NonEmptySchema, PositiveCountSchema, RunIdSchema, SchemaVersionSchema, ServerJobSchema, Sha256Schema, YearStampSchema, reject } from "./primitives";
 
@@ -110,6 +112,16 @@ export const PlannerFileEnvelopeSchema = z.strictObject({
     && (value.version === PLANNER_LEDGER_VERSION || !["selected-articles", "plan-runs"].includes(value.ledger))) {
     reject(ctx, "current row stamp requires its declared ledger and envelope");
   }
+  if (value.ledger === "selected-articles" && value.row_schema_version !== SELECTED_ARTICLE_VERSION) {
+    reject(ctx, "selected-articles requires its current row schema");
+  }
+  if (value.ledger === "plan-runs" && value.row_schema_version !== PLAN_RUN_VERSION) {
+    reject(ctx, "plan-runs requires its current row schema");
+  }
+  if ((value.ledger === "discovered-articles" || value.ledger === "feed-health-state")
+    && value.row_schema_version !== PLANNER_LEDGER_VERSION) {
+    reject(ctx, "discovered and feed-health ledgers require their current row schema");
+  }
   if ((value.tier === "compact") !== (value.period !== null)) reject(ctx, "planner compact files require a period; raw files name none");
   const stamp = value.tier === "raw" || value.period === "daily" ? DateStampSchema
     : value.period === "monthly" ? MonthStampSchema : YearStampSchema;
@@ -119,7 +131,7 @@ export const PlannerFileEnvelopeSchema = z.strictObject({
 }).meta({
   version: PLANNER_ENVELOPE_VERSION,
   changelog: [
-    { version: PLANNER_ENVELOPE_VERSION, change: "Accept current and prior selected-article and run row stamps." },
+    { version: PLANNER_ENVELOPE_VERSION, change: "Require the current row stamp for selected articles and plan runs." },
     { version: PLANNER_LEDGER_VERSION, change: "Declare planner-only file metadata without generic writer identity." },
   ],
 });
