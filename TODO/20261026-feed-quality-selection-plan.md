@@ -162,7 +162,7 @@ flowchart TD
 | D1 | 1 | Deliver reviewed publisher IDs | - | DONE | Eight reviewed publisher IDs now bind 20 active and retired feeds; unreviewed entries remain unknown. | feed-selection-delivery | #1762 | - |
 | D2 | 2 | Finish TypeScript contract and ledger-IO integration | 1 | DONE | Raw-day membership tests and all required PR checks passed; the change is merged. | feed-selection-delivery | #1763 | - |
 | D3 | 3 | Remove feed labels and rename article/discovery controls | 2 | DONE | All required checks passed on source 3e612aa4f5d9092d345a9f2ef9790125cb8847c1; merged as d484600018cd9a4264266493d2a7522a3a5d12f7 and verified on remote main. | feed-selection-controls | #1766 | - |
-| D4 | 4 | Implement allocation, freshness, cutoff and rejection persistence | 1, 2, 3 | IN REVIEW | Allocation, source outcomes and five-ledger persistence are implemented. Contract and writer suites plus targeted planner and native-hook cases pass; required CI and remote-main verification remain. | feed-selection-controls | - | - |
+| D4 | 4 | Implement allocation, freshness, cutoff and rejection persistence | 1, 2, 3 | DONE | All five required checks passed in CI run 40579413266 on source f81d5abc4d5e30f354de7d28bde91b32a43448a1; merged as 9534aa071120ea6cee3f3dc8f08644666342c00a and verified on remote main. | feed-selection-controls | #1768 | - |
 
 Implementation gates, not this documentation delivery: inspect `npm run test:changed -- --list` from `frontend/`, run the selected checks, and run each row's named Bun cases. Type-check affected packages with `bun run --cwd <package> check`. CI runs the full merge-candidate suite once. No row requires a live feed probe or a workflow dispatch.
 
