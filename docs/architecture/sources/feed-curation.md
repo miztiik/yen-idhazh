@@ -232,13 +232,12 @@ Missing matches or carrier witnesses are not measured zeroes.
 records actual adjustments as `term` and `value`; accepting a term name does
 not approve its meaning.
 
-**Recommendation, not approval:** Keep current ranking while the priority
-decision is pending. This gives watchlist, theme and repeated-URL inputs no
-extra priority; it does not close the remaining priority work.
-Before adding a term, obtain approval for its exact input and matching rule,
+**Decision:** The priority review is closed with current ranking unchanged.
+Watchlist, theme and repeated-URL inputs receive no extra priority. No new
+term, matcher or default is approved or pending under this review.
+Any future addition needs separate approval for its exact input and matching rule,
 independent meaning, config maintainer and default, no-double-counting rule,
-score evidence and current-reader-before-writer sequence. No proposed priority
-term, matcher or default has approval. Front-page votes, inferred
+score evidence and current-reader-before-writer sequence. Front-page votes, inferred
 classifications and a wholesale Python-ranking port are not authorized by
 this comparison.
 

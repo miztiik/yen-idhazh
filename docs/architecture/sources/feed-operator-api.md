@@ -85,7 +85,7 @@ Selected metadata includes `published_at_source`. A trusted source time uses
 `source`; otherwise the actual saved selection-start UTC instant uses
 `selection`. This fallback is output metadata, not a new age or admission
 input. The [ledger reference](../../reference/feed-planner-ledgers.md#b-selected-articles)
-owns the compatible historical-read rule.
+owns the [current-format refusal rule](../../reference/feed-planner-ledgers.md#typescript-current-format-refusal).
 
 Table A
 

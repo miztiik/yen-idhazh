@@ -55,8 +55,7 @@ readback cannot report completed planning.
 
 Sparse progress proves observed activity only. It does not prove persistence.
 The independent host instruments are optional and never establish planner
-completion. Genuine publication and lead-observer integration remain deferred
-under [Plan 67 Rows 17 and 18](../../../TODO/20261024-67-feed-ingest-feedback-and-selection-plan.md#19-row-17---prove-dispatch-parquet-parity-then-wire-digest-workers).
+completion. Genuine publication and lead-observer integration remain deferred.
 Generated publication fixtures prove only the observer boundary, not actual
 worker/model cost, publication or lead selection. Production planner and
 worker cutover are not approved: they require a separate decision and staged
