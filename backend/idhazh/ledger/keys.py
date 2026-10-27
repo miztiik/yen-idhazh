@@ -19,16 +19,12 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Final, NamedTuple
 
-from idhazh.contracts.base import Contract
+from idhazh.contracts.base import Contract, LedgerContract
 from idhazh.contracts.collection_prune import CollectionPruneRow
 from idhazh.contracts.council_run_record import CouncilRunRecord
 from idhazh.contracts.counterfactual_score import CounterfactualScoreRow
 from idhazh.contracts.eval_row import EvalRow
 from idhazh.contracts.feed_health import FeedHealthRow, supersedes
-from idhazh.contracts.feed_health_state import FeedHealthStateRow
-from idhazh.contracts.feed_ingest_discovered_article import DiscoveredArticleRow, LedgerContract
-from idhazh.contracts.feed_ingest_plan_run import PlanRunRow
-from idhazh.contracts.feed_ingest_selected_article import SelectedArticleRow
 from idhazh.contracts.feed_retirement import FeedRetirementRow
 from idhazh.contracts.host_fingerprint import HostFingerprintRow
 from idhazh.contracts.item_health import ItemHealthRow
@@ -321,18 +317,6 @@ class _DoorShape(NamedTuple):
 #: cannot disagree about which row of a key survives. A new door ledger gets its
 #: row here in the change that registers it.
 _DOOR_SHAPES: Final[dict[LedgerName, _DoorShape]] = {
-    LedgerName.FEED_INGEST_PLAN_DISCOVERED_ARTICLES: _DoorShape(
-        ("url_key",), DiscoveredArticleRow
-    ),
-    LedgerName.FEED_INGEST_PLAN_SELECTED_ARTICLES: _DoorShape(
-        ("run_id", "attempt", "url_key"), SelectedArticleRow
-    ),
-    LedgerName.FEED_INGEST_PLAN_FEED_HEALTH_STATE: _DoorShape(
-        ("run_id", "attempt", "feed_id", "endpoint_key", "date"), FeedHealthStateRow
-    ),
-    LedgerName.FEED_INGEST_PLAN_PLAN_RUNS: _DoorShape(
-        ("run_id", "attempt"), PlanRunRow
-    ),
     LedgerName.GARDENER: _DoorShape(COLLECTION_PRUNE_KEY, CollectionPruneRow),
     LedgerName.VISUAL_PRUNES: _DoorShape(VISUAL_PRUNE_KEY, VisualPruneRow),
     LedgerName.FEED_RETIREMENTS: _DoorShape(FEED_RETIREMENT_KEY, FeedRetirementRow),

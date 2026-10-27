@@ -23,6 +23,7 @@ import { createGunzip, gzipSync } from "node:zlib";
 import { RecordedTransport, contentFilterPage, context, inputs, readContentFilters, readRecordings, source } from "./harvest-recordings";
 import { recordHarvestObservations } from "./observation-recordings";
 import { excludeArticleContent } from "../src/screen-article-candidates/content-filters";
+import { PublisherDefinitionSchema, validatePublisherReferences } from "../src/publisher-catalog";
 
 function expectFeedParseObservations(facts: readonly DocumentWorkFact[], parsedSources: readonly string[]) {
   const parsed = facts.filter(fact => fact.document_kind === "feed" && fact.operation === "parse" && fact.outcome !== "not_attempted");
@@ -33,34 +34,24 @@ function expectFeedParseObservations(facts: readonly DocumentWorkFact[], parsedS
   }
 }
 
-test("reviewed publisher IDs bind only the confirmed feeds in the live catalog", async () => {
-  const [config, taxonomy, sources, extraction] = await Promise.all([
-    Bun.file(new URL("../../../config/feed-ingest-plan.json", import.meta.url)).json(),
-    Bun.file(new URL("../../../config/taxonomy.json", import.meta.url)).json(),
-    Bun.file(new URL("../../../config/sources.json", import.meta.url)).json(),
-    Bun.file(new URL("../../../config/idhazh.json", import.meta.url)).json(),
+test("publisher reference validation accepts shared, distinct and unknown identities", () => {
+  const publishers = PublisherDefinitionSchema.array().parse([
+    { id: "publisher-alpha", display_name: "Publisher Alpha" },
+    { id: "publisher-beta", display_name: "Publisher Beta" },
   ]);
-  const loaded = loadHarvestInputs({ config, taxonomy, sources, extraction });
-  const publishersByFeed = new Map(
-    [...loaded.sources, ...loaded.retired_sources].map(feed => [feed.id, feed.publisher_id] as const),
-  );
-  const expectedMappings = {
-    "bbc-business": "bbc", "bbc-tech": "bbc", "bbc-world": "bbc",
-    "cgtn-business": "cgtn", "cgtn-china": "cgtn", "cgtn-opnion": "cgtn", "cgtn-tech": "cgtn",
-    "cna-business": "cna", "cna-world": "cna",
-    "conversation-africa": "the-conversation-africa",
-    "the-hindu-national": "the-hindu", "thehindu-all": "the-hindu",
-    "thehindu-biz": "the-hindu", "thehindu-intl": "the-hindu",
-    "thehindu-business": "the-hindu-businessline",
-    livemint: "mint", "livemint-companies": "mint", "livemint-markets": "mint",
-    "economist-business": "the-economist", "economist-finance": "the-economist",
-  } as const;
-  for (const [feed, publisher] of Object.entries(expectedMappings)) {
-    expect(publishersByFeed.get(feed)).toBe(publisher);
-  }
-  expect(publishersByFeed.get("apnews-world")).toBeNull();
-  expect(publishersByFeed.get("conversation-business")).toBeNull();
-  expect(publishersByFeed.get("conversation-world")).toBeNull();
+  const feeds = [
+    { id: "section-one", publisher_id: "publisher-alpha" },
+    { id: "section-two", publisher_id: "publisher-alpha" },
+    { id: "independent-source", publisher_id: "publisher-beta" },
+    { id: "unreviewed-source", publisher_id: null },
+  ];
+  expect(() => validatePublisherReferences(publishers, feeds)).not.toThrow();
+  expect(PublisherDefinitionSchema.safeParse({
+    id: "Publisher Alpha", display_name: "Publisher Alpha",
+  }).success).toBe(false);
+  expect(() => validatePublisherReferences(publishers, [
+    { id: "unreviewed-source", publisher_id: "unlisted-publisher" },
+  ])).toThrow("unknown publisher");
 });
 
 test("the live transport owns a real closable pinned dispatcher without opening a connection", async () => {

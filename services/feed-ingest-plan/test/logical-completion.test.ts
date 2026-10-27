@@ -13,7 +13,8 @@ import { readPlannerDay } from "../src/read-ledger-history/read-planner-history"
 import { readPlannerParquet } from "../src/read-ledger-history/read-planner-parquet";
 import { settleHealthRows } from "../src/read-ledger-history/health-summary";
 import { foldFirstSight } from "../src/read-ledger-history/read-seen-evidence";
-import { compactRows, registration, writeRows } from "./partition-fixtures";
+import { commitFixtureFiles, compactRows, registration, writeRows } from "./partition-fixtures";
+import { fixtureGit } from "./publication-recordings";
 
 const day = "2026-10-20";
 const contracts = {
@@ -33,10 +34,10 @@ test("explicit run results survive native daily, monthly and yearly packing with
       const raw = await writeRows(root, record.name, day, record.contract, [record.row]);
       expect(raw.status).toBe("written");
       for (const period of ["daily", "monthly", "yearly"] as const) {
-        const packed = await compactRows(root, record.name, day, record.contract, [record.row], period);
+        const packed = await compactRows(join(root, "state"), record.name, day, record.contract, [record.row], period, root);
         for (const file of raw.files) await rm(join(root, file.path), { force: true });
         const reopened = await readPlannerDay(root, registration(record.name), {
-          day, indexes: { [period]: packed.indexPath }, raw_files: [],
+          day,
         }, record.contract);
         expect(reopened.complete).toBe(true);
         expect(reopened.rows).toEqual([record.row]);
@@ -47,7 +48,7 @@ test("explicit run results survive native daily, monthly and yearly packing with
       }
     }
   } finally { await rm(root, { recursive: true, force: true }); }
-});
+}, 30_000);
 
 test("identical storage copies count once while distinct attempts retain their real request spend", async () => {
   const root = await mkdtemp(join(tmpdir(), "planner-attempt-facts-"));
@@ -56,10 +57,13 @@ test("identical storage copies count once while distinct attempts retain their r
     const first = FeedHealthStateRowContract.schema.parse({ ...original.row, article_requests: 3 });
     const retry = FeedHealthStateRowContract.schema.parse({ ...first, attempt: 2, article_requests: 7 });
     const raw = await Promise.all([first, retry].map(row =>
-      writeRows(root, original.name, day, FeedHealthStateRowContract, [row])));
-    const packed = await compactRows(root, original.name, day, FeedHealthStateRowContract, [first, retry], "daily");
+      writeRows(join(root, "state"), original.name, day, FeedHealthStateRowContract, [row])));
+    const rawFiles = raw.flatMap(result => result.files.map(file => `state/${file.path}`));
+    await commitFixtureFiles(root, rawFiles);
+    await compactRows(join(root, "state"), original.name, day, FeedHealthStateRowContract, [first, retry], "daily", root);
+    const raw_revision = await fixtureGit(root, ["rev-parse", "--verify", "HEAD"]);
     const merged = await readPlannerDay(root, registration(original.name), {
-      day, raw_files: raw.flatMap(result => result.files.map(file => file.path)), indexes: { daily: packed.indexPath },
+      day, raw_files: rawFiles, raw_revision,
     }, FeedHealthStateRowContract);
     expect(merged.rows).toHaveLength(4);
     const settled = settleHealthRows(merged.rows);
@@ -71,7 +75,7 @@ test("identical storage copies count once while distinct attempts retain their r
     expect(foldFirstSight([discovery, earlier, discovery])).toEqual([earlier]);
     expect(settled.every((row: FeedHealthStateRow) => !("unit_id" in row))).toBe(true);
   } finally { await rm(root, { recursive: true, force: true }); }
-});
+}, 30_000);
 
 test("a later explicit zero completion coexists with prior selections and failed-attempt work", async () => {
   const root = await mkdtemp(join(tmpdir(), "planner-zero-result-"));
@@ -95,15 +99,15 @@ test("a later explicit zero completion coexists with prior selections and failed
     for (const period of ["daily", "monthly", "yearly"] as const) {
       for (const population of populations) {
         const rows = population.name === "plan-runs" ? runs : [selected];
-        const packed = await compactRows(root, population.name, day, population.contract, rows, period);
+        await compactRows(join(root, "state"), population.name, day, population.contract, rows, period, root);
         const held = await readPlannerDay(root, registration(population.name), {
-          day, indexes: { [period]: packed.indexPath },
+          day,
         }, population.contract);
         expect(held.rows).toEqual(rows);
       }
-      const packed = await compactRows(root, "feed-health-state", day, FeedHealthStateRowContract, health, period);
+      await compactRows(join(root, "state"), "feed-health-state", day, FeedHealthStateRowContract, health, period, root);
       const held = await readPlannerDay(root, registration("feed-health-state"), {
-        day, indexes: { [period]: packed.indexPath },
+        day,
       }, FeedHealthStateRowContract);
       expect(settleHealthRows(held.rows).reduce((total, row) => total + row.article_requests!, 0)).toBe(6);
     }
@@ -111,4 +115,4 @@ test("a later explicit zero completion coexists with prior selections and failed
     expect(selected.attempt).toBe(1);
     expect(runs.map(row => row.attempt)).toEqual([1, 2, 3]);
   } finally { await rm(root, { recursive: true, force: true }); }
-});
+}, 30_000);

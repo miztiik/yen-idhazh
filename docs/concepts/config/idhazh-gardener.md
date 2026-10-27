@@ -1,6 +1,6 @@
 # The gardener's knobs and declarations
 
-**Last Updated**: 2026-10-25
+**Last Updated**: 2026-10-27
 
 What the gardener may delete and rewrite, and how each of its tasks is declared.
 Two inputs, both under `config/`: the gardener's own knobs in
@@ -29,10 +29,10 @@ naming both values.
 ## One declaration a task
 
 A task is named by its file: `config/gardener/traces.json` declares the task
-`traces`. `task_names` in `config/idhazh_gardener.json` names the files to read. Thirty ship today:
-five `retention` tasks, two `collection` tasks, twenty-two `compaction` tasks -
-nineteen for ledgers and three for trial roots (below) - and `corpus-squash`,
-the one `history` task (below).
+`traces`. `task_names` in `config/idhazh_gardener.json` names the files to read.
+Thirty-three tasks ship today: five `retention`, two `collection`, twenty-five
+`compaction` - twenty-three for production ledgers and two for trial roots -
+and one `corpus-squash` history task.
 There is no `name` key inside a declaration. Both plan writers open the same
 named list, so adding an unrelated file cannot change a wake's plan.
 
@@ -79,7 +79,7 @@ Why each tree gets the age it has is
 
 ## The compaction declarations that ship
 
-All nineteen ledger declarations pack live. They keep day files until 45 whole days
+All twenty-three production ledger declarations pack live. They keep day files until 45 whole days
 after their month ends, then month files until 93 whole days after their year
 ends. Indexed year files expire 36 calendar months after that UTC year ends.
 For example, 2026 expires on 2030-01-01 at 00:00 UTC. Each declaration has
@@ -97,7 +97,7 @@ folder and then that name for a ledger filed inside its family's folder, such as
 `compact-<folder>` with `/` written `-`.
 The raw-day packing wait remains one whole day for every ledger.
 
-Table A. All eighteen declarations use the same packing and expiry settings.
+Table A. All twenty-three production declarations use the same packing and expiry settings.
 
 | ID | Declaration | Daily to monthly / monthly to yearly / yearly expiry |
 | --- | --- | --- |
@@ -119,6 +119,17 @@ Table A. All eighteen declarations use the same packing and expiry settings.
 | A16 | `compact-content-similarity-judge-metrics` | 45 days / 93 days / 36 calendar months |
 | A17 | `compact-content-similarity-judge-holdout-pairs` | 45 days / 93 days / 36 calendar months |
 | A18 | `compact-content-similarity-judge-fitted-thresholds` | 45 days / 93 days / 36 calendar months |
+| A19 | `compact-run-shards` | 45 days / 93 days / 36 calendar months |
+| A20 | `compact-feed-ingest-plan-discovered-articles` | 45 days / 93 days / 36 calendar months |
+| A21 | `compact-feed-ingest-plan-feed-health-state` | 45 days / 93 days / 36 calendar months |
+| A22 | `compact-feed-ingest-plan-plan-runs` | 45 days / 93 days / 36 calendar months |
+| A23 | `compact-feed-ingest-plan-selected-articles` | 45 days / 93 days / 36 calendar months |
+
+The two `compact-trial-*` declarations use the separate trial policy under
+their named trial roots. Only shards that run one of the four planner declarations
+install Bun 1.3.13 and the existing common-contracts and ledger-writer packages.
+That adds two locked package installs to those shards and lets TypeScript own
+planner row validation and compaction without a Python schema or codec copy.
 
 `item-health-summary` has a declaration but no generated rows yet.
 `telemetry-aggregate` remains `dry_run: true`; it produces summaries only for

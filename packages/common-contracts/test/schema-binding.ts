@@ -1,4 +1,4 @@
-/** Which actual input schemas bind the native payloads and their TypeScript copies? */
+/** Which actual input schemas do contract-binding and planner tests exercise? */
 import { z } from "zod";
 import {
   DiscoveredArticleRowSchema,

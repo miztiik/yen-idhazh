@@ -1,6 +1,6 @@
 # Ledger compaction
 
-**Last Updated**: 2026-10-26
+**Last Updated**: 2026-10-27
 
 How a ledger's daily, monthly and yearly files are packed and dropped. The
 gardener runs a compaction like any other task; how a wake runs its tasks and
@@ -198,14 +198,20 @@ the day and settles the rows: one file's rows per work unit - the last file of
 its highest attempt - then the first row of each key. It writes the day's day
 file and no raw listing.
 The four current planner ledgers instead use their declared row identities
-and minimal native envelope. They never add generic `unit_id`, Git SHA or
-writer-identity columns. Discovery retains the global earliest URL sighting.
-Selected, health and run rows retain distinct actual execution/attempt facts;
-identical raw/compact copies count once and conflicting records refuse the
-period before destructive changes.
+and TypeScript-owned minimal envelope. They never add generic `unit_id`, Git
+SHA or writer-identity columns. Discovery retains the global earliest URL
+sighting. Selected, health and run rows retain distinct actual
+execution/attempt facts; identical raw/compact copies count once and
+conflicting records refuse the period before destructive changes.
 
-Daily, monthly, reopened-month and grouped yearly rendering all use the same
-native planner settlement. Readers include late raw planner work beside
+The Python gardener still chooses bounded periods and keeps the shared
+compact-index marks used by all ledger families. For planner rows, it delegates
+validation and daily, monthly, reopened-month and yearly compaction to the
+TypeScript writer. That adapter checks exact canonical raw and compact paths at
+one captured Git revision, settles rows through their declared identities,
+and returns verified output bytes and exact deletion paths. Missing, changed
+or unsupported members refuse the period; no Python planner row model or
+second scheduler is added. Readers include late raw planner work beside
 compact coverage; another family keeps its existing compact-first rule.
 Packing preserves captured reliability and score values rather than summing
 them. Run counters can be aggregated later, once per fact.

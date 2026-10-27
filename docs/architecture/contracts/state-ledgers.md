@@ -1,6 +1,6 @@
 # The ledgers under state/
 
-**Last Updated**: 2026-10-26
+**Last Updated**: 2026-10-27
 
 `state/` is the only memory this pipeline has. Every run starts on a fresh machine with a fresh checkout, so anything one run needs to tell the next is committed (CLAUDE.md Guardrail #1). This page says what each committed ledger answers and why it files at the grain it does.
 
@@ -38,6 +38,11 @@ A window lets the reader name the files it wants and skip the rest. Without one 
 | `state/raw/feed-ingest-plan/plan-runs/<YYYY>/<MM>/<DD>/<file_id>.parquet` | What did one execution finish, including empty or partial results? | raw and compact | named run/day |
 
 The seen ledger has no published mirror at all, so unlike the two health ledgers there is no second grain anywhere near it.
+
+The four planner ledgers are declared, read, written and file-validated by
+TypeScript. Python has no planner row or stage model. The Python gardener keeps
+its scheduler and generic compact-index records, then delegates planner row
+validation and compaction to the TypeScript writer for each named period.
 
 The run-plan ledger is how a plan reaches the stages after it. The plan stage
 files one row per run through the ledger door. In the daily workflow the plan

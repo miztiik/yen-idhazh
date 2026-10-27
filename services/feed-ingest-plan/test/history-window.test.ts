@@ -1,6 +1,6 @@
 /** Are lifecycle, represented reliability and closed-day request spend independent bounded views? */
 import { expect, test } from "bun:test";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -10,7 +10,8 @@ import { plannerRecordings } from "../../../packages/ledger-file-writer/test/pla
 import { loadPlanInputs } from "../src/load-plan-inputs";
 import { closedRequestDays, summarizeHealth } from "../src/read-ledger-history/health-summary";
 import { endpointKey, readFeedHistory } from "../src/read-ledger-history/read-feed-history";
-import { compactRows, registration, writeRows } from "./partition-fixtures";
+import { commitFixtureFiles, compactRows, registration, writeRows } from "./partition-fixtures";
+import { fixtureGit } from "./publication-recordings";
 import { defaultDayInput } from "../src/read-ledger-history/named-days";
 
 const now = "2026-10-21T12:00:00Z";
@@ -186,11 +187,15 @@ test("native history reads only named current-family days and rejects unbounded 
   const setup = await input();
   const root = await mkdtemp(join(tmpdir(), "planner-health-window-"));
   try {
-    const written = await writeRows(root, "feed-health-state", "2026-10-20", FeedHealthStateRowContract, [work()]);
+    const written = await writeRows(join(root, "state"), "feed-health-state", "2026-10-20",
+      FeedHealthStateRowContract, [work()]);
+    const rawFiles = written.files.map(file => `state/${file.path}`);
+    await commitFixtureFiles(root, rawFiles);
+    const rawRevision = await fixtureGit(root, ["rev-parse", "--verify", "HEAD"]);
     await writeFile(join(root, "outside-unrequested.parquet"), "not a ledger and never an input");
     const request = {
       ...setup, root, concurrency: 2, health: registration("feed-health-state"),
-      health_days: [{ day: "2026-10-20", raw_files: written.files.map(file => file.path) }],
+      health_days: [{ day: "2026-10-20", raw_revision: rawRevision, raw_files: rawFiles }],
     };
     const loaded = await readFeedHistory(request);
     expect(loaded.rows).toEqual([work()]);
@@ -213,15 +218,14 @@ test("native history reads only named current-family days and rejects unbounded 
       const raw = await writeRows(dailyState, "feed-health-state", row.date, FeedHealthStateRowContract, [row]);
       return { day: row.date, raw_files: raw.files.map(file => `state/${file.path}`) };
     }));
-    const empty = await compactRows(dailyState, "feed-health-state", "2026-10-19", FeedHealthStateRowContract, [], "daily");
-    await writeFile(empty.indexPath, JSON.stringify({
-      ...empty.index, entries: closedRequestDays(now, 7).filter(day => day !== recent.date)
-        .map(covers => ({ covers, rows: 0, bytes: 0, state: "empty" })),
-    }));
+    await commitFixtureFiles(dailyRoot, dailyInputs.flatMap(input => input.raw_files));
+    const dailyRevision = await fixtureGit(dailyRoot, ["rev-parse", "--verify", "HEAD"]);
+    const committedDailyInputs = dailyInputs.map(input => ({ ...input, raw_revision: dailyRevision }));
     const daily = await readFeedHistory({
-      ...request, root: dailyRoot, health_days: [...dailyInputs,
+      ...request, root: dailyRoot, health_days: [...committedDailyInputs,
         ...closedRequestDays(now, 7).filter(day => day !== recent.date).map(day => ({
-          ...defaultDayInput(registration("feed-health-state").prefix, day), raw_files: [],
+          ...defaultDayInput(registration("feed-health-state").prefix, day),
+          raw_revision: dailyRevision, raw_files: [],
         }))], lifecycle_window_days: 2,
       policy: { ...setup.policy, reliability_window_days: 2, availability_strikes_before_rest: 2 },
     });
@@ -245,18 +249,22 @@ test("native history reads only named current-family days and rejects unbounded 
     for (const period of ["monthly", "yearly"] as const) {
       const periodRoot = join(root, period);
       const state = join(periodRoot, "state");
-      const compact = await compactRows(state, "feed-health-state", "2026-10-30", FeedHealthStateRowContract, packedRows, period);
+      const compact = await compactRows(state, "feed-health-state", "2026-10-30",
+        FeedHealthStateRowContract, packedRows, period, periodRoot);
       const old = work("2026-09-30", { outcome: "permanent", items: 0, productive_reads: 0, failed_reads: 1 });
       const oldRaw = await writeRows(state, "feed-health-state", old.date, FeedHealthStateRowContract, [old]);
       const original = packedRows.at(-1)!;
       const late = { ...original, attempt: 2, checked_at: "2026-10-30T16:00:00Z", article_requests: 5 };
       const copies = await Promise.all([original, late].map(row =>
         writeRows(state, "feed-health-state", row.date, FeedHealthStateRowContract, [row])));
-      const indexes = { [period]: compact.indexPath };
+      const rawPaths = [...oldRaw.files, ...copies.flatMap(result => result.files)]
+        .map(file => `state/${file.path}`);
+      await commitFixtureFiles(periodRoot, rawPaths);
+      const raw_revision = await fixtureGit(periodRoot, ["rev-parse", "--verify", "HEAD"]);
       const healthDays = [
-        { day: old.date, raw_files: oldRaw.files.map(file => `state/${file.path}`) },
+        { day: old.date, raw_revision, raw_files: oldRaw.files.map(file => `state/${file.path}`) },
         ...monthDays.map(day => ({
-          day, indexes, raw_files: day !== original.date ? []
+          day, raw_revision, raw_files: day !== original.date ? []
             : copies.flatMap(result => result.files.map(file => `state/${file.path}`)),
         })),
       ];
@@ -285,26 +293,27 @@ test("native history reads only named current-family days and rejects unbounded 
       expect(beforeMidnight.sources.get("recorded-news")).toMatchObject({
         strikes: 3, reliability: { attempted: 2, from_day: "2026-10-01", through_day: "2026-10-30", complete: true },
       });
-      await writeFile(compact.indexPath, JSON.stringify({
-        ...compact.index, entries: [{ ...compact.index.entries[0]!, lost_days: ["2026-10-15"] }],
-      }));
-      const lost = await readFeedHistory(periodRequest);
-      expect(lost.represented_days).toEqual(packed.represented_days);
-      expect(lost.sources.get("recorded-news")!.reliability!.complete).toBe(false);
-      expect(lost.request_report).toEqual(packed.request_report);
-      await writeFile(compact.indexPath, "{");
-      const refused = await readFeedHistory(periodRequest);
+      const compactBytes = await readFile(compact.path!);
+      const failureRequest = {
+        ...periodRequest,
+        health_days: [{
+          day: original.date, raw_revision,
+          raw_files: copies.flatMap(result => result.files.map(file => `state/${file.path}`)),
+        }],
+      };
+      await writeFile(compact.path!, new Uint8Array([1, 2, 3]));
+      const refused = await readFeedHistory(failureRequest);
       expect(refused.sources.get("recorded-news")!.reliability).toMatchObject({ attempted: 1, complete: false });
       expect(refused.request_report).toMatchObject({
         complete: false, feeds: [{ article_requests: null, counts_complete: false }],
       });
-      await writeFile(compact.indexPath, JSON.stringify(compact.index));
+      await writeFile(compact.path!, compactBytes);
       await rm(compact.path!);
-      const missing = await readFeedHistory(periodRequest);
+      const missing = await readFeedHistory(failureRequest);
       expect(missing.sources.get("recorded-news")!.reliability).toMatchObject({ attempted: 1, complete: false });
       expect(missing.request_report).toMatchObject({
         complete: false, feeds: [{ article_requests: null, counts_complete: false }],
       });
     }
   } finally { await rm(root, { recursive: true, force: true }); }
-});
+}, 120_000);

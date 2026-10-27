@@ -1,6 +1,6 @@
 # How completed output reaches the repository
 
-**Last Updated**: 2026-10-26
+**Last Updated**: 2026-10-27
 
 Start here when an agent adds a workflow that commits generated files.
 Gardener, council, digest and the additional clients below use one publisher:
@@ -204,6 +204,11 @@ concurrent additions remain in the new tree; an existing UUID with different
 bytes refuses publication. Replaying identical output creates no commit.
 The [planner input contract](../../reference/feed-planner-ledgers.md#raw-day-membership)
 defines bounded day discovery separately from compact-period metadata.
+
+The gardener's existing publisher still lands compact planner changes. Its
+Python scheduler receives a TypeScript maintenance receipt containing the
+verified compact bytes and exact source paths; this is not a second publisher
+or a permission to alter other families.
 
 This is a bounded native-format handoff, not a second general publisher.
 The adapter performs no deletion, other-ledger write, publication/site

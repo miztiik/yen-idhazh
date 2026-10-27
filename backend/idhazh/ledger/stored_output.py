@@ -5,30 +5,26 @@ from __future__ import annotations
 from pathlib import Path
 
 from idhazh.contracts.base import StalePayloadError
-from idhazh.contracts.file_envelope import FileEnvelope, Format, Period, PlannerFileEnvelope, Tier
+from idhazh.contracts.file_envelope import Format, Period, Tier
 from idhazh.contracts.ledger_index import CompactIndex
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.ledger import keys, paths
-from idhazh.ledger.persist import StoredRow, load_registered_stored, read_registered_envelope
+from idhazh.ledger.persist import load_registered_stored, read_registered_envelope
 from idhazh.ledger.raw_files import read_registered_day_files
 
 
 def check_raw_day(state_dir: Path, which: LedgerName, day: str) -> bool:
     """Validate actual raw files and report presence."""
+    if paths.is_planner_ledger(which):
+        raise ValueError(f"{which.value} files are validated by the TypeScript planner")
     raw = read_registered_day_files(state_dir, which, day)
     for held in raw:
         stored = load_registered_stored([held.path], ledger=which, model=keys.door_contract(which))
-        if isinstance(held.envelope, PlannerFileEnvelope):
-            if any(row.day != day for row in stored):
-                raise ValueError(f"{held.path.name}: planner row names another UTC work day")
-            continue
-        legacy: FileEnvelope = held.envelope
         if any(
-            not isinstance(row, StoredRow)
-            or row.identity.ledger != which
+            row.identity.ledger != which
             or row.identity.covers != day
-            or row.identity.unit_id != str(legacy.unit_id)
-            or row.identity.attempt != legacy.identity.attempt
+            or row.identity.unit_id != str(held.envelope.unit_id)
+            or row.identity.attempt != held.envelope.identity.attempt
             for row in stored
         ):
             raise ValueError(f"{held.path.name}: raw row identity differs from its envelope")
@@ -41,6 +37,8 @@ def check_compact_period(state_dir: Path, which: LedgerName, period: Period, cov
     An entry with no file, an `empty` period or a `lost` day, is present while no
     file holds it, and a file where it stands is refused.
     """
+    if paths.is_planner_ledger(which):
+        raise ValueError(f"{which.value} files are validated by the TypeScript planner")
     index_path = paths.compact_index_path(state_dir, which, period)
     entry = None
     if index_path.exists():
@@ -82,7 +80,7 @@ def check_compact_period(state_dir: Path, which: LedgerName, period: Period, cov
     if (entry.rows, entry.bytes) != (len(stored), path.stat().st_size):
         raise ValueError(f"{index_path.name}: {covers} row count or size differs from its file")
     if any(
-        (isinstance(held, StoredRow) and held.identity.ledger != which)
+        held.identity.ledger != which
         or not (held.day == covers or held.day.startswith(f"{covers}-"))
         for held in stored
     ):

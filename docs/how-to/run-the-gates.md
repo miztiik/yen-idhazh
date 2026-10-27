@@ -1,6 +1,6 @@
 # Run the Gates
 
-**Last Updated**: 2026-10-26
+**Last Updated**: 2026-10-27
 Set up a machine, then run every check `CLAUDE.md` section 9 asks for before a
 merge. This page owns the project's actual gate commands; the neutral PR
 lifecycle that calls for them is
@@ -238,18 +238,12 @@ or manual workflow dispatch is needed. Run the changed fingerprint service
 and shared writer's native checks as well. A Windows fixture pass does not
 certify live Linux hardware collection.
 
-Maintainer clarification, 2026-10-22: the existing contract-tier
-`backend/tests/ledger/test_feed_ingest_ledgers.py::test_zero_completion_evidence_survives_without_erasing_an_earlier_complete_attempt`
-also runs the real Bun producer, actual gardener daily/monthly/yearly tasks,
-and independent Bun selector over one generated tree. It adds no Python case
-or isolated-workflow Python dependency. Its bounded subprocesses fail after
-120 seconds each; absent Bun fails rather than skips.
-Main CI installs the planner's existing frozen lockfile and runs its strict
-check and native test suite beside the existing package gates, before the
-unchanged pytest invocation. Cost: one additional package installation and
-planner suite plus the cross-language case; no new dependency or browser bytes.
-The beneficiary is proof that production compaction preserves real planning
-attempts, not only that the TypeScript writer can produce compact files.
+The former Python planner-model comparison is retired. Real planner compaction
+is covered by `services/feed-ingest-plan/test/logical-completion.test.ts` and
+the Python-scheduler adapter cases in
+`packages/ledger-file-writer/test/planner-maintenance.test.ts`. The existing
+Python-to-TypeScript binding remains for Python-owned native shapes in
+`backend/tests/contracts/test_native_typescript_bindings.py`.
 Hosted duration is measured by the CI step, not estimated as a passing gate.
 
 This subsection stays here because it selects the local commands; format and

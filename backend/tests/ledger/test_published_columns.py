@@ -5,7 +5,6 @@ from __future__ import annotations
 from dataclasses import replace
 from pathlib import Path
 
-from contracts._fixtures import planner_payload
 from pytest import CaptureFixture, mark
 from support.ledger import writer_identity
 from support.paths import CONTRACT_FIXTURES_DIR, read_text
@@ -13,7 +12,6 @@ from support.paths import CONTRACT_FIXTURES_DIR, read_text
 from idhazh import ledger
 from idhazh.contracts.base import ServerJob
 from idhazh.contracts.feed_health import FeedHealthRow
-from idhazh.contracts.feed_ingest_selected_article import SelectedArticleRow
 from idhazh.contracts.file_envelope import Compression, FileEnvelope, Format, Period, WriterIdentity
 from idhazh.contracts.host_fingerprint import HostFingerprintRow
 from idhazh.contracts.ledger_name import LedgerName
@@ -108,13 +106,6 @@ def test_current_published_columns_pass(tmp_path: Path, capsys: CaptureFixture[s
     assert capsys.readouterr().out == (
         "published-columns host-fingerprint: checked 2 file(s), current 2, history none\n"
     )
-    planner = SelectedArticleRow.model_validate(planner_payload("selected-articles"))
-    ledger.persist(
-        site_tree / "state", [planner], ledger=LedgerName.FEED_INGEST_PLAN_SELECTED_ARTICLES,
-        covers=planner.date, fmt=Format.PARQUET,
-    )
-    assert published_columns.check(site_tree, [LedgerName.FEED_INGEST_PLAN_SELECTED_ARTICLES]) == 0
-    assert [column.name for column in file_columns(SelectedArticleRow)] == list(SelectedArticleRow.model_fields)
 
 
 @mark.parametrize(

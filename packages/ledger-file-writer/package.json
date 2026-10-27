@@ -3,7 +3,7 @@
   "version": "2026.10.21",
   "private": true,
   "type": "module",
-  "description": "Reusable TypeScript writer for Python-readable ledger Parquet files.",
+  "description": "TypeScript reader and writer for registered ledger Parquet files, including planner-owned formats.",
   "exports": "./src/index.ts",
   "scripts": {
     "check": "tsc --noEmit",
