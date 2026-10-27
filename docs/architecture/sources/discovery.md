@@ -350,8 +350,16 @@ no model call and changes neither curation nor the pipeline's health ledgers.
 The utility is a minimum access check, not an editorial acceptance gate. Its
 current limits matter when reading a green exit code:
 
-- `--articles` defaults to one. A larger value samples the first entries in
- feed order, not a representative selection across dates or content types.
+- An ad-hoc address is compared with live, retired and salience entries before
+  it is fetched. The same feed URL or derived source ID stops the probe with
+  exit code 2 and names the catalog rows it matches.
+- A sampled article that fails extraction keeps its paywall evidence in the
+ report: `json-ld`, `configured-marker`, `none` or `not-observed`. The
+ machine-readable signal and the configured fallback are reported separately.
+- `--articles` defaults to three. A final `paywalled` verdict needs at least
+ two samples and matching paywall evidence on every sampled article. One
+ sample, one paywall among mixed failures, or a single paywall plus a readable
+ free article returns `paywall_not_confirmed` or passes on the readable article.
 - **Any one readable article passes the feed.** Asking for three records all
  three results, but does not stop one free article hiding two blocked ones in
  the headline verdict. Review the per-article results, not only `passed`.

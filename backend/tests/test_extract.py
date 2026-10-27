@@ -44,7 +44,9 @@ from idhazh.extract import (
     declares_paywall,
     extract_text,
     is_contaminated,
+    is_paywalled,
     page_headline,
+    paywall_evidence,
     to_article,
     truncate_to_tokens,
 )
@@ -173,6 +175,7 @@ ROBOTS_PATHS = (
     "/orphan/a",
     "/nocolon/a",
 )
+
 
 class RobotsCase(NamedTuple):
     """One committed file, what it is here to cover, and both of its answers."""
@@ -806,6 +809,33 @@ def test_a_declared_paywall_is_rejected_before_extraction() -> None:
     assert declares_paywall(html)
     assert article.status is ArticleStatus.EXTRACT_FAILED
     assert article.failure_code is FailureCode.PAYWALLED
+
+
+def test_simple_json_ld_paywall_has_json_ld_evidence() -> None:
+    html = (
+        '<script type="application/ld+json">'
+        '{"@type":"NewsArticle","isAccessibleForFree":false}'
+        "</script>"
+    )
+
+    assert declares_paywall(html)
+    assert paywall_evidence(html, ExtractConfig()) == "json-ld"
+    assert is_paywalled(html, ExtractConfig())
+
+
+def test_configured_marker_has_fallback_evidence() -> None:
+    html = "<html><body><p>Subscribe to continue reading</p></body></html>"
+
+    assert not declares_paywall(html)
+    assert paywall_evidence(html, ExtractConfig()) == "configured-marker"
+    assert is_paywalled(html, ExtractConfig())
+
+
+def test_free_page_has_no_paywall_evidence() -> None:
+    html = "<html><body><article><p>A complete article is visible here.</p></article></body></html>"
+
+    assert paywall_evidence(html, ExtractConfig()) == "none"
+    assert not is_paywalled(html, ExtractConfig())
 
 
 def test_a_pdf_feed_item_has_a_typed_unsupported_form() -> None:
