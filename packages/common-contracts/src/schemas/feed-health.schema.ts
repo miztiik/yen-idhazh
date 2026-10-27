@@ -15,40 +15,5 @@ export const FeedHealthRowSchema = z.strictObject({
   robots_checked_at: TimestampSchema.nullable().default(null), robots_status: z.int().min(100).max(599).nullable().default(null),
   target_attempted: z.boolean().nullable().default(null),
   publisher_id: SlugSchema.nullable().default(null),
-}).superRefine((row, ctx) => {
-  if (row.checked_at.includes(".") && row.version < "2026-10-23T18:50") {
-    ctx.addIssue({ code: "custom", message: "legacy feed health records use whole-second checked_at" });
-  }
 });
-const { publisher_id: _publisherId, ...previousHealthFields } = FeedHealthRowSchema.shape;
-const PreviousPublisherHealthSchema = z.strictObject({
-  ...previousHealthFields, version: z.literal("2026-10-23T18:50"),
-});
-const LegacyEndpointHealthSchema = z.strictObject(previousHealthFields).extend({
-  version: SchemaVersionSchema.default("2026-09-02T20:00"), checked_at: TimestampSchema,
-});
-const PreviousFeedHealthSchema = LegacyEndpointHealthSchema.omit({
-  endpoint_key: true, robots_outcome: true, robots_checked_at: true, robots_status: true, target_attempted: true,
-});
-export const FeedHealthContract = {
-  schema: FeedHealthRowSchema, schemaVersion: PUBLISHER_IDENTITY_VERSION,
-  legacyVersions: {
-    "2026-10-23T18:50": {
-      schema: PreviousPublisherHealthSchema,
-      migrate: (row: object) => FeedHealthRowSchema.parse({ ...PreviousPublisherHealthSchema.parse(row), version: PUBLISHER_IDENTITY_VERSION }),
-    },
-    "2026-09-02T20:00": {
-      schema: LegacyEndpointHealthSchema,
-      migrate: (row: object) => FeedHealthRowSchema.parse({ ...LegacyEndpointHealthSchema.parse(row), version: PUBLISHER_IDENTITY_VERSION }),
-    },
-    "2026-08-23": {
-      schema: PreviousFeedHealthSchema,
-      migrate: (row: object) => FeedHealthRowSchema.parse({ ...PreviousFeedHealthSchema.parse(row), version: PUBLISHER_IDENTITY_VERSION }),
-    },
-    "2026-08-23T12:00": {
-      schema: PreviousFeedHealthSchema,
-      migrate: (row: object) => FeedHealthRowSchema.parse({ ...PreviousFeedHealthSchema.parse(row), version: PUBLISHER_IDENTITY_VERSION }),
-    },
-  },
-};
 export type FeedHealthRow = z.infer<typeof FeedHealthRowSchema>;
