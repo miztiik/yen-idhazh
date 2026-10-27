@@ -23,6 +23,12 @@ Deliver publisher identities first, then use them in the TypeScript article-sele
 | A9 | Integration ownership | This session owns the remaining planner schema-authority, catalog, ledger-consumer and validation integration when implementation is authorized. It is not blocked on assigning another owner. Preserve unrelated consumers and checks; do not build Python schema mirrors or silently bypass validation. |
 | A10 | ESCALATE | Stop for a user decision if work needs a persisted shape/meaning outside the approved contracts, changes selection policy/scope or unrelated consumers, adds compatibility/backfill or qualitative assessment, or meets a trust/platform boundary. Do not weaken the trust boundary or exceed the six-hour job/one-GB site limits: they cause job termination/deployment refusal. No silent scope or validation bypass. |
 
+On 2026-10-27 UTC the user authorized a separate nested child to implement the
+reusable TypeScript `safe_persist_data` API, its contracts, tests and planner
+delivery integration. Selection rows 3 and 4 continue here while that child
+works. The child owns removal of the planner-specific Git implementation and
+its redundant delivery tests; these are not duplicated in the selection PRs.
+
 ### Table B - Implementation requirements
 
 | Id | Surface | Required behavior |

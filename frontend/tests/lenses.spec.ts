@@ -23,7 +23,6 @@ test.describe('the chips, without a browser', () => {
     test('the configured order chooses named ids before unknown ids', () => {
         const unknown = unregisteredId(lensIds);
         const shown = shownLenses([unknown, ...lensIds]);
-        expect(shown).toHaveLength(MAX_LENS_CHIPS);
-        expect(shown).toEqual(lensIds.slice(0, MAX_LENS_CHIPS));
+        expect(shown).toEqual([...lensIds, unknown].slice(0, MAX_LENS_CHIPS));
     });
 });
