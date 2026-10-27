@@ -2,14 +2,14 @@
 import { expect, test } from "bun:test";
 import { z } from "zod";
 import {
-  CandidateRejectionRecordSchema, DropReasonSchema, FeedIngestCandidateSchema,
-  HarvestDiagnosticsSchema, SourceFormSchema, deriveCandidateId,
+  CandidateRejectionRecordSchema, DiscoveredArticleRowSchema, DropReasonSchema, FeedIngestCandidateSchema,
+  HarvestDiagnosticsSchema, deriveCandidateId,
 } from "@idhazh/common-contracts";
 import { loadPlanningConfig } from "../src/config/resolve-policy";
 import { harvestFeeds, HarvestObservationSchema } from "@idhazh/feed-ingest-plan/harvest-feeds";
 import { screenArticleCandidates } from "../src/screen-article-candidates/triage-gates";
 import type { ScreeningInput } from "../src/screen-article-candidates/triage-gates";
-import { indexSeenEvidence, SeenRowSchema } from "../src/screen-article-candidates/seen-evidence";
+import { DiscoveredRowSchema, indexDiscoveredEvidence } from "../src/screen-article-candidates/discovered-evidence";
 import {
   RecordedTransport, context, inputs as harvestInputs, readRecordings, source as recordedSource,
   readContentFilters,
@@ -18,22 +18,21 @@ import { measureArticleContent } from "../src/harvest-feeds/content-evidence";
 import { excludeArticleContent } from "../src/screen-article-candidates/content-filters";
 
 const fixtureUrl = new URL("../../../tests/fixtures/feed-ingest-plan/screening-cases.json", import.meta.url);
-const seenUrl = new URL("../../../tests/fixtures/feed-ingest-plan/seen-evidence.json", import.meta.url);
+const discoveredUrl = new URL("../../../tests/fixtures/feed-ingest-plan/discovered-evidence.json", import.meta.url);
 const CaseSchema = z.object({
-  name: z.string(), form: SourceFormSchema.optional(), words: z.int().nonnegative().optional(),
+  name: z.string(), words: z.int().nonnegative().optional(),
   status: z.number().nullable().optional(), paywall: z.boolean().optional(),
   categories: z.array(z.string()).optional(), published_at: z.string().nullable().optional(),
-  seen: z.enum(["old", "new"]).optional(), reason: DropReasonSchema.nullable(),
+  discovered: z.enum(["old", "new"]).optional(), reason: DropReasonSchema.nullable(),
   details: z.record(z.string(), z.number().nullable()).optional(),
   age: z.number().nullable().optional(), clock: z.enum(["published_at", "first_seen", "unknown"]).optional(),
   bonus: z.number().optional(),
 });
 
 async function inputs() {
-  const [fixture, seenFixture, authored, clockConfig] = await Promise.all([
-    Bun.file(fixtureUrl).json(), Bun.file(seenUrl).json(),
+  const [fixture, discoveryFixture, authored] = await Promise.all([
+    Bun.file(fixtureUrl).json(), Bun.file(discoveredUrl).json(),
     Bun.file(new URL("../../../config/feed-ingest-plan.json", import.meta.url)).json(),
-    Bun.file(new URL("../../../config/idhazh.json", import.meta.url)).json(),
   ]);
   // Build current strict payloads from recorded content, URLs and clocks only.
   const recorded = fixture.candidate;
@@ -43,7 +42,7 @@ async function inputs() {
     source: {
       source_id: recorded.source.source_id, publisher_id: recorded.source.publisher_id ?? null,
       feed_url: recorded.source.feed_url, title: recorded.source.title,
-      kind: recorded.source.kind, tier: recorded.source.tier, form: recorded.source.form, status: recorded.source.status,
+      tier: recorded.source.tier, status: recorded.source.status,
       weight: recorded.source.weight, applied_tier_weight: recorded.source.applied_tier_weight,
     },
     canonical_url: recorded.canonical_url, url_key: recorded.url_key, title: recorded.title,
@@ -54,24 +53,31 @@ async function inputs() {
   const observation = HarvestObservationSchema.parse(fixture.observation);
   const input: ScreeningInput = {
     candidates: [candidate], observations: { [candidate.candidate_id]: observation },
-    seen: { availability: "unavailable" }, planning: loadPlanningConfig(authored), clock_config: clockConfig,
+    discovered: { availability: "unavailable" },
+    planning: loadPlanningConfig({
+      ...authored,
+      harvest: { ...authored.harvest, blocked_categories: ["links", "video"] },
+      triage: { ...authored.triage, min_words: 180, blocked_http_statuses: [401, 403, 429],
+        max_age_hours: 24, recency_half_life_hours: 18, recency_weight: 0.6 },
+    }),
+    clock_config: { collect: { max_future_hours: 6 } },
     run: { now: fixture.now, run_id: candidate.run_id, correlation_id: candidate.correlation_id, overrides: {} },
   };
-  const seen = {
-    old: SeenRowSchema.parse({
-      url_key: seenFixture.rows.old.url_key, first_seen_at: seenFixture.rows.old.first_seen_at,
-      date: seenFixture.rows.old.first_seen_at.slice(0, 10),
+  const discovered = {
+    old: DiscoveredRowSchema.parse({
+      url_key: discoveryFixture.rows.old.url_key, first_seen_at: discoveryFixture.rows.old.first_seen_at,
+      date: discoveryFixture.rows.old.first_seen_at.slice(0, 10),
     }),
-    new: SeenRowSchema.parse({
-      url_key: seenFixture.rows.new.url_key, first_seen_at: seenFixture.rows.new.first_seen_at,
-      date: seenFixture.rows.new.first_seen_at.slice(0, 10),
+    new: DiscoveredRowSchema.parse({
+      url_key: discoveryFixture.rows.new.url_key, first_seen_at: discoveryFixture.rows.new.first_seen_at,
+      date: discoveryFixture.rows.new.first_seen_at.slice(0, 10),
     }),
   };
-  return { input, candidate, observation, cases: CaseSchema.array().parse(fixture.cases), seen };
+  return { input, candidate, observation, cases: CaseSchema.array().parse(fixture.cases), discovered };
 }
 
 test("recorded word, blocking, precedence and exact freshness boundaries", async () => {
-  const { input, candidate, cases, seen, observation } = await inputs();
+  const { input, candidate, cases, discovered, observation } = await inputs();
   const diagnostics = HarvestDiagnosticsSchema.parse({ http_status: 200, fetch_ms: 17, extract_ms: 3 });
   const boundaries = CaseSchema.array().parse([
     ...cases,
@@ -81,7 +87,7 @@ test("recorded word, blocking, precedence and exact freshness boundaries", async
   for (const entry of boundaries) {
     const words = candidate.article_text.split(/\s+/u).slice(0, entry.words ?? candidate.word_count);
     const offered = FeedIngestCandidateSchema.parse({
-      ...candidate, source: { ...candidate.source, form: entry.form ?? candidate.source.form },
+      ...candidate,
       word_count: words.length, article_text: words.join(" "),
       categories: entry.categories ?? candidate.categories,
       published_at: entry.published_at === undefined ? candidate.published_at : entry.published_at,
@@ -92,7 +98,8 @@ test("recorded word, blocking, precedence and exact freshness boundaries", async
         ...observation, diagnostics,
         http_status: entry.status === undefined ? 200 : entry.status, paywall: entry.paywall ?? false,
       } },
-      seen: entry.seen === undefined ? input.seen : { availability: "available", rows: [seen[entry.seen]] },
+      discovered: entry.discovered === undefined ? input.discovered
+        : { availability: "available", rows: [discovered[entry.discovered]] },
     });
     expect(result.rejections[0]?.drop_reason ?? null, entry.name).toBe(entry.reason);
     expect(result.admitted.length + result.rejections.length, entry.name).toBe(1);
@@ -130,13 +137,11 @@ test("recorded word, blocking, precedence and exact freshness boundaries", async
     const article = {
       ...candidate, article_text: candidate.article_text.split(/\s+/u).slice(0, entry.words).join(" "), word_count: entry.words,
     };
-    for (const form of ["article", "abstract"] as const) {
-      const screened = await screenArticleCandidates({
-        ...input, candidates: [{ ...article, source: { ...article.source, form } }],
-        observations: { [article.candidate_id]: { ...observation, content_evidence: measured } },
-      });
-      expect(screened.rejections[0]?.drop_reason ?? null).toBe(entry.excluded ? "LINK_HEAVY" : form === "article" ? "STUB_CONTENT" : null);
-    }
+    const screened = await screenArticleCandidates({
+      ...input, candidates: [article],
+      observations: { [article.candidate_id]: { ...observation, content_evidence: measured } },
+    });
+    expect(screened.rejections[0]?.drop_reason ?? null).toBe(entry.excluded ? "LINK_HEAVY" : "STUB_CONTENT");
     expect(excludeArticleContent(measured, entry.words, {
       ...config, link_heavy: { ...config.link_heavy, max_list_items: entry.items },
     })).toBeNull();
@@ -187,23 +192,21 @@ test("global and run policies change only their declared gates for every feed", 
   const { input, candidate } = await inputs();
   const change = async (
     words: number, published_at: string, overrides: ScreeningInput["run"]["overrides"] = {},
-    form = candidate.source.form, source_id = candidate.source_id,
+    source_id = candidate.source_id,
   ) => screenArticleCandidates({
     ...input, candidates: [FeedIngestCandidateSchema.parse({
-      ...candidate, source_id, source: { ...candidate.source, source_id, form },
+      ...candidate, source_id, source: { ...candidate.source, source_id },
       candidate_id: deriveCandidateId(candidate.run_id, source_id, candidate.entry_ordinal),
       word_count: words, article_text: candidate.article_text.split(/\s+/u).slice(0, words).join(" "), published_at,
     })], observations: {}, run: { ...input.run, overrides },
   });
   input.planning = loadPlanningConfig({
     ...input.planning.config,
-    triage: { ...input.planning.config.triage, min_words_article: 190, min_words_abstract: 70, max_age_hours: 12 },
+    triage: { ...input.planning.config.triage, min_words: 190, max_age_hours: 12 },
   });
   for (const feed of [candidate.source_id, "another-configured-feed"]) {
-    expect((await change(180, "2026-10-21T11:00:00Z", {}, "article", feed)).rejections[0]?.details.words_required).toBe(190);
-    expect((await change(190, "2026-10-21T11:00:00Z", {}, "article", feed)).admitted).toHaveLength(1);
-    expect((await change(60, "2026-10-21T11:00:00Z", {}, "abstract", feed)).rejections[0]?.details.words_required).toBe(70);
-    expect((await change(70, "2026-10-21T11:00:00Z", {}, "abstract", feed)).admitted).toHaveLength(1);
+    expect((await change(189, "2026-10-21T11:00:00Z", {}, feed)).rejections[0]?.details.words_required).toBe(190);
+    expect((await change(190, "2026-10-21T11:00:00Z", {}, feed)).admitted).toHaveLength(1);
   }
   expect((await change(200, "2026-10-20T18:00:00Z")).rejections[0]?.drop_reason).toBe("STALE_MAX_AGE_EXCEEDED");
   const admitted = await change(200, "2026-10-20T18:00:00Z", { freshness_hours: 18 });
@@ -211,7 +214,7 @@ test("global and run policies change only their declared gates for every feed", 
   expect(admitted.admitted[0]?.policy.triage).toMatchObject({ max_age_hours: 18, recency_half_life_hours: 18 });
   expect((await change(200, "2026-10-20T18:00:00Z", { freshness_hours: 17.99 })).rejections).toHaveLength(1);
   expect(input.planning.config.triage.max_age_hours).toBe(12);
-  input.planning.config.triage.min_words_article = 200;
+  input.planning.config.triage.min_words = 200;
   expect((await change(199, "2026-10-21T11:00:00Z")).rejections[0]?.details.words_required).toBe(200);
   expect((await change(200, "2026-10-21T11:30:00Z", { freshness_hours: 0.5 })).admitted).toHaveLength(1);
   input.planning.config.triage.recency_weight = 0;
@@ -221,22 +224,18 @@ test("global and run policies change only their declared gates for every feed", 
   expect(zero.admitted[0]?.policy.triage.recency_half_life_hours).toBe(9);
 });
 
-test("kind relabel and unavailable observations do not invent eligibility rules", async () => {
+test("classification labels are refused and unavailable observations do not invent eligibility rules", async () => {
   const { input, candidate, observation } = await inputs();
-  for (const kind of ["reporting", "newly-configured-kind"]) {
-    const offered = FeedIngestCandidateSchema.parse({ ...candidate, source: { ...candidate.source, kind, tier: 9 } });
-    const result = await screenArticleCandidates({ ...input, candidates: [offered], observations: {} });
-    expect(result.admitted[0]?.candidate).toEqual(offered);
-    expect(result.admitted[0]?.observation).toBeNull();
-    expect(result.admitted[0]?.seen_availability).toBe("unavailable");
-  }
+  expect(FeedIngestCandidateSchema.safeParse({
+    ...candidate, source: { ...candidate.source, kind: `kind-${candidate.source_id}`, form: `form-${candidate.source_id}` },
+  }).success).toBe(false);
   const unknown = { ...observation, http_status: null, paywall: null, paywall_evidence: "not-observed" as const };
   const result = await screenArticleCandidates({ ...input, observations: { [candidate.candidate_id]: unknown } });
   expect(result.admitted[0]?.observation).toEqual(unknown);
 });
 
 test("configured HTTP/category lists and future tolerance are read, not hardcoded", async () => {
-  const { input, candidate, seen, observation } = await inputs();
+  const { input, candidate, discovered, observation } = await inputs();
   input.planning.config.triage.blocked_http_statuses = [418];
   input.planning.config.harvest.blocked_categories = ["science"];
   input.observations = { [candidate.candidate_id]: { ...observation, http_status: 403, paywall: false } };
@@ -247,7 +246,7 @@ test("configured HTTP/category lists and future tolerance are read, not hardcode
   expect((await screenArticleCandidates(input)).rejections[0]?.details.http_status).toBe(418);
   input.observations = {};
   input.candidates = [{ ...candidate, published_at: "2026-10-21T14:00:00Z" }];
-  input.seen = { availability: "available", rows: [seen.old] };
+  input.discovered = { availability: "available", rows: [discovered.old] };
   input.clock_config = { collect: { max_future_hours: 1 } };
   expect((await screenArticleCandidates(input)).rejections[0]?.details.age_hours).toBe(50);
   input.clock_config.collect.max_future_hours = 2;
@@ -257,8 +256,8 @@ test("configured HTTP/category lists and future tolerance are read, not hardcode
   expect((await screenArticleCandidates(input)).rejections[0]?.details.age_hours).toBe(50);
 });
 
-test("repeated undated and far-future fetches keep the settled first sight", async () => {
-  const { input, candidate, seen } = await inputs();
+test("repeated undated and far-future fetches keep the settled first discovery", async () => {
+  const { input, candidate, discovered } = await inputs();
   for (const published_at of [null, "2026-11-01T00:00:00Z"]) {
     for (const run_id of ["2026-10-21-123", "2026-10-21-124"]) {
       const candidate_id = deriveCandidateId(run_id, candidate.source_id, candidate.entry_ordinal);
@@ -267,36 +266,36 @@ test("repeated undated and far-future fetches keep the settled first sight", asy
           ...candidate, run_id, candidate_id, correlation_id: run_id, published_at,
           fetched_at: run_id.endsWith("-123") ? "2026-10-21T09:00:00Z" : "2026-10-21T12:00:00Z",
         }], observations: {}, run: { ...input.run, run_id, correlation_id: run_id },
-        seen: { availability: "available", rows: [seen.old] },
+        discovered: { availability: "available", rows: [discovered.old] },
       });
       expect(result.rejections[0]?.details.age_hours).toBe(50);
     }
   }
   const missing = { ...input, candidates: [{ ...candidate, published_at: null }] };
   const unknown = await screenArticleCandidates(missing);
-  const empty = await screenArticleCandidates({ ...missing, seen: { availability: "available", rows: [] } });
+  const empty = await screenArticleCandidates({ ...missing, discovered: { availability: "available", rows: [] } });
   expect(unknown.admitted[0]!.freshness).toEqual(empty.admitted[0]!.freshness);
   expect(unknown.admitted[0]!.freshness).toEqual({ timing_at: null, timing_source: "unknown", age_hours: null, recency_bonus: 0 });
-  expect(unknown.admitted[0]?.seen_availability).toBe("unavailable");
-  expect(empty.admitted[0]?.seen_availability).toBe("available");
+  expect(unknown.admitted[0]?.discovered_availability).toBe("unavailable");
+  expect(empty.admitted[0]?.discovered_availability).toBe("available");
   const differentUrl = await screenArticleCandidates({
-    ...missing, seen: { availability: "available", rows: [{ ...seen.old, url_key: "a".repeat(64) }] },
+    ...missing, discovered: { availability: "available", rows: [{ ...discovered.old, url_key: "a".repeat(64) }] },
   });
   expect(differentUrl.admitted[0]?.freshness.timing_source).toBe("unknown");
 });
 
-test("current discovery rows validate UTC dates and refuse removed seen provenance", async () => {
-  const { seen } = await inputs();
-  const row = seen.old;
-  expect(Object.keys(SeenRowSchema.shape).sort()).toEqual(["date", "first_seen_at", "url_key"]);
-  expect(SeenRowSchema.parse(row)).toEqual(row);
-  expect(() => indexSeenEvidence({ availability: "available", rows: [row, seen.new] })).toThrow("conflicting");
-  expect(indexSeenEvidence({ availability: "available", rows: [row, row] }).size).toBe(1);
-  expect(() => SeenRowSchema.parse({ ...row, first_seen_run: "2026-10-19-2" })).toThrow("first_seen_run");
-  expect(() => SeenRowSchema.parse({ ...row, version: "2026-08-31" })).toThrow("version");
-  expect(() => SeenRowSchema.parse({ ...row, date: "2026-10-20" })).toThrow("date");
-  expect(() => SeenRowSchema.parse({ ...row, first_seen_at: "2026-02-30T00:00:00Z" })).toThrow("first_seen_at");
-  expect(() => SeenRowSchema.parse({ ...row, first_seen_at: "2026-10-19T10:00:00+02:00" })).toThrow("first_seen_at");
+test("current discovery rows validate UTC dates and contain only planner-owned provenance", async () => {
+  const { discovered } = await inputs();
+  const row = discovered.old;
+  expect(Object.keys(DiscoveredArticleRowSchema.shape).sort()).toEqual(["date", "first_seen_at", "url_key"]);
+  expect(DiscoveredArticleRowSchema.parse(row)).toEqual(row);
+  expect(() => indexDiscoveredEvidence({ availability: "available", rows: [row, discovered.new] })).toThrow("conflicting");
+  expect(indexDiscoveredEvidence({ availability: "available", rows: [row, row] }).size).toBe(1);
+  expect(() => DiscoveredArticleRowSchema.parse({ ...row, first_seen_run: "2026-10-19-2" })).toThrow("first_seen_run");
+  expect(() => DiscoveredArticleRowSchema.parse({ ...row, version: "2026-08-31" })).toThrow("version");
+  expect(() => DiscoveredArticleRowSchema.parse({ ...row, date: "2026-10-20" })).toThrow("date");
+  expect(() => DiscoveredArticleRowSchema.parse({ ...row, first_seen_at: "2026-02-30T00:00:00Z" })).toThrow("first_seen_at");
+  expect(() => DiscoveredArticleRowSchema.parse({ ...row, first_seen_at: "2026-10-19T10:00:00+02:00" })).toThrow("first_seen_at");
 });
 
 test("invalid overrides, config, observations and batch identities fail by name without mutation", async () => {
@@ -341,9 +340,9 @@ test("invalid overrides, config, observations and batch identities fail by name 
   })).rejects.toThrow("vertical");
   await expect(screenArticleCandidates({
     ...input, planning: {
-      config: { ...input.planning.config, triage: { ...input.planning.config.triage, min_words_article: 0 } },
+      config: { ...input.planning.config, triage: { ...input.planning.config.triage, min_words: 0 } },
     },
-  })).rejects.toThrow("min_words_article");
+  })).rejects.toThrow("min_words");
   for (const removed of ["vertical", "policy", "labels"]) {
     await expect(screenArticleCandidates({
       ...input, candidates: [{ ...candidate, [removed]: removed === "vertical" ? "world" : {} }],
@@ -356,7 +355,7 @@ test("invalid overrides, config, observations and batch identities fail by name 
 });
 
 test("transient rejections preserve exact details, candidate identity and the UTC evaluation day", async () => {
-  const { input, candidate, seen, observation } = await inputs();
+  const { input, candidate, discovered, observation } = await inputs();
   const offers = [
     { ...candidate, fetched_at: "2026-10-20T23:59:59Z", date: "2026-10-20", word_count: 1, article_text: "Researchers" },
     { ...candidate, categories: ["video"] },
@@ -366,7 +365,7 @@ test("transient rejections preserve exact details, candidate identity and the UT
   input.candidates = offers.map((offer, entry_ordinal) => ({
     ...offer, entry_ordinal, candidate_id: deriveCandidateId(candidate.run_id, candidate.source_id, entry_ordinal),
   }));
-  input.seen = { availability: "available", rows: [seen.old] };
+  input.discovered = { availability: "available", rows: [discovered.old] };
   const blockedId = input.candidates[3]!.candidate_id;
   input.observations = {
     ...input.observations, [blockedId]: { ...observation, candidate_id: blockedId, http_status: 403, paywall: null },
@@ -412,7 +411,7 @@ test("public harvesting observations compose with screening without duplicating 
   const screened = await screenArticleCandidates({
     ...input, candidates: harvested.candidates, observations,
     planning: loadPlanningConfig({
-      ...loaded.config, triage: { ...loaded.config.triage, min_words_article: 100 },
+      ...loaded.config, triage: { ...loaded.config.triage, min_words: 100 },
       harvest: { ...loaded.config.harvest, blocked_categories: ["science"] },
     }),
   });

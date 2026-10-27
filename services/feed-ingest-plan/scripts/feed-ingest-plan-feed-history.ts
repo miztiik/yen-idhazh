@@ -3,8 +3,8 @@ import {
   CompactIndexSchema, DateStampSchema, PublicationInventoryInputSchema,
 } from "../../../packages/common-contracts/src/index";
 import type { CompactIndex, FeedHealthStateRow } from "../../../packages/common-contracts/src/index";
-import type { SeenDayInput } from "../src/config/service-settings";
-import { createSeenDayInputs, resolveHistoryInventory } from "./feed-ingest-plan-outputs";
+import type { LedgerDayInput } from "../src/config/service-settings";
+import { createHistoryDayInputs, resolveHistoryInventory } from "./feed-ingest-plan-outputs";
 import { closedRequestDays } from "../src/read-ledger-history/health-summary";
 import { classifyPlannerHistoryGap } from "../src/read-ledger-history/planner-history-gap";
 import { LedgerHistoryReadError } from "../src/read-ledger-history/ledger-history-error";
@@ -31,7 +31,7 @@ function representedPeriodDays(period: CompactIndex["period"], covers: string, t
 export async function stageFeedHistory(input: {
   ledger: "feed-health-state"; prefix: readonly string[]; now: string;
   health_window_days: number; request_report_closed_days: number; period_limit: number;
-  authored: readonly SeenDayInput[];
+  authored: readonly LedgerDayInput[];
   read: (path: string) => Promise<unknown | undefined>;
   read_period: (path: string) => Promise<readonly FeedHealthStateRow[]>;
   raw_files: (day: string) => Promise<readonly string[]>;
@@ -39,7 +39,7 @@ export async function stageFeedHistory(input: {
   if (!Number.isSafeInteger(input.period_limit) || input.period_limit < 1) throw new Error("Health period limit must be positive");
   const base = input.prefix.join("/");
   if (base !== "feed-ingest-plan/feed-health-state") throw new Error("Health history requires its current planner registration");
-  const defaults = createSeenDayInputs(input.prefix, [input.now.slice(0, 10)])[0]!;
+  const defaults = createHistoryDayInputs(input.prefix, [input.now.slice(0, 10)])[0]!;
   const compact: CompactIndex[] = [];
   const files = new Set<string>(["frontend/public/publication.json", ...Object.values(defaults.indexes)]);
   const notices: string[] = [];
@@ -56,7 +56,7 @@ export async function stageFeedHistory(input: {
       notices.push(`health_index_refused:${period}`);
     }
   }
-  const days = new Map<string, SeenDayInput>();
+  const days = new Map<string, LedgerDayInput>();
   const rawDays = new Map<string, readonly string[]>();
   async function rawFiles(day: string) {
     let files = rawDays.get(day);
@@ -79,7 +79,7 @@ export async function stageFeedHistory(input: {
     if (parts.length !== 4 || !/^[0-9a-f-]{36}\.parquet$/.test(parts[3]!)) continue;
     const day = DateStampSchema.parse(parts.slice(0, 3).join("-"));
     if (day > input.now.slice(0, 10)) continue;
-    const held: SeenDayInput = days.get(day) ?? createSeenDayInputs(input.prefix, [day])[0]!;
+    const held: LedgerDayInput = days.get(day) ?? createHistoryDayInputs(input.prefix, [day])[0]!;
     const rawFiles = [...new Set([...(held.raw_files ?? []), `state/${entry.path}`])];
     days.set(day, { day, indexes: defaults.indexes, raw_files: rawFiles });
   }
@@ -99,7 +99,7 @@ export async function stageFeedHistory(input: {
     files.add(period.path);
     try {
       for (const day of representedPeriodDays(period.period, period.covers, input.now.slice(0, 10))) {
-        if (!days.has(day)) days.set(day, createSeenDayInputs(input.prefix, [day])[0]!);
+        if (!days.has(day)) days.set(day, createHistoryDayInputs(input.prefix, [day])[0]!);
       }
       await input.read_period(period.path);
     } catch (error) {
@@ -109,7 +109,7 @@ export async function stageFeedHistory(input: {
     }
   }
   for (const day of [...closedRequestDays(input.now, input.request_report_closed_days), input.now.slice(0, 10)]) {
-    const named = createSeenDayInputs(input.prefix, [day])[0]!;
+    const named = createHistoryDayInputs(input.prefix, [day])[0]!;
     if (!days.has(day) && (await rawFiles(day)).length > 0) days.set(day, named);
   }
   for (const named of input.authored) {

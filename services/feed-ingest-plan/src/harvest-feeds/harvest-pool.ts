@@ -103,7 +103,7 @@ export async function harvestFeeds(
     return {
       inputs, config: inputs.config, articles, feed_outcomes: feeds.map(feed => feed.outcome),
       rejections, salience: [],
-      first_sight_candidates: articles.flatMap(article => {
+      discovered_candidates: articles.flatMap(article => {
         if (article.rejection?.drop_reason === "BLOCKED_URL_MARKER") return [];
         const key = (article.candidate ?? article.rejection)?.url_key;
         return key === null || key === undefined ? [] : [{ url_key: key }];

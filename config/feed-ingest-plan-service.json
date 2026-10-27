@@ -19,8 +19,8 @@
     "artifact_root": "backend/var/feed-ingest-plan",
     "health_period_limit": 32,
     "feed_health_input_gap": false,
-    "seen_files": [],
-    "seen_days": []
+    "discovered_files": [],
+    "discovered_days": []
   },
   "run": {
     "attempt": 1,

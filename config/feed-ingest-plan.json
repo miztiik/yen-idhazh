@@ -1,5 +1,5 @@
 {
-  "version": "2026-10-20",
+  "version": "2026-10-27",
   "harvest": {
     "concurrency": 24,
     "fetch_timeout_ms": 6000,
@@ -93,31 +93,34 @@
     }
   },
   "triage": {
-    "min_words_article": 180,
-    "min_words_abstract": 60,
+    "min_words": 180,
     "blocked_http_statuses": [401, 403, 429],
     "max_age_hours": 24,
     "recency_half_life_hours": 18,
     "recency_weight": 0.6
   },
-  "curate": {
+  "curate_articles": {
     "article_limit": 100,
     "source_reliability_penalty_enabled": true,
     "source_authority_weight": 1.0,
     "base_source_allowance": 3,
-    "bonus_unique_evidence": 1,
     "soft_caps": {
       "max_source_share": 0.10,
-      "max_parent_domain_share": 0.15,
+      "max_website_group_share": 0.15,
       "min_distinct_sources": 12,
       "relaxation_order": ["distinct_sources", "source_share"]
     },
     "mmr_weights": {
       "lambda_source": 0.25,
-      "lambda_source_kind": 0.05,
-      "lambda_domain": 0.15
+      "lambda_website_group": 0.15
     },
-    "exploration_slot_share": 0.08
+    "exploration_slot_share": 0.08,
+    "website_grouping": {
+      "include_private_suffixes": true
+    }
+  },
+  "discovered_articles": {
+    "lookback_days": 90
   },
   "partition": {
     "default_strategy": "bin-pack",

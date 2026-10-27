@@ -1,7 +1,7 @@
 /** How old is the trusted publication time, and what recency bonus does it earn? */
 import type { EffectiveFeedPolicy, FeedIngestCandidate } from "@idhazh/common-contracts";
-import type { SeenRow } from "./seen-evidence";
-import { UtcInstantSchema } from "./seen-evidence";
+import type { DiscoveredRow } from "./discovered-evidence";
+import { UtcInstantSchema } from "../utc-instant";
 
 const MILLISECONDS_PER_HOUR = 60 * 60 * 1000;
 
@@ -14,7 +14,7 @@ export type FreshnessEvidence = {
 
 export function calculateFreshness(
   candidate: Pick<FeedIngestCandidate, "published_at">,
-  seen: SeenRow | undefined,
+  discovered: DiscoveredRow | undefined,
   now: string,
   maxFutureHours: number,
   policy: EffectiveFeedPolicy,
@@ -22,7 +22,7 @@ export function calculateFreshness(
   const clock = Date.parse(UtcInstantSchema.parse(now));
   const published = candidate.published_at === null ? null : UtcInstantSchema.parse(candidate.published_at);
   const trusted = published !== null && (Date.parse(published) - clock) / MILLISECONDS_PER_HOUR <= maxFutureHours;
-  const effective = trusted ? published : seen?.first_seen_at ?? null;
+  const effective = trusted ? published : discovered?.first_seen_at ?? null;
   const age = effective === null ? null : (clock - Date.parse(effective)) / MILLISECONDS_PER_HOUR;
   return {
     timing_at: effective,

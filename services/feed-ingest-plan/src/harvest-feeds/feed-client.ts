@@ -1,5 +1,5 @@
 /** Read the complete RSS/Atom entries offered by one configured source. */
-import { FeedOutcomePayloadSchema } from "@idhazh/common-contracts";
+import { FEED_OUTCOME_PAYLOAD_VERSION, FeedOutcomePayloadSchema } from "@idhazh/common-contracts";
 import type { CandidateRejectionRecord, FeedOutcomePayload, SourceSnapshot } from "@idhazh/common-contracts";
 import type { FeedEntry, HarvestContext } from "./harvest-types";
 import type { PermittedFetcher } from "./robots-policy";
@@ -25,7 +25,7 @@ export async function readFeed(
   source: SourceSnapshot, fetcher: PermittedFetcher, context: HarvestContext, timeout_ms: number,
 ): Promise<{ entries: FeedEntry[]; rejection: CandidateRejectionRecord | null; outcome: FeedOutcomePayload }> {
   const outcome: FeedOutcomePayload = {
-    kind: "feed_outcome", source,
+    version: FEED_OUTCOME_PAYLOAD_VERSION, kind: "feed_outcome", source,
     fetch_status: "not_requested", parse_status: "not_attempted",
     parsed_count: null, harvested_count: null, fetch_duration_ms: null, parse_duration_ms: null,
     rejection_reason: null,

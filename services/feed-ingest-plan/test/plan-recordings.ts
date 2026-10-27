@@ -1,4 +1,5 @@
 /** Build a bounded real planner run from the named offline RSS, HTML and transport recordings. */
+import { existsSync } from "node:fs";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -17,7 +18,8 @@ export async function recordedPlan(sources: ConfiguredSource[] = [source()], pub
       loadPlanInputs(root), inputs(sources, { publishers }), readRecordings(),
     ]);
     const transport = new RecordedTransport(recordings);
-    harvest.config.triage.min_words_article = 100;
+    harvest.config.triage.min_words = 100;
+    harvest.config.curate_articles.soft_caps.max_website_group_share = 1;
     const events: FeedIngestEvent[] = [];
     const context = {
       ...loaded, root: directory, outputRoot: join(directory, "state"),
@@ -31,17 +33,32 @@ export async function recordedPlan(sources: ConfiguredSource[] = [source()], pub
     };
     return {
       inputs: context, runtime, transport, events, directory,
-      close: () => rm(directory, { recursive: true, force: true }),
+      close: () => removeRecordedDirectory(directory),
     };
   } catch (error) {
-    await rm(directory, { recursive: true, force: true });
+    await removeRecordedDirectory(directory);
     throw error;
   }
 }
 
+async function removeRecordedDirectory(directory: string) {
+  // Retry only transient locks; persistent and unrelated cleanup failures remain visible.
+  for (let attempt = 0; attempt < 30; attempt++) {
+    try {
+      await rm(directory, { recursive: true, force: true });
+      return;
+    } catch (error) {
+      if (!(error && typeof error === "object" && "code" in error && error.code === "EBUSY")) throw error;
+      if (!existsSync(directory)) return;
+      await new Promise(resolve => setTimeout(resolve, 100));
+    }
+  }
+  await rm(directory, { recursive: true, force: true });
+}
+
 export async function recordedContentFilterPlan() {
   const cases = await readContentFilters();
-  const recorded = await recordedPlan([source({ form: "abstract" })]);
+  const recorded = await recordedPlan();
   try {
     const mediaUrl = `https://${recorded.inputs.harvest.config.content_filters.media.url_rules[0]!.host}/watch`;
     const mimeUrl = "https://news.example/filter-media";

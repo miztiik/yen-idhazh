@@ -1,7 +1,7 @@
-/** Share only current-process first sight and finalized health within configured history windows. */
+/** Share current-process discoveries and finalized health within configured history windows. */
 import type { DiscoveredArticleRow, FeedHealthStateRow } from "@idhazh/common-contracts";
 import type { PlanInputs } from "./load-plan-inputs";
-import { foldFirstSight } from "./read-ledger-history/read-seen-evidence";
+import { foldDiscoveryHistory } from "./read-ledger-history/read-discovered-evidence";
 import { settleHealthRows } from "./read-ledger-history/health-summary";
 
 const held = new WeakMap<PlanInputs, { discoveries: DiscoveredArticleRow[]; health: FeedHealthStateRow[] }>();
@@ -16,7 +16,7 @@ export function plannerMemory(inputs: PlanInputs) {
     discoveries: () => current.discoveries,
     health: () => current.health,
     rememberDiscoveries(rows: readonly DiscoveredArticleRow[], fromDay: string) {
-      current.discoveries = foldFirstSight([...current.discoveries, ...rows]).filter(row => row.date >= fromDay);
+      current.discoveries = foldDiscoveryHistory([...current.discoveries, ...rows]).filter(row => row.date >= fromDay);
       return current.discoveries;
     },
     rememberHealth(rows: readonly FeedHealthStateRow[]) {

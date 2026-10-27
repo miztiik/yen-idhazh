@@ -79,7 +79,7 @@ function paywallEvidence(document: Document, html: string, markers: readonly str
   return { paywall: false, paywall_evidence: "none", warnings, metadata };
 }
 
-export async function extractArticle(html: string, configuredUrl: string, config: ExtractionControls, form: "article" | "abstract" = "article") {
+export async function extractArticle(html: string, configuredUrl: string, config: ExtractionControls) {
   if (!html.trim()) return {
     article_text: "", word_count: 0, author: null, page_title: null,
     paywall: false, paywall_evidence: "none" as const,
@@ -87,7 +87,7 @@ export async function extractArticle(html: string, configuredUrl: string, config
     quality: null as ExtractionQuality | null,
     content_evidence: null as ArticleContentEvidence | null,
   };
-  try { return await extractDocument(html, configuredUrl, config, form); }
+  try { return await extractDocument(html, configuredUrl, config); }
   catch (error) {
     if (error instanceof RangeError && /call stack|recursion/i.test(error.message)) {
       throw new ArticleExtractionError("dom-depth-exceeded");
@@ -108,7 +108,7 @@ function extractBody(document: Document, configuredUrl: string) {
   });
 }
 
-async function extractDocument(html: string, configuredUrl: string, config: ExtractionControls, form: "article" | "abstract") {
+async function extractDocument(html: string, configuredUrl: string, config: ExtractionControls) {
   const { document } = parseHTML(html);
   if (!document.documentElement) throw new ArticleExtractionError("missing-document-root");
   const { metadata, ...paywall } = paywallEvidence(document, html, config.paywall_markers);
@@ -147,7 +147,7 @@ async function extractDocument(html: string, configuredUrl: string, config: Extr
     author: cleanText(extracted?.author ?? "") || recovered.author,
     page_title: cleanText(extracted?.title ?? "") || recovered.page_title,
     ...paywall,
-    quality: text && !paywall.paywall ? measureExtractionQuality(text, corroborated, config, form) : null,
+    quality: text && !paywall.paywall ? measureExtractionQuality(text, corroborated, config) : null,
     content_evidence: text ? measureArticleContent(markdown, config.press_release_filter) : null,
   };
 }

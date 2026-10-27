@@ -1,18 +1,14 @@
 {
-  "authority": "backend/idhazh/contracts/seen.py:SeenRow",
-  "fields": ["version", "url_key", "first_seen_at", "first_seen_run"],
   "rows": {
     "old": {
-      "version": "2026-08-31",
       "url_key": "f07385212d41204642eb81969dba8b11d935a70aae97b2d9817e40ac63aa4bb8",
       "first_seen_at": "2026-10-19T10:00:00Z",
-      "first_seen_run": "2026-10-19-1"
+      "date": "2026-10-19"
     },
     "new": {
-      "version": "2026-08-31",
       "url_key": "f07385212d41204642eb81969dba8b11d935a70aae97b2d9817e40ac63aa4bb8",
       "first_seen_at": "2026-10-21T12:00:00Z",
-      "first_seen_run": "2026-10-21-123"
+      "date": "2026-10-21"
     }
   }
 }

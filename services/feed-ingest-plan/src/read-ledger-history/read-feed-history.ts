@@ -3,7 +3,7 @@ import { z } from "zod";
 import { FeedHealthStateRowContract } from "@idhazh/common-contracts";
 import type { FeedHealthStateRow, SourceSnapshot } from "@idhazh/common-contracts";
 import type { LedgerRegistration } from "@idhazh/ledger-file-writer";
-import type { SeenDayInput } from "../config/service-settings";
+import type { LedgerDayInput } from "../config/service-settings";
 import { defaultDayInput } from "./named-days";
 import { mapPool } from "../harvest-feeds/harvest-pool";
 import { readPlannerDay, createPlannerHistoryCache } from "./read-planner-history";
@@ -23,8 +23,8 @@ export const endpointKey = inputEndpointKey;
 export async function readFeedHistory(input: {
   root: string; now: string; sources: readonly SourceSnapshot[]; policy: FeedHistoryPolicy;
   lifecycle_window_days: number; request_report_closed_days: number; concurrency: number;
-  health: LedgerRegistration; health_days: readonly SeenDayInput[];
-  own_days?: readonly SeenDayInput[];
+  health: LedgerRegistration; health_days: readonly LedgerDayInput[];
+  own_days?: readonly LedgerDayInput[];
   own_rows?: readonly FeedHealthStateRow[];
   current_rows?: readonly FeedHealthStateRow[];
   exclude_execution?: { run_id: string; attempt: number };
@@ -33,7 +33,7 @@ export async function readFeedHistory(input: {
   if (input.health_days.length > limit + input.request_report_closed_days) {
     throw new Error("Planner health inventory exceeds its configured represented-day and closed-day bounds");
   }
-  const named = new Map<string, SeenDayInput>();
+  const named = new Map<string, LedgerDayInput>();
   for (const day of input.health_days) {
     if (named.has(day.day) || day.day > input.now.slice(0, 10)) throw new Error("Planner health inventory must name distinct past UTC days");
     named.set(day.day, day);

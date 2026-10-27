@@ -14,6 +14,7 @@ import {
 import { RecordedInstantSchema } from "./recorded-instant.schema";
 import { SourceSnapshotSchema } from "./source.schema";
 import { UrlSchema } from "./primitives";
+import { PARSED_FEED_BATCH_VERSION } from "../version";
 
 export const PlannerStageContextSchema = z.strictObject({
   now: TimestampSchema, captured_at: RecordedInstantSchema, date: DateStampSchema,
@@ -51,20 +52,18 @@ export const PlannerHarvestObservationSchema = z.strictObject({
   content_evidence: ArticleContentEvidenceSchema.optional(),
 });
 export type PlannerHarvestObservation = z.infer<typeof PlannerHarvestObservationSchema>;
-export const PlannerSeenRowSchema = DiscoveredArticleRowSchema;
-export const PlannerSeenAvailableSchema = z.strictObject({
-  availability: z.literal("available"), rows: z.array(PlannerSeenRowSchema),
+export const PlannerDiscoveredRowSchema = DiscoveredArticleRowSchema;
+export const PlannerDiscoveredAvailableSchema = z.strictObject({
+  availability: z.literal("available"), rows: z.array(PlannerDiscoveredRowSchema),
 });
-export const PlannerSeenUnavailableSchema = z.strictObject({ availability: z.literal("unavailable") });
-export const PlannerSeenEvidenceSchema = z.discriminatedUnion("availability", [
-  PlannerSeenAvailableSchema, PlannerSeenUnavailableSchema,
+export const PlannerDiscoveredUnavailableSchema = z.strictObject({ availability: z.literal("unavailable") });
+export const PlannerDiscoveredEvidenceSchema = z.discriminatedUnion("availability", [
+  PlannerDiscoveredAvailableSchema, PlannerDiscoveredUnavailableSchema,
 ]);
-export type PlannerSeenEvidence = z.infer<typeof PlannerSeenEvidenceSchema>;
+export type PlannerDiscoveredEvidence = z.infer<typeof PlannerDiscoveredEvidenceSchema>;
 export const RecordedIdentitySchema = z.strictObject({ value: NonEmptySchema, origin: NonEmptySchema });
-export const PrimaryEvidenceSchema = z.strictObject({ ids: z.array(NonEmptySchema).min(1), origin: NonEmptySchema });
 export const PlannerArticleEvidenceSchema = z.strictObject({
-  parent_domain: RecordedIdentitySchema.nullable(), primary_evidence: PrimaryEvidenceSchema.nullable(),
-  estimated_work: NonNegativeSchema,
+  website_group: RecordedIdentitySchema.nullable(), estimated_work: NonNegativeSchema,
 });
 export type PlannerArticleEvidence = z.infer<typeof PlannerArticleEvidenceSchema>;
 export const PlannerFeedEntrySchema = z.strictObject({
@@ -98,10 +97,10 @@ const batchIdentity = {
   batch_id: z.uuid({ version: "v4" }), config_sha256: Sha256Schema, context: PlannerStageContextSchema,
 };
 export const ParsedFeedBatchSchema = z.strictObject({
-  ...batchIdentity, request: PlannerStageRequestSchema,
+  ...batchIdentity, version: z.literal(PARSED_FEED_BATCH_VERSION).default(PARSED_FEED_BATCH_VERSION), request: PlannerStageRequestSchema,
   candidates: z.array(FeedIngestCandidateSchema),
   observations: z.record(Sha256Schema, PlannerHarvestObservationSchema),
-  seen: PlannerSeenEvidenceSchema,
+  discovered: PlannerDiscoveredEvidenceSchema,
   evidence: z.record(Sha256Schema, PlannerArticleEvidenceSchema),
   history_rows: z.array(FeedHealthStateRowSchema), history_days: z.array(PlannerHealthDaySchema),
   work_rows: z.array(FeedHealthStateRowSchema), exclusions: z.array(PlannerRejectionCountSchema),
@@ -120,6 +119,12 @@ export const ParsedFeedBatchSchema = z.strictObject({
     || Object.entries(value.observations).some(([id, observation]) => !ids.has(id) || id !== observation.candidate_id)) {
     reject(ctx, "parsed observations must match the complete candidate batch");
   }
+}).meta({
+  version: PARSED_FEED_BATCH_VERSION,
+  changelog: [
+    { version: PARSED_FEED_BATCH_VERSION, change: "Name planner discovery evidence and derive website groups from canonical URLs." },
+    { version: "2026-10-25", change: "Declare complete parsed feed batches and their source evidence." },
+  ],
 });
 export type ParsedFeedBatch = z.infer<typeof ParsedFeedBatchSchema>;
 export const SelectedFeedBatchSchema = z.strictObject({

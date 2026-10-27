@@ -7,18 +7,17 @@ import { readLedgerDay } from "./read-period";
 import { ItemHealthFailureProjectionContract } from "./item-health-failure";
 import type { ItemHealthFailureProjection } from "./item-health-failure";
 import { PublishedRowProjectionContract } from "./published-row";
-import { SeenDayInputSchema } from "../config/service-settings";
-import type { SeenDayInput } from "../config/service-settings";
+import { LedgerDayInputSchema } from "../config/service-settings";
+import type { LedgerDayInput } from "../config/service-settings";
 import type { LedgerRegistration } from "@idhazh/ledger-file-writer";
-import { requiredSeenDays } from "./read-seen-evidence";
-import { UtcInstantSchema } from "../screen-article-candidates/seen-evidence";
+import { requiredUtcDays, UtcInstantSchema } from "../utc-instant";
 import type { LedgerDay } from "./read-period";
 import type { ReadLedgerFile } from "./read-parquet";
 import { mapPool } from "../harvest-feeds/harvest-pool";
 
-function defaultInput(prefix: readonly string[], day: string): SeenDayInput {
+function defaultInput(prefix: readonly string[], day: string): LedgerDayInput {
   const base = prefix.join("/");
-  return SeenDayInputSchema.parse({
+  return LedgerDayInputSchema.parse({
     day,
     indexes: {
       yearly: `state/compact/${base}/index/yearly.json`,
@@ -30,11 +29,11 @@ function defaultInput(prefix: readonly string[], day: string): SeenDayInput {
 }
 
 function namedDays(
-  prefix: readonly string[], required: readonly string[], authored: readonly SeenDayInput[],
+  prefix: readonly string[], required: readonly string[], authored: readonly LedgerDayInput[],
   name: string,
 ) {
-  const parsed = authored.map(input => SeenDayInputSchema.parse(input));
-  const byDay = new Map<string, SeenDayInput>();
+  const parsed = authored.map(input => LedgerDayInputSchema.parse(input));
+  const byDay = new Map<string, LedgerDayInput>();
   for (const [index, input] of parsed.entries()) {
     if (index > 0 && input.day <= parsed[index - 1]!.day) throw new Error(`${name} must name distinct ascending UTC days`);
     if (!required.includes(input.day)) throw new Error(`${name}.${index}.day is outside the configured UTC window`);
@@ -47,7 +46,7 @@ function namedDays(
 }
 
 function coverage(days: readonly {
-  input: SeenDayInput; held: LedgerDay<PublishedRow>;
+  input: LedgerDayInput; held: LedgerDay<PublishedRow>;
 }[]) {
   const missing = days.filter(({ held }) => (held.status !== "rows" && held.status !== "empty")
     || held.notices.some(notice => notice === "period-expired" || notice.startsWith("files-set-aside:")));
@@ -59,7 +58,7 @@ function coverage(days: readonly {
 }
 
 function folderInputs(
-  root: string, input: SeenDayInput,
+  root: string, input: LedgerDayInput,
 ) {
   return {
     ...(input.indexes === undefined ? {} : {
@@ -74,14 +73,14 @@ function folderInputs(
 export async function readExclusionEvidence(input: {
   root: string; now: string; publishedWindowDays: number; settledFailureCodes: readonly ItemHealthFailureCode[];
   publishedRegistration: LedgerRegistration; itemHealthRegistration: LedgerRegistration;
-  publishedDays: readonly SeenDayInput[]; settledFailureDays: readonly SeenDayInput[];
+  publishedDays: readonly LedgerDayInput[]; settledFailureDays: readonly LedgerDayInput[];
   concurrency?: number;
 }) {
   const now = UtcInstantSchema.parse(input.now);
   if (!Number.isSafeInteger(input.publishedWindowDays) || input.publishedWindowDays < 0) {
     throw new Error("collect.published_window_days must be a finite nonnegative integer in the TypeScript planner");
   }
-  const publishedDays = requiredSeenDays(now, input.publishedWindowDays);
+  const publishedDays = requiredUtcDays(now, input.publishedWindowDays);
   const publishedNamed = namedDays(input.publishedRegistration.prefix, publishedDays,
     input.publishedDays, "published_days");
   const publishedFileCache = new Map<string, Promise<ReadLedgerFile<PublishedRow>>>();

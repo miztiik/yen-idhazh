@@ -17,7 +17,6 @@ export function createRunHealth(context: RunContext, sources: readonly SourceSna
   history: ReadonlyMap<string, SourceHistoryEvidence>) {
   const rows = new Map<string, FeedHealthStateRow>();
   const exclusions = new Map<string, PlannerRejectionCount>();
-  const firstSight = new Set<string>();
   const pendingReads = new Map<string, FeedHealthStateRow>();
   const sourceById = new Map(sources.map(source => [source.source_id, source]));
   function row(feed: string, instant: string) {
@@ -118,7 +117,7 @@ export function createRunHealth(context: RunContext, sources: readonly SourceSna
         const instant = artifact.attempt_observations[index]!.occurred_at;
         const target = row(artifact.source_id, instant);
         if (attempt.phase === "validation") continue;
-        const field = attempt.phase === "robots" ? "robots_requests" : artifact.kind === "feed" ? "feed_requests" : "article_requests";
+        const field = attempt.phase === "robots" ? "robots_requests" : artifact.fetch_item_type === "feed" ? "feed_requests" : "article_requests";
         if (attempt.http_status === null) {
           target[field] = null;
           target.counts_complete = false;
@@ -173,14 +172,10 @@ export function createRunHealth(context: RunContext, sources: readonly SourceSna
       }
     },
     article(article: HarvestArticleResult) {
-      const offered = article.candidate ?? article.rejection;
-      if (offered?.url_key !== null && offered?.url_key !== undefined
-        && article.rejection?.drop_reason !== "BLOCKED_URL_MARKER") firstSight.add(offered.url_key);
       if (article.rejection !== null) reject(article.rejection);
     },
     reject,
     rows: () => [...rows.values()].map(value => FeedHealthStateRowSchema.parse(value)),
     exclusions: () => [...exclusions.values()],
-    first_sight: () => [...firstSight].map(url_key => ({ url_key })),
   };
 }

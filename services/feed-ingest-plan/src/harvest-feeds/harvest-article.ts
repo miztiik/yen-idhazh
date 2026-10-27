@@ -54,7 +54,7 @@ export async function harvestArticle(
   const body = fetched.body;
   const link = entry.link;
   const parsed = await work.parse(
-    () => parseDocument("article", body, link, inputs.extraction, source.form, context.parser_pool, context.parser_options), fetchedEvent.event_id, describeArticleParse,
+    () => parseDocument("article", body, link, inputs.extraction, context.parser_pool, context.parser_options), fetchedEvent.event_id, describeArticleParse,
   );
   if (parsed.parsed === null) {
     diagnostics = {

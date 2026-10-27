@@ -20,17 +20,18 @@ test("global policy needs no taxonomy and refuses removed vertical overrides", a
   expect(resolvePolicy(loaded)).toEqual(baseline);
 });
 
-test("global policy resolves the authored defaults exactly", async () => {
+test("global policy resolves the current authored values without a second vocabulary", async () => {
   const config = await readInputs();
-  expect(resolvePolicy(loadPlanningConfig(config))).toEqual({
-    triage: {
-      min_words_article: 180, min_words_abstract: 60, max_age_hours: 24,
-      recency_half_life_hours: 18, recency_weight: 0.6,
-    },
-    curate: {
-      source_authority_weight: 1, base_source_allowance: 3, bonus_unique_evidence: 1,
-      mmr_weights: { lambda_source: 0.25, lambda_source_kind: 0.05, lambda_domain: 0.15 },
-    },
+  const resolved = resolvePolicy(loadPlanningConfig(config));
+  expect(resolved.triage).toEqual({
+    min_words: config.triage.min_words, max_age_hours: config.triage.max_age_hours,
+    recency_half_life_hours: config.triage.recency_half_life_hours,
+    recency_weight: config.triage.recency_weight,
+  });
+  expect(resolved.curate_articles).toEqual({
+    source_authority_weight: config.curate_articles.source_authority_weight,
+    base_source_allowance: config.curate_articles.base_source_allowance,
+    mmr_weights: config.curate_articles.mmr_weights,
   });
 });
 
@@ -39,27 +40,31 @@ test("each global candidate policy field is independently replaceable, including
   const loaded = loadPlanningConfig(config);
   const baseline = resolvePolicy(loaded);
   const triageChanges = {
-    min_words_article: 240, min_words_abstract: 80, max_age_hours: 12,
+    min_words: 240, max_age_hours: 12,
     recency_half_life_hours: 9, recency_weight: 0,
   };
-  const curateChanges = { source_authority_weight: 0, base_source_allowance: 0, bonus_unique_evidence: 0 };
+  const curateChanges = { source_authority_weight: 0, base_source_allowance: 0 };
   for (const [name, value] of Object.entries(triageChanges)) {
     const changed = loadPlanningConfig({ ...config, triage: { ...config.triage, [name]: value } });
     expect(resolvePolicy(changed)).toEqual({ ...baseline, triage: { ...baseline.triage, [name]: value } });
     expect(resolvePolicy(loaded)).toEqual(baseline);
   }
   for (const [name, value] of Object.entries(curateChanges)) {
-    const changed = loadPlanningConfig({ ...config, curate: { ...config.curate, [name]: value } });
-    expect(resolvePolicy(changed)).toEqual({ ...baseline, curate: { ...baseline.curate, [name]: value } });
+    const changed = loadPlanningConfig({ ...config, curate_articles: { ...config.curate_articles, [name]: value } });
+    expect(resolvePolicy(changed)).toEqual({ ...baseline, curate_articles: { ...baseline.curate_articles, [name]: value } });
     expect(resolvePolicy(loaded)).toEqual(baseline);
   }
-  for (const name of Object.keys(baseline.curate.mmr_weights)) {
-    for (const value of [0, baseline.curate.mmr_weights[name as keyof typeof baseline.curate.mmr_weights] + 0.2]) {
+  for (const name of Object.keys(baseline.curate_articles.mmr_weights)) {
+    for (const value of [0, baseline.curate_articles.mmr_weights[name as keyof typeof baseline.curate_articles.mmr_weights] + 0.2]) {
       const changed = loadPlanningConfig({
-        ...config, curate: { ...config.curate, mmr_weights: { ...config.curate.mmr_weights, [name]: value } },
+        ...config, curate_articles: {
+          ...config.curate_articles, mmr_weights: { ...config.curate_articles.mmr_weights, [name]: value },
+        },
       });
       expect(resolvePolicy(changed)).toEqual({
-        ...baseline, curate: { ...baseline.curate, mmr_weights: { ...baseline.curate.mmr_weights, [name]: value } },
+        ...baseline, curate_articles: {
+          ...baseline.curate_articles, mmr_weights: { ...baseline.curate_articles.mmr_weights, [name]: value },
+        },
       });
       expect(resolvePolicy(loaded)).toEqual(baseline);
     }
@@ -73,15 +78,15 @@ test("reporting and global portfolio controls cannot change candidate policies",
     ...config,
     harvest: { ...config.harvest, concurrency: 1 },
     workflow_reporting: { ...config.workflow_reporting, enabled: true },
-    curate: {
-      ...config.curate, article_limit: 5,
-      soft_caps: { ...config.curate.soft_caps, max_source_share: 0.2 },
+    curate_articles: {
+      ...config.curate_articles, article_limit: 5,
+      soft_caps: { ...config.curate_articles.soft_caps, max_source_share: 0.2 },
     },
     feedback: { lifecycle_window_days: 5, request_report_closed_days: 2 },
     partition: { ...config.partition, default_shards: 2 },
   });
   expect(resolvePolicy(loaded)).toEqual(baseline);
-  expect(loaded.config.curate.article_limit).toBe(5);
+  expect(loaded.config.curate_articles.article_limit).toBe(5);
   expect(loaded.config.feedback).toEqual({ lifecycle_window_days: 5, request_report_closed_days: 2 });
 });
 
@@ -97,7 +102,9 @@ test("removed controls, invalid run fields and null global policy fail before re
   expect(() => resolvePolicy(loaded, { vertical: "world" } as never)).toThrow("vertical");
   for (const removed of ["lambda_vertical", "lambda_desk", "lambda_lens", "lambda_event_type", "lambda_event_cluster", "lambda_entity", "lambda_coverage"]) {
     expect(() => loadPlanningConfig({
-      ...config, curate: { ...config.curate, mmr_weights: { ...config.curate.mmr_weights, [removed]: 1 } },
+      ...config, curate_articles: {
+        ...config.curate_articles, mmr_weights: { ...config.curate_articles.mmr_weights, [removed]: 1 },
+      },
     })).toThrow(removed);
   }
   for (const removed of ["metrics", "qualification", "component_weights"]) {
@@ -108,13 +115,16 @@ test("removed controls, invalid run fields and null global policy fail before re
 test("resolving one candidate mutates neither global policy nor returned sibling settings", async () => {
   const config = await readInputs();
   const loaded = loadPlanningConfig({
-    ...config, curate: { ...config.curate, mmr_weights: { ...config.curate.mmr_weights, lambda_domain: 0 } },
+    ...config, curate_articles: {
+      ...config.curate_articles, mmr_weights: { ...config.curate_articles.mmr_weights, lambda_website_group: 0 },
+    },
   });
   const before = JSON.stringify(loaded);
   const result = resolvePolicy(loaded, { freshness_hours: 4 });
-  result.curate.mmr_weights.lambda_domain = 99;
+  result.curate_articles.mmr_weights.lambda_website_group = 99;
   expect(JSON.stringify(loaded)).toBe(before);
-  expect(resolvePolicy(loaded).triage.max_age_hours).toBe(24);
-  expect(resolvePolicy(loaded).curate.mmr_weights.lambda_domain).toBe(0);
-  expect(resolvePolicy(loadPlanningConfig(config)).curate.mmr_weights.lambda_domain).toBe(0.15);
+  expect(resolvePolicy(loaded).triage.max_age_hours).toBe(config.triage.max_age_hours);
+  expect(resolvePolicy(loaded).curate_articles.mmr_weights.lambda_website_group).toBe(0);
+  expect(resolvePolicy(loadPlanningConfig(config)).curate_articles.mmr_weights.lambda_website_group)
+    .toBe(config.curate_articles.mmr_weights.lambda_website_group);
 });

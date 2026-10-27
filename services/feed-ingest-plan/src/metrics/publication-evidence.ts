@@ -4,7 +4,7 @@ import {
   DateStampSchema, PositiveCountSchema, RunIdSchema, SchemaVersionSchema,
   Sha256Schema, SlugSchema, UrlSchema, deriveUrlKey,
 } from "@idhazh/common-contracts";
-import { UtcInstantSchema } from "../screen-article-candidates/seen-evidence";
+import { UtcInstantSchema } from "../utc-instant";
 
 // Read copies of contracts/seen.py, item_health.py and digest_day.py.
 // Projections strip unrelated columns; they are not contracts for writing those payloads.
@@ -28,7 +28,7 @@ export const DigestPublicationSchema = z.object({
   })).min(1),
   items: z.array(z.object({
     item_id: ItemIdSchema, source_id: SlugSchema, source_url: UrlSchema,
-    source_kind: SlugSchema.optional(), introduced_by_run: PositiveCountSchema,
+    introduced_by_run: PositiveCountSchema,
     title: z.string().min(1).optional(), source_name: z.string().min(1).optional(),
   })),
   leads: z.array(z.object({ item_id: ItemIdSchema })).default([]),
