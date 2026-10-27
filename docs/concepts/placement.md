@@ -1,6 +1,6 @@
 # Placement
 
-**Last Updated**: 2026-10-10
+**Last Updated**: 2026-10-27
 
 How admitted stories are ordered and filed in a published day. [Discovery](../architecture/sources/discovery.md#ranking-is-arithmetic-not-judgement) owns the selection score; [placement.py](../../backend/idhazh/placement.py) applies the page's ordering and desk rules.
 
@@ -13,8 +13,6 @@ Repeated carriage earns one fixed addition, not a multiplier. Several feeds carr
 Admission and order are separate. Only `collect.max_age_hours` in the table below refuses an old candidate. Placement does not remove an admitted story because it aged.
 
 ### Every number the order depends on, and where it lives
-
-The table is checked against configuration by [test_order_of_the_day.py](../../backend/tests/test_order_of_the_day.py).
 
 | What it measures | Where the number lives | Today |
 | --- | --- | ---: |
@@ -40,7 +38,7 @@ Per-feed weights live in `config/sources.json`; per-lens weights live in `config
 
 ## A worked example
 
-The real scorer runs against [worked-example.json](../../tests/fixtures/rank/worked-example.json), whose fixed clock is 2026-09-13 at 12:00 UTC. The test checks the names, scores and order below.
+This example uses the fixed clock 2026-09-13 at 12:00 UTC.
 
 | Story | How its number is built | Score |
 | --- | --- | ---: |
