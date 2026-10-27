@@ -13,10 +13,10 @@ succeed and still be worthless, and no gate noticed. This is that gate, run by
 hand before the config changes rather than by the ledger six weeks after.
 
 **The bar it checks** is the one `docs/architecture/sources/discovery.md` states:
-a feed must parse cleanly, and one article behind it must return readable prose
-through the production path. Both halves matter and the second is the one that
-fails - `openai-news` served a perfect feed whose articles answered 4xx, and
-`venturebeat-ai` rate-limited every article request.
+a feed must parse cleanly, and at least one of the default three sampled articles
+must return readable prose through the production path. Both halves matter and
+the second is the one that fails - `openai-news` served a perfect feed whose
+articles answered 4xx, and `venturebeat-ai` rate-limited every article request.
 
 **It uses the production path, not an imitation.** The configured user agent,
 the public-address check, the `robots.txt` policy, the bounded retries,
@@ -48,7 +48,7 @@ follows, so the trace of a probe opens the same way as the trace of a run.
 `--report` writes one JSON object per feed for a later diff.
 
 Exit code 0 when every probed feed cleared the bar, 1 when any did not, and 2
-when there was nothing to probe.
+when there was nothing to probe or an ad-hoc address duplicated the catalog.
 """
 
 from __future__ import annotations
@@ -64,7 +64,7 @@ from collections.abc import Callable, Sequence
 from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Final
+from typing import Final, Literal
 from urllib.parse import urlsplit
 
 import feedparser
@@ -75,7 +75,7 @@ from idhazh.contracts.base import derive_url_key
 from idhazh.contracts.feed_health import FetchOutcome, RobotsOutcome
 from idhazh.contracts.item_health import FailureCode
 from idhazh.contracts.run_plan import PlannedItem
-from idhazh.contracts.sources import FeedDef
+from idhazh.contracts.sources import FeedDef, SalienceFeedDef, Sources
 from idhazh.fetch import FetchResult
 from idhazh.stages import common
 from idhazh.stages.common import Fetcher
@@ -101,6 +101,9 @@ _HOST_NOISE: Final = frozenset({"www", "com", "org", "net", "io", "co", "feeds",
 #: else reuses the pipeline's own vocabulary.
 NOT_A_FEED: Final = "not_a_feed"
 NO_DATED_ENTRIES: Final = "no_dated_entries"
+PAYWALL_NOT_CONFIRMED: Final = "paywall_not_confirmed"
+MIN_PAYWALL_SAMPLES: Final = 2
+ArticlePaywallEvidence = Literal["json-ld", "configured-marker", "none", "not-observed"]
 
 
 @dataclass(slots=True)
@@ -125,6 +128,7 @@ class ArticleProbe:
     words: int
     verdict: str
     detail: str | None
+    paywall_evidence: ArticlePaywallEvidence = "not-observed"
 
     @property
     def ms(self) -> int:
@@ -133,6 +137,28 @@ class ArticleProbe:
     @property
     def read(self) -> bool:
         return self.verdict == ArticleStatus.OK.value
+
+
+def resolve_probe_verdict(articles: Sequence[ArticleProbe]) -> tuple[bool, str]:
+    """Set pass and feed verdict from all sampled article outcomes."""
+    if any(article.read for article in articles):
+        return True, ArticleStatus.OK.value
+
+    evidence_paywalls = [
+        article
+        for article in articles
+        if article.verdict == FailureCode.PAYWALLED.value
+        and article.paywall_evidence in {"json-ld", "configured-marker"}
+    ]
+    if len(articles) >= MIN_PAYWALL_SAMPLES and len(evidence_paywalls) == len(articles):
+        return False, FailureCode.PAYWALLED.value
+
+    if evidence_paywalls or any(
+        article.verdict == FailureCode.PAYWALLED.value for article in articles
+    ):
+        return False, PAYWALL_NOT_CONFIRMED
+
+    return (False, articles[0].verdict) if articles else (False, NOT_A_FEED)
 
 
 @dataclass(slots=True)
@@ -199,9 +225,10 @@ def probe_feed(
     """Read one feed, then read up to `articles` of the pages behind it.
 
     More than one article is worth asking for on a publisher that mixes free and
-    paywalled pages: one sample can condemn a feed that mostly works, or clear
-    one that mostly does not. The feed passes if any sampled article yields
-    prose, and the row keeps every attempt so the ratio is visible.
+    paywalled pages: one paywall sample does not condemn a mixed feed. The feed
+    passes if any sampled article yields prose, and a paywall verdict requires
+    at least two matching samples. The row keeps every attempt so the ratio is
+    visible.
     """
     row = ProbeRow(
         id=feed.id,
@@ -253,13 +280,14 @@ def probe_feed(
                 )
             )
 
-    if any(article.read for article in row.articles):
+    passed, verdict = resolve_probe_verdict(row.articles)
+    if passed:
         row.passed = True
         # An undated feed still works - freshness falls back to first sight - so
         # this is reported beside the verdict and never fails the feed for it.
         row.verdict = ArticleStatus.OK.value if row.dated else NO_DATED_ENTRIES
         return row
-    row.verdict = row.articles[0].verdict
+    row.verdict = verdict
     return row
 
 
@@ -312,6 +340,20 @@ def _probe_article(
     verdict = article.status.value
     if article.status is not ArticleStatus.OK:
         verdict = article.failure_code.value if article.failure_code else _failure_of(result)
+    html = result.body.decode("utf-8", errors="replace")
+    paywall_evidence = (
+        extract.paywall_evidence(html, settings.app.extract) if result.body else "not-observed"
+    )
+    detail = article.failure_detail
+    if article.failure_code is FailureCode.PAYWALLED and paywall_evidence in {
+        "json-ld",
+        "configured-marker",
+    }:
+        detail = (
+            f"{detail} ({paywall_evidence})"
+            if detail
+            else f"publisher declared a paywall ({paywall_evidence})"
+        )
     return ArticleProbe(
         url=candidate.canonical_url,
         fetch_ms=fetch_ms,
@@ -320,7 +362,8 @@ def _probe_article(
         outcome=result.outcome.value,
         words=len(extracted.source_text.split()),
         verdict=verdict,
-        detail=article.failure_detail,
+        detail=detail,
+        paywall_evidence=paywall_evidence,
     )
 
 
@@ -339,6 +382,57 @@ def adhoc_id(url: str, taken: set[str]) -> str:
         candidate, suffix = f"{stem}-{suffix}", suffix + 1
     taken.add(candidate)
     return candidate
+
+
+@dataclass(frozen=True, slots=True)
+class SourceDuplicate:
+    """One candidate address or ID that already exists in the source catalog."""
+
+    candidate_url: str
+    candidate_id: str
+    url_matches: tuple[str, ...]
+    id_matches: tuple[str, ...]
+
+
+def canonical_feed_url(url: str) -> str:
+    """One stable comparison key for a feed address."""
+    parts = urlsplit(url.strip())
+    host = (parts.hostname or parts.netloc).lower().rstrip(".")
+    if host.startswith("www."):
+        host = host[4:]
+    if not host:
+        return url.strip().lower().rstrip("/")
+    path = parts.path.rstrip("/")
+    query = f"?{parts.query}" if parts.query else ""
+    return f"{host}{path}{query}"
+
+
+def find_source_duplicate(candidate_url: str, sources: Sources) -> SourceDuplicate | None:
+    """Find URL or derived-ID matches without making a network request."""
+    candidate_key = canonical_feed_url(candidate_url)
+    known_entries: list[FeedDef | SalienceFeedDef] = [
+        *sources.known_feeds(),
+        *sources.salience,
+    ]
+    url_matches = tuple(
+        sorted(
+            {
+                entry.id
+                for entry in known_entries
+                if canonical_feed_url(str(entry.url)) == candidate_key
+            }
+        )
+    )
+    candidate_id = adhoc_id(candidate_url, set())
+    id_matches = tuple(sorted({entry.id for entry in known_entries if entry.id == candidate_id}))
+    if not url_matches and not id_matches:
+        return None
+    return SourceDuplicate(
+        candidate_url=candidate_url,
+        candidate_id=candidate_id,
+        url_matches=url_matches,
+        id_matches=id_matches,
+    )
 
 
 def targets(args: argparse.Namespace, settings: config.Settings) -> list[FeedDef]:
@@ -401,6 +495,29 @@ def report(rows: Sequence[ProbeRow], *, where: str, trace: Path | None) -> None:
             file=sys.stderr,
         )
 
+    paywall_rows = [
+        (
+            row,
+            [
+                article.paywall_evidence
+                for article in row.articles
+                if article.paywall_evidence in {"json-ld", "configured-marker"}
+            ],
+        )
+        for row in rows
+    ]
+    paywall_rows = [(row, evidence) for row, evidence in paywall_rows if evidence]
+    if paywall_rows:
+        print("\nPaywall evidence:", file=sys.stderr)
+        for row, evidence in paywall_rows:
+            counts: dict[str, int] = {}
+            for source in evidence:
+                counts[source] = counts.get(source, 0) + 1
+            detail = ", ".join(
+                f"{source}={counts[source]}/{len(row.articles)}" for source in sorted(counts)
+            )
+            print(f"  {row.id}: {detail}", file=sys.stderr)
+
     failed = [row for row in rows if not row.passed]
     tally: dict[str, int] = {}
     for row in failed:
@@ -435,8 +552,11 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser.add_argument(
         "--articles",
         type=int,
-        default=1,
-        help="Articles to sample behind each feed. The feed passes if any yields prose.",
+        default=3,
+        help=(
+            "Articles to sample behind each feed. The feed passes if any yields prose; "
+            "a paywall verdict needs at least two matching samples."
+        ),
     )
     parser.add_argument("--report", type=Path, help="Write one JSON object per feed here.")
     parser.add_argument(
@@ -460,6 +580,27 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 2
 
     settings = config.load()
+    if args.url:
+        duplicate_found = False
+        for candidate_url in args.url:
+            duplicate = find_source_duplicate(candidate_url, settings.sources)
+            if duplicate is None:
+                continue
+            duplicate_found = True
+            reasons: list[str] = []
+            if duplicate.url_matches:
+                reasons.append(f"url already belongs to {', '.join(duplicate.url_matches)}")
+            if duplicate.id_matches:
+                reasons.append(f"id already belongs to {', '.join(duplicate.id_matches)}")
+            LOG.error(
+                "duplicate feed candidate %s: candidate_id=%s; %s",
+                candidate_url,
+                duplicate.candidate_id,
+                "; ".join(reasons),
+            )
+        if duplicate_found:
+            return 2
+
     chosen = targets(args, settings)
     if not chosen:
         LOG.error("nothing matched: no feed to probe")
