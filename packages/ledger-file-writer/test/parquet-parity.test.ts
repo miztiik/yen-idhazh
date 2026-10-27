@@ -279,7 +279,7 @@ describe("ledger Parquet readback", () => {
     });
   });
 
-  test("writes all four planner ledgers without article text or generic identity", async () => {
+  test("writes every planner ledger without article text or generic identity", async () => {
     await withOutputRoot(async root => {
       const article = selectedArticle();
       const before = structuredClone(article);

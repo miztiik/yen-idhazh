@@ -1,6 +1,6 @@
 /** Derive independent lifecycle, reliability and closed-day spend views from run facts. */
 import { availabilityEvidence, definitelyAfter } from "@idhazh/common-contracts";
-import { FeedHealthStateRowSchema } from "@idhazh/common-contracts";
+import { FeedHealthStateRowSchema, SourceArticleRefusalReasonSchema } from "@idhazh/common-contracts";
 import type { FeedHealthStateRow, SourceSnapshot } from "@idhazh/common-contracts";
 import type { SourceHistoryEvidence, FeedHistoryPolicy } from "./read-feed-history";
 
@@ -65,12 +65,22 @@ export function summarizeHealth(input: {
     const measured = logical.filter(row => reliabilityDays.includes(row.date)
       && row.outcome !== "skipped" && row.outcome !== "robots_denied");
     const productive = measured.filter(row => row.outcome === "ok" && row.items > 0).length;
+    const articleRows = rows.filter(row => row.feed_id === source.source_id
+      && row.endpoint_key === inputEndpointKey(endpoint) && reliabilityDays.includes(row.date));
+    const articleKnown = complete(reliabilityDays, input.policy.reliability_window_days)
+      && articleRows.every(row => row.counts_complete && row.article_candidates !== null);
+    const admitted = articleRows.reduce((total, row) => total + (row.article_candidates ?? 0), 0);
+    const refused = articleRows.reduce((total, row) => total + row.rejection_counts
+      .filter(reason => reason.subject === "article" && reason.attribution === "feed"
+        && SourceArticleRefusalReasonSchema.safeParse(reason.reason_code).success)
+      .reduce((count, reason) => count + reason.count, 0), 0);
     sources.set(source.source_id, {
       endpoint_key: inputEndpointKey(endpoint),
       lifecycle: source.status === "retired" ? "retired" : lifecycleRows.length === 0 ? "unknown"
         : availability.resting === true ? "resting" : availability.resting === null ? "unknown" : "eligible",
       strikes: lifecycleRows.length === 0 ? null : availability.strikes,
       rested_runs: lifecycleRows.length === 0 ? null : availability.rested_runs,
+      article_pass_rate: articleKnown && admitted + refused > 0 ? admitted / (admitted + refused) : null,
       reliability: measured.length === 0 ? null : {
         productive, attempted: measured.length, success_fraction: productive / measured.length,
         from_day: reliabilityDays[0] ?? null, through_day: reliabilityDays.at(-1) ?? null,

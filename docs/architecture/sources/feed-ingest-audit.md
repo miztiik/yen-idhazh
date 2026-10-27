@@ -1,9 +1,9 @@
 # Feed planning completion
 
-**Last Updated**: 2026-10-26
+**Last Updated**: 2026-10-27
 
 What saved evidence proves that an isolated planning execution finished?
-The current planner writes its four declared formats and an independent
+The current planner writes its five declared formats and an independent
 selected-text artifact. It does not certify summary quality or publication.
 
 ## Recording boundary
@@ -55,14 +55,19 @@ readback cannot report completed planning.
 
 Sparse progress proves observed activity only. It does not prove persistence.
 The independent host instruments are optional and never establish planner
-completion. Downstream worker integration and publication observations remain
-separate work.
+completion. Genuine publication and lead-observer integration remain deferred
+under [Plan 67 Rows 17 and 18](../../../TODO/20261024-67-feed-ingest-feedback-and-selection-plan.md#19-row-17---prove-dispatch-parquet-parity-then-wire-digest-workers).
+Generated publication fixtures prove only the observer boundary, not actual
+worker/model cost, publication or lead selection. Production planner and
+worker cutover are not approved: they require a separate decision and staged
+producer/consumer integration proof. The production Python planner, worker
+fetching and digest workflow remain unchanged by isolated planner delivery.
 
 ## Design rationale
 
 Keeping the chosen result and actual run facts is enough to explain planning
 without retaining every candidate's assessment or replaying a historical
-selection. Exact output verification protects the handoff while the four
+selection. Exact output verification protects the handoff while the five
 small formats replace the former audit products.
 
 ## See also

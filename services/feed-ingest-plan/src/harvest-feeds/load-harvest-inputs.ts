@@ -105,6 +105,11 @@ export function loadHarvestInputs(raw: {
       throw new Error(`source.${source.id}.tier: source tier must be active and registered`);
     }
   }
+  const rules = new Set(planning.config.curate_articles.feed_quality_tiers.map(rule => rule.tier));
+  const active = registry.source_tiers.filter(tier => tier.status === "active");
+  if (active.some(tier => !rules.has(tier.id)) || [...rules].some(id => !active.some(tier => tier.id === id))) {
+    throw new Error("curate_articles.feed_quality_tiers: rules must name every active taxonomy tier exactly once");
+  }
   // This digest covers every validated input that can change harvested content or provenance.
   const { workflow_reporting, ...contentConfig } = planning.config;
   const snapshot = {

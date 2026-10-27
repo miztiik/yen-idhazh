@@ -6,6 +6,7 @@ import { HarvestDiagnosticsSchema } from "./harvest-diagnostics.schema";
 import { ArticleContentEvidenceSchema } from "./content-filter-evidence.schema";
 import { DiscoveredArticleRowSchema } from "./discovered-article.schema";
 import { SelectedArticleRowSchema } from "./selected-article.schema";
+import { RejectedArticleRowSchema } from "./rejected-article.schema";
 import { FeedHealthStateRowSchema } from "./feed-health-state.schema";
 import {
   CountSchema, DateStampSchema, NonEmptySchema, NonNegativeSchema, PositiveCountSchema,
@@ -106,6 +107,7 @@ export const ParsedFeedBatchSchema = z.strictObject({
   work_rows: z.array(FeedHealthStateRowSchema), exclusions: z.array(PlannerRejectionCountSchema),
   offers: z.array(PlannerFeedOfferSchema).default([]),
   feed_fetch_request_id: z.uuid({ version: "v4" }).nullable().default(null),
+  article_fetch_request_id: z.uuid({ version: "v4" }).nullable().default(null),
   input_complete: z.boolean().default(true),
 }).superRefine((value, ctx) => {
   const ids = new Set(value.candidates.map(candidate => candidate.candidate_id));
@@ -122,16 +124,21 @@ export const ParsedFeedBatchSchema = z.strictObject({
 }).meta({
   version: PARSED_FEED_BATCH_VERSION,
   changelog: [
-    { version: PARSED_FEED_BATCH_VERSION, change: "Name planner discovery evidence and derive website groups from canonical URLs." },
+    { version: PARSED_FEED_BATCH_VERSION, change: "Link standalone article batches to their original source-outcome receipt." },
+    { version: "2026-10-27", change: "Name planner discovery evidence and derive website groups from canonical URLs." },
     { version: "2026-10-25", change: "Declare complete parsed feed batches and their source evidence." },
   ],
 });
 export type ParsedFeedBatch = z.infer<typeof ParsedFeedBatchSchema>;
 export const SelectedFeedBatchSchema = z.strictObject({
-  ...batchIdentity, version: z.literal("2026-10-26").default("2026-10-26"), parsed_batch_id: z.uuid({ version: "v4" }),
+  ...batchIdentity, version: z.literal("2026-10-27").default("2026-10-27"), parsed_batch_id: z.uuid({ version: "v4" }),
   selection_started_at_utc: TimestampSchema, evaluated_at: TimestampSchema,
   articles: z.array(SelectedArticleContentSchema), health_rows: z.array(FeedHealthStateRowSchema),
+  rejected_articles: z.array(RejectedArticleRowSchema),
   exclusions: z.array(PlannerRejectionCountSchema), request_report: PlannerRequestReportSchema,
+}).meta({
+  version: "2026-10-27",
+  changelog: [{ version: "2026-10-27", change: "Carry terminal rejected article metadata with the complete selection." }],
 });
 export type SelectedFeedBatch = z.infer<typeof SelectedFeedBatchSchema>;
 export const PartitionedFeedBatchSchema = SelectedFeedBatchSchema.safeExtend({

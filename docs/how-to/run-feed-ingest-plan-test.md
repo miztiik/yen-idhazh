@@ -17,7 +17,7 @@ the Python pipeline and global health data are unchanged.
 
 The workflow starts the real loopback listener, reads listener health, posts
 to `/plan` and stops the listener in `finally`. It verifies the returned
-four-format native output and selected artifact before exposing commit paths.
+five-format native output and selected artifact before exposing commit paths.
 Completed planning is not proof of summarization or publication.
 
 ## Manual controls
@@ -85,7 +85,7 @@ the service's test directory only when they cover an independently maintained
 reader or writer. The runtime verifier checks actual planner files during real
 execution; it has no fixture-only entry point.
 
-The commit manifest permits exact current raw Parquet paths for the four
+The commit manifest permits exact current raw Parquet paths for the five
 planner siblings only. The committer validates bytes, appends them through a
 private temporary Git staging index against fresh main. It creates no planner
 raw-day JSON list. A normal push retry preserves another writer's immutable additions.

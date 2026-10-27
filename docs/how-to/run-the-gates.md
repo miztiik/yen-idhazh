@@ -229,11 +229,12 @@ require the approval and compatibility rules in `CLAUDE.md`.
 For the manual planner's metadata integration, select its five named native
 cases: `feed-ingest-plan-report.test.ts`, `feed-ingest-plan-outputs.test.ts`,
 `feed-ingest-plan-workflow.test.ts`, `feed-ingest-plan-host.test.ts` and
-`feed-ingest-plan-publication.test.ts`, all under
+`feed-ingest-plan-delivery.test.ts`, all under
 `services/feed-ingest-plan/test/`. They use the real loopback fingerprint API,
-actual Parquet bytes and generated local Git origins. The publication cases
-cover sparse and foreign indexes, concurrent main movement, immutable
-collisions, already-published output and failed-planner recovery. No live feed
+actual Parquet bytes and generated local Git origins. The delivery cases
+cover registered metadata permissions, verified current-run files and
+failed-planner recovery; the shared data-delivery package covers Git delivery.
+No live feed
 or manual workflow dispatch is needed. Run the changed fingerprint service
 and shared writer's native checks as well. A Windows fixture pass does not
 certify live Linux hardware collection.

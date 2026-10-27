@@ -23,6 +23,9 @@ import { profileTask } from "../../../host-probes/src/task-profile/task-profiler
 import { fetchRejection, recordRejection } from "../harvest-feeds/record-rejection";
 import { deriveCandidateId } from "@idhazh/common-contracts";
 import { sourceSnapshot } from "../harvest-feeds/load-harvest-inputs";
+import { HarvestArticleResultSchema, utcTimestamp } from "../harvest-feeds/harvest-types";
+import { resolveArticleSourceOutcome } from "../article-source-outcome";
+import type { SourceArticleOutcome } from "@idhazh/common-contracts";
 
 type FetchRequest = z.infer<typeof FetchRequestSchema>;
 const requestPools = new WeakMap<PlanInputs, ReturnType<typeof workPool>>();
@@ -39,7 +42,7 @@ export function resolveFetchParent(request: FetchRequest, inputs: PlanInputs, ru
 }
 export async function fetchDocument(
   request: FetchRequest, record: PlannerOperation, inputs: PlanInputs, runtime: PlanRuntime,
-  parent: ReturnType<typeof resolveFetchParent>, signal?: AbortSignal,
+  parent: ReturnType<typeof resolveFetchParent>, store: OperationStore, signal?: AbortSignal,
 ) {
   const source = inputs.harvest.sources.find(source => source.id === request.feed_id);
   if (source === undefined || source.status !== "active") throw new PlanError("INVALID_REQUEST", "Fetch requires an active configured feed", "feed_id");
@@ -49,7 +52,7 @@ export async function fetchDocument(
     try { validateTargetName(url); }
     catch { throw new PlanError("INVALID_REQUEST", "Fetch requires a public HTTP address without credentials", "url"); }
   }
-  const state = await documentState(record, inputs, runtime, parent?.root);
+  const state = await documentState(record, inputs, runtime, store, parent?.root);
   if (state.health_written) throw new PlanError("REQUEST_CONFLICT", "This execution finalized its health; start a new feed fetch for new work", "request_id");
   const identity = canonicalizeUrl(url);
   const attemptObservations: ReturnType<typeof observeDocument>[] = [];
@@ -91,9 +94,10 @@ export async function fetchDocument(
   const { fetched, observation } = result;
   state.recovered.add(record.request_id);
   if (request.fetch_item_type === "feed") state.work.pendingFeed(source.id, fetched, observation.occurred_at);
+  let sourceOutcome: SourceArticleOutcome | null = null;
   if (request.fetch_item_type === "article" && fetched.body === null) {
     const refusal = fetchRejection(fetched, inputs.harvest.config.harvest.fetch_timeout_ms, null);
-    state.work.reject(recordRejection({ source_id: source.id, feed_url: source.url }, {
+    const rejection = recordRejection({ source_id: source.id, feed_url: source.url }, {
       writer: state.context.writer, correlation_id: state.context.correlation_id,
       max_future_hours: inputs.clock_config.collect.max_future_hours,
       observation_clock: runtime.observation_clock ?? (() => new Date()),
@@ -101,7 +105,20 @@ export async function fetchDocument(
       candidate_id: parent?.offer.offer_id ?? deriveCandidateId(record.run_id, source.id, 0),
       canonical_url: identity.canonical_url, url_key: identity.url_key,
       title: parent?.offer.entry.title ?? null, categories: parent?.offer.entry.categories ?? [],
-    }));
+    });
+    const result = HarvestArticleResultSchema.parse({
+      candidate: null, rejection, observation: {
+        candidate_id: rejection.candidate_id, http_status: fetched.http_status, robots: fetched.robots,
+        fetch_failure: fetched.failure, paywall: null, paywall_evidence: "not-observed",
+        extraction: "not-attempted", observed_at: observation.occurred_at, diagnostics: refusal.details.diagnostics ?? null,
+      },
+    });
+    sourceOutcome = resolveArticleSourceOutcome(result, inputs.harvest.config.triage.min_words,
+      inputs.harvest.config.triage.blocked_http_statuses, utcTimestamp(runtime.observation_clock));
+    state.work.article(result, record.request_id, sourceOutcome);
+  }
+  if (request.fetch_item_type === "article") {
+    state.work.captureArticle(record.request_id, source.id, observation.occurred_at, sourceOutcome);
   }
   if (parent !== null) updateFeedOffer(inputs, state, parent.batch.batch_id, parent.offer.offer_id,
     fetched.failure === null && fetched.body !== null ? "fetched" : "rejected", record.request_id);
@@ -113,7 +130,7 @@ export async function fetchDocument(
     parent_fetch_request_id: parent?.root.request_id ?? null, parent_batch_id: parent?.batch.batch_id ?? null,
     entry_ordinal: parent?.offer.entry.entry_ordinal ?? null,
   });
-  return { artifact, response_json: JSON.stringify({
+  return { artifact, source_outcome: sourceOutcome, response_json: JSON.stringify({
     fetch_request_id: record.request_id, batch_id: parent?.batch.batch_id ?? record.request_id,
     run_id: record.run_id, correlation_id: record.correlation_id, fetch_item_type: request.fetch_item_type, feed_id: source.id,
     article_id: identity.url_key, canonical_url: identity.canonical_url, http_status: fetched.http_status,

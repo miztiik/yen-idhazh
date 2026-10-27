@@ -1,6 +1,7 @@
 /** Does one global planner policy substitute cleanly without vertical-specific controls? */
 import { expect, test } from "bun:test";
 import { loadPlanningConfig, resolvePolicy } from "../src/config/resolve-policy";
+import { PlanningRunOverridesSchema } from "@idhazh/common-contracts";
 
 const readInputs = () => Bun.file(new URL("../../../config/feed-ingest-plan.json", import.meta.url)).json();
 
@@ -13,10 +14,7 @@ test("global policy needs no taxonomy and refuses removed vertical overrides", a
   for (const vertical_overrides of [{}, { ai: {} }, { oceans: { triage: { max_age_hours: 12 } } }]) {
     expect(() => loadPlanningConfig({ ...config, vertical_overrides })).toThrow("vertical_overrides");
   }
-  expect(resolvePolicy(loaded, { freshness_hours: 8 }).triage).toEqual({
-    ...baseline.triage, max_age_hours: 8,
-  });
-  expect(resolvePolicy(loaded, { freshness_hours: 0.5 }).triage.max_age_hours).toBe(0.5);
+  expect(baseline.triage).not.toHaveProperty("max_age_hours");
   expect(resolvePolicy(loaded)).toEqual(baseline);
 });
 
@@ -24,13 +22,12 @@ test("global policy resolves the current authored values without a second vocabu
   const config = await readInputs();
   const resolved = resolvePolicy(loadPlanningConfig(config));
   expect(resolved.triage).toEqual({
-    min_words: config.triage.min_words, max_age_hours: config.triage.max_age_hours,
+    min_words: config.triage.min_words,
     recency_half_life_hours: config.triage.recency_half_life_hours,
     recency_weight: config.triage.recency_weight,
   });
   expect(resolved.curate_articles).toEqual({
     source_authority_weight: config.curate_articles.source_authority_weight,
-    base_source_allowance: config.curate_articles.base_source_allowance,
     mmr_weights: config.curate_articles.mmr_weights,
   });
 });
@@ -40,10 +37,10 @@ test("each global candidate policy field is independently replaceable, including
   const loaded = loadPlanningConfig(config);
   const baseline = resolvePolicy(loaded);
   const triageChanges = {
-    min_words: 240, max_age_hours: 12,
+    min_words: 240,
     recency_half_life_hours: 9, recency_weight: 0,
   };
-  const curateChanges = { source_authority_weight: 0, base_source_allowance: 0 };
+  const curateChanges = { source_authority_weight: 0 };
   for (const [name, value] of Object.entries(triageChanges)) {
     const changed = loadPlanningConfig({ ...config, triage: { ...config.triage, [name]: value } });
     expect(resolvePolicy(changed)).toEqual({ ...baseline, triage: { ...baseline.triage, [name]: value } });
@@ -92,14 +89,13 @@ test("reporting and global portfolio controls cannot change candidate policies",
 
 test("removed controls, invalid run fields and null global policy fail before resolution", async () => {
   const config = await readInputs();
-  const loaded = loadPlanningConfig(config);
   expect(() => loadPlanningConfig({ ...config, triage: { ...config.triage, recency_weight: null } })).toThrow("recency_weight");
   for (const freshness_hours of [0, -1, NaN, Infinity]) {
-    expect(() => resolvePolicy(loaded, { freshness_hours })).toThrow("freshness_hours");
+    expect(() => PlanningRunOverridesSchema.parse({ freshness_hours })).toThrow("freshness_hours");
   }
-  expect(() => resolvePolicy(loaded, { recency_half_life_hours: 3, freshness_hours: 8 } as never))
+  expect(() => PlanningRunOverridesSchema.parse({ recency_half_life_hours: 3, freshness_hours: 8 }))
     .toThrow("recency_half_life_hours");
-  expect(() => resolvePolicy(loaded, { vertical: "world" } as never)).toThrow("vertical");
+  expect(() => PlanningRunOverridesSchema.parse({ vertical: "world" })).toThrow("vertical");
   for (const removed of ["lambda_vertical", "lambda_desk", "lambda_lens", "lambda_event_type", "lambda_event_cluster", "lambda_entity", "lambda_coverage"]) {
     expect(() => loadPlanningConfig({
       ...config, curate_articles: {
@@ -120,10 +116,9 @@ test("resolving one candidate mutates neither global policy nor returned sibling
     },
   });
   const before = JSON.stringify(loaded);
-  const result = resolvePolicy(loaded, { freshness_hours: 4 });
+  const result = resolvePolicy(loaded);
   result.curate_articles.mmr_weights.lambda_website_group = 99;
   expect(JSON.stringify(loaded)).toBe(before);
-  expect(resolvePolicy(loaded).triage.max_age_hours).toBe(config.triage.max_age_hours);
   expect(resolvePolicy(loaded).curate_articles.mmr_weights.lambda_website_group).toBe(0);
   expect(resolvePolicy(loadPlanningConfig(config)).curate_articles.mmr_weights.lambda_website_group)
     .toBe(config.curate_articles.mmr_weights.lambda_website_group);

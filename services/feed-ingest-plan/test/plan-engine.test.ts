@@ -3,7 +3,7 @@ import { expect, test } from "bun:test";
 import { join } from "node:path";
 import { mkdir, writeFile, readFile } from "node:fs/promises";
 import {
-  DiscoveredArticleRowContract, SelectedArticleRowContract, FeedHealthStateRowContract, PlanRunRowContract,
+  DiscoveredArticleRowContract, SelectedArticleRowContract, RejectedArticleRowContract, FeedHealthStateRowContract, PlanRunRowContract,
   SelectedArticlesArtifactSchema, deriveUrlKey,
 } from "@idhazh/common-contracts";
 import { persistLedger } from "@idhazh/ledger-file-writer";
@@ -107,6 +107,26 @@ test("freshness equality is admitted; a smaller override really rejects; empty i
   } finally { await recorded.close(); }
 });
 
+test("zero selected articles still persist every parsed refusal without article text", async () => {
+  const recorded = await recordedPlan();
+  recorded.inputs.harvest.config.triage.min_words = 10_000;
+  try {
+    const result = await runFeedPlan({}, recorded.inputs, recorded.runtime);
+    expect(result.row.status).toBe("completed");
+    expect(result.selected).toEqual([]);
+    expect(result.files.selected_articles).toEqual({ status: "empty", files: [] });
+    const saved = result.files.rejected_articles!;
+    expect(saved.status).toBe("written");
+    const rows = (await Promise.all(saved.files.map(file =>
+      readPlannerParquet(join(recorded.inputs.outputRoot, file.path), "rejected-articles", RejectedArticleRowContract))))
+      .flatMap(file => file.rows);
+    expect(rows).toHaveLength(2);
+    expect(new Set(rows.map(row => row.candidate_id)).size).toBe(2);
+    expect(rows.every(row => row.reason_code === "REJECTED_SCREENING_MIN_WORDS")).toBe(true);
+    expect(rows.every(row => !Object.hasOwn(row, "title") && !Object.hasOwn(row, "article_text"))).toBe(true);
+  } finally { await recorded.close(); }
+});
+
 test("persisted discovery wins for undated articles; empty history does not prove absence", async () => {
   const recorded = await recordedPlan();
   try {
@@ -126,7 +146,7 @@ test("persisted discovery wins for undated articles; empty history does not prov
     });
     expect(fresh.batch.request_report.through_day).toBe("2026-10-21");
     expect(fresh.batch.health_rows[0]!.reliability).toMatchObject({ productive: 1, attempted: 2, production_factor: 0.5, complete: false });
-    expect(fresh.batch.articles.every(article => article.ratings.adjustments.find(adjustment => adjustment.term === "feed_reliability")!.value! < 0)).toBe(true);
+    expect(fresh.batch.articles.every(article => article.ratings.adjustments.find(adjustment => adjustment.term === "article_pass_rate")!.value === null)).toBe(true);
     recorded.runtime.run_number = "701";
     recorded.runtime.clock = () => new Date("2026-10-22T00:10:00Z");
     const second = await runFeedPlan({}, recorded.inputs, recorded.runtime);

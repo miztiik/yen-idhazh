@@ -10,6 +10,7 @@ export const PlanResponseSchema = PlanRunRowSchema.safeExtend({
   }),
   files: z.strictObject({
     discovered_articles: StageWriteResultSchema.optional(), selected_articles: StageWriteResultSchema.optional(),
+    rejected_articles: StageWriteResultSchema.optional(),
     feed_health_state: StageWriteResultSchema.optional(), plan_runs: StageWriteResultSchema.optional(),
   }),
   selected_url_keys: z.array(Sha256Schema),

@@ -28,5 +28,6 @@ export const PartitionResponseSchema = z.strictObject({
 });
 export const PersistenceResponseSchema = z.strictObject({
   batch_id: RequestIdSchema, files: StageWriteResultSchema, artifact: RelativePathSchema, selected_count: CountSchema,
+  rejected_files: StageWriteResultSchema,
   run_files: StageWriteResultSchema.optional(), run_status: z.enum(["completed", "partial", "failed"]).optional(),
 });

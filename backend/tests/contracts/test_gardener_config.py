@@ -106,6 +106,7 @@ RETENTION_LEDGERS: Final = (
 MOVED_LEDGER_TASKS: Final = (
     "compact-feed-ingest-plan-discovered-articles",
     "compact-feed-ingest-plan-selected-articles",
+    "compact-feed-ingest-plan-rejected-articles",
     "compact-feed-ingest-plan-feed-health-state",
     "compact-feed-ingest-plan-plan-runs",
     "compact-content-similarity-judge-merge-line-holdout-scores",

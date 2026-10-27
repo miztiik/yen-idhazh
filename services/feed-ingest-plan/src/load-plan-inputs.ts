@@ -52,11 +52,12 @@ export async function loadPlanInputs(root: string, settingsPath = "config/feed-i
   const selected = {
     discovered_articles: registration("discovered-articles"),
     selected_articles: registration("selected-articles"),
+    rejected_articles: registration("rejected-articles"),
     feed_health_state: registration("feed-health-state"),
     plan_runs: registration("plan-runs"),
     published: registration("published"), item_health: registration("item-health"),
   };
-  for (const entry of [selected.discovered_articles, selected.selected_articles, selected.feed_health_state, selected.plan_runs]) {
+  for (const entry of [selected.discovered_articles, selected.selected_articles, selected.rejected_articles, selected.feed_health_state, selected.plan_runs]) {
     if (entry.family !== "feed-ingest-plan" || entry.lifecycle_status !== "active"
       || JSON.stringify(entry.prefix) !== JSON.stringify(["feed-ingest-plan", entry.name])) {
       throw new Error(`registrations.${entry.name}: requires its active planner-family prefix`);

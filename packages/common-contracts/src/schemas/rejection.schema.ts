@@ -11,10 +11,20 @@ import { ArticleContentEvidenceSchema } from "./content-filter-evidence.schema";
 export const DropReasonSchema = z.enum([
   "SOURCE_INACTIVE", "FETCH_FAILED", "FETCH_FAILED_HTTP", "FETCH_TIMEOUT", "EXTRACT_FAILED", "EXTRACT_EMPTY",
   "ALREADY_PUBLISHED", "SETTLED_FAILURE", "BLOCKED_URL_MARKER", "PAYWALL_OR_BLOCKED", "FEED_PARSE_FAILED",
-  "FEED_EMPTY", "MISSING_REQUIRED_FIELDS", "CATEGORY_EXCLUDED", "STUB_CONTENT", "STALE_MAX_AGE_EXCEEDED",
+  "FEED_EMPTY", "MISSING_REQUIRED_FIELDS", "CATEGORY_EXCLUDED",
   "MEDIA_CONTENT", "PRESS_RELEASE", "LINK_HEAVY",
+  "REJECTED_SCREENING_MIN_WORDS", "REJECTED_AGE_EXCEEDS_MAX_TIER_ENVELOPE",
+  "REJECTED_RUN_FRESHNESS_OVERRIDE", "REJECTED_DUPLICATE_CANONICAL_CARRIER",
+  "REJECTED_LADDER_WINDOW_NOT_ACTIVATED", "REJECTED_SLACK_DEFICIT_FULFILLED",
+  "REJECTED_GLOBAL_CAPACITY_REACHED", "REJECTED_SOURCE_SHARE_LIMIT_REACHED",
+  "REJECTED_DOMAIN_SHARE_LIMIT_REACHED", "REJECTED_TIER_BUFFER_CEILING_REACHED",
+  "REJECTED_DISTINCT_SOURCE_REQUIREMENT_UNMET",
 ]);
 export type DropReason = z.infer<typeof DropReasonSchema>;
+export const SourceArticleRefusalReasonSchema = DropReasonSchema.extract([
+  "FETCH_FAILED", "FETCH_FAILED_HTTP", "EXTRACT_FAILED", "EXTRACT_EMPTY", "MISSING_REQUIRED_FIELDS",
+  "PAYWALL_OR_BLOCKED", "REJECTED_SCREENING_MIN_WORDS",
+]);
 export type RejectionStage = z.infer<typeof RejectionStageSchema>;
 export const RejectionDetailsSchema = z.strictObject({
   http_status: z.int().min(100).max(599).nullable().default(null), timeout_ms: PositiveSchema.nullable().default(null),
@@ -38,13 +48,26 @@ export const REASON_STAGES: Readonly<Record<DropReason, readonly RejectionStage[
   ALREADY_PUBLISHED: ["harvest-feeds", "screen-article-candidates"],
   SETTLED_FAILURE: ["harvest-feeds", "screen-article-candidates"], BLOCKED_URL_MARKER: ["harvest-feeds", "screen-article-candidates"],
   PAYWALL_OR_BLOCKED: ["screen-article-candidates"], CATEGORY_EXCLUDED: ["screen-article-candidates"],
-  STUB_CONTENT: ["screen-article-candidates"], STALE_MAX_AGE_EXCEEDED: ["harvest-feeds", "screen-article-candidates"],
   MEDIA_CONTENT: ["harvest-feeds", "screen-article-candidates"],
   PRESS_RELEASE: ["screen-article-candidates"], LINK_HEAVY: ["screen-article-candidates"],
+  REJECTED_SCREENING_MIN_WORDS: ["screen-article-candidates"],
+  REJECTED_AGE_EXCEEDS_MAX_TIER_ENVELOPE: ["harvest-feeds", "screen-article-candidates"],
+  REJECTED_RUN_FRESHNESS_OVERRIDE: ["harvest-feeds", "screen-article-candidates"],
+  REJECTED_DUPLICATE_CANONICAL_CARRIER: ["curate-article-portfolio"],
+  REJECTED_LADDER_WINDOW_NOT_ACTIVATED: ["curate-article-portfolio"],
+  REJECTED_SLACK_DEFICIT_FULFILLED: ["curate-article-portfolio"],
+  REJECTED_GLOBAL_CAPACITY_REACHED: ["curate-article-portfolio"],
+  REJECTED_SOURCE_SHARE_LIMIT_REACHED: ["curate-article-portfolio"],
+  REJECTED_DOMAIN_SHARE_LIMIT_REACHED: ["curate-article-portfolio"],
+  REJECTED_TIER_BUFFER_CEILING_REACHED: ["curate-article-portfolio"],
+  REJECTED_DISTINCT_SOURCE_REQUIREMENT_UNMET: ["curate-article-portfolio"],
 };
 export const REQUIRED_DETAILS: Readonly<Partial<Record<DropReason, readonly (keyof z.infer<typeof RejectionDetailsSchema>)[]>>> = {
-  FETCH_FAILED_HTTP: ["http_status"], FETCH_TIMEOUT: ["timeout_ms"], STUB_CONTENT: ["words_found", "words_required"],
-  STALE_MAX_AGE_EXCEEDED: ["age_hours", "max_age_hours"], ALREADY_PUBLISHED: ["matched_url_key", "published_on", "history_window_days"],
+  FETCH_FAILED_HTTP: ["http_status"], FETCH_TIMEOUT: ["timeout_ms"],
+  REJECTED_SCREENING_MIN_WORDS: ["words_found", "words_required"],
+  REJECTED_AGE_EXCEEDS_MAX_TIER_ENVELOPE: ["age_hours", "max_age_hours"],
+  REJECTED_RUN_FRESHNESS_OVERRIDE: ["age_hours", "max_age_hours"],
+  ALREADY_PUBLISHED: ["matched_url_key", "published_on", "history_window_days"],
   SETTLED_FAILURE: ["matched_url_key", "failure_code"], BLOCKED_URL_MARKER: ["matched_url_key", "matched_url_marker"],
   MEDIA_CONTENT: ["media_match"],
   PRESS_RELEASE: ["content_evidence", "sample_chars_limit"],

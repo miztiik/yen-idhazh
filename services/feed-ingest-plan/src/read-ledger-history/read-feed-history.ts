@@ -18,6 +18,7 @@ export type SourceHistoryEvidence = Readonly<{
   lifecycle: "eligible" | "resting" | "retired" | "unknown"; endpoint_key: string;
   strikes: number | null; rested_runs: number | null;
   reliability: FeedHealthStateRow["reliability"];
+  article_pass_rate?: number | null;
 }>;
 export const endpointKey = inputEndpointKey;
 export async function readFeedHistory(input: {

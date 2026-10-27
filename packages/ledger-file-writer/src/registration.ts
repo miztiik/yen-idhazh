@@ -2,7 +2,7 @@
 import {
   DateStampSchema, DiscoveredArticleRowContract, FeedHealthStateRowContract,
   LedgerNameSchema, PlanRunRowContract, PlannerLedgerNameSchema,
-  SelectedArticleRowContract, WriterIdentitySchema,
+  SelectedArticleRowContract, RejectedArticleRowContract, WriterIdentitySchema,
 } from "@idhazh/common-contracts";
 import type { WriterIdentity } from "@idhazh/common-contracts";
 import { resolve } from "node:path";
@@ -18,6 +18,7 @@ import type {
 export const PLANNER_CONTRACTS = {
   "discovered-articles": DiscoveredArticleRowContract,
   "selected-articles": SelectedArticleRowContract,
+  "rejected-articles": RejectedArticleRowContract,
   "feed-health-state": FeedHealthStateRowContract,
   "plan-runs": PlanRunRowContract,
 } as const;

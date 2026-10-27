@@ -53,9 +53,10 @@ async function inputs(patch: Partial<Knobs> = {}) {
   ]);
   const planning = loadPlanningConfig({
     ...loaded.harvest.config,
-    triage: { ...loaded.harvest.config.triage, max_age_hours: 72, recency_half_life_hours: 18, recency_weight: 1 },
+    triage: { ...loaded.harvest.config.triage, recency_half_life_hours: 18, recency_weight: 1 },
     curate_articles: {
-      ...loaded.harvest.config.curate_articles, article_limit: 2, base_source_allowance: 3,
+      ...loaded.harvest.config.curate_articles, article_limit: 2,
+      feed_quality_tiers: [{ tier: 1, share_pct: 100, buffer_pct: 0, ladder_hours: [72] }],
       source_authority_weight: 0, exploration_slot_share: 0,
       soft_caps: {
         ...loaded.harvest.config.curate_articles.soft_caps, max_source_share: 1, max_website_group_share: 1, min_distinct_sources: 1,
@@ -65,7 +66,10 @@ async function inputs(patch: Partial<Knobs> = {}) {
   });
   const context = resolveRunContext(loaded.settings, "a".repeat(40), new Date(fixture.observed_at),
     fixture.run_id.slice(11), "c6fc0434-baaa-4b34-937a-fe2412f3a720");
-  return { fixture, planning, context, inputs: { ...loaded, harvest: { ...loaded.harvest, ...planning } } };
+  return { fixture, planning, context, inputs: { ...loaded, harvest: {
+    ...loaded.harvest, ...planning,
+    registry: { ...loaded.harvest.registry, source_tiers: [{ id: 1, status: "active" as const, retired_on: null, weight: 1 }] },
+  } } };
 }
 type Setup = Awaited<ReturnType<typeof inputs>>;
 function article(spec: CandidateCase, setup: Setup): ScreenedCandidate {
@@ -122,6 +126,95 @@ function adjustment(row: ReturnType<typeof run>["articles"][number], term: strin
   return row.ratings.adjustments.find(value => value.term === term)?.value;
 }
 
+function tierArticles(setup: Setup, tier: number, count: number, ageHours: number) {
+  return Array.from({ length: count }, (_, ordinal) => {
+    const value = article({
+      ...setup.fixture.candidates[0]!, source: `tier-${tier}`, name: `tier-${tier}-${ordinal}`, ordinal,
+      published_at: new Date(Date.parse(setup.context.now) - ageHours * 3_600_000).toISOString().replace(".000Z", "Z"),
+    }, setup);
+    value.candidate.source.tier = tier;
+    return value;
+  });
+}
+
+test("fresh target and buffer phases produce six, two and two before older backfill", async () => {
+  const setup = await inputs({ article_limit: 10, feed_quality_tiers: [
+    { tier: 1, share_pct: 60, buffer_pct: 10, ladder_hours: [24, 36, 48] },
+    { tier: 2, share_pct: 30, buffer_pct: 5, ladder_hours: [24, 30] },
+    { tier: 3, share_pct: 10, buffer_pct: 5, ladder_hours: [24] },
+  ] });
+  const candidates = [
+    ...tierArticles(setup, 1, 5, 1), ...tierArticles(setup, 2, 2, 1), ...tierArticles(setup, 3, 2, 1),
+    ...tierArticles(setup, 1, 1, 36).map(value => ({
+      ...value, candidate: { ...value.candidate, candidate_id: deriveCandidateId(setup.context.run_id, "tier-1", 99),
+        entry_ordinal: 99, canonical_url: "https://example.org/older", url_key: deriveUrlKey("https://example.org/older") },
+    })),
+  ];
+  const result = curateArticles(selectionInput(setup, candidates));
+  expect([1, 2, 3].map(tier => result.articles.filter(row => row.tier === tier).length)).toEqual([6, 2, 2]);
+  expect(result.articles.slice(0, 9).every(row => row.age_hours! <= 24)).toBe(true);
+  expect(result.articles[9]!.age_hours).toBe(36);
+  expect(result.articles[9]!.freshness_cutoff_at)
+    .toBe(new Date(Date.parse(setup.context.now) - 36 * 3_600_000).toISOString());
+});
+
+test("older windows fill a tier target but never its fresh buffer", async () => {
+  const setup = await inputs({ article_limit: 10, feed_quality_tiers: [
+    { tier: 1, share_pct: 60, buffer_pct: 10, ladder_hours: [24, 36, 48] },
+    { tier: 2, share_pct: 30, buffer_pct: 5, ladder_hours: [24, 30] },
+    { tier: 3, share_pct: 10, buffer_pct: 5, ladder_hours: [24] },
+  ] });
+  const result = curateArticles(selectionInput(setup, [
+    ...tierArticles(setup, 1, 10, 36), ...tierArticles(setup, 2, 1, 1),
+  ]));
+  expect(result.articles.filter(row => row.tier === 1)).toHaveLength(6);
+  expect(result.articles).toHaveLength(7);
+  expect(result.losses).toHaveLength(4);
+  expect(result.losses.every(loss => loss.reason === "REJECTED_SLACK_DEFICIT_FULFILLED")).toBe(true);
+  expect(result.losses.every(loss => loss.freshness_cutoff_at !== null)).toBe(true);
+});
+
+test("a lower-scored duplicate carrier remains eligible when the first carrier hits its feed cap", async () => {
+  const setup = await inputs({ article_limit: 2 });
+  setup.planning.config.curate_articles.soft_caps.max_source_share = 0.5;
+  setup.planning.config.curate_articles.soft_caps.relaxation_order = [];
+  const base = setup.fixture.candidates[0]!;
+  const candidates = [
+    article({ ...base, source: "alpha", name: "first", ordinal: 0, published_at: setup.context.now }, setup),
+    article({ ...base, source: "alpha", name: "shared", ordinal: 1,
+      published_at: new Date(Date.parse(setup.context.now) - 3_600_000).toISOString().replace(".000Z", "Z") }, setup),
+    article({ ...base, source: "beta", name: "shared", ordinal: 0,
+      published_at: new Date(Date.parse(setup.context.now) - 7_200_000).toISOString().replace(".000Z", "Z") }, setup),
+  ];
+  const result = curateArticles(selectionInput(setup, candidates));
+  expect(result.articles.map(row => row.feed_id)).toEqual(["alpha", "beta"]);
+  expect(result.losses.map(loss => loss.reason)).toEqual(["REJECTED_DUPLICATE_CANONICAL_CARRIER"]);
+});
+
+test("article-pass evidence controls the adjustment without using opposite RSS ratios", async () => {
+  const setup = await inputs({ article_limit: 1, source_authority_weight: 1, source_reliability_penalty_enabled: true });
+  setup.inputs.clock_config.collect.reliability_floor = 0;
+  const health = new Map<string, SourceHistoryEvidence>([
+    ["alpha", { lifecycle: "eligible", endpoint_key: "a".repeat(64), strikes: 0, rested_runs: 0,
+      article_pass_rate: 0.25, reliability: { productive: 10, attempted: 10, success_fraction: 1,
+        from_day: "2026-10-15", through_day: "2026-10-21", production_factor: 1, complete: true } }],
+    ["gamma", { lifecycle: "eligible", endpoint_key: "b".repeat(64), strikes: 0, rested_runs: 0,
+      article_pass_rate: 0.75, reliability: { productive: 0, attempted: 10, success_fraction: 0,
+        from_day: "2026-10-15", through_day: "2026-10-21", production_factor: 0, complete: true } }],
+  ]);
+  const specs = [setup.fixture.candidates[0]!, setup.fixture.candidates[2]!]
+    .map(spec => ({ ...spec, published_at: setup.context.now }));
+  const winner = run(setup, specs, { health }).articles[0]!;
+  expect(winner.feed_id).toBe("gamma");
+  expect(adjustment(winner, "article_pass_rate")).toBe(-0.25);
+  health.set("alpha", { ...health.get("alpha")!, article_pass_rate: null });
+  const unknown = run(setup, specs, { health }).articles[0]!;
+  expect(unknown.feed_id).toBe("alpha");
+  expect(adjustment(unknown, "article_pass_rate")).toBeNull();
+  setup.planning.config.curate_articles.source_reliability_penalty_enabled = false;
+  expect(adjustment(run(setup, specs, { health }).articles[0]!, "article_pass_rate")).toBe(0);
+});
+
 test("fixed real stage selects exact identities, ranks, components and preserves content", async () => {
   const setup = await inputs();
   const supplied = selectionInput(setup, setup.fixture.candidates.map(spec => article(spec, setup)));
@@ -137,7 +230,7 @@ test("fixed real stage selects exact identities, ranks, components and preserves
     expect(row).not.toHaveProperty("labels");
     expect(row).not.toHaveProperty("policy");
   }
-  expect(result.losses.map(loss => loss.reason)).toEqual(["PORTFOLIO_CUTOFF"]);
+  expect(result.losses.map(loss => loss.reason)).toEqual(["REJECTED_GLOBAL_CAPACITY_REACHED"]);
   expect(result.articles.length + result.losses.length).toBe(supplied.articles.length);
   expect(supplied.batch).toEqual(before);
 });
@@ -174,7 +267,7 @@ test("unavailable numeric evidence stays null while a measured zero stays zero",
   const offered = article(setup.fixture.candidates[0]!, setup);
   const absent = curateArticles(selectionInput(setup, [offered], { evidence: {} })).articles[0]!;
   expect(adjustment(absent, "website_group")).toBeNull();
-  expect(adjustment(absent, "feed_reliability")).toBeNull();
+  expect(adjustment(absent, "article_pass_rate")).toBeNull();
   const known = run(setup).articles[0]!;
   expect(adjustment(known, "website_group") === 0).toBe(true);
   const unknownPublisher = run(setup, [{ ...setup.fixture.candidates[0]!, publisher_id: null }]).articles[0]!;
@@ -183,8 +276,9 @@ test("unavailable numeric evidence stays null while a measured zero stays zero",
   expect(known.ratings.marginal_score).toBe(absent.ratings.marginal_score);
 });
 
-test("flooding duplicates cannot buy allowance or displace another qualifying source", async () => {
-  const setup = await inputs({ article_limit: null, base_source_allowance: 1 });
+test("flooding duplicates cannot buy capacity or displace another qualifying source", async () => {
+  const setup = await inputs({ article_limit: 2 });
+  setup.planning.config.curate_articles.soft_caps.max_source_share = 0.5;
   const articles = setup.fixture.candidates.map(spec => article(spec, setup));
   const baseline = curateArticles(selectionInput(setup, articles));
   const original = articles[0]!;
@@ -196,13 +290,13 @@ test("flooding duplicates cannot buy allowance or displace another qualifying so
   const flooded = curateArticles(selectionInput(setup, [...articles, ...copies]));
   expect(flooded.articles).toEqual(baseline.articles);
   expect(flooded.articles.map(row => row.feed_id).sort()).toEqual(["alpha", "gamma"]);
-  expect(flooded.losses.filter(loss => loss.reason === "DUPLICATE_URL")).toHaveLength(20);
-  expect(flooded.losses.filter(loss => loss.reason === "SOURCE_QUOTA_EXCEEDED")).toHaveLength(1);
-  expect(flooded.articles.every(row => row.feed_allowance === 1)).toBe(true);
+  expect(flooded.losses.filter(loss => loss.reason === "REJECTED_DUPLICATE_CANONICAL_CARRIER")).toHaveLength(20);
+  expect(flooded.losses.filter(loss => loss.reason === "REJECTED_GLOBAL_CAPACITY_REACHED")).toHaveLength(1);
+  expect(flooded.articles.every(row => row.feed_limit === 1)).toBe(true);
 });
 
 test("soft caps relax only in configured order and parent-domain limits remain effective", async () => {
-  const setup = await inputs({ article_limit: null });
+  const setup = await inputs({ article_limit: 3 });
   setup.planning.config.curate_articles.soft_caps = {
     max_source_share: 0.2, max_website_group_share: 1, min_distinct_sources: 3,
     relaxation_order: ["distinct_sources", "source_share"],
@@ -272,10 +366,12 @@ test("operational history, length and byline never become model verdicts or a qu
   expect(b).not.toHaveProperty("quality");
   for (const recorded of setup.fixture.reliability_cases) {
     const configured = await inputs({ article_limit: 1, source_authority_weight: 1, source_reliability_penalty_enabled: recorded.enabled });
+    configured.inputs.clock_config.collect.reliability_floor = recorded.floor;
     const health = new Map<string, SourceHistoryEvidence>();
     for (const [feed, evidence] of [["alpha", recorded.alpha], ["gamma", recorded.gamma]] as const) {
       health.set(feed, {
         lifecycle: "unknown", endpoint_key: "a".repeat(64), strikes: null, rested_runs: null,
+        article_pass_rate: evidence?.success_fraction ?? null,
         reliability: evidence === null ? null : {
           productive: evidence.attempted * evidence.success_fraction, attempted: evidence.attempted,
           success_fraction: evidence.success_fraction, from_day: "2026-10-15", through_day: "2026-10-21",
@@ -292,14 +388,15 @@ test("operational history, length and byline never become model verdicts or a qu
       const penalty = spec.source === "alpha" ? recorded.alpha_penalty : recorded.gamma_penalty;
       expect(row.ratings.base_article_score, recorded.name).toBe(2);
       expect(row.ratings.marginal_score, recorded.name).toBe(2 - (penalty ?? 0));
-      if (penalty === null) expect(adjustment(row, "feed_reliability"), recorded.name).toBeNull();
-      else expect(adjustment(row, "feed_reliability"), recorded.name).toBeCloseTo(-penalty);
+      if (!recorded.enabled) expect(adjustment(row, "article_pass_rate"), recorded.name).toBe(0);
+      else if (penalty === null) expect(adjustment(row, "article_pass_rate"), recorded.name).toBeNull();
+      else expect(adjustment(row, "article_pass_rate"), recorded.name).toBeCloseTo(-penalty);
     }
   }
 });
 
-test("stable ties, null article limit and global source authority substitution use the actual stage", async () => {
-  const setup = await inputs({ article_limit: null, base_source_allowance: 40 });
+test("stable ties, finite article limit and global source authority substitution use the actual stage", async () => {
+  const setup = await inputs({ article_limit: 40 });
   const specs = Array.from({ length: 40 }, (_, ordinal) => ({ ...setup.fixture.candidates[0]!, name: `tie-${ordinal}`, ordinal }));
   const forward = run(setup, specs);
   expect(forward.articles).toHaveLength(40);
@@ -319,8 +416,8 @@ test("run freshness overrides remain separate from the unchanged harvested conte
     clock_config: { collect: { max_future_hours: 0 } },
     run: { now: setup.context.now, run_id: setup.context.run_id, correlation_id: setup.context.correlation_id, overrides: { freshness_hours: 6 } },
   });
-  expect(screened.admitted.map(value => value.policy.triage.max_age_hours)).toEqual([6]);
-  expect(screened.rejections.map(row => row.drop_reason)).toEqual(["STALE_MAX_AGE_EXCEEDED", "STALE_MAX_AGE_EXCEEDED"]);
+  expect(screened.admitted).toHaveLength(1);
+  expect(screened.rejections.map(row => row.drop_reason)).toEqual(["REJECTED_RUN_FRESHNESS_OVERRIDE", "REJECTED_RUN_FRESHNESS_OVERRIDE"]);
   expect(curateArticles(selectionInput(setup, screened.admitted)).articles[0]!.article_text).toBe(candidates[0]!.article_text);
   expect(candidates).toEqual(before);
 });
@@ -335,7 +432,7 @@ test("real screening results compose into exact curation without losing harveste
     clock_config: { collect: { max_future_hours: 0 } },
     run: { now: setup.context.now, run_id: setup.context.run_id, correlation_id: setup.context.correlation_id, overrides: {} },
   });
-  expect(screened.rejections.map(row => row.drop_reason)).toEqual(["STUB_CONTENT"]);
+  expect(screened.rejections.map(row => row.drop_reason)).toEqual(["REJECTED_SCREENING_MIN_WORDS"]);
   expect(screened).not.toHaveProperty("sealing");
   const result = curateArticles(selectionInput(setup, screened.admitted));
   expect(names(result)).toEqual(setup.fixture.expected.baseline);
@@ -360,13 +457,13 @@ test("real screening results compose into exact curation without losing harveste
       ...plannerRecordings(setup.context.date).find(record => record.name === "feed-health-state")!.row,
       run_id: setup.context.run_id, attempt: setup.context.writer.attempt, feed_id: first.candidate.source_id,
       endpoint_key: endpointKey(first.candidate.source.feed_url), checked_at: setup.context.now,
-      items: 2, article_candidates: 0, articles_selected: 0,
+      items: 2, article_candidates: 1, articles_selected: 0,
     })];
     const selected = await selectArticles(pair, setup.inputs, setup.context.now);
     expect(selected.health_rows[0]).toMatchObject({ article_candidates: 1, articles_selected: 1 });
     expect(selected.exclusions).toContainEqual({
       feed_id: first.candidate.source_id, subject: "article", stage: "screen-article-candidates",
-      reason_code: "STUB_CONTENT", attribution: null, count: 1,
+      reason_code: "REJECTED_SCREENING_MIN_WORDS", attribution: null, count: 1,
     });
     expect(selected.articles).toHaveLength(1);
     const originalBatch = structuredClone(pair);
@@ -379,7 +476,7 @@ test("real screening results compose into exact curation without losing harveste
     expect(fresh.health_rows[0]).toMatchObject({
       run_id: runContext.run_id, date: runContext.date, checked_at: null, outcome: null, items: null,
       feed_reads: 0, productive_reads: 0, failed_reads: 0, feed_requests: 0,
-      article_requests: 0, robots_requests: 0, article_candidates: 1, articles_selected: 1,
+      article_requests: 0, robots_requests: 0, article_candidates: 0, articles_selected: 1,
     });
     expect(pair).toEqual(originalBatch);
   } finally { await rm(root, { recursive: true, force: true }); }

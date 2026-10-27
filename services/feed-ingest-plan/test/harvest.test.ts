@@ -615,7 +615,7 @@ test("report settings remain available without changing the planning fingerprint
   expect(catalogAnnotations.config_sha256).toBe(baseline.config_sha256);
   expect(sourceSnapshot(catalogAnnotations, catalogAnnotations.sources[0]!))
     .toEqual(sourceSnapshot(baseline, baseline.sources[0]!));
-  expect(load({ ...baseline.config, triage: { ...baseline.config.triage, max_age_hours: baseline.config.triage.max_age_hours + 1 } }).config_sha256)
+  expect(load({ ...baseline.config, triage: { ...baseline.config.triage, recency_half_life_hours: baseline.config.triage.recency_half_life_hours + 1 } }).config_sha256)
     .not.toBe(baseline.config_sha256);
   for (const [knob, value] of [
     ["reject_not_prose", true], ["reject_contaminated", true], ["reject_boilerplate", true],
@@ -655,7 +655,7 @@ test("planner inputs ignore added feed labels while configured tiers retain thei
         ? { ...tier, status: registryStatus, retired_on: registryStatus === "retired" ? "2026-10-20" : null } : tier),
     };
     expect(() => loadHarvestInputs({
-      config: baseline.config, taxonomy: tierTaxonomy, sources: { feeds: [source({ status })] }, extraction: baseline.extraction_settings,
+      config: baseline.config, taxonomy: tierTaxonomy, sources: { feeds: [source({ status, tier: tierId })] }, extraction: baseline.extraction_settings,
     })).toThrow("source tier must be active and registered");
   }
   const historicalTierId = Math.max(...baseline.registry.source_tiers.map(tier => tier.id)) + 1;
