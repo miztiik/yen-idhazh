@@ -1,6 +1,7 @@
 /** Do global planner settings reject invalid values and retired per-vertical controls? */
 import { expect, test } from "bun:test";
 import { z } from "zod";
+import { PublisherIdSchema } from "../src/schemas/source.schema";
 import * as policies from "../src/schemas/policy.schema";
 import * as configs from "../src/schemas/config.schema";
 
@@ -15,6 +16,15 @@ if (Bun.argv.includes("--emit-schemas")) {
   )));
 } else {
   const readConfig = () => Bun.file(new URL("../../../config/feed-ingest-plan.json", import.meta.url)).json();
+
+  test("publisher IDs use the shared lowercase slug rule", () => {
+    for (const id of ["bbc", "the-conversation-africa", "the-hindu-businessline"]) {
+      expect(PublisherIdSchema.parse(id)).toBe(id);
+    }
+    for (const id of ["BBC", "the_hindu", "mint 2"]) {
+      expect(PublisherIdSchema.safeParse(id).success).toBe(false);
+    }
+  });
 
   test("authored defaults preserve word thresholds, age, and reporting isolation", async () => {
     const config = configs.FeedIngestConfigSchema.parse(await readConfig());

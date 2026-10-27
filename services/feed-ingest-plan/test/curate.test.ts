@@ -385,6 +385,7 @@ test("real screening results compose into exact curation without losing harveste
       tier: first.candidate.source.tier, weight: first.candidate.source.weight,
       publisher_id: first.candidate.source.publisher_id,
     })];
+    setup.inputs.harvest.retired_sources = [];
     if (first.candidate.source.publisher_id !== null) setup.inputs.harvest.publishers = [{
       id: first.candidate.source.publisher_id, display_name: "Recorded publisher",
     }];

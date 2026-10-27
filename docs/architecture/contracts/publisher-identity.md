@@ -4,10 +4,10 @@
 
 How is a publisher ID created once, then kept stable as names and feeds change?
 
-**Status**: The catalog and persisted identity readers are implemented. No
-current feed mapping had publisher-owned evidence in this review, so the live
-registry is empty and all configured feeds remain unknown. Soft publisher
-exposure is implemented in the isolated planner; its
+**Status**: Eight reviewed publisher IDs name 20 active and retired feeds in
+the catalog. Other feed mappings remain unknown until publisher-owned evidence
+confirms their editorial identity. Soft publisher exposure is implemented in
+the isolated planner; its
 [selection contract](../sources/feed-curation.md#publisher-exposure-adjustment)
 owns the behavior and missing-history fallback. I Feed remains a design proposal, not a
 deployed engine.
@@ -25,8 +25,9 @@ name is separate and can change. Several feeds can explicitly reference one
 publisher ID; their `source_id` values still identify separate feeds.
 
 The maintainer-maintained [source catalog](../../../config/sources.json) declares
-the publisher registry beside feed references. Its current registry is empty;
-no feed has a confirmed `publisher_id`.
+the publisher registry beside feed references. Feed entries reference only
+IDs with reviewed publication evidence; missing or uncertain evidence stays
+null.
 Existing story grouping uses the recorded `source_name` masthead through
 `outlet_of`, as the masthead rule describes. That text key is not an immutable
 publisher ID. This contract does not replace it or change story grouping.
@@ -73,9 +74,7 @@ Apply this procedure when adding a publisher or assigning a feed:
    editorial requirement, not a runtime guarantee. Do not invent unknown dates.
    The reviewed catalog change and its Git history
    record publisher-mapping decisions; there is no extra provenance field.
-   Adding or changing these values must not need per-publisher code edits. No
-   current feed is assigned because this review found no supporting
-   publisher-owned evidence.
+   Adding or changing these values must not need per-publisher code edits.
 
 Fetch, parse and later runtime stages read the recorded reference. They never
 regenerate a publisher ID from a URL, title, article text or changed display
@@ -84,7 +83,8 @@ not publisher-ID creation rules. Event and run UUID rules name different things.
 
 ### Creation examples
 
-These are illustrations, not approved catalog assignments or reservations:
+These examples show the naming and identity rules; current assignments are in
+the [source catalog](../../../config/sources.json).
 
 - **Accept after identity review:** `bbc`, `the-guardian` and `straits-times`
   are valid spellings for curated publication names. Several confirmed feeds
@@ -197,9 +197,9 @@ acceptance cases, not claims of executed runtime checks:
 - [ ] Keep missing historical IDs unknown, without current-catalog backfill.
 - [ ] Review catalog storage, actual feed mappings, persisted-field compatibility
   and cross-language binding coverage before wiring runtime readers or writers.
-- [ ] Obtain input/output-contract and implementation approval for
-  `/select-articles` without adding fetch/parse content deduplication,
-  qualitative assessment, hard day caps or history blocking.
+- [ ] Keep any `/select-articles` behavior within its separately approved
+  contract; this identity contract does not authorize fetch/parse content
+  deduplication, qualitative assessment, hard day caps or history blocking.
 
 ## Design rationale
 
@@ -224,6 +224,21 @@ are enough provenance; do not add an `identity_provenance` field.
 Maintainer ruling, 2026-10-24 UTC: AI may help identify
 publisher-owned evidence for feed mappings. It must leave a feed unknown when
 that evidence does not settle the publication identity.
+
+Maintainer-approved catalog delivery, 2026-10-27 UTC: assign stable IDs only
+where official publication material confirms the editorial publication. The
+reviewed sources were the [BBC](https://www.bbc.com/aboutthebbc),
+[CGTN](https://www.cgtn.com/about-us.html),
+[CNA](https://www.channelnewsasia.com/about-us),
+[The Conversation Africa](https://theconversation.com/africa/who-we-are),
+[The Hindu](https://www.thehindu.com/aboutus/),
+[The Hindu BusinessLine](https://www.thehindubusinessline.com/aboutus/),
+[Mint](https://www.livemint.com/object/141enehrj3mssnltt8beak/aboutus.html)
+and [The Economist](https://www.economistgroup.com/businesses/the-economist).
+Section feeds reuse their publication's ID, while The Hindu and BusinessLine
+remain separate publications. The catalog is the source of truth for exact
+feed references; all unreviewed entries stay null, and no historical record is
+backfilled.
 
 ## See also
 
