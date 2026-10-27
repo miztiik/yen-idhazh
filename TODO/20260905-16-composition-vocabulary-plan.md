@@ -55,7 +55,7 @@ rules remain unchanged.
 | 3 | A declared whole: pie | 2 | C | DONE #1753 | - | #1753 | - |
 | 4 | Three numbers at once: bubble | 2 | D | DONE #1747 | composition-vocabulary-row-4 | #1747 | - |
 | 5 | A spread of values: histogram | 2 | E | DONE #1757 | - | #1757 | - |
-| 6 | Human pie and bubble keep-rate evidence | 3, 4 | F | PENDING | - | - | - |
+| 6 | Human pie and bubble keep-rate evidence | 3, 4 | F | IN-FLIGHT | row-6-visual-labels | #1764 | - |
 
 ### Current delivery evidence
 
