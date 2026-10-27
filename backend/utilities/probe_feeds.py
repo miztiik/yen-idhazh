@@ -75,7 +75,7 @@ from idhazh.contracts.base import derive_url_key
 from idhazh.contracts.feed_health import FetchOutcome, RobotsOutcome
 from idhazh.contracts.item_health import FailureCode
 from idhazh.contracts.run_plan import PlannedItem
-from idhazh.contracts.sources import FeedDef, Sources
+from idhazh.contracts.sources import FeedDef, SalienceFeedDef, Sources
 from idhazh.fetch import FetchResult
 from idhazh.stages import common
 from idhazh.stages.common import Fetcher
@@ -410,7 +410,10 @@ def canonical_feed_url(url: str) -> str:
 def find_source_duplicate(candidate_url: str, sources: Sources) -> SourceDuplicate | None:
     """Find URL or derived-ID matches without making a network request."""
     candidate_key = canonical_feed_url(candidate_url)
-    known_entries = [*sources.known_feeds(), *sources.salience]
+    known_entries: list[FeedDef | SalienceFeedDef] = [
+        *sources.known_feeds(),
+        *sources.salience,
+    ]
     url_matches = tuple(
         sorted(
             {
