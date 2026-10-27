@@ -102,7 +102,11 @@ export async function readPlannerDay<T extends object>(
   const committedDigests = new Map<string, string>();
   if (rawPaths === undefined || day.raw_revision !== undefined) {
     const discovered = await attempt(resolve(root, `state/raw/${registration.prefix.join("/")}`), async () => {
-      const revision = day.raw_revision ?? await (cache.revision ??= fixedHistoryRevision(root));
+      const revision = await (cache.revision ??= day.raw_revision === undefined
+        ? fixedHistoryRevision(root) : Promise.resolve(day.raw_revision));
+      if (day.raw_revision !== undefined && day.raw_revision !== revision) {
+        throw new LedgerHistoryReadError("Raw history revisions differ within one capture");
+      }
       const listing = await listExactRawDayMembers(root, registration, day.day, revision, cache.trees);
       const expected = listing.members.map(member => resolve(root, member.path));
       if (rawPaths !== undefined && [...rawPaths].sort().join("\n") !== [...expected].sort().join("\n")) {

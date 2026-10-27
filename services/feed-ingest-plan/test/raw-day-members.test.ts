@@ -9,7 +9,7 @@ import { plannerRecordings } from "../../../packages/ledger-file-writer/test/pla
 import { fixtureGit } from "./publication-recordings";
 import { registration, writeRows } from "./partition-fixtures";
 import { fixedHistoryRevision, listExactRawDayMembers, readNamedGitFile } from "../src/read-ledger-history/raw-day-members";
-import { readPlannerDay } from "../src/read-ledger-history/read-planner-history";
+import { createPlannerHistoryCache, readPlannerDay } from "../src/read-ledger-history/read-planner-history";
 import { stageNamedFiles, stagePlannerHistory } from "../scripts/feed-ingest-plan-history";
 import { PlannerDayInputSchema } from "../src/config/service-settings";
 import { loadPlanInputs } from "../src/load-plan-inputs";
@@ -54,6 +54,14 @@ test("one revision proves absent days, every sibling and sparse staging without 
     const complete = await readPlannerDay(root, entry, { day, raw_revision: revision }, PlanRunRowContract);
     expect(complete).toMatchObject({ complete: true, represented: true });
     expect(complete.rows.map(row => row.attempt).sort()).toEqual([1, 2]);
+    const capture = createPlannerHistoryCache<ReturnType<typeof PlanRunRowContract.schema.parse>>();
+    await readPlannerDay(root, entry, { day, raw_revision: revision }, PlanRunRowContract, capture);
+    await writeFile(join(root, "README.md"), "Another revision, the same native files.\n");
+    await fixtureGit(root, ["add", "--", "README.md"]);
+    await fixtureGit(root, ["commit", "-m", "Advance generated history revision"]);
+    expect((await readPlannerDay(root, entry, {
+      day, raw_revision: await fixedHistoryRevision(root),
+    }, PlanRunRowContract, capture)).complete).toBe(false);
     const missing = await readPlannerDay(root, entry, { day: "2026-10-19", raw_revision: revision }, PlanRunRowContract);
     expect(missing).toMatchObject({ complete: true, represented: false, rows: [], gaps: [] });
     const incomplete = await readPlannerDay(root, entry, {
@@ -80,6 +88,12 @@ test("one revision proves absent days, every sibling and sparse staging without 
     await stagePlannerHistory(root, inputs, `${day}T12:00:00Z`);
     const staged = await readPlannerDay(root, registration("discovered-articles"), { day, raw_revision: revision }, DiscoveredArticleRowContract);
     expect(staged).toMatchObject({ complete: true, rows: [discoveryRow] });
+    inputs.settings.inputs.seen_days = [{ day, raw_revision: revision, raw_files: discoveryPaths }];
+    await expect(stagePlannerHistory(root, inputs, `${day}T12:00:00Z`)).rejects.toMatchObject({
+      errors: expect.arrayContaining([expect.objectContaining({
+        message: "Authored raw history revision differs from the captured staging revision",
+      })]),
+    });
     await rm(join(root, paths[0]!));
     expect((await readPlannerDay(root, entry, { day, raw_revision: revision, raw_files: paths }, PlanRunRowContract)).complete).toBe(false);
   } finally { await rm(root, { recursive: true, force: true }); }

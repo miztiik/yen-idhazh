@@ -578,7 +578,8 @@ configuration. After sparse checkout, each file must match its Git blob
 and size at that same revision, then pass the existing Parquet footer, schema,
 canonical content digest, filename, ledger and UTC-day checks. Missing files,
 failed listings and refused bytes remain explicit history gaps, never empty
-successful history. Each capture shares one revision and caches named reads.
+successful history. Each capture shares one revision and caches named reads;
+staging and shared reader captures refuse conflicting supplied revisions.
 
 Direct current-invocation input still uses `raw_files` without `raw_revision`:
 the caller supplies all exact completed paths from the existing writer result.
