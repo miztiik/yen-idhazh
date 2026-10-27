@@ -96,7 +96,7 @@ independently calculated selections.
 | B8 | `categories` | Article | Yes | Original feed category strings; empty arrays remain empty arrays |
 | B9 | `article_text` | Artifact article | No | Sanitized summarizer input; never in committed Parquet or logs |
 | B10 | `author` | Article | Yes | Attribution; nullable |
-| B11 | `published_at` | Article | Yes | Trusted source publication or actual selection-start UTC instant; every current row carries one, and the stored column stays nullable so committed `2026-10-26` files read unchanged |
+| B11 | `published_at` | Article | Yes | Trusted source publication or actual selection-start UTC instant; unknown source time does not make this null |
 | B12 | `tier` | Article | Yes | Configured tier used for this choice |
 | B13 | `weight` | Article | Yes | Configured feed weight actually used |
 | B14 | `applied_tier_weight` | Article | Yes | Applied tier multiplier |
@@ -144,15 +144,13 @@ and `age_hours = null`. It does not create a fabricated historical publication
 source or rewrite the selection-start fallback. The artifact and metadata
 projection use the same chosen values.
 
-The TypeScript and Python planner readers accept only the current native ledger
-stamps: `2026-10-25` for discovered articles and feed health, and `2026-10-26`
-for selected articles and plan runs. They verify the physical fields, file
-identity and canonical digest, then parse every row with the matching current
-schema. The selected and plan-run `2026-10-25` rows and the selected
-`2026-10-25` artifact are obsolete and refuse explicitly; they are unchanged on
-disk and receive no migration, null-fill or invented provenance. Every
-`source` or `selection` row must carry a UTC publication instant, and the
-retired `legacy-unavailable` value is refused.
+The TypeScript planner reader accepts only the current native ledger stamps:
+`2026-10-25` for discovered articles and feed health, and `2026-10-26` for
+selected articles and plan runs. It verifies the physical fields, file identity
+and canonical digest, then parses every row with the matching current schema.
+The selected and plan-run `2026-10-25` rows and the selected `2026-10-25`
+artifact are obsolete and refuse explicitly; they are unchanged on disk and
+receive no migration, null-fill or invented provenance.
 
 Empty categories stay arrays. The native Parquet and JSON comparison found
 that null increased both representations, so no nullable category shape is
@@ -601,20 +599,29 @@ actual code paths. No old-to-new migrators, compatibility readers, aliases or
 dual writers are required or permitted for this replacement. The old-to-new
 tables above explain field disposition; they are not migration instructions.
 
-### Current-format refusal
+### TypeScript current-format refusal
 
-**Breaking cutover approval, 2026-10-26 UTC:** The TypeScript and Python planner
-readers and the selected-artifact readers accept only their current ledger
-stamps. The selected and plan-run row stamps and selected artifact stamp are
+**Breaking cutover approval, 2026-10-26 UTC:** The TypeScript planner native
+reader and selected-artifact reader accept only their current ledger stamps.
+The selected and plan-run row stamps and selected artifact stamp are
 `2026-10-26`; the discovered and feed-health stamps remain `2026-10-25`.
 Obsolete selected and plan-run `2026-10-25` rows refuse with a contract
 diagnostic. Obsolete selected artifacts refuse instead of adding a historical
 provenance default. Missing age evidence remains null; a real current-run
 selection instant remains selection provenance.
 
-The selected stamp is not bumped. Committed `2026-10-26` files keep their
-physical layout, including the nullable publication column, so only the retired
-provenance value and a missing publication instant are refused.
+This is the maintainer-approved TypeScript exception to the read-side migration
+rule in `CLAUDE.md` section 11. Python's historical readers, contract authority,
+registry, gardener and publication wiring are unchanged. The binding test
+compares the current-input subset without carrying historical acceptance into
+TypeScript.
+
+The shared TypeScript ledger reader has no migration table. A full-row contract
+accepts only its own current row stamp. A projection contract, which names only
+the fields it reads, refuses a stamp newer than it declares and reads older
+stamps for those fields without any migration. The selected stamp is not
+bumped: the physical layout is unchanged, so committed `2026-10-26` files still
+read.
 
 Targeted deletion of the same eight obsolete ledger prefixes named in Table F
 under both `state/raw/feed-ingest-plan/` and

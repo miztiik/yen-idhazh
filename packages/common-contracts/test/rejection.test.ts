@@ -215,6 +215,11 @@ describe("rejection evidence", () => {
     expect(SelectedArticleRowSchema.safeParse({
       ...row, published_at_source: "other",
     }).success).toBe(false);
+    for (const published_at_source of ["source", "selection"]) {
+      expect(SelectedArticleRowSchema.safeParse({
+        ...row, published_at_source, published_at: null,
+      }).success).toBe(false);
+    }
     const artifact = SelectedArticlesArtifactSchema.parse({
       schema_version: SELECTED_ARTICLE_VERSION, run_id: run, attempt: 1, date: day, evaluated_at: at, articles: [article],
     });

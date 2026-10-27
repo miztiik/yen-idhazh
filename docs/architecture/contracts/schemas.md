@@ -152,14 +152,21 @@ Contract input bindings use `Contract.json_schema()`, which includes its
 read-time version default; nested models use `model_json_schema()`.
 
 Current planner batches and ledger rows reject the retired eight-ledger
-formats. The native TypeScript and Python readers accept only ledger-specific
-current stamps: discovered articles and feed health use `2026-10-25`; selected
-articles and plan runs use `2026-10-26`. Obsolete selected and plan-run
+formats. The native TypeScript reader accepts only ledger-specific current
+stamps: discovered articles and feed health use `2026-10-25`; selected articles
+and plan runs use `2026-10-26`. Obsolete selected and plan-run
 `2026-10-25` rows and obsolete selected artifacts refuse explicitly. They are
 not migrated or given invented historical provenance. Unknown current timing
 evidence stays null and real selection-start fallback remains separate from
 source provenance. There is no dual writer or restored audit shape. Finite
 historical generic-envelope vectors for unrelated families remain readable.
+Python retains its historical planner readers. The named binding test narrows
+only Python's selected-input schema for the TypeScript comparison: provenance
+is `source` or `selection`, and the artifact stamp is required. The physical
+publication column stays nullable to match native Python packing; current
+TypeScript row validation still refuses a null publication time. All other
+fields, defaults and vocabularies match the authoritative models, including
+selected content inside stage batches.
 The private fetch journal retains its separately declared finite receipt
 stamps; it does not preserve an obsolete planner ledger.
 

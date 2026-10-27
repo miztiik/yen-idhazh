@@ -98,13 +98,18 @@ def test_assessment_keeps_unassessed_evidence_null_and_measured_zero() -> None:
     assert row.publisher_id is None
     assert row.published_at == "2026-10-20T10:00:00.123Z"
     assert row.published_at_source == "selection"
+    previous = {
+        name: value for name, value in row.model_dump(mode="json").items()
+        if name != "published_at_source"
+    } | {"published_at": None}
+    legacy = SelectedArticleRow.read_row(previous, schema_version="2026-10-25")
+    assert legacy.published_at is None and legacy.published_at_source == "legacy-unavailable"
+    assert (legacy.timing_at, legacy.timing_basis, legacy.age_hours) == (
+        row.timing_at, row.timing_basis, row.age_hours,
+    )
     assert row.ratings.recency_score == 1.0 and row.ratings.feed_authority_score == 0.5
-    for changed in ({"article_text": "artifact-only"}, {"published_at": None},
-                    {"published_at_source": "legacy-unavailable"}):
-        with pytest.raises(ValidationError):
-            SelectedArticleRow.model_validate(make_assessment() | changed)
-    with pytest.raises(ValueError, match="incompatible planner row schema version"):
-        SelectedArticleRow.read_row(make_assessment(), schema_version="2026-10-25")
+    with pytest.raises(ValidationError):
+        SelectedArticleRow.model_validate(make_assessment() | {"article_text": "artifact-only"})
 
 
 def test_diversity_zero_is_distinct_from_unavailable_and_nonfinite_is_rejected() -> None:

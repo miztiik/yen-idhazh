@@ -54,7 +54,7 @@ function validatePublication(value: {
   }
 }
 const changelog = [
-  { version: SELECTED_ARTICLE_VERSION, change: "Require source or selection provenance and a UTC instant; no legacy provenance." },
+  { version: SELECTED_ARTICLE_VERSION, change: "Require source or selection publication provenance and refuse obsolete selected rows." },
 ];
 export const SelectedArticleMetadataSchema = z.strictObject(MetadataFields)
   .superRefine(validateMetadata).superRefine(validatePublication);

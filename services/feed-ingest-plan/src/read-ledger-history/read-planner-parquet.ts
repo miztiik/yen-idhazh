@@ -5,7 +5,6 @@ import { tableFromIPC } from "apache-arrow";
 import initializeParquet, { readMetadata, readParquet } from "parquet-wasm/esm";
 import {
   PlannerFileEnvelopeSchema, PLANNER_FOOTER_METADATA_KEYS, PLANNER_OPTIONAL_FOOTER_METADATA_KEYS,
-  PLANNER_LEDGER_VERSION, SELECTED_ARTICLE_VERSION, PLAN_RUN_VERSION,
 } from "@idhazh/common-contracts";
 import type { PlannerFileEnvelope } from "@idhazh/common-contracts";
 import { describeObjectSchema, digestRows } from "@idhazh/ledger-file-writer";
@@ -46,19 +45,10 @@ export async function readPlannerParquet<T extends object>(
     }
     const footerLedger = values.get("ledger");
     const rowSchemaVersion = values.get("schema_version");
-    const currentSchemaVersions: Partial<Record<PlannerFileEnvelope["ledger"], string>> = {
-      "discovered-articles": PLANNER_LEDGER_VERSION,
-      "selected-articles": SELECTED_ARTICLE_VERSION,
-      "feed-health-state": PLANNER_LEDGER_VERSION,
-      "plan-runs": PLAN_RUN_VERSION,
-    };
-    if (footerLedger !== undefined && rowSchemaVersion !== undefined) {
-      const currentSchema = currentSchemaVersions[footerLedger as PlannerFileEnvelope["ledger"]];
-      if (currentSchema !== undefined && rowSchemaVersion !== currentSchema) {
-        throw new LedgerHistoryReadError(
-          `Planner ${footerLedger} uses unsupported row schema ${rowSchemaVersion}; current row schema is ${currentSchema}`,
-        );
-      }
+    if (footerLedger === ledger && rowSchemaVersion !== contract.schemaVersion) {
+      throw new LedgerHistoryReadError(
+        `Planner ${ledger} uses unsupported row schema ${rowSchemaVersion}; current ledger contract requires ${contract.schemaVersion}`,
+      );
     }
     envelope = PlannerFileEnvelopeSchema.parse({
       version: values.get("envelope_version"), row_schema_version: values.get("schema_version"),

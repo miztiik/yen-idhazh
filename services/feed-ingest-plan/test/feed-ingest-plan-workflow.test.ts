@@ -198,7 +198,7 @@ test("hostile dispatch strings fail in the actual adapter before loading inputs 
   expect(output).toBe("");
   expect(JSON.parse(errors)).toEqual({ event: "planner_workflow_failed", code: "INVALID_INPUT" });
   expect(errors).not.toContain("injected");
-}, 120_000);
+});
 
 test("strict-checks the exact named sparse adapter and test inventory in one compiler invocation", async () => {
   const { steps } = await workflow();
@@ -243,4 +243,4 @@ test("strict-checks the exact named sparse adapter and test inventory in one com
     const [output, errors] = await Promise.all([new Response(child.stdout).text(), new Response(child.stderr).text()]);
     expect({ exit: await child.exited, output, errors }).toEqual({ exit: 0, output: "", errors: "" });
   } finally { await rm(directory, { recursive: true, force: true }); }
-}, 120_000);
+});
