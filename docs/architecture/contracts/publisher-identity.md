@@ -1,6 +1,6 @@
 # Publisher identity
 
-**Last Updated**: 2026-10-24
+**Last Updated**: 2026-10-27
 
 How is a publisher ID created once, then kept stable as names and feeds change?
 
@@ -147,7 +147,7 @@ Publisher identity is carried by the Pydantic-owned shared snapshot and the
 TypeScript copy, with versioned compatible readers and the named binding tests.
 Follow
 [the schema contract](schemas.md#what-holds-the-copy-in-step), including
-`backend/tests/contracts/test_feed_ingest_contracts.py`.
+`backend/tests/contracts/test_native_typescript_bindings.py`.
 The planner-only TypeScript event exception stays narrow; approval of a
 publisher slug does not create another exception.
 

@@ -1,14 +1,15 @@
 # Feed planner ledgers
 
-**Last Updated**: 2026-10-26
+**Last Updated**: 2026-10-27
 
 Which planner data is retained, and where is it stored?
 
 **Status**: Current four-ledger contract for the isolated TypeScript planner.
 [Plan 67](../../TODO/20261024-67-feed-ingest-feedback-and-selection-plan.md)
 tracks delivery and the separately deferred policy, worker and console work.
-Native Pydantic declarations own persisted data; named binding cases keep the
-TypeScript copies in step. The planner-only progress event remains TypeScript-owned.
+TypeScript owns planner settings, events, requests, private receipts, stage
+payloads, ledgers and their file validation. Python keeps the gardener
+scheduler, which delegates planner row validation and compaction to TypeScript.
 
 **Scope**: Simplify the storage and audit portions of
 [Plan 66](../../TODO/20261020-66-feed-ingest-plan.md) and
@@ -28,8 +29,9 @@ Committed selected rows never contain `article_text`.
 Breaking format changes and removal of old planner-family raw and compact
 ledgers are approved within the
 [clean-break boundary](#approved-clean-break-delivery). New-family shared-ledger
-storage support is in scope; the Python news pipeline remains unchanged. This
-page defines the retained formats and their current readers and writers.
+storage support is in scope; the separate Python news pipeline remains
+unchanged. This page defines the retained formats and their current readers
+and writers.
 
 Use section letters and field IDs when reviewing, for example "C20" or "B12-B14".
 Keep IDs stable during iteration; do not reuse a removed field's ID.
@@ -48,6 +50,7 @@ is listed below; there are no hidden policy or assessment payloads.
 - [H. Nested payload mapping](#h-nested-payload-mapping)
 - [K. API inventory](#k-api-inventory)
 - [L. Lookback summaries](#l-lookback-summaries)
+- [TypeScript contract ownership](#typescript-contract-ownership)
 - [Shared rules and removals](#shared-rules-and-removals)
 - [Design rationale](#design-rationale)
 
@@ -549,14 +552,38 @@ after the complete input arrives, so a saved parsed batch does not freeze
 feedback or window membership. D11-D13 include the measured cost of both
 captures. There is no per-candidate history read or persistent result cache.
 
+## TypeScript contract ownership
+
+The Zod schemas under `packages/common-contracts/src/schemas/` are the sole
+contract authority for planner configuration, events, requests, private
+receipts, stage payloads and the four planner ledgers. The TypeScript writer
+validates and writes planner Parquet and artifacts. Python has no planner row,
+stage or configuration model and no cross-language comparison copy. Native
+Python ledger readers refuse planner rows; the published-file check delegates
+their validation to TypeScript.
+
+The Python gardener remains the scheduler for every ledger family. Its shared
+compact-index records are maintenance marks, not planner row contracts. For
+planner data, the gardener hands one named bounded period to the TypeScript
+adapter, which validates exact raw and compact Parquet members at one captured
+Git revision and returns verified bytes and exact source paths. Python applies
+that result through its existing pass and commit flow.
+
+Planner contracts still carry current schema stamps and changelogs. The
+current-format refusal has no Python copy, compatibility reader or migration;
+the TypeScript tests and the real gardener-adapter integration test own this
+boundary.
+
 ## Raw-day membership
 
 The four planner ledgers have no active raw-day `index.json` reader or writer.
 Their data remains in immutable UUID Parquet siblings under
 `state/raw/feed-ingest-plan/<ledger>/YYYY/MM/DD/`. Historical derived JSON lists
-are left inert; this change does not scan or rewrite the corpus. Compact
-yearly, monthly and daily indexes and their declared models remain separate
-and unchanged. Other ledger families keep their own readers.
+are left inert; this change does not scan or rewrite the corpus. TypeScript
+planner history also does not read compact-index JSON: it checks exact
+yearly, monthly and daily Parquet paths in precedence order. The gardener's
+shared compact indexes remain its scheduling marks and are not planner row
+contracts. Other ledger families keep their own history readers.
 
 Configuration names a finite UTC lookback or explicit bounded UTC days.
 The workflow captures one full Git commit id before staging. For each requested
@@ -624,9 +651,9 @@ pushes without rerunning producers or changing the caller's checkout.
 - Existing rest fields do not claim completion of the separately tracked D5
   earned-recovery, trial/review or polling work. No unused future-policy columns
   are preallocated, and those policy tasks are not silently cancelled.
-- The Python news pipeline remains unchanged. New-family shared-ledger
-  persistence, readers and compaction are part of Plan 67's authorized
-  clean-break sequence; the superseded compatibility migration is not resumed.
+- The separate Python news pipeline remains unchanged. Planner persistence,
+  row readers and compaction use TypeScript contracts; the Python gardener
+  retains scheduling and shared maintenance indexes.
 
 ## Design rationale
 
@@ -658,10 +685,10 @@ provenance default. Missing age evidence remains null; a real current-run
 selection instant remains selection provenance.
 
 This is the maintainer-approved TypeScript exception to the read-side migration
-rule in `CLAUDE.md` section 11. Python's historical readers, contract authority,
-registry, gardener and publication wiring are unchanged. The binding test
-compares the current-input subset without carrying historical acceptance into
-TypeScript.
+rule in `CLAUDE.md` section 11. Python's historical planner row readers and
+contract copies are retired. The gardener registry and scheduler remain; the
+published-file validator and compact writer use the current TypeScript
+contracts.
 
 The shared TypeScript ledger reader has no migration table. A full-row contract
 accepts only its own current row stamp. A projection contract, which names only

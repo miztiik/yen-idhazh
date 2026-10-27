@@ -1,6 +1,6 @@
 # The gardener
 
-**Last Updated**: 2026-10-23
+**Last Updated**: 2026-10-27
 
 How the one program that deletes and rewrites what this repository keeps is put
 together: where its tasks come from, how a wake is split into shards, what a
@@ -777,6 +777,15 @@ under each root. The runner calls the existing one-root pass in declaration
 order, stops at the first root that needs another wake, and writes one record
 row for the task. Production compactions keep their existing single-root path
 and remain the authority for production retention and prune refusals.
+
+The four planner compaction tasks keep this Python scheduler and its shared
+compact-index marks. A shard that runs one of them also checks out
+`packages/common-contracts` and `packages/ledger-file-writer`, installs Bun
+1.3.13 and installs those two locked packages. The scheduler passes one named
+bounded period to the TypeScript writer, which validates planner rows and
+returns verified compact bytes and exact source paths. Python applies that
+receipt through the existing pass; the shard still lands the same gardener
+record and commit. Other shards do not install Bun or those packages.
 
 ## Design rationale
 

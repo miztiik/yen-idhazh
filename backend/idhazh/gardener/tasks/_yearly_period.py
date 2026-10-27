@@ -66,8 +66,8 @@ from pathlib import Path
 from typing import Final
 
 from idhazh import ledger
+from idhazh.contracts.base import LedgerContract
 from idhazh.contracts.collection_prune import StopReason
-from idhazh.contracts.feed_ingest_discovered_article import LedgerContract
 from idhazh.contracts.file_envelope import Period, WriterIdentity
 from idhazh.contracts.gardener_events import CompactionStep, StepChoice
 from idhazh.contracts.gardener_fault import GardenerFault, RecoveryNote
@@ -314,7 +314,13 @@ def _fetched(tree: CompactTree, year: str) -> PeriodFetch:
     return PeriodFetch(folders=(tree.monthly_year_folder(year),))
 
 
-def absorb(tree: CompactTree, choice: StepChoice, *, identity: WriterIdentity) -> tuple[Stop, ...]:
+def absorb(
+    tree: CompactTree,
+    choice: StepChoice,
+    *,
+    identity: WriterIdentity,
+    most: int | None = None,
+) -> tuple[Stop, ...]:
     """Pack the years chosen for this wake, oldest first, stopping at the first one refused.
 
     A choice an operator range refused stops here, deferred at the year the
@@ -329,6 +335,24 @@ def absorb(tree: CompactTree, choice: StepChoice, *, identity: WriterIdentity) -
     if choice.first is None or choice.last is None:
         return ()
     years = [f"{number:04d}" for number in range(int(choice.first), int(choice.last) + 1)]
+    if ledger.paths.is_planner_ledger(tree.ledger):
+        if most is None:
+            raise ValueError("planner year maintenance requires its configured raw-file limit")
+        stops: list[Stop] = []
+        for year in years:
+            stop = tree.compact_planner_period(
+                Period.YEARLY,
+                year,
+                step=_STEP,
+                most=most,
+            )
+            if stop is not None:
+                stops.append(stop)
+                if stop.fault is not None or stop.because is StopReason.CEILING:
+                    return tuple(stops)
+        if choice.stopped_because is StopReason.CEILING and choice.resume_from is not None:
+            stops.append(Stop(StopReason.CEILING, choice.resume_from))
+        return tuple(stops)
     tree.name_years(years)
     fits, over = tree.fit_to_budget(years, lambda year: _fetched(tree, year))
     tree.fetch(_fetched(tree, year) for year in fits)

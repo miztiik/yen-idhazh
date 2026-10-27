@@ -48,7 +48,7 @@ from pydantic import ValidationError
 from idhazh import config
 from idhazh.contracts.file_envelope import Format, Period, Tier, covers_fits
 from idhazh.contracts.ledger_name import LedgerName
-from idhazh.contracts.ledgers import Grain, LedgerEntry, LedgersConfig
+from idhazh.contracts.ledgers import Grain, LedgerEntry, LedgerFamily, LedgersConfig
 
 STATE_DIRNAME: Final = "state"
 
@@ -99,6 +99,9 @@ DoorRegistry = Mapping[LedgerName, LedgerEntry]
 _REGISTRY: Final[dict[LedgerName, LedgerEntry]] = {
     held.name: held for family in _CONFIG.families for held in family.ledgers
 }
+_FAMILY_BY_LEDGER = {
+    entry.name: family for family in _CONFIG.families for entry in family.ledgers
+}
 
 
 #: The registry every builder falls back to when a caller passes none, swapped
@@ -119,6 +122,21 @@ def _registry(registry: DoorRegistry | None) -> DoorRegistry:
         return registry
     active = _ACTIVE_OVERRIDE.get()
     return _REGISTRY if active is None else active
+
+
+def family_of(ledger: LedgerName) -> LedgerFamily:
+    """The configured family that owns one registered ledger."""
+    try:
+        return _FAMILY_BY_LEDGER[ledger]
+    except KeyError as missing:
+        raise ValueError(
+            f"{ledger.value} is not registered in config/{REGISTRY_FILENAME}"
+        ) from missing
+
+
+def is_planner_ledger(ledger: LedgerName) -> bool:
+    """Whether the configured family assigns row and file validation to TypeScript."""
+    return family_of(ledger).name == "feed-ingest-plan"
 
 
 @contextmanager

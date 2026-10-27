@@ -148,8 +148,8 @@ flowchart TD
 
 | Id | Row | PR outcome | Depends-on | Status | Readiness condition | Worktree | PR | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| D1 | 1 | Deliver reviewed publisher IDs | - | IN_PROGRESS | Eight reviewed publisher IDs now bind 20 active and retired feeds; unreviewed entries remain unknown. | feed-selection-delivery | #1762 | - |
-| D2 | 2 | Finish TypeScript contract and ledger-IO integration | 1 | PENDING | Reuse delivered raw-day IO; complete compact-index and native-consumer integration here. | - | - | - |
+| D1 | 1 | Deliver reviewed publisher IDs | - | DONE | Eight reviewed publisher IDs now bind 20 active and retired feeds; unreviewed entries remain unknown. | feed-selection-delivery | #1762 | - |
+| D2 | 2 | Finish TypeScript contract and ledger-IO integration | 1 | DONE | Reuse delivered raw-day IO; complete compact-index and native-consumer integration here. | feed-selection-delivery | - | - |
 | D3 | 3 | Remove feed labels and rename article/discovery controls | 2 | PENDING | Sole TypeScript contract authority is available. | - | - | - |
 | D4 | 4 | Implement allocation, freshness, cutoff and rejection persistence | 1, 2, 3 | PENDING | Consume PR1's catalog and the verified integration; policy is settled. | - | - | - |
 

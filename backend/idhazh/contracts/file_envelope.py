@@ -54,7 +54,6 @@ from idhazh.contracts.base import (
     TaskName,
 )
 from idhazh.contracts.ledger_name import LedgerName
-from idhazh.contracts.recorded_instant import RecordedInstant
 
 
 class Tier(StrEnum):
@@ -472,8 +471,6 @@ class FileEnvelope(Contract):
 
     @model_validator(mode="after")
     def _writer_scope_is_finite(self) -> Self:
-        if self.ledger in PLANNER_LEDGERS:
-            raise ValueError("planner ledgers require their minimal file envelope")
         if self.version not in _ENVELOPE_VERSIONS:
             raise ValueError("unrecognized file envelope version")
         if self.writer == "idhazh_typescript.ledger.parquet" and self.version < "2026-10-20":
@@ -592,128 +589,6 @@ class FileEnvelope(Contract):
         )
 
 
-PLANNER_LEDGERS: Final = frozenset({
-    LedgerName.FEED_INGEST_PLAN_DISCOVERED_ARTICLES,
-    LedgerName.FEED_INGEST_PLAN_SELECTED_ARTICLES,
-    LedgerName.FEED_INGEST_PLAN_FEED_HEALTH_STATE,
-    LedgerName.FEED_INGEST_PLAN_PLAN_RUNS,
-})
-PLANNER_FOOTER_KEYS: Final = (
-    "envelope_version", "schema_version", "tier", "ledger", "covers", "period",
-    "file_id", "content_sha256", "writer", "writer_version", "compression", "updated_at",
-)
-PLANNER_OPTIONAL_FOOTER_KEYS: Final = frozenset({"period", "updated_at"})
-
-
-class PlannerFileEnvelope(Contract):
-    """Only the format metadata the four planner ledgers actually need."""
-
-    model_config = ConfigDict(frozen=True, revalidate_instances="always")
-    __schema_stem__: ClassVar[str] = "planner-file-envelope"
-    __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
-        ChangelogEntry(
-            version="2026-10-26",
-            change="Accept current and prior selected-article and run row stamps.",
-            why="Compatible readers verify original bytes before normalizing old rows.",
-        ),
-        ChangelogEntry(
-            version="2026-10-25",
-            change="Declare planner-only file metadata without generic writer identity.",
-            why="Planner rows retain their own identities and no audit identity tree.",
-        ),
-    )
-
-    version: Literal["2026-10-25", "2026-10-26"] = "2026-10-26"
-    row_schema_version: Literal["2026-10-25", "2026-10-26"]
-    tier: Tier
-    ledger: Literal[
-        LedgerName.FEED_INGEST_PLAN_DISCOVERED_ARTICLES,
-        LedgerName.FEED_INGEST_PLAN_SELECTED_ARTICLES,
-        LedgerName.FEED_INGEST_PLAN_FEED_HEALTH_STATE,
-        LedgerName.FEED_INGEST_PLAN_PLAN_RUNS,
-    ]
-    covers: PeriodStamp
-    period: Period | None = None
-    file_id: uuid.UUID
-    content_sha256: Sha256
-    writer: Literal["idhazh.ledger.parquet", "idhazh_typescript.ledger.parquet"]
-    writer_version: Annotated[str, Field(min_length=1)]
-    compression: Compression
-    updated_at: RecordedInstant | None = None
-
-    @model_validator(mode="after")
-    def validate_format(self) -> Self:
-        if self.row_schema_version == "2026-10-26" and (
-            self.version == "2026-10-25"
-            or self.ledger not in {
-                LedgerName.FEED_INGEST_PLAN_SELECTED_ARTICLES,
-                LedgerName.FEED_INGEST_PLAN_PLAN_RUNS,
-            }
-        ):
-            raise ValueError("current row stamp requires its declared ledger and envelope")
-        if (self.tier is Tier.COMPACT) != (self.period is not None):
-            raise ValueError("planner compact files require a period; raw files name none")
-        if not covers_fits(self.covers, tier=self.tier, period=self.period):
-            raise ValueError("planner covers must match its tier and period")
-        if self.file_id.version != 8:
-            raise ValueError("planner file_id must be UUID version 8")
-        if (self.ledger is LedgerName.FEED_INGEST_PLAN_FEED_HEALTH_STATE) != (
-            self.updated_at is not None
-        ):
-            raise ValueError("only feed-health-state files require updated_at")
-        return self
-
-    def validate_container(self, container: Format) -> Self:
-        if Format(container) is not Format.PARQUET:
-            raise ValueError("planner ledgers require Parquet")
-        return self
-
-    def as_metadata(self) -> dict[bytes, bytes]:
-        values = {
-            "envelope_version": self.version,
-            "schema_version": self.row_schema_version,
-            "tier": self.tier.value,
-            "ledger": self.ledger.value,
-            "covers": self.covers,
-            "period": self.period.value if self.period is not None else None,
-            "file_id": str(self.file_id),
-            "content_sha256": self.content_sha256,
-            "writer": self.writer,
-            "writer_version": self.writer_version,
-            "compression": self.compression.value,
-            "updated_at": self.updated_at,
-        }
-        return {
-            key.encode("utf-8"): value.encode("utf-8")
-            for key, value in values.items() if value is not None
-        }
-
-    @classmethod
-    def from_metadata(cls, mapping: Mapping[bytes, bytes]) -> Self:
-        text = {key.decode("utf-8"): value.decode("utf-8") for key, value in mapping.items()}
-        unknown = sorted(set(text) - set(PLANNER_FOOTER_KEYS))
-        missing = sorted(set(PLANNER_FOOTER_KEYS) - PLANNER_OPTIONAL_FOOTER_KEYS - set(text))
-        if unknown or missing:
-            raise ValueError(
-                f"planner envelope has {len(unknown)} undeclared keys; missing={missing}"
-            )
-        try:
-            return cls.model_validate({
-                "version": text["envelope_version"],
-                "row_schema_version": text["schema_version"],
-                "tier": text["tier"], "ledger": text["ledger"], "covers": text["covers"],
-                "period": text.get("period"), "file_id": text["file_id"],
-                "content_sha256": text["content_sha256"], "writer": text["writer"],
-                "writer_version": text["writer_version"], "compression": text["compression"],
-                "updated_at": text.get("updated_at"),
-            })
-        except ValidationError:
-            raise ValueError("planner envelope fails declared format validation") from None
-
-
-def envelope_from_metadata(mapping: Mapping[bytes, bytes]) -> FileEnvelope | PlannerFileEnvelope:
-    """Select the declared protocol by registered ledger name, never by missing keys."""
-    ledger = mapping.get(b"ledger", b"").decode("utf-8")
-    if ledger in PLANNER_LEDGERS:
-        return PlannerFileEnvelope.from_metadata(mapping)
+def envelope_from_metadata(mapping: Mapping[bytes, bytes]) -> FileEnvelope:
+    """Read an original-protocol envelope; TypeScript owns planner files."""
     return FileEnvelope.from_metadata(mapping)

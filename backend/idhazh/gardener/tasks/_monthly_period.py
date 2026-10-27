@@ -81,9 +81,9 @@ from pathlib import Path
 from typing import Final
 
 from idhazh import ledger, month_partition
+from idhazh.contracts.base import LedgerContract
 from idhazh.contracts.collection_prune import StopReason
-from idhazh.contracts.feed_ingest_discovered_article import LedgerContract
-from idhazh.contracts.file_envelope import PLANNER_LEDGERS, Format, Period, WriterIdentity
+from idhazh.contracts.file_envelope import Format, Period, WriterIdentity
 from idhazh.contracts.gardener_events import CompactionStep, LedgerFaultMet, StepChoice
 from idhazh.contracts.gardener_fault import GardenerFault, RecoveryNote
 from idhazh.contracts.knobs.gardener import DaysWindow, ForeverWindow, Window
@@ -393,10 +393,6 @@ def _keep_own[C: LedgerContract](
     else:
         try:
             rows = [row for path in sources for row in tree.load(path, model=model)]
-            if tree.ledger in PLANNER_LEDGERS:
-                rows = ledger.settle_registered_rows(
-                    [rows], ledger.door_key(tree.ledger), ledger=tree.ledger
-                )
             if tree.load(own.path, model=model) != rows:
                 # Its own file is at its path, no monthly entry names it, and it
                 # holds other rows than its days. Nothing is written over a
@@ -431,7 +427,11 @@ def _fetched(tree: CompactTree, month: str) -> PeriodFetch:
 
 
 def absorb(
-    tree: CompactTree, choice: StepChoice, *, identity: WriterIdentity
+    tree: CompactTree,
+    choice: StepChoice,
+    *,
+    identity: WriterIdentity,
+    most: int | None = None,
 ) -> tuple[Stop, ...]:
     """Close the months chosen for this wake, oldest first, stopping at the first one held.
 
@@ -447,6 +447,24 @@ def absorb(
     if choice.first is None or choice.last is None:
         return ()
     months = month_partition.months_between(choice.first, choice.last)
+    if ledger.paths.is_planner_ledger(tree.ledger):
+        if most is None:
+            raise ValueError("planner month maintenance requires its configured raw-file limit")
+        stops: list[Stop] = []
+        for month in months:
+            stop = tree.compact_planner_period(
+                Period.MONTHLY,
+                month,
+                step=_STEP,
+                most=most,
+            )
+            if stop is not None:
+                stops.append(stop)
+                if stop.fault is not None or stop.because is StopReason.CEILING:
+                    return tuple(stops)
+        if choice.stopped_because is StopReason.CEILING and choice.resume_from is not None:
+            stops.append(Stop(StopReason.CEILING, choice.resume_from))
+        return tuple(stops)
     tree.name_months(months)
     closing: list[str] = []
     for month in months:

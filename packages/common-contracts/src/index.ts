@@ -26,3 +26,5 @@ export * from "./schemas/publication-input.schema";
 export * from "./schemas/discovered-article.schema";
 export * from "./schemas/selected-article.schema";
 export * from "./schemas/plan-run.schema";
+export * from "./schemas/planner-maintenance.schema";
+export * from "./schemas/planner-file-validation.schema";

@@ -40,8 +40,8 @@ from __future__ import annotations
 from typing import Final
 
 from idhazh import ledger
+from idhazh.contracts.base import LedgerContract
 from idhazh.contracts.collection_prune import StopReason
-from idhazh.contracts.feed_ingest_discovered_article import LedgerContract
 from idhazh.contracts.file_envelope import Period, WriterIdentity
 from idhazh.contracts.gardener_events import CompactionStep
 from idhazh.contracts.gardener_fault import GardenerFault, RecoveryNote
@@ -70,6 +70,15 @@ def reopen[C: LedgerContract](
     once. `most` is how many raw files one period is built from at most. A
     `ceiling` stop at the month says late files wait for the next wake.
     """
+    if ledger.paths.is_planner_ledger(tree.ledger):
+        stop = tree.compact_planner_period(
+            Period.MONTHLY,
+            month,
+            step=_STEP,
+            most=most,
+            reopened=True,
+        )
+        return () if stop is None else (stop,)
     tree.name_months([month])
     late = [day for day in tree.raw_days if day.startswith(f"{month}-")]
     entry = tree.monthly[month]

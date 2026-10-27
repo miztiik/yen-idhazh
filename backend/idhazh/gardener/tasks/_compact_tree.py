@@ -90,8 +90,8 @@ from pathlib import Path
 from typing import NamedTuple, assert_never
 
 from idhazh import atomic_write, day_partition, ledger
+from idhazh.contracts.base import LedgerContract
 from idhazh.contracts.collection_prune import Recovery, StopReason, stop_for
-from idhazh.contracts.feed_ingest_discovered_article import LedgerContract
 from idhazh.contracts.file_envelope import Format, Period
 from idhazh.contracts.gardener_events import (
     CompactionStep,
@@ -386,6 +386,207 @@ class CompactTree:
             ],
             days=days,
         )
+
+    def compact_planner_period(
+        self,
+        period: Period,
+        covers: str,
+        *,
+        step: CompactionStep,
+        most: int,
+        reopened: bool = False,
+    ) -> Stop | None:
+        """Ask TypeScript to replace one named planner period from its verified members."""
+        from idhazh.ledger.planner_maintenance import (
+            PlannerMaintenanceRefusalError,
+            maintain_period,
+        )
+
+        match period:
+            case Period.DAILY:
+                self.name_days([covers])
+                self._name(
+                    [
+                        ledger.compact_path(
+                            self.state_dir,
+                            self.ledger,
+                            candidate,
+                            candidate_covers,
+                            fmt=fmt,
+                        )
+                        for candidate, candidate_covers in (
+                            (Period.MONTHLY, covers[:7]),
+                            (Period.YEARLY, covers[:4]),
+                        )
+                        for fmt in Format
+                    ]
+                )
+                fetch = PeriodFetch(
+                    folders=(
+                        self.raw_day_folder(covers),
+                        self.daily_month_folder(covers[:7]),
+                    ),
+                    beside=tuple(
+                        ledger.compact_path(
+                            self.state_dir, self.ledger, candidate, candidate_covers, fmt=fmt
+                        )
+                        for candidate, candidate_covers in (
+                            (Period.MONTHLY, covers[:7]),
+                            (Period.YEARLY, covers[:4]),
+                        )
+                        for fmt in Format
+                    ),
+                )
+            case Period.MONTHLY:
+                self.name_months([covers])
+                self._name(
+                    [
+                        ledger.compact_path(
+                            self.state_dir, self.ledger, Period.YEARLY, covers[:4], fmt=fmt
+                        )
+                        for fmt in Format
+                    ]
+                )
+                fetch = PeriodFetch(
+                    folders=(
+                        self.raw_month_folder(covers),
+                        self.daily_month_folder(covers),
+                    ),
+                    beside=tuple(
+                        ledger.compact_path(
+                            self.state_dir, self.ledger, candidate, candidate_covers, fmt=fmt
+                        )
+                        for candidate, candidate_covers in (
+                            (Period.MONTHLY, covers),
+                            (Period.YEARLY, covers[:4]),
+                        )
+                        for fmt in Format
+                    ),
+                )
+            case Period.YEARLY:
+                months = [f"{covers}-{number:02d}" for number in range(1, 13)]
+                self.name_months(months)
+                self.name_years([covers])
+                fetch = PeriodFetch(
+                    folders=(
+                        *(
+                            folder
+                            for month in months
+                            for folder in (
+                                self.raw_month_folder(month),
+                                self.daily_month_folder(month),
+                            )
+                        ),
+                        self.monthly_year_folder(covers),
+                    ),
+                    beside=tuple(
+                        ledger.compact_path(
+                            self.state_dir, self.ledger, Period.YEARLY, covers, fmt=fmt
+                        )
+                        for fmt in Format
+                    ),
+                )
+            case _:
+                assert_never(period)
+
+        fits, stop = self.fit_to_budget([covers], lambda _covers: fetch)
+        if not fits:
+            return stop
+        self.fetch([fetch])
+        try:
+            result = maintain_period(
+                self.listing.repo_root,
+                self.ledger,
+                period.value,
+                covers,
+                max_raw_files_per_period=most,
+            )
+        except PlannerMaintenanceRefusalError as refusal:
+            if refusal.reason == "revision-changed":
+                return self.refuse(step, covers, failure=refusal)
+            fault = (
+                GardenerFault.MANUAL_ACTION
+                if refusal.reason == "target-conflict"
+                else GardenerFault.PACKED_FILE_UNREADABLE
+            )
+            return self.refuse(
+                step,
+                covers,
+                fault=fault,
+                ledger_fault=(
+                    LedgerFault.FILE_MISSING
+                    if refusal.reason == "missing-local-member"
+                    else None
+                ),
+                failure=refusal,
+            )
+        self.looked.update(result.input_paths)
+        if result.status != "written":
+            return None
+        if (
+            result.target_path is None
+            or result.data is None
+            or result.file_sha256 is None
+            or result.row_count < 1
+        ):
+            raise RuntimeError("planner maintenance returned an incomplete write result")
+        self.write(result.target_path, result.data)
+        for path in result.delete_paths:
+            self.delete(path)
+        previous = self.entries(period).get(covers)
+        lower = (
+            [
+                entry
+                for day, entry in self.daily.items()
+                if day.startswith(f"{covers}-")
+            ]
+            if period is Period.MONTHLY
+            else [
+                entry
+                for month, entry in self.monthly.items()
+                if month.startswith(f"{covers}-")
+            ]
+            if period is Period.YEARLY
+            else []
+        )
+        lost_days = set(() if previous is None else previous.lost_days)
+        if previous is None:
+            lost_days.update(day for entry in lower for day in entry.lost_days)
+        entry = CompactEntry(
+            covers=covers,
+            rows=result.row_count,
+            bytes=len(result.data),
+            file_sha256=result.file_sha256,
+            lost_days=sorted(lost_days),
+            set_aside=(
+                previous.set_aside
+                if previous is not None
+                else sum(item.set_aside for item in lower)
+            ),
+        )
+        self.entries(period)[covers] = entry
+        self.mark_index(period)
+        if period is Period.MONTHLY:
+            for day in [day for day in self.daily if day.startswith(f"{covers}-")]:
+                self.daily.pop(day)
+            self.mark_index(Period.DAILY)
+            self.monthly_through = max(covers, self.monthly_through or covers)
+        elif period is Period.YEARLY:
+            for month in [month for month in self.monthly if month.startswith(f"{covers}-")]:
+                self.monthly.pop(month)
+            for day in [day for day in self.daily if day.startswith(f"{covers}-")]:
+                self.daily.pop(day)
+            self.mark_index(Period.MONTHLY)
+            self.mark_index(Period.DAILY)
+            self.yearly_through = max(covers, self.yearly_through or covers)
+        else:
+            self.daily_through = max(covers, self.daily_through or covers)
+        if reopened:
+            self.note_recovery(RecoveryNote.REOPENED_MONTH, covers)
+        if result.carried_over:
+            self.note_recovery(RecoveryNote.CARRIED_OVER, covers)
+            return Stop(StopReason.CEILING, covers)
+        return None
 
     def _name(
         self, paths: Sequence[Path], *, months: Sequence[str] = (), days: Sequence[str] = ()
