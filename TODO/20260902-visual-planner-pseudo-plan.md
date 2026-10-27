@@ -1825,7 +1825,7 @@ index, not the plan.
 | 15 | [Chart vocabulary and refusal rules](../docs/architecture/publishing/what-a-visual-plan-may-say-and-what-happens-to-one-that-is-refused.md) | Chart families 1-5 delivered; Row 6 text visuals abandoned |
 | 16 | [Parts of a whole](../docs/architecture/publishing/what-a-visual-plan-may-say-and-what-happens-to-one-that-is-refused.md) | The composition family |
 | 17 | [The rest of the infographics](20260905-17-infographic-vocabulary-plan.md) | The infographic family |
-| 18 | [Diagrams](20260905-18-diagram-vocabulary-plan.md) | The diagram family, gated on the potential classifier |
+| 18 | [Diagrams deferred](../docs/architecture/publishing/visuals.md#diagrams-deferred) | Whole plan deferred; not delivered or a prerequisite for other visual work |
 | 19 | [Every attempt is recorded](20260905-19-visual-telemetry-plan.md) | The visual telemetry event and the ledger under `state/` |
 | 20 | [The operator can see whether it worked](20260905-20-visual-console-plan.md) | The console panels that read that ledger |
 | 21 | [Human judgement](20260905-21-human-judgement-plan.md) | Ground truth: the review harness, paired evaluation, weight fitting |

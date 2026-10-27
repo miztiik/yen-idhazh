@@ -1,6 +1,6 @@
 # Visual planning and rendering
 
-**Last Updated**: 2026-10-25
+**Last Updated**: 2026-10-27
 
 How an item gets a chart or - most of the time - nothing at all: which pass
 decides, which gate refuses, and what every refusal is called. The rule this
@@ -467,6 +467,26 @@ page nobody can guess now costs a table lookup, where before it cost a long scro
 correction travelled with the split: the flow drawing's node table said the validator holds eight
 checks and it holds eleven - `plan_version_current`, `stacked_bar_exhaustive` and `pie_exhaustive` were added after the drawing was made.
 Authority: Fowler.
+
+### Diagrams deferred
+
+The whole diagram plan is deferred, not delivered. This includes sequence and
+contrast word lists, the `comparative` and `processual` reporting classes,
+`flow`, force layout, `hierarchy`, `state`, `mindmap`, and the expanded whole-day
+check. Existing chart selection is unchanged: the summarize-and-plan call
+chooses from the defined visual types, and code validates its choice.
+
+The intended reader benefit is a diagram that explains a process or relationship
+better than the summary alone. No reader-facing diagram has yet demonstrated
+that benefit, so its supporting classification and layout work is deferred too.
+Keep the current three reporting classes; other visual work does not wait for
+diagram delivery.
+
+If diagrams return to scope, first use source-backed examples to establish that
+reader benefit. Every arrow must have supporting article evidence; paragraph
+order alone supports no connection, and a matching text span does not prove
+direction or causality. These are requirements for future work, not claims that
+diagram validation or rendering exists today.
 
 ## Rejected alternatives
 
