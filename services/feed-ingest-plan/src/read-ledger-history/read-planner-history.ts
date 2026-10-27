@@ -9,7 +9,7 @@ import { LedgerHistoryReadError } from "./ledger-history-error";
 import { classifyPlannerHistoryGap } from "./planner-history-gap";
 import {
   compactPeriodFile, fixedHistoryRevision, listExactRawDayMembers, rawDayDirectory,
-  readNamedGitMember, verifyRawDayMember,
+  readNamedGitMember, verifiedHistoryRevision, verifyRawDayMember,
 } from "./raw-day-members";
 export type PlannerHistoryCache<T extends object> = {
   files: Map<string, Promise<Awaited<ReturnType<typeof readPlannerParquet<T>>>>>;
@@ -50,8 +50,11 @@ export async function readPlannerDay<T extends object>(
   let revision: string | undefined;
   if (day.raw_files === undefined || day.raw_revision !== undefined) {
     revision = await attempt(root, async () => {
-      const captured = await (cache.revision ??= fixedHistoryRevision(root));
-      if (day.raw_revision !== undefined && day.raw_revision !== captured) {
+      const requested = day.raw_revision === undefined
+        ? await (cache.revision ??= fixedHistoryRevision(root))
+        : await verifiedHistoryRevision(root, day.raw_revision);
+      const captured = await (cache.revision ??= Promise.resolve(requested));
+      if (requested !== captured) {
         throw new LedgerHistoryReadError("Raw and compact history revisions differ within one capture");
       }
       return captured;
