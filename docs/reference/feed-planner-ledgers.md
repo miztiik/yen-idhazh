@@ -5,8 +5,6 @@
 Which planner data is retained, and where is it stored?
 
 **Status**: Current five-ledger contract for the isolated TypeScript planner.
-[Plan 67](../../TODO/20261024-67-feed-ingest-feedback-and-selection-plan.md)
-tracks delivery and the separately deferred policy, worker and console work.
 TypeScript owns planner settings, events, requests, private receipts, stage
 payloads, ledgers and their file validation. Python keeps the gardener
 scheduler, which delegates planner row validation and compaction to TypeScript.
@@ -462,7 +460,7 @@ The route registrations implement 14 HTTP operations across three local
 services. The selected persistence operation replaces the old route; there is
 no permanent compatibility API.
 
-### Table K - Plan 66/67 HTTP operations
+### Table K - HTTP operations
 
 | ID | Service | Method and full path | Current role |
 | --- | --- | --- | --- |
@@ -682,8 +680,9 @@ pushes without rerunning producers or changing the caller's checkout.
   They are not written or inferred by planning.
 - Ordinary planning does not require machine fingerprints or CPU/RAM/cache/copy
   proofs. Their independent tools in K remain available.
-- Existing rest fields do not claim completion of the separately tracked D5
-  earned-recovery, trial/review or polling work. No unused future-policy columns
+- Existing rest fields do not claim completion of the
+  [deferred controls](../architecture/contracts/feed-ingest-feedback.md#deferred-controls).
+  No unused future-policy columns
   are preallocated, and those policy tasks are not silently cancelled.
 - The separate Python news pipeline remains unchanged. Planner persistence,
   row readers and compaction use TypeScript contracts; the Python gardener
@@ -696,9 +695,8 @@ pushes without rerunning producers or changing the caller's checkout.
 The field lists, old-to-new mappings, API inventory and window definitions
 answer one question: which planner data is retained and where. They remain
 together so each retained field can be reviewed against its old source and
-consumer without losing the stable review IDs. Plan 67 tracks removal or
-splitting of obsolete duplicated prose after the replacement contracts are
-settled and the affected consumers are migrated.
+consumer without losing the stable review IDs. Current behavior belongs in
+the linked subsystem pages, not a second execution narrative.
 
 ### Approved clean-break delivery
 
@@ -738,13 +736,6 @@ and indexes. It does not authorize deletion of either broader root, other
 families, the global Python `feed-health` data or the historical corpus, a
 Python news-pipeline rewrite, or a Git history rewrite.
 
-The documentation and updated Plan 67 must reach remote `main` before
-implementation starts. Contracts, current-format readers and writers, API
-cutover, and the required old-writer/data/registry cleanup ship together when
-separating them would leave an unused second implementation. Declare the
-minimal four contracts before their logic within that cohesive change; do not
-land a compatibility phase.
-
 Registration alone cannot make the native file reader and compactor accept
 the declared minimal metadata. Include new-family native file-format,
 readback, settlement and daily/monthly/yearly packing support, plus the
@@ -782,7 +773,7 @@ shows a need.
 
 ## See also
 
-- [Plan 67](../../TODO/20261024-67-feed-ingest-feedback-and-selection-plan.md) - cutover delivery and separately deferred work.
+- [I Feed scope](../architecture/sources/i-feed.md#continuing-this-work) - deferred policy, worker, Python and console work.
 - [Selection rules](../architecture/sources/feed-curation.md) - current selection behavior.
 - [Feed history and reliability](../architecture/sources/planner-feed-history.md) - current native readers and represented-day rules.
 - [Operator API](../architecture/sources/feed-operator-api.md) - current planner routes and contracts.

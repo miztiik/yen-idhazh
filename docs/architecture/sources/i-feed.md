@@ -12,11 +12,10 @@ improvement has yet been measured.
 The isolated planner's current observations, bounded summaries and next-selection
 inputs are defined in the [feedback contract](../contracts/feed-ingest-feedback.md)
 and [selection rules](feed-curation.md), not the earlier operational-state
-proposal. Request spend is report-only. Plan 67's D5 restriction and recovery
-thresholds are approved but inactive pending their policy-state contract and implementation;
-adaptive polling and operational review remain open. Recommendations below do
-not activate those controls; see the
-[feedback contract](../contracts/feed-ingest-feedback.md).
+proposal. Request spend is report-only. Admission trials, restrictions,
+recovery, adaptive polling and operational review remain
+[deferred controls](../contracts/feed-ingest-feedback.md#deferred-controls).
+Recommendations below do not activate them.
 
 **A feed earns its place.** Being on our list gives it a chance to prove useful.
 It does not guarantee requests, model time or space in the digest. A dependable
@@ -60,7 +59,8 @@ do not implement every paper or every proposed metric in the first delivery.
 Keep today's freshness, duplicate suppression, source limits and source floor
 at first. Record their effects so later changes are deliberate. Do not add a
 second source-weight penalty on top of the old one. Keep the proposed generic
-query cleanup separate because it changes article identity and old-record reads.
+query cleanup out of this delivery because it changes article identity and
+old-record reads.
 
 ## The model in one picture
 
@@ -490,30 +490,14 @@ conflict. Record an unmet target rather than hiding it. The existing floor
 counts eligible feeds, including temporary rests; changing to publisher counts
 or daily participation changes its meaning and needs a contract revision.
 
-### URL cleanup proposal
+### Host and path exclusions
 
-There is no `/news/` allowlist in the reviewed code. The one configured exclusion
-is `fool.com/the-ascent/`, intended to exclude affiliate-product pages, not all
-Motley Fool reporting. The current full-URL substring match also rejects an
-unrelated URL with that string in a query. Constructed offline checks confirmed
-this behavior on 2026-09-09; they do not establish how often it occurs in feeds.
-
-Prefer structured host and path-segment matching, with explicit subdomain and
-case behavior. Give exclusions a reason, scope and review policy. Removing the
-affiliate exclusion would admit those promotional pages to ordinary selection;
-tightening the matcher would keep the purpose without blocking query mentions.
-
-For identity cleanup, preserve unknown query keys, including `s`, `ref` and
-`src`. Remove a key only under a documented tracking policy with evidence for
-its scope. Use URL parsing and encoding APIs to preserve values, repeated keys
-and escaping. Keep the original address and canonicalization version.
-
-Changing cleanup can split an identity that was previously merged. Match old
-and new keys only where equivalence is supported; a blanket old-key fallback
-would recreate the false merge. Preserve published identities and mark ambiguous
-old observations rather than attributing them to both new articles. Use bounded
-requalification for unresolved cases and compare old/new decisions on fixtures
-before changing the live identity policy.
+The isolated TypeScript planner's
+[structured exclusions](feed-harvesting.md#inputs-and-identity) preserve the
+configured editorial intent without matching unrelated query text. This does not change
+the Python runtime. Identity-changing query cleanup and migration are removed
+from this delivery; the [identity contract](../contracts/identity.md) remains
+unchanged.
 
 ## Five- and ten-times catalog scale
 
@@ -896,21 +880,33 @@ article-pass evidence separately from feed-read reliability; neither is an
 article-quality verdict. [Host and process profiling](../../reference/host-metrics.md#whole-task-typescript-samples)
 measures resources independently and does not populate feed-health scores.
 The [feedback contract](../contracts/feed-ingest-feedback.md) defines current
-recording, while Plan 67 retains unresolved admission, recovery, polling and
-review work. These are not completed by resource reports or by deleting an
-earlier plan.
+recording and the deferred admission, recovery, polling and review controls.
+These are not completed by resource reports or by deleting an execution plan.
 
 Genuine worker/model-cost, publication and lead integration remain deferred;
 production planner/worker cutover is not approved. The
 [planning completion boundary](feed-ingest-audit.md#partial-results-and-boundaries)
 separates isolated output proof from those downstream responsibilities.
 
+Python news-pipeline producer/consumer migration, console migration to the
+derived ledgers, and retirement of global `feed-health` and
+`frontend/public/source-health.json` remain deferred. Keep the legacy outputs
+until all named Python and console consumers are migrated and verified.
+Planner storage validation and compaction do not complete that migration.
+
+Conditional feed requests, cached bodies and `304` recovery remain excluded;
+ordinary fetching can repeat unchanged-body transfer. Identity-changing query
+cleanup is removed, not an outstanding migration. The
+[configured priority review](feed-curation.md#configured-priority-review)
+is closed with no new score terms. Reopening any of these choices requires a
+separate maintainer decision.
+
 ### What the next design pass must settle
 
-Plan 67 carries the current nonsemantic execution scope and the remaining
-contract decisions in its Table D. The broader questions below do not expand
-that scope: qualitative assessment and automatic formula tuning remain
-excluded. Unavailable measurements are not zeros or invented model verdicts.
+The [deferred controls](../contracts/feed-ingest-feedback.md#deferred-controls)
+retain their unresolved contract and policy decisions. The broader questions
+below do not expand that scope: qualitative assessment and automatic formula
+tuning remain excluded. Unavailable measurements are not zeros or invented model verdicts.
 Authority follows [CLAUDE.md](../../../CLAUDE.md) section 14.
 
 | # | Decision to settle | Authority |
@@ -938,7 +934,7 @@ writing them as a plan earlier states decisions nobody made.
 | [source_health.py](../../../backend/idhazh/telemetry/publish/source_health.py) and [item health](item-health.md) | Reuse source-outcome definitions carefully. The public view's maturity is global, not each feed's history, and the public JSON is not planner control state. |
 | [stages/plan.py](../../../backend/idhazh/stages/plan.py) and [rank.py](../../../backend/idhazh/rank.py) | Put temporary article-access decisions before spending the next article slot. Check the owning path when implementation starts; do not use a later warning as the control. |
 | [sources.py](../../../backend/idhazh/contracts/sources.py) | Define feed-specific catalog fields and compatible reads. Keep `added_on`, `retired_on` and an open lowercase `retirement_reason`; no `retirement_note`. |
-| [discover.py](../../../backend/idhazh/discover.py) | Fix host/path matching separately from identity-changing query cleanup. There is no `/news/` allowlist to remove. |
+| [Screening](feed-screening.md) | The isolated TypeScript host/path correction is delivered; Python matcher changes and identity-changing query cleanup are not authorized here. |
 | [test_discover.py](../../../backend/tests/test_discover.py) and [test_publish_source_health.py](../../../backend/tests/test_publish_source_health.py) | Extend bounded fixtures for the touched behavior. Add a focused report test when its contract is defined. |
 
 Preserve the maintainer's ability to augment, replace and retire metrics. A metric
