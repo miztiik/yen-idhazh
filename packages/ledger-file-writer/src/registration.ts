@@ -15,7 +15,7 @@ import type {
   ValidatedLedgerWrite,
 } from "./ledger-types";
 
-const PLANNER_CONTRACTS = {
+export const PLANNER_CONTRACTS = {
   "discovered-articles": DiscoveredArticleRowContract,
   "selected-articles": SelectedArticleRowContract,
   "feed-health-state": FeedHealthStateRowContract,

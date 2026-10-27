@@ -1,6 +1,6 @@
 # Contracts and Schemas
 
-**Last Updated**: 2026-10-26
+**Last Updated**: 2026-10-27
 
 The persisted-shape subsystem: where the models live, how a schema is obtained from one, the small hand copy the frontend carries, and the tests that stop the two drifting apart. This is the operational home of Guardrail #3 (contracts before logic) and `CLAUDE.md` sections 1a and 11.
 
@@ -9,23 +9,31 @@ Concept-level *why* lives in [../../concepts/principles.md](../../concepts/princ
 ## One source of truth, and nothing generated from it
 
 ```
-backend/idhazh/contracts/*.py <- Pydantic models. HAND-WRITTEN. The source of truth.
+backend/idhazh/contracts/*.py <- Pydantic source for native Python payloads.
  |
- +--> Contract.json_schema() <- computed on demand. Nothing writes it to disk.
+ +--> Contract.json_schema() <- computed on demand; nothing writes it to disk.
+
+packages/common-contracts/src/schemas/*.ts <- Zod source for planner payloads.
  |
- +--> a few names copied by hand into frontend modules, each bound by a test.
+ +--> z.toJSONSchema() <- computed on demand; no Python planner copy exists.
+
+frontend modules <- small hand copies of named payloads, each held in step by tests.
 ```
 
-To change a persisted shape you edit the Pydantic model. Where the frontend copies something, you edit the copy in the same change, and the two tests below fail if you do not.
+Change a native Python payload in its Pydantic model and a planner payload in
+its Zod schema. Where the frontend copies a shape, change that copy in the same
+commit and run the two binding tests.
 
 **A contract produces its own schema.** `Contract.json_schema()` is `model_json_schema()` plus this project's canonicalisation - the `$id`, the `$schema` dialect, the version stamp and the changelog. A reader outside Python is handed one when it asks.
 
-The planner-only event stream is the named exception in `CLAUDE.md` Guardrail #3.
-Its sole authority is `packages/common-contracts/src/schemas/event.schema.ts`;
-Zod validates the event and produces its JSON Schema, version and changelog
-metadata on demand. Python does not consume these events. There is no Python
-event model or cross-language event comparison. Shared ledger payloads still
-have their Pydantic declarations and binding tests.
+The planner TypeScript contracts are the named exception in `CLAUDE.md`
+Guardrail #3. Zod schemas under `packages/common-contracts/src/schemas/` own
+planner configuration, events, requests, private receipts, stage payloads and
+the four planner ledgers. They produce JSON Schema, versions and changelogs on
+demand. Python does not read planner rows or stage payloads, and has no planner
+model or comparison copy. The Python gardener keeps its scheduler and delegates
+planner file validation and compaction to the TypeScript writer; generic
+compact-index and non-planner ledger contracts retain their Pydantic owners.
 
 ## Recursive ledger types
 
@@ -118,15 +126,15 @@ backend gate; the isolated TypeScript checks do not invoke Python.
 
 ## What holds the copy in step
 
-Shared feed-planning ledger contracts carry strict hand-written Zod copies in
-`packages/common-contracts/src/schemas/`. Python remains their authority.
-`backend/tests/contracts/test_feed_ingest_contracts.py` compares the actual
-runtime schemas recursively: fields, nested types, required keys, nullability,
-defaults, and vocabularies. The package's tests exercise rejection evidence and
-cross-field refusals. Run `bun run check` and `bun test` in that package.
-The CI backend gate installs the locked package and runs these checks before
-pytest, which executes the Python-to-Zod bindings. It does not skip a binding
-when Bun or the package is absent.
+Python-owned native payloads that need a TypeScript reader have strict
+hand-written Zod copies in `packages/common-contracts/src/schemas/`. Python
+remains their authority, and the named backend binding tests compare their
+fields, nested types, required keys, nullability, defaults and vocabularies.
+Planner contracts are the exception: TypeScript owns those schemas and their
+tests, with no Python model comparison. Run `bun run check` and `bun test` in
+the package; the backend gate installs its locked dependencies before pytest.
+The remaining native copies are bound by
+`backend/tests/contracts/test_native_typescript_bindings.py`.
 
 The current planner family has four strict native payloads:
 `DiscoveredArticleRow`, `SelectedArticleRow`, `FeedHealthStateRow` and
@@ -136,37 +144,31 @@ once in file metadata, not a repeated row version or generic identity.
 text, with one stamped header. The exact fields and review IDs are
 [the planner reference](../../reference/feed-planner-ledgers.md).
 
-The native `PlannerFileEnvelope` is distinct from the unchanged generic
-`FileEnvelope`. Both languages validate its allowed footer keys and declared
-row schema. Planner files have no generic `unit_id`, writer identity tree or
-Git SHA. Raw, compact and stored-row readers must support this format
-directly; they cannot add placeholder identity to make it fit.
+The TypeScript `PlannerFileEnvelope` is distinct from the unchanged generic
+Python `FileEnvelope`. TypeScript validates planner footer keys, row schema and
+content before reading or writing planner Parquet. Planner files have no
+generic `unit_id`, writer identity tree or Git SHA. Python refuses planner rows
+at its native ledger boundary; the gardener receives verified bytes and exact
+source paths from the TypeScript maintenance adapter.
 
-Named native binding cases compare current rows, nested values, artifact,
-private receipt and stage-batch shapes with actual Zod input schemas,
-including required keys, defaults and vocabularies. The report and runtime
-use those real schemas, not hand-built export copies. Native CI also reads
-real Bun output through daily, monthly, reopened-month and yearly packing.
-The TypeScript package checks do not claim that local Python ran.
+TypeScript tests exercise current rows, nested values, artifacts, private
+receipts and stage payloads against their Zod schemas, including required
+keys, defaults and vocabularies. Integration tests read real writer output
+through daily, monthly, reopened-month and yearly maintenance. Python planner
+model comparisons are retired, not skipped or replaced with compatible copies;
+native Python binding tests remain for payloads Python still owns.
 Contract input bindings use `Contract.json_schema()`, which includes its
 read-time version default; nested models use `model_json_schema()`.
 
-Current planner batches and ledger rows reject the retired eight-ledger
-formats. The native TypeScript reader accepts only ledger-specific current
-stamps: discovered articles and feed health use `2026-10-25`; selected articles
-and plan runs use `2026-10-26`. Obsolete selected and plan-run
-`2026-10-25` rows and obsolete selected artifacts refuse explicitly. They are
-not migrated or given invented historical provenance. Unknown current timing
-evidence stays null and real selection-start fallback remains separate from
-source provenance. There is no dual writer or restored audit shape. Finite
-historical generic-envelope vectors for unrelated families remain readable.
-Python retains its historical planner readers. The named binding test narrows
-only Python's selected-input schema for the TypeScript comparison: provenance
-is `source` or `selection`, and the artifact stamp is required. The physical
-publication column stays nullable to match native Python packing; current
-TypeScript row validation still refuses a null publication time. All other
-fields, defaults and vocabularies match the authoritative models, including
-selected content inside stage batches.
+Current TypeScript planner batches and ledger rows refuse retired formats.
+Discovered articles and feed health use `2026-10-25`; selected articles and
+plan runs use `2026-10-26`. Obsolete selected and plan-run `2026-10-25` rows
+and selected artifacts refuse explicitly. They are not migrated or given
+invented historical provenance. Unknown timing evidence stays null; selection
+time remains separate from source provenance. There is no dual writer or
+restored audit shape. Finite historical generic-envelope vectors for unrelated
+families remain readable. Python has no planner row reader or schema binding;
+the shared gardener keeps its generic compact-index records for scheduling.
 The private fetch journal retains its separately declared finite receipt
 stamps; it does not preserve an obsolete planner ledger.
 

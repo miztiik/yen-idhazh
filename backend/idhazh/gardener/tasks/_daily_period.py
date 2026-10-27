@@ -87,8 +87,8 @@ from pathlib import Path
 from typing import Final
 
 from idhazh import ledger
+from idhazh.contracts.base import LedgerContract
 from idhazh.contracts.collection_prune import StopReason
-from idhazh.contracts.feed_ingest_discovered_article import LedgerContract
 from idhazh.contracts.file_envelope import Period, WriterIdentity
 from idhazh.contracts.gardener_events import CompactionStep, StepChoice
 from idhazh.contracts.gardener_fault import GardenerFault, RecoveryNote
@@ -338,6 +338,8 @@ def compact(
         [] if choice.first is None or choice.last is None else _days_from(choice.first, choice.last)
     )
     tree.name_days([*(_days_from(*rerun_span) if rerun_span is not None else []), *new])
+    if ledger.paths.is_planner_ledger(tree.ledger):
+        return _compact_planner(tree, policy, new, first_kept=first_kept)
     model, key = ledger.door_contract(tree.ledger), ledger.door_key(tree.ledger)
     stops: list[Stop] = []
     closed: list[str] = []
@@ -405,4 +407,110 @@ def compact(
     else:
         if choice.stopped_because is StopReason.CEILING and choice.resume_from is not None:
             stops.append(Stop(StopReason.CEILING, choice.resume_from))
+    return tuple(stops)
+
+
+def _compact_planner(
+    tree: CompactTree,
+    policy: CompactionPolicy,
+    days: Sequence[str],
+    *,
+    first_kept: str | None,
+) -> tuple[Stop, ...]:
+    """Replace planner periods through their TypeScript row and file contract."""
+    work: list[tuple[Period, str, bool]] = []
+    seen: set[tuple[Period, str]] = set()
+    again: list[str] = []
+    for day in tree.raw_days:
+        if tree.daily_through is None or day > tree.daily_through:
+            continue
+        month, year = day[:7], day[:4]
+        if first_kept is not None and month < first_kept:
+            continue
+        if month in tree.monthly and (first_kept is None or month >= first_kept):
+            period, covers = (
+                (Period.YEARLY, year)
+                if year in tree.yearly
+                else (Period.MONTHLY, month)
+            )
+            key = (period, covers)
+            if key not in seen:
+                work.append((period, covers, True))
+                seen.add(key)
+        elif (
+            tree.monthly_through is not None
+            and month <= tree.monthly_through
+            and year not in tree.yearly
+            and month not in tree.monthly
+        ):
+            return (
+                tree.refuse(
+                    _STEP,
+                    day,
+                    fault=GardenerFault.NO_MONTH_TO_REOPEN,
+                ),
+            )
+
+        elif month in tree.monthly:
+            continue
+        else:
+            again.append(day)
+
+    raw_days = set(tree.raw_days)
+    for day in [*again, *days]:
+        if day not in raw_days:
+            continue
+        month, year = day[:7], day[:4]
+        if year in tree.yearly:
+            period, covers = Period.YEARLY, year
+        elif month in tree.monthly and first_kept is not None and month < first_kept:
+            continue
+        elif month in tree.monthly:
+            period, covers = Period.MONTHLY, month
+        elif tree.monthly_through is not None and month <= tree.monthly_through:
+            return (
+                tree.refuse(
+                    _STEP,
+                    day,
+                    fault=GardenerFault.NO_MONTH_TO_REOPEN,
+                ),
+            )
+        else:
+            period, covers = Period.DAILY, day
+        key = (period, covers)
+        if key not in seen:
+            work.append((period, covers, False))
+            seen.add(key)
+
+    stops: list[Stop] = []
+    taken = 0
+    for position, (period, covers, reopened) in enumerate(work):
+        if taken == policy.max_periods_per_run:
+            stops.append(Stop(StopReason.CEILING, covers))
+            break
+        step = (
+            CompactionStep.REOPEN_MONTHS
+            if reopened
+            else CompactionStep.PACK_DAYS
+            if period is Period.DAILY
+            else CompactionStep.CLOSE_MONTHS
+            if period is Period.MONTHLY
+            else CompactionStep.PACK_YEARS
+        )
+        stop = tree.compact_planner_period(
+            period,
+            covers,
+            step=step,
+            most=policy.max_raw_files_per_period,
+            reopened=reopened,
+        )
+        if stop is not None:
+            stops.append(stop)
+            if stop.fault is not None or stop.because is StopReason.CEILING:
+                break
+        taken += 1
+        if position == len(work) - 1 and stop is not None:
+            break
+    if not stops and policy.max_periods_per_run < len(work):
+        stops.append(Stop(StopReason.CEILING, work[policy.max_periods_per_run][1]))
     return tuple(stops)

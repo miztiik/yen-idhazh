@@ -2,15 +2,16 @@
 
 from __future__ import annotations
 
+import json
+import subprocess
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Final
 
-from idhazh.contracts.feed_ingest_discovered_article import LedgerContract
+from idhazh.contracts.base import LedgerContract
 from idhazh.contracts.file_envelope import (
     FileEnvelope,
-    PlannerFileEnvelope,
     envelope_from_metadata,
 )
 from idhazh.contracts.ledger_name import LedgerName
@@ -25,6 +26,14 @@ _REPACK_FIX: Final = (
     "give the contract a new version, CLAUDE.md section 11, or re-pack the file"
 )
 _ZERO_FILE_FIX: Final = "is --site-tree the built site?"
+_PLANNER_VALIDATION_VERSION: Final = "2026-10-27"
+_PLANNER_VALIDATION_CLI: Final = (
+    Path(__file__).resolve().parents[3]
+    / "packages"
+    / "ledger-file-writer"
+    / "src"
+    / "planner-file-validation-cli.ts"
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -172,7 +181,7 @@ def _check_file(
     ledger: LedgerName,
     contract_stamp: str,
     model: type[LedgerContract],
-) -> tuple[FileEnvelope | PlannerFileEnvelope, Any, list[_Fault]]:
+) -> tuple[FileEnvelope, Any, list[_Fault]]:
     from idhazh.ledger import parquet
 
     metadata, actual = parquet.read_footer_schema(path)
@@ -253,6 +262,77 @@ def _check_file(
     return envelope, actual, faults
 
 
+def _validate_planner_files(
+    site_tree: Path, inputs: Sequence[tuple[LedgerName, Path]]
+) -> tuple[dict[LedgerName, int], list[_Fault]]:
+    request = {
+        "version": _PLANNER_VALIDATION_VERSION,
+        "files": [
+            {"ledger": ledger.value, "path": path.relative_to(site_tree).as_posix()}
+            for ledger, path in inputs
+        ],
+    }
+    completed = subprocess.run(
+        ["bun", "run", str(_PLANNER_VALIDATION_CLI)],
+        cwd=site_tree,
+        input=json.dumps(request, separators=(",", ":")),
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if completed.returncode != 0:
+        raise RuntimeError(
+            f"TypeScript planner-file validation exited with status {completed.returncode}"
+        )
+    try:
+        result = json.loads(completed.stdout)
+    except json.JSONDecodeError as refusal:
+        raise ValueError("TypeScript planner-file validation returned invalid JSON") from refusal
+    if (
+        not isinstance(result, dict)
+        or result.get("version") != _PLANNER_VALIDATION_VERSION
+        or not isinstance(result.get("files"), list)
+        or len(result["files"]) != len(inputs)
+    ):
+        raise ValueError("TypeScript planner-file validation returned a mismatched result")
+
+    current: dict[LedgerName, int] = {}
+    faults: list[_Fault] = []
+    for (ledger, path), held in zip(inputs, result["files"], strict=True):
+        relative = path.relative_to(site_tree).as_posix()
+        if (
+            not isinstance(held, dict)
+            or held.get("ledger") != ledger.value
+            or held.get("path") != relative
+        ):
+            raise ValueError("TypeScript planner-file validation returned a mismatched file")
+        if held.get("status") == "valid":
+            row_count = held.get("row_count")
+            if type(row_count) is not int or row_count < 0 or held.get("reason") is not None:
+                raise ValueError("TypeScript planner-file validation returned an invalid success")
+            current[ledger] = current.get(ledger, 0) + 1
+            continue
+        reason = held.get("reason")
+        if held.get("status") != "invalid" or reason not in {"missing", "invalid"} or (
+            held.get("row_count") is not None
+        ):
+            raise ValueError("TypeScript planner-file validation returned an invalid refusal")
+        faults.append(
+            _Fault(
+                kind="F5",
+                ledger=ledger,
+                path=path,
+                file_stamp=None,
+                contract_stamp=None,
+                column=reason,
+                file_type="<invalid>",
+                contract_type="TypeScript planner row schema",
+                fix="repair the file using the current TypeScript-owned planner contract",
+            )
+        )
+    return current, faults
+
+
 def check(site_tree: Path, published: Sequence[LedgerName]) -> int:
     """Print the published-column check result and return a process exit code.
 
@@ -264,9 +344,17 @@ def check(site_tree: Path, published: Sequence[LedgerName]) -> int:
     site_tree = site_tree.resolve()
     faults: list[_Fault] = []
     reports: list[_Report] = []
+    planner_inputs: list[tuple[LedgerName, Path]] = []
     contracted_ledgers = 0
     contracted_files = 0
     for ledger in published:
+        files = _parquet_files(site_tree, ledger)
+        if paths.is_planner_ledger(ledger):
+            contracted_ledgers += 1
+            contracted_files += len(files)
+            planner_inputs.extend((ledger, path) for path in files)
+            reports.append(_Report(ledger=ledger, files=len(files), current=0, history={}))
+            continue
         try:
             model = keys.door_contract(ledger)
         except ValueError:
@@ -289,7 +377,6 @@ def check(site_tree: Path, published: Sequence[LedgerName]) -> int:
         contract_stamp = model.schema_version()
         current = 0
         history: dict[str, _History] = {}
-        files = _parquet_files(site_tree, ledger)
         contracted_files += len(files)
         for path in files:
             envelope, actual, file_faults = _check_file(
@@ -312,6 +399,20 @@ def check(site_tree: Path, published: Sequence[LedgerName]) -> int:
                 )
         reports.append(_Report(ledger=ledger, files=len(files), current=current, history=history))
 
+    if planner_inputs:
+        planner_current, planner_faults = _validate_planner_files(site_tree, planner_inputs)
+        faults.extend(planner_faults)
+        reports = [
+            _Report(
+                ledger=report.ledger,
+                files=report.files,
+                current=planner_current.get(report.ledger, 0)
+                if paths.is_planner_ledger(report.ledger)
+                else report.current,
+                history=report.history,
+            )
+            for report in reports
+        ]
     zero_file_fault = contracted_ledgers > 0 and contracted_files == 0
     if faults or zero_file_fault:
         if zero_file_fault:

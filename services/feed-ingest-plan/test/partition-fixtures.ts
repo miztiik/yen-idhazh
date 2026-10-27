@@ -1,10 +1,9 @@
 /** Build a bounded real screening -> curation -> metadata write from recorded work sizes. */
 import { randomUUID } from "node:crypto";
-import { mkdir, stat, writeFile } from "node:fs/promises";
-import { dirname, join } from "node:path";
+import { relative, resolve, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
-  COMPACT_INDEX_VERSION, CompactIndexSchema, FeedIngestCandidateSchema, ParsedFeedBatchSchema, SelectedArticleRowContract,
+  FeedIngestCandidateSchema, ParsedFeedBatchSchema, SelectedArticleRowContract,
   WriterIdentitySchema, deriveCandidateId, deriveUrlKey, selectedArticleMetadata,
 } from "@idhazh/common-contracts";
 import type { WriterIdentity } from "@idhazh/common-contracts";
@@ -16,6 +15,7 @@ import { screenArticleCandidates } from "../src/screen-article-candidates/triage
 import { readPlannerDay } from "../src/read-ledger-history/read-planner-history";
 import { loadPlanInputs } from "../src/load-plan-inputs";
 import { resolveRunContext } from "../src/resolve-run-context";
+import { fixtureGit } from "./publication-recordings";
 
 export type HistoryFixture = {
   date: string; run_id: string; correlation_id: string; observed_at: string;
@@ -134,9 +134,21 @@ export async function writeRows<T extends object>(
   });
 }
 
+export async function commitFixtureFiles(repositoryRoot: string, paths: readonly string[]) {
+  if (paths.length === 0) return;
+  try {
+    const top = await fixtureGit(repositoryRoot, ["rev-parse", "--show-toplevel"]);
+    if (resolve(top) !== resolve(repositoryRoot)) {
+      await fixtureGit(repositoryRoot, ["init", "--initial-branch=main"]);
+    }
+  } catch { await fixtureGit(repositoryRoot, ["init", "--initial-branch=main"]); }
+  await fixtureGit(repositoryRoot, ["add", "--", ...paths]);
+  await fixtureGit(repositoryRoot, ["commit", "--allow-empty", "-m", "Record planner fixture files"]);
+}
+
 export async function compactRows<T extends object>(
   root: string, ledger: string, day: string, contract: LedgerRowContract<T>, rows: readonly T[],
-  period: "daily" | "monthly" | "yearly",
+  period: "daily" | "monthly" | "yearly", repositoryRoot = root,
 ) {
   const covers = day.slice(0, period === "daily" ? 10 : period === "monthly" ? 7 : 4);
   const written = await persistLedger({
@@ -145,14 +157,9 @@ export async function compactRows<T extends object>(
     ...(ledger === "feed-health-state" ? { updatedAt: `${day}T23:59:59.123Z` } : {}),
   });
   const file = written.files[0];
-  const indexPath = join(root, "compact", ...registration(ledger).prefix, "index", `${period}.json`);
-  const index = CompactIndexSchema.parse({
-    version: COMPACT_INDEX_VERSION, ledger, period, entries: [{
-      covers, rows: rows.length, bytes: file === undefined ? 0 : (await stat(join(root, file.path))).size,
-      state: file === undefined ? "empty" : "packed",
-    }],
-  });
-  await mkdir(dirname(indexPath), { recursive: true });
-  await writeFile(indexPath, JSON.stringify(index));
-  return { written, indexPath, index, path: file === undefined ? undefined : join(root, file.path) };
+  if (file !== undefined) {
+    const path = relative(repositoryRoot, join(root, file.path)).replaceAll("\\", "/");
+    await commitFixtureFiles(repositoryRoot, [path]);
+  }
+  return { written, path: file === undefined ? undefined : join(root, file.path) };
 }

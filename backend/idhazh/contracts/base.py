@@ -893,3 +893,6 @@ class Contract(Model):
 
     def to_json(self) -> str:
         return canonical_json(self.model_dump(mode="json"))
+
+
+LedgerContract = Contract

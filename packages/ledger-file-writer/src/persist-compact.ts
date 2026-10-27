@@ -12,6 +12,7 @@ export async function persistCompactLedger<T extends object>(
   input: Extract<PersistLedgerInput<T>, { period: { tier: "compact" } }>,
 ): Promise<PersistLedgerResult> {
   const context = validateLedgerInput(input);
+  if (context.planner && input.rows.length === 0) return { status: "empty", files: [] };
   const compactPeriod = input.period;
   const compactRows = input.rows.map((candidate) => context.planner
     ? buildPlannerCompactRow(candidate, context.rowSchema, compactPeriod)

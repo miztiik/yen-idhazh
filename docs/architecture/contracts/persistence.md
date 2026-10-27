@@ -1,6 +1,6 @@
 # The Ledger Door: Parquet and JSON Lines Under state/raw and state/compact
 
-**Last Updated**: 2026-10-26
+**Last Updated**: 2026-10-27
 
 How a contract payload reaches disk under `state/raw/` and `state/compact/`, how it comes back, and how the parquet engine is swapped. The door is `backend/idhazh/ledger/persist.py`; everything a producer needs is two calls, `ledger.persist` and `ledger.load`. The registry and the lifecycle statuses are [ledger-registry.md](ledger-registry.md), what each ledger answers is [state-ledgers.md](state-ledgers.md), and the shape of a contract is [schemas.md](schemas.md).
 
@@ -115,17 +115,19 @@ proof limits are described in [feed-partitioning.md](../sources/feed-partitionin
 
 ## Planner files without generic identities
 
-Only the four current planner siblings use `PlannerFileEnvelope` and
-`PlannerStoredRow`. Format-specific typed readers share the private I/O
-decoder. Existing generic readers retain their original envelope/row types
-and reject a planner format; shared native and gardener callers dispatch by
-the registered family. No old-family caller receives an optional identity
-where its existing protocol requires one.
+Only the four current planner siblings use the TypeScript-owned
+`PlannerFileEnvelope` and `PlannerStoredRow`. Format-specific typed readers
+share the private I/O decoder. Python's generic readers retain their original
+envelope and row types and refuse planner rows; the published-file check and
+gardener dispatch planner files to the TypeScript reader and writer by
+registered family. No old-family caller receives an optional identity where
+its existing protocol requires one.
 
-Planner payload models do not inherit generic row identity. Native and
-TypeScript writers emit the exact declared payload columns; persistence,
-raw readers, stored-output verification and all gardener packing tiers
-understand that format directly.
+Planner payloads do not inherit generic row identity. TypeScript writers emit
+the exact declared payload columns; the gardener's Python scheduler keeps its
+generic compact-index records, while TypeScript validates and packs planner
+rows and returns verified bytes and exact deletion paths. No Python planner
+row model duplicates that format.
 
 The minimal footer contains schema/envelope versions, registered ledger,
 tier/period/coverage, file ID, canonical content digest and the actual writer

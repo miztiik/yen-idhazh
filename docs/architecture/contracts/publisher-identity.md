@@ -1,6 +1,6 @@
 # Publisher identity
 
-**Last Updated**: 2026-10-24
+**Last Updated**: 2026-10-27
 
 How is a publisher ID created once, then kept stable as names and feeds change?
 
@@ -89,8 +89,8 @@ the [source catalog](../../../config/sources.json).
 - **Accept after identity review:** `bbc`, `the-guardian` and `straits-times`
   are valid spellings for curated publication names. Several confirmed feeds
   from the same publication would reference the same ID.
-- **Keep separate:** `the-hindu` and `the-hindu-businessline` illustrate the
-  existing editorial-publication distinction, not a common-parent grouping.
+- **Do not infer from ownership:** separate editorial publications keep
+  separate IDs even when they share a parent organization.
 - **Qualify a genuine collision:** if `the-herald` already belongs to another
   publication, `the-herald-australia` is a possible new ID only when the operator
   confirms that country identifies the distinct publication. Do not rename the
@@ -147,7 +147,7 @@ Publisher identity is carried by the Pydantic-owned shared snapshot and the
 TypeScript copy, with versioned compatible readers and the named binding tests.
 Follow
 [the schema contract](schemas.md#what-holds-the-copy-in-step), including
-`backend/tests/contracts/test_feed_ingest_contracts.py`.
+`backend/tests/contracts/test_native_typescript_bindings.py`.
 The planner-only TypeScript event exception stays narrow; approval of a
 publisher slug does not create another exception.
 
@@ -235,9 +235,10 @@ reviewed sources were the [BBC](https://www.bbc.com/aboutthebbc),
 [The Hindu BusinessLine](https://www.thehindubusinessline.com/aboutus/),
 [Mint](https://www.livemint.com/object/141enehrj3mssnltt8beak/aboutus.html)
 and [The Economist](https://www.economistgroup.com/businesses/the-economist).
-Section feeds reuse their publication's ID, while The Hindu and BusinessLine
-remain separate publications. The catalog is the source of truth for exact
-feed references; all unreviewed entries stay null, and no historical record is
+Section feeds reuse their publication's ID where review confirms one editorial
+publication. Separate editorial publications keep separate IDs even when they
+share a parent organization. The catalog is the source of truth for exact feed
+references; all unreviewed entries stay null, and no historical record is
 backfilled.
 
 ## See also
