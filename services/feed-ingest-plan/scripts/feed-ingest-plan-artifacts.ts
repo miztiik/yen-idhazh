@@ -3,9 +3,9 @@ import { copyFile, mkdir, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { z } from "zod";
 import { WriterIdentitySchema } from "../../../packages/common-contracts/src/index";
-import { collectWorkflowFiles, readWorkflowPublicationContext } from "./feed-ingest-plan-current-files";
+import { collectWorkflowFiles, readWorkflowDeliveryContext } from "./feed-ingest-plan-current-files";
 import type { ExecutionIdentity, MetadataRegistrations } from "./feed-ingest-plan-metadata";
-import { MetadataCommitResultSchema } from "./feed-ingest-plan-commit-result";
+import { MetadataDeliveryResultSchema } from "./feed-ingest-plan-delivery-result";
 import { writeGitHubOutputs } from "./feed-ingest-plan-outputs";
 
 export async function prepareWorkflowArtifacts(input: {
@@ -16,7 +16,7 @@ export async function prepareWorkflowArtifacts(input: {
   const run = z.string().regex(/^\d+$/).parse(input.runNumber);
   const attempt = WriterIdentitySchema.shape.attempt.parse(input.attempt);
   const outputs: Record<string, string> = {};
-  async function publish(key: string, path: string) {
+  async function writeOutput(key: string, path: string) {
     outputs[key] = path;
     if (input.outputPath !== undefined) await writeGitHubOutputs(input.outputPath, { [key]: path });
   }
@@ -28,26 +28,26 @@ export async function prepareWorkflowArtifacts(input: {
     const path = `artifacts/${run}-${attempt}-${filename}`;
     await mkdir(dirname(join(input.directory, path)), { recursive: true });
     await copyFile(source, join(input.directory, path));
-    await publish(key, path);
+    await writeOutput(key, path);
   }
   for (const [key, name] of [
     ["response", "response.json"], ["health", "health.json"], ["history", "history-staging-ms.json"],
-    ["commit", "commit-result.json"], ["runtime_log", "runtime.log"], ["commit_log", "commit.log"],
+    ["delivery", "delivery-result.json"], ["runtime_log", "runtime.log"], ["delivery_log", "delivery.log"],
     ["policy", "workflow-policy.json"], ["resources", "resources.json"], ["report", "report.md"],
   ] as const) await retain(key, join(input.directory, name), name);
   await retain("independent", join(input.root, "test-results", "host-probes", "resource-proof.json"), "controlled-host-proof.json");
   const responsePath = join(input.directory, "response.json");
   if (!await Bun.file(responsePath).exists() && !await Bun.file(join(input.directory, "resources.json")).exists()) return outputs;
   const context = input.identity !== undefined && input.registrations !== undefined
-    ? { identity: input.identity, registrations: input.registrations } : await readWorkflowPublicationContext(input);
+    ? { identity: input.identity, registrations: input.registrations } : await readWorkflowDeliveryContext(input);
   const { paths, response, failures } = await collectWorkflowFiles({ ...input, ...context });
-  const commitFile = Bun.file(join(input.directory, "commit-result.json"));
-  let commit: ReturnType<typeof MetadataCommitResultSchema.parse> | null = null;
-  try { if (await commitFile.exists()) commit = MetadataCommitResultSchema.parse(await commitFile.json()); }
+  const deliveryFile = Bun.file(join(input.directory, "delivery-result.json"));
+  let delivery: ReturnType<typeof MetadataDeliveryResultSchema.parse> | null = null;
+  try { if (await deliveryFile.exists()) delivery = MetadataDeliveryResultSchema.parse(await deliveryFile.json()); }
   catch (error) { failures.push(error); }
-  const confirmed = commit !== null && commit.files === paths.length
-    && [...commit.paths].sort().join("\n") === [...paths].sort().join("\n")
-    && (commit.status === "landed" || commit.status === "already-on-main") && commit.commit !== null;
+  const confirmed = delivery !== null && delivery.files === paths.length
+    && [...delivery.paths].sort().join("\n") === [...paths].sort().join("\n")
+    && (delivery.status === "landed" || delivery.status === "already-on-main") && delivery.commit !== null;
   if (!confirmed && paths.length > 0) {
     const recovery = `artifacts/uncommitted-metadata-${run}-${attempt}`;
     for (const path of paths) {
@@ -56,9 +56,9 @@ export async function prepareWorkflowArtifacts(input: {
       await copyFile(join(input.directory, "state", path), destination);
     }
     await writeFile(join(input.directory, recovery, "current-run-files.json"), JSON.stringify(paths));
-    await publish("metadata_recovery", recovery);
+    await writeOutput("metadata_recovery", recovery);
     console.error(JSON.stringify({ event: "planner_uncommitted_metadata_retained", files: paths.length,
-      commit_status: commit?.status ?? "not_recorded" }));
+      delivery_status: delivery?.status ?? "not_recorded" }));
   }
   if (response !== undefined && response.selected_articles_artifact !== null) {
     await retain("selected", join(input.root, response.selected_articles_artifact), "selected-articles.json");

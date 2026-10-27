@@ -1,4 +1,4 @@
-/** Which five registered raw ledgers may this workflow publish? */
+/** Which five registered raw ledgers may this workflow deliver? */
 import { lstat, readFile, realpath } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { z } from "zod";
@@ -55,17 +55,17 @@ export function hostWriter(identity: ExecutionIdentity) {
 
 export function identifyMetadataPath(path: string, registrations: MetadataRegistrations) {
   const name = LedgerSchema.options.find(name => path.startsWith(`raw/${registrations[name].prefix.join("/")}/`));
-  if (name === undefined) throw new Error("commit: expected one exact current planner or host raw UUID Parquet path");
+  if (name === undefined) throw new Error("delivery: expected one exact current planner or host raw UUID Parquet path");
   const registration = registrations[name];
   if (registration.name !== name || registration.lifecycle_status !== "active"
     || registration.grain !== "raw-and-compact" || registration.prefix.some(part => !/^[a-z0-9][a-z0-9-]*$/.test(part))) {
-    throw new Error("commit: metadata registration is not active and declared");
+    throw new Error("delivery: metadata registration is not active and declared");
   }
   const suffix = path.slice(`raw/${registration.prefix.join("/")}/`.length).split("/");
   const file = suffix[3];
   if (suffix.length !== 4 || file === undefined
     || !/^[0-9a-f]{8}-[0-9a-f]{4}-8[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\.parquet$/.test(file)) {
-    throw new Error("commit: expected one exact current planner or host raw UUID Parquet path");
+    throw new Error("delivery: expected one exact current planner or host raw UUID Parquet path");
   }
   const covers = DateStampSchema.parse(suffix.slice(0, 3).join("-"));
   return { ledger: name, covers, file_id: file.slice(0, -8) };
@@ -73,17 +73,17 @@ export function identifyMetadataPath(path: string, registrations: MetadataRegist
 
 export async function readMetadataBytes(root: string, path: string) {
   if (path.startsWith("/") || /[:\\\u0000-\u001f\u007f]/.test(path)
-    || path.split("/").some(part => part === "" || part === "." || part === "..")) throw new Error("commit: output escapes state root");
+    || path.split("/").some(part => part === "" || part === "." || part === "..")) throw new Error("delivery: output escapes state root");
   let file = await realpath(root);
   const parts = path.split("/");
   for (const [index, part] of parts.entries()) {
     file = join(file, part);
     const info = await lstat(file);
     if (info.isSymbolicLink() || !(index === parts.length - 1 ? info.isFile() : info.isDirectory())) {
-      throw new Error("commit: output contains a symlink or non-file parent");
+      throw new Error("delivery: output contains a symlink or non-file parent");
     }
   }
-  if (resolve(await realpath(file)) !== resolve(file)) throw new Error("commit: output escapes state root");
+  if (resolve(await realpath(file)) !== resolve(file)) throw new Error("delivery: output escapes state root");
   return { file, bytes: await readFile(file) };
 }
 
@@ -101,7 +101,7 @@ export async function verifyMetadataFile(root: string, path: string, registratio
       || actual.envelope.covers !== named.covers || actual.envelope.file_id !== named.file_id
       || actual.rows.length !== 1 || actual.rows[0]!.row.date !== named.covers
       || Object.entries(writer).some(([key, value]) => actual.envelope.identity[key as keyof typeof writer] !== value)) {
-      throw new Error("commit: host output differs from its current execution identity");
+      throw new Error("delivery: host output differs from its current execution identity");
     }
     return { ...named, bytes, file_sha256: digest, envelope: actual.envelope, rows: actual.rows.map(stored => stored.row),
       content_sha256: actual.envelope.content_sha256, row_count: actual.rows.length };
@@ -113,7 +113,7 @@ export async function verifyMetadataFile(root: string, path: string, registratio
     || actual.rows.length === 0 || (named.ledger !== "discovered-articles"
       && actual.rows.some(row => !("run_id" in row) || row.run_id !== expected.run_id
         || !("attempt" in row) || row.attempt !== expected.attempt))) {
-    throw new Error("commit: planner output differs from its current execution identity");
+    throw new Error("delivery: planner output differs from its current execution identity");
   }
   return { ...named, bytes, file_sha256: digest, envelope: actual.envelope, rows: actual.rows,
     content_sha256: actual.envelope.content_sha256, row_count: actual.rows.length };
