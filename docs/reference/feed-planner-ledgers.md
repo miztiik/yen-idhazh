@@ -565,8 +565,8 @@ Explicit selection persistence writes one row for each parsed candidate not
 selected, including runs with zero selected articles. Fetch/parse failures are
 not parsed selection candidates. This ledger has no title, body, policy or score
 tree and no explorer consent.
-Its compact index has the same configured payload-size ceiling as the other
-planner indexes in `config/idhazh.json`.
+Without explorer consent, its files are not staged in the site and it has no
+published-payload ceiling in `config/idhazh.json`.
 
 ### Table M - Rejected article fields
 
