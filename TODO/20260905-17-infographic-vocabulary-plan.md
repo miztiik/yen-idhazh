@@ -3,7 +3,7 @@
 **Last Updated**: 2026-09-05
 **Level**: 3 (three typeset templates and the compiler rule that lets a real sentence fit a card)
 
-**Chain**: previous [`20260905-16-composition-vocabulary-plan.md`](20260905-16-composition-vocabulary-plan.md) | next [`20260905-18-diagram-vocabulary-plan.md`](20260905-18-diagram-vocabulary-plan.md).
+**Chain**: the composition family is delivered in [the visual-plan rules](../docs/architecture/publishing/what-a-visual-plan-may-say-and-what-happens-to-one-that-is-refused.md) | next [`20260905-18-diagram-vocabulary-plan.md`](20260905-18-diagram-vocabulary-plan.md).
 **Reference**: [`20260902-visual-planner-pseudo-plan.md`](20260902-visual-planner-pseudo-plan.md) - rows 40, 41, 42, section 4.F, 12.11 G18, 12.13 G33, 14.3, P.L28, P.L33, P.R20.
 
 Execute per docs/how-to/execute-a-plan.md: one maintainer carries the plan and delegates a row where delegation pays; keep parallel N = 4 rows in flight, refilling a slot as soon as a worker returns and never waiting on a merge; consult a persona only where two answers would lead to different code; AUTO-merge on green gates; honor the ESCALATE triggers in section 0. AUTHOR-AND-STOP until the user authorizes.
@@ -133,6 +133,6 @@ Execute per docs/how-to/execute-a-plan.md: one maintainer carries the plan and d
 ## See also
 
 - [`20260902-visual-planner-pseudo-plan.md`](20260902-visual-planner-pseudo-plan.md) - the decision record this group executes.
-- [`20260905-16-composition-vocabulary-plan.md`](20260905-16-composition-vocabulary-plan.md) - the previous plan.
+- [Composition chart rules](../docs/architecture/publishing/what-a-visual-plan-may-say-and-what-happens-to-one-that-is-refused.md) - the delivered composition family.
 - [`20260905-18-diagram-vocabulary-plan.md`](20260905-18-diagram-vocabulary-plan.md) - the next plan.
 - [Summary metrics](../docs/concepts/summary-metrics.md) - current evaluation; the old `new_fact_rate` is retired.

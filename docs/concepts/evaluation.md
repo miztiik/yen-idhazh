@@ -876,7 +876,7 @@ invent a majority rule when reviewers disagree or when some answers are
 missing. The report prints the raw pairwise agreement beside the rate. At
 least one visual must have two named reviewers before a rate is quotable; this
 means agreement can be measured, not that it meets a threshold. No numerical
-agreement threshold is set here. Authority: Plan 16 row 6 and Plan 21 Q5.
+agreement threshold is set here. Authority: the visual keep-rate rule above and Plan 21 Q5.
 
 **The band is one function (2026-08-23).** The old code had one function for rows with a faithfulness score and another function for rows without one. Only the first path wrote the eval row, so the counterweights were measured and then ignored by the reader-facing band. One function removes that split. Authority: Fowler.
 
