@@ -3,9 +3,9 @@ import { randomUUID, createHash } from "node:crypto";
 import { appendFile } from "node:fs/promises";
 import { posix } from "node:path";
 import {
-  COMPACT_INDEX_VERSION, RAW_DAY_INDEX_VERSION, CompactIndexSchema, DateStampSchema, RawDayIndexSchema, PlannerLedgerNameSchema,
+  COMPACT_INDEX_VERSION, RAW_DAY_INDEX_VERSION, CompactIndexSchema, DateStampSchema, PlannerLedgerNameSchema, RawDayIndexSchema,
 } from "../../../packages/common-contracts/src/index";
-import type { CompactIndex, RawDayIndex } from "../../../packages/common-contracts/src/index";
+import type { CompactIndex } from "../../../packages/common-contracts/src/index";
 import type { LedgerRegistration } from "../../../packages/ledger-file-writer/src/index";
 import { RelativePathSchema, SeenDayInputSchema } from "../src/config/service-settings";
 import type { SeenDayInput } from "../src/config/service-settings";
@@ -58,7 +58,9 @@ export function createSeenDayInputs(prefix: readonly string[], days: readonly st
   const indexes = resolveHistoryIndexes(prefix);
   return days.map(day => ({
     day: DateStampSchema.parse(day), indexes,
-    raw_index: `state/raw/${prefix.join("/")}/${day.replaceAll("-", "/")}/index.json`,
+    ...(prefix[0] === "feed-ingest-plan" ? {} : {
+      raw_index: `state/raw/${prefix.join("/")}/${day.replaceAll("-", "/")}/index.json`,
+    }),
   }));
 }
 export function completeHistoryDayInputs(prefix: readonly string[], required: readonly string[], authored: readonly SeenDayInput[], name: string): SeenDayInput[] {
@@ -79,23 +81,34 @@ export function historyIndexPaths(prefix: readonly string[], days: readonly stri
   if (prefix.length === 0 || prefix.some(piece => !/^[a-z0-9][a-z0-9-]*$/.test(piece))) throw new Error("History prefix requires directory identifiers");
   return [
     ...(["yearly", "monthly", "daily"] as const).map(period => `state/compact/${prefix.join("/")}/index/${period}.json`),
-    ...days.map(day => `state/raw/${prefix.join("/")}/${DateStampSchema.parse(day).replaceAll("-", "/")}/index.json`),
+    ...(prefix[0] === "feed-ingest-plan" ? [] : days.map(day =>
+      `state/raw/${prefix.join("/")}/${DateStampSchema.parse(day).replaceAll("-", "/")}/index.json`)),
   ];
 }
 export function resolveHistoryInventory(input: {
   ledger: CompactIndex["ledger"]; prefix: readonly string[]; days: readonly string[];
-  compact: readonly CompactIndex[]; raw: readonly RawDayIndex[];
-  indexes?: SeenDayInput["indexes"]; rawIndexes?: Readonly<Record<string, string>>;
+  compact: readonly CompactIndex[]; rawFiles?: readonly string[];
+  raw?: readonly unknown[]; rawIndexes?: Readonly<Record<string, string>>;
+  indexes?: SeenDayInput["indexes"];
 }) {
   const indexes = resolveHistoryIndexes(input.prefix, input.indexes);
-  const rawIndex = (day: string) => input.rawIndexes?.[day] ?? `state/raw/${input.prefix.join("/")}/${day.replaceAll("-", "/")}/index.json`;
-  const paths = new Set([...Object.values(indexes), ...input.days.map(rawIndex)]);
+  const paths = new Set(Object.values(indexes));
+  const planner = PlannerLedgerNameSchema.safeParse(input.ledger).success;
+  const rawIndex = (day: string) => input.rawIndexes?.[day]
+    ?? `state/raw/${input.prefix.join("/")}/${day.replaceAll("-", "/")}/index.json`;
+  const raw = (input.raw ?? []).map(value => RawDayIndexSchema.parse(value));
   const compact = input.compact.map(value => CompactIndexSchema.parse(value));
-  const raw = input.raw.map(value => RawDayIndexSchema.parse(value));
   if (compact.some(index => index.version > COMPACT_INDEX_VERSION || index.ledger !== input.ledger)
     || raw.some(index => index.version > RAW_DAY_INDEX_VERSION || index.ledger !== input.ledger)
-    || new Set(compact.map(index => index.period)).size !== compact.length || new Set(raw.map(index => index.date)).size !== raw.length) {
+    || new Set(raw.map(index => index.date)).size !== raw.length
+    || new Set(compact.map(index => index.period)).size !== compact.length) {
     throw new LedgerHistoryReadError("History indexes repeat, belong to another ledger or use an unsupported version");
+  }
+  for (const path of input.rawFiles ?? []) {
+    const directories = input.days.map(day => `state/raw/${input.prefix.join("/")}/${DateStampSchema.parse(day).replaceAll("-", "/")}/`);
+    if (!directories.some(directory => path.startsWith(directory) && !path.slice(directory.length).includes("/"))) {
+      throw new LedgerHistoryReadError("Raw history file lies outside its named ledger day");
+    }
   }
   for (const day of input.days) {
     DateStampSchema.parse(day);
@@ -112,11 +125,21 @@ export function resolveHistoryInventory(input: {
       }
       if (entry !== undefined) { covered = true; break; }
     }
-    if (covered && !PlannerLedgerNameSchema.safeParse(input.ledger).success) continue;
-    const index = raw.find(index => index.date === day);
-    if (index === undefined) continue;
-    if (createHash("sha256").update(index.files.join("\n")).digest("hex") !== index.content_sha256) throw new LedgerHistoryReadError("Raw history filename digest differs");
-    for (const name of index.files) paths.add(`${posix.dirname(rawIndex(day))}/${name}`);
+    if (covered && !planner) continue;
+    const directory = `state/raw/${input.prefix.join("/")}/${day.replaceAll("-", "/")}/`;
+    for (const path of input.rawFiles ?? []) {
+      if (path.startsWith(directory)) paths.add(path);
+    }
+    if (!planner) {
+      paths.add(rawIndex(day));
+      const index = raw.find(index => index.date === day);
+      if (index === undefined) continue;
+      if (index.ledger !== input.ledger
+        || createHash("sha256").update(index.files.join("\n")).digest("hex") !== index.content_sha256) {
+        throw new LedgerHistoryReadError("Raw history filename digest differs");
+      }
+      for (const name of index.files) paths.add(`${posix.dirname(rawIndex(day))}/${name}`);
+    }
   }
   paths.forEach(path => RelativePathSchema.parse(path));
   return [...paths];

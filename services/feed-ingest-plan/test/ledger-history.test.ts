@@ -1,11 +1,11 @@
 /** Verify named current planner history without weakening the other families' native protocol. */
 import { beforeAll, expect, test } from "bun:test";
-import { createHash, randomUUID } from "node:crypto";
+import { randomUUID } from "node:crypto";
 import { mkdtemp, mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { basename, dirname, join } from "node:path";
+import { dirname, join } from "node:path";
 import {
-  COMPACT_INDEX_VERSION, RAW_DAY_INDEX_VERSION, PlanRunRowContract, SelectedArticleRowContract,
+  COMPACT_INDEX_VERSION, PlanRunRowContract, SelectedArticleRowContract,
   SelectedArticleRowSchema,
 } from "@idhazh/common-contracts";
 import { persistLedger } from "@idhazh/ledger-file-writer";
@@ -25,6 +25,7 @@ import { LedgerHistoryReadError } from "../src/read-ledger-history/ledger-histor
 import { ItemHealthPublicationSchema, PublishedRowSchema, PUBLISHED_ROW_SCHEMA_VERSION } from "../src/metrics/publication-evidence";
 import { ITEM_HEALTH_ROW_SCHEMA_VERSION } from "../src/read-ledger-history/item-health-version";
 import { compactRows, registration, settings, writer, writeRows } from "./partition-fixtures";
+import { fixtureGit } from "./publication-recordings";
 
 const day = "2026-10-20";
 const publishedContract = { schema: PublishedRowSchema, schemaVersion: PUBLISHED_ROW_SCHEMA_VERSION };
@@ -32,20 +33,11 @@ beforeAll(async () => { await initializeParquet(); });
 function selection(date = day, attempt = 1) {
   return SelectedArticleRowSchema.parse(plannerRecordings(date, attempt).find(record => record.name === "selected-articles")!.row);
 }
-async function rawIndex(root: string, ledger: string, date: string, written: PersistLedgerResult) {
-  const file = written.files[0];
-  if (file === undefined) throw new Error("Index fixture needs one generated native file");
-  const directory = dirname(join(root, file.path));
-  const names = written.files.map(file => basename(file.path)).sort();
-  const value = {
-    version: RAW_DAY_INDEX_VERSION, ledger, date, files: names,
-    content_sha256: createHash("sha256").update(names.join("\n")).digest("hex"),
-    bytes: await Promise.all(names.map(async name => (await stat(join(directory, name))).size)),
-    listed_at: `${date}T23:59:59Z`,
-  };
-  const path = join(directory, "index.json");
-  await writeFile(path, JSON.stringify(value));
-  return { path, value };
+async function commitRaw(root: string, written: PersistLedgerResult) {
+  const repository = dirname(root);
+  await fixtureGit(repository, ["init", "--initial-branch=main"]);
+  await fixtureGit(repository, ["add", "--", ...written.files.map(file => `state/${file.path}`)]);
+  await fixtureGit(repository, ["commit", "--allow-empty", "-m", "Record native fixture members"]);
 }
 
 test("native raw and daily reads preserve another family's original writer identity", async () => {
@@ -125,12 +117,12 @@ test("native monthly and yearly precedence reads only the requested day's origin
     for (const period of ["monthly", "yearly"] as const) {
       const compact = await compactRows(root, "selected-articles", day, SelectedArticleRowContract, [original, neighbor], period);
       indexes[period] = compact.indexPath;
-      const current = await readPlannerDay(root, registration("selected-articles"), { day, indexes }, SelectedArticleRowContract);
+      const current = await readPlannerDay(root, registration("selected-articles"), { day, indexes, raw_files: [] }, SelectedArticleRowContract);
       expect(current.complete).toBe(true);
       expect(current.represented).toBe(true);
       expect(current.rows).toEqual([original]);
       const quiet = await readPlannerDay(root, registration("selected-articles"), {
-        day: "2026-10-18", indexes,
+        day: "2026-10-18", indexes, raw_files: [],
       }, SelectedArticleRowContract);
       expect(quiet).toMatchObject({ complete: true, represented: true, rows: [] });
       const native = await readPlannerParquet(compact.path!, "selected-articles", SelectedArticleRowContract);
@@ -160,7 +152,7 @@ test("named empty, lost, expired and missing periods preserve each family's comp
       expect(held.complete).toBe(state === "empty");
       expect(held.represented).toBe(true);
       const quiet = await readPlannerDay(root, registration("selected-articles"), {
-        day, indexes: { daily: indexPath },
+        day, indexes: { daily: indexPath }, raw_files: [],
       }, SelectedArticleRowContract);
       expect(quiet).toMatchObject({ complete: state === "empty", represented: false, rows: [] });
     }
@@ -200,34 +192,19 @@ test("named empty, lost, expired and missing periods preserve each family's comp
   } finally { await rm(root, { recursive: true, force: true }); }
 });
 
-test("one named raw listing verifies filenames and sizes, and genuine publications require an unambiguous publisher join", async () => {
+test("explicit completed files retain integrity and genuine publications require an unambiguous publisher join", async () => {
   const root = await mkdtemp(join(tmpdir(), "history-raw-index-"));
   try {
     const written = await writeRows(root, "selected-articles", day, SelectedArticleRowContract, [selection()]);
-    const index = await rawIndex(root, "selected-articles", day, written);
-    const read = () => readPlannerDay(root, registration("selected-articles"), { day, raw_index: index.path }, SelectedArticleRowContract);
+    const read = () => readPlannerDay(root, registration("selected-articles"), {
+      day, raw_files: written.files.map(file => file.path),
+    }, SelectedArticleRowContract);
     expect((await read()).rows).toEqual([selection()]);
-    for (const patch of [{ content_sha256: "0".repeat(64) }, { bytes: [1] }, { ledger: "plan-runs" }, { date: "2026-10-19" }]) {
-      await writeFile(index.path, JSON.stringify({ ...index.value, ...patch }));
-      const refused = await read();
-      expect(refused.complete).toBe(false);
-      expect(refused.rows).toEqual([]);
-      expect(refused.gaps.length).toBeGreaterThan(0);
-    }
-    await writeFile(index.path, "{");
-    const invalid = await read();
-    expect(invalid.complete).toBe(false);
-    expect(invalid.rows).toEqual([]);
-    expect(invalid.gaps.length).toBeGreaterThan(0);
-    await writeFile(index.path, JSON.stringify(index.value));
     await rm(join(root, written.files[0]!.path));
     const missing = await read();
     expect(missing.complete).toBe(false);
     expect(missing.rows).toEqual([]);
-    await writeFile(index.path, JSON.stringify({
-      ...index.value, files: [], bytes: [], content_sha256: createHash("sha256").update("").digest("hex"),
-    }));
-    const empty = await read();
+    const empty = await readPlannerDay(root, registration("selected-articles"), { day, raw_files: [] }, SelectedArticleRowContract);
     expect(empty.complete).toBe(true);
     expect(empty.represented).toBe(false);
     expect(empty.rows).toEqual([]);
@@ -244,7 +221,7 @@ test("one named raw listing verifies filenames and sizes, and genuine publicatio
     const publication = await writeRows(stateRoot, "published", day, publishedContract,
       [{ version: PUBLISHED_ROW_SCHEMA_VERSION, published_on: day, url_key: selected.url_key, item_id: identity.item_id }], writerIdentity);
     const snapshots = await writeRows(stateRoot, "selected-articles", day, SelectedArticleRowContract, [selected]);
-    await rawIndex(stateRoot, "selected-articles", day, snapshots);
+    await commitRaw(stateRoot, snapshots);
     const localFiles = (written: PersistLedgerResult) => written.files.map(file => `state/${file.path}`);
     const request = {
       root: publisherRoot, day, published: registration("published"), item_health: registration("item-health"),
@@ -272,12 +249,13 @@ test("one named raw listing verifies filenames and sizes, and genuine publicatio
       { ...selected, publisher_id: null },
     ]) {
       const changed = await writeRows(stateRoot, "selected-articles", day, SelectedArticleRowContract, [row]);
-      await rawIndex(stateRoot, "selected-articles", day, changed);
-      expect((await readPublisherPublication(request)).gaps).toContain("recorded_publisher_unavailable");
+      await commitRaw(stateRoot, changed);
+      // Earlier committed siblings remain visible; a later snapshot cannot hide them.
+      expect((await readPublisherPublication(request)).availability).toBe(row.publisher_id === null ? "unavailable" : "available");
     }
     const changedPublisher = await writeRows(stateRoot, "selected-articles", day, SelectedArticleRowContract,
       [{ ...selected, attempt: 2, publisher_id: "conflicting-publisher" }]);
-    await rawIndex(stateRoot, "selected-articles", day, { status: "written", files: [...snapshots.files, ...changedPublisher.files] });
+    await commitRaw(stateRoot, { status: "written", files: [...snapshots.files, ...changedPublisher.files] });
     const ambiguous = await readPublisherPublication(request);
     expect(ambiguous.availability).toBe("unavailable");
     expect(ambiguous.counts.size).toBe(0);
@@ -302,7 +280,6 @@ test("one named raw listing verifies filenames and sizes, and genuine publicatio
       expect(classifyPublicationHistoryError(error)).toBeNull();
     }
     expect(classifyPublicationHistoryError(new LedgerHistoryReadError("integrity diagnostic"))).toBe("integrity diagnostic");
-    await rawIndex(stateRoot, "selected-articles", day, snapshots);
     for (const bytes of [new Uint8Array([1, 2, 3]), new Uint8Array(20)]) {
       await writeFile(join(stateRoot, publication.files[0]!.path), bytes);
       await expect(readLedgerDay({ ledger: "published", day, contract: publishedContract,

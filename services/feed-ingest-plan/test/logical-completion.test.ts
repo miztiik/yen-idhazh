@@ -36,7 +36,7 @@ test("explicit run results survive native daily, monthly and yearly packing with
         const packed = await compactRows(root, record.name, day, record.contract, [record.row], period);
         for (const file of raw.files) await rm(join(root, file.path), { force: true });
         const reopened = await readPlannerDay(root, registration(record.name), {
-          day, indexes: { [period]: packed.indexPath },
+          day, indexes: { [period]: packed.indexPath }, raw_files: [],
         }, record.contract);
         expect(reopened.complete).toBe(true);
         expect(reopened.rows).toEqual([record.row]);

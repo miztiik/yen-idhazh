@@ -1,6 +1,6 @@
 /** Resolve bounded represented planner days from existing native inventory and period files. */
 import {
-  CompactIndexSchema, DateStampSchema, PublicationInventoryInputSchema, RawDayIndexSchema,
+  CompactIndexSchema, DateStampSchema, PublicationInventoryInputSchema,
 } from "../../../packages/common-contracts/src/index";
 import type { CompactIndex, FeedHealthStateRow } from "../../../packages/common-contracts/src/index";
 import type { SeenDayInput } from "../src/config/service-settings";
@@ -34,6 +34,7 @@ export async function stageFeedHistory(input: {
   authored: readonly SeenDayInput[];
   read: (path: string) => Promise<unknown | undefined>;
   read_period: (path: string) => Promise<readonly FeedHealthStateRow[]>;
+  raw_files: (day: string) => Promise<readonly string[]>;
 }) {
   if (!Number.isSafeInteger(input.period_limit) || input.period_limit < 1) throw new Error("Health period limit must be positive");
   const base = input.prefix.join("/");
@@ -56,6 +57,12 @@ export async function stageFeedHistory(input: {
     }
   }
   const days = new Map<string, SeenDayInput>();
+  const rawDays = new Map<string, readonly string[]>();
+  async function rawFiles(day: string) {
+    let files = rawDays.get(day);
+    if (files === undefined) { files = await input.raw_files(day); rawDays.set(day, files); }
+    return files;
+  }
   let entries: ReturnType<typeof PublicationInventoryInputSchema.parse>["entries"] = [];
   try {
     const inventory = await input.read("frontend/public/publication.json");
@@ -103,17 +110,7 @@ export async function stageFeedHistory(input: {
   }
   for (const day of [...closedRequestDays(input.now, input.request_report_closed_days), input.now.slice(0, 10)]) {
     const named = createSeenDayInputs(input.prefix, [day])[0]!;
-    try {
-      const raw = await input.read(named.raw_index);
-      if (raw !== undefined) {
-        const index = RawDayIndexSchema.parse(raw);
-        if (index.ledger !== input.ledger || index.date !== day) throw new LedgerHistoryReadError("Health raw index differs from its named day");
-        days.set(day, named);
-      }
-    } catch (error) {
-      if (classifyPlannerHistoryGap(error) === null) throw error;
-      notices.push(`health_index_refused:${day}`);
-    }
+    if (!days.has(day) && (await rawFiles(day)).length > 0) days.set(day, named);
   }
   for (const named of input.authored) {
     if (named.day > input.now.slice(0, 10)) throw new Error("Authored health day exceeds the captured UTC clock");
@@ -128,29 +125,21 @@ export async function stageFeedHistory(input: {
         && entry.covers <= input.now.slice(0, entry.covers.length))))) {
     notices.push("health_coverage_gap");
   }
-  for (const day of selected) {
-    const rawPath = day.raw_index ?? createSeenDayInputs(input.prefix, [day.day])[0]!.raw_index;
-    let index: ReturnType<typeof RawDayIndexSchema.parse>[] = [];
-    try {
-      const raw = await input.read(rawPath);
-      index = raw === undefined ? [] : [RawDayIndexSchema.parse(raw)];
-    } catch (error) {
-      if (classifyPlannerHistoryGap(error) === null) throw error;
-      notices.push(`health_index_refused:${day.day}`);
+  for (const [position, day] of selected.entries()) {
+    const members = [...await rawFiles(day.day)];
+    const authored = input.authored.find(value => value.day === day.day);
+    if (authored?.raw_files !== undefined && [...authored.raw_files].sort().join("\n") !== [...members].sort().join("\n")) {
+      throw new LedgerHistoryReadError("Supplied health members differ from the selected Git day");
     }
+    selected[position] = { ...day, raw_files: members };
     try {
       for (const path of resolveHistoryInventory({
-        ledger: input.ledger, prefix: input.prefix, days: [day.day], compact, raw: index,
-        ...(day.indexes === undefined ? {} : { indexes: day.indexes }), rawIndexes: { [day.day]: rawPath },
+        ledger: input.ledger, prefix: input.prefix, days: [day.day], compact, rawFiles: members,
+        ...(day.indexes === undefined ? {} : { indexes: day.indexes }),
       })) files.add(path);
     } catch (error) {
       if (classifyPlannerHistoryGap(error) === null) throw error;
-      notices.push(`health_index_refused:${day.day}`);
-    }
-    for (const path of day.raw_files ?? []) files.add(path);
-    if (index.length > 0 && day.raw_files !== undefined) {
-      const position = selected.indexOf(day);
-      selected[position] = { day: day.day, indexes: defaults.indexes, raw_index: rawPath };
+      notices.push(`health_history_refused:${day.day}`);
     }
   }
   return { inputs: selected, files: [...files].sort(), represented_days: selected.map(day => day.day), notices };

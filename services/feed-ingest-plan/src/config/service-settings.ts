@@ -16,8 +16,14 @@ export const SeenDayInputSchema = z.strictObject({
   }).optional(),
   raw_files: z.array(RelativePathSchema).optional(),
   raw_index: RelativePathSchema.optional(),
+  raw_revision: z.string().regex(/^[0-9a-f]{40}$/).optional(),
 }).refine(value => value.raw_files === undefined || value.raw_index === undefined, {
   message: "name raw_files or raw_index, not both",
+});
+export const PlannerDayInputSchema = SeenDayInputSchema.refine(value => value.raw_index === undefined, {
+  message: "Planner raw days use Parquet members, not raw_index",
+}).refine(value => value.raw_files === undefined || value.raw_revision !== undefined, {
+  message: "Configured planner raw_files require their complete raw_revision",
 });
 export type SeenDayInput = z.infer<typeof SeenDayInputSchema>;
 export const ServiceSettingsSchema = z.strictObject({
@@ -39,10 +45,10 @@ export const ServiceSettingsSchema = z.strictObject({
     artifact_root: ArtifactRootSchema.default("backend/var/feed-ingest-plan"),
     health_period_limit: PositiveCountSchema.default(32),
     feed_health_input_gap: z.boolean().default(false),
-    seen_days: z.array(SeenDayInputSchema).default([]),
+    seen_days: z.array(PlannerDayInputSchema).default([]),
     published_days: z.array(SeenDayInputSchema).default([]),
     settled_failure_days: z.array(SeenDayInputSchema).default([]),
-    feed_health_days: z.array(SeenDayInputSchema).default([]),
+    feed_health_days: z.array(PlannerDayInputSchema).default([]),
   }),
   run: z.strictObject({ attempt: PositiveCountSchema, producer: NonEmptySchema }),
 });

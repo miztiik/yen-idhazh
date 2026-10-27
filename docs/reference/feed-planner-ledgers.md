@@ -546,6 +546,52 @@ after the complete input arrives, so a saved parsed batch does not freeze
 feedback or window membership. D11-D13 include the measured cost of both
 captures. There is no per-candidate history read or persistent result cache.
 
+## Raw-day membership
+
+The four planner ledgers have no active raw-day `index.json` reader or writer.
+Their data remains in immutable UUID Parquet siblings under
+`state/raw/feed-ingest-plan/<ledger>/YYYY/MM/DD/`. Historical derived JSON lists
+are left inert; this change does not scan or rewrite the corpus. Compact
+yearly, monthly and daily indexes and their declared models remain separate
+and unchanged. Other ledger families keep their own readers.
+
+Configuration names a finite UTC lookback or explicit bounded UTC days.
+The workflow captures one full Git commit id before staging. For each requested
+registered day it checks that exact path with `git ls-tree <revision> -- <day>`
+and lists only that directory with `git ls-tree -l <revision>:<day>`.
+A successful absent-path result proves no committed members at that revision;
+a failed Git read does not prove absence. A directory may contain zero or many
+regular UUID Parquet files. An old regular `index.json` is ignored, not parsed.
+Other filenames, nonregular members and wrong registered roots are refused.
+There is no state-root walk, replacement saved catalog or run discovery.
+
+The existing named-day input carries `day`, optional compact `indexes`,
+`raw_files` and `raw_revision`. Repository staging supplies the full member
+set and its captured revision, not a partial hand-picked subset. A supplied
+set must equal the Git listing; missing, additional or repeated members make
+the read incomplete. Authored planner configuration rejects `raw_index` and
+requires `raw_revision` with `raw_files`; an unproved subset is not a valid
+configuration. After sparse checkout, each file must match its Git blob
+and size at that same revision, then pass the existing Parquet footer, schema,
+canonical content digest, filename, ledger and UTC-day checks. Missing files,
+failed listings and refused bytes remain explicit history gaps, never empty
+successful history. Each capture shares one revision and caches named reads.
+
+Direct current-invocation input still uses `raw_files` without `raw_revision`:
+the caller supplies all exact completed paths from the existing writer result.
+It is a trusted complete result, not a way to discover archived repository
+history or to assert completeness for an arbitrary subset. Native identity
+and content checks still run. No new persisted manifest is introduced.
+
+Yearly, monthly and daily compact precedence is unchanged. Planner raw
+siblings still join the selected compact representation so newly appended
+work is not hidden by an earlier packed period. Source windows and health
+represented-day membership keep their existing meanings. Publication accepts
+only exact completed immutable paths and independently registered permissions;
+reading a day grants no permission to publish it. The publisher builds a
+private candidate on fresh main, refuses byte collisions and retries normal
+pushes without rerunning producers or changing the caller's checkout.
+
 ## Shared rules and removals
 
 - No article text in committed ledgers, committed repository files or normal-run logs.

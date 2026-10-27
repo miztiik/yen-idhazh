@@ -68,7 +68,7 @@ export function identifyMetadataPath(path: string, registrations: MetadataRegist
     throw new Error("commit: expected one exact current planner or host raw UUID Parquet path");
   }
   const covers = DateStampSchema.parse(suffix.slice(0, 3).join("-"));
-  return { ledger: name, covers, file_id: file.slice(0, -8), indexed: name !== "host-fingerprint" };
+  return { ledger: name, covers, file_id: file.slice(0, -8) };
 }
 
 export async function readMetadataBytes(root: string, path: string) {
