@@ -148,7 +148,7 @@ flowchart TD
 
 | Id | Row | PR outcome | Depends-on | Status | Readiness condition | Worktree | PR | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| D1 | 1 | Deliver reviewed publisher IDs | - | IN_PROGRESS | Eight reviewed publisher IDs now bind 20 active and retired feeds; unreviewed entries remain unknown. | feed-selection-delivery | - | - |
+| D1 | 1 | Deliver reviewed publisher IDs | - | IN_PROGRESS | Eight reviewed publisher IDs now bind 20 active and retired feeds; unreviewed entries remain unknown. | feed-selection-delivery | #1762 | - |
 | D2 | 2 | Finish TypeScript contract and ledger-IO integration | 1 | PENDING | Reuse delivered raw-day IO; complete compact-index and native-consumer integration here. | - | - | - |
 | D3 | 3 | Remove feed labels and rename article/discovery controls | 2 | PENDING | Sole TypeScript contract authority is available. | - | - | - |
 | D4 | 4 | Implement allocation, freshness, cutoff and rejection persistence | 1, 2, 3 | PENDING | Consume PR1's catalog and the verified integration; policy is settled. | - | - | - |
@@ -158,8 +158,8 @@ Implementation gates, not this documentation delivery: inspect `npm run test:cha
 ## 2. Row #1 - Deliver reviewed publisher IDs
 
 - **Scope:** Review both `feeds` and `retired` in `config/sources.json` and deliver stable publisher mappings before ranking changes.
-- **Files touched:** `config/sources.json`, `packages/common-contracts/test/config.test.ts`, `services/feed-ingest-plan/test/harvest.test.ts`, `docs/architecture/contracts/publisher-identity.md`, `TODO/20261026-feed-quality-selection-plan.md`.
-- **Acceptance gates:** Run the named Bun test files and affected-package checks. Use bounded same-publisher/different-publisher/unknown-identity cases against the real catalog/reference validator; no live feed probes or fixed catalog-size assertions.
+- **Files touched:** `config/sources.json`, `packages/common-contracts/test/config.test.ts`, `services/feed-ingest-plan/test/harvest.test.ts`, `services/feed-ingest-plan/test/curate.test.ts`, `docs/architecture/contracts/publisher-identity.md`, `TODO/20261026-feed-quality-selection-plan.md`.
+- **Acceptance gates:** Run `config.test.ts`, `harvest.test.ts` and `curate.test.ts` with affected-package checks. Use bounded same-publisher/different-publisher/unknown-identity cases against the real catalog/reference validator; no live feed probes or fixed catalog-size assertions.
 - **Oracle:** Every assigned ID is declared once, related feeds reuse it, and non-publisher feed fields remain unchanged; strings alone cannot prove identity, so unresolved cases must be reported.
 
 ### Table E - Review rules
