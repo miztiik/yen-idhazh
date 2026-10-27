@@ -1,22 +1,18 @@
 {
   "now": "2026-10-21T12:00:00Z",
   "candidate": {
-    "version": "2026-10-20",
+    "version": "2026-10-27",
     "date": "2026-10-21",
     "correlation_id": "2026-10-21-123",
     "run_id": "2026-10-21-123",
     "candidate_id": "d60a9dad872cff31431c23b6ba34d1ce2a80c95a0a8bd5bbd003fa37f70af13c",
     "entry_ordinal": 0,
     "source_id": "fixture-source",
-    "vertical": "world",
     "source": {
       "source_id": "fixture-source",
       "feed_url": "https://example.org/feed.xml",
       "title": "River research",
-      "vertical": "world",
-      "kind": "reporting",
       "tier": 1,
-      "form": "article",
       "status": "active",
       "weight": 1,
       "applied_tier_weight": 1
@@ -29,40 +25,7 @@
     "word_count": 229,
     "author": "Research desk",
     "published_at": "2026-10-21T11:00:00Z",
-    "fetched_at": "2026-10-21T12:00:00Z",
-    "labels": {
-      "assigned_desk": null,
-      "lenses": null,
-      "event_types": null,
-      "event_cluster_id": null,
-      "entities": null,
-      "origin": null,
-      "matcher_version": null
-    },
-    "policy": {
-      "policy_version": "screening-fixture",
-      "config_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-      "min_words_article": 180,
-      "min_words_abstract": 60,
-      "max_age_hours": 24,
-      "recency_half_life_hours": 18,
-      "recency_weight": 0.6,
-      "source_authority_weight": 1,
-      "base_source_allowance": 3,
-      "bonus_uncovered_event_cluster": 1,
-      "bonus_underrepresented_vertical": 1,
-      "bonus_unique_evidence": 1,
-      "lambda_source": 0.25,
-      "lambda_source_kind": 0.05,
-      "lambda_domain": 0.15,
-      "lambda_vertical": 0.1,
-      "lambda_desk": 0.1,
-      "lambda_lens": 0.1,
-      "lambda_event_type": 0,
-      "lambda_event_cluster": 0.3,
-      "lambda_entity": 0,
-      "lambda_coverage": 0.1
-    }
+    "fetched_at": "2026-10-21T12:00:00Z"
   },
   "observation": {
     "candidate_id": "d60a9dad872cff31431c23b6ba34d1ce2a80c95a0a8bd5bbd003fa37f70af13c",
@@ -75,10 +38,8 @@
     "observed_at": "2026-10-21T12:00:00Z"
   },
   "cases": [
-    { "name": "article below floor", "form": "article", "words": 179, "reason": "STUB_CONTENT", "details": { "words_found": 179, "words_required": 180 } },
-    { "name": "article exact floor", "form": "article", "words": 180, "reason": null },
-    { "name": "abstract below floor", "form": "abstract", "words": 59, "reason": "STUB_CONTENT", "details": { "words_found": 59, "words_required": 60 } },
-    { "name": "abstract exact floor", "form": "abstract", "words": 60, "reason": null },
+    { "name": "one word below configured floor", "words": 179, "reason": "STUB_CONTENT", "details": { "words_found": 179, "words_required": 180 } },
+    { "name": "exact configured floor", "words": 180, "reason": null },
     { "name": "blocked HTTP", "status": 403, "reason": "PAYWALL_OR_BLOCKED", "details": { "http_status": 403 } },
     { "name": "rate limited HTTP", "status": 429, "reason": "PAYWALL_OR_BLOCKED", "details": { "http_status": 429 } },
     { "name": "paywall without HTTP result", "status": null, "paywall": true, "reason": "PAYWALL_OR_BLOCKED", "details": { "http_status": null } },
@@ -90,9 +51,9 @@
     { "name": "exact age cutoff", "published_at": "2026-10-20T12:00:00Z", "reason": null, "age": 24 },
     { "name": "one second past cutoff", "published_at": "2026-10-20T11:59:59Z", "reason": "STALE_MAX_AGE_EXCEEDED", "details": { "max_age_hours": 24 } },
     { "name": "future tolerance inclusive", "published_at": "2026-10-21T18:00:00Z", "reason": null, "age": -6, "clock": "published_at", "bonus": 0.6 },
-    { "name": "future beyond tolerance uses old first sight", "published_at": "2026-10-21T18:00:01Z", "seen": "old", "reason": "STALE_MAX_AGE_EXCEEDED", "details": { "age_hours": 50, "max_age_hours": 24 } },
-    { "name": "undated old first sight", "published_at": null, "seen": "old", "reason": "STALE_MAX_AGE_EXCEEDED", "details": { "age_hours": 50, "max_age_hours": 24 } },
-    { "name": "new undated persisted first sight", "published_at": null, "seen": "new", "reason": null, "age": 0, "clock": "first_seen", "bonus": 0.6 },
+    { "name": "future beyond tolerance uses old discovery", "published_at": "2026-10-21T18:00:01Z", "discovered": "old", "reason": "STALE_MAX_AGE_EXCEEDED", "details": { "age_hours": 50, "max_age_hours": 24 } },
+    { "name": "undated old discovery", "published_at": null, "discovered": "old", "reason": "STALE_MAX_AGE_EXCEEDED", "details": { "age_hours": 50, "max_age_hours": 24 } },
+    { "name": "new undated discovery", "published_at": null, "discovered": "new", "reason": null, "age": 0, "clock": "first_seen", "bonus": 0.6 },
     { "name": "unknown undated history", "published_at": null, "reason": null, "age": null, "clock": "unknown", "bonus": 0 },
     { "name": "untrustworthy date without history", "published_at": "2026-10-22T12:00:00Z", "reason": null, "age": null, "clock": "unknown", "bonus": 0 },
     { "name": "half life score", "published_at": "2026-10-20T18:00:00Z", "reason": null, "age": 18, "bonus": 0.3 }

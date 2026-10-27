@@ -8,7 +8,7 @@ import type { FreshnessEvidence } from "./freshness-decay";
 import { matchUrlExclusion, urlExclusionMarker } from "../harvest-feeds/url-exclusions";
 import { validateScreeningInput } from "./screening-input";
 import type { HarvestObservation, ScreeningInput } from "./screening-input";
-import { indexSeenEvidence } from "./seen-evidence";
+import { indexDiscoveredEvidence } from "./discovered-evidence";
 import { matchMediaArticle } from "../harvest-feeds/media-filter";
 import { excludeArticleContent } from "./content-filters";
 
@@ -17,7 +17,7 @@ export type ScreenedCandidate = {
   policy: EffectiveFeedPolicy;
   freshness: FreshnessEvidence;
   observation: HarvestObservation | null;
-  seen_availability: ScreeningInput["seen"]["availability"];
+  discovered_availability: ScreeningInput["discovered"]["availability"];
 };
 export type ScreeningResult = {
   admitted: ScreenedCandidate[];
@@ -29,15 +29,15 @@ export type { FreshnessEvidence } from "./freshness-decay";
 export async function screenArticleCandidates(
   input: ScreeningInput,
 ): Promise<ScreeningResult> {
-  const { candidates, observations, seen, planning, run, exclusions, maxFutureHours } = validateScreeningInput(input);
-  const seenByUrl = indexSeenEvidence(seen);
+  const { candidates, observations, discovered, planning, run, exclusions, maxFutureHours } = validateScreeningInput(input);
+  const discoveredByUrl = indexDiscoveredEvidence(discovered);
   const admitted: ScreenedCandidate[] = [];
   const rejections: CandidateRejectionRecord[] = [];
   for (const candidate of candidates) {
     const policy = resolvePolicy(planning, run.overrides);
     const observation = observations[candidate.candidate_id] ?? null;
-    const freshness = calculateFreshness(candidate, seenByUrl.get(candidate.url_key), run.now, maxFutureHours, policy);
-    const required = candidate.source.form === "article" ? policy.triage.min_words_article : policy.triage.min_words_abstract;
+    const freshness = calculateFreshness(candidate, discoveredByUrl.get(candidate.url_key), run.now, maxFutureHours, policy);
+    const required = policy.triage.min_words;
     const blockedStatus = observation?.http_status != null &&
       planning.config.triage.blocked_http_statuses.includes(observation.http_status);
     let rejection: Pick<CandidateRejectionRecord, "drop_reason"> & { details: Partial<RejectionDetails> } | null = null;
@@ -73,7 +73,7 @@ export async function screenArticleCandidates(
       };
     }
     if (rejection === null) {
-      admitted.push({ candidate, policy, freshness, observation, seen_availability: seen.availability });
+      admitted.push({ candidate, policy, freshness, observation, discovered_availability: discovered.availability });
     } else {
       rejections.push(CandidateRejectionRecordSchema.parse({
         date: run.now.slice(0, 10), correlation_id: candidate.correlation_id,

@@ -15,7 +15,7 @@ export async function recordPlanRun(inputs: PlanInputs, context: RunContext, val
     ...values, run_id: context.run_id, attempt: context.writer.attempt, date: context.date, started_at: context.captured_at,
     lifecycle_window_days: inputs.harvest.config.feedback.lifecycle_window_days,
     reliability_floor: inputs.clock_config.collect.reliability_floor,
-    reliability_penalty_enabled: inputs.harvest.config.curate.source_reliability_penalty_enabled,
+    reliability_penalty_enabled: inputs.harvest.config.curate_articles.source_reliability_penalty_enabled,
     request_report_closed_days: inputs.harvest.config.feedback.request_report_closed_days,
     reliability_window_days: inputs.clock_config.collect.reliability_window_days,
   });

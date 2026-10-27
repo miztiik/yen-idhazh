@@ -23,7 +23,7 @@ const RegistrySchema = z.object({
 const ExtractionSettingsSchema = z.object({
   ledger: LedgerSettingsSchema,
   collect: FeedHistoryPolicySchema.extend({
-    max_future_hours: NonNegativeSchema, seen_window_days: z.int().nonnegative(),
+    max_future_hours: NonNegativeSchema,
     published_window_days: z.int().nonnegative(),
     settled_failure_codes: z.array(ItemHealthFailureCodeSchema),
   }),

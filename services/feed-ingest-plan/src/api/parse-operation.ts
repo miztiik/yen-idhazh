@@ -1,7 +1,7 @@
 /** Parse one saved response without network access and complete its server-owned article batch. */
 import { randomUUID } from "node:crypto";
 import {
-  FeedIngestCandidateSchema, ParsedFeedBatchSchema, PlannerHarvestObservationSchema,
+  FEED_OUTCOME_PAYLOAD_VERSION, FeedIngestCandidateSchema, ParsedFeedBatchSchema, PlannerHarvestObservationSchema,
   deriveCandidateId,
 } from "@idhazh/common-contracts";
 import type { FeedIngestCandidate, PlannerOperation, PlannerHarvestObservation, PlannerFeedOffer } from "@idhazh/common-contracts";
@@ -23,7 +23,9 @@ import { resolveArticleTitle } from "../harvest-feeds/prepare-article";
 import { stageStore } from "./stage-store";
 import { createParsedFeedBatch, publicFeedOffers, updateFeedOffer } from "./feed-offers";
 import { HarvestArticleResultSchema, utcTimestamp } from "../harvest-feeds/harvest-types";
-import { readSeenEvidence, rememberFirstSight, requiredSeenDays } from "../read-ledger-history/read-seen-evidence";
+import { readDiscoveredEvidence, rememberDiscoveries } from "../read-ledger-history/read-discovered-evidence";
+import { requiredUtcDays } from "../utc-instant";
+import { resolveArticleEvidence } from "../website-group";
 import { DiscoveredArticleRowSchema } from "@idhazh/common-contracts";
 import { plannerMemory } from "../planner-memory";
 import { createStageLogger } from "../logging/structured-logger";
@@ -58,15 +60,16 @@ export async function parseFetchedDocument(
     observations: createIngestObservations(state.work.observe), observation_clock: runtime.observation_clock ?? (() => new Date()),
   }, { run_id: fetched.run_id, correlation_id: fetched.correlation_id, article_id: artifact.article_id, source_id: source.id },
   record.request_id, {
-    document_kind: artifact.kind, source_id: source.id, publisher_id: source.publisher_id,
+    document_kind: artifact.fetch_item_type, source_id: source.id, publisher_id: source.publisher_id,
     observed_run_id: fetched.run_id, observed_attempt: inputs.settings.run.attempt, candidate_id: offer?.offer_id ?? null,
   });
-  if (artifact.kind === "feed") {
+  if (artifact.fetch_item_type === "feed") {
     const parsed = await work.parse(() => parseDocument("feed", artifact.body!, artifact.canonical_url),
       artifact.observation.event_id, describeFeedParse);
     const entries = parsed.parsed ?? [];
     state.work.feed({
-      kind: "feed_outcome", source: sourceSnapshot(inputs.harvest, source), fetch_status: "success",
+      version: FEED_OUTCOME_PAYLOAD_VERSION, kind: "feed_outcome",
+      source: sourceSnapshot(inputs.harvest, source), fetch_status: "success",
       parse_status: parsed.failure === null ? entries.length ? "success" : "empty" : "failure",
       parsed_count: entries.length, harvested_count: 0, fetch_duration_ms: null, parse_duration_ms: null,
       rejection_reason: parsed.failure === null ? entries.length ? null : "FEED_EMPTY" : "FEED_PARSE_FAILED",
@@ -76,7 +79,7 @@ export async function parseFetchedDocument(
       state, inputs, runtime, feed_id: source.id, entries, fetched_request_id: fetched.request_id, observed_at: parsed.observation.occurred_at,
     });
     return { artifact: null, response_json: JSON.stringify({
-      batch_id: batch.batch_id, fetch_request_id: fetched.request_id, run_id: fetched.run_id, kind: "feed",
+      batch_id: batch.batch_id, fetch_request_id: fetched.request_id, run_id: fetched.run_id, fetch_item_type: "feed",
       parsed_count: entries.length, failure: parsed.failure, offers: publicFeedOffers(batch),
     }) };
   }
@@ -87,7 +90,7 @@ export async function parseFetchedDocument(
     parsed = await profileTask(runtime.task_profiling, {
       pipeline_name: "feed-ingest-plan", task_name: "parse", run_id: fetched.run_id,
       correlation_id: fetched.correlation_id, request_id: record.request_id,
-    }, () => work.parse(() => parseDocument("article", artifact.body!, artifact.canonical_url, inputs.harvest.extraction, source.form, pool, {
+    }, () => work.parse(() => parseDocument("article", artifact.body!, artifact.canonical_url, inputs.harvest.extraction, pool, {
       activity: phase => emit("parse", phase, { feed_id: source.id }), ...(signal === undefined ? {} : { signal }),
     }), artifact.observation.event_id, describeArticleParse),
     { ...(signal === undefined ? {} : { signal }), outcome: result => result.failure === null ? "success" : "error" });
@@ -125,26 +128,32 @@ export async function parseFetchedDocument(
   if (offer !== undefined && artifact.parent_batch_id !== null) {
     batch = updateFeedOffer(inputs, state, artifact.parent_batch_id, offer.offer_id, candidate === null ? "rejected" : "parsed", fetched.request_id, result);
   } else {
-    const seen = await readSeenEvidence({
-      root: inputs.root, files: inputs.settings.inputs.seen_files, days: inputs.settings.inputs.seen_days,
+    const discovered = await readDiscoveredEvidence({
+      root: inputs.root, discovered_files: inputs.settings.inputs.discovered_files, discovered_days: inputs.settings.inputs.discovered_days,
       registration: inputs.registrations.discovered_articles, now: state.context.now,
-      lookback_days: inputs.clock_config.collect.seen_window_days, concurrency: inputs.harvest.config.harvest.concurrency,
+      lookback_days: inputs.harvest.config.discovered_articles.lookback_days, concurrency: inputs.harvest.config.harvest.concurrency,
       own_rows: plannerMemory(inputs).discoveries(),
     });
     const instant = utcTimestamp(runtime.observation_clock);
-    const saved = await rememberFirstSight(seen.rows, candidate === null ? [] : [DiscoveredArticleRowSchema.parse({
+    const saved = await rememberDiscoveries(discovered.rows, candidate === null ? [] : [DiscoveredArticleRowSchema.parse({
       url_key: candidate.url_key, first_seen_at: instant, date: instant.slice(0, 10),
     })], state.context, { outputRoot: inputs.outputRoot, registryEntry: inputs.registrations.discovered_articles, ledgerSettings: inputs.ledgerSettings });
-    plannerMemory(inputs).rememberDiscoveries(saved.rows, requiredSeenDays(state.context.now, inputs.clock_config.collect.seen_window_days)[0]!);
+    plannerMemory(inputs).rememberDiscoveries(saved.rows, requiredUtcDays(
+      state.context.now, inputs.harvest.config.discovered_articles.lookback_days,
+    )[0]!);
     const observations: Record<string, PlannerHarvestObservation> = candidate === null ? {} : { [candidate.candidate_id]: observation };
     batch = stageStore(inputs).write("parsed", ParsedFeedBatchSchema, {
       batch_id: randomUUID(), context: state.context, config_sha256: record.config_sha256, request: {},
-      candidates: candidate === null ? [] : [candidate], observations, evidence: {}, seen: { availability: "available", rows: saved.rows },
+      candidates: candidate === null ? [] : [candidate], observations,
+      evidence: candidate === null ? {} : { [candidate.candidate_id]: resolveArticleEvidence(
+        candidate, undefined, inputs.harvest.config.curate_articles.website_grouping.include_private_suffixes,
+      ) },
+      discovered: { availability: "available", rows: saved.rows },
       history_rows: state.history.rows, history_days: state.history.days, work_rows: state.work.rows(), exclusions: state.work.exclusions(),
     });
   }
   return { artifact: null, response_json: JSON.stringify({
-    batch_id: batch.batch_id, fetch_request_id: fetched.request_id, kind: "article", run_id: fetched.run_id,
+    batch_id: batch.batch_id, fetch_request_id: fetched.request_id, fetch_item_type: "article", run_id: fetched.run_id,
     parsed_count: candidate === null ? 0 : 1, failure: rejected,
     pending_offers: batch.offers.filter(offer => offer.state !== "parsed" && offer.state !== "rejected").length,
   }) };

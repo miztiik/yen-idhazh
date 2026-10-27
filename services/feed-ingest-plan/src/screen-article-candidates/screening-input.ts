@@ -1,4 +1,4 @@
-/** Which bounded candidate, harvest, first-sight and run inputs can screening trust? */
+/** Which bounded candidate, harvest, discovery and run inputs can screening trust? */
 import { z } from "zod";
 import {
   FeedIngestCandidateSchema, NonEmptySchema, PlanningRunOverridesSchema,
@@ -9,8 +9,9 @@ import { HarvestObservationSchema } from "@idhazh/feed-ingest-plan/harvest-feeds
 import type { HarvestObservation } from "@idhazh/feed-ingest-plan/harvest-feeds";
 import { loadPlanningConfig } from "../config/resolve-policy";
 import type { PlanningConfig } from "../config/resolve-policy";
-import { SeenEvidenceSchema, UtcInstantSchema } from "./seen-evidence";
-import type { SeenEvidence } from "./seen-evidence";
+import { DiscoveredEvidenceSchema } from "./discovered-evidence";
+import type { DiscoveredEvidence } from "./discovered-evidence";
+import { UtcInstantSchema } from "../utc-instant";
 import type { FeedIngestCandidate, PlanningRunOverrides } from "@idhazh/common-contracts";
 
 export type { HarvestObservation } from "@idhazh/feed-ingest-plan/harvest-feeds";
@@ -31,7 +32,7 @@ const ExclusionsSchema = z.strictObject({
 export type ScreeningInput = {
   candidates: readonly FeedIngestCandidate[];
   observations: Readonly<Record<string, HarvestObservation>>;
-  seen: SeenEvidence;
+  discovered: DiscoveredEvidence;
   planning: PlanningConfig;
   clock_config: { collect: { max_future_hours: number } };
   run: { now: string; run_id: string; correlation_id: string; overrides: PlanningRunOverrides };
@@ -41,7 +42,7 @@ export type ScreeningInput = {
 export function validateScreeningInput(input: ScreeningInput) {
   const candidates = z.array(FeedIngestCandidateSchema).parse(input.candidates);
   const observations = z.record(Sha256Schema, HarvestObservationSchema).parse(input.observations);
-  const seen = SeenEvidenceSchema.parse(input.seen);
+  const discovered = DiscoveredEvidenceSchema.parse(input.discovered);
   const run = ScreeningRunSchema.parse(input.run);
   const planning = loadPlanningConfig(input.planning.config);
   const clockConfig = ClockConfigSchema.parse(input.clock_config);
@@ -64,5 +65,5 @@ export function validateScreeningInput(input: ScreeningInput) {
     }
     UtcInstantSchema.parse(observation.observed_at);
   }
-  return { candidates, observations, seen, planning, run, exclusions, maxFutureHours: clockConfig.collect.max_future_hours };
+  return { candidates, observations, discovered, planning, run, exclusions, maxFutureHours: clockConfig.collect.max_future_hours };
 }

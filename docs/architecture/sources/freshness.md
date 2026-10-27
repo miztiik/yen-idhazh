@@ -4,6 +4,12 @@
 
 How often the pipeline runs, what makes an article worth today's slot, what stops the same article being published twice, and how an item keeps its name across the runs of one day. This page owns the decisions the planning step makes before any model loads.
 
+The separate TypeScript feed-ingest planner records discovery in
+`discovered-articles` and reads its configured
+`discovered_articles.lookback_days`; it does not use this pipeline's native
+`seen` ledger. See [planner feed history](planner-feed-history.md) and
+[candidate screening](feed-screening.md).
+
 ## The run happens five times each day
 
 The runs start at 02:20, 06:20, 10:20, 14:20, and 18:20 UTC, expressed as

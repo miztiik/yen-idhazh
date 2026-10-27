@@ -2,15 +2,15 @@
 import { resolve } from "node:path";
 import type { LedgerRegistration, StoredLedgerRow } from "@idhazh/ledger-file-writer";
 import { LedgerNameSchema } from "@idhazh/common-contracts";
-import { SeenDayInputSchema } from "../config/service-settings";
-import type { SeenDayInput } from "../config/service-settings";
+import { LedgerDayInputSchema } from "../config/service-settings";
+import type { LedgerDayInput } from "../config/service-settings";
 import { readLedgerDay } from "./read-period";
 import type { NamedDayInput, LedgerDay } from "./read-period";
 import type { ReadLedgerFile } from "./read-parquet";
 
-export function defaultDayInput(prefix: readonly string[], day: string): SeenDayInput {
+export function defaultDayInput(prefix: readonly string[], day: string): LedgerDayInput {
   const base = prefix.join("/");
-  return SeenDayInputSchema.parse({
+  return LedgerDayInputSchema.parse({
     day, ...(prefix[0] === "feed-ingest-plan" ? {} : {
       indexes: Object.fromEntries(["yearly", "monthly", "daily"].map(period =>
         [period, `state/compact/${base}/index/${period}.json`])),
@@ -22,11 +22,11 @@ export function defaultDayInput(prefix: readonly string[], day: string): SeenDay
 }
 
 export async function readNamedDays<T extends object>(
-  root: string, registration: LedgerRegistration, days: readonly SeenDayInput[],
+  root: string, registration: LedgerRegistration, days: readonly LedgerDayInput[],
   contract: NamedDayInput<T>["contract"],
   fileCache = new Map<string, Promise<ReadLedgerFile<T>>>(),
 ) {
-  const parsed = days.map(day => SeenDayInputSchema.parse(day));
+  const parsed = days.map(day => LedgerDayInputSchema.parse(day));
   if (parsed.some((day, index) => index > 0 && day.day <= parsed[index - 1]!.day)) {
     throw new Error(`${registration.name}: history must name distinct ascending UTC days`);
   }

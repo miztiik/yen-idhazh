@@ -12,31 +12,30 @@ Repeated carriage earns one fixed addition, not a multiplier. Several feeds carr
 
 Admission and order are separate. Only `collect.max_age_hours` in the table below refuses an old candidate. Placement does not remove an admitted story because it aged.
 
-### Every number the order depends on, and where it lives
+### The numeric controls and where they live
 
-The table is checked against configuration by [test_order_of_the_day.py](../../backend/tests/test_order_of_the_day.py).
+The table names the live controls. Their values stay in configuration and are
+not copied here.
 
-| What it measures | Where the number lives | Today |
-| --- | --- | ---: |
-| Trust in an institution publishing about itself | `taxonomy.source_tiers.1.weight` | 1.0 |
-| Trust in the trade press | `taxonomy.source_tiers.2.weight` | 0.6 |
-| Trust in a community feed | `taxonomy.source_tiers.3.weight` | 0.3 |
-| What one more feed carrying the same link is worth | `collect.carriage_step` | 0.25 |
-| Naming a company or person we follow | `collect.watchlist_bonus` | 0.5 |
-| How far freshness may move a score | `collect.recency_weight` | 0.6 |
-| The hours in which that freshness halves | `collect.recency_half_life_hours` | 18.0 |
-| The age past which a story may not be added at all | `collect.max_age_hours` | 24.0 |
-| The lowest a feed's record may drag it | `collect.reliability_floor` | 0.5 |
-| The days of record that reliability reads | `collect.reliability_window_days` | 30 |
-| A subject several sources named, in the leading block | `ui.lead_shared_subject_weight` | 0.2 |
-| Sources that have to name it before it counts | `ui.lead_cluster_floor` | 3 |
-| How much of a lead's score the selection number is | `ui.lead_rank_weight` | 1.0 |
-| What each other source carrying the story adds | `ui.lead_also_covered_weight` | 0.0 |
-| Hours a leading story keeps its full score before age counts | `placement.freshness_offset_hours` | 6.0 |
-| Hours past that at which it reaches the share below | `placement.freshness_scale_hours` | 24.0 |
-| Score share retained at that age | `placement.freshness_decay_at_scale` | 0.5 |
+| What it measures | Where the number lives |
+| --- | --- |
+| Trust assigned to each source tier | `taxonomy.source_tiers[].weight` |
+| What one more feed carrying the same link is worth | `collect.carriage_step` |
+| Naming a company or person we follow | `collect.watchlist_bonus` |
+| How far freshness may move a score | `collect.recency_weight` |
+| The hours in which that freshness halves | `collect.recency_half_life_hours` |
+| The age past which a story may not be added at all | `collect.max_age_hours` |
+| The lowest a feed's record may drag it | `collect.reliability_floor` |
+| The days of record that reliability reads | `collect.reliability_window_days` |
+| A subject several sources named, in the leading block | `ui.lead_shared_subject_weight` |
+| Sources that have to name it before it counts | `ui.lead_cluster_floor` |
+| How much of a lead's score the selection number is | `ui.lead_rank_weight` |
+| What each other source carrying the story adds | `ui.lead_also_covered_weight` |
+| Hours a leading story keeps its full score before age counts | `placement.freshness_offset_hours` |
+| Hours past that at which it reaches the share below | `placement.freshness_scale_hours` |
+| Score share retained at that age | `placement.freshness_decay_at_scale` |
 
-Per-feed weights live in `config/sources.json`; per-lens weights live in `config/taxonomy.json`. The highest lens weight is 0.3. Reliability comes from recent feed outcomes, stays between its configured floor and 1.0, and treats a feed with no recent record as fully reliable.
+Per-feed weights live in `config/sources.json`; per-lens weights live in `config/taxonomy.json`. The scoring code reads their current values when it ranks a story. Reliability comes from recent feed outcomes, stays between its configured floor and 1.0, and treats a feed with no recent record as fully reliable.
 
 ## A worked example
 

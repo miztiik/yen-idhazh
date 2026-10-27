@@ -26,14 +26,14 @@ export class ArticleParserPool {
     PositiveCountSchema.parse(concurrency);
   }
 
-  parse(body: string, url: string, config: ExtractionControls, form: "article" | "abstract", options: {
+  parse(body: string, url: string, config: ExtractionControls, options: {
     activity?: (phase: "started" | "completed" | "failed") => void; signal?: AbortSignal;
   } = {}) {
     if (this.closed) return Promise.reject(new Error("Article parser pool is closed"));
     options.signal?.throwIfAborted();
     return new Promise<ArticleParserResult>((resolve, reject) => {
       const job: Job = {
-        request: { id: randomUUID(), body, url, config, form }, resolve, reject,
+        request: { id: randomUUID(), body, url, config }, resolve, reject,
         activity: options.activity ?? this.activity, signal: options.signal, cancel: undefined, started: false,
       };
       job.cancel = () => {

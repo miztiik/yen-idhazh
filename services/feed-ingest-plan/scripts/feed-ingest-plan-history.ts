@@ -6,10 +6,10 @@ import {
 import type { CompactIndex } from "../../../packages/common-contracts/src/index";
 import type { PlanInputs } from "../src/load-plan-inputs";
 import { mapPool } from "../src/harvest-feeds/harvest-pool";
-import { requiredSeenDays } from "../src/read-ledger-history/read-seen-evidence";
+import { requiredUtcDays } from "../src/utc-instant";
 import { readPlannerParquet } from "../src/read-ledger-history/read-planner-parquet";
 import { closedRequestDays } from "../src/read-ledger-history/health-summary";
-import { completeHistoryDayInputs, createSeenDayInputs, resolveHistoryIndexes, resolveHistoryInventory, sparseCheckoutPath } from "./feed-ingest-plan-outputs";
+import { completeHistoryDayInputs, createHistoryDayInputs, resolveHistoryIndexes, resolveHistoryInventory, sparseCheckoutPath } from "./feed-ingest-plan-outputs";
 import { stageFeedHistory } from "./feed-ingest-plan-feed-history";
 import { LedgerHistoryReadError } from "../src/read-ledger-history/ledger-history-error";
 import { fixedHistoryRevision, listExactRawDayMembers, readNamedGitFile, verifyRawDayMember } from "../src/read-ledger-history/raw-day-members";
@@ -30,9 +30,10 @@ export async function stagePlannerHistory(root: string, inputs: PlanInputs, now:
   const nextDay = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate() + 1)).toISOString().slice(0, 10);
   const withBoundary = (days: string[]) => [...new Set([...days, nextDay])].sort();
   const plans = [
-    { entry: inputs.registrations.discovered_articles, days: withBoundary(requiredSeenDays(now, inputs.clock_config.collect.seen_window_days)),
-      authored: inputs.settings.inputs.seen_days },
-    { entry: inputs.registrations.published, days: withBoundary(requiredSeenDays(now, inputs.clock_config.collect.published_window_days)),
+    { entry: inputs.registrations.discovered_articles,
+      days: withBoundary(requiredUtcDays(now, inputs.harvest.config.discovered_articles.lookback_days)),
+      authored: inputs.settings.inputs.discovered_days },
+    { entry: inputs.registrations.published, days: withBoundary(requiredUtcDays(now, inputs.clock_config.collect.published_window_days)),
       authored: inputs.settings.inputs.published_days },
     { entry: inputs.registrations.item_health, days: withBoundary([now.slice(0, 10)]),
       authored: inputs.settings.inputs.settled_failure_days },
@@ -42,12 +43,12 @@ export async function stagePlannerHistory(root: string, inputs: PlanInputs, now:
   const revision = await fixedHistoryRevision(root);
   const trees = new Map<string, Promise<string>>();
   const metadata = new Set<string>(["frontend/public/publication.json"]);
-  for (const plan of plans) for (const day of createSeenDayInputs(plan.entry.prefix, plan.days)) {
+  for (const plan of plans) for (const day of createHistoryDayInputs(plan.entry.prefix, plan.days)) {
     for (const path of Object.values(day.indexes)) metadata.add(path);
     if (day.raw_index !== undefined) metadata.add(day.raw_index);
   }
   for (const day of [...inputs.settings.inputs.feed_health_days,
-    ...createSeenDayInputs(inputs.registrations.feed_health_state.prefix, healthDays),
+    ...createHistoryDayInputs(inputs.registrations.feed_health_state.prefix, healthDays),
     ...plans.flatMap(plan => plan.authored)]) {
     for (const path of Object.values(day.indexes ?? {})) if (path !== undefined) metadata.add(path);
     if (day.raw_index !== undefined) metadata.add(day.raw_index);
@@ -74,7 +75,7 @@ export async function stagePlannerHistory(root: string, inputs: PlanInputs, now:
     }
     return pending;
   }
-  const inventory = new Set<string>(inputs.settings.inputs.seen_files);
+  const inventory = new Set<string>(inputs.settings.inputs.discovered_files);
   const compactCache = new Map<string, Promise<CompactIndex | undefined>>();
   function readCompact(path: string) {
     let pending = compactCache.get(path);

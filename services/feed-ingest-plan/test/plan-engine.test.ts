@@ -107,7 +107,7 @@ test("freshness equality is admitted; a smaller override really rejects; empty i
   } finally { await recorded.close(); }
 });
 
-test("named native first sight wins for undated articles; arbitrary empty history proves no absence", async () => {
+test("persisted discovery wins for undated articles; empty history does not prove absence", async () => {
   const recorded = await recordedPlan();
   try {
     const first = await runFeedPlan({}, recorded.inputs, recorded.runtime);

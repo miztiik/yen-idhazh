@@ -149,8 +149,8 @@ flowchart TD
 | Id | Row | PR outcome | Depends-on | Status | Readiness condition | Worktree | PR | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | D1 | 1 | Deliver reviewed publisher IDs | - | DONE | Eight reviewed publisher IDs now bind 20 active and retired feeds; unreviewed entries remain unknown. | feed-selection-delivery | #1762 | - |
-| D2 | 2 | Finish TypeScript contract and ledger-IO integration | 1 | IN PROGRESS | Raw-day membership tests pass locally; PR checks must pass before row 3. | feed-selection-delivery | #1763 | - |
-| D3 | 3 | Remove feed labels and rename article/discovery controls | 2 | PENDING | Sole TypeScript contract authority is available. | - | - | - |
+| D2 | 2 | Finish TypeScript contract and ledger-IO integration | 1 | DONE | Raw-day membership tests and all required PR checks passed; the change is merged. | feed-selection-delivery | #1763 | - |
+| D3 | 3 | Remove feed labels and rename article/discovery controls | 2 | IN PROGRESS | Sole TypeScript contract authority is available. | feed-selection-controls | - | - |
 | D4 | 4 | Implement allocation, freshness, cutoff and rejection persistence | 1, 2, 3 | PENDING | Consume PR1's catalog and the verified integration; policy is settled. | - | - | - |
 
 Implementation gates, not this documentation delivery: inspect `npm run test:changed -- --list` from `frontend/`, run the selected checks, and run each row's named Bun cases. Type-check affected packages with `bun run --cwd <package> check`. CI runs the full merge-candidate suite once. No row requires a live feed probe or a workflow dispatch.

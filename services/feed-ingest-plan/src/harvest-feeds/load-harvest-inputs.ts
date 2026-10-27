@@ -3,7 +3,7 @@ import { createHash } from "node:crypto";
 import { z } from "zod";
 import {
   DateStampSchema, LifecycleStatusSchema, NonEmptySchema,
-  PositiveCountSchema, SlugSchema, SourceFormSchema, SourceSnapshotSchema, UrlSchema,
+  PositiveCountSchema, SlugSchema, SourceSnapshotSchema, UrlSchema,
 } from "@idhazh/common-contracts";
 import type { SourceSnapshot } from "@idhazh/common-contracts";
 import { loadPlanningConfig } from "../config/resolve-policy";
@@ -25,7 +25,7 @@ const ConfiguredUrlSchema = UrlSchema.refine(value => {
 }, { message: "configured feed URL must be valid and contain no credentials" });
 const SourceConfigSchema = LifecycleSchema.safeExtend({
   id: SlugSchema, url: ConfiguredUrlSchema, title: NonEmptySchema,
-  kind: SlugSchema, tier: PositiveCountSchema, form: SourceFormSchema, weight: WeightSchema,
+  tier: PositiveCountSchema, weight: WeightSchema,
   added_on: DateStampSchema.nullable().default(null),
   publisher_id: SlugSchema.nullable().default(null),
   retirement_reason: z.string().min(1).nullable().default(null).refine(
@@ -59,7 +59,6 @@ const SourcesSchema = z.object({
   publishers: z.array(PublisherDefinitionSchema).default([]),
 });
 const RegistrySchema = z.object({
-  source_kinds: z.array(LifecycleSchema.safeExtend({ id: SlugSchema })),
   source_tiers: z.array(LifecycleSchema.safeExtend({ id: PositiveCountSchema, weight: WeightSchema })),
 });
 const ExtractionSchema = z.object({
@@ -91,7 +90,6 @@ export function loadHarvestInputs(raw: {
   validateSemanticSelectors(extraction.semantic_fallback);
   for (const [name, ids] of [
     ["source", [...sources, ...retired].map(source => source.id)],
-    ["source kind", registry.source_kinds.map(kind => kind.id)],
     ["source tier", registry.source_tiers.map(tier => tier.id)],
   ] as const) {
     if (new Set<string | number>(ids).size !== ids.length) throw new Error(`${name} ids must be distinct`);
@@ -102,9 +100,6 @@ export function loadHarvestInputs(raw: {
         throw new Error(`source.${source.id}.tier: missing registered snapshot weight`);
       }
       continue;
-    }
-    if (!registry.source_kinds.some(kind => kind.id === source.kind && kind.status === "active")) {
-      throw new Error(`source.${source.id}.kind: source kind must be active and registered`);
     }
     if (!registry.source_tiers.some(tier => tier.id === source.tier && tier.status === "active")) {
       throw new Error(`source.${source.id}.tier: source tier must be active and registered`);
@@ -135,7 +130,7 @@ export function sourceSnapshot(inputs: HarvestInputs, source: ConfiguredSource):
   if (!tier) throw new Error(`source.${source.id}.tier: unknown registry entry`);
   return SourceSnapshotSchema.parse({
     source_id: source.id, feed_url: source.url, title: source.title,
-    publisher_id: source.publisher_id, kind: source.kind, tier: source.tier, form: source.form, status: source.status,
+    publisher_id: source.publisher_id, tier: source.tier, status: source.status,
     weight: source.weight, applied_tier_weight: tier.weight,
   });
 }

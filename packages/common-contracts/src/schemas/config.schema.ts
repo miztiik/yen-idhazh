@@ -1,4 +1,4 @@
-/** Which authored planner settings and vertical references are valid before a run? */
+/** Which authored planner settings are valid before a run? */
 import { z } from "zod";
 import {
   NonEmptySchema, PositiveCountSchema, PositiveSchema, reject,
@@ -93,7 +93,7 @@ export const FeedTriageConfigSchema = FeedScreeningPolicySchema.extend({
 });
 export const FeedSoftCapsSchema = z.strictObject({
   max_source_share: PositiveSchema.max(1),
-  max_parent_domain_share: PositiveSchema.max(1),
+  max_website_group_share: PositiveSchema.max(1),
   min_distinct_sources: PositiveCountSchema,
   relaxation_order: z.array(z.enum(["distinct_sources", "source_share"])),
 }).superRefine((value, ctx) => {
@@ -101,13 +101,17 @@ export const FeedSoftCapsSchema = z.strictObject({
     reject(ctx, "relaxation_order must not repeat a limit", ["relaxation_order"]);
   }
 });
-export const FeedCurateConfigSchema = FeedCurationPolicySchema.extend({
+export const FeedWebsiteGroupingConfigSchema = z.strictObject({
+  include_private_suffixes: z.boolean().default(true),
+});
+export const FeedCurateArticlesConfigSchema = FeedCurationPolicySchema.extend({
   article_limit: PositiveCountSchema.nullable(),
   source_reliability_penalty_enabled: z.boolean().default(true).describe(
     "Apply measured source reliability separately from article quality. Remove this switch and its disabled path when isolated selection becomes the sole planner.",
   ),
   soft_caps: FeedSoftCapsSchema,
   exploration_slot_share: z.number().finite().min(0).max(1),
+  website_grouping: FeedWebsiteGroupingConfigSchema.default({ include_private_suffixes: true }),
 });
 export const FeedPartitionConfigSchema = z.strictObject({
   default_strategy: z.enum(["bin-pack", "round-robin", "none"]),
@@ -134,11 +138,12 @@ export const FeedFeedbackConfigSchema = z.strictObject({
   request_report_closed_days: PositiveCountSchema.default(7),
 });
 export const FeedIngestConfigSchema = z.strictObject({
-  version: z.literal("2026-10-20"),
+  version: z.literal("2026-10-27"),
   harvest: FeedHarvestConfigSchema,
   content_filters: FeedContentFiltersConfigSchema,
   triage: FeedTriageConfigSchema,
-  curate: FeedCurateConfigSchema,
+  curate_articles: FeedCurateArticlesConfigSchema,
+  discovered_articles: z.strictObject({ lookback_days: z.int().nonnegative().default(90) }).default({ lookback_days: 90 }),
   partition: FeedPartitionConfigSchema,
   seal: FeedSealConfigSchema,
   workflow_reporting: FeedWorkflowReportingConfigSchema,
