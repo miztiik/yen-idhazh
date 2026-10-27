@@ -1,9 +1,8 @@
 /** Do actual HTTP results, native files and selected artifacts survive the isolated handoff? */
 import { expect, test } from "bun:test";
-import { copyFile, mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { tmpdir } from "node:os";
-import { fileURLToPath } from "node:url";
 import { SelectedArticlesArtifactSchema } from "../../../packages/common-contracts/src/index";
 import { runFeedPlan, summarizePlan } from "../src/run-feed-plan";
 import { recordedPlan } from "./plan-recordings";
@@ -11,30 +10,18 @@ import { source } from "./harvest-recordings";
 import { main } from "../src/index";
 import { executeFeedHealthState } from "../src/api/feed-health-state-operation";
 import { invokePlannerHttp } from "../scripts/feed-ingest-plan-http-proof";
-import { commitPlannerFiles } from "../scripts/feed-ingest-plan-commit";
 import { verifyParquetFiles, verifyPlanningCompletion } from "../scripts/feed-ingest-plan-verification";
 import { createExecutionOutputs, writeGitHubOutputs } from "../scripts/feed-ingest-plan-outputs";
 import { formatExecutionOutcome, formatExecutionReport, readExecutionReport, writePlannerReport } from "../scripts/feed-ingest-plan-report";
 import { prepareWorkflowArtifacts } from "../scripts/feed-ingest-plan-artifacts";
 import { observeWorkflowResources, WorkflowResourcesSchema } from "../scripts/feed-ingest-plan-workflow-resources";
 import { escapeMarkdown } from "../scripts/feed-ingest-plan-report-format";
-import { hostWriter } from "../scripts/feed-ingest-plan-metadata";
 import { metadataRegistrations } from "./host-recordings";
-
-async function git(directory: string, args: string[]) {
-  const child = Bun.spawn(["git", ...args], { cwd: directory, stdout: "pipe", stderr: "pipe", env: {
-    ...Bun.env, GIT_AUTHOR_NAME: "Fixture", GIT_AUTHOR_EMAIL: "fixture@example.test",
-    GIT_COMMITTER_NAME: "Fixture", GIT_COMMITTER_EMAIL: "fixture@example.test",
-  } });
-  const [output, errors] = await Promise.all([new Response(child.stdout).text(), new Response(child.stderr).text()]);
-  if (await child.exited !== 0) throw new Error(`Generated Git fixture refused ${args[0]}: ${errors}`);
-  return output.trim();
-}
 
 test("actual HTTP output retains selected text separately from its strict metadata manifest", async () => {
   const fixture = await recordedPlan();
   try {
-    const publication = { identity: { run_id: "2026-10-21-700", attempt: 1, git_sha: fixture.runtime.git_sha },
+    const deliveryContext = { identity: { run_id: "2026-10-21-700", attempt: 1, git_sha: fixture.runtime.git_sha },
       registrations: await metadataRegistrations() };
     fixture.inputs.settings.listener.port = 0;
     const directory = join(fixture.directory, "evidence");
@@ -83,7 +70,7 @@ test("actual HTTP output retains selected text separately from its strict metada
       await Bun.write(join(directory, "state", path), await readFile(join(fixture.inputs.outputRoot, path)));
     }
     await writeFile(join(directory, "runtime.log"), fixture.events.map(event => JSON.stringify(event)).join("\n"));
-    const retained = await prepareWorkflowArtifacts({ root: fixture.directory, directory, runNumber: "700", attempt: 1, ...publication });
+    const retained = await prepareWorkflowArtifacts({ root: fixture.directory, directory, runNumber: "700", attempt: 1, ...deliveryContext });
     expect(retained.selected).toBe("artifacts/700-1-selected-articles.json");
     expect(SelectedArticlesArtifactSchema.parse(await Bun.file(join(directory, retained.selected!)).json())).toEqual(artifact);
     const recovery = join(directory, retained.metadata_recovery!);
@@ -92,104 +79,17 @@ test("actual HTTP output retains selected text separately from its strict metada
     const log = await Bun.file(join(directory, retained.runtime_log!)).text();
     expect(log).not.toContain(artifact.articles[0]!.article_text);
     expect(log).not.toContain("article_text");
-    await writeFile(join(directory, "commit-result.json"), JSON.stringify({ status: "landed", commit: "a".repeat(40), files: paths.length, paths }));
-    const confirmed = await prepareWorkflowArtifacts({ root: fixture.directory, directory, runNumber: "700", attempt: 2, ...publication });
+    await writeFile(join(directory, "delivery-result.json"), JSON.stringify({ status: "landed", commit: "a".repeat(40), files: paths.length, paths }));
+    const confirmed = await prepareWorkflowArtifacts({ root: fixture.directory, directory, runNumber: "700", attempt: 2, ...deliveryContext });
     expect(confirmed.metadata_recovery).toBeUndefined();
     expect(confirmed.selected).toBe("artifacts/700-2-selected-articles.json");
     expect(confirmed.selected).not.toBe(retained.selected);
-    await expect(prepareWorkflowArtifacts({ root: fixture.directory, directory, runNumber: "../injected", attempt: 1, ...publication })).rejects.toThrow();
+    await expect(prepareWorkflowArtifacts({ root: fixture.directory, directory, runNumber: "../injected", attempt: 1, ...deliveryContext })).rejects.toThrow();
     await writeFile(join(directory, "response.json"), "invalid JSON");
     const published = join(directory, "artifact-outputs");
     await expect(prepareWorkflowArtifacts({ root: fixture.directory, directory, runNumber: "700", attempt: 3,
-      outputPath: published, ...publication })).rejects.toThrow();
+      outputPath: published, ...deliveryContext })).rejects.toThrow();
     expect(await readFile(published, "utf8")).toContain("runtime_log<<");
-  } finally { await fixture.close(); }
-});
-
-test("exact metadata appends through a generated bare origin without raw indexes and with safe replay", async () => {
-  const fixture = await recordedPlan([source({ url: "https://news.example/empty.xml" })]);
-  try {
-    fixture.inputs.outputRoot = join(fixture.directory, "feed-ingest-plan", "state");
-    const summary = summarizePlan(await runFeedPlan({}, fixture.inputs, fixture.runtime));
-    await writeFile(join(fixture.directory, "feed-ingest-plan", "response.json"), JSON.stringify(summary));
-    const paths: string[] = JSON.parse(createExecutionOutputs(summary, fixture.inputs.registrations).current_run_files!);
-    const repository = join(fixture.directory, "checkout");
-    const origin = join(fixture.directory, "origin.git");
-    await mkdir(repository);
-    await git(fixture.directory, ["init", "--bare", "--initial-branch=main", origin]);
-    await git(repository, ["init", "--initial-branch=main"]);
-    await writeFile(join(repository, "README.md"), "Generated bounded fixture.\n");
-    const retry = await Bun.file(new URL("../../../config/push-retry.json", import.meta.url)).json();
-    await mkdir(join(repository, "config"));
-    await writeFile(join(repository, "config", "push-retry.json"), JSON.stringify(retry));
-    for (const name of ["ledgers.json", "feed-ingest-plan-service.json"]) {
-      await writeFile(join(repository, "config", name), await Bun.file(new URL(`../../../config/${name}`, import.meta.url)).text());
-    }
-    await git(repository, ["add", "--", "README.md", "config/push-retry.json", "config/ledgers.json", "config/feed-ingest-plan-service.json"]);
-    await git(repository, ["commit", "-m", "Create generated fixture"]);
-    await git(repository, ["remote", "add", "origin", origin]);
-    await git(repository, ["push", "origin", "HEAD:refs/heads/main"]);
-    const head = await git(repository, ["rev-parse", "HEAD"]);
-    const publication = { identity: { run_id: summary.run_id, attempt: summary.attempt, git_sha: head },
-      registrations: await metadataRegistrations() };
-    if (summary.selected_articles_artifact !== null) {
-      const artifact = join(repository, summary.selected_articles_artifact);
-      await mkdir(dirname(artifact), { recursive: true });
-      await copyFile(join(fixture.directory, summary.selected_articles_artifact), artifact);
-    }
-    await writeFile(join(fixture.directory, "feed-ingest-plan", "resources.json"), JSON.stringify(WorkflowResourcesSchema.parse({
-      host_request: { date: summary.date, writer: hostWriter(publication.identity) }, profile_requested: false,
-      host: { status: "disabled", reason: "observability.host_fingerprint=false" },
-      profile: { status: "disabled", reason: "profile_machine_memory=false" },
-    })));
-    const statusBefore = await git(repository, ["status", "--porcelain"]);
-    async function invokeCommit() {
-      const child = Bun.spawn([process.execPath, fileURLToPath(new URL("../scripts/feed-ingest-plan-commit.ts", import.meta.url))], {
-        cwd: repository, stdout: "pipe", stderr: "pipe", timeout: 120000,
-        env: { ...Bun.env, RUNNER_TEMP: fixture.directory, CURRENT_RUN_FILES: JSON.stringify(paths),
-          GITHUB_RUN_ID: "700", GITHUB_RUN_ATTEMPT: "1" },
-      });
-      const [output, errors] = await Promise.all([new Response(child.stdout).text(), new Response(child.stderr).text()]);
-      expect({ code: await child.exited, errors }).toEqual({ code: 0, errors: "" });
-      const result: { status: string; commit: string; files: number } = JSON.parse(output);
-      expect(JSON.parse(await readFile(join(fixture.directory, "feed-ingest-plan", "commit-result.json"), "utf8"))).toEqual(result);
-      return result;
-    }
-    const committed = await invokeCommit();
-    expect(committed.status).toBe("landed");
-    expect(committed.commit).toBe(await git(fixture.directory, ["--git-dir", origin, "rev-parse", "main"]));
-    expect(await git(repository, ["rev-parse", "HEAD"])).toBe(head);
-    expect(await git(repository, ["status", "--porcelain"])).toBe(statusBefore);
-    const indexes = [...new Set(paths.map(path => `state/${path.slice(0, path.lastIndexOf("/"))}/index.json`))];
-    // This tree was just built by this case; it cannot grow with repository history.
-    const members = (await git(fixture.directory, ["--git-dir", origin, "ls-tree", "-r", "--name-only", "main"])).split("\n");
-    expect(members.sort()).toEqual(["README.md", "config/push-retry.json", "config/ledgers.json", "config/feed-ingest-plan-service.json",
-      ...paths.map(path => `state/${path}`)].sort());
-    for (const path of indexes) {
-      expect(await git(fixture.directory, ["--git-dir", origin, "ls-tree", "main", "--", path])).toBe("");
-    }
-    expect((await invokeCommit()).status).toBe("already-on-main");
-    await expect(commitPlannerFiles({ repository, stateRoot: fixture.inputs.outputRoot, retry, message: "Refuse old format",
-      paths: ["raw/feed-ingest-plan/dispatches/2026/10/21/anything.parquet"], ...publication })).rejects.toThrow("current planner");
-    await writeFile(join(repository, "config", "push-retry.json"), "{}");
-    const failed = Bun.spawn([process.execPath, fileURLToPath(new URL("../scripts/feed-ingest-plan-commit.ts", import.meta.url))], {
-      cwd: repository, stdout: "pipe", stderr: "pipe",
-      env: { ...Bun.env, RUNNER_TEMP: fixture.directory, CURRENT_RUN_FILES: JSON.stringify(paths),
-        GITHUB_RUN_ID: "700", GITHUB_RUN_ATTEMPT: "1" },
-    });
-    const [failedOutput, failedErrors, exit] = await Promise.all([
-      new Response(failed.stdout).text(), new Response(failed.stderr).text(), failed.exited,
-    ]);
-    expect(exit).toBe(2);
-    expect(failedOutput).toBe("");
-    expect(JSON.parse(failedErrors)).toMatchObject({ event: "planner_metadata_commit_failed", status: "failed",
-      reason: "push retry requires deadline_seconds.default" });
-    expect(await Bun.file(join(fixture.directory, "feed-ingest-plan", "commit-result.json")).json())
-      .toEqual({ status: "failed", commit: null, files: paths.length, paths });
-    const recovered = await prepareWorkflowArtifacts({ root: fixture.directory, directory: join(fixture.directory, "feed-ingest-plan"),
-      runNumber: "700", attempt: 3, ...publication });
-    expect(recovered.metadata_recovery).toBeDefined();
-    for (const path of paths) expect(await readFile(join(fixture.inputs.outputRoot, path))).toBeInstanceOf(Buffer);
   } finally { await fixture.close(); }
 });
 

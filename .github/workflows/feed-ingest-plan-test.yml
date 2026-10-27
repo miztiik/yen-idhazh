@@ -49,6 +49,7 @@ jobs:
           sparse-checkout: |
             /config/
             /packages/common-contracts/
+            /packages/data-delivery/
             /packages/ledger-file-writer/
             /services/feed-ingest-plan/
             /services/host-probes/
@@ -69,6 +70,7 @@ jobs:
       - name: Install declared TypeScript dependencies
         run: |
           bun install --frozen-lockfile --cwd packages/common-contracts
+          bun install --frozen-lockfile --cwd packages/data-delivery
           bun install --frozen-lockfile --cwd packages/ledger-file-writer
           bun install --frozen-lockfile --cwd services/feed-ingest-plan
           bun install --frozen-lockfile --cwd services/host-probes
@@ -77,9 +79,11 @@ jobs:
       - name: Check isolated adapters
         run: |
           bun run --cwd packages/common-contracts check
+          bun run --cwd packages/data-delivery check
+          bun run --cwd packages/data-delivery test
           bun run --cwd packages/ledger-file-writer check
           bun run --cwd services/feed-ingest-plan check
-          bun test ./services/feed-ingest-plan/test/feed-ingest-plan-report.test.ts ./services/feed-ingest-plan/test/feed-ingest-plan-outputs.test.ts ./services/feed-ingest-plan/test/feed-ingest-plan-workflow.test.ts ./services/feed-ingest-plan/test/feed-ingest-plan-host.test.ts ./services/feed-ingest-plan/test/feed-ingest-plan-publication.test.ts --timeout 30000
+          bun test ./services/feed-ingest-plan/test/feed-ingest-plan-report.test.ts ./services/feed-ingest-plan/test/feed-ingest-plan-outputs.test.ts ./services/feed-ingest-plan/test/feed-ingest-plan-workflow.test.ts ./services/feed-ingest-plan/test/feed-ingest-plan-host.test.ts ./services/feed-ingest-plan/test/feed-ingest-plan-delivery.test.ts --timeout 30000
 
       - name: Read named history and call the real HTTP planner
         id: plan
@@ -94,13 +98,13 @@ jobs:
           set -o pipefail
           bun run services/feed-ingest-plan/scripts/feed-ingest-plan-http-proof.ts 2>&1 | tee "$RUNNER_TEMP/feed-ingest-plan/runtime.log"
 
-      - name: Commit exact current planner and host metadata
+      - name: Deliver exact current planner and host metadata
         if: ${{ !cancelled() && steps.plan.outputs.current_run_files != '' }}
         env:
           CURRENT_RUN_FILES: ${{ steps.plan.outputs.current_run_files }}
         run: |
           set -o pipefail
-          bun run services/feed-ingest-plan/scripts/feed-ingest-plan-commit.ts 2>&1 | tee "$RUNNER_TEMP/feed-ingest-plan/commit.log"
+          bun run services/feed-ingest-plan/scripts/feed-ingest-plan-deliver.ts 2>&1 | tee "$RUNNER_TEMP/feed-ingest-plan/delivery.log"
 
       - name: Install optional host instruments
         if: ${{ !cancelled() && inputs.profile_machine_memory }}
@@ -154,12 +158,12 @@ jobs:
           path: ${{ runner.temp }}/feed-ingest-plan/${{ steps.evidence.outputs.history }}
           if-no-files-found: error
 
-      - name: Preserve metadata commit result
-        if: ${{ always() && steps.evidence.outputs.commit != '' }}
+      - name: Preserve metadata delivery result
+        if: ${{ always() && steps.evidence.outputs.delivery != '' }}
         uses: actions/upload-artifact@v7
         with:
           archive: false
-          path: ${{ runner.temp }}/feed-ingest-plan/${{ steps.evidence.outputs.commit }}
+          path: ${{ runner.temp }}/feed-ingest-plan/${{ steps.evidence.outputs.delivery }}
           if-no-files-found: error
 
       - name: Preserve real planner and listener logs
@@ -170,12 +174,12 @@ jobs:
           path: ${{ runner.temp }}/feed-ingest-plan/${{ steps.evidence.outputs.runtime_log }}
           if-no-files-found: error
 
-      - name: Preserve real metadata commit logs
-        if: ${{ always() && steps.evidence.outputs.commit_log != '' }}
+      - name: Preserve real metadata delivery logs
+        if: ${{ always() && steps.evidence.outputs.delivery_log != '' }}
         uses: actions/upload-artifact@v7
         with:
           archive: false
-          path: ${{ runner.temp }}/feed-ingest-plan/${{ steps.evidence.outputs.commit_log }}
+          path: ${{ runner.temp }}/feed-ingest-plan/${{ steps.evidence.outputs.delivery_log }}
           if-no-files-found: error
 
       - name: Preserve effective workflow settings

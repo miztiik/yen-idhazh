@@ -2,12 +2,17 @@
 
 **Last Updated**: 2026-10-27
 
-Start here when an agent adds a workflow that commits generated files.
-Gardener, council, digest and the additional clients below use one publisher:
-[`backend/utilities/publish_to_repo.py`](../../../backend/utilities/publish_to_repo.py).
-It builds a private candidate on fetched `main`, not a commit or rebase in the
-caller's checkout. HEAD, the caller's index and sparse patterns do not move.
-The workflows are described in [GitHub Actions](../../reference/github-actions.md).
+Start here when a workflow delivers generated files. Python jobs use
+[`backend/utilities/publish_to_repo.py`](../../../backend/utilities/publish_to_repo.py)
+and its caller-specific adapters. TypeScript callers use
+[`packages/data-delivery`](../../../packages/data-delivery/src/index.ts) when
+they need Git or local artifact-directory output. The workflows are described
+in [GitHub Actions](../../reference/github-actions.md).
+
+Both paths require exact completed files and permissions declared separately.
+The Python publisher builds a private candidate on fetched `main`. The
+TypeScript `safe_persist_data` API does the same for Git output, without moving
+the caller's HEAD, index or sparse patterns. Neither API reruns a producer.
 
 ## When a data commit publishes the site
 
@@ -41,7 +46,7 @@ The version `2026-10-09` `PublicationReceipt` holds only identity and exact
 not a publication ledger or authority to stage anything. Raw envelopes must
 identify the run, attempt, job, shard and code revision that actually executed.
 
-Every retry checks worktree evidence, filtered Git blobs and candidate entries.
+The Python publisher checks worktree evidence, filtered Git blobs and candidate entries.
 Only mode `100644` is accepted. Literal paths, whole-segment permissions,
 symlink/junction parents, executable/submodule conversions, disjoint operations
 and the absence of foreign candidate changes are checked before pushing.
@@ -122,6 +127,28 @@ that main rejected a push. Gardener preserves its logged crash/exit-1 path.
 
 ## Adopting the publisher in another workflow
 
+For a TypeScript caller, validate the producer's output and ownership before
+calling `safe_persist_data`. Its input schema validates the in-process request;
+it is not a persisted contract because no later run reads the request. The API
+accepts explicitly named files with expected SHA256 values and independently
+declared whole-segment permissions, plus a caller-supplied Git committer
+identity. The manual planner test workflow reads that identity from
+[`config/data-delivery.json`](../../../config/data-delivery.json). Git delivery refuses immutable collisions,
+verifies each source hash before writing its bytes as an unfiltered Git blob,
+uses a private candidate on fetched `main`, and
+retries with the named `config/push-retry.json` settings. Artifact-directory
+delivery copies only named files and refuses symlink parents or replacement
+with different bytes. Neither destination supports deletion or mutable
+replacement.
+
+The manual planner test workflow is a consumer, not an application publishing
+stage. Its adapter validates the exact completed planner and host metadata
+against registered raw ledger prefixes, then calls the shared API. It does not
+give the API planner registration or Parquet policy. Selected article text is
+uploaded separately and is never part of the Git request.
+
+For a Python publisher adapter, use this sequence:
+
 1. Reuse an adapter when its policy fits. See
    [`gardener_publish.py`](../../../backend/utilities/gardener_publish.py),
    [`council_publish.py`](../../../backend/utilities/council_publish.py),
@@ -180,54 +207,35 @@ enable the expensive memory copy. Only jobs selected by its config knob copy.
 
 ## Design rationale
 
-The manual TypeScript planner commits only exact current raw UUID Parquet
-files for its four registered planner ledgers and `host-fingerprint`.
-Permissions come from those five committed registrations, never an API path.
-The caller confirms completed API receipts, the configured prefix, UTC day,
-UUID, row count and canonical digest against the actual Parquet. Host files
-use the shared generic envelope and recomputed work-unit identity, including
-the executed revision, run, attempt, pipeline, task and shard. Planner files
-use their native minimal envelope; discovery rows do not acquire invented
-run fields.
+The TypeScript API request exists only during one call, so its Zod schema and
+inferred types live beside the delivery code rather than in the persisted
+contract collection. The API does not know planner registrations or ledger
+formats. A caller must first validate its completed output and provide
+permissions independently from the output paths.
 
-The Bun adapter rejects symlink/junction escapes and non-directory Git parents,
-checks that completed local bytes have not changed on each retry, and builds
-a private `GIT_INDEX_FILE` candidate parented on fetched main. A normal
-non-force push preserves completed bytes; different committed bytes at the
-same UUID are refused. The checkout, caller's index, foreign index and sparse
-patterns do not move. Only declared candidate changes can be pushed.
+The manual planner test workflow is the first Git consumer. Its adapter
+confirms current raw UUID Parquet files against the registered prefixes and
+their execution evidence. It passes only those exact files to
+`safe_persist_data`; the API does not create raw-day indexes, host indexes,
+inventory records, or article-text commits. Selected text stays in a separate
+uploaded artifact. The planner input contract defines bounded day discovery
+separately from compact-period metadata.
 
-The commit appends only those completed immutable Parquet files. It writes no
-planner raw-day `index.json` and no host index. On a lost push it fetches fresh
-main and reapplies the same exact files, without regenerating output. Both
-concurrent additions remain in the new tree; an existing UUID with different
-bytes refuses publication. Replaying identical output creates no commit.
-The [planner input contract](../../reference/feed-planner-ledgers.md#raw-day-membership)
-defines bounded day discovery separately from compact-period metadata.
+The Git committer identity belongs to the caller, not the reusable delivery
+API. This keeps generated commits from claiming the workflow operator's
+identity and lets each caller use its own committed configuration.
 
 The gardener's existing publisher still lands compact planner changes. Its
 Python scheduler receives a TypeScript maintenance receipt containing the
 verified compact bytes and exact source paths; this is not a second publisher
 or a permission to alter other families.
 
-This is a bounded native-format handoff, not a second general publisher.
-The adapter performs no deletion, other-ledger write, publication/site
-inventory update, site deploy or producer rerun. Selected text stays in its
-separate artifact. Completed host files remain publishable and recoverable
-even when the planner saves no response. Partial completed metadata may land
-with its explicit failed run outcome; publication success never turns failed
-planning green. A refused publication retains exact validated Parquet and a
-path manifest in the uncommitted metadata recovery artifact, without indexes
-or article bodies. The commit result identifies the exact confirmed paths,
-not only their count.
-Other workflows retain the shared Python publisher rule above.
-
-Maintainer-approved on 2026-10-09: reuse gardener's private-index, exact-change,
-sparse-safe publication, with three actual policies rather than a generic
-framework. Rebase, broad staging/restoration and text conflict resolution were
-removed because they could discard foreign work or publish bytes no producer
-confirmed. The optional bounded preparation callback belongs to the caller;
-the core has no pipeline switches, models or audit ledger.
+Maintainer-approved on 2026-10-09: the Python publisher reuses a private index,
+exact-change checks and sparse-safe publication. Rebase, broad staging and
+text conflict resolution were removed because they could discard foreign work
+or publish bytes no producer confirmed. Its optional bounded preparation
+callback belongs to the caller; the core has no pipeline switches, models or
+audit ledger.
 
 ## See also
 
