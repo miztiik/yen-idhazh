@@ -9,7 +9,7 @@ import {
   DateStampSchema, FileEnvelopeSchema, FOOTER_METADATA_KEYS, OPTIONAL_FOOTER_METADATA_KEYS,
   PLANNER_FOOTER_METADATA_KEYS, PLANNER_OPTIONAL_FOOTER_METADATA_KEYS,
   PlannerFileEnvelopeSchema, PlannerLedgerNameSchema, RowIdentitySchema, WriterIdentitySchema,
-  SelectedArticlesArtifactSchema, SelectedArticleRowSchema,
+  SELECTED_ARTICLE_VERSION, SelectedArticlesArtifactSchema, SelectedArticleRowSchema,
   selectedArticleMetadata, validateEnvelopeContainer,
 } from "@idhazh/common-contracts";
 import type { FileEnvelope, PlannerFileEnvelope } from "@idhazh/common-contracts";
@@ -283,7 +283,8 @@ describe("ledger Parquet readback", () => {
       const before = structuredClone(article);
       const metadata = selectedArticleMetadata(article);
       const artifact = SelectedArticlesArtifactSchema.parse({
-        run_id: "2026-10-20-1", attempt: 1, date: "2026-10-20", evaluated_at: "2026-10-20T10:00:00.123Z", articles: [article],
+        schema_version: SELECTED_ARTICLE_VERSION, run_id: "2026-10-20-1", attempt: 1,
+        date: "2026-10-20", evaluated_at: "2026-10-20T10:00:00.123Z", articles: [article],
       });
       expect(article).toEqual(before);
       expect(metadata).not.toHaveProperty("article_text");
@@ -333,12 +334,12 @@ describe("ledger Parquet readback", () => {
         await expect(persistLedger({ ...context, rows: [{ ...recording.row, ...change }] })).rejects.toThrow();
       }
       await expect(persistLedger({ ...context, rows: [recording.row], rowContract: {
-        schema: SelectedArticleRowSchema.safeExtend({ article_text: z.string().optional() }), schemaVersion: "2026-10-25",
+        schema: SelectedArticleRowSchema.safeExtend({ article_text: z.string().optional() }), schemaVersion: recording.contract.schemaVersion,
       } })).rejects.toThrow("declared current planner row contract");
       await expect(persistLedger({ ...context, rows: [recording.row, { ...recording.row, title: "Conflicting copy" }] })).rejects.toThrow("conflicting duplicate");
       await expect(persistLedger({
         ...context, rows: [{ ...SelectedArticleRowSchema.parse(recording.row), url_key: "f".repeat(64) }],
-        rowContract: { schema: z.strictObject(SelectedArticleRowSchema.shape), schemaVersion: "2026-10-25" },
+        rowContract: { schema: z.strictObject(SelectedArticleRowSchema.shape), schemaVersion: recording.contract.schemaVersion },
       })).rejects.toThrow();
       const health = plannerRecordings().find(row => row.name === "feed-health-state")!;
       await expect(persistLedger({

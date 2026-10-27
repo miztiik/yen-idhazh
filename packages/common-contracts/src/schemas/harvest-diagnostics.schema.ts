@@ -54,12 +54,6 @@ export const HarvestDiagnosticsSchema = z.strictObject({
   warnings: z.array(z.enum(["malformed-json-ld", "semantic-dom-fallback"])).max(2).default([]),
   quality: ExtractionQualitySchema.nullable().default(null),
 });
-export const PreviousHarvestDiagnosticsSchema = HarvestDiagnosticsSchema.omit({ quality: true }).extend({
-  failure_code: HarvestDiagnosticsSchema.shape.failure_code.unwrap().unwrap()
-    .exclude(ExtractionSignalSchema.options).nullable().default(null),
-  detail: HarvestDiagnosticsSchema.shape.detail.unwrap().unwrap()
-    .exclude(ExtractionSignalSchema.options).nullable().default(null),
-});
 export type HarvestDiagnostics = z.infer<typeof HarvestDiagnosticsSchema>;
 export type FetchFailure = z.infer<typeof FetchFailureSchema>;
 export type ExtractionFailure = z.infer<typeof ExtractionFailureSchema>;

@@ -285,7 +285,7 @@ test("admitted future timing preserves its signed observation and floors only th
   expect(row.age_hours).toBe(-1);
   expect(row.ratings.recency_score).toBe(1);
   expect(row.timing_at).toBe("2026-10-21T13:00:00Z");
-  expect(row.published_at).toBe(row.timing_at);
+  expect(row.timing_at).toBe(row.published_at);
   expect(row.published_at_source).toBe("source");
   const untrusted = run(setup, [{ ...setup.fixture.candidates[0]!, published_at: "2026-10-23T00:00:00Z" }]).articles[0]!;
   expect(untrusted).toMatchObject({
@@ -462,7 +462,7 @@ test("actual selected Parquet has exactly metadata columns while the same choice
     expect(actual.envelope).not.toHaveProperty("identity");
     expect(actual.envelope).not.toHaveProperty("unit_id");
     const artifact = SelectedArticlesArtifactSchema.parse({
-      run_id: setup.context.run_id, attempt: setup.context.writer.attempt,
+      schema_version: SelectedArticleRowContract.schemaVersion, run_id: setup.context.run_id, attempt: setup.context.writer.attempt,
       date: setup.context.date, evaluated_at: setup.context.now,
       articles: chosen.map(row => ({ ...selectedArticleMetadata(row), article_text: row.article_text })),
     });

@@ -19,18 +19,10 @@ export const FeedIngestEventSchema = z.strictObject({
   version: "2026-10-26",
   changelog: [
     { version: "2026-10-26", change: "Name pre-fetch and selection health captures separately." },
-    { version: "2026-10-25", change: "Emit sparse body-free progress instead of article audit histories." },
   ],
 });
 export type FeedIngestEvent = z.infer<typeof FeedIngestEventSchema>;
-const PreviousFeedIngestEventSchema = FeedIngestEventSchema.extend({
-  version: z.literal("2026-10-25"),
-  operation: FeedIngestEventSchema.shape.operation.exclude(["feed-health-before-fetch", "feed-health-for-selection"]),
-});
 export function readFeedIngestEvent(raw: unknown): FeedIngestEvent {
-  if (typeof raw === "object" && raw !== null && "version" in raw && raw.version === "2026-10-25") {
-    return FeedIngestEventSchema.parse({ ...PreviousFeedIngestEventSchema.parse(raw), version: "2026-10-26" });
-  }
   return FeedIngestEventSchema.parse(raw);
 }
 export const PlannerWorkEventSchema = z.discriminatedUnion("stage", [

@@ -347,6 +347,10 @@ test("native digest tampering, wrong ledger, schema, index counts and undeclared
     const rewrite = (values: Map<string, string>) => writeFile(path,
       writeParquet(WasmTable.fromIPCStream(tableToIPC(table, "stream")),
         new WriterPropertiesBuilder().setKeyValueMetadata(values).build()));
+    await rewrite(new Map([...pairs, ["schema_version", "2026-10-25"]]));
+    await expect(readPlannerParquet(path, "selected-articles", SelectedArticleRowContract))
+      .rejects.toThrow("unsupported row schema");
+    await rewrite(pairs);
     await rewrite(new Map([...pairs, ["content_sha256", "0".repeat(64)]]));
     await expect(readPlannerParquet(path, "selected-articles", SelectedArticleRowContract)).rejects.toThrow("digest");
     for (const key of ["unit_id", "git_sha", "written_at_ms", "built_from"]) {
