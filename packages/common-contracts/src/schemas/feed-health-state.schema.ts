@@ -1,6 +1,6 @@
 /** What feed work did one run attempt perform on one actual UTC day? */
 import { z } from "zod";
-import { PLANNER_LEDGER_VERSION } from "../version";
+import { FEED_HEALTH_STATE_VERSION } from "../version";
 import { CountSchema, DateStampSchema, FiniteSchema, NonEmptySchema, PositiveCountSchema, RunIdSchema, Sha256Schema, SlugSchema, reject } from "./primitives";
 import { RecordedInstantSchema } from "./recorded-instant.schema";
 
@@ -39,10 +39,13 @@ export const FeedHealthStateRowSchema = z.strictObject({
     value.feed_reads, value.productive_reads, value.failed_reads, value.article_candidates,
     value.articles_selected, value.feed_requests, value.article_requests, value.robots_requests,
   ].some((count) => count === null)) reject(ctx, "complete accounting requires every run counter");
+}).meta({
+  version: FEED_HEALTH_STATE_VERSION,
+  changelog: [{ version: FEED_HEALTH_STATE_VERSION, change: "Count admitted original article captures before selection instead of screening admissions." }],
 });
 export type FeedHealthStateRow = z.infer<typeof FeedHealthStateRowSchema>;
 export type FeedHealthReliability = z.infer<typeof FeedHealthReliabilitySchema>;
 export type FeedHealthRejectionCount = z.infer<typeof FeedHealthRejectionCountSchema>;
 export const FeedHealthStateRowContract = {
-  schema: FeedHealthStateRowSchema, schemaVersion: PLANNER_LEDGER_VERSION,
+  schema: FeedHealthStateRowSchema, schemaVersion: FEED_HEALTH_STATE_VERSION,
 } as const;

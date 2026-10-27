@@ -4,7 +4,7 @@
 
 Which planner data is retained, and where is it stored?
 
-**Status**: Current four-ledger contract for the isolated TypeScript planner.
+**Status**: Current five-ledger contract for the isolated TypeScript planner.
 [Plan 67](../../TODO/20261024-67-feed-ingest-feedback-and-selection-plan.md)
 tracks delivery and the separately deferred policy, worker and console work.
 TypeScript owns planner settings, events, requests, private receipts, stage
@@ -15,15 +15,16 @@ scheduler, which delegates planner row validation and compaction to TypeScript.
 [Plan 66](../../TODO/20261020-66-feed-ingest-plan.md) and
 [Plan 67](../../TODO/20261024-67-feed-ingest-feedback-and-selection-plan.md).
 
-**Four committed ledgers**, all under `state/raw/feed-ingest-plan/`:
+**Five committed ledgers**, all under `state/raw/feed-ingest-plan/`:
 
 - `discovered-articles`
 - `selected-articles`
+- `rejected-articles`
 - `feed-health-state`
 - `plan-runs`
 
 `selected-articles` also has a GitHub Actions artifact representation containing
-`article_text` for the summarizer. That artifact is not a fifth ledger.
+`article_text` for the summarizer. That artifact is not another ledger.
 Committed selected rows never contain `article_text`.
 
 Breaking format changes and removal of old planner-family raw and compact
@@ -44,6 +45,7 @@ is listed below; there are no hidden policy or assessment payloads.
 - [B. selected-articles](#b-selected-articles)
 - [C. feed-health-state](#c-feed-health-state)
 - [D. plan-runs](#d-plan-runs)
+- [M. rejected-articles](#m-rejected-articles)
 - [E. Dates, counters and compaction](#e-dates-counters-and-compaction)
 - [F. Screenshot ledger mapping](#f-screenshot-ledger-mapping)
 - [G. Declared payload field mapping](#g-declared-payload-field-mapping)
@@ -116,7 +118,7 @@ independently calculated selections.
 | B21 | `ratings.adjustments[].value` | Article | Yes | Signed contribution; null means unavailable, zero means a known no-op |
 | B22 | `ratings.recency_score` | Article | Yes | Actual recency contribution to the base score |
 | B23 | `ratings.feed_authority_score` | Article | Yes | Actual weighted feed-authority contribution to the base score |
-| B24 | `feed_allowance` | Article | Yes | Effective feed allowance used before portfolio selection |
+| B24 | `feed_limit` | Article | Yes | Per-feed share limit computed from the requested output count |
 | B25 | `exploration_slot` | Article | Yes | Explain a choice made through the exploration allocation |
 | B26 | `cap_relaxations` | Article | Yes | Record which configured caps were relaxed for this choice |
 | B27 | `timing_at` | Article | Yes | Publication/first-sight instant actually used for age |
@@ -124,9 +126,10 @@ independently calculated selections.
 | B29 | `age_hours` | Article | Yes | Age actually evaluated, not age at artifact upload |
 | B30 | `date` | Artifact header / Parquet row | Yes | Owning run's UTC accounting date, not publication date |
 | B31 | `evaluated_at` | Artifact header / D19 | In D19 | Save the evaluation clock once in the run ledger; include it in the self-contained artifact |
-| B32 | `allowance_reasons` | Article | Yes | Compact codes for allowance bonuses actually used; no copied witness trees |
+| B32 | Removed | - | - | Fixed allowance bonuses no longer govern selection |
 | B33 | `attempt` | Artifact header / Parquet row | Yes | Owning workflow/run attempt; not a selection-idempotency key |
 | B34 | `published_at_source` | Article | Yes | `source` or `selection`; never infer provenance from the timestamp |
+| B35 | `freshness_cutoff_at` | Article | Yes | Actual admitted window's UTC cutoff against the saved evaluation clock; null for unknown age |
 
 The compact `adjustments` list replaces the large existing score-evidence tree.
 It distinguishes unavailable evidence from a measured zero. It does not contain
@@ -152,8 +155,8 @@ source or rewrite the selection-start fallback. The artifact and metadata
 projection use the same chosen values.
 
 The TypeScript planner reader accepts only the current native ledger stamps:
-`2026-10-25` for discovered articles and feed health, and `2026-10-26` for
-selected articles and plan runs. It verifies the physical fields, file identity
+`2026-10-25` for discovered articles, `2026-10-26` for plan runs and `2026-10-27`
+for selected articles, rejected articles and feed health. It verifies the physical fields, file identity
 and canonical digest, then parses every row with the matching current schema.
 The selected and plan-run `2026-10-25` rows and the selected `2026-10-25`
 artifact are obsolete and refuse explicitly; they are unchanged on disk and
@@ -163,7 +166,7 @@ Empty categories stay arrays. The native Parquet and JSON comparison found
 that null increased both representations, so no nullable category shape is
 introduced.
 
-Use recency, curated tier/weight, the explicitly enabled measured feed-reliability
+Use recency, curated tier/weight, the explicitly enabled measured article-pass
 adjustment and applicable feed/publisher/domain selection controls. Do not
 infer verticals, desks, lenses or article-quality verdicts here. Removing those
 classification-based controls is part of the runtime cutover,
@@ -210,7 +213,7 @@ totals or add together saved rolling reliability results.
 | C23 | `feed_reads` | Run counters | Logical feed checks represented by this row, not retry requests |
 | C24 | `productive_reads` | Run counters | Productive checks under the existing outcome/items rule |
 | C25 | `failed_reads` | Run counters | Failed feed checks represented by this row |
-| C26 | `article_candidates` | Run counters | Articles passing admission and reaching numeric selection in this run/day |
+| C26 | `article_candidates` | Run counters | Original captures passing technical admission, accounted on their actual UTC settlement day; independent of selection |
 | C27 | `articles_selected` | Run counters | Selected opportunities from this feed in this run/day |
 | C28 | `feed_requests` | Run counters | Actual feed requests, including retries/redirects |
 | C29 | `article_requests` | Run counters | Actual article requests |
@@ -441,10 +444,10 @@ in the main tables; other generic identity columns are not added.
 | H2 | Candidate `fetched_at`, `word_count` | Actual age basis B27-B31 and work estimate B16 where used | No duplicated fetch timestamp/word-count column merely to restate another value |
 | H3 | Feed snapshot ID, publisher, tier, weight and applied tier weight | B4/B5/B12-B14; feed key C5 | Repeated title/feed URL/form/kind/status trees are not saved; live configuration remains authoritative |
 | H4 | `labels` desk/lens/vertical/event/entity classification and origin fields | Not retained in the simplified planner scope; RSS strings remain B8 | Active classification-based rules are removed with that scope, not silently left without explanations |
-| H5 | Policy version/hash, admission thresholds, recency/authority coefficients, allowances and concentration coefficients | Runtime configuration; actual contributions B18-B26/B32 and explicit run settings D16-D18 | No full historical policy replay or repeated per-article configuration snapshots |
+| H5 | Policy version/hash, admission thresholds, recency/authority coefficients, tier budgets and concentration coefficients | Runtime configuration; actual contributions B18-B26/B35 and explicit run settings D16-D18 | No full historical policy replay or repeated per-article configuration snapshots |
 | H6 | Score base and marginal values | B18/B19 plus explicit components B22/B23 | None for explaining the two totals |
 | H7 | Numerical penalties and their availability | B20/B21; null remains unavailable, not a measured zero | Full nested operands/witness trees are not copied; this is not a promise of complete replay |
-| H8 | Effective allowance, bonus witnesses, exploration and relaxed caps | B24-B26/B32 | Full witness objects removed; relevant reason codes remain |
+| H8 | Feed limit, exploration and relaxed caps | B24-B26 | No allowance bonuses or witness objects |
 | H9 | Carrier outlets, representative and replacement references | Applicable duplicate handling can run in memory; B keeps the selected URL | No permanent competitor/carrier reconstruction; unused replacement scaffolding removed |
 | H10 | Rejection details: HTTP/timeout/word/age bounds, matched URL/date/marker, failure code, history window and diagnostics | Checks remain in execution; C keeps grouped causes and feed-level code/status | No historical per-article diagnostic dossier |
 | H11 | Fetch/extraction diagnostic trees, quality measurements and warnings | Sparse exceptional diagnostics outside ledger data; API duration in D | No routine copied article measurement trees |
@@ -464,7 +467,7 @@ no permanent compatibility API.
 | ID | Service | Method and full path | Current role |
 | --- | --- | --- | --- |
 | K1 | Feed planner | `GET /api/2026-10-20/health` | Implemented: listener/enablement check only, not a feed-reliability query |
-| K2 | Feed planner | `POST /api/2026-10-20/plan` | Runs the shared stages and finalizes the four ledgers and selected text artifact |
+| K2 | Feed planner | `POST /api/2026-10-20/plan` | Runs the shared stages and finalizes the five ledgers and selected text artifact |
 | K3 | Feed planner | `POST /api/2026-10-20/fetch` | Implemented fetch for either a configured feed or an explicitly permitted article |
 | K4 | Feed planner | `POST /api/2026-10-20/parse` | Parses one saved feed or article without network calls; feed parsing returns body-free offers and a server-owned batch |
 | K5 | Feed planner | `POST /api/2026-10-20/select-articles` | Implemented combined admission/ranking; no selection-idempotency requirement or input-count cap |
@@ -556,11 +559,36 @@ after the complete input arrives, so a saved parsed batch does not freeze
 feedback or window membership. D11-D13 include the measured cost of both
 captures. There is no per-candidate history read or persistent result cache.
 
+## M. rejected-articles
+
+Explicit selection persistence writes one row for each parsed candidate not
+selected, including runs with zero selected articles. Fetch/parse failures are
+not parsed selection candidates. This ledger has no title, body, policy or score
+tree and no explorer consent.
+Without explorer consent, its files are not staged in the site and it has no
+published-payload ceiling in `config/idhazh.json`.
+
+### Table M - Rejected article fields
+
+| Id | Field | Meaning |
+| --- | --- | --- |
+| M1 | `schema_version` | File metadata declaring the current row format |
+| M2 | `run_id`, `attempt`, `date` | Selection execution identity and its UTC accounting day |
+| M3 | `candidate_id` | Original parsed candidate identity |
+| M4 | `url_key`, `feed_id` | Canonical URL hash and supplying feed |
+| M5 | `stage`, `reason_code` | One final screening or curation refusal |
+| M6 | `freshness_cutoff_at` | Applied UTC age cutoff, or null when no cutoff was applied |
+
+Row identity is run, attempt and candidate. Selected cutoffs use their admitted
+window. Age refusals use the failed threshold. An unopened older step is not
+an applied cutoff. Current schemas refuse harvest-stage or mismatched
+stage/reason rows.
+
 ## TypeScript contract ownership
 
 The Zod schemas under `packages/common-contracts/src/schemas/` are the sole
 contract authority for planner configuration, events, requests, private
-receipts, stage payloads and the four planner ledgers. The TypeScript writer
+receipts, stage payloads and the five planner ledgers. The TypeScript writer
 validates and writes planner Parquet and artifacts. Python has no planner row,
 stage or configuration model and no cross-language comparison copy. Native
 Python ledger readers refuse planner rows; the published-file check delegates
@@ -580,7 +608,7 @@ boundary.
 
 ## Raw-day membership
 
-The four planner ledgers have no active raw-day `index.json` reader or writer.
+The five planner ledgers have no active raw-day `index.json` reader or writer.
 Their data remains in immutable UUID Parquet siblings under
 `state/raw/feed-ingest-plan/<ledger>/YYYY/MM/DD/`. Historical derived JSON lists
 are left inert; this change does not scan or rewrite the corpus. TypeScript

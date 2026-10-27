@@ -1,10 +1,9 @@
 /** Which numeric rules govern article screening and selection? */
 import { z } from "zod";
-import { CountSchema, NonNegativeSchema, PositiveCountSchema, PositiveSchema } from "./primitives";
+import { NonNegativeSchema, PositiveCountSchema, PositiveSchema } from "./primitives";
 
 export const FeedScreeningPolicySchema = z.strictObject({
   min_words: PositiveCountSchema.default(180),
-  max_age_hours: PositiveSchema,
   recency_half_life_hours: PositiveSchema,
   recency_weight: NonNegativeSchema,
 });
@@ -16,7 +15,6 @@ export const FeedPenaltyWeightsSchema = z.strictObject({
 
 export const FeedCurationPolicySchema = z.strictObject({
   source_authority_weight: NonNegativeSchema,
-  base_source_allowance: CountSchema,
   mmr_weights: FeedPenaltyWeightsSchema,
 });
 

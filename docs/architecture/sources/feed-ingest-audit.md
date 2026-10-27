@@ -3,7 +3,7 @@
 **Last Updated**: 2026-10-26
 
 What saved evidence proves that an isolated planning execution finished?
-The current planner writes its four declared formats and an independent
+The current planner writes its five declared formats and an independent
 selected-text artifact. It does not certify summary quality or publication.
 
 ## Recording boundary
@@ -62,7 +62,7 @@ separate work.
 
 Keeping the chosen result and actual run facts is enough to explain planning
 without retaining every candidate's assessment or replaying a historical
-selection. Exact output verification protects the handoff while the four
+selection. Exact output verification protects the handoff while the five
 small formats replace the former audit products.
 
 ## See also

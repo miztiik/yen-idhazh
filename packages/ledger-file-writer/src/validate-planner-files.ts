@@ -24,6 +24,8 @@ function readPlannerFile(path: string, ledger: PlannerFileValidationRequest["fil
       return readPlannerParquet(path, ledger, PLANNER_CONTRACTS["discovered-articles"]);
     case "selected-articles":
       return readPlannerParquet(path, ledger, PLANNER_CONTRACTS["selected-articles"]);
+    case "rejected-articles":
+      return readPlannerParquet(path, ledger, PLANNER_CONTRACTS["rejected-articles"]);
     case "feed-health-state":
       return readPlannerParquet(path, ledger, PLANNER_CONTRACTS["feed-health-state"]);
     case "plan-runs":

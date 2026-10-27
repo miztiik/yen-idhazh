@@ -24,7 +24,7 @@ export type HistoryFixture = {
 };
 export const settings: LedgerSettings = { format: "parquet", compression_raw: "snappy", compression_compact: "zstd" };
 export function registration(name: string): LedgerRegistration {
-  const planner = ["discovered-articles", "selected-articles", "feed-health-state", "plan-runs"].includes(name);
+  const planner = ["discovered-articles", "selected-articles", "rejected-articles", "feed-health-state", "plan-runs"].includes(name);
   return {
     name, family: planner ? "feed-ingest-plan" : name, grain: "raw-and-compact",
     lifecycle_status: "active", prefix: planner ? ["feed-ingest-plan", name] : [name],
@@ -45,8 +45,10 @@ export async function fixtureInput(root: string, options: { count?: number; fres
     ...loaded.harvest.config,
     triage: { ...loaded.harvest.config.triage, min_words: 1 },
     curate_articles: {
-      ...loaded.harvest.config.curate_articles, article_limit: null, exploration_slot_share: 0,
-      source_authority_weight: 0, base_source_allowance: 20,
+      ...loaded.harvest.config.curate_articles,
+      article_limit: Math.max(1, options.words?.length ?? options.count ?? fixture.word_work.length), exploration_slot_share: 0,
+      source_authority_weight: 0,
+      feed_quality_tiers: [{ tier: 1, share_pct: 100, buffer_pct: 0, ladder_hours: [72] }],
       soft_caps: {
         ...loaded.harvest.config.curate_articles.soft_caps, max_source_share: 1,
         max_website_group_share: 1, min_distinct_sources: 1,

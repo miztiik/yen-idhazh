@@ -1,6 +1,6 @@
 # Feed history used by the TypeScript planner
 
-**Last Updated**: 2026-10-26
+**Last Updated**: 2026-10-27
 
 Which saved observations can change feed rest and measured reliability?
 The isolated planner reads only its current `feed-health-state` format and its
@@ -63,6 +63,26 @@ Partial history does not become perfect health. Current work does not turn
 an unverified earlier day into a measured zero.
 
 ## Curated retirement and external outcomes
+
+Article technical admission is a separate derived fraction: admitted original
+captures divided by admitted captures plus source-attributed article refusals.
+Access, extraction, required fields and the minimum word count determine this
+outcome. Age, content-policy, publication and quota losses do not change it.
+Incomplete represented evidence or a zero denominator means unknown.
+
+Each staged article fetch receipt settles its first known `source_outcome`
+atomically in the existing operation journal. Its saved body and response stay
+immutable. The parent feed receipt names its completed article captures, so
+reconstruction reads only that root and those members, never the whole journal.
+Reparse and reselection reuse the original capture outcome; a genuinely new
+capture is separate work. Whole-plan work uses the same technical outcome rule.
+Settlement uses its actual UTC day, independently of selection time.
+
+Source outcomes survive process restart. Finalized-health ownership and write
+deduplication remain process-local; this change adds no durable finalization
+snapshot or general replay framework. The maintainer directed delivery without
+that extension on 2026-10-27 UTC. Retrying health recording after a process
+restart does not carry an exactly-once output guarantee.
 
 Only active configured feeds may fetch. The separate retired-source list
 does not add live reads. A changed endpoint key cannot inherit the former

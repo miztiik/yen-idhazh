@@ -14,12 +14,12 @@ import { PlanResponseSchema } from "../src/api/plan-response.schema";
 import { LedgerHistoryReadError } from "../src/read-ledger-history/ledger-history-error";
 
 export function createExecutionOutputs(raw: unknown, registrations: {
-  discovered_articles: LedgerRegistration; selected_articles: LedgerRegistration;
+  discovered_articles: LedgerRegistration; selected_articles: LedgerRegistration; rejected_articles: LedgerRegistration;
   feed_health_state: LedgerRegistration; plan_runs: LedgerRegistration;
 }): Record<string, string> {
   const summary = PlanResponseSchema.parse(raw);
   const paths: string[] = [];
-  for (const key of ["discovered_articles", "selected_articles", "feed_health_state", "plan_runs"] as const) {
+  for (const key of ["discovered_articles", "selected_articles", "rejected_articles", "feed_health_state", "plan_runs"] as const) {
     const result = summary.files[key];
     if (result === undefined) {
       if (summary.planning_complete) throw new Error("Completed run lacks an explicit planner ledger result");

@@ -31,6 +31,9 @@ export async function executePartition(raw: unknown, inputs: PlanInputs, runtime
       articles: selected.articles.map(article => ({
         ...article, run_id: context.run_id, attempt: context.writer.attempt, date: context.date,
       })),
+      rejected_articles: selected.rejected_articles.map(article => ({
+        ...article, run_id: context.run_id, attempt: context.writer.attempt, date: context.date,
+      })),
     });
   }
   const partition = partitionArticles(selected.articles, controls);

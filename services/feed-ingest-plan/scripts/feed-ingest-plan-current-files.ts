@@ -54,6 +54,7 @@ export async function collectWorkflowFiles(input: {
       const registrations = input.registrations;
       const verified = await verifyPlanningCompletion(stateRoot, parsed, {
         discovered_articles: registrations["discovered-articles"], selected_articles: registrations["selected-articles"],
+        rejected_articles: registrations["rejected-articles"],
         feed_health_state: registrations["feed-health-state"], plan_runs: registrations["plan-runs"],
       }, input.root);
       for (const path of Object.values(verified).flatMap(result => result?.files ?? [])) {

@@ -17,6 +17,7 @@ function registrations(): MetadataRegistrations {
   return {
     "discovered-articles": registration("discovered-articles", ["generated", "discoveries"]),
     "selected-articles": registration("selected-articles", ["generated", "selections"]),
+    "rejected-articles": registration("rejected-articles", ["generated", "refusals"]),
     "feed-health-state": registration("feed-health-state", ["generated", "health"]),
     "plan-runs": registration("plan-runs", ["generated", "runs"]),
     "host-fingerprint": registration("host-fingerprint", ["generated", "host"]),

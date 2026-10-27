@@ -41,6 +41,7 @@ export async function readMetadataRegistrations(path: string | URL): Promise<Met
   const registration = (name: MetadataLedger) => entries.find(([key]) => key === name)![1];
   return {
     "discovered-articles": registration("discovered-articles"), "selected-articles": registration("selected-articles"),
+    "rejected-articles": registration("rejected-articles"),
     "feed-health-state": registration("feed-health-state"), "plan-runs": registration("plan-runs"),
     "host-fingerprint": registration("host-fingerprint"),
   };

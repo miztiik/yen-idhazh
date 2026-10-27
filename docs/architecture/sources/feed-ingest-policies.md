@@ -1,6 +1,6 @@
 # Feed ingest planning policies
 
-**Last Updated**: 2026-10-26
+**Last Updated**: 2026-10-27
 
 Which settings does the isolated planner apply to a candidate?
 `config/feed-ingest-plan.json` supplies one global policy. The production
@@ -9,20 +9,20 @@ Python planner, source catalog and taxonomy retain their separate behavior.
 ## Resolve a candidate
 
 Load and validate the authored planning configuration before work.
-`resolvePolicy` applies the global screening and scoring settings, followed
-only by the optional run freshness cutoff. Zero is a value where permitted;
+`resolvePolicy` applies global screening and scoring settings. Tier windows
+are resolved separately and a run freshness cutoff can only tighten them.
+Zero is a value where permitted;
 null is not an inheritance instruction. Returned policies do not share
 mutable objects with their configuration.
 
 There are no vertical overrides or vertical-specific admission, authority,
-allowance or grouping rules. Source kinds and numeric tier weights still
+allowance or grouping rules. Numeric tier weights still
 come from the shared curated catalog. Loading that catalog does not restore
 vertical decisions or infer story labels.
 
-Word minima depend on article or abstract form. Age cutoff and recency
-half-life remain separate settings. A freshness override changes only the
-cutoff. Exact defaults and validation live in the native knob declaration
-and its bound TypeScript copy, not in a second policy ledger.
+The same word minimum applies to every parsed article. Tier age steps and
+recency half-life remain separate settings. The validated TypeScript
+configuration owns defaults; it has no Python planner mirror.
 
 ## Global controls and evidence
 
@@ -33,12 +33,12 @@ share govern the complete selection. Partition controls govern assignments,
 not admission.
 
 Numeric ranking uses recency, configured feed authority and the retained
-feed-reliability, publisher, source-kind and parent-domain adjustments.
+article-pass, publisher and canonical website-group adjustments.
 Each applied component is recorded in the compact selected metadata.
 See [curation](feed-curation.md) for the calculation.
 
 Publisher IDs remain configured or null. Primary-document identities and
-parent domains require explicit evidence. No headline, article length,
+website groups come from validated canonical URLs. No headline, article length,
 byline or feed category creates a vertical, desk, lens, event group, entity
 or article-quality verdict.
 

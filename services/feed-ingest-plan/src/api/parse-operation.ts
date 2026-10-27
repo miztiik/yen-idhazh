@@ -30,6 +30,7 @@ import { DiscoveredArticleRowSchema } from "@idhazh/common-contracts";
 import { plannerMemory } from "../planner-memory";
 import { createStageLogger } from "../logging/structured-logger";
 import { profileTask } from "../../../host-probes/src/task-profile/task-profiler";
+import { resolveArticleSourceOutcome } from "../article-source-outcome";
 
 export async function parseFetchedDocument(
   request: z.infer<typeof ParseRequestSchema>, record: PlannerOperation, fetched: PlannerOperation,
@@ -54,7 +55,7 @@ export async function parseFetchedDocument(
     if (offer === undefined || offer.fetch_request_id !== fetched.request_id
       || batch.feed_fetch_request_id !== parent?.request_id) throw new PlanError("ARTIFACT_INVALID", "Fetched article does not match its current offer", "fetch_request_id");
   }
-  const state = await documentState(fetched, inputs, runtime, parent);
+  const state = await documentState(fetched, inputs, runtime, store, parent);
   if (state.health_written) throw new PlanError("REQUEST_CONFLICT", "This execution finalized its health; parse in a new execution", "request_id");
   const work = documentWork({
     observations: createIngestObservations(state.work.observe), observation_clock: runtime.observation_clock ?? (() => new Date()),
@@ -100,7 +101,7 @@ export async function parseFetchedDocument(
     candidate_id: candidateId, http_status: artifact.http_status, robots: artifact.robots, fetch_failure: null,
     paywall: parsed.parsed?.paywall ?? null, paywall_evidence: parsed.parsed?.paywall_evidence ?? "not-observed",
     extraction: parsed.parsed === null ? "failed" : parsed.parsed.article_text ? "success" : "empty",
-    observed_at: state.context.now, diagnostics: null,
+    observed_at: artifact.observation.occurred_at, diagnostics: null,
     ...(parsed.parsed?.content_evidence == null ? {} : { content_evidence: parsed.parsed.content_evidence }),
   });
   const title = resolveArticleTitle(offer?.entry.title ?? null, parsed.parsed?.page_title ?? null);
@@ -123,7 +124,11 @@ export async function parseFetchedDocument(
     author: parsed.parsed.author ?? offer?.entry.author ?? null, published_at: offer?.entry.published_at ?? null,
   });
   const result = HarvestArticleResultSchema.parse({ candidate, rejection, observation });
-  state.work.article(result);
+  const measuredOutcome = resolveArticleSourceOutcome(result, inputs.harvest.config.triage.min_words,
+    inputs.harvest.config.triage.blocked_http_statuses, utcTimestamp(runtime.observation_clock));
+  const sourceOutcome = fetched.source_outcome ?? (measuredOutcome === null ? null
+    : store.settleSourceOutcome(fetched.request_id, measuredOutcome));
+  state.work.article(result, fetched.request_id, sourceOutcome);
   let batch;
   if (offer !== undefined && artifact.parent_batch_id !== null) {
     batch = updateFeedOffer(inputs, state, artifact.parent_batch_id, offer.offer_id, candidate === null ? "rejected" : "parsed", fetched.request_id, result);
@@ -150,6 +155,7 @@ export async function parseFetchedDocument(
       ) },
       discovered: { availability: "available", rows: saved.rows },
       history_rows: state.history.rows, history_days: state.history.days, work_rows: state.work.rows(), exclusions: state.work.exclusions(),
+      article_fetch_request_id: fetched.request_id,
     });
   }
   return { artifact: null, response_json: JSON.stringify({
