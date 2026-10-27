@@ -2,7 +2,7 @@
 
 **Last Updated**: 2026-10-27
 
-**Level**: 5 - Design decisions approved; ready for separate implementation authorization.
+**Level**: 5 - Design decisions approved; implementation authorized by the user on 2026-10-27 UTC.
 
 ## 0. Operating contract
 
@@ -12,14 +12,14 @@ Deliver publisher identities first, then use them in the TypeScript article-sele
 
 | Id | Field | Requirement |
 | --- | --- | --- |
-| A1 | Permission | The user authorizes committing this ready plan directly to remote main. Application implementation, a PR and manual workflow dispatch remain unauthorized. |
+| A1 | Permission | The user authorized implementation of all four rows and delivery through reviewed pull requests to remote main on 2026-10-27 UTC. This supersedes the earlier plan-only permission and AUTHOR-AND-STOP wording, not the ESCALATE boundaries. No manual ingestion workflow dispatch is authorized. |
 | A2 | First delivery | Publisher curation is PR1. Ranking changes must consume that delivered catalog, not wait for publisher IDs afterward. |
 | A3 | Ownership | TypeScript owns planner configuration validation, requests, private receipts, stage payloads and created ledgers. Do not maintain Python planner-schema mirrors. Existing Python consumers may remain; this plan owns the necessary artifact-boundary integration. |
 | A4 | Compatibility | Current formats only. No migrations, old-row adapters, legacy aliases or historical backfills. Index cleanup is scoped in A5; deleting actual Parquet/article data is not authorized by breaking-code approval. |
 | A5 | Index-removal ownership | The named raw-index workstream removes active JSON-index dependencies for the four existing planner raw-day ledgers; historical derived JSON lists may remain inert. This plan owns remaining planner index removal, including compact-index dependencies not covered there, and the reader/writer integration. Do not duplicate that work, promise historical JSON purging or invent replacement manifests/history scans. |
 | A6 | Storage | Reuse the existing Parquet codec. Minimal Python consumer hooks and retirement of planner-model bindings are approved; Python retains its scheduler and unrelated ledgers. Delegate planner row validation/maintenance to TypeScript, not compatible Python schema copies or a gardener rewrite. |
 | A7 | Safety | Preserve access, sanitization, publication/failure exclusions, actual UTC clocks and content checks. Article text stays only in the selected handoff, never rejected metadata or public logs. |
-| A8 | Execution | Execute per docs/how-to/execute-a-plan.md. Parallel N = 1 because these changes share planner contracts. AUTHOR-AND-STOP until the user separately authorizes application execution and delivery. |
+| A8 | Execution | Execute per docs/how-to/execute-a-plan.md. One maintainer carries the rows sequentially; Parallel N = 1 because these changes share planner contracts. AUTO-merge each row on green gates and continue until all four rows are delivered. |
 | A9 | Integration ownership | This session owns the remaining planner schema-authority, catalog, ledger-consumer and validation integration when implementation is authorized. It is not blocked on assigning another owner. Preserve unrelated consumers and checks; do not build Python schema mirrors or silently bypass validation. |
 | A10 | ESCALATE | Stop for a user decision if work needs a persisted shape/meaning outside the approved contracts, changes selection policy/scope or unrelated consumers, adds compatibility/backfill or qualitative assessment, or meets a trust/platform boundary. Do not weaken the trust boundary or exceed the six-hour job/one-GB site limits: they cause job termination/deployment refusal. No silent scope or validation bypass. |
 
@@ -148,7 +148,7 @@ flowchart TD
 
 | Id | Row | PR outcome | Depends-on | Status | Readiness condition | Worktree | PR | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| D1 | 1 | Deliver reviewed publisher IDs | - | PENDING | A1; first delivery by user direction. | - | - | - |
+| D1 | 1 | Deliver reviewed publisher IDs | - | IN_PROGRESS | Eight reviewed publisher IDs now bind 20 active and retired feeds; unreviewed entries remain unknown. | feed-selection-delivery | #1762 | - |
 | D2 | 2 | Finish TypeScript contract and ledger-IO integration | 1 | PENDING | Reuse delivered raw-day IO; complete compact-index and native-consumer integration here. | - | - | - |
 | D3 | 3 | Remove feed labels and rename article/discovery controls | 2 | PENDING | Sole TypeScript contract authority is available. | - | - | - |
 | D4 | 4 | Implement allocation, freshness, cutoff and rejection persistence | 1, 2, 3 | PENDING | Consume PR1's catalog and the verified integration; policy is settled. | - | - | - |
@@ -158,8 +158,8 @@ Implementation gates, not this documentation delivery: inspect `npm run test:cha
 ## 2. Row #1 - Deliver reviewed publisher IDs
 
 - **Scope:** Review both `feeds` and `retired` in `config/sources.json` and deliver stable publisher mappings before ranking changes.
-- **Files touched:** `config/sources.json`, `packages/common-contracts/test/config.test.ts`, `services/feed-ingest-plan/test/policy.test.ts`, `docs/architecture/contracts/publisher-identity.md`, `TODO/20261026-feed-quality-selection-plan.md`.
-- **Acceptance gates:** Run the two named Bun test files and affected-package checks. Use bounded same-publisher/different-publisher/unknown-identity cases against the real catalog/reference validator; no live feed probes or fixed catalog-size assertions.
+- **Files touched:** `config/sources.json`, `packages/common-contracts/test/config.test.ts`, `services/feed-ingest-plan/test/harvest.test.ts`, `services/feed-ingest-plan/test/curate.test.ts`, `docs/architecture/contracts/publisher-identity.md`, `TODO/20261026-feed-quality-selection-plan.md`.
+- **Acceptance gates:** Run `config.test.ts`, `harvest.test.ts` and `curate.test.ts` with affected-package checks. Use bounded same-publisher/different-publisher/unknown-identity cases against the real catalog/reference validator; no live feed probes or fixed catalog-size assertions.
 - **Oracle:** Every assigned ID is declared once, related feeds reuse it, and non-publisher feed fields remain unchanged; strings alone cannot prove identity, so unresolved cases must be reported.
 
 ### Table E - Review rules
@@ -271,7 +271,7 @@ Extend `services/feed-ingest-plan/test/curate.test.ts`: limit 10, targets 6 / 3 
 | H7 | Website grouping | Approved: include private suffix rules so recognized tenant websites are separate groups. Registration-suffix-only grouping was not selected. |
 | H8 | Native integration | Approved: minimal Python consumer hooks and retirement of planner-model bindings, with TypeScript authority. No compatible Python row models or gardener rewrite. |
 
-H1-H2 are excluded additions, not unanswered prerequisites. No policy question blocks row 1. Later rows remain subject to their named implementation/integration gates and separate execution authorization.
+H1-H2 are excluded additions, not unanswered prerequisites. No policy question blocks row 1. All four rows are authorized and remain subject to their named implementation/integration gates; the ESCALATE boundaries still apply.
 
 ### Table I - Existing TypeScript schemas, not new ports
 

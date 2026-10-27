@@ -33,6 +33,36 @@ function expectFeedParseObservations(facts: readonly DocumentWorkFact[], parsedS
   }
 }
 
+test("reviewed publisher IDs bind only the confirmed feeds in the live catalog", async () => {
+  const [config, taxonomy, sources, extraction] = await Promise.all([
+    Bun.file(new URL("../../../config/feed-ingest-plan.json", import.meta.url)).json(),
+    Bun.file(new URL("../../../config/taxonomy.json", import.meta.url)).json(),
+    Bun.file(new URL("../../../config/sources.json", import.meta.url)).json(),
+    Bun.file(new URL("../../../config/idhazh.json", import.meta.url)).json(),
+  ]);
+  const loaded = loadHarvestInputs({ config, taxonomy, sources, extraction });
+  const publishersByFeed = new Map(
+    [...loaded.sources, ...loaded.retired_sources].map(feed => [feed.id, feed.publisher_id] as const),
+  );
+  const expectedMappings = {
+    "bbc-business": "bbc", "bbc-tech": "bbc", "bbc-world": "bbc",
+    "cgtn-business": "cgtn", "cgtn-china": "cgtn", "cgtn-opnion": "cgtn", "cgtn-tech": "cgtn",
+    "cna-business": "cna", "cna-world": "cna",
+    "conversation-africa": "the-conversation-africa",
+    "the-hindu-national": "the-hindu", "thehindu-all": "the-hindu",
+    "thehindu-biz": "the-hindu", "thehindu-intl": "the-hindu",
+    "thehindu-business": "the-hindu-businessline",
+    livemint: "mint", "livemint-companies": "mint", "livemint-markets": "mint",
+    "economist-business": "the-economist", "economist-finance": "the-economist",
+  } as const;
+  for (const [feed, publisher] of Object.entries(expectedMappings)) {
+    expect(publishersByFeed.get(feed)).toBe(publisher);
+  }
+  expect(publishersByFeed.get("apnews-world")).toBeNull();
+  expect(publishersByFeed.get("conversation-business")).toBeNull();
+  expect(publishersByFeed.get("conversation-world")).toBeNull();
+});
+
 test("the live transport owns a real closable pinned dispatcher without opening a connection", async () => {
   expect(() => createPinnedDispatcher([])).toThrow("no address");
   const dispatcher = createPinnedDispatcher([{ address: "93.184.216.34", family: 4 }]);
