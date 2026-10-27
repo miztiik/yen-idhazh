@@ -163,6 +163,14 @@ jobs:
           bun run check
           bun run test
 
+      - name: TypeScript data delivery
+        if: needs.scope.outputs.code == 'true'
+        working-directory: packages/data-delivery
+        run: |
+          bun install --frozen-lockfile
+          bun run check
+          bun run test
+
       - name: TypeScript host fingerprints
         if: needs.scope.outputs.code == 'true'
         working-directory: services/host-fingerprints
@@ -307,6 +315,7 @@ jobs:
       - name: Install the native planner fixture writer
         run: |
           bun install --frozen-lockfile --cwd packages/common-contracts
+          bun install --frozen-lockfile --cwd packages/data-delivery
           bun install --frozen-lockfile --cwd packages/ledger-file-writer
 
       # For the site-weight gate at the end, which is a backend module: one
@@ -429,6 +438,7 @@ jobs:
       - name: Install the native planner fixture writer
         run: |
           bun install --frozen-lockfile --cwd packages/common-contracts
+          bun install --frozen-lockfile --cwd packages/data-delivery
           bun install --frozen-lockfile --cwd packages/ledger-file-writer
 
       # The canary day and other-family fixtures use the real backend contracts.
