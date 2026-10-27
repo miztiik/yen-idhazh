@@ -3,7 +3,7 @@
 **Last Updated**: 2026-10-27
 **Level**: 5 (Row 3 adds a persisted `WhowhatGridData` payload; Row 1 is independently executable)
 
-**Chain**: the composition family is delivered in [the visual-plan rules](../docs/architecture/publishing/what-a-visual-plan-may-say-and-what-happens-to-one-that-is-refused.md) | next [`20260905-18-diagram-vocabulary-plan.md`](20260905-18-diagram-vocabulary-plan.md).
+**Chain**: the composition family is delivered in [the visual-plan rules](../docs/architecture/publishing/what-a-visual-plan-may-say-and-what-happens-to-one-that-is-refused.md) | diagrams are [deferred](../docs/architecture/publishing/visuals.md#diagrams-deferred).
 **Reference**: [`20260902-visual-planner-pseudo-plan.md`](20260902-visual-planner-pseudo-plan.md) - row 41, 12.11 G18, 12.13 G33, 14.3, P.L32.
 
 Execute per docs/how-to/execute-a-plan.md: one maintainer carries the plan and delegates each implementation row to a nested worker in its own worktree and pull request; dispatch Row 1 first; dispatch Row 3 only after Row 1 is DONE; keep Parallel N = 1 because Row 3 depends on Row 1; consult a persona only where two answers would lead to different code; leave implementation pull requests open for review and merge only with explicit user authorization; honor section 0 ESCALATE triggers.
@@ -163,4 +163,4 @@ Execute per docs/how-to/execute-a-plan.md: one maintainer carries the plan and d
 
 - [`20260902-visual-planner-pseudo-plan.md`](20260902-visual-planner-pseudo-plan.md) - source decisions for the retained rows.
 - [Composition chart rules](../docs/architecture/publishing/what-a-visual-plan-may-say-and-what-happens-to-one-that-is-refused.md) - the delivered composition family.
-- [`20260905-18-diagram-vocabulary-plan.md`](20260905-18-diagram-vocabulary-plan.md) - the next plan.
+- [Diagrams deferred](../docs/architecture/publishing/visuals.md#diagrams-deferred) - current scope and retained reader intent.

@@ -49,7 +49,7 @@ Execute per docs/how-to/execute-a-plan.md: one maintainer carries the plan and d
 | --- | --- | --- |
 | 1 | These two were ranked first in the source document's own build order and appeared in **no** panel list. The downgrade funnel is the one panel that renders the refusal reason end to end; the pipeline funnel is the only panel the per-class denominator ever reaches | 12.9 G14 |
 | 2 | Every rate is reported **per potential class**. Without a denominator of what was possible, 4 percent on narrative and 4 percent on chartable are the same number | Row 56 |
-| 3 | The class set is five only after plan 18. Before that a panel names three and says so | O46 |
+| 3 | Panels name the current three classes. The two additional classes are [deferred with diagrams](../docs/architecture/publishing/visuals.md#diagrams-deferred), not a prerequisite for this plan | Current visual scope |
 
 ### Rejected alternatives
 
