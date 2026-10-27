@@ -1,6 +1,6 @@
 # Placement
 
-**Last Updated**: 2026-10-10
+**Last Updated**: 2026-10-27
 
 How admitted stories are ordered and filed in a published day. [Discovery](../architecture/sources/discovery.md#ranking-is-arithmetic-not-judgement) owns the selection score; [placement.py](../../backend/idhazh/placement.py) applies the page's ordering and desk rules.
 
@@ -39,7 +39,7 @@ Per-feed weights live in `config/sources.json`; per-lens weights live in `config
 
 ## A worked example
 
-The real scorer runs against [worked-example.json](../../tests/fixtures/rank/worked-example.json), whose fixed clock is 2026-09-13 at 12:00 UTC. The test checks the names, scores and order below.
+This example uses the fixed clock 2026-09-13 at 12:00 UTC.
 
 | Story | How its number is built | Score |
 | --- | --- | ---: |
