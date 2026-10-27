@@ -267,9 +267,6 @@ def current_planner_input_schema(schema: dict[str, Any]) -> dict[str, Any]:
         fields = node.get("properties", {})
         if "published_at_source" in fields:
             assert fields["published_at_source"]["enum"] == ["source", "selection", "legacy-unavailable"]
-            branches = fields["published_at"]["anyOf"]
-            assert len(branches) == 2 and branches[1] == {"type": "null"}
-            fields["published_at"] = branches[0]
             fields["published_at_source"]["enum"] = ["source", "selection"]
         stamp = fields.get("schema_version", {})
         if stamp.get("const") == SELECTED_ARTICLE_VERSION:

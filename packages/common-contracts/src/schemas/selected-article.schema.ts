@@ -19,7 +19,7 @@ export const SelectedArticleRatingsSchema = z.strictObject({
 const MetadataFields = {
   url_key: Sha256Schema, feed_id: SlugSchema, publisher_id: SlugSchema.nullable(),
   canonical_url: UrlSchema, title: NonEmptySchema, categories: z.array(z.string()),
-  author: z.string().nullable(), published_at: RecordedInstantSchema,
+  author: z.string().nullable(), published_at: RecordedInstantSchema.nullable(),
   published_at_source: z.enum(["source", "selection"]),
   tier: PositiveCountSchema, weight: FiniteSchema.min(0).max(1),
   applied_tier_weight: FiniteSchema.min(0).max(1),
@@ -42,8 +42,9 @@ function validateMetadata(value: {
   }
 }
 function validatePublication(value: {
-  published_at: string; published_at_source: string; timing_basis: string; timing_at: string | null;
+  published_at: string | null; published_at_source: string; timing_basis: string; timing_at: string | null;
 }, ctx: z.RefinementCtx) {
+  if (value.published_at === null) reject(ctx, "source or selection publication time requires a UTC instant");
   if (value.published_at_source === "source"
     && (value.timing_basis !== "published_at" || value.published_at !== value.timing_at)) {
     reject(ctx, "source publication must retain the trusted admission instant");
