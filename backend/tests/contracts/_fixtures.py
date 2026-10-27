@@ -32,8 +32,6 @@ CONFIG_FILES: dict[str, type[Contract]] = {
 }
 
 FIXTURE_FILES: Final = (
-    "fetched-document/refused.json",
-    "planner-operation/started.json",
     "run-shards/unknown.json",
     "app-config/every-knob-differs-from-the-committed-config.json",
     "appearance-config/knobs-set-away-from-the-defaults.json",

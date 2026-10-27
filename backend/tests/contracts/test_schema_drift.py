@@ -1,4 +1,4 @@
-"""Does every persisted shape still read back the way it was written?
+"""Does every Python-owned persisted shape still read back the way it was written?
 
 The round trip through every fixture, the version stamp a writer inherits when
 it omits one, and the release blocker section 11 names: a payload yesterday's
@@ -6,7 +6,8 @@ run wrote has to load today.
 
 The schema each contract describes is computed here rather than read off disk.
 `schemas/` held a generated copy of it until 2026-09-23, and the gate that kept
-the copy honest was most of what the copy was for."""
+the copy honest was most of what the copy was for. TypeScript planner fixtures
+are validated by the TypeScript contract tests, not by Python mirrors."""
 
 from __future__ import annotations
 
