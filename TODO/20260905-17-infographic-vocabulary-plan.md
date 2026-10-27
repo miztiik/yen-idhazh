@@ -1,12 +1,12 @@
-# 17 - The rest of the infographics
+# 17 - Source text and the whowhat grid
 
-**Last Updated**: 2026-09-05
-**Level**: 3 (three typeset templates and the compiler rule that lets a real sentence fit a card)
+**Last Updated**: 2026-10-27
+**Level**: 5 (Row 3 adds a persisted `WhowhatGridData` payload; Row 1 is independently executable)
 
 **Chain**: the composition family is delivered in [the visual-plan rules](../docs/architecture/publishing/what-a-visual-plan-may-say-and-what-happens-to-one-that-is-refused.md) | next [`20260905-18-diagram-vocabulary-plan.md`](20260905-18-diagram-vocabulary-plan.md).
-**Reference**: [`20260902-visual-planner-pseudo-plan.md`](20260902-visual-planner-pseudo-plan.md) - rows 40, 41, 42, section 4.F, 12.11 G18, 12.13 G33, 14.3, P.L28, P.L33, P.R20.
+**Reference**: [`20260902-visual-planner-pseudo-plan.md`](20260902-visual-planner-pseudo-plan.md) - row 41, 12.11 G18, 12.13 G33, 14.3, P.L32.
 
-Execute per docs/how-to/execute-a-plan.md: one maintainer carries the plan and delegates a row where delegation pays; keep parallel N = 4 rows in flight, refilling a slot as soon as a worker returns and never waiting on a merge; consult a persona only where two answers would lead to different code; AUTO-merge on green gates; honor the ESCALATE triggers in section 0. AUTHOR-AND-STOP until the user authorizes.
+Execute per docs/how-to/execute-a-plan.md: one maintainer carries the plan and delegates each implementation row to a nested worker in its own worktree and pull request; dispatch Row 1 first; dispatch Row 3 only after Row 1 is DONE; keep Parallel N = 1 because Row 3 depends on Row 1; consult a persona only where two answers would lead to different code; leave implementation pull requests open for review and merge only with explicit user authorization; honor section 0 ESCALATE triggers.
 
 ---
 
@@ -14,12 +14,20 @@ Execute per docs/how-to/execute-a-plan.md: one maintainer carries the plan and d
 
 | Field | Value |
 | --- | --- |
-| Why this plan exists | Some stories carry no series and no breakdown, only one striking figure, a set of actors, or a handful of takeaways. These three types cover them - and the family needs one compiler rule first, because a real sentence is rarely card-shaped |
-| Hard scope - in | Deterministic truncation in the compiler; `callout` under a three-part gate; `whowhat` as a one-attribute grid; `keyfacts` with a per-item gate and a pre-committed kill criterion |
-| Hard scope - out | Diagrams. Any change to `key_points`, which is a summary field and a different thing from the `keyfacts` infographic. Any model rewriting of text - the compiler shortens, the model never re-words |
-| ESCALATE triggers | 1. Truncation is proposed as "let the model tidy the wording slightly" - it will sound reasonable every single time and it is the thing this row exists to refuse. 2. `callout` fires on a figure whose significance rests on our own sort order. 3. `keyfacts` cannot compute its per-item gate on committed data, which would make its kill criterion unfireable |
-| Chosen strategy | Build the pressure valve first, then the three types, each with a gate that can fire without a model call and without human labels |
-| Execution | `autonomous orchestrator per docs/how-to/execute-a-plan.md. Parallel N = 4.` |
+| Why this plan exists | Stories without a series or breakdown still need source-preserving text fit and an evidence-backed one-attribute actor/claim grid. |
+| Hard scope - in | Row 1: deterministic source-prefix truncation with an appended `...`. Row 3: a one-attribute `whowhat` grid with same-sentence evidence, in a separate persisted `WhowhatGridData` format and reader. |
+| Hard scope - out | See the scope-out table below. |
+| ESCALATE triggers | 1. Row 1 proposes model rewriting instead of deterministic source-prefix truncation. 2. Row 3 cannot prove each filled cell from source spans in one sentence. 3. Row 3 would change the existing chart `VisualData` payload or its renderer version, or send grid decisions through `write_charts_from_decisions()`. |
+| Chosen strategy | Rows 1 and 3 are approved for delivery by user ruling, 2026-10-27; their status stays PENDING until each implementation pull request is complete. Deliver Row 1 first, then Row 3 in its own pull request after Row 1 is DONE. Row 3 uses a separate versioned `WhowhatGridData` contract, writer and browser reader. Keep chart `VisualData`, its renderer version and its reader unchanged. |
+| Execution | Autonomous orchestrator per `docs/how-to/execute-a-plan.md`. Parallel N = 1 because Row 3 depends on Row 1; no further design ruling is pending. |
+
+| Out of scope | Cost of leaving it out | What would bring it in |
+| --- | --- | --- |
+| Row 2 callout card; collapsed below | No single-figure callout ships; readers rely on the story text and existing visuals. | A new user ruling with an objective, article-verifiable selection rule. Model judgment and ranking are not substitutes. |
+| Row 4 `keyfacts` card; collapsed below | No standalone `keyfacts` visual ships; summary fields remain unchanged. | A new explicit user ruling. No reason for the abandonment was recorded. |
+| Diagrams | Diagram forms remain in the next plan. | Work scoped and authorized in the diagram plan. |
+| Changes to `key_points` | The summary field and its current behavior remain unchanged. | A separate user-approved scope and plan. |
+| Model rewriting of claims or quotes | Long text is clipped rather than paraphrased, so some wording is not shown in full. | A new user ruling and a separately checked source-attribution design. |
 
 ---
 
@@ -28,111 +36,131 @@ Execute per docs/how-to/execute-a-plan.md: one maintainer carries the plan and d
 | # | Row title | Depends-on | Parallel-group | Status | Worktree | PR | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | 1 | A real sentence made to fit, without anyone re-writing it | - | A | PENDING | - | - | - |
-| 2 | One striking figure: callout | 1 | B | PENDING | - | - | - |
-| 3 | Who did what: whowhat | 2 | C | PENDING | - | - | - |
-| 4 | Three to five takeaways, and the switch that kills them | 3 | D | PENDING | - | - | - |
+| 2 | One striking figure: callout | - | - | COLLAPSED | - | - | - |
+| 3 | Who did what: whowhat | 1 | B | PENDING | - | - | - |
+| 4 | Three to five takeaways, and the switch that kills them | - | - | COLLAPSED | - | - | - |
 
 ---
 
 ## 2. Row #1 - A real sentence made to fit, without anyone re-writing it
 
 - **Scope:** Where a claim or quote must be shortened to fit a card, the compiler truncates deterministically with an ellipsis. The model never rewrites.
-- **Files touched:** the compiler module under `frontend/src/lib/charts/` or its backend counterpart, `config/idhazh.json`, `backend/idhazh/contracts/app_config.py`, `schemas/app-config.schema.json`, `tests/fixtures/**`, `frontend/tests/**`, `docs/architecture/publishing/**`, `docs/concepts/design-system.md`
-- **Acceptance gates:** `ruff`; `mypy --strict`; export + drift; the full suite; `npm run check`; build; the browser suite.
-- **Oracle:** Truncating the same claim twice gives the identical string, and the truncated string is a **prefix** of the element's own span text - so no character a reader sees came from anywhere but the article.
+- **Files touched:**
+  - `backend/idhazh/render/chart.py`
+  - `backend/idhazh/contracts/knobs/visuals.py`
+  - `config/idhazh.json`
+  - `backend/tests/test_chart_text_fit.py` (new)
+  - `tests/fixtures/visual-validator/articles/text-fit.txt` (new)
+  - `tests/fixtures/visual-validator/tables/text-fit.json` (new)
+  - `tests/fixtures/visual-validator/plans/text-fit.json` (new)
+  - `tests/fixtures/contracts/visual-data/text-fit.json` (new)
+  - `frontend/tests/item-visual.spec.ts`
+  - `docs/architecture/publishing/where-a-drawing-becomes-pixels.md`
+  - `docs/concepts/design-system.md`
+- **Acceptance gates:** Local: inspect the shared selection with `npm run test:changed -- --list`, run `npm run test:changed` and `npm run check`, and complete the section 12 browser smoke. CI: full backend and frontend suites.
+- **Oracle:** Repeated compilation gives the same output. For truncated output, removing the appended `...` leaves a prefix of the exact source span; otherwise the output equals that full span. This proves source fidelity and determinism, not that the published reader gives the text enough space; the browser smoke checks the rendered result.
 
 ### Decisions
 
 | # | Decision | Authority |
 | --- | --- | --- |
-| 1 | **A cap rejects; truncation renders.** `summarize.max_verbatim_words` is 20 and is a summary anti-copying cap, so nothing today says what happens to a 40-word claim a plan picked for a card | 12.11 G18, section 14.3 |
-| 2 | The valve got **more** necessary, not less: plan 11 made quotes and claims sentence-index-only, which is a better guarantee and yields **whole sentences** - precisely the input truncation exists to handle | 12.11 G18 |
-| 3 | "Let it tidy the wording slightly" is refused now, in writing, because it will sound reasonable every time it is proposed | P.L32, 12.11 G18 |
+| 1 | **A cap rejects; truncation renders.** `summarize.max_verbatim_words` governs summary reuse, not the display length of a source-backed chart label. | 12.11 G18, section 14.3 |
+| 2 | Plan 11 makes claims and quotes sentence-index-only, so source sentences remain the unit; text fitting preserves their wording. | 12.11 G18 |
+| 3 | Model rewriting is not allowed; rewritten output cannot be checked by the source-prefix oracle. | P.L32, 12.11 G18 |
 
 ### Rejected alternatives
 
-| # | Option | Why rejected | Authority |
-| --- | --- | --- | --- |
-| 1 | Let the model shorten the sentence | It becomes the last unguarded prose channel, and nothing can check a re-worded claim against the article | Andre |
-| 2 | Refuse anything that does not fit | Real sentences are rarely card-shaped, so the family would almost never fire | Editor |
+| # | Option | Why rejected | What it would cost to take | Authority |
+| --- | --- | --- | --- | --- |
+| 1 | Let the model shorten the sentence | Rewritten words cannot be verified by checking that the visible text is a source prefix. | It loses direct source attribution; retaining it would require a separate check for every changed word. | Andre |
+| 2 | Refuse anything that does not fit | Real sentences are rarely card-shaped, so the family would almost never fire. | Eligible spans beyond the configured boundary disappear; their count in the fixed fixture corpus measures the loss. | Editor |
 
 ---
 
-## 3. Row #2 - One striking figure: callout
+## 3. Collapsed row #2 - One striking figure: callout
 
-- **Scope:** `callout` under a three-part gate, all of it checkable with no model call.
-- **Files touched:** `frontend/src/lib/charts/types/callout.ts` or a typeset component, `backend/idhazh/contracts/visual.py`, `config/idhazh.json` (the qualifier list and its version), `frontend/tests/**`, `docs/architecture/publishing/**`
-- **Acceptance gates:** `npm run check`; build; `bundle-gate`; the browser suite; both floors; the section 12 smoke.
-- **Oracle:** Four fixtures: one passing each admissible branch of the gate, and one where the only significance signal is our own ranking - which must be **refused**. The refusal case is the one that matters.
-
-### Decisions
-
-| # | Decision | Authority |
-| --- | --- | --- |
-| 1 | The gate: primary class is `singular`; the figure is carried by our own title or standfirst; **and either** a span-anchored significance qualifier from a versioned list within one sentence, **or** the figure is the only quantity in the article | Row 40, Editor |
-| 2 | **"Only" is admitted where "biggest" is refused.** Biggest is a fact about our sort order, not about the world | Row 40 |
-| 3 | The qualifier list is versioned config, so a later change to what counts as significant is visible in the record | Guardrail #6 |
-
-### Rejected alternatives
-
-| # | Option | Why rejected | Authority |
-| --- | --- | --- | --- |
-| 1 | Let the model judge which figure is striking | The judgement is the whole risk, and it is unverifiable | Editor, P.R20 |
-| 2 | Fire on the largest number in the article | States a significance the article did not | Editor |
+- **Status:** COLLAPSED; not executable.
+- **Ruling:** User ruling, 2026-10-27: choosing a singular callout figure requires subjective selection. Model judgment and ranking are not substitutes.
 
 ---
 
 ## 4. Row #3 - Who did what: whowhat
 
-- **Scope:** `whowhat` as a one-attribute `comparison` grid rather than a separate template.
-- **Files touched:** `frontend/src/lib/charts/types/whowhat.ts` or a `comparison` variant, `backend/idhazh/contracts/visual.py`, `frontend/tests/**`, `docs/architecture/publishing/**`
-- **Acceptance gates:** as row 2.
-- **Oracle:** Every filled cell pairs an entity span and a claim span **from the same sentence**, re-sliced from the article in the test; a cell that cannot is empty rather than filled from elsewhere.
+- **Scope:** Deliver `whowhat` as a one-attribute actor/claim grid. Every populated cell must come from entity and claim spans in the same sentence. Store it in the separate versioned `WhowhatGridData` format at the item's existing `DigestVisual.data_path`. Reuse `asset_relpath()` and atomic-write behavior, but route `WHOWHAT` decisions through a dedicated grid writer, not `write_charts_from_decisions()`. Project `DigestVisual.kind` to a new `WhowhatVisual` browser reader; a served visual without `kind` keeps the existing chart path. Leave chart `VisualData`, its renderer version and chart reader unchanged. Bump `PLAN_VOCABULARY_VERSION` when the `WHOWHAT` rules become active.
+- **Files touched:**
+  - `backend/idhazh/contracts/__init__.py`
+  - `backend/idhazh/contracts/digest_day.py`
+  - `backend/idhazh/contracts/digest_view.py`
+  - `backend/idhazh/contracts/knobs/visuals.py`
+  - `backend/idhazh/contracts/visual_decision.py`
+  - `backend/idhazh/contracts/whowhat_grid.py` (new)
+  - `backend/idhazh/render/__init__.py`
+  - `backend/idhazh/render/whowhat_grid.py` (new)
+  - `backend/idhazh/stages/assemble.py`
+  - `backend/idhazh/stages/two_calls.py`
+  - `backend/idhazh/visual_planner.py`
+  - `backend/idhazh/visual_vocabulary.py`
+  - `backend/idhazh/visual_validator.py`
+  - `config/idhazh.json`
+  - `backend/tests/contracts/_fixtures.py`
+  - `backend/tests/contracts/test_schema_drift.py`
+  - `backend/tests/contracts/test_served_day.py`
+  - `backend/tests/contracts/test_whowhat_grid.py` (new)
+  - `backend/tests/pipeline/test_published_whowhat_grids.py` (new)
+  - `backend/tests/test_canary_day.py`
+  - `backend/tests/test_render.py`
+  - `backend/tests/test_visual_planner.py`
+  - `backend/tests/test_visual_validator.py`
+  - `backend/tests/test_whowhat_grid.py` (new)
+  - `tests/fixtures/contracts/whowhat-grid/whowhat.json` (new)
+  - `tests/fixtures/visual-validator/articles/whowhat.txt` (new)
+  - `tests/fixtures/visual-validator/plans/whowhat.json` (new)
+  - `tests/fixtures/visual-validator/tables/whowhat.json` (new)
+  - `frontend/src/lib/components/ItemVisual.svelte`
+  - `frontend/src/lib/payload/whowhat-grid.ts` (new)
+  - `frontend/src/lib/payload/project.ts`
+  - `frontend/src/lib/payload/types.ts`
+  - `frontend/src/lib/visual/WhowhatVisual.svelte` (new)
+  - `frontend/tests/item-visual.spec.ts`
+  - `frontend/tests/visual-legibility.spec.ts`
+  - `frontend/tests/whowhat-visual.spec.ts` (new)
+  - `docs/architecture/publishing/what-a-visual-plan-may-say-and-what-happens-to-one-that-is-refused.md`
+  - `docs/architecture/publishing/where-a-drawing-becomes-pixels.md`
+  - `docs/architecture/publishing/visuals.md`
+  - `docs/concepts/design-system.md`
+- **Existing code reused:** `backend/idhazh/render/write.py` provides `asset_relpath()` and `write_bytes_atomic()`. Assembly sends chart decisions only to `write_charts_from_decisions()` and sends `WHOWHAT` decisions only to the dedicated grid writer.
+- **Versioning:** Give `WhowhatGridData` its own date-stamped version and changelog; stamp and changelog changes to `VisualDecision`, `DigestDay` and `DigestView`. Bump `PLAN_VOCABULARY_VERSION` when the `WHOWHAT` rules become active.
+- **Acceptance gates:** After Row 1 is DONE, inspect the shared selection with `npm run test:changed -- --list`, run `npm run test:changed` and `npm run check`, including the new grid-contract tests. CI: full backend and frontend suites plus applicable payload and bundle gates. Complete the section 12 browser smoke.
+- **Oracle:** Every populated cell pairs entity and claim spans from the same sentence and re-slices both against the fixture article; a cell without that pair is empty. Grid files validate against `WhowhatGridData` and its reader. Grid decisions never pass through the chart writer. Existing chart files continue through `VisualData`, its unchanged renderer version and its unchanged reader.
 
 ### Decisions
 
 | # | Decision | Authority |
 | --- | --- | --- |
-| 1 | It ships as a variant of `comparison`, not a new template. One grid engine, two purposes | Row 41 |
-| 2 | The same-sentence rule is what stops the grid asserting that an actor said a thing they did not | Row 41 |
-| 3 | Rectangularity belongs to this row's grid contract; it is not inherited from the abandoned Row 6 comparison type | 12.13 G33 |
+| 1 | The reader shows one-attribute actor/claim pairs as a comparison grid, not a bespoke actor-role template. | Row 41 |
+| 2 | The same-sentence rule stops the grid asserting that an actor said something they did not. | Row 41 |
+| 3 | The displayed grid is rectangular; it does not assume the persisted shape of the abandoned Row 6 comparison type. | 12.13 G33 |
+| 4 | A2: store grids in a separate versioned `WhowhatGridData` payload and use a dedicated writer and `WhowhatVisual` browser reader. Reuse the item's existing `DigestVisual.data_path`, `asset_relpath()` and atomic-write behavior, without routing grid decisions through `write_charts_from_decisions()`. Keep chart `VisualData`, its renderer version and its reader unchanged. | User ruling, 2026-10-27; read-only architecture refinement |
+| 5 | Project `DigestVisual.kind` so `WHOWHAT` reaches its reader; an older served visual with no `kind` keeps the chart path. Bump `PLAN_VOCABULARY_VERSION` when the `WHOWHAT` rules become active. | Read-only architecture refinement |
 
 ### Rejected alternatives
 
-| # | Option | Why rejected | Authority |
-| --- | --- | --- | --- |
-| 1 | A bespoke actor-role template | A second grid engine for one purpose, against a design system that refuses per-page bespoke components | Jony |
+| # | Option | Why rejected | What it would cost to take | Authority |
+| --- | --- | --- | --- | --- |
+| 1 | Add a text-grid variant to `VisualData` | Grid cells are text, while the existing chart payload requires measured quantities for emphasis. The user chose a separate format to keep the chart payload and renderer version unchanged. | It would require stored-shape and reader-version changes, causing the current reader to refuse older chart files while leaving their story text intact. | User ruling, 2026-10-27 |
+| 2 | A bespoke actor-role template | It adds a second grid engine for one purpose, against the shared comparison-grid presentation. | It adds another renderer and test path; count the new branches and tests against the shared grid before taking it. | Jony |
 
 ---
 
-## 5. Row #4 - Three to five takeaways, and the switch that kills them
+## 5. Collapsed row #4 - Three to five takeaways, and the switch that kills them
 
-- **Scope:** `keyfacts` with a per-item gate and a pre-committed kill criterion.
-- **Files touched:** `frontend/src/lib/charts/types/keyfacts.ts`, `backend/idhazh/contracts/visual.py`, `backend/idhazh/evals/metrics.py`, `config/idhazh.json`, `frontend/tests/**`, `docs/architecture/publishing/**`, `docs/concepts/evaluation.md`
-- **Acceptance gates:** as row 2, plus `ruff`, `mypy --strict`, export + drift.
-- **Oracle:** `keyfacts` **does not render** on an item whose new-fact rate is below the configured floor - asserted with a fixture pair straddling the floor. And the kill criterion is written into the doc as a number, so it can fire without a fresh argument.
-
-### Decisions
-
-| # | Decision | Authority |
-| --- | --- | --- |
-| 1 | **Four personas voted to kill this type and Andre's diagnosis overruled them, because they aimed at the wrong target.** `key_points` is the summary field nobody proposed removing; `keyfacts` is the infographic that draws them bigger. The 7-in-8 restatement rate is a **prompt** defect, and plan 07 fixed it | Row 42, section 4.F |
-| 2 | The veto becomes a **per-item gate**: `keyfacts` may not render on an item whose new-fact rate is below the floor. Machine-checkable on committed data, needs no labels, and it is what "a visual is earned, never granted" means | Row 42, O21 |
-| 3 | A type-level veto could not fire without human labels, which is why the objection could not be settled before | Row 42 |
-| 4 | Reader's objection is recorded rather than erased: a 3-to-5 bullet box beside a summary that already carries key points is the same thing printed twice - **which is exactly what the per-item gate refuses** | Section 4.F |
-
-### Rejected alternatives
-
-| # | Option | Why rejected | Authority |
-| --- | --- | --- | --- |
-| 1 | Kill the type | The four vetoes were aimed at `key_points`, a different thing, and the measured defect was in the prompt | Andre, row 42 |
-| 2 | Ship it ungated | Then it draws the summary twice on the items where it least helps | Reader |
+- **Status:** COLLAPSED; not executable.
+- **Ruling:** User ruling, 2026-10-27. The user abandoned this row; no reason was recorded.
 
 ---
 
 ## See also
 
-- [`20260902-visual-planner-pseudo-plan.md`](20260902-visual-planner-pseudo-plan.md) - the decision record this group executes.
+- [`20260902-visual-planner-pseudo-plan.md`](20260902-visual-planner-pseudo-plan.md) - source decisions for the retained rows.
 - [Composition chart rules](../docs/architecture/publishing/what-a-visual-plan-may-say-and-what-happens-to-one-that-is-refused.md) - the delivered composition family.
 - [`20260905-18-diagram-vocabulary-plan.md`](20260905-18-diagram-vocabulary-plan.md) - the next plan.
-- [Summary metrics](../docs/concepts/summary-metrics.md) - current evaluation; the old `new_fact_rate` is retired.
