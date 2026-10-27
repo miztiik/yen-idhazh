@@ -1,0 +1,45 @@
+{
+  "annotations": [
+    "quantity-501-509"
+  ],
+  "caption": "Each value is the figure the source states.",
+  "confidence": 0.86,
+  "decision": "visual",
+  "element_ids": [
+    "place-0-500",
+    "quantity-501-509",
+    "entity-511-517",
+    "quantity-518-526",
+    "entity-528-534",
+    "quantity-535-541"
+  ],
+  "encodings": {
+    "bins": [],
+    "category": [
+      "place-0-500",
+      "entity-511-517",
+      "entity-528-534"
+    ],
+    "entity": [],
+    "event_label": [],
+    "quantity": [
+      "quantity-501-509",
+      "quantity-518-526",
+      "quantity-535-541"
+    ],
+    "quantity_x": [],
+    "series": [],
+    "size": [],
+    "time": []
+  },
+  "labels": [
+    "quantity-501-509",
+    "place-0-500"
+  ],
+  "plan_version": "2026-09-09",
+  "purpose": "comparison",
+  "title": "Offshore wind capacity by region",
+  "type": "bar",
+  "version": "2026-09-09T03:11",
+  "why": "Three locations have comparable figures in one unit."
+}

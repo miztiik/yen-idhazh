@@ -1,0 +1,39 @@
+{
+  "annotations": [],
+  "caption": "Reported capacity differs by region.",
+  "confidence": 0.9,
+  "decision": "visual",
+  "element_ids": [
+    "place-0-45",
+    "quantity-55-63",
+    "place-146-191",
+    "quantity-201-207"
+  ],
+  "encodings": {
+    "bins": [],
+    "category": [
+      "place-0-45",
+      "place-146-191"
+    ],
+    "entity": [],
+    "event_label": [],
+    "quantity": [
+      "quantity-55-63",
+      "quantity-201-207"
+    ],
+    "quantity_x": [],
+    "series": [],
+    "size": [],
+    "time": []
+  },
+  "labels": [
+    "place-0-45",
+    "place-146-191"
+  ],
+  "plan_version": "2026-09-09",
+  "purpose": "comparison",
+  "title": "Wind capacity by region",
+  "type": "bar",
+  "version": "2026-09-09T03:11",
+  "why": "The source reports a different capacity for each region."
+}
