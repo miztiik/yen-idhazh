@@ -10,6 +10,7 @@ import { recordRejection } from "./record-rejection";
 import { calculateFreshness } from "../screen-article-candidates/freshness-decay";
 import { resolvePolicy } from "../config/resolve-policy";
 import { matchMediaArticle } from "./media-filter";
+import { rejectArticleAge } from "../article-freshness-policy";
 
 // These existing feed and extracted headline bounds define the input format.
 const feedTitleLimit = 500;
@@ -55,11 +56,12 @@ export function prepareArticle(offered: OfferedArticle, inputs: HarvestInputs, c
   const media = matchMediaArticle(entry.link, identity.canonical_url, entry.media_types ?? [], inputs.config);
   if (media !== null) return reject("MEDIA_CONTENT", media);
   if (article.title) {
-    const policy = resolvePolicy(inputs, context.overrides);
+    const policy = resolvePolicy(inputs);
     const freshness = calculateFreshness(entry, undefined, observation.observed_at, context.max_future_hours, policy);
+    const ageRefusal = rejectArticleAge(inputs.config, source.tier, freshness.age_hours, context.overrides?.freshness_hours);
     if (freshness.timing_source === "published_at" && freshness.age_hours !== null && freshness.timing_at !== null
-      && freshness.age_hours > policy.triage.max_age_hours) {
-      return reject("STALE_MAX_AGE_EXCEEDED", { age_hours: freshness.age_hours, max_age_hours: policy.triage.max_age_hours },
+      && ageRefusal !== null) {
+      return reject(ageRefusal.drop_reason, ageRefusal.details,
         { ...observation, preflight_freshness: {
           timing_at: freshness.timing_at, timing_source: "published_at", age_hours: freshness.age_hours, recency_bonus: freshness.recency_bonus,
         } });

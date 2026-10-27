@@ -1,6 +1,6 @@
 # Selecting an editorial portfolio
 
-**Last Updated**: 2026-10-26
+**Last Updated**: 2026-10-27
 
 How does the isolated planner choose articles from the admitted batch?
 It uses configured numeric rules and explicit factual evidence, not a model
@@ -16,33 +16,46 @@ Unknown stays null; source titles and article prose do not fill it.
 
 The base score is the recency contribution plus configured feed authority:
 authority coefficient times feed weight times applied tier weight.
-When enabled, measured feed reliability reduces only the authority part:
+When enabled, measured article technical admission reduces only the authority part:
 
 ```text
-factor = max(configured reliability floor, productive / attempted)
-reliability adjustment = -authority * (1 - factor)
+factor = max(configured reliability floor, admitted / (admitted + source refusals))
+article-pass adjustment = -authority * (1 - factor)
 ```
 
-The numerator and denominator follow the native feed-read rules, not article
-quality or publication yield. Missing reliability produces a null adjustment
-and no ranking change. A disabled known adjustment is zero. Request spend
-never becomes a ranking penalty.
+The numerator counts original captures that pass access, extraction, required
+fields and minimum words. The denominator adds source-attributed technical
+refusals, not publication, age, category, content-policy or selection losses.
+Missing or incomplete evidence, or a zero denominator, produces a null
+adjustment and no ranking change. A disabled adjustment is zero. RSS-read
+reliability governs access/rest separately; it never substitutes for this rate.
 
-## Opportunity before selection
+## Targets, fresh buffers and older deficits
 
-Canonical URL duplicates cannot buy more allowance. Candidates are ordered
-by numeric priority with the supplied candidate identity breaking ties.
-Each feed receives its configured base allowance. Candidate labels and
-primary-document evidence do not increase that allowance.
+The saved request's `article_limit`, or the configured default, is a positive
+finite safe integer. `curate_articles.feed_quality_tiers` declares each tier's
+share, additional fresh buffer and increasing age steps. Configured list order
+sets priority; numeric tier IDs do not.
 
-Candidates beyond that allowance receive a grouped quota exclusion.
-Vertical, desk, lens, event, entity and carrier-group allowances are not
-planner decisions in this format.
+Largest-remainder allocation makes integer targets sum to the requested limit,
+breaking ties by tier order. Fresh ceilings round upward from share plus buffer,
+never below the allocated target. Counts are based on the requested limit, not
+candidate supply. No fixed feed allowance or shortlist trims the complete input.
+
+Choose fresh articles up to each target first, then remaining fresh articles
+up to each ceiling. Only then open older steps for tiers below target. Older
+articles fill targets, never buffers. Re-enter phase priority after each winner
+or permitted relaxation, using the same full selected set and exposure counts.
+Shortages do not authorize exceeding ceilings.
+
+Canonical URL carriers stay available until one actually wins. A capped carrier
+cannot remove a viable carrier from another feed. Identity breaks score ties;
+labels and primary-document evidence buy no additional capacity.
 
 ## Marginal choices and concentration
 
 Each choice recomputes remaining candidates against the actual chosen set.
-The retained numeric adjustments cover feed reliability, publisher exposure
+The retained numeric adjustments cover article technical admission, publisher exposure
 and website-group exposure. Website groups are recomputed from canonical URLs
 using the configured private-suffix rule; supplied hints cannot override
 them. Feed kind, form and other classification labels do not affect admission,
@@ -70,6 +83,14 @@ scores, signed adjustments, tier/weight, work estimate, timing and the quota
 or exploration exceptions used. No full policy, assessment or losing-score
 tree is copied.
 
+`feed_limit` records the per-feed share limit computed from requested output.
+`freshness_cutoff_at` records the admitted age window against the saved age
+clock; unknown age has no invented cutoff. Every unchosen parsed candidate
+receives one terminal metadata row in `rejected-articles`, after all permitted
+phase changes and relaxations. Screening refusals precede numeric selection;
+winning duplicates precede closed older windows, global capacity, distinct-feed,
+feed-share, website-share and fresh-ceiling refusals, in that order.
+
 Only the declared metadata projection is committed. Article text remains
 in the separate artifact. [Table B](../../reference/feed-planner-ledgers.md#b-selected-articles)
 owns the complete field list. Partitioning adds assignments without
@@ -84,7 +105,7 @@ and unavailable evidence remain distinct through JSON and Parquet readback.
 ### Configured priority review
 
 **Adopted behavior, unchanged:** Keep the numeric selection described above,
-including separate reliability and publisher-exposure adjustments. This
+including separate article-pass and publisher-exposure adjustments. This
 review adds no score term, matcher, config default or persisted field.
 
 Maintainers write watchlist aliases in

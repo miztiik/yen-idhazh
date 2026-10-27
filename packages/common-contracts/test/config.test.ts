@@ -53,7 +53,7 @@ if (Bun.argv.includes("--emit-schemas")) {
     [["triage", "kind"], "research"],
     [["curate_articles", "source_authority_weight"], Infinity],
     [["curate_articles", "source_reliability_penalty_enabled"], null],
-    [["curate_articles", "base_source_allowance"], -1],
+    [["curate_articles", "article_limit"], -1],
     [["curate_articles", "mmr_weights", "lambda_website_group"], NaN],
     [["curate_articles", "mmr_weights", "lambda_lens"], 0],
     [["curate_articles", "soft_caps", "max_source_share"], 0],

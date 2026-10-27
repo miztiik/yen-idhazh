@@ -9,6 +9,10 @@ The separate TypeScript feed-ingest planner records discovery in
 `discovered_articles.lookback_days`; it does not use this pipeline's native
 `seen` ledger. See [planner feed history](planner-feed-history.md) and
 [candidate screening](feed-screening.md).
+Its separate [selection rules](feed-curation.md#targets-fresh-buffers-and-older-deficits)
+use tier-specific fresh windows and older-deficit steps. The saved batch clock
+determines age; a run override only tightens those windows. The native pipeline
+rules below do not configure that planner.
 
 ## The run happens five times each day
 

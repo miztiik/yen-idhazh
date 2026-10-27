@@ -114,7 +114,7 @@ test("actual API and awaited CLI compose the same recorded plan and disclose the
     expect(decisionHealth.rows[0]).toMatchObject({
       run_id: selected.run_id, date: "2026-10-22", checked_at: null, outcome: null, items: null,
       feed_reads: 0, productive_reads: 0, failed_reads: 0, feed_requests: 0, article_requests: 0,
-      robots_requests: 0, article_candidates: 2, articles_selected: 1, counts_complete: true,
+      robots_requests: 0, article_candidates: 0, articles_selected: 1, counts_complete: true,
     });
     const selectedResponse = await fetch(`${url}/persist-selected-articles`, json({ batch_id: partition.batch_id }));
     expect(selectedResponse.status).toBe(200);

@@ -23,6 +23,14 @@
           "suffix": null
         },
         {
+          "name": "rejected-articles",
+          "publish_to_data_explorer": false,
+          "grain": "raw-and-compact",
+          "prefix": ["feed-ingest-plan", "rejected-articles"],
+          "stem": null,
+          "suffix": null
+        },
+        {
           "name": "feed-health-state",
           "publish_to_data_explorer": true,
           "grain": "raw-and-compact",

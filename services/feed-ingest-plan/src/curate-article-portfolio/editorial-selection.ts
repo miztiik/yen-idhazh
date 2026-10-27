@@ -1,11 +1,13 @@
-/** Choose articles using recorded time, configured authority and measured numeric set controls. */
+/** Choose each permitted tier/window winner against the full selected set. */
 import { SelectedArticleContentSchema } from "@idhazh/common-contracts";
-import type { ParsedFeedBatch, SelectedArticleRow } from "@idhazh/common-contracts";
+import type { DropReason, ParsedFeedBatch, SelectedArticleRow } from "@idhazh/common-contracts";
+import type { z } from "zod";
 import type { ScreenedCandidate } from "../screen-article-candidates/triage-gates";
 import type { PlanInputs } from "../load-plan-inputs";
 import type { SourceHistoryEvidence } from "../read-ledger-history/read-feed-history";
 import type { PublisherPublicationHistory } from "./publisher-exposure";
 import type { RunContext } from "../resolve-run-context";
+import { allocateTierBudgets, freshnessCutoff, resolveTierWindows } from "../article-freshness-policy";
 
 export function curateArticles(input: {
   articles: readonly ScreenedCandidate[]; batch: ParsedFeedBatch; inputs: PlanInputs;
@@ -13,88 +15,100 @@ export function curateArticles(input: {
   selectionStartedAt: string; context?: RunContext;
 }) {
   const context = input.context ?? input.batch.context;
-  const config = input.inputs.harvest.config.curate_articles;
-  const sourceEvidence = input.batch.evidence;
-  const score = (article: ScreenedCandidate) => {
-    const recency = article.freshness.recency_bonus;
-    const authority = article.policy.curate_articles.source_authority_weight
-      * article.candidate.source.weight * article.candidate.source.applied_tier_weight;
-    const reliability = input.health.get(article.candidate.source_id)?.reliability;
-    const adjustment = reliability?.production_factor == null ? null : config.source_reliability_penalty_enabled
-      ? -authority * (1 - reliability.production_factor) : 0;
-    return { recency, authority, adjustment, base: recency + authority, priority: recency + authority + (adjustment ?? 0) };
-  };
-  const compare = (a: ScreenedCandidate, b: ScreenedCandidate) => score(b).priority - score(a).priority
-    || a.candidate.candidate_id.localeCompare(b.candidate.candidate_id);
-  const losses: { article: ScreenedCandidate; reason: string }[] = [];
-  const urls = new Set<string>();
-  const counts = new Map<string, number>();
-  const allowances = new Map<string, { value: number; reasons: string[] }>();
+  const config = input.inputs.harvest.config;
+  const policy = config.curate_articles;
+  const limit = input.batch.request.article_limit ?? policy.article_limit;
+  const budgets = allocateTierBudgets(config, limit).map(budget => ({
+    ...budget, windows: resolveTierWindows(budget.rule, input.batch.request.freshness_hours),
+    opened: new Set<number>(),
+  }));
   for (const article of input.articles) {
-    const prior = allowances.get(article.candidate.source_id);
-    const value = article.policy.curate_articles.base_source_allowance;
-    if (prior === undefined || value > prior.value) allowances.set(article.candidate.source_id, { value, reasons: [] });
+    if (!budgets.some(budget => budget.rule.tier === article.candidate.source.tier)) {
+      throw new Error(`curate_articles.feed_quality_tiers: missing tier ${article.candidate.source.tier}`);
+    }
   }
-  const remaining: ScreenedCandidate[] = [];
-  for (const article of [...input.articles].sort(compare)) {
-    const feed = article.candidate.source_id;
-    if (urls.has(article.candidate.url_key)) { losses.push({ article, reason: "DUPLICATE_URL" }); continue; }
-    urls.add(article.candidate.url_key);
-    const used = counts.get(feed) ?? 0;
-    if (used >= allowances.get(feed)!.value) { losses.push({ article, reason: "SOURCE_QUOTA_EXCEEDED" }); continue; }
-    counts.set(feed, used + 1);
-    remaining.push(article);
-  }
-  const target = Math.min(input.batch.request.article_limit ?? config.article_limit ?? remaining.length, remaining.length);
+  const remaining = [...input.articles];
   const chosen: ScreenedCandidate[] = [];
   const articles: z.infer<typeof SelectedArticleContentSchema>[] = [];
   const relaxations: string[] = [];
-  const sourceMaximum = Math.ceil(target * config.soft_caps.max_source_share);
-  const websiteGroupMaximum = Math.ceil(target * config.soft_caps.max_website_group_share);
-  const explorationSlots = Math.floor(target * config.exploration_slot_share);
-  while (chosen.length < target && remaining.length > 0) {
-    const feeds = new Set(chosen.map(article => article.candidate.source_id));
-    const exploring = chosen.length >= target - explorationSlots && remaining.some(article => !feeds.has(article.candidate.source_id));
-    const evaluated = remaining.map(article => {
-      const candidate = article.candidate;
-      const weights = article.policy.curate_articles.mmr_weights;
-      const websiteGroup = sourceEvidence[candidate.candidate_id]?.website_group?.value;
-      const publisher = candidate.source.publisher_id;
-      const exposure = publisher === null ? null : Math.min(1,
-        ((input.publications.availability === "available" ? input.publications.counts.get(publisher) ?? 0 : 0)
-          + chosen.filter(previous => previous.candidate.source.publisher_id === publisher).length) / target);
-      const measured = score(article);
-      const adjustments: SelectedArticleRow["ratings"]["adjustments"] = [
-        { term: "feed_reliability", value: measured.adjustment },
-        { term: input.publications.availability === "available" ? "publisher_exposure" : "publisher_exposure_current_run",
-          value: exposure === null ? null : -weights.lambda_source * exposure },
-        { term: "website_group", value: websiteGroup === undefined ? null : -weights.lambda_website_group * (chosen.length === 0 ? 0
-          : chosen.filter(previous => sourceEvidence[previous.candidate.candidate_id]?.website_group?.value === websiteGroup).length / chosen.length) },
-      ].map(adjustment => ({ ...adjustment, value: adjustment.value === 0 ? 0 : adjustment.value }));
-      const blocked: string[] = [];
-      if (!relaxations.includes("distinct_sources") && feeds.size < Math.min(config.soft_caps.min_distinct_sources, target)
-        && feeds.has(candidate.source_id)) blocked.push("distinct_sources");
-      if (!relaxations.includes("source_share")
-        && chosen.filter(previous => previous.candidate.source_id === candidate.source_id).length >= sourceMaximum) blocked.push("source_share");
-      if (websiteGroup !== undefined && chosen.filter(previous =>
-        sourceEvidence[previous.candidate.candidate_id]?.website_group?.value === websiteGroup).length >= websiteGroupMaximum) blocked.push("website_group_share");
-      return { article, adjustments, measured, blocked, marginal: measured.base
-        + adjustments.reduce((total, adjustment) => total + (adjustment.value ?? 0), 0) };
-    });
-    const viable = evaluated.filter(value => value.blocked.length === 0);
-    const exploration = exploring ? viable.filter(value => !feeds.has(value.article.candidate.source_id)) : [];
-    const available = exploration.length ? exploration : viable;
-    available.sort((a, b) => b.marginal - a.marginal || compare(a.article, b.article));
-    const winner = available[0];
-    if (winner === undefined) {
-      const next = config.soft_caps.relaxation_order.find(limit => !relaxations.includes(limit)
-        && evaluated.some(value => value.blocked.includes(limit)));
-      if (next === undefined) break;
-      relaxations.push(next);
-      continue;
+  const urls = new Set<string>();
+  const counts = new Map<number, number>();
+  const feedLimit = Math.ceil(limit * policy.soft_caps.max_source_share);
+  const domainLimit = Math.ceil(limit * policy.soft_caps.max_website_group_share);
+  const explorationSlots = Math.floor(limit * policy.exploration_slot_share);
+  const sourceEvidence = input.batch.evidence;
+  const website = (article: ScreenedCandidate) => sourceEvidence[article.candidate.candidate_id]?.website_group?.value;
+  const tierCount = (tier: number) => counts.get(tier) ?? 0;
+  function evaluate(article: ScreenedCandidate) {
+    const candidate = article.candidate;
+    const weights = article.policy.curate_articles.mmr_weights;
+    const recency = article.freshness.recency_bonus;
+    const authority = article.policy.curate_articles.source_authority_weight
+      * candidate.source.weight * candidate.source.applied_tier_weight;
+    const rate = input.health.get(candidate.source_id)?.article_pass_rate ?? null;
+    const adjustment = !policy.source_reliability_penalty_enabled ? 0 : rate === null ? null
+      : -authority * (1 - Math.max(input.inputs.clock_config.collect.reliability_floor, rate));
+    const group = website(article);
+    const publisher = candidate.source.publisher_id;
+    const exposure = publisher === null ? null : Math.min(1,
+      ((input.publications.availability === "available" ? input.publications.counts.get(publisher) ?? 0 : 0)
+        + chosen.filter(previous => previous.candidate.source.publisher_id === publisher).length) / limit);
+    const adjustments: SelectedArticleRow["ratings"]["adjustments"] = [
+      { term: "article_pass_rate", value: adjustment },
+      { term: input.publications.availability === "available" ? "publisher_exposure" : "publisher_exposure_current_run",
+        value: exposure === null ? null : -weights.lambda_source * exposure },
+      { term: "website_group", value: group === undefined ? null : -weights.lambda_website_group * (chosen.length === 0 ? 0
+        : chosen.filter(previous => website(previous) === group).length / chosen.length) },
+    ].map(term => ({ ...term, value: term.value === 0 ? 0 : term.value }));
+    const feeds = new Set(chosen.map(previous => previous.candidate.source_id));
+    const blocked: string[] = [];
+    if (!relaxations.includes("distinct_sources")
+      && feeds.size < Math.min(policy.soft_caps.min_distinct_sources, limit) && feeds.has(candidate.source_id)) blocked.push("distinct_sources");
+    if (!relaxations.includes("source_share")
+      && chosen.filter(previous => previous.candidate.source_id === candidate.source_id).length >= feedLimit) blocked.push("source_share");
+    if (group !== undefined && chosen.filter(previous => website(previous) === group).length >= domainLimit) blocked.push("website_group_share");
+    return { article, recency, authority, adjustments, blocked,
+      marginal: recency + authority + adjustments.reduce((sum, term) => sum + (term.value ?? 0), 0) };
+  }
+  type Evaluation = ReturnType<typeof evaluate>;
+  function phase(older: boolean, buffer: boolean): { winner: Evaluation; hours: number; exploring: boolean } | "relaxed" | undefined {
+    const blocked: Evaluation[] = [];
+    for (const budget of budgets) {
+      const count = tierCount(budget.rule.tier);
+      if (count >= (buffer ? budget.ceiling : budget.target)) continue;
+      const steps = older ? budget.windows.steps.slice(1) : budget.windows.steps.slice(0, 1);
+      for (const hours of steps) {
+        const pool = remaining.filter(article => article.candidate.source.tier === budget.rule.tier
+          && !urls.has(article.candidate.url_key)
+          && (article.freshness.age_hours === null ? !older : article.freshness.age_hours <= hours
+            && (!older || article.freshness.age_hours > budget.windows.steps[0]!)));
+        if (older) budget.opened.add(hours);
+        const evaluated = pool.map(evaluate);
+        blocked.push(...evaluated);
+        const viable = evaluated.filter(value => value.blocked.length === 0);
+        const feeds = new Set(chosen.map(previous => previous.candidate.source_id));
+        const exploration = chosen.length >= limit - explorationSlots
+          ? viable.filter(value => !feeds.has(value.article.candidate.source_id)) : [];
+        const available = exploration.length ? exploration : viable;
+        available.sort((a, b) => b.marginal - a.marginal
+          || a.article.candidate.candidate_id.localeCompare(b.article.candidate.candidate_id));
+        if (available[0] !== undefined) return { winner: available[0], hours, exploring: exploration.length > 0 };
+      }
     }
+    const next = policy.soft_caps.relaxation_order.find(name =>
+      !relaxations.includes(name) && blocked.some(value => value.blocked.includes(name)));
+    if (next !== undefined) {
+      relaxations.push(next);
+      return "relaxed";
+    }
+    return undefined;
+  }
+  while (chosen.length < limit) {
+    const choice = phase(false, false) ?? phase(false, true) ?? phase(true, false);
+    if (choice === undefined) break;
+    if (choice === "relaxed") continue;
+    const { winner, hours, exploring } = choice;
     const { candidate, freshness } = winner.article;
-    const allowance = allowances.get(candidate.source_id)!;
     articles.push(SelectedArticleContentSchema.parse({
       run_id: context.run_id, attempt: context.writer.attempt, date: context.date,
       url_key: candidate.url_key, feed_id: candidate.source_id, publisher_id: candidate.source.publisher_id,
@@ -104,18 +118,40 @@ export function curateArticles(input: {
       published_at_source: freshness.timing_source === "published_at" ? "source" : "selection",
       tier: candidate.source.tier, weight: candidate.source.weight, applied_tier_weight: candidate.source.applied_tier_weight,
       editorial_rank: articles.length + 1, estimated_work: sourceEvidence[candidate.candidate_id]?.estimated_work ?? candidate.word_count,
-      worker_assignment: null, feed_allowance: allowance.value, exploration_slot: exploration.length > 0,
-      cap_relaxations: [...relaxations], allowance_reasons: allowance.reasons,
+      worker_assignment: null, feed_limit: feedLimit, exploration_slot: exploring, cap_relaxations: [...relaxations],
       timing_at: freshness.timing_at, timing_basis: freshness.timing_source === "unknown" ? "unavailable" : freshness.timing_source,
-      age_hours: freshness.age_hours, ratings: {
-        base_article_score: winner.measured.base, marginal_score: winner.marginal, adjustments: winner.adjustments,
-        recency_score: winner.measured.recency, feed_authority_score: winner.measured.authority,
-      },
+      age_hours: freshness.age_hours,
+      freshness_cutoff_at: freshness.age_hours === null ? null : freshnessCutoff(input.batch.context.now, hours),
+      ratings: { base_article_score: winner.recency + winner.authority, marginal_score: winner.marginal,
+        adjustments: winner.adjustments, recency_score: winner.recency, feed_authority_score: winner.authority },
     }));
     chosen.push(winner.article);
+    urls.add(candidate.url_key);
+    counts.set(candidate.source.tier, tierCount(candidate.source.tier) + 1);
     remaining.splice(remaining.indexOf(winner.article), 1);
   }
-  losses.push(...remaining.map(article => ({ article, reason: "PORTFOLIO_CUTOFF" })));
+  const losses = remaining.map(article => {
+    const budget = budgets.find(budget => budget.rule.tier === article.candidate.source.tier)!;
+    const age = article.freshness.age_hours;
+    const step = age === null ? budget.windows.steps[0] : budget.windows.steps.find(hours => age <= hours);
+    if (step === undefined) throw new Error("Article selection requires candidates inside their screened tier age envelope");
+    const older = step !== undefined && step !== budget.windows.steps[0];
+    let reason: DropReason;
+    let cutoff: string | null = null;
+    if (urls.has(article.candidate.url_key)) reason = "REJECTED_DUPLICATE_CANONICAL_CARRIER";
+    else if (older && !budget.opened.has(step) && tierCount(budget.rule.tier) >= budget.target) reason = "REJECTED_LADDER_WINDOW_NOT_ACTIVATED";
+    else if (older && tierCount(budget.rule.tier) >= budget.target) reason = "REJECTED_SLACK_DEFICIT_FULFILLED";
+    else if (chosen.length >= limit) reason = "REJECTED_GLOBAL_CAPACITY_REACHED";
+    else {
+      const blocked = evaluate(article).blocked;
+      reason = blocked.includes("distinct_sources") ? "REJECTED_DISTINCT_SOURCE_REQUIREMENT_UNMET"
+        : blocked.includes("source_share") ? "REJECTED_SOURCE_SHARE_LIMIT_REACHED"
+        : blocked.includes("website_group_share") ? "REJECTED_DOMAIN_SHARE_LIMIT_REACHED"
+        : "REJECTED_TIER_BUFFER_CEILING_REACHED";
+    }
+    if (!older && age !== null) cutoff = freshnessCutoff(input.batch.context.now, budget.windows.steps[0]!);
+    else if (older && budget.opened.has(step!)) cutoff = freshnessCutoff(input.batch.context.now, step!);
+    return { article, reason, freshness_cutoff_at: cutoff };
+  });
   return { articles, losses };
 }
-import type { z } from "zod";

@@ -239,6 +239,7 @@ export async function maintainPlannerPeriod(root: string, rawRequest: unknown): 
   switch (request.ledger) {
     case "discovered-articles": return maintainPeriod(root, request, PLANNER_CONTRACTS["discovered-articles"]);
     case "selected-articles": return maintainPeriod(root, request, PLANNER_CONTRACTS["selected-articles"]);
+    case "rejected-articles": return maintainPeriod(root, request, PLANNER_CONTRACTS["rejected-articles"]);
     case "feed-health-state": return maintainPeriod(root, request, PLANNER_CONTRACTS["feed-health-state"]);
     case "plan-runs": return maintainPeriod(root, request, PLANNER_CONTRACTS["plan-runs"]);
   }

@@ -18,6 +18,7 @@ import { stageStore } from "./stage-store";
 import type { RunContext } from "../resolve-run-context";
 import type { recordPlanRun } from "../record-plan-run";
 import { selectedArtifactPath } from "../selected-artifact-path";
+import type { OperationStore } from "./operation-store";
 
 type ExecutionStateBase = {
   context: RunContext; started: number | null; api_timings: PlanApiTiming[];
@@ -70,11 +71,12 @@ export function checkFetchedDocument(record: PlannerOperation, inputs: PlanInput
   }
   return artifact;
 }
-export async function documentState(record: PlannerOperation, inputs: PlanInputs, runtime: PlanRuntime, parent?: PlannerOperation) {
+export async function documentState(record: PlannerOperation, inputs: PlanInputs, runtime: PlanRuntime, store: OperationStore, parent?: PlannerOperation) {
   const root = parent ?? record;
   if (root.run_id !== record.run_id || root.correlation_id !== record.correlation_id) throw new PlanError("ARTIFACT_INVALID", "Document chain belongs to another run", "fetch_request_id");
   const states = statesFor(inputs);
   let pending = states.get(root.run_id);
+  const recovering = pending === undefined;
   if (pending === undefined) {
     pending = (async (): Promise<DocumentState> => {
       const started = root.state === "started" ? performance.now() : null;
@@ -83,7 +85,9 @@ export async function documentState(record: PlannerOperation, inputs: PlanInputs
       const historyStarted = performance.now();
       const history = await prepareFeedHealthState(inputs, context.now);
       return {
-        kind: "document", context, history, work: createRunHealth(context, inputs.harvest.sources.map(source => sourceSnapshot(inputs.harvest, source)), history.sources),
+        kind: "document", context, history, work: createRunHealth(context,
+          inputs.harvest.sources.map(source => sourceSnapshot(inputs.harvest, source)), history.sources,
+          { ...inputs.harvest.config.triage, clock: runtime.observation_clock ?? (() => new Date()) }),
         fetcher: createPermittedFetcher(inputs.harvest.config.harvest, inputs.harvest.extraction, runtime.boundary, runtime.observation_clock),
         recovered: new Set<string>(), exclusions: null, started,
         api_timings: [{ operation: "feed-health-before-fetch", duration_ms: Math.round(performance.now() - historyStarted), status: "completed" }],
@@ -94,9 +98,23 @@ export async function documentState(record: PlannerOperation, inputs: PlanInputs
   }
   const state = await pending;
   if (state.kind !== "document") throw new PlanError("ARTIFACT_INVALID", "Document work belongs to a different execution", "fetch_request_id");
-  for (const saved of parent === undefined ? [record] : [parent, record]) {
-    if (saved.state !== "complete" || saved.operation !== "fetch" || state.recovered.has(saved.request_id)) continue;
+  const latestRoot = recovering ? store.get(root.request_id) ?? root : root;
+  const members = recovering ? latestRoot.article_capture_request_ids.map(id => {
+    const saved = store.get(id);
+    if (saved?.artifact?.parent_fetch_request_id !== root.request_id || saved.run_id !== root.run_id
+      || saved.correlation_id !== root.correlation_id || saved.state !== "complete") {
+      throw new PlanError("ARTIFACT_INVALID", "Feed capture membership has a missing or unrelated article receipt", "fetch_request_id");
+    }
+    return saved;
+  }) : [];
+  for (const saved of [latestRoot, ...members, record]) {
+    if (saved.state !== "complete" || saved.operation !== "fetch") continue;
+    if (state.recovered.has(saved.request_id) && saved.source_outcome === null) continue;
     const artifact = checkFetchedDocument(saved, inputs);
+    if (artifact.fetch_item_type === "article") {
+      state.work.captureArticle(saved.request_id, artifact.source_id, artifact.observation.occurred_at, saved.source_outcome);
+    }
+    if (state.recovered.has(saved.request_id)) continue;
     state.work.restoreRequests(artifact);
     if (artifact.fetch_item_type === "feed") state.work.pendingFeed(artifact.source_id, artifact, artifact.observation.occurred_at);
     state.recovered.add(saved.request_id);

@@ -9,5 +9,7 @@
   "response_json": null,
   "run_id": "2026-10-21-700",
   "state": "started",
-  "version": "2026-10-27"
+  "source_outcome": null,
+  "article_capture_request_ids": [],
+  "version": "2026-10-27T18:30"
 }

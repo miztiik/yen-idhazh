@@ -11,7 +11,7 @@ import {
   readFeedIngestEvent, HarvestDiagnosticsSchema, FetchAttemptSchema, OPERATION_VERSION,
   PLANNER_OPERATION_VERSION, RecordedInstantSchema, TimestampSchema,
   FEED_INGEST_CANDIDATE_VERSION, PARSED_FEED_BATCH_VERSION, PLANNER_LEDGER_VERSION, PLAN_RUN_VERSION,
-  SELECTED_ARTICLE_VERSION, ParsedFeedBatchSchema, SelectedFeedBatchSchema, PartitionedFeedBatchSchema,
+  SELECTED_ARTICLE_VERSION, FEED_HEALTH_STATE_VERSION, ParsedFeedBatchSchema, SelectedFeedBatchSchema, PartitionedFeedBatchSchema,
   PlannerHarvestObservationSchema, PlannerDiscoveredEvidenceSchema, PlannerDiscoveredRowSchema,
   PlannerStageContextSchema, PlannerStageRequestSchema, StageReferenceRequestSchema,
   PartitionArticlesRequestSchema, PlannerWorkEventSchema, DiscoveredArticleRowSchema,
@@ -46,7 +46,7 @@ function rejection() {
     date: day, correlation_id: "correlation", source_id: source.source_id,
     feed_url: source.feed_url, subject: "article", candidate_id: candidate().candidate_id,
     url_key: deriveUrlKey(url), canonical_url: url, title: "An article", categories: [],
-    stage: "screen-article-candidates", drop_reason: "STUB_CONTENT",
+    stage: "screen-article-candidates", drop_reason: "REJECTED_SCREENING_MIN_WORDS",
     details: { words_found: 3, words_required: 100 }, rejected_at: at,
   });
 }
@@ -74,7 +74,7 @@ function selection() {
         { term: "domain", value: -0.25 },
       ],
     },
-    feed_allowance: 3, exploration_slot: false, cap_relaxations: [], allowance_reasons: [],
+    feed_limit: 3, exploration_slot: false, cap_relaxations: [], freshness_cutoff_at: at,
     timing_at: at, timing_basis: "first_seen", age_hours: 0,
   });
 }
@@ -253,7 +253,7 @@ describe("rejection evidence", () => {
     expect(WriterIdentitySchema.safeParse({ ...row.identity, task_name: null }).success).toBe(false);
     expect(FileEnvelopeSchema.safeParse({ ...row, ledger: "selected-articles" }).success).toBe(false);
     const planner = PlannerFileEnvelopeSchema.parse({
-      row_schema_version: PLANNER_LEDGER_VERSION, ledger: "feed-health-state", tier: "raw", covers: day,
+      row_schema_version: FEED_HEALTH_STATE_VERSION, ledger: "feed-health-state", tier: "raw", covers: day,
       file_id: row.file_id, content_sha256: digest, writer: row.writer, writer_version: row.writer_version,
       compression: "snappy", updated_at: at,
     });
@@ -267,7 +267,7 @@ describe("rejection evidence", () => {
       ledger: "selected-articles", updated_at: null,
     }).success).toBe(true);
     expect(PlannerFileEnvelopeSchema.safeParse({
-      ...planner, ledger: "selected-articles", updated_at: null,
+      ...planner, row_schema_version: PLANNER_LEDGER_VERSION, ledger: "selected-articles", updated_at: null,
     }).success).toBe(false);
     expect(PlannerFileEnvelopeSchema.safeParse({
       ...planner, row_schema_version: PLANNER_LEDGER_VERSION,
@@ -446,6 +446,7 @@ describe("current planner contracts", () => {
     expect(ParsedFeedBatchSchema.safeParse({ ...parsed, observations: { [digest]: { candidate_id: digest } } }).success).toBe(false);
     const selected = SelectedFeedBatchSchema.parse({
       batch_id, config_sha256: digest, parsed_batch_id: batch_id, context, articles: [],
+      rejected_articles: [],
       selection_started_at_utc: at, evaluated_at: at, health_rows: [], exclusions: [],
       request_report: { from_day: day, through_day: day, complete: false, feeds: [] },
     });

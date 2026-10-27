@@ -4,7 +4,7 @@ import { mkdir, rename, rm, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import {
   PartitionedFeedBatchSchema, StageReferenceRequestSchema, SelectedArticleRowContract,
-  SelectedArticlesArtifactSchema, selectedArticleMetadata,
+  SelectedArticlesArtifactSchema, selectedArticleMetadata, RejectedArticleRowContract,
 } from "@idhazh/common-contracts";
 import { persistLedger } from "@idhazh/ledger-file-writer";
 import type { PersistLedgerResult } from "@idhazh/ledger-file-writer";
@@ -20,6 +20,7 @@ import { healthFingerprint } from "./feed-health-state-operation";
 
 type Result = {
   files: PersistLedgerResult; artifact: string; selected_count: number;
+  rejected_files: PersistLedgerResult;
   run_files?: PersistLedgerResult; run_status?: "completed" | "partial" | "failed";
 };
 const finalized = new WeakMap<object, { fingerprint: string; result: Promise<Result> }>();
@@ -49,7 +50,7 @@ export async function executePersistence(raw: unknown, inputs: PlanInputs, runti
   });
   const bytes = JSON.stringify(artifact);
   const fingerprint = createHash("sha256").update(JSON.stringify({
-    artifact, strategy: batch.strategy, dispatch_count: batch.dispatch_count,
+    artifact, rejected_articles: batch.rejected_articles, strategy: batch.strategy, dispatch_count: batch.dispatch_count,
   })).digest("hex");
   const previous = finalized.get(claim);
   if (previous !== undefined) {
@@ -74,9 +75,16 @@ export async function executePersistence(raw: unknown, inputs: PlanInputs, runti
       writerContext: batch.context.writer, ledgerSettings: inputs.ledgerSettings, period: { tier: "raw", covers: batch.context.date },
     });
     if (files.status === "skipped") throw new Error("Selected metadata write was refused");
+    const rejectedFiles = await persistLedger({
+      ledger: "rejected-articles", rowContract: RejectedArticleRowContract, rows: batch.rejected_articles,
+      registryEntry: inputs.registrations.rejected_articles, outputRoot: inputs.outputRoot,
+      writerContext: batch.context.writer, ledgerSettings: inputs.ledgerSettings, period: { tier: "raw", covers: batch.context.date },
+    });
+    if (rejectedFiles.status === "skipped") throw new Error("Rejected metadata write was refused");
     await appendDocumentTiming(inputs, batch.context.run_id, { operation: "persist", duration_ms: Math.round(performance.now() - began), status: "completed" });
     const run = await recordStandaloneRun(inputs, batch, path);
-    return { files, artifact: path, selected_count: metadata.length, ...(run === undefined ? {} : { run_files: run.files, run_status: run.row.status }) };
+    return { files, rejected_files: rejectedFiles, artifact: path, selected_count: metadata.length,
+      ...(run === undefined ? {} : { run_files: run.files, run_status: run.row.status }) };
   })();
   finalized.set(claim, { fingerprint, result });
   try { return await result; }

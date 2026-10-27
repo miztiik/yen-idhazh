@@ -25,10 +25,10 @@ const MetadataFields = {
   applied_tier_weight: FiniteSchema.min(0).max(1),
   editorial_rank: PositiveCountSchema, estimated_work: CountSchema,
   worker_assignment: CountSchema.nullable(), ratings: SelectedArticleRatingsSchema,
-  feed_allowance: CountSchema, exploration_slot: z.boolean(),
+  feed_limit: CountSchema, exploration_slot: z.boolean(),
   cap_relaxations: z.array(NonEmptySchema), timing_at: RecordedInstantSchema.nullable(),
   timing_basis: z.enum(["published_at", "first_seen", "unavailable"]),
-  age_hours: FiniteSchema.nullable(), allowance_reasons: z.array(NonEmptySchema),
+  age_hours: FiniteSchema.nullable(), freshness_cutoff_at: RecordedInstantSchema.nullable(),
 };
 function validateMetadata(value: {
   canonical_url: string; url_key: string; timing_basis: string;
@@ -54,7 +54,8 @@ function validatePublication(value: {
   }
 }
 const changelog = [
-  { version: SELECTED_ARTICLE_VERSION, change: "Require source or selection publication provenance and refuse obsolete selected rows." },
+  { version: SELECTED_ARTICLE_VERSION, change: "Record the applied freshness cutoff and percentage-based feed limit." },
+  { version: "2026-10-26", change: "Require source or selection publication provenance and refuse obsolete selected rows." },
 ];
 export const SelectedArticleMetadataSchema = z.strictObject(MetadataFields)
   .superRefine(validateMetadata).superRefine(validatePublication);
@@ -97,9 +98,9 @@ export function selectedArticleMetadata(article: SelectedArtifactArticle): Selec
     weight: article.weight, applied_tier_weight: article.applied_tier_weight,
     editorial_rank: article.editorial_rank, estimated_work: article.estimated_work,
     worker_assignment: article.worker_assignment, ratings: article.ratings,
-    feed_allowance: article.feed_allowance, exploration_slot: article.exploration_slot,
+    feed_limit: article.feed_limit, exploration_slot: article.exploration_slot,
     cap_relaxations: article.cap_relaxations, timing_at: article.timing_at,
     timing_basis: article.timing_basis, age_hours: article.age_hours,
-    allowance_reasons: article.allowance_reasons,
+    freshness_cutoff_at: article.freshness_cutoff_at,
   });
 }

@@ -81,7 +81,7 @@ test("preflight uses the configured age override, strict boundary and future tol
     run.exclusions = { ...history, published_window_days: 1 };
     const result = await harvestFeeds(loaded, run, { transport, resolve: transport.resolve });
     expect(result.rejections.map(row => row.drop_reason).sort()).toEqual([
-      "ALREADY_PUBLISHED", "BLOCKED_URL_MARKER", "SETTLED_FAILURE", "STALE_MAX_AGE_EXCEEDED",
+      "ALREADY_PUBLISHED", "BLOCKED_URL_MARKER", "REJECTED_RUN_FRESHNESS_OVERRIDE", "SETTLED_FAILURE",
     ]);
     expect(history.history.published).toMatchObject({ required_day_count: 2, known_day_count: 1 });
     expect(history.history.published.missing_days).toHaveLength(1);
@@ -133,7 +133,7 @@ test("real planning records early losses once in native health counters without 
     const stale = rows.find(row => row.feed_id === "recorded-news")!;
     expect(stale).toMatchObject({ items: 2, outcome: "ok", feed_reads: 1, productive_reads: 1, article_candidates: 0, articles_selected: 0 });
     expect(stale.rejection_counts).toEqual([{
-      subject: "article", stage: "harvest-feeds", reason_code: "STALE_MAX_AGE_EXCEEDED", attribution: null, count: 2,
+      subject: "article", stage: "harvest-feeds", reason_code: "REJECTED_AGE_EXCEEDS_MAX_TIER_ENVELOPE", attribution: null, count: 2,
     }]);
     const discoveries = (await Promise.all(summary.files.discovered_articles!.files.map(file =>
       readPlannerParquet(join(fixture.inputs.outputRoot, file.path), "discovered-articles", DiscoveredArticleRowContract)))).flatMap(file => file.rows);

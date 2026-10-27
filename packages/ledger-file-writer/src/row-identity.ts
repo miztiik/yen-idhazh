@@ -94,6 +94,7 @@ export function buildStoredCompactRow<T extends object>(
 const PLANNER_ROW_KEYS: Readonly<Record<string, readonly string[]>> = {
   "discovered-articles": ["url_key"],
   "selected-articles": ["run_id", "attempt", "url_key"],
+  "rejected-articles": ["run_id", "attempt", "candidate_id"],
   "feed-health-state": ["run_id", "attempt", "feed_id", "endpoint_key", "date"],
   "plan-runs": ["run_id", "attempt"],
 };

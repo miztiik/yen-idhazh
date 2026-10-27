@@ -615,7 +615,7 @@ test("report settings remain available without changing the planning fingerprint
   expect(catalogAnnotations.config_sha256).toBe(baseline.config_sha256);
   expect(sourceSnapshot(catalogAnnotations, catalogAnnotations.sources[0]!))
     .toEqual(sourceSnapshot(baseline, baseline.sources[0]!));
-  expect(load({ ...baseline.config, triage: { ...baseline.config.triage, max_age_hours: baseline.config.triage.max_age_hours + 1 } }).config_sha256)
+  expect(load({ ...baseline.config, triage: { ...baseline.config.triage, recency_half_life_hours: baseline.config.triage.recency_half_life_hours + 1 } }).config_sha256)
     .not.toBe(baseline.config_sha256);
   for (const [knob, value] of [
     ["reject_not_prose", true], ["reject_contaminated", true], ["reject_boilerplate", true],

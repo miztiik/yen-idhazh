@@ -50,7 +50,7 @@ export async function runFeedPlan(raw: unknown, inputs: PlanInputs, runtime: Pla
   registerStageExecution(inputs, context, "plan", started);
   const emit = createStageLogger(context, runtime.log);
   const timings: PlanRunRow["api_timings"] = [];
-  const files: Partial<Record<"discovered_articles" | "selected_articles" | "feed_health_state" | "plan_runs", PersistLedgerResult>> = {};
+  const files: Partial<Record<"discovered_articles" | "selected_articles" | "rejected_articles" | "feed_health_state" | "plan_runs", PersistLedgerResult>> = {};
   const batches: { parsed_batch_id?: string; selection_batch_id?: string; partition_batch_id?: string } = {};
   let selected: Awaited<ReturnType<typeof executeSelection>>["batch"] | undefined;
   let partitioned: Awaited<ReturnType<typeof executePartition>>["batch"] | undefined;
@@ -115,7 +115,8 @@ export async function runFeedPlan(raw: unknown, inputs: PlanInputs, runtime: Pla
     // The measured initial capture already includes bounded in-memory evidence and its summary.
     // Selection performs a separate fresh capture; no membership/index cache crosses that boundary.
     const historyRows = initialHistory.rows;
-    work = createRunHealth(context, sources, initialHistory.sources);
+    work = createRunHealth(context, sources, initialHistory.sources,
+      { ...inputs.harvest.config.triage, clock: runtime.observation_clock ?? (() => new Date()) });
     const currentWork = work;
     const observations = createIngestObservations(currentWork.observe);
     const harvest = await phase("fetch", () => harvestFeeds(inputs.harvest, {
@@ -199,6 +200,7 @@ export async function runFeedPlan(raw: unknown, inputs: PlanInputs, runtime: Pla
     if (partitioned !== undefined) {
       const persisted = await phase("persist", () => executePersistence({ batch_id: partitioned!.batch_id }, inputs, runtime));
       files.selected_articles = persisted.files;
+      files.rejected_articles = persisted.rejected_files;
       artifact = persisted.artifact;
     }
     const rejected = settled.filter(result => result.status === "rejected");

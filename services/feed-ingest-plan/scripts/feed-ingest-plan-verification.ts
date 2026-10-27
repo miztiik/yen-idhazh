@@ -2,10 +2,10 @@
 import { readFile, realpath } from "node:fs/promises";
 import { isDeepStrictEqual } from "node:util";
 import { isAbsolute, relative, resolve } from "node:path";
-import { z } from "zod";
 import {
   DateStampSchema, DiscoveredArticleRowContract, FeedHealthStateRowContract, PlanRunRowContract,
-  SelectedArticleRowContract, readSelectedArticlesArtifact, selectedArticleMetadata,
+  SelectedArticleRowContract, RejectedArticleRowContract, PlannerLedgerNameSchema,
+  readSelectedArticlesArtifact, selectedArticleMetadata,
 } from "../../../packages/common-contracts/src/index";
 import type { LedgerRegistration, LedgerRowContract, PersistLedgerResult } from "../../../packages/ledger-file-writer/src/index";
 import { readPlannerParquet } from "../src/read-ledger-history/read-planner-parquet";
@@ -14,12 +14,13 @@ import { PlanResponseSchema } from "../src/api/plan-response.schema";
 
 export const plannerContracts = {
   "discovered-articles": DiscoveredArticleRowContract, "selected-articles": SelectedArticleRowContract,
+  "rejected-articles": RejectedArticleRowContract,
   "feed-health-state": FeedHealthStateRowContract, "plan-runs": PlanRunRowContract,
 };
 export type PlannerLedger = keyof typeof plannerContracts;
 export function validateLedgerFilePath(path: string, fileId: string, covers: string, registration: LedgerRegistration) {
   DateStampSchema.parse(covers);
-  const name = z.enum(["discovered-articles", "selected-articles", "feed-health-state", "plan-runs"]).parse(registration.name);
+  const name = PlannerLedgerNameSchema.parse(registration.name);
   if (registration.family !== "feed-ingest-plan" || registration.prefix.join("/") !== `feed-ingest-plan/${name}`
     || !/^[0-9a-f]{8}-[0-9a-f]{4}-8[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(fileId)
     || path !== `raw/feed-ingest-plan/${name}/${covers.replaceAll("-", "/")}/${fileId}.parquet`) {
@@ -62,7 +63,7 @@ export async function verifyParquetFiles(
 
 export async function verifyPlanningCompletion(
   root: string, raw: unknown, registrations: {
-    discovered_articles: LedgerRegistration; selected_articles: LedgerRegistration;
+    discovered_articles: LedgerRegistration; selected_articles: LedgerRegistration; rejected_articles: LedgerRegistration;
     feed_health_state: LedgerRegistration; plan_runs: LedgerRegistration;
   }, repositoryRoot = resolve(root, ".."),
 ) {
@@ -70,6 +71,7 @@ export async function verifyPlanningCompletion(
   const verified: Partial<Record<PlannerLedger, Awaited<ReturnType<typeof verifyParquetFiles>>>> = {};
   for (const [key, name] of [
     ["discovered_articles", "discovered-articles"], ["selected_articles", "selected-articles"],
+    ["rejected_articles", "rejected-articles"],
     ["feed_health_state", "feed-health-state"], ["plan_runs", "plan-runs"],
   ] as const) {
     const files = summary.files[key];

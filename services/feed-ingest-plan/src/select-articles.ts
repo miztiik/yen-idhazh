@@ -1,5 +1,5 @@
 /** Screen the complete parsed input and retain only chosen metadata, text and grouped losses. */
-import { FeedHealthStateRowSchema } from "@idhazh/common-contracts";
+import { FeedHealthStateRowSchema, RejectedArticleRowSchema } from "@idhazh/common-contracts";
 import type { ParsedFeedBatch, PlannerRejectionCount } from "@idhazh/common-contracts";
 import type { PlanInputs } from "./load-plan-inputs";
 import { screenArticleCandidates } from "./screen-article-candidates/triage-gates";
@@ -12,6 +12,7 @@ import type { FeedHistory } from "./read-ledger-history/read-feed-history";
 import type { RunContext } from "./resolve-run-context";
 import { inputEndpointKey } from "./read-ledger-history/health-summary";
 import { readExclusionEvidence } from "./read-ledger-history/read-exclusion-evidence";
+import { freshnessCutoff } from "./article-freshness-policy";
 
 export async function selectArticles(batch: ParsedFeedBatch, inputs: PlanInputs, selectionStartedAt: string,
   currentHealth?: Pick<FeedHistory, "sources" | "request_report">, context: RunContext = batch.context) {
@@ -54,6 +55,21 @@ export async function selectArticles(batch: ParsedFeedBatch, inputs: PlanInputs,
   const curation = curateArticles({
     articles: screening.admitted, batch, inputs, health: health.sources, publications, context, selectionStartedAt,
   });
+  const rejectedArticles = [
+    ...screening.rejections.map(rejection => ({
+      candidate_id: rejection.candidate_id, url_key: rejection.url_key, feed_id: rejection.source_id,
+      stage: rejection.stage, reason_code: rejection.drop_reason,
+      freshness_cutoff_at: rejection.details.max_age_hours === null ? null
+        : freshnessCutoff(batch.context.now, rejection.details.max_age_hours),
+    })),
+    ...curation.losses.map(loss => ({
+      candidate_id: loss.article.candidate.candidate_id, url_key: loss.article.candidate.url_key,
+      feed_id: loss.article.candidate.source_id, stage: "curate-article-portfolio",
+      reason_code: loss.reason, freshness_cutoff_at: loss.freshness_cutoff_at,
+    })),
+  ].map(row => RejectedArticleRowSchema.parse({
+    ...row, run_id: context.run_id, attempt: context.writer.attempt, date: context.date,
+  }));
   const losses: PlannerRejectionCount[] = [...batch.exclusions];
   for (const rejection of screening.rejections) losses.push({
     feed_id: rejection.source_id, subject: "article", stage: "screen-article-candidates",
@@ -73,7 +89,6 @@ export async function selectArticles(batch: ParsedFeedBatch, inputs: PlanInputs,
   }
   const originalWork = context.run_id === batch.context.run_id && context.writer.attempt === batch.context.writer.attempt;
   const healthRows = originalWork ? captureHealthRows(batch.work_rows, health.sources) : [];
-  const admitted = new Set(screening.admitted.map(article => article.candidate.candidate_id));
   for (const candidate of batch.candidates) {
     let row = healthRows.find(row => row.feed_id === candidate.source_id && row.date === selectionStartedAt.slice(0, 10));
     if (row === undefined) {
@@ -92,7 +107,6 @@ export async function selectArticles(batch: ParsedFeedBatch, inputs: PlanInputs,
       });
       healthRows.push(row);
     }
-    if (admitted.has(candidate.candidate_id) && row.article_candidates !== null) row.article_candidates++;
   }
   for (const article of curation.articles) {
     const row = healthRows.find(row => row.feed_id === article.feed_id && row.date === selectionStartedAt.slice(0, 10))!;
@@ -100,9 +114,11 @@ export async function selectArticles(batch: ParsedFeedBatch, inputs: PlanInputs,
   }
   for (const row of healthRows) {
     if (row.date !== selectionStartedAt.slice(0, 10)) continue;
-    const losses = [...grouped.values()].filter(loss => loss.feed_id === row.feed_id && loss.stage !== "harvest-feeds");
+    const losses = [...grouped.values()].filter(loss => loss.feed_id === row.feed_id
+      && loss.stage !== "harvest-feeds" && loss.attribution === null);
     row.rejection_counts.push(...losses.map(({ feed_id: _feed, ...loss }) => loss));
   }
-  return { articles: curation.articles, health_rows: healthRows, exclusions: [...grouped.values()], request_report: health.request_report };
+  return { articles: curation.articles, rejected_articles: rejectedArticles, health_rows: healthRows,
+    exclusions: [...grouped.values()], request_report: health.request_report };
 }
 import { sourceSnapshot } from "./harvest-feeds/load-harvest-inputs";

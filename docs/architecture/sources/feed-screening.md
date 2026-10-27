@@ -1,6 +1,6 @@
 # Feed candidate screening
 
-**Last Updated**: 2026-10-26
+**Last Updated**: 2026-10-27
 
 Which parsed articles can reach numeric selection?
 Screening validates the complete server-owned candidate batch, current
@@ -16,10 +16,10 @@ success or proof of no paywall. Terminal harvest failures are not admitted
 again as candidates.
 
 The result contains admitted candidates and transient terminal exclusions.
-Only admitted candidates increment the selection-opportunity denominator in
-health C26. Exclusions are reduced to grouped counts by feed, subject, stage,
-reason and supported attribution. No full rejected population is committed
-or returned as an audit export.
+Screening does not increment source-admission counters: those belong to the
+original capture's technical outcome, independent of selection.
+Exclusions become grouped counts by feed, subject, stage, reason and supported
+attribution, and minimal per-candidate metadata at explicit selection persistence.
 
 ## Gates and timing
 
@@ -30,7 +30,7 @@ parsed articles. An unavailable external history does not manufacture a
 publication or failure.
 
 Paywall or configured HTTP blocks, category exclusions, the configured
-`triage.min_words` minimum and the maximum age retain their relative
+`triage.min_words` minimum and the tier's maximum age retain their relative
 precedence. The same word minimum applies to every parsed article; feed
 classification labels do not change admission. Category matching uses whole
 trimmed, case-folded tags. One first failed gate produces one terminal
@@ -79,19 +79,23 @@ The parsed batch's saved age clock is D19. A later feedback refresh uses D22
 without changing that age clock. Signed age can be negative for an admitted
 near-future publication; only the ranking calculation floors it at zero.
 The selected metadata retains its actual timing basis and timestamp.
+The normal tier's final age step is checked before a tighter run override.
+An override cannot widen any tier window. Harvest preflight uses the same
+maximum envelope, not the initial fresh window, so it preserves viable backfill.
 
 ## Rejection persistence
 
-There is no standalone rejection write. A run records grouped exclusions in
-its actual UTC work-day health rows. Missing measurements remain unavailable.
-Native selected output and the text artifact are finalized later from the
-same chosen result.
+Explicit selection persistence writes `rejected-articles` even when no article
+wins. It retains only execution/candidate/URL/feed identities, stage, reason and
+the applied age cutoff. No title, text, policy or score tree is copied. Fetch
+or parse failures do not acquire fabricated selection rows. Grouped counts
+remain in actual UTC work-day health rows.
 
 ## Design rationale
 
 Admission and ranking share one public selection operation, but keep distinct
-denominators. A stale or technically rejected candidate is not a new admitted
-opportunity. The global discovery join prevents another feed or fetch from
+denominators. A technically usable but stale article is still a source pass,
+not a selection pass. The global discovery join prevents another feed or fetch from
 renewing an undated article's age.
 Content exclusions retain successful feed downloads/parses, original offered
 ordinals, discovery evidence and actual request spend. Their grouped health reason
