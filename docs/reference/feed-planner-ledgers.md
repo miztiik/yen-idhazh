@@ -96,7 +96,7 @@ independently calculated selections.
 | B8 | `categories` | Article | Yes | Original feed category strings; empty arrays remain empty arrays |
 | B9 | `article_text` | Artifact article | No | Sanitized summarizer input; never in committed Parquet or logs |
 | B10 | `author` | Article | Yes | Attribution; nullable |
-| B11 | `published_at` | Article | Yes | Trusted source publication or actual selection-start UTC instant; null only in older data |
+| B11 | `published_at` | Article | Yes | Trusted source publication or actual selection-start UTC instant; unknown source time does not make this null |
 | B12 | `tier` | Article | Yes | Configured tier used for this choice |
 | B13 | `weight` | Article | Yes | Configured feed weight actually used |
 | B14 | `applied_tier_weight` | Article | Yes | Applied tier multiplier |
@@ -119,7 +119,7 @@ independently calculated selections.
 | B31 | `evaluated_at` | Artifact header / D19 | In D19 | Save the evaluation clock once in the run ledger; include it in the self-contained artifact |
 | B32 | `allowance_reasons` | Article | Yes | Compact codes for allowance bonuses actually used; no copied witness trees |
 | B33 | `attempt` | Artifact header / Parquet row | Yes | Owning workflow/run attempt; not a selection-idempotency key |
-| B34 | `published_at_source` | Article | Yes | `source`, `selection` or `legacy-unavailable`; never infer provenance from the timestamp |
+| B34 | `published_at_source` | Article | Yes | `source` or `selection`; never infer provenance from the timestamp |
 
 The compact `adjustments` list replaces the large existing score-evidence tree.
 It distinguishes unavailable evidence from a measured zero. It does not contain
@@ -139,15 +139,18 @@ and choice, an absent or untrusted source date uses D22, the actual captured
 selection-start UTC instant, with `published_at_source = selection`. The
 spelling stays ISO 8601 with `Z`, as for source instants. This does not change
 B27-B29, the original first sight, freshness eligibility, recency or ranking.
-The artifact and metadata projection use the same chosen values.
+Unknown timing evidence stays in `timing_basis = unavailable`, `timing_at = null`
+and `age_hours = null`. It does not create a fabricated historical publication
+source or rewrite the selection-start fallback. The artifact and metadata
+projection use the same chosen values.
 
-Readers accept the four-ledger files written under `2026-10-25`. They verify
-the original physical fields and canonical digest before adding
-`legacy-unavailable` provenance in memory. They retain each original
-publication value, including null, and every original age field. They never
-fill an older missing time with a new clock or rewrite the source file.
-Older artifacts follow the same rule. This compatibility does not restore
-the retired eight-ledger formats.
+The TypeScript planner reader accepts only the current native ledger stamps:
+`2026-10-25` for discovered articles and feed health, and `2026-10-26` for
+selected articles and plan runs. It verifies the physical fields, file identity
+and canonical digest, then parses every row with the matching current schema.
+The selected and plan-run `2026-10-25` rows and the selected `2026-10-25`
+artifact are obsolete and refuse explicitly; they are unchanged on disk and
+receive no migration, null-fill or invented provenance.
 
 Empty categories stay arrays. The native Parquet and JSON comparison found
 that null increased both representations, so no nullable category shape is
@@ -595,6 +598,23 @@ settled and the affected consumers are migrated.
 actual code paths. No old-to-new migrators, compatibility readers, aliases or
 dual writers are required or permitted for this replacement. The old-to-new
 tables above explain field disposition; they are not migration instructions.
+
+### TypeScript current-format refusal
+
+**Breaking cutover approval, 2026-10-26 UTC:** The TypeScript planner native
+reader and selected-artifact reader accept only their current ledger stamps.
+The selected and plan-run row stamps and selected artifact stamp are
+`2026-10-26`; the discovered and feed-health stamps remain `2026-10-25`.
+Obsolete selected and plan-run `2026-10-25` rows refuse with a contract
+diagnostic. Obsolete selected artifacts refuse instead of adding a historical
+provenance default. Missing age evidence remains null; a real current-run
+selection instant remains selection provenance.
+
+This is the maintainer-approved TypeScript exception to the read-side migration
+rule in `CLAUDE.md` section 11. Python's historical readers, contract authority,
+registry, gardener and publication wiring are unchanged. The binding test
+compares the current-input subset without carrying historical acceptance into
+TypeScript.
 
 Targeted deletion of the same eight obsolete ledger prefixes named in Table F
 under both `state/raw/feed-ingest-plan/` and
