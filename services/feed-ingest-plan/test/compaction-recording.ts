@@ -1,5 +1,5 @@
 /** Produce real four-ledger attempts, then reopen the exact gardener outputs in the native CI case. */
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, readdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { isDeepStrictEqual } from "node:util";
 import {
@@ -114,8 +114,16 @@ if (mode === "produce" || mode === "late") {
   const recorded: Manifest = JSON.parse(await readFile(manifestPath, "utf8")) as Manifest;
   const period = tier === "reopened" ? "monthly" : tier as "daily" | "monthly" | "yearly";
   for (const name of names) {
+    const rawDirectory = join(root, "state", "raw", "feed-ingest-plan", name, ...day.split("-"));
+    let rawFiles: string[];
+    try { rawFiles = (await readdir(rawDirectory)).map(file => join(rawDirectory, file)); }
+    catch (error) {
+      if (!(error instanceof Error && "code" in error && error.code === "ENOENT")) throw error;
+      rawFiles = [];
+    }
     const held = await readPlannerDay(root, registration(name), {
-      day, indexes: { [period]: join(root, "state", "compact", "feed-ingest-plan", name, "index", `${period}.json`) },
+      day, raw_files: rawFiles,
+      indexes: { [period]: join(root, "state", "compact", "feed-ingest-plan", name, "index", `${period}.json`) },
     }, contracts[name] as LedgerRowContract<Row>);
     if (!held.complete || !isDeepStrictEqual(settle(name, held.rows), recorded.expected[name])) {
       throw new Error(`Production ${tier} packing changed ${name} facts or their completeness`);
