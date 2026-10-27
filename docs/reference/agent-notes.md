@@ -1,6 +1,6 @@
 # Agent Notes
 
-**Last Updated**: 2026-10-02
+**Last Updated**: 2026-10-27
 
 Environment and tool quirks that make a command lie about its result in this
 repository. Each entry is a trap that cost real time at least once: the false
@@ -53,6 +53,16 @@ command, set the import path to this worktree's backend, not another checkout.
 ```powershell
 $env:PYTHONPATH = Join-Path (Get-Location) 'backend'
 ```
+
+## Closing a superseded plan
+
+**An open pull request can look like missing delivery after its replacement
+has shipped.** Its GitHub state reports the proposal's lifecycle, not whether
+the current capability exists. Reconcile stale plan rows with the current
+contracts and the maintainer's latest dispositions before deletion. Retain
+deferred work in its owning page; do not mark it delivered or restart the
+superseded implementation. Closing the old pull request is a separate action
+that still needs authority.
 
 ## Adding an entry
 

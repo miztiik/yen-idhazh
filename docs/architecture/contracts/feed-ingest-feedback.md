@@ -1,6 +1,6 @@
 # Feed-ingest feedback
 
-**Last Updated**: 2026-10-26
+**Last Updated**: 2026-10-27
 
 Which actual feed work informs a later selection?
 The planner records per-run, per-feed facts for each actual UTC work day in
@@ -56,51 +56,68 @@ health. A failed health save cannot discard a completed selection's
 independent metadata and text artifact; the run records a partial outcome
 and its cause.
 
+## Deferred controls
+
+Technical admission trials, temporary restrictions, earned recovery, adaptive
+polling and operational review are deferred, not delivered by these counters.
+Request spend remains report-only; the current next-selection behavior is
+defined in [curation](../sources/feed-curation.md).
+
+### Admission trials
+
+The conditional sample permits up to 100 distinct articles in each
+non-overlapping age group `[24,36]`, `[12,24)`, `[6,12)`, `[2,6)` and `[0,2)`
+hours, fewer when unavailable. Retries and redirects can exceed 500 HTTP
+requests across those groups. Each considered entry needs a selected,
+group-capped, unknown-age or future-age disposition. Total implementation cost
+and configuration placement remain unsettled. This is not an ordinary-work,
+selection-input or selected-output cap.
+
+### Restrictions and recovery
+
+The approved but inactive policy pauses only the evidenced source or endpoint
+after 3 consecutive confirmed source-side failures within a configured window.
+Known success resets that streak; unknown and pipeline outcomes neither count
+nor reset it. An article refusal affects only that article.
+
+A 24-hour pause makes a check due on the next permitted planner run; elapsed
+time alone does not restore ordinary work. Recovery requires 3 consecutive
+successful checks across at least 2 UTC dates and at least 80 percent known
+outcomes. Confirmed source failure resets progress and starts another 24-hour
+pause; unknown and pipeline outcomes neither count as successes nor reset
+progress.
+
+Allow up to 20 recovery-check opportunities per planner run, at most 1 per
+source, oldest due first, with ties by stable source ID then endpoint identity.
+This is not a request budget or ordinary-work cap. Recovery restores limited
+trial access, not catalog membership or permanent-retirement authority.
+
+The policy-state contract is still unapproved. Current run-count rest cannot
+retain pause deadlines, check purpose and recovery progress beyond bounded
+evidence. Do not encode those meanings in failure codes or reliability.
+Before implementation, settle the configured window, the known-outcome
+cohort and its reset, first enablement, and missing or refused prior state.
+State must survive not-due and deferred checks without inventing work or
+recovery. Any extension follows the
+[TypeScript contract ownership](../../reference/feed-planner-ledgers.md#typescript-contract-ownership)
+and versioning rules; the earlier clean break grants no new deletion permission.
+
+### Polling and operational review
+
+Adaptive polling still needs an approved formula, budget, maximum discovery
+gap and coverage trade-off before it can suppress a feed request. Quiet feeds
+are not source failures. Operational review is a no-go for implementation
+until its caller, cadence, authority and independent evidence are approved.
+Neither higher internal scores nor generated fixtures prove a live
+feedback-and-next-consumer loop.
+
 ## Design rationale
 
 Batched facts retain actual work without preserving a causal request archive.
 The declared execution/feed/endpoint/day identity removes duplicate storage
 representations while retaining distinct real attempts. The same validated
-facts serve all three windows; no snapshot head, revision chain or fifth
+facts serve all three windows; no snapshot head, revision chain or separate
 summary ledger is required.
-
-### Recovery-state gap (proposal only)
-
-The current [health](../../../backend/idhazh/contracts/feed_health_state.py)
-and [run](../../../backend/idhazh/contracts/feed_ingest_plan_run.py)
-declarations cannot distinguish ordinary from recovery checks, retain a pause
-deadline and recovery progress beyond bounded evidence, or represent TRIAL
-(limited trial access, not catalog membership). Do not hide these meanings in
-`rested_runs`, failure codes or reliability. Current run-count rest is not
-[D5 enforcement](../../../TODO/20261024-67-feed-ingest-feedback-and-selection-plan.md#table-d---required-design-decisions-and-stop-conditions).
-
-The smallest proposal is one optional typed access-policy record in health
-(C), using the existing feed/endpoint/run/attempt/day identity, and one optional
-applied-policy record in runs (D). C would capture ordinary/recovery/neither
-purpose, whether a real check occurred, a confirmed success, confirmed source
-failure, pipeline error or unknown result, resulting ordinary/restricted/TRIAL phase,
-UTC pause deadline, recovery streak, first/latest successful UTC dates, and
-known/total outcomes with completeness. D would capture the trusted evaluation
-clock, activation, actual approved parameters and explicit configured-window
-binding and unit. Initial consecutive confirmed failures would be recomputed
-from bounded configured evidence, not unlimited failure history.
-
-To carry finite state beyond the [lifecycle window](../../reference/feed-planner-ledgers.md#l-lookback-summaries),
-the proposal would emit actual access decisions for participating restricted
-scopes even when not due or a recovery slot is deferred. When no reads or
-requests occurred, their actual counters are zero. Carry policy state, not old rows
-or cumulative work totals. Reuse must validate endpoint, applied settings and
-temporal order. Missing or refused prior policy state is not proof of recovery.
-
-Any approved extension must be additive and read-compatible: native Pydantic
-first, version/changelog, named TypeScript field/vocabulary binding cases, and
-absent policy read as UNKNOWN, never ordinary or TRIAL. Existing four-family
-records must stay readable; the prior eight-ledger deletion permission does
-not authorize another clean break. Packing would retain captured policy state
-without summing it or adding snapshots. A/B and artifact-only article text stay
-unchanged. These are proposed records, not approved field names or a ruling;
-the [open decisions in Row 1](../../../TODO/20261024-67-feed-ingest-feedback-and-selection-plan.md#3-row-1---settle-remaining-trial-polling-and-review-policy)
-must be settled before declarations, implementation or activation.
 
 ## See also
 
