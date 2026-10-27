@@ -10,8 +10,9 @@ import {
   SourceSnapshotSchema, WriterIdentitySchema, deriveCandidateId, deriveUrlKey, validateEnvelopeContainer,
   readFeedIngestEvent, HarvestDiagnosticsSchema, FetchAttemptSchema, OPERATION_VERSION,
   PLANNER_OPERATION_VERSION, RecordedInstantSchema, TimestampSchema,
-  PLANNER_LEDGER_VERSION, PLAN_RUN_VERSION, SELECTED_ARTICLE_VERSION, ParsedFeedBatchSchema, SelectedFeedBatchSchema, PartitionedFeedBatchSchema,
-  PlannerHarvestObservationSchema, PlannerSeenEvidenceSchema, PlannerSeenRowSchema,
+  FEED_INGEST_CANDIDATE_VERSION, PARSED_FEED_BATCH_VERSION, PLANNER_LEDGER_VERSION, PLAN_RUN_VERSION,
+  SELECTED_ARTICLE_VERSION, ParsedFeedBatchSchema, SelectedFeedBatchSchema, PartitionedFeedBatchSchema,
+  PlannerHarvestObservationSchema, PlannerDiscoveredEvidenceSchema, PlannerDiscoveredRowSchema,
   PlannerStageContextSchema, PlannerStageRequestSchema, StageReferenceRequestSchema,
   PartitionArticlesRequestSchema, PlannerWorkEventSchema, DiscoveredArticleRowSchema,
   FetchRequestSchema,
@@ -27,7 +28,7 @@ const url = "https://example.com/article?x=1";
 const digest = "a".repeat(64);
 const source = SourceSnapshotSchema.parse({
   source_id: "example", feed_url: "https://example.com/feed", title: "Example",
-  kind: "new-kind", tier: 4, form: "article", status: "active",
+  tier: 4, status: "active",
   weight: 1, applied_tier_weight: 0.6,
 });
 function candidate() {
@@ -353,7 +354,7 @@ describe("current planner contracts", () => {
     const request = {
       request_id: "00000000-0000-4000-8000-000000000010",
       correlation_id: "00000000-0000-4000-8000-000000000011",
-      feed_id: source.source_id, kind: "article", batch_id: "00000000-0000-4000-8000-000000000012",
+      feed_id: source.source_id, fetch_item_type: "article", batch_id: "00000000-0000-4000-8000-000000000012",
       offer_id: digest,
     };
     expect(FetchRequestSchema.safeParse(request).success).toBe(true);
@@ -383,16 +384,17 @@ describe("current planner contracts", () => {
       const branches = output?.oneOf ?? output?.anyOf ?? [output];
       expect(branches.every(branch => branch?.additionalProperties === false)).toBe(true);
     }
-    expect(schemas.FeedIngestCandidate?.properties?.version).toMatchObject({ const: PLANNER_LEDGER_VERSION, default: PLANNER_LEDGER_VERSION });
+    expect(schemas.FeedIngestCandidate?.properties?.version).toMatchObject({
+      const: FEED_INGEST_CANDIDATE_VERSION, default: FEED_INGEST_CANDIDATE_VERSION,
+    });
     expect(schemas.FeedIngestCandidate?.required).not.toContain("version");
     for (const [name, path] of [["FetchedDocument", "fetched-document/refused.json"], ["PlannerOperation", "planner-operation/started.json"]] as const) {
       const original = await Bun.file(new URL(`../../../tests/fixtures/contracts/${path}`, import.meta.url)).json();
-      expect(runtimeSchemas[name].parse(original).version).toBe("2026-10-23");
+      expect(runtimeSchemas[name].parse(original).version).toBe(name === "PlannerOperation" ? PLANNER_OPERATION_VERSION : OPERATION_VERSION);
       expect(runtimeSchemas[name].parse({ ...original, version: undefined }).version).toBe(name === "PlannerOperation" ? PLANNER_OPERATION_VERSION : OPERATION_VERSION);
       if (name === "PlannerOperation") {
         expect(runtimeSchemas[name].parse({ ...original, version: PLANNER_OPERATION_VERSION, created_at: `${at.slice(0, -1)}.123Z` }).created_at).toBe(`${at.slice(0, -1)}.123Z`);
-        expect(runtimeSchemas[name].safeParse({ ...original, version: "2026-10-23T18:50", created_at: `${at.slice(0, -1)}.123Z` }).success).toBe(true);
-        expect(runtimeSchemas[name].safeParse({ ...original, version: "2026-10-23T09:22", created_at: `${at.slice(0, -1)}.123Z` }).success).toBe(false);
+        expect(runtimeSchemas[name].safeParse({ ...original, version: "2026-10-23T18:50", created_at: `${at.slice(0, -1)}.123Z` }).success).toBe(false);
       } else {
         const saved = runtimeSchemas[name].parse(original);
         expect(saved.parent_fetch_request_id).toBeNull();
@@ -419,13 +421,13 @@ describe("current planner contracts", () => {
         shard: 0, producer: "feed-ingest-plan", git_sha: "a".repeat(40) },
     };
     const parsed = { batch_id, config_sha256: digest, context, request: {}, candidates: [],
-      observations: {}, seen: { availability: "available", rows: [] }, evidence: {},
+      observations: {}, discovered: { availability: "available", rows: [] }, evidence: {},
       history_rows: [], history_days: [], work_rows: [], exclusions: [] };
     expect(PlannerStageContextSchema.parse(context).captured_at).toBe(context.captured_at);
     expect(PlannerStageRequestSchema.parse({})).toEqual({});
     expect(PlannerStageRequestSchema.safeParse({ article_limit: null }).success).toBe(false);
     const parsedBatch = ParsedFeedBatchSchema.parse(parsed);
-    expect(parsedBatch.version).toBe(PLANNER_LEDGER_VERSION);
+    expect(parsedBatch.version).toBe(PARSED_FEED_BATCH_VERSION);
     expect(parsedBatch.offers).toEqual([]);
     expect(parsedBatch.feed_fetch_request_id).toBeNull();
     expect(parsedBatch.input_complete).toBe(true);
@@ -454,8 +456,8 @@ describe("current planner contracts", () => {
     });
     expect(observation.diagnostics).toBeNull();
     expect(PlannerHarvestObservationSchema.safeParse({ ...observation, preflight_freshness: null }).success).toBe(false);
-    expect(PlannerSeenRowSchema.safeParse({ url_key: digest, first_seen_at: at, date: day, first_seen_run: run }).success).toBe(false);
-    expect(plannerStageSchemas.PlannerSeenEvidence).toEqual(z.toJSONSchema(PlannerSeenEvidenceSchema, { io: "input" }));
+    expect(PlannerDiscoveredRowSchema.safeParse({ url_key: digest, first_seen_at: at, date: day, first_seen_run: run }).success).toBe(false);
+    expect(plannerStageSchemas.PlannerDiscoveredEvidence).toEqual(z.toJSONSchema(PlannerDiscoveredEvidenceSchema, { io: "input" }));
     expect(StageReferenceRequestSchema.safeParse({ batch_id, path: "batch.json" }).success).toBe(false);
     expect(PartitionArticlesRequestSchema.parse({ batch_id, strategy: "round-robin", shards: 2 })).toEqual({ batch_id, strategy: "round-robin", shards: 2 });
   });

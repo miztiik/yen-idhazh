@@ -11,7 +11,6 @@ export const WorkflowPolicySchema = z.strictObject({
   request: PlanRequestSchema,
   history: FeedHistoryPolicySchema.extend({
     max_future_hours: z.number().finite().nonnegative(),
-    seen_window_days: z.int().nonnegative(),
     published_window_days: z.int().nonnegative(),
     settled_failure_codes: z.array(z.string()),
   }),
@@ -37,21 +36,21 @@ export function formatWorkflowPolicy(input: unknown, selectionRan: boolean) {
     ["Article limit", `${maximum} (${source("article_limit")})`],
     ["Worker assignment", `${workers} (count: ${source("shards")}; distribution: ${source("partition_strategy")})`],
     ["Extraction", `${config.harvest.concurrency} concurrent fetches; ${config.harvest.fetch_timeout_ms} milliseconds fetch timeout; ${parser_concurrency} parser workers`],
-    ["Minimum text", `${policy.triage.min_words_article} words per article; ${policy.triage.min_words_abstract} words per abstract`],
+    ["Minimum text", `${policy.triage.min_words} words per parsed item`],
     ["Recency score", `${policy.triage.recency_half_life_hours} hours half-life; weight ${policy.triage.recency_weight}`],
-    ["Feed authority score", `Weight ${policy.curate.source_authority_weight}; measured reliability penalty ${config.curate.source_reliability_penalty_enabled ? "enabled" : "disabled"}`],
-    ["Per-feed allowance", `${policy.curate.base_source_allowance} articles; ${policy.curate.bonus_unique_evidence} extra for unique evidence`],
-    ["Portfolio limits", `${percent(config.curate.soft_caps.max_source_share)} per feed; ${percent(config.curate.soft_caps.max_parent_domain_share)} per known parent domain; target ${config.curate.soft_caps.min_distinct_sources} distinct feeds`],
-    ["Limit relaxation order", config.curate.soft_caps.relaxation_order.map(limit =>
+    ["Feed authority score", `Weight ${policy.curate_articles.source_authority_weight}; measured reliability penalty ${config.curate_articles.source_reliability_penalty_enabled ? "enabled" : "disabled"}`],
+    ["Per-feed allowance", `${policy.curate_articles.base_source_allowance} articles`],
+    ["Portfolio limits", `${percent(config.curate_articles.soft_caps.max_source_share)} per feed; ${percent(config.curate_articles.soft_caps.max_website_group_share)} per known website group; target ${config.curate_articles.soft_caps.min_distinct_sources} distinct feeds`],
+    ["Limit relaxation order", config.curate_articles.soft_caps.relaxation_order.map(limit =>
       ({ distinct_sources: "distinct-feed target", source_share: "per-feed share" })[limit]).join(", ") || "No relaxation"],
-    ["Diversity score deductions", `Publisher exposure ${policy.curate.mmr_weights.lambda_source}; source kind ${policy.curate.mmr_weights.lambda_source_kind}; known parent domain ${policy.curate.mmr_weights.lambda_domain}`],
-    ["Exploration slots", `${percent(config.curate.exploration_slot_share)} for feeds not yet chosen when available`],
-    ["History", `${history.seen_window_days} UTC days for first sight; ${history.published_window_days} UTC days for prior publication; ${history.max_future_hours} hours future-time tolerance`],
+    ["Diversity score deductions", `Publisher exposure ${policy.curate_articles.mmr_weights.lambda_source}; known website group ${policy.curate_articles.mmr_weights.lambda_website_group}`],
+    ["Exploration slots", `${percent(config.curate_articles.exploration_slot_share)} for feeds not yet chosen when available`],
+    ["History", `${config.discovered_articles.lookback_days} UTC days for article discovery; ${history.published_window_days} UTC days for prior publication; ${history.max_future_hours} hours future-time tolerance`],
     ["Article exclusions", `Blocked HTTP statuses: ${config.triage.blocked_http_statuses.join(", ")}; blocked categories: ${config.harvest.blocked_categories.join(", ") || "none"}; ${config.harvest.url_exclusions.length} configured URL exclusions`],
   ];
   return {
     notice: `${selectionRan ? "Used" : "Requested; selection did not run"}: maximum age ${policy.triage.max_age_hours} hours; `
-      + `${maximum}; ${workers}; measured reliability penalty ${config.curate.source_reliability_penalty_enabled ? "enabled" : "disabled"}. `
+      + `${maximum}; ${workers}; measured reliability penalty ${config.curate_articles.source_reliability_penalty_enabled ? "enabled" : "disabled"}. `
       + "The job summary records the effective scoring, exclusions, allowances and portfolio limits.",
     rows,
   };

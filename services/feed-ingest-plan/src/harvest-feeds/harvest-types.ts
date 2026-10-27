@@ -58,7 +58,7 @@ export type HarvestContext = {
   observation_clock?: () => Date;
   observations?: IngestObservations;
   parser_pool?: ArticleParserPool;
-  parser_options?: Parameters<ArticleParserPool["parse"]>[4];
+  parser_options?: Parameters<ArticleParserPool["parse"]>[3];
   on_feed?: (outcome: FeedOutcomePayload, entries: readonly FeedEntry[], checked_at: string) => void;
   on_article?: (result: HarvestArticleResult) => void;
   log?: (record: z.infer<typeof CandidateRejectionRecordSchema>) => void;
@@ -68,7 +68,7 @@ export type HarvestResult = {
   inputs: HarvestInputs;
   config: FeedIngestConfig;
   articles: HarvestArticleResult[];
-  first_sight_candidates: { url_key: string }[];
+  discovered_candidates: { url_key: string }[];
   feed_outcomes: FeedOutcomePayload[];
   salience: { feed_id: string; available: boolean; unavailable_reason: string | null }[];
   candidates: z.infer<typeof FeedIngestCandidateSchema>[];

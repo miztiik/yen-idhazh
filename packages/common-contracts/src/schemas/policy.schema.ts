@@ -1,10 +1,9 @@
-/** Which candidate settings may a vertical override without changing global controls? */
+/** Which numeric rules govern article screening and selection? */
 import { z } from "zod";
 import { CountSchema, NonNegativeSchema, PositiveCountSchema, PositiveSchema } from "./primitives";
 
 export const FeedScreeningPolicySchema = z.strictObject({
-  min_words_article: PositiveCountSchema,
-  min_words_abstract: PositiveCountSchema,
+  min_words: PositiveCountSchema.default(180),
   max_age_hours: PositiveSchema,
   recency_half_life_hours: PositiveSchema,
   recency_weight: NonNegativeSchema,
@@ -12,29 +11,18 @@ export const FeedScreeningPolicySchema = z.strictObject({
 
 export const FeedPenaltyWeightsSchema = z.strictObject({
   lambda_source: NonNegativeSchema,
-  lambda_source_kind: NonNegativeSchema,
-  lambda_domain: NonNegativeSchema,
+  lambda_website_group: NonNegativeSchema,
 });
 
 export const FeedCurationPolicySchema = z.strictObject({
   source_authority_weight: NonNegativeSchema,
   base_source_allowance: CountSchema,
-  bonus_unique_evidence: CountSchema,
   mmr_weights: FeedPenaltyWeightsSchema,
 });
 
-export const FeedScreeningPatchSchema = FeedScreeningPolicySchema.partial();
-export const FeedPenaltyWeightsPatchSchema = FeedPenaltyWeightsSchema.partial();
-export const FeedCurationPatchSchema = FeedCurationPolicySchema.omit({ mmr_weights: true }).partial().extend({
-  mmr_weights: FeedPenaltyWeightsPatchSchema.optional(),
-});
-export const VerticalPolicyOverrideSchema = z.strictObject({
-  triage: FeedScreeningPatchSchema.optional(),
-  curate: FeedCurationPatchSchema.optional(),
-});
 export const EffectiveFeedPolicySchema = z.strictObject({
   triage: FeedScreeningPolicySchema,
-  curate: FeedCurationPolicySchema,
+  curate_articles: FeedCurationPolicySchema,
 });
 export const PlanningRunOverridesSchema = z.strictObject({
   freshness_hours: PositiveSchema.optional(),

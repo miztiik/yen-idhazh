@@ -10,7 +10,8 @@ is the complete versioned route inventory.
 ## Independent fetch and parse endpoints
 
 `POST /api/2026-10-20/fetch` requires UUIDv4 `request_id` and
-`correlation_id`, an active configured `feed_id`, and `kind`.
+`correlation_id`, an active configured `feed_id`, and `fetch_item_type`
+(`feed` or `article`).
 There is no public `source_id` alias. A feed request uses the configured
 URL. An article request uses either an explicit permitted operator URL or
 the complete server-owned `batch_id` and `offer_id` pair, not both.
@@ -27,7 +28,9 @@ URL hash, byte limit and identities, then parses without any network call.
 Missing receipts return HTTP 404; unavailable fetch content returns HTTP 409.
 Malformed controls and damaged receipts fail explicitly.
 
-Feed parsing returns sanitized, body-free offers and one parsed `batch_id`.
+Feed parsing returns sanitized, body-free offers, discovery evidence and one
+parsed `batch_id`. Article parsing completes that same batch without depending
+on feed classification labels.
 Fetch each offer by its server-owned reference, then parse each fetched
 article. Concurrent article parses atomically update the same complete feed
 batch. Selection refuses while any offer is still pending. A separate
@@ -49,9 +52,9 @@ The body-bearing fetch receipt remains private for the parse operation.
 ## Durable replay and interrupted requests
 
 `planner-operations.sqlite` lives under the configured output root.
-Native `PlannerOperation` and `FetchedDocument` models declare its private
-records; named tests bind their TypeScript copies. Reads use one indexed
-request key, never a history walk.
+TypeScript contracts declare its private `PlannerOperation` and
+`FetchedDocument` records. Reads use one indexed request key, never a history
+walk.
 
 The key is shared across fetch, parse and keyed plans. Reuse with different
 input, operation or configuration returns HTTP 409. A short transaction

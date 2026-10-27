@@ -83,12 +83,12 @@ test("one revision proves absent days, every sibling and sparse staging without 
     await stageNamedFiles(root, paths);
     expect((await readPlannerDay(root, entry, { day, raw_revision: revision, raw_files: paths }, PlanRunRowContract)).rows).toHaveLength(2);
     const inputs = await loadPlanInputs(fileURLToPath(new URL("../../../", import.meta.url)));
-    inputs.clock_config.collect.seen_window_days = 0;
+    inputs.harvest.config.discovered_articles.lookback_days = 0;
     inputs.clock_config.collect.published_window_days = 0;
     await stagePlannerHistory(root, inputs, `${day}T12:00:00Z`);
     const staged = await readPlannerDay(root, registration("discovered-articles"), { day, raw_revision: revision }, DiscoveredArticleRowContract);
     expect(staged).toMatchObject({ complete: true, rows: [discoveryRow] });
-    inputs.settings.inputs.seen_days = [{ day, raw_revision: revision, raw_files: discoveryPaths }];
+    inputs.settings.inputs.discovered_days = [{ day, raw_revision: revision, raw_files: discoveryPaths }];
     await expect(stagePlannerHistory(root, inputs, `${day}T12:00:00Z`)).rejects.toMatchObject({
       errors: expect.arrayContaining([expect.objectContaining({
         message: "Authored raw history revision differs from the captured staging revision",

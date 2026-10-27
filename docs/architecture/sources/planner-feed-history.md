@@ -3,10 +3,16 @@
 **Last Updated**: 2026-10-26
 
 Which saved observations can change feed rest and measured reliability?
-The isolated planner reads only its current `feed-health-state` format.
+The isolated planner reads only its current `feed-health-state` format and its
+planner-owned `discovered-articles` ledger. The native Python `seen` ledger
+remains separate and is not the planner's discovery source.
 The global Python `feed-health` ledger and public health JSON are unchanged.
 
 ## Named evidence and independent windows
+
+Discovery reads the configured `discovered_articles.lookback_days` of prior
+UTC days plus today. It retains the earliest known timestamp by canonical URL;
+another feed or fetch cannot renew an article's age.
 
 Service settings name bounded UTC days, compact indexes and either raw
 indexes or explicit complete raw-file lists. The workflow resolves represented

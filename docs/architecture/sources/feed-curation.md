@@ -32,9 +32,8 @@ never becomes a ranking penalty.
 
 Canonical URL duplicates cannot buy more allowance. Candidates are ordered
 by numeric priority with the supplied candidate identity breaking ties.
-Each feed receives its configured base allowance plus at most one declared
-unique-primary-evidence bonus. The witness must be absent from other feeds'
-admitted evidence; no story group is inferred.
+Each feed receives its configured base allowance. Candidate labels and
+primary-document evidence do not increase that allowance.
 
 Candidates beyond that allowance receive a grouped quota exclusion.
 Vertical, desk, lens, event, entity and carrier-group allowances are not
@@ -43,14 +42,16 @@ planner decisions in this format.
 ## Marginal choices and concentration
 
 Each choice recomputes remaining candidates against the actual chosen set.
-The retained numeric adjustments cover feed reliability, publisher exposure,
-source kind and parent domain. Source kind has no admission, authority or
-quota shortcut. An unavailable domain or publisher produces a null component,
-not a fabricated no-overlap measurement.
+The retained numeric adjustments cover feed reliability, publisher exposure
+and website-group exposure. Website groups are recomputed from canonical URLs
+using the configured private-suffix rule; supplied hints cannot override
+them. Feed kind, form and other classification labels do not affect admission,
+authority or ranking. An unavailable group or publisher produces a null
+component, not a fabricated no-overlap measurement.
 
-Configured source and parent-domain shares bound the planned count.
+Configured source and website-group shares bound the planned count.
 The minimum-distinct-source preference and source-share cap relax only in
-their configured order. The parent-domain cap does not silently disappear.
+their configured order. The website-group cap does not silently disappear.
 Exploration reserves its configured final share, rounded down, for viable
 feeds not yet represented. It bypasses no admission or cap.
 

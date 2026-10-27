@@ -10,7 +10,9 @@ import { sourceSnapshot } from "../harvest-feeds/load-harvest-inputs";
 import { canonicalizeUrl } from "../harvest-feeds/url-cleaner";
 import { matchUrlExclusion } from "../harvest-feeds/url-exclusions";
 import { recordRejection } from "../harvest-feeds/record-rejection";
-import { readSeenEvidence, rememberFirstSight, requiredSeenDays } from "../read-ledger-history/read-seen-evidence";
+import { readDiscoveredEvidence, rememberDiscoveries } from "../read-ledger-history/read-discovered-evidence";
+import { requiredUtcDays } from "../utc-instant";
+import { resolveArticleEvidence } from "../website-group";
 import { plannerMemory } from "../planner-memory";
 import { stageStore } from "./stage-store";
 import { operationConfigFingerprint } from "./operation-context";
@@ -43,10 +45,10 @@ export async function createParsedFeedBatch(input: {
     offers.push({ offer_id: deriveCandidateId(state.context.run_id, source.source_id, entry.entry_ordinal),
       source, entry: PlannerFeedEntrySchema.parse(entry), state: "pending", fetch_request_id: null });
   }
-  const seen = await readSeenEvidence({
-    root: inputs.root, files: inputs.settings.inputs.seen_files, days: inputs.settings.inputs.seen_days,
+  const discovered = await readDiscoveredEvidence({
+    root: inputs.root, discovered_files: inputs.settings.inputs.discovered_files, discovered_days: inputs.settings.inputs.discovered_days,
     registration: inputs.registrations.discovered_articles, now: state.context.now,
-    lookback_days: inputs.clock_config.collect.seen_window_days, concurrency: inputs.harvest.config.harvest.concurrency,
+    lookback_days: inputs.harvest.config.discovered_articles.lookback_days, concurrency: inputs.harvest.config.harvest.concurrency,
     own_rows: plannerMemory(inputs).discoveries(),
   });
   const sightings = offers.flatMap(offer => {
@@ -56,13 +58,15 @@ export async function createParsedFeedBatch(input: {
       url_key: identity.url_key, first_seen_at: input.observed_at, date: input.observed_at.slice(0, 10),
     })];
   });
-  const saved = await rememberFirstSight(seen.rows, sightings, state.context, {
+  const saved = await rememberDiscoveries(discovered.rows, sightings, state.context, {
     outputRoot: inputs.outputRoot, registryEntry: inputs.registrations.discovered_articles, ledgerSettings: inputs.ledgerSettings,
   });
-  plannerMemory(inputs).rememberDiscoveries(saved.rows, requiredSeenDays(state.context.now, inputs.clock_config.collect.seen_window_days)[0]!);
+  plannerMemory(inputs).rememberDiscoveries(saved.rows, requiredUtcDays(
+    state.context.now, inputs.harvest.config.discovered_articles.lookback_days,
+  )[0]!);
   return stageStore(inputs).write("parsed", ParsedFeedBatchSchema, {
     batch_id: randomUUID(), context: state.context, config_sha256: operationConfigFingerprint(inputs, runtime), request: {},
-    candidates: [], observations: {}, evidence: {}, seen: { availability: "available", rows: saved.rows },
+    candidates: [], observations: {}, evidence: {}, discovered: { availability: "available", rows: saved.rows },
     history_rows: state.history.rows, history_days: state.history.days, work_rows: state.work.rows(), exclusions: state.work.exclusions(),
     offers, feed_fetch_request_id: input.fetched_request_id, input_complete: offers.length === 0,
   });
@@ -78,9 +82,14 @@ export function updateFeedOffer(
     const retained = current.candidates.filter(candidate => candidate.candidate_id !== offerId);
     const candidates = result?.candidate ? [...retained, result.candidate] : status === "fetched" || status === "rejected" ? retained : current.candidates;
     const observations = Object.fromEntries(Object.entries(current.observations).filter(([id]) => id !== offerId));
+    const evidence = { ...current.evidence };
+    if (result?.candidate) evidence[offerId] = resolveArticleEvidence(
+      result.candidate, evidence[offerId], inputs.harvest.config.curate_articles.website_grouping.include_private_suffixes,
+    );
+    else if (status === "fetched" || status === "rejected") delete evidence[offerId];
     if (result?.candidate) observations[offerId] = result.observation;
     return {
-      ...current, offers, candidates: candidates.sort((a, b) => a.entry_ordinal - b.entry_ordinal), observations,
+      ...current, offers, candidates: candidates.sort((a, b) => a.entry_ordinal - b.entry_ordinal), observations, evidence,
       input_complete: offers.every(offer => offer.state === "parsed" || offer.state === "rejected"),
       work_rows: state.work.rows(), exclusions: state.work.exclusions(),
     };

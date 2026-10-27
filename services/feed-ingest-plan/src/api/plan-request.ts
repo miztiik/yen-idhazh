@@ -33,7 +33,7 @@ export function resolvePlanRequest(raw: unknown, config: FeedIngestConfig) {
   }
   return {
     ...request, shards: partition.dispatch_count, partition_strategy: partition.strategy,
-    article_limit: request.article_limit ?? config.curate.article_limit,
+    article_limit: request.article_limit ?? config.curate_articles.article_limit,
   };
 }
 

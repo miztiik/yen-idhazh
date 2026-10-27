@@ -9,7 +9,9 @@ import { harvestFeeds } from "./harvest-feeds/harvest-pool";
 import { sourceSnapshot } from "./harvest-feeds/load-harvest-inputs";
 import { ArticleParserPool } from "./harvest-feeds/article-parser-pool";
 import { resolveRunContext } from "./resolve-run-context";
-import { readSeenEvidence, rememberFirstSight, requiredSeenDays, foldFirstSight } from "./read-ledger-history/read-seen-evidence";
+import { readDiscoveredEvidence, rememberDiscoveries, foldDiscoveryHistory } from "./read-ledger-history/read-discovered-evidence";
+import { requiredUtcDays } from "./utc-instant";
+import { resolveArticleEvidence } from "./website-group";
 import { readExclusionEvidence } from "./read-ledger-history/read-exclusion-evidence";
 import { resolvePlanRequest, PlanError } from "./api/plan-request";
 import { createStageLogger } from "./logging/structured-logger";
@@ -71,7 +73,7 @@ export async function runFeedPlan(raw: unknown, inputs: PlanInputs, runtime: Pla
   const parserPool = runtime.parser_pool ?? new ArticleParserPool(inputs.settings.listener.parser_concurrency);
   let work: ReturnType<typeof createRunHealth> | undefined;
   let history: Awaited<ReturnType<typeof prepareFeedHealthState>> | undefined;
-  let discovery: Awaited<ReturnType<typeof readSeenEvidence>> | undefined;
+  let discovery: Awaited<ReturnType<typeof readDiscoveredEvidence>> | undefined;
   const sightings: DiscoveredArticleRow[] = [];
   async function phase<T>(operation: PlanRunRow["api_timings"][number]["operation"], execute: () => Promise<T>): Promise<T> {
     const begin = performance.now();
@@ -93,10 +95,10 @@ export async function runFeedPlan(raw: unknown, inputs: PlanInputs, runtime: Pla
   try {
     const loaded = await Promise.all([
       phase("feed-health-before-fetch", () => prepareFeedHealthState(inputs, context.now)),
-      readSeenEvidence({
-        root: inputs.root, files: inputs.settings.inputs.seen_files, days: inputs.settings.inputs.seen_days,
+      readDiscoveredEvidence({
+        root: inputs.root, discovered_files: inputs.settings.inputs.discovered_files, discovered_days: inputs.settings.inputs.discovered_days,
         registration: inputs.registrations.discovered_articles, now: context.now,
-        lookback_days: inputs.clock_config.collect.seen_window_days, concurrency: inputs.harvest.config.harvest.concurrency,
+        lookback_days: inputs.harvest.config.discovered_articles.lookback_days, concurrency: inputs.harvest.config.harvest.concurrency,
         own_rows: memory.discoveries(),
       }),
       readExclusionEvidence({
@@ -143,9 +145,9 @@ export async function runFeedPlan(raw: unknown, inputs: PlanInputs, runtime: Pla
         eventType, feed_id: details?.source_id ?? null, output_count: details?.output_count ?? null,
       }),
     }, runtime.boundary));
-    const seenRows = memory.rememberDiscoveries([...discovery.rows, ...sightings],
-      requiredSeenDays(context.now, inputs.clock_config.collect.seen_window_days)[0]!);
-    const saved = await rememberFirstSight(discovery.rows, seenRows, context, {
+    const discoveredRows = memory.rememberDiscoveries([...discovery.rows, ...sightings],
+      requiredUtcDays(context.now, inputs.harvest.config.discovered_articles.lookback_days)[0]!);
+    const saved = await rememberDiscoveries(discovery.rows, discoveredRows, context, {
       outputRoot: inputs.outputRoot, registryEntry: inputs.registrations.discovered_articles, ledgerSettings: inputs.ledgerSettings,
     });
     files.discovered_articles = saved.result;
@@ -159,10 +161,12 @@ export async function runFeedPlan(raw: unknown, inputs: PlanInputs, runtime: Pla
       candidates: harvest.candidates,
       observations: Object.fromEntries(harvest.articles.filter(article => article.candidate !== null)
         .map(article => [article.candidate!.candidate_id, article.observation])),
-      seen: { availability: "available", rows: foldFirstSight([...seenRows, ...memory.discoveries()]) },
-      evidence: Object.fromEntries(harvest.candidates.flatMap(candidate => {
+      discovered: { availability: "available", rows: foldDiscoveryHistory([...discoveredRows, ...memory.discoveries()]) },
+      evidence: Object.fromEntries(harvest.candidates.map(candidate => {
         const supplied = runtime.evidence?.get(candidate.candidate_id);
-        return supplied === undefined ? [] : [[candidate.candidate_id, supplied]];
+        return [candidate.candidate_id, resolveArticleEvidence(
+          candidate, supplied, inputs.harvest.config.curate_articles.website_grouping.include_private_suffixes,
+        )];
       })),
       history_rows: historyRows, history_days: history.days, work_rows: currentWork.rows(), exclusions: currentWork.exclusions(),
     });
@@ -217,7 +221,7 @@ export async function runFeedPlan(raw: unknown, inputs: PlanInputs, runtime: Pla
     }
     if (discovery !== undefined && files.discovered_articles === undefined) {
       try {
-        const saved = await rememberFirstSight(discovery.rows, sightings, context, {
+        const saved = await rememberDiscoveries(discovery.rows, sightings, context, {
           outputRoot: inputs.outputRoot, registryEntry: inputs.registrations.discovered_articles, ledgerSettings: inputs.ledgerSettings,
         });
         files.discovered_articles = saved.result;
