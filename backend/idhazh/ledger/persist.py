@@ -431,22 +431,27 @@ def _inside(day: str, covers: str) -> bool:
 
 
 def _refuse_rows_outside_the_period[C: LedgerContract](
-    rows: Sequence[LedgerStoredRow], *, model: type[C], ledger: LedgerName, covers: str
+    rows: Sequence[object], *, model: type[C], ledger: LedgerName, covers: str
 ) -> None:
     """Every row is one `model` row, filed into this ledger inside this period, or none is kept.
 
     A compact file replaces its whole period, so a row filed anywhere else is
     refused rather than allowed to overwrite a finished period with a stranger's.
     """
-    strays = sorted({type(held.row).__name__ for held in rows if type(held.row) is not model})
+    stored_rows: list[LedgerStoredRow] = []
+    for held in rows:
+        if not isinstance(held, StoredRow):
+            raise ValueError("compact rows require original writer identity")
+        stored_rows.append(held)
+    strays = sorted(
+        {type(held.row).__name__ for held in stored_rows if type(held.row) is not model}
+    )
     if strays:
         raise TypeError(f"one file holds rows of one contract, and {model.__name__} met {strays}")
-    if any(not isinstance(held, StoredRow) for held in rows):
-        raise ValueError("compact rows require original writer identity")
     outside = sorted(
         {
             f"{held.identity.ledger.value} {held.identity.covers}"
-            for held in rows if isinstance(held, StoredRow)
+            for held in stored_rows
             if held.identity.ledger is not ledger or not _inside(held.identity.covers, covers)
         }
     )
@@ -461,11 +466,10 @@ def _refuse_rows_outside_the_period[C: LedgerContract](
 def _stored(rows: Sequence[LedgerStoredRow]) -> list[dict[str, Any]]:
     """Each row as the cells a file holds: its identity cells, then its contract's own."""
     return [
-        (
-            held.identity.model_dump(mode="json")
-            | (held.provenance.model_dump(mode="json") if held.provenance is not None else {})
-            if isinstance(held, StoredRow) else {}
-        ) | held.row.model_dump(mode="json") for held in rows
+        held.identity.model_dump(mode="json")
+        | (held.provenance.model_dump(mode="json") if held.provenance is not None else {})
+        | held.row.model_dump(mode="json")
+        for held in rows
     ]
 
 

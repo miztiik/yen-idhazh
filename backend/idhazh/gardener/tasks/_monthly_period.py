@@ -450,7 +450,7 @@ def absorb(
     if ledger.paths.is_planner_ledger(tree.ledger):
         if most is None:
             raise ValueError("planner month maintenance requires its configured raw-file limit")
-        stops: list[Stop] = []
+        planner_stops: list[Stop] = []
         for month in months:
             stop = tree.compact_planner_period(
                 Period.MONTHLY,
@@ -459,12 +459,12 @@ def absorb(
                 most=most,
             )
             if stop is not None:
-                stops.append(stop)
+                planner_stops.append(stop)
                 if stop.fault is not None or stop.because is StopReason.CEILING:
-                    return tuple(stops)
+                    return tuple(planner_stops)
         if choice.stopped_because is StopReason.CEILING and choice.resume_from is not None:
-            stops.append(Stop(StopReason.CEILING, choice.resume_from))
-        return tuple(stops)
+            planner_stops.append(Stop(StopReason.CEILING, choice.resume_from))
+        return tuple(planner_stops)
     tree.name_months(months)
     closing: list[str] = []
     for month in months:
