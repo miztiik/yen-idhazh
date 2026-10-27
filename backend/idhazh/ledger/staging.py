@@ -83,6 +83,14 @@ REGISTRY: Final[dict[LedgerName, LedgerStaging]] = {
         symbol=None,
         job_labels=frozenset(),
     ),
+    LedgerName.FEED_INGEST_PLAN_REJECTED_ARTICLES: LedgerStaging(
+        writer=(
+            "TypeScript services/feed-ingest-plan rejected metadata writer through "
+            "packages/ledger-file-writer; no Python producer symbol"
+        ),
+        symbol=None,
+        job_labels=frozenset(),
+    ),
     LedgerName.FEED_INGEST_PLAN_FEED_HEALTH_STATE: LedgerStaging(
         writer=(
             "TypeScript services/feed-ingest-plan run/day health writer through "

@@ -94,7 +94,7 @@ Table A
 | A1 | `select-articles` | Accepts the complete parsed `batch_id`; returns a fresh selected ID, metadata-only articles, grouped exclusions and request report. No fetch, model call or automatic health write. |
 | A2 | `partition-articles` | Accepts a selected ID and optional configured strategy/count; returns assignments and estimated work without reranking. |
 | A3 | `feed-health-state` | Accepts a batch ID and explicit `summarize` or `record` action, defaulting to record; returns current health, request spend, `reliability.window_days` and actual receipts when saved. |
-| A4 | `persist-selected-articles` | Accepts a partitioned ID; writes strict selected metadata and the same result's text artifact, returning exact relative paths and a standalone run outcome where applicable. |
+| A4 | `persist-selected-articles` | Accepts a partitioned ID; writes selected and rejected metadata plus the selected text artifact, returning exact relative paths, `rejected_files` receipts even for zero-selected results, and a standalone run outcome where applicable. |
 
 Each finalized execution is immutable. A fresh result must not overwrite a
 prior artifact or double-count its HTTP work. Replaying the same finalized

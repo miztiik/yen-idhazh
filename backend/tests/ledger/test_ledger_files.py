@@ -505,6 +505,7 @@ def test_every_ledger_the_registry_files_under_the_two_roots_has_a_key_and_a_rea
     assert planner == {
         LedgerName.FEED_INGEST_PLAN_DISCOVERED_ARTICLES,
         LedgerName.FEED_INGEST_PLAN_SELECTED_ARTICLES,
+        LedgerName.FEED_INGEST_PLAN_REJECTED_ARTICLES,
         LedgerName.FEED_INGEST_PLAN_FEED_HEALTH_STATE,
         LedgerName.FEED_INGEST_PLAN_PLAN_RUNS,
     }

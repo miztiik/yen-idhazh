@@ -6,6 +6,8 @@ import { createHash } from "node:crypto";
 import { PlanError } from "./plan-request";
 import { PlannerOperationSchema, RequestIdSchema } from "./operation-contracts";
 import type { PlannerOperation } from "./operation-contracts";
+import { SourceArticleOutcomeSchema } from "@idhazh/common-contracts";
+import type { SourceArticleOutcome } from "@idhazh/common-contracts";
 
 type RequestIdentity = Pick<PlannerOperation, "request_id" | "operation" | "input_sha256" | "config_sha256">;
 export type PreparedOperation = Readonly<RequestIdentity & { capture: () => PlannerOperation }>;
@@ -49,9 +51,27 @@ export async function openOperationStore(outputRoot: string) {
     }
     return previous;
   }
+  function settleSourceOutcome(id: string, outcome: SourceArticleOutcome): SourceArticleOutcome {
+    const checked = SourceArticleOutcomeSchema.parse(outcome);
+    try { database.exec("BEGIN IMMEDIATE"); }
+    catch (error) { refuseBusy(error); }
+    let committed = false;
+    try {
+      const capture = get(id);
+      if (capture === null || capture.state !== "complete" || capture.operation !== "fetch"
+        || capture.artifact?.fetch_item_type !== "article") {
+        throw new PlanError("ARTIFACT_NOT_FOUND", "A source outcome requires its completed article capture", "fetch_request_id");
+      }
+      const settled = capture.source_outcome ?? checked;
+      if (capture.source_outcome === null) put({ ...capture, source_outcome: settled });
+      database.exec("COMMIT");
+      committed = true;
+      return settled;
+    } finally { if (!committed && database.inTransaction) database.exec("ROLLBACK"); }
+  }
   async function execute(
     proposed: PlannerOperation | PreparedOperation,
-    work: (record: PlannerOperation) => Promise<Pick<PlannerOperation, "response_json" | "artifact">>,
+    work: (record: PlannerOperation) => Promise<Pick<PlannerOperation, "response_json" | "artifact"> & Partial<Pick<PlannerOperation, "source_outcome">>>,
   ): Promise<PlannerOperation> {
     try { database.exec("BEGIN IMMEDIATE"); }
     catch (error) { refuseBusy(error); }
@@ -81,6 +101,15 @@ export async function openOperationStore(outputRoot: string) {
       try { database.exec("BEGIN IMMEDIATE"); }
       catch (error) { refuseBusy(error); }
       committed = false;
+      const parentId = complete.artifact?.parent_fetch_request_id;
+      if (complete.artifact?.fetch_item_type === "article" && parentId != null) {
+        const parent = get(parentId);
+        if (parent?.state !== "complete" || parent.operation !== "fetch" || parent.artifact?.fetch_item_type !== "feed"
+          || parent.run_id !== complete.run_id || parent.correlation_id !== complete.correlation_id) {
+          throw new PlanError("ARTIFACT_INVALID", "Article capture lacks its original feed receipt", "fetch_request_id");
+        }
+        put({ ...parent, article_capture_request_ids: [...new Set([...parent.article_capture_request_ids, complete.request_id])] });
+      }
       put(complete);
       database.exec("COMMIT");
       committed = true;
@@ -89,6 +118,6 @@ export async function openOperationStore(outputRoot: string) {
       if (!committed && database.inTransaction) database.exec("ROLLBACK");
     }
   }
-  return { get, execute, close: () => database.close() };
+  return { get, execute, settleSourceOutcome, close: () => database.close() };
 }
 export type OperationStore = Awaited<ReturnType<typeof openOperationStore>>;

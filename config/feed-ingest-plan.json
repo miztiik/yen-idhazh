@@ -95,15 +95,18 @@
   "triage": {
     "min_words": 180,
     "blocked_http_statuses": [401, 403, 429],
-    "max_age_hours": 24,
     "recency_half_life_hours": 18,
     "recency_weight": 0.6
   },
   "curate_articles": {
     "article_limit": 100,
+    "feed_quality_tiers": [
+      { "tier": 1, "share_pct": 60, "buffer_pct": 10, "ladder_hours": [24, 36, 48] },
+      { "tier": 2, "share_pct": 30, "buffer_pct": 5, "ladder_hours": [24, 30] },
+      { "tier": 3, "share_pct": 10, "buffer_pct": 5, "ladder_hours": [24] }
+    ],
     "source_reliability_penalty_enabled": true,
     "source_authority_weight": 1.0,
-    "base_source_allowance": 3,
     "soft_caps": {
       "max_source_share": 0.10,
       "max_website_group_share": 0.15,

@@ -3,10 +3,20 @@ import { z } from "zod";
 import { CountSchema, NonEmptySchema, RunIdSchema, Sha256Schema, SlugSchema, TimestampSchema, UrlSchema } from "./primitives";
 import { FetchFailureSchema } from "./harvest-diagnostics.schema";
 import { RecordedInstantSchema } from "./recorded-instant.schema";
+import { SourceArticleRefusalReasonSchema } from "./rejection.schema";
 
 export const OPERATION_VERSION = "2026-10-27";
 const OperationVersionSchema = z.literal(OPERATION_VERSION).default(OPERATION_VERSION);
-export const PLANNER_OPERATION_VERSION = "2026-10-27";
+export const PLANNER_OPERATION_VERSION = "2026-10-27T18:30";
+export const SourceArticleOutcomeSchema = z.strictObject({
+  disposition: z.enum(["admitted", "source_refused"]),
+  reason_code: SourceArticleRefusalReasonSchema.nullable(), settled_at: RecordedInstantSchema,
+}).superRefine((value, ctx) => {
+  if ((value.disposition === "admitted") !== (value.reason_code === null)) {
+    ctx.addIssue({ code: "custom", message: "Only a source refusal carries a technical reason" });
+  }
+});
+export type SourceArticleOutcome = z.infer<typeof SourceArticleOutcomeSchema>;
 export const RequestIdSchema = z.uuid({ version: "v4" });
 export const FetchAttemptSchema = z.strictObject({
   phase: z.enum(["validation", "robots", "target"]), sequence: CountSchema, retry: CountSchema,
@@ -66,7 +76,17 @@ export const PlannerOperationSchema = z.strictObject({
   input_sha256: Sha256Schema, config_sha256: Sha256Schema, run_id: RunIdSchema,
   correlation_id: RequestIdSchema, created_at: RecordedInstantSchema, state: z.enum(["started", "complete"]),
   response_json: z.string().nullable(), artifact: FetchedDocumentSchema.nullable(),
+  source_outcome: SourceArticleOutcomeSchema.nullable().default(null),
+  article_capture_request_ids: z.array(RequestIdSchema).default([]),
 }).superRefine((value, ctx) => {
+  if (new Set(value.article_capture_request_ids).size !== value.article_capture_request_ids.length
+    || (value.article_capture_request_ids.length > 0
+      && (value.state !== "complete" || value.operation !== "fetch" || value.artifact?.fetch_item_type !== "feed"))) {
+    ctx.addIssue({ code: "custom", message: "Only a completed feed capture has distinct bounded article receipt references" });
+  }
+  if (value.source_outcome !== null && (value.state !== "complete" || value.operation !== "fetch" || value.artifact?.fetch_item_type !== "article")) {
+    ctx.addIssue({ code: "custom", message: "A source outcome belongs only to a completed article capture" });
+  }
   if (value.state === "started" && (value.response_json !== null || value.artifact !== null)) {
     ctx.addIssue({ code: "custom", message: "started requests cannot carry completed output" });
   }
@@ -81,11 +101,11 @@ export const PlannerOperationSchema = z.strictObject({
 }).meta({
   version: PLANNER_OPERATION_VERSION,
   changelog: [
-    { version: PLANNER_OPERATION_VERSION, change: "Refuse prior operation formats after renaming fetch routing." },
+    { version: PLANNER_OPERATION_VERSION, change: "Settle original article outcomes and retain their bounded receipt membership on the feed capture." },
+    { version: "2026-10-27", change: "Refuse prior operation formats after renaming fetch routing." },
     { version: "2026-10-26", change: "Retain current fetched offer references through request replay." },
     { version: "2026-10-23T18:50", change: "Retain the original captured clock precision through replay." },
-    { version: "2026-10-23T09:22", change: "Retain measured retry waits on fetched artifacts." },
-    { version: "2026-10-23", change: "Declare durable keyed operator request replay." },
+    { version: "2026-10-23", change: "Earlier changes are in git." },
   ],
 });
 export type PlannerOperation = z.infer<typeof PlannerOperationSchema>;

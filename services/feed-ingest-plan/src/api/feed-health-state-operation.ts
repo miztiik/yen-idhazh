@@ -20,6 +20,7 @@ import { readDocumentHealthBatch } from "./document-operations";
 import { plannerMemory } from "../planner-memory";
 import { PlanError } from "./plan-request";
 import { rememberDocumentHealth } from "./document-state";
+import { restoreSourceHealth } from "./restore-source-health";
 
 export async function prepareFeedHealthState(inputs: PlanInputs, now: string, current?: {
   context: RunContext; rows: readonly FeedHealthStateRow[];
@@ -36,7 +37,8 @@ export async function prepareFeedHealthState(inputs: PlanInputs, now: string, cu
   });
   if (inputs.settings.inputs.feed_health_input_gap) {
     for (const [id, source] of result.sources) result.sources.set(id, {
-      ...source, reliability: source.reliability === null ? null : { ...source.reliability, complete: false },
+      ...source, article_pass_rate: null,
+      reliability: source.reliability === null ? null : { ...source.reliability, complete: false },
     });
     result.request_report.complete = false;
     for (const source of result.request_report.feeds) {
@@ -91,8 +93,11 @@ export async function executeFeedHealthState(raw: unknown, inputs: PlanInputs, r
   }
   const held = stageStore(inputs).inspect(request.batch_id);
   if (held.stage === "parsed") {
-    const parsed = ParsedFeedBatchSchema.parse(held.value);
+    let parsed = ParsedFeedBatchSchema.parse(held.value);
     requireStageConfiguration(parsed, inputs, runtime);
+    if (stageStore(inputs).ownership(parsed.batch_id).health_fingerprint === null) {
+      parsed = stageStore(inputs).replace("parsed", ParsedFeedBatchSchema, await restoreSourceHealth(parsed, inputs));
+    }
     const summary = await prepareFeedHealthState(inputs, utcTimestamp(runtime.selection_clock ?? runtime.clock),
       { context: parsed.context, rows: parsed.work_rows });
     const rows = captureHealthRows(parsed.work_rows, summary.sources);

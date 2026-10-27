@@ -29,6 +29,11 @@ delivery integration. Selection rows 3 and 4 continue here while that child
 works. The child owns removal of the planner-specific Git implementation and
 its redundant delivery tests; these are not duplicated in the selection PRs.
 
+On 2026-10-27 UTC the maintainer directed delivery of the agreed row 4 without
+the proposed durable health-finalization snapshot or tests for that extension.
+Original capture outcomes remain durable; health-write ownership retains its
+existing process-local scope. This is not a new selection replay framework.
+
 ### Table B - Implementation requirements
 
 | Id | Surface | Required behavior |
@@ -156,8 +161,8 @@ flowchart TD
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | D1 | 1 | Deliver reviewed publisher IDs | - | DONE | Eight reviewed publisher IDs now bind 20 active and retired feeds; unreviewed entries remain unknown. | feed-selection-delivery | #1762 | - |
 | D2 | 2 | Finish TypeScript contract and ledger-IO integration | 1 | DONE | Raw-day membership tests and all required PR checks passed; the change is merged. | feed-selection-delivery | #1763 | - |
-| D3 | 3 | Remove feed labels and rename article/discovery controls | 2 | IN PROGRESS | Sole TypeScript contract authority is available. | feed-selection-controls | - | - |
-| D4 | 4 | Implement allocation, freshness, cutoff and rejection persistence | 1, 2, 3 | PENDING | Consume PR1's catalog and the verified integration; policy is settled. | - | - | - |
+| D3 | 3 | Remove feed labels and rename article/discovery controls | 2 | DONE | All required checks passed on source 3e612aa4f5d9092d345a9f2ef9790125cb8847c1; merged as d484600018cd9a4264266493d2a7522a3a5d12f7 and verified on remote main. | feed-selection-controls | #1766 | - |
+| D4 | 4 | Implement allocation, freshness, cutoff and rejection persistence | 1, 2, 3 | IN REVIEW | Allocation, source outcomes and five-ledger persistence are implemented. Contract and writer suites plus targeted planner and native-hook cases pass; required CI and remote-main verification remain. | feed-selection-controls | - | - |
 
 Implementation gates, not this documentation delivery: inspect `npm run test:changed -- --list` from `frontend/`, run the selected checks, and run each row's named Bun cases. Type-check affected packages with `bun run --cwd <package> check`. CI runs the full merge-candidate suite once. No row requires a live feed probe or a workflow dispatch.
 

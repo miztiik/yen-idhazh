@@ -3,8 +3,9 @@ import {
   DiscoveredArticleRowContract, DiscoveredArticleRowSchema, FeedHealthStateRowContract,
   FeedHealthStateRowSchema, PlanRunRowContract, PlanRunRowSchema,
   SelectedArticleRowContract, SelectedArticleRowSchema, SelectedArtifactArticleSchema,
-  deriveUrlKey, selectedArticleMetadata,
+  RejectedArticleRowContract, RejectedArticleRowSchema, deriveCandidateId, deriveUrlKey, selectedArticleMetadata,
 } from "@idhazh/common-contracts";
+import type { PlannerLedgerName } from "@idhazh/common-contracts";
 import type { LedgerRowContract } from "../src/ledger-types";
 
 export function selectedArticle(day = "2026-10-20") {
@@ -21,14 +22,14 @@ export function selectedArticle(day = "2026-10-20") {
         { term: "domain", value: -0.25 },
       ], recency_score: 1, feed_authority_score: 0.5,
     },
-    feed_allowance: 3, exploration_slot: false, cap_relaxations: [],
+    feed_limit: 3, exploration_slot: false, cap_relaxations: [],
     timing_at: `${day}T10:00:00.123Z`, timing_basis: "first_seen", age_hours: 0,
-    allowance_reasons: [],
+    freshness_cutoff_at: `${day}T00:00:00Z`,
   });
 }
 
 export type PlannerRecording = {
-  name: "discovered-articles" | "selected-articles" | "feed-health-state" | "plan-runs";
+  name: PlannerLedgerName;
   row: Record<string, unknown>;
   contract: LedgerRowContract<Record<string, unknown>>;
 };
@@ -72,6 +73,15 @@ export function plannerRecordings(day = "2026-10-20", attempt = 1, execution = 1
         date: day, attempt, lifecycle_window_days: 31, reliability_floor: 0.5,
         reliability_penalty_enabled: true, evaluated_at: at, request_report_closed_days: 7,
         reliability_window_days: 30, selection_started_at_utc: null,
+      }),
+    },
+    {
+      name: "rejected-articles", contract: RejectedArticleRowContract,
+      row: RejectedArticleRowSchema.parse({
+        run_id, attempt, date: day, candidate_id: deriveCandidateId(run_id, "fixture-feed", 1),
+        url_key: deriveUrlKey("https://example.org/article/2"), feed_id: "fixture-feed",
+        stage: "curate-article-portfolio", reason_code: "REJECTED_GLOBAL_CAPACITY_REACHED",
+        freshness_cutoff_at: `${day}T00:00:00Z`,
       }),
     },
   ];

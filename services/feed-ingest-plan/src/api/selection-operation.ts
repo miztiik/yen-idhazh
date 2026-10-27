@@ -13,6 +13,7 @@ import { prepareFeedHealthState } from "./feed-health-state-operation";
 import { appendDocumentTiming, currentExecutionState, executionHasArtifact, registerStageExecution } from "./document-state";
 import { resolveRunContext } from "../resolve-run-context";
 import { recordFinalizedDocumentWork } from "./record-standalone-run";
+import { restoreSourceHealth } from "./restore-source-health";
 
 export function requireStageConfiguration(batch: { config_sha256: string }, inputs: PlanInputs, runtime: PlanRuntime) {
   if (!inputs.settings.enabled) throw new PlanError("PLANNER_DISABLED", "Planner is disabled", "enabled");
@@ -25,8 +26,11 @@ export async function executeSelection(raw: unknown, inputs: PlanInputs, runtime
   const started = performance.now();
   const request = StageReferenceRequestSchema.parse(raw);
   const store = stageStore(inputs);
-  const parsed = store.read("parsed", request.batch_id, ParsedFeedBatchSchema);
+  let parsed = store.read("parsed", request.batch_id, ParsedFeedBatchSchema);
   requireStageConfiguration(parsed, inputs, runtime);
+  if (store.ownership(parsed.batch_id).health_fingerprint === null) {
+    parsed = store.replace("parsed", ParsedFeedBatchSchema, await restoreSourceHealth(parsed, inputs));
+  }
   if (!parsed.input_complete) throw new PlanError("BATCH_INCOMPLETE", "Every offered article needs a terminal fetch/parse result before selection", "batch_id");
   const originalClaim = store.claimSelection(parsed.batch_id);
   const captured = (runtime.selection_clock ?? runtime.clock)?.() ?? new Date();

@@ -1,7 +1,8 @@
 /** Which writer and recorded format identify one immutable ledger file? */
 import { z } from "zod";
+import { REJECTED_ARTICLE_VERSION } from "./rejected-article.schema";
 import {
-  PLANNER_LEDGER_VERSION, PLANNER_ENVELOPE_VERSION, PLAN_RUN_VERSION, SELECTED_ARTICLE_VERSION,
+  PLANNER_LEDGER_VERSION, PLANNER_ENVELOPE_VERSION, PLAN_RUN_VERSION, SELECTED_ARTICLE_VERSION, FEED_HEALTH_STATE_VERSION,
 } from "../version";
 import { RecordedInstantSchema } from "./recorded-instant.schema";
 import { CommitShaSchema, CountSchema, DateStampSchema, JobNameSchema, MonthStampSchema, NonEmptySchema, PositiveCountSchema, RunIdSchema, SchemaVersionSchema, ServerJobSchema, Sha256Schema, YearStampSchema, reject } from "./primitives";
@@ -12,7 +13,7 @@ export const LedgerNameSchema = z.enum([
   "counterfactual-scores", "scored-pairs", "fitted-thresholds", "holdout-pairs", "score-distribution",
   "archive", "metrics", "merge-line-holdout-scores", "traces", "day-metrics", "digest-fragments",
   "gardener", "run-plan", "run-shards", "council-run-records",
-  "discovered-articles", "selected-articles", "feed-health-state", "plan-runs",
+  "discovered-articles", "selected-articles", "rejected-articles", "feed-health-state", "plan-runs",
 ]);
 export const TierSchema = z.enum(["raw", "compact"]);
 export const PeriodSchema = z.enum(["daily", "monthly", "yearly"]);
@@ -90,16 +91,17 @@ export type WriterIdentity = z.infer<typeof WriterIdentitySchema>;
 export type RowIdentity = z.infer<typeof RowIdentitySchema>;
 
 export const PlannerLedgerNameSchema = z.enum([
-  "discovered-articles", "selected-articles", "feed-health-state", "plan-runs",
+  "discovered-articles", "selected-articles", "rejected-articles", "feed-health-state", "plan-runs",
 ]);
+export type PlannerLedgerName = z.infer<typeof PlannerLedgerNameSchema>;
 export const PLANNER_FOOTER_METADATA_KEYS = [
   "envelope_version", "schema_version", "tier", "ledger", "covers", "period",
   "file_id", "content_sha256", "writer", "writer_version", "compression", "updated_at",
 ] as const;
 export const PLANNER_OPTIONAL_FOOTER_METADATA_KEYS = ["period", "updated_at"] as const;
 export const PlannerFileEnvelopeSchema = z.strictObject({
-  version: z.enum([PLANNER_LEDGER_VERSION, PLANNER_ENVELOPE_VERSION]).default(PLANNER_ENVELOPE_VERSION),
-  row_schema_version: z.enum([PLANNER_LEDGER_VERSION, PLANNER_ENVELOPE_VERSION]),
+  version: z.enum([PLANNER_LEDGER_VERSION, "2026-10-26", PLANNER_ENVELOPE_VERSION]).default(PLANNER_ENVELOPE_VERSION),
+  row_schema_version: z.enum([PLANNER_LEDGER_VERSION, PLANNER_ENVELOPE_VERSION, PLAN_RUN_VERSION]),
   tier: TierSchema, ledger: PlannerLedgerNameSchema,
   covers: z.union([DateStampSchema, MonthStampSchema, YearStampSchema]),
   period: PeriodSchema.nullable().default(null), file_id: UuidSchema,
@@ -108,20 +110,15 @@ export const PlannerFileEnvelopeSchema = z.strictObject({
   writer_version: NonEmptySchema, compression: CompressionSchema,
   updated_at: RecordedInstantSchema.nullable().default(null),
 }).superRefine((value, ctx) => {
-  if (value.row_schema_version === PLANNER_ENVELOPE_VERSION
-    && (value.version === PLANNER_LEDGER_VERSION || !["selected-articles", "plan-runs"].includes(value.ledger))) {
-    reject(ctx, "current row stamp requires its declared ledger and envelope");
+  const rowVersions = {
+    "discovered-articles": PLANNER_LEDGER_VERSION, "selected-articles": SELECTED_ARTICLE_VERSION,
+    "rejected-articles": REJECTED_ARTICLE_VERSION, "feed-health-state": FEED_HEALTH_STATE_VERSION, "plan-runs": PLAN_RUN_VERSION,
+  } as const;
+  if ((value.version === PLANNER_LEDGER_VERSION && value.row_schema_version !== PLANNER_LEDGER_VERSION)
+    || (value.row_schema_version === PLANNER_ENVELOPE_VERSION && value.version !== PLANNER_ENVELOPE_VERSION)) {
+    reject(ctx, "row schema requires its declared envelope revision");
   }
-  if (value.ledger === "selected-articles" && value.row_schema_version !== SELECTED_ARTICLE_VERSION) {
-    reject(ctx, "selected-articles requires its current row schema");
-  }
-  if (value.ledger === "plan-runs" && value.row_schema_version !== PLAN_RUN_VERSION) {
-    reject(ctx, "plan-runs requires its current row schema");
-  }
-  if ((value.ledger === "discovered-articles" || value.ledger === "feed-health-state")
-    && value.row_schema_version !== PLANNER_LEDGER_VERSION) {
-    reject(ctx, "discovered and feed-health ledgers require their current row schema");
-  }
+  if (value.row_schema_version !== rowVersions[value.ledger]) reject(ctx, `${value.ledger} requires its current row schema`);
   if ((value.tier === "compact") !== (value.period !== null)) reject(ctx, "planner compact files require a period; raw files name none");
   const stamp = value.tier === "raw" || value.period === "daily" ? DateStampSchema
     : value.period === "monthly" ? MonthStampSchema : YearStampSchema;
@@ -131,7 +128,8 @@ export const PlannerFileEnvelopeSchema = z.strictObject({
 }).meta({
   version: PLANNER_ENVELOPE_VERSION,
   changelog: [
-    { version: PLANNER_ENVELOPE_VERSION, change: "Require the current row stamp for selected articles and plan runs." },
+    { version: PLANNER_ENVELOPE_VERSION, change: "Register rejected articles and current selection and article-outcome row stamps." },
+    { version: "2026-10-26", change: "Require the current row stamp for selected articles and plan runs." },
     { version: PLANNER_LEDGER_VERSION, change: "Declare planner-only file metadata without generic writer identity." },
   ],
 });

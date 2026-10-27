@@ -3,7 +3,7 @@ import { test, expect } from "bun:test";
 import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { readFeedIngestEvent } from "../../../packages/common-contracts/src/index";
+import { FeedIngestConfigSchema, readFeedIngestEvent } from "../../../packages/common-contracts/src/index";
 import { formatPlannerReport, writePlannerReport } from "../scripts/feed-ingest-plan-report";
 import { formatRam, formatResourceSummary } from "../scripts/feed-ingest-plan-resource-summary";
 import { formatWorkflowPolicy } from "../scripts/feed-ingest-plan-policy-report";
@@ -118,7 +118,7 @@ test("refuses mixed executions but permits concurrent stage ordering without fab
 test("disabled reporting reads no evidence and enabled reporting requires an explicit output path", async () => {
   const root = await mkdtemp(join(tmpdir(), "feed-report-"));
   try {
-    const config = await Bun.file(new URL("../../../config/feed-ingest-plan.json", import.meta.url)).json();
+    const config = FeedIngestConfigSchema.parse(await Bun.file(new URL("../../../config/feed-ingest-plan.json", import.meta.url)).json());
     const summary = join(root, "summary.md");
     const lines: string[] = [];
     await writePlannerReport({
@@ -145,13 +145,17 @@ test("disabled reporting reads no evidence and enabled reporting requires an exp
       }
     }
     const settings = await Bun.file(new URL("../../../config/idhazh.json", import.meta.url)).json();
-    const policy = formatWorkflowPolicy({ config,
+    const policy = formatWorkflowPolicy({ config: { ...config, curate_articles: {
+      ...config.curate_articles, feed_quality_tiers: config.curate_articles.feed_quality_tiers.map(rule =>
+        ({ ...rule, ladder_hours: [6, 12] })),
+    } },
       request: { freshness_hours: 2, article_limit: 10, shards: 4, partition_strategy: "bin-pack" },
       history: settings.collect, parser_concurrency: 4 }, true);
-    expect(policy.notice).toContain("maximum age 2 hours; 10 articles; 4 workers; bin-pack");
-    expect(policy.rows.find(([name]) => name === "Maximum article age")?.[1]).toBe("2 hours (workflow override)");
+    expect(policy.notice).toContain("10 articles; 4 workers; bin-pack");
+    expect(policy.rows.find(([name]) => name === "Article age windows")?.[1]).toBe(
+      `${config.curate_articles.feed_quality_tiers.map(rule => `Tier ${rule.tier}: 2 hours`).join("; ")} (workflow override)`,
+    );
     expect(policy.rows.find(([name]) => name === "Article limit")?.[1]).toBe("10 articles (workflow override)");
-    expect(policy.notice).not.toContain("24 hours");
     expect(formatWorkflowPolicy(undefined, false).notice).toContain("defaults do not prove");
     await mkdir(join(root, "config"));
     const input = { root, directory: root, stateRoot: join(root, "state"), profileRequested: false, gitSha: "a".repeat(40), attempt: 1,

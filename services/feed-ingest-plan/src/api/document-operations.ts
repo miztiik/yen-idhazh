@@ -25,7 +25,7 @@ export async function executeDocumentOperation(
       const record = await store.execute(proposed, async record => {
         const begin = performance.now();
         try {
-          const result = await fetchDocument(request, record, inputs, runtime, parent, signal);
+          const result = await fetchDocument(request, record, inputs, runtime, parent, store, signal);
           await appendDocumentTiming(inputs, record.run_id, { operation: "fetch", duration_ms: Math.round(performance.now() - begin),
             status: result.artifact.failure === null ? "completed" : "failed" });
           return result;
@@ -66,6 +66,6 @@ export async function readDocumentHealthBatch(batchId: string, inputs: PlanInput
     const artifact = checkFetchedDocument(record, inputs);
     const parent = artifact.parent_fetch_request_id === null ? undefined : store.get(artifact.parent_fetch_request_id);
     if (parent === null) throw new PlanError("ARTIFACT_NOT_FOUND", "Fetched article parent is missing", "batch_id");
-    return documentState(record, inputs, runtime, parent);
+    return await documentState(record, inputs, runtime, store, parent);
   } finally { store.close(); }
 }

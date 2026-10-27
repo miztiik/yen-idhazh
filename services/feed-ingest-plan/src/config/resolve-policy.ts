@@ -1,20 +1,18 @@
-/** Apply the planner's global numeric controls and explicit per-run age override. */
+/** Which global numeric controls score and screen an individual candidate? */
 import {
-  EffectiveFeedPolicySchema, FeedIngestConfigSchema, FeedScreeningPolicySchema, PlanningRunOverridesSchema,
+  EffectiveFeedPolicySchema, FeedIngestConfigSchema, FeedScreeningPolicySchema,
 } from "@idhazh/common-contracts";
-import type { EffectiveFeedPolicy, FeedIngestConfig, PlanningRunOverrides } from "@idhazh/common-contracts";
+import type { EffectiveFeedPolicy, FeedIngestConfig } from "@idhazh/common-contracts";
 
 export type PlanningConfig = Readonly<{ config: FeedIngestConfig }>;
 export function loadPlanningConfig(config: unknown): PlanningConfig { return { config: FeedIngestConfigSchema.parse(config) }; }
-export function resolvePolicy(loaded: PlanningConfig, overrides: PlanningRunOverrides = {}): EffectiveFeedPolicy {
-  const run = PlanningRunOverridesSchema.parse(overrides);
+export function resolvePolicy(loaded: PlanningConfig): EffectiveFeedPolicy {
   const { blocked_http_statuses: _statuses, ...screening } = loaded.config.triage;
   const { article_limit: _limit, source_reliability_penalty_enabled: _reliability,
     soft_caps: _caps, exploration_slot_share: _exploration, website_grouping: _websiteGrouping,
+    feed_quality_tiers: _tiers,
     ...curateArticles } = loaded.config.curate_articles;
   return EffectiveFeedPolicySchema.parse({
-    triage: FeedScreeningPolicySchema.parse({
-      ...screening, ...(run.freshness_hours === undefined ? {} : { max_age_hours: run.freshness_hours }),
-    }), curate_articles: curateArticles,
+    triage: FeedScreeningPolicySchema.parse(screening), curate_articles: curateArticles,
   });
 }

@@ -69,5 +69,6 @@ class LedgerName(StrEnum):
     COUNCIL_RUN_RECORDS = "council-run-records"
     FEED_INGEST_PLAN_DISCOVERED_ARTICLES = "discovered-articles"
     FEED_INGEST_PLAN_SELECTED_ARTICLES = "selected-articles"
+    FEED_INGEST_PLAN_REJECTED_ARTICLES = "rejected-articles"
     FEED_INGEST_PLAN_FEED_HEALTH_STATE = "feed-health-state"
     FEED_INGEST_PLAN_PLAN_RUNS = "plan-runs"

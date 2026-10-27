@@ -11,6 +11,7 @@ import type { HarvestObservation, ScreeningInput } from "./screening-input";
 import { indexDiscoveredEvidence } from "./discovered-evidence";
 import { matchMediaArticle } from "../harvest-feeds/media-filter";
 import { excludeArticleContent } from "./content-filters";
+import { rejectArticleAge } from "../article-freshness-policy";
 
 export type ScreenedCandidate = {
   candidate: FeedIngestCandidate;
@@ -33,8 +34,8 @@ export async function screenArticleCandidates(
   const discoveredByUrl = indexDiscoveredEvidence(discovered);
   const admitted: ScreenedCandidate[] = [];
   const rejections: CandidateRejectionRecord[] = [];
+  const policy = resolvePolicy(planning);
   for (const candidate of candidates) {
-    const policy = resolvePolicy(planning, run.overrides);
     const observation = observations[candidate.candidate_id] ?? null;
     const freshness = calculateFreshness(candidate, discoveredByUrl.get(candidate.url_key), run.now, maxFutureHours, policy);
     const required = policy.triage.min_words;
@@ -65,12 +66,9 @@ export async function screenArticleCandidates(
     } else if (content !== null) {
       rejection = content;
     } else if (candidate.word_count < required) {
-      rejection = { drop_reason: "STUB_CONTENT", details: { words_found: candidate.word_count, words_required: required } };
-    } else if (freshness.age_hours !== null && freshness.age_hours > policy.triage.max_age_hours) {
-      rejection = {
-        drop_reason: "STALE_MAX_AGE_EXCEEDED",
-        details: { age_hours: freshness.age_hours, max_age_hours: policy.triage.max_age_hours },
-      };
+      rejection = { drop_reason: "REJECTED_SCREENING_MIN_WORDS", details: { words_found: candidate.word_count, words_required: required } };
+    } else {
+      rejection = rejectArticleAge(planning.config, candidate.source.tier, freshness.age_hours, run.overrides?.freshness_hours);
     }
     if (rejection === null) {
       admitted.push({ candidate, policy, freshness, observation, discovered_availability: discovered.availability });
