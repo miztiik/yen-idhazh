@@ -28,6 +28,11 @@ Readers expand before configuration and consumers migrate. Closed live lookups
 are removed only after their consumers move. Historical read rules stay.
 No committed archive payload is rewritten.
 
+An active feed must use a tier that is active in the taxonomy, because its
+weight is part of source ranking. A new tier therefore needs a registered
+active ID and numeric weight before any active feed can use it; configuration
+loading refuses an unregistered tier instead of guessing.
+
 ## Live configuration
 
 `config/taxonomy.json`, edited by maintainers, owns `source_kinds`,

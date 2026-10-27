@@ -1,16 +1,15 @@
-"""Does every ledger on the door have its compaction and its folders, and can every door row be filed?
+"""Do native door ledgers have their row keys, while all registered ledgers keep their folders?
 
 A ledger is on the door when its entry in `config/ledgers.json` is
 `raw-and-compact`, and that one switch is what every rule here reads. No ledger
-keeps a CSV path any more, so what is left to hold each one to is the rest of
-what a ledger on the door owes: a compaction, folders a declaration may own,
-and a door row the door can file. Every test reads the committed registry and
-the committed declarations under `config/gardener/`, never a fixture garden,
-which holds declarations the committed config does not.
+keeps a CSV path any more. Each registered ledger still owes a compaction and
+the folders its declaration may own. Python's door table holds native row
+shapes only; the planner's TypeScript-owned rows stop at the Python boundary.
+Every test reads the committed registry and declarations under
+`config/gardener/`, never a fixture garden.
 
-The door table holds each door ledger's key and row contract, so it is held
-here too: a key or a field the door cannot file fails here rather than at the
-ledger's first write.
+The native door table holds each ledger's key and row contract, so a key or
+field it cannot file fails here rather than at the ledger's first write.
 """
 
 from __future__ import annotations
@@ -57,10 +56,6 @@ ENVELOPE_NAMED_FIELDS: Final[Mapping[LedgerName, frozenset[str]]] = {
     LedgerName.CONTENT_SIMILARITY_JUDGE_SCORED_PAIRS: frozenset({"run_id"}),
     LedgerName.CONTENT_SIMILARITY_JUDGE_METRICS: frozenset({"run_id"}),
     LedgerName.CONTENT_SIMILARITY_JUDGE_FITTED_THRESHOLDS: frozenset({"run_id"}),
-    LedgerName.FEED_INGEST_PLAN_DISCOVERED_ARTICLES: frozenset(),
-    LedgerName.FEED_INGEST_PLAN_SELECTED_ARTICLES: frozenset({"run_id", "attempt", "tier"}),
-    LedgerName.FEED_INGEST_PLAN_FEED_HEALTH_STATE: frozenset({"run_id", "attempt"}),
-    LedgerName.FEED_INGEST_PLAN_PLAN_RUNS: frozenset({"run_id", "attempt"}),
 }
 
 

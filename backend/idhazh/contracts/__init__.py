@@ -4,10 +4,8 @@ This package is the bottom of the dependency graph and MUST NOT import any other
 subpackage of `idhazh` (CLAUDE.md section 4). A contract that imports a stage is
 a contract that cannot be loaded by a test of that stage.
 
-`CONTRACTS` registers version-bearing documents. `PLANNER_CONTRACTS` registers
-the planner's file-versioned rows, artifact and minimal envelope. Their bounded
-fixture and binding checks cover each protocol without adding a version column
-to planner rows.
+`CONTRACTS` registers version-bearing documents. The TypeScript planner owns its
+request, stage, row and file contracts.
 """
 
 from typing import Final
@@ -49,16 +47,8 @@ from idhazh.contracts.element import ElementTable
 from idhazh.contracts.eval_row import ConfidenceBand, EvalRow
 from idhazh.contracts.evidence import EvidenceItem
 from idhazh.contracts.feed_health import FeedHealthRow
-from idhazh.contracts.feed_health_state import FeedHealthStateRow
-from idhazh.contracts.feed_ingest_candidate import FeedIngestCandidate
-from idhazh.contracts.feed_ingest_discovered_article import DiscoveredArticleRow, PlannerPayload
-from idhazh.contracts.feed_ingest_plan_run import PlanRunRow
-from idhazh.contracts.feed_ingest_selected_article import (
-    SelectedArticleRow,
-    SelectedArticlesArtifact,
-)
 from idhazh.contracts.feed_retirement import FeedRetirementRow
-from idhazh.contracts.file_envelope import FileEnvelope, PlannerFileEnvelope
+from idhazh.contracts.file_envelope import FileEnvelope
 from idhazh.contracts.fingerprint import PipelineInputs
 from idhazh.contracts.fitted_similarity_threshold import FittedSimilarityThreshold
 from idhazh.contracts.host_fingerprint import HostFingerprintRow
@@ -71,12 +61,6 @@ from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.machine_panels import MachinePanels
 from idhazh.contracts.merge_line_holdout_score import MergeLineHoldoutScore
 from idhazh.contracts.pipeline_tests import PipelineTestsConfig
-from idhazh.contracts.planner_operation import FetchedDocument, PlannerOperation
-from idhazh.contracts.planner_stage import (
-    ParsedFeedBatch,
-    PartitionedFeedBatch,
-    SelectedFeedBatch,
-)
 from idhazh.contracts.publication_inventory import PublicationInventory
 from idhazh.contracts.publication_receipt import PublicationReceipt
 from idhazh.contracts.reference_dataset import (
@@ -140,8 +124,6 @@ from idhazh.contracts.watchlist import EdgarPolicy, EntityDef, EntityFeed, Watch
 #: persisted documents has nothing to do with it (Guardrail #3, maintainer ruling
 #: 2026-09-21).
 CONTRACTS: Final[tuple[type[Contract], ...]] = (
-    FetchedDocument,
-    PlannerOperation,
     AppConfig,
     AppearanceConfig,
     Article,
@@ -209,16 +191,8 @@ CONTRACTS: Final[tuple[type[Contract], ...]] = (
     Watchlist,
 )
 
-# Planner rows have no per-row version field. Their native storage and binding
-# tests use this registry instead of forcing them through the unrelated format.
-PLANNER_CONTRACTS: Final[tuple[type[PlannerPayload] | type[PlannerFileEnvelope], ...]] = (
-    DiscoveredArticleRow, SelectedArticleRow, FeedHealthStateRow, PlanRunRow,
-    SelectedArticlesArtifact, PlannerFileEnvelope,
-)
-
 __all__ = [
     "CONTRACTS",
-    "PLANNER_CONTRACTS",
     "AppConfig",
     "Article",
     "ArticleStatus",
@@ -237,16 +211,12 @@ __all__ = [
     "DigestViewItem",
     "DigestViewVisual",
     "DigestVisual",
-    "DiscoveredArticleRow",
     "EdgarPolicy",
     "EntityDef",
     "EntityFeed",
     "EvalRow",
     "EventDef",
     "FeedDef",
-    "FeedHealthStateRow",
-    "FeedIngestCandidate",
-    "FetchedDocument",
     "FileEnvelope",
     "LedgerName",
     "LensDef",
@@ -255,13 +225,8 @@ __all__ = [
     "Model",
     "ModelRole",
     "ModelUse",
-    "ParsedFeedBatch",
-    "PartitionedFeedBatch",
     "PipelineInputs",
-    "PlanRunRow",
     "PlannedItem",
-    "PlannerFileEnvelope",
-    "PlannerOperation",
     "PublicationInventory",
     "RawDayIndex",
     "RunManifest",
@@ -270,9 +235,6 @@ __all__ = [
     "RunShards",
     "RunStatus",
     "SalienceFeedDef",
-    "SelectedArticleRow",
-    "SelectedArticlesArtifact",
-    "SelectedFeedBatch",
     "SourceForm",
     "SourceKind",
     "SourceKindDefinition",

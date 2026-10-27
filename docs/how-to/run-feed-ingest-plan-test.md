@@ -1,6 +1,6 @@
 # Run the isolated feed planner checks
 
-**Last Updated**: 2026-10-26
+**Last Updated**: 2026-10-27
 
 How do you check the TypeScript planner without changing daily publication?
 Use offline cases for validation. The manual workflow performs real feed work
@@ -46,11 +46,12 @@ bun run --cwd services/feed-ingest-plan check
 bun run --cwd services/feed-ingest-plan test
 ```
 
-For a shared contract input change, also run the named Python binding test
-with the existing Python development environment:
+Planner contracts are owned and tested in TypeScript; do not compare them with
+retired Python planner models. A change to a Python-owned shape copied into
+TypeScript still runs the native binding test:
 
 ```text
-python -m pytest backend/tests/contracts/test_feed_ingest_contracts.py
+python -m pytest backend/tests/contracts/test_native_typescript_bindings.py
 ```
 
 The service suite includes the existing workflow/report cases. Its case

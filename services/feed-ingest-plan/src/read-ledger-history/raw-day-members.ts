@@ -2,7 +2,9 @@
 import { lstat, readFile, realpath } from "node:fs/promises";
 import { createHash } from "node:crypto";
 import { relative, resolve } from "node:path";
-import { DateStampSchema, PlannerLedgerNameSchema } from "@idhazh/common-contracts";
+import {
+  DateStampSchema, MonthStampSchema, PlannerLedgerNameSchema, YearStampSchema,
+} from "@idhazh/common-contracts";
 import type { LedgerRegistration } from "@idhazh/ledger-file-writer";
 import { LedgerHistoryReadError } from "./ledger-history-error";
 
@@ -24,6 +26,13 @@ export async function fixedHistoryRevision(repository: string) {
   return revision;
 }
 
+export async function verifiedHistoryRevision(repository: string, revision: string) {
+  if (!/^[0-9a-f]{40}$/.test(revision) || await git(repository, ["cat-file", "-t", revision]) !== "commit") {
+    throw new LedgerHistoryReadError("Invalid history revision");
+  }
+  return revision;
+}
+
 export function rawDayDirectory(registration: LedgerRegistration, day: string) {
   const ledger = PlannerLedgerNameSchema.parse(registration.name);
   if (registration.family !== "feed-ingest-plan"
@@ -37,32 +46,65 @@ export function rawDayDirectory(registration: LedgerRegistration, day: string) {
   return `state/raw/${registration.prefix.join("/")}/${day.replaceAll("-", "/")}`;
 }
 
+export function compactPeriodFile(
+  registration: LedgerRegistration, period: "daily" | "monthly" | "yearly", covers: string,
+) {
+  const ledger = PlannerLedgerNameSchema.parse(registration.name);
+  if (registration.family !== "feed-ingest-plan"
+    || registration.prefix.join("/") !== `feed-ingest-plan/${ledger}`) {
+    throw new LedgerHistoryReadError("Planner compact period requires its registered root");
+  }
+  const stamp = period === "yearly" ? YearStampSchema : period === "monthly" ? MonthStampSchema : DateStampSchema;
+  stamp.parse(covers);
+  if (period === "daily" && new Date(`${covers}T00:00:00Z`).toISOString().slice(0, 10) !== covers) {
+    throw new LedgerHistoryReadError("Invalid compact UTC day");
+  }
+  const pieces = covers.split("-");
+  const file = period === "yearly" ? `${covers}/${covers}.parquet`
+    : period === "monthly" ? `${pieces[0]}/${pieces[1]}.parquet`
+      : `${pieces[0]}/${pieces[1]}/${pieces[2]}.parquet`;
+  return `state/compact/${registration.prefix.join("/")}/${period}/${file}`;
+}
+
 export async function listExactRawDayMembers(
   repository: string, registration: LedgerRegistration, day: string, revision: string,
   treeCache = new Map<string, Promise<string>>(),
 ) {
   if (!/^[0-9a-f]{40}$/.test(revision)) throw new LedgerHistoryReadError("Invalid history revision");
   const directory = rawDayDirectory(registration, day);
-  function tree(path: string) {
-    const key = `${revision}:${path}`;
-    let pending = treeCache.get(key);
-    if (pending === undefined) { pending = git(repository, ["ls-tree", revision, "--", path]); treeCache.set(key, pending); }
-    return pending;
+  const pieces = directory.split("/");
+  const parents = pieces.slice(0, -1).map((_, index) => pieces.slice(0, index + 1).join("/"));
+  const key = `${revision}:raw-day-tree:${directory}`;
+  let pending = treeCache.get(key);
+  if (pending === undefined) {
+    pending = git(repository, ["ls-tree", revision, "--", ...parents, directory]);
+    treeCache.set(key, pending);
   }
-  const entry = await tree(directory);
-  if (entry === "") {
-    const pieces = directory.split("/");
-    for (let count = pieces.length - 1; count > 0; count--) {
-      const parent = await tree(pieces.slice(0, count).join("/"));
-      if (parent === "") continue;
-      if (!/^040000 tree [0-9a-f]{40}\t/.test(parent)) {
-        throw new LedgerHistoryReadError("Named raw day parent is not a directory");
-      }
-      break;
+  const entries = new Map<string, { mode: string; type: string }>();
+  for (const line of (await pending).split("\n").filter(Boolean)) {
+    const match = /^([0-7]{6}) (tree|blob) [0-9a-f]{40}\t(.+)$/.exec(line);
+    if (match === null) throw new LedgerHistoryReadError("Invalid raw day tree entry");
+    entries.set(match[3]!, { mode: match[1]!, type: match[2]! });
+  }
+  for (const parent of parents) {
+    const entry = entries.get(parent);
+    if (entry !== undefined && (entry.mode !== "040000" || entry.type !== "tree")) {
+      throw new LedgerHistoryReadError("Raw day parent is not a directory");
     }
-    return { present: false, members: [] };
   }
-  if (entry !== `${entry.split("\t")[0]}\t${directory}` || !/^040000 tree [0-9a-f]{40}\t/.test(entry)) {
+  const entry = entries.get(directory);
+  async function absent() {
+    try { await lstat(resolve(repository, directory)); }
+    catch (error) {
+      if (error instanceof Error && "code" in error && error.code === "ENOENT") {
+        return { present: false as const, members: [] as const };
+      }
+      throw error;
+    }
+    throw new LedgerHistoryReadError("Uncommitted raw day differs from the selected Git revision");
+  }
+  if (entry === undefined) return absent();
+  if (entry.mode !== "040000" || entry.type !== "tree") {
     throw new LedgerHistoryReadError("Named raw day is not a directory");
   }
   const listing = await git(repository, ["ls-tree", "-l", `${revision}:${directory}`]);
@@ -97,18 +139,40 @@ export async function verifyRawDayMember(
   return { bytes, file_sha256: createHash("sha256").update(bytes).digest("hex") };
 }
 
-export async function readNamedGitFile(root: string, path: string, revision: string) {
-  const entry = await git(root, ["ls-tree", "-l", revision, "--", path]);
-  if (entry === "") {
+export async function readNamedGitMember(
+  root: string, path: string, revision: string,
+  treeCache = new Map<string, Promise<string>>(),
+) {
+  if (!/^[0-9a-f]{40}$/.test(revision)) throw new LedgerHistoryReadError("Invalid history revision");
+  const pieces = path.split("/");
+  if (pieces.some(piece => piece === "" || piece === "." || piece === ".." || piece.includes("\\"))) {
+    throw new LedgerHistoryReadError("Named history path is not canonical");
+  }
+  function tree(named: string) {
+    const key = `${revision}:${named}`;
+    let pending = treeCache.get(key);
+    if (pending === undefined) { pending = git(root, ["ls-tree", "-l", revision, "--", named]); treeCache.set(key, pending); }
+    return pending;
+  }
+  async function absent() {
     try { await lstat(resolve(root, path)); }
     catch (error) {
       if (error instanceof Error && "code" in error && error.code === "ENOENT") return undefined;
       throw error;
     }
-    throw new LedgerHistoryReadError("Uncommitted history metadata differs from the selected Git revision");
+    throw new LedgerHistoryReadError("Uncommitted history member differs from the selected Git revision");
   }
+  const entry = await tree(path);
+  if (entry === "") return absent();
+  const entryPath = entry.slice(entry.indexOf("\t") + 1);
+  if (entryPath !== path && /^040000 tree [0-9a-f]{40}\s+-\t/.test(entry)
+    && path.startsWith(`${entryPath}/`)) return absent();
   const match = /^100644 blob ([0-9a-f]{40})\s+(\d+)\t(.+)$/.exec(entry);
-  if (match === null || match[3] !== path) throw new LedgerHistoryReadError("Named history metadata is not a regular file");
-  const held = await verifyRawDayMember(root, { path, blob: match[1]!, bytes: Number(match[2]) });
-  return held.bytes.toString("utf8");
+  if (match === null || match[3] !== path) throw new LedgerHistoryReadError("Named history member is not a regular file");
+  return verifyRawDayMember(root, { path, blob: match[1]!, bytes: Number(match[2]) });
+}
+
+export async function readNamedGitFile(root: string, path: string, revision: string) {
+  const held = await readNamedGitMember(root, path, revision);
+  return held?.bytes.toString("utf8");
 }

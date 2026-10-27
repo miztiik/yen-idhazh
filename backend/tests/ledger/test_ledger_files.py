@@ -31,6 +31,7 @@ from idhazh.contracts.ledger_index import CompactEntry, CompactIndex
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.ledgers import Grain
 from idhazh.contracts.visual_prune import VisualPruneRow
+from idhazh.ledger import keys
 
 pytestmark = pytest.mark.contract
 
@@ -495,13 +496,25 @@ def test_a_refused_rows_own_value_never_reaches_either_warning(
 
 
 def test_every_ledger_the_registry_files_under_the_two_roots_has_a_key_and_a_reader() -> None:
-    """A ledger that joins the two roots with no row in the door table could not be compacted."""
+    """Native ledgers have row readers; planner ledgers refuse native reads before lookup."""
     door = {member for member in LedgerName if ledger.entry(member).grain is Grain.RAW_AND_COMPACT}
+    planner = {member for member in door if ledger.paths.is_planner_ledger(member)}
+    native = door - planner
 
     assert door, "the registry files no ledger under the two roots, so nothing is checked"
-    for member in door:
+    assert planner == {
+        LedgerName.FEED_INGEST_PLAN_DISCOVERED_ARTICLES,
+        LedgerName.FEED_INGEST_PLAN_SELECTED_ARTICLES,
+        LedgerName.FEED_INGEST_PLAN_FEED_HEALTH_STATE,
+        LedgerName.FEED_INGEST_PLAN_PLAN_RUNS,
+    }
+    assert planner.isdisjoint(keys.door_table_ledgers())
+    for member in native:
         assert ledger.door_key(member), member
         assert ledger.door_contract(member).__schema_stem__, member
+    for member in planner:
+        with pytest.raises(ValueError, match="history is read by the TypeScript planner"):
+            ledger.load_ledger_rows(Path(), member, model=VisualPruneRow)
     # The judge's score distribution is one document rewritten whole, so it stays
     # off the door and the door has no row for it.
     with pytest.raises(ValueError, match="has no key and no row contract"):

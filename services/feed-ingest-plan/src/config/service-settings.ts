@@ -22,6 +22,8 @@ export const SeenDayInputSchema = z.strictObject({
 });
 export const PlannerDayInputSchema = SeenDayInputSchema.refine(value => value.raw_index === undefined, {
   message: "Planner raw days use Parquet members, not raw_index",
+}).refine(value => value.indexes === undefined, {
+  message: "Planner compact membership uses exact files, not indexes",
 }).refine(value => value.raw_files === undefined || value.raw_revision !== undefined, {
   message: "Configured planner raw_files require their complete raw_revision",
 });

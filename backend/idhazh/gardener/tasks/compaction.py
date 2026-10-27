@@ -193,9 +193,19 @@ def run(context: TaskContext) -> Pass:
         *(
             ()
             if chosen.years is None
-            else _yearly_period.absorb(tree, chosen.years, identity=identity)
+            else _yearly_period.absorb(
+                tree,
+                chosen.years,
+                identity=identity,
+                most=policy.max_raw_files_per_period,
+            )
         ),
-        *_monthly_period.absorb(tree, chosen.months, identity=identity),
+        *_monthly_period.absorb(
+            tree,
+            chosen.months,
+            identity=identity,
+            most=policy.max_raw_files_per_period,
+        ),
         *_daily_period.compact(
             tree,
             policy,

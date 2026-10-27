@@ -241,12 +241,14 @@ describe("ledger Parquet readback", () => {
 
   test("keeps empty raw output absent and writes a typed empty compact file", async () => {
     await withOutputRoot(async root => {
-      const recording = plannerRecordings().find(row => row.name === "plan-runs")!;
-      const context = { ledger: recording.name, outputRoot: root, rowContract: recording.contract, ledgerSettings: compression, registryEntry: registration(recording.name) };
+      const context = {
+        ledger: "feed-health", outputRoot: root, rowContract: { schema: NestedSchema, schemaVersion: "2026-10-20" },
+        writerContext, ledgerSettings: compression, registryEntry: registration("feed-health"),
+      };
       expect(await persistLedger({ ...context, rows: [], period: { tier: "raw", covers: "2026-10-20" } })).toEqual({ status: "empty", files: [] });
       const compact = await persistLedger({ ...context, rows: [], period: { tier: "compact", period: "daily", covers: "2026-10-20", builtFrom: 0 } });
-      if (compact.status !== "written") throw new Error("typed empty planner compact file was not written");
-      expect((await checkParquetReadback(recording.name, root, compact.files, recording.contract.schema)).files[0]!.row_count).toBe(0);
+      if (compact.status !== "written") throw new Error("typed empty compact file was not written");
+      expect((await checkParquetReadback("feed-health", root, compact.files, NestedSchema)).files[0]!.row_count).toBe(0);
     });
   });
 

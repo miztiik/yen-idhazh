@@ -373,12 +373,31 @@ def test_a_shard_checks_out_only_its_code_and_runs_the_landing_program() -> None
 
     steps = _steps(workflow, RUN_TASKS)
     (checkout,) = _checkouts(workflow, RUN_TASKS)
-    assert _sparse(checkout) == ["config", "backend", ".github"]
+    assert _sparse(checkout) == [
+        "config",
+        "backend",
+        ".github",
+        "packages/common-contracts",
+        "packages/ledger-file-writer",
+    ]
     assert (str(checkout["fetch-depth"]), checkout["filter"]) == ("1", "blob:none")
     assert steps[1].get("run") == "git config index.sparse true", (
         "the index turns sparse right after the checkout, before any widening can expand it"
     )
     assert any(step.get("run") == "pip install -e ." for step in steps)
+    bun_setup = next(step for step in steps if step.get("uses") == "oven-sh/setup-bun@v2")
+    assert bun_setup.get("if") == (
+        "contains(join(matrix.task_names, ','), 'compact-feed-ingest-plan-')"
+    )
+    assert _mapping(bun_setup.get("with"), "Bun setup") == {"bun-version": "1.3.13"}
+    bun_install = _step(
+        workflow, RUN_TASKS, "name", "Install planner ledger contracts and writer"
+    )
+    assert bun_install.get("if") == bun_setup["if"]
+    assert bun_install.get("run") == (
+        "bun install --frozen-lockfile --cwd packages/common-contracts\n"
+        "bun install --frozen-lockfile --cwd packages/ledger-file-writer\n"
+    )
 
     landing = _step(workflow, RUN_TASKS, "name", "Run the shard's tasks and land its record")
     landing_script = _script(landing, "shard step")

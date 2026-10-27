@@ -11,8 +11,10 @@ import type { ReadLedgerFile } from "./read-parquet";
 export function defaultDayInput(prefix: readonly string[], day: string): SeenDayInput {
   const base = prefix.join("/");
   return SeenDayInputSchema.parse({
-    day, indexes: Object.fromEntries(["yearly", "monthly", "daily"].map(period =>
-      [period, `state/compact/${base}/index/${period}.json`])),
+    day, ...(prefix[0] === "feed-ingest-plan" ? {} : {
+      indexes: Object.fromEntries(["yearly", "monthly", "daily"].map(period =>
+        [period, `state/compact/${base}/index/${period}.json`])),
+    }),
     ...(prefix[0] === "feed-ingest-plan" ? {} : {
       raw_index: `state/raw/${base}/${day.replaceAll("-", "/")}/index.json`,
     }),
