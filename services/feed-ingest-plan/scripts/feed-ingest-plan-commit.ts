@@ -2,8 +2,6 @@
 import { mkdtemp, realpath, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { createHash } from "node:crypto";
-import { RawDayIndexSchema, RAW_DAY_INDEX_VERSION } from "../../../packages/common-contracts/src/index";
 import { readMetadataBytes, verifyMetadataFile } from "./feed-ingest-plan-metadata";
 import type { ExecutionIdentity, MetadataRegistrations } from "./feed-ingest-plan-metadata";
 import { collectWorkflowFiles, readWorkflowPublicationContext } from "./feed-ingest-plan-current-files";
@@ -81,8 +79,7 @@ export async function commitPlannerFiles(input: Readonly<{
     for (const path of input.paths) {
       const checked = await verifyMetadataFile(stateRoot, path, input.registrations, input.identity);
       const blob = await required(["hash-object", "-w", "--stdin"], checked.bytes);
-      writes.push({ path: `state/${path}`, source: path, blob, bytes: checked.bytes.byteLength,
-        file_sha256: checked.file_sha256, ledger: checked.ledger, indexed: checked.indexed });
+      writes.push({ path: `state/${path}`, source: path, blob, file_sha256: checked.file_sha256 });
     }
     let failures = 0;
     while (performance.now() < deadline) {
@@ -111,49 +108,6 @@ export async function commitPlannerFiles(input: Readonly<{
         }
       }
 
-      const dayFolders = [...new Set(writes.filter(write => write.indexed).map(write => write.path.slice(0, write.path.lastIndexOf("/"))))];
-      for (const directory of dayFolders) {
-        const members = new Map<string, number>();
-        if (await required(["ls-tree", base, "--", directory]) !== "") {
-          const listing = await required(["ls-tree", "-l", `${base}:${directory}`]);
-          for (const line of listing.split("\n").filter(Boolean)) {
-            const match = /^100644 blob [0-9a-f]{40}\s+(\d+)\t(.+)$/.exec(line);
-            if (match === null) throw new Error("commit: raw day contains a non-file entry");
-            if (match[2] === "index.json") continue;
-            if (!/^[0-9a-f]{8}-[0-9a-f]{4}-8[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\.parquet$/.test(match[2]!)) {
-              throw new Error("commit: raw day contains an undeclared member");
-            }
-            members.set(match[2]!, Number(match[1]));
-          }
-        }
-        for (const write of writes.filter(write => write.path.startsWith(`${directory}/`))) {
-          members.set(write.path.slice(directory.length + 1), write.bytes);
-        }
-        const names = [...members.keys()].sort();
-        const day = directory.split("/").slice(-3).join("-");
-        const ledger = writes.find(write => write.indexed && write.path.startsWith(`${directory}/`))!.ledger;
-        const index = RawDayIndexSchema.parse({
-          version: RAW_DAY_INDEX_VERSION, ledger, date: day,
-          files: names, bytes: names.map(name => members.get(name)!),
-          content_sha256: createHash("sha256").update(names.join("\n")).digest("hex"),
-          listed_at: new Date().toISOString().replace(/\.\d{3}Z$/, "Z"),
-        });
-        const indexPath = `${directory}/index.json`;
-        allowed.add(indexPath);
-        await checkParents(base, indexPath, parents);
-        const existing = await required(["ls-tree", base, "--", indexPath]);
-        if (existing !== "") {
-          if (!/^100644 blob [0-9a-f]{40}\t/.test(existing)) throw new Error("commit: raw index is not a regular file");
-          const previous = RawDayIndexSchema.parse(JSON.parse(await required(["show", `${base}:${indexPath}`])));
-          if (previous.ledger !== index.ledger || previous.date !== day) throw new Error("commit: raw index identity differs");
-          if (JSON.stringify(previous.files) === JSON.stringify(index.files)
-            && JSON.stringify(previous.bytes) === JSON.stringify(index.bytes)
-            && previous.content_sha256 === index.content_sha256) continue;
-        }
-        const blob = await required(["hash-object", "-w", "--stdin"], new TextEncoder().encode(`${JSON.stringify(index)}\n`));
-        await required(["update-index", "--add", "--cacheinfo", `100644,${blob},${indexPath}`]);
-        changed = true;
-      }
       if (!changed) return { status: "already-on-main", commit: base, files: writes.length, paths: [...input.paths] };
       const tree = await required(["write-tree"]);
       const changedPaths = (await required(["diff-tree", "--no-commit-id", "--name-only", "-r", "-z", base, tree])).split("\0").filter(Boolean);

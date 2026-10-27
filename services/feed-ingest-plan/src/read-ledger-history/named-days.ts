@@ -13,7 +13,9 @@ export function defaultDayInput(prefix: readonly string[], day: string): SeenDay
   return SeenDayInputSchema.parse({
     day, indexes: Object.fromEntries(["yearly", "monthly", "daily"].map(period =>
       [period, `state/compact/${base}/index/${period}.json`])),
-    raw_index: `state/raw/${base}/${day.replaceAll("-", "/")}/index.json`,
+    ...(prefix[0] === "feed-ingest-plan" ? {} : {
+      raw_index: `state/raw/${base}/${day.replaceAll("-", "/")}/index.json`,
+    }),
   });
 }
 

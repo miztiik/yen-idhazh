@@ -67,7 +67,7 @@ distinct attempts and explicit empty or partial outcomes. No test contacts
 an external feed, starts a live workflow or requires local Python.
 
 The generated bare-origin case executes the actual commit CLI, checks the
-new remote metadata and raw-day indexes, replays it safely and verifies that
+new remote metadata without raw-day indexes, replays it safely and verifies that
 the checkout did not change. Helper-only coverage cannot certify this entry.
 Independent writer and contract tests own native digest, identifier and
 historical ledger coverage. The workflow does not add a synthetic receipt.
@@ -86,9 +86,12 @@ execution; it has no fixture-only entry point.
 
 The commit manifest permits exact current raw Parquet paths for the four
 planner siblings only. The committer validates bytes, appends them through a
-temporary Git index and rebuilds the affected raw-day indexes from the
-current main commit. A normal push retry preserves another writer's changes.
+private temporary Git staging index against fresh main. It creates no planner
+raw-day JSON list. A normal push retry preserves another writer's immutable additions.
 It does not rewrite the checkout, rebase or force-push.
+
+History staging uses the [bounded day membership contract](../reference/feed-planner-ledgers.md#raw-day-membership).
+Named Git days, not saved raw-day JSON lists, identify all Parquet siblings.
 
 Partial completed files are retained and can be committed even when the
 planning step fails. Selected text is uploaded separately for the summarizer.

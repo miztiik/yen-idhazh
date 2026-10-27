@@ -3,7 +3,7 @@ import { expect, test } from "bun:test";
 import { copyFile, mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { RawDayIndexSchema, PlanRunRowContract } from "../../../packages/common-contracts/src/index";
+import { PlanRunRowContract } from "../../../packages/common-contracts/src/index";
 import { persistLedger } from "../../../packages/ledger-file-writer/src/index";
 import { commitPlannerFiles } from "../scripts/feed-ingest-plan-commit";
 import { MetadataCommitResultSchema } from "../scripts/feed-ingest-plan-commit-result";
@@ -29,7 +29,7 @@ async function invokeCommit(f: Awaited<ReturnType<typeof publicationRecording>>,
   return { output, errors, code };
 }
 
-test("real planner and HTTP host files land together, keep four named indexes, and replay without a commit", async () => {
+test("real planner and HTTP host files land together without raw indexes and replay without a commit", async () => {
   const f = await publicationRecording();
   try {
     const completed = await collectWorkflowFiles({
@@ -48,19 +48,17 @@ test("real planner and HTTP host files land together, keep four named indexes, a
     const changed = (await readOrigin(f, ["diff-tree", "--no-commit-id", "--name-only", "-r", f.head, tip])).split("\n");
     const indexes = [...new Set(f.plannerPaths.map(path => `state/${dirname(path).replaceAll("\\", "/")}/index.json`))];
     expect(indexes).toHaveLength(4);
-    expect(changed.sort()).toEqual([...f.paths.map(path => `state/${path}`), ...indexes].sort());
+    expect(changed.sort()).toEqual(f.paths.map(path => `state/${path}`).sort());
     const hostIndex = `state/${dirname(f.host.response.files[0]!.path).replaceAll("\\", "/")}/index.json`;
     expect(await readOrigin(f, ["ls-tree", tip, "--", hostIndex])).toBe("");
     for (const path of indexes) {
-      const index = RawDayIndexSchema.parse(JSON.parse(await readOrigin(f, ["show", `${tip}:${path}`])));
-      expect(index.files).toHaveLength(1);
-      expect(index.bytes?.[0]).toBeGreaterThan(0);
+      expect(await readOrigin(f, ["ls-tree", tip, "--", path])).toBe("");
     }
     await fixtureGit(f.repository, ["fetch", "origin", "main"]);
     const reader = join(dirname(f.directory), "reader");
     await fixtureGit(f.repository, ["clone", "--quiet", f.origin, reader]);
     const loaded = await readPlannerDay(reader, f.commit.registrations["plan-runs"], {
-      day: f.summary.date, raw_index: `state/raw/feed-ingest-plan/plan-runs/${f.summary.date.replaceAll("-", "/")}/index.json`,
+      day: f.summary.date,
     }, PlanRunRowContract);
     expect(loaded.complete).toBe(true);
     expect(loaded.rows[0]).toMatchObject({ run_id: f.summary.run_id, attempt: f.summary.attempt });
@@ -96,7 +94,7 @@ test("private publication preserves sparse patterns, the real index and a suppli
   } finally { await f.close(); }
 });
 
-test("a real rejected push rebuilds only planner day indexes on the new parent without rerunning producers", async () => {
+test("a real rejected push retains both immutable planner additions without rerunning producers or adding indexes", async () => {
   const f = await publicationRecording();
   try {
     const concurrent = join(dirname(f.directory), "concurrent");
@@ -130,20 +128,20 @@ test("a real rejected push rebuilds only planner day indexes on the new parent w
     expect(await readOrigin(f, ["rev-parse", `${committed.commit}^`])).toBe(moved);
     expect(await stat(`${hook}.used`)).toBeDefined();
     const day = dirname(priorPath).replaceAll("\\", "/");
-    const index = RawDayIndexSchema.parse(JSON.parse(await readOrigin(f, ["show", `main:state/${day}/index.json`])));
-    expect(index.files).toEqual([priorPath.split("/").at(-1)!, f.plannerPaths.find(path => path.includes("/plan-runs/"))!.split("/").at(-1)!].sort());
+    const listing = await readOrigin(f, ["ls-tree", "--name-only", `main:state/${day}`]);
+    expect(listing.split("\n").sort()).toEqual([priorPath.split("/").at(-1)!, f.plannerPaths.find(path => path.includes("/plan-runs/"))!.split("/").at(-1)!].sort());
     expect(await readOrigin(f, ["show", `main:${unrelated}`])).toContain("Do not scan");
     expect(await readOrigin(f, ["ls-tree", "main", "--", "state/raw/host-fingerprint/2026/10/21/index.json"])).toBe("");
     for (const [index, path] of f.paths.entries()) expect(await readFile(join(f.commit.stateRoot, path))).toEqual(before[index]!);
   } finally { await f.close(); }
 });
 
-test("immutable host collisions refuse publication and retain all valid completed files for recovery", async () => {
+for (const family of ["host", "planner"] as const) test(`immutable ${family} collisions refuse publication and retain completed files for recovery`, async () => {
   const f = await publicationRecording();
   try {
     const other = join(dirname(f.directory), "collision");
     await fixtureGit(f.repository, ["clone", "--quiet", f.origin, other]);
-    const target = `state/${f.host.response.files[0]!.path}`;
+    const target = `state/${family === "host" ? f.host.response.files[0]!.path : f.plannerPaths[0]!}`;
     await mkdir(dirname(join(other, target)), { recursive: true });
     await writeFile(join(other, target), "Conflicting immutable bytes");
     await fixtureGit(other, ["add", "--", target]);

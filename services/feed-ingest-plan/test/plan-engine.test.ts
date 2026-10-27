@@ -1,12 +1,10 @@
 /** Verify the real four-ledger flow, clocks, partial work and text boundary on recorded content. */
 import { expect, test } from "bun:test";
-import { basename, dirname, join } from "node:path";
-import { mkdir, writeFile, readFile, stat } from "node:fs/promises";
-import { createHash } from "node:crypto";
+import { join } from "node:path";
+import { mkdir, writeFile, readFile } from "node:fs/promises";
 import {
   DiscoveredArticleRowContract, SelectedArticleRowContract, FeedHealthStateRowContract, PlanRunRowContract,
   SelectedArticlesArtifactSchema, deriveUrlKey,
-  RAW_DAY_INDEX_VERSION,
 } from "@idhazh/common-contracts";
 import { persistLedger } from "@idhazh/ledger-file-writer";
 import { runFeedPlan, summarizePlan } from "../src/run-feed-plan";
@@ -15,6 +13,7 @@ import { recordedPlan } from "./plan-recordings";
 import { source } from "./harvest-recordings";
 import { executeSelection } from "../src/api/selection-operation";
 import { endpointKey } from "../src/read-ledger-history/read-feed-history";
+import { fixtureGit } from "./publication-recordings";
 
 async function writeHistoricalHealth(recorded: Awaited<ReturnType<typeof recordedPlan>>, day: string) {
   const row = FeedHealthStateRowContract.schema.parse({
@@ -32,13 +31,10 @@ async function writeHistoricalHealth(recorded: Awaited<ReturnType<typeof recorde
     period: { tier: "raw", covers: day }, updatedAt: `${day}T11:00:00Z`, rows: [row],
   });
   const path = join(recorded.inputs.outputRoot, result.files[0]!.path);
-  const index = join(dirname(path), "index.json");
-  const names = [basename(path)];
-  await writeFile(index, JSON.stringify({
-    version: RAW_DAY_INDEX_VERSION, ledger: "feed-health-state", date: day, files: names, bytes: [(await stat(path)).size],
-    content_sha256: createHash("sha256").update(names.join("\n")).digest("hex"), listed_at: `${day}T12:00:00Z`,
-  }));
-  return { path, index, index_bytes: await readFile(index, "utf8") };
+  await fixtureGit(recorded.directory, ["init", "--initial-branch=main"]);
+  await fixtureGit(recorded.directory, ["add", "--", `state/${result.files[0]!.path}`]);
+  await fixtureGit(recorded.directory, ["commit", "-m", "Record historical native health"]);
+  return { path, bytes: await readFile(path) };
 }
 
 test("real composition separates run and selection clocks and reads native dispatches with exact choices", async () => {
@@ -162,7 +158,7 @@ test("invalid controls, disabled runs, inactive ledgers and unavailable named hi
     recorded.inputs.settings.enabled = true;
     await writeHistoricalHealth(recorded, "2026-10-19");
     const damaged = await writeHistoricalHealth(recorded, "2026-10-20");
-    await writeFile(damaged.index, "{\"malformed_index\":true}");
+    await writeFile(damaged.path, "invalid Parquet");
     recorded.runtime.run_number = "702";
     const partialHistory = await runFeedPlan({}, recorded.inputs, recorded.runtime);
     expect(partialHistory.row.status).toBe("completed");
@@ -171,7 +167,7 @@ test("invalid controls, disabled runs, inactive ledgers and unavailable named hi
     const captured = await readPlannerParquet(join(recorded.inputs.outputRoot, partialHistory.files.feed_health_state!.files[0]!.path),
       "feed-health-state", FeedHealthStateRowContract);
     expect(captured.rows[0]!.reliability).toMatchObject({ productive: 1, attempted: 2, complete: false });
-    await writeFile(damaged.index, damaged.index_bytes);
+    await writeFile(damaged.path, damaged.bytes);
     await writeFile(damaged.path, "corrupt Parquet");
     recorded.runtime.run_number = "703";
     const corruptFile = await runFeedPlan({}, recorded.inputs, recorded.runtime);

@@ -42,6 +42,8 @@ export async function publicationRecording(failPlanning = false) {
     const host = await recordedWorkflowHost(directory, identity);
     plan.inputs.root = repository;
     plan.inputs.outputRoot = join(directory, "state");
+    plan.inputs.clock_config.collect.seen_window_days = 1;
+    plan.inputs.clock_config.collect.published_window_days = 1;
     plan.runtime.git_sha = head;
     if (failPlanning) {
       plan.inputs.settings.inputs.artifact_root = "blocked-artifacts";

@@ -197,15 +197,13 @@ non-force push preserves completed bytes; different committed bytes at the
 same UUID are refused. The checkout, caller's index, foreign index and sparse
 patterns do not move. Only declared candidate changes can be pushed.
 
-The same commit also maintains each affected planner UTC day's existing
-native `index.json`. This mutable index is required by the current-format
-named reader. The adapter lists only that exact registered day at the fetched
-tip, combines its immutable members with the validated current files, sorts
-names and records actual byte counts and the filename digest. On a lost push,
-it fetches again and rebuilds those day indexes from the new tip before
-retrying. Replaying identical output leaves an unchanged index alone.
-Host files never enter this index builder: no host `index.json` is created,
-read, recovered or inferred from an archive scan.
+The commit appends only those completed immutable Parquet files. It writes no
+planner raw-day `index.json` and no host index. On a lost push it fetches fresh
+main and reapplies the same exact files, without regenerating output. Both
+concurrent additions remain in the new tree; an existing UUID with different
+bytes refuses publication. Replaying identical output creates no commit.
+The [planner input contract](../../reference/feed-planner-ledgers.md#raw-day-membership)
+defines bounded day discovery separately from compact-period metadata.
 
 This is a bounded native-format handoff, not a second general publisher.
 The adapter performs no deletion, other-ledger write, publication/site
