@@ -1823,7 +1823,7 @@ index, not the plan.
 | 13 | Deletion switched on (delivered) | Retention that actually deletes, with a visible backlog |
 | 14 | The rest of the ship-or-not bar (delivered) | The sufficiency checks as a build gate rather than a habit |
 | 15 | [Chart vocabulary and refusal rules](../docs/architecture/publishing/what-a-visual-plan-may-say-and-what-happens-to-one-that-is-refused.md) | Chart families 1-5 delivered; Row 6 text visuals abandoned |
-| 16 | [Parts of a whole](20260905-16-composition-vocabulary-plan.md) | The composition family |
+| 16 | [Parts of a whole](../docs/architecture/publishing/what-a-visual-plan-may-say-and-what-happens-to-one-that-is-refused.md) | The composition family |
 | 17 | [The rest of the infographics](20260905-17-infographic-vocabulary-plan.md) | The infographic family |
 | 18 | [Diagrams](20260905-18-diagram-vocabulary-plan.md) | The diagram family, gated on the potential classifier |
 | 19 | [Every attempt is recorded](20260905-19-visual-telemetry-plan.md) | The visual telemetry event and the ledger under `state/` |
