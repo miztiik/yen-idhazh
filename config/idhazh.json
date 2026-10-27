@@ -225,6 +225,7 @@
       "state/compact/feed-ingest-plan/discovered-articles/index/": 2200,
       "state/compact/feed-ingest-plan/feed-health-state/index/": 2200,
       "state/compact/feed-ingest-plan/plan-runs/index/": 2200,
+      "state/compact/feed-ingest-plan/rejected-articles/index/": 2200,
       "state/compact/feed-ingest-plan/selected-articles/index/": 2200,
       "state/compact/gardener/index/": 2064,
       "state/compact/host-fingerprint/index/": 2200,
