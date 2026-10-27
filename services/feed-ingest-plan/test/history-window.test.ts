@@ -11,6 +11,7 @@ import { loadPlanInputs } from "../src/load-plan-inputs";
 import { closedRequestDays, summarizeHealth } from "../src/read-ledger-history/health-summary";
 import { endpointKey, readFeedHistory } from "../src/read-ledger-history/read-feed-history";
 import { compactRows, registration, writeRows } from "./partition-fixtures";
+import { defaultDayInput } from "../src/read-ledger-history/named-days";
 
 const now = "2026-10-21T12:00:00Z";
 function work(day = "2026-10-20", patch: Partial<FeedHealthStateRow> = {}) {
@@ -218,7 +219,10 @@ test("native history reads only named current-family days and rejects unbounded 
         .map(covers => ({ covers, rows: 0, bytes: 0, state: "empty" })),
     }));
     const daily = await readFeedHistory({
-      ...request, root: dailyRoot, health_days: dailyInputs, lifecycle_window_days: 2,
+      ...request, root: dailyRoot, health_days: [...dailyInputs,
+        ...closedRequestDays(now, 7).filter(day => day !== recent.date).map(day => ({
+          ...defaultDayInput(registration("feed-health-state").prefix, day), raw_files: [],
+        }))], lifecycle_window_days: 2,
       policy: { ...setup.policy, reliability_window_days: 2, availability_strikes_before_rest: 2 },
     });
     expect(daily.represented_days).toEqual([earlier.date, recent.date]);
@@ -252,8 +256,8 @@ test("native history reads only named current-family days and rejects unbounded 
       const healthDays = [
         { day: old.date, raw_files: oldRaw.files.map(file => `state/${file.path}`) },
         ...monthDays.map(day => ({
-          day, indexes,
-          ...(day !== original.date ? {} : { raw_files: copies.flatMap(result => result.files.map(file => `state/${file.path}`)) }),
+          day, indexes, raw_files: day !== original.date ? []
+            : copies.flatMap(result => result.files.map(file => `state/${file.path}`)),
         })),
       ];
       const periodRequest = { ...request, root: periodRoot, now: "2026-10-31T12:00:00Z", health_days: healthDays,

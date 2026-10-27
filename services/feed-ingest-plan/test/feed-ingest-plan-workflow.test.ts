@@ -1,13 +1,12 @@
 /** Does the manual workflow keep current history bounded and selected text out of committed output? */
 import { expect, test } from "bun:test";
-import { createHash } from "node:crypto";
 import { copyFile, mkdir, mkdtemp, readFile, rm, stat, symlink, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { z } from "zod";
 import {
-  COMPACT_INDEX_VERSION, RAW_DAY_INDEX_VERSION, CompactIndexSchema, RawDayIndexSchema,
+  COMPACT_INDEX_VERSION, CompactIndexSchema,
   FeedHealthStateRowContract, FeedHealthStateRowSchema, FeedIngestConfigSchema, PUBLICATION_INVENTORY_VERSION,
 } from "../../../packages/common-contracts/src/index";
 import { persistLedger } from "../../../packages/ledger-file-writer/src/index";
@@ -17,7 +16,7 @@ import { readPlannerParquet } from "../src/read-ledger-history/read-planner-parq
 import { LedgerHistoryReadError } from "../src/read-ledger-history/ledger-history-error";
 import { requiredSeenDays } from "../src/read-ledger-history/read-seen-evidence";
 import { stageFeedHistory } from "../scripts/feed-ingest-plan-feed-history";
-import { completeHistoryDayInputs, createSeenDayInputs, historyIndexPaths, resolveHistoryInventory, sparseCheckoutPath } from "../scripts/feed-ingest-plan-outputs";
+import { completeHistoryDayInputs, historyIndexPaths, resolveHistoryInventory, sparseCheckoutPath } from "../scripts/feed-ingest-plan-outputs";
 import { loadConfig as loadProbeConfig } from "../../host-probes/src/config";
 
 const root = fileURLToPath(new URL("../../../", import.meta.url));
@@ -117,24 +116,21 @@ test("bounded native history preserves covered-day membership and planner raw ov
   const rawName = "01a1592e-c600-84d0-96e4-7bb01708ce01.parquet";
   for (const ledger of ["feed-health-state", "published"] as const) {
     const prefix = ledger === "published" ? ["published"] : ["feed-ingest-plan", ledger];
-    const raw = RawDayIndexSchema.parse({
-      version: RAW_DAY_INDEX_VERSION, ledger, date: "2026-01-01", files: [rawName], bytes: [10],
-      content_sha256: createHash("sha256").update(rawName).digest("hex"), listed_at: "2026-01-01T00:00:00Z",
-    });
+    const rawPath = `state/raw/${prefix.join("/")}/2026/01/01/${rawName}`;
     const compact = CompactIndexSchema.parse({ version: COMPACT_INDEX_VERSION, ledger, period: "monthly",
       entries: [{ covers: "2026-01", rows: 1, bytes: 20 }] });
-    const inventory = resolveHistoryInventory({ ledger, prefix, days: ["2026-01-01"], compact: [compact], raw: [raw] });
+    const inventory = resolveHistoryInventory({ ledger, prefix, days: ["2026-01-01"], compact: [compact], rawFiles: [rawPath] });
     expect(inventory).toContain(`state/compact/${prefix.join("/")}/monthly/2026/01.parquet`);
     expect(inventory.includes(`state/raw/${prefix.join("/")}/2026/01/01/${rawName}`)).toBe(ledger === "feed-health-state");
     expect(() => resolveHistoryInventory({ ledger, prefix, days: ["2026-01-01"], compact: [],
-      raw: [{ ...raw, content_sha256: "0".repeat(64) }] })).toThrow("digest");
+      rawFiles: ["state/raw/foreign/2026/01/01/member.parquet"] })).toThrow("outside");
   }
   const directory = await mkdtemp(join(tmpdir(), "planner-history-"));
   try {
     const registration = { name: "feed-health-state", family: "feed-ingest-plan", prefix: ["feed-ingest-plan", "feed-health-state"],
       grain: "raw-and-compact" as const, lifecycle_status: "active" as const };
     const ledgerSettings = { format: "parquet" as const, compression_raw: "snappy" as const, compression_compact: "zstd" as const };
-    const entries = [];
+    const entries: { root: string; path: string; bytes: number; items: number }[] = [];
     let monthPath = "";
     for (const day of ["2024-01-01", "2026-01-01"]) {
       const row = FeedHealthStateRowSchema.parse(plannerRecordings(day).find(value => value.name === "feed-health-state")!.row);
@@ -160,6 +156,8 @@ test("bounded native history preserves covered-day membership and planner raw ov
     const stage = () => stageFeedHistory({
       ledger: "feed-health-state", prefix: registration.prefix, now: "2026-01-01T23:59:59Z",
       health_window_days: 2, request_report_closed_days: 7, period_limit: 3, authored: [],
+      raw_files: async day => entries.filter(entry => entry.path.includes(`/${day.replaceAll("-", "/")}/`))
+        .map(entry => `state/${entry.path}`),
       read: async path => {
         const file = Bun.file(join(directory, path));
         return await file.exists() ? file.json() : undefined;
@@ -175,13 +173,13 @@ test("bounded native history preserves covered-day membership and planner raw ov
     expect(partial.notices).toContain("health_period_refused:2024-01");
     expect(partial.represented_days).toEqual(["2024-01-31", "2026-01-01"]);
     expect(partial.represented_days).toContain("2026-01-01");
-    const named = createSeenDayInputs(registration.prefix, ["2026-01-01"])[0]!;
-    await mkdir(dirname(join(directory, named.raw_index)), { recursive: true });
-    await writeFile(join(directory, named.raw_index), JSON.stringify({ invalid: true }));
-    expect((await stage()).notices).toContain("health_index_refused:2026-01-01");
+    const inertIndex = join(directory, "state", "raw", ...registration.prefix, "2026", "01", "01", "index.json");
+    await writeFile(inertIndex, JSON.stringify({ invalid: true }));
+    expect((await stage()).notices).not.toContain("health_index_refused:2026-01-01");
     await expect(stageFeedHistory({
       ledger: "feed-health-state", prefix: registration.prefix, now: "2026-01-01T23:59:59Z",
       health_window_days: 2, request_report_closed_days: 7, period_limit: 3, authored: [],
+      raw_files: async () => [],
       read: async () => { throw new TypeError("Unexpected implementation failure"); },
       read_period: async () => { throw new LedgerHistoryReadError("Not reached"); },
     })).rejects.toThrow("Unexpected implementation failure");

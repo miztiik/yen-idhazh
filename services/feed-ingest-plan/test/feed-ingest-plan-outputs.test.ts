@@ -4,8 +4,7 @@ import { copyFile, mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs
 import { dirname, join } from "node:path";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
-import { createHash } from "node:crypto";
-import { RawDayIndexSchema, SelectedArticlesArtifactSchema } from "../../../packages/common-contracts/src/index";
+import { SelectedArticlesArtifactSchema } from "../../../packages/common-contracts/src/index";
 import { runFeedPlan, summarizePlan } from "../src/run-feed-plan";
 import { recordedPlan } from "./plan-recordings";
 import { source } from "./harvest-recordings";
@@ -107,7 +106,7 @@ test("actual HTTP output retains selected text separately from its strict metada
   } finally { await fixture.close(); }
 });
 
-test("exact metadata appends through a generated bare origin with complete raw indexes and safe replay", async () => {
+test("exact metadata appends through a generated bare origin without raw indexes and with safe replay", async () => {
   const fixture = await recordedPlan([source({ url: "https://news.example/empty.xml" })]);
   try {
     fixture.inputs.outputRoot = join(fixture.directory, "feed-ingest-plan", "state");
@@ -165,13 +164,9 @@ test("exact metadata appends through a generated bare origin with complete raw i
     // This tree was just built by this case; it cannot grow with repository history.
     const members = (await git(fixture.directory, ["--git-dir", origin, "ls-tree", "-r", "--name-only", "main"])).split("\n");
     expect(members.sort()).toEqual(["README.md", "config/push-retry.json", "config/ledgers.json", "config/feed-ingest-plan-service.json",
-      ...paths.map(path => `state/${path}`), ...indexes].sort());
+      ...paths.map(path => `state/${path}`)].sort());
     for (const path of indexes) {
-      const index = RawDayIndexSchema.parse(JSON.parse(await git(fixture.directory, ["--git-dir", origin, "show", `main:${path}`])));
-      expect(index.files).toEqual(paths.filter(file => `state/${file}`.startsWith(path.slice(0, -10))).map(file => file.split("/").at(-1)!));
-      expect(index.content_sha256).toBe(createHash("sha256").update(index.files.join("\n")).digest("hex"));
-      if (index.bytes === null) throw new Error("The generated raw index must record actual byte counts");
-      expect(index.bytes.every(value => value > 0)).toBe(true);
+      expect(await git(fixture.directory, ["--git-dir", origin, "ls-tree", "main", "--", path])).toBe("");
     }
     expect((await invokeCommit()).status).toBe("already-on-main");
     await expect(commitPlannerFiles({ repository, stateRoot: fixture.inputs.outputRoot, retry, message: "Refuse old format",
