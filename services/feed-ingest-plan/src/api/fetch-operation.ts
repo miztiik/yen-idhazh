@@ -34,7 +34,7 @@ export function resolveFetchParent(request: FetchRequest, inputs: PlanInputs, ru
   if (offer === undefined || offer.source.source_id !== request.feed_id || request.correlation_id !== batch.context.correlation_id
     || batch.feed_fetch_request_id === null) throw new PlanError("INVALID_REQUEST", "Article reference does not belong to this feed batch", "offer_id");
   const root = store.get(batch.feed_fetch_request_id);
-  if (root === null || checkFetchedDocument(root, inputs).kind !== "feed") throw new PlanError("ARTIFACT_NOT_FOUND", "Feed batch has no completed fetched input", "batch_id");
+  if (root === null || checkFetchedDocument(root, inputs).fetch_item_type !== "feed") throw new PlanError("ARTIFACT_NOT_FOUND", "Feed batch has no completed fetched input", "batch_id");
   return { batch, offer, root };
 }
 export async function fetchDocument(
@@ -43,7 +43,7 @@ export async function fetchDocument(
 ) {
   const source = inputs.harvest.sources.find(source => source.id === request.feed_id);
   if (source === undefined || source.status !== "active") throw new PlanError("INVALID_REQUEST", "Fetch requires an active configured feed", "feed_id");
-  const url = request.kind === "feed" ? source.url : parent?.offer.entry.link ?? request.url;
+  const url = request.fetch_item_type === "feed" ? source.url : parent?.offer.entry.link ?? request.url;
   if (url == null) throw new PlanError("INVALID_REQUEST", "Article fetch requires its authorized address", "url");
   if (parent === null) {
     try { validateTargetName(url); }
@@ -58,10 +58,10 @@ export async function fetchDocument(
     on_attempt: observation => { attemptObservations.push(observation); },
   }, { run_id: record.run_id, correlation_id: record.correlation_id, article_id: identity.url_key, source_id: source.id },
   record.request_id, {
-    document_kind: request.kind, source_id: source.id, publisher_id: source.publisher_id,
+    document_kind: request.fetch_item_type, source_id: source.id, publisher_id: source.publisher_id,
     observed_run_id: record.run_id, observed_attempt: inputs.settings.run.attempt, candidate_id: parent?.offer.offer_id ?? null,
   });
-  if (request.kind === "article") {
+  if (request.fetch_item_type === "article") {
     const exclusions = await documentExclusions(state, inputs);
     const offered = parent?.offer ?? { source: sourceSnapshot(inputs.harvest, source), entry: {
       entry_ordinal: 0, title: null, link: url, categories: [], author: null, published_at: null, media_types: [],
@@ -90,8 +90,8 @@ export async function fetchDocument(
   { ...(signal === undefined ? {} : { signal }), outcome: result => result.fetched.failure === null ? "success" : "error" });
   const { fetched, observation } = result;
   state.recovered.add(record.request_id);
-  if (request.kind === "feed") state.work.pendingFeed(source.id, fetched, observation.occurred_at);
-  if (request.kind === "article" && fetched.body === null) {
+  if (request.fetch_item_type === "feed") state.work.pendingFeed(source.id, fetched, observation.occurred_at);
+  if (request.fetch_item_type === "article" && fetched.body === null) {
     const refusal = fetchRejection(fetched, inputs.harvest.config.harvest.fetch_timeout_ms, null);
     state.work.reject(recordRejection({ source_id: source.id, feed_url: source.url }, {
       writer: state.context.writer, correlation_id: state.context.correlation_id,
@@ -106,7 +106,7 @@ export async function fetchDocument(
   if (parent !== null) updateFeedOffer(inputs, state, parent.batch.batch_id, parent.offer.offer_id,
     fetched.failure === null && fetched.body !== null ? "fetched" : "rejected", record.request_id);
   const artifact = FetchedDocumentSchema.parse({
-    ...fetched, kind: request.kind, canonical_url: identity.canonical_url, article_id: identity.url_key, source_id: source.id,
+    ...fetched, fetch_item_type: request.fetch_item_type, canonical_url: identity.canonical_url, article_id: identity.url_key, source_id: source.id,
     error_code: fetched.error_code ?? null, robots_failure: fetched.robots_failure ?? null, robots_http_status: fetched.robots_http_status ?? null,
     body_sha256: fetched.body === null ? null : sha256(fetched.body), attempts: fetched.attempts ?? [],
     observation, attempt_observations: attemptObservations,
@@ -115,7 +115,7 @@ export async function fetchDocument(
   });
   return { artifact, response_json: JSON.stringify({
     fetch_request_id: record.request_id, batch_id: parent?.batch.batch_id ?? record.request_id,
-    run_id: record.run_id, correlation_id: record.correlation_id, kind: request.kind, feed_id: source.id,
+    run_id: record.run_id, correlation_id: record.correlation_id, fetch_item_type: request.fetch_item_type, feed_id: source.id,
     article_id: identity.url_key, canonical_url: identity.canonical_url, http_status: fetched.http_status,
     failure: fetched.failure, body_sha256: artifact.body_sha256,
   }) };

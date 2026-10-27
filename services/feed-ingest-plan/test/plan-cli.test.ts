@@ -51,7 +51,7 @@ test("CLI blanks are absent; typed API strings, nulls, unknown fields and invali
   } }).inputs.output_root).toBe("local state");
   const config = inputs.harvest.config;
   expect(resolvePlanRequest({}, config)).toMatchObject({
-    article_limit: config.curate.article_limit, shards: config.partition.default_shards,
+    article_limit: config.curate_articles.article_limit, shards: config.partition.default_shards,
     partition_strategy: config.partition.default_strategy,
   });
   expect(resolvePlanRequest({ partition_strategy: "none" }, config).shards).toBe(1);
@@ -94,7 +94,7 @@ test("real CLI process refuses disabled or invalid requests without Python or ne
   }
 }, 30000);
 
-test("the awaited entrypoint records configured selection counts, signed ages and global first sight", async () => {
+test("the awaited entrypoint records configured selection counts, signed ages and global discovery", async () => {
   for (const mode of ["counts", "negative_age", "first_seen"] as const) {
     const recorded = await recordedPlan(mode === "first_seen"
       ? [source({ url: "https://news.example/article-failures.xml" })] : undefined);
@@ -106,8 +106,8 @@ test("the awaited entrypoint records configured selection counts, signed ages an
       }
       if (mode === "negative_age") recorded.runtime.clock = () => new Date("2026-10-21T09:00:00Z");
       if (mode === "first_seen") {
-        recorded.inputs.clock_config.collect.seen_window_days = 0;
-        recorded.inputs.settings.inputs.seen_days = [{ day: "2026-10-21", raw_files: [] }];
+        recorded.inputs.harvest.config.discovered_articles.lookback_days = 0;
+        recorded.inputs.settings.inputs.discovered_days = [{ day: "2026-10-21", raw_files: [] }];
       }
       const summary = await main(["--cli", "--partition-strategy=none", "--article-limit=1"], {
         inputs: recorded.inputs, runtime: recorded.runtime, output: value => { printed.push(value); },

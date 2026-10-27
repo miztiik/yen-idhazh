@@ -4,7 +4,7 @@
 
 Which parsed articles can reach numeric selection?
 Screening validates the complete server-owned candidate batch, current
-technical observations, settled first sight and the global policy. It
+technical observations, settled discovery evidence and the global policy. It
 fetches nothing and writes no rejection ledger.
 
 ## Inputs and result
@@ -29,15 +29,17 @@ article download where possible; screening rechecks them for independently
 parsed articles. An unavailable external history does not manufacture a
 publication or failure.
 
-Paywall or configured HTTP blocks, category exclusions, the form-specific
-word minimum and the maximum age retain their relative precedence. Category matching
-uses whole trimmed, case-folded tags. One first failed gate produces one
-terminal exclusion.
+Paywall or configured HTTP blocks, category exclusions, the configured
+`triage.min_words` minimum and the maximum age retain their relative
+precedence. The same word minimum applies to every parsed article; feed
+classification labels do not change admission. Category matching uses whole
+trimmed, case-folded tags. One first failed gate produces one terminal
+exclusion.
 
 After category admission, the enabled `content_filters` apply media addresses,
-opening press-release markers, then link-heavy content before the existing
-form-specific word minimum and age gate. These are heuristic exclusions, not
-model quality scores. Media can stop earlier at
+opening press-release markers, then link-heavy content before the configured
+word minimum and age gate. These are heuristic exclusions, not model quality
+scores. Media can stop earlier at
 [harvest preflight](feed-harvesting.md#inputs-and-identity).
 
 The opening sample is the first configured number of extracted Markdown
@@ -52,8 +54,7 @@ configured limit, 0.40 by default. Thus 400 or 404 linked-label characters in
 1,000 Markdown characters both round to 0.40 and pass this rule; 405 round to
 0.41 and fail it. A second branch rejects more than 10 actual list items only
 when the extracted word count is below 150. Both limits are configurable.
-Equality at 10 items or 150 words passes that branch. This does not replace
-the existing article and abstract word minima.
+Equality at 10 items or 150 words passes that branch.
 
 The native Markdown parser counts decoded label text, including image alt
 text once, and actual list items. Formatting delimiters, escaped syntax and
@@ -70,7 +71,7 @@ Missing historical observation evidence stays unavailable; screening does
 not recalculate a false zero from URL-scrubbed text.
 
 Age uses a trustworthy publication time, otherwise the earliest known global
-first sight by URL key. A timestamp exactly at the future tolerance is
+discovery by URL key. A timestamp exactly at the future tolerance is
 trusted; one beyond it is not. Age equal to the cutoff passes. Unknown time
 stays null with no invented recency bonus.
 
@@ -90,10 +91,10 @@ same chosen result.
 
 Admission and ranking share one public selection operation, but keep distinct
 denominators. A stale or technically rejected candidate is not a new admitted
-opportunity. The global first-sight join prevents another feed or fetch from
+opportunity. The global discovery join prevents another feed or fetch from
 renewing an undated article's age.
 Content exclusions retain successful feed downloads/parses, original offered
-ordinals, first sight and actual request spend. Their grouped health reason
+ordinals, discovery evidence and actual request spend. Their grouped health reason
 has no source-failure attribution. Numeric selection and quotas are unchanged.
 
 ## See also

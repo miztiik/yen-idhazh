@@ -14,7 +14,7 @@ import { plannerRecordings } from "../../../packages/ledger-file-writer/test/pla
 import { PlanRequestSchema } from "../src/api/plan-request";
 import { readPlannerParquet } from "../src/read-ledger-history/read-planner-parquet";
 import { LedgerHistoryReadError } from "../src/read-ledger-history/ledger-history-error";
-import { requiredSeenDays } from "../src/read-ledger-history/read-seen-evidence";
+import { requiredUtcDays } from "../src/utc-instant";
 import { stageFeedHistory } from "../scripts/feed-ingest-plan-feed-history";
 import { completeHistoryDayInputs, historyIndexPaths, resolveHistoryInventory, sparseCheckoutPath } from "../scripts/feed-ingest-plan-outputs";
 import { loadConfig as loadProbeConfig } from "../../host-probes/src/config";
@@ -47,7 +47,7 @@ test("manual controls commit only current metadata and keep optional host tools 
   expect(Object.keys(controls)).toEqual(["freshness_hours", "article_limit", "shards", "partition_strategy", "profile_machine_memory"]);
   const config = FeedIngestConfigSchema.parse(await Bun.file(join(root, "config", "feed-ingest-plan.json")).json());
   for (const [field, value] of Object.entries({
-    freshness_hours: config.triage.max_age_hours, article_limit: config.curate.article_limit ?? "",
+    freshness_hours: config.triage.max_age_hours, article_limit: config.curate_articles.article_limit ?? "",
     shards: config.partition.default_shards, partition_strategy: config.partition.default_strategy,
   })) expect(controls[field]!.default).toBe(String(value));
   expect(controls.partition_strategy!.options).toEqual(PlanRequestSchema.shape.partition_strategy.unwrap().options);
@@ -106,13 +106,14 @@ test("manual controls commit only current metadata and keep optional host tools 
   }
 });
 
-test("bounded native history preserves covered-day membership and planner raw overlap", async () => {
-  const seen = requiredSeenDays("2026-01-01T00:00:00Z", 2);
-  expect(seen).toEqual(["2025-12-30", "2025-12-31", "2026-01-01"]);
-  expect(completeHistoryDayInputs(["feed-ingest-plan", "discovered-articles"], seen, [], "seen_days")).toHaveLength(3);
-  expect(sparseCheckoutPath("state/raw/seen/[literal]*?.json")).toBe("/state/raw/seen/\\[literal\\]\\*\\?.json");
-  expect(() => sparseCheckoutPath("state/raw/seen/a\nstate/")).toThrow("control");
-  expect(() => historyIndexPaths([".."], seen)).toThrow("prefix");
+test("bounded discovery history preserves covered-day membership and planner raw overlap", async () => {
+  const discoveredDays = requiredUtcDays("2026-01-01T00:00:00Z", 2);
+  expect(discoveredDays).toEqual(["2025-12-30", "2025-12-31", "2026-01-01"]);
+  expect(completeHistoryDayInputs(["feed-ingest-plan", "discovered-articles"], discoveredDays, [], "discovered_days")).toHaveLength(3);
+  expect(sparseCheckoutPath("state/raw/discovered-articles/[literal]*?.parquet"))
+    .toBe("/state/raw/discovered-articles/\\[literal\\]\\*\\?.parquet");
+  expect(() => sparseCheckoutPath("state/raw/discovered-articles/a\nstate/")).toThrow("control");
+  expect(() => historyIndexPaths([".."], discoveredDays)).toThrow("prefix");
   const rawName = "01a1592e-c600-84d0-96e4-7bb01708ce01.parquet";
   for (const ledger of ["feed-health-state", "published"] as const) {
     const prefix = ledger === "published" ? ["published"] : ["feed-ingest-plan", ledger];
@@ -210,6 +211,7 @@ test("strict-checks the exact named sparse adapter and test inventory in one com
       "services/feed-ingest-plan/test/feed-ingest-plan-report.test.ts", "services/feed-ingest-plan/test/feed-ingest-plan-workflow.test.ts",
       "services/feed-ingest-plan/scripts/feed-ingest-plan-artifacts.ts", "services/host-probes/scripts/feed-ingest-plan-profile-proof.ts",
       "services/feed-ingest-plan/test/feed-ingest-plan-host.test.ts", "services/feed-ingest-plan/test/feed-ingest-plan-publication.test.ts",
+      "services/feed-ingest-plan/src/website-group.ts", "services/feed-ingest-plan/test/website-group.test.ts",
     ]);
     const adapters: string[] = [];
     for (const entry of selection.trim().split("\n").map(value => value.trim())) {

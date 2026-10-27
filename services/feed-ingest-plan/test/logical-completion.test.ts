@@ -12,7 +12,7 @@ import type { PlannerRecording } from "../../../packages/ledger-file-writer/test
 import { readPlannerDay } from "../src/read-ledger-history/read-planner-history";
 import { readPlannerParquet } from "../src/read-ledger-history/read-planner-parquet";
 import { settleHealthRows } from "../src/read-ledger-history/health-summary";
-import { foldFirstSight } from "../src/read-ledger-history/read-seen-evidence";
+import { foldDiscoveryHistory } from "../src/read-ledger-history/read-discovered-evidence";
 import { commitFixtureFiles, compactRows, registration, writeRows } from "./partition-fixtures";
 import { fixtureGit } from "./publication-recordings";
 
@@ -72,7 +72,7 @@ test("identical storage copies count once while distinct attempts retain their r
     expect(() => settleHealthRows([...settled, { ...first, article_requests: 99 }])).toThrow("Conflicting copies");
     const discovery = DiscoveredArticleRowContract.schema.parse(plannerRecordings(day)[0]!.row);
     const earlier = { ...discovery, first_seen_at: "2026-10-19T23:59:59.999Z", date: "2026-10-19" };
-    expect(foldFirstSight([discovery, earlier, discovery])).toEqual([earlier]);
+    expect(foldDiscoveryHistory([discovery, earlier, discovery])).toEqual([earlier]);
     expect(settled.every((row: FeedHealthStateRow) => !("unit_id" in row))).toBe(true);
   } finally { await rm(root, { recursive: true, force: true }); }
 }, 30_000);

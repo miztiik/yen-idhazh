@@ -3,7 +3,7 @@ import { realpath } from "node:fs/promises";
 import { resolve, relative } from "node:path";
 import { PlannerLedgerNameSchema } from "@idhazh/common-contracts";
 import type { LedgerRegistration, LedgerRowContract } from "@idhazh/ledger-file-writer";
-import type { SeenDayInput } from "../config/service-settings";
+import type { LedgerDayInput } from "../config/service-settings";
 import { readPlannerParquet } from "./read-planner-parquet";
 import { LedgerHistoryReadError } from "./ledger-history-error";
 import { classifyPlannerHistoryGap } from "./planner-history-gap";
@@ -20,7 +20,7 @@ export function createPlannerHistoryCache<T extends object>(): PlannerHistoryCac
   return { files: new Map(), trees: new Map() };
 }
 export async function readPlannerDay<T extends object>(
-  root: string, registration: LedgerRegistration, day: SeenDayInput, contract: LedgerRowContract<T>,
+  root: string, registration: LedgerRegistration, day: LedgerDayInput, contract: LedgerRowContract<T>,
   cache: PlannerHistoryCache<T> = createPlannerHistoryCache<T>(),
 ) {
   if (day.raw_index !== undefined) throw new LedgerHistoryReadError("Planner raw days do not accept raw_index");

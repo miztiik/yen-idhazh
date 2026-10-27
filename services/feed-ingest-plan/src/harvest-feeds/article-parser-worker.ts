@@ -7,7 +7,7 @@ import { isMainThread } from "node:worker_threads";
 
 export const ArticleParserRequestSchema = z.strictObject({
   id: z.uuid(), body: z.string(), url: UrlSchema,
-  config: ExtractionControlsSchema, form: z.enum(["article", "abstract"]),
+  config: ExtractionControlsSchema,
 });
 export type ArticleParserRequest = z.infer<typeof ArticleParserRequestSchema>;
 export type ArticleParserResult = Awaited<ReturnType<typeof extractArticle>>;
@@ -37,7 +37,7 @@ if (!isMainThread) self.onmessage = async (event: MessageEvent<unknown>) => {
   try {
     response = {
       id: request.id, phase: "completed", ok: true,
-      result: await extractArticle(request.body, request.url, request.config, request.form),
+      result: await extractArticle(request.body, request.url, request.config),
     };
   } catch (error) {
     response = {

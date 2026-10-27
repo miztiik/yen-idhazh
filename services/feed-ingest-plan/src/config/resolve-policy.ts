@@ -10,10 +10,11 @@ export function resolvePolicy(loaded: PlanningConfig, overrides: PlanningRunOver
   const run = PlanningRunOverridesSchema.parse(overrides);
   const { blocked_http_statuses: _statuses, ...screening } = loaded.config.triage;
   const { article_limit: _limit, source_reliability_penalty_enabled: _reliability,
-    soft_caps: _caps, exploration_slot_share: _exploration, ...curate } = loaded.config.curate;
+    soft_caps: _caps, exploration_slot_share: _exploration, website_grouping: _websiteGrouping,
+    ...curateArticles } = loaded.config.curate_articles;
   return EffectiveFeedPolicySchema.parse({
     triage: FeedScreeningPolicySchema.parse({
       ...screening, ...(run.freshness_hours === undefined ? {} : { max_age_hours: run.freshness_hours }),
-    }), curate,
+    }), curate_articles: curateArticles,
   });
 }

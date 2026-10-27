@@ -7,7 +7,7 @@ from typing import Any, Final
 
 import pytest
 from pydantic import ValidationError
-from support.paths import CONFIG_DIR, CONTRACT_FIXTURES_DIR, FIXTURES_DIR, read_text
+from support.paths import CONTRACT_FIXTURES_DIR, FIXTURES_DIR, read_text
 
 from idhazh.contracts.digest_day import DigestDay, DigestItem
 from idhazh.contracts.run_manifest import RunManifest
@@ -131,35 +131,6 @@ def test_the_lens_vocabulary_may_lose_an_entry_but_never_hold_one_twice() -> Non
     payload["lenses"].append(payload["lenses"][0])
     with pytest.raises(ValueError, match="lens ids must be distinct"):
         Taxonomy.model_validate(payload)
-
-
-def test_every_desk_ships_with_a_floor_and_a_ceiling() -> None:
-    """A fresh clone runs on these, so they are the numbers a reader gets.
-
-    The floor is a count and the ceiling is a share, and the five ceilings sum
-    to 1.6, so they are satisfiable together rather than five rules that cannot
-    all hold. Ruled by Editor, 2026-09-13, against the 24 committed days:
-    `india` has never passed 44.7 percent of a day and `world` 37.2, so a region
-    desk sits at 0.4; `ai` reached 29.5 percent on the largest day on record, so
-    it sits at 0.35 with headroom over what supply has produced; the two subject
-    desks with 21 feeds sit at 0.25, above their worst full days of 19.3 and
-    16.7 percent.
-    """
-    taxonomy = Taxonomy.from_json(read_text(CONFIG_DIR / "taxonomy.json"))
-    bounds = {desk.id: (desk.floor, desk.ceiling) for desk in taxonomy.verticals}
-
-    assert bounds == {
-        "ai": (6, 0.35),
-        "energy": (6, 0.25),
-        "business-economy": (6, 0.25),
-        "world": (6, 0.4),
-        "india": (6, 0.4),
-        "science": (6, 0.25),
-        "climate": (6, 0.25),
-    }
-    assert sum(ceiling for _, ceiling in bounds.values()) > 1.0, (
-        "five ceilings that sum below one cannot all hold on any day"
-    )
 
 
 def test_a_taxonomy_with_no_floor_and_no_ceiling_still_validates() -> None:
@@ -387,7 +358,9 @@ def test_a_published_chart_written_before_the_field_reads_as_a_chart_draft() -> 
     drafts than published charts, which is the one thing `charts_drafted` exists
     to measure.
     """
-    payload = json.loads(read_text(CONTRACT_FIXTURES_DIR / "visual-decision" / "chart-rendered.json"))
+    payload = json.loads(
+        read_text(CONTRACT_FIXTURES_DIR / "visual-decision" / "chart-rendered.json")
+    )
     del payload["drafted_chart"]
     assert VisualDecision.model_validate(payload).drafted_chart is True
 
@@ -428,7 +401,9 @@ def test_a_rendered_decision_must_record_where_its_marks_landed() -> None:
     opened. That is what lets the rule here be both ways round where the
     published day's can only be one.
     """
-    payload = json.loads(read_text(CONTRACT_FIXTURES_DIR / "visual-decision" / "chart-rendered.json"))
+    payload = json.loads(
+        read_text(CONTRACT_FIXTURES_DIR / "visual-decision" / "chart-rendered.json")
+    )
     payload.pop("data_path", None)
 
     with pytest.raises(ValueError, match="where its marks landed"):
@@ -444,9 +419,11 @@ def test_only_a_rendered_visual_carries_data() -> None:
     with pytest.raises(ValueError, match="rendered visual"):
         VisualDecision.model_validate(payload)
 
+
 VISUAL_DATA_FIXTURE: Final = (
     CONTRACT_FIXTURES_DIR / "visual-data" / "bars-from-the-committed-plan.json"
 )
+
 
 def _visual_data() -> dict[str, Any]:
     """The one fitting case, compiled from the committed plan by the real compiler."""

@@ -1,7 +1,7 @@
 /** Which actual publications today have an unambiguous recorded publisher identity? */
 import { SelectedArticleRowContract } from "@idhazh/common-contracts";
 import type { LedgerRegistration } from "@idhazh/ledger-file-writer";
-import type { SeenDayInput } from "../config/service-settings";
+import type { LedgerDayInput } from "../config/service-settings";
 import { ItemHealthPublicationSchema } from "../metrics/publication-evidence";
 import { defaultDayInput, historyCoverage, readNamedDays, usableDay } from "./named-days";
 import { PublishedRowProjectionContract } from "./published-row";
@@ -15,11 +15,11 @@ import { readPlannerDay } from "./read-planner-history";
 type PublisherPublicationInput = Readonly<{
   root: string; day: string;
   published: LedgerRegistration; item_health: LedgerRegistration; selections: LedgerRegistration;
-  published_days: readonly SeenDayInput[]; health_days: readonly SeenDayInput[];
+  published_days: readonly LedgerDayInput[]; health_days: readonly LedgerDayInput[];
 }>;
 
 async function readConfirmedPublication(input: PublisherPublicationInput) {
-  const named = (days: readonly SeenDayInput[], registration: LedgerRegistration) => {
+  const named = (days: readonly LedgerDayInput[], registration: LedgerRegistration) => {
     const today = days.filter(day => day.day === input.day);
     if (today.length > 1) throw new Error("Publisher publication history repeats its UTC day");
     return today.length === 0 ? [defaultDayInput(registration.prefix, input.day)] : today;

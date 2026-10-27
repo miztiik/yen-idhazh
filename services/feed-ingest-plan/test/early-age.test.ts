@@ -1,4 +1,4 @@
-/** Do expired entries stop before page I/O while retaining first sight and grouped health losses? */
+/** Do expired entries stop before page I/O while retaining discovery and grouped health losses? */
 import { expect, test } from "bun:test";
 import { mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
@@ -106,9 +106,9 @@ test("preflight uses the configured age override, strict boundary and future tol
     });
     expect(result.candidates.map(row => row.entry_ordinal)).toEqual([1, 2, 3, 4, 5]);
     expect(result.candidates.every(row => row.candidate_id === deriveCandidateId(run.writer.run_id, row.source_id, row.entry_ordinal))).toBe(true);
-    expect(result.first_sight_candidates.map(row => row.url_key)).toContain(deriveUrlKey(publishedUrl));
-    expect(result.first_sight_candidates.map(row => row.url_key)).toContain(deriveUrlKey(settledUrl));
-    expect(result.first_sight_candidates.map(row => row.url_key)).not.toContain(deriveUrlKey(blockedUrl));
+    expect(result.discovered_candidates.map(row => row.url_key)).toContain(deriveUrlKey(publishedUrl));
+    expect(result.discovered_candidates.map(row => row.url_key)).toContain(deriveUrlKey(settledUrl));
+    expect(result.discovered_candidates.map(row => row.url_key)).not.toContain(deriveUrlKey(blockedUrl));
     expect(result.feed_outcomes[0]).toMatchObject({ parsed_count: 9, harvested_count: 5 });
     expect(result).not.toHaveProperty("rejection_files");
   } finally { await rm(root, { recursive: true, force: true }); }

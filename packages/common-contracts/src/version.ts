@@ -7,3 +7,6 @@ export const PLANNER_LEDGER_VERSION = "2026-10-25" as const;
 export const SELECTED_ARTICLE_VERSION = "2026-10-26" as const;
 export const PLAN_RUN_VERSION = "2026-10-26" as const;
 export const PLANNER_ENVELOPE_VERSION = "2026-10-26" as const;
+export const FEED_INGEST_CANDIDATE_VERSION = "2026-10-27" as const;
+export const PARSED_FEED_BATCH_VERSION = "2026-10-27" as const;
+export const FEED_OUTCOME_PAYLOAD_VERSION = "2026-10-27" as const;
