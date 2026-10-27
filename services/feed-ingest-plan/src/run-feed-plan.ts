@@ -1,4 +1,4 @@
-/** Execute one isolated planner run and finalize its four-ledger result even after later work fails. */
+/** Execute one isolated planner run and finalize its five-ledger result even after later work fails. */
 import { randomUUID } from "node:crypto";
 import {
   DiscoveredArticleRowSchema, ParsedFeedBatchSchema, PlannerWorkEventSchema,

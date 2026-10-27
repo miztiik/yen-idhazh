@@ -23,7 +23,7 @@ export const DropReasonSchema = z.enum([
 export type DropReason = z.infer<typeof DropReasonSchema>;
 export const SourceArticleRefusalReasonSchema = DropReasonSchema.extract([
   "FETCH_FAILED", "FETCH_FAILED_HTTP", "EXTRACT_FAILED", "EXTRACT_EMPTY", "MISSING_REQUIRED_FIELDS",
-  "ROBOTS_DENIED", "PAYWALL_OR_BLOCKED", "REJECTED_SCREENING_MIN_WORDS",
+  "PAYWALL_OR_BLOCKED", "REJECTED_SCREENING_MIN_WORDS",
 ]);
 export type RejectionStage = z.infer<typeof RejectionStageSchema>;
 export const RejectionDetailsSchema = z.strictObject({

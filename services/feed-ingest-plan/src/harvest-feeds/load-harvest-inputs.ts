@@ -80,11 +80,6 @@ export function loadHarvestInputs(raw: {
 }) {
   const planning = loadPlanningConfig(raw.config);
   const registry = RegistrySchema.parse(raw.taxonomy);
-  const rules = new Set(planning.config.curate_articles.feed_quality_tiers.map(rule => rule.tier));
-  const active = registry.source_tiers.filter(tier => tier.status === "active");
-  if (active.some(tier => !rules.has(tier.id)) || [...rules].some(id => !active.some(tier => tier.id === id))) {
-    throw new Error("curate_articles.feed_quality_tiers: rules must name every active taxonomy tier exactly once");
-  }
   const { feeds: sources, retired, publishers } = SourcesSchema.parse(raw.sources);
   validatePublisherReferences(publishers, [...sources, ...retired]);
   const extraction_settings = ExtractionSchema.parse(raw.extraction);
@@ -109,6 +104,11 @@ export function loadHarvestInputs(raw: {
     if (!registry.source_tiers.some(tier => tier.id === source.tier && tier.status === "active")) {
       throw new Error(`source.${source.id}.tier: source tier must be active and registered`);
     }
+  }
+  const rules = new Set(planning.config.curate_articles.feed_quality_tiers.map(rule => rule.tier));
+  const active = registry.source_tiers.filter(tier => tier.status === "active");
+  if (active.some(tier => !rules.has(tier.id)) || [...rules].some(id => !active.some(tier => tier.id === id))) {
+    throw new Error("curate_articles.feed_quality_tiers: rules must name every active taxonomy tier exactly once");
   }
   // This digest covers every validated input that can change harvested content or provenance.
   const { workflow_reporting, ...contentConfig } = planning.config;

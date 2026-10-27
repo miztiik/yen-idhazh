@@ -655,7 +655,7 @@ test("planner inputs ignore added feed labels while configured tiers retain thei
         ? { ...tier, status: registryStatus, retired_on: registryStatus === "retired" ? "2026-10-20" : null } : tier),
     };
     expect(() => loadHarvestInputs({
-      config: baseline.config, taxonomy: tierTaxonomy, sources: { feeds: [source({ status })] }, extraction: baseline.extraction_settings,
+      config: baseline.config, taxonomy: tierTaxonomy, sources: { feeds: [source({ status, tier: tierId })] }, extraction: baseline.extraction_settings,
     })).toThrow("source tier must be active and registered");
   }
   const historicalTierId = Math.max(...baseline.registry.source_tiers.map(tier => tier.id)) + 1;

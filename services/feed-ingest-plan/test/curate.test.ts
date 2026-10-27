@@ -68,7 +68,7 @@ async function inputs(patch: Partial<Knobs> = {}) {
     fixture.run_id.slice(11), "c6fc0434-baaa-4b34-937a-fe2412f3a720");
   return { fixture, planning, context, inputs: { ...loaded, harvest: {
     ...loaded.harvest, ...planning,
-    registry: { ...loaded.harvest.registry, source_tiers: [{ id: 1, status: "active", retired_on: null, weight: 1 }] },
+    registry: { ...loaded.harvest.registry, source_tiers: [{ id: 1, status: "active" as const, retired_on: null, weight: 1 }] },
   } } };
 }
 type Setup = Awaited<ReturnType<typeof inputs>>;
