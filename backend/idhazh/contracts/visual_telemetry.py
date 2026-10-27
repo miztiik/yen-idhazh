@@ -43,7 +43,7 @@ from typing import Any, ClassVar, Final, Self
 
 from pydantic import Field, model_validator
 
-from idhazh.contracts.base import ChangelogEntry, Contract, DateStamp, ItemId, RunId
+from idhazh.contracts.base import ChangelogEntry, Contract, DateStamp, ItemId, RunId, Sha256
 from idhazh.contracts.item_health import ElementClass
 from idhazh.contracts.visual import PlanDecision, VisualType
 from idhazh.contracts.visual_decision import NoneReason, VisualState
@@ -217,15 +217,19 @@ class VisualAttemptRow(Contract):
     auditable while still being the gate, and a later run cannot tell a refused
     visual from one never attempted.
 
-    This is the shape the fold reads. It carries the eight terms of `FOLD_KEY`
-    and the two measured columns the folded row keeps a distribution of, and
-    nothing else yet: the join key a human label needs, and a typed reason for
-    every one of the six gates, arrive with the row that writes the ledger.
-    Both are additive.
+    This is the shape the fold reads. It carries the eight terms of `FOLD_KEY`,
+    the two measured columns the folded row keeps a distribution of, and the
+    optional decision key used to join human labels. The fold deliberately
+    drops per-item identity when it replaces this row.
     """
 
     __schema_stem__: ClassVar[str] = "visual-attempt-row"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-10-27T11:32",
+            change="Add the visual decision join key to full-grain attempts.",
+            why="A human review label needs to identify the exact visual.",
+        ),
         ChangelogEntry(
             version="2026-10-27T04:00",
             change="Name pie exhaustiveness refusals in attempt records.",
@@ -318,6 +322,13 @@ class VisualAttemptRow(Contract):
             "What became of the visual. `rendered` is the one value that means a reader "
             "saw it, so it is the numerator of every keep rate here."
         )
+    )
+    visual_id: Sha256 | None = Field(
+        default=None,
+        description=(
+            "The exact visual decision's human-label join key. Null on legacy attempt "
+            "rows written before this field existed."
+        ),
     )
 
     @model_validator(mode="after")

@@ -73,6 +73,24 @@ def test_fixture_round_trips_without_losing_values(path: Path) -> None:
                     for feed in original["retired"]
                 ],
             }
+        elif contract.__schema_stem__ == "review-queue":
+            row_defaults = {
+                "alt_text": None,
+                "asset_relpath": None,
+                "none_reason": None,
+                "planned_type": None,
+                "rationale": None,
+                "rendered_type": None,
+                "title": None,
+                "visual_id": None,
+            }
+            expected = {
+                **original,
+                "rows": [
+                    {**row_defaults, **row}
+                    for row in original["rows"]
+                ],
+            }
         elif "publisher_id" in contract.model_fields and "publisher_id" not in original:
             expected = {**original, "publisher_id": None}
         elif contract.__schema_stem__ == "fetched-document":
@@ -82,6 +100,8 @@ def test_fixture_round_trips_without_losing_values(path: Path) -> None:
             }
         elif contract.__schema_stem__ == "host-fingerprint-row":
             expected = {"machine_memory_total_mib": None, **original}
+        elif "visual_id" in contract.model_fields and "visual_id" not in original:
+            expected = {**original, "visual_id": None}
         assert json.loads(once) == expected
     else:
         assert original["version"] < record.version

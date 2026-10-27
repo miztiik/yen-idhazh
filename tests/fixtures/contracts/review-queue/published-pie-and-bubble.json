@@ -1,0 +1,46 @@
+{
+  "budget_bytes": 100000,
+  "built_at": "2026-10-27T11:32:00Z",
+  "bytes_written": 1000,
+  "census": [
+    {
+      "kept": 2,
+      "population": "published",
+      "seen": 2
+    },
+    {
+      "kept": 0,
+      "population": "rejected",
+      "seen": 0
+    },
+    {
+      "kept": 0,
+      "population": "none",
+      "seen": 0
+    }
+  ],
+  "date": "2026-10-27",
+  "rows": [
+    {
+      "item_id": "ai-01",
+      "population": "published",
+      "rendered_type": "pie",
+      "source_url": "https://news.example/source/one",
+      "url_key": "1111111111111111111111111111111111111111111111111111111111111111",
+      "visual_id": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "visual_state": "rendered",
+      "planned_type": "pie"
+    },
+    {
+      "item_id": "ai-02",
+      "population": "published",
+      "rendered_type": "bubble",
+      "source_url": "https://news.example/source/two",
+      "url_key": "2222222222222222222222222222222222222222222222222222222222222222",
+      "visual_id": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+      "visual_state": "rendered",
+      "planned_type": "bubble"
+    }
+  ],
+  "version": "2026-10-27T11:32"
+}

@@ -20,7 +20,7 @@ def project_visual_outcome(decision: VisualDecision) -> dict[str, object]:
     """Copy the final decision's measurements without deriving a second outcome."""
     return decision.model_dump(
         mode="json", include={"planned_type", "rendered_type", "downgrade_depth", "marks"}
-    )
+    ) | {"visual_id": decision.visual_id}
 
 
 def count_visual_outcomes(rows: Iterable[ItemHealthRow]) -> VisualOutcomes:
