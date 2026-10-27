@@ -89,8 +89,8 @@ the [source catalog](../../../config/sources.json).
 - **Accept after identity review:** `bbc`, `the-guardian` and `straits-times`
   are valid spellings for curated publication names. Several confirmed feeds
   from the same publication would reference the same ID.
-- **Keep separate:** `the-hindu` and `the-hindu-businessline` illustrate the
-  existing editorial-publication distinction, not a common-parent grouping.
+- **Do not infer from ownership:** separate editorial publications keep
+  separate IDs even when they share a parent organization.
 - **Qualify a genuine collision:** if `the-herald` already belongs to another
   publication, `the-herald-australia` is a possible new ID only when the operator
   confirms that country identifies the distinct publication. Do not rename the
@@ -235,9 +235,10 @@ reviewed sources were the [BBC](https://www.bbc.com/aboutthebbc),
 [The Hindu BusinessLine](https://www.thehindubusinessline.com/aboutus/),
 [Mint](https://www.livemint.com/object/141enehrj3mssnltt8beak/aboutus.html)
 and [The Economist](https://www.economistgroup.com/businesses/the-economist).
-Section feeds reuse their publication's ID, while The Hindu and BusinessLine
-remain separate publications. The catalog is the source of truth for exact
-feed references; all unreviewed entries stay null, and no historical record is
+Section feeds reuse their publication's ID where review confirms one editorial
+publication. Separate editorial publications keep separate IDs even when they
+share a parent organization. The catalog is the source of truth for exact feed
+references; all unreviewed entries stay null, and no historical record is
 backfilled.
 
 ## See also
