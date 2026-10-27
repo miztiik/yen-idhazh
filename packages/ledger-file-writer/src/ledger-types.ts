@@ -6,10 +6,6 @@ import type { PersistedLedgerFileSchema } from "./ledger-file-receipt";
 export type LedgerRowContract<T extends object> = {
   schema: z.ZodType<T>;
   schemaVersion: string;
-  legacyVersions?: Readonly<Record<string, {
-    schema: z.ZodType<object>;
-    migrate: (row: object) => T;
-  }>>;
 };
 
 export type LedgerRegistration = {

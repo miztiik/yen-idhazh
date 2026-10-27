@@ -158,16 +158,13 @@ export async function readLedgerParquet<T extends object>(
     throw new LedgerHistoryReadError("Parquet ledger differs from the requested contract");
   }
   const projectionContract = "projectedFields" in contract ? contract : undefined;
-  const legacy = projectionContract !== undefined || envelope.row_schema_version === contract.schemaVersion
-    ? undefined : "legacyVersions" in contract ? contract.legacyVersions?.[envelope.row_schema_version] : undefined;
   if (projectionContract !== undefined) {
     if (SchemaVersionSchema.parse(envelope.row_schema_version) > projectionContract.schemaVersion) {
       throw new LedgerHistoryReadError("Parquet projection schema is newer than its declared fields");
     }
-  } else if (envelope.row_schema_version !== contract.schemaVersion && legacy === undefined) {
+  } else if (envelope.row_schema_version !== contract.schemaVersion) {
     throw new LedgerHistoryReadError("Parquet row schema version differs from the requested contract");
   }
-  const storedSchema = legacy?.schema ?? contract.schema;
   const writer = envelope.identity;
   const unit = createUnitId({
     ledger, covers: envelope.covers, runId: writer.run_id, job: writer.job,
@@ -181,7 +178,7 @@ export async function readLedgerParquet<T extends object>(
   }
   const table = tableFromIPC(parseParquet(() => readParquet(bytes)).intoIPCStream());
   const columns = projectionContract !== undefined ? table.schema.fields.map(logicalField)
-    : appendIdentityColumns(describeObjectSchema(storedSchema).fields, envelope.version);
+    : appendIdentityColumns(describeObjectSchema(contract.schema).fields, envelope.version);
   if (projectionContract === undefined) checkFields(table.schema.fields, columns);
   else {
     const described = describeObjectSchema(projectionContract.schema).fields;
@@ -203,7 +200,7 @@ export async function readLedgerParquet<T extends object>(
     return record as Record<string, unknown>;
   });
   if (digestRows(records, columns) !== envelope.content_sha256) throw new LedgerHistoryReadError("Parquet content digest differs from its rows");
-  const rowFields = Object.keys(describeObjectSchema(storedSchema).root.properties as Record<string, unknown>);
+  const rowFields = Object.keys(describeObjectSchema(contract.schema).root.properties as Record<string, unknown>);
   const rows = records.map(record => {
     const identity = RowIdentitySchema.parse(Object.fromEntries(
       Object.keys(RowIdentitySchema.shape).map(key => [key, record[key]]),
@@ -219,14 +216,14 @@ export async function readLedgerParquet<T extends object>(
       throw new LedgerHistoryReadError("Raw row identity differs from its writer envelope");
     }
     const storedRow = projectionContract === undefined
-      ? storedSchema.parse(Object.fromEntries(rowFields.map(key => [key, record[key]]))) : undefined;
+      ? contract.schema.parse(Object.fromEntries(rowFields.map(key => [key, record[key]]))) : undefined;
     const projectedRow = projectionContract !== undefined
       ? Object.fromEntries(projectionContract.projectedFields.map(key => [key, record[key]]))
       : storedRow;
     if (projectedRow === undefined) throw new Error("Ledger projection did not produce a row");
     if (projectionContract === undefined && storedRow === undefined) throw new Error("Stored ledger row was not parsed");
     const row = projectionContract !== undefined ? projectionContract.schema.parse(projectedRow)
-      : contract.schema.parse(legacy === undefined ? storedRow : legacy.migrate(storedRow!));
+      : contract.schema.parse(storedRow!);
     return { identity, row };
   });
   return { envelope, rows, bytes: bytes.byteLength, file_sha256: Bun.CryptoHasher.hash("sha256", bytes, "hex") };

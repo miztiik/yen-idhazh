@@ -616,6 +616,13 @@ registry, gardener and publication wiring are unchanged. The binding test
 compares the current-input subset without carrying historical acceptance into
 TypeScript.
 
+The shared TypeScript ledger reader has no migration table. A full-row contract
+accepts only its own current row stamp. A projection contract, which names only
+the fields it reads, refuses a stamp newer than it declares and reads older
+stamps for those fields without any migration. The selected stamp is not
+bumped: the physical layout is unchanged, so committed `2026-10-26` files still
+read.
+
 Targeted deletion of the same eight obsolete ledger prefixes named in Table F
 under both `state/raw/feed-ingest-plan/` and
 `state/compact/feed-ingest-plan/` is permitted, including their compact files
