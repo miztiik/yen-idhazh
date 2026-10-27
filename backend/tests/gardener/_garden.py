@@ -248,12 +248,12 @@ def _build_origin(root: Path, files: dict[str, str]) -> None:
     git(seed, "push", "--quiet", "origin", "HEAD:refs/heads/main")
 
 
-def an_origin(root: Path, files: dict[str, str]) -> tuple[Path, Path]:
-    """A bare origin holding these files in one commit, and a clone of it to work in.
+def a_bare_origin(root: Path, files: dict[str, str]) -> Path:
+    """A private bare origin holding these files in one commit.
 
     The origin is built once per session for each distinct set of files and
-    copied here, so the commit and push behind it are paid once. The copy is
-    the test's own: it pushes to it, and nothing writes to what was copied.
+    copied here, so the commit behind it is paid once. The copy is the test's
+    own: it pushes to it, and nothing writes to what was copied.
     """
     held = hashlib.sha256(json.dumps(files, sort_keys=True).encode("utf-8")).hexdigest()
     built, unbuilt = template(("garden", held))
@@ -261,6 +261,12 @@ def an_origin(root: Path, files: dict[str, str]) -> tuple[Path, Path]:
         _build_origin(built, files)
     origin = root / "origin.git"
     copy_origin(built, origin)
+    return origin
+
+
+def an_origin(root: Path, files: dict[str, str]) -> tuple[Path, Path]:
+    """A bare origin holding these files in one commit, and a clone of it to work in."""
+    origin = a_bare_origin(root, files)
     checkout = root / "checkout"
     git(root, "clone", "--quiet", str(origin), str(checkout))
     return origin, checkout

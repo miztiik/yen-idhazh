@@ -480,9 +480,9 @@ a judge.
 `backend/tests/council/test_sparse_publication.py` uses real local partial
 clones and Git packet traces. It checks exact requested blobs, unavailable
 undeclared and out-of-window blobs, missing optional paths and failed input
-fetches. Sparse and full checkouts of the same fixed base publish identical
-completed tenant bytes to separate origins. Venue records retain their own
-execution clocks and file identities; the test does not require a rerun to
+fetches. It checks the completed tenant bytes against the fixed fixture inputs
+and confirms those bytes landed in the local origin. Venue records retain their
+own execution clocks and file identities; the test does not require a rerun to
 repeat them.
 
 **The collecting job hands each tenant the identity it files under.**
