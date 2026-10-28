@@ -72,7 +72,7 @@ jobs:
           bun install --frozen-lockfile --cwd services/feed-ingest-plan
           bun install --frozen-lockfile --cwd services/host-fingerprints
 
-      - name: Run feed planning with saved history
+      - name: Collect and select articles
         id: plan
         env:
           FRESHNESS_HOURS: ${{ inputs.freshness_hours }}
@@ -81,57 +81,29 @@ jobs:
           PARTITION_STRATEGY: ${{ inputs.partition_strategy }}
         run: bun run services/feed-ingest-plan/scripts/feed-ingest-plan-http-proof.ts
 
-      - name: Persist verified planner ledgers
-        if: ${{ !cancelled() && steps.plan.outputs.current_run_files != '' }}
+      - name: Commit ledgers and write report
+        id: finalize
+        if: ${{ always() }}
         env:
           CURRENT_RUN_FILES: ${{ steps.plan.outputs.current_run_files }}
-        run: bun run services/feed-ingest-plan/scripts/feed-ingest-plan-deliver.ts
+          RUN_CANCELLED: ${{ cancelled() }}
+        run: bun run services/feed-ingest-plan/scripts/finalize-run-output.ts
 
-      - name: Write workflow run summary
+      - name: Upload run artifacts
+        id: upload
+        if: ${{ always() && steps.finalize.outputs.artifact_directory != '' }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: collect-and-select-articles-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/feed-ingest-plan/${{ steps.finalize.outputs.artifact_directory }}
+          if-no-files-found: error
+
+      - name: Finish and clean up
         if: ${{ always() }}
-        run: bun run services/feed-ingest-plan/scripts/feed-ingest-plan-report.ts
-
-      - name: Prepare selected handoff and recovery
-        id: evidence
-        if: ${{ always() }}
-        run: bun run services/feed-ingest-plan/scripts/feed-ingest-plan-artifacts.ts
-
-      # For unarchived uploads the filename is the artifact name; each path is one file.
-      - name: Preserve selected text for the summarizer
-        if: ${{ always() && steps.evidence.outputs.selected != '' }}
-        uses: actions/upload-artifact@v7
-        with:
-          archive: false
-          path: ${{ runner.temp }}/feed-ingest-plan/${{ steps.evidence.outputs.selected }}
-          if-no-files-found: error
-
-      - name: Preserve metadata delivery result
-        if: ${{ always() && steps.evidence.outputs.delivery != '' }}
-        uses: actions/upload-artifact@v7
-        with:
-          archive: false
-          path: ${{ runner.temp }}/feed-ingest-plan/${{ steps.evidence.outputs.delivery }}
-          if-no-files-found: error
-
-      - name: Preserve the public Markdown report
-        if: ${{ always() && steps.evidence.outputs.report != '' }}
-        uses: actions/upload-artifact@v7
-        with:
-          archive: false
-          path: ${{ runner.temp }}/feed-ingest-plan/${{ steps.evidence.outputs.report }}
-          if-no-files-found: error
-
-      - name: Preserve uncommitted metadata recovery only
-        if: ${{ always() && steps.evidence.outputs.metadata_recovery != '' }}
-        uses: actions/upload-artifact@v7
-        with:
-          name: uncommitted-metadata-recovery-${{ github.run_id }}-${{ github.run_attempt }}
-          path: ${{ runner.temp }}/feed-ingest-plan/${{ steps.evidence.outputs.metadata_recovery }}
-          if-no-files-found: error
-
-      - name: Require completed planning
-        if: ${{ !cancelled() }}
         env:
+          COLLECTION_OUTCOME: ${{ steps.plan.outcome }}
           PLANNING_COMPLETE: ${{ steps.plan.outputs.planning_complete }}
-        run: |
-          bun -e 'if (process.env.PLANNING_COMPLETE !== "true") { console.error("Planning did not complete; saved partial output and selected text are retained."); process.exitCode = 2; }'
+          FINALIZATION_OUTCOME: ${{ steps.finalize.outcome }}
+          UPLOAD_OUTCOME: ${{ steps.upload.outcome }}
+          UPLOAD_ARTIFACT_ID: ${{ steps.upload.outputs.artifact-id }}
+        run: bun run services/feed-ingest-plan/scripts/finish-run-output.ts

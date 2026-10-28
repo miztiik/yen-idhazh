@@ -1,6 +1,6 @@
 # GitHub Actions Workflows
 
-**Last Updated**: 2026-10-27
+**Last Updated**: 2026-10-28
 
 Which workflows run, when they run, and what they may publish.
 The [workflow declarations](../../.github/workflows/) are authoritative.
@@ -66,15 +66,19 @@ There is no host index, remote host service or direct collector call. The
 workflow records a host fingerprint but does not profile live planner CPU or
 RAM.
 
+Three tasks close the collection: commit all verified ledgers and write the
+report, upload one prepared run artifact, then check completion and clean up.
 Publication may retain completed diagnostics after planner failure; it never
-changes the planner's failed result. Unpublished valid files join the existing
-metadata recovery artifact even when no planner response was saved.
-Selected text is uploaded separately for the next summarizer stage; ledger
-rows remain body-free. The Markdown summary includes host fingerprint facts,
-with L3 cache and total RAM capacity displayed in MiB. The safe-delivery API
-commits the exact verified metadata files and preserves an explicit recovery
-artifact if that commit is not confirmed. Independent host-probe checks remain
-in CI and are not part of this manual workflow.
+changes the failed result. The artifact contains selected full text for the
+next summarizer, the report and delivery receipt, plus exact uncommitted
+metadata only when Git delivery was not confirmed. Ledger rows remain
+body-free and go to their normal Git locations, not to an archive in Git.
+The Markdown summary includes the actual Git delivery result and host
+fingerprint facts, with L3 cache and total RAM capacity displayed in MiB.
+Failed finalization or upload leaves temporary output untouched. Independent
+host-probe checks remain in CI and are not part of this manual workflow.
+The [manual workflow guide](../how-to/run-feed-ingest-plan-test.md#saved-output-and-failures)
+defines the artifact layout and cleanup conditions.
 See [host metrics](host-metrics.md) for the fingerprint and its unavailable reasons.
 
 ## Pages publication

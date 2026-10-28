@@ -10,6 +10,7 @@ import type { PlannerMarkdown } from "../src/reporting";
 import { formatHostFingerprintSummary } from "./feed-ingest-plan-host-summary";
 import { formatPolicyTable } from "./feed-ingest-plan-policy-report";
 import { formatWorkflowAnnotation } from "./feed-ingest-plan-report-format";
+import { MetadataDeliveryResultSchema } from "./feed-ingest-plan-delivery-result";
 
 export type WorkflowReportEvidence = {
   response: unknown; health?: unknown; policy?: unknown; host?: unknown;
@@ -58,29 +59,38 @@ export async function readExecutionReport(directory: string) {
   return renderWorkflowPlanMarkdown(await readExecutionEvidence(directory)).markdown;
 }
 
+export async function writeWorkflowReport(input: {
+  root: string; directory: string; summaryPath?: string;
+}) {
+  const config = FeedIngestConfigSchema.parse(await Bun.file(join(input.root, "config", "feed-ingest-plan.json")).json());
+  if (!config.workflow_reporting.enabled) return { status: "disabled" as const };
+  if (!input.summaryPath) throw new Error("Enabled reporting requires a summary output path");
+  await mkdir(input.directory, { recursive: true });
+  let report: PlannerMarkdown;
+  if (await Bun.file(join(input.directory, "response.json")).exists()) {
+    report = renderWorkflowPlanMarkdown(await readExecutionEvidence(input.directory));
+  } else {
+    const hostFile = Bun.file(join(input.directory, "host-fingerprint.json"));
+    const host = formatHostFingerprintSummary(await hostFile.exists() ? await hostFile.json() : undefined);
+    report = renderUnavailablePlanMarkdown({ host: { markdown: host.summary, notice: host.notice } });
+  }
+  const receiptFile = Bun.file(join(input.directory, "delivery-result.json"));
+  const receipt = await receiptFile.exists() ? MetadataDeliveryResultSchema.parse(await receiptFile.json()) : null;
+  const delivery = receipt === null ? "Git delivery was not confirmed."
+    : `Git delivery: **${receipt.status}**. ${receipt.files} verified files.`
+      + (receipt.commit === null ? "" : ` Commit: \`${receipt.commit}\`.`);
+  const markdown = `${report.markdown}\n\n## Metadata delivery\n\n${delivery}\n`;
+  await writeFile(join(input.directory, "report.md"), markdown, "utf8");
+  await appendFile(input.summaryPath, markdown, "utf8");
+  for (const notice of report.notices) console.log(formatWorkflowAnnotation(notice));
+  return { status: "written" as const, markdown };
+}
+
 if (import.meta.main) {
   const { RUNNER_TEMP, GITHUB_STEP_SUMMARY } = process.env;
-  const config = FeedIngestConfigSchema.parse(await Bun.file("config/feed-ingest-plan.json").json());
-  if (config.workflow_reporting.enabled) {
-    if (!RUNNER_TEMP || !GITHUB_STEP_SUMMARY) throw new Error("Workflow report controls are missing");
-    const directory = join(RUNNER_TEMP, "feed-ingest-plan");
-    await mkdir(directory, { recursive: true });
-    const response = Bun.file(join(directory, "response.json"));
-    if (!await response.exists()) {
-      const hostFile = Bun.file(join(directory, "host-fingerprint.json"));
-      const host = formatHostFingerprintSummary(await hostFile.exists() ? await hostFile.json() : undefined);
-      const report = renderUnavailablePlanMarkdown({
-        host: { markdown: host.summary, notice: host.notice },
-      });
-      await appendFile(GITHUB_STEP_SUMMARY, report.markdown, "utf8");
-      await writeFile(join(directory, "report.md"), report.markdown);
-      for (const notice of report.notices) console.log(formatWorkflowAnnotation(notice));
-    } else {
-      const report = await writePlannerReport({
-        config, evidence: await readExecutionEvidence(directory), summary_path: GITHUB_STEP_SUMMARY,
-      });
-      if (report.status !== "written") throw new Error("Enabled workflow reporting did not write a report");
-      await writeFile(join(directory, "report.md"), report.markdown);
-    }
-  }
+  if (!RUNNER_TEMP) throw new Error("Workflow report controls are missing");
+  await writeWorkflowReport({
+    root: process.cwd(), directory: join(RUNNER_TEMP, "feed-ingest-plan"),
+    ...(GITHUB_STEP_SUMMARY === undefined ? {} : { summaryPath: GITHUB_STEP_SUMMARY }),
+  });
 }
