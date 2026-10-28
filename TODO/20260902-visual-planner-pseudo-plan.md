@@ -1824,7 +1824,7 @@ index, not the plan.
 | 14 | The rest of the ship-or-not bar (delivered) | The sufficiency checks as a build gate rather than a habit |
 | 15 | [Chart vocabulary and refusal rules](../docs/architecture/publishing/what-a-visual-plan-may-say-and-what-happens-to-one-that-is-refused.md) | Chart families 1-5 delivered; Row 6 text visuals abandoned |
 | 16 | [Parts of a whole](../docs/architecture/publishing/what-a-visual-plan-may-say-and-what-happens-to-one-that-is-refused.md) | The composition family |
-| 17 | [The rest of the infographics](20260905-17-infographic-vocabulary-plan.md) | The infographic family |
+| 17 | [Source text fitting and the who/what grid](../docs/architecture/publishing/where-a-drawing-becomes-pixels.md#the-whowhat-grid-is-a-separate-format-and-reader) | Delivered: source-prefix chart labels and a separate source-backed grid; callout and keyfacts collapsed |
 | 18 | [Diagrams deferred](../docs/architecture/publishing/visuals.md#diagrams-deferred) | Whole plan deferred; not delivered or a prerequisite for other visual work |
 | 19 | [Every attempt is recorded](20260905-19-visual-telemetry-plan.md) | The visual telemetry event and the ledger under `state/` |
 | 20 | [The operator can see whether it worked](20260905-20-visual-console-plan.md) | The console panels that read that ledger |
