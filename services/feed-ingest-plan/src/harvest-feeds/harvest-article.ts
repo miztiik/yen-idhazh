@@ -55,7 +55,9 @@ export async function harvestArticle(
   const link = entry.link;
   const parserOptions: HarvestContext["parser_options"] = context.parser_options?.activity === undefined ? context.parser_options : {
     ...context.parser_options,
-    activity: (phase, duration_ms) => context.parser_options!.activity?.(phase, duration_ms, source.source_id),
+    activity: (phase, duration_ms) => context.parser_options!.activity?.(
+      phase, duration_ms, source.source_id, source.publisher_id,
+    ),
   };
   const parsed = await work.parse(
     () => parseDocument("article", body, link, inputs.extraction, context.parser_pool, parserOptions), fetchedEvent.event_id, describeArticleParse,
