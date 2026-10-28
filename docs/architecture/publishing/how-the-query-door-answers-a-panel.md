@@ -1,6 +1,6 @@
 # How the query door answers a panel
 
-**Last Updated**: 2026-10-24
+**Last Updated**: 2026-10-28
 
 The query door is the one module a console panel calls to read a committed
 ledger: `slice()` for rows and `ledgerReach()` for how far a ledger reaches, both
@@ -602,10 +602,8 @@ Tests of HTTP caching use their own local add-on host, because a routed context
 disables HTTP caching.
 
 CI restores a cache named by the installed package, runtime and platform before
-any frontend test or build. A miss runs the explicit setup command. The weekly
-main-branch refresh downloads the current file and saves a new cache entry under
-that version's prefix, so normal runs restore the newest prepared copy without
-depending on the add-on host. See [the gate commands](../../how-to/run-the-gates.md#the-frontend-gates).
+any frontend test or build. A miss runs the explicit setup command. See the
+[gate commands](../../how-to/run-the-gates.md#the-frontend-gates).
 
 ## Design rationale
 
