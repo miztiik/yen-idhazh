@@ -6,6 +6,8 @@
   "description": "Read-only TypeScript feed access and article readability probe.",
   "exports": "./src/index.ts",
   "scripts": {
+    "probe": "bun src/feed-probe-cli.ts",
+    "probe-feeds": "bun src/feed-probe-cli.ts",
     "check": "tsc --noEmit",
     "test": "bun test --timeout 30000"
   },
