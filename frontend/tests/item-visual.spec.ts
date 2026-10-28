@@ -86,6 +86,15 @@ test('viewport sizing preserves every supported family without a density or fixe
     }
 });
 
+test('a fitted chart label keeps the source prefix and visible suffix', () => {
+    const data = sourceCompiledChart('text-fit.json');
+    expect(refusedVisualData(data)).toBeNull();
+    const drawing = drawBars(data, 360, formatNumber, geometry);
+    const fitted = 'Northern Atlantic offshore developmen...';
+    expect(drawing.bars.map(({ name }) => name)).toContain(fitted);
+    expect(statedBars(drawing)).toContain(fitted);
+});
+
 test('pie geometry and its visible readout preserve every share and the stated total', () => {
     const data = sourceCompiledChart('pie-from-declared-whole.json');
     expect(refusedVisualData(data)).toBeNull();

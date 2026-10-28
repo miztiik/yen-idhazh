@@ -78,7 +78,9 @@ class VisualsConfig(Model):
         description="Apply enabled_types to the request grammar, reachability and parsed plans.",
     )
     enabled_types: list[VisualType] = Field(
-        default_factory=lambda: list(VisualType), min_length=1, max_length=len(VisualType),
+        default_factory=lambda: list(VisualType),
+        min_length=1,
+        max_length=len(VisualType),
         description="Native type names the operator selects, including unruled and unbuilt forms.",
     )
     downgrade_enabled: bool = Field(  # Remove after tested, maintainer-approved as permanent.
@@ -86,11 +88,13 @@ class VisualsConfig(Model):
         description="Try supported purpose-preserving replacements using measured history.",
     )
     downgrade_lookback_days: int = Field(
-        default=30, ge=1,
+        default=30,
+        ge=1,
         description="Previous UTC days of direct delivered item-health outcomes to read per shard.",
     )
     downgrade_max_samples_per_type: int = Field(
-        default=256, ge=1,
+        default=256,
+        ge=1,
         description="Most recent direct delivered mark counts retained per target type.",
     )
     min_chart_points: int = Field(
@@ -155,6 +159,15 @@ class VisualsConfig(Model):
             "lost-in-the-middle for a small model picking an integer index."
         ),
     )
+    max_label_characters: int = Field(
+        default=40,
+        ge=4,
+        description=(
+            "Maximum displayed characters for source-backed chart labels, including the `...` "
+            "suffix. Longer labels keep their exact opening source characters; stacked-bar "
+            "labels remain uncapped."
+        ),
+    )
     lead_words: int = Field(
         default=150,
         ge=1,
@@ -210,9 +223,7 @@ class VisualsConfig(Model):
         if value.endswith("/"):
             raise ValueError("visuals.asset_base_url carries no trailing slash")
         if any(character in value for character in " \t?#"):
-            raise ValueError(
-                "visuals.asset_base_url carries no whitespace, query or fragment"
-            )
+            raise ValueError("visuals.asset_base_url carries no whitespace, query or fragment")
         return value
 
     @model_validator(mode="after")

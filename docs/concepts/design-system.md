@@ -91,6 +91,9 @@ Apply `--measure` once to the block holding title and summary, at the prose size
 ### A chart's column is set by what the chart was drawn at
 
 Draw against the actual content width in CSS pixels. Do not shrink a wide drawing until its labels are unreadable. Reserve the figure's dimensions to avoid layout shifts; choose a simpler layout when the available width cannot hold its labels.
+The [chart contract](../architecture/publishing/where-a-drawing-becomes-pixels.md#design-rationale)
+defines how the producer shortens long source labels without changing their source wording,
+and omits a chart if two different labels would become the same.
 
 Fit the complete story figure to the visible viewport where readable content
 allows it. Measure wrapped framing, readings, spacing and any sticky filter band;

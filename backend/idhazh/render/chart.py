@@ -45,11 +45,9 @@ from idhazh.derived_values import (
 )
 from idhazh.relationship_evidence import refuse_relationship
 from idhazh.sanitize import sanitize
+from idhazh.text_fit import fit_source_span
 from idhazh.visual_vocabulary import TYPE_RULES, VALUE_ROLES
 
-#: How many of an element's own characters name one bar. The drawn label is the
-#: article's text, so it is cut rather than reworded.
-MARK_NAME_MAX: Final = 40
 #: What a screen reader gets, and the same cap `UntrustedLine` holds the
 #: decision's `alt_text` to.
 ALT_TEXT_MAX: Final = 300
@@ -195,8 +193,18 @@ def compile_chart(
         role: [value for value in resolved.values if value.role is role] if role in allowed else []
         for role in EncodingRole
     }
-    _check_channel_pairing(visual_type, channels, known)
-    data, figures = _chart_data(table.item_id, channels, plan, visual_type, known)
+    max_label_characters = (
+        None if visual_type is VisualType.STACKED_BAR else visuals.max_label_characters
+    )
+    _check_channel_pairing(visual_type, channels, known, max_label_characters=max_label_characters)
+    data, figures = _chart_data(
+        table.item_id,
+        channels,
+        plan,
+        visual_type,
+        known,
+        max_label_characters=max_label_characters,
+    )
     return CompiledChart(
         _chart_alt_text(
             visual_type,
@@ -205,6 +213,7 @@ def compile_chart(
             known,
             data.declared_whole,
             data.histogram_unit,
+            max_label_characters=max_label_characters,
         ),
         data,
         measure_displayed_values(
@@ -227,13 +236,18 @@ def _check_channel_pairing(
     visual_type: VisualType,
     channels: Mapping[EncodingRole, Sequence[DisplayedValue]],
     known: Mapping[ElementId, Element],
+    *,
+    max_label_characters: int | None,
 ) -> None:
     """Refuse a channel shape that cannot be drawn without losing values."""
     quantities = channels[EncodingRole.QUANTITY]
     if visual_type in (VisualType.SCATTER, VisualType.BUBBLE):
-        names = [_mark_text(value, known) for value in channels[EncodingRole.ENTITY]]
+        names = [
+            _mark_text(value, known, max_length=max_label_characters)
+            for value in channels[EncodingRole.ENTITY]
+        ]
         if len(set(names)) != len(names):
-            raise CompileError("relationship entity labels must remain distinct after sanitizing")
+            raise CompileError("relationship entity labels must remain distinct after fitting")
         if visual_type is VisualType.BUBBLE and len(channels[EncodingRole.SIZE]) != len(quantities):
             raise CompileError("a bubble needs one size measure for every point")
         return
@@ -250,17 +264,17 @@ def _check_channel_pairing(
         series = channels[EncodingRole.SERIES]
         if len(categories) != 1 or len(quantities) < 2 or len(series) != len(quantities):
             raise CompileError("a stacked bar has one whole and one label for each part")
-        labels = [_mark_text(value, known, max_length=None) for value in series]
+        labels = [_mark_text(value, known, max_length=max_label_characters) for value in series]
         if len(set(labels)) != len(labels):
-            raise CompileError("stacked-bar part labels must remain distinct after sanitizing")
+            raise CompileError("stacked-bar part labels must remain distinct as source text")
         return
     if visual_type is VisualType.PIE:
         categories = channels[EncodingRole.CATEGORY]
-        labels = [_mark_text(value, known) for value in categories]
+        labels = [_mark_text(value, known, max_length=max_label_characters) for value in categories]
         if len(categories) != len(quantities):
             raise CompileError("a pie pairs one category with each part quantity")
         if len(set(labels)) != len(labels):
-            raise CompileError("pie category names must remain distinct after sanitizing")
+            raise CompileError("pie category names must remain distinct after fitting")
         return
     if visual_type is VisualType.HISTOGRAM:
         if not 2 <= len(channels[EncodingRole.BINS]) <= 8:
@@ -288,7 +302,9 @@ def _check_channel_pairing(
             if element is None or element.kind is not ElementKind.DATE or element.value is None:
                 raise CompileError("a line time has no source date")
             precisions.add(len(element.value))
-            label = _mark_text(series[index], known) if series else ""
+            label = (
+                _mark_text(series[index], known, max_length=max_label_characters) if series else ""
+            )
             dates = by_series.setdefault(label, set())
             if element.value in dates:
                 raise CompileError("a line has two readings for one series and date")
@@ -307,9 +323,13 @@ def _check_channel_pairing(
         raise CompileError("a slope needs one entity label for each quantity pair")
     if series and len(series) != pair_count:
         raise CompileError("a slope needs one series label for each quantity pair")
-    if len({_mark_text(value, known) for value in times}) != 2:
+    if len({_mark_text(value, known, max_length=max_label_characters) for value in times}) != 2:
         raise CompileError("a slope needs two distinct time labels")
-    if not entities and len({_mark_text(value, known) for value in series}) != pair_count:
+    if (
+        not entities
+        and len({_mark_text(value, known, max_length=max_label_characters) for value in series})
+        != pair_count
+    ):
         raise CompileError("a slope needs distinct series labels when entity labels are absent")
 
 
@@ -319,8 +339,11 @@ def _chart_data(
     plan: VisualPlan,
     visual_type: VisualType,
     known: Mapping[ElementId, Element],
+    *,
+    max_label_characters: int | None,
 ) -> tuple[VisualData, list[_Figure]]:
     """Write each filled source channel once, keeping its role in the payload."""
+    _refuse_label_fit_collisions(channels, known, max_label_characters=max_label_characters)
     marks: list[VisualMark] = []
     measured_figures: dict[str, _Figure] = {}
     encoded: dict[str, list[str]] = {role.value: [] for role in EncodingRole}
@@ -355,11 +378,7 @@ def _chart_data(
                     )
                 )
             else:
-                text = _mark_text(
-                    value,
-                    known,
-                    max_length=None if visual_type is VisualType.STACKED_BAR else MARK_NAME_MAX,
-                )
+                text = _mark_text(value, known, max_length=max_label_characters)
                 if not text:
                     raise CompileError(
                         f"a {role.value} mark has nothing after sanitizing and cannot be drawn"
@@ -575,13 +594,47 @@ def _mark_text(
     value: DisplayedValue,
     known: Mapping[ElementId, Element],
     *,
-    max_length: int | None = MARK_NAME_MAX,
+    max_length: int | None,
 ) -> str:
-    """A label taken from its own source characters and sanitized before publication."""
+    """Publish unchanged source characters or their exact fitted prefix."""
     if value.element_id is None:
         raise CompileError("a label has to be an element the article wrote")
-    text = sanitize(known[value.element_id].span_excerpt)
-    return text if max_length is None else text[:max_length]
+    source_span = known[value.element_id].span_excerpt
+    safe_span = sanitize(source_span)
+    if not safe_span:
+        return ""
+    if safe_span != source_span:
+        raise CompileError("a source label changed when sanitized and cannot be drawn")
+    return (
+        source_span
+        if max_length is None
+        else fit_source_span(source_span, max_characters=max_length)
+    )
+
+
+def _refuse_label_fit_collisions(
+    channels: Mapping[EncodingRole, Sequence[DisplayedValue]],
+    known: Mapping[ElementId, Element],
+    *,
+    max_label_characters: int | None,
+) -> None:
+    """Keep distinct source labels distinct after shortening."""
+    if max_label_characters is None:
+        return
+    for role, values in channels.items():
+        if role in VALUE_ROLES:
+            continue
+        sources_by_label: dict[str, set[str]] = {}
+        for value in values:
+            if value.element_id is None:
+                continue
+            source_span = known[value.element_id].span_excerpt
+            label = _mark_text(value, known, max_length=max_label_characters)
+            sources_by_label.setdefault(label, set()).add(source_span)
+        if any(len(sources) > 1 for sources in sources_by_label.values()):
+            raise CompileError(
+                f"different source labels in {role.value} become identical after shortening"
+            )
 
 
 def _time_value(value: DisplayedValue, known: Mapping[ElementId, Element]) -> str:
@@ -601,6 +654,8 @@ def _chart_alt_text(
     known: Mapping[ElementId, Element],
     declared_whole: VisualWhole | None,
     histogram_unit: str | None,
+    *,
+    max_label_characters: int | None,
 ) -> str:
     """State every visible label and figure from the source channels."""
     unit = f" {figures[0].unit}" if figures and figures[0].unit else ""
@@ -608,7 +663,11 @@ def _chart_alt_text(
         facts = []
         for index, figure in enumerate(figures):
             horizontal = _figure(channels[EncodingRole.QUANTITY_X][index], known)
-            label = _mark_text(channels[EncodingRole.ENTITY][index], known)
+            label = _mark_text(
+                channels[EncodingRole.ENTITY][index],
+                known,
+                max_length=max_label_characters,
+            )
             facts.append(
                 f"{label}: x {horizontal.stated} {horizontal.unit or ''}, "
                 f"y {figure.stated}{unit}"
@@ -620,7 +679,11 @@ def _chart_alt_text(
         for index, figure in enumerate(figures):
             horizontal = _figure(channels[EncodingRole.QUANTITY_X][index], known)
             size = _figure(sizes[index], known)
-            label = _mark_text(channels[EncodingRole.ENTITY][index], known)
+            label = _mark_text(
+                channels[EncodingRole.ENTITY][index],
+                known,
+                max_length=max_label_characters,
+            )
             facts.append(
                 f"{label}: x {horizontal.stated} {horizontal.unit or ''}, "
                 f"y {figure.stated} {figure.unit or ''}, "
@@ -631,12 +694,15 @@ def _chart_alt_text(
         categories = channels[EncodingRole.CATEGORY]
         series = channels[EncodingRole.SERIES]
         name = "Bar chart" if visual_type is VisualType.BAR else "Dot chart"
-        facts = [
-            f"{_mark_text(categories[index], known)}"
-            f"{f' ({_mark_text(series[index], known)})' if series else ''} "
-            f"{format(figure.value.normalize(), ',f')}{unit}"
-            for index, figure in enumerate(figures)
-        ]
+        facts = []
+        for index, figure in enumerate(figures):
+            category = _mark_text(categories[index], known, max_length=max_label_characters)
+            series_label = (
+                f" ({_mark_text(series[index], known, max_length=max_label_characters)})"
+                if series
+                else ""
+            )
+            facts.append(f"{category}{series_label} {format(figure.value.normalize(), ',f')}{unit}")
         return f"{name}. {'; '.join(facts)}."[:ALT_TEXT_MAX]
     if visual_type is VisualType.STACKED_BAR:
         row = _mark_text(channels[EncodingRole.CATEGORY][0], known, max_length=None)
@@ -654,7 +720,7 @@ def _chart_alt_text(
             raise CompileError("a pie has no declared whole to read out")
         categories = channels[EncodingRole.CATEGORY]
         facts = [
-            f"{_mark_text(categories[index], known)} "
+            f"{_mark_text(categories[index], known, max_length=max_label_characters)} "
             f"{format(figure.value.normalize(), ',f')}{unit}"
             for index, figure in enumerate(figures)
         ]
@@ -676,13 +742,20 @@ def _chart_alt_text(
         unit_suffix = f" {DISPLAY_UNIT_SYMBOLS.get(histogram_unit or '', histogram_unit or '')}"
         return f"Histogram chart. {'; '.join(facts)}{unit_suffix}."[:ALT_TEXT_MAX]
 
-    times = [_mark_text(value, known) for value in channels[EncodingRole.TIME]]
+    times = [
+        _mark_text(value, known, max_length=max_label_characters)
+        for value in channels[EncodingRole.TIME]
+    ]
     entities = channels[EncodingRole.ENTITY]
     series = channels[EncodingRole.SERIES]
     if visual_type is VisualType.LINE:
         facts = []
         for index, figure in enumerate(figures):
-            name = f"{_mark_text(series[index], known)}: " if series else ""
+            name = (
+                f"{_mark_text(series[index], known, max_length=max_label_characters)}: "
+                if series
+                else ""
+            )
             facts.append(
                 f"{name}{times[index]} "
                 f"{format(figure.value.normalize(), ',f')}{unit}"
@@ -690,8 +763,16 @@ def _chart_alt_text(
         return f"Line chart. {'; '.join(facts)}."[:ALT_TEXT_MAX]
     facts = []
     for index in range(len(figures) // 2):
-        label = _mark_text(entities[index], known) if entities else _mark_text(series[index], known)
-        family = f" ({_mark_text(series[index], known)})" if entities and series else ""
+        label = (
+            _mark_text(entities[index], known, max_length=max_label_characters)
+            if entities
+            else _mark_text(series[index], known, max_length=max_label_characters)
+        )
+        family = (
+            f" ({_mark_text(series[index], known, max_length=max_label_characters)})"
+            if entities and series
+            else ""
+        )
         before = format(figures[index * 2].value.normalize(), ',f')
         after = format(figures[index * 2 + 1].value.normalize(), ',f')
         facts.append(f"{label}{family}: {times[0]} {before}{unit}; {times[1]} {after}{unit}")
