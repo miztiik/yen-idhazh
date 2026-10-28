@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0">
+  <channel>
+    <title>Mixed Feed Fixture</title>
+    <link>https://fixture.test/</link>
+    <description>Recorded mixed access fixture</description>
+    <item>
+      <title>Paywall Article</title>
+      <link>https://fixture.test/paywall-one</link>
+      <pubDate>Tue, 27 Oct 2026 10:00:00 GMT</pubDate>
+    </item>
+    <item>
+      <title>Readable Article</title>
+      <link>https://fixture.test/article-one</link>
+      <pubDate>Tue, 27 Oct 2026 11:00:00 GMT</pubDate>
+    </item>
+  </channel>
+</rss>
