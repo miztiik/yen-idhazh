@@ -79,7 +79,7 @@ jobs:
           ARTICLE_LIMIT: ${{ inputs.article_limit }}
           SHARDS: ${{ inputs.shards }}
           PARTITION_STRATEGY: ${{ inputs.partition_strategy }}
-        run: bun run services/feed-ingest-plan/scripts/feed-ingest-plan-http-proof.ts
+        run: bun run services/feed-ingest-plan/scripts/run-feed-ingest-plan.ts
 
       - name: Record workflow cancellation
         id: cancellation

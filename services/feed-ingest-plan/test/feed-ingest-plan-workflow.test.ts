@@ -18,6 +18,7 @@ import { LedgerHistoryReadError } from "../src/read-ledger-history/ledger-histor
 import { requiredUtcDays } from "../src/utc-instant";
 import { createPlannerHistoryInputs } from "../scripts/feed-ingest-plan-history";
 import { stageFeedHistory } from "../scripts/feed-ingest-plan-feed-history";
+import { preparePlannerWorkflow, readWorkflowRequest } from "../scripts/feed-ingest-plan-workflow-inputs";
 import { completeHistoryDayInputs, historyIndexPaths, resolveHistoryInventory, sparseCheckoutPath } from "../scripts/feed-ingest-plan-outputs";
 
 const root = fileURLToPath(new URL("../../../", import.meta.url));
@@ -40,6 +41,16 @@ async function workflow() {
   return { text, parsed, steps: parsed.jobs["isolated-plan"].steps };
 }
 
+test("workflow preparation validates dispatch data and requires execution controls before loading files", async () => {
+  expect(readWorkflowRequest({ ARTICLE_LIMIT: "", SHARDS: "  " })).toEqual({});
+  expect(readWorkflowRequest({
+    FRESHNESS_HOURS: "12", ARTICLE_LIMIT: "5", SHARDS: "2", PARTITION_STRATEGY: "round-robin",
+  })).toEqual({ freshness_hours: 12, article_limit: 5, shards: 2, partition_strategy: "round-robin" });
+  expect(() => readWorkflowRequest({ ARTICLE_LIMIT: "0" })).toThrow();
+  expect(() => readWorkflowRequest({ PARTITION_STRATEGY: "unknown" })).toThrow();
+  await expect(preparePlannerWorkflow(root, {})).rejects.toThrow("Workflow execution controls are missing");
+});
+
 test("manual controls exercise the planner API and keep only required outputs", async () => {
   const { text, parsed, steps } = await workflow();
   expect(parsed.permissions).toEqual({ contents: "write" });
@@ -55,7 +66,7 @@ test("manual controls exercise the planner API and keep only required outputs", 
   const serviceManifest = await Bun.file(join(root, "services", "feed-ingest-plan", "package.json")).json();
   expect(serviceManifest.exports["./markdown"]).toBe("./src/reporting/index.ts");
   const plan = steps.find(step => step.id === "plan")!;
-  expect(plan.run).toBe("bun run services/feed-ingest-plan/scripts/feed-ingest-plan-http-proof.ts");
+  expect(plan.run).toBe("bun run services/feed-ingest-plan/scripts/run-feed-ingest-plan.ts");
   expect(plan.env).toEqual({
     FRESHNESS_HOURS: "${{ inputs.freshness_hours }}", ARTICLE_LIMIT: "${{ inputs.article_limit }}",
     SHARDS: "${{ inputs.shards }}", PARTITION_STRATEGY: "${{ inputs.partition_strategy }}",
@@ -224,7 +235,7 @@ test("bounded discovery history preserves covered-day membership and planner raw
 });
 
 test("hostile dispatch strings fail in the actual adapter before loading inputs or making requests", async () => {
-  const child = Bun.spawn([process.execPath, join(root, "services", "feed-ingest-plan", "scripts", "feed-ingest-plan-http-proof.ts")], {
+  const child = Bun.spawn([process.execPath, join(root, "services", "feed-ingest-plan", "scripts", "run-feed-ingest-plan.ts")], {
     cwd: root, stdout: "pipe", stderr: "pipe",
     env: { ...Bun.env, FRESHNESS_HOURS: '24; throw new Error("injected")', ARTICLE_LIMIT: "", SHARDS: "", PARTITION_STRATEGY: "" },
   });
@@ -245,7 +256,9 @@ test("the workflow checkout names runtime code and only the delivery inputs it n
   const required = new Set([
     "services/feed-ingest-plan/package.json",
     "services/feed-ingest-plan/bun.lock",
-    "services/feed-ingest-plan/scripts/feed-ingest-plan-http-proof.ts",
+    "services/feed-ingest-plan/scripts/run-feed-ingest-plan.ts",
+    "services/feed-ingest-plan/scripts/feed-ingest-plan-http-client.ts",
+    "services/feed-ingest-plan/scripts/feed-ingest-plan-workflow-inputs.ts",
     "services/feed-ingest-plan/scripts/feed-ingest-plan-deliver.ts",
     "services/feed-ingest-plan/scripts/finalize-run-output.ts",
     "services/feed-ingest-plan/scripts/finish-run-output.ts",

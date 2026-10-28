@@ -9,7 +9,7 @@ import { recordedPlan } from "./plan-recordings";
 import { source } from "./harvest-recordings";
 import { main } from "../src/index";
 import { executeFeedHealthState } from "../src/api/feed-health-state-operation";
-import { invokePlannerHttp } from "../scripts/feed-ingest-plan-http-proof";
+import { invokePlannerHttp } from "../scripts/run-feed-ingest-plan";
 import { verifyParquetFiles, verifyPlanningCompletion } from "../scripts/feed-ingest-plan-verification";
 import { createExecutionOutputs, writeGitHubOutputs } from "../scripts/feed-ingest-plan-outputs";
 import { readExecutionReport, renderWorkflowPlanMarkdown, writePlannerReport } from "../scripts/feed-ingest-plan-report";
