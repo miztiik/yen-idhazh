@@ -62,7 +62,7 @@ export async function parseFetchedDocument(
   }, { run_id: fetched.run_id, correlation_id: fetched.correlation_id, article_id: artifact.article_id, source_id: source.id },
   record.request_id, {
     document_kind: artifact.fetch_item_type, source_id: source.id, publisher_id: source.publisher_id,
-    observed_run_id: fetched.run_id, observed_attempt: inputs.settings.run.attempt, candidate_id: offer?.offer_id ?? null,
+    observed_run_id: fetched.run_id, observed_attempt: state.context.writer.attempt, candidate_id: offer?.offer_id ?? null,
   });
   if (artifact.fetch_item_type === "feed") {
     const parsed = await work.parse(() => parseDocument("feed", artifact.body!, artifact.canonical_url),

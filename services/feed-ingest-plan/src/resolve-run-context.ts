@@ -5,11 +5,16 @@ import { z } from "zod";
 import type { ServiceSettings } from "./config/service-settings";
 import { selectedArtifactPath } from "./selected-artifact-path";
 
+export const FIRST_RUN_ATTEMPT = 1;
+export const DEFAULT_PLANNER_PRODUCER = "feed-ingest-plan.runner";
+
 export function resolveRunContext(
   settings: ServiceSettings, gitSha: string, now: Date,
   runNumber = BigInt(`0x${randomUUID().replaceAll("-", "")}`).toString(),
   correlationId: string = randomUUID(),
   capturedAt?: string,
+  attempt = FIRST_RUN_ATTEMPT,
+  producer = DEFAULT_PLANNER_PRODUCER,
 ) {
   if (!Number.isFinite(now.getTime())) throw new Error("run.now must be a valid UTC instant");
   const occurred_at = now.toISOString().replace(/\.\d{3}Z$/, "Z");
@@ -18,8 +23,8 @@ export function resolveRunContext(
   const date = occurred_at.slice(0, 10);
   const run_id = `${date}-${runNumber}`;
   const writer = WriterIdentitySchema.parse({
-    run_id, attempt: settings.run.attempt, job: null, pipeline_name: "feed-ingest-plan",
-    task_name: "plan", shard: 0, producer: settings.run.producer, git_sha: gitSha,
+    run_id, attempt, job: null, pipeline_name: "feed-ingest-plan",
+    task_name: "plan", shard: 0, producer, git_sha: gitSha,
   });
   selectedArtifactPath(settings.inputs.artifact_root, { run_id, writer });
   return {

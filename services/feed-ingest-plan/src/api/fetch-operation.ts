@@ -62,7 +62,7 @@ export async function fetchDocument(
   }, { run_id: record.run_id, correlation_id: record.correlation_id, article_id: identity.url_key, source_id: source.id },
   record.request_id, {
     document_kind: request.fetch_item_type, source_id: source.id, publisher_id: source.publisher_id,
-    observed_run_id: record.run_id, observed_attempt: inputs.settings.run.attempt, candidate_id: parent?.offer.offer_id ?? null,
+    observed_run_id: record.run_id, observed_attempt: state.context.writer.attempt, candidate_id: parent?.offer.offer_id ?? null,
   });
   if (request.fetch_item_type === "article") {
     const exclusions = await documentExclusions(state, inputs);

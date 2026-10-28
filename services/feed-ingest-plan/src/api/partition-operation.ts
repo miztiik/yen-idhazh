@@ -24,7 +24,8 @@ export async function executePartition(raw: unknown, inputs: PlanInputs, runtime
   const keepOriginal = store.claimPartition(selected.batch_id) && !executionHasArtifact(inputs, selected.context);
   if (!keepOriginal) {
     const captured = (runtime.selection_clock ?? runtime.clock)?.() ?? new Date();
-    const context = resolveRunContext(inputs.settings, runtime.git_sha, captured);
+    const context = resolveRunContext(inputs.settings, runtime.git_sha, captured,
+      undefined, undefined, undefined, runtime.attempt, runtime.producer);
     registerStageExecution(inputs, context, "partition", started);
     selected = SelectedFeedBatchSchema.parse({
       ...selected, context, health_rows: [],
