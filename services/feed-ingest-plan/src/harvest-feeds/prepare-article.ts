@@ -21,7 +21,7 @@ export function resolveArticleTitle(feedTitle: string | null, pageTitle: string 
 }
 export function prepareArticle(offered: OfferedArticle, inputs: HarvestInputs, context: HarvestContext) {
   const { source, entry } = offered;
-  const candidateId = deriveCandidateId(context.writer.run_id, source.source_id, entry.entry_ordinal);
+  const candidateId = deriveCandidateId(context.writer.run_id, source.feed_id, entry.entry_ordinal);
   let identity: ReturnType<typeof canonicalizeUrl> | null = null;
   if (entry.link) {
     try { identity = canonicalizeUrl(entry.link); }

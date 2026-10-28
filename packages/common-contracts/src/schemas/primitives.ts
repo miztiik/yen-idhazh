@@ -31,8 +31,8 @@ export function deriveUrlKey(canonicalUrl: string): string {
   return createHash("sha256").update(canonicalUrl, "utf8").digest("hex");
 }
 
-export function deriveCandidateId(runId: string, sourceId: string, entryOrdinal: number): string {
-  return deriveUrlKey(`${RunIdSchema.parse(runId)}\n${SlugSchema.parse(sourceId)}\n${CountSchema.parse(entryOrdinal)}`);
+export function deriveCandidateId(runId: string, feedId: string, entryOrdinal: number): string {
+  return deriveUrlKey(`${RunIdSchema.parse(runId)}\n${SlugSchema.parse(feedId)}\n${CountSchema.parse(entryOrdinal)}`);
 }
 
 export function reject(ctx: z.RefinementCtx, message: string, path: PropertyKey[] = []): void {

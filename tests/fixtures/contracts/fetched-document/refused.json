@@ -17,11 +17,11 @@
     "occurred_at": "2026-10-21T12:00:00Z",
     "operation": "fetch",
     "run_id": "2026-10-21-700",
-    "source_id": "recorded-news"
+    "feed_id": "recorded-news"
   },
   "robots": "denied",
   "robots_failure": null,
   "robots_http_status": 200,
-  "source_id": "recorded-news",
-  "version": "2026-10-27"
+  "feed_id": "recorded-news",
+  "version": "2026-10-28"
 }

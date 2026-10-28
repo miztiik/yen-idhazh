@@ -14,9 +14,9 @@ export { parseFeed } from "./parse-feed";
 export function feedDocumentWork(source: SourceSnapshot, context: HarvestContext) {
   return documentWork(context, {
     run_id: context.writer.run_id, correlation_id: context.correlation_id,
-    article_id: canonicalizeUrl(source.feed_url).url_key, source_id: source.source_id,
-  }, `${context.writer.run_id}\n${source.source_id}\nfeed`, {
-    document_kind: "feed", source_id: source.source_id, publisher_id: source.publisher_id,
+    article_id: canonicalizeUrl(source.feed_url).url_key, feed_id: source.feed_id,
+  }, `${context.writer.run_id}\n${source.feed_id}\nfeed`, {
+    document_kind: "feed", feed_id: source.feed_id, publisher_id: source.publisher_id,
     candidate_id: null, observed_run_id: context.writer.run_id, observed_attempt: context.writer.attempt,
   });
 }

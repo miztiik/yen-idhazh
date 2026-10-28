@@ -1,19 +1,19 @@
-/** Which configured age windows and integer tier budgets apply to one saved request? */
+/** Which configured age windows and article-quality bucket budgets apply to one saved request? */
 import { PositiveCountSchema } from "@idhazh/common-contracts";
 import type { FeedIngestConfig } from "@idhazh/common-contracts";
 
-type TierRule = FeedIngestConfig["curate_articles"]["feed_quality_tiers"][number];
+type ArticleQualityBucketRule = FeedIngestConfig["curate_articles"]["article_quality_buckets"][number];
 const millisecondsPerHour = 60 * 60 * 1000;
 
-export function resolveTierWindows(rule: TierRule, freshnessHours?: number) {
+export function resolveArticleQualityBucketWindows(rule: ArticleQualityBucketRule, freshnessHours?: number) {
   const steps = [...new Set(rule.ladder_hours.map(hours =>
     freshnessHours === undefined ? hours : Math.min(hours, freshnessHours)))];
   return { steps, normalMaximum: rule.ladder_hours.at(-1)!, maximum: steps.at(-1)! };
 }
 
-export function requireTierRule(config: FeedIngestConfig, tier: number): TierRule {
-  const rule = config.curate_articles.feed_quality_tiers.find(rule => rule.tier === tier);
-  if (rule === undefined) throw new Error(`curate_articles.feed_quality_tiers: missing tier ${tier}`);
+export function requireArticleQualityBucket(config: FeedIngestConfig, sourceClass: number): ArticleQualityBucketRule {
+  const rule = config.curate_articles.article_quality_buckets.find(rule => rule.tier === sourceClass);
+  if (rule === undefined) throw new Error(`curate_articles.article_quality_buckets: missing source class ${sourceClass}`);
   return rule;
 }
 
@@ -21,8 +21,8 @@ export function freshnessCutoff(evaluatedAt: string, hours: number): string {
   return new Date(Date.parse(evaluatedAt) - hours * millisecondsPerHour).toISOString();
 }
 
-export function rejectArticleAge(config: FeedIngestConfig, tier: number, ageHours: number | null, freshnessHours?: number) {
-  const windows = resolveTierWindows(requireTierRule(config, tier), freshnessHours);
+export function rejectArticleAge(config: FeedIngestConfig, sourceClass: number, ageHours: number | null, freshnessHours?: number) {
+  const windows = resolveArticleQualityBucketWindows(requireArticleQualityBucket(config, sourceClass), freshnessHours);
   if (ageHours === null) return null;
   if (ageHours > windows.normalMaximum) return {
     drop_reason: "REJECTED_AGE_EXCEEDS_MAX_TIER_ENVELOPE" as const,
@@ -35,9 +35,9 @@ export function rejectArticleAge(config: FeedIngestConfig, tier: number, ageHour
   return null;
 }
 
-export function allocateTierBudgets(config: FeedIngestConfig, limit: number) {
+export function allocateArticleQualityBucketBudgets(config: FeedIngestConfig, limit: number) {
   PositiveCountSchema.parse(limit);
-  const budgets = config.curate_articles.feed_quality_tiers.map((rule, order) => {
+  const budgets = config.curate_articles.article_quality_buckets.map((rule, order) => {
     const exact = limit * rule.share_pct / 100;
     return {
       rule, order, target: Math.floor(exact), remainder: exact - Math.floor(exact),

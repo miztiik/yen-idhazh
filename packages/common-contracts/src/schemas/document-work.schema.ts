@@ -4,7 +4,7 @@ import { CountSchema, PositiveCountSchema, RunIdSchema, SlugSchema, TimestampSch
 import { ExtractionFailureSchema, FetchFailureSchema } from "./harvest-diagnostics.schema";
 
 export const DocumentWorkFactSchema = z.strictObject({
-  run_id: RunIdSchema, attempt: PositiveCountSchema, source_id: SlugSchema,
+  run_id: RunIdSchema, attempt: PositiveCountSchema, feed_id: SlugSchema,
   document_kind: z.enum(["feed", "article"]), operation: z.enum(["fetch", "parse", "attempt"]),
   outcome: z.enum(["success", "empty", "failed", "not_attempted", "unavailable"]),
   occurred_at: TimestampSchema, duration_ms: CountSchema,

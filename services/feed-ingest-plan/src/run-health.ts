@@ -21,7 +21,7 @@ export function createRunHealth(context: RunContext, sources: readonly SourceSna
   const rows = new Map<string, FeedHealthStateRow>();
   const exclusions = new Map<string, PlannerRejectionCount>();
   const pendingReads = new Map<string, FeedHealthStateRow>();
-  const sourceById = new Map(sources.map(source => [source.source_id, source]));
+  const sourceById = new Map(sources.map(source => [source.feed_id, source]));
   const captures = new Map<string, {
     feed_id: string; captured_at: string; outcome: SourceArticleOutcome | null;
   }>();
@@ -71,7 +71,7 @@ export function createRunHealth(context: RunContext, sources: readonly SourceSna
         http_status: rejection.details.http_status ?? null, request_phase: null,
       }) : null;
     const grouped: PlannerRejectionCount = {
-      feed_id: rejection.source_id, subject: rejection.subject, stage: rejection.stage,
+      feed_id: rejection.feed_id, subject: rejection.subject, stage: rejection.stage,
       reason_code: rejection.drop_reason, attribution: override !== undefined ? override : attribution === "source" ? "feed"
         : attribution === "unresolved" ? "unknown" : attribution, count: 1,
     };
@@ -129,8 +129,8 @@ export function createRunHealth(context: RunContext, sources: readonly SourceSna
   return {
     observe(fact: DocumentWorkFact) {
       if (fact.run_id !== context.run_id || fact.attempt !== context.writer.attempt) throw new Error("Work fact belongs to another run attempt");
-      if (fact.source_id === null || fact.operation !== "attempt") return;
-      const target = row(fact.source_id, fact.occurred_at);
+      if (fact.feed_id === null || fact.operation !== "attempt") return;
+      const target = row(fact.feed_id, fact.occurred_at);
       const field = fact.request_phase === "robots" ? "robots_requests"
         : fact.document_kind === "feed" ? "feed_requests" : "article_requests";
       if (fact.request_coverage !== "complete" || fact.dispatched_request_count === null) {
@@ -163,7 +163,7 @@ export function createRunHealth(context: RunContext, sources: readonly SourceSna
     },
     restoreRequests(artifact: FetchedDocument) {
       if (artifact.attempts.length === 0) {
-        const target = row(artifact.source_id, artifact.observation.occurred_at);
+        const target = row(artifact.feed_id, artifact.observation.occurred_at);
         target.feed_requests = null;
         target.article_requests = null;
         target.robots_requests = null;
@@ -171,7 +171,7 @@ export function createRunHealth(context: RunContext, sources: readonly SourceSna
       }
       for (const [index, attempt] of artifact.attempts.entries()) {
         const instant = artifact.attempt_observations[index]!.occurred_at;
-        const target = row(artifact.source_id, instant);
+        const target = row(artifact.feed_id, instant);
         if (attempt.phase === "validation") continue;
         const field = attempt.phase === "robots" ? "robots_requests" : artifact.fetch_item_type === "feed" ? "feed_requests" : "article_requests";
         if (attempt.http_status === null) {
@@ -181,8 +181,8 @@ export function createRunHealth(context: RunContext, sources: readonly SourceSna
       }
     },
     feed(outcome: FeedOutcomePayload, entries: readonly FeedEntry[], checkedAt: string, fetched?: FetchResult) {
-      const target = row(outcome.source.source_id, checkedAt);
-      const pending = pendingReads.get(outcome.source.source_id);
+      const target = row(outcome.source.feed_id, checkedAt);
+      const pending = pendingReads.get(outcome.source.feed_id);
       if (pending !== undefined && pending !== target) {
         pending.checked_at = null;
         pending.items = null;
@@ -192,7 +192,7 @@ export function createRunHealth(context: RunContext, sources: readonly SourceSna
         pending.failed_reads = 0;
         pending.counts_complete = pending.feed_requests !== null && pending.article_requests !== null && pending.robots_requests !== null;
       }
-      pendingReads.delete(outcome.source.source_id);
+      pendingReads.delete(outcome.source.feed_id);
       const failure = fetched?.failure ?? outcome.diagnostics?.fetch_failure ?? null;
       const status = fetched?.http_status ?? outcome.diagnostics?.http_status ?? null;
       const skipped = outcome.fetch_status === "not_requested";
@@ -221,7 +221,7 @@ export function createRunHealth(context: RunContext, sources: readonly SourceSna
           outcome: "failed", failure_code: failureCode, http_status: status, request_phase: null,
         });
         group({
-          feed_id: outcome.source.source_id, subject: "feed", stage: "harvest-feeds",
+          feed_id: outcome.source.feed_id, subject: "feed", stage: "harvest-feeds",
           reason_code: outcome.rejection_reason, count: 1,
           attribution: attribution === "source" ? "feed" : attribution === "unresolved" ? "unknown" : attribution,
         }, checkedAt);
@@ -233,7 +233,7 @@ export function createRunHealth(context: RunContext, sources: readonly SourceSna
       const outcome = settled === undefined ? resolveArticleSourceOutcome(article, admission.min_words,
         admission.blocked_http_statuses, (admission.clock?.() ?? new Date()).toISOString()) : settled;
       if (hasArticleCapture(article)) {
-        const feedId = article.candidate?.source_id ?? article.rejection?.source_id;
+        const feedId = article.candidate?.feed_id ?? article.rejection?.feed_id;
         if (feedId === undefined) throw new Error("Captured article lacks its configured source");
         captureArticle(captureId, feedId, article.observation.observed_at, outcome);
       }

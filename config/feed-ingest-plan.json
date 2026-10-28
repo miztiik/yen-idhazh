@@ -100,7 +100,7 @@
   },
   "curate_articles": {
     "article_limit": 100,
-    "feed_quality_tiers": [
+    "article_quality_buckets": [
       { "tier": 1, "share_pct": 60, "buffer_pct": 10, "ladder_hours": [24, 36, 48] },
       { "tier": 2, "share_pct": 30, "buffer_pct": 5, "ladder_hours": [24, 30] },
       { "tier": 3, "share_pct": 10, "buffer_pct": 5, "ladder_hours": [24] }

@@ -57,14 +57,14 @@
     "feed_url": "https://news.example.com/feed.xml",
     "form": "article",
     "kind": "reporting",
-    "source_id": "sample-feed",
+    "feed_id": "sample-feed",
     "status": "active",
     "tier": 1,
     "title": "Sample Feed",
     "vertical": "world",
     "weight": 1.0
   },
-  "source_id": "sample-feed",
+  "feed_id": "sample-feed",
   "status": "active",
   "version": "2026-10-20"
 }

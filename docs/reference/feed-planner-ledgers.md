@@ -388,7 +388,7 @@ in the main tables; other generic identity columns are not added.
 | --- | --- | --- | --- |
 | G1 | `article-assessments` | `version` | File `schema_version`; no repeated row stamp |
 | G2 | `article-assessments` | `date`, `correlation_id`, `observed_at` | Relevant UTC dates in B/C/D; correlation and per-assessment time history removed |
-| G3 | `article-assessments` | `candidate_id`, `source_id`, `source`, `canonical_url`, `url_key`, `categories` | Selected-only identity/configuration subset in B; A keeps first sight; transient candidate identity is not a new durable key |
+| G3 | `article-assessments` | `candidate_id`, `feed_id`, `source`, `canonical_url`, `url_key`, `categories` | Selected-only identity/configuration subset in B; A keeps first sight; transient candidate identity is not a new durable key |
 | G4 | `article-assessments` | `labels` | Planner classification dossier removed; original RSS categories remain B8 |
 | G5 | `article-assessments` | `stage`, `decision`, `reason` | Terminal rejection counts in C32-C37 and chosen order in B15; no per-stage article diary |
 | G6 | `article-assessments` | `policy` | Runtime configuration; only declared run settings in D and actual applied values in B are retained |
@@ -405,25 +405,25 @@ in the main tables; other generic identity columns are not added.
 | G17 | `diversity` | `value`, `unit`, `before_value`, `after_value`, `numerator`, `denominator`, `item_count`, `source_count` | Historical metrics removed. B/C/D retain independently measured base counts, not renamed copies of these metrics |
 | G18 | `diversity` | `history_coverage_days`, `history_required_days`, `algorithm_version`, `config_sha256`, `availability`, `unavailable_reason` | Old metric interpretation/proof removed; C21/C31 retain their own health/count completeness |
 | G19 | `editorial-selections` | `version`, `date`, `correlation_id` | B1/B30 and D; correlation copy removed |
-| G20 | `editorial-selections` | `candidate_id`, `source_id`, `source`, `canonical_url`, `url_key` | B3-B6/B12-B14; candidate identity remains transient |
+| G20 | `editorial-selections` | `candidate_id`, `feed_id`, `source`, `canonical_url`, `url_key` | B3-B6/B12-B14; candidate identity remains transient |
 | G21 | `editorial-selections` | `vertical`, `labels` | Removed from the proposed planner output/classification scope; not disguised as RSS categories |
 | G22 | `editorial-selections` | `editorial_rank`, `estimated_work` | B15-B16 |
 | G23 | `editorial-selections` | `ratings`, `policy` | Reduced chosen-score evidence in B and declared run settings in D; full policy tree removed |
 | G24 | `document-observations` | `version`, `correlation_id`, `observed_run_id`, `observed_attempt` | File schema plus C34/C38 and D2/D15; no per-operation correlation record |
 | G25 | `document-observations` | `event_id`, `caused_by_event_id`, `corrects_event_id`, `correction_revision` | Removed with historical causal/correction accounting |
-| G26 | `document-observations` | `source_id`, `publisher_id`, `article_id`, `candidate_id` | Feed identity in C; selected article/publisher identity in B; no operation-level identity rows |
+| G26 | `document-observations` | `feed_id`, `publisher_id`, `article_id`, `candidate_id` | Feed identity in C; selected article/publisher identity in B; no operation-level identity rows |
 | G27 | `document-observations` | `document_kind`, `operation`, `outcome`, `attribution`, `failure_code`, `http_status`, `dispatched_request_count`, `request_coverage` | C28-C31 request totals/coverage, C12/C13/C40 feed outcomes, C32-C37 grouped causes; individual article HTTP outcomes are not retained |
 | G28 | `document-observations` | `occurred_at`, `duration_ms`, `request_phase`, `request_sequence`, `retry` | C7 feed-check time and D API timings; request totals include actual retries/hops; individual operation clocks/order removed |
-| G29 | `operational-state` | `version`, `date`, `written_at_utc`, `evidence_cutoff_utc`, `source_id` | Relevant schema/run/feed context in C/D; old request-score cutoff removed with that score |
+| G29 | `operational-state` | `version`, `date`, `written_at_utc`, `evidence_cutoff_utc`, `feed_id` | Relevant schema/run/feed context in C/D; old request-score cutoff removed with that score |
 | G30 | `operational-state` | `state_revision`, `parent_revision`, `code_revision`, `policy_version` | Removed revision/reproduction machinery; no Git SHA |
 | G31 | `operational-state` | `window_days`, `window_start`, `window_end`, `evidence_start_utc`, `evidence_end_utc` | Seven-day date-window concept retained for the spend report L3/D20, not the old score. D21/C18/C19 describe the separate native feed-reliability window |
 | G32 | `operational-state` | `measured_target_requests`, `measured_source_wasted_requests`, `observed_attempted_opportunities`, `observed_measured_opportunities`, `measured_coverage`, `qualification_status`, `request_waste_ratio`, `operational_penalty` | Raw request spend remains C28-C30; causal waste, qualification and article-cost penalty deliberately removed, not reconstructed from totals |
 | G33 | `rejections` | `version`, `date`, `correlation_id`, `rejected_at` | Schema and UTC accounting date retained at output grain; per-rejected-article clocks/correlation removed |
-| G34 | `rejections` | `source_id`, `feed_url`, `subject`, `stage`, `drop_reason` | C5/C32/C35/C36; feed URL comes from registry |
+| G34 | `rejections` | `feed_id`, `feed_url`, `subject`, `stage`, `drop_reason` | C5/C32/C35/C36; feed URL comes from registry |
 | G35 | `rejections` | `candidate_id`, `url_key`, `canonical_url`, `title`, `categories` | No permanent rejected-article record. A may retain the URL key for first sight; B keeps content only if selected |
 | G36 | `rejections` | `details` | Known feed failure code/status and grouped reasons in C; detailed per-article failure payload removed |
 | G37 | `source-runs` | `version`, `date`, `run_id`, `correlation_id`, `attempt` | Schema plus D2/D14/D15 and C22/C34/C38; correlation copy removed |
-| G38 | `source-runs` | `source_id`, `source`, `status` | Feed identity in C, selected applied configuration in B, registry membership remains configuration. Old catalog `status` is not C13's HTTP status |
+| G38 | `source-runs` | `feed_id`, `source`, `status` | Feed identity in C, selected applied configuration in B, registry membership remains configuration. Old catalog `status` is not C13's HTTP status |
 | G39 | `source-runs` | `fetch_status`, `parse_status`, `last_failure_at`, `last_failure_reason` | C7/C12/C13/C32-C40 outcomes and grouped causes; no duplicated per-feed duration/diagnostic tree |
 | G40 | `source-runs` | `parsed_count`, `harvested_count`, `fresh_count`, `duplicate_count`, `eligible_count`, `normalized_count`, `selected_count` | Relevant offered URLs C39, admitted candidates C26, selected C27 and rejected reasons C32-C37; exact old stage-population series removed |
 | G41 | `source-runs` | `published_count`, `lead_count` | Removed: planning does not know downstream publication/lead results |

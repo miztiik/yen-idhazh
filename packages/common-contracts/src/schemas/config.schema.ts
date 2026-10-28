@@ -104,7 +104,7 @@ export const FeedSoftCapsSchema = z.strictObject({
 export const FeedWebsiteGroupingConfigSchema = z.strictObject({
   include_private_suffixes: z.boolean().default(true),
 });
-export const FeedQualityTierSchema = z.strictObject({
+export const ArticleQualityBucketSchema = z.strictObject({
   tier: PositiveCountSchema,
   share_pct: z.number().finite().min(0).max(100),
   buffer_pct: z.number().finite().min(0).max(100),
@@ -117,15 +117,15 @@ export const FeedQualityTierSchema = z.strictObject({
     reject(ctx, "ladder_hours must be strictly increasing", ["ladder_hours"]);
   }
 });
-export const FeedQualityTiersSchema = z.array(FeedQualityTierSchema).min(1).superRefine((tiers, ctx) => {
-  if (new Set(tiers.map(rule => rule.tier)).size !== tiers.length) reject(ctx, "feed_quality_tiers must not repeat a tier");
-  if (Math.abs(tiers.reduce((sum, rule) => sum + rule.share_pct, 0) - 100) > Number.EPSILON * 100) {
-    reject(ctx, "feed_quality_tiers share_pct must sum to 100");
+export const ArticleQualityBucketsSchema = z.array(ArticleQualityBucketSchema).min(1).superRefine((buckets, ctx) => {
+  if (new Set(buckets.map(rule => rule.tier)).size !== buckets.length) reject(ctx, "article_quality_buckets must not repeat a source class");
+  if (Math.abs(buckets.reduce((sum, rule) => sum + rule.share_pct, 0) - 100) > Number.EPSILON * 100) {
+    reject(ctx, "article_quality_buckets share_pct must sum to 100");
   }
 });
 export const FeedCurateArticlesConfigSchema = FeedCurationPolicySchema.extend({
   article_limit: PositiveCountSchema,
-  feed_quality_tiers: FeedQualityTiersSchema,
+  article_quality_buckets: ArticleQualityBucketsSchema,
   source_reliability_penalty_enabled: z.boolean().default(true).describe(
     "Apply measured source reliability separately from article quality. Remove this switch and its disabled path when isolated selection becomes the sole planner.",
   ),

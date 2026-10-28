@@ -22,7 +22,7 @@ export async function recordedPlan(sources: ConfiguredSource[] = [source()], pub
     harvest.config.discovered_articles.lookback_days = 3;
     harvest.config.curate_articles.soft_caps.max_website_group_share = 1;
     const fixtureTiers = new Set(harvest.sources.filter(source => source.status === "active").map(source => source.tier));
-    harvest.config.curate_articles.feed_quality_tiers = harvest.registry.source_tiers
+    harvest.config.curate_articles.article_quality_buckets = harvest.registry.source_tiers
       .filter(tier => tier.status === "active").map(tier => ({
         tier: tier.id, share_pct: fixtureTiers.has(tier.id) ? 100 / fixtureTiers.size : 0, buffer_pct: 0, ladder_hours: [48],
       }));

@@ -20,10 +20,10 @@ export async function harvestArticle(
   const { candidate_id, identity, article, observation } = prepared;
   const eventIdentity = {
     run_id: context.writer.run_id, correlation_id: context.correlation_id,
-    article_id: identity?.url_key ?? null, source_id: source.source_id,
+    article_id: identity?.url_key ?? null, feed_id: source.feed_id,
   };
   const work = documentWork(context, eventIdentity, candidate_id, {
-    document_kind: "article", source_id: source.source_id, publisher_id: source.publisher_id,
+    document_kind: "article", feed_id: source.feed_id, publisher_id: source.publisher_id,
     candidate_id, observed_run_id: context.writer.run_id, observed_attempt: context.writer.attempt,
   });
   if (prepared.status === "rejected") {
@@ -55,7 +55,7 @@ export async function harvestArticle(
   const link = entry.link;
   const parserOptions: HarvestContext["parser_options"] = context.parser_options?.activity === undefined ? context.parser_options : {
     ...context.parser_options,
-    activity: (phase, duration_ms) => context.parser_options!.activity?.(phase, duration_ms, source.source_id),
+    activity: (phase, duration_ms) => context.parser_options!.activity?.(phase, duration_ms, source.feed_id),
   };
   const parsed = await work.parse(
     () => parseDocument("article", body, link, inputs.extraction, context.parser_pool, parserOptions), fetchedEvent.event_id, describeArticleParse,
@@ -88,7 +88,7 @@ export async function harvestArticle(
     quality: extracted.quality,
   } satisfies HarvestDiagnostics;
   if (diagnostics.warnings.length) context.progress?.("ARTICLE_EXTRACTION_WARNING", {
-    source_id: source.source_id, candidate_id, diagnostics,
+    feed_id: source.feed_id, candidate_id, diagnostics,
   });
   const completeObservation = {
     ...fetchedObservation, paywall: extracted.paywall, paywall_evidence: extracted.paywall_evidence, extraction,
@@ -119,7 +119,7 @@ export async function harvestArticle(
       date: fetched_at.slice(0, 10), fetched_at,
       correlation_id: context.correlation_id, run_id: context.writer.run_id,
       candidate_id, entry_ordinal: entry.entry_ordinal,
-      source_id: source.source_id, source, ...identity,
+      feed_id: source.feed_id, source, ...identity,
       title: article.title, categories: article.categories,
       article_text: extracted.article_text, word_count: extracted.word_count,
       author: extracted.author ?? entry.author, published_at: entry.published_at,

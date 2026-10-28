@@ -38,9 +38,9 @@ async function inputs() {
   const recorded = fixture.candidate;
   const candidate = FeedIngestCandidateSchema.parse({
     date: recorded.date, correlation_id: recorded.correlation_id, run_id: recorded.run_id,
-    candidate_id: recorded.candidate_id, entry_ordinal: recorded.entry_ordinal, source_id: recorded.source_id,
+    candidate_id: recorded.candidate_id, entry_ordinal: recorded.entry_ordinal, feed_id: recorded.feed_id,
     source: {
-      source_id: recorded.source.source_id, publisher_id: recorded.source.publisher_id ?? null,
+      feed_id: recorded.source.feed_id, publisher_id: recorded.source.publisher_id ?? null,
       feed_url: recorded.source.feed_url, title: recorded.source.title,
       tier: recorded.source.tier, status: recorded.source.status,
       weight: recorded.source.weight, applied_tier_weight: recorded.source.applied_tier_weight,
@@ -59,7 +59,7 @@ async function inputs() {
       harvest: { ...authored.harvest, blocked_categories: ["links", "video"] },
       triage: { ...authored.triage, min_words: 180, blocked_http_statuses: [401, 403, 429],
         recency_half_life_hours: 18, recency_weight: 0.6 },
-      curate_articles: { ...authored.curate_articles, feed_quality_tiers: [
+      curate_articles: { ...authored.curate_articles, article_quality_buckets: [
         { tier: candidate.source.tier, share_pct: 100, buffer_pct: 0, ladder_hours: [24] },
       ] },
     }),
@@ -195,22 +195,22 @@ test("global and run policies change only their declared gates for every feed", 
   const { input, candidate } = await inputs();
   const change = async (
     words: number, published_at: string, overrides: ScreeningInput["run"]["overrides"] = {},
-    source_id = candidate.source_id,
+    feed_id = candidate.feed_id,
   ) => screenArticleCandidates({
     ...input, candidates: [FeedIngestCandidateSchema.parse({
-      ...candidate, source_id, source: { ...candidate.source, source_id },
-      candidate_id: deriveCandidateId(candidate.run_id, source_id, candidate.entry_ordinal),
+      ...candidate, feed_id, source: { ...candidate.source, feed_id },
+      candidate_id: deriveCandidateId(candidate.run_id, feed_id, candidate.entry_ordinal),
       word_count: words, article_text: candidate.article_text.split(/\s+/u).slice(0, words).join(" "), published_at,
     })], observations: {}, run: { ...input.run, overrides },
   });
   input.planning = loadPlanningConfig({
     ...input.planning.config,
     triage: { ...input.planning.config.triage, min_words: 190 },
-    curate_articles: { ...input.planning.config.curate_articles, feed_quality_tiers: [
+    curate_articles: { ...input.planning.config.curate_articles, article_quality_buckets: [
       { tier: candidate.source.tier, share_pct: 100, buffer_pct: 0, ladder_hours: [12] },
     ] },
   });
-  for (const feed of [candidate.source_id, "another-configured-feed"]) {
+  for (const feed of [candidate.feed_id, "another-configured-feed"]) {
     expect((await change(189, "2026-10-21T11:00:00Z", {}, feed)).rejections[0]?.details.words_required).toBe(190);
     expect((await change(190, "2026-10-21T11:00:00Z", {}, feed)).admitted).toHaveLength(1);
   }
@@ -221,7 +221,7 @@ test("global and run policies change only their declared gates for every feed", 
   expect(admitted.admitted[0]?.freshness.recency_bonus).toBeCloseTo(0.6 * 0.5 ** (12 / 18));
   expect(admitted.admitted[0]?.policy.triage.recency_half_life_hours).toBe(18);
   expect((await change(200, "2026-10-20T18:00:00Z", { freshness_hours: 17.99 })).rejections).toHaveLength(1);
-  expect(input.planning.config.curate_articles.feed_quality_tiers[0]!.ladder_hours).toEqual([12]);
+  expect(input.planning.config.curate_articles.article_quality_buckets[0]!.ladder_hours).toEqual([12]);
   input.planning.config.triage.min_words = 200;
   expect((await change(199, "2026-10-21T11:00:00Z")).rejections[0]?.details.words_required).toBe(200);
   expect((await change(200, "2026-10-21T11:30:00Z", { freshness_hours: 0.5 })).admitted).toHaveLength(1);
@@ -235,7 +235,7 @@ test("global and run policies change only their declared gates for every feed", 
 test("classification labels are refused and unavailable observations do not invent eligibility rules", async () => {
   const { input, candidate, observation } = await inputs();
   expect(FeedIngestCandidateSchema.safeParse({
-    ...candidate, source: { ...candidate.source, kind: `kind-${candidate.source_id}`, form: `form-${candidate.source_id}` },
+    ...candidate, source: { ...candidate.source, kind: `kind-${candidate.feed_id}`, form: `form-${candidate.feed_id}` },
   }).success).toBe(false);
   const unknown = { ...observation, http_status: null, paywall: null, paywall_evidence: "not-observed" as const };
   const result = await screenArticleCandidates({ ...input, observations: { [candidate.candidate_id]: unknown } });
@@ -268,7 +268,7 @@ test("repeated undated and far-future fetches keep the settled first discovery",
   const { input, candidate, discovered } = await inputs();
   for (const published_at of [null, "2026-11-01T00:00:00Z"]) {
     for (const run_id of ["2026-10-21-123", "2026-10-21-124"]) {
-      const candidate_id = deriveCandidateId(run_id, candidate.source_id, candidate.entry_ordinal);
+      const candidate_id = deriveCandidateId(run_id, candidate.feed_id, candidate.entry_ordinal);
       const result = await screenArticleCandidates({
         ...input, candidates: [{
           ...candidate, run_id, candidate_id, correlation_id: run_id, published_at,
@@ -323,11 +323,11 @@ test("invalid overrides, config, observations and batch identities fail by name 
     ...input, observations: { [candidate.candidate_id]: { ...observation, http_status: 600, paywall: false } },
   })).rejects.toThrow("http_status");
   await expect(screenArticleCandidates({
-    ...input, observations: { [deriveCandidateId(candidate.run_id, candidate.source_id, 99)]: observation },
+    ...input, observations: { [deriveCandidateId(candidate.run_id, candidate.feed_id, 99)]: observation },
   })).rejects.toThrow("observations.");
   await expect(screenArticleCandidates({
     ...input, observations: { [candidate.candidate_id]: {
-      ...observation, candidate_id: deriveCandidateId(candidate.run_id, candidate.source_id, 99),
+      ...observation, candidate_id: deriveCandidateId(candidate.run_id, candidate.feed_id, 99),
     } },
   })).rejects.toThrow("candidate_id");
   await expect(screenArticleCandidates({ ...input, candidates: [candidate, candidate] })).rejects.toThrow("candidate_id");
@@ -371,7 +371,7 @@ test("transient rejections preserve exact details, candidate identity and the UT
     { ...candidate },
   ];
   input.candidates = offers.map((offer, entry_ordinal) => ({
-    ...offer, entry_ordinal, candidate_id: deriveCandidateId(candidate.run_id, candidate.source_id, entry_ordinal),
+    ...offer, entry_ordinal, candidate_id: deriveCandidateId(candidate.run_id, candidate.feed_id, entry_ordinal),
   }));
   input.discovered = { availability: "available", rows: [discovered.old] };
   const blockedId = input.candidates[3]!.candidate_id;
@@ -387,7 +387,7 @@ test("transient rejections preserve exact details, candidate identity and the UT
   for (const [index, rejection] of result.rejections.entries()) {
     expect(CandidateRejectionRecordSchema.parse(rejection)).toEqual(rejection);
     expect(rejection).toMatchObject({
-      candidate_id: input.candidates[index]!.candidate_id, source_id: candidate.source_id,
+      candidate_id: input.candidates[index]!.candidate_id, feed_id: candidate.feed_id,
       url_key: candidate.url_key, canonical_url: candidate.canonical_url, date: "2026-10-21",
       rejected_at: input.run.now, stage: "screen-article-candidates",
     });

@@ -7,7 +7,9 @@ import type { PlanInputs } from "../load-plan-inputs";
 import type { SourceHistoryEvidence } from "../read-ledger-history/read-feed-history";
 import type { PublisherPublicationHistory } from "./publisher-exposure";
 import type { RunContext } from "../resolve-run-context";
-import { allocateTierBudgets, freshnessCutoff, resolveTierWindows } from "../article-freshness-policy";
+import {
+  allocateArticleQualityBucketBudgets, freshnessCutoff, resolveArticleQualityBucketWindows,
+} from "../article-freshness-policy";
 
 export function curateArticles(input: {
   articles: readonly ScreenedCandidate[]; batch: ParsedFeedBatch; inputs: PlanInputs;
@@ -18,13 +20,13 @@ export function curateArticles(input: {
   const config = input.inputs.harvest.config;
   const policy = config.curate_articles;
   const limit = input.batch.request.article_limit ?? policy.article_limit;
-  const budgets = allocateTierBudgets(config, limit).map(budget => ({
-    ...budget, windows: resolveTierWindows(budget.rule, input.batch.request.freshness_hours),
+  const budgets = allocateArticleQualityBucketBudgets(config, limit).map(budget => ({
+    ...budget, windows: resolveArticleQualityBucketWindows(budget.rule, input.batch.request.freshness_hours),
     opened: new Set<number>(),
   }));
   for (const article of input.articles) {
     if (!budgets.some(budget => budget.rule.tier === article.candidate.source.tier)) {
-      throw new Error(`curate_articles.feed_quality_tiers: missing tier ${article.candidate.source.tier}`);
+      throw new Error(`curate_articles.article_quality_buckets: missing source class ${article.candidate.source.tier}`);
     }
   }
   const remaining = [...input.articles];
@@ -45,7 +47,7 @@ export function curateArticles(input: {
     const recency = article.freshness.recency_bonus;
     const authority = article.policy.curate_articles.source_authority_weight
       * candidate.source.weight * candidate.source.applied_tier_weight;
-    const rate = input.health.get(candidate.source_id)?.article_pass_rate ?? null;
+    const rate = input.health.get(candidate.feed_id)?.article_pass_rate ?? null;
     const adjustment = !policy.source_reliability_penalty_enabled ? 0 : rate === null ? null
       : -authority * (1 - Math.max(input.inputs.clock_config.collect.reliability_floor, rate));
     const group = website(article);
@@ -60,12 +62,12 @@ export function curateArticles(input: {
       { term: "website_group", value: group === undefined ? null : -weights.lambda_website_group * (chosen.length === 0 ? 0
         : chosen.filter(previous => website(previous) === group).length / chosen.length) },
     ].map(term => ({ ...term, value: term.value === 0 ? 0 : term.value }));
-    const feeds = new Set(chosen.map(previous => previous.candidate.source_id));
+    const feeds = new Set(chosen.map(previous => previous.candidate.feed_id));
     const blocked: string[] = [];
     if (!relaxations.includes("distinct_sources")
-      && feeds.size < Math.min(policy.soft_caps.min_distinct_sources, limit) && feeds.has(candidate.source_id)) blocked.push("distinct_sources");
+      && feeds.size < Math.min(policy.soft_caps.min_distinct_sources, limit) && feeds.has(candidate.feed_id)) blocked.push("distinct_sources");
     if (!relaxations.includes("source_share")
-      && chosen.filter(previous => previous.candidate.source_id === candidate.source_id).length >= feedLimit) blocked.push("source_share");
+      && chosen.filter(previous => previous.candidate.feed_id === candidate.feed_id).length >= feedLimit) blocked.push("source_share");
     if (group !== undefined && chosen.filter(previous => website(previous) === group).length >= domainLimit) blocked.push("website_group_share");
     return { article, recency, authority, adjustments, blocked,
       marginal: recency + authority + adjustments.reduce((sum, term) => sum + (term.value ?? 0), 0) };
@@ -86,9 +88,9 @@ export function curateArticles(input: {
         const evaluated = pool.map(evaluate);
         blocked.push(...evaluated);
         const viable = evaluated.filter(value => value.blocked.length === 0);
-        const feeds = new Set(chosen.map(previous => previous.candidate.source_id));
+        const feeds = new Set(chosen.map(previous => previous.candidate.feed_id));
         const exploration = chosen.length >= limit - explorationSlots
-          ? viable.filter(value => !feeds.has(value.article.candidate.source_id)) : [];
+          ? viable.filter(value => !feeds.has(value.article.candidate.feed_id)) : [];
         const available = exploration.length ? exploration : viable;
         available.sort((a, b) => b.marginal - a.marginal
           || a.article.candidate.candidate_id.localeCompare(b.article.candidate.candidate_id));
@@ -111,7 +113,7 @@ export function curateArticles(input: {
     const { candidate, freshness } = winner.article;
     articles.push(SelectedArticleContentSchema.parse({
       run_id: context.run_id, attempt: context.writer.attempt, date: context.date,
-      url_key: candidate.url_key, feed_id: candidate.source_id, publisher_id: candidate.source.publisher_id,
+      url_key: candidate.url_key, feed_id: candidate.feed_id, publisher_id: candidate.source.publisher_id,
       canonical_url: candidate.canonical_url, title: candidate.title, categories: candidate.categories,
       article_text: candidate.article_text, author: candidate.author,
       published_at: freshness.timing_source === "published_at" ? candidate.published_at : input.selectionStartedAt,

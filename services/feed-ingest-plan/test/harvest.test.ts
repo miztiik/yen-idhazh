@@ -27,10 +27,10 @@ import { PublisherDefinitionSchema, validatePublisherReferences } from "../src/p
 
 function expectFeedParseObservations(facts: readonly DocumentWorkFact[], parsedSources: readonly string[]) {
   const parsed = facts.filter(fact => fact.document_kind === "feed" && fact.operation === "parse" && fact.outcome !== "not_attempted");
-  expect(parsed.map(fact => fact.source_id).sort()).toEqual([...parsedSources].sort());
+  expect(parsed.map(fact => fact.feed_id).sort()).toEqual([...parsedSources].sort());
   for (const fact of parsed) {
     expect(facts.some(fetch => fetch.document_kind === "feed" && fetch.operation === "fetch"
-      && fetch.source_id === fact.source_id && fetch.run_id === fact.run_id && fetch.outcome === "success")).toBe(true);
+      && fetch.feed_id === fact.feed_id && fetch.run_id === fact.run_id && fetch.outcome === "success")).toBe(true);
   }
 }
 
@@ -181,7 +181,7 @@ test("public harvest returns strict full text and streamed work facts without pe
     .reduce((count, row) => count + row.dispatched_request_count!, 0)).toBe(transport.requests.length);
   expect(facts.every(row => DocumentWorkFactSchema.safeParse(row).success)).toBe(true);
   expect(facts.every(row => !("event_id" in row) && !("candidate_id" in row) && !("article_text" in row))).toBe(true);
-  expect(facts.some(row => row.source_id === "retired-source" && row.outcome === "not_attempted")).toBe(true);
+  expect(facts.some(row => row.feed_id === "retired-source" && row.outcome === "not_attempted")).toBe(true);
   expectFeedParseObservations(facts, ["recorded-news", "recorded-atom"]);
   expect(result.candidates).toHaveLength(4);
   expect(result.rejections.map(row => row.drop_reason)).toEqual(["SOURCE_INACTIVE", "MISSING_REQUIRED_FIELDS"]);
@@ -190,7 +190,7 @@ test("public harvest returns strict full text and streamed work facts without pe
   const first = result.candidates[0]!;
   expect(FeedIngestCandidateSchema.parse(first)).toEqual(first);
   expect(first.source).toEqual(sourceSnapshot(loaded, loaded.sources[0]!));
-  expect(result.candidates.find(candidate => candidate.source_id === "recorded-atom")?.source.publisher_id)
+  expect(result.candidates.find(candidate => candidate.feed_id === "recorded-atom")?.source.publisher_id)
     .toBe("recorded-publication");
   expect(first.canonical_url).toBe("https://news.example/story?a=1&b=2");
   expect(first.url_key).toBe(deriveUrlKey(first.canonical_url));
@@ -299,17 +299,17 @@ test("inactive, empty, malformed, HTTP, timeout and address failures are distinc
     "../../../tests/fixtures/feed-ingest-plan/ingest-outcomes.json", import.meta.url,
   )).json() as Array<{ name: string; evidence: Parameters<typeof attributeIngestOutcome>[0]; attribution: ReturnType<typeof attributeIngestOutcome> }>;
   for (const item of attributionCases) expect(attributeIngestOutcome(item.evidence), item.name).toBe(item.attribution);
-  expect(facts.find(row => row.source_id === "empty" && row.operation === "parse")?.outcome).toBe("empty");
-  expect(facts.find(row => row.source_id === "malformed" && row.operation === "parse")).toMatchObject({
+  expect(facts.find(row => row.feed_id === "empty" && row.operation === "parse")?.outcome).toBe("empty");
+  expect(facts.find(row => row.feed_id === "malformed" && row.operation === "parse")).toMatchObject({
     outcome: "failed", failure_code: "malformed-feed", attribution: "source",
   });
-  expect(facts.find(row => row.source_id === "inward" && row.operation === "attempt")).toMatchObject({
+  expect(facts.find(row => row.feed_id === "inward" && row.operation === "attempt")).toMatchObject({
     request_phase: "validation", dispatched_request_count: 0, request_coverage: "complete",
     outcome: "failed", failure_code: "unsafe-target", attribution: "pipeline",
   });
-  expect(facts.filter(row => row.source_id === "http" && row.operation === "attempt" && row.request_phase === "target"))
+  expect(facts.filter(row => row.feed_id === "http" && row.operation === "attempt" && row.request_phase === "target"))
     .toMatchObject([{ dispatched_request_count: 1, outcome: "failed", attribution: "source", failure_code: "http" }]);
-  expect(facts.find(row => row.source_id === "timeout" && row.operation === "attempt" && row.request_phase === "target"))
+  expect(facts.find(row => row.feed_id === "timeout" && row.operation === "attempt" && row.request_phase === "target"))
     .toMatchObject({ dispatched_request_count: 1, outcome: "failed", failure_code: "timeout", attribution: "unresolved" });
   expect(facts.filter(row => row.operation === "attempt")
     .reduce((count, row) => count + row.dispatched_request_count!, 0)).toBe(transport.requests.length);
@@ -329,7 +329,7 @@ test("inactive, empty, malformed, HTTP, timeout and address failures are distinc
     fetch_failure: "unsafe-target", failure_code: "blocked_address", stopped_stage: "fetch",
   });
   for (const outcome of result.feed_outcomes) {
-    const rejection = result.rejections.find(row => row.source_id === outcome.source.source_id)!;
+    const rejection = result.rejections.find(row => row.feed_id === outcome.source.feed_id)!;
     expect(outcome.diagnostics).toEqual(rejection.details.diagnostics);
     expect(outcome.diagnostics?.fetch_ms ?? null).toBe(outcome.fetch_duration_ms);
   }
@@ -548,7 +548,7 @@ test("rootless extraction, empty content and article request failures do not kil
   expect(result.articles).toHaveLength(9);
   expect(result.candidates.map(candidate => candidate.entry_ordinal)).toEqual([4, 5, 6, 7]);
   expect(result.feed_outcomes).toHaveLength(1);
-  expect(result.candidates.every(candidate => candidate.source_id === "recorded-news")).toBe(true);
+  expect(result.candidates.every(candidate => candidate.feed_id === "recorded-news")).toBe(true);
   expect(result.articles[0]?.observation).toMatchObject({ http_status: 200, extraction: "failed", paywall: null });
   expect(result.articles[0]?.rejection?.drop_reason).toBe("EXTRACT_FAILED");
   expect(result.articles[0]?.observation.diagnostics).toMatchObject({
