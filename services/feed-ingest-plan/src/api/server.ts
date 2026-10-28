@@ -13,9 +13,10 @@ import { documentRoute } from "./routes/document.route";
 import { stagesRoute } from "./routes/stages.route";
 import { feedHealthStateRoute } from "./routes/feed-health-state.route";
 import { ArticleParserPool } from "../harvest-feeds/article-parser-pool";
+import type { PlannerReady } from "../config/planner-startup";
 
 const apiPrefix = "/api/2026-10-20";
-export function createPlanApp(inputs: PlanInputs, runtime: PlanRuntime) {
+export function createPlanApp(inputs: PlanInputs, runtime: PlanRuntime, identity?: PlannerReady) {
   const app = new Hono<{ Bindings: PlanningBindings }>();
   const parserPool = runtime.parser_pool ?? new ArticleParserPool(inputs.settings.listener.parser_concurrency);
   const requestRuntime = () => ({ ...runtime, parser_pool: parserPool });
@@ -23,8 +24,11 @@ export function createPlanApp(inputs: PlanInputs, runtime: PlanRuntime) {
     maxSize: inputs.settings.listener.max_body_bytes,
     onError: c => c.json({ code: "BODY_TOO_LARGE", issues: [{ field: "body", message: "Body exceeds configured max_body_bytes" }] }, 413),
   }));
-  app.route(apiPrefix, healthRoute(inputs));
-  app.route(apiPrefix, planRoute((request, captured) => runFeedPlan(request, inputs, { ...requestRuntime(), ...captured }), inputs, requestRuntime));
+  app.route(apiPrefix, healthRoute(inputs, identity));
+  app.route(apiPrefix, planRoute((request, captured) => runFeedPlan(request, inputs, {
+    ...requestRuntime(), ...captured,
+    signal: AbortSignal.any([runtime.signal, captured?.signal].filter((signal): signal is AbortSignal => signal !== undefined)),
+  }), inputs, requestRuntime));
   app.route(apiPrefix, documentRoute(inputs, requestRuntime));
   app.route(apiPrefix, stagesRoute(inputs, requestRuntime));
   app.route(apiPrefix, feedHealthStateRoute(inputs, requestRuntime));
@@ -40,18 +44,19 @@ export function createPlanApp(inputs: PlanInputs, runtime: PlanRuntime) {
   });
   return Object.assign(app, { close() { if (runtime.parser_pool === undefined) parserPool.close(); } });
 }
-export function servePlan(inputs: PlanInputs, runtime: PlanRuntime) {
-  const app = createPlanApp(inputs, runtime);
-  const server = Bun.serve({
+export function servePlan(inputs: PlanInputs, runtime: PlanRuntime, identity?: PlannerReady) {
+  const app = createPlanApp(inputs, runtime, identity);
+  let server: ReturnType<typeof Bun.serve>;
+  try { server = Bun.serve({
     hostname: inputs.settings.listener.hostname, port: inputs.settings.listener.port,
     idleTimeout: inputs.settings.listener.idle_timeout_seconds,
     fetch(request, server) {
       return app.fetch(request, { beginPlanning: () => server.timeout(request, 0) });
     },
-  });
+  }); } catch (error) { app.close(); throw error; }
   return {
     get port() { return server.port; },
     get hostname() { return server.hostname; },
-    async stop(force = false) { await server.stop(force); app.close(); },
+    async stop(force = false) { try { await server.stop(force); } finally { app.close(); } },
   };
 }
