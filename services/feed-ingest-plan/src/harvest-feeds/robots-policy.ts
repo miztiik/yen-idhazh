@@ -327,8 +327,12 @@ export function createPermittedFetcher(
   }
   async function fetch(
     raw: string, emit?: AttemptCapture["emit"], kind: "feed" | "article" = "article",
+    externalSignal?: AbortSignal,
   ): Promise<FetchResult> {
     const controller = new AbortController();
+    const operationSignal = externalSignal === undefined
+      ? controller.signal
+      : AbortSignal.any([controller.signal, externalSignal]);
     const attempts: AttemptCapture = { rows: [], ...(emit === undefined ? {} : { emit }) };
     // Enabled profiles each contribute one attempt/backoff allowance to the shared operation budget.
     const backoff = Array.from({ length: controls.max_retries }, (_, retry) =>
@@ -336,7 +340,7 @@ export function createPermittedFetcher(
     const profileCount = [config.request_headers.primary, config.request_headers.secondary].filter(profile => profile !== null).length;
     const deadline = (config.fetch_timeout_ms * (controls.max_retries + 1) + backoff) * profileCount;
     const timer = setTimeout(() => controller.abort(new DOMException("harvest deadline exceeded", "TimeoutError")), deadline);
-    try { return { ...await fetchTarget(raw, controller.signal, attempts, kind), attempts: attempts.rows }; }
+    try { return { ...await fetchTarget(raw, operationSignal, attempts, kind), attempts: attempts.rows }; }
     finally { clearTimeout(timer); }
   }
   return { fetch };

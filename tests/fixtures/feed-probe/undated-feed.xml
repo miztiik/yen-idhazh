@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0">
+  <channel>
+    <title>Undated Feed Fixture</title>
+    <link>https://fixture.test/</link>
+    <description>Recorded undated feed fixture</description>
+    <item>
+      <title>Undated Readable Article</title>
+      <link>https://fixture.test/article-one</link>
+    </item>
+  </channel>
+</rss>

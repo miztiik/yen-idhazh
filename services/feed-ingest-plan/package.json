@@ -7,6 +7,14 @@
   "exports": {
     "./harvest-feeds": "./src/harvest-feeds/harvest-pool.ts",
     "./harvest-types": "./src/harvest-feeds/harvest-types.ts",
+    "./parse-document": "./src/harvest-feeds/parse-document.ts",
+    "./parse-feed": "./src/harvest-feeds/parse-feed.ts",
+    "./dom-extractor": "./src/harvest-feeds/dom-extractor.ts",
+    "./robots-policy": "./src/harvest-feeds/robots-policy.ts",
+    "./fetch-diagnostics": "./src/harvest-feeds/fetch-diagnostics.ts",
+    "./extraction-controls": "./src/harvest-feeds/extraction-controls.ts",
+    "./transport": "./src/harvest-feeds/transport.ts",
+    "./safe-target": "./src/harvest-feeds/safe-target.ts",
     "./markdown": "./src/reporting/index.ts"
   },
   "scripts": {
