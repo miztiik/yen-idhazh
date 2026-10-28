@@ -62,12 +62,17 @@ export async function runFeedPlan(raw: unknown, inputs: PlanInputs, runtime: Pla
   let parseStarted: number | undefined;
   let parseFinished: number | undefined;
   let parseFailed = false;
-  const parserActivity = (phase: "started" | "completed" | "failed", duration_ms: number | null, feed_id: string | null = null) => {
+  const parserActivity = (
+    phase: "started" | "completed" | "failed",
+    duration_ms: number | null,
+    feed_id: string | null = null,
+    publisher_id: string | null = null,
+  ) => {
     const now = performance.now();
     if (phase === "started") parseStarted ??= now;
     else parseFinished = now;
     if (phase === "failed") parseFailed = true;
-    emit("parse", phase, { duration_ms, ...(feed_id === null ? {} : { feed_id }) });
+    emit("parse", phase, { duration_ms, feed_id, publisher_id });
   };
   const parserPool = runtime.parser_pool ?? new ArticleParserPool(inputs.settings.listener.parser_concurrency);
   let work: ReturnType<typeof createRunHealth> | undefined;

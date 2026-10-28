@@ -2,23 +2,25 @@
 import { z } from "zod";
 import { CountSchema, NonEmptySchema, RunIdSchema, SlugSchema } from "./primitives";
 import { RecordedInstantSchema } from "./recorded-instant.schema";
-import { SourceSnapshotSchema } from "./source.schema";
+import { PublisherIdSchema, SourceSnapshotSchema } from "./source.schema";
 import { HarvestDiagnosticsSchema } from "./harvest-diagnostics.schema";
 import { ParsedFeedBatchSchema, SelectedFeedBatchSchema, PartitionedFeedBatchSchema } from "./planner-stage.schema";
 import { PlanApiTimingSchema } from "./plan-run.schema";
 import { FEED_OUTCOME_PAYLOAD_VERSION } from "../version";
 
 export const FeedIngestEventSchema = z.strictObject({
-  version: z.literal("2026-10-26").default("2026-10-26"),
+  version: z.enum(["2026-10-28", "2026-10-26"]).default("2026-10-28"),
   run_id: RunIdSchema, correlation_id: z.uuid({ version: "v4" }),
   occurred_at: RecordedInstantSchema,
   operation: z.enum(["history", ...PlanApiTimingSchema.shape.operation.options, "plan"]),
   phase: z.enum(["started", "completed", "failed"]),
-  feed_id: SlugSchema.nullable(), input_count: CountSchema.nullable(), output_count: CountSchema.nullable(),
+  feed_id: SlugSchema.nullable(), publisher_id: PublisherIdSchema.nullable().default(null),
+  input_count: CountSchema.nullable(), output_count: CountSchema.nullable(),
   duration_ms: CountSchema.nullable(), failure_code: NonEmptySchema.nullable(),
 }).meta({
-  version: "2026-10-26",
+  version: "2026-10-28",
   changelog: [
+    { version: "2026-10-28", change: "Name the publisher on sparse article progress events." },
     { version: "2026-10-26", change: "Name pre-fetch and selection health captures separately." },
   ],
 });

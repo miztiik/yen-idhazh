@@ -11,10 +11,10 @@ export function writeAuditEvent(event: FeedIngestEvent): void {
 }
 export function createStageLogger(context: RunContext, write = writeAuditEvent) {
   return (operation: FeedIngestEvent["operation"], phase: FeedIngestEvent["phase"],
-    details: Partial<Pick<FeedIngestEvent, "feed_id" | "input_count" | "output_count" | "duration_ms" | "failure_code">> = {}) => {
+    details: Partial<Pick<FeedIngestEvent, "feed_id" | "publisher_id" | "input_count" | "output_count" | "duration_ms" | "failure_code">> = {}) => {
     write(FeedIngestEventSchema.parse({
       run_id: context.run_id, correlation_id: context.correlation_id, occurred_at: new Date().toISOString(),
-      operation, phase, feed_id: null, input_count: null, output_count: null, duration_ms: null,
+      operation, phase, feed_id: null, publisher_id: null, input_count: null, output_count: null, duration_ms: null,
       failure_code: null, ...details,
     }));
   };

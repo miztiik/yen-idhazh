@@ -24,6 +24,7 @@ test("reads current sparse progress and refuses hidden article or audit payloads
   const before = structuredClone(events);
   expect(renderPlannerProgressMarkdown(events)).toEqual(renderPlannerProgressMarkdown(before));
   expect(events.every(event => event.version === "2026-10-26")).toBe(true);
+  expect(events.every(event => event.publisher_id === null)).toBe(true);
   for (const changed of [
     { ...events[0], headers: { authorization: "private" } },
     { ...events[0], article_text: "Private article body" },

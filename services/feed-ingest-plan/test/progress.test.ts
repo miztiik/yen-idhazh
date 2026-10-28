@@ -5,11 +5,15 @@ import { runFeedPlan } from "../src/run-feed-plan";
 import type { ProgressRecord } from "../src/logging/progress-logger";
 import { stageStore } from "../src/api/stage-store";
 import { recordedPlan } from "./plan-recordings";
+import { source } from "./harvest-recordings";
 import { parseFeed } from "../src/harvest-feeds/feed-client";
 import { cleanRequestTarget } from "../src/harvest-feeds/request-url";
 
 test("live progress precedes completion and the structured event stream stays sparse and body-free", async () => {
-  const recorded = await recordedPlan();
+  const recorded = await recordedPlan(
+    [source({ publisher_id: "recorded-publication" })],
+    [{ id: "recorded-publication", display_name: "Recorded publication" }],
+  );
   const first = (await parseFeed(recorded.transport.recordings.bodies.rss))[0]!;
   if (first.link === null) throw new Error("Recorded entry must identify its target");
   const target = recorded.inputs.harvest.config.harvest.tidy_urls ? cleanRequestTarget(first.link).href : first.link;
@@ -59,6 +63,7 @@ test("live progress precedes completion and the structured event stream stays sp
     expect(parserEvents.length).toBeGreaterThan(0);
     for (const event of parserEvents) {
       expect(event.feed_id).toBe("recorded-news");
+      expect(event.publisher_id).toBe("recorded-publication");
       if (event.phase === "started") expect(event.duration_ms).toBeNull();
       else expect(event.duration_ms).not.toBeNull();
       if (event.duration_ms !== null) expect(event.duration_ms).toBeGreaterThanOrEqual(0);
