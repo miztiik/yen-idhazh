@@ -8,12 +8,18 @@ import type {
 import type { ExtractionControls } from "./extraction-controls";
 import { ArticleParserResponseSchema } from "./article-parser-worker";
 
+type ArticleParserActivity = (
+  phase: "started" | "completed" | "failed",
+  duration_ms: number | null,
+) => void;
+
 type Job = {
   request: ArticleParserRequest;
   resolve: (result: ArticleParserResult) => void;
   reject: (error: Error) => void;
-  activity: ((phase: "started" | "completed" | "failed") => void) | undefined;
+  activity: ArticleParserActivity | undefined;
   signal: AbortSignal | undefined; cancel: (() => void) | undefined; started: boolean;
+  startedAt: number | null;
 };
 type Slot = { worker: Worker; job: Job | null };
 
@@ -22,19 +28,20 @@ export class ArticleParserPool {
   private readonly waiting: Job[] = [];
   private closed = false;
 
-  constructor(private readonly concurrency: number, private readonly activity?: (phase: "started" | "completed" | "failed") => void) {
+  constructor(private readonly concurrency: number,
+    private readonly activity?: ArticleParserActivity) {
     PositiveCountSchema.parse(concurrency);
   }
 
   parse(body: string, url: string, config: ExtractionControls, options: {
-    activity?: (phase: "started" | "completed" | "failed") => void; signal?: AbortSignal;
+    activity?: ArticleParserActivity; signal?: AbortSignal;
   } = {}) {
     if (this.closed) return Promise.reject(new Error("Article parser pool is closed"));
     options.signal?.throwIfAborted();
     return new Promise<ArticleParserResult>((resolve, reject) => {
       const job: Job = {
         request: { id: randomUUID(), body, url, config }, resolve, reject,
-        activity: options.activity ?? this.activity, signal: options.signal, cancel: undefined, started: false,
+        activity: options.activity ?? this.activity, signal: options.signal, cancel: undefined, started: false, startedAt: null,
       };
       job.cancel = () => {
         const slot = this.slots.find(slot => slot.job === job);
@@ -75,12 +82,13 @@ export class ArticleParserPool {
           }
           if (response.phase === "started") {
             job.started = true;
-            job.activity?.("started");
+            job.startedAt = performance.now();
+            job.activity?.("started", null);
             return;
           }
           held.job = null;
           job.signal?.removeEventListener("abort", job.cancel!);
-          job.activity?.(response.ok ? "completed" : "failed");
+          job.activity?.(response.ok ? "completed" : "failed", this.elapsed(job));
           if (response.ok) job.resolve(response.result);
           else job.reject(response.reason === "parser-failed"
             ? new Error("Article parser worker failed")
@@ -97,6 +105,11 @@ export class ArticleParserPool {
     }
   }
 
+  private elapsed(job: Job): number | null {
+    if (job.startedAt === null) return null;
+    return Math.max(0, Math.round(performance.now() - job.startedAt));
+  }
+
   private failSlot(slot: Slot, error: Error) {
     const index = this.slots.indexOf(slot);
     if (index < 0) return;
@@ -106,7 +119,7 @@ export class ArticleParserPool {
     slot.worker.terminate();
     if (job !== null) {
       job.signal?.removeEventListener("abort", job.cancel!);
-      if (job.started) job.activity?.("failed");
+      if (job.started) job.activity?.("failed", this.elapsed(job));
       job.reject(error);
     }
     this.dispatch();
@@ -122,7 +135,7 @@ export class ArticleParserPool {
     }
     for (const slot of slots) {
       slot.job?.signal?.removeEventListener("abort", slot.job.cancel!);
-      if (slot.job?.started) slot.job.activity?.("failed");
+      if (slot.job?.started) slot.job.activity?.("failed", this.elapsed(slot.job));
       slot.job?.reject(error);
       slot.job = null;
       slot.worker.onmessage = null;

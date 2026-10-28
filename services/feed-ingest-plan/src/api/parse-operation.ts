@@ -88,7 +88,8 @@ export async function parseFetchedDocument(
   let parsed;
   try {
     parsed = await work.parse(() => parseDocument("article", artifact.body!, artifact.canonical_url, inputs.harvest.extraction, pool, {
-      activity: phase => emit("parse", phase, { feed_id: source.id }), ...(signal === undefined ? {} : { signal }),
+      activity: (phase, duration_ms) => emit("parse", phase, { feed_id: source.id, duration_ms }),
+      ...(signal === undefined ? {} : { signal }),
     }), artifact.observation.event_id, describeArticleParse);
   } finally { if (runtime.parser_pool === undefined) pool.close(); }
   const candidateId = offer?.offer_id ?? deriveCandidateId(state.context.run_id, source.id, 0);
