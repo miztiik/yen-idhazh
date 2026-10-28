@@ -82,7 +82,7 @@ from idhazh.contracts.digest_day import (
 from idhazh.contracts.eval_row import BandReason, ConfidenceBand
 from idhazh.contracts.item_health import TimeSource
 from idhazh.contracts.taxonomy import SourceKind
-from idhazh.contracts.visual_decision import VisualState
+from idhazh.contracts.visual_decision import VisualKind, VisualState
 
 #: How many publisher names a served item may carry.
 #:
@@ -174,32 +174,40 @@ class DigestCoverage(Model):
 
 
 class DigestViewVisual(Model):
-    """The chart, as the browser that draws it needs it.
+    """A chart or whowhat pointer, as the browser that draws it needs it.
 
-    `kind` is not here. It is read at build time off the committed tree for the
-    console's chart count, and a browser that has already been handed the marks
-    has no use for it.
+    `kind` is optional so a cached shell can still read an older served visual;
+    absent kinds keep the pre-existing chart reader path.
 
     **`data_path` is the whole of what a fetched story gets**, and it replaced
-    `path` on 2026-09-13. The reader's browser draws the chart from that file, so
-    a projection that dropped the key would leave every story past the document's
-    seed unable to ask for its own picture - which is every story on a dated page.
+    `path` on 2026-09-13. The reader's browser reads this visual's data from that
+    file, so a projection that dropped the key would leave every story past the
+    document's seed unable to ask for its own visual - which is every story on a
+    dated page.
     """
 
     state: VisualState
     data_path: RelPath | None = Field(
         default=None,
         description=(
-            "Where this visual's marks are, relative to frontend/public/. Null on a day "
+            "Where this visual's data is, relative to frontend/public/. Null on a day "
             "published before the file existed - absent and null are the same fact, and "
-            "both mean the story simply has no chart."
+            "both mean the story has no published visual data."
         ),
     )
     alt: UntrustedLine | None = Field(
         default=None,
         description=(
-            "What the figure is labelled with. On a page that never runs a script it is "
+            "What this visual is labelled with. On a page that never runs a script it is "
             "the whole of what a reader receives for this visual."
+        ),
+    )
+    kind: VisualKind | None = Field(
+        default=None,
+        exclude_if=lambda value: value is None,
+        description=(
+            "The committed visual family. Null or absent on an older served visual, "
+            "which the browser continues to read through its chart path."
         ),
     )
 
@@ -355,6 +363,11 @@ class DigestView(Contract):
     __schema_stem__: ClassVar[str] = "digest-view"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-10-28",
+            change="Project optional visual kind for whowhat reader routing.",
+            why="Older served visuals without kind retain the chart path.",
+        ),
+        ChangelogEntry(
             version="2026-10-20",
             change="Source classification accepts open kind and numeric tier identifiers.",
             why="Registry membership can change without invalidating recorded payloads.",
@@ -368,11 +381,6 @@ class DigestView(Contract):
             version="2026-09-22",
             change="generated_at is the newest run's completion, not the assembling clock.",
             why="A wall clock makes two assemblies of one set of runs disagree byte for byte.",
-        ),
-        ChangelogEntry(
-            version="2026-09-17",
-            change="DigestViewItem.summary is Prose - paragraphs split by one blank line.",
-            why="A long summary is two paragraphs, and read-side folding keeps old days readable.",
         ),
         ChangelogEntry(
             version="2026-08-31T12:00",

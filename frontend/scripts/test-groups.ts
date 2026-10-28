@@ -48,7 +48,7 @@ const FILES: Record<FrontendGroup, readonly string[]> = {
 		'source-classification-binding',
 		'similarity-ledgers', 'span-sentences', 'span-words', 'statement',
 		'telemetry-header', 'telemetry-hold', 'throughput-window', 'time-split', 'tokens',
-		'topics', 'verdict-split', 'vocabulary', 'weights'
+		'topics', 'verdict-split', 'vocabulary', 'whowhat-visual', 'weights'
 	],
 	reader: ['payload-state', 'reading-page', 'visual-legibility'],
 	offline: ['service-worker'],

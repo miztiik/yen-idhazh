@@ -1,0 +1,54 @@
+{
+  "item_id": "ai-17",
+  "rows": [
+    {
+      "actor": {
+        "display_text": "Northstar Energy",
+        "element_id": "entity-0-16",
+        "kind": "entity",
+        "sentence_index": 0,
+        "span_end": 16,
+        "span_excerpt": "Northstar Energy",
+        "span_start": 0
+      },
+      "claim": {
+        "display_text": "announced it will close the Ridge fac...",
+        "element_id": "claim-17-69",
+        "kind": "claim",
+        "sentence_index": 0,
+        "span_end": 69,
+        "span_excerpt": "announced it will close the Ridge facility next year",
+        "span_start": 17
+      }
+    },
+    {
+      "actor": null,
+      "claim": null
+    },
+    {
+      "actor": null,
+      "claim": null
+    },
+    {
+      "actor": {
+        "display_text": "Meridian Power",
+        "element_id": "entity-140-154",
+        "kind": "entity",
+        "sentence_index": 2,
+        "span_end": 154,
+        "span_excerpt": "Meridian Power",
+        "span_start": 140
+      },
+      "claim": {
+        "display_text": "said it will build a 40 MW battery",
+        "element_id": "claim-155-189",
+        "kind": "claim",
+        "sentence_index": 2,
+        "span_end": 189,
+        "span_excerpt": "said it will build a 40 MW battery",
+        "span_start": 155
+      }
+    }
+  ],
+  "version": "2026-10-28"
+}

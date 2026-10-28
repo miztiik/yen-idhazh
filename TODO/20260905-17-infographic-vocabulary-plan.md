@@ -37,7 +37,7 @@ Execute per docs/how-to/execute-a-plan.md: one maintainer carries the plan and d
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | 1 | A real sentence made to fit, without anyone re-writing it | - | A | PENDING | plan-17-row-1-labels | - | - |
 | 2 | One striking figure: callout | - | - | COLLAPSED | - | - | - |
-| 3 | Who did what: whowhat | 1 | B | PENDING | - | - | - |
+| 3 | Who did what: whowhat | 1 | B | PENDING | plan-17-whowhat-grid | - | Fowler |
 | 4 | Three to five takeaways, and the switch that kills them | - | - | COLLAPSED | - | - | - |
 
 ---

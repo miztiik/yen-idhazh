@@ -24,6 +24,7 @@ from idhazh.contracts import CONTRACTS
 from idhazh.contracts.base import Contract
 from idhazh.contracts.knobs.models import ModelsConfig
 from idhazh.contracts.run_manifest import RunManifest
+from idhazh.contracts.visual_decision import VisualKind
 
 from . import _fixtures
 from ._fixtures import (
@@ -171,6 +172,23 @@ def test_a_payload_written_before_a_field_existed_still_reads() -> None:
     payload = json.loads(read_text(CONTRACT_FIXTURES_DIR / "summary" / "ok.json"))
     del payload["title"]
     assert load_summary(payload).title is None  # type: ignore[attr-defined]
+
+
+def test_a_historical_visual_without_a_kind_still_reads_as_a_chart() -> None:
+    """A day written before the separate grid format has no family field.
+
+    Every historical visual was a chart, so adding a family must not make an
+    earlier published day unreadable or send its file to a new reader.
+    """
+    payload = json.loads(read_text(CONTRACT_FIXTURES_DIR / "digest-day" / "two-runs.json"))
+    visual = next(item["visual"] for item in payload["items"] if item.get("visual") is not None)
+    del visual["kind"]
+
+    day = BY_STEM["digest-day"].model_validate(payload)
+
+    item = next(item for item in day.items if item.visual is not None)  # type: ignore[attr-defined]
+    assert item.visual is not None
+    assert item.visual.kind is VisualKind.CHART
 
 
 def test_version_is_stamped_when_a_writer_omits_it() -> None:

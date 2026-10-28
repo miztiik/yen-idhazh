@@ -25,7 +25,7 @@ test('reader labels clear the text floor without scaling, and every mark survive
 	const date = newestDate();
 	const day = payloadOf(date) as unknown as DigestDay;
 	const visuals = day.items.flatMap((item) =>
-		item.visual?.state === 'rendered' && item.visual.data_path
+		item.visual?.kind !== 'whowhat' && item.visual?.state === 'rendered' && item.visual.data_path
 			? [{ id: item.item_id, data: JSON.parse(readFileSync(
 				join(CANARY, '..', item.visual.data_path), 'utf8'
 			)) as VisualData }]
@@ -298,7 +298,9 @@ test('a failed chart load leaves only the story text without marking chartless s
 	const date = newestDate();
 	const day = payloadOf(newestDate()) as unknown as DigestDay;
 	const chartStory = day.items.filter((item) =>
-		item.visual?.state === 'rendered' && typeof item.visual.data_path === 'string'
+		item.visual?.kind !== 'whowhat' &&
+		item.visual?.state === 'rendered' &&
+		typeof item.visual.data_path === 'string'
 	).at(-1);
 	const chartlessStory = day.items.find((item) => item.visual === null);
 	if (!chartStory?.visual || typeof chartStory.visual.data_path !== 'string') {
@@ -385,7 +387,11 @@ test('the published stacked bar stays readable inside a short, narrow story card
 	const date = newestDate();
 	const day = payloadOf(date) as unknown as DigestDay;
 	const item = day.items.find((entry) => {
-		if (entry.visual?.state !== 'rendered' || !entry.visual.data_path) return false;
+		if (
+			entry.visual?.kind === 'whowhat' ||
+			entry.visual?.state !== 'rendered' ||
+			!entry.visual.data_path
+		) return false;
 		const data = JSON.parse(readFileSync(join(CANARY, '..', entry.visual.data_path), 'utf8')) as VisualData;
 		return data.type === 'stacked_bar';
 	});

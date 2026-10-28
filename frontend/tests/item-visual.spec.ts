@@ -27,6 +27,16 @@ test('story chart geometry projects the committed appearance settings', () => {
     expect(geometry).toEqual(appearance.chart.story_geometry);
 });
 
+test('only explicit whowhat kind leaves the existing chart-reader path', () => {
+    const source = readFileSync(
+        join(process.cwd(), 'src', 'lib', 'components', 'ItemVisual.svelte'),
+        'utf8'
+    );
+    expect(source).toContain("visual && visual.kind === 'whowhat'");
+    expect(source).toContain("visual?.kind !== 'whowhat'");
+    expect(source).toContain("import { isVisualData, publishedVisualData, refusedVisualData }");
+});
+
 function sourceCompiledChart(filename: string): VisualData {
     const path = join(
         process.cwd(),

@@ -1,0 +1,50 @@
+{
+  "annotations": [
+    "entity-0-16"
+  ],
+  "caption": null,
+  "confidence": 0.9,
+  "decision": "visual",
+  "declared_whole_element_id": null,
+  "element_ids": [
+    "entity-0-16",
+    "claim-17-69",
+    "entity-71-83",
+    "entity-88-99",
+    "claim-100-138",
+    "entity-140-154",
+    "claim-155-189"
+  ],
+  "encodings": {
+    "bins": [],
+    "category": [],
+    "entity": [
+      "entity-0-16",
+      "entity-71-83",
+      "entity-88-99",
+      "entity-140-154"
+    ],
+    "event_label": [
+      "claim-17-69",
+      "claim-100-138",
+      "claim-155-189"
+    ],
+    "quantity": [],
+    "quantity_x": [],
+    "series": [],
+    "size": [],
+    "time": []
+  },
+  "labels": [
+    "entity-0-16",
+    "entity-71-83",
+    "entity-88-99",
+    "entity-140-154"
+  ],
+  "plan_version": "2026-10-28",
+  "purpose": "comparison",
+  "title": "Who did what",
+  "type": "whowhat",
+  "version": "2026-10-26T09:41",
+  "why": "The article gives source-backed actions for its named actors."
+}

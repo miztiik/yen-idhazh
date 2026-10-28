@@ -340,7 +340,7 @@
     "tagline": "A daily digest that checks its own work.",
     "theme_default": "dark"
   },
-  "version": "2026-10-25",
+  "version": "2026-10-28",
   "visuals": {
     "asset_base_url": "",
     "downgrade_enabled": false,
@@ -351,7 +351,8 @@
     "downgrade_lookback_days": 30,
     "downgrade_max_samples_per_type": 256,
     "enabled_kinds": [
-      "chart"
+      "chart",
+      "whowhat"
     ],
     "enabled_types": [
       "bar",

@@ -25,7 +25,7 @@
     "time": []
   },
   "labels": ["quantity-22-29", "entity-63-67"],
-  "plan_version": "2026-09-09",
+  "plan_version": "2026-10-28",
   "purpose": "composition",
   "title": "Wind, solar, and hydro shares",
   "type": "stacked_bar",

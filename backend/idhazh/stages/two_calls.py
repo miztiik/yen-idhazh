@@ -34,7 +34,7 @@ from idhazh.contracts.element import ElementTable
 from idhazh.contracts.item_health import FailureCode
 from idhazh.contracts.summary import Summary, SummaryStatus
 from idhazh.contracts.visual import PlanDecision, VisualPlan, VisualType
-from idhazh.contracts.visual_decision import VisualDecision
+from idhazh.contracts.visual_decision import VisualDecision, VisualKind
 from idhazh.contracts.visual_telemetry import ValidatorCheck
 from idhazh.fingerprint import (
     text_digest,
@@ -47,7 +47,12 @@ from idhazh.llm.server import (
     resolve_endpoint,
     window,
 )
-from idhazh.render import asset_relpath, can_compile, render_planned_visual
+from idhazh.render import (
+    asset_relpath,
+    can_compile,
+    render_planned_visual,
+    render_planned_whowhat,
+)
 from idhazh.stages import common
 from idhazh.stages.common import (
     LOG,
@@ -234,6 +239,7 @@ def _drawn(
     plan: VisualPlan,
     table: ElementTable,
     *,
+    article: Article | None = None,
     settings: config.Settings,
     date: str,
     stamp: Mapping[str, str],
@@ -242,11 +248,57 @@ def _drawn(
 ) -> VisualDecision:
     """Validate and deliver one typed request, preserving its original choice on refusal."""
     visuals = settings.app.visuals
-    if visuals.downgrade_enabled and published_marks is None:
+    is_whowhat = plan.type is VisualType.WHOWHAT
+    if visuals.downgrade_enabled and published_marks is None and not is_whowhat:
         raise ValueError("enabled visual downgrade requires the shard's published mark population")
     if plan.type is None:
         raise ValueError("a typed visual request requires its original type")
     outcome: dict[str, object] = {"planned_type": plan.type, "downgrade_depth": 0}
+    if is_whowhat:
+        outcome["drafted_chart"] = False
+        if VisualKind.WHOWHAT not in visuals.enabled_kinds:
+            refused = visual_planner.not_drawable_here(
+                summary, why="whowhat is not enabled in visuals.enabled_kinds", **stamp
+            )
+            return VisualDecision.model_validate(refused.model_dump(mode="json") | outcome)
+        if plan.type not in visuals.select_types():
+            refused = visual_planner.not_drawable_here(
+                summary, why="whowhat is not selected in visuals.enabled_types", **stamp
+            )
+            return VisualDecision.model_validate(refused.model_dump(mode="json") | outcome)
+        if rejections := validate_plan(plan, table, visuals=visuals):
+            refused = visual_planner.not_drawable_here(
+                summary,
+                why="the whowhat plan was refused on "
+                + ", ".join(rejection.check.value for rejection in rejections),
+                **stamp,
+            )
+            return VisualDecision.model_validate(refused.model_dump(mode="json") | outcome)
+        if article is None:
+            refused = visual_planner.not_drawable_here(
+                summary,
+                why="the whowhat plan has no article text to re-slice its evidence",
+                **stamp,
+            )
+            return VisualDecision.model_validate(refused.model_dump(mode="json") | outcome)
+        return render_planned_whowhat(
+            VisualDecision.model_validate(
+                visual_planner.not_drawable_here(
+                    summary,
+                    why="the whowhat plan passed every check and this build could not compile it",
+                    **stamp,
+                ).model_dump(mode="json")
+                | outcome
+            ),
+            plan,
+            table,
+            article,
+            date=date,
+            public_root=common.PUBLIC_ROOT.parent,
+            relpath=asset_relpath(date, summary.item_id),
+            visuals=visuals,
+            run_id=run_id,
+        )
     if plan.type not in visuals.select_types():
         refused = visual_planner.not_drawable_here(
             summary, why=f"{plan.type.value} is not selected in visuals.enabled_types", **stamp
@@ -893,6 +945,6 @@ def _decide_the_visual(
             summary, why=plan.why if plan is not None else "the reply carried no plan", **stamp
         )
     return _drawn(
-        summary, plan, table, settings=settings, date=date, stamp=stamp,
+        summary, plan, table, article=article, settings=settings, date=date, stamp=stamp,
         run_id=run_id, published_marks=published_marks,
     )
