@@ -62,12 +62,17 @@ test("manual controls exercise the planner API and keep only required outputs", 
   });
   expect(plan.run).not.toContain("${{");
   const closing = steps.slice(steps.indexOf(plan) + 1);
-  expect(closing).toHaveLength(3);
-  const [finalize, upload, finish] = closing;
+  expect(closing).toHaveLength(4);
+  const [cancellation, finalize, upload, finish] = closing;
+  expect(cancellation?.id).toBe("cancellation");
+  expect(cancellation?.if).toBe("${{ cancelled() }}");
+  expect(cancellation?.run).toBe('echo "cancelled=true" >> "$GITHUB_OUTPUT"');
+  expect(steps.flatMap(step => Object.values(step.env ?? {})).join("\n")).not.toContain("cancelled()");
   expect(finalize?.id).toBe("finalize");
   expect(finalize?.if).toContain("always()");
   expect(finalize?.env).toEqual({
-    CURRENT_RUN_FILES: "${{ steps.plan.outputs.current_run_files }}", RUN_CANCELLED: "${{ cancelled() }}",
+    CURRENT_RUN_FILES: "${{ steps.plan.outputs.current_run_files }}",
+    RUN_CANCELLED: "${{ steps.cancellation.outputs.cancelled == 'true' }}",
   });
   expect(finalize?.run).toBe("bun run services/feed-ingest-plan/scripts/finalize-run-output.ts");
   expect(finalize?.run).not.toContain("git push");
