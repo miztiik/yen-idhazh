@@ -1,6 +1,6 @@
 # What the pipeline records about the machine it ran on
 
-**Last Updated**: 2026-10-26
+**Last Updated**: 2026-10-27
 
 Every host-fingerprint field, what it means and which readings are optional.
 The hardware fingerprint is reusable by any pipeline. Callers name their
@@ -67,16 +67,17 @@ disabled instrument is an explicit skip, with no listener or host write.
 The listener stops after success or failure.
 
 The API writes its raw Parquet under the caller's run state root.
-`resources.json` retains the exact request, validated row, unavailable reasons
-and completed file receipts. The caller checks those receipts against actual
-Parquet before adding the host file to the four planner metadata ledgers'
-publication and recovery path. Host persistence or validation failure remains
-failed evidence, not a fabricated row. Missing hardware stays unavailable.
-The Resources report shows L3 and total machine RAM capacity in MiB; stored
-`l3_cache_bytes` and the hardware hash do not change. Live task RAM profiling
-remains a separate instrument. The independent copy/cache proof also uses the
-HTTP API, but its temporary host files are removed rather than published as
-real-run observations. See the [commit policy](../architecture/publishing/committing.md#design-rationale)
+`host-fingerprint.json` retains the exact request, validated row, unavailable
+reasons and completed file receipts. The caller checks those receipts against
+actual Parquet before adding the host file to the planner metadata commit and
+recovery path. Host persistence or validation failure remains failed evidence,
+not a fabricated row. Missing hardware stays unavailable. The Markdown report
+shows L3 and total machine RAM capacity in MiB; stored `l3_cache_bytes` and the
+hardware hash do not change. The manual workflow does not collect a live
+planner CPU or RAM profile. The independent copy/cache proof remains in CI and
+its temporary host files are removed rather than published as real-run
+observations. See the
+[commit policy](../architecture/publishing/committing.md#design-rationale)
 for validation, retries and the four planner-only day indexes.
 
 Whole-instrument off and memory-only off are different controls. Their exact
@@ -394,32 +395,17 @@ wrapper still defaults to the actual calling PID.
 Profiles are locally validated transient metadata, separate from hardware
 rows and request journals. They retain pipeline, task, run, correlation and
 request identity, but no article text or paths. The
-[operator API](../architecture/sources/feed-operator-api.md#optional-task-profiles)
-defines the actual fetch/parse boundaries. The
-[isolated checks](../how-to/run-feed-ingest-plan-test.md#resource-proof)
-separate recorded CPU-bound work, live document work, the real RAM HTTP
-endpoint and the existing optional copy benchmark. Copying measures median
-read-plus-write throughput with two cache-sized buffers; it does not measure
-L3 hit or miss counts and runs outside fetch/parse CPU windows.
+[operator API](../architecture/sources/feed-operator-api.md) defines the
+fetch/parse boundaries. The manual planner workflow records host fingerprints
+but does not collect a live planner CPU or RAM profile.
+Copying measures median read-plus-write throughput with two cache-sized
+buffers; it does not measure L3 hit or miss counts and runs outside fetch/parse
+CPU windows.
 
 The separate default-off [cache probes](host-cache-probes.md) measure exact
 last-level-cache read events with Linux perf and a native random-pointer-chain
 working-set latency curve. Copy throughput is neither of those measurements.
 Cache results are transient and do not add fingerprint fields.
-
-The isolated workflow's `profile_machine_memory` checkbox defaults false.
-When selected, it enables the existing profiler around the whole real HTTP
-planner invocation and separately selects the controlled sample/copy/cache
-proof. It does not enable per-document profiles or a resource ledger. Global
-`host_telemetry_enabled` still controls collection; `memory_profiling_enabled`
-still controls process and machine RAM. The fingerprint and placement switches
-also govern the basic actual-host observation.
-
-The job summary and one grouped Resources notice combine actual host facts,
-the live planner process and the separate controlled proof, with each scope
-labelled. The planner and listener share one PID. An absent separate-server
-PID means there is no second process to measure, not that the HTTP API is down.
-No process is counted twice. CPU values include all work in the measured PID.
 
 RAM display uses decimal GB: 1 GB is 1,000,000,000 bytes. Linux proc `kB`
 values remain KiB in the stored readings and are multiplied by 1,024 before
@@ -429,12 +415,10 @@ cache; free RAM does not. The lowest observed available RAM describes only
 sampled observations, never an assured whole-run minimum. Its percentage is
 unavailable if the corresponding total was not retained.
 
-`resources.json` holds the validated actual-host and live-process evidence;
-the separate `resource-proof.json` describes controlled work. Missing,
-disabled, failed and unsupported readings retain their reasons, never zero
-or successful collection. No sample dump enters the summary or notices.
-Reporting off reads no evidence and writes no summary or annotations. These
-transient inputs add no native host fields, durable request fields or ledger.
+Generic profile results retain explicit unavailable reasons, never zero
+substitutes. They do not add native host fields, durable request fields or
+ledger rows. The manual planner report shows the host fingerprint separately;
+it does not report process or machine RAM samples.
 
 ## Controls and precedence
 

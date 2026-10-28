@@ -5,7 +5,7 @@ import { fixture } from "../../host-fingerprints/test/fixture";
 import { captureLocalFingerprint } from "../../host-fingerprints/src/api/local-fingerprint";
 import { hostWriter, readMetadataRegistrations } from "../scripts/feed-ingest-plan-metadata";
 import type { ExecutionIdentity } from "../scripts/feed-ingest-plan-metadata";
-import { WorkflowResourcesSchema } from "../scripts/feed-ingest-plan-workflow-resources";
+import { WorkflowHostFingerprintSchema } from "../scripts/feed-ingest-plan-host-fingerprint";
 
 export function metadataRegistrations() {
   return readMetadataRegistrations(new URL("../../../config/ledgers.json", import.meta.url));
@@ -19,12 +19,11 @@ export async function recordedWorkflowHost(directory: string, identity: Executio
       outputRoot: join(directory, "state"), inspection: recording.inspection,
     });
     if (response.status !== "written") throw new Error("The recorded host HTTP request must persist");
-    const resources = WorkflowResourcesSchema.parse({
-      host_request: request, profile_requested: false,
+    const evidence = WorkflowHostFingerprintSchema.parse({
+      host_request: request,
       host: { ...response, status: "recorded" },
-      profile: { status: "disabled", reason: "profile_machine_memory=false" },
     });
-    await writeFile(join(directory, "resources.json"), JSON.stringify(resources));
-    return { response, resources, identity, registrations: await metadataRegistrations() };
+    await writeFile(join(directory, "host-fingerprint.json"), JSON.stringify(evidence));
+    return { response, evidence, identity, registrations: await metadataRegistrations() };
   } finally { await recording.cleanup(); }
 }
