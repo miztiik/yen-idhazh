@@ -26,13 +26,13 @@
   },
   "compaction_lag_days": 0,
   "covers_through": "2026-10-28",
-  "generated_at": "2026-10-28T15:12:17Z",
+  "generated_at": "2026-10-28T18:55:18Z",
   "routes": [
-    {"carries": "The model spent 34 h 18 m of this.","description": "Did the runs work, and what each stage cost.","href": "/console/","id": "pipelines","label": "Pipelines","severity": 3,"worst": "66 feeds resting"},
-    {"carries": "This day ran in 3 runs, 1.14x apart on read speed.","description": "What the model wrote, how long it took, and what it got wrong.","href": "/console/model/","id": "model","label": "Summaries","severity": 3,"worst": "63 items failed"},
-    {"carries": "177 articles on this day.","description": "The hardware the model ran on, and how much it varied between runs.","href": "/console/machine/","id": "machine","label": "Hardware","severity": 2,"worst": "free swap fell to 2116.2 MB"},
-    {"carries": "16 summaries were marked \"not sure\" on this day.","description": "Which stories the day merged, and where the judge and a person disagreed.","href": "/console/judgement/","id": "judgement","label": "Judgement","severity": 0,"worst": null},
-    {"carries": "66 feeds rested over these 365 runs.","description": "Who supplied the day, and how far each feed is discounted.","href": "/console/voices/","id": "voices","label": "Voices","severity": 2,"worst": "51 feeds discounted to the floor"},
+    {"carries": "The model spent 45 h 9 m of this.","description": "Did the runs work, and what each stage cost.","href": "/console/","id": "pipelines","label": "Pipelines","severity": 3,"worst": "66 feeds resting"},
+    {"carries": "This day ran in 4 runs, 1.14x apart on read speed.","description": "What the model wrote, how long it took, and what it got wrong.","href": "/console/model/","id": "model","label": "Summaries","severity": 3,"worst": "82 items failed"},
+    {"carries": "238 articles on this day.","description": "The hardware the model ran on, and how much it varied between runs.","href": "/console/machine/","id": "machine","label": "Hardware","severity": 2,"worst": "free swap fell to 2116.2 MB"},
+    {"carries": "23 summaries were marked \"not sure\" on this day.","description": "Which stories the day merged, and where the judge and a person disagreed.","href": "/console/judgement/","id": "judgement","label": "Judgement","severity": 0,"worst": null},
+    {"carries": "66 feeds rested over these 366 runs.","description": "Who supplied the day, and how far each feed is discounted.","href": "/console/voices/","id": "voices","label": "Voices","severity": 2,"worst": "51 feeds discounted to the floor"},
     {"carries": "Every published ledger the other routes draw from, open to a question of your own.","description": "What the ledgers hold, and whatever you ask of them.","href": "/console/data-explorer/","id": "data-explorer","label": "Data explorer","severity": 0,"worst": null}
   ],
   "rows_uncompacted": 0,
@@ -134,12 +134,12 @@
     "compared_from": "2026-09-14"
   },
   "size": {
-    "articles_to_cap": 448631,
-    "bytes": 55029108,
-    "cap_fraction": 0.051249850541353226,
-    "left_mb": 971.5201530456543,
+    "articles_to_cap": 448575,
+    "bytes": 55156008,
+    "cap_fraction": 0.05136803537607193,
+    "left_mb": 971.3991317749023,
     "measured_days": 67,
-    "sentence": "52.5 MB of the 1 GB limit - room for about 449,000 more articles."
+    "sentence": "52.6 MB of the 1 GB limit - room for about 449,000 more articles."
   },
   "verdict": {
     "date": "2026-10-28",
@@ -148,9 +148,10 @@
     "runs": [
       {"health": "amber","label": "Run 1 is worth a look"},
       {"health": "amber","label": "Run 2 is worth a look"},
-      {"health": "amber","label": "Run 3 is worth a look"}
+      {"health": "amber","label": "Run 3 is worth a look"},
+      {"health": "amber","label": "Run 4 is worth a look"}
     ],
-    "sentence": "2026-10-28 ran 3 runs and published 177 of 240 planned items. 63 items failed."
+    "sentence": "2026-10-28 ran 4 runs and published 238 of 320 planned items. 82 items failed."
   },
   "version": "2026-10-11T21:00",
   "worst": {
