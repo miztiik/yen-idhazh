@@ -1,0 +1,35 @@
+{
+  "feeds": [
+    {
+      "id": "alpha-ai",
+      "url": "https://fixture.test/feed.xml",
+      "title": "Alpha AI",
+      "tier": 1,
+      "status": "active",
+      "vertical": "ai",
+      "weight": 1
+    },
+    {
+      "id": "beta-world",
+      "url": "https://www.beta-world.test/feed.xml",
+      "title": "Beta World",
+      "tier": 2,
+      "status": "active",
+      "vertical": "world",
+      "weight": 0.9
+    }
+  ],
+  "retired": [
+    {
+      "id": "legacy-india",
+      "url": "https://legacy.test/feed.xml",
+      "title": "Legacy India",
+      "tier": 2,
+      "status": "retired",
+      "vertical": "india",
+      "weight": 0.8,
+      "retired_on": "2026-10-01",
+      "retirement_reason": "feed_404"
+    }
+  ]
+}

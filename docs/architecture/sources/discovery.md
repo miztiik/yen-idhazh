@@ -341,16 +341,17 @@ A vertical will be retired. A feed will die quietly when a site is redesigned. B
 ## Feed Admission Check
 
 The **Feed Admission Check** is the source-entry review before adding or
-restoring a feed. Its instrument is
-[`backend/utilities/probe_feeds.py`](../../../backend/utilities/probe_feeds.py).
-It uses the production fetcher, configured user agent, public-address check,
-robots policy, bounded retries, paywall detector and text extractor. It makes
-no model call and changes neither curation nor the pipeline's health ledgers.
+restoring a feed. The standalone TypeScript package
+[`packages/feed-probe`](../../../packages/feed-probe/) is a separate
+instrument for this check. It uses the standalone probe core, the production
+fetcher settings, public-address check, robots policy, bounded article count,
+paywall evidence and text extractor. It makes no model call and changes neither
+curation nor the pipeline health ledgers.
 
-The utility is a minimum access check, not an editorial acceptance gate. Its
+The TypeScript probe is a minimum access check, not an editorial acceptance gate. Its
 current limits matter when reading a green exit code:
 
-- An ad-hoc address is compared with live, retired and salience entries before
+- An ad-hoc address is compared with live and retired entries before
   it is fetched. The same feed URL or derived source ID stops the probe with
   exit code 2 and names the catalog rows it matches.
 - A sampled article that fails extraction keeps its paywall evidence in the
@@ -376,7 +377,7 @@ current limits matter when reading a green exit code:
 Sample several articles and keep the report for review, for example:
 
 ```text
-python backend/utilities/probe_feeds.py --articles 3 --report backend/var/probes/candidate-feeds.jsonl https://finshots.in/archive/rss/
+bun run --cwd packages/feed-probe probe-feeds --articles 3 --report backend/var/probes/candidate-feeds.jsonl https://finshots.in/archive/rss/
 ```
 
 Admission remains a curator's decision. Ongoing feed availability and article
