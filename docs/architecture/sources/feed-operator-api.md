@@ -125,6 +125,10 @@ is the one-request alternative: it runs the planning stages in process and
 records their results; it does not call the other HTTP routes. Selection
 captures health for its own decision but does not write it. The separate
 `feed-health-state` request can summarize or record a batch.
+The workflow HTTP client calls `/health`, `/plan`, then
+`/feed-health-state` with `action: summarize` when a batch exists. The
+[workflow entry](feed-plan-runner.md#entry-points-and-controls) keeps the
+same listener alive for all three calls because batch state is in memory.
 
 ```mermaid
 %%{init: {"theme": "base", "themeVariables": {"fontFamily": "sans-serif", "primaryColor": "#f8fafc", "primaryTextColor": "#1f2937", "primaryBorderColor": "#64748b", "lineColor": "#64748b", "textColor": "#1f2937", "clusterBkg": "#f8fafc", "clusterBorder": "#94a3b8", "edgeLabelBackground": "#ffffff"}}}%%
