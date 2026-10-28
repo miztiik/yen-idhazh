@@ -23,7 +23,6 @@ import { executePersistence } from "./api/persistence-operation";
 import { prepareFeedHealthState, recordFeedHealthState } from "./api/feed-health-state-operation";
 import type { PlanInputs } from "./load-plan-inputs";
 import type { ProgressRecord } from "./logging/progress-logger";
-import type { TaskProfiling } from "../../host-probes/src/task-profile/task-profiler";
 import { createIngestObservations } from "./ingest-observations";
 import { createRunHealth } from "./run-health";
 import { plannerMemory } from "./planner-memory";
@@ -35,7 +34,6 @@ export type PlanRuntime = {
   selection_clock?: () => Date; captured_at?: string; observation_clock?: () => Date;
   boundary?: NonNullable<Parameters<typeof harvestFeeds>[2]>;
   log?: (event: FeedIngestEvent) => void; progress?: (record: ProgressRecord) => void;
-  task_profiling?: TaskProfiling;
   parser_pool?: ArticleParserPool;
   signal?: AbortSignal;
   evidence?: ReadonlyMap<string, PlannerArticleEvidence>;

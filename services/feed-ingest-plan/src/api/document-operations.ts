@@ -25,7 +25,7 @@ export async function executeDocumentOperation(
       const record = await store.execute(proposed, async record => {
         const begin = performance.now();
         try {
-          const result = await fetchDocument(request, record, inputs, runtime, parent, store, signal);
+          const result = await fetchDocument(request, record, inputs, runtime, parent, store);
           await appendDocumentTiming(inputs, record.run_id, { operation: "fetch", duration_ms: Math.round(performance.now() - begin),
             status: result.artifact.failure === null ? "completed" : "failed" });
           return result;

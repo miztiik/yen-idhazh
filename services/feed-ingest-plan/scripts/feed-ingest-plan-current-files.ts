@@ -3,7 +3,7 @@ import { join } from "node:path";
 import { z } from "zod";
 import { ServiceSettingsSchema } from "../src/config/service-settings";
 import { PlanResponseSchema } from "../src/api/plan-response.schema";
-import { WorkflowResourcesSchema } from "./feed-ingest-plan-workflow-resources";
+import { WorkflowHostFingerprintSchema } from "./feed-ingest-plan-host-fingerprint";
 import { ExecutionIdentitySchema, hostWriter, readMetadataRegistrations, verifyMetadataFile } from "./feed-ingest-plan-metadata";
 import type { ExecutionIdentity, MetadataRegistrations } from "./feed-ingest-plan-metadata";
 import { verifyHostFingerprint } from "./feed-ingest-plan-host-verification";
@@ -12,16 +12,16 @@ import { verifyPlanningCompletion } from "./feed-ingest-plan-verification";
 export async function readWorkflowDeliveryContext(input: {
   root: string; directory: string; runNumber: string; attempt: number;
 }) {
-  const resources = z.object({ host_request: WorkflowResourcesSchema.shape.host_request })
-    .parse(await Bun.file(join(input.directory, "resources.json")).json());
-  const { run_id, attempt, git_sha } = resources.host_request.writer;
+  const host = z.object({ host_request: WorkflowHostFingerprintSchema.shape.host_request })
+    .parse(await Bun.file(join(input.directory, "host-fingerprint.json")).json());
+  const { run_id, attempt, git_sha } = host.host_request.writer;
   const identity = ExecutionIdentitySchema.parse({ run_id, attempt, git_sha });
   z.string().regex(/^\d+$/).parse(input.runNumber);
   const child = Bun.spawn(["git", "rev-parse", "HEAD"], { cwd: input.root, stdout: "pipe", stderr: "pipe" });
   const [sha] = await Promise.all([new Response(child.stdout).text(), new Response(child.stderr).text()]);
   if (await child.exited !== 0 || sha.trim() !== identity.git_sha || input.attempt !== identity.attempt
-    || identity.run_id !== `${resources.host_request.date}-${input.runNumber}`
-    || JSON.stringify(resources.host_request.writer) !== JSON.stringify(hostWriter(identity))) {
+    || identity.run_id !== `${host.host_request.date}-${input.runNumber}`
+    || JSON.stringify(host.host_request.writer) !== JSON.stringify(hostWriter(identity))) {
     throw new Error("Workflow metadata differs from the executed revision, run or attempt");
   }
   const settings = ServiceSettingsSchema.parse(await Bun.file(join(input.root, "config", "feed-ingest-plan-service.json")).json());
@@ -35,10 +35,10 @@ export async function collectWorkflowFiles(input: {
   const paths: string[] = [];
   const failures: unknown[] = [];
   let response: ReturnType<typeof PlanResponseSchema.parse> | undefined;
-  const resources = Bun.file(join(input.directory, "resources.json"));
-  if (await resources.exists()) {
+  const hostFile = Bun.file(join(input.directory, "host-fingerprint.json"));
+  if (await hostFile.exists()) {
     try {
-      const evidence = WorkflowResourcesSchema.parse(await resources.json());
+      const evidence = WorkflowHostFingerprintSchema.parse(await hostFile.json());
       if (evidence.host.status === "recorded") paths.push(...await verifyHostFingerprint(stateRoot,
         { ...evidence.host, status: "written" }, input.registrations, input.identity));
       else if (evidence.host.status === "failed") throw new Error(evidence.host.reason);

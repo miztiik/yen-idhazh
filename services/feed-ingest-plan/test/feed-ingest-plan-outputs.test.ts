@@ -12,10 +12,12 @@ import { executeFeedHealthState } from "../src/api/feed-health-state-operation";
 import { invokePlannerHttp } from "../scripts/feed-ingest-plan-http-proof";
 import { verifyParquetFiles, verifyPlanningCompletion } from "../scripts/feed-ingest-plan-verification";
 import { createExecutionOutputs, writeGitHubOutputs } from "../scripts/feed-ingest-plan-outputs";
-import { formatExecutionOutcome, formatExecutionReport, readExecutionReport, writePlannerReport } from "../scripts/feed-ingest-plan-report";
+import { readExecutionReport, renderWorkflowPlanMarkdown, writePlannerReport } from "../scripts/feed-ingest-plan-report";
 import { prepareWorkflowArtifacts } from "../scripts/feed-ingest-plan-artifacts";
-import { observeWorkflowResources, WorkflowResourcesSchema } from "../scripts/feed-ingest-plan-workflow-resources";
-import { escapeMarkdown } from "../scripts/feed-ingest-plan-report-format";
+import { captureWorkflowHostFingerprint, WorkflowHostFingerprintSchema } from "../scripts/feed-ingest-plan-host-fingerprint";
+import { formatWorkflowAnnotation } from "../scripts/feed-ingest-plan-report-format";
+import { escapeMarkdown } from "../src/reporting/markdown-format";
+import { renderPlanMarkdown } from "@idhazh/feed-ingest-plan/markdown";
 import { metadataRegistrations } from "./host-recordings";
 
 test("actual HTTP output retains selected text separately from its strict metadata manifest", async () => {
@@ -30,26 +32,17 @@ test("actual HTTP output retains selected text separately from its strict metada
     const settings = await Bun.file(new URL("../../../config/idhazh.json", import.meta.url)).json();
     await writeFile(join(resourceConfig, "config", "idhazh.json"), JSON.stringify({ ...settings,
       observability: { ...settings.observability, host_fingerprint: false, host_fingerprint_placement_enabled: false } }));
-    await writeFile(join(resourceConfig, "config", "host-probes.json"),
-      await Bun.file(new URL("../../../config/host-probes.json", import.meta.url)).text());
     await mkdir(directory, { recursive: true });
-    const closeResources = await observeWorkflowResources({
-      root: resourceConfig, directory, stateRoot: join(directory, "state"), profileRequested: true, gitSha: fixture.runtime.git_sha, attempt: 1,
-      identity: { pipeline_name: "feed-ingest-plan", task_name: "planner-http-request",
-        run_id: "2026-10-21-700", correlation_id: fixture.runtime.correlation_id!, request_id: crypto.randomUUID() },
+    const host = await captureWorkflowHostFingerprint({
+      root: resourceConfig, directory, stateRoot: join(directory, "state"),
+      registryPath: join(resourceConfig, "config", "ledgers.json"),
+      identity: { run_id: "2026-10-21-700", attempt: 1, git_sha: fixture.runtime.git_sha },
+      registrations: await metadataRegistrations(),
     });
-    let result: Awaited<ReturnType<typeof invokePlannerHttp>>;
-    let outcome: "success" | "error" = "error";
-    try {
-      result = await invokePlannerHttp(fixture.inputs, fixture.runtime, { article_limit: 1 }, directory);
-      if (result.summary.planning_complete) outcome = "success";
-    } finally { await closeResources.close(outcome); }
-    const resources = WorkflowResourcesSchema.parse(await Bun.file(join(directory, "resources.json")).json());
-    expect(resources.host.status).toBe("disabled");
-    expect(resources.profile.status).toBe("recorded");
-    if (resources.profile.status !== "recorded") throw new Error("The real optional planner profile must close");
-    expect(resources.profile.value.identity.task_name).toBe("planner-http-request");
-    expect(resources.profile.value.processes.server.closing.pid).toBeNull();
+    const savedHost = WorkflowHostFingerprintSchema.parse(await Bun.file(join(directory, "host-fingerprint.json")).json());
+    expect(host.host.status).toBe("disabled");
+    expect(savedHost).toEqual(host);
+    const result = await invokePlannerHttp(fixture.inputs, fixture.runtime, { article_limit: 1 }, directory);
     expect(result.http_status).toBe(200);
     expect(result.summary.planning_complete).toBe(true);
     const paths: string[] = JSON.parse(result.outputs.current_run_files!);
@@ -69,16 +62,12 @@ test("actual HTTP output retains selected text separately from its strict metada
       await mkdir(dirname(join(directory, "state", path)), { recursive: true });
       await Bun.write(join(directory, "state", path), await readFile(join(fixture.inputs.outputRoot, path)));
     }
-    await writeFile(join(directory, "runtime.log"), fixture.events.map(event => JSON.stringify(event)).join("\n"));
     const retained = await prepareWorkflowArtifacts({ root: fixture.directory, directory, runNumber: "700", attempt: 1, ...deliveryContext });
     expect(retained.selected).toBe("artifacts/700-1-selected-articles.json");
     expect(SelectedArticlesArtifactSchema.parse(await Bun.file(join(directory, retained.selected!)).json())).toEqual(artifact);
     const recovery = join(directory, retained.metadata_recovery!);
     expect(await Bun.file(join(recovery, "current-run-files.json")).json()).toEqual(paths);
     for (const path of paths) expect(await readFile(join(recovery, path))).toEqual(await readFile(join(fixture.inputs.outputRoot, path)));
-    const log = await Bun.file(join(directory, retained.runtime_log!)).text();
-    expect(log).not.toContain(artifact.articles[0]!.article_text);
-    expect(log).not.toContain("article_text");
     await writeFile(join(directory, "delivery-result.json"), JSON.stringify({ status: "landed", commit: "a".repeat(40), files: paths.length, paths }));
     const confirmed = await prepareWorkflowArtifacts({ root: fixture.directory, directory, runNumber: "700", attempt: 2, ...deliveryContext });
     expect(confirmed.metadata_recovery).toBeUndefined();
@@ -89,7 +78,7 @@ test("actual HTTP output retains selected text separately from its strict metada
     const published = join(directory, "artifact-outputs");
     await expect(prepareWorkflowArtifacts({ root: fixture.directory, directory, runNumber: "700", attempt: 3,
       outputPath: published, ...deliveryContext })).rejects.toThrow();
-    expect(await readFile(published, "utf8")).toContain("runtime_log<<");
+    expect(await readFile(published, "utf8")).toContain("delivery<<");
   } finally { await fixture.close(); }
 });
 
@@ -108,10 +97,13 @@ test("one real result and every native file stay unchanged through both report m
     const outputs = createExecutionOutputs(response, fixture.inputs.registrations);
     const paths: string[] = JSON.parse(outputs.current_run_files!);
     const bytes = await Promise.all(paths.map(path => readFile(join(fixture.inputs.outputRoot, path))));
-    const evidence = { response, health, historyStagingMs: 3, policy: {
+    const evidence = { response, health, policy: {
       config: fixture.inputs.harvest.config, request: {}, history: fixture.inputs.clock_config.collect,
       parser_concurrency: fixture.inputs.settings.listener.parser_concurrency,
     } };
+    const markdownApi = renderPlanMarkdown({ response, health });
+    expect(markdownApi.markdown).toContain("# Feed planner run");
+    expect(markdownApi.notices.some(notice => notice.title === "This run's feed work")).toBe(true);
     const summary = join(fixture.directory, "summary.md");
     const annotations: string[] = [];
     await writePlannerReport({ config: { ...fixture.inputs.harvest.config, workflow_reporting: {
@@ -120,20 +112,21 @@ test("one real result and every native file stay unchanged through both report m
     await expect(stat(summary)).rejects.toMatchObject({ code: "ENOENT" });
     await writePlannerReport({ config: fixture.inputs.harvest.config, evidence, summary_path: summary,
       annotate: line => annotations.push(line) });
-    expect(await readFile(summary, "utf8")).toBe(formatExecutionReport(evidence));
-    expect(annotations).toEqual([...formatExecutionOutcome(evidence).annotations]);
+    const workflowReport = renderWorkflowPlanMarkdown(evidence);
+    expect(await readFile(summary, "utf8")).toBe(workflowReport.markdown);
+    expect(annotations).toEqual(workflowReport.notices.map(formatWorkflowAnnotation));
     expect(annotations.map(line => line.slice(0, line.indexOf("::", 2)))).toEqual([
-      "::notice title=Resources", "::notice title=This run's feed work", "::notice title=Closed-day request spend",
+      "::notice title=Host fingerprint", "::notice title=This run's feed work", "::notice title=Closed-day request spend",
       "::notice title=Grouped exclusions", "::notice title=Policy used",
     ]);
     const rendered = Bun.markdown.html(await readFile(summary, "utf8"));
     expect(rendered).toContain("Feed health before requests");
     expect(rendered).toContain("Fresh feed health for selection");
-    const legacyTiming = formatExecutionReport({ ...evidence, response: {
+    const legacyTiming = renderWorkflowPlanMarkdown({ ...evidence, response: {
       ...response, api_timings: response.api_timings.map(timing => ({
         ...timing, operation: timing.operation.startsWith("feed-health-") ? "feed-health-summary" : timing.operation,
       })),
-    } });
+    } }).markdown;
     expect(legacyTiming).toContain("Legacy feed-health capture (purpose not recorded)");
     expect(legacyTiming).not.toContain("| Feed health before requests |");
     expect(legacyTiming).not.toContain("| Fresh feed health for selection |");
@@ -149,7 +142,7 @@ test("one real result and every native file stay unchanged through both report m
       expect(health.rows[index]).toMatchObject({
         status: 200, outcome: "ok", items: 0, failed_reads: 1, last_failure_code: code,
       });
-      const cell = formatExecutionReport(evidence).split("\n").find(line => line.startsWith(`| C${index + 1} |`));
+      const cell = workflowReport.markdown.split("\n").find(line => line.startsWith(`| C${index + 1} |`));
       expect(cell).toContain(`| ${description} |`);
     }
     expect(rendered).toContain("Feed read succeeded");
@@ -171,25 +164,26 @@ test("one real result and every native file stay unchanged through both report m
       const missing = { ...evidence, health: { ...health, rows: [{ ...firstHealth,
         outcome, items: null, last_failure_code: null,
       }] } };
-      expect(formatExecutionReport(missing)).toContain(escapeMarkdown(description));
+      expect(renderWorkflowPlanMarkdown(missing).markdown).toContain(escapeMarkdown(description));
     }
     const changed = { ...evidence, health: { ...health, rows: [{ ...firstHealth, rejection_counts: [
       ...firstHealth.rejection_counts, { reason_code: reason, count: 1, subject: "article", stage: "harvest-feeds", attribution: null },
       { reason_code: "HOSTILE\r\n::error title=unsafe::% <script>", count: 1, subject: "article", stage: "harvest-feeds", attribution: null },
     ] }] } };
-    const escaped = formatExecutionOutcome(changed);
-    expect(escaped.summary).toContain("It does not mean a feed configuration field is missing.");
-    expect(escaped.annotations[3]).toContain("which field failed");
-    expect(escaped.annotations.every(line => !line.includes("\n") && !line.includes("\r"))).toBe(true);
-    expect(escaped.annotations[3]).toContain("%0A");
-    expect(Bun.markdown.html(escaped.summary)).not.toContain("<script>");
+    const escaped = renderWorkflowPlanMarkdown(changed);
+    expect(escaped.markdown).toContain("It does not mean a feed configuration field is missing.");
+    expect(escaped.notices[3]!.message).toContain("which field failed");
+    const annotation = formatWorkflowAnnotation(escaped.notices[3]!);
+    expect(annotation).not.toContain("\n");
+    expect(annotation).not.toContain("\r");
+    expect(annotation).toContain("%0A");
+    expect(Bun.markdown.html(escaped.markdown)).not.toContain("<script>");
     const directory = join(fixture.directory, "evidence");
     await mkdir(directory);
     await writeFile(join(directory, "response.json"), JSON.stringify(response));
     await writeFile(join(directory, "health.json"), JSON.stringify(health));
-    await writeFile(join(directory, "history-staging-ms.json"), "3");
     await writeFile(join(directory, "workflow-policy.json"), JSON.stringify(evidence.policy));
-    expect(await readExecutionReport(directory)).toBe(formatExecutionReport(evidence));
+    expect(await readExecutionReport(directory)).toBe(workflowReport.markdown);
     expect(JSON.stringify(health)).toBe(healthBefore);
     for (const [index, path] of paths.entries()) expect(await readFile(join(fixture.inputs.outputRoot, path))).toEqual(bytes[index]!);
     await verifyPlanningCompletion(fixture.inputs.outputRoot, response, fixture.inputs.registrations, fixture.directory);

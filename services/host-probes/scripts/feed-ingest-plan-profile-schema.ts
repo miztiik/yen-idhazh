@@ -1,9 +1,8 @@
-/** Which body-free resource evidence belongs to one isolated planning attempt? */
+/** Which independent host-probe measurements must a proof record? */
 import { z } from "zod";
 import {
-  HostFingerprintRowSchema, PlannerObservationSchema, RequestIdSchema, RunIdSchema, Sha256Schema, WriterIdentitySchema,
+  HostFingerprintRowSchema, RequestIdSchema, RunIdSchema, WriterIdentitySchema,
 } from "../../../packages/common-contracts/src/index";
-import { TaskProfileConfigSchema } from "../src/config";
 import { OwnedProcessSchema, TaskProfileSchema } from "../src/task-profile/profile-schema";
 import { HostSampleSchema } from "../src/probe/sample-host";
 import { CacheProofSchema } from "./feed-ingest-plan-cache-proof";
@@ -16,45 +15,10 @@ export const WorkflowSettingsSchema = SelectedSettingsSchema.extend({
   }),
 });
 
-export const WorkflowMachineMemorySchema = z.enum(["false", "true"]).default("false")
-  .transform(value => value === "true");
 export const ProfileProofIdentitySchema = z.strictObject({
   git_sha: WriterIdentitySchema.shape.git_sha,
   run_id: RunIdSchema, attempt: WriterIdentitySchema.shape.attempt, correlation_id: RequestIdSchema,
 });
-export const DocumentProfilingSchema = z.strictObject({
-  profiles: z.array(TaskProfileSchema).max(2),
-  actual_work_count: z.int().nonnegative().nullable(),
-  after_checks_count: z.int().nonnegative().nullable(),
-});
-
-// Read only the fields the report uses; existing HTTP proof responses remain outside this projection.
-const ProfileCallSchema = z.object({
-  stage: z.string(), endpoint: z.enum(["fetch", "parse"]),
-  request: z.object({
-    request_id: RequestIdSchema, correlation_id: RequestIdSchema,
-    source_id: PlannerObservationSchema.shape.source_id.optional(),
-    kind: z.enum(["feed", "article"]).optional(),
-    article_id: Sha256Schema.optional(), fetch_request_id: RequestIdSchema.optional(),
-  }),
-  http_status: z.int().min(100).max(599), response_sha256: Sha256Schema,
-  network: z.strictObject({ dns: z.int().nonnegative(), http: z.int().nonnegative() }),
-});
-export const StageProfileProofSchema = z.object({
-  ...ProfileProofIdentitySchema.shape,
-  scope: z.literal("live_configured_feed_and_selected_article"),
-  status: z.enum(["running", "complete", "failed"]),
-  task_profile: TaskProfileConfigSchema,
-  documents: z.array(z.object({
-    kind: z.enum(["feed", "article"]), status: z.enum(["running", "complete", "failed"]),
-    git_sha: WriterIdentitySchema.shape.git_sha, run_id: RunIdSchema, correlation_id: RequestIdSchema,
-    source_id: PlannerObservationSchema.shape.source_id.nullable(), article_id: Sha256Schema.nullable(),
-    calls: z.array(ProfileCallSchema).max(7),
-    profiling: DocumentProfilingSchema.optional(),
-    journal_records_sha256: z.strictObject({ before_restart: Sha256Schema, after_checks: Sha256Schema }).nullable(),
-  })).max(2),
-});
-
 const fields = HostFingerprintRowSchema.shape;
 export const CopyResultSchema = z.object({
   memcpy_probe_mib: fields.memcpy_probe_mib, memcpy_gib_s: fields.memcpy_gib_s,
@@ -121,6 +85,5 @@ export const ResourceProofSchema = z.strictObject({
   error: z.string().nullable(),
 });
 export type ProfileProofIdentity = z.infer<typeof ProfileProofIdentitySchema>;
-export type StageProfileProof = z.infer<typeof StageProfileProofSchema>;
 export type ResourceProof = z.infer<typeof ResourceProofSchema>;
 export type TaskProfileProof = z.infer<typeof TaskProfileProofSchema>;

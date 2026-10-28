@@ -5,14 +5,13 @@ import { createServer } from "node:net";
 import { dirname, join } from "node:path";
 import { fixture } from "../../host-fingerprints/test/fixture";
 import { captureLocalFingerprint } from "../../host-fingerprints/src/api/local-fingerprint";
-import { serveFingerprints } from "../../host-fingerprints/src/api/server";
-import { observeWorkflowResources, WorkflowResourcesSchema } from "../scripts/feed-ingest-plan-workflow-resources";
+import { captureWorkflowHostFingerprint, WorkflowHostFingerprintSchema } from "../scripts/feed-ingest-plan-host-fingerprint";
 import { collectWorkflowFiles } from "../scripts/feed-ingest-plan-current-files";
 import { hostWriter } from "../scripts/feed-ingest-plan-metadata";
 import { verifyHostFingerprint } from "../scripts/feed-ingest-plan-host-verification";
-import { formatUnavailableExecutionReport } from "../scripts/feed-ingest-plan-report";
-import { formatResourceSummary } from "../scripts/feed-ingest-plan-resource-summary";
+import { formatHostFingerprintSummary } from "../scripts/feed-ingest-plan-host-summary";
 import { prepareWorkflowArtifacts } from "../scripts/feed-ingest-plan-artifacts";
+import { renderUnavailablePlanMarkdown } from "../src/reporting";
 import { metadataRegistrations, recordedWorkflowHost } from "./host-recordings";
 
 const identity = { run_id: "2026-10-21-700", attempt: 1, git_sha: "a".repeat(40) };
@@ -38,27 +37,30 @@ test("real API receipts survive a missing planner result and keep byte-valued ca
     expect(completed.response).toBeUndefined();
     expect(completed.paths).toEqual(paths);
     const before = await readFile(join(directory, "state", paths[0]!));
-    const report = formatUnavailableExecutionReport({ resources: host.resources });
-    expect(report.summary).toContain("Planning result unavailable");
-    const resourceNotice = formatResourceSummary(host.resources, undefined, false).notice;
-    expect(resourceNotice).toContain("L3 48.00 MiB");
-    expect(resourceNotice).toContain("total RAM 16383.750 MiB");
+    const hostSummary = formatHostFingerprintSummary(host.evidence);
+    const report = renderUnavailablePlanMarkdown({
+      host: { markdown: hostSummary.summary, notice: hostSummary.notice },
+    });
+    expect(report.markdown).toContain("Planning result unavailable");
+    const hostNotice = hostSummary.notice;
+    expect(hostNotice).toContain("L3 48.00 MiB");
+    expect(hostNotice).toContain("total RAM 16383.750 MiB");
     expect(host.response.row.l3_cache_bytes).toBe(50_331_648);
     expect(host.response.row.machine_memory_total_mib).toBe(16_383.75);
     expect(host.response.row).toMatchObject({ job_seconds: null, model_load_ms: null,
       server_prompt_tokens: null, server_prompt_seconds: null });
-    expect(Bun.markdown.html(report.summary)).toContain("<table>");
+    expect(Bun.markdown.html(report.markdown)).toContain("<table>");
     const retained = await prepareWorkflowArtifacts({ root: f.directory, directory,
       runNumber: "700", attempt: 1, identity, registrations: host.registrations });
     expect(await Bun.file(join(directory, retained.metadata_recovery!, "current-run-files.json")).json()).toEqual(paths);
     expect(await readFile(join(directory, retained.metadata_recovery!, paths[0]!))).toEqual(before);
     expect(await readFile(join(directory, "state", paths[0]!))).toEqual(before);
-    expect(JSON.stringify(host.resources)).not.toContain("article_text");
+    expect(JSON.stringify(host.evidence)).not.toContain("article_text");
     await expect(stat(join(directory, "state", dirname(paths[0]!), "index.json"))).rejects.toMatchObject({ code: "ENOENT" });
   } finally { await f.cleanup(); }
 });
 
-test("workflow collection retains HTTP files while optional live profiling still records independently", async () => {
+test("workflow collection retains the actual host fingerprint beside planner files", async () => {
   const f = await fixture();
   try {
     const directory = join(f.directory, "evidence");
@@ -71,28 +73,25 @@ test("workflow collection retains HTTP files while optional live profiling still
     } }));
     const config = { ...f.config, listen_port: await reservePort() };
     await writeFile(join(f.directory, "config", "host-fingerprints.json"), JSON.stringify(config));
-    for (const name of ["ledgers.json", "host-probes.json"]) {
+    for (const name of ["ledgers.json"]) {
       await copyFile(new URL(`../../../config/${name}`, import.meta.url), join(f.directory, "config", name));
     }
-    const session = await observeWorkflowResources({
-      root: f.directory, directory, stateRoot: join(directory, "state"), profileRequested: true,
-      gitSha: identity.git_sha, attempt: identity.attempt, identity: {
-        run_id: identity.run_id, pipeline_name: "feed-ingest-plan", task_name: "planner-http-request",
-        correlation_id: crypto.randomUUID(), request_id: crypto.randomUUID(),
-      },
+    const evidence = await captureWorkflowHostFingerprint({
+      root: f.directory, directory, stateRoot: join(directory, "state"),
+      registryPath: join(f.directory, "config", "ledgers.json"),
+      identity, registrations: await metadataRegistrations(),
     });
-    await session.close("error");
-    const saved = WorkflowResourcesSchema.parse(await Bun.file(join(directory, "resources.json")).json());
+    const saved = WorkflowHostFingerprintSchema.parse(await Bun.file(join(directory, "host-fingerprint.json")).json());
+    expect(saved).toEqual(evidence);
     expect(saved.host.status).toBe("recorded");
-    expect(saved.profile_requested).toBe(true);
-    expect(saved.profile.status).toBe("recorded");
-    if (saved.host.status !== "recorded" || saved.profile.status !== "recorded") throw new Error("Both independent observations must be recorded");
-    expect(saved.profile.value.outcome).toBe("error");
-    expect(saved.profile.value.identity.task_name).toBe("planner-http-request");
+    if (saved.host.status !== "recorded") throw new Error("The host fingerprint must be recorded");
     expect(saved.host.row.task_name).toBe("isolated-plan");
     expect(saved.host.files).toHaveLength(1);
-    const server = serveFingerprints(config, f.settings, { outputRoot: join(f.directory, "must-not-write") });
-    await server.stop(true);
+    const completed = await collectWorkflowFiles({
+      root: f.directory, directory, identity, registrations: await metadataRegistrations(),
+    });
+    expect(completed.paths).toEqual(saved.host.files.map(file => file.path));
+    expect(completed.failures).toEqual([]);
   } finally { await f.cleanup(); }
 });
 
@@ -106,15 +105,11 @@ test("configured off does not start a listener, read missing host config, or cre
     for (const key of ["host_telemetry_enabled", "host_fingerprint"] as const) {
       await writeFile(join(f.directory, "config", "idhazh.json"), JSON.stringify({ ...settings,
         observability: { ...settings.observability, host_telemetry_enabled: true, host_fingerprint: true, [key]: false } }));
-      const session = await observeWorkflowResources({
-        root: f.directory, directory, stateRoot: join(directory, "state"), profileRequested: false,
-        gitSha: identity.git_sha, attempt: identity.attempt, identity: {
-          run_id: identity.run_id, pipeline_name: "feed-ingest-plan", task_name: "planner-http-request",
-          correlation_id: crypto.randomUUID(), request_id: crypto.randomUUID(),
-        },
+      const evidence = await captureWorkflowHostFingerprint({
+        root: f.directory, directory, stateRoot: join(directory, "state"), registryPath: "missing",
+        identity, registrations: await metadataRegistrations(),
       });
-      await session.close("success");
-      expect(session.evidence.host).toEqual({ status: "disabled", reason: `observability.${key}=false` });
+      expect(evidence.host).toEqual({ status: "disabled", reason: `observability.${key}=false` });
       const completed = await collectWorkflowFiles({ root: f.directory, directory, identity, registrations: await metadataRegistrations() });
       expect(completed.paths).toEqual([]);
       expect(completed.failures).toEqual([]);
@@ -169,8 +164,8 @@ test("HTTP write failures and nonlocal listeners cannot return a successful host
       { outputRoot: state })).rejects.toThrow("loopback");
     const directory = join(f.directory, "evidence");
     const host = await recordedWorkflowHost(directory, identity);
-    const unavailable = formatResourceSummary({ ...host.resources,
-      host: { status: "failed", reason: "Host persistence failed" } }, undefined, false);
+    const unavailable = formatHostFingerprintSummary({ ...host.evidence,
+      host: { status: "failed", reason: "Host persistence failed" } });
     expect(unavailable.notice).toContain("failed (Host persistence failed)");
     expect(unavailable.notice).not.toContain("0.00 MiB");
   } finally { await f.cleanup(); }
@@ -200,10 +195,9 @@ test("the local HTTP boundary preserves task-selected copy work and unavailable 
     expect(unsupported.row.l3_cache_bytes).toBeNull();
     expect(unsupported.row.machine_memory_total_mib).toBeNull();
     expect(unsupported.unavailable.machine_memory_total_mib).toBe("unsupported_platform");
-    const report = formatResourceSummary({
-      host_request: request, profile_requested: false, host: { ...unsupported, status: "recorded" },
-      profile: { status: "disabled", reason: "profile_machine_memory=false" },
-    }, undefined, false);
+    const report = formatHostFingerprintSummary({
+      host_request: request, host: { ...unsupported, status: "recorded" },
+    });
     expect(report.notice).toContain("L3 Unavailable");
     expect(report.notice).toContain("total RAM Unavailable");
     expect(report.notice).not.toContain("0.00 MiB");

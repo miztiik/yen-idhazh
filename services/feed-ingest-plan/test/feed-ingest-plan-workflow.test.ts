@@ -12,12 +12,13 @@ import {
 import { persistLedger } from "../../../packages/ledger-file-writer/src/index";
 import { plannerRecordings } from "../../../packages/ledger-file-writer/test/planner-recordings";
 import { PlanRequestSchema } from "../src/api/plan-request";
+import { ServiceSettingsSchema } from "../src/config/service-settings";
 import { readPlannerParquet } from "../src/read-ledger-history/read-planner-parquet";
 import { LedgerHistoryReadError } from "../src/read-ledger-history/ledger-history-error";
 import { requiredUtcDays } from "../src/utc-instant";
+import { createPlannerHistoryInputs } from "../scripts/feed-ingest-plan-history";
 import { stageFeedHistory } from "../scripts/feed-ingest-plan-feed-history";
 import { completeHistoryDayInputs, historyIndexPaths, resolveHistoryInventory, sparseCheckoutPath } from "../scripts/feed-ingest-plan-outputs";
-import { loadConfig as loadProbeConfig } from "../../host-probes/src/config";
 
 const root = fileURLToPath(new URL("../../../", import.meta.url));
 const StepSchema = z.object({
@@ -39,40 +40,38 @@ async function workflow() {
   return { text, parsed, steps: parsed.jobs["isolated-plan"].steps };
 }
 
-test("manual controls deliver only current metadata and keep optional host tools independent", async () => {
+test("manual controls exercise the planner API and keep only required outputs", async () => {
   const { text, parsed, steps } = await workflow();
   expect(parsed.permissions).toEqual({ contents: "write" });
   expect(parsed.jobs["isolated-plan"]["timeout-minutes"]).toBe(360);
   const controls = parsed.on.workflow_dispatch.inputs;
-  expect(Object.keys(controls)).toEqual(["freshness_hours", "article_limit", "shards", "partition_strategy", "profile_machine_memory"]);
+  expect(Object.keys(controls)).toEqual(["freshness_hours", "article_limit", "shards", "partition_strategy"]);
   const config = FeedIngestConfigSchema.parse(await Bun.file(join(root, "config", "feed-ingest-plan.json")).json());
   for (const [field, value] of Object.entries({
     freshness_hours: config.curate_articles.feed_quality_tiers[0]!.ladder_hours[0]!, article_limit: config.curate_articles.article_limit,
     shards: config.partition.default_shards, partition_strategy: config.partition.default_strategy,
   })) expect(controls[field]!.default).toBe(String(value));
   expect(controls.partition_strategy!.options).toEqual(PlanRequestSchema.shape.partition_strategy.unwrap().options);
-  expect(controls.profile_machine_memory!.default).toBe((await loadProbeConfig()).task_profile.machine_memory_enabled);
+  const serviceManifest = await Bun.file(join(root, "services", "feed-ingest-plan", "package.json")).json();
+  expect(serviceManifest.exports["./markdown"]).toBe("./src/reporting/index.ts");
   const plan = steps.find(step => step.id === "plan")!;
-  expect(plan.run).toContain("set -o pipefail");
-  expect(plan.run).toContain('bun run services/feed-ingest-plan/scripts/feed-ingest-plan-http-proof.ts 2>&1 | tee "$RUNNER_TEMP/feed-ingest-plan/runtime.log"');
+  expect(plan.run).toBe("bun run services/feed-ingest-plan/scripts/feed-ingest-plan-http-proof.ts");
   expect(plan.env).toEqual({
     FRESHNESS_HOURS: "${{ inputs.freshness_hours }}", ARTICLE_LIMIT: "${{ inputs.article_limit }}",
     SHARDS: "${{ inputs.shards }}", PARTITION_STRATEGY: "${{ inputs.partition_strategy }}",
-    PROFILE_MACHINE_MEMORY: "${{ inputs.profile_machine_memory }}",
   });
   expect(plan.run).not.toContain("${{");
-  const delivery = steps.find(step => step.name === "Deliver exact current planner and host metadata")!;
+  const delivery = steps.find(step => step.name === "Persist verified planner ledgers")!;
   expect(delivery.if).toContain("!cancelled()");
   expect(delivery.if).toContain("current_run_files");
   expect(delivery.if).not.toContain("planning_complete");
-  expect(delivery.run).toContain("set -o pipefail");
+  expect(delivery.run).toBe("bun run services/feed-ingest-plan/scripts/feed-ingest-plan-deliver.ts");
   expect(delivery.run).toContain("scripts/feed-ingest-plan-deliver.ts");
-  expect(delivery.run).toContain('tee "$RUNNER_TEMP/feed-ingest-plan/delivery.log"');
   expect(delivery.run).not.toContain("git push");
   const textArtifact = steps.find(step => step.name === "Preserve selected text for the summarizer")!;
   expect(textArtifact.with?.path).toBe("${{ runner.temp }}/feed-ingest-plan/${{ steps.evidence.outputs.selected }}");
   const individual = steps.filter(step => step.uses === "actions/upload-artifact@v7" && step.with?.archive === false);
-  expect(individual).toHaveLength(11);
+  expect(individual).toHaveLength(3);
   for (const artifact of individual) {
     expect(artifact.with?.name).toBeUndefined();
     expect(String(artifact.with?.path)).not.toMatch(/[\n*]/);
@@ -83,30 +82,59 @@ test("manual controls deliver only current metadata and keep optional host tools
   expect(recovery.with?.name).toBe("uncommitted-metadata-recovery-${{ github.run_id }}-${{ github.run_attempt }}");
   expect(recovery.with?.path).toBe("${{ runner.temp }}/feed-ingest-plan/${{ steps.evidence.outputs.metadata_recovery }}");
   expect(steps.find(step => step.id === "evidence")?.if).toContain("always()");
-  const report = steps.findIndex(step => step.name === "Write the public planner summary and grouped annotations");
-  expect(report).toBeGreaterThan(steps.findIndex(step => step.name === "Run independent optional host proof"));
+  const report = steps.findIndex(step => step.name === "Write workflow run summary");
+  expect(report).toBeGreaterThan(steps.indexOf(delivery));
   expect(steps[report]?.run).toBe("bun run services/feed-ingest-plan/scripts/feed-ingest-plan-report.ts");
   expect(steps[report]?.if).toContain("always()");
   expect(text).not.toContain("/state/raw/feed-ingest-plan/");
-  expect(steps.some(step => step.name === "Check isolated adapters")).toBe(true);
+  expect(steps.some(step => step.name === "Check isolated adapters")).toBe(false);
   expect(steps.some(step => step.name?.includes("native compatibility"))).toBe(false);
   const optional = steps.filter(step => step["continue-on-error"]);
-  expect(optional).toHaveLength(2);
-  expect(optional.every(step => step.if?.includes("inputs.profile_machine_memory"))).toBe(true);
+  expect(optional).toHaveLength(0);
+  expect(text).not.toContain("profile_machine_memory");
+  expect(text).not.toContain("services/host-probes");
+  expect(text).not.toContain("runtime.log");
+  expect(text).not.toContain("delivery.log");
   expect(steps.at(-1)?.env).toEqual({ PLANNING_COMPLETE: "${{ steps.plan.outputs.planning_complete }}" });
   expect(text).not.toContain("audited_complete");
   expect(text).not.toContain("persist-dispatches");
   expect(text).not.toContain(".github/scripts/");
-  const ci = z.object({ jobs: z.object({
-    site: z.object({ steps: z.array(StepSchema) }), browser: z.object({ steps: z.array(StepSchema) }),
-  }) }).parse(Bun.YAML.parse(await readFile(join(root, ".github", "workflows", "ci.yml"), "utf8")));
-  for (const job of [ci.jobs.site, ci.jobs.browser]) {
-    expect(job.steps.some(step => step.uses === "oven-sh/setup-bun@v2")).toBe(true);
-    const install = job.steps.find(step => step.name === "Install the native planner fixture writer")!;
+  const ci = z.object({ jobs: z.record(z.string(), z.object({ steps: z.array(StepSchema).optional() })) })
+    .parse(Bun.YAML.parse(await readFile(join(root, ".github", "workflows", "ci.yml"), "utf8")));
+  const plannerChecks = Object.values(ci.jobs).flatMap(job => job.steps ?? []);
+  const plannerTest = plannerChecks.find(step => step.name === "TypeScript feed planner and native audit evidence")!;
+  expect(plannerTest.run).toContain("bun run check");
+  expect(plannerTest.run).toContain("bun run test");
+  for (const name of ["site", "browser"]) {
+    const steps = ci.jobs[name]!.steps ?? [];
+    expect(steps.some(step => step.uses === "oven-sh/setup-bun@v2")).toBe(true);
+    const install = steps.find(step => step.name === "Install the native planner fixture writer")!;
     expect(install.run).toContain("bun install --frozen-lockfile --cwd packages/common-contracts");
     expect(install.run).toContain("bun install --frozen-lockfile --cwd packages/data-delivery");
     expect(install.run).toContain("bun install --frozen-lockfile --cwd packages/ledger-file-writer");
   }
+});
+
+test("planner history removes staging indexes before strict configuration validation", async () => {
+  const revision = "a".repeat(40);
+  const history = createPlannerHistoryInputs([{
+    day: "2026-10-27",
+    indexes: {
+      yearly: "state/compact/feed-ingest-plan/feed-health-state/index/yearly.json",
+      monthly: "state/compact/feed-ingest-plan/feed-health-state/index/monthly.json",
+      daily: "state/compact/feed-ingest-plan/feed-health-state/index/daily.json",
+    },
+    raw_files: ["state/raw/feed-ingest-plan/feed-health-state/2026/10/27/01a17c6e-7acc-834f-a173-7b12dbfa240d.parquet"],
+  }], revision);
+  expect(history).toEqual([{
+    day: "2026-10-27",
+    raw_files: ["state/raw/feed-ingest-plan/feed-health-state/2026/10/27/01a17c6e-7acc-834f-a173-7b12dbfa240d.parquet"],
+    raw_revision: revision,
+  }]);
+  const settings = ServiceSettingsSchema.parse(await Bun.file(join(root, "config", "feed-ingest-plan-service.json")).json());
+  expect(ServiceSettingsSchema.parse({
+    ...settings, inputs: { ...settings.inputs, feed_health_days: history },
+  }).inputs.feed_health_days).toEqual(history);
 });
 
 test("bounded discovery history preserves covered-day membership and planner raw overlap", async () => {
@@ -202,35 +230,54 @@ test("hostile dispatch strings fail in the actual adapter before loading inputs 
   expect(errors).not.toContain("injected");
 });
 
-test("the workflow checkout names every delivery adapter and focused test input", async () => {
+test("the workflow checkout names runtime code and only the delivery inputs it needs", async () => {
   const { steps } = await workflow();
   const selection = steps.find(step => step.uses?.startsWith("actions/checkout@"))!.with?.["sparse-checkout"];
   if (typeof selection !== "string") throw new Error("Expected a named sparse selection");
+  expect(selection).not.toContain("/services/feed-ingest-plan/test/");
+  expect(selection).not.toContain("/services/host-probes/");
+  expect(selection).not.toContain("/tests/");
   const required = new Set([
+    "services/feed-ingest-plan/package.json",
+    "services/feed-ingest-plan/bun.lock",
     "services/feed-ingest-plan/scripts/feed-ingest-plan-http-proof.ts",
     "services/feed-ingest-plan/scripts/feed-ingest-plan-deliver.ts",
     "services/feed-ingest-plan/scripts/feed-ingest-plan-delivery-result.ts",
     "services/feed-ingest-plan/scripts/feed-ingest-plan-current-files.ts",
+    "services/feed-ingest-plan/scripts/feed-ingest-plan-host-fingerprint.ts",
+    "services/feed-ingest-plan/scripts/feed-ingest-plan-history.ts",
     "services/feed-ingest-plan/scripts/feed-ingest-plan-metadata.ts",
+    "services/feed-ingest-plan/scripts/feed-ingest-plan-host-verification.ts",
     "services/feed-ingest-plan/scripts/feed-ingest-plan-verification.ts",
-    "services/feed-ingest-plan/test/feed-ingest-plan-outputs.test.ts",
-    "services/feed-ingest-plan/test/feed-ingest-plan-report.test.ts",
-    "services/feed-ingest-plan/test/feed-ingest-plan-workflow.test.ts",
     "services/feed-ingest-plan/scripts/feed-ingest-plan-artifacts.ts",
+    "services/feed-ingest-plan/scripts/feed-ingest-plan-report.ts",
+    "services/feed-ingest-plan/scripts/feed-ingest-plan-policy-report.ts",
     "services/feed-ingest-plan/src/website-group.ts",
-    "services/host-probes/scripts/feed-ingest-plan-profile-proof.ts",
-    "services/feed-ingest-plan/test/feed-ingest-plan-host.test.ts",
-    "services/feed-ingest-plan/test/feed-ingest-plan-delivery.test.ts",
-    "services/feed-ingest-plan/test/website-group.test.ts",
+    "services/feed-ingest-plan/src/config/service-settings.ts",
+    "services/feed-ingest-plan/src/reporting/index.ts",
+    "services/feed-ingest-plan/src/reporting/plan-markdown.ts",
+    "services/host-fingerprints/package.json",
+    "services/host-fingerprints/bun.lock",
+    "services/host-fingerprints/src/api/local-fingerprint.ts",
+    "config/feed-ingest-plan-service.json",
+    "config/feed-ingest-plan.json",
+    "config/taxonomy.json",
+    "config/sources.json",
+    "config/idhazh.json",
+    "config/ledgers.json",
+    "config/host-fingerprints.json",
     "config/data-delivery.json",
     "config/push-retry.json",
+    "packages/common-contracts/package.json",
+    "packages/common-contracts/bun.lock",
+    "packages/common-contracts/src/index.ts",
     "packages/data-delivery/package.json",
     "packages/data-delivery/bun.lock",
-    "packages/data-delivery/tsconfig.json",
     "packages/data-delivery/src/index.ts",
-    "packages/data-delivery/src/safe-persist-data-contract.ts",
     "packages/data-delivery/src/safe-persist-data.ts",
-    "packages/data-delivery/test/safe-persist-data.test.ts",
+    "packages/ledger-file-writer/package.json",
+    "packages/ledger-file-writer/bun.lock",
+    "packages/ledger-file-writer/src/index.ts",
   ]);
   for (const entry of selection.trim().split("\n").map(value => value.trim())) {
     if (!/^\/[\w./-]+$/.test(entry) || entry.split("/").includes("..")) {

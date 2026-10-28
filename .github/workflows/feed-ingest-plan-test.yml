@@ -3,7 +3,7 @@ name: Feed ingest plan test
 on:
   workflow_dispatch:
     inputs:
-      # The named workflow case binds these literal form defaults to configuration.
+      # CI checks these form defaults against the committed planner config.
       freshness_hours:
         description: Maximum article age in hours for this run
         required: true
@@ -28,11 +28,6 @@ on:
           - bin-pack
           - round-robin
           - none
-      profile_machine_memory:
-        description: Profile the live planner CPU/RAM and separate controlled host tools; default off
-        required: false
-        default: false
-        type: boolean
 
 permissions:
   contents: write
@@ -48,20 +43,22 @@ jobs:
           sparse-checkout-cone-mode: false
           sparse-checkout: |
             /config/
-            /packages/common-contracts/
-            /packages/data-delivery/
-            /packages/ledger-file-writer/
-            /services/feed-ingest-plan/
-            /services/host-probes/
-            /services/host-fingerprints/
-            /.github/workflows/feed-ingest-plan-test.yml
-            /.github/workflows/ci.yml
-            /tests/fixtures/feed-ingest-plan/
-            /tests/fixtures/ledger-file-writer/
-            /tests/fixtures/host-probes/
-            /tests/fixtures/host-fingerprints/linux-inputs.json
-            /tests/fixtures/runtime/2026-08-30-probe-proc-stat-at-start.txt
-            /tests/fixtures/runtime/2026-08-30-probe-proc-stat-at-end.txt
+            /packages/common-contracts/package.json
+            /packages/common-contracts/bun.lock
+            /packages/common-contracts/src/
+            /packages/data-delivery/package.json
+            /packages/data-delivery/bun.lock
+            /packages/data-delivery/src/
+            /packages/ledger-file-writer/package.json
+            /packages/ledger-file-writer/bun.lock
+            /packages/ledger-file-writer/src/
+            /services/feed-ingest-plan/package.json
+            /services/feed-ingest-plan/bun.lock
+            /services/feed-ingest-plan/src/
+            /services/feed-ingest-plan/scripts/
+            /services/host-fingerprints/package.json
+            /services/host-fingerprints/bun.lock
+            /services/host-fingerprints/src/
 
       - uses: oven-sh/setup-bun@v2
         with:
@@ -73,54 +70,28 @@ jobs:
           bun install --frozen-lockfile --cwd packages/data-delivery
           bun install --frozen-lockfile --cwd packages/ledger-file-writer
           bun install --frozen-lockfile --cwd services/feed-ingest-plan
-          bun install --frozen-lockfile --cwd services/host-probes
           bun install --frozen-lockfile --cwd services/host-fingerprints
 
-      - name: Check isolated adapters
-        run: |
-          bun run --cwd packages/common-contracts check
-          bun run --cwd packages/data-delivery check
-          bun run --cwd packages/data-delivery test
-          bun run --cwd packages/ledger-file-writer check
-          bun run --cwd services/feed-ingest-plan check
-          bun test ./services/feed-ingest-plan/test/feed-ingest-plan-report.test.ts ./services/feed-ingest-plan/test/feed-ingest-plan-outputs.test.ts ./services/feed-ingest-plan/test/feed-ingest-plan-workflow.test.ts ./services/feed-ingest-plan/test/feed-ingest-plan-host.test.ts ./services/feed-ingest-plan/test/feed-ingest-plan-delivery.test.ts --timeout 30000
-
-      - name: Read named history and call the real HTTP planner
+      - name: Run feed planning with saved history
         id: plan
         env:
           FRESHNESS_HOURS: ${{ inputs.freshness_hours }}
           ARTICLE_LIMIT: ${{ inputs.article_limit }}
           SHARDS: ${{ inputs.shards }}
           PARTITION_STRATEGY: ${{ inputs.partition_strategy }}
-          PROFILE_MACHINE_MEMORY: ${{ inputs.profile_machine_memory }}
-        run: |
-          mkdir -p "$RUNNER_TEMP/feed-ingest-plan"
-          set -o pipefail
-          bun run services/feed-ingest-plan/scripts/feed-ingest-plan-http-proof.ts 2>&1 | tee "$RUNNER_TEMP/feed-ingest-plan/runtime.log"
+        run: bun run services/feed-ingest-plan/scripts/feed-ingest-plan-http-proof.ts
 
-      - name: Deliver exact current planner and host metadata
+      - name: Persist verified planner ledgers
         if: ${{ !cancelled() && steps.plan.outputs.current_run_files != '' }}
         env:
           CURRENT_RUN_FILES: ${{ steps.plan.outputs.current_run_files }}
-        run: |
-          set -o pipefail
-          bun run services/feed-ingest-plan/scripts/feed-ingest-plan-deliver.ts 2>&1 | tee "$RUNNER_TEMP/feed-ingest-plan/delivery.log"
+        run: bun run services/feed-ingest-plan/scripts/feed-ingest-plan-deliver.ts
 
-      - name: Install optional host instruments
-        if: ${{ !cancelled() && inputs.profile_machine_memory }}
-        continue-on-error: true
-        run: bash services/host-probes/scripts/install-host-cache-tools.sh
-
-      - name: Run independent optional host proof
-        if: ${{ !cancelled() && inputs.profile_machine_memory }}
-        continue-on-error: true
-        run: bun run services/host-probes/scripts/feed-ingest-plan-profile-proof.ts
-
-      - name: Write the public planner summary and grouped annotations
+      - name: Write workflow run summary
         if: ${{ always() }}
         run: bun run services/feed-ingest-plan/scripts/feed-ingest-plan-report.ts
 
-      - name: Prepare exact individual evidence and uncommitted metadata recovery
+      - name: Prepare selected handoff and recovery
         id: evidence
         if: ${{ always() }}
         run: bun run services/feed-ingest-plan/scripts/feed-ingest-plan-artifacts.ts
@@ -134,76 +105,12 @@ jobs:
           path: ${{ runner.temp }}/feed-ingest-plan/${{ steps.evidence.outputs.selected }}
           if-no-files-found: error
 
-      - name: Preserve planner response
-        if: ${{ always() && steps.evidence.outputs.response != '' }}
-        uses: actions/upload-artifact@v7
-        with:
-          archive: false
-          path: ${{ runner.temp }}/feed-ingest-plan/${{ steps.evidence.outputs.response }}
-          if-no-files-found: error
-
-      - name: Preserve feed work and request evidence
-        if: ${{ always() && steps.evidence.outputs.health != '' }}
-        uses: actions/upload-artifact@v7
-        with:
-          archive: false
-          path: ${{ runner.temp }}/feed-ingest-plan/${{ steps.evidence.outputs.health }}
-          if-no-files-found: error
-
-      - name: Preserve measured history staging time
-        if: ${{ always() && steps.evidence.outputs.history != '' }}
-        uses: actions/upload-artifact@v7
-        with:
-          archive: false
-          path: ${{ runner.temp }}/feed-ingest-plan/${{ steps.evidence.outputs.history }}
-          if-no-files-found: error
-
       - name: Preserve metadata delivery result
         if: ${{ always() && steps.evidence.outputs.delivery != '' }}
         uses: actions/upload-artifact@v7
         with:
           archive: false
           path: ${{ runner.temp }}/feed-ingest-plan/${{ steps.evidence.outputs.delivery }}
-          if-no-files-found: error
-
-      - name: Preserve real planner and listener logs
-        if: ${{ always() && steps.evidence.outputs.runtime_log != '' }}
-        uses: actions/upload-artifact@v7
-        with:
-          archive: false
-          path: ${{ runner.temp }}/feed-ingest-plan/${{ steps.evidence.outputs.runtime_log }}
-          if-no-files-found: error
-
-      - name: Preserve real metadata delivery logs
-        if: ${{ always() && steps.evidence.outputs.delivery_log != '' }}
-        uses: actions/upload-artifact@v7
-        with:
-          archive: false
-          path: ${{ runner.temp }}/feed-ingest-plan/${{ steps.evidence.outputs.delivery_log }}
-          if-no-files-found: error
-
-      - name: Preserve effective workflow settings
-        if: ${{ always() && steps.evidence.outputs.policy != '' }}
-        uses: actions/upload-artifact@v7
-        with:
-          archive: false
-          path: ${{ runner.temp }}/feed-ingest-plan/${{ steps.evidence.outputs.policy }}
-          if-no-files-found: error
-
-      - name: Preserve actual host and live planner resources
-        if: ${{ always() && steps.evidence.outputs.resources != '' }}
-        uses: actions/upload-artifact@v7
-        with:
-          archive: false
-          path: ${{ runner.temp }}/feed-ingest-plan/${{ steps.evidence.outputs.resources }}
-          if-no-files-found: error
-
-      - name: Preserve independent controlled host evidence
-        if: ${{ always() && steps.evidence.outputs.independent != '' }}
-        uses: actions/upload-artifact@v7
-        with:
-          archive: false
-          path: ${{ runner.temp }}/feed-ingest-plan/${{ steps.evidence.outputs.independent }}
           if-no-files-found: error
 
       - name: Preserve the public Markdown report
