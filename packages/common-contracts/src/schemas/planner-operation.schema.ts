@@ -5,9 +5,9 @@ import { FetchFailureSchema } from "./harvest-diagnostics.schema";
 import { RecordedInstantSchema } from "./recorded-instant.schema";
 import { SourceArticleRefusalReasonSchema } from "./rejection.schema";
 
-export const OPERATION_VERSION = "2026-10-27";
+export const OPERATION_VERSION = "2026-10-28";
 const OperationVersionSchema = z.literal(OPERATION_VERSION).default(OPERATION_VERSION);
-export const PLANNER_OPERATION_VERSION = "2026-10-27T18:30";
+export const PLANNER_OPERATION_VERSION = "2026-10-28";
 export const SourceArticleOutcomeSchema = z.strictObject({
   disposition: z.enum(["admitted", "source_refused"]),
   reason_code: SourceArticleRefusalReasonSchema.nullable(), settled_at: RecordedInstantSchema,
@@ -30,12 +30,12 @@ export type FetchAttempt = z.infer<typeof FetchAttemptSchema>;
 export const PlannerObservationSchema = z.strictObject({
   event_id: z.uuid({ version: "v5" }), caused_by_event_id: z.uuid({ version: "v5" }).nullable(),
   correlation_id: NonEmptySchema, run_id: RunIdSchema, article_id: Sha256Schema,
-  source_id: SlugSchema, occurred_at: TimestampSchema,
+  feed_id: SlugSchema, occurred_at: TimestampSchema,
   operation: z.enum(["fetch", "parse", "attempt"]),
 });
 export const FetchedDocumentSchema = z.strictObject({
   version: OperationVersionSchema,
-  fetch_item_type: z.enum(["feed", "article"]), canonical_url: UrlSchema, article_id: Sha256Schema, source_id: SlugSchema,
+  fetch_item_type: z.enum(["feed", "article"]), canonical_url: UrlSchema, article_id: Sha256Schema, feed_id: SlugSchema,
   body: z.string().nullable(), http_status: z.int().min(100).max(599).nullable(),
   failure: FetchFailureSchema.nullable(), robots: z.enum(["allowed", "denied", "unknown"]).nullable(),
   error_code: FetchAttemptSchema.shape.error_code, robots_failure: FetchFailureSchema.nullable(),
@@ -50,13 +50,13 @@ export const FetchedDocumentSchema = z.strictObject({
     ctx.addIssue({ code: "custom", message: "body and body digest must be available together" });
   }
   if (value.observation.operation !== "fetch" || value.observation.article_id !== value.article_id
-    || value.observation.source_id !== value.source_id) {
+    || value.observation.feed_id !== value.feed_id) {
     ctx.addIssue({ code: "custom", message: "fetch observation must retain document identity" });
   }
   if (value.attempts.length !== value.attempt_observations.length
     || value.attempts.some((attempt, index) => attempt.sequence !== index)
     || value.attempt_observations.some(observation => observation.operation !== "attempt"
-      || observation.source_id !== value.source_id || observation.article_id !== value.article_id
+      || observation.feed_id !== value.feed_id || observation.article_id !== value.article_id
       || observation.run_id !== value.observation.run_id || observation.correlation_id !== value.observation.correlation_id
       || observation.caused_by_event_id !== value.observation.event_id)) {
     ctx.addIssue({ code: "custom", message: "attempt observations must match the ordered attempts" });
@@ -64,7 +64,8 @@ export const FetchedDocumentSchema = z.strictObject({
 }).meta({
   version: OPERATION_VERSION,
   changelog: [
-    { version: OPERATION_VERSION, change: "Name the fetched item type and refuse older fetch artifacts." },
+    { version: OPERATION_VERSION, change: "Rename fetched document and observation feed identity from source_id to feed_id." },
+    { version: "2026-10-27", change: "Name the fetched item type and refuse older fetch artifacts." },
     { version: "2026-10-26", change: "Link fetched articles to bounded server-owned feed offers." },
     { version: "2026-10-23T09:22", change: "Record actual retry waits and elapsed retry time." },
     { version: "2026-10-23", change: "Declare durable fetched documents and causal observations." },
@@ -101,7 +102,8 @@ export const PlannerOperationSchema = z.strictObject({
 }).meta({
   version: PLANNER_OPERATION_VERSION,
   changelog: [
-    { version: PLANNER_OPERATION_VERSION, change: "Settle original article outcomes and retain their bounded receipt membership on the feed capture." },
+    { version: PLANNER_OPERATION_VERSION, change: "Rename nested fetched feed identity from source_id to feed_id." },
+    { version: "2026-10-27T18:30", change: "Settle original article outcomes and retain their bounded receipt membership on the feed capture." },
     { version: "2026-10-27", change: "Refuse prior operation formats after renaming fetch routing." },
     { version: "2026-10-26", change: "Retain current fetched offer references through request replay." },
     { version: "2026-10-23T18:50", change: "Retain the original captured clock precision through replay." },

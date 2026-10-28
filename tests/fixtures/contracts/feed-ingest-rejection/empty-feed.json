@@ -19,10 +19,10 @@
   "drop_reason": "FEED_EMPTY",
   "feed_url": "https://example.org/feed.xml",
   "rejected_at": "2026-10-20T19:40:00Z",
-  "source_id": "fixture-feed",
+  "feed_id": "fixture-feed",
   "stage": "harvest-feeds",
   "subject": "feed",
   "title": null,
   "url_key": null,
-  "version": "2026-10-20"
+  "version": "2026-10-28"
 }

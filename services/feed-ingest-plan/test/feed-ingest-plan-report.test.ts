@@ -74,7 +74,7 @@ test("absent progress stays unavailable and zero counts do not certify publicati
   const settings = await Bun.file(new URL("../../../config/idhazh.json", import.meta.url)).json();
   const policy = formatWorkflowPolicy({ config: {
     ...config, curate_articles: {
-      ...config.curate_articles, feed_quality_tiers: config.curate_articles.feed_quality_tiers.map(rule =>
+      ...config.curate_articles, article_quality_buckets: config.curate_articles.article_quality_buckets.map(rule =>
         ({ ...rule, ladder_hours: [6, 12] })),
     },
   },
@@ -82,7 +82,7 @@ test("absent progress stays unavailable and zero counts do not certify publicati
     history: settings.collect, parser_concurrency: 4 }, true);
   expect(policy.notice).toContain("10 articles; 4 workers; bin-pack");
   expect(policy.rows.find(([name]) => name === "Article age windows")?.[1]).toBe(
-    `${config.curate_articles.feed_quality_tiers.map(rule => `Tier ${rule.tier}: 2 hours`).join("; ")} (workflow override)`,
+    `${config.curate_articles.article_quality_buckets.map(rule => `Article-quality bucket ${rule.tier}: 2 hours`).join("; ")} (workflow override)`,
   );
   expect(policy.rows.find(([name]) => name === "Article limit")?.[1]).toBe("10 articles (workflow override)");
   expect(formatWorkflowPolicy(undefined, false).notice).toContain("defaults do not prove");

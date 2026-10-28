@@ -10,7 +10,7 @@
   "window_end": "2026-10-24",
   "code_revision": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
   "policy_version": "2026-10-25",
-  "source_id": "fixture-source",
+  "feed_id": "fixture-source",
   "evidence_start_utc": "2026-10-20T00:00:00Z",
   "evidence_end_utc": "2026-10-24T23:59:59Z",
   "measured_target_requests": 120,

@@ -43,7 +43,7 @@ export function summarizeHealth(input: {
   const sources = new Map<string, SourceHistoryEvidence>();
   for (const source of input.sources) {
     const endpoint = source.feed_url;
-    const matching = rows.filter(row => row.feed_id === source.source_id && row.endpoint_key === inputEndpointKey(endpoint)
+    const matching = rows.filter(row => row.feed_id === source.feed_id && row.endpoint_key === inputEndpointKey(endpoint)
       && row.checked_at !== null && row.outcome !== null && row.items !== null);
     // Logical reads retain native successful-attempt settlement; spend retains every attempt below.
     const reads = new Map<string, typeof matching[number]>();
@@ -65,7 +65,7 @@ export function summarizeHealth(input: {
     const measured = logical.filter(row => reliabilityDays.includes(row.date)
       && row.outcome !== "skipped" && row.outcome !== "robots_denied");
     const productive = measured.filter(row => row.outcome === "ok" && row.items > 0).length;
-    const articleRows = rows.filter(row => row.feed_id === source.source_id
+    const articleRows = rows.filter(row => row.feed_id === source.feed_id
       && row.endpoint_key === inputEndpointKey(endpoint) && reliabilityDays.includes(row.date));
     const articleKnown = complete(reliabilityDays, input.policy.reliability_window_days)
       && articleRows.every(row => row.counts_complete && row.article_candidates !== null);
@@ -74,7 +74,7 @@ export function summarizeHealth(input: {
       .filter(reason => reason.subject === "article" && reason.attribution === "feed"
         && SourceArticleRefusalReasonSchema.safeParse(reason.reason_code).success)
       .reduce((count, reason) => count + reason.count, 0), 0);
-    sources.set(source.source_id, {
+    sources.set(source.feed_id, {
       endpoint_key: inputEndpointKey(endpoint),
       lifecycle: source.status === "retired" ? "retired" : lifecycleRows.length === 0 ? "unknown"
         : availability.resting === true ? "resting" : availability.resting === null ? "unknown" : "eligible",
@@ -94,14 +94,14 @@ export function summarizeHealth(input: {
   const request_report = {
     from_day: requestDays[0]!, through_day: requestDays.at(-1)!, complete: windowComplete,
     feeds: input.sources.map(source => {
-      const work = rows.filter(row => row.feed_id === source.source_id
+      const work = rows.filter(row => row.feed_id === source.feed_id
         && row.endpoint_key === inputEndpointKey(source.feed_url) && requestDays.includes(row.date));
       const known = windowComplete && work.every(row =>
         row.feed_requests !== null && row.article_requests !== null && row.robots_requests !== null);
       const sum = (field: "feed_requests" | "article_requests" | "robots_requests") =>
         !known || work.some(row => row[field] === null) ? null : work.reduce((total, row) => total + row[field]!, 0);
       return {
-        feed_id: source.source_id, feed_requests: sum("feed_requests"), article_requests: sum("article_requests"),
+        feed_id: source.feed_id, feed_requests: sum("feed_requests"), article_requests: sum("article_requests"),
         robots_requests: sum("robots_requests"), counts_complete: known,
       };
     }),

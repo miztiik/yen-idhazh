@@ -59,7 +59,7 @@ test("manual controls exercise the planner API and keep only required outputs", 
   expect(Object.keys(controls)).toEqual(["freshness_hours", "article_limit", "shards", "partition_strategy"]);
   const config = FeedIngestConfigSchema.parse(await Bun.file(join(root, "config", "feed-ingest-plan.json")).json());
   for (const [field, value] of Object.entries({
-    freshness_hours: config.curate_articles.feed_quality_tiers[0]!.ladder_hours[0]!, article_limit: config.curate_articles.article_limit,
+    freshness_hours: config.curate_articles.article_quality_buckets[0]!.ladder_hours[0]!, article_limit: config.curate_articles.article_limit,
     shards: config.partition.default_shards, partition_strategy: config.partition.default_strategy,
   })) expect(controls[field]!.default).toBe(String(value));
   expect(controls.partition_strategy!.options).toEqual(PlanRequestSchema.shape.partition_strategy.unwrap().options);

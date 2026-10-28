@@ -96,14 +96,14 @@
     "feed_url": "https://example.org/feed.xml",
     "form": "article",
     "kind": "research",
-    "source_id": "fixture-feed",
+    "feed_id": "fixture-feed",
     "status": "active",
     "tier": 4,
     "title": "Fixture feed",
     "vertical": "technology",
     "weight": 1.0
   },
-  "source_id": "fixture-feed",
+  "feed_id": "fixture-feed",
   "url_key": "9eba6b3c57ce169e19742b249a7f7542a620751a5c4b2f2c4990684f7e655f70",
   "version": "2026-10-20",
   "vertical": "technology"

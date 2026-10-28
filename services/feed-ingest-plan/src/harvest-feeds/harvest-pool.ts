@@ -65,7 +65,7 @@ export async function harvestFeeds(
   try {
     const feeds = await mapPool(inputs.sources, inputs.config.harvest.concurrency, async configured => {
       const source = sourceSnapshot(inputs, configured);
-      const history = context.feed_history?.get(source.source_id);
+      const history = context.feed_history?.get(source.feed_id);
       if (source.status === "active" && history?.lifecycle === "resting") {
         await feedDocumentWork(source, runContext).skip();
         const outcome = FeedOutcomePayloadSchema.parse({
@@ -75,17 +75,17 @@ export async function harvestFeeds(
         context.on_feed?.(outcome, [], utcTimestamp(context.observation_clock));
         return { outcome, articles: [], rejection: null };
       }
-      context.progress?.("FEED_FETCH_STARTED", { source_id: source.source_id });
+      context.progress?.("FEED_FETCH_STARTED", { feed_id: source.feed_id });
       const feed = await readFeed(source, boundedFetcher, runContext, inputs.config.harvest.fetch_timeout_ms);
       context.on_feed?.(feed.outcome, feed.entries, utcTimestamp(context.observation_clock));
-      context.progress?.("FEED_FETCH_COMPLETED", { source_id: source.source_id, output_count: feed.entries.length });
+      context.progress?.("FEED_FETCH_COMPLETED", { feed_id: source.feed_id, output_count: feed.entries.length });
       const articles = await mapPool(feed.entries, inputs.config.harvest.concurrency, async entry => {
         const offered: OfferedArticle = { source, entry };
-        context.progress?.("ARTICLE_HARVEST_STARTED", { source_id: source.source_id });
+        context.progress?.("ARTICLE_HARVEST_STARTED", { feed_id: source.feed_id });
         const result = await harvestArticle(offered, inputs, boundedFetcher, runContext);
         context.on_article?.(result);
         context.progress?.("ARTICLE_HARVEST_COMPLETED", {
-          source_id: source.source_id, output_count: result.candidate === null ? 0 : 1,
+          feed_id: source.feed_id, output_count: result.candidate === null ? 0 : 1,
         });
         return result;
       });

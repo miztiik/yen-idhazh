@@ -37,12 +37,12 @@ export async function createParsedFeedBatch(input: {
         writer: state.context.writer, correlation_id: state.context.correlation_id, max_future_hours: inputs.clock_config.collect.max_future_hours,
         clock: () => new Date(state.context.now), observation_clock: runtime.observation_clock ?? (() => new Date()),
       }, "MISSING_REQUIRED_FIELDS", {}, {
-        candidate_id: deriveCandidateId(state.context.run_id, source.source_id, entry.entry_ordinal),
+        candidate_id: deriveCandidateId(state.context.run_id, source.feed_id, entry.entry_ordinal),
         canonical_url: null, url_key: null, title: entry.title, categories: entry.categories,
       }));
       continue;
     }
-    offers.push({ offer_id: deriveCandidateId(state.context.run_id, source.source_id, entry.entry_ordinal),
+    offers.push({ offer_id: deriveCandidateId(state.context.run_id, source.feed_id, entry.entry_ordinal),
       source, entry: PlannerFeedEntrySchema.parse(entry), state: "pending", fetch_request_id: null });
   }
   const discovered = await readDiscoveredEvidence({
@@ -97,7 +97,7 @@ export function updateFeedOffer(
 }
 export function publicFeedOffers(batch: ParsedFeedBatch) {
   return batch.offers.map(offer => ({
-    offer_id: offer.offer_id, feed_id: offer.source.source_id, canonical_url: canonicalizeUrl(offer.entry.link!).canonical_url,
+    offer_id: offer.offer_id, feed_id: offer.source.feed_id, canonical_url: canonicalizeUrl(offer.entry.link!).canonical_url,
     title: offer.entry.title, categories: offer.entry.categories, published_at: offer.entry.published_at,
   }));
 }

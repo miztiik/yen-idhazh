@@ -57,14 +57,14 @@ export async function selectArticles(batch: ParsedFeedBatch, inputs: PlanInputs,
   });
   const rejectedArticles = [
     ...screening.rejections.map(rejection => ({
-      candidate_id: rejection.candidate_id, url_key: rejection.url_key, feed_id: rejection.source_id,
+      candidate_id: rejection.candidate_id, url_key: rejection.url_key, feed_id: rejection.feed_id,
       stage: rejection.stage, reason_code: rejection.drop_reason,
       freshness_cutoff_at: rejection.details.max_age_hours === null ? null
         : freshnessCutoff(batch.context.now, rejection.details.max_age_hours),
     })),
     ...curation.losses.map(loss => ({
       candidate_id: loss.article.candidate.candidate_id, url_key: loss.article.candidate.url_key,
-      feed_id: loss.article.candidate.source_id, stage: "curate-article-portfolio",
+      feed_id: loss.article.candidate.feed_id, stage: "curate-article-portfolio",
       reason_code: loss.reason, freshness_cutoff_at: loss.freshness_cutoff_at,
     })),
   ].map(row => RejectedArticleRowSchema.parse({
@@ -72,11 +72,11 @@ export async function selectArticles(batch: ParsedFeedBatch, inputs: PlanInputs,
   }));
   const losses: PlannerRejectionCount[] = [...batch.exclusions];
   for (const rejection of screening.rejections) losses.push({
-    feed_id: rejection.source_id, subject: "article", stage: "screen-article-candidates",
+    feed_id: rejection.feed_id, subject: "article", stage: "screen-article-candidates",
     reason_code: rejection.drop_reason, attribution: null, count: 1,
   });
   for (const loss of curation.losses) losses.push({
-    feed_id: loss.article.candidate.source_id, subject: "article", stage: "curate-article-portfolio",
+    feed_id: loss.article.candidate.feed_id, subject: "article", stage: "curate-article-portfolio",
     reason_code: loss.reason, attribution: null, count: 1,
   });
   const grouped = new Map<string, PlannerRejectionCount>();
@@ -90,9 +90,9 @@ export async function selectArticles(batch: ParsedFeedBatch, inputs: PlanInputs,
   const originalWork = context.run_id === batch.context.run_id && context.writer.attempt === batch.context.writer.attempt;
   const healthRows = originalWork ? captureHealthRows(batch.work_rows, health.sources) : [];
   for (const candidate of batch.candidates) {
-    let row = healthRows.find(row => row.feed_id === candidate.source_id && row.date === selectionStartedAt.slice(0, 10));
+    let row = healthRows.find(row => row.feed_id === candidate.feed_id && row.date === selectionStartedAt.slice(0, 10));
     if (row === undefined) {
-      const source = planning.sources.find(source => source.id === candidate.source_id);
+      const source = planning.sources.find(source => source.id === candidate.feed_id);
       if (source === undefined) throw new Error("Selection candidate lacks its configured feed");
       row = FeedHealthStateRowSchema.parse({
         run_id: context.run_id, attempt: context.writer.attempt, feed_id: source.id,

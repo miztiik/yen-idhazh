@@ -3,7 +3,7 @@ import { createUuidV5 } from "@idhazh/ledger-file-writer";
 import { EVENT_NAMESPACE } from "../logging/structured-logger";
 
 export type DocumentIdentity = {
-  run_id: string; correlation_id: string; article_id: string | null; source_id: string | null;
+  run_id: string; correlation_id: string; article_id: string | null; feed_id: string | null;
 };
 export function observeDocument(
   identity: DocumentIdentity, key: string, operation: "fetch" | "parse" | "attempt",

@@ -24,7 +24,7 @@ function work(day = "2026-10-20", patch: Partial<FeedHealthStateRow> = {}) {
 async function input() {
   const loaded = await loadPlanInputs(fileURLToPath(new URL("../../../", import.meta.url)));
   const source = SourceSnapshotSchema.parse({
-    source_id: "recorded-news", feed_url: "https://news.example/feed.xml", title: "Recorded feed",
+    feed_id: "recorded-news", feed_url: "https://news.example/feed.xml", title: "Recorded feed",
     publisher_id: null, tier: 2,
     status: "active", weight: 0.8, applied_tier_weight: 0.6,
   });
@@ -127,7 +127,7 @@ test("precise, legacy and tied timestamps preserve the recorded lifecycle uncert
       statuses: [number | null, number | null]; expected: "eligible" | "resting" | "retired" | "unknown" }[];
   };
   const sources = recorded.cases.map(testCase => SourceSnapshotSchema.parse({
-    ...setup.sources[0], source_id: testCase.id, feed_url: `${setup.sources[0]!.feed_url}?ordering=${testCase.id}`,
+    ...setup.sources[0], feed_id: testCase.id, feed_url: `${setup.sources[0]!.feed_url}?ordering=${testCase.id}`,
     status: testCase.id === "known-retired" ? "retired" : "active",
   }));
   const rows = recorded.cases.flatMap((testCase, sourceIndex) => recorded.run_suffixes.map((suffix, index) => work(undefined, {
@@ -147,7 +147,7 @@ test("a changed feed URL inherits neither the old endpoint reliability nor its r
   const setup = await input();
   const source = { ...setup.sources[0]!, feed_url: "https://news.example/changed.xml" };
   const result = summarize(setup, [work()], { sources: [source] });
-  expect(result.sources.get(source.source_id)).toMatchObject({
+  expect(result.sources.get(source.feed_id)).toMatchObject({
     endpoint_key: endpointKey(source.feed_url), lifecycle: "unknown", strikes: null, rested_runs: null, reliability: null,
   });
   expect(result.request_report.feeds[0]).toMatchObject({

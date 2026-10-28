@@ -129,7 +129,7 @@
           "observed_run_id": "2026-10-24-7",
           "observed_attempt": 1,
           "correlation_id": "7cef34e3-dd9f-40ce-9a56-4d01ff5115cc",
-          "source_id": "recorded-news",
+          "feed_id": "recorded-news",
           "publisher_id": "recorded-publisher",
           "article_id": "d5ac862b279674275ef140975760a0e49b3a8aa6121d5dcb999e0b8b445417fb",
           "candidate_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -156,7 +156,7 @@
           "observed_run_id": "2026-10-24-7",
           "observed_attempt": 1,
           "correlation_id": "7cef34e3-dd9f-40ce-9a56-4d01ff5115cc",
-          "source_id": "recorded-news",
+          "feed_id": "recorded-news",
           "publisher_id": "recorded-publisher",
           "article_id": "d5ac862b279674275ef140975760a0e49b3a8aa6121d5dcb999e0b8b445417fb",
           "candidate_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -183,7 +183,7 @@
           "observed_run_id": "2026-10-24-7",
           "observed_attempt": 1,
           "correlation_id": "7cef34e3-dd9f-40ce-9a56-4d01ff5115cc",
-          "source_id": "recorded-news",
+          "feed_id": "recorded-news",
           "publisher_id": "recorded-publisher",
           "article_id": "d5ac862b279674275ef140975760a0e49b3a8aa6121d5dcb999e0b8b445417fb",
           "candidate_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -208,7 +208,7 @@
   "source_inventory_sha256": "729e6ffc64a3ab568958f45c86725ee6266c64994e3a6c5a17b3851f5952360e",
   "source_inventory": [
     {
-      "source_id": "recorded-news",
+      "feed_id": "recorded-news",
       "endpoint_key": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
       "publisher_id": "recorded-publisher",
       "registry_status": "active"
@@ -216,7 +216,7 @@
   ],
   "source_results": [
     {
-      "source_id": "recorded-news",
+      "feed_id": "recorded-news",
       "endpoint_key": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
       "lifecycle": {
         "input_status": "complete",

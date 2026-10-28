@@ -14,7 +14,7 @@ import { attributeIngestOutcome } from "../attribute-ingest-outcomes";
 type Result = Pick<DocumentWorkFact, "outcome" | "failure_code">;
 type Scope = {
   document_kind: "feed" | "article"; publisher_id: string | null; candidate_id: string | null;
-  observed_run_id: string; observed_attempt: number; source_id: string;
+  observed_run_id: string; observed_attempt: number; feed_id: string;
 };
 type Context = Pick<HarvestContext, "progress" | "observations" | "observation_clock"> & {
   on_attempt?: (observation: ReturnType<typeof observeDocument>) => void;
@@ -29,7 +29,7 @@ export function documentWork(context: Context, identity: DocumentIdentity, key: 
     measurement?: FetchAttemptMeasurement,
   ) {
     const candidate = {
-      document_kind: scope.document_kind, source_id: scope.source_id,
+      document_kind: scope.document_kind, feed_id: scope.feed_id,
       run_id: scope.observed_run_id, attempt: scope.observed_attempt,
       operation: observation.operation, occurred_at: observation.occurred_at,
       ...result, duration_ms, http_status,
