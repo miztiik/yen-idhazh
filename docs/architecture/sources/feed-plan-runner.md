@@ -93,6 +93,8 @@ owns the exact fields and row identities.
 Only sparse body-free progress and failure events leave the runtime.
 There are no exported full work events, archived parsed/rejected populations,
 classification products, per-operation ledgers or full-audit receipt graph.
+Article parser start events carry no duration; completion and failure events
+carry elapsed milliseconds measured from the worker's start response.
 Completed earlier files are retained after a later failure.
 
 ## Design rationale
