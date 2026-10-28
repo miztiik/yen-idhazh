@@ -1,0 +1,21 @@
+{
+  "name": "@idhazh/feed-probe",
+  "version": "2026.10.28",
+  "private": true,
+  "type": "module",
+  "description": "Read-only TypeScript feed access and article readability probe.",
+  "exports": "./src/index.ts",
+  "scripts": {
+    "check": "tsc --noEmit",
+    "test": "bun test --timeout 30000"
+  },
+  "dependencies": {
+    "@idhazh/common-contracts": "file:../common-contracts",
+    "@idhazh/feed-ingest-plan": "file:../../services/feed-ingest-plan",
+    "zod": "^4.1.12"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.3.0",
+    "typescript": "^5.9.3"
+  }
+}

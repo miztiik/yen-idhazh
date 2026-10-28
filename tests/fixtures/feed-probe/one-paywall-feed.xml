@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0">
+  <channel>
+    <title>One Paywall Feed Fixture</title>
+    <link>https://fixture.test/</link>
+    <description>Recorded paywall fixture</description>
+    <item>
+      <title>Paywall Article</title>
+      <link>https://fixture.test/paywall-one</link>
+      <pubDate>Tue, 27 Oct 2026 10:00:00 GMT</pubDate>
+    </item>
+  </channel>
+</rss>
