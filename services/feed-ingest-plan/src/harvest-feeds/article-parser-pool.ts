@@ -11,6 +11,7 @@ import { ArticleParserResponseSchema } from "./article-parser-worker";
 type ArticleParserActivity = (
   phase: "started" | "completed" | "failed",
   duration_ms: number | null,
+  feed_id?: string | null,
 ) => void;
 
 type Job = {

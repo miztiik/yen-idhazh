@@ -55,6 +55,14 @@ test("live progress precedes completion and the structured event stream stays sp
       expect(FeedIngestEventSchema.safeParse({ ...event, source_id: event.feed_id }).success).toBe(false);
       if (event.duration_ms !== null) expect(event.duration_ms).toBeGreaterThanOrEqual(0);
     }
+    const parserEvents = recorded.events.filter(event => event.operation === "parse");
+    expect(parserEvents.length).toBeGreaterThan(0);
+    for (const event of parserEvents) {
+      expect(event.feed_id).toBe("recorded-news");
+      if (event.phase === "started") expect(event.duration_ms).toBeNull();
+      else expect(event.duration_ms).not.toBeNull();
+      if (event.duration_ms !== null) expect(event.duration_ms).toBeGreaterThanOrEqual(0);
+    }
     expect(result).not.toHaveProperty("events");
     expect(JSON.stringify(progress)).not.toContain(result.selected[0]!.article_text);
     expect(JSON.stringify(recorded.events)).not.toContain(result.selected[0]!.article_text);

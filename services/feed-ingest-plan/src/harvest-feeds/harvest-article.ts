@@ -53,8 +53,12 @@ export async function harvestArticle(
   const extractStarted = performance.now();
   const body = fetched.body;
   const link = entry.link;
+  const parserOptions: HarvestContext["parser_options"] = context.parser_options?.activity === undefined ? context.parser_options : {
+    ...context.parser_options,
+    activity: (phase, duration_ms) => context.parser_options!.activity?.(phase, duration_ms, source.source_id),
+  };
   const parsed = await work.parse(
-    () => parseDocument("article", body, link, inputs.extraction, context.parser_pool, context.parser_options), fetchedEvent.event_id, describeArticleParse,
+    () => parseDocument("article", body, link, inputs.extraction, context.parser_pool, parserOptions), fetchedEvent.event_id, describeArticleParse,
   );
   if (parsed.parsed === null) {
     diagnostics = {
