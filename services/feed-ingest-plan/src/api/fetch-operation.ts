@@ -19,7 +19,6 @@ import { createIngestObservations } from "../ingest-observations";
 import { prepareArticle } from "../harvest-feeds/prepare-article";
 import { updateFeedOffer } from "./feed-offers";
 import { workPool } from "../harvest-feeds/harvest-pool";
-import { profileTask } from "../../../host-probes/src/task-profile/task-profiler";
 import { fetchRejection, recordRejection } from "../harvest-feeds/record-rejection";
 import { deriveCandidateId } from "@idhazh/common-contracts";
 import { sourceSnapshot } from "../harvest-feeds/load-harvest-inputs";
@@ -42,7 +41,7 @@ export function resolveFetchParent(request: FetchRequest, inputs: PlanInputs, ru
 }
 export async function fetchDocument(
   request: FetchRequest, record: PlannerOperation, inputs: PlanInputs, runtime: PlanRuntime,
-  parent: ReturnType<typeof resolveFetchParent>, store: OperationStore, signal?: AbortSignal,
+  parent: ReturnType<typeof resolveFetchParent>, store: OperationStore,
 ) {
   const source = inputs.harvest.sources.find(source => source.id === request.feed_id);
   if (source === undefined || source.status !== "active") throw new PlanError("INVALID_REQUEST", "Fetch requires an active configured feed", "feed_id");
@@ -86,11 +85,7 @@ export async function fetchDocument(
   let permit = requestPools.get(inputs);
   if (permit === undefined) { permit = workPool(inputs.harvest.config.harvest.concurrency); requestPools.set(inputs, permit); }
   const bounded = permit;
-  const result = await profileTask(runtime.task_profiling, {
-    pipeline_name: "feed-ingest-plan", task_name: "fetch", run_id: record.run_id,
-    correlation_id: record.correlation_id, request_id: record.request_id,
-  }, () => bounded(() => work.fetch(state.fetcher, url, request.caused_by_event_id ?? null)),
-  { ...(signal === undefined ? {} : { signal }), outcome: result => result.fetched.failure === null ? "success" : "error" });
+  const result = await bounded(() => work.fetch(state.fetcher, url, request.caused_by_event_id ?? null));
   const { fetched, observation } = result;
   state.recovered.add(record.request_id);
   if (request.fetch_item_type === "feed") state.work.pendingFeed(source.id, fetched, observation.occurred_at);

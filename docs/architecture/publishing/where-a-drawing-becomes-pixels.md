@@ -103,8 +103,9 @@ for every chart on the page rather than one each (Guardrail #12).
 
 **The bar name sits above its bar rather than beside it, and that is what keeps the bar
 horizontal at narrow widths** (row #2, 2026-09-14). A name column has to hold the longest name the compiler
-allows - `MARK_NAME_MAX` is 40 of the article's own characters, about 250 CSS pixels at
-`--text-xs` - and a 360 px phone has roughly 300 pixels of card to spend. Side by side, a
+allows - the default `visuals.max_label_characters` is 40 displayed characters, including
+the `...` suffix, about 250 CSS pixels at `--text-xs` - and a 360 px phone has roughly
+300 pixels of card to spend. Side by side, a
 column that fits the names leaves nothing for the bars and a column that fits the bars cuts
 the names in half; the old drawing hid that by scaling the type down until the names fitted,
 which is the defect above. Above the bar, the name has the whole width at every size, and the
@@ -365,6 +366,17 @@ date or year alongside the source wording, so the compiler can order readings
 without replacing what the article wrote. The reader refuses older or malformed
 chart data rather than guessing.
 
+`visuals.max_label_characters` defaults to 40 displayed characters, including
+the three dots. For a longer source span, the shared
+`idhazh.text_fit.fit_source_span` helper keeps the opening source characters
+that fit and appends `...`; shorter spans pass through unchanged. It does not
+rewrite source wording, and it has no dependency on chart code so other visual
+compilers can reuse it. Stacked-bar labels remain uncapped.
+
+If different source labels become identical after shortening, the chart is
+refused before its data is written. The item still publishes without a picture,
+rather than hiding which category or series a value belongs to.
+
 Bubble adds a relationship drawing without changing the fields or the meaning
 of an existing chart. Its x and y positions reuse the paired relationship
 geometry; its radius is proportional to the square root of the positive size
@@ -421,7 +433,7 @@ or null path remains the same chartless payload older days already carry.
 | State `renderer_version` in a second place | `spec_format` carried the same idea twice, the two disagreed on 2026-09-05T18:00, and nothing downstream can tell which of two versions to believe. |
 | A visual placeholder when a drawing refuses | It makes "we correctly decided this needed no picture" look identical to a failed image, and 94.7 percent of stories already have no visual. |
 | Install `d3-selection` or `d3-axis` for the reading page | Nothing here joins, enters or exits; `d3-axis` writes a 10px font that would be imported in order to be undone. A package absent from the lockfile cannot be imported onto a reading page. |
-| Keep the name in a column beside its bar | A name column has to hold 40 of the article's characters, about 250 CSS px, against roughly 300 px of card on a phone - so either the bars or the names lose, and the old drawing hid that by scaling the type until the names fitted. |
+| Keep the name in a column beside its bar | A name column has to hold the default 40-character label, including its `...` suffix, about 250 CSS px, against roughly 300 px of card on a phone - so either the bars or the names lose, and the old drawing hid that by scaling the type until the names fitted. |
 | Back-fill the 495 deleted drawings as marks | It means re-fetching 495 source pages that have since moved, and a chart compiled from today's page under an old day's date is a record of nothing. |
 
 ## See also

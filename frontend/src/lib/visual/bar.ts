@@ -194,12 +194,13 @@ function figureOf(mark: VisualMark): number {
  * comparison the chart exists to make gets every pixel left once the number it
  * compares has somewhere to stand. A name column beside the bars is what a
  * fixed canvas could afford and a phone cannot
- * - the compiler allows 40 of the article's own characters, about 250 CSS
- * pixels at `--text-xs`, and a 360 px phone has roughly 300 pixels of card to
- * spend. Side by side, a column that fits the names leaves nothing to draw a
- * bar in, and the old drawing hid that by scaling the type down until the names
- * fitted. What a reader gives up is the tidy left-hand column a desktop had
- * room for, and one text line of height per bar.
+ * - the default `visuals.max_label_characters` is 40 characters, including
+ *   the `...` suffix, about 250 CSS pixels at `--text-xs`, and a 360 px phone
+ *   has roughly 300 pixels of card to spend. Side by side, a column that fits
+ *   the names leaves nothing to draw a bar in, and the old drawing hid that
+ *   by scaling the type down until the names fitted. What a reader gives up is
+ *   the tidy left-hand column a desktop had room for, and one text line of
+ *   height per bar.
  *
  * Throws where the data does not fit - see the module note: `refusedVisualData`
  * is the check, and this is the code that trusts it.

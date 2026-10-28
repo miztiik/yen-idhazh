@@ -29,7 +29,6 @@ import { resolveArticleEvidence } from "../website-group";
 import { DiscoveredArticleRowSchema } from "@idhazh/common-contracts";
 import { plannerMemory } from "../planner-memory";
 import { createStageLogger } from "../logging/structured-logger";
-import { profileTask } from "../../../host-probes/src/task-profile/task-profiler";
 import { resolveArticleSourceOutcome } from "../article-source-outcome";
 
 export async function parseFetchedDocument(
@@ -88,13 +87,9 @@ export async function parseFetchedDocument(
   const emit = createStageLogger(state.context, runtime.log);
   let parsed;
   try {
-    parsed = await profileTask(runtime.task_profiling, {
-      pipeline_name: "feed-ingest-plan", task_name: "parse", run_id: fetched.run_id,
-      correlation_id: fetched.correlation_id, request_id: record.request_id,
-    }, () => work.parse(() => parseDocument("article", artifact.body!, artifact.canonical_url, inputs.harvest.extraction, pool, {
+    parsed = await work.parse(() => parseDocument("article", artifact.body!, artifact.canonical_url, inputs.harvest.extraction, pool, {
       activity: phase => emit("parse", phase, { feed_id: source.id }), ...(signal === undefined ? {} : { signal }),
-    }), artifact.observation.event_id, describeArticleParse),
-    { ...(signal === undefined ? {} : { signal }), outcome: result => result.failure === null ? "success" : "error" });
+    }), artifact.observation.event_id, describeArticleParse);
   } finally { if (runtime.parser_pool === undefined) pool.close(); }
   const candidateId = offer?.offer_id ?? deriveCandidateId(state.context.run_id, source.id, 0);
   const observation = PlannerHarvestObservationSchema.parse({

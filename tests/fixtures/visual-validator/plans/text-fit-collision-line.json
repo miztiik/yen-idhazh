@@ -1,0 +1,62 @@
+{
+  "annotations": [],
+  "caption": "The readings cover two separate year ranges.",
+  "confidence": 0.9,
+  "decision": "visual",
+  "element_ids": [
+    "place-0-45",
+    "quantity-55-63",
+    "date-67-71",
+    "place-73-118",
+    "quantity-128-136",
+    "date-140-144",
+    "place-146-191",
+    "quantity-201-207",
+    "date-211-215",
+    "place-217-262",
+    "quantity-272-280",
+    "date-284-288"
+  ],
+  "encodings": {
+    "bins": [],
+    "category": [],
+    "entity": [],
+    "event_label": [],
+    "quantity": [
+      "quantity-55-63",
+      "quantity-128-136",
+      "quantity-201-207",
+      "quantity-272-280"
+    ],
+    "quantity_x": [],
+    "series": [
+      "place-0-45",
+      "place-73-118",
+      "place-146-191",
+      "place-217-262"
+    ],
+    "size": [],
+    "time": [
+      "date-67-71",
+      "date-140-144",
+      "date-211-215",
+      "date-284-288"
+    ]
+  },
+  "labels": [
+    "place-0-45",
+    "place-73-118",
+    "place-146-191",
+    "place-217-262",
+    "date-67-71",
+    "date-140-144",
+    "date-211-215",
+    "date-284-288"
+  ],
+  "plan_version": "2026-09-09",
+  "purpose": "trend",
+  "title": "Reported capacity by region over time",
+  "type": "line",
+  "version": "2026-09-09T03:11",
+  "why": "The source reports capacity over time for two regions."
+}

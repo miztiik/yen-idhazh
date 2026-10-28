@@ -149,6 +149,7 @@ FIXTURE_FILES: Final = (
     "visual-data/bars-from-the-committed-plan.json",
     "visual-data/histogram-from-wind.json",
     "visual-data/stacked-bar-from-whole.json",
+    "visual-data/text-fit.json",
     "visual-decision/chart-render-failed.json",
     "visual-decision/chart-rendered.json",
     "visual-decision/none-the-gate-refused.json",

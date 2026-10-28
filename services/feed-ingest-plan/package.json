@@ -6,7 +6,8 @@
   "description": "Isolated operator feed planner, API and CLI; no browser bundle cost.",
   "exports": {
     "./harvest-feeds": "./src/harvest-feeds/harvest-pool.ts",
-    "./harvest-types": "./src/harvest-feeds/harvest-types.ts"
+    "./harvest-types": "./src/harvest-feeds/harvest-types.ts",
+    "./markdown": "./src/reporting/index.ts"
   },
   "scripts": {
     "start": "bun src/index.ts",
