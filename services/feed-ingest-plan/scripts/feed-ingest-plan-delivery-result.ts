@@ -14,3 +14,12 @@ export const MetadataDeliveryResultSchema = z.strictObject({
     context.addIssue({ code: "custom", message: "Commit status, identity and exact file paths must agree" });
   }
 });
+
+export function isMetadataDeliveryConfirmed(
+  delivery: z.infer<typeof MetadataDeliveryResultSchema> | null, paths: readonly string[],
+): boolean {
+  return delivery !== null && delivery.files === paths.length
+    && [...delivery.paths].sort().join("\n") === [...paths].sort().join("\n")
+    && (delivery.status === "no-changes"
+      || ((delivery.status === "landed" || delivery.status === "already-on-main") && delivery.commit !== null));
+}

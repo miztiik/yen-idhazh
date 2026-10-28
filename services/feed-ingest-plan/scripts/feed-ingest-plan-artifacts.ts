@@ -5,7 +5,7 @@ import { z } from "zod";
 import { WriterIdentitySchema } from "../../../packages/common-contracts/src/index";
 import { collectWorkflowFiles, readWorkflowDeliveryContext } from "./feed-ingest-plan-current-files";
 import type { ExecutionIdentity, MetadataRegistrations } from "./feed-ingest-plan-metadata";
-import { MetadataDeliveryResultSchema } from "./feed-ingest-plan-delivery-result";
+import { isMetadataDeliveryConfirmed, MetadataDeliveryResultSchema } from "./feed-ingest-plan-delivery-result";
 import { writeGitHubOutputs } from "./feed-ingest-plan-outputs";
 
 export async function prepareWorkflowArtifacts(input: {
@@ -18,7 +18,10 @@ export async function prepareWorkflowArtifacts(input: {
   const outputs: Record<string, string> = {};
   async function writeOutput(key: string, path: string) {
     outputs[key] = path;
-    if (input.outputPath !== undefined) await writeGitHubOutputs(input.outputPath, { [key]: path });
+    outputs.artifact_directory = "artifacts";
+    if (input.outputPath !== undefined) await writeGitHubOutputs(input.outputPath, {
+      [key]: path, artifact_directory: outputs.artifact_directory,
+    });
   }
   async function retain(key: string, source: string, filename: string) {
     if (!await Bun.file(source).exists()) {
@@ -43,9 +46,7 @@ export async function prepareWorkflowArtifacts(input: {
   let delivery: ReturnType<typeof MetadataDeliveryResultSchema.parse> | null = null;
   try { if (await deliveryFile.exists()) delivery = MetadataDeliveryResultSchema.parse(await deliveryFile.json()); }
   catch (error) { failures.push(error); }
-  const confirmed = delivery !== null && delivery.files === paths.length
-    && [...delivery.paths].sort().join("\n") === [...paths].sort().join("\n")
-    && (delivery.status === "landed" || delivery.status === "already-on-main") && delivery.commit !== null;
+  const confirmed = isMetadataDeliveryConfirmed(delivery, paths);
   if (!confirmed && paths.length > 0) {
     const recovery = `artifacts/uncommitted-metadata-${run}-${attempt}`;
     for (const path of paths) {

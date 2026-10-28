@@ -61,31 +61,32 @@ test("manual controls exercise the planner API and keep only required outputs", 
     SHARDS: "${{ inputs.shards }}", PARTITION_STRATEGY: "${{ inputs.partition_strategy }}",
   });
   expect(plan.run).not.toContain("${{");
-  const delivery = steps.find(step => step.name === "Persist verified planner ledgers")!;
-  expect(delivery.if).toContain("!cancelled()");
-  expect(delivery.if).toContain("current_run_files");
-  expect(delivery.if).not.toContain("planning_complete");
-  expect(delivery.run).toBe("bun run services/feed-ingest-plan/scripts/feed-ingest-plan-deliver.ts");
-  expect(delivery.run).toContain("scripts/feed-ingest-plan-deliver.ts");
-  expect(delivery.run).not.toContain("git push");
-  const textArtifact = steps.find(step => step.name === "Preserve selected text for the summarizer")!;
-  expect(textArtifact.with?.path).toBe("${{ runner.temp }}/feed-ingest-plan/${{ steps.evidence.outputs.selected }}");
-  const individual = steps.filter(step => step.uses === "actions/upload-artifact@v7" && step.with?.archive === false);
-  expect(individual).toHaveLength(3);
-  for (const artifact of individual) {
-    expect(artifact.with?.name).toBeUndefined();
-    expect(String(artifact.with?.path)).not.toMatch(/[\n*]/);
-    expect(artifact.if).toContain("always()");
-    expect(artifact.with?.["if-no-files-found"]).toBe("error");
-  }
-  const recovery = steps.find(step => step.name === "Preserve uncommitted metadata recovery only")!;
-  expect(recovery.with?.name).toBe("uncommitted-metadata-recovery-${{ github.run_id }}-${{ github.run_attempt }}");
-  expect(recovery.with?.path).toBe("${{ runner.temp }}/feed-ingest-plan/${{ steps.evidence.outputs.metadata_recovery }}");
-  expect(steps.find(step => step.id === "evidence")?.if).toContain("always()");
-  const report = steps.findIndex(step => step.name === "Write workflow run summary");
-  expect(report).toBeGreaterThan(steps.indexOf(delivery));
-  expect(steps[report]?.run).toBe("bun run services/feed-ingest-plan/scripts/feed-ingest-plan-report.ts");
-  expect(steps[report]?.if).toContain("always()");
+  const closing = steps.slice(steps.indexOf(plan) + 1);
+  expect(closing).toHaveLength(3);
+  const [finalize, upload, finish] = closing;
+  expect(finalize?.id).toBe("finalize");
+  expect(finalize?.if).toContain("always()");
+  expect(finalize?.env).toEqual({
+    CURRENT_RUN_FILES: "${{ steps.plan.outputs.current_run_files }}", RUN_CANCELLED: "${{ cancelled() }}",
+  });
+  expect(finalize?.run).toBe("bun run services/feed-ingest-plan/scripts/finalize-run-output.ts");
+  expect(finalize?.run).not.toContain("git push");
+  expect(upload?.id).toBe("upload");
+  expect(upload?.uses).toBe("actions/upload-artifact@v7");
+  expect(steps.filter(step => step.uses === upload?.uses)).toHaveLength(1);
+  expect(upload?.with?.archive).not.toBe(false);
+  expect(upload?.with?.name).toBe("collect-and-select-articles-${{ github.run_id }}-${{ github.run_attempt }}");
+  expect(upload?.with?.path).toBe("${{ runner.temp }}/feed-ingest-plan/${{ steps.finalize.outputs.artifact_directory }}");
+  expect(upload?.if).toContain("always()");
+  expect(upload?.if).toContain("steps.finalize.outputs.artifact_directory != ''");
+  expect(upload?.with?.["if-no-files-found"]).toBe("error");
+  expect(finish?.if).toContain("always()");
+  expect(finish?.run).toBe("bun run services/feed-ingest-plan/scripts/finish-run-output.ts");
+  expect(finish?.env).toEqual({
+    COLLECTION_OUTCOME: "${{ steps.plan.outcome }}", PLANNING_COMPLETE: "${{ steps.plan.outputs.planning_complete }}",
+    FINALIZATION_OUTCOME: "${{ steps.finalize.outcome }}", UPLOAD_OUTCOME: "${{ steps.upload.outcome }}",
+    UPLOAD_ARTIFACT_ID: "${{ steps.upload.outputs.artifact-id }}",
+  });
   expect(text).not.toContain("/state/raw/feed-ingest-plan/");
   expect(steps.some(step => step.name === "Check isolated adapters")).toBe(false);
   expect(steps.some(step => step.name?.includes("native compatibility"))).toBe(false);
@@ -95,7 +96,6 @@ test("manual controls exercise the planner API and keep only required outputs", 
   expect(text).not.toContain("services/host-probes");
   expect(text).not.toContain("runtime.log");
   expect(text).not.toContain("delivery.log");
-  expect(steps.at(-1)?.env).toEqual({ PLANNING_COMPLETE: "${{ steps.plan.outputs.planning_complete }}" });
   expect(text).not.toContain("audited_complete");
   expect(text).not.toContain("persist-dispatches");
   expect(text).not.toContain(".github/scripts/");
@@ -242,6 +242,8 @@ test("the workflow checkout names runtime code and only the delivery inputs it n
     "services/feed-ingest-plan/bun.lock",
     "services/feed-ingest-plan/scripts/feed-ingest-plan-http-proof.ts",
     "services/feed-ingest-plan/scripts/feed-ingest-plan-deliver.ts",
+    "services/feed-ingest-plan/scripts/finalize-run-output.ts",
+    "services/feed-ingest-plan/scripts/finish-run-output.ts",
     "services/feed-ingest-plan/scripts/feed-ingest-plan-delivery-result.ts",
     "services/feed-ingest-plan/scripts/feed-ingest-plan-current-files.ts",
     "services/feed-ingest-plan/scripts/feed-ingest-plan-host-fingerprint.ts",
