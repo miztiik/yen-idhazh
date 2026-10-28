@@ -30,6 +30,7 @@ from idhazh.contracts.base import (
 from idhazh.contracts.chart_evidence import ChartEvidence
 from idhazh.contracts.visual_outcome import validate_visual_outcome
 from idhazh.contracts.visual_type import VisualType
+from idhazh.contracts.whowhat_grid import WhowhatGridData
 
 #: What one item's decision is filed as, under `backend/var/run/<date>/items/`.
 #: The writer, the reader and the workflow's upload glob all spell it, and a run
@@ -40,6 +41,7 @@ _VISUAL_ID_FORMAT: Final = "visual-id-v1"
 
 class VisualKind(StrEnum):
     CHART = "chart"
+    WHOWHAT = "whowhat"
     NONE = "none"
 
 
@@ -106,6 +108,11 @@ class VisualDecision(Contract):
     __schema_stem__: ClassVar[str] = "visual-decision"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-10-28",
+            change="Add a separate whowhat grid payload and visual kind.",
+            why="Actor/claim grids must not be encoded as chart data.",
+        ),
+        ChangelogEntry(
             version="2026-10-25",
             change="Record requested and delivered types, replacement depth and delivered marks.",
             why="Refusals and replacements must not conceal the original visual request.",
@@ -121,11 +128,6 @@ class VisualDecision(Contract):
             why="The build-time renderer is deleted, so nothing writes an SVG to name.",
         ),
         ChangelogEntry(
-            version="2026-09-13T20:00",
-            change="Added data_path, where this item's published visual data landed.",
-            why="The reader's browser draws the chart, so it needs the marks rather than an SVG.",
-        ),
-        ChangelogEntry(
             version="2026-08-21",
             change="Earlier changes are in this file's git history.",
             why="A changelog says what moved lately; git is the archive.",
@@ -139,7 +141,7 @@ class VisualDecision(Contract):
     spec: str | None = Field(
         default=None,
         description=(
-            "The compiled drawing instruction, built here from the article's own "
+            "The compiled chart data, built here from the article's own "
             "numbers and read back by whatever draws it. Since 2026-09-13 that is the "
             "reader's browser and this holds the published visual-data document, the "
             "same bytes the file beside the day carries. The grammar is the drawing "
@@ -147,6 +149,14 @@ class VisualDecision(Contract):
             "build-time renderer ran - and naming one here would date the field to a "
             "renderer this project has already changed twice. Null on an item decided "
             "to nothing."
+        ),
+    )
+    whowhat_grid: WhowhatGridData | None = Field(
+        default=None,
+        exclude_if=lambda value: value is None,
+        description=(
+            "The compiled actor/claim grid, kept in its own versioned payload rather "
+            "than folded into chart `spec`. Omitted unless this decision carries a whowhat grid."
         ),
     )
     data_path: RelPath | None = Field(
@@ -245,16 +255,31 @@ class VisualDecision(Contract):
 
     @model_validator(mode="after")
     def _outcome_matches_the_decision(self) -> Self:
+        if self.whowhat_grid is not None and self.whowhat_grid.item_id != self.item_id:
+            raise ValueError("a whowhat grid names its decision item")
         if self.kind is VisualKind.NONE:
             if self.chart_evidence is not None:
                 raise ValueError("an item decided to nothing carries no compiled chart evidence")
             if self.spec is not None:
                 raise ValueError("an item decided to nothing carries no spec")
+            if self.whowhat_grid is not None:
+                raise ValueError("an item decided to nothing carries no whowhat grid")
             if self.visual_state is not VisualState.ABSENT:
                 raise ValueError("an item decided to nothing has no visual to be in a state about")
-        else:
+        elif self.kind is VisualKind.CHART:
             if not self.spec:
-                raise ValueError("a planned visual must carry the spec it was planned as")
+                raise ValueError("a planned chart must carry its compiled spec")
+            if self.whowhat_grid is not None:
+                raise ValueError("a chart carries no whowhat grid")
+            if self.none_reason is not None:
+                raise ValueError("only an item decided to nothing records the gate that refused it")
+        else:
+            if self.spec is not None:
+                raise ValueError("a whowhat grid carries no chart spec")
+            if self.chart_evidence is not None:
+                raise ValueError("a whowhat grid carries no compiled chart evidence")
+            if self.whowhat_grid is None:
+                raise ValueError("a planned whowhat visual carries its grid payload")
             if self.none_reason is not None:
                 raise ValueError("only an item decided to nothing records the gate that refused it")
 

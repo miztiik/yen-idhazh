@@ -1,6 +1,6 @@
 # What a visual plan may say, and what happens to one that is refused
 
-**Last Updated**: 2026-10-25
+**Last Updated**: 2026-10-28
 
 The shape the model decodes into, the four things it may not carry, the ten
 deterministic checks a plan has to clear, and the ladder a refused plan may step
@@ -190,14 +190,21 @@ is a date-stamp that lies**, which is the same argument that keeps both of them 
  anybody configures. `MAGNITUDE` in `idhazh.elements` is the precedent - a magnitude word's
  multiplier lives in code beside the pattern that reads it.
 
-Eleven of the eighteen declarable types have a role rule: the grammar-of-graphics forms, where the
-channels follow from the role names and anybody would write the same table. The other seven -
-`table`, `flow`, `comparison`, `callout`, `quotecard`, `whowhat`, `keyfacts` - are **named as having
-no rule yet**, and a plan naming one is refused by name. Naming them is the point: a type in neither
-set would be waved through by both per-type checks and drawn with nothing having ruled on it.
-Refusing them is correct: a request must have both validator rules and a
-supported compiler before it may render. A replacement must meet the same
-requirements; otherwise the item keeps its text without a visual.
+Twelve of the eighteen declarable types have a role rule: the grammar-of-graphics forms, where the
+channels follow from the role names, and `whowhat`, whose actor and claim channels have an explicit
+source-pairing rule. The other six - `table`, `flow`, `comparison`, `callout`, `quotecard`,
+`keyfacts` - are **named as having no rule yet**, and a plan naming one is refused by name. Naming
+them is the point: a type in neither set would be waved through by both per-type checks and drawn
+with nothing having ruled on it. Refusing them is correct: a request must have both validator rules
+and a supported compiler before it may render. A replacement must meet the same requirements;
+otherwise the item keeps its text without a visual.
+
+`whowhat` is narrower than the generic `ROLE_KINDS` table: the actor channel accepts entity
+elements, and `event_label` accepts claim elements only. The validator and reachability gate use the
+same rule: a row is populated only when one selected actor and one selected claim share a sentence.
+Ambiguous or unmatched rows stay empty; the plan is refused when it has no safe pair or exceeds the
+configured row ceiling. The grid compiler then re-slices both spans against `Article.text` before it
+writes the separate `WhowhatGridData` payload.
 
 `PLAN_VOCABULARY_VERSION` is the date-stamp of the role table, and it is not the plan contract's
 `version`, which says when the *shape* last moved. `plan_version_current` compares the two
@@ -251,7 +258,7 @@ purpose the plan started with. A failed pie whole check still sends its
 stacked-bar candidate through the stacked whole check; neither the direct
 request nor its downgrade can escape without independent whole evidence.
 
-### The static allow-list, and the four edges it permits
+### The static allow-list, and the three edges it permits
 
 `DOWNGRADE_EDGES` is a static table with its own date-stamp. Without one the ladder can walk a
 comparison into a timeline and record it as a legal edge; the cross-family ban is what "purpose
@@ -262,7 +269,6 @@ survives" implies and never states.
 | `bubble` | `scatter` | `relationship` | The size channel. The two measured axes the relationship is stay. |
 | `pie` | `stacked_bar` | `composition` | The circle. Parts of a declared whole, stacked in one bar. |
 | `comparison` | `bar` | `comparison` | An unruled request can become bars only when its complete channels already state a magnitude comparison. |
-| `whowhat` | `bar` | `comparison` | The grid. A one-attribute comparison grid drawn as the comparison it is. |
 
 **An edge must change an outcome.** It changes either validation or compiler
 availability: an unruled `comparison` can reach a supported bar when its complete
@@ -351,10 +357,11 @@ is what stops the number being argued after it is seen.
 **Plan 15 Row 6's text-only visuals are abandoned.** On 2026-10-26 UTC, its
 `quotecard` and `comparison` proposal was abandoned: an exact quote requires
 article wording in new visual data, and current summarizer metadata cannot
-express an honest shared-attribute comparison without source wording. This
-ruling does not abandon Plan 17's `whowhat` comparison variant or rule out a
-future separately implemented reader for it. Row 6 adds no reader payload,
-renderer or switch.
+express an honest shared-attribute comparison without source wording. The
+separate `whowhat` grid delivered on 2026-10-28 does not revive that proposal:
+it has its own payload and reader, and it publishes only an entity and a claim
+from one source sentence. It adds no generic comparison reader, renderer or
+switch.
 
 **Why every field of the model's reply is required, including the empty ones.** A field with a
 default is absent from the schema's `required` list, and a constrained decoder emits exactly what

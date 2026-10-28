@@ -2,6 +2,7 @@
 
 export type ConfidenceBand = 'high' | 'medium' | 'low';
 export type SourceForm = 'article' | 'abstract';
+export type VisualKind = 'chart' | 'whowhat' | 'none';
 
 export type BandReason =
 	| 'unsupported_number'
@@ -18,7 +19,8 @@ export type SourceKind = string;
 export type TimeSource = 'feed' | 'first_seen' | 'unknown';
 
 export interface DigestVisual {
-	kind: string;
+	/** Absent on older served days, where ItemVisual keeps the chart reader path. */
+	kind?: VisualKind | null;
 	state: string;
 	/** Where this visual's marks are, relative to `frontend/public/`. Null where
 	 * the compile landed and the write did not, and **absent** on a day published
@@ -26,6 +28,37 @@ export interface DigestVisual {
 	 * never an empty chart. */
 	data_path?: string | null;
 	alt: string | null;
+}
+
+/** Source evidence for one entity or claim, at the exact offsets in Article.text. */
+export interface WhowhatSourceSpan {
+	element_id: string;
+	sentence_index: number;
+	span_start: number;
+	span_end: number;
+	span_excerpt: string;
+	display_text: string;
+}
+
+export interface WhowhatEntitySpan extends WhowhatSourceSpan {
+	kind: 'entity';
+}
+
+export interface WhowhatClaimSpan extends WhowhatSourceSpan {
+	kind: 'claim';
+}
+
+/** Both cells are populated from one sentence, or both are empty. */
+export interface WhowhatGridRow {
+	actor: WhowhatEntitySpan | null;
+	claim: WhowhatClaimSpan | null;
+}
+
+/** The independent, versioned data format read by WhowhatVisual. */
+export interface WhowhatGridData {
+	version: string;
+	item_id: string;
+	rows: WhowhatGridRow[];
 }
 
 /** One thing a drawing puts on the page, mirroring `VisualData`.
@@ -252,10 +285,9 @@ export interface DigestDay {
 	embeddings: DigestEmbeddings | null;
 }
 
-/** The rendered chart as a served item carries it, mirroring
- * `DigestView`. `kind` is a build-time field of the
- * committed tree and never reaches a browser. */
-export type DigestViewVisual = Pick<DigestVisual, 'state' | 'data_path' | 'alt'>;
+/** The served visual pointer, mirroring `DigestView`. Older payloads may omit
+ * `kind`; those visuals continue through the existing chart reader. */
+export type DigestViewVisual = Pick<DigestVisual, 'state' | 'data_path' | 'alt' | 'kind'>;
 
 /** One item as the served day carries it - twenty-five of the published item's
  * fields, every one with a renderer.

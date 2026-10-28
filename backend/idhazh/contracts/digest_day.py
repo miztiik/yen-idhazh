@@ -83,7 +83,7 @@ from idhazh.contracts.visual_decision import VisualKind, VisualState
 
 
 class DigestVisual(Model):
-    """Where a story's chart data is, and never the chart data itself.
+    """Where a story's chart or whowhat data is, and never that data itself.
 
     One pointer and no chart data, ever. The day payload is the record that a
     day happened and is never deleted, so anything held inside it could not age
@@ -97,7 +97,13 @@ class DigestVisual(Model):
     the model (`CLAUDE.md` section 11).
     """
 
-    kind: VisualKind
+    kind: VisualKind = Field(
+        default=VisualKind.CHART,
+        description=(
+            "The visual family. Historical visuals without this field were charts, so they "
+            "continue to read through the chart path."
+        ),
+    )
     state: VisualState
     data_path: RelPath | None = Field(
         default=None,
@@ -544,6 +550,11 @@ class DigestDay(Contract):
     __schema_stem__: ClassVar[str] = "digest-day"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-10-28",
+            change="DigestVisual.kind names the separate whowhat grid format.",
+            why="Historical visuals without kind remain charts; grids need a distinct reader.",
+        ),
+        ChangelogEntry(
             version="2026-10-20",
             change="Source classification accepts open kind and numeric tier identifiers.",
             why="Registry membership can change without invalidating recorded payloads.",
@@ -557,11 +568,6 @@ class DigestDay(Contract):
             version="2026-09-22T12:00",
             change="Added DigestRunRef.run_id and .completed_at; items_failed may be null.",
             why="The day is folded from per-run fragments, and a fold can be missing one.",
-        ),
-        ChangelogEntry(
-            version="2026-09-22",
-            change="Runs may be numbered with gaps, and two runs may not share an ordinal.",
-            why="Runs land in parallel, so no writer can know what the next number is.",
         ),
         ChangelogEntry(
             version="2026-08-21",

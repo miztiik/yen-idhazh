@@ -40,6 +40,11 @@ export const ServiceSettingsSchema = z.strictObject({
     max_stage_batches: PositiveCountSchema.default(128),
     parser_concurrency: PositiveCountSchema.default(4),
   }),
+  supervision: z.strictObject({
+    readiness_timeout_ms: PositiveCountSchema,
+    shutdown_timeout_ms: PositiveCountSchema,
+    forced_exit_timeout_ms: PositiveCountSchema,
+  }),
   inputs: z.strictObject({
     planning: RelativePathSchema, taxonomy: RelativePathSchema, sources: RelativePathSchema,
     extraction: RelativePathSchema, registrations: RelativePathSchema,

@@ -52,7 +52,7 @@ class VisualsConfig(Model):
 
     `enabled_kinds` controls whether planning is reachable at all. Type
     selection and safe replacement have separate activation switches; naming
-    an unbuilt type never enables its rendering.
+    a type never enables a visual family whose kind is disabled.
 
     `asset_base_url` is the same shape at the other end of the pipeline: where a
     browser asks for a drawing the pipeline already published. It ships empty,
@@ -62,15 +62,12 @@ class VisualsConfig(Model):
     """
 
     enabled_kinds: list[VisualKind] = Field(
-        default_factory=lambda: [VisualKind.CHART],
+        default_factory=lambda: [VisualKind.CHART, VisualKind.WHOWHAT],
         description=(
             "Kinds the planner may choose. `none` is always available and never listed. "
-            "Chart is the only one left: diagram drawing shipped off - the model drafted "
-            "it zero times in 88 items and rendered it zero times in 703 (ubuntu-latest, "
-            "2026-08-24/25), while its presence made the planner's own pre-filter "
-            "unfireable, because a diagram's steps come from prose and nothing about it "
-            "is decidable in advance - and its renderer was deleted with the Mermaid "
-            "round trip on 2026-09-05."
+            "`chart` names the existing numeric family; `whowhat` names the separately "
+            "versioned actor/claim grid. Diagram drawing remains off: its renderer was "
+            "deleted with the Mermaid round trip on 2026-09-05."
         ),
     )
     type_selection_enabled: bool = Field(  # Remove after maintainer-approved permanent activation.
@@ -163,9 +160,9 @@ class VisualsConfig(Model):
         default=40,
         ge=4,
         description=(
-            "Maximum displayed characters for source-backed chart labels, including the `...` "
-            "suffix. Longer labels keep their exact opening source characters; stacked-bar "
-            "labels remain uncapped."
+            "Maximum displayed characters for source-backed chart labels and whowhat cell labels, "
+            "including the `...` suffix. Longer text keeps its exact opening source characters; "
+            "stacked-bar labels remain uncapped."
         ),
     )
     lead_words: int = Field(

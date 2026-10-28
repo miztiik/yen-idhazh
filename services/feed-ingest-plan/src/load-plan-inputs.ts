@@ -29,8 +29,8 @@ const ExtractionSettingsSchema = z.object({
   }),
 });
 
-export async function loadPlanInputs(root: string, settingsPath = "config/feed-ingest-plan-service.json") {
-  const settings = ServiceSettingsSchema.parse(await Bun.file(resolve(root, settingsPath)).json());
+export async function loadPlanInputs(root: string, settingsPath = "config/feed-ingest-plan-service.json", preparedSettings?: unknown) {
+  const settings = ServiceSettingsSchema.parse(preparedSettings ?? await Bun.file(resolve(root, settingsPath)).json());
   const paths = settings.inputs;
   const [harvest, extraction, registry] = await Promise.all([
     readHarvestInputs({

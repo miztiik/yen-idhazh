@@ -267,9 +267,10 @@ def test_the_served_item_is_a_narrowing_of_the_published_one() -> None:
             continue
         assert without_description(shape) == without_description(published[name]), name
 
-    # The visual is the one field that is itself narrowed: `kind` is read at
-    # build time for the console's chart count and no browser needs it.
-    assert set(DigestViewVisual.model_fields) < set(DigestVisual.model_fields)
+    # The served visual is never wider than the committed pointer. It now carries
+    # `kind` because the browser routes whowhat grids separately; historical
+    # pointers without it still use the chart reader.
+    assert set(DigestViewVisual.model_fields) <= set(DigestVisual.model_fields)
 
 
 def test_a_day_without_the_ranking_fields_serves_a_valid_view_with_them_unknown() -> None:
@@ -329,6 +330,34 @@ def test_a_served_day_written_before_the_version_existed_still_reads() -> None:
     del payload["version"]
 
     assert DigestView.model_validate(payload).version == DigestView.schema_version()
+
+
+def test_an_old_served_visual_without_kind_keeps_the_chart_reader_path() -> None:
+    day = json.loads(read_text(CONTRACT_FIXTURES_DIR / "digest-day" / "two-runs.json"))
+    payload = DigestView.project(day).model_dump(mode="json")
+    item_payload = next(item for item in payload["items"] if item.get("visual") is not None)
+    item_payload["visual"].pop("kind")
+    payload["version"] = "2026-10-20"
+
+    served = DigestView.model_validate(payload)
+
+    item = next(item for item in served.items if item.visual is not None)
+    assert item.visual is not None
+    assert item.visual.kind is None
+    assert item.visual.state.value == "rendered"
+
+
+def test_a_whowhat_kind_survives_the_served_projection() -> None:
+    payload = json.loads(read_text(CONTRACT_FIXTURES_DIR / "digest-day" / "two-runs.json"))
+    visual = next(item["visual"] for item in payload["items"] if item.get("visual") is not None)
+    visual["kind"] = "whowhat"
+
+    served = DigestView.project(payload)
+
+    item = next(item for item in served.items if item.visual is not None)
+    assert item.visual is not None
+    assert item.visual.kind is not None
+    assert item.visual.kind.value == "whowhat"
 
 
 def test_a_summary_written_before_paragraphs_existed_reads_as_one_paragraph() -> None:

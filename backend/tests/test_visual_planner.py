@@ -91,6 +91,10 @@ def wind_table(*element_ids: str) -> ElementTable:
     return ElementTable.model_validate(payload)
 
 
+def whowhat_table() -> ElementTable:
+    return ElementTable.read(VALIDATOR_FIXTURES / "tables" / "whowhat.json")
+
+
 def wind_plan(**changed: Any) -> VisualPlan:
     """The committed four-bar plan over that table, with these fields moved."""
     payload = json.loads(read_text(VALIDATOR_FIXTURES / "plans" / "passes.json"))
@@ -115,6 +119,27 @@ WHOLE = (
 
 
 class TestTheReachabilityGate:
+    def test_whowhat_is_reachable_only_when_the_enabled_grid_has_a_safe_pair(self) -> None:
+        table = whowhat_table()
+
+        assert VisualType.WHOWHAT in reachable_types(table, visuals=committed_visuals())
+        assert reachable_types(
+            table,
+            visuals=committed_visuals(enabled_kinds=[VisualKind.WHOWHAT]),
+        ) == (VisualType.WHOWHAT,)
+
+        payload = table.model_dump(mode="json")
+        payload["elements"] = [
+            element
+            for element in payload["elements"]
+            if element["element_id"] in {"entity-71-83", "entity-88-99", "claim-100-138"}
+        ]
+        ambiguous = ElementTable.model_validate(payload)
+        assert VisualType.WHOWHAT not in reachable_types(
+            ambiguous,
+            visuals=committed_visuals(enabled_kinds=[VisualKind.WHOWHAT]),
+        )
+
     def test_a_table_too_thin_for_any_picture_reaches_no_type(self) -> None:
         assert reachable_types(wind_table(*THIN), visuals=committed_visuals()) == ()
         assert not plan_is_reachable(wind_table(*THIN), visuals=committed_visuals())

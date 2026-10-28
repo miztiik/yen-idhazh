@@ -27,7 +27,7 @@
     "time": []
   },
   "labels": ["entity-28-32", "entity-49-54", "entity-72-77"],
-  "plan_version": "2026-09-09",
+  "plan_version": "2026-10-28",
   "purpose": "composition",
   "title": "Generation by source",
   "type": "pie",

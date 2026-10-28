@@ -125,6 +125,15 @@ is the one-request alternative: it runs the planning stages in process and
 records their results; it does not call the other HTTP routes. Selection
 captures health for its own decision but does not write it. The separate
 `feed-health-state` request can summarize or record a batch.
+The workflow HTTP client calls `/health`, `/plan`, then
+`/feed-health-state` with `action: summarize` when a batch exists. The
+[workflow entry](feed-plan-runner.md#entry-points-and-controls) supervises a
+separate server child and keeps that same listener alive for all three calls
+because parsed, selected and partitioned batches are in memory. The private
+SQLite journal does not restore those references after a restart. The workflow
+checks health against its expected child and run identity before sending work;
+ordinary `--serve` health remains an availability and enablement check.
+Startup controls pass only through the private process pipe, never HTTP paths.
 
 ```mermaid
 %%{init: {"theme": "base", "themeVariables": {"fontFamily": "sans-serif", "primaryColor": "#f8fafc", "primaryTextColor": "#1f2937", "primaryBorderColor": "#64748b", "lineColor": "#64748b", "textColor": "#1f2937", "clusterBkg": "#f8fafc", "clusterBorder": "#94a3b8", "edgeLabelBackground": "#ffffff"}}}%%

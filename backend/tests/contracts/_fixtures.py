@@ -158,6 +158,7 @@ FIXTURE_FILES: Final = (
     "visual-plan/declined.json",
     "visual-prune-row/fuse-tripped.json",
     "visual-prune-row/policy-off.json",
+    "whowhat-grid/whowhat.json",
     "watchlist/seeded.json",
 )
 
