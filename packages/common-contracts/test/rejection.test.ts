@@ -103,7 +103,7 @@ function assessment() {
 function event() {
   return FeedIngestEventSchema.parse({
     run_id: run, correlation_id: "7cef34e3-dd9f-40ce-9a56-4d01ff5115cc",
-    occurred_at: at, operation: "fetch", phase: "completed", feed_id: null,
+    occurred_at: at, operation: "fetch", phase: "completed", feed_id: null, publisher_id: null,
     input_count: 0, output_count: 0, duration_ms: 1, failure_code: null,
   });
 }
@@ -346,10 +346,12 @@ describe("current planner contracts", () => {
 
   test("binds event discriminators, candidate identities and stages", () => {
     const row = event();
-    expect(row.version).toBe("2026-10-26");
+    expect(row.version).toBe("2026-10-28");
     expect(FeedIngestEventSchema.safeParse({ ...row, payload: { article_text: "must not escape" } }).success).toBe(false);
     expect(FeedIngestEventSchema.safeParse({ ...row, operation: "article-assessment" }).success).toBe(false);
     expect(FeedIngestEventSchema.safeParse({ ...row, duration_ms: 0.5 }).success).toBe(false);
+    expect(FeedIngestEventSchema.safeParse({ ...row, publisher_id: "recorded-publication" }).success).toBe(true);
+    expect(FeedIngestEventSchema.safeParse({ ...row, publisher_id: "Recorded_Publisher" }).success).toBe(false);
     expect(PlannerWorkEventSchema.safeParse({ stage: "unknown", payload: {} }).success).toBe(false);
     const request = {
       request_id: "00000000-0000-4000-8000-000000000010",
@@ -366,11 +368,13 @@ describe("current planner contracts", () => {
   test("refuses old progress shapes through the sole TypeScript event declaration", () => {
     const row = event();
     expect(readFeedIngestEvent(JSON.parse(JSON.stringify(row)))).toEqual(row);
+    expect(readFeedIngestEvent({ ...row, version: "2026-10-26", publisher_id: undefined }).publisher_id).toBeNull();
     expect(() => readFeedIngestEvent({ ...row, version: "2026-10-25" })).toThrow();
     expect(() => readFeedIngestEvent({ ...row, version: "2026-10-24" })).toThrow();
     const schema = z.toJSONSchema(FeedIngestEventSchema);
-    expect(schema.version).toBe("2026-10-26");
+    expect(schema.version).toBe("2026-10-28");
     expect(schema.changelog).toEqual([
+      { version: "2026-10-28", change: "Name the publisher on sparse article progress events." },
       { version: "2026-10-26", change: "Name pre-fetch and selection health captures separately." },
     ]);
     expect(schema.additionalProperties).toBe(false);

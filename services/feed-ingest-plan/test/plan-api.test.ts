@@ -9,6 +9,7 @@ import { fileURLToPath } from "node:url";
 import { createPlanApp, servePlan } from "../src/api/server";
 import { main } from "../src/index";
 import { recordedContentFilterPlan, recordedPlan } from "./plan-recordings";
+import { source } from "./harvest-recordings";
 import { DiscoveredArticleRowContract, FeedHealthStateRowContract, ParsedFeedBatchSchema, PlanRunRowContract, SelectedArticleRowContract, SelectedArticlesArtifactSchema, selectedArticleMetadata, deriveCandidateId, deriveUrlKey } from "@idhazh/common-contracts";
 import { readPlannerParquet } from "../src/read-ledger-history/read-planner-parquet";
 import { currentExecutionState } from "../src/api/document-state";
@@ -47,7 +48,10 @@ test("health is explicit; disabled, malformed, oversized and unknown controls ca
 });
 
 test("actual API and awaited CLI compose the same recorded plan and disclose the same audit limit", async () => {
-  const api = await recordedPlan();
+  const api = await recordedPlan(
+    [source({ publisher_id: "recorded-publication" })],
+    [{ id: "recorded-publication", display_name: "Recorded publication" }],
+  );
   const cli = await recordedPlan();
   for (const recorded of [api, cli]) {
     for (const url of ["https://news.example/feed.xml", "https://news.example/story/?b=2&a=1#section"]) {
@@ -187,6 +191,10 @@ test("actual API and awaited CLI compose the same recorded plan and disclose the
       }))).json();
       expect(parsed.batch_id).toBe(offered.batch_id);
     }));
+    const parserEvents = api.events.filter(event => event.operation === "parse");
+    expect(parserEvents.length).toBeGreaterThan(0);
+    expect(parserEvents.every(event =>
+      event.feed_id === "recorded-news" && event.publisher_id === "recorded-publication")).toBe(true);
     expect(api.transport.requests.length).toBe(requestsBeforeParse);
     const choices = await Promise.all([0, 1].map(async () =>
       (await fetch(`${url}/select-articles`, json({ batch_id: offered.batch_id }))).json()));
