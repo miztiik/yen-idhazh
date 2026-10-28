@@ -20,7 +20,8 @@ consumers. The local seven-day window is not the article-age limit.
 `listener.parser_concurrency` controls concurrent article HTML parser workers,
 not the number of feeds fetched.
 
-The health route reports listener availability and enablement only.
+The standalone health route reports listener availability and enablement.
+The workflow child also reports its startup nonce, process ID and run identity.
 The service owns its API code and workflow adapters. GitHub workflow YAML
 calls `services/feed-ingest-plan/scripts/`; no native API depends on
 `.github/scripts/`. The two independent experiment files retained there
@@ -30,8 +31,27 @@ The workflow entry is `scripts/run-feed-ingest-plan.ts`. Preparation lives in
 enables only this invocation and captures identity, effective policy and host
 evidence. `scripts/feed-ingest-plan-http-client.ts` calls an existing listener
 and verifies retained output; it does not start or stop the listener. The entry
-still owns same-process listener startup and shutdown, including the health
-summary request before shutdown.
+supervises `scripts/feed-ingest-plan-server.ts` as a separate child process in
+one workflow step. It verifies private-pipe readiness against the child's
+process ID, a fresh startup nonce, run, attempt, captured UTC clock and code
+revision, then checks that the HTTP health response matches. An occupied port,
+wrong identity, early child exit or expired readiness fails the step explicitly.
+The same child handles planning and the health summary before shutdown.
+
+The private startup pipe carries validated effective settings, a relative
+temporary output root and scalar execution identity. The child reloads named
+authored inputs, then reconstructs its fixed run-start clock and live selection
+clock. No function, map, credential or article body crosses this pipe. Startup
+data is not a saved artifact and is never accepted by an HTTP route. Plain
+`--serve` does not stage history or supply workflow controls.
+
+`supervision.readiness_timeout_ms` bounds startup and its health check.
+`shutdown_timeout_ms` allows graceful drain after success, failure, cancellation
+or pipe closure. `forced_exit_timeout_ms` bounds the supervisor's wait after
+killing only its owned child. Defaults allow 30 seconds for readiness, 10 seconds
+for drain and 5 seconds to confirm forced exit. The child also applies its own
+drain bound if its supervisor disappears. No process is detached, no process
+name is used for cleanup, and runner process tracking remains enabled.
 `POST /api/2026-10-20/plan` accepts optional numeric `freshness_hours`,
 `article_limit`, `shards` and a configured partition strategy. Unknown fields,
 strings in numeric API fields, invalid counts and null controls fail before
@@ -84,6 +104,14 @@ One request's cancellation or failed worker must not close another request's
 jobs. Listener shutdown closes its owned workers; an injected pool remains
 with its caller.
 
+The workflow forwards termination to its cancellation signal and closes the
+startup pipe in `finally`. The child observes EOF as well as termination signals,
+stops accepting requests, cancels parsing and drains its listener. If drain does
+not finish within the configured bound, the child exits and the supervisor
+reaps it, using a forced kill only if needed. Completed response and health files
+remain in the temporary run directory for the unchanged finalization, report,
+artifact and recovery tasks. A planning failure remains a failed workflow.
+
 ## First sight and retained output
 
 Discovery records global earliest sight by canonical URL key, independent of
@@ -105,6 +133,13 @@ carry elapsed milliseconds measured from the worker's start response.
 Completed earlier files are retained after a later failure.
 
 ## Design rationale
+
+One supervised step gives the child the same lifetime as the HTTP client
+without losing in-memory batch references between planning and health reporting.
+Startup is a transient native payload, not a ledger, because no later run reads
+it. Pipe closure gives the child a cleanup signal even when the supervisor
+cannot deliver termination. Planning stages still compose inside the server,
+not through HTTP calls back to itself.
 
 Native workers provide real extraction overlap rather than promises around
 synchronous DOM work. Separate execution state prevents concurrent plans

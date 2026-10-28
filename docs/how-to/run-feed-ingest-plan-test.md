@@ -16,10 +16,14 @@ production use or change committed defaults. Production digest workers,
 the Python pipeline and global health data are unchanged.
 
 The workflow calls `services/feed-ingest-plan/scripts/run-feed-ingest-plan.ts`.
-Its preparation and HTTP client are separate modules, while execution still
-starts and stops the real loopback listener in the same process. It reads
-listener health, posts to `/plan`, and reads the batch health summary before
-stopping the listener in `finally`. It verifies the returned
+Its preparation and HTTP client are separate modules. Execution supervises the
+real loopback server in a separate child process within one workflow step.
+Validated private startup data preserves staged history, invocation-only
+enablement, temporary output, run/attempt/revision identity and UTC clocks.
+Readiness must match that exact child and invocation, not merely an available
+port. The client posts to `/plan` and reads the batch health summary while the
+same child remains alive. The supervisor closes and reaps it in `finally`.
+It verifies the returned
 five-format native output and selected artifact before exposing commit paths.
 Completed planning is not proof of summarization or publication.
 
@@ -60,6 +64,13 @@ it calls the live Plan API and commits its real output. An unselected local
 module cannot satisfy a missing dependency. The local suite does not run a
 fixture-only compatibility entry point.
 
+The process-boundary cases run the real supervisor and child lifecycle with
+recorded RSS/HTML at the external transport boundary. They prove child identity,
+output and in-memory batch preservation, occupied-port refusal, early exit,
+readiness expiry, identity mismatch, partial-file recovery, cancellation and
+supervisor disappearance without a surviving listener. These are offline checks,
+not a live workflow.
+
 Recorded RSS/HTML and transport facts drive the actual listener, worker
 extractor, complete public offer flow and CLI. Generated native files prove
 metadata/artifact agreement, original UTC work dates, incomplete history,
@@ -95,7 +106,7 @@ files at their registered paths, never an archive.
 History staging uses the [bounded day membership contract](../reference/feed-planner-ledgers.md#raw-day-membership).
 Named Git days, not saved raw-day JSON lists, identify all Parquet siblings.
 
-Three tasks follow `Collect and select articles`:
+Three tasks follow `Collect and select articles with a supervised server`:
 
 1. `Commit ledgers and write report` calls the safe-delivery API once for all
    verified completed ledgers, then calls the Markdown API and prepares the
@@ -122,6 +133,14 @@ files. No whole temporary root, private SQLite store or parsed/rejected
 population is uploaded. Invalid evidence fails preparation while independently
 verified files remain recoverable. Cancellation skips new Git delivery while
 still attempting the report and recovery upload.
+
+Readiness, graceful drain and forced-exit waits are finite settings under
+`supervision` in `config/feed-ingest-plan-service.json`; the
+[runner](../architecture/sources/feed-plan-runner.md#entry-points-and-controls)
+defines their defaults and failure behavior. Termination cancels the real HTTP
+client, then closes the child pipe. Pipe closure also triggers child cleanup
+when the supervisor disappears. Only the exact spawned child can be forcibly
+killed. The server is never detached or kept alive across workflow steps.
 
 The Markdown report reads the body-free response, health result, effective
 settings and host fingerprint after metadata delivery. It writes the report

@@ -9,6 +9,11 @@
     "max_stage_batches": 128,
     "parser_concurrency": 10
   },
+  "supervision": {
+    "readiness_timeout_ms": 30000,
+    "shutdown_timeout_ms": 10000,
+    "forced_exit_timeout_ms": 5000
+  },
   "inputs": {
     "planning": "config/feed-ingest-plan.json",
     "taxonomy": "config/taxonomy.json",

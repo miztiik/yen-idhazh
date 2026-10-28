@@ -72,7 +72,8 @@ jobs:
           bun install --frozen-lockfile --cwd services/feed-ingest-plan
           bun install --frozen-lockfile --cwd services/host-fingerprints
 
-      - name: Collect and select articles
+      # This one step owns the child server, readiness, HTTP client and shutdown.
+      - name: Collect and select articles with a supervised server
         id: plan
         env:
           FRESHNESS_HOURS: ${{ inputs.freshness_hours }}
