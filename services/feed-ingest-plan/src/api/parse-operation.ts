@@ -43,7 +43,7 @@ export async function parseFetchedDocument(
     throw new PlanError("INVALID_REQUEST", "Parse identity differs from its fetched document", "article_id");
   }
   if (artifact.body === null || artifact.failure !== null) throw new PlanError("FETCH_UNAVAILABLE", "Fetch has no successful body", "fetch_request_id");
-  const source = inputs.harvest.sources.find(source => source.id === artifact.source_id);
+  const source = inputs.harvest.sources.find(source => source.id === artifact.feed_id);
   if (source === undefined) throw new PlanError("ARTIFACT_INVALID", "Fetched feed is no longer configured", "feed_id");
   const parent = artifact.parent_fetch_request_id === null ? undefined : store.get(artifact.parent_fetch_request_id);
   if (parent === null) throw new PlanError("ARTIFACT_NOT_FOUND", "Fetched offer has no parent response", "fetch_request_id");
@@ -58,9 +58,9 @@ export async function parseFetchedDocument(
   if (state.health_written) throw new PlanError("REQUEST_CONFLICT", "This execution finalized its health; parse in a new execution", "request_id");
   const work = documentWork({
     observations: createIngestObservations(state.work.observe), observation_clock: runtime.observation_clock ?? (() => new Date()),
-  }, { run_id: fetched.run_id, correlation_id: fetched.correlation_id, article_id: artifact.article_id, source_id: source.id },
+  }, { run_id: fetched.run_id, correlation_id: fetched.correlation_id, article_id: artifact.article_id, feed_id: source.id },
   record.request_id, {
-    document_kind: artifact.fetch_item_type, source_id: source.id, publisher_id: source.publisher_id,
+    document_kind: artifact.fetch_item_type, feed_id: source.id, publisher_id: source.publisher_id,
     observed_run_id: fetched.run_id, observed_attempt: state.context.writer.attempt, candidate_id: offer?.offer_id ?? null,
   });
   if (artifact.fetch_item_type === "feed") {
@@ -106,7 +106,7 @@ export async function parseFetchedDocument(
   let candidate: FeedIngestCandidate | null = null;
   const rejected = parsed.failure !== null || parsed.parsed?.quality?.rejected ? "EXTRACT_FAILED"
     : !parsed.parsed?.article_text ? "EXTRACT_EMPTY" : !title ? "MISSING_REQUIRED_FIELDS" : null;
-  const rejection = rejected === null ? null : recordRejection({ source_id: source.id, feed_url: source.url }, {
+  const rejection = rejected === null ? null : recordRejection({ feed_id: source.id, feed_url: source.url }, {
     writer: state.context.writer, correlation_id: state.context.correlation_id, max_future_hours: inputs.clock_config.collect.max_future_hours,
     observation_clock: runtime.observation_clock ?? (() => new Date()),
   }, rejected, {}, {
@@ -116,7 +116,7 @@ export async function parseFetchedDocument(
   if (rejection === null && parsed.parsed !== null) candidate = FeedIngestCandidateSchema.parse({
     date: artifact.observation.occurred_at.slice(0, 10), fetched_at: artifact.observation.occurred_at,
     correlation_id: state.context.correlation_id, run_id: state.context.run_id,
-    candidate_id: candidateId, entry_ordinal: offer?.entry.entry_ordinal ?? 0, source_id: source.id,
+    candidate_id: candidateId, entry_ordinal: offer?.entry.entry_ordinal ?? 0, feed_id: source.id,
     source: sourceSnapshot(inputs.harvest, source), canonical_url: artifact.canonical_url, url_key: artifact.article_id,
     title, categories: offer?.entry.categories ?? [], article_text: parsed.parsed.article_text, word_count: parsed.parsed.word_count,
     author: parsed.parsed.author ?? offer?.entry.author ?? null, published_at: offer?.entry.published_at ?? null,

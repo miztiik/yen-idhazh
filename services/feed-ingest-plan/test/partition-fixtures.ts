@@ -48,7 +48,7 @@ export async function fixtureInput(root: string, options: { count?: number; fres
       ...loaded.harvest.config.curate_articles,
       article_limit: Math.max(1, options.words?.length ?? options.count ?? fixture.word_work.length), exploration_slot_share: 0,
       source_authority_weight: 0,
-      feed_quality_tiers: [{ tier: 1, share_pct: 100, buffer_pct: 0, ladder_hours: [72] }],
+      article_quality_buckets: [{ tier: 1, share_pct: 100, buffer_pct: 0, ladder_hours: [72] }],
       soft_caps: {
         ...loaded.harvest.config.curate_articles.soft_caps, max_source_share: 1,
         max_website_group_share: 1, min_distinct_sources: 1,
@@ -72,9 +72,9 @@ export async function fixtureInput(root: string, options: { count?: number; fres
     return FeedIngestCandidateSchema.parse({
       date: fixture.date, run_id: fixture.run_id, correlation_id: context.correlation_id,
       candidate_id: deriveCandidateId(fixture.run_id, sourceId, ordinal), entry_ordinal: ordinal,
-      source_id: sourceId,
+      feed_id: sourceId,
       source: {
-        source_id: sourceId, feed_url: "https://example.org/feed", title: "Recorded source",
+        feed_id: sourceId, feed_url: "https://example.org/feed", title: "Recorded source",
         tier: 1, status: "active",
         weight: 1, applied_tier_weight: 1,
       },

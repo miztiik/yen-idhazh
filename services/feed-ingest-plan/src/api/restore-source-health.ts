@@ -32,7 +32,7 @@ export async function restoreSourceHealth(batch: ParsedFeedBatch, inputs: PlanIn
       if (artifact.fetch_item_type !== "article" || (id !== rootId && artifact.parent_fetch_request_id !== rootId)) {
         throw new PlanError("ARTIFACT_INVALID", "Source receipt does not belong to this original capture", "batch_id");
       }
-      work.captureArticle(id, artifact.source_id, artifact.observation.occurred_at, capture.source_outcome);
+      work.captureArticle(id, artifact.feed_id, artifact.observation.occurred_at, capture.source_outcome);
     }
     return ParsedFeedBatchSchema.parse({ ...batch, work_rows: work.rows(), exclusions: work.exclusions() });
   } finally { store.close(); }

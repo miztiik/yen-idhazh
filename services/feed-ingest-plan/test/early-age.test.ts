@@ -105,7 +105,7 @@ test("preflight uses the configured age override, strict boundary and future tol
       preflight_freshness: { timing_source: "published_at", timing_at: items[0]!.date },
     });
     expect(result.candidates.map(row => row.entry_ordinal)).toEqual([1, 2, 3, 4, 5]);
-    expect(result.candidates.every(row => row.candidate_id === deriveCandidateId(run.writer.run_id, row.source_id, row.entry_ordinal))).toBe(true);
+    expect(result.candidates.every(row => row.candidate_id === deriveCandidateId(run.writer.run_id, row.feed_id, row.entry_ordinal))).toBe(true);
     expect(result.discovered_candidates.map(row => row.url_key)).toContain(deriveUrlKey(publishedUrl));
     expect(result.discovered_candidates.map(row => row.url_key)).toContain(deriveUrlKey(settledUrl));
     expect(result.discovered_candidates.map(row => row.url_key)).not.toContain(deriveUrlKey(blockedUrl));

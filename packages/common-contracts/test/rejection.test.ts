@@ -27,15 +27,15 @@ const run = `${day}-7`;
 const url = "https://example.com/article?x=1";
 const digest = "a".repeat(64);
 const source = SourceSnapshotSchema.parse({
-  source_id: "example", feed_url: "https://example.com/feed", title: "Example",
+  feed_id: "example", feed_url: "https://example.com/feed", title: "Example",
   tier: 4, status: "active",
   weight: 1, applied_tier_weight: 0.6,
 });
 function candidate() {
   return FeedIngestCandidateSchema.parse({
     date: day, correlation_id: "correlation", run_id: run,
-    candidate_id: deriveCandidateId(run, source.source_id, 0), entry_ordinal: 0,
-    source_id: source.source_id, source,
+    candidate_id: deriveCandidateId(run, source.feed_id, 0), entry_ordinal: 0,
+    feed_id: source.feed_id, source,
     canonical_url: url, url_key: deriveUrlKey(url), title: "An article", categories: [],
     article_text: "A recorded article.", word_count: 3, author: null,
     published_at: null, fetched_at: at,
@@ -43,7 +43,7 @@ function candidate() {
 }
 function rejection() {
   return CandidateRejectionRecordSchema.parse({
-    date: day, correlation_id: "correlation", source_id: source.source_id,
+    date: day, correlation_id: "correlation", feed_id: source.feed_id,
     feed_url: source.feed_url, subject: "article", candidate_id: candidate().candidate_id,
     url_key: deriveUrlKey(url), canonical_url: url, title: "An article", categories: [],
     stage: "screen-article-candidates", drop_reason: "REJECTED_SCREENING_MIN_WORDS",
@@ -356,11 +356,11 @@ describe("current planner contracts", () => {
     const request = {
       request_id: "00000000-0000-4000-8000-000000000010",
       correlation_id: "00000000-0000-4000-8000-000000000011",
-      feed_id: source.source_id, fetch_item_type: "article", batch_id: "00000000-0000-4000-8000-000000000012",
+      feed_id: source.feed_id, fetch_item_type: "article", batch_id: "00000000-0000-4000-8000-000000000012",
       offer_id: digest,
     };
     expect(FetchRequestSchema.safeParse(request).success).toBe(true);
-    expect(FetchRequestSchema.safeParse({ ...request, source_id: source.source_id }).success).toBe(false);
+    expect(FetchRequestSchema.safeParse({ ...request, source_id: source.feed_id }).success).toBe(false);
     expect(FetchRequestSchema.safeParse({ ...request, offer_id: undefined }).success).toBe(false);
     expect(FetchRequestSchema.safeParse({ ...request, url }).success).toBe(false);
   });
@@ -443,7 +443,7 @@ describe("current planner contracts", () => {
         state: "pending", fetch_request_id: null,
       }],
     });
-    expect(offered.offers[0]!.source.source_id).toBe(source.source_id);
+    expect(offered.offers[0]!.source.feed_id).toBe(source.feed_id);
     expect(offered.input_complete).toBe(false);
     expect(ParsedFeedBatchSchema.safeParse({ ...parsed, input_complete: "true" }).success).toBe(false);
     expect(ParsedFeedBatchSchema.safeParse({ ...parsed, version: "2026-10-24" }).success).toBe(false);

@@ -147,7 +147,7 @@ export async function runFeedPlan(raw: unknown, inputs: PlanInputs, runtime: Pla
       },
       on_article: currentWork.article,
       progress: (eventType, details) => runtime.progress?.({
-        eventType, feed_id: details?.source_id ?? null, output_count: details?.output_count ?? null,
+        eventType, feed_id: details?.feed_id ?? null, output_count: details?.output_count ?? null,
       }),
     }, runtime.boundary));
     const discoveredRows = memory.rememberDiscoveries([...discovery.rows, ...sightings],

@@ -20,7 +20,7 @@ export function fetchRejection(result: FetchResult, timeout_ms: number, diagnost
 }
 
 export function recordRejection(
-  source: Pick<SourceSnapshot, "source_id" | "feed_url">, context: HarvestContext, reason: DropReason,
+  source: Pick<SourceSnapshot, "feed_id" | "feed_url">, context: HarvestContext, reason: DropReason,
   details: Partial<RejectionDetails> = {},
   article: {
     candidate_id: string; canonical_url: string | null; url_key: string | null;
@@ -30,7 +30,7 @@ export function recordRejection(
   const rejected_at = utcTimestamp(context.observation_clock ?? context.clock);
   const row = CandidateRejectionRecordSchema.parse({
     date: rejected_at.slice(0, 10), correlation_id: context.correlation_id,
-    source_id: source.source_id, feed_url: source.feed_url,
+    feed_id: source.feed_id, feed_url: source.feed_url,
     subject: article === null ? "feed" : "article",
     candidate_id: article?.candidate_id ?? null,
     canonical_url: article?.canonical_url ?? null, url_key: article?.url_key ?? null,

@@ -18,7 +18,7 @@ function recording() {
   const at = "2026-10-27T12:00:00Z";
   const run = "2026-10-27-1";
   const source = SourceSnapshotSchema.parse({
-    source_id: "recorded", publisher_id: null, feed_url: "https://example.org/feed",
+    feed_id: "recorded", publisher_id: null, feed_url: "https://example.org/feed",
     title: "Recorded source", tier: 1, status: "active", weight: 1, applied_tier_weight: 1,
   });
   const context = PlannerStageContextSchema.parse({
@@ -29,13 +29,13 @@ function recording() {
   const article = (words: number) => HarvestArticleResultSchema.parse({
     candidate: FeedIngestCandidateSchema.parse({
       date: context.date, run_id: run, correlation_id: context.correlation_id,
-      source_id: source.source_id, source, candidate_id: deriveCandidateId(run, source.source_id, 0), entry_ordinal: 0,
+      feed_id: source.feed_id, source, candidate_id: deriveCandidateId(run, source.feed_id, 0), entry_ordinal: 0,
       canonical_url: "https://example.org/article", url_key: deriveUrlKey("https://example.org/article"),
       title: "Recorded article", article_text: Array(words).fill("evidence").join(" "), word_count: words,
       author: null, categories: [], published_at: "2020-01-01T00:00:00Z", fetched_at: at,
     }),
     rejection: null,
-    observation: { candidate_id: deriveCandidateId(run, source.source_id, 0), http_status: 200, robots: "allowed",
+    observation: { candidate_id: deriveCandidateId(run, source.feed_id, 0), http_status: 200, robots: "allowed",
       fetch_failure: null, paywall: false, paywall_evidence: "none", extraction: "success", observed_at: at, diagnostics: null },
   });
   return { at, source, context, article };
@@ -63,8 +63,8 @@ test("the source rate stays eight out of ten when only three articles are select
   }));
   const work = createRunHealth(context, [source], new Map(), { min_words: 10, blocked_http_statuses: [401, 403] });
   for (const capture of captures) {
-    work.captureArticle(capture.id, source.source_id, at, capture.outcome);
-    work.captureArticle(capture.id, source.source_id, at, capture.outcome);
+    work.captureArticle(capture.id, source.feed_id, at, capture.outcome);
+    work.captureArticle(capture.id, source.feed_id, at, capture.outcome);
   }
   const rows = work.rows();
   rows[0]!.articles_selected = 3;
@@ -72,16 +72,16 @@ test("the source rate stays eight out of ten when only three articles are select
     rows: facts, days: [{ day: context.date, complete }], sources: [source], now: at,
     policy: { availability_strikes_before_rest: 3, reliability_window_days: 1, reliability_floor: 0 },
     lifecycle_window_days: 1, request_report_closed_days: 1,
-  }).sources.get(source.source_id)!;
+  }).sources.get(source.feed_id)!;
   expect(rows[0]!.article_candidates).toBe(8);
   expect(rows[0]!.rejection_counts.reduce((total, reason) => total + reason.count, 0)).toBe(2);
   expect(summarize().article_pass_rate).toBe(0.8);
   expect(summarize([], true).article_pass_rate).toBeNull();
   expect(summarize(rows, false).article_pass_rate).toBeNull();
   const recovered = createRunHealth(context, [source], new Map(), { min_words: 10, blocked_http_statuses: [] }, rows);
-  for (const capture of captures) recovered.captureArticle(capture.id, source.source_id, at, capture.outcome);
+  for (const capture of captures) recovered.captureArticle(capture.id, source.feed_id, at, capture.outcome);
   expect(recovered.rows()).toEqual(rows);
-  recovered.captureArticle(randomUUID(), source.source_id, at, null);
+  recovered.captureArticle(randomUUID(), source.feed_id, at, null);
   expect(summarize(recovered.rows()).article_pass_rate).toBeNull();
 });
 
@@ -101,11 +101,11 @@ test("the existing operation journal preserves the first outcome and bounded fee
       const body = kind === "feed" ? '<rss version="2.0"><channel><title>Recorded feed</title></channel></rss>'
         : "<article><h1>Recorded report</h1><p>Recorded article evidence.</p></article>";
       return FetchedDocumentSchema.parse({
-        fetch_item_type: kind, canonical_url: url, article_id: deriveUrlKey(url), source_id: source.source_id,
+        fetch_item_type: kind, canonical_url: url, article_id: deriveUrlKey(url), feed_id: source.feed_id,
         body, http_status: 200, failure: null, robots: "allowed", error_code: null, robots_failure: null,
         robots_http_status: null, attempts: [], attempt_observations: [], body_sha256: sha256(body),
         observation: { event_id: "5ee218d4-8bf2-5d1b-bc69-c23fb7261a60", caused_by_event_id: null,
-          run_id: context.run_id, correlation_id: context.correlation_id, source_id: source.source_id,
+          run_id: context.run_id, correlation_id: context.correlation_id, feed_id: source.feed_id,
           article_id: deriveUrlKey(url), occurred_at: at, operation: "fetch" },
         parent_fetch_request_id: parent,
       });

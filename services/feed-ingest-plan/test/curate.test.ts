@@ -56,7 +56,7 @@ async function inputs(patch: Partial<Knobs> = {}) {
     triage: { ...loaded.harvest.config.triage, recency_half_life_hours: 18, recency_weight: 1 },
     curate_articles: {
       ...loaded.harvest.config.curate_articles, article_limit: 2,
-      feed_quality_tiers: [{ tier: 1, share_pct: 100, buffer_pct: 0, ladder_hours: [72] }],
+      article_quality_buckets: [{ tier: 1, share_pct: 100, buffer_pct: 0, ladder_hours: [72] }],
       source_authority_weight: 0, exploration_slot_share: 0,
       soft_caps: {
         ...loaded.harvest.config.curate_articles.soft_caps, max_source_share: 1, max_website_group_share: 1, min_distinct_sources: 1,
@@ -78,9 +78,9 @@ function article(spec: CandidateCase, setup: Setup): ScreenedCandidate {
   const candidate = FeedIngestCandidateSchema.parse({
     date: context.date, run_id: context.run_id, correlation_id: context.correlation_id,
     candidate_id: deriveCandidateId(context.run_id, spec.source, spec.ordinal), entry_ordinal: spec.ordinal,
-    source_id: spec.source,
+    feed_id: spec.source,
     source: {
-      source_id: spec.source, publisher_id: spec.publisher_id, feed_url: `https://${spec.domain}/feed`,
+      feed_id: spec.source, publisher_id: spec.publisher_id, feed_url: `https://${spec.domain}/feed`,
       title: `${spec.source} configured feed`,
       tier: 1, status: "active", weight: 1, applied_tier_weight: 1,
     },
@@ -138,7 +138,7 @@ function tierArticles(setup: Setup, tier: number, count: number, ageHours: numbe
 }
 
 test("fresh target and buffer phases produce six, two and two before older backfill", async () => {
-  const setup = await inputs({ article_limit: 10, feed_quality_tiers: [
+  const setup = await inputs({ article_limit: 10, article_quality_buckets: [
     { tier: 1, share_pct: 60, buffer_pct: 10, ladder_hours: [24, 36, 48] },
     { tier: 2, share_pct: 30, buffer_pct: 5, ladder_hours: [24, 30] },
     { tier: 3, share_pct: 10, buffer_pct: 5, ladder_hours: [24] },
@@ -159,7 +159,7 @@ test("fresh target and buffer phases produce six, two and two before older backf
 });
 
 test("older windows fill a tier target but never its fresh buffer", async () => {
-  const setup = await inputs({ article_limit: 10, feed_quality_tiers: [
+  const setup = await inputs({ article_limit: 10, article_quality_buckets: [
     { tier: 1, share_pct: 60, buffer_pct: 10, ladder_hours: [24, 36, 48] },
     { tier: 2, share_pct: 30, buffer_pct: 5, ladder_hours: [24, 30] },
     { tier: 3, share_pct: 10, buffer_pct: 5, ladder_hours: [24] },
@@ -443,7 +443,7 @@ test("real screening results compose into exact curation without losing harveste
     setup.inputs.root = root;
     const first = article(setup.fixture.candidates[0]!, setup);
     setup.inputs.harvest.sources = [source({
-      id: first.candidate.source_id, url: first.candidate.source.feed_url,
+      id: first.candidate.feed_id, url: first.candidate.source.feed_url,
       title: first.candidate.source.title,
       tier: first.candidate.source.tier, weight: first.candidate.source.weight,
       publisher_id: first.candidate.source.publisher_id,
@@ -455,14 +455,14 @@ test("real screening results compose into exact curation without losing harveste
     const pair = selectionInput(setup, [first, { ...first, candidate: short }]).batch;
     pair.work_rows = [FeedHealthStateRowSchema.parse({
       ...plannerRecordings(setup.context.date).find(record => record.name === "feed-health-state")!.row,
-      run_id: setup.context.run_id, attempt: setup.context.writer.attempt, feed_id: first.candidate.source_id,
+      run_id: setup.context.run_id, attempt: setup.context.writer.attempt, feed_id: first.candidate.feed_id,
       endpoint_key: endpointKey(first.candidate.source.feed_url), checked_at: setup.context.now,
       items: 2, article_candidates: 1, articles_selected: 0,
     })];
     const selected = await selectArticles(pair, setup.inputs, setup.context.now);
     expect(selected.health_rows[0]).toMatchObject({ article_candidates: 1, articles_selected: 1 });
     expect(selected.exclusions).toContainEqual({
-      feed_id: first.candidate.source_id, subject: "article", stage: "screen-article-candidates",
+      feed_id: first.candidate.feed_id, subject: "article", stage: "screen-article-candidates",
       reason_code: "REJECTED_SCREENING_MIN_WORDS", attribution: null, count: 1,
     });
     expect(selected.articles).toHaveLength(1);

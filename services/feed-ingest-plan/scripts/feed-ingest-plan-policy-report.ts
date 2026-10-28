@@ -5,7 +5,9 @@ import { PlanRequestSchema, resolvePlanRequest } from "../src/api/plan-request";
 import { resolvePolicy } from "../src/config/resolve-policy";
 import { FeedHistoryPolicySchema } from "../src/read-ledger-history/read-feed-history";
 import { escapeMarkdown } from "../src/reporting/markdown-format";
-import { allocateTierBudgets, resolveTierWindows } from "../src/article-freshness-policy";
+import {
+  allocateArticleQualityBucketBudgets, resolveArticleQualityBucketWindows,
+} from "../src/article-freshness-policy";
 
 export const WorkflowPolicySchema = z.strictObject({
   config: FeedIngestConfigSchema,
@@ -29,8 +31,8 @@ export function formatWorkflowPolicy(input: unknown, selectionRan: boolean) {
   const percent = (value: number) => `${(value * 100).toFixed(2)} percent`;
   const source = (key: keyof typeof supplied) => supplied[key] === undefined ? "configuration" : "workflow override";
   const maximum = `${request.article_limit} articles`;
-  const ages = config.curate_articles.feed_quality_tiers.map(rule =>
-    `Tier ${rule.tier}: ${resolveTierWindows(rule, request.freshness_hours).steps.join(" / ")} hours`).join("; ");
+  const ages = config.curate_articles.article_quality_buckets.map(rule =>
+    `Article-quality bucket ${rule.tier}: ${resolveArticleQualityBucketWindows(rule, request.freshness_hours).steps.join(" / ")} hours`).join("; ");
   const workers = `${request.shards} workers; ${request.partition_strategy}`;
   const rows = [
     ["Application", selectionRan ? "Selection ran with these effective controls" : "Requested controls; selection did not run"],
@@ -41,8 +43,8 @@ export function formatWorkflowPolicy(input: unknown, selectionRan: boolean) {
     ["Minimum text", `${policy.triage.min_words} words per parsed item`],
     ["Recency score", `${policy.triage.recency_half_life_hours} hours half-life; weight ${policy.triage.recency_weight}`],
     ["Feed authority score", `Weight ${policy.curate_articles.source_authority_weight}; technical article-pass adjustment ${config.curate_articles.source_reliability_penalty_enabled ? "enabled" : "disabled"}; RSS reliability controls access only`],
-    ["Tier article budgets", allocateTierBudgets(config, request.article_limit).map(budget =>
-      `Tier ${budget.rule.tier}: target ${budget.target} articles; fresh ceiling ${budget.ceiling} articles`).join("; ")],
+    ["Article-quality bucket budgets", allocateArticleQualityBucketBudgets(config, request.article_limit).map(budget =>
+      `Article-quality bucket ${budget.rule.tier}: target ${budget.target} articles; fresh ceiling ${budget.ceiling} articles`).join("; ")],
     ["Portfolio limits", `${percent(config.curate_articles.soft_caps.max_source_share)} per feed; ${percent(config.curate_articles.soft_caps.max_website_group_share)} per known website group; target ${config.curate_articles.soft_caps.min_distinct_sources} distinct feeds`],
     ["Limit relaxation order", config.curate_articles.soft_caps.relaxation_order.map(limit =>
       ({ distinct_sources: "distinct-feed target", source_share: "per-feed share" })[limit]).join(", ") || "No relaxation"],

@@ -105,10 +105,10 @@ export function loadHarvestInputs(raw: {
       throw new Error(`source.${source.id}.tier: source tier must be active and registered`);
     }
   }
-  const rules = new Set(planning.config.curate_articles.feed_quality_tiers.map(rule => rule.tier));
+  const rules = new Set(planning.config.curate_articles.article_quality_buckets.map(rule => rule.tier));
   const active = registry.source_tiers.filter(tier => tier.status === "active");
   if (active.some(tier => !rules.has(tier.id)) || [...rules].some(id => !active.some(tier => tier.id === id))) {
-    throw new Error("curate_articles.feed_quality_tiers: rules must name every active taxonomy tier exactly once");
+    throw new Error("curate_articles.article_quality_buckets: rules must name every active source class exactly once");
   }
   // This digest covers every validated input that can change harvested content or provenance.
   const { workflow_reporting, ...contentConfig } = planning.config;
@@ -134,7 +134,7 @@ export function sourceSnapshot(inputs: HarvestInputs, source: ConfiguredSource):
   const tier = inputs.registry.source_tiers.find(tier => tier.id === source.tier);
   if (!tier) throw new Error(`source.${source.id}.tier: unknown registry entry`);
   return SourceSnapshotSchema.parse({
-    source_id: source.id, feed_url: source.url, title: source.title,
+    feed_id: source.id, feed_url: source.url, title: source.title,
     publisher_id: source.publisher_id, tier: source.tier, status: source.status,
     weight: source.weight, applied_tier_weight: tier.weight,
   });

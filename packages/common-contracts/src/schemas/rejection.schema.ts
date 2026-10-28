@@ -73,9 +73,10 @@ export const REQUIRED_DETAILS: Readonly<Partial<Record<DropReason, readonly (key
   PRESS_RELEASE: ["content_evidence", "sample_chars_limit"],
   LINK_HEAVY: ["content_evidence", "max_link_density", "max_list_items", "words_found", "list_word_limit"],
 };
+export const CANDIDATE_REJECTION_VERSION = "2026-10-28";
 export const CandidateRejectionRecordSchema = z.strictObject({
-  version: z.literal("2026-10-25").default("2026-10-25"), date: DateStampSchema, correlation_id: NonEmptySchema,
-  source_id: SlugSchema, feed_url: UrlSchema, subject: z.enum(["feed", "article"]),
+  version: z.literal(CANDIDATE_REJECTION_VERSION).default(CANDIDATE_REJECTION_VERSION), date: DateStampSchema, correlation_id: NonEmptySchema,
+  feed_id: SlugSchema, feed_url: UrlSchema, subject: z.enum(["feed", "article"]),
   candidate_id: Sha256Schema.nullable(), url_key: Sha256Schema.nullable(), canonical_url: UrlSchema.nullable(),
   title: z.string().nullable(), categories: z.array(z.string()), stage: RejectionStageSchema,
   drop_reason: DropReasonSchema, details: RejectionDetailsSchema, rejected_at: TimestampSchema,
@@ -111,6 +112,11 @@ export const CandidateRejectionRecordSchema = z.strictObject({
   if (value.drop_reason === "PRESS_RELEASE" && value.details.content_evidence?.press_release_marker_index == null) {
     reject(ctx, "PRESS_RELEASE requires a measured marker index", ["details", "content_evidence"]);
   }
+}).meta({
+  version: CANDIDATE_REJECTION_VERSION,
+  changelog: [
+    { version: CANDIDATE_REJECTION_VERSION, change: "Rename the feed identity from source_id to feed_id." },
+  ],
 });
 export type CandidateRejectionRecord = z.infer<typeof CandidateRejectionRecordSchema>;
 export type RejectionDetails = z.infer<typeof RejectionDetailsSchema>;

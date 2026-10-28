@@ -36,7 +36,7 @@ test("health is explicit; disabled, malformed, oversized and unknown controls ca
     expect(existsSync(join(recorded.inputs.outputRoot, "planner-operations.sqlite"))).toBe(false);
     expect((await app.request(`${prefix}/plan`, json({ padding: "x".repeat(recorded.inputs.settings.listener.max_body_bytes) }))).status).toBe(413);
     expect((await app.request(`${prefix}/fetch`, json({
-      request_id: randomUUID(), correlation_id: randomUUID(), source_id: "recorded-news", kind: "feed",
+      request_id: randomUUID(), correlation_id: randomUUID(), feed_id: "recorded-news", kind: "feed",
     }))).status).toBe(400);
     expect(recorded.transport.requests).toHaveLength(0);
     recorded.inputs.settings.enabled = true;

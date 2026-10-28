@@ -68,7 +68,7 @@
         "feed_url": "https://news.example.com/feed.xml",
         "form": "article",
         "kind": "reporting",
-        "source_id": "sample-feed",
+        "feed_id": "sample-feed",
         "status": "active",
         "tier": 1,
         "title": "Sample Feed",
@@ -76,7 +76,7 @@
         "weight": 1.0
       },
       "source_form": "article",
-      "source_id": "sample-feed",
+      "feed_id": "sample-feed",
       "stage": "screen-article-candidates",
       "suitability_evaluator_version": null,
       "suitability_status": "unavailable",
@@ -116,7 +116,7 @@
   },
   "run_id": "2026-10-20-1",
   "sequence": 0,
-  "source_id": "sample-feed",
+  "feed_id": "sample-feed",
   "stage": "screen-article-candidates",
   "step_elapsed_ms": 0,
   "version": "2026-10-22T12:20"
