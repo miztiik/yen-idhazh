@@ -5,9 +5,9 @@
     "hostname": "127.0.0.1",
     "port": 8787,
     "idle_timeout_seconds": 30,
-    "max_body_bytes": 16384,
+    "max_body_bytes": 2000000,
     "max_stage_batches": 128,
-    "parser_concurrency": 4
+    "parser_concurrency": 10
   },
   "inputs": {
     "planning": "config/feed-ingest-plan.json",
@@ -17,13 +17,8 @@
     "registrations": "config/ledgers.json",
     "output_root": "state",
     "artifact_root": "backend/var/feed-ingest-plan",
+    "published_url_lookback_days": 7,
     "health_period_limit": 32,
-    "feed_health_input_gap": false,
-    "discovered_files": [],
-    "discovered_days": []
-  },
-  "run": {
-    "attempt": 1,
-    "producer": "feed-ingest-plan.runner"
+    "feed_health_input_gap": false
   }
 }

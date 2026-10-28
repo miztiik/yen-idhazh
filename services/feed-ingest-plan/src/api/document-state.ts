@@ -81,7 +81,7 @@ export async function documentState(record: PlannerOperation, inputs: PlanInputs
     pending = (async (): Promise<DocumentState> => {
       const started = root.state === "started" ? performance.now() : null;
       const context = resolveRunContext(inputs.settings, runtime.git_sha, new Date(root.created_at),
-        root.run_id.slice(11), root.correlation_id, root.created_at);
+        root.run_id.slice(11), root.correlation_id, root.created_at, runtime.attempt, runtime.producer);
       const historyStarted = performance.now();
       const history = await prepareFeedHealthState(inputs, context.now);
       return {

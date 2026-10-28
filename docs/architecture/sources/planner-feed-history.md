@@ -19,6 +19,18 @@ indexes or explicit complete raw-file lists. The workflow resolves represented
 health days from existing native indexes and publication inventory. It reads
 only the named periods needed by the configured lookback, within the
 `health_period_limit` control.
+`discovered_files` names extra existing discovered-article Parquet files by
+path; it does not create another ledger. The normal history read comes from
+the configured UTC-day window, and this list is empty by default.
+For example:
+
+```json
+{
+  "discovered_files": [
+    "state/raw/feed-ingest-plan/discovered-articles/2026/10/27/<uuid>.parquet"
+  ]
+}
+```
 
 The exact windows, units and skip rules are
 [Table L](../../reference/feed-planner-ledgers.md#l-lookback-summaries).

@@ -59,7 +59,7 @@ async function produce(attempt: number, zero = false, partial = false) {
     fixture.inputs.root = root!;
     fixture.inputs.outputRoot = join(root!, "state");
     fixture.inputs.settings.inputs.artifact_root = "artifacts";
-    fixture.inputs.settings.run.attempt = attempt;
+    fixture.runtime.attempt = attempt;
     fixture.runtime.clock = () => new Date(`${day}T12:00:00Z`);
     fixture.runtime.observation_clock = () => new Date(`${day}T12:00:00Z`);
     if (partial) fixture.runtime.progress = event => {

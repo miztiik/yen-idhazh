@@ -2,6 +2,7 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
+import { PositiveCountSchema } from "@idhazh/common-contracts";
 import { loadPlanInputs } from "../src/load-plan-inputs";
 import type { PlanInputs } from "../src/load-plan-inputs";
 import type { PlanRuntime } from "../src/run-feed-plan";
@@ -65,11 +66,11 @@ async function runWorkflow() {
   if (!RUNNER_TEMP || !GITHUB_OUTPUT || !GITHUB_RUN_ID || !GITHUB_RUN_ATTEMPT) throw new Error("Workflow execution controls are missing");
   const directory = join(RUNNER_TEMP, "feed-ingest-plan");
   const inputs = await loadPlanInputs(root);
+  const attempt = PositiveCountSchema.parse(Number(GITHUB_RUN_ATTEMPT));
   const staged = await stagePlannerHistory(root, inputs, new Date().toISOString().replace(/\.\d{3}Z$/, "Z"));
   inputs.settings = ServiceSettingsSchema.parse({
     ...inputs.settings, enabled: true,
     inputs: { ...inputs.settings.inputs, feed_health_days: staged.feed_health_days, feed_health_input_gap: staged.feed_health_input_gap },
-    run: { ...inputs.settings.run, attempt: Number(GITHUB_RUN_ATTEMPT) },
   });
   inputs.outputRoot = join(directory, "state");
   const git = Bun.spawn(["git", "rev-parse", "HEAD"], { cwd: root, stdout: "pipe", stderr: "pipe" });
@@ -77,7 +78,7 @@ async function runWorkflow() {
   if (await git.exited !== 0) throw new Error("Code identity could not be read");
   const captured = new Date();
   const correlationId = randomUUID();
-  const runtime: PlanRuntime = { git_sha: gitSha.trim(), run_number: GITHUB_RUN_ID, correlation_id: correlationId,
+  const runtime: PlanRuntime = { git_sha: gitSha.trim(), run_number: GITHUB_RUN_ID, correlation_id: correlationId, attempt,
     clock: () => captured, selection_clock: () => new Date() };
   await mkdir(directory, { recursive: true });
   await writeFile(join(directory, "workflow-policy.json"), JSON.stringify(WorkflowPolicySchema.parse({
@@ -86,7 +87,7 @@ async function runWorkflow() {
   })));
   console.error(JSON.stringify({ event: "planner_history_staged", notices: staged.notices }));
   const identity = { run_id: `${captured.toISOString().slice(0, 10)}-${GITHUB_RUN_ID}`,
-    attempt: inputs.settings.run.attempt, git_sha: runtime.git_sha };
+    attempt, git_sha: runtime.git_sha };
   const registryPath = join(root, inputs.settings.inputs.registrations);
   const registrations = await readMetadataRegistrations(registryPath);
   const host = await captureWorkflowHostFingerprint({
