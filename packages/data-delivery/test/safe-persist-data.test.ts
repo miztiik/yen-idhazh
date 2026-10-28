@@ -202,6 +202,44 @@ test("artifact delivery refuses a symlink parent", async () => {
   }
 });
 
+test("Git delivery checks exact paths in a state tree with unrelated siblings", async () => {
+  const fixture = await repositoryFixture();
+  const bytes = new Uint8Array([9, 8, 7, 0, 255]);
+  const unrelatedPath = join(fixture.repository, "state", "unrelated", "keep.txt");
+  await createSource(fixture.sourceRoot, bytes);
+  await mkdir(join(fixture.repository, "state", "unrelated"), { recursive: true });
+  await writeFile(unrelatedPath, "Keep this unrelated state.\n");
+  try {
+    await git(fixture.repository, ["add", "--", "state/unrelated/keep.txt"]);
+    await git(fixture.repository, ["commit", "-m", "Add unrelated state"]);
+    await git(fixture.repository, ["push", "origin", "HEAD:refs/heads/main"]);
+    const request = gitInput(fixture, bytes);
+    const result = await safe_persist_data(request);
+    expect(result).toMatchObject({
+      destination: "git", status: "landed", files: 1, paths: [request.files[0]!.targetPath],
+    });
+    expect(Array.from(await gitBytes(fixture.origin, [
+      "--git-dir", fixture.origin, "show", `main:${request.files[0]!.targetPath}`,
+    ]))).toEqual(Array.from(bytes));
+    expect(await git(fixture.origin, [
+      "--git-dir", fixture.origin, "show", "main:state/unrelated/keep.txt",
+    ])).toBe("Keep this unrelated state.");
+    expect((await safe_persist_data(request)).status).toBe("already-on-main");
+    const conflictingBytes = new Uint8Array([1, 2, 3]);
+    await writeFile(join(fixture.sourceRoot, "completed", "item.bin"), conflictingBytes);
+    request.files[0]!.sha256 = digest(conflictingBytes);
+    await expect(safe_persist_data(request)).rejects.toMatchObject({
+      code: "integrity-refused",
+      paths: [request.files[0]!.targetPath],
+    } satisfies Partial<SafePersistDataError>);
+    expect(Array.from(await gitBytes(fixture.origin, [
+      "--git-dir", fixture.origin, "show", `main:${request.files[0]!.targetPath}`,
+    ]))).toEqual(Array.from(bytes));
+  } finally {
+    await fixture.close();
+  }
+}, 30000);
+
 test("a rejected push retries on fresh main without losing a concurrent file or changing completed bytes", async () => {
   const fixture = await repositoryFixture();
   const bytes = new Uint8Array([4, 5, 6, 0, 255]);
