@@ -1,6 +1,6 @@
 # Feed planning operator APIs
 
-**Last Updated**: 2026-10-27
+**Last Updated**: 2026-10-28
 
 How do local requests fetch, parse, select, partition and persist content?
 These are build-time operator APIs, not a server for the static site.
@@ -111,8 +111,11 @@ Markdown and semantic notices. It performs no network or file access and is a
 package API, not an HTTP route.
 
 The manual workflow uses an adapter to write that Markdown to its job summary
-and turn notices into workflow annotations. This workflow presentation is not
-the production digest renderer; production can choose a reader-facing format
+and turn notices into workflow annotations. Its finalization task first calls
+the separate safe Git delivery API, then renders the report before the artifact
+upload. The workflow adapter adds the actual Git delivery result; the pure
+renderer does not commit or upload files. This workflow presentation is not the
+production digest renderer; production can choose a reader-facing format
 without changing the planner API.
 
 ## Request flow

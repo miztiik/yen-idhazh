@@ -1,6 +1,6 @@
 # How completed output reaches the repository
 
-**Last Updated**: 2026-10-27
+**Last Updated**: 2026-10-28
 
 Start here when a workflow delivers generated files. Python jobs use
 [`backend/utilities/publish_to_repo.py`](../../../backend/utilities/publish_to_repo.py)
@@ -146,6 +146,10 @@ stage. Its adapter validates the exact completed planner and host metadata
 against registered raw ledger prefixes, then calls the shared API. It does not
 give the API planner registration or Parquet policy. Selected article text is
 uploaded separately and is never part of the Git request.
+One workflow task may call this delivery API and then the independent Markdown
+renderer. Task consolidation does not give the Git API report or upload
+responsibilities. The report precedes the artifact upload; cleanup waits for
+confirmed delivery and preserves an earlier producer failure.
 
 For a Python publisher adapter, use this sequence:
 

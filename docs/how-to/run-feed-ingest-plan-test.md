@@ -1,6 +1,6 @@
 # Run the isolated feed planner checks
 
-**Last Updated**: 2026-10-27
+**Last Updated**: 2026-10-28
 
 How do you check the TypeScript planner without changing daily publication?
 Use offline cases for validation. The manual workflow performs real feed work
@@ -82,33 +82,49 @@ reader or writer. The runtime verifier checks actual planner files during real
 execution; it has no fixture-only entry point.
 
 The commit manifest permits exact current raw Parquet paths for the five
-planner siblings only. The committer validates bytes, appends them through a
-private temporary Git staging index against fresh main. It creates no planner
-raw-day JSON list. A normal push retry preserves another writer's immutable additions.
-It does not rewrite the checkout, rebase or force-push.
+planner siblings and the host fingerprint. The committer validates bytes and
+appends all completed files in one request through a private temporary Git
+staging index against fresh main. It creates no planner raw-day JSON list.
+A normal push retry preserves another writer's immutable additions. It does
+not rewrite the checkout, rebase or force-push. Git receives ordinary ledger
+files at their registered paths, never an archive.
 
 History staging uses the [bounded day membership contract](../reference/feed-planner-ledgers.md#raw-day-membership).
 Named Git days, not saved raw-day JSON lists, identify all Parquet siblings.
 
-Partial completed files are retained and can be committed even when the
-planning step fails. The workflow uploads the selected text for the next
-summarizer stage, the Markdown report and the metadata delivery result. It
-uploads exact metadata for recovery only when the safe commit is not confirmed.
-Step output remains in the workflow logs; the report carries the effective
-settings, feed results and host fingerprint. The selected text and the
-body-free ledger rows remain separate.
+Three tasks follow `Collect and select articles`:
 
-When the metadata commit is not confirmed, a separate artifact named
-`uncommitted-metadata-recovery-<run>-<attempt>` contains only the exact
-validated current-run metadata files and their receipt list. This small
-recovery archive can contain multiple UTC-day files. It never includes the
-whole temporary root, private SQLite store or parsed/rejected populations.
-It is not a successful commit. Invalid evidence fails preparation while
-verified completed metadata remains available in the recovery artifact.
+1. `Commit ledgers and write report` calls the safe-delivery API once for all
+   verified completed ledgers, then calls the Markdown API and prepares the
+   upload directory. A commit or report failure does not stop the remaining
+   preparation; the task still fails after preserving its useful output.
+2. `Upload run artifacts` uploads that prepared directory as one archive named
+   `collect-and-select-articles-<run>-<attempt>`, including after finalization
+   failure. It contains `<run>-<attempt>-selected-articles.json` for the next
+   summarizer, plus the delivery result and Markdown report when available.
+   The summarizer downloads this named artifact and reads its selected JSON
+   file, not a ledger. Article bodies never enter the Git request.
+3. `Finish and clean up` checks collection, finalization and the upload's
+   returned artifact identity. It rechecks the saved result and exact Git
+   delivery receipt before removing only the temporary run directory.
+   An earlier collection failure still fails the job after completed
+   diagnostics have landed. Failed finalization, missing confirmation or a
+   failed upload leaves temporary files untouched. A recovery artifact does
+   not turn a failed commit into success.
+
+When the metadata commit is not confirmed, the same artifact also contains
+`uncommitted-metadata-<run>-<attempt>/`: only the exact validated current-run
+metadata files and `current-run-files.json`. It can contain multiple UTC-day
+files. No whole temporary root, private SQLite store or parsed/rejected
+population is uploaded. Invalid evidence fails preparation while independently
+verified files remain recoverable. Cancellation skips new Git delivery while
+still attempting the report and recovery upload.
 
 The Markdown report reads the body-free response, health result, effective
-settings and host fingerprint after metadata delivery. It writes the job
-summary and five grouped notices: Host fingerprint, This run's feed work,
+settings and host fingerprint after metadata delivery. It writes the report
+before upload, includes the Git delivery status and commit when confirmed,
+and writes the same Markdown to the job summary. It emits five grouped notices:
+Host fingerprint, This run's feed work,
 Closed-day request spend, Grouped exclusions, and Policy used. Full per-feed
 details stay in the summary rather than one notice per feed or article.
 Effective settings include workflow overrides, not just committed defaults.
@@ -162,6 +178,11 @@ CI; repeating them here does not exercise a live API. The selected text upload
 and ledger commit stay separate because the summarizer needs article bodies
 while the ledger does not. CPU and RAM profiling does not prove API correctness,
 so this workflow keeps the host fingerprint but does not profile the planner.
+The closing tasks group orchestration rather than merge API responsibilities.
+Safe Git delivery and Markdown rendering remain separate functions. One
+standard artifact upload carries selected text, run evidence and any recovery
+files, so consolidation adds no upload dependency. Cleanup follows confirmed
+delivery instead of discarding the only recoverable copy.
 
 ## See also
 
