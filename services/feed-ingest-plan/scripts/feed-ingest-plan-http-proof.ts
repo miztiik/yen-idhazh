@@ -14,9 +14,8 @@ import { FeedHealthStateUpdateResponseSchema } from "../src/api/feed-health-stat
 import { stagePlannerHistory } from "./feed-ingest-plan-history";
 import { createExecutionOutputs, writeGitHubOutputs } from "./feed-ingest-plan-outputs";
 import { verifyPlanningCompletion } from "./feed-ingest-plan-verification";
-import { WorkflowMachineMemorySchema } from "../../host-probes/scripts/feed-ingest-plan-profile-schema";
 import { WorkflowPolicySchema } from "./feed-ingest-plan-policy-report";
-import { observeWorkflowResources } from "./feed-ingest-plan-workflow-resources";
+import { captureWorkflowHostFingerprint } from "./feed-ingest-plan-host-fingerprint";
 import { readMetadataRegistrations } from "./feed-ingest-plan-metadata";
 import { collectWorkflowFiles } from "./feed-ingest-plan-current-files";
 
@@ -64,12 +63,9 @@ async function runWorkflow() {
   const root = process.cwd();
   const { RUNNER_TEMP, GITHUB_OUTPUT, GITHUB_RUN_ID, GITHUB_RUN_ATTEMPT } = process.env;
   if (!RUNNER_TEMP || !GITHUB_OUTPUT || !GITHUB_RUN_ID || !GITHUB_RUN_ATTEMPT) throw new Error("Workflow execution controls are missing");
-  const profileRequested = WorkflowMachineMemorySchema.parse(process.env.PROFILE_MACHINE_MEMORY);
   const directory = join(RUNNER_TEMP, "feed-ingest-plan");
   const inputs = await loadPlanInputs(root);
-  const started = performance.now();
   const staged = await stagePlannerHistory(root, inputs, new Date().toISOString().replace(/\.\d{3}Z$/, "Z"));
-  const historyMs = Math.round(performance.now() - started);
   inputs.settings = ServiceSettingsSchema.parse({
     ...inputs.settings, enabled: true,
     inputs: { ...inputs.settings.inputs, feed_health_days: staged.feed_health_days, feed_health_input_gap: staged.feed_health_input_gap },
@@ -84,7 +80,6 @@ async function runWorkflow() {
   const runtime: PlanRuntime = { git_sha: gitSha.trim(), run_number: GITHUB_RUN_ID, correlation_id: correlationId,
     clock: () => captured, selection_clock: () => new Date() };
   await mkdir(directory, { recursive: true });
-  await writeFile(join(directory, "history-staging-ms.json"), JSON.stringify(historyMs));
   await writeFile(join(directory, "workflow-policy.json"), JSON.stringify(WorkflowPolicySchema.parse({
     config: inputs.harvest.config, request, history: inputs.clock_config.collect,
     parser_concurrency: inputs.settings.listener.parser_concurrency,
@@ -94,25 +89,19 @@ async function runWorkflow() {
     attempt: inputs.settings.run.attempt, git_sha: runtime.git_sha };
   const registryPath = join(root, inputs.settings.inputs.registrations);
   const registrations = await readMetadataRegistrations(registryPath);
-  const resources = await observeWorkflowResources({
-    root, directory, stateRoot: inputs.outputRoot, registryPath, profileRequested,
-    gitSha: runtime.git_sha, attempt: identity.attempt,
-    identity: { pipeline_name: "feed-ingest-plan", task_name: "planner-http-request",
-      run_id: identity.run_id, correlation_id: correlationId, request_id: randomUUID() },
+  const host = await captureWorkflowHostFingerprint({
+    root, directory, stateRoot: inputs.outputRoot, registryPath, identity, registrations,
   });
-  let outcome: "success" | "error" = "error";
   let result: Awaited<ReturnType<typeof invokePlannerHttp>> | undefined;
   try {
     await writeGitHubOutputs(GITHUB_OUTPUT, {
       run_id: identity.run_id, date: captured.toISOString().slice(0, 10), planning_complete: "false",
-      current_run_files: JSON.stringify(resources.evidence.host.status === "recorded"
-        ? resources.evidence.host.files.map(file => file.path) : []),
+      current_run_files: JSON.stringify(host.host.status === "recorded"
+        ? host.host.files.map(file => file.path) : []),
     });
     result = await invokePlannerHttp(inputs, runtime, request, directory);
     if (!result.summary.planning_complete || result.http_status !== 200) process.exitCode = 2;
-    else outcome = "success";
   } finally {
-    await resources.close(outcome);
     const completed = await collectWorkflowFiles({ root, directory, identity, registrations });
     await writeGitHubOutputs(GITHUB_OUTPUT, {
       ...result?.outputs, current_run_files: JSON.stringify(completed.paths),

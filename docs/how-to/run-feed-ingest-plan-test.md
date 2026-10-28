@@ -27,12 +27,8 @@ strategy through the real CLI request validator. Values are environment data,
 never interpolated shell code. Blank optional values use configuration.
 For `none`, clear the worker count or set it to one.
 
-The CPU/RAM checkbox defaults off. When selected, it profiles the whole live
-planner process and also runs the existing independent controlled host proof.
-These are separate measurements in one Resources section, not per-article
-profiles. The listener and planner share one Bun process; no second server
-PID is required. An optional instrument failure is explicit and does not
-change planning completion or block its metadata commit.
+The workflow does not profile live planner CPU or RAM. It still records the
+configured host fingerprint and commits it with the planner ledgers.
 
 ## Local offline checks
 
@@ -56,10 +52,10 @@ python -m pytest backend/tests/contracts/test_native_typescript_bindings.py
 
 The service suite includes the existing workflow/report cases. Its case
 timeout bounds test execution; it is not a planner speed
-target. The workflow case compiles mandatory adapters and tests from its exact
-named sparse inputs; independent host tools retain their own checks. An
-unselected local module cannot satisfy a missing dependency. The local suite
-does not run a fixture-only compatibility entry point.
+target. CI runs these offline checks. The manual workflow does not repeat them:
+it calls the live Plan API and commits its real output. An unselected local
+module cannot satisfy a missing dependency. The local suite does not run a
+fixture-only compatibility entry point.
 
 Recorded RSS/HTML and transport facts drive the actual listener, worker
 extractor, complete public offer flow and CLI. Generated native files prove
@@ -95,17 +91,12 @@ History staging uses the [bounded day membership contract](../reference/feed-pla
 Named Git days, not saved raw-day JSON lists, identify all Parquet siblings.
 
 Partial completed files are retained and can be committed even when the
-planning step fails. Selected text is uploaded separately for the summarizer.
-The selected JSON handoff, response, health, measured staging time, commit
-result, effective settings, resources, report and real process logs are each
-one unarchived artifact. Filenames include the run number and attempt, so
-retries do not replace earlier evidence. The upload action uses each filename
-as its artifact name; its `name` input does not name an unarchived upload.
-
-The runtime log retains the real planner/listener stdout and stderr; the
-commit log retains the real metadata-commit output. A pipeline failure keeps
-its nonzero exit status through `tee`. Neither log is a second server or a
-copy of article text.
+planning step fails. The workflow uploads the selected text for the next
+summarizer stage, the Markdown report and the metadata delivery result. It
+uploads exact metadata for recovery only when the safe commit is not confirmed.
+Step output remains in the workflow logs; the report carries the effective
+settings, feed results and host fingerprint. The selected text and the
+body-free ledger rows remain separate.
 
 When the metadata commit is not confirmed, a separate artifact named
 `uncommitted-metadata-recovery-<run>-<attempt>` contains only the exact
@@ -113,17 +104,19 @@ validated current-run metadata files and their receipt list. This small
 recovery archive can contain multiple UTC-day files. It never includes the
 whole temporary root, private SQLite store or parsed/rejected populations.
 It is not a successful commit. Invalid evidence fails preparation while
-already copied individual evidence remains available for upload.
+verified completed metadata remains available in the recovery artifact.
 
-The Actions Markdown report reads the actual body-free response and health
-result after the optional instruments finish. It writes the actual job
-summary and five grouped public notices: Resources, This run's feed work,
+The Markdown report reads the body-free response, health result, effective
+settings and host fingerprint after metadata delivery. It writes the job
+summary and five grouped notices: Host fingerprint, This run's feed work,
 Closed-day request spend, Grouped exclusions, and Policy used. Full per-feed
-details stay in the public summary rather than one notice per feed or article.
+details stay in the summary rather than one notice per feed or article.
 Effective settings include workflow overrides, not just committed defaults.
 Missing policy evidence stays unavailable; defaults are not substituted.
 Reporting is controlled by `workflow_reporting.enabled`; it cannot change
 ledger bytes or establish completion.
+The exported Markdown renderer and its separation from production digest
+presentation are documented in the [operator API reference](../architecture/sources/feed-operator-api.md#markdown-rendering-api).
 
 `MISSING_REQUIRED_FIELDS` is an article rejection: its offered URL or identity
 was missing or invalid, or extraction produced no usable title. A grouped
@@ -147,22 +140,28 @@ A later authorized live run can verify feed availability and actual hosted
 operation timings. Offline fixtures and local checks make no production
 throughput claim.
 
-## Resource proof
+## Host fingerprint
 
-Basic host facts use the existing collector without the copy benchmark and
-respect the global host, fingerprint, frequency and placement switches.
-The checkbox permits the existing whole-task profiler around the real HTTP
-planner call; global host telemetry and memory switches remain authoritative.
-CPU samples, process RAM and machine RAM are not per-article costs.
+The workflow uses the existing fingerprint settings and records one host row in
+the native ledger. It does not collect a live planner CPU or RAM profile, run
+the separate controlled host-probe proof or add a memory-profile dispatch
+option. The host row is validated and committed with the planner files through
+the shared safe-delivery API. If that commit is not confirmed, the exact files
+remain available in the recovery artifact.
 
-The independent proof uses the sample, pinned-process profile, copy and cache
-tools. Its rows are labelled as controlled work, not live planner measurements
-or a planner speed gain. Missing or disabled observations retain their reasons,
-never zero substitutes. RAM is displayed in decimal GB with two-decimal free
-and available percentages. Free RAM and available RAM are different quantities;
-the lowest observed available RAM is a sample, not an assured whole-run minimum.
-See [host measurements](../reference/host-metrics.md#whole-task-typescript-samples)
-for units and controls. No host benchmark determines planning completion.
+## Design rationale
+
+The manual workflow proves that the real Plan API can fetch, parse, select,
+write body-free ledger rows and hand selected text to the next stage. Named
+history reads day-level ledger data from the current commit, not only the
+immediately previous workflow run; its data families and windows are in the
+[bounded day membership contract](../reference/feed-planner-ledgers.md#raw-day-membership).
+The sparse checkout still supplies runnable source and configuration while
+keeping the growing state tree out of the worktree. Adapter checks remain in
+CI; repeating them here does not exercise a live API. The selected text upload
+and ledger commit stay separate because the summarizer needs article bodies
+while the ledger does not. CPU and RAM profiling does not prove API correctness,
+so this workflow keeps the host fingerprint but does not profile the planner.
 
 ## See also
 

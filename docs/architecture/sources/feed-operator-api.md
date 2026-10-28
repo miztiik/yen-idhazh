@@ -101,6 +101,20 @@ prior artifact or double-count its HTTP work. Replaying the same finalized
 result returns its existing receipt. The removed `persist-dispatches`
 endpoint has no alias and returns ordinary HTTP 404.
 
+## Markdown rendering API
+
+TypeScript callers can render a validated planner result without starting an
+HTTP request. Import `renderPlanMarkdown` from
+`@idhazh/feed-ingest-plan/markdown`; it accepts a Plan response, optional feed
+health data and optional pre-rendered policy and host sections, then returns
+Markdown and semantic notices. It performs no network or file access and is a
+package API, not an HTTP route.
+
+The manual workflow uses an adapter to write that Markdown to its job summary
+and turn notices into workflow annotations. This workflow presentation is not
+the production digest renderer; production can choose a reader-facing format
+without changing the planner API.
+
 ## Request flow
 
 The diagram shows the separate stage requests. `POST /api/2026-10-20/plan`
@@ -150,15 +164,6 @@ feed, publication and settled item-health evidence. The
 ledger. A completed `/plan` run writes the same ledger and artifact families;
 a partial run records only the work it finished.
 
-## Optional task profiles
-
-The independent host tools remain optional. Embedded callers can explicitly
-provide validated `PlanRuntime.task_profiling` controls and a local report
-callback for document work. The ordinary planner does not implicitly load
-host-probe configuration or require a profile to complete.
-The separate host sample and pinned-process start/stop APIs remain unchanged.
-Profiles are not source-cost scores or planner ledger fields.
-
 ## Design rationale
 
 Server-owned offer references preserve a complete public feed-to-article
@@ -166,6 +171,12 @@ flow without granting fetched prose authority over paths or later requests.
 Shared bounded parsing capacity keeps the listener responsive while real
 HTML extraction runs. Short private-journal transactions protect request
 identity without restoring a listener-wide run queue.
+The Plan API does not collect per-document CPU or RAM profiles. These samples
+do not change fetch, parse, selection or persistence results; host fingerprints
+remain separate ledger records.
+The Markdown renderer is a pure package function, not another HTTP route:
+formatting needs no service call, workflow annotations stay in the workflow
+adapter, and production can choose a separate reader-facing presentation.
 
 ## See also
 

@@ -31,13 +31,11 @@ export async function prepareWorkflowArtifacts(input: {
     await writeOutput(key, path);
   }
   for (const [key, name] of [
-    ["response", "response.json"], ["health", "health.json"], ["history", "history-staging-ms.json"],
-    ["delivery", "delivery-result.json"], ["runtime_log", "runtime.log"], ["delivery_log", "delivery.log"],
-    ["policy", "workflow-policy.json"], ["resources", "resources.json"], ["report", "report.md"],
+    ["delivery", "delivery-result.json"], ["report", "report.md"],
   ] as const) await retain(key, join(input.directory, name), name);
-  await retain("independent", join(input.root, "test-results", "host-probes", "resource-proof.json"), "controlled-host-proof.json");
   const responsePath = join(input.directory, "response.json");
-  if (!await Bun.file(responsePath).exists() && !await Bun.file(join(input.directory, "resources.json")).exists()) return outputs;
+  if (!await Bun.file(responsePath).exists()
+    && !await Bun.file(join(input.directory, "host-fingerprint.json")).exists()) return outputs;
   const context = input.identity !== undefined && input.registrations !== undefined
     ? { identity: input.identity, registrations: input.registrations } : await readWorkflowDeliveryContext(input);
   const { paths, response, failures } = await collectWorkflowFiles({ ...input, ...context });

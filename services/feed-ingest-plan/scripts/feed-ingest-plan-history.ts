@@ -7,6 +7,8 @@ import type { CompactIndex } from "../../../packages/common-contracts/src/index"
 import type { PlanInputs } from "../src/load-plan-inputs";
 import { mapPool } from "../src/harvest-feeds/harvest-pool";
 import { requiredUtcDays } from "../src/utc-instant";
+import { PlannerDayInputSchema } from "../src/config/service-settings";
+import type { LedgerDayInput } from "../src/config/service-settings";
 import { readPlannerParquet } from "../src/read-ledger-history/read-planner-parquet";
 import { closedRequestDays } from "../src/read-ledger-history/health-summary";
 import { completeHistoryDayInputs, createHistoryDayInputs, resolveHistoryIndexes, resolveHistoryInventory, sparseCheckoutPath } from "./feed-ingest-plan-outputs";
@@ -25,6 +27,13 @@ export async function stageNamedFiles(repository: string, paths: readonly string
   await Promise.all([new Response(child.stdout).text(), new Response(child.stderr).text()]);
   if (await child.exited !== 0) throw new Error("Named history checkout failed");
 }
+
+export function createPlannerHistoryInputs(history: readonly LedgerDayInput[], revision: string) {
+  return history.map(({ day, raw_files }) => PlannerDayInputSchema.parse({
+    day, raw_files: raw_files ?? [], raw_revision: revision,
+  }));
+}
+
 export async function stagePlannerHistory(root: string, inputs: PlanInputs, now: string) {
   const today = new Date(now);
   const nextDay = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate() + 1)).toISOString().slice(0, 10);
@@ -131,7 +140,7 @@ export async function stagePlannerHistory(root: string, inputs: PlanInputs, now:
     }
   }
   return {
-    feed_health_days: health.inputs.map(day => ({ ...day, raw_revision: revision })),
+    feed_health_days: createPlannerHistoryInputs(health.inputs, revision),
     feed_health_input_gap: health.notices.some(notice => notice.startsWith("health_")),
     notices: health.notices,
   };

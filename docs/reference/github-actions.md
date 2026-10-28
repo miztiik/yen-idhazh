@@ -1,6 +1,6 @@
 # GitHub Actions Workflows
 
-**Last Updated**: 2026-10-26
+**Last Updated**: 2026-10-27
 
 Which workflows run, when they run, and what they may publish.
 The [workflow declarations](../../.github/workflows/) are authoritative.
@@ -62,16 +62,20 @@ controls. It returns one completed raw host Parquet file, or an explicit
 disabled result. The caller validates it and combines it with the current
 planner metadata for the [bounded commit adapter](../architecture/publishing/committing.md#design-rationale).
 Only the four planner ledgers maintain their existing raw-day indexes.
-There is no host index, remote host service or direct collector call.
+There is no host index, remote host service or direct collector call. The
+workflow records a host fingerprint but does not profile live planner CPU or
+RAM.
 
 Publication may retain completed diagnostics after planner failure; it never
 changes the planner's failed result. Unpublished valid files join the existing
 metadata recovery artifact even when no planner response was saved.
-`resources.json` retains host receipts and separate live planner CPU/RAM
-observations. L3 and total RAM capacity are displayed in MiB, without changing
-the stored byte-valued cache field. Optional controlled copy/cache evidence
-remains separate from those live planner measurements.
-See [host metrics](host-metrics.md) for each instrument and unavailable reason.
+Selected text is uploaded separately for the next summarizer stage; ledger
+rows remain body-free. The Markdown summary includes host fingerprint facts,
+with L3 cache and total RAM capacity displayed in MiB. The safe-delivery API
+commits the exact verified metadata files and preserves an explicit recovery
+artifact if that commit is not confirmed. Independent host-probe checks remain
+in CI and are not part of this manual workflow.
+See [host metrics](host-metrics.md) for the fingerprint and its unavailable reasons.
 
 ## Pages publication
 

@@ -4,7 +4,7 @@ import { FeedIngestConfigSchema } from "../../../packages/common-contracts/src/i
 import { PlanRequestSchema, resolvePlanRequest } from "../src/api/plan-request";
 import { resolvePolicy } from "../src/config/resolve-policy";
 import { FeedHistoryPolicySchema } from "../src/read-ledger-history/read-feed-history";
-import { escapeMarkdown } from "./feed-ingest-plan-report-format";
+import { escapeMarkdown } from "../src/reporting/markdown-format";
 import { allocateTierBudgets, resolveTierWindows } from "../src/article-freshness-policy";
 
 export const WorkflowPolicySchema = z.strictObject({
