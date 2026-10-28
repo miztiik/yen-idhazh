@@ -179,19 +179,54 @@ async function treeEntries(
 ): Promise<Map<string, TreeEntry>> {
   const requested = [...new Set(paths)];
   if (requested.length === 0) return new Map();
-  const listed = await requiredGitOutput(repository, ["ls-tree", "-z", tree, "--", ...requested], { timeout });
+  const input = new TextEncoder().encode(requested.map(path => `${tree}:${path}\n`).join(""));
+  const listed = await requiredGitOutput(repository, ["cat-file", "--batch-check=%(objectname) %(objecttype)"], {
+    input, timeout,
+  });
+  const rows = listed.split(/\r?\n/);
+  if (rows.at(-1) === "") rows.pop();
+  if (rows.length !== requested.length) {
+    throw new SafePersistDataError("Git returned incomplete named tree metadata", "delivery-failed");
+  }
   const entries = new Map<string, TreeEntry>();
-  for (const row of listed.split("\0").filter(Boolean)) {
+  const blobs: { path: string; oid: string }[] = [];
+  for (const [index, path] of requested.entries()) {
+    const row = rows[index]!;
+    if (row === `${tree}:${path} missing`) continue;
+    const [oid, type, extra] = row.split(" ");
+    if (oid === undefined || type === undefined || extra !== undefined || !/^[a-f0-9]{40,64}$/.test(oid)
+      || !["blob", "tree", "commit"].includes(type)) {
+      throw new SafePersistDataError("Git returned invalid named tree metadata", "delivery-failed", [path]);
+    }
+    entries.set(path, {
+      mode: type === "tree" ? "040000" : type === "commit" ? "160000" : PLAIN_FILE_MODE,
+      type, oid,
+    });
+    if (type === "blob") blobs.push({ path, oid });
+  }
+  if (blobs.length === 0) return entries;
+  const blobPaths = blobs.map(({ path }) => path);
+  const blobPathSet = new Set(blobPaths);
+  const blobListing = await requiredGitOutput(repository, ["ls-tree", "-z", tree, "--", ...blobPaths], { timeout });
+  const modes = new Map<string, TreeEntry>();
+  for (const row of blobListing.split("\0").filter(Boolean)) {
     const separator = row.indexOf("\t");
     if (separator < 0) {
       throw new SafePersistDataError("Git returned an invalid tree entry", "delivery-failed");
     }
     const path = row.slice(separator + 1);
     const [mode, type, oid] = row.slice(0, separator).split(" ");
-    if (!requested.includes(path) || mode === undefined || type === undefined || oid === undefined) {
+    if (!blobPathSet.has(path) || mode === undefined || type !== "blob" || oid === undefined) {
       throw new SafePersistDataError("Git returned an unexpected tree entry", "delivery-failed", [path]);
     }
-    entries.set(path, { mode, type, oid });
+    modes.set(path, { mode, type, oid });
+  }
+  for (const { path, oid } of blobs) {
+    const entry = modes.get(path);
+    if (entry === undefined || entry.oid !== oid) {
+      throw new SafePersistDataError("Git returned incomplete named blob metadata", "delivery-failed", [path]);
+    }
+    entries.set(path, entry);
   }
   return entries;
 }
