@@ -66,8 +66,11 @@ export async function loadPlanInputs(root: string, settingsPath = "config/feed-i
   if (extraction.ledger.compression_raw !== harvest.config.seal.compression) {
     throw new Error("ledger.compression_raw differs from planning config.seal.compression");
   }
+  const publishedWindowDays = settings.inputs.published_url_lookback_days
+    ?? extraction.collect.published_window_days;
   return {
-    root, settings, harvest, clock_config: { collect: extraction.collect },
+    root, settings, harvest,
+    clock_config: { collect: { ...extraction.collect, published_window_days: publishedWindowDays } },
     ledgerSettings: extraction.ledger, registrations: selected,
     outputRoot: resolve(root, paths.output_root),
   };

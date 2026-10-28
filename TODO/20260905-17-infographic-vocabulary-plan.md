@@ -1,6 +1,6 @@
 # 17 - Source text and the whowhat grid
 
-**Last Updated**: 2026-10-27
+**Last Updated**: 2026-10-28
 **Level**: 5 (Row 3 adds a persisted `WhowhatGridData` payload; Row 1 is independently executable)
 
 **Chain**: the composition family is delivered in [the visual-plan rules](../docs/architecture/publishing/what-a-visual-plan-may-say-and-what-happens-to-one-that-is-refused.md) | diagrams are [deferred](../docs/architecture/publishing/visuals.md#diagrams-deferred).
@@ -35,7 +35,7 @@ Execute per docs/how-to/execute-a-plan.md: one maintainer carries the plan and d
 
 | # | Row title | Depends-on | Parallel-group | Status | Worktree | PR | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| 1 | A real sentence made to fit, without anyone re-writing it | - | A | PENDING | - | - | - |
+| 1 | A real sentence made to fit, without anyone re-writing it | - | A | PENDING | plan-17-row-1-labels | - | - |
 | 2 | One striking figure: callout | - | - | COLLAPSED | - | - | - |
 | 3 | Who did what: whowhat | 1 | B | PENDING | - | - | - |
 | 4 | Three to five takeaways, and the switch that kills them | - | - | COLLAPSED | - | - | - |
@@ -44,21 +44,29 @@ Execute per docs/how-to/execute-a-plan.md: one maintainer carries the plan and d
 
 ## 2. Row #1 - A real sentence made to fit, without anyone re-writing it
 
-- **Scope:** Where a claim or quote must be shortened to fit a card, the compiler truncates deterministically with an ellipsis. The model never rewrites.
+- **Scope:** Where a source-backed chart label must be shortened to fit, the compiler truncates deterministically and appends `...`. The model never rewrites it.
 - **Files touched:**
   - `backend/idhazh/render/chart.py`
+  - `backend/idhazh/text_fit.py` (new)
   - `backend/idhazh/contracts/knobs/visuals.py`
   - `config/idhazh.json`
   - `backend/tests/test_chart_text_fit.py` (new)
+  - `backend/tests/contracts/_fixtures.py`
   - `tests/fixtures/visual-validator/articles/text-fit.txt` (new)
+  - `tests/fixtures/visual-validator/articles/text-fit-collision.txt` (new)
   - `tests/fixtures/visual-validator/tables/text-fit.json` (new)
+  - `tests/fixtures/visual-validator/tables/text-fit-collision.json` (new)
   - `tests/fixtures/visual-validator/plans/text-fit.json` (new)
+  - `tests/fixtures/visual-validator/plans/text-fit-collision-bar.json` (new)
+  - `tests/fixtures/visual-validator/plans/text-fit-collision-line.json` (new)
   - `tests/fixtures/contracts/visual-data/text-fit.json` (new)
+  - `tests/fixtures/contracts/app-config/every-knob-differs-from-the-committed-config.json`
+  - `frontend/src/lib/visual/bar.ts`
   - `frontend/tests/item-visual.spec.ts`
   - `docs/architecture/publishing/where-a-drawing-becomes-pixels.md`
   - `docs/concepts/design-system.md`
 - **Acceptance gates:** Local: inspect the shared selection with `npm run test:changed -- --list`, run `npm run test:changed` and `npm run check`, and complete the section 12 browser smoke. CI: full backend and frontend suites.
-- **Oracle:** Repeated compilation gives the same output. For truncated output, removing the appended `...` leaves a prefix of the exact source span; otherwise the output equals that full span. This proves source fidelity and determinism, not that the published reader gives the text enough space; the browser smoke checks the rendered result.
+- **Oracle:** Repeated compilation gives the same output. For truncated output, removing the appended `...` leaves a prefix of the exact source span; otherwise the output equals that full span. Distinct labels that collide after shortening refuse the chart. Stacked-bar labels remain uncapped. This proves source fidelity and determinism, not that the published reader gives the text enough space; the browser smoke checks the rendered result.
 
 ### Decisions
 
@@ -67,6 +75,8 @@ Execute per docs/how-to/execute-a-plan.md: one maintainer carries the plan and d
 | 1 | **A cap rejects; truncation renders.** `summarize.max_verbatim_words` governs summary reuse, not the display length of a source-backed chart label. | 12.11 G18, section 14.3 |
 | 2 | Plan 11 makes claims and quotes sentence-index-only, so source sentences remain the unit; text fitting preserves their wording. | 12.11 G18 |
 | 3 | Model rewriting is not allowed; rewritten output cannot be checked by the source-prefix oracle. | P.L32, 12.11 G18 |
+| 4 | A chart-independent helper owns deterministic prefix-plus-ellipsis fitting so later compilers can reuse it without importing chart code. Row 1 does not implement grid behavior. | User ruling, 2026-10-28 |
+| 5 | Refuse a chart when distinct source labels become identical after shortening. | User ruling |
 
 ### Rejected alternatives
 

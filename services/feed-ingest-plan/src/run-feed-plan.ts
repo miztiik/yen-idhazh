@@ -30,7 +30,8 @@ import { recordPlanRun } from "./record-plan-run";
 import { registerStageExecution } from "./api/document-state";
 
 export type PlanRuntime = {
-  git_sha: string; run_number?: string; correlation_id?: string; clock?: () => Date;
+  git_sha: string; run_number?: string; correlation_id?: string;
+  attempt?: number; producer?: string; clock?: () => Date;
   selection_clock?: () => Date; captured_at?: string; observation_clock?: () => Date;
   boundary?: NonNullable<Parameters<typeof harvestFeeds>[2]>;
   log?: (event: FeedIngestEvent) => void; progress?: (record: ProgressRecord) => void;
@@ -43,7 +44,7 @@ export async function runFeedPlan(raw: unknown, inputs: PlanInputs, runtime: Pla
   if (!inputs.settings.enabled) throw new PlanError("PLANNER_DISABLED", "Planner is disabled", "enabled");
   const captured = runtime.clock?.() ?? new Date();
   const context = resolveRunContext(inputs.settings, runtime.git_sha, captured,
-    runtime.run_number, runtime.correlation_id, runtime.captured_at);
+    runtime.run_number, runtime.correlation_id, runtime.captured_at, runtime.attempt, runtime.producer);
   const started = performance.now();
   registerStageExecution(inputs, context, "plan", started);
   const emit = createStageLogger(context, runtime.log);

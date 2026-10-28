@@ -12,6 +12,13 @@ From `services/feed-ingest-plan`, use `bun src/index.ts --serve` for the
 loopback listener or `bun src/index.ts --cli` for an awaited one-shot run.
 `config/feed-ingest-plan-service.json` supplies validated settings. Its service
 flag defaults off until production use is approved.
+Its `inputs.published_url_lookback_days` value overrides only the planner's
+published-URL exclusion window; the global value remains unchanged for other
+consumers. The local seven-day window is not the article-age limit.
+`listener.max_body_bytes` limits incoming API request bodies.
+`extract.max_body_bytes` limits fetched article response bytes.
+`listener.parser_concurrency` controls concurrent article HTML parser workers,
+not the number of feeds fetched.
 
 The health route reports listener availability and enablement only.
 The service owns its API code and workflow adapters. GitHub workflow YAML
@@ -40,6 +47,10 @@ One execution has isolated run identity, attempt, clocks, counters, timings
 and batches. Run start supplies the accounting date. The saved parsed age
 clock is D19; the fresh selection/feedback clock is D22. Actual HTTP and feed
 work use their own UTC occurrence dates, including work after midnight.
+The workflow supplies the retry attempt as execution metadata; local runs use
+the first attempt. The caller supplies the producer identity at runtime when
+it has one; the standalone runner uses its named default. Neither value is a
+service setting.
 Elapsed duration comes from the monotonic process clock, not wall-clock
 subtraction. A restarted standalone chain records unavailable total duration
 as null.
@@ -90,6 +101,11 @@ Native workers provide real extraction overlap rather than promises around
 synchronous DOM work. Separate execution state prevents concurrent plans
 from mixing data or clocks. Explicit independent outputs preserve useful work
 without reporting a failed stage as completed planning.
+
+Maintainer decision, 2026-10-27 UTC: the isolated planner uses a local
+seven-day published-URL exclusion window. The global 730-day setting remains
+unchanged for its other readers. Seven days permits the same URL to be selected
+again after that window; the separate article-age limit remains unchanged.
 
 ## See also
 
