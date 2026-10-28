@@ -148,6 +148,43 @@ def test_a_plan_of_cited_elements_and_legal_roles_passes_every_check() -> None:
     assert refuse("passes", "wind") == []
 
 
+def test_whowhat_accepts_only_the_source_backed_same_sentence_pairs() -> None:
+    assert refuse("whowhat", "whowhat") == []
+
+    plan = load_plan("whowhat")
+    table = load_table("whowhat")
+    payload = plan.model_dump(mode="json")
+    payload["encodings"]["entity"] = ["entity-0-16"]
+    payload["encodings"]["event_label"] = ["claim-100-138"]
+    payload["element_ids"] = ["claim-100-138", "entity-0-16"]
+    payload["labels"] = ["entity-0-16"]
+    separated = VisualPlan.model_validate(payload)
+
+    rejections = validate_plan(separated, table, visuals=committed_visuals())
+    assert [rejection.check for rejection in rejections] == [ValidatorCheck.ENOUGH_DATA]
+    assert "same-sentence" in rejections[0].detail
+
+
+def test_whowhat_event_labels_must_be_claim_elements() -> None:
+    plan = load_plan("whowhat")
+    payload = plan.model_dump(mode="json")
+    payload["encodings"]["entity"] = ["entity-0-16"]
+    payload["encodings"]["event_label"] = ["entity-0-16"]
+    payload["element_ids"] = ["entity-0-16"]
+    payload["labels"] = ["entity-0-16"]
+    payload["annotations"] = ["entity-0-16"]
+    mislabeled = VisualPlan.model_validate(payload)
+
+    rejections = validate_plan(
+        mislabeled,
+        load_table("whowhat"),
+        visuals=committed_visuals(),
+    )
+    assert [rejection.check for rejection in rejections] == [
+        ValidatorCheck.ROLES_VALID_FOR_TYPE
+    ]
+
+
 def test_stacked_parts_match_the_independently_declared_whole_after_unit_conversion() -> None:
     """The parts use MW while their separately stated whole uses GW."""
     assert refuse("stacked-valid", "stacked-whole") == []

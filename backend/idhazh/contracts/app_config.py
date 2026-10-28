@@ -110,6 +110,11 @@ class AppConfig(Contract):
     __schema_stem__: ClassVar[str] = "app-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-10-28",
+            change="visuals.enabled_kinds includes the whowhat grid family.",
+            why="The config contract must name every visual kind its reader can route.",
+        ),
+        ChangelogEntry(
             version="2026-10-24T18:29",
             change="visuals.number_format added.",
             why="The digest and console need one declared number style.",
@@ -123,11 +128,6 @@ class AppConfig(Contract):
             version="2026-10-11",
             change="council removed; its settings live in config/llm_council.json.",
             why="The council owns its settings and judge list, as the gardener does.",
-        ),
-        ChangelogEntry(
-            version="2026-10-09",
-            change="console.panel_groups and console.judged_panel_ids removed.",
-            why="Each route's console file owns its panel order and judged list.",
         ),
         ChangelogEntry(
             version="2026-09-28",

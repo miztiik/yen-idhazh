@@ -30,7 +30,7 @@ from idhazh.contracts.knobs.evaluation import EvaluationConfig
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.sources import SourceForm
 from idhazh.contracts.visual import VisualType
-from idhazh.contracts.visual_data import VisualData
+from idhazh.contracts.visual_data import RENDERER_VERSION, VisualData
 from utilities import build_canary_day
 
 
@@ -113,6 +113,7 @@ def test_the_canary_line_is_compiled_from_the_named_source_fixture(tmp_path: Pat
 
     data = VisualData.read(tmp_path / item.visual.data_path)
     assert data.item_id == item.item_id
+    assert data.renderer_version == RENDERER_VERSION
     assert data.type is VisualType.LINE
     marks = {mark.mark_id: mark for mark in data.marks}
     assert [

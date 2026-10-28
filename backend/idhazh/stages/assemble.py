@@ -26,13 +26,13 @@ from idhazh.contracts.run_plan import RunPlan
 from idhazh.contracts.seen import PublishedRow
 from idhazh.contracts.source_health_view import SourceHealthView
 from idhazh.contracts.summary import Summary, SummaryStatus
-from idhazh.contracts.visual_decision import VisualDecision
+from idhazh.contracts.visual_decision import VisualDecision, VisualKind
 from idhazh.embed import Embedder
 from idhazh.evals import metrics, sampling, score, writer
 from idhazh.fingerprint import (
     prose_changed_alone,
 )
-from idhazh.render import write_charts_from_decisions
+from idhazh.render import write_charts_from_decisions, write_whowhat_from_decisions
 from idhazh.similarity import applied
 from idhazh.stages import common
 from idhazh.stages.common import (
@@ -342,10 +342,19 @@ def stage_assemble(
         )
         atomic_write.write_atomic(target / "digest.json", day.to_json())
 
-    # This run's charts reach this job inside their decisions, and only the day
-    # says which of them it names. Written before the inventory records the day,
-    # because the inventory skips a file that is not there.
-    write_charts_from_decisions(day, decisions, public_root=common.PUBLIC_ROOT.parent)
+    # Each format has its own writer. In particular, a grid decision must never
+    # be parsed as VisualData by the chart writer. Both run before inventory
+    # records the day, because the inventory skips a file that is not there.
+    write_charts_from_decisions(
+        day,
+        (decision for decision in decisions if decision.kind is VisualKind.CHART),
+        public_root=common.PUBLIC_ROOT.parent,
+    )
+    write_whowhat_from_decisions(
+        day,
+        (decision for decision in decisions if decision.kind is VisualKind.WHOWHAT),
+        public_root=common.PUBLIC_ROOT.parent,
+    )
 
     # The month shard is a projection of the days on disk, so it is rebuilt after
     # the day is written and never patched in place.

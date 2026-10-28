@@ -137,6 +137,9 @@ def write_charts_from_decisions(
     payloads, and the bytes have to be a drawing of that item. Both jobs run one
     commit, so a disagreement is a defect in this repository and stops the run.
     """
+    decisions = tuple(decisions)
+    if any(decision.kind is VisualKind.WHOWHAT for decision in decisions):
+        raise ValueError("whowhat grid decisions must use the dedicated grid writer")
     rendered = {
         decision.item_id: decision
         for decision in decisions
@@ -235,7 +238,7 @@ def render_planned_visual(
     try:
         write_bytes_atomic(public_root / relpath, compiled.data.to_json().encode("utf-8"))
     except OSError as error:
-        _log_render_failed(planned, error=error, run_id=run_id)
+        log_render_failed(planned, error=error, run_id=run_id)
         return VisualDecision.model_validate(
             planned.model_dump(mode="json") | {
                 "visual_state": VisualState.RENDER_FAILED,
@@ -252,7 +255,7 @@ def render_planned_visual(
     )
 
 
-def _log_render_failed(planned: VisualDecision, *, error: OSError, run_id: str | None) -> None:
+def log_render_failed(planned: VisualDecision, *, error: OSError, run_id: str | None) -> None:
     """The marks compiled and the file did not land, said out loud.
 
     `src` is the step that broke rather than the stage the item ends at, which

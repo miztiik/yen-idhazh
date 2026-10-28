@@ -53,7 +53,7 @@
     "date-211-215",
     "date-284-288"
   ],
-  "plan_version": "2026-09-09",
+  "plan_version": "2026-10-28",
   "purpose": "trend",
   "title": "Reported capacity by region over time",
   "type": "line",
