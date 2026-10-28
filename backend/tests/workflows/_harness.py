@@ -81,7 +81,6 @@ EXPECTED_WORKFLOWS: Final = {
 # Extra workflows share runtime checks but have no application routing contract here.
 WORKFLOW_FILES: Final = (
     *EXPECTED_WORKFLOWS,
-    "duckdb-addon.yml",
     "yen-ai-pipeline.yml",
     "ai-pipeline-tests.yml",
 )
