@@ -81,12 +81,17 @@ jobs:
           PARTITION_STRATEGY: ${{ inputs.partition_strategy }}
         run: bun run services/feed-ingest-plan/scripts/feed-ingest-plan-http-proof.ts
 
+      - name: Record workflow cancellation
+        id: cancellation
+        if: ${{ cancelled() }}
+        run: echo "cancelled=true" >> "$GITHUB_OUTPUT"
+
       - name: Commit ledgers and write report
         id: finalize
         if: ${{ always() }}
         env:
           CURRENT_RUN_FILES: ${{ steps.plan.outputs.current_run_files }}
-          RUN_CANCELLED: ${{ cancelled() }}
+          RUN_CANCELLED: ${{ steps.cancellation.outputs.cancelled == 'true' }}
         run: bun run services/feed-ingest-plan/scripts/finalize-run-output.ts
 
       - name: Upload run artifacts
