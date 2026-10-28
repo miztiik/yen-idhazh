@@ -6,6 +6,7 @@ import {
 	VIEW_VERSION,
 	projectDay
 } from '../src/lib/payload/project';
+import type { DigestViewVisual } from '../src/lib/payload/types';
 
 /**
  * The served day, read the way a browser reads it.
@@ -71,7 +72,7 @@ const UNKNOWN_WHEN_ABSENT = [
 
 interface Served {
 	version?: unknown;
-	items: Record<string, unknown>[];
+	items: (Record<string, unknown> & { visual?: DigestViewVisual | null })[];
 }
 
 /** What `assist/day.ts` does to a response body, and nothing more. */
@@ -177,6 +178,38 @@ test('every day serves the shape the contract names', () => {
 			);
 		}
 	}
+});
+
+test('a served visual without kind is explicit null and keeps the chart fallback', () => {
+	const oldDay = JSON.parse(LEGACY) as { items: Record<string, unknown>[] };
+	oldDay.items[0]!.visual = {
+		state: 'rendered',
+		data_path: 'digest/2026/08/23/ai-0001.json',
+		alt: 'A chart written before family routing'
+	};
+
+	const served = read(projectDay(JSON.stringify(oldDay)));
+
+	expect(served?.items[0]?.visual).toEqual({
+		state: 'rendered',
+		data_path: 'digest/2026/08/23/ai-0001.json',
+		alt: 'A chart written before family routing',
+		kind: null
+	});
+});
+
+test('a whowhat visual kind reaches the served day for reader routing', () => {
+	const day = JSON.parse(LEGACY) as { items: Record<string, unknown>[] };
+	day.items[0]!.visual = {
+		state: 'rendered',
+		data_path: 'digest/2026/08/23/ai-0001.json',
+		alt: null,
+		kind: 'whowhat'
+	};
+
+	const served = read(projectDay(JSON.stringify(day)));
+
+	expect(served?.items[0]?.visual?.kind).toBe('whowhat');
 });
 
 /** The day's own facts reach the wire, and an absent one is null rather than a

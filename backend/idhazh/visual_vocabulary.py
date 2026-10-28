@@ -57,10 +57,11 @@ plan is a check in `visual_validator.py` or a function in `derived_values.py`.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from decimal import Decimal
 from typing import Final, NamedTuple
 
-from idhazh.contracts.element import ElementKind
+from idhazh.contracts.element import Element, ElementKind
 from idhazh.contracts.visual import EncodingRole, VisualPurpose, VisualType
 from idhazh.elements import normalise_unit
 
@@ -69,7 +70,7 @@ from idhazh.elements import normalise_unit
 #: and it is not `UNIT_TABLE_VERSION`, which stamps the other table. A plan
 #: carries the vocabulary it was planned against, and `plan_version_current`
 #: compares the two.
-PLAN_VOCABULARY_VERSION: Final = "2026-09-09"
+PLAN_VOCABULARY_VERSION: Final = "2026-10-28"
 
 
 class TypeRules(NamedTuple):
@@ -86,13 +87,45 @@ class TypeRules(NamedTuple):
     marks: EncodingRole
 
 
+class WhowhatRow(NamedTuple):
+    """A fixed-width grid row; both empty fields mean no safe source pair."""
+
+    entity: Element | None
+    claim: Element | None
+
+
+def whowhat_rows(
+    entities: Sequence[Element], claims: Sequence[Element]
+) -> tuple[WhowhatRow, ...]:
+    """Pair only a sole entity and sole claim selected from one sentence.
+
+    Multiple actors or claims in the same sentence are ambiguous without a
+    relation the plan contract does not carry. Keep that row empty rather than
+    assigning the claim to an actor by position or guesswork.
+    """
+    entity_counts: dict[int, int] = {}
+    claim_by_sentence: dict[int, list[Element]] = {}
+    for entity in entities:
+        entity_counts[entity.sentence_index] = entity_counts.get(entity.sentence_index, 0) + 1
+    for claim in claims:
+        claim_by_sentence.setdefault(claim.sentence_index, []).append(claim)
+    return tuple(
+        WhowhatRow(entity, claim_by_sentence[entity.sentence_index][0])
+        if entity_counts[entity.sentence_index] == 1
+        and len(claim_by_sentence.get(entity.sentence_index, ())) == 1
+        else WhowhatRow(None, None)
+        for entity in entities
+    )
+
+
 _R = EncodingRole
 _T = VisualType
 
-#: The eleven types whose channels the nine role descriptions determine. These
+#: The twelve types whose channels the nine role descriptions determine. These
 #: are grammar-of-graphics forms and the table is not a design choice - a
 #: scatter needs two measured axes, a histogram needs bins, a timeline needs a
-#: time and something to name each dated point.
+#: time and something to name each dated point; whowhat needs a source-backed
+#: entity and claim.
 TYPE_RULES: Final[dict[VisualType, TypeRules]] = {
     _T.BAR: TypeRules(frozenset({_R.CATEGORY, _R.QUANTITY}), frozenset({_R.SERIES}), _R.QUANTITY),
     _T.DOT: TypeRules(frozenset({_R.CATEGORY, _R.QUANTITY}), frozenset({_R.SERIES}), _R.QUANTITY),
@@ -117,18 +150,19 @@ TYPE_RULES: Final[dict[VisualType, TypeRules]] = {
     _T.TIMELINE: TypeRules(
         frozenset({_R.TIME, _R.EVENT_LABEL}), frozenset({_R.ENTITY}), _R.TIME
     ),
+    _T.WHOWHAT: TypeRules(frozenset({_R.ENTITY, _R.EVENT_LABEL}), frozenset(), _R.ENTITY),
 }
 
-#: The seven whose channels are a design decision rather than a reading of the
+#: The six whose channels are a design decision rather than a reading of the
 #: role names, and the decision belongs to the plan that ships each family:
-#: `table` and `flow` to the composition and diagram vocabularies, and the five
+#: `table` and `flow` to the composition and diagram vocabularies, and the four
 #: infographic forms to theirs. Naming them here rather than leaving them out is
 #: the whole point - a type in neither set would be waved through by the two
 #: per-type checks and drawn with nothing having ruled on it. Until those rules
 #: are written, a plan naming one is refused unless an explicit supported
 #: replacement preserves its purpose and facts and clears the measured floor.
 UNRULED_TYPES: Final[frozenset[VisualType]] = frozenset(
-    {_T.TABLE, _T.FLOW, _T.COMPARISON, _T.CALLOUT, _T.QUOTECARD, _T.WHOWHAT, _T.KEYFACTS}
+    {_T.TABLE, _T.FLOW, _T.COMPARISON, _T.CALLOUT, _T.QUOTECARD, _T.KEYFACTS}
 )
 
 #: Which element kinds may fill each channel. A channel that measures takes a
@@ -202,9 +236,8 @@ DOWNGRADE_EDGES: Final[dict[VisualType, tuple[DowngradeEdge, ...]]] = {
     # The parts of a declared whole, stacked in one bar instead of swept round a
     # circle. The one edge the source document names outright.
     _T.PIE: (DowngradeEdge(_T.STACKED_BAR, frozenset({_P.COMPOSITION})),),
-    # These unruled forms may recover only as a complete magnitude comparison.
+    # This unruled form may recover only as a complete magnitude comparison.
     _T.COMPARISON: (DowngradeEdge(_T.BAR, frozenset({_P.COMPARISON})),),
-    _T.WHOWHAT: (DowngradeEdge(_T.BAR, frozenset({_P.COMPARISON})),),
 }
 
 #: The date-stamp of the conversion table below. Separate from

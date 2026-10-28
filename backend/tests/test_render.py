@@ -47,6 +47,7 @@ from idhazh.contracts.visual_decision import (
     VisualKind,
     VisualState,
 )
+from idhazh.contracts.whowhat_grid import WhowhatGridData
 from idhazh.derived_values import DERIVED_VALUE_VERSION
 from idhazh.render.chart import CompileError, compile_bar, compile_chart
 from idhazh.render.write import (
@@ -859,6 +860,33 @@ class TestWriteChartsFromDecisions:
 
         write_charts_from_decisions(day, [], public_root=tmp_path)
         write_charts_from_decisions(day, [declined], public_root=tmp_path)
+
+        assert not (tmp_path / "digest").exists()
+
+    def test_a_whowhat_decision_is_refused_by_the_chart_writer(self, tmp_path: Path) -> None:
+        grid = WhowhatGridData.read(
+            CONTRACT_FIXTURES_DIR / "whowhat-grid" / "whowhat.json"
+        )
+        day = _charted_day()
+        decision = VisualDecision(
+            version=VisualDecision.schema_version(),
+            item_id=grid.item_id,
+            url_key="b" * 64,
+            kind=VisualKind.WHOWHAT,
+            whowhat_grid=grid,
+            alt_text="Actor and claim grid with source-backed pairs.",
+            visual_state=VisualState.RENDERED,
+            data_path=asset_relpath(day.date, grid.item_id),
+            model_id="fixture-model",
+            decided_at="2026-10-28T00:00:00Z",
+            planned_type=VisualType.WHOWHAT,
+            rendered_type=VisualType.WHOWHAT,
+            downgrade_depth=0,
+            marks=2,
+        )
+
+        with pytest.raises(ValueError, match="dedicated grid writer"):
+            write_charts_from_decisions(day, [decision], public_root=tmp_path)
 
         assert not (tmp_path / "digest").exists()
 

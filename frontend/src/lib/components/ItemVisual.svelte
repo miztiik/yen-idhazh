@@ -60,14 +60,17 @@
 	import PieChart from '$lib/visual/PieChart.svelte';
 	import { drawVisual, statedDrawing, type Drawing } from '$lib/visual/bar';
 	import { fitChartGeometry, fitChartTicks, whenChartFits, type ChartRoom } from '$lib/visual/viewport';
+	import WhowhatVisual from '$lib/visual/WhowhatVisual.svelte';
 
 	let {
 		visual,
+		itemId,
 		numberFormat,
 		storyChartGeometry,
 		chartTickDensity
 	}: {
 		visual: DigestVisual | null;
+		itemId: string;
 		numberFormat: NumberFormatConfig;
 		storyChartGeometry: StoryChartGeometryConfig;
 		chartTickDensity: number;
@@ -81,7 +84,9 @@
 	 * designed states: the story has no chart.
 	 */
 	const wanted = $derived(
-		visual?.state === 'rendered' && visual.data_path ? visual.data_path : null
+		visual?.kind !== 'whowhat' && visual?.state === 'rendered' && visual.data_path
+			? visual.data_path
+			: null
 	);
 
 	/** The result for the current path, or null while its request has not settled. */
@@ -213,6 +218,9 @@
 	}
 </script>
 
+{#if visual && visual.kind === 'whowhat'}
+	<WhowhatVisual {visual} {itemId} />
+{:else}
 {#if currentLoad}
 	<!-- The figure takes the focus, not the marks inside it: `role="img"` replaces
 	     its whole subtree with one name, so a bar given its own tab stop would be
@@ -541,6 +549,7 @@
 	     nearly on screen, and a story whose marks never arrive keeps exactly the
 	     height it has now. -->
 	<div class="slot" use:askWhenNear></div>
+{/if}
 {/if}
 
 <style>

@@ -69,6 +69,7 @@ from idhazh.visual_vocabulary import (
     UNIT_DIMENSIONS,
     VALUE_ROLES,
     commensurable,
+    whowhat_rows,
 )
 
 
@@ -220,6 +221,19 @@ def _roles_valid_for_type(
             ValidatorCheck.ROLES_VALID_FOR_TYPE,
             f"a {visual_type.value} has no {extra[0]} channel",
         )
+    if visual_type is VisualType.WHOWHAT:
+        entities = elements_by_role.get(EncodingRole.ENTITY, ())
+        claims = elements_by_role.get(EncodingRole.EVENT_LABEL, ())
+        if any(element.kind is not ElementKind.ENTITY for element in entities):
+            return Rejection(
+                ValidatorCheck.ROLES_VALID_FOR_TYPE,
+                "a whowhat actor is an entity element",
+            )
+        if any(element.kind is not ElementKind.CLAIM for element in claims):
+            return Rejection(
+                ValidatorCheck.ROLES_VALID_FOR_TYPE,
+                "a whowhat claim is a claim element",
+            )
     if visual_type is VisualType.LINE:
         times = elements_by_role.get(EncodingRole.TIME, ())
         line_quantities = elements_by_role.get(EncodingRole.QUANTITY, ())
@@ -420,6 +434,7 @@ def _enough_data(
     visual_type: VisualType,
     filled: Mapping[EncodingRole, Sequence[str]],
     *,
+    elements_by_role: Mapping[EncodingRole, Sequence[Element]],
     visuals: VisualsConfig,
 ) -> Rejection | None:
     """Are there enough marks to be a comparison, and few enough to read?
@@ -438,6 +453,17 @@ def _enough_data(
     fewer values than bins leaves a bin empty, `idhazh.derived_values` refuses
     that drawing, and a plan the validator passed should never reach it.
     """
+    if visual_type is VisualType.WHOWHAT:
+        entities = elements_by_role.get(EncodingRole.ENTITY, ())
+        claims = elements_by_role.get(EncodingRole.EVENT_LABEL, ())
+        rows = whowhat_rows(entities, claims)
+        paired = sum(row.entity is not None and row.claim is not None for row in rows)
+        if paired < 1:
+            return Rejection(
+                ValidatorCheck.ENOUGH_DATA,
+                "no unambiguous same-sentence entity and claim pair",
+            )
+        return None
     rules = TYPE_RULES.get(visual_type)
     if rules is None or rules.marks not in filled:
         # A type with no rule, or a required channel left empty, belongs to
@@ -616,7 +642,9 @@ def validate_plan(
             found.append(roles)
             found.append(_stacked_bar_exhaustive(plan, drawn, known))
             found.append(_pie_exhaustive(plan, drawn, known))
-            found.append(_enough_data(plan.type, filled, visuals=visuals))
+            found.append(
+                _enough_data(plan.type, filled, elements_by_role=drawn, visuals=visuals)
+            )
         found += [
             _no_duplicate_in_role(filled),
             _no_invented_values(cited),

@@ -1,13 +1,13 @@
 # Where a drawing becomes pixels
 
-**Last Updated**: 2026-10-27
+**Last Updated**: 2026-10-28
 
-The reader's browser draws the chart and the pipeline never draws one. This page
-holds that ruling, what it cost and what it bought, where the marks are
-published, the contract they travel in, the one place a renderer version is
-stated, and the compiler that turns one validated plan into one set of marks.
-Who decides a picture at all is [visuals.md](visuals.md); what the browser then
-does with the file is
+The reader's browser renders charts and lays out the whowhat grid; the pipeline
+never draws a chart. This page holds that ruling, what it cost and what it
+bought, where visual data is published, the contracts it travels in, the one
+place a chart renderer version is stated, and the compilers that turn validated
+plans into visual data. Who decides a visual at all is
+[visuals.md](visuals.md); what the browser then does with the file is
 [how-a-story-chart-is-drawn-and-what-refuses-one.md](how-a-story-chart-is-drawn-and-what-refuses-one.md).
 
 ## Where a drawing becomes pixels, ruled
@@ -22,10 +22,30 @@ into validated chart data. The day payload points to a separate per-item JSON fi
 the reader's browser draws its SVG with d3 scale arithmetic and Svelte elements.
 Nothing draws a chart at build time and no SVG is committed.
 
-**A reader without JavaScript gets story text, but no chart or chart description.**
-The figure exists only once its marks have arrived. This gives up the no-script
-drawing the retired build-time renderer supplied. With JavaScript, the browser builds
-the accessible name from the same marks it draws, including every figure
+## The whowhat grid is a separate format and reader
+
+The actor/claim grid is text, not a chart mark family. It has its own date-stamped
+`WhowhatGridData` contract and changelog; chart `VisualData`, `RENDERER_VERSION` and the chart
+reader remain unchanged. The grid writer reuses the item's `DigestVisual.data_path`,
+`asset_relpath()` and atomic-write behavior, but assembly routes `WHOWHAT` decisions to that
+dedicated writer rather than `write_charts_from_decisions()`.
+
+The compiler creates a rectangular row for each selected actor. It fills both cells only when
+exactly one selected entity and one selected claim come from that same sentence; ambiguous or
+unmatched rows have both cells empty. It re-slices each source span against the article before
+writing, keeps the full bounded excerpt (at most 500 characters), and uses Row 1's
+`fit_source_span()` helper for both displayed labels. The browser's `WhowhatVisual` reader
+validates the grid payload and its item/path identity before rendering the two-column table.
+
+`DigestVisual.kind` selects the family. The projection preserves an explicit `whowhat` kind for
+the new reader. An older served visual with no kind retains the established chart route, so the
+new path does not reinterpret historical chart payloads.
+
+**A reader without JavaScript gets story text, but no chart, chart description or whowhat grid.**
+The chart exists only once its marks have arrived; the grid exists only once its
+validated payload has arrived. This gives up the no-script drawing the retired
+build-time renderer supplied. With JavaScript, the browser builds the chart's
+accessible name from the same marks it draws, including every figure
 ([../../concepts/design-system.md](../../concepts/design-system.md#every-fact-a-drawing-shows-is-reachable-without-a-pointer)).
 
 **And every day published before 2026-09-13 loses its chart, for every reader rather than

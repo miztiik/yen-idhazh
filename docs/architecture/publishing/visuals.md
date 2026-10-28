@@ -1,12 +1,14 @@
 # Visual planning and rendering
 
-**Last Updated**: 2026-10-27
+**Last Updated**: 2026-10-28
 
-How an item gets a chart or - most of the time - nothing at all: which pass
-decides, which gate refuses, and what every refusal is called. The rule this
-subsystem serves is in [`../../concepts/digest.md`](../../concepts/digest.md): a
-visual must carry a fact the sentence beside it does not. A picture that decorates is worse than
-no picture, because the product is trust and an invented axis label costs it permanently.
+How an item gets a chart, a whowhat grid or - most of the time - nothing at
+all: which pass decides, which gate refuses, and what every refusal is called.
+The rule this subsystem serves is in
+[`../../concepts/digest.md`](../../concepts/digest.md): a visual must carry a
+fact the sentence beside it does not. A picture that decorates is worse than no
+picture, because the product is trust and an invented axis label costs it
+permanently.
 
 This page holds the decision path end to end, and the drawing of it. Each step
 along that path is written up on a page of its own, and the table below routes.
@@ -17,10 +19,10 @@ Six pages, one question each. Arrive at the one holding your question and stop.
 
 | Page | The question it answers |
 | --- | --- |
-| this one | Which pass decides a picture, which gate refuses, and what every `none` is called |
+| this one | Which pass decides a visual, which gate refuses, and what every `none` is called |
 | [what-a-visual-plan-may-say-and-what-happens-to-one-that-is-refused.md](what-a-visual-plan-may-say-and-what-happens-to-one-that-is-refused.md) | What shape the model decodes into, the eleven checks it must clear, and the ladder a refused plan may step down |
 | [where-every-drawn-figure-came-from.md](where-every-drawn-figure-came-from.md) | This number is on a bar - is it the article's own characters, or arithmetic over them, and what chain proves it |
-| [where-a-drawing-becomes-pixels.md](where-a-drawing-becomes-pixels.md) | Who draws the chart, what the compiler publishes, and what a reader receives |
+| [where-a-drawing-becomes-pixels.md](where-a-drawing-becomes-pixels.md) | Who renders the chart or grid, what each compiler publishes, and what a reader receives |
 | [one-visual-one-file-and-the-race-between-two-runs.md](one-visual-one-file-and-the-race-between-two-runs.md) | What the file is called, and what happens when two overlapping runs write it |
 | [what-drawing-costs-and-what-has-been-retired-for-it.md](what-drawing-costs-and-what-has-been-retired-for-it.md) | What drawing has cost, what has already been retired for costing too much, and where the line is read from |
 
@@ -34,7 +36,7 @@ idhazh assemble --date <D> # the day payload picks up whatever was drawn
 ```
 
 The summarize-and-plan call writes the summary and the plan in one reply, so the same model that read the article
-decides the picture and `work` draws it while it still holds the text.
+decides the visual and `work` compiles its data while it still holds the text.
 
 **It was two stages on two models until 2026-09-13.** `idhazh visuals` ran a Qwen3-4B after the
 summarizer had finished, decided a picture from the summary, and rendered it in a job of its own.
@@ -49,9 +51,11 @@ Two things follow from `work` being the job that draws. It is sharded four ways,
 render a quarter of the day each instead of one runner rendering all of it against a budget; and
 the file a shard writes stays on its runner, which is thrown away. What reaches `assemble` is the
 decision inside `items-<n>`, and a rendered decision carries the chart's bytes in `spec` - the
-same string the shard wrote to its file. So `assemble` writes each chart the day names from this
-run's own decision, before it records the day, and never replaces a file that is already there
-(`render.write.write_charts_from_decisions`). Until 2026-10-04 each shard also uploaded its whole
+same string the shard wrote to its file; a whowhat decision carries its separate
+`WhowhatGridData` in `whowhat_grid`. So `assemble` routes charts and grids to their dedicated
+writers from this run's own decisions, before it records the day, and never replaces a file that
+is already there. In particular, `WHOWHAT` never passes through
+`render.write.write_charts_from_decisions`. Until 2026-10-04 each shard also uploaded its whole
 day directory as `shard-visuals-<n>` and `assemble` merged the four into its own. In run
 `37212772816` two of them carried a newer `digest.json` than the other two, and the merged file
 could not be read. No job hands a file under `frontend/public/` to another job now, and
@@ -61,15 +65,19 @@ could not be read. No job hands a file under `frontend/public/` to another job n
 the small model, this stage and its job together. Until then the flag off leaves the pipeline
 exactly where it was.
 
-**Two tests prove a drawn chart reaches a reader, one for each job.** Once the small model goes,
-the two calls are the only thing left that puts a picture on disk, so the question a reader cares
-about is whether a file lands - not whether a decision does. Every route to no picture writes a
-decision too, so a test that reads `asked_the_model` off the payload passes on a day the digest
-drew nothing. `test_a_decided_item_leaves_a_drawn_chart_on_disk` reads the SVG back from the path
-the payload names and checks the bars carry the article's own entity names.
+**The chart path has a test for each job, and the grid has a fixture-backed handoff test.** For
+charts, the question a reader cares about is whether a file lands - not whether a decision does.
+Every route to no picture writes a decision too, so a test that reads `asked_the_model` off the
+payload passes on a day the digest drew nothing. `test_a_decided_item_leaves_a_drawn_chart_on_disk`
+reads the SVG back from the path the payload names and checks the bars carry the article's own entity names.
 `test_assemble_publishes_a_chart_from_its_decision_alone` runs `work` and `assemble` in two trees,
 hands across only the items directory, and checks that the published day names the chart, that
 its bytes are the shard's, and that the inventory counts it.
+
+`test_publisher_writes_the_grid_from_the_item_decision_alone` uses the real local whowhat article,
+element-table and plan fixtures. It derives the decision in a worker tree, transfers only the
+serialized item decision, and checks the dedicated writer's file and inventory in the publisher
+tree.
 
 It needs an article a bar can legally be drawn from, which is rarer than it sounds.
 `tests/fixtures/pages/article.html` states three figures in three units - dollars, megawatts and
@@ -110,16 +118,17 @@ the model never ran. The run manifest counts those separately as `items_prefilte
 
 Three properties of how it is written, and each one is load-bearing:
 
-- **It is a predicate over every enabled kind, not a chart special case.** Chart is the only kind
- left, so the predicate answers for one today - but a kind added later declares its own
- reachability here rather than being let through by an `if` that only knows about charts. The
- diagram drawing is what made that shape necessary and then proved its own cost: a diagram's steps come
- from prose, so nothing about one is decidable in advance, and with `diagram` in
- `visuals.enabled_kinds` **no item was ever skipped** - measured at 145 of 145 asked on 2026-08-25.
+- **It is a predicate over every enabled kind, not a chart special case.** Chart reachability
+ uses the numeric floor and unit groups; whowhat reachability requires an unambiguous same-sentence
+ entity/claim pair and respects the row ceiling. A kind added later declares its own reachability
+ rather than being let through by an `if` that only knows about charts. The diagram drawing is
+ what made that shape necessary and then proved its own cost: a diagram's steps come from prose,
+ so nothing about one is decidable in advance, and with `diagram` in `visuals.enabled_kinds`
+ **no item was ever skipped** - measured at 145 of 145 asked on 2026-08-25.
 - **It reads the facts only - never the article's words.** A predicate that branched on fetched
  prose would let a stranger's page steer our control flow, which is Guardrail #11 with no prompt in
  sight. There was no keyword rescue for the diagram drawing for the same reason.
-- **The empty string is a unit group.** `numeric_facts` writes `""` when nothing after the number
+- **For charts, the empty string is a unit group.** `numeric_facts` writes `""` when nothing after the number
  reads as a unit, and `same_unit_bars` already groups on it. Excluding it here would gate items
  that publish today.
 
@@ -143,13 +152,15 @@ the decoder would start the plan and meet the cap part-way through, which spends
 exists to save and returns a cut reply.
 
 `reachable_types` is the predicate, and **it reads the validator's own tables** - `TYPE_RULES`,
-`ROLE_KINDS`, `VALUE_ROLES` and `commensurable`, out of
+`ROLE_KINDS`, `VALUE_ROLES`, `commensurable` and the `whowhat_rows` pairing rule, out of
 [`visual_vocabulary.py`](../../../backend/idhazh/visual_vocabulary.py). A gate written from
 somebody's reading of those rules drifts the first day a rule moves, silently, in the direction that
-costs items their pictures. For each type with a role rule it asks three questions of the element
-table alone: is every required channel fillable by some element of a kind that channel takes, does
-the channel the type counts its marks in reach the floor, and - where that channel is drawn on a
-measured axis - do enough of those marks measure the same thing.
+costs items their pictures. For each chart type with a role rule it asks three questions of the
+element table alone: is every required channel fillable by some element of a kind that channel
+takes, does the channel the type counts its marks in reach the floor, and - where that channel is
+drawn on a measured axis - do enough of those marks measure the same thing. Whowhat has a separate
+source-pairing predicate: at least one unambiguous same-sentence actor/claim row, with no more than
+the configured row ceiling.
 
 Three of the eleven checks cannot refuse a plan the gate admitted, so the gate does not ask them.
 `element_exists` is satisfied by choosing from the table. `plan_version_current` is stamped by code.
@@ -311,9 +322,11 @@ flowchart TD
     VP["<b>VISUAL PLAN</b><br/>type + role -&gt; element_ids<br/>no geometry, no literal value, no authored text"]
     VV{"<b>VALIDATOR</b> - deterministic, no model<br/>is this type drawable from these elements?"}
     DL["<b>DOWNGRADE LADDER</b><br/>depth 1, depth 2, then refuse"]
-    VC["<b>COMPILER</b> - code<br/>plan + elements =&gt; THE DATA AND ITS SHAPE<br/>every number traced to an element or a derived value"]
+    VC["<b>CHART COMPILER</b> - code<br/>plan + elements =&gt; VisualData<br/>every number traced to an element or a derived value"]
+    WG["<b>WHOWHAT GRID COMPILER</b> - code<br/>entity + claim spans =&gt; WhowhatGridData<br/>each filled row is paired in one sentence"]
     ART --> CP --> C1 --> ANC --> TE --> C2 --> VP --> VV
-    VV -->|"drawable"| VC
+    VV -->|"chart plan"| VC
+    VV -->|"whowhat plan"| WG
     VV -->|"not drawable"| DL
     DL -->|"re-enters the SAME validator"| VV
   end
@@ -321,25 +334,37 @@ flowchart TD
   subgraph PUB["PUBLISHED - committed files, sharded by day"]
     direction TB
     DJ[("<b>digest.json</b> - the day's TEXT<br/>carries a POINTER to the visual, never its data<br/><b>never deleted</b>")]
-    VJ[("<b>&lt;item_id&gt;.json</b> - ONE VISUAL, ONE FILE<br/>the data, its shape, renderer_version<br/><b>pruned on its own clock</b>")]
+    VJ[("<b>&lt;item_id&gt;.json</b> - chart<br/>VisualData + renderer_version<br/><b>pruned on its own clock</b>")]
+    WJ[("<b>&lt;item_id&gt;.json</b> - whowhat<br/>versioned WhowhatGridData<br/><b>pruned on its own clock</b>")]
   end
 
-  subgraph FE["READ TIME - the reader's browser.  EVERY DRAWING HAPPENS HERE."]
+  subgraph FE["READ TIME - the reader's browser.  EVERY VISUAL RENDERS HERE."]
     direction TB
     PG["<b>THE PAGE</b><br/>reads digest.json and renders the text<br/>the text never waits on a drawing"]
-    FJ["<b>FETCH</b> the visual file<br/>when the story comes near"]
-    SC{"<b>SHAPE CHECK</b> - the frontend contract<br/>does this data fit the type it names?"}
+    ROUTE{"<b>FAMILY ROUTE</b><br/>explicit whowhat, or chart<br/>for a kind-less historical visual"}
+    FJ["<b>CHART FETCH</b><br/>when the story comes near"]
+    SC{"<b>CHART SHAPE CHECK</b><br/>does this fit VisualData?"}
     D3["<b>d3 DRAWS</b> the SVG into the document<br/>at the width the screen actually has"]
+    FW["<b>GRID FETCH</b><br/>when the story comes near"]
+    WSC{"<b>GRID SHAPE CHECK</b><br/>does this fit WhowhatGridData?"}
+    WV["<b>WhowhatVisual</b><br/>lays out the validated two-column grid"]
     DEG(["<b>DEGRADE</b> - the story is simply shorter<br/>no broken glyph, no grey box, no skeleton"])
-    PG --> FJ --> SC
+    PG --> ROUTE
+    ROUTE -->|"chart or missing kind"| FJ --> SC
     SC -->|"fits"| D3
-    SC -->|"does not fit"| DEG
+    SC -->|"refused"| DEG
+    ROUTE -->|"whowhat"| FW --> WSC
+    WSC -->|"fits"| WV
+    WSC -->|"refused"| DEG
   end
 
   VC -->|"the pointer"| DJ
   VC -->|"the data"| VJ
+  WG -->|"the pointer"| DJ
+  WG -->|"the data"| WJ
   DJ --> PG
   VJ --> FJ
+  WJ --> FW
 
   subgraph KEY["KEY"]
     direction LR
@@ -357,11 +382,11 @@ flowchart TD
   classDef none fill:#fff5f5,stroke:#e03131,stroke-width:1.5px,color:#0b1020;
   classDef plain fill:#f8f9fa,stroke:#adb5bd,stroke-width:1px,color:#0b1020;
 
-  class ART,PG,FJ plain;
-  class CP,ANC,VP,DL,VC,D3,K1 code;
+  class ART,PG,ROUTE,FJ,FW,WV plain;
+  class CP,ANC,VP,DL,VC,WG,D3,K1 code;
   class C1,C2,K2 model;
-  class VV,SC,K3 gate;
-  class TE,DJ,VJ,K4 ledger;
+  class VV,SC,WSC,K3 gate;
+  class TE,DJ,VJ,WJ,K4 ledger;
   class DEG,K5 none;
 ```
 
@@ -373,10 +398,13 @@ flowchart TD
 | `C1` | The model's whole numeric vocabulary is `0..len(candidates)-1`. **It cannot write a number because no field of the schema accepts one**, which is a property of the grammar rather than a check somebody remembered to add |
 | `VP` | `decision`, `purpose`, `type`, `encodings`, `declared_whole_element_id`, `element_ids`, `labels`, `annotations`, `why`, `title`, `caption`, `confidence`, `plan_version`. Four prohibitions: no geometry, no literal value, no authored text, no `alt_text` |
 | `VV` | Ten checks: elements exist; semantically compatible; units convertible; roles valid for the type; enough data; no duplicate in a role; no invented values; numerals matched; plan version current; stacked parts equal a separate declared whole |
-| `VC` | The one place the picture's numbers come into being, and every one of them is arithmetic over Tier 1 elements through a closed four-function allow-list - `count`, `sum`, `share_of_declared_whole`, `convert` |
-| `DJ` | The day's text, and for each item a pointer: the visual's `kind`, its `state`, and where its file is. **No chart data, ever** |
-| `VJ` | One visual, as `VisualData`: `item_id`, `type`, `renderer_version`, a flat `marks` pool each carrying `text`, `value`, `unit` and its provenance, and an `encoding` saying which marks fill which channel |
-| `SC` | The frontend contract. It refuses rather than guesses, and a refusal costs the story its picture and nothing else |
+| `VC` | The chart compiler: the one place chart numbers come into being, each arithmetic result resolved over Tier 1 elements through the closed four-function allow-list - `count`, `sum`, `share_of_declared_whole`, `convert` |
+| `WG` | The grid compiler: pairs entity and claim source spans from one sentence, re-slices both against the article, and leaves both cells empty when the pair is not unambiguous |
+| `DJ` | The day's text, and for each item a pointer: the visual's `kind`, its `state`, and where its file is. **No visual data, ever** |
+| `VJ` | A chart as `VisualData`: `item_id`, `type`, `renderer_version`, the flat `marks` pool with provenance, and the encoding that assigns marks to channels |
+| `WJ` | A whowhat grid as versioned `WhowhatGridData`: item identity, rectangular rows, same-sentence source spans and fitted actor/claim labels; no chart renderer version |
+| `ROUTE` | Explicit `whowhat` selects the grid reader; `chart` and a missing historical kind select the existing chart path |
+| `SC`, `WSC` | Each reader validates its own payload shape and refuses rather than guesses; a refusal costs the story its visual and nothing else |
 
 **Three things this drawing rules out, and a plan-doc may not relax any of them.**
 
@@ -384,7 +412,7 @@ flowchart TD
 
 **Nothing is drawn at build time.** There is no SVG on disk, no headless browser, and no Node in the pipeline. `BE` ends at data.
 
-**The text never waits on a drawing.** `digest.json` is a complete page on its own. The visual file is a separate fetch, and a reader who never scrolls to a chart never pays for one.
+**The text never waits on a visual.** `digest.json` is a complete page on its own. The visual file is a separate fetch, and a reader who never scrolls to a chart or grid never pays for that file.
 
 ## Design rationale
 
