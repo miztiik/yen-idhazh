@@ -45,7 +45,8 @@ export async function executeSelection(raw: unknown, inputs: PlanInputs, runtime
   const hasArtifact = executionHasArtifact(inputs, parsed.context);
   const keepOriginal = originalClaim && !hasArtifact && !original?.owns_choice
     && !original?.health_written && claim.health_fingerprint === null;
-  const context = keepOriginal ? parsed.context : resolveRunContext(inputs.settings, runtime.git_sha, captured);
+  const context = keepOriginal ? parsed.context : resolveRunContext(inputs.settings, runtime.git_sha, captured,
+    undefined, undefined, undefined, runtime.attempt, runtime.producer);
   if (keepOriginal) {
     if (original !== undefined) original.owns_choice = true;
   } else {

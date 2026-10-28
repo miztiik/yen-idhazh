@@ -43,6 +43,15 @@ test("CLI blanks are absent; typed API strings, nulls, unknown fields and invali
     ["--serve", "--cli"], ["--serve", "--shards=1"], ["--cli", "--shards=1", "--shards=2"], [],
   ]) expect(() => parseCliRequest(args)).toThrow();
   const inputs = await loadPlanInputs(root);
+  const globalConfig = await Bun.file(join(root, "config", "idhazh.json")).json();
+  expect(globalConfig.collect.published_window_days).toBe(730);
+  expect(inputs.settings.inputs.published_url_lookback_days).toBe(7);
+  expect(inputs.clock_config.collect.published_window_days).toBe(7);
+  expect(inputs.settings.listener.parser_concurrency).toBe(10);
+  expect(inputs.settings.listener.max_body_bytes).toBe(2_000_000);
+  expect(inputs.settings).not.toHaveProperty("run");
+  expect(inputs.settings.inputs.discovered_files).toEqual([]);
+  expect(inputs.settings.inputs.discovered_days).toEqual([]);
   for (const artifact_root of ["folder with spaces", "/tmp/artifacts", "../artifacts", "a".repeat(500)]) {
     expect(ServiceSettingsSchema.safeParse({ ...inputs.settings, inputs: { ...inputs.settings.inputs, artifact_root } }).success).toBe(false);
   }
@@ -69,6 +78,9 @@ test("one captured UTC day determines identity while independent runs have disti
   expect(context.now).toBe("2026-10-21T23:59:59Z");
   expect(context.run_id).toBe("2026-10-21-700");
   expect(context.writer.shard).toBe(0);
+  expect(resolveRunContext(settings, "a".repeat(40), now, "700", undefined, undefined, 2).writer.attempt).toBe(2);
+  expect(resolveRunContext(settings, "a".repeat(40), now, "700", undefined, undefined, 1, "parent.runner").writer.producer)
+    .toBe("parent.runner");
   expect(resolveRunContext(settings, "a".repeat(40), now).run_id)
     .not.toBe(resolveRunContext(settings, "a".repeat(40), now).run_id);
 });
