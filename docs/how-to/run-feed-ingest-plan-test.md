@@ -15,8 +15,11 @@ The manual workflow enables only its own invocation; it does not approve
 production use or change committed defaults. Production digest workers,
 the Python pipeline and global health data are unchanged.
 
-The workflow starts the real loopback listener, reads listener health, posts
-to `/plan` and stops the listener in `finally`. It verifies the returned
+The workflow calls `services/feed-ingest-plan/scripts/run-feed-ingest-plan.ts`.
+Its preparation and HTTP client are separate modules, while execution still
+starts and stops the real loopback listener in the same process. It reads
+listener health, posts to `/plan`, and reads the batch health summary before
+stopping the listener in `finally`. It verifies the returned
 five-format native output and selected artifact before exposing commit paths.
 Completed planning is not proof of summarization or publication.
 
