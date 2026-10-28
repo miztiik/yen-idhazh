@@ -9,7 +9,8 @@ import { recordedPlan } from "./plan-recordings";
 import { source } from "./harvest-recordings";
 import { main } from "../src/index";
 import { executeFeedHealthState } from "../src/api/feed-health-state-operation";
-import { invokePlannerHttp } from "../scripts/run-feed-ingest-plan";
+import { servePlan } from "../src/api/server";
+import { requestPlannerHttp } from "../scripts/feed-ingest-plan-http-client";
 import { verifyParquetFiles, verifyPlanningCompletion } from "../scripts/feed-ingest-plan-verification";
 import { createExecutionOutputs, writeGitHubOutputs } from "../scripts/feed-ingest-plan-outputs";
 import { readExecutionReport, renderWorkflowPlanMarkdown, writePlannerReport } from "../scripts/feed-ingest-plan-report";
@@ -42,7 +43,12 @@ test("actual HTTP output retains selected text separately from its strict metada
     const savedHost = WorkflowHostFingerprintSchema.parse(await Bun.file(join(directory, "host-fingerprint.json")).json());
     expect(host.host.status).toBe("disabled");
     expect(savedHost).toEqual(host);
-    const result = await invokePlannerHttp(fixture.inputs, fixture.runtime, { article_limit: 1 }, directory);
+    const server = servePlan(fixture.inputs, fixture.runtime);
+    let result: Awaited<ReturnType<typeof requestPlannerHttp>>;
+    try {
+      result = await requestPlannerHttp(`http://127.0.0.1:${server.port}/api/2026-10-20`,
+        fixture.inputs, { article_limit: 1 }, directory);
+    } finally { await server.stop(true); }
     expect(result.http_status).toBe(200);
     expect(result.summary.planning_complete).toBe(true);
     const paths: string[] = JSON.parse(result.outputs.current_run_files!);

@@ -1,25 +1,12 @@
 /** Run one workflow plan while retaining completed diagnostics and closing its listener. */
-import { mkdir } from "node:fs/promises";
-import type { PlanInputs } from "../src/load-plan-inputs";
-import type { PlanRuntime } from "../src/run-feed-plan";
 import { describePlanError } from "../src/api/plan-request";
-import type { PlanRequest } from "../src/api/plan-request";
-import { servePlan } from "../src/api/server";
 import { writeGitHubOutputs } from "./feed-ingest-plan-outputs";
 import { collectWorkflowFiles } from "./feed-ingest-plan-current-files";
-import { requestPlannerHttp } from "./feed-ingest-plan-http-client";
+import { invokePlannerHttp } from "./feed-ingest-plan-supervisor";
 import { preparePlannerWorkflow } from "./feed-ingest-plan-workflow-inputs";
 
-export async function invokePlannerHttp(inputs: PlanInputs, runtime: PlanRuntime, request: PlanRequest, directory: string) {
-  await mkdir(directory, { recursive: true });
-  const server = servePlan(inputs, runtime);
-  try {
-    const base = `http://${inputs.settings.listener.hostname}:${server.port}/api/2026-10-20`;
-    return await requestPlannerHttp(base, inputs, request, directory);
-  } finally { await server.stop(true); }
-}
-async function runWorkflow() {
-  const { root, directory, inputs, runtime, request, identity, registrations, host, outputPath, date }
+async function runWorkflow(signal: AbortSignal) {
+  const { root, directory, inputs, startup, request, identity, registrations, host, outputPath, date }
     = await preparePlannerWorkflow(process.cwd(), process.env);
   let result: Awaited<ReturnType<typeof invokePlannerHttp>> | undefined;
   try {
@@ -28,7 +15,7 @@ async function runWorkflow() {
       current_run_files: JSON.stringify(host.host.status === "recorded"
         ? host.host.files.map(file => file.path) : []),
     });
-    result = await invokePlannerHttp(inputs, runtime, request, directory);
+    result = await invokePlannerHttp(inputs, startup, request, directory, { signal });
     if (!result.summary.planning_complete || result.http_status !== 200) process.exitCode = 2;
   } finally {
     const completed = await collectWorkflowFiles({ root, directory, identity, registrations });
@@ -39,10 +26,18 @@ async function runWorkflow() {
   }
 }
 if (import.meta.main) {
-  try { await runWorkflow(); }
+  const cancellation = new AbortController();
+  const stop = () => cancellation.abort(new Error("Planner workflow cancelled"));
+  process.on("SIGINT", stop);
+  process.on("SIGTERM", stop);
+  try { await runWorkflow(cancellation.signal); }
   catch (error) {
     const failure = describePlanError(error, process.cwd());
     console.error(JSON.stringify({ event: "planner_workflow_failed", code: failure.code }));
     process.exitCode = 2;
+  }
+  finally {
+    process.off("SIGINT", stop);
+    process.off("SIGTERM", stop);
   }
 }

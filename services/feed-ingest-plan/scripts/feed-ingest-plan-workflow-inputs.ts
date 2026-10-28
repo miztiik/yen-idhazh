@@ -4,13 +4,13 @@ import { join } from "node:path";
 import { randomUUID } from "node:crypto";
 import { PositiveCountSchema } from "@idhazh/common-contracts";
 import { loadPlanInputs } from "../src/load-plan-inputs";
-import type { PlanRuntime } from "../src/run-feed-plan";
 import { parseCliRequest } from "../src/api/plan-request";
 import { ServiceSettingsSchema } from "../src/config/service-settings";
 import { stagePlannerHistory } from "./feed-ingest-plan-history";
 import { WorkflowPolicySchema } from "./feed-ingest-plan-policy-report";
 import { captureWorkflowHostFingerprint } from "./feed-ingest-plan-host-fingerprint";
 import { readMetadataRegistrations } from "./feed-ingest-plan-metadata";
+import { createPlannerStartup } from "./feed-ingest-plan-supervisor";
 
 export function readWorkflowRequest(environment: Record<string, string | undefined>) {
   const args = ["--cli"];
@@ -42,8 +42,6 @@ export async function preparePlannerWorkflow(root: string, environment: Record<s
   if (await git.exited !== 0) throw new Error("Code identity could not be read");
   const captured = new Date();
   const correlationId = randomUUID();
-  const runtime: PlanRuntime = { git_sha: gitSha.trim(), run_number: GITHUB_RUN_ID, correlation_id: correlationId, attempt,
-    clock: () => captured, selection_clock: () => new Date() };
   await mkdir(directory, { recursive: true });
   await writeFile(join(directory, "workflow-policy.json"), JSON.stringify(WorkflowPolicySchema.parse({
     config: inputs.harvest.config, request, history: inputs.clock_config.collect,
@@ -51,12 +49,16 @@ export async function preparePlannerWorkflow(root: string, environment: Record<s
   })));
   console.error(JSON.stringify({ event: "planner_history_staged", notices: staged.notices }));
   const identity = { run_id: `${captured.toISOString().slice(0, 10)}-${GITHUB_RUN_ID}`,
-    attempt, git_sha: runtime.git_sha };
+    attempt, git_sha: gitSha.trim() };
   const registryPath = join(root, inputs.settings.inputs.registrations);
   const registrations = await readMetadataRegistrations(registryPath);
   const host = await captureWorkflowHostFingerprint({
     root, directory, stateRoot: inputs.outputRoot, registryPath, identity, registrations,
   });
-  return { root, directory, inputs, runtime, request, identity, registrations, host,
+  const startup = createPlannerStartup(inputs, {
+    git_sha: identity.git_sha, run_number: GITHUB_RUN_ID, correlation_id: correlationId,
+    attempt, captured_at: captured.toISOString(),
+  });
+  return { root, directory, inputs, startup, request, identity, registrations, host,
     outputPath: GITHUB_OUTPUT, date: captured.toISOString().slice(0, 10) };
 }
