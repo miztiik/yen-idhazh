@@ -101,7 +101,7 @@ export function validateLedgerInput<T extends object>(
     if (!acceptedSchemaVersions.includes(declared.schemaVersion)
       || !acceptedSchemaVersions.includes(input.rowContract.schemaVersion)
       || JSON.stringify(z.toJSONSchema(input.rowContract.schema)) !== JSON.stringify(z.toJSONSchema(declared.schema))) {
-      throw new Error(`${ledger} requires its declared planner row contract`);
+      throw new Error(`${ledger} requires its declared current planner row contract`);
     }
   }
   if (!/^\d{4}-\d{2}-\d{2}(?:T\d{2}:\d{2}(?::\d{2})?)?$/.test(input.rowContract.schemaVersion)) {
