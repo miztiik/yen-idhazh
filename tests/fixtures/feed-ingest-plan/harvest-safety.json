@@ -28,13 +28,13 @@
   "robots": [
     {
       "name": "repeated groups and exact configured identity",
-      "body": "User-agent: OtherBot\nDisallow: /\n\nUser-agent: YenIdhazhBot\nDisallow: /private\n\nUser-agent: YenIdhazhBot\nDisallow: /second\nAllow: /private/open\n\nUser-agent: *\nDisallow: /\n",
+      "body": "User-agent: OtherBot\nDisallow: /\n\nUser-agent: {{crawler_product}}\nDisallow: /private\n\nUser-agent: {{crawler_product}}\nDisallow: /second\nAllow: /private/open\n\nUser-agent: *\nDisallow: /\n",
       "allowed": ["/", "/private/open"],
       "denied": ["/private/file", "/second/file"]
     },
     {
       "name": "longest rule and allow on a tie",
-      "body": "User-agent: YenIdhazhBot\nDisallow: /area\nAllow: /area/public\nDisallow: /tie\nAllow: /tie\n",
+      "body": "User-agent: {{crawler_product}}\nDisallow: /area\nAllow: /area/public\nDisallow: /tie\nAllow: /tie\n",
       "allowed": ["/area/public/story", "/tie"],
       "denied": ["/area/secret"]
     },
