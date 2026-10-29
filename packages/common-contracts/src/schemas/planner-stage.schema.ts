@@ -16,6 +16,9 @@ import { RecordedInstantSchema } from "./recorded-instant.schema";
 import { SourceSnapshotSchema } from "./source.schema";
 import { UrlSchema } from "./primitives";
 import { PARSED_FEED_BATCH_VERSION } from "../version";
+import { PlannerRequestReportSchema } from "./planner-request-report.schema";
+export { PlannerRequestReportSchema } from "./planner-request-report.schema";
+export type { PlannerRequestReport } from "./planner-request-report.schema";
 
 export const PlannerStageContextSchema = z.strictObject({
   now: TimestampSchema, captured_at: RecordedInstantSchema, date: DateStampSchema,
@@ -83,14 +86,6 @@ export const PlannerRejectionCountSchema = z.strictObject({
 });
 export type PlannerRejectionCount = z.infer<typeof PlannerRejectionCountSchema>;
 export const PlannerHealthDaySchema = z.strictObject({ day: DateStampSchema, complete: z.boolean() });
-export const PlannerRequestReportSchema = z.strictObject({
-  from_day: DateStampSchema, through_day: DateStampSchema, complete: z.boolean(),
-  feeds: z.array(z.strictObject({
-    feed_id: SlugSchema, feed_requests: CountSchema.nullable(),
-    article_requests: CountSchema.nullable(), robots_requests: CountSchema.nullable(),
-    counts_complete: z.boolean(),
-  })),
-});
 export const SelectedArticleContentSchema = SelectedArticleRowSchema.safeExtend({ article_text: z.string() });
 const batchIdentity = {
   version: z.literal("2026-10-25").default("2026-10-25"),
@@ -130,14 +125,17 @@ export const ParsedFeedBatchSchema = z.strictObject({
 });
 export type ParsedFeedBatch = z.infer<typeof ParsedFeedBatchSchema>;
 export const SelectedFeedBatchSchema = z.strictObject({
-  ...batchIdentity, version: z.literal("2026-10-27").default("2026-10-27"), parsed_batch_id: z.uuid({ version: "v4" }),
+  ...batchIdentity, version: z.literal("2026-10-29").default("2026-10-29"), parsed_batch_id: z.uuid({ version: "v4" }),
   selection_started_at_utc: TimestampSchema, evaluated_at: TimestampSchema,
   articles: z.array(SelectedArticleContentSchema), health_rows: z.array(FeedHealthStateRowSchema),
   rejected_articles: z.array(RejectedArticleRowSchema),
   exclusions: z.array(PlannerRejectionCountSchema), request_report: PlannerRequestReportSchema,
 }).meta({
-  version: "2026-10-27",
-  changelog: [{ version: "2026-10-27", change: "Carry terminal rejected article metadata with the complete selection." }],
+  version: "2026-10-29",
+  changelog: [
+    { version: "2026-10-29", change: "Carry independent request totals with explicit counter coverage." },
+    { version: "2026-10-27", change: "Carry terminal rejected article metadata with the complete selection." },
+  ],
 });
 export type SelectedFeedBatch = z.infer<typeof SelectedFeedBatchSchema>;
 export const PartitionedFeedBatchSchema = SelectedFeedBatchSchema.safeExtend({

@@ -1,0 +1,147 @@
+/** Do independent recorded counters retain honest coverage and report-only request ordering? */
+import { expect, test } from "bun:test";
+import { FeedHealthStateRowSchema, SourceSnapshotSchema } from "@idhazh/common-contracts";
+import { projectFeedHealthFields } from "../src/read-ledger-history/read-feed-health-fields";
+import { summarizeRequestReport } from "../src/read-ledger-history/request-summary";
+import { inputEndpointKey } from "../src/read-ledger-history/health-summary";
+import { renderRequestReport } from "../src/reporting/request-report-markdown";
+import { renderPlanMarkdown } from "../src/reporting/plan-markdown";
+import { runFeedPlan, summarizePlan } from "../src/run-feed-plan";
+import { recordedPlan } from "./plan-recordings";
+import { executeFeedHealthState } from "../src/api/feed-health-state-operation";
+import { escapeMarkdown } from "../src/reporting/markdown-format";
+
+async function fixture() {
+  const source = SourceSnapshotSchema.parse({
+    feed_id: "recorded-feed", feed_url: "https://news.example/feed.xml", title: "Recorded feed",
+    tier: 2, status: "active", weight: 1, applied_tier_weight: 1,
+  });
+  const row = FeedHealthStateRowSchema.parse({
+    ...await Bun.file(new URL("../../../tests/fixtures/feed-ingest-plan/health-field-history.json", import.meta.url)).json(),
+    endpoint_key: inputEndpointKey(source.feed_url),
+  });
+  const days = [{ day: "2026-10-24", complete: true }, { day: row.date, complete: true }];
+  function report(records: Record<string, unknown>[], options: {
+    days?: typeof days; input_complete?: boolean; sources?: typeof source[];
+  } = {}) {
+    const projection = ["2026-10-24", row.date, "2026-10-26", "2026-10-23"].map(day =>
+      projectFeedHealthFields(day, records.filter(record => record.date === day)).request_totals);
+    return summarizeRequestReport({
+      rows: projection.flatMap(use => use.rows), partial_rows: projection.flatMap(use => use.partial_rows),
+      gaps: projection.flatMap(use => use.gaps), sources: [source], now: "2026-10-26T23:59:59Z",
+      request_report_closed_days: 2, days, ...options,
+    });
+  }
+  return { source, row, days, report };
+}
+
+test("sums each usable counter across full and partial records without double counting attempts", async () => {
+  const { row, report } = await fixture();
+  const { article_requests: _missing, ...partial } = row;
+  const result = report([
+    row, row, { ...row, attempt: 2, article_requests: null },
+    { ...partial, attempt: 3 }, { ...row, attempt: 4, article_requests: -1 },
+    { ...row, attempt: 5, endpoint_key: "2".repeat(64), article_requests: 100 },
+    { ...row, date: "2026-10-26", run_id: "2026-10-26-1", article_requests: 200 },
+    { ...row, date: "2026-10-23", run_id: "2026-10-23-1", article_requests: 400 },
+  ]);
+  expect(result.complete).toBe(false);
+  expect(result.missing_days).toEqual([]);
+  expect(result.feeds[0]).toMatchObject({
+    feed_requests: 8, article_requests: 4, robots_requests: 0, counts_complete: false,
+    coverage: {
+      feed_requests: { status: "complete", known_records: 4, unknown_records: 0, complete_days: ["2026-10-24", row.date] },
+      article_requests: { status: "partial", known_records: 1, unknown_records: 3, recorded_days: [row.date], complete_days: ["2026-10-24"] },
+      robots_requests: { status: "complete", known_records: 4 },
+    },
+  });
+  expect(() => report([row, { ...row, permission: "denied" }])).toThrow("Conflicting copies");
+  const rendered = renderRequestReport(result);
+  expect(rendered.markdown).toContain("| 8 requests | 4 requests* | 0 requests | Partial* |");
+  expect(Bun.markdown.html(rendered.markdown)).toContain("<td>4 requests*</td>");
+  expect(rendered.notice).toContain("8 requests / 4 requests* / 0 requests");
+  expect(rendered.markdown).toContain("3 records with missing or invalid counts");
+});
+
+test("reports missing files, unidentifiable records and staged input gaps without erasing known values", async () => {
+  const { row, report, days } = await fixture();
+  const missing = report([row], { days: [days[1]!] });
+  expect(missing).toMatchObject({ complete: false, missing_days: ["2026-10-24"] });
+  expect(missing.feeds[0]).toMatchObject({ feed_requests: 2, article_requests: 4, robots_requests: 0 });
+  expect(missing.feeds[0]!.coverage.robots_requests).toMatchObject({
+    status: "partial", known_records: 1, recorded_days: [row.date], complete_days: [row.date],
+  });
+  const unattributed = report([row, { ...row, attempt: "invalid" }]);
+  expect(unattributed.unattributed_days).toEqual([row.date]);
+  expect(unattributed.feeds[0]!.coverage.feed_requests).toMatchObject({
+    status: "partial", known_records: 1, complete_days: ["2026-10-24"],
+  });
+  const staged = report([row], { input_complete: false });
+  expect(staged).toMatchObject({ complete: false, input_complete: false });
+  expect(staged.feeds[0]!.coverage.article_requests).toMatchObject({ status: "partial", complete_days: [] });
+  const rendered = renderRequestReport(staged);
+  expect(rendered.markdown).toContain("Staged history inputs: incomplete");
+  expect(rendered.notice).toContain("2 requests* / 4 requests* / 0 requests*");
+});
+
+test("distinguishes known zero from absent counts and leaves unrelated counters complete", async () => {
+  const { row, report } = await fixture();
+  const unknown = report([{ ...row, article_requests: null, feed_requests: 0 }]);
+  expect(unknown.feeds[0]).toMatchObject({ feed_requests: 0, article_requests: null, robots_requests: 0 });
+  expect(unknown.feeds[0]!.coverage.article_requests).toMatchObject({
+    status: "none", known_records: 0, unknown_records: 1,
+  });
+  const empty = report([]);
+  expect(empty).toMatchObject({ complete: true, feeds: [{ feed_requests: 0, article_requests: 0, robots_requests: 0 }] });
+  const absent = report([], { days: [] });
+  expect(absent.feeds[0]).toMatchObject({ feed_requests: null, article_requests: null, robots_requests: null });
+  expect(renderRequestReport(absent).markdown).toContain("| No recorded data | No recorded data | No recorded data |");
+  expect(renderRequestReport(unknown).markdown).toContain("| 0 requests | No recorded data | 0 requests |");
+  const articleOnly = report([{ ...row, feed_requests: null, robots_requests: -1 }]);
+  expect(articleOnly.feeds[0]).toMatchObject({
+    feed_requests: null, article_requests: 4, robots_requests: null,
+    coverage: { article_requests: { status: "complete" }, robots_requests: { status: "none", unknown_records: 1 } },
+  });
+  expect(renderRequestReport(articleOnly).markdown).toContain("| No recorded data | 4 requests | No recorded data |");
+  expect(Bun.markdown.html(renderRequestReport(report([{ ...row, feed_requests: 0 }], { days: [] })).markdown))
+    .toContain("<td>0 requests*</td>");
+  expect(renderRequestReport(undefined).notice).toContain("No recorded data");
+});
+
+test("sorts only Table D by feed requests, article requests, then name with unknown values last", async () => {
+  const { row, source, report } = await fixture();
+  const cases = [
+    { feed_id: "unknown", feed_requests: null, article_requests: 100 },
+    { feed_id: "beta", feed_requests: 2, article_requests: 4 },
+    { feed_id: "zero", feed_requests: 0, article_requests: 200 },
+    { feed_id: "alpha", feed_requests: 2, article_requests: 4 },
+    { feed_id: "missing-article", feed_requests: 2, article_requests: null },
+    { feed_id: "most-articles", feed_requests: 2, article_requests: 5 },
+    { feed_id: "most-feeds", feed_requests: 3, article_requests: 0 },
+  ];
+  const request_report = report(cases.map(value => ({ ...row, ...value })), {
+    sources: cases.map(value => ({ ...source, feed_id: value.feed_id })),
+  });
+  const before = structuredClone(request_report);
+  const fixturePlan = await recordedPlan();
+  try {
+    const response = summarizePlan(await runFeedPlan({}, fixturePlan.inputs, fixturePlan.runtime));
+    const health = await executeFeedHealthState({ batch_id: response.batches.selection_batch_id, action: "summarize" },
+      fixturePlan.inputs, fixturePlan.runtime);
+    const original = renderPlanMarkdown({ response, health });
+    const rendered = renderPlanMarkdown({ response, health: { ...health, request_report } });
+    const lines = rendered.markdown.split("\n").filter(line => /^\| D\d+ \|/.test(line));
+    expect(lines.map(line => line.split(" | ")[1])).toEqual([
+      "most-feeds", "most-articles", "alpha", "beta", "missing-article", "zero", "unknown",
+    ].map(escapeMarkdown));
+    expect(rendered.markdown.split("## Table C")[1]!.split("## Table D")[0])
+      .toBe(original.markdown.split("## Table C")[1]!.split("## Table D")[0]);
+    expect(request_report).toEqual(before);
+    const html = Bun.markdown.html(rendered.markdown);
+    expect(html).toContain("<td>Partial*</td>");
+    expect(html).toContain("Not full data");
+    expect(rendered.notices.find(notice => notice.title === "Closed-day request spend")!.message)
+      .toContain("Not full data; only known counts are added");
+    expect(renderRequestReport(report([row])).markdown).not.toContain("Partial*");
+  } finally { await fixturePlan.close(); }
+});

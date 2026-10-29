@@ -65,7 +65,7 @@ test("changed unrelated columns and row dates preserve real planning evidence an
       const summary = await prepareFeedHealthState(setup.inputs, now);
       expect(summary.sources.get(setup.row.feed_id)).toEqual(expected);
       expect(summary.request_report.feeds[0]).toMatchObject({
-        counts_complete: false, feed_requests: null, article_requests: null, robots_requests: null,
+        counts_complete: false, feed_requests: 2, article_requests: null, robots_requests: 0,
       });
       const requests = await readRequestHistory(healthHistoryInput(setup.inputs, now));
       expect(requests.partial_rows[0]).toMatchObject({ feed_requests: 2, robots_requests: 0 });
@@ -97,6 +97,13 @@ test("unknown or invalid admission and read fields never turn partial evidence i
     history = await preparePlanningHealth(setup.inputs, now);
     expect(history.sources.get(setup.row.feed_id)?.article_pass_rate).toBe(0.75);
     setup.inputs.settings.inputs.feed_health_input_gap = true;
+    const partialReport = await prepareRequestReport(setup.inputs, now);
+    expect(partialReport).toMatchObject({
+      complete: false, input_complete: false,
+      feeds: [expect.objectContaining({ feed_requests: 2, article_requests: 4, robots_requests: 0,
+        coverage: expect.objectContaining({ feed_requests: expect.objectContaining({ status: "partial", complete_days: [] }) }),
+      })],
+    });
     history = await preparePlanningHealth(setup.inputs, now);
     expect(history.sources.get(setup.row.feed_id)).toMatchObject({
       article_pass_rate: null, reliability: { complete: false },
@@ -131,6 +138,13 @@ test("field-based captures retain attempts, exclude current work before replacem
       current_rows: [{ ...setup.row, attempt: 2, article_requests: 9 }],
     });
     expect(replaced.uses.request_totals.rows.map(row => row.article_requests).sort()).toEqual([4, 9]);
+    const requestReplacement = await readRequestHistory({
+      ...input, exclude_execution: { run_id: setup.row.run_id, attempt: 2 },
+      current_rows: [{ ...setup.row, attempt: 2, article_requests: 9 }],
+    });
+    expect(requestReplacement.request_report.feeds[0]).toMatchObject({
+      article_requests: 13, coverage: { article_requests: { known_records: 2 } },
+    });
     await expect(readFeedHistory({ ...input, own_rows: [{ ...setup.row, permission: "denied" }] }))
       .rejects.toThrow("Conflicting copies");
     await rewriteHealthFields(setup.path, [setup.row, failed, { ...failed, permission: "denied" }], schema);

@@ -88,7 +88,7 @@ test("closed request spend sums distinct attempts once without adding captured r
   const anotherRun = work(undefined, { run_id: "2026-10-20-2", article_requests: 2,
     outcome: "transient", items: 0, productive_reads: 0, failed_reads: 1 });
   const result = summarize(setup, [first, structuredClone(first), second, anotherRun]);
-  expect(result.request_report.feeds[0]).toEqual({
+  expect(result.request_report.feeds[0]).toMatchObject({
     feed_id: "recorded-news", feed_requests: 6, article_requests: 12, robots_requests: 0, counts_complete: true,
   });
   expect(result.sources.get("recorded-news")!.reliability).toMatchObject({
@@ -130,12 +130,13 @@ test("missing work, nullable counters and partial days never become measured zer
     checked_at: null, outcome: null, items: null,
   })]);
   expect(unknown.sources.get("recorded-news")!.reliability).toBeNull();
-  expect(unknown.request_report.feeds[0]).toMatchObject({ counts_complete: false, article_requests: null, feed_requests: null });
+  expect(unknown.request_report.feeds[0]).toMatchObject({ counts_complete: false, article_requests: null, feed_requests: 0 });
   const partial = summarize(setup, [work()], {
     request_days: closedRequestDays(now, 7).map(day => ({ day, complete: day !== "2026-10-18" })),
   });
   expect(partial.request_report.complete).toBe(false);
-  expect(partial.request_report.feeds[0]!.article_requests).toBeNull();
+  expect(partial.request_report.feeds[0]!.article_requests).toBe(work().article_requests);
+  expect(partial.request_report.feeds[0]!.coverage.article_requests.status).toBe("partial");
 });
 
 test("precise, legacy and tied timestamps preserve the recorded lifecycle uncertainty", async () => {
@@ -354,14 +355,14 @@ test("native history reads only named current-family days and rejects unbounded 
       const refused = await readFeedHistory(failureRequest);
       expect(refused.sources.get("recorded-news")!.reliability).toMatchObject({ attempted: 1, complete: false });
       expect(refused.request_report).toMatchObject({
-        complete: false, feeds: [{ article_requests: null, counts_complete: false }],
+        complete: false, feeds: [{ article_requests: 8, counts_complete: false }],
       });
       await writeFile(compact.path!, compactBytes);
       await rm(compact.path!);
       const missing = await readFeedHistory(failureRequest);
       expect(missing.sources.get("recorded-news")!.reliability).toMatchObject({ attempted: 1, complete: false });
       expect(missing.request_report).toMatchObject({
-        complete: false, feeds: [{ article_requests: null, counts_complete: false }],
+        complete: false, feeds: [{ article_requests: 8, counts_complete: false }],
       });
     }
   } finally { await rm(root, { recursive: true, force: true }); }

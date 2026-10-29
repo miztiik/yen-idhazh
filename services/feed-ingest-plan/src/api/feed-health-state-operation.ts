@@ -25,16 +25,9 @@ import { restoreSourceHealth } from "./restore-source-health";
 
 export async function prepareRequestReport(inputs: PlanInputs, now: string, current?: CurrentHealthWork,
   cache = createPlannerHistoryCache<Record<string, unknown>>()) {
-  const { request_report } = await readRequestHistory(healthHistoryInput(inputs, now, current), cache);
-  if (inputs.settings.inputs.feed_health_input_gap) {
-    request_report.complete = false;
-    for (const source of request_report.feeds) {
-      source.feed_requests = null;
-      source.article_requests = null;
-      source.robots_requests = null;
-      source.counts_complete = false;
-    }
-  }
+  const { request_report } = await readRequestHistory({
+    ...healthHistoryInput(inputs, now, current), input_complete: !inputs.settings.inputs.feed_health_input_gap,
+  }, cache);
   return request_report;
 }
 export async function prepareFeedHealthState(inputs: PlanInputs, now: string, current?: CurrentHealthWork) {
