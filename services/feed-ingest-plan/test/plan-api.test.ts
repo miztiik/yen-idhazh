@@ -194,7 +194,7 @@ test("actual API and awaited CLI compose the same recorded plan and disclose the
     const parserEvents = api.events.filter(event => event.operation === "parse");
     expect(parserEvents.length).toBeGreaterThan(0);
     expect(parserEvents.every(event =>
-      event.feed_id === "recorded-news" && event.publisher_id === "recorded-publication")).toBe(true);
+      event.details.feed_id === "recorded-news" && event.details.publisher_id === "recorded-publication")).toBe(true);
     expect(api.transport.requests.length).toBe(requestsBeforeParse);
     const choices = await Promise.all([0, 1].map(async () =>
       (await fetch(`${url}/select-articles`, json({ batch_id: offered.batch_id }))).json()));

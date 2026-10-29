@@ -90,7 +90,7 @@ export async function parseFetchedDocument(
     parsed = await work.parse(() => parseDocument("article", artifact.body!, artifact.canonical_url, inputs.harvest.extraction, pool, {
       activity: (phase, duration_ms) => emit("parse", phase, {
         feed_id: source.id, publisher_id: source.publisher_id, duration_ms,
-      }),
+      }, ["feed_id", "publisher_id"]),
       ...(signal === undefined ? {} : { signal }),
     }), artifact.observation.event_id, describeArticleParse);
   } finally { if (runtime.parser_pool === undefined) pool.close(); }

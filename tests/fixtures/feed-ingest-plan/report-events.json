@@ -1,184 +1,139 @@
 [
   {
-    "version": "2026-10-26",
+    "version": "2026-10-29",
     "run_id": "2026-10-21-700",
     "correlation_id": "7cef34e3-dd9f-40ce-9a56-4d01ff5115cc",
     "occurred_at": "2026-10-26T02:38:10.595Z",
     "operation": "plan",
     "phase": "started",
-    "feed_id": null,
-    "input_count": null,
-    "output_count": null,
-    "duration_ms": null,
-    "failure_code": null
+    "details": {}
   },
   {
-    "version": "2026-10-26",
+    "version": "2026-10-29",
     "run_id": "2026-10-21-700",
     "correlation_id": "7cef34e3-dd9f-40ce-9a56-4d01ff5115cc",
     "occurred_at": "2026-10-26T02:38:10.855Z",
     "operation": "fetch",
     "phase": "started",
-    "feed_id": null,
-    "input_count": null,
-    "output_count": null,
-    "duration_ms": null,
-    "failure_code": null
+    "details": {}
   },
   {
-    "version": "2026-10-26",
+    "version": "2026-10-29",
     "run_id": "2026-10-21-700",
     "correlation_id": "7cef34e3-dd9f-40ce-9a56-4d01ff5115cc",
     "occurred_at": "2026-10-26T02:38:11.670Z",
     "operation": "parse",
     "phase": "started",
-    "feed_id": null,
-    "input_count": null,
-    "output_count": null,
-    "duration_ms": null,
-    "failure_code": null
+    "details": {}
   },
   {
-    "version": "2026-10-26",
+    "version": "2026-10-29",
     "run_id": "2026-10-21-700",
     "correlation_id": "7cef34e3-dd9f-40ce-9a56-4d01ff5115cc",
     "occurred_at": "2026-10-26T02:38:11.670Z",
     "operation": "parse",
     "phase": "started",
-    "feed_id": null,
-    "input_count": null,
-    "output_count": null,
-    "duration_ms": null,
-    "failure_code": null
+    "details": {}
   },
   {
-    "version": "2026-10-26",
+    "version": "2026-10-29",
     "run_id": "2026-10-21-700",
     "correlation_id": "7cef34e3-dd9f-40ce-9a56-4d01ff5115cc",
     "occurred_at": "2026-10-26T02:38:11.904Z",
     "operation": "parse",
     "phase": "completed",
-    "feed_id": null,
-    "input_count": null,
-    "output_count": null,
-    "duration_ms": null,
-    "failure_code": null
+    "details": {}
   },
   {
-    "version": "2026-10-26",
+    "version": "2026-10-29",
     "run_id": "2026-10-21-700",
     "correlation_id": "7cef34e3-dd9f-40ce-9a56-4d01ff5115cc",
     "occurred_at": "2026-10-26T02:38:11.919Z",
     "operation": "parse",
     "phase": "completed",
-    "feed_id": null,
-    "input_count": null,
-    "output_count": null,
-    "duration_ms": null,
-    "failure_code": null
+    "details": {}
   },
   {
-    "version": "2026-10-26",
+    "version": "2026-10-29",
     "run_id": "2026-10-21-700",
     "correlation_id": "7cef34e3-dd9f-40ce-9a56-4d01ff5115cc",
     "occurred_at": "2026-10-26T02:38:11.922Z",
     "operation": "fetch",
     "phase": "completed",
-    "feed_id": null,
-    "input_count": null,
-    "output_count": null,
-    "duration_ms": 1067,
-    "failure_code": null
+    "details": {
+      "duration_ms": 1067
+    }
   },
   {
-    "version": "2026-10-26",
+    "version": "2026-10-29",
     "run_id": "2026-10-21-700",
     "correlation_id": "7cef34e3-dd9f-40ce-9a56-4d01ff5115cc",
     "occurred_at": "2026-10-26T02:38:12.314Z",
     "operation": "select",
     "phase": "started",
-    "feed_id": null,
-    "input_count": null,
-    "output_count": null,
-    "duration_ms": null,
-    "failure_code": null
+    "details": {}
   },
   {
-    "version": "2026-10-26",
+    "version": "2026-10-29",
     "run_id": "2026-10-21-700",
     "correlation_id": "7cef34e3-dd9f-40ce-9a56-4d01ff5115cc",
     "occurred_at": "2026-10-26T02:38:12.688Z",
     "operation": "select",
     "phase": "completed",
-    "feed_id": null,
-    "input_count": null,
-    "output_count": null,
-    "duration_ms": 374,
-    "failure_code": null
+    "details": {
+      "duration_ms": 374
+    }
   },
   {
-    "version": "2026-10-26",
+    "version": "2026-10-29",
     "run_id": "2026-10-21-700",
     "correlation_id": "7cef34e3-dd9f-40ce-9a56-4d01ff5115cc",
     "occurred_at": "2026-10-26T02:38:12.689Z",
     "operation": "partition",
     "phase": "started",
-    "feed_id": null,
-    "input_count": null,
-    "output_count": null,
-    "duration_ms": null,
-    "failure_code": null
+    "details": {}
   },
   {
-    "version": "2026-10-26",
+    "version": "2026-10-29",
     "run_id": "2026-10-21-700",
     "correlation_id": "7cef34e3-dd9f-40ce-9a56-4d01ff5115cc",
     "occurred_at": "2026-10-26T02:38:12.734Z",
     "operation": "partition",
     "phase": "completed",
-    "feed_id": null,
-    "input_count": null,
-    "output_count": null,
-    "duration_ms": 45,
-    "failure_code": null
+    "details": {
+      "duration_ms": 45
+    }
   },
   {
-    "version": "2026-10-26",
+    "version": "2026-10-29",
     "run_id": "2026-10-21-700",
     "correlation_id": "7cef34e3-dd9f-40ce-9a56-4d01ff5115cc",
     "occurred_at": "2026-10-26T02:38:12.929Z",
     "operation": "persist",
     "phase": "started",
-    "feed_id": null,
-    "input_count": null,
-    "output_count": null,
-    "duration_ms": null,
-    "failure_code": null
+    "details": {}
   },
   {
-    "version": "2026-10-26",
+    "version": "2026-10-29",
     "run_id": "2026-10-21-700",
     "correlation_id": "7cef34e3-dd9f-40ce-9a56-4d01ff5115cc",
     "occurred_at": "2026-10-26T02:38:13.066Z",
     "operation": "persist",
     "phase": "completed",
-    "feed_id": null,
-    "input_count": null,
-    "output_count": null,
-    "duration_ms": 136,
-    "failure_code": null
+    "details": {
+      "duration_ms": 136
+    }
   },
   {
-    "version": "2026-10-26",
+    "version": "2026-10-29",
     "run_id": "2026-10-21-700",
     "correlation_id": "7cef34e3-dd9f-40ce-9a56-4d01ff5115cc",
     "occurred_at": "2026-10-26T02:38:13.134Z",
     "operation": "plan",
     "phase": "completed",
-    "feed_id": null,
-    "input_count": null,
-    "output_count": 2,
-    "duration_ms": 2473,
-    "failure_code": null
+    "details": {
+      "output_count": 2,
+      "duration_ms": 2473
+    }
   }
 ]
