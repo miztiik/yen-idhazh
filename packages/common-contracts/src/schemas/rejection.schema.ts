@@ -21,6 +21,9 @@ export const DropReasonSchema = z.enum([
   "REJECTED_DISTINCT_SOURCE_REQUIREMENT_UNMET",
 ]);
 export type DropReason = z.infer<typeof DropReasonSchema>;
+export const RetainedRejectionReasonSchema = z.string().min(1).max(128)
+  .regex(/^[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)*$/, "Retained rejection reason must be an uppercase underscore-delimited code");
+export type RetainedRejectionReason = z.infer<typeof RetainedRejectionReasonSchema>;
 export const SourceArticleRefusalReasonSchema = DropReasonSchema.extract([
   "FETCH_FAILED", "FETCH_FAILED_HTTP", "EXTRACT_FAILED", "EXTRACT_EMPTY", "MISSING_REQUIRED_FIELDS",
   "PAYWALL_OR_BLOCKED", "REJECTED_SCREENING_MIN_WORDS",

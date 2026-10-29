@@ -101,7 +101,7 @@ export const PLANNER_FOOTER_METADATA_KEYS = [
 export const PLANNER_OPTIONAL_FOOTER_METADATA_KEYS = ["period", "updated_at"] as const;
 export const PlannerFileEnvelopeSchema = z.strictObject({
   version: z.enum([PLANNER_LEDGER_VERSION, "2026-10-26", PLANNER_ENVELOPE_VERSION]).default(PLANNER_ENVELOPE_VERSION),
-  row_schema_version: z.enum([PLANNER_LEDGER_VERSION, PLANNER_ENVELOPE_VERSION, PLAN_RUN_VERSION]),
+  row_schema_version: z.enum([PLANNER_LEDGER_VERSION, PLANNER_ENVELOPE_VERSION, PLAN_RUN_VERSION, REJECTED_ARTICLE_VERSION]),
   tier: TierSchema, ledger: PlannerLedgerNameSchema,
   covers: z.union([DateStampSchema, MonthStampSchema, YearStampSchema]),
   period: PeriodSchema.nullable().default(null), file_id: UuidSchema,
