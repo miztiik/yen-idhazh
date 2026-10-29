@@ -253,7 +253,11 @@ def _drawn(
         raise ValueError("enabled visual downgrade requires the shard's published mark population")
     if plan.type is None:
         raise ValueError("a typed visual request requires its original type")
-    outcome: dict[str, object] = {"planned_type": plan.type, "downgrade_depth": 0}
+    outcome: dict[str, object] = {
+        "planned_type": plan.type,
+        "downgrade_depth": 0,
+        "deepest_downgrade_depth": 0,
+    }
     if is_whowhat:
         outcome["drafted_chart"] = False
         if VisualKind.WHOWHAT not in visuals.enabled_kinds:
@@ -267,6 +271,7 @@ def _drawn(
             )
             return VisualDecision.model_validate(refused.model_dump(mode="json") | outcome)
         if rejections := validate_plan(plan, table, visuals=visuals):
+            outcome["rejection_reason"] = rejections[0].check
             refused = visual_planner.not_drawable_here(
                 summary,
                 why="the whowhat plan was refused on "
@@ -305,6 +310,8 @@ def _drawn(
         )
         return VisualDecision.model_validate(refused.model_dump(mode="json") | outcome)
     rejections = validate_plan(plan, table, visuals=visuals)
+    if rejections:
+        outcome["rejection_reason"] = rejections[0].check
     drawable = plan
     reason = "the plan passed every check and this build could not draw it"
     if rejections or not can_compile(plan.type):
@@ -314,6 +321,7 @@ def _drawn(
             + ", ".join(rejection.check.value for rejection in rejections)
             if rejections else f"{plan.type.value} has no compiler"
         )
+        downgrade_evidence = visual_planner.DowngradeEvidence()
         step = (
             visual_planner.downgrade(
                 plan,
@@ -321,9 +329,13 @@ def _drawn(
                 visuals=visuals,
                 published_marks=published_marks,
                 rejected=replacement_rejections,
+                evidence=downgrade_evidence,
             )
             if published_marks is not None and visuals.downgrade_enabled else None
         )
+        outcome["deepest_downgrade_depth"] = downgrade_evidence.deepest_depth
+        if downgrade_evidence.gate_floor_applied is not None:
+            outcome["gate_floor_applied"] = downgrade_evidence.gate_floor_applied
         if step is None:
             if any(
                 rejection.check is ValidatorCheck.STACKED_BAR_EXHAUSTIVE

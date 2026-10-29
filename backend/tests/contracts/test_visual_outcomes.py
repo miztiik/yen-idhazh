@@ -13,6 +13,7 @@ from idhazh.contracts.item_health import ItemHealthRow
 from idhazh.contracts.knobs.visuals import VisualsConfig
 from idhazh.contracts.visual import VisualType
 from idhazh.contracts.visual_decision import VisualDecision
+from idhazh.contracts.visual_telemetry import ValidatorCheck
 
 pytestmark = [pytest.mark.contract, pytest.mark.visual]
 
@@ -36,6 +37,54 @@ def test_older_payloads_remain_unmeasured_without_inferred_types(
     original = {name: value for name, value in payload(model).items() if name not in FIELDS}
     old = model.model_validate(original)
     assert all(getattr(old, name) is None for name in FIELDS)
+    if isinstance(old, VisualDecision):
+        assert old.deepest_downgrade_depth is None
+        assert old.rejection_reason is None
+        assert old.gate_floor_applied is None
+
+
+def test_decision_evidence_round_trips_without_conflating_selected_and_reached_depth() -> None:
+    document = json.loads(
+        read_text(CONTRACT_FIXTURES_DIR / "visual-decision/none.json")
+    ) | {
+        "asked_the_model": True,
+        "none_reason": "validation_failed",
+        "drafted_chart": True,
+        "planned_type": "pie",
+        "downgrade_depth": 0,
+        "deepest_downgrade_depth": 2,
+        "rejection_reason": "pie_exhaustive",
+        "gate_floor_applied": True,
+    }
+
+    decision = VisualDecision.model_validate(document)
+
+    assert decision.downgrade_depth == 0
+    assert decision.deepest_downgrade_depth == 2
+    assert decision.rejection_reason is ValidatorCheck.PIE_EXHAUSTIVE
+    assert decision.gate_floor_applied is True
+    assert VisualDecision.from_json(decision.to_json()) == decision
+
+
+@pytest.mark.parametrize(
+    "changed",
+    [
+        {"deepest_downgrade_depth": 0},
+        {"rejection_reason": "pie_exhaustive"},
+        {"gate_floor_applied": False},
+        {
+            "planned_type": "bar",
+            "downgrade_depth": 0,
+            "deepest_downgrade_depth": 0,
+            "gate_floor_applied": False,
+        },
+    ],
+)
+def test_decision_evidence_requires_a_typed_request_and_reached_rung(
+    changed: dict[str, object],
+) -> None:
+    with pytest.raises(ValidationError):
+        VisualDecision.model_validate(payload(VisualDecision) | changed)
 
 
 @pytest.mark.parametrize("model", MODELS)
