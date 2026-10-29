@@ -115,13 +115,16 @@ The recency contribution uses the original age in hours. A missing age gives
 zero recency; near-future ages do not increase the bonus:
 
 $$
-R_{i} =
+R_i =
 \begin{cases}
 0 & \text{if age is unknown} \\
-\mathrm{recency\_weight}\left(\frac{1}{2}\right)^{\frac{\max(0,\mathrm{age\_hours}_{i})}{\mathrm{recency\_half\_life\_hours}}}
+w_r \left(\frac{1}{2}\right)^{\frac{\max(0,a_i)}{h}}
 & \text{otherwise}
 \end{cases}
 $$
+
+`w_r` is the configured recency weight, `a_i` is the original age in
+hours, and `h` is the configured recency half-life in hours.
 
 The age is the trusted publication time, or first sight when that source date
 is unavailable or outside the future-date tolerance. Unknown age contributes
