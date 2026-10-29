@@ -84,6 +84,13 @@
     "source_yield_alarm_min_decisions": 20,
     "source_yield_alarm_point": 0.4,
     "source_yield_min_complete_days": 45,
+    "vertical_feed_floors": {
+      "ai": 34,
+      "business-economy": 20,
+      "energy": 20,
+      "india": 20,
+      "world": 20
+    },
     "watchlist_bonus": 0.75
   },
   "console": {

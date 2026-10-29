@@ -42,8 +42,7 @@
     {
       "definition": "The story turns on artificial intelligence - the models, the people building them, or what they are used for.",
       "display_name": "AI",
-      "id": "ai",
-      "min_feeds": 1
+      "id": "ai"
     }
   ]
 }

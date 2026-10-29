@@ -409,7 +409,7 @@ other way the fix is one `retired_on`.
 
 ### The feed floor counts feeds, not working feeds
 
-`rank.plan_vertical` compares `min_feeds` against the number of feeds
+`rank.plan_vertical` compares `collect.vertical_feed_floors` against the number of feeds
 **configured** as active in that vertical. It cannot count feeds that work,
 because it runs before anything is fetched. So the gate can be green while the
 source pool is not, and a desk can sit well under its floor on the count that
@@ -434,7 +434,7 @@ holds it to that, from a built config.
 
 It used to be a merge gate instead - a test reading the committed
 `config/sources.json` and `config/taxonomy.json` and failing the build when a
-desk dropped under `min_feeds`. That gate could not be fired by a code change,
+desk dropped under its collection floor. That gate could not be fired by a code change,
 only by a source outage, a retirement or a curator's edit, so it went red on pull
 requests that had touched neither file (`CLAUDE.md` section 13). The report is
 weaker in one way and stronger in another: it cannot stop a bad config reaching

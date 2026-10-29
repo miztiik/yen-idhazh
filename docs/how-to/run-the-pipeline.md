@@ -219,8 +219,9 @@ vertical. A quiet day is also where `collect.max_source_share_per_day` earns its
 keep: the same two-per-desk rule that is a rounding error on a 400-item day is a
 quarter of a four-item one, and the share is what says so.
 
-**A vertical below its feed floor plans nothing.** The floor is `min_feeds` on
-the vertical in `config/taxonomy.json`, and it counts only the endpoints the run
+**A vertical below its feed floor plans nothing.** The floor is
+`collect.vertical_feed_floors[vertical_id]` in
+`config/idhazh.json`, and it counts only the endpoints the run
 may lawfully ask - a curated tombstone, a retired endpoint, a robots denial and
 unknown permission are all excluded, while a resting or failing endpoint still
 counts. That is the floor working, not a bug: a thin list produces a thin day,

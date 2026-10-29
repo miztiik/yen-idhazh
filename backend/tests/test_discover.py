@@ -89,7 +89,7 @@ PROLIFIC = FeedDef(
     tier=2,
 )
 
-AI = VerticalDef(id="ai", display_name="AI", min_feeds=3)
+AI = VerticalDef(id="ai", display_name="AI")
 
 
 NOW = "2026-08-21T12:00:00Z"
@@ -1004,7 +1004,11 @@ def test_the_committed_share_bounds_the_largest_day_this_project_has_published()
 
 def test_a_vertical_below_its_feed_floor_plans_nothing() -> None:
     summary, items, _ = plan_vertical(
-        AI, all_candidates(), config=collect_config(), eligible_feeds=2, now=NOW
+        AI,
+        all_candidates(),
+        config=collect_config(vertical_feed_floors={"ai": 3}),
+        eligible_feeds=2,
+        now=NOW,
     )
     assert summary.below_feed_floor
     assert items == []

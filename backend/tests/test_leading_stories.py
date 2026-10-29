@@ -448,9 +448,11 @@ def test_rank_carriage_outranks_a_qualifying_shared_subject_in_the_block() -> No
             for source_id in source_ids
         ]
         planned = plan_vertical(
-            VerticalDef(id=vertical, display_name=DESKS[vertical], min_feeds=1),
+            VerticalDef(id=vertical, display_name=DESKS[vertical]),
             candidates,
-            config=app.collect,
+            config=app.collect.model_copy(
+                update={"vertical_feed_floors": {vertical: 1}}
+            ),
             eligible_feeds=len(source_ids),
             now=NOW,
         ).items
