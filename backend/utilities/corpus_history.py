@@ -11,7 +11,8 @@ environment string:
 1. Remember the tip origin handed over.
 2. Find the boundary, the newest commit old enough to collapse (below).
 3. Collapse the boundary and everything before it into one new root commit.
-4. Replay every later commit onto that root, and refuse if the tip's tree moved.
+4. Recreate every later first-parent commit from its exact tree, and refuse if the
+   tip's tree moved.
 5. Record the run through the `corpus-squash` task, bound the way a shard binds
    its tasks, and commit what it wrote.
 6. Push with a lease on the tip from step 1. If origin's `main` moved, wait,
@@ -69,7 +70,7 @@ Exit codes:
   0  squashed and pushed, or nothing was old enough and the run was pushed, or a dry run
   1  every push was refused because origin's tip moved, so the run is not recorded
   2  this cannot rewrite the repository: a detached head, a dirty tree, a boundary
-     that does not resolve, a replay that conflicts or moves the tip's tree, a
+     that does not resolve, a commit-object replay that moves the tip's tree, a
      declaration that does not load or is not active, or a run it cannot record
 A git command that fails ends the program with git's own exit code, and so does
 a push git refused while origin's tip stayed where this run read it.
@@ -145,13 +146,14 @@ class MainMovedError(Exception):
 
 
 def _run(
-    repo: Path, *args: str, env: dict[str, str] | None = None
+    repo: Path, *args: str, env: dict[str, str] | None = None, data: str | None = None
 ) -> subprocess.CompletedProcess[str]:
     """One git call in `repo`, as the repository's own committer, whatever it returns."""
     return subprocess.run(
         ["git", "-c", f"user.name={COMMITTER_NAME}", "-c", f"user.email={COMMITTER_EMAIL}", *args],
         cwd=repo,
         env=None if env is None else {**os.environ, **env},
+        input=data,
         capture_output=True,
         text=True,
         check=False,
@@ -248,16 +250,66 @@ def squash_below(repo: Path, *, boundary: str, message: str) -> str:
 
 
 def replay_above(repo: Path, *, boundary: str, onto: str) -> None:
-    """Rebase every commit after `boundary` onto `onto`, trees unchanged.
-
-    A replay that stops on a conflict is aborted and refused, so the branch is
-    left where it was and nothing is pushed.
-    """
-    done = _run(repo, "rebase", "--quiet", "--onto", onto, boundary, BRANCH)
-    if done.returncode:
-        _run(repo, "rebase", "--abort")
-        said = (done.stderr or done.stdout).strip()
-        raise CannotRewriteError(f"replaying the commits after {boundary} stopped: {said}")
+    """Recreate first-parent commits after `boundary` from their exact commit trees."""
+    commits = _git(
+        repo,
+        "rev-list",
+        "--first-parent",
+        "--reverse",
+        f"{boundary}..{BRANCH}",
+    ).splitlines()
+    parent = onto
+    for original in commits:
+        fetched = _run(repo, "cat-file", "commit", original)
+        if fetched.returncode:
+            raise CannotRewriteError(
+                f"reading commit {original} after {boundary} stopped: "
+                f"{(fetched.stderr or fetched.stdout).strip()}"
+            )
+        header, separator, message = fetched.stdout.partition("\n\n")
+        if not separator:
+            raise CannotRewriteError(f"commit {original} has no complete Git commit header")
+        metadata: dict[str, str] = {}
+        for line in header.splitlines():
+            key, separated, value = line.partition(" ")
+            if separated:
+                metadata[key] = value
+        author = re.fullmatch(
+            r"(.*) <([^<>]*)> ([0-9]+) ([+-][0-9]{4})",
+            metadata.get("author", ""),
+        )
+        committer = re.fullmatch(
+            r"(.*) <([^<>]*)> ([0-9]+) ([+-][0-9]{4})",
+            metadata.get("committer", ""),
+        )
+        tree = metadata.get("tree")
+        if author is None or committer is None or tree is None:
+            raise CannotRewriteError(f"commit {original} has no usable tree or identity metadata")
+        created = _run(
+            repo,
+            "commit-tree",
+            tree,
+            "-p",
+            parent,
+            "-F",
+            "-",
+            env={
+                "GIT_AUTHOR_NAME": author.group(1),
+                "GIT_AUTHOR_EMAIL": author.group(2),
+                "GIT_AUTHOR_DATE": f"{author.group(3)} {author.group(4)}",
+                "GIT_COMMITTER_NAME": committer.group(1),
+                "GIT_COMMITTER_EMAIL": committer.group(2),
+                "GIT_COMMITTER_DATE": f"{committer.group(3)} {committer.group(4)}",
+            },
+            data=message,
+        )
+        if created.returncode:
+            raise CannotRewriteError(
+                f"recreating commit {original} stopped: "
+                f"{(created.stderr or created.stdout).strip()}"
+            )
+        parent = created.stdout.strip()
+    _git(repo, "reset", "--keep", parent)
 
 
 def _refuse_a_moved_tree(repo: Path, tip_before: str) -> None:
