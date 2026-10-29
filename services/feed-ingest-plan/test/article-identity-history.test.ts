@@ -22,6 +22,7 @@ import { sourceSnapshot } from "../src/harvest-feeds/load-harvest-inputs";
 import { recordedPlan } from "./plan-recordings";
 import { runFeedPlan } from "../src/run-feed-plan";
 import { stageStore } from "../src/api/stage-store";
+import { createPermittedFetcher } from "../src/harvest-feeds/robots-policy";
 
 async function recording() {
   return z.object({
@@ -154,5 +155,39 @@ test("query variants retain their offer ordinals and downloads but produce only 
     expect(new Set(batch.candidates.map(candidate => candidate.url_key)).size).toBe(1);
     expect(result.selected).toHaveLength(1);
     expect(held.transport.requests.filter(request => request.url.pathname === "/story/")).toHaveLength(2);
+  } finally { await held.close(); }
+});
+
+test("accepted schemes retain query evidence and oversized serialized addresses cannot abort a plan or dispatch", async () => {
+  const held = await recordedPlan();
+  try {
+    const fixture = z.object({
+      mixed_scheme_offer: z.string(), expanded_path_character: z.string(), expanded_path_repetitions: z.number(),
+    }).parse(await Bun.file(new URL(
+      "../../../tests/fixtures/feed-ingest-plan/article-identity-history.json", import.meta.url,
+    )).json());
+    const expanded = `https://news.example/${fixture.expanded_path_character.repeat(fixture.expanded_path_repetitions)}`;
+    expect(expanded).toHaveLength(251);
+    expect(new URL(expanded).href).toHaveLength(2091);
+    held.inputs.harvest.config.harvest.tidy_urls = false;
+    expect(() => deriveArticleIdentity(expanded, held.inputs.harvest.config.harvest)).toThrow("serialized article address");
+    const fetcher = createPermittedFetcher(held.inputs.harvest.config.harvest, held.inputs.harvest.extraction, held.runtime.boundary);
+    expect(await fetcher.fetch(expanded)).toMatchObject({ failure: "unsafe-target" });
+    expect(held.transport.requests).toHaveLength(0);
+    held.transport.recordings.responses["https://news.example/feed.xml"] = [{
+      status: 200, body: `<rss version="2.0"><channel><title>Recorded URL bounds</title>
+        <item><title>Accepted offer</title><link>${fixture.mixed_scheme_offer}</link></item>
+        <item><title>Oversized address</title><link>${expanded}</link></item></channel></rss>`,
+    }];
+    const result = await runFeedPlan({ article_limit: 2 }, held.inputs, held.runtime);
+    expect(result.row.status).toBe("completed");
+    const batch = stageStore(held.inputs).read("parsed", result.batches.parsed_batch_id!, ParsedFeedBatchSchema);
+    expect(batch.offers.map(offer => offer.entry.link)).toEqual([
+      fixture.mixed_scheme_offer.replace(/^HTTPS:/, "https:"),
+    ]);
+    expect(batch.candidates.map(candidate => candidate.canonical_url)).toEqual(["https://news.example/second"]);
+    expect(result.selected).toHaveLength(1);
+    expect(held.transport.requests.some(request => request.url.href === new URL(expanded).href)).toBe(false);
+    expect(held.transport.requests.filter(request => request.url.pathname === "/second")).toHaveLength(1);
   } finally { await held.close(); }
 });

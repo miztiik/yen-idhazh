@@ -50,7 +50,11 @@ the initial identity. The lower-level `http-request-target.ts` applies the
 optional cleaner; it does not hash addresses.
 
 Cleanup and network permission remain separate responsibilities. Invalid
-article addresses retain `InvalidArticleUrlError`. Each transformed address
+article addresses retain `InvalidArticleUrlError`. Feed offers normalize only
+the HTTP scheme spelling before storage, retaining their original query and
+fragment as historical evidence. The final serialized article address must
+pass the same URL format and length contract as downstream payloads before
+hashing or dispatch; percent-encoding cannot bypass that bound. Each transformed address
 passes public-address validation, DNS checks, robots permission and pinned
 dispatch before use. An unsafe transformed address is never dispatched.
 The [bounded saved-key lookup](article-identity-history.md)

@@ -7,8 +7,12 @@ import { InvalidArticleUrlError } from "./legacy-article-identity";
 
 export type ArticleUrlPolicy = Pick<FeedIngestConfig["harvest"], "tidy_urls">;
 
+export function normalizeArticleUrlInput(raw: string): string {
+  return raw.trim().replace(/^https?:/i, scheme => scheme.toLowerCase());
+}
+
 export function cleanArticleUrl(raw: string, policy: ArticleUrlPolicy): string {
-  const parsed = UrlSchema.safeParse(raw.trim().replace(/^https?:/i, scheme => scheme.toLowerCase()));
+  const parsed = UrlSchema.safeParse(normalizeArticleUrlInput(raw));
   if (!parsed.success) throw new InvalidArticleUrlError("invalid article address", { cause: parsed.error });
   try { new URL(parsed.data); }
   catch (error) {
@@ -19,5 +23,7 @@ export function cleanArticleUrl(raw: string, policy: ArticleUrlPolicy): string {
   const url = policy.tidy_urls ? cleanHttpRequestTarget(offered.href) : offered;
   url.search = "";
   url.hash = "";
-  return validateTargetName(url.href).href;
+  const serialized = UrlSchema.safeParse(validateTargetName(url.href).href);
+  if (!serialized.success) throw new InvalidArticleUrlError("invalid serialized article address", { cause: serialized.error });
+  return serialized.data;
 }

@@ -39,6 +39,19 @@ recognized from another offer. The planner does not invent an address or claim
 complete historical deduplication. No durable alias ledger, historical rewrite
 or Python discovery change is introduced.
 
+## Completed receipt replay
+
+Completed legacy operations may match their original configuration fingerprint,
+which predates the selected-history and digest input settings. Their operation,
+request input and all earlier configuration fields must still match. Only a
+legacy journal with a legacy fetched artifact, or no artifact for a completed
+parse or plan, qualifies. Return its exact saved response without downloading,
+resolving an expired offer batch or rewriting its identity. Missing current
+parse state does not change that saved response.
+
+Interrupted legacy work and mixed-version records cannot use this exception.
+An old article capture still cannot be parsed into a current-policy candidate.
+
 ## Design rationale
 
 The approved 2026-10-29 UTC cleanup keeps requests and stored article identity
