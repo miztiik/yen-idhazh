@@ -1,5 +1,6 @@
 /** Dispatch a validated document request to its shared fetch or parse execution unit. */
 import { FetchRequestSchema, ParseRequestSchema } from "./operation-contracts";
+import { LEGACY_PLANNER_OPERATION_VERSION } from "@idhazh/common-contracts";
 import type { PlanInputs } from "../load-plan-inputs";
 import type { PlanRuntime } from "../run-feed-plan";
 import { openOperationStore } from "./operation-store";
@@ -20,8 +21,13 @@ export async function executeDocumentOperation(
   const store = await openOperationStore(inputs.outputRoot);
   try {
     if ("feed_id" in request) {
-      const parent = resolveFetchParent(request, inputs, runtime, store);
-      const proposed = prepareOperation("fetch", request.request_id, request, request.correlation_id, inputs, runtime, parent?.root.run_id);
+      let parent: ReturnType<typeof resolveFetchParent> = null;
+      const prepared = prepareOperation("fetch", request.request_id, request, request.correlation_id, inputs, runtime);
+      const proposed = { ...prepared, capture: () => {
+        parent = resolveFetchParent(request, inputs, runtime, store);
+        const record = prepared.capture();
+        return parent === null ? record : { ...record, run_id: parent.root.run_id };
+      } };
       const record = await store.execute(proposed, async record => {
         const begin = performance.now();
         try {
@@ -53,7 +59,9 @@ export async function executeDocumentOperation(
       }
     });
     const response = ParseResponseSchema.parse(JSON.parse(record.response_json!));
-    if (!stageStore(inputs).has(response.batch_id)) throw new PlanError("REQUEST_INCOMPLETE", "Parsed batch has expired; parse its saved response with a new request key", "request_id");
+    if (record.version !== LEGACY_PLANNER_OPERATION_VERSION && !stageStore(inputs).has(response.batch_id)) {
+      throw new PlanError("REQUEST_INCOMPLETE", "Parsed batch has expired; parse its saved response with a new request key", "request_id");
+    }
     return record.response_json!;
   } finally { store.close(); }
 }

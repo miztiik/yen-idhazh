@@ -52,7 +52,7 @@ export async function harvestArticle(
   let extracted: Awaited<ReturnType<typeof extractArticle>>;
   const extractStarted = performance.now();
   const body = fetched.body;
-  const link = entry.link;
+  const link = identity.canonical_url;
   const parserOptions: HarvestContext["parser_options"] = context.parser_options?.activity === undefined ? context.parser_options : {
     ...context.parser_options,
     activity: (phase, duration_ms) => context.parser_options!.activity?.(

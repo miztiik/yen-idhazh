@@ -1,0 +1,12 @@
+{
+  "selected": "https://news.example/selected?edition=old#part",
+  "selected_offer": "https://news.example/selected?edition=new",
+  "published": "https://news.example/published?edition=old",
+  "published_offer": "https://news.example/published?edition=new",
+  "unknown": "https://news.example/unknown?edition=old",
+  "unknown_offer": "https://news.example/unknown?edition=new",
+  "first_seen_at": "2026-10-20T08:00:00Z",
+  "mixed_scheme_offer": "HTTPS://news.example/second?edition=old#part",
+  "expanded_path_character": "\u0b85",
+  "expanded_path_repetitions": 230
+}
