@@ -3,7 +3,7 @@
 **Last Updated**: 2026-10-29
 
 Which saved observations can change feed rest and measured reliability?
-The isolated planner reads only its current `feed-health-state` format and its
+The isolated planner reads compatible required `feed-health-state` fields and its
 planner-owned `discovered-articles` ledger. The native Python `seen` ledger
 remains separate and is not the planner's discovery source.
 The global Python `feed-health` ledger and public health JSON remain separate
@@ -36,7 +36,10 @@ For example:
 The exact windows, units and skip rules are
 [Table L](../../reference/feed-planner-ledgers.md#l-lookback-summaries).
 Lifecycle and reliability share the validated health input, not each other's
-window setting. The request report uses closed calendar days instead.
+window setting. Each calculation validates only its required columns under the
+[field-read contract](../../reference/feed-planner-ledgers.md#field-based-health-history).
+The request report uses closed calendar days instead. Those extra calendar
+reads and historical counter calculations do not run during fetch/parse setup.
 
 Native represented membership is not limited to row-bearing dates. A daily
 compact entry contributes its date only when it has rows. A nonempty month
@@ -50,6 +53,9 @@ Within a capture, index and Parquet caches prevent reopening one compact file
 for each day it represents. A new selection capture reads current named
 evidence and finalized in-memory facts, rather than reusing a saved parsed
 batch's old health. The age clock remains separate from this feedback clock.
+New parsed batches retain the existing `history_rows` field as an empty list;
+historical rows need not satisfy the current full-row format to cross a stage.
+Selection reads current field-based evidence instead of that saved list.
 
 ## Raw and compact copies
 
@@ -74,6 +80,10 @@ Unexpected programming errors propagate rather than becoming an empty day.
 No logical feed evidence means unknown lifecycle and unavailable reliability.
 Partial history does not become perfect health. Current work does not turn
 an unverified earlier day into a measured zero.
+An unrelated missing or changed column cannot remove a valid feed check or
+article-admission count. Required-field gaps remain specific to their
+calculation and endpoint. Invalid identity cannot be attributed and makes
+that calculation incomplete for all configured feeds on the affected day.
 
 Lifecycle is known only when the full configured represented-day window is
 complete. A failure streak in a partial window cannot prove that no later
@@ -122,6 +132,12 @@ would hide a late old-date file or a UTC window change. The pre-fetch capture
 governs rest; a later selection capture includes finished work and newly
 finalized evidence. Both costs belong in the run's measured health-summary
 time, without a persistent cache or benchmark gate.
+
+Request reporting is independent of planning evidence. A damaged report-only
+day must not prevent a feed fetch, a document parse or current-run request
+accounting. Selection and explicit summaries load request evidence when their
+response needs it; they share verified file reads with planning evidence
+without making the report an execution prerequisite.
 
 ## See also
 

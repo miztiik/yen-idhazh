@@ -7,7 +7,7 @@ import { resolveRunContext } from "../resolve-run-context";
 import { createRunHealth } from "../run-health";
 import { sourceSnapshot } from "../harvest-feeds/load-harvest-inputs";
 import { createPermittedFetcher } from "../harvest-feeds/robots-policy";
-import { prepareFeedHealthState } from "./feed-health-state-operation";
+import { preparePlanningHealth } from "./prepare-planning-health";
 import { canonicalizeUrl } from "../harvest-feeds/url-cleaner";
 import { PlanError } from "./plan-request";
 import { sha256 } from "./operation-store";
@@ -26,7 +26,7 @@ type ExecutionStateBase = {
   run_result?: Promise<Awaited<ReturnType<typeof recordPlanRun>>>;
 };
 export type DocumentState = ExecutionStateBase & {
-  kind: "document"; history: Awaited<ReturnType<typeof prepareFeedHealthState>>;
+  kind: "document"; history: Awaited<ReturnType<typeof preparePlanningHealth>>;
   work: ReturnType<typeof createRunHealth>; fetcher: ReturnType<typeof createPermittedFetcher>;
   recovered: Set<string>;
   exclusions: Promise<Awaited<ReturnType<typeof readExclusionEvidence>>> | null;
@@ -83,7 +83,7 @@ export async function documentState(record: PlannerOperation, inputs: PlanInputs
       const context = resolveRunContext(inputs.settings, runtime.git_sha, new Date(root.created_at),
         root.run_id.slice(11), root.correlation_id, root.created_at, runtime.attempt, runtime.producer);
       const historyStarted = performance.now();
-      const history = await prepareFeedHealthState(inputs, context.now);
+      const history = await preparePlanningHealth(inputs, context.now, { context, rows: [] });
       return {
         kind: "document", context, history, work: createRunHealth(context,
           inputs.harvest.sources.map(source => sourceSnapshot(inputs.harvest, source)), history.sources,

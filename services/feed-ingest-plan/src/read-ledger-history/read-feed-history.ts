@@ -1,13 +1,9 @@
-/** Read only the current planner family's named represented days and request-report days. */
+/** Read the named represented days needed for rest, reliability and article admission. */
 import { z } from "zod";
-import { FeedHealthStateRowContract } from "@idhazh/common-contracts";
 import type { FeedHealthStateRow, SourceSnapshot } from "@idhazh/common-contracts";
-import type { LedgerRegistration } from "@idhazh/ledger-file-writer";
-import type { LedgerDayInput } from "../config/service-settings";
-import { defaultDayInput } from "./named-days";
-import { mapPool } from "../harvest-feeds/harvest-pool";
-import { readPlannerDay, createPlannerHistoryCache } from "./read-planner-history";
-import { closedRequestDays, inputEndpointKey, summarizeHealth, settleHealthRows } from "./health-summary";
+import { inputEndpointKey, summarizePlanningHealth } from "./health-summary";
+import { readHealthCapture } from "./read-health-capture";
+import type { HealthCaptureCache, HealthCaptureInput } from "./read-health-capture";
 
 export const FeedHistoryPolicySchema = z.object({
   availability_strikes_before_rest: z.int().positive(),
@@ -21,46 +17,21 @@ export type SourceHistoryEvidence = Readonly<{
   article_pass_rate?: number | null;
 }>;
 export const endpointKey = inputEndpointKey;
-export async function readFeedHistory(input: {
-  root: string; now: string; sources: readonly SourceSnapshot[]; policy: FeedHistoryPolicy;
+export type FeedHistoryInput = HealthCaptureInput & {
+  sources: readonly SourceSnapshot[]; policy: FeedHistoryPolicy;
   lifecycle_window_days: number; request_report_closed_days: number; concurrency: number;
-  health: LedgerRegistration; health_days: readonly LedgerDayInput[];
-  own_days?: readonly LedgerDayInput[];
-  own_rows?: readonly FeedHealthStateRow[];
-  current_rows?: readonly FeedHealthStateRow[];
-  exclude_execution?: { run_id: string; attempt: number };
-}) {
+};
+export async function readFeedHistory(input: FeedHistoryInput, cache?: HealthCaptureCache) {
   const limit = Math.max(input.lifecycle_window_days, input.policy.reliability_window_days);
   if (input.health_days.length > limit + input.request_report_closed_days) {
     throw new Error("Planner health inventory exceeds its configured represented-day and closed-day bounds");
   }
-  const named = new Map<string, LedgerDayInput>();
+  const named = new Set<string>();
   for (const day of input.health_days) {
     if (named.has(day.day) || day.day > input.now.slice(0, 10)) throw new Error("Planner health inventory must name distinct past UTC days");
-    named.set(day.day, day);
+    named.add(day.day);
   }
-  for (const day of closedRequestDays(input.now, input.request_report_closed_days)) {
-    if (!named.has(day)) named.set(day, defaultDayInput(input.health.prefix, day));
-  }
-  const cache = createPlannerHistoryCache<FeedHealthStateRow>();
-  const loaded = await mapPool([...named.values()].sort((a, b) => a.day.localeCompare(b.day)), input.concurrency,
-    day => readPlannerDay(input.root, input.health, day, FeedHealthStateRowContract, cache));
-  const own = await mapPool(input.own_days ?? [], input.concurrency,
-    day => readPlannerDay(input.root, input.health, day, FeedHealthStateRowContract, cache));
-  const stored = [...loaded, ...own].flatMap(day => day.rows).concat(input.own_rows ?? []).filter(row =>
-    input.exclude_execution === undefined || row.run_id !== input.exclude_execution.run_id || row.attempt !== input.exclude_execution.attempt);
-  const rows = settleHealthRows([...stored, ...(input.current_rows ?? [])]);
-  const inventory = new Set([...input.health_days, ...input.own_days ?? []].map(day => day.day));
-  const request_days = [...new Map([...loaded, ...own]
-    .map(day => [day.day, { day: day.day, complete: day.complete }])).values()];
-  // Keep refused/missing declared members incomplete, but never promote a verified
-  // empty daily entry just because the independent closed-day report read it.
-  const days = [...new Map([...loaded, ...own].filter(day => day.represented === true
-    || (day.represented === null && inventory.has(day.day)))
-    .map(day => [day.day, { day: day.day, complete: day.complete }])).values()]
-    .sort((a, b) => a.day.localeCompare(b.day));
-  for (const row of rows) if (!days.some(day => day.day === row.date)) days.push({ day: row.date, complete: false });
-  days.sort((a, b) => a.day.localeCompare(b.day));
-  return { rows, days, request_days, ...summarizeHealth({ ...input, rows, days, request_days }) };
+  const capture = await readHealthCapture(input, input.health_days, cache);
+  return { ...capture, ...summarizePlanningHealth({ ...input, ...capture }) };
 }
 export type FeedHistory = Awaited<ReturnType<typeof readFeedHistory>>;

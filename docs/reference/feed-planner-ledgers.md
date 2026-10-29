@@ -775,8 +775,32 @@ projection, including conflicts in fields a use does not read. The identity
 includes the endpoint and run attempt, so neither changed endpoints nor real
 repeated work collapse into another fact. Missing request columns do not remove
 valid feed-check evidence. No rest, reliability or article selection policy is
-changed by this read contract. The existing production consumers still use the
-strict full-row reader; the field reader is the reusable consumer boundary.
+changed by this read contract. Production planning, standalone document work,
+selection and health summaries use these field projections. Strict full-row
+validation remains on the write and maintenance paths.
+
+`readFeedHistory` returns rest, feed-read reliability and article-admission
+inputs from the named represented-day inventory. `preparePlanningHealth`
+supplies those inputs before both combined and standalone fetch work. Neither
+path adds closed request-report days or calculates historical request totals.
+Current-run request recording is unchanged.
+
+`readRequestHistory` reads only the configured closed calendar days and returns
+validated request rows, partial request rows, field gaps and file coverage.
+`prepareRequestReport` is its request-only reporting entry point.
+Selection and explicit health summaries combine planning evidence with that
+report through `prepareFeedHealthState`; their shared capture cache keeps one
+stored file read and Git revision per capture. The report contract remains
+all-or-unknown for each feed's three counters.
+
+Before projection, stored and finalized in-memory facts from the current run
+and attempt are excluded. Supplied current work then replaces that execution.
+Endpoint matching and productive logical-read settlement remain unchanged.
+A required-field gap affects only its use and matching endpoint, or all feeds
+when identity is invalid. Rest requires complete evidence; article admission
+is unknown if any required evidence is missing. Incomplete feed-read ratios
+remain labelled incomplete and are not substituted for the article-admission
+rate used by selection.
 
 Targeted deletion of the same eight obsolete ledger prefixes named in Table F
 under both `state/raw/feed-ingest-plan/` and
@@ -805,8 +829,9 @@ safety checks and the artifact-only article-text boundary remain unchanged.
 
 The pre-fetch decision and fresh selection feedback answer different questions
 at different instants. A run needs both when work or external evidence changes
-between them. Each capture derives lifecycle, reliability and request spend
-together and shares bounded file reads among its consumers. The run records
+between them. Pre-fetch captures derive planning evidence only; selection and
+explicit summaries also derive the request report. Each capture shares bounded
+file reads among its consumers. The run records
 the full measured health-summary cost through D11-D13, not only its last
 refresh. This is a measured operation cost, not a claim of a speed improvement.
 

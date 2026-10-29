@@ -11,7 +11,8 @@ import {
 import { HarvestArticleResultSchema } from "../src/harvest-feeds/harvest-types";
 import { resolveArticleSourceOutcome } from "../src/article-source-outcome";
 import { createRunHealth } from "../src/run-health";
-import { summarizeHealth } from "../src/read-ledger-history/health-summary";
+import { summarizePlanningHealth } from "../src/read-ledger-history/health-summary";
+import { projectFeedHealthFields } from "../src/read-ledger-history/read-feed-health-fields";
 import { openOperationStore, sha256 } from "../src/api/operation-store";
 
 function recording() {
@@ -68,10 +69,11 @@ test("the source rate stays eight out of ten when only three articles are select
   }
   const rows = work.rows();
   rows[0]!.articles_selected = 3;
-  const summarize = (facts = rows, complete = true) => summarizeHealth({
-    rows: facts, days: [{ day: context.date, complete }], sources: [source], now: at,
+  const summarize = (facts = rows, complete = true) => summarizePlanningHealth({
+    uses: projectFeedHealthFields(context.date, facts),
+    days: [{ day: context.date, complete }], sources: [source], now: at,
     policy: { availability_strikes_before_rest: 3, reliability_window_days: 1, reliability_floor: 0 },
-    lifecycle_window_days: 1, request_report_closed_days: 1,
+    lifecycle_window_days: 1,
   }).sources.get(source.feed_id)!;
   expect(rows[0]!.article_candidates).toBe(8);
   expect(rows[0]!.rejection_counts.reduce((total, reason) => total + reason.count, 0)).toBe(2);

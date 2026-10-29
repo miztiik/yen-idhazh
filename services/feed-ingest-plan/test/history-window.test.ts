@@ -8,13 +8,21 @@ import { FeedHealthStateRowContract, FeedHealthStateRowSchema, SourceSnapshotSch
 import type { FeedHealthStateRow } from "@idhazh/common-contracts";
 import { plannerRecordings } from "../../../packages/ledger-file-writer/test/planner-recordings";
 import { loadPlanInputs } from "../src/load-plan-inputs";
-import { closedRequestDays, summarizeHealth } from "../src/read-ledger-history/health-summary";
-import { endpointKey, readFeedHistory } from "../src/read-ledger-history/read-feed-history";
+import { settleHealthRows, summarizePlanningHealth } from "../src/read-ledger-history/health-summary";
+import { closedRequestDays, summarizeRequestReport } from "../src/read-ledger-history/request-summary";
+import { projectFeedHealthFields } from "../src/read-ledger-history/read-feed-health-fields";
+import { endpointKey, readFeedHistory as readPlanningHistory } from "../src/read-ledger-history/read-feed-history";
+import { readRequestHistory } from "../src/read-ledger-history/read-request-history";
 import { commitFixtureFiles, compactRows, registration, writeRows } from "./partition-fixtures";
 import { fixtureGit } from "./publication-recordings";
 import { defaultDayInput } from "../src/read-ledger-history/named-days";
 
 const now = "2026-10-21T12:00:00Z";
+async function readFeedHistory(input: Parameters<typeof readPlanningHistory>[0]) {
+  const planning = await readPlanningHistory(input);
+  const requests = await readRequestHistory(input);
+  return { ...planning, request_report: requests.request_report };
+}
 function work(day = "2026-10-20", patch: Partial<FeedHealthStateRow> = {}) {
   const seed = plannerRecordings(day).find(record => record.name === "feed-health-state")!;
   return FeedHealthStateRowSchema.parse({
@@ -33,12 +41,25 @@ async function input() {
   };
 }
 function summarize(setup: Awaited<ReturnType<typeof input>>, rows: FeedHealthStateRow[],
-  patch: Partial<Parameters<typeof summarizeHealth>[0]> = {}) {
-  return summarizeHealth({
+  patch: Partial<Omit<Parameters<typeof summarizePlanningHealth>[0], "uses"> & {
+    request_days: { day: string; complete: boolean }[];
+  }> = {}) {
+  const request = {
     ...setup, rows,
     days: [...new Set(rows.map(row => row.date))].map(day => ({ day, complete: true })),
     request_days: closedRequestDays(now, setup.request_report_closed_days).map(day => ({ day, complete: true })), ...patch,
-  });
+  };
+  const settled = settleHealthRows(rows);
+  const projections = [...new Set(settled.map(row => row.date))].map(day =>
+    projectFeedHealthFields(day, settled.filter(row => row.date === day)));
+  return {
+    ...summarizePlanningHealth({ ...request, uses: {
+      feed_rest: { rows: projections.flatMap(use => use.feed_rest.rows), gaps: projections.flatMap(use => use.feed_rest.gaps) },
+      feed_reliability: { rows: projections.flatMap(use => use.feed_reliability.rows), gaps: projections.flatMap(use => use.feed_reliability.gaps) },
+      article_admission: { rows: projections.flatMap(use => use.article_admission.rows), gaps: projections.flatMap(use => use.article_admission.gaps) },
+    } }),
+    request_report: summarizeRequestReport({ ...request, rows: settled, days: request.request_days }),
+  };
 }
 
 test("default lifecycle, reliability and closed request windows stay independent at UTC boundaries", async () => {
@@ -224,7 +245,9 @@ test("native history reads only named current-family days and rejects unbounded 
       health_days: [{ day: "2026-10-20", raw_revision: rawRevision, raw_files: rawFiles }],
     };
     const loaded = await readFeedHistory(request);
-    expect(loaded.rows).toEqual([work()]);
+    expect(loaded.uses.feed_rest.rows).toEqual([expect.objectContaining({
+      run_id: work().run_id, outcome: work().outcome, items: work().items,
+    })]);
     expect(loaded.represented_days).toContain("2026-10-20");
     await expect(readFeedHistory({ ...request, health_days: [...request.health_days, ...request.health_days] })).rejects.toThrow("distinct");
     await expect(readFeedHistory({ ...request, health_days: [{ day: "2026-10-22", raw_files: [] }] })).rejects.toThrow("past UTC days");
@@ -299,8 +322,8 @@ test("native history reads only named current-family days and rejects unbounded 
       const packed = await readFeedHistory(periodRequest);
       expect(packed.represented_days).toEqual([old.date, ...monthDays]);
       expect(packed.days.every(day => day.complete)).toBe(true);
-      expect(packed.rows).toHaveLength(6);
-      expect(packed.rows.filter(row => row.date === original.date).map(row => row.attempt).sort()).toEqual([1, 2]);
+      expect(packed.uses.feed_rest.rows).toHaveLength(6);
+      expect(packed.uses.feed_rest.rows.filter(row => row.date === original.date).map(row => row.attempt).sort()).toEqual([1, 2]);
       expect(packed.sources.get("recorded-news")).toMatchObject({
         lifecycle: "resting", strikes: 2,
         reliability: {

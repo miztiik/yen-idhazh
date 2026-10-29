@@ -7,27 +7,19 @@ import { curateArticles } from "./curate-article-portfolio/editorial-selection";
 import { resolvePlanRequest } from "./api/plan-request";
 import { resolvePlanningInputs } from "./resolve-planning-inputs";
 import { readPublisherPublication } from "./read-ledger-history/read-publisher-publication";
-import { summarizeHealth, captureHealthRows } from "./read-ledger-history/health-summary";
-import type { FeedHistory } from "./read-ledger-history/read-feed-history";
+import { captureHealthRows } from "./read-ledger-history/health-summary";
+import { prepareFeedHealthState } from "./api/feed-health-state-operation";
 import type { RunContext } from "./resolve-run-context";
 import { inputEndpointKey } from "./read-ledger-history/health-summary";
 import { readExclusionEvidence } from "./read-ledger-history/read-exclusion-evidence";
 import { freshnessCutoff } from "./article-freshness-policy";
 
 export async function selectArticles(batch: ParsedFeedBatch, inputs: PlanInputs, selectionStartedAt: string,
-  currentHealth?: Pick<FeedHistory, "sources" | "request_report">, context: RunContext = batch.context) {
+  currentHealth?: Pick<Awaited<ReturnType<typeof prepareFeedHealthState>>, "sources" | "request_report">, context: RunContext = batch.context) {
   const request = resolvePlanRequest(batch.request, inputs.harvest.config);
   const planning = resolvePlanningInputs(inputs, request);
-  const healthDays = [...batch.history_days];
-  for (const row of batch.work_rows) if (!healthDays.some(day => day.day === row.date)) {
-    healthDays.push({ day: row.date, complete: false });
-  }
-  const health = currentHealth ?? summarizeHealth({
-    rows: [...batch.history_rows, ...batch.work_rows], days: healthDays,
-    sources: planning.sources.map(source => sourceSnapshot(inputs.harvest, source)),
-    now: selectionStartedAt, policy: inputs.clock_config.collect,
-    ...inputs.harvest.config.feedback,
-  });
+  const health = currentHealth ?? await prepareFeedHealthState(inputs, selectionStartedAt,
+    { context: batch.context, rows: batch.work_rows });
   const exclusions = await readExclusionEvidence({
     root: inputs.root, now: selectionStartedAt, publishedWindowDays: inputs.clock_config.collect.published_window_days,
     settledFailureCodes: inputs.clock_config.collect.settled_failure_codes,
@@ -120,4 +112,3 @@ export async function selectArticles(batch: ParsedFeedBatch, inputs: PlanInputs,
   return { articles: curation.articles, rejected_articles: rejectedArticles, health_rows: healthRows,
     exclusions: [...grouped.values()], request_report: health.request_report };
 }
-import { sourceSnapshot } from "./harvest-feeds/load-harvest-inputs";

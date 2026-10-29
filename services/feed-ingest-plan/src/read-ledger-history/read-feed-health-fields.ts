@@ -76,14 +76,17 @@ export function projectFeedHealthFields(day: string, records: readonly Record<st
 export async function readFeedHealthFieldsDay(
   root: string, registration: LedgerRegistration, day: LedgerDayInput,
   cache: PlannerHistoryCache<Record<string, unknown>> = createPlannerHistoryCache(),
+  excludeExecution?: { run_id: string; attempt: number },
 ) {
   if (registration.name !== "feed-health-state") {
     throw new LedgerHistoryReadError("Health field reads require the feed-health-state ledger");
   }
   const { rows, ...stored } = await readStoredPlannerDay(root, registration, day, cache);
-  const uses = projectFeedHealthFields(day.day, rows);
+  const records = rows.filter(row => excludeExecution === undefined
+    || row.run_id !== excludeExecution.run_id || row.attempt !== excludeExecution.attempt);
+  const uses = projectFeedHealthFields(day.day, records);
   for (const view of Object.values(uses)) for (const gap of view.gaps) {
     console.error(JSON.stringify({ event: "planner_health_field_gap", ...gap }));
   }
-  return { ...stored, uses };
+  return { ...stored, records, uses };
 }

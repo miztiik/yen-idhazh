@@ -9,46 +9,40 @@ import { createHash } from "node:crypto";
 import type { PlanInputs } from "../load-plan-inputs";
 import type { PlanRuntime } from "../run-feed-plan";
 import type { RunContext } from "../resolve-run-context";
-import { readFeedHistory } from "../read-ledger-history/read-feed-history";
-import { sourceSnapshot } from "../harvest-feeds/load-harvest-inputs";
+import { readRequestHistory } from "../read-ledger-history/read-request-history";
+import { createPlannerHistoryCache } from "../read-ledger-history/read-planner-history";
+import { healthHistoryInput, preparePlanningHealth } from "./prepare-planning-health";
+import type { CurrentHealthWork } from "./prepare-planning-health";
 import { captureHealthRows } from "../read-ledger-history/health-summary";
 import { FeedHealthStateUpdateRequestSchema } from "./feed-health-state.schema";
 import { stageStore } from "./stage-store";
 import { requireStageConfiguration } from "./selection-operation";
 import { utcTimestamp } from "../harvest-feeds/harvest-types";
 import { readDocumentHealthBatch } from "./document-operations";
-import { plannerMemory } from "../planner-memory";
 import { PlanError } from "./plan-request";
 import { rememberDocumentHealth } from "./document-state";
 import { restoreSourceHealth } from "./restore-source-health";
 
-export async function prepareFeedHealthState(inputs: PlanInputs, now: string, current?: {
-  context: RunContext; rows: readonly FeedHealthStateRow[];
-}) {
-  const result = await readFeedHistory({
-    root: inputs.root, now, sources: inputs.harvest.sources.map(source => sourceSnapshot(inputs.harvest, source)),
-    policy: inputs.clock_config.collect, ...inputs.harvest.config.feedback,
-    concurrency: inputs.harvest.config.harvest.concurrency, health: inputs.registrations.feed_health_state,
-    health_days: inputs.settings.inputs.feed_health_days,
-    own_rows: plannerMemory(inputs).health(),
-    ...(current === undefined ? {} : {
-      current_rows: current.rows, exclude_execution: { run_id: current.context.run_id, attempt: current.context.writer.attempt },
-    }),
-  });
+export async function prepareRequestReport(inputs: PlanInputs, now: string, current?: CurrentHealthWork,
+  cache = createPlannerHistoryCache<Record<string, unknown>>()) {
+  const { request_report } = await readRequestHistory(healthHistoryInput(inputs, now, current), cache);
   if (inputs.settings.inputs.feed_health_input_gap) {
-    for (const [id, source] of result.sources) result.sources.set(id, {
-      ...source, article_pass_rate: null,
-      reliability: source.reliability === null ? null : { ...source.reliability, complete: false },
-    });
-    result.request_report.complete = false;
-    for (const source of result.request_report.feeds) {
+    request_report.complete = false;
+    for (const source of request_report.feeds) {
       source.feed_requests = null;
       source.article_requests = null;
       source.robots_requests = null;
       source.counts_complete = false;
     }
   }
-  return result;
+  return request_report;
+}
+export async function prepareFeedHealthState(inputs: PlanInputs, now: string, current?: CurrentHealthWork) {
+  const cache = createPlannerHistoryCache<Record<string, unknown>>();
+  const [planning, request_report] = await Promise.all([
+    preparePlanningHealth(inputs, now, current, cache), prepareRequestReport(inputs, now, current, cache),
+  ]);
+  return { ...planning, request_report };
 }
 export async function recordFeedHealthState(
   rows: readonly FeedHealthStateRow[], context: RunContext, inputs: PlanInputs,

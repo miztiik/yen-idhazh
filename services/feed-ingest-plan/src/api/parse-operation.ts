@@ -150,7 +150,7 @@ export async function parseFetchedDocument(
         candidate, undefined, inputs.harvest.config.curate_articles.website_grouping.include_private_suffixes,
       ) },
       discovered: { availability: "available", rows: saved.rows },
-      history_rows: state.history.rows, history_days: state.history.days, work_rows: state.work.rows(), exclusions: state.work.exclusions(),
+      history_rows: [], history_days: state.history.days, work_rows: state.work.rows(), exclusions: state.work.exclusions(),
       article_fetch_request_id: fetched.request_id,
     });
   }

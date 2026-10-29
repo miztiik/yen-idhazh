@@ -67,7 +67,7 @@ export async function createParsedFeedBatch(input: {
   return stageStore(inputs).write("parsed", ParsedFeedBatchSchema, {
     batch_id: randomUUID(), context: state.context, config_sha256: operationConfigFingerprint(inputs, runtime), request: {},
     candidates: [], observations: {}, evidence: {}, discovered: { availability: "available", rows: saved.rows },
-    history_rows: state.history.rows, history_days: state.history.days, work_rows: state.work.rows(), exclusions: state.work.exclusions(),
+    history_rows: [], history_days: state.history.days, work_rows: state.work.rows(), exclusions: state.work.exclusions(),
     offers, feed_fetch_request_id: input.fetched_request_id, input_complete: offers.length === 0,
   });
 }
