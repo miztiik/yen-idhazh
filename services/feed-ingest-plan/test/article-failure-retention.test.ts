@@ -9,6 +9,7 @@ import { readPlannerParquet } from "../src/read-ledger-history/read-planner-parq
 import { runFeedPlan } from "../src/run-feed-plan";
 import { recordedPlan } from "./plan-recordings";
 import { createPlanApp } from "../src/api/server";
+import { deriveArticleIdentity } from "../src/harvest-feeds/article-identity";
 
 async function failureCases() {
   const response = z.object({ status: z.int().optional(), body: z.string().optional(), error: z.string().optional() });
@@ -37,6 +38,7 @@ test("terminal HTTP, DNS, TLS, timeout, robots and extraction failures survive z
   for (const entry of await failureCases()) {
     const recorded = await recordedPlan();
     try {
+      recorded.inputs.harvest.config.harvest.article_robots_policy = "enforce";
       recorded.inputs.harvest.extraction.max_retries = 1;
       recorded.inputs.harvest.config.harvest.request_headers.secondary = null;
       recorded.transport.recordings.responses["https://news.example/feed.xml"] = [{
@@ -89,12 +91,51 @@ test("a successful retry leaves no stale rejection and keeps selected identity a
   const recorded = await recordedPlan();
   try {
     recorded.inputs.harvest.extraction.max_retries = 1;
+    recorded.transport.recordings.responses["https://news.example/robots.txt"] = [{
+      status: 200, body: "User-agent: *\nDisallow: /\nAllow: /feed.xml\n",
+    }];
     recorded.transport.recordings.responses["https://news.example/second"]!.unshift({ status: 503, body: "" });
     const result = await runFeedPlan({}, recorded.inputs, recorded.runtime);
     expect(result.row.status).toBe("completed");
     expect(result.selected).toHaveLength(2);
     expect(result.selected.every(article => article.article_text.length > 0)).toBe(true);
     expect(result.files.rejected_articles).toEqual({ status: "empty", files: [] });
+  } finally { await recorded.close(); }
+});
+
+test("observed denial retains actual terminal target failures in one all-failed batch", async () => {
+  const recorded = await recordedPlan();
+  try {
+    recorded.inputs.harvest.extraction.max_retries = 1;
+    recorded.inputs.harvest.config.harvest.request_headers.secondary = null;
+    const cases = (await failureCases()).filter(entry => entry.expected.fetch_failure !== null
+      && entry.expected.robots === "allowed");
+    cases.push({
+      name: "target-dns", url: "https://news.example/target-dns", responses: [{ error: "ENOTFOUND" }],
+      expected: { http_status: null, fetch_failure: "dns", error_code: "ENOTFOUND",
+        robots: "allowed", robots_http_status: 200, robots_failure: null },
+    });
+    recorded.transport.recordings.responses["https://news.example/robots.txt"] = [{
+      status: 200, body: "User-agent: *\nDisallow: /\nAllow: /feed.xml\n",
+    }];
+    recorded.transport.recordings.responses["https://news.example/feed.xml"] = [{
+      status: 200, body: `<rss version="2.0"><channel><title>Recorded failures</title>${cases.map(entry =>
+        `<item><title>Actual offer</title><link>${entry.url}</link></item>`).join("")}</channel></rss>`,
+    }];
+    for (const entry of cases) recorded.transport.recordings.responses[entry.url] = entry.responses!;
+    const result = await runFeedPlan({}, recorded.inputs, recorded.runtime);
+    expect(result.row.status).toBe("completed");
+    expect(result.selected).toEqual([]);
+    expect(result.files.rejected_articles!.files).toHaveLength(1);
+    const rows = await rejectedRows(recorded, result.files.rejected_articles!.files.map(file => file.path));
+    expect(rows).toHaveLength(cases.length);
+    for (const entry of cases) {
+      expect(rows.find(row => row.url_key === deriveArticleIdentity(entry.url).url_key), entry.name).toMatchObject({
+        ...entry.expected, robots: "denied",
+      });
+      expect(recorded.transport.requests.some(request => request.url.href === entry.url)).toBe(true);
+    }
+    expect(recorded.transport.requests.filter(request => request.url.pathname === "/robots.txt")).toHaveLength(1);
   } finally { await recorded.close(); }
 });
 
@@ -118,6 +159,9 @@ test("completed failures survive a later selected-ledger write failure", async (
 test("standalone fetch retains a terminal row outside its private receipt and replay adds no duplicate", async () => {
   const recorded = await recordedPlan();
   recorded.inputs.harvest.config.harvest.request_headers.secondary = null;
+  recorded.transport.recordings.responses["https://news.example/robots.txt"] = [{
+    status: 200, body: "User-agent: *\nDisallow: /\n",
+  }];
   const app = createPlanApp(recorded.inputs, recorded.runtime);
   try {
     const body = JSON.stringify({
@@ -136,7 +180,8 @@ test("standalone fetch retains a terminal row outside its private receipt and re
       .filter(name => name.endsWith(".parquet")).map(name => join(directory, name));
     const rows = await rejectedRows(recorded, paths);
     expect(rows).toHaveLength(1);
-    expect(rows[0]).toMatchObject({ http_status: 404, fetch_failure: "http", robots: "allowed" });
+    expect(rows[0]).toMatchObject({ http_status: 404, fetch_failure: "http", robots: "denied",
+      robots_http_status: 200, robots_failure: null });
   } finally { app.close(); await recorded.close(); }
 });
 

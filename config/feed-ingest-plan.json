@@ -3,6 +3,7 @@
   "harvest": {
     "concurrency": 24,
     "fetch_timeout_ms": 6000,
+    "article_robots_policy": "observe",
     "tidy_urls": true,
     "user_agent": "Mozilla/5.0 (compatible; YenIdhazhReader/2026.10; +https://github.com/miztiik/yen-idhazh)",
     "request_headers": {

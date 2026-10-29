@@ -58,7 +58,7 @@ export async function harvestFeeds(
   const fetcher = createPermittedFetcher(inputs.config.harvest, inputs.extraction, boundary, context.observation_clock);
   const permit = workPool(inputs.config.harvest.concurrency);
   const boundedFetcher: Pick<typeof fetcher, "fetch"> = {
-    fetch: (url, emit) => permit(() => fetcher.fetch(url, emit)),
+    fetch: (url, emit, kind, signal) => permit(() => fetcher.fetch(url, emit, kind, signal)),
   };
   const ownedPool = context.parser_pool ?? new ArticleParserPool(inputs.config.harvest.concurrency);
   const runContext = { ...context, parser_pool: ownedPool };
