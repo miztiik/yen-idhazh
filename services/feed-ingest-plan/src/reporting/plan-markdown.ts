@@ -40,18 +40,29 @@ export function renderPlannerProgressMarkdown(input: unknown): PlannerMarkdown {
   if (events.some(event => event.run_id !== first!.run_id || event.correlation_id !== first!.correlation_id)) {
     throw new Error("Progress belongs to more than one run");
   }
-  const notices = events.filter(event => event.phase === "failed").map(event => ({
-    level: "warning" as const, title: "Planner operation failed",
-    message: `${event.operation}: ${event.failure_code ?? "Cause unavailable"}`,
-  }));
+  const notices = events.flatMap(event => [
+    ...(event.phase === "failed" ? [{
+      level: "warning" as const, title: "Planner operation failed",
+      message: `${event.operation}: ${typeof event.details.failure_code === "string" ? event.details.failure_code : "Cause unavailable"}`,
+    }] : []),
+    ...(typeof event.details._compliance === "object" && event.details._compliance !== null
+      && !Array.isArray(event.details._compliance)
+      && event.details._compliance.status === "NON_COMPLIANT" ? [{
+        level: "warning" as const, title: "Non-compliant progress event",
+        message: `${event.operation} event details did not meet the publisher's requested fields or safety limits.`,
+      }] : []),
+  ]);
   return {
     notices,
     markdown: [
       "# Feed planner progress", "", "Progress does not prove saved output or publication.", "",
-      "## Table A - Observed work", "", "| Id | Operation | State | Feed | Measured duration |",
-      "| --- | --- | --- | --- | --- |",
+      "## Table A - Observed work", "", "| Id | Operation | State | Details |",
+      "| --- | --- | --- | --- |",
       ...events.map((event, index) =>
-        `| A${index + 1} | ${event.operation} | ${event.phase} | ${escapeMarkdown(event.feed_id ?? "Unavailable")} | ${event.duration_ms === null ? "Unavailable" : `${event.duration_ms} milliseconds`} |`),
+        `| A${index + 1} | ${event.operation} | ${event.phase} | ${escapeMarkdown(JSON.stringify(event.details))} |`),
+      ...(events.some(event => typeof event.details._compliance === "object" && event.details._compliance !== null)
+        ? ["", "One or more events are marked NON_COMPLIANT by the publisher."]
+        : []),
       ...(events.length ? [] : ["", "No progress was supplied. The result is unavailable."]), "",
     ].join("\n"),
   };

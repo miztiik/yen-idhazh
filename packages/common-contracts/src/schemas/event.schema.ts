@@ -1,25 +1,24 @@
 /** Which sparse body-free progress event may leave the planner runtime? */
 import { z } from "zod";
-import { CountSchema, NonEmptySchema, RunIdSchema, SlugSchema } from "./primitives";
+import { CountSchema, NonEmptySchema, RunIdSchema } from "./primitives";
 import { RecordedInstantSchema } from "./recorded-instant.schema";
-import { PublisherIdSchema, SourceSnapshotSchema } from "./source.schema";
+import { SourceSnapshotSchema } from "./source.schema";
 import { HarvestDiagnosticsSchema } from "./harvest-diagnostics.schema";
 import { ParsedFeedBatchSchema, SelectedFeedBatchSchema, PartitionedFeedBatchSchema } from "./planner-stage.schema";
 import { PlanApiTimingSchema } from "./plan-run.schema";
-import { FEED_OUTCOME_PAYLOAD_VERSION } from "../version";
+import { FEED_INGEST_EVENT_VERSION, FEED_OUTCOME_PAYLOAD_VERSION } from "../version";
 
 export const FeedIngestEventSchema = z.strictObject({
-  version: z.enum(["2026-10-28", "2026-10-26"]).default("2026-10-28"),
+  version: z.literal(FEED_INGEST_EVENT_VERSION).default(FEED_INGEST_EVENT_VERSION),
   run_id: RunIdSchema, correlation_id: z.uuid({ version: "v4" }),
   occurred_at: RecordedInstantSchema,
   operation: z.enum(["history", ...PlanApiTimingSchema.shape.operation.options, "plan"]),
   phase: z.enum(["started", "completed", "failed"]),
-  feed_id: SlugSchema.nullable(), publisher_id: PublisherIdSchema.nullable().default(null),
-  input_count: CountSchema.nullable(), output_count: CountSchema.nullable(),
-  duration_ms: CountSchema.nullable(), failure_code: NonEmptySchema.nullable(),
+  details: z.record(z.string(), z.json()),
 }).meta({
-  version: "2026-10-28",
+  version: FEED_INGEST_EVENT_VERSION,
   changelog: [
+    { version: FEED_INGEST_EVENT_VERSION, change: "Move operation-specific fields into flexible details." },
     { version: "2026-10-28", change: "Name the publisher on sparse article progress events." },
     { version: "2026-10-26", change: "Name pre-fetch and selection health captures separately." },
   ],

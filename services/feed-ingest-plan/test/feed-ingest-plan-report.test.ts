@@ -4,6 +4,7 @@ import { mkdtemp, readFile, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { FeedIngestConfigSchema, readFeedIngestEvent } from "../../../packages/common-contracts/src/index";
+import { prepareProgressEvent } from "../src/logging/structured-logger";
 import { writePlannerReport } from "../scripts/feed-ingest-plan-report";
 import { formatHostFingerprintSummary } from "../scripts/feed-ingest-plan-host-summary";
 import { formatWorkflowPolicy } from "../scripts/feed-ingest-plan-policy-report";
@@ -23,8 +24,7 @@ test("reads current sparse progress and refuses hidden article or audit payloads
   const events = await fixture();
   const before = structuredClone(events);
   expect(renderPlannerProgressMarkdown(events)).toEqual(renderPlannerProgressMarkdown(before));
-  expect(events.every(event => event.version === "2026-10-26")).toBe(true);
-  expect(events.every(event => event.publisher_id === null)).toBe(true);
+  expect(events.every(event => event.version === "2026-10-29")).toBe(true);
   for (const changed of [
     { ...events[0], headers: { authorization: "private" } },
     { ...events[0], article_text: "Private article body" },
@@ -46,8 +46,10 @@ test("absent progress stays unavailable and zero counts do not certify publicati
   const empty = renderPlannerProgressMarkdown([]);
   expect(empty.markdown).toContain("No progress was supplied. The result is unavailable.");
   expect(empty.notices).toEqual([]);
-  const zero = renderPlannerProgressMarkdown([{ ...events[0], phase: "completed", output_count: 0, duration_ms: 0 }]);
-  expect(zero.markdown).toContain("0 milliseconds");
+  const zero = renderPlannerProgressMarkdown([{ ...events[0], phase: "completed", details: { output_count: 0, duration_ms: 0 } }]);
+  expect(zero.markdown).toContain("duration&#95;ms");
+  expect(zero.markdown).toContain("output&#95;count");
+  expect(zero.markdown).toContain("&#58;0");
   expect(zero.markdown).not.toContain("publication completed");
   const unavailable = formatHostFingerprintSummary(undefined);
   expect(unavailable.notice).toContain("Host fingerprint unavailable");
@@ -91,15 +93,50 @@ test("absent progress stays unavailable and zero counts do not certify publicati
 test("escapes command data and refuses URLs or arbitrary progress fields", async () => {
   const events = await fixture();
   const report = renderPlannerProgressMarkdown([{ ...events[0], phase: "failed",
-    failure_code: "NETWORK\r\n::error title=pwn::run | <script>` %" }]);
+    details: { failure_code: "NETWORK\r\n::error title=pwn::run | <script>` %" } }]);
   expect(report.notices).toHaveLength(1);
   const annotation = formatWorkflowAnnotation(report.notices[0]!);
   expect(annotation).not.toContain("\n");
   expect(annotation).not.toContain("\r");
   expect(annotation).toContain("%0A");
   expect(annotation).toContain("%25");
-  expect(() => renderPlannerProgressMarkdown([{ ...events[0], feed_id: "https://news.example/feed?token=private" }])).toThrow();
+  const unsafe = prepareProgressEvent({ ...events[0], details: { feed_url: "https://news.example/feed?token=private" } });
+  expect(unsafe.details._compliance).toMatchObject({ status: "NON_COMPLIANT" });
+  expect(JSON.stringify(unsafe)).not.toContain("news.example");
   expect(() => renderPlannerProgressMarkdown([{ ...events[0], url: "https://news.example/private" }])).toThrow();
+});
+
+test("publisher keeps flexible details and records missing or unsafe details without leaking values", async () => {
+  const events = await fixture();
+  const compliant = prepareProgressEvent({
+    ...events[0],
+    details: { feed_id: "recorded-news", publisher_id: null, extension: { enabled: true } },
+  }, ["feed_id", "publisher_id"]);
+  expect(compliant.details).toEqual({ feed_id: "recorded-news", publisher_id: null, extension: { enabled: true } });
+
+  const nonCompliant = prepareProgressEvent({
+    ...events[0],
+    details: { feed_id: "recorded-news", article_text: "Private article body", _compliance: { status: "COMPLIANT" } },
+  }, ["feed_id", "publisher_id"]);
+  expect(nonCompliant.details._compliance).toMatchObject({
+    status: "NON_COMPLIANT",
+    violations: [
+      { code: "unsafe_detail_key", path: "details" },
+      { code: "reserved_publisher_field", path: "details" },
+      { code: "required_detail_missing", path: "details.publisher_id" },
+    ],
+  });
+  expect(JSON.stringify(nonCompliant)).not.toContain("Private article body");
+  expect(renderPlannerProgressMarkdown([nonCompliant]).markdown).toContain("NON_COMPLIANT");
+
+  const malformed = prepareProgressEvent({ ...events[0], details: "not-an-object" }, ["feed_id"]);
+  expect(malformed.details._compliance).toMatchObject({
+    status: "NON_COMPLIANT",
+    violations: [
+      { code: "details_must_be_object", path: "details" },
+      { code: "required_detail_missing", path: "details.feed_id" },
+    ],
+  });
 });
 
 test("refuses mixed executions but permits concurrent stage ordering without fabricated sequence fields", async () => {
