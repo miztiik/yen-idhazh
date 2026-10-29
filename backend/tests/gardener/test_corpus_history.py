@@ -178,16 +178,15 @@ def history(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> History:
     return the_six_commits(tmp_path)
 
 
-def a_racer_after_every_replay(checkout: Path, racer: Path, body: str) -> None:
-    """Another run, pushing to origin from `racer` each time the job's replay finishes.
+def a_racer_before_every_push(checkout: Path, racer: Path, body: str) -> None:
+    """Another run pushes to origin from `racer` at the start of every history push.
 
-    A `post-rewrite` hook in the job's own clone. Git runs it when the replay
-    after the squash finishes: after the program read its tip and before it
-    pushes, which is the window a forcing push would delete a commit in and the
-    one the lease exists for. `body` runs in `racer`, with the job's own git
-    variables cleared so it cannot write to the job's repository.
+    A `pre-push` hook runs after the program rebuilt its candidate and read the
+    tip for the lease, but before that candidate reaches origin. `body` runs in
+    `racer`, with the job's own Git variables cleared so it cannot write to the
+    job's repository.
     """
-    hook = checkout / ".git" / "hooks" / "post-rewrite"
+    hook = checkout / ".git" / "hooks" / "pre-push"
     hook.write_text(
         "#!/bin/sh\n"
         "cat >/dev/null\n"
@@ -326,10 +325,10 @@ def test_a_merge_above_the_boundary_is_replayed_with_the_tip_tree_intact(
     assert history.tree(newest) == tree(checkout, tip)
 
 
-def test_a_merge_that_carried_its_own_change_is_refused_before_anything_is_pushed(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+def test_a_merge_that_carried_its_own_change_keeps_its_exact_tree(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """A replay drops a merge commit, so a change only the merge made would vanish from the tip."""
+    """Object reconstruction keeps a merge commit's exact tree without replaying its patch."""
     quiet_git(tmp_path, monkeypatch)
     history = History(tmp_path, declared=a_declaration())
     history.add("2026-03-01T09:00:00Z", "the root")
@@ -348,17 +347,21 @@ def test_a_merge_that_carried_its_own_change_is_refused_before_anything_is_pushe
     )
     checkout = history.publish()
     before = history.on_origin("rev-parse", "main").strip()
+    tip = git(checkout, "rev-parse", "HEAD").strip()
 
-    assert squash(checkout) == corpus_history.EXIT_CANNOT_REWRITE
+    assert squash(checkout) == corpus_history.EXIT_OK
 
-    assert "must be thrown away" in capsys.readouterr().err
-    assert history.on_origin("rev-parse", "main").strip() == before
+    assert history.on_origin("show", "main~1:docs/only-the-merge.md").strip() == (
+        "made by the merge"
+    )
+    assert history.tree("main~1") == tree(checkout, tip)
+    assert history.on_origin("rev-parse", "main~1").strip() != before
 
 
-def test_a_replay_that_conflicts_is_aborted_and_nothing_is_pushed(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+def test_a_resolved_merge_conflict_keeps_its_exact_tree(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Two sides changed one line and a person merged them by hand; a replay cannot redo that."""
+    """Object reconstruction uses the conflict's resolved committed tree without replaying text."""
     quiet_git(tmp_path, monkeypatch)
     history = History(tmp_path, declared=a_declaration())
     history.add("2026-03-01T09:00:00Z", "the root", {"docs/line.md": "first\n"})
@@ -384,11 +387,10 @@ def test_a_replay_that_conflicts_is_aborted_and_nothing_is_pushed(
     checkout = history.publish()
     tip = git(checkout, "rev-parse", "HEAD").strip()
 
-    assert squash(checkout) == corpus_history.EXIT_CANNOT_REWRITE
+    assert squash(checkout) == corpus_history.EXIT_OK
 
-    assert "replaying the commits after" in capsys.readouterr().err
-    assert git(checkout, "rev-parse", "HEAD").strip() == tip, "the replay was not aborted"
-    assert history.on_origin("rev-parse", "main").strip() == tip
+    assert history.on_origin("show", "main~1:docs/line.md").strip() == "both"
+    assert history.tree("main~1") == tree(checkout, tip)
 
 
 @pytest.mark.parametrize("bare_repository_policy", ("explicit",))
@@ -448,7 +450,7 @@ def test_a_commit_that_lands_after_the_tip_was_read_is_refused_by_the_lease_and_
             "corpus/corpus.meta.json": harvested.to_json(),
         },
     )
-    a_racer_after_every_replay(checkout, racer, "git push --quiet origin HEAD:refs/heads/main")
+    a_racer_before_every_push(checkout, racer, "git push --quiet origin HEAD:refs/heads/main")
 
     assert squash(checkout) == corpus_history.EXIT_OK
 
@@ -490,7 +492,7 @@ def test_a_run_whose_every_push_is_refused_leaves_main_to_the_other_writer_and_s
     published = git(checkout, "rev-parse", "HEAD").strip()
     racer = history.clone("racer")
     identity = " ".join(f'"{part}"' for part in SEED_IDENTITY)
-    a_racer_after_every_replay(
+    a_racer_before_every_push(
         checkout,
         racer,
         'echo "a run pushed meanwhile" >> docs/raced.md\n'
