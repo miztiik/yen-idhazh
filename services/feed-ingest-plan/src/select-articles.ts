@@ -13,6 +13,7 @@ import type { RunContext } from "./resolve-run-context";
 import { inputEndpointKey } from "./read-ledger-history/health-summary";
 import { readExclusionEvidence } from "./read-ledger-history/read-exclusion-evidence";
 import { freshnessCutoff } from "./article-freshness-policy";
+import { readArticleIdentityHistory } from "./read-ledger-history/read-article-identity-history";
 
 export async function selectArticles(batch: ParsedFeedBatch, inputs: PlanInputs, selectionStartedAt: string,
   currentHealth?: Pick<FeedHistory, "sources" | "request_report">, context: RunContext = batch.context) {
@@ -36,14 +37,44 @@ export async function selectArticles(batch: ParsedFeedBatch, inputs: PlanInputs,
     settledFailureDays: inputs.settings.inputs.settled_failure_days.filter(day => day.day === selectionStartedAt.slice(0, 10)),
     concurrency: inputs.harvest.config.harvest.concurrency,
   });
+  const discoveryRows = batch.discovered.availability === "available" ? batch.discovered.rows : [];
+  const identities = await readArticleIdentityHistory(inputs, selectionStartedAt, discoveryRows, exclusions.published_rows);
+  for (const offer of batch.offers) if (offer.entry.link !== null) identities.remember(offer.entry.link);
+  for (const candidate of batch.candidates) identities.remember(candidate.canonical_url, candidate.url_key);
+  const publishedOn = new Map(exclusions.published_on);
+  const failureCodes = new Map(exclusions.settled_failure_codes);
+  const publishedKeys: Record<string, string> = {};
+  const failureKeys: Record<string, string> = {};
+  for (const candidate of batch.candidates) {
+    const keys = identities.keysFor(candidate.url_key);
+    const published = keys.flatMap(key => {
+      const value = exclusions.published_on.get(key);
+      return value === undefined ? [] : [{ key, value }];
+    }).sort((a, b) => a.value.localeCompare(b.value) || a.key.localeCompare(b.key))[0];
+    if (published !== undefined) {
+      publishedOn.set(candidate.url_key, published.value);
+      publishedKeys[candidate.url_key] = published.key;
+    }
+    const failure = keys.flatMap(key => {
+      const value = exclusions.settled_failure_codes.get(key);
+      return value === undefined ? [] : [{ key, value }];
+    }).sort((a, b) => a.value.localeCompare(b.value) || a.key.localeCompare(b.key))[0];
+    if (failure !== undefined) {
+      failureCodes.set(candidate.url_key, failure.value);
+      failureKeys[candidate.url_key] = failure.key;
+    }
+  }
   const screening = await screenArticleCandidates({
-    candidates: batch.candidates, observations: batch.observations, discovered: batch.discovered, planning,
+    candidates: batch.candidates, observations: batch.observations,
+    discovered: batch.discovered.availability === "available"
+      ? { availability: "available", rows: identities.discoveries(discoveryRows) } : batch.discovered, planning,
     clock_config: inputs.clock_config, run: {
       now: batch.context.now, run_id: batch.context.run_id, correlation_id: batch.context.correlation_id,
     },
     exclusions: {
       published_window_days: inputs.clock_config.collect.published_window_days,
-      published_on: Object.fromEntries(exclusions.published_on), settled_failure_codes: Object.fromEntries(exclusions.settled_failure_codes),
+      published_on: Object.fromEntries(publishedOn), settled_failure_codes: Object.fromEntries(failureCodes),
+      matched_published_keys: publishedKeys, matched_failure_keys: failureKeys,
     },
   });
   const publications = await readPublisherPublication({

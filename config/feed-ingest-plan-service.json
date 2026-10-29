@@ -21,6 +21,7 @@
     "extraction": "config/idhazh.json",
     "registrations": "config/ledgers.json",
     "output_root": "state",
+    "digest_root": "frontend/public/digest",
     "artifact_root": "backend/var/feed-ingest-plan",
     "published_url_lookback_days": 7,
     "health_period_limit": 32,
