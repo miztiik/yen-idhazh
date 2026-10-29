@@ -249,14 +249,15 @@ not, and nobody has.
 | Deleting one outright | A config edit, and every published day that carries the id starts showing the id itself in place of the name. Retire instead |
 | Any of the above that reaches an **active** vertical or lens | One thing more, every time: rebuild and commit `config/taxonomy-vectors.bin` with `python backend/utilities/build_taxonomy_vectors.py`. Its header pins the exact label sentences that were encoded, and until it is rebuilt the next run **stops and names the file**. An event, and an entry that was already retired, reach none of this |
 
-**That last row is a tripwire, not a build step, and nothing but a person can
-clear it.** The refusal is the right failure, because a stale file compares
-today's stories against last month's lenses
+**That last row is a tripwire, not a build step.** A contract test reads the
+committed taxonomy and vectors together, so a stale pair blocks the change
+instead of failing a later scheduled run. It does not rebuild the vectors: a
+person still runs the command above and commits the result. The refusal is the
+right failure, because a stale file compares today's stories against last
+month's lenses
 ([classification.md](classification.md#the-encoder-alarm-a-number-that-labels-nothing)).
-But it only tells somebody to go and type a command, and the day a fit moves a
-word there is nobody to tell.
-[../architecture/publishing/autotune-desk-assignment.md](../architecture/publishing/autotune-desk-assignment.md)
-owns that gap, and the published search index has the same one.
+The [desk-assignment page](../architecture/publishing/autotune-desk-assignment.md)
+covers the related gap for automatic vocabulary changes and earlier search indexes.
 
 ## Every id is an open slug, and the vocabulary is this file
 

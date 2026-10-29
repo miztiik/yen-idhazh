@@ -410,6 +410,14 @@ class TestTheStaleFileRefusal:
     one quietly.
     """
 
+    def test_the_committed_vectors_match_the_committed_vocabulary(self) -> None:
+        taxonomy = Taxonomy.read(CONFIG_DIR / "taxonomy.json")
+
+        vectors = assemble.read_taxonomy_vectors(REPO_ROOT, taxonomy)
+
+        assert vectors is not None
+        assert len(vectors.vectors) == len(assemble.label_vector_texts(taxonomy))
+
     def test_the_oracle_a_file_built_from_another_vocabulary_is_refused_by_name(
         self, tmp_path: Path
     ) -> None:
