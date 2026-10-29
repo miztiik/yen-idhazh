@@ -1,6 +1,8 @@
 /** Which selected fields are committed, and which text travels only in the artifact? */
 import { z } from "zod";
-import { SELECTED_ARTICLE_VERSION } from "../version";
+import {
+  LEGACY_SELECTED_ARTICLE_VERSION, SELECTED_ARTICLE_ACCEPTED_SCHEMA_VERSIONS, SELECTED_ARTICLE_VERSION,
+} from "../version";
 import {
   CountSchema, DateStampSchema, FiniteSchema, NonEmptySchema,
   PositiveCountSchema, RunIdSchema, Sha256Schema, SlugSchema, UrlSchema,
@@ -54,7 +56,8 @@ function validatePublication(value: {
   }
 }
 const changelog = [
-  { version: SELECTED_ARTICLE_VERSION, change: "Record the applied freshness cutoff and percentage-based feed limit." },
+  { version: SELECTED_ARTICLE_VERSION, change: "Identify query-free article selection while retaining historical URLs and keys unchanged." },
+  { version: LEGACY_SELECTED_ARTICLE_VERSION, change: "Record the applied freshness cutoff and percentage-based feed limit." },
   { version: "2026-10-26", change: "Require source or selection publication provenance and refuse obsolete selected rows." },
 ];
 export const SelectedArticleMetadataSchema = z.strictObject(MetadataFields)
@@ -72,7 +75,7 @@ function validateRow(value: Parameters<typeof validateMetadata>[0] & { run_id: s
 export const SelectedArticleRowSchema = RowSchema.superRefine(validateRow).superRefine(validatePublication)
   .meta({ version: SELECTED_ARTICLE_VERSION, changelog });
 const ArtifactFields = {
-  schema_version: z.literal(SELECTED_ARTICLE_VERSION),
+  schema_version: z.enum(SELECTED_ARTICLE_ACCEPTED_SCHEMA_VERSIONS),
   run_id: RunIdSchema, attempt: PositiveCountSchema, date: DateStampSchema,
   evaluated_at: RecordedInstantSchema, articles: z.array(SelectedArtifactArticleSchema),
 };
@@ -85,6 +88,7 @@ export type SelectedArticleRow = z.infer<typeof SelectedArticleRowSchema>;
 export type SelectedArticlesArtifact = z.infer<typeof SelectedArticlesArtifactSchema>;
 export const SelectedArticleRowContract = {
   schema: SelectedArticleRowSchema, schemaVersion: SELECTED_ARTICLE_VERSION,
+  acceptedSchemaVersions: SELECTED_ARTICLE_ACCEPTED_SCHEMA_VERSIONS,
 } as const;
 
 export function readSelectedArticlesArtifact(raw: unknown): SelectedArticlesArtifact {

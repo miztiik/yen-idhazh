@@ -1,7 +1,7 @@
 /** Execute one isolated planner run and finalize its five-ledger result even after later work fails. */
 import { randomUUID } from "node:crypto";
 import {
-  DiscoveredArticleRowSchema, ParsedFeedBatchSchema, PlannerWorkEventSchema,
+  DiscoveredArticleRowSchema, ParsedFeedBatchSchema, PlannerWorkEventSchema, deriveCandidateId,
 } from "@idhazh/common-contracts";
 import type { FeedIngestEvent, PlannerArticleEvidence, DiscoveredArticleRow, PlanRunRow } from "@idhazh/common-contracts";
 import type { PersistLedgerResult } from "@idhazh/ledger-file-writer";
@@ -28,6 +28,10 @@ import { createRunHealth } from "./run-health";
 import { plannerMemory } from "./planner-memory";
 import { recordPlanRun } from "./record-plan-run";
 import { registerStageExecution } from "./api/document-state";
+import { readArticleIdentityHistory } from "./read-ledger-history/read-article-identity-history";
+import { InvalidArticleUrlError } from "./harvest-feeds/article-identity";
+import { UnsafeTargetError } from "./harvest-feeds/safe-target";
+import type { OfferedArticle } from "./harvest-feeds/harvest-types";
 
 export type PlanRuntime = {
   git_sha: string; run_number?: string; correlation_id?: string;
@@ -75,6 +79,7 @@ export async function runFeedPlan(raw: unknown, inputs: PlanInputs, runtime: Pla
   let history: Awaited<ReturnType<typeof prepareFeedHealthState>> | undefined;
   let discovery: Awaited<ReturnType<typeof readDiscoveredEvidence>> | undefined;
   const sightings: DiscoveredArticleRow[] = [];
+  const offers: OfferedArticle[] = [];
   async function phase<T>(operation: PlanRunRow["api_timings"][number]["operation"], execute: () => Promise<T>, publish = true): Promise<T> {
     const begin = performance.now();
     if (publish) emit(operation, "started", { scope: "plan" });
@@ -112,17 +117,20 @@ export async function runFeedPlan(raw: unknown, inputs: PlanInputs, runtime: Pla
     const initialHistory = loaded[0];
     history = initialHistory;
     discovery = loaded[1];
+    const identities = await readArticleIdentityHistory(inputs, context.now, discovery.rows, loaded[2].published_rows);
     // The measured initial capture already includes bounded in-memory evidence and its summary.
     // Selection performs a separate fresh capture; no membership/index cache crosses that boundary.
     const historyRows = initialHistory.rows;
     work = createRunHealth(context, sources, initialHistory.sources,
-      { ...inputs.harvest.config.triage, clock: runtime.observation_clock ?? (() => new Date()) });
+      { ...inputs.harvest.config.triage, tidy_urls: inputs.harvest.config.harvest.tidy_urls,
+        clock: runtime.observation_clock ?? (() => new Date()) });
     const currentWork = work;
     const observations = createIngestObservations(currentWork.observe);
     const harvest = await phase("fetch", () => harvestFeeds(inputs.harvest, {
       writer: context.writer, correlation_id: context.correlation_id,
       max_future_hours: inputs.clock_config.collect.max_future_hours,
       exclusions: { ...loaded[2], published_window_days: inputs.clock_config.collect.published_window_days },
+      identities,
       feed_history: initialHistory.sources, observations, parser_pool: parserPool,
       document_activity: (operation, phase, details, url) => {
         if (operation === "parse") recordParseActivity(phase);
@@ -136,8 +144,12 @@ export async function runFeedPlan(raw: unknown, inputs: PlanInputs, runtime: Pla
         for (const entry of entries) {
           if (entry.link === null) continue;
           let identity;
-          try { identity = deriveArticleIdentity(entry.link); }
-          catch { continue; }
+          try { identity = identities.remember(entry.link); }
+          catch (error) {
+            if (error instanceof InvalidArticleUrlError || error instanceof UnsafeTargetError) continue;
+            throw error;
+          }
+          offers.push({ source: outcome.source, entry });
           if (matchUrlExclusion(identity.canonical_url, inputs.harvest.config.harvest.url_exclusions) !== undefined) continue;
           sightings.push(DiscoveredArticleRowSchema.parse({
             url_key: identity.url_key, first_seen_at: checkedAt, date: checkedAt.slice(0, 10),
@@ -149,12 +161,13 @@ export async function runFeedPlan(raw: unknown, inputs: PlanInputs, runtime: Pla
         eventType, feed_id: details?.feed_id ?? null, output_count: details?.output_count ?? null,
       }),
     }, runtime.boundary));
-    const discoveredRows = memory.rememberDiscoveries([...discovery.rows, ...sightings],
+    const discoveredRows = memory.rememberDiscoveries(identities.discoveries([...discovery.rows, ...sightings]),
       requiredUtcDays(context.now, inputs.harvest.config.discovered_articles.lookback_days)[0]!);
     const saved = await rememberDiscoveries(discovery.rows, discoveredRows, context, {
       outputRoot: inputs.outputRoot, registryEntry: inputs.registrations.discovered_articles, ledgerSettings: inputs.ledgerSettings,
     });
     files.discovered_articles = saved.result;
+    const candidateIds = new Set(harvest.candidates.map(candidate => candidate.candidate_id));
     const parsed = stageStore(inputs).write("parsed", ParsedFeedBatchSchema, {
       batch_id: randomUUID(), config_sha256: operationConfigFingerprint(inputs, runtime), context,
       request: {
@@ -162,6 +175,11 @@ export async function runFeedPlan(raw: unknown, inputs: PlanInputs, runtime: Pla
         shards: request.shards, partition_strategy: request.partition_strategy,
       },
       candidates: harvest.candidates,
+      offers: offers.map(offer => {
+        const offer_id = deriveCandidateId(context.run_id, offer.source.feed_id, offer.entry.entry_ordinal);
+        return { ...offer, offer_id, fetch_request_id: null,
+          state: candidateIds.has(offer_id) ? "parsed" : "rejected" };
+      }),
       observations: Object.fromEntries(harvest.articles.filter(article => article.candidate !== null)
         .map(article => [article.candidate!.candidate_id, article.observation])),
       discovered: { availability: "available", rows: foldDiscoveryHistory([...discoveredRows, ...memory.discoveries()]) },
@@ -266,6 +284,5 @@ export function summarizePlan(result: FeedPlanResult) {
     })),
   };
 }
-import { deriveArticleIdentity } from "./harvest-feeds/article-identity";
 import { matchUrlExclusion } from "./harvest-feeds/url-exclusions";
 import { utcTimestamp } from "./harvest-feeds/harvest-types";
