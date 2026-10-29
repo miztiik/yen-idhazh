@@ -60,30 +60,45 @@
         "entries_key": "verticals",
         "id": "verticals",
         "id_field": "id",
-        "match": {"status": "active"},
+        "match": {
+          "status": "active"
+        },
         "minimum_similarity": 0.2,
         "source": "config/taxonomy.json",
-        "text_fields": ["display_name", "definition"]
+        "text_fields": [
+          "display_name",
+          "definition"
+        ]
       },
       {
         "destination": "lenses",
         "entries_key": "lenses",
         "id": "lenses",
         "id_field": "id",
-        "match": {"status": "active"},
+        "match": {
+          "status": "active"
+        },
         "minimum_similarity": 0.2,
         "source": "config/taxonomy.json",
-        "text_fields": ["display_name", "definition"]
+        "text_fields": [
+          "display_name",
+          "definition"
+        ]
       },
       {
         "destination": "events",
         "entries_key": "events",
         "id": "events",
         "id_field": "id",
-        "match": {"status": "active"},
+        "match": {
+          "status": "active"
+        },
         "minimum_similarity": 0.25,
         "source": "config/taxonomy.json",
-        "text_fields": ["display_name", "definition"]
+        "text_fields": [
+          "display_name",
+          "definition"
+        ]
       },
       {
         "ambiguity_margin": 0.05,
@@ -91,10 +106,16 @@
         "entries_key": "entities",
         "id": "organizations",
         "id_field": "id",
-        "match": {"kind": "organisation", "status": "active"},
+        "match": {
+          "kind": "organisation",
+          "status": "active"
+        },
         "minimum_similarity": 0.2,
         "source": "config/watchlist.json",
-        "text_fields": ["display_name", "aliases"]
+        "text_fields": [
+          "display_name",
+          "aliases"
+        ]
       }
     ],
     "dimensions": 384,
