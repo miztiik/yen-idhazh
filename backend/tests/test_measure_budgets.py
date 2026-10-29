@@ -188,7 +188,7 @@ def test_the_definition_reading_divides_by_what_it_counted(
     assert reading.record == "DEFINITION_SENTENCE_TOKENS"
     assert reading.working["entries_offered"] == offered
     assert reading.value == tokenizer.count(block)
-    assert reading.working["tokens_an_entry"] == pytest.approx(reading.value / offered)
+    assert reading.working["tokens_an_entry"] == round(reading.value / offered, 4)
     assert reading.working["characters"] == len(block)
 
 
@@ -226,9 +226,15 @@ def test_a_vocabulary_that_offers_nothing_yields_no_reading(
             entry["status"] = "draft"
             entry.pop("retired_on", None)
 
+    config_dir = a_config_dir(tmp_path, drafted)
+    sources_path = config_dir / "sources.json"
+    sources = json.loads(read_text(sources_path))
+    sources["feeds"] = []
+    sources_path.write_text(json.dumps(sources), encoding="utf-8")
+
     with pytest.raises(ValueError, match="offers no definition to any prompt"):
         read_definition_budget(
-            tokenizer, config_dir=a_config_dir(tmp_path, drafted), stamp=STAMP
+            tokenizer, config_dir=config_dir, stamp=STAMP
         )
 
 

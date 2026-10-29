@@ -33,7 +33,6 @@ from support.ledger import (
 from support.paths import CONFIG_DIR, FIXTURES_DIR, read_text
 
 from idhazh import cli, config, fetch, ledger
-from idhazh.contracts.app_config import AppConfig
 from idhazh.contracts.base import derive_url_key
 from idhazh.contracts.feed_health import (
     FeedHealthRow,
@@ -237,12 +236,15 @@ def settings_for(
     hold still.
     """
     base = config.load()
+    configured_verticals = verticals if verticals is not None else [AI]
+    floors = (
+        vertical_feed_floors
+        if vertical_feed_floors is not None
+        else {vertical.id: 3 for vertical in configured_verticals}
+    )
     collect = base.app.collect.model_copy(
         update={
-            "vertical_feed_floors": vertical_feed_floors or {
-                "ai": 3,
-                "energy": 3,
-            }
+            "vertical_feed_floors": floors
         }
     )
     app = base.app.model_copy(update={"collect": collect})
@@ -255,7 +257,7 @@ def settings_for(
             salience=salience or [],
             retired=retired or [],
         ),
-        taxonomy=base.taxonomy.model_copy(update={"verticals": verticals or [AI]}),
+        taxonomy=base.taxonomy.model_copy(update={"verticals": configured_verticals}),
     )
 
 
@@ -602,8 +604,8 @@ def test_no_single_feed_becomes_the_vertical(tmp_path: Path) -> None:
         "https://blog.example-lab.org/2026/08/decoding-notes",
         "https://blog.example-lab.org/2026/08/supply-agreement",
     }
-    collect = config.load().app.collect
     settings = settings_for([LAB, TRADE, COMMUNITY])
+    collect = settings.app.collect
     available_collect = collect_config(
         **{
             **collect.model_dump(),
@@ -675,6 +677,7 @@ def test_cross_vertical_duplicate_drops_once_before_the_safety_ceiling(
         [LAB, TRADE, COMMUNITY, DUPLICATE],
         verticals=[AI, energy],
         safety_ceiling=2,
+        vertical_feed_floors={"ai": 3, "energy": 1},
     )
 
     matching = [item for item in built.items if item.canonical_url == MODEL_RELEASE]
@@ -907,10 +910,13 @@ def test_the_cap_flag_reaches_the_plan_stage(
     # feeds age by a day for every real day that passes. The window is widened
     # here so this stays a test of `--cap` and not a calendar.
     tuned = config_dir / "idhazh.json"
-    app = AppConfig.from_json(tuned.read_text(encoding="utf-8"))
     tuned.write_text(
-        app.model_copy(
-            update={"collect": app.collect.model_copy(update={"max_age_hours": 24.0 * 365 * 50})}
+        settings.app.model_copy(
+            update={
+                "collect": settings.app.collect.model_copy(
+                    update={"max_age_hours": 24.0 * 365 * 50}
+                )
+            }
         ).to_json(),
         encoding="utf-8",
     )
