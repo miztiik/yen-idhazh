@@ -38,7 +38,7 @@ Execute per docs/how-to/execute-a-plan.md: one maintainer carries the plan and d
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | 1 | The fold key, decided before anything writes a row | - | A | DONE #686 | p19-r1 | #686 | worker |
 | 2 | A stage of its own | 1 | B | DONE #695 | p19-r2 | #695 | worker |
-| 3 | One row per attempt, and a reason for every refusal | 2 | C | IMPLEMENTED; local gates and stacked PR delivery in progress; full CI required before merge | visual-design-attempt-ledger | - | - |
+| 3 | One row per attempt, and a reason for every refusal | 2 | C | DONE | visual-design-attempt-ledger | - | - |
 | 4 | What a re-render needs, and where a rejected plan lives | 3 | D | DEFERRED | - | - | - |
 
 ---
