@@ -8,6 +8,8 @@ import { finalizeRunOutput } from "../scripts/finalize-run-output";
 import { finishRunOutput } from "../scripts/finish-run-output";
 import { MetadataDeliveryResultSchema } from "../scripts/feed-ingest-plan-delivery-result";
 import { publicationRecording, fixtureGit } from "./publication-recordings";
+import { publishUploadInventory } from "../scripts/feed-ingest-plan-upload-inventory";
+import type { FeedIngestEvent } from "@idhazh/common-contracts";
 
 async function recording(failCollection = false) {
   const fixture = await publicationRecording(failCollection);
@@ -67,6 +69,11 @@ test("one Git delivery precedes the report and prepares only the selected handof
     expect((await readdir(artifacts)).sort()).toEqual([
       "700-1-delivery-result.json", "700-1-report.md", "700-1-selected-articles.json",
     ]);
+    const inventory: FeedIngestEvent[] = [];
+    expect(await publishUploadInventory({ directory: artifacts, runNumber: "700",
+      write: event => { inventory.push(event); } })).toBe(3);
+    expect(inventory.flatMap(event => typeof event.details.file === "string" ? [event.details.file] : []).sort())
+      .toEqual((await readdir(artifacts)).sort());
     const selected = await readFile(join(f.repository, f.summary.selected_articles_artifact!));
     expect(await readFile(join(artifacts, "700-1-selected-articles.json"))).toEqual(selected);
     const report = await readFile(join(artifacts, "700-1-report.md"), "utf8");
