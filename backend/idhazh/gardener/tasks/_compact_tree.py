@@ -387,6 +387,18 @@ class CompactTree:
             days=days,
         )
 
+    def _held_compact_siblings(
+        self, candidates: Iterable[tuple[Period, str]]
+    ) -> tuple[Path, ...]:
+        """Name candidate sibling files, then keep only those the commit holds."""
+        paths = tuple(
+            ledger.compact_path(self.state_dir, self.ledger, period, covers, fmt=fmt)
+            for period, covers in candidates
+            for fmt in Format
+        )
+        self._name(paths)
+        return tuple(path for path in paths if self.listing.holds(path))
+
     def compact_planner_period(
         self,
         period: Period,
@@ -405,68 +417,39 @@ class CompactTree:
         match period:
             case Period.DAILY:
                 self.name_days([covers])
-                self._name(
-                    [
-                        ledger.compact_path(
-                            self.state_dir,
-                            self.ledger,
-                            candidate,
-                            candidate_covers,
-                            fmt=fmt,
-                        )
-                        for candidate, candidate_covers in (
-                            (Period.MONTHLY, covers[:7]),
-                            (Period.YEARLY, covers[:4]),
-                        )
-                        for fmt in Format
-                    ]
+                beside = self._held_compact_siblings(
+                    (
+                        (Period.MONTHLY, covers[:7]),
+                        (Period.YEARLY, covers[:4]),
+                    )
                 )
                 fetch = PeriodFetch(
                     folders=(
                         self.raw_day_folder(covers),
                         self.daily_month_folder(covers[:7]),
                     ),
-                    beside=tuple(
-                        ledger.compact_path(
-                            self.state_dir, self.ledger, candidate, candidate_covers, fmt=fmt
-                        )
-                        for candidate, candidate_covers in (
-                            (Period.MONTHLY, covers[:7]),
-                            (Period.YEARLY, covers[:4]),
-                        )
-                        for fmt in Format
-                    ),
+                    beside=beside,
                 )
             case Period.MONTHLY:
                 self.name_months([covers])
-                self._name(
-                    [
-                        ledger.compact_path(
-                            self.state_dir, self.ledger, Period.YEARLY, covers[:4], fmt=fmt
-                        )
-                        for fmt in Format
-                    ]
+                beside = self._held_compact_siblings(
+                    (
+                        (Period.MONTHLY, covers),
+                        (Period.YEARLY, covers[:4]),
+                    )
                 )
                 fetch = PeriodFetch(
                     folders=(
                         self.raw_month_folder(covers),
                         self.daily_month_folder(covers),
                     ),
-                    beside=tuple(
-                        ledger.compact_path(
-                            self.state_dir, self.ledger, candidate, candidate_covers, fmt=fmt
-                        )
-                        for candidate, candidate_covers in (
-                            (Period.MONTHLY, covers),
-                            (Period.YEARLY, covers[:4]),
-                        )
-                        for fmt in Format
-                    ),
+                    beside=beside,
                 )
             case Period.YEARLY:
                 months = [f"{covers}-{number:02d}" for number in range(1, 13)]
                 self.name_months(months)
                 self.name_years([covers])
+                beside = self._held_compact_siblings(((Period.YEARLY, covers),))
                 fetch = PeriodFetch(
                     folders=(
                         *(
@@ -479,12 +462,7 @@ class CompactTree:
                         ),
                         self.monthly_year_folder(covers),
                     ),
-                    beside=tuple(
-                        ledger.compact_path(
-                            self.state_dir, self.ledger, Period.YEARLY, covers, fmt=fmt
-                        )
-                        for fmt in Format
-                    ),
+                    beside=beside,
                 )
             case _:
                 assert_never(period)
