@@ -51,7 +51,7 @@ from typing import Any, Final, Protocol
 
 from idhazh import config
 from idhazh.contracts.corpus import ChatRole, CorpusRow
-from idhazh.contracts.taxonomy import LifecycleStatus
+from idhazh.contracts.taxonomy import LifecycleStatus, Taxonomy
 from idhazh.contracts.visual import PlanEncodings
 from idhazh.measured import (
     SIZED_BY_A_READING_HERE,
@@ -195,7 +195,7 @@ def definition_probe(config_dir: Path) -> tuple[str, int]:
     nothing to the block and is not counted, which is what makes the per-entry
     figure the cost of an entry a prompt actually carries.
     """
-    taxonomy = config.load(config_dir).taxonomy
+    taxonomy = Taxonomy.from_json((config_dir / "taxonomy.json").read_text(encoding="utf-8"))
     offered = sum(
         1
         for group in (taxonomy.verticals, taxonomy.lenses, taxonomy.events)
@@ -290,8 +290,8 @@ def read_definition_budget(
             "entries_offered": offered,
             "tokens": tokens,
             "characters": len(block),
-            "tokens_an_entry": round(tokens / offered, 4),
-            "characters_an_entry": round(len(block) / offered, 4),
+            "tokens_an_entry": tokens / offered,
+            "characters_an_entry": len(block) / offered,
         },
         **stamp,
     )
