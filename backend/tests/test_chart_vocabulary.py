@@ -42,6 +42,7 @@ from idhazh.contracts.visual_decision import (
     VisualKind,
     VisualState,
 )
+from idhazh.contracts.visual_telemetry import ValidatorCheck
 from idhazh.fetch import FetchResult
 from idhazh.render import asset_relpath
 from idhazh.stages import common
@@ -185,6 +186,9 @@ def test_selected_names_limit_rendering_and_dot_keeps_grouped_evidence(
     knobs = settings(downgrade_enabled=True, type_selection_enabled=True, enabled_types=["bar"])
     disabled = draw(knobs, population=population, type="dot")
     assert disabled.planned_type is VisualType.DOT and disabled.rendered_type is None
+    assert disabled.rejection_reason is None
+    assert disabled.deepest_downgrade_depth == 0
+    assert disabled.gate_floor_applied is None
     assert draw(knobs, population=population).rendered_type is VisualType.BAR
     _, requested, _ = inputs()
     grouped = requested.encodings.model_dump(mode="json") | {"series": requested.encodings.category}
@@ -192,6 +196,27 @@ def test_selected_names_limit_rendering_and_dot_keeps_grouped_evidence(
         settings(downgrade_enabled=True), population=population, type="dot", encodings=grouped
     )
     assert grouped_dot.rendered_type is VisualType.DOT
+
+
+@pytest.mark.parametrize(
+    ("history_marks", "selected_depth", "floor_applied"),
+    [(4, 1, False), (8, 0, True)],
+)
+def test_downgrade_records_floor_effect_separately_from_selected_depth(
+    history_marks: int,
+    selected_depth: int,
+    floor_applied: bool,
+) -> None:
+    decision = draw(
+        settings(downgrade_enabled=True, downgrade_floor_percentiles=[50]),
+        population={VisualType.BAR: (history_marks,)},
+        type="comparison",
+    )
+
+    assert decision.downgrade_depth == selected_depth
+    assert decision.deepest_downgrade_depth == 1
+    assert decision.gate_floor_applied is floor_applied
+    assert decision.rejection_reason is not None
 
 
 def test_enabled_fallback_requires_real_input_and_cold_start_records_refusal(
@@ -211,6 +236,7 @@ def test_enabled_fallback_requires_real_input_and_cold_start_records_refusal(
     refused = draw(knobs, population=population, type="comparison")
     assert refused.planned_type is VisualType.COMPARISON
     assert refused.rendered_type is None
+    assert refused.gate_floor_applied is None
     assert refused.rationale and "floor" in refused.rationale
 
 
@@ -351,5 +377,8 @@ def test_real_shard_keeps_story_when_pie_fallback_parts_do_not_match_its_whole(
     assert decision.kind is VisualKind.NONE
     assert decision.none_reason is NoneReason.VALIDATION_FAILED
     assert decision.planned_type is VisualType.PIE and decision.rendered_type is None
+    assert decision.rejection_reason is ValidatorCheck.PIE_EXHAUSTIVE
+    assert decision.deepest_downgrade_depth == 1
+    assert decision.gate_floor_applied is None
     assert decision.spec is None and decision.data_path is None
     assert decision.rationale and "stacked_bar_exhaustive" in decision.rationale

@@ -101,6 +101,15 @@ def test_fixture_round_trips_without_losing_values(path: Path) -> None:
             }
         elif contract.__schema_stem__ == "host-fingerprint-row":
             expected = {"machine_memory_total_mib": None, **original}
+        elif contract.__schema_stem__ == "visual-decision":
+            expected = {
+                **original,
+                "deepest_downgrade_depth": None,
+                "rejection_reason": None,
+                "gate_floor_applied": None,
+            }
+            if "visual_id" in contract.model_fields and "visual_id" not in original:
+                expected["visual_id"] = None
         elif "visual_id" in contract.model_fields and "visual_id" not in original:
             expected = {**original, "visual_id": None}
         assert json.loads(once) == expected
