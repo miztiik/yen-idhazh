@@ -1,6 +1,6 @@
 # Feed planning operator APIs
 
-**Last Updated**: 2026-10-28
+**Last Updated**: 2026-10-29
 
 How do local requests fetch, parse, select, partition and persist content?
 These are build-time operator APIs, not a server for the static site.
@@ -48,6 +48,14 @@ Transient work facts retain actual UTC operation times and request attempts.
 They feed grouped health counters, not a committed per-operation history.
 Public responses, progress and commit manifests contain no article bodies.
 The body-bearing fetch receipt remains private for the parse operation.
+
+## Structured operation logs
+
+Standalone fetch, parse and persistence use the same structured publisher
+as `/plan`. Completed replays emit no new work events. Invalid controls that
+cannot resolve a document do not log caller-supplied addresses.
+The [runner](feed-plan-runner.md#first-sight-and-retained-output) owns event
+fields, failure-only article addresses and elapsed-time meaning.
 
 ## Durable replay and interrupted requests
 

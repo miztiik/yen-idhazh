@@ -95,6 +95,12 @@ jobs:
           RUN_CANCELLED: ${{ steps.cancellation.outputs.cancelled == 'true' }}
         run: bun run services/feed-ingest-plan/scripts/finalize-run-output.ts
 
+      - name: List actual upload files as JSONL
+        if: ${{ always() && steps.finalize.outputs.artifact_directory != '' }}
+        env:
+          ARTIFACT_DIRECTORY: ${{ steps.finalize.outputs.artifact_directory }}
+        run: bun run services/feed-ingest-plan/scripts/feed-ingest-plan-upload-inventory.ts
+
       - name: Upload run artifacts
         id: upload
         if: ${{ always() && steps.finalize.outputs.artifact_directory != '' }}
@@ -102,6 +108,7 @@ jobs:
         with:
           name: collect-and-select-articles-${{ github.run_id }}-${{ github.run_attempt }}
           path: ${{ runner.temp }}/feed-ingest-plan/${{ steps.finalize.outputs.artifact_directory }}
+          include-hidden-files: false
           if-no-files-found: error
 
       - name: Finish and clean up

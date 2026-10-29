@@ -16,11 +16,21 @@ type Scope = {
   document_kind: "feed" | "article"; publisher_id: string | null; candidate_id: string | null;
   observed_run_id: string; observed_attempt: number; feed_id: string;
 };
-type Context = Pick<HarvestContext, "progress" | "observations" | "observation_clock"> & {
+type Context = Pick<HarvestContext, "progress" | "observations" | "observation_clock" | "document_activity"> & {
   on_attempt?: (observation: ReturnType<typeof observeDocument>) => void;
 };
 
 export function documentWork(context: Context, identity: DocumentIdentity, key: string, scope: Scope) {
+  const publish = (operation: "fetch" | "parse", phase: "started" | "completed" | "failed",
+    duration_ms: number | null, url?: string, failure_code?: string | null) => context.document_activity?.(
+    operation, phase, {
+      scope: "document",
+      request_id: key, article_id: identity.article_id, document_kind: scope.document_kind,
+      feed_id: scope.feed_id, publisher_id: scope.publisher_id, duration_ms,
+      ...(failure_code == null ? {} : { failure_code }),
+    }, phase === "failed" && scope.document_kind === "article" ? url : undefined,
+  );
+  let fetchedUrl: string | undefined;
   const timestamp = () => utcTimestamp(context.observation_clock);
   const event = (operation: "fetch" | "parse" | "attempt", cause: string | null, occurred_at = timestamp(), suffix = key) =>
     observeDocument(identity, suffix, operation, cause, occurred_at);
@@ -43,8 +53,14 @@ export function documentWork(context: Context, identity: DocumentIdentity, key: 
     await context.observations?.save([row]);
   }
   return {
+    rejectFetch(url: string, failure_code: string) {
+      publish("fetch", "started", null);
+      publish("fetch", "failed", 0, url, failure_code);
+    },
     async fetch(fetcher: Pick<PermittedFetcher, "fetch">, url: string, cause: string | null = null) {
       const started = performance.now();
+      fetchedUrl = url;
+      publish("fetch", "started", null);
       const fetchId = event("fetch", cause).event_id;
       {
         let fetched: FetchResult;
@@ -58,11 +74,14 @@ export function documentWork(context: Context, identity: DocumentIdentity, key: 
             }, measurement.attempt.duration_ms, measurement.attempt.http_status, measurement);
           }, scope.document_kind);
         } catch (error) {
+          publish("fetch", "failed", Math.round(performance.now() - started), url, "FETCH_FAILED");
           await save(event("fetch", cause), { outcome: "failed", failure_code: null },
             Math.round(performance.now() - started), null);
           throw error;
         }
         const observation = event("fetch", cause);
+        publish("fetch", fetched.failure !== null || fetched.body === null ? "failed" : "completed",
+          Math.round(performance.now() - started), url, fetched.failure);
         await save(observation, {
           outcome: fetched.failure !== null ? "failed" : fetched.body === null ? "unavailable" : "success",
           failure_code: fetched.failure,
@@ -70,8 +89,9 @@ export function documentWork(context: Context, identity: DocumentIdentity, key: 
         return { fetched, observation };
       }
     },
-    async parse<T>(execute: () => Promise<T>, cause: string, describe: (parsed: T) => Result) {
+    async parse<T>(execute: () => Promise<T>, cause: string, describe: (parsed: T) => Result, url = fetchedUrl) {
       const started = performance.now();
+      publish("parse", "started", null);
       let parsed: T | null = null;
       let failure: "malformed-feed" | ArticleExtractionError["reason"] | null = null;
       let result: Result;
@@ -81,11 +101,14 @@ export function documentWork(context: Context, identity: DocumentIdentity, key: 
       } catch (error) {
         const observation = event("parse", cause);
         failure = error instanceof ArticleExtractionError ? error.reason : error instanceof FeedParseError ? "malformed-feed" : null;
+        publish("parse", "failed", Math.round(performance.now() - started), url, failure ?? "PARSE_FAILED");
         await save(observation, { outcome: "failed", failure_code: failure }, Math.round(performance.now() - started), null);
         if (failure === null) throw error;
         return { parsed, failure, observation };
       }
       const observation = event("parse", cause);
+      publish("parse", result.outcome === "failed" ? "failed" : "completed",
+        Math.round(performance.now() - started), url, result.failure_code);
       await save(observation, result, Math.round(performance.now() - started), null);
       return { parsed, failure, observation };
     },

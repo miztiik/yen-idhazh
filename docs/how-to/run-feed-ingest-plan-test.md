@@ -106,19 +106,26 @@ files at their registered paths, never an archive.
 History staging uses the [bounded day membership contract](../reference/feed-planner-ledgers.md#raw-day-membership).
 Named Git days, not saved raw-day JSON lists, identify all Parquet siblings.
 
-Three tasks follow `Collect and select articles with a supervised server`:
+Four tasks follow `Collect and select articles with a supervised server`:
 
 1. `Commit ledgers and write report` calls the safe-delivery API once for all
    verified completed ledgers, then calls the Markdown API and prepares the
    upload directory. A commit or report failure does not stop the remaining
    preparation; the task still fails after preserving its useful output.
-2. `Upload run artifacts` uploads that prepared directory as one archive named
+2. `List actual upload files as JSONL` uses the existing structured publisher
+   to name each actual file relative to the ZIP root, then its total count.
+   It reads only this run's prepared `artifacts` directory, follows the
+   upload's ordinary file matching and excludes hidden files and directories.
+   The inventory is beside the upload in the job log; it does not change the
+   third-party action's file-count message or add a file to the archive.
+   Its `artifact-upload` completion means enumeration, not upload success.
+3. `Upload run artifacts` uploads that prepared directory as one archive named
    `collect-and-select-articles-<run>-<attempt>`, including after finalization
    failure. It contains `<run>-<attempt>-selected-articles.json` for the next
    summarizer, plus the delivery result and Markdown report when available.
    The summarizer downloads this named artifact and reads its selected JSON
    file, not a ledger. Article bodies never enter the Git request.
-3. `Finish and clean up` checks collection, finalization and the upload's
+4. `Finish and clean up` checks collection, finalization and the upload's
    returned artifact identity. It rechecks the saved result and exact Git
    delivery receipt before removing only the temporary run directory.
    An earlier collection failure still fails the job after completed

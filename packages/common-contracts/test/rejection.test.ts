@@ -346,7 +346,7 @@ describe("current planner contracts", () => {
 
   test("binds event discriminators, candidate identities and stages", () => {
     const row = event();
-    expect(row.version).toBe("2026-10-29");
+    expect(row.version).toBe("2026-10-29T08:00");
     expect(FeedIngestEventSchema.safeParse({ ...row, payload: { article_text: "must not escape" } }).success).toBe(false);
     expect(FeedIngestEventSchema.safeParse({ ...row, operation: "article-assessment" }).success).toBe(false);
     expect(FeedIngestEventSchema.safeParse({ ...row, details: { duration_ms: 0.5 } }).success).toBe(true);
@@ -372,8 +372,9 @@ describe("current planner contracts", () => {
     expect(() => readFeedIngestEvent({ ...row, version: "2026-10-28" })).toThrow();
     expect(() => readFeedIngestEvent({ ...row, feed_id: null })).toThrow();
     const schema = z.toJSONSchema(FeedIngestEventSchema);
-    expect(schema.version).toBe("2026-10-29");
+    expect(schema.version).toBe("2026-10-29T08:00");
     expect(schema.changelog).toEqual([
+      { version: "2026-10-29T08:00", change: "Add artifact-upload inventory and publisher-controlled failure article addresses." },
       { version: "2026-10-29", change: "Move operation-specific fields into flexible details." },
       { version: "2026-10-28", change: "Name the publisher on sparse article progress events." },
       { version: "2026-10-26", change: "Name pre-fetch and selection health captures separately." },

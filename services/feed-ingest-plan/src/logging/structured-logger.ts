@@ -10,13 +10,29 @@ const DETAIL_LIMITS = { depth: 6, entries: 128, stringLength: 512, bytes: 4096 }
 const SENSITIVE_DETAIL_KEY = /^(?:article_text|body|policy|headers?|authorization|cookie|secret|token|url|.*_(?:body|text|policy|headers?|authorization|cookie|secret|token|url))$/i;
 type ComplianceViolation = Readonly<{ code: string; path: string }>;
 
+/** A diagnostic address never retains credentials, query values or fragments. */
+function diagnosticArticleUrl(value: string): string | undefined {
+  try {
+    const url = new URL(value);
+    if (!["http:", "https:"].includes(url.protocol) || url.username || url.password) return undefined;
+    // Signed addresses must not be copied, even with their signature removed.
+    if ([...url.searchParams.keys()].some(key => /token|secret|signature|credential|authorization|key|auth|sig/i.test(key))) return undefined;
+    url.search = "";
+    url.hash = "";
+    return url.href.length <= DETAIL_LIMITS.stringLength ? url.href : undefined;
+  } catch (error) {
+    if (!(error instanceof TypeError)) throw error;
+    return undefined;
+  }
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   if (value === null || typeof value !== "object" || Array.isArray(value)) return false;
   const prototype = Object.getPrototypeOf(value);
   return prototype === Object.prototype || prototype === null;
 }
 
-export function prepareProgressEvent(raw: unknown, requiredDetails: readonly string[] = []): FeedIngestEvent {
+export function prepareProgressEvent(raw: unknown, requiredDetails: readonly string[] = [], failureArticleUrl?: string): FeedIngestEvent {
   if (!isRecord(raw)) throw new TypeError("Progress event must be an object");
   const { details: rawDetails, ...envelope } = raw;
   const base = FeedIngestEventSchema.omit({ details: true }).parse(envelope);
@@ -95,6 +111,12 @@ export function prepareProgressEvent(raw: unknown, requiredDetails: readonly str
   for (const key of requiredDetails) {
     if (!Object.hasOwn(details, key)) addViolation("required_detail_missing", `details.${key}`);
   }
+  if (failureArticleUrl !== undefined) {
+    const url = diagnosticArticleUrl(failureArticleUrl);
+    if (base.phase === "failed" && (base.operation === "fetch" || base.operation === "parse") && url !== undefined) {
+      details.article_url = url;
+    } else addViolation("unsafe_article_url", "details.article_url");
+  }
   let serialized = JSON.stringify(details);
   if (Buffer.byteLength(serialized, "utf8") > DETAIL_LIMITS.bytes) {
     details = {};
@@ -114,14 +136,14 @@ export function prepareProgressEvent(raw: unknown, requiredDetails: readonly str
 }
 
 export function createStageLogger(
-  context: RunContext,
+  context: Pick<RunContext, "run_id" | "correlation_id">,
   write: (event: FeedIngestEvent) => void = writeJsonLine,
 ) {
   return (operation: FeedIngestEvent["operation"], phase: FeedIngestEvent["phase"],
-    details: Record<string, unknown> = {}, requiredDetails: readonly string[] = []) => {
+    details: Record<string, unknown> = {}, requiredDetails: readonly string[] = [], failureArticleUrl?: string) => {
     write(prepareProgressEvent({
       run_id: context.run_id, correlation_id: context.correlation_id, occurred_at: new Date().toISOString(),
       operation, phase, details,
-    }, requiredDetails));
+    }, requiredDetails, failureArticleUrl));
   };
 }

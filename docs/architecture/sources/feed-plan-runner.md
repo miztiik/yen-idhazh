@@ -1,6 +1,6 @@
 # Running the isolated feed planner
 
-**Last Updated**: 2026-10-28
+**Last Updated**: 2026-10-29
 
 How do the API and CLI execute one real feed plan?
 Both compose the same units. The production Python news pipeline, digest
@@ -130,13 +130,26 @@ line has a strict run envelope and a flexible `details` object; callers may
 name required detail keys for an event. The publisher marks missing requested
 keys or unsafe details with `details._compliance.status` set to
 `NON_COMPLIANT`, and does not include rejected values in that marker. Unknown
-detail keys are allowed. HTTP URLs and detail keys for article text, bodies,
-policies, headers, credentials or URLs are refused. Details are limited to
+detail keys are allowed. Caller-supplied HTTP URLs and detail keys for article
+text, bodies, policies, headers, credentials or URLs are refused. Details are limited to
 4,096 bytes, six levels, 128 values, 128 characters per key and 512 characters
-per string. Article parser events carry the supplying feed's `feed_id` and
-publisher's `publisher_id`. Run-level parser activity may leave both IDs
-null. Article parser start events carry no duration; completion and failure
-events carry elapsed milliseconds measured from the worker's start response.
+per string. The document execution unit emits one started and one completed
+or failed event for each fetch or parse, both in `/plan` and standalone calls.
+It names the server-owned request and article identity, `feed_id` and
+`publisher_id`. `scope: document` identifies this work; `scope: plan` identifies
+aggregate orchestration, not a second fetch of that document. Worker callbacks
+do not emit duplicate lifecycles. Started events have null duration; terminal
+events measure elapsed milliseconds, including time waiting for a parser.
+Persistence emits its lifecycle around the actual write, including standalone
+requests; replay does not repeat completed work.
+
+Article fetch and parse failure events alone may include `details.article_url`.
+The execution unit supplies this address separately from flexible details.
+The publisher removes its query and fragment, rejects credentials and signed
+or token-bearing addresses, and refuses non-HTTP addresses. Started and
+completed events never include article URLs. Caller-provided URL fields,
+article bodies, credentials and reserved compliance markers remain refused.
+Logged addresses are diagnostic data, never inputs to fetching, files or commands.
 
 The progress report reads the event array from the current run. No later run
 reads archived JSONL, so the event shape can move without a history migration.
@@ -145,6 +158,15 @@ event non-compliant.
 Completed earlier files are retained after a later failure.
 
 ## Design rationale
+
+The maintainer-directed change on 2026-10-29 permits diagnostic article
+addresses only on fetch/parse failures, replacing the former blanket refusal.
+The separate publisher argument prevents arbitrary details from granting that
+permission. Existing document execution owns progress instead of adding a
+second API wrapper or another worker event stream. This also reports empty
+article extraction as failed instead of reporting only a completed worker.
+The strict envelope remains shared; details remain flexible rather than
+operation-specific schemas.
 
 One supervised step gives the child the same lifetime as the HTTP client
 without losing in-memory batch references between planning and health reporting.
