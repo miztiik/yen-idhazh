@@ -144,13 +144,19 @@ def stage_plan(
 
     candidates: list[discover.Candidate] = []
     health: list[FeedHealthRow] = []
-    history = ledger.load_health(state, today=date, within_days=ledger.HEALTH_WINDOW_DAYS)
-    asleep = discover.resting(history, after_failures=collect.availability_strikes_before_rest)
+    history = ledger.load_health_history(
+        state, today=date, within_days=ledger.HEALTH_WINDOW_DAYS
+    )
+    asleep = discover.resting(
+        history.rows,
+        after_failures=collect.availability_strikes_before_rest,
+        history_complete=history.complete,
+    )
     # Retirement outranks rest, so it is decided first and from its own evidence:
     # five distinct runs reading `410 Gone` from one address. The ledger is read
     # before the row is filed and the two are joined, so the run that decides is
     # also the first run that does not ask.
-    endpoints = source_health.endpoint_records(history)
+    endpoints = source_health.endpoint_records(history.rows)
     gone = {row.endpoint_key for row in ledger.load_retirements(state)}
     filed = source_health.retirements(
         settings.sources.feeds,

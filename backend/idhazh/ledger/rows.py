@@ -23,6 +23,7 @@ its rows to `persist` itself.
 from __future__ import annotations
 
 from collections.abc import Collection, Iterable
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Final
 
@@ -45,6 +46,14 @@ from idhazh.ledger.persist import persist
 #: enough history to reach into last month, so a quarantine decided on the first
 #: of the month can still see the failures that caused it.
 HEALTH_WINDOW_DAYS: Final = 31
+
+
+@dataclass(frozen=True, slots=True)
+class FeedHealthHistory:
+    """The bounded health rows and whether enough represented days were read."""
+
+    rows: tuple[FeedHealthRow, ...]
+    complete: bool
 
 
 def append_seen(
@@ -304,6 +313,23 @@ def load_visual_prunes(state_dir: Path) -> list[VisualPruneRow]:
 
 
 def load_health(state_dir: Path, *, today: str, within_days: int) -> list[FeedHealthRow]:
+    """Return rows from the newest `within_days` recorded health days."""
+    return list(
+        load_health_history(
+            state_dir,
+            today=today,
+            within_days=within_days,
+        ).rows
+    )
+
+
+def load_health_history(
+    state_dir: Path,
+    *,
+    today: str,
+    within_days: int,
+    required_days: int = HEALTH_WINDOW_DAYS,
+) -> FeedHealthHistory:
     """Every health row of the newest `within_days` days the ledger holds, oldest run first.
 
     Sorted by run rather than by file order so a caller can talk about "the last
@@ -320,9 +346,29 @@ def load_health(state_dir: Path, *, today: str, within_days: int) -> list[FeedHe
     one writer's file per work unit, the highest attempt's, then one row per
     feed per run by `FEED_HEALTH_KEY` and its preference. A file this build
     cannot read is skipped with a warning naming it, as every door read is.
+
+    `complete` is true only when the bounded read has at least `required_days`
+    represented dates, each selected date still has rows, and its ledger read
+    skipped no files or recorded losses. A shorter or damaged history cannot
+    prove that a failure streak is the latest one.
     """
+    if required_days < 1:
+        raise ValueError("required_days must be positive")
     held = ledger_files.held_days(state_dir, LedgerName.FEED_HEALTH)
     days = held if within_days == UNBOUNDED_WINDOW else held[max(0, len(held) - within_days) :]
-    rows = ledger_files.load_days(state_dir, LedgerName.FEED_HEALTH, days, model=FeedHealthRow)
+    read_status = ledger_files.LedgerReadStatus()
+    rows = ledger_files.load_days(
+        state_dir,
+        LedgerName.FEED_HEALTH,
+        days,
+        model=FeedHealthRow,
+        read_status=read_status,
+    )
     rows.sort(key=lambda row: (row.date, *instant_bounds(row.checked_at), row.run_id))
-    return rows
+    loaded_days = {row.date for row in rows}
+    complete = (
+        len(days) >= required_days
+        and set(days).issubset(loaded_days)
+        and read_status.complete
+    )
+    return FeedHealthHistory(rows=tuple(rows), complete=complete)
