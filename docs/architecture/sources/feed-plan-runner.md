@@ -125,13 +125,23 @@ run row records completed, partial or failed outcome, including an explicit
 empty result. The [ledger reference](../../reference/feed-planner-ledgers.md)
 owns the exact fields and row identities.
 
-Only sparse body-free progress and failure events leave the runtime.
-There are no exported full work events, archived parsed/rejected populations,
-classification products, per-operation ledgers or full-audit receipt graph.
-Article parser events carry the supplying feed's `feed_id` and publisher's
-`publisher_id`. Run-level parser activity leaves both IDs null. Article parser
-start events carry no duration; completion and failure events carry elapsed
-milliseconds measured from the worker's start response.
+Only sparse body-free progress and failure events leave the runtime. Each JSONL
+line has a strict run envelope and a flexible `details` object; callers may
+name required detail keys for an event. The publisher marks missing requested
+keys or unsafe details with `details._compliance.status` set to
+`NON_COMPLIANT`, and does not include rejected values in that marker. Unknown
+detail keys are allowed. HTTP URLs and detail keys for article text, bodies,
+policies, headers, credentials or URLs are refused. Details are limited to
+4,096 bytes, six levels, 128 values, 128 characters per key and 512 characters
+per string. Article parser events carry the supplying feed's `feed_id` and
+publisher's `publisher_id`. Run-level parser activity may leave both IDs
+null. Article parser start events carry no duration; completion and failure
+events carry elapsed milliseconds measured from the worker's start response.
+
+The progress report reads the event array from the current run. No later run
+reads archived JSONL, so the event shape can move without a history migration.
+The report displays flexible details and warns when the publisher marks an
+event non-compliant.
 Completed earlier files are retained after a later failure.
 
 ## Design rationale
