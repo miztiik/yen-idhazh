@@ -57,6 +57,11 @@ from idhazh.visual_population import load_visual_population
 pytestmark = [pytest.mark.visual, pytest.mark.contract]
 
 
+@pytest.fixture(autouse=True)
+def isolate_visual_outputs(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(common, "PUBLIC_ROOT", tmp_path / "public" / "digest")
+
+
 def settings(**knobs: object) -> config.Settings:
     loaded = config.load(CONFIG_DIR)
     app = loaded.app.model_dump(mode="json")
