@@ -8,6 +8,7 @@ from support.ledger import writer_identity
 
 from idhazh import ledger
 from idhazh.contracts.file_envelope import Period
+from idhazh.contracts.knobs.gardener import CompactionPolicy
 from idhazh.contracts.ledger_index import CompactIndex
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.visual import PlanDecision
@@ -24,6 +25,7 @@ LEDGER = LedgerName.VISUAL_DESIGN_ATTEMPTS
 def test_shipped_policy_retains_full_rows_then_deletes_without_an_aggregate(tmp_path: Path) -> None:
     state = tmp_path / "state"
     row = VisualAttemptRow(
+        version=VisualAttemptRow.schema_version(),
         date="2026-08-21", run_id="2026-08-21-1", item_id="energy-01",
         decision=PlanDecision.NONE, none_reason=NoneReason.NOT_REACHABLE,
         state=VisualState.ABSENT, visual_id="a" * 64,
@@ -56,6 +58,6 @@ def test_shipped_policy_retains_full_rows_then_deletes_without_an_aggregate(tmp_
     index = CompactIndex.read(ledger.compact_index_path(state, LEDGER, Period.MONTHLY))
     assert not any(entry.covers == "2026-08" for entry in index.entries)
     policy = declared()[TASK]
-    assert policy.kind == "compaction"
+    assert isinstance(policy, CompactionPolicy)
     assert policy.monthly_window.model_dump() == {"unit": "months", "value": 14}
     assert policy.monthly_keep_days is None

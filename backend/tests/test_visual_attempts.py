@@ -163,7 +163,7 @@ def test_whowhat_uses_the_same_attempt_mapping_and_storage(
 def test_real_compiler_refusal_remains_a_drafted_attempt(tmp_path: Path) -> None:
     plan, table, article = whowhat_inputs()
     assert article.text is not None
-    changed_text = article.text.replace("Northstar", "Southstar", 1)
+    changed_text = article.text.swapcase()
     changed_article = Article.model_validate(
         article.model_dump(mode="json") | {"text": changed_text}
     )
@@ -234,7 +234,8 @@ def test_old_attempts_remain_readable_without_invented_outcome_evidence() -> Non
     )
     read = VisualAttemptRow.from_csv_row(old.csv_row())
     assert read == old
-    assert read.planned_type is read.rendered_type is read.gate_floor_applied is None
+    assert read.planned_type is read.rendered_type is None
+    assert read.gate_floor_applied is None
     with pytest.raises(ValidationError):
         VisualAttemptRow.model_validate(old.model_dump() | {"planned_type": "bar"})
 
