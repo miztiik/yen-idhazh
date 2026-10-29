@@ -215,6 +215,12 @@ second scheduler is added. Readers include late raw planner work beside
 compact coverage; another family keeps its existing compact-first rule.
 Packing preserves captured reliability and score values rather than summing
 them. Run counters can be aggregated later, once per fact.
+Before a planner period is fetched, the Python pass names its candidate compact
+sibling paths, then asks the listing which exact files the commit holds. A
+missing sibling is not passed as a fetch member. Daily, monthly, reopened-month
+monthly and yearly periods use this rule. A held JSON sibling is still named,
+so the TypeScript owner can refuse unsupported legacy JSON; a held Parquet
+file alone names no other format as a guess.
 The row identities and missing-data rules are
 [the planner reference](../../reference/feed-planner-ledgers.md#e-dates-counters-and-compaction).
 After all stages decide their files, the pass writes each final index once,
