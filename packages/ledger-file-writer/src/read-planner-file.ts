@@ -90,9 +90,10 @@ export async function readPlannerParquet<T extends object>(
     }
     const footerLedger = values.get("ledger");
     const rowSchemaVersion = values.get("schema_version");
-    if (footerLedger === ledger && rowSchemaVersion !== contract.schemaVersion) {
+    const acceptedSchemaVersions = contract.acceptedSchemaVersions ?? [contract.schemaVersion];
+    if (footerLedger === ledger && (rowSchemaVersion === undefined || !acceptedSchemaVersions.includes(rowSchemaVersion))) {
       throw new PlannerLedgerFileError(
-        `Planner ${ledger} uses an unsupported row schema; current ledger contract requires ${contract.schemaVersion}`,
+        `Planner ${ledger} uses an unsupported row schema; accepted ledger contract versions are ${acceptedSchemaVersions.join(", ")}`,
       );
     }
     envelope = PlannerFileEnvelopeSchema.parse({
@@ -104,7 +105,8 @@ export async function readPlannerParquet<T extends object>(
       updated_at: values.get("updated_at") ?? null,
     });
   } finally { footer.free(); metadata.free(); }
-  if (envelope.ledger !== ledger || envelope.row_schema_version !== contract.schemaVersion) {
+  const acceptedSchemaVersions = contract.acceptedSchemaVersions ?? [contract.schemaVersion];
+  if (envelope.ledger !== ledger || !acceptedSchemaVersions.includes(envelope.row_schema_version)) {
     throw new PlannerLedgerFileError("Planner file does not match its current ledger contract");
   }
   if (envelope.tier === "raw" && basename(path) !== `${envelope.file_id}.parquet`) {

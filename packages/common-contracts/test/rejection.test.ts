@@ -18,6 +18,7 @@ import {
   FetchRequestSchema,
   SelectedArticleRowSchema, SelectedArticlesArtifactSchema, SelectedArtifactArticleSchema,
   selectedArticleMetadata, readSelectedArticlesArtifact, FeedHealthStateRowSchema, PlanRunRowSchema,
+  DropReasonSchema, RetainedRejectionReasonSchema, RejectedArticleRowSchema,
 } from "../src/index";
 import { plannerStageSchemas, runtimeSchemas, schemas } from "./schema-binding";
 
@@ -157,6 +158,36 @@ describe("rejection evidence", () => {
         expect(CandidateRejectionRecordSchema.safeParse({ ...row, details: { ...details, [field]: null } }).success).toBe(false);
       }
     }
+  });
+
+  test("separates strict current reasons from bounded retained ledger reasons", async () => {
+    const fixture = await Bun.file(new URL(
+      "../../../tests/fixtures/contracts/rejected-article/retained-reasons.json", import.meta.url,
+    )).json();
+    const row = {
+      run_id: run, attempt: 1, date: day, candidate_id: digest, url_key: digest,
+      feed_id: "example", stage: "curate-article-portfolio", freshness_cutoff_at: null,
+    };
+
+    expect(RejectedArticleRowSchema.parse({
+      ...row, reason_code: fixture.known_active_reason,
+    }).reason_code).toBe(fixture.known_active_reason);
+    expect(RejectedArticleRowSchema.parse({
+      ...row, reason_code: fixture.unknown_retained_reason,
+    }).reason_code).toBe(fixture.unknown_retained_reason);
+
+    const oldReason = DropReasonSchema.options.find(reason => reason.startsWith("REJECTED_RUN"));
+    expect(oldReason).toBeDefined();
+    expect(RejectedArticleRowSchema.safeParse({
+      ...row, stage: "screen-article-candidates", reason_code: oldReason,
+    }).success).toBe(true);
+
+    expect(CandidateRejectionRecordSchema.safeParse({
+      ...rejection(), drop_reason: "UNKNOWN_CANDIDATE_REASON",
+    }).success).toBe(false);
+    expect(RetainedRejectionReasonSchema.safeParse("lowercase_reason").success).toBe(false);
+    expect(RetainedRejectionReasonSchema.safeParse("UNKNOWN REASON").success).toBe(false);
+    expect(RetainedRejectionReasonSchema.safeParse("X".repeat(129)).success).toBe(false);
   });
 
   test("refuses unknown fields, coercion, nonfinite values and non-UTC timestamps", () => {

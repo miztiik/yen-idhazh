@@ -1,6 +1,6 @@
 # Feed planner ledgers
 
-**Last Updated**: 2026-10-27
+**Last Updated**: 2026-10-29
 
 Which planner data is retained, and where is it stored?
 
@@ -574,13 +574,15 @@ published-payload ceiling in `config/idhazh.json`.
 | M2 | `run_id`, `attempt`, `date` | Selection execution identity and its UTC accounting day |
 | M3 | `candidate_id` | Original parsed candidate identity |
 | M4 | `url_key`, `feed_id` | Canonical URL hash and supplying feed |
-| M5 | `stage`, `reason_code` | One final screening or curation refusal |
+| M5 | `stage`, `reason_code` | Final screening or curation refusal; retained rows accept bounded historical reason strings |
 | M6 | `freshness_cutoff_at` | Applied UTC age cutoff, or null when no cutoff was applied |
 
 Row identity is run, attempt and candidate. Selected cutoffs use their admitted
 window. Age refusals use the failed threshold. An unopened older step is not
 an applied cutoff. Current schemas refuse harvest-stage or mismatched
-stage/reason rows.
+stage/reason rows. Known current reasons keep their stage checks; unknown or
+retired reason strings remain readable evidence when they follow the bounded
+uppercase reason-code pattern.
 
 ## TypeScript contract ownership
 
