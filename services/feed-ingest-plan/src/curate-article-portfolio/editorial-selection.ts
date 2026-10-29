@@ -21,7 +21,7 @@ export function curateArticles(input: {
   const policy = config.curate_articles;
   const limit = input.batch.request.article_limit ?? policy.article_limit;
   const budgets = allocateArticleQualityBucketBudgets(config, limit).map(budget => ({
-    ...budget, windows: resolveArticleQualityBucketWindows(budget.rule, input.batch.request.freshness_hours),
+    ...budget, windows: resolveArticleQualityBucketWindows(budget.rule),
     opened: new Set<number>(),
   }));
   for (const article of input.articles) {

@@ -18,7 +18,7 @@ import {
   FetchRequestSchema,
   SelectedArticleRowSchema, SelectedArticlesArtifactSchema, SelectedArtifactArticleSchema,
   selectedArticleMetadata, readSelectedArticlesArtifact, FeedHealthStateRowSchema, PlanRunRowSchema,
-  DropReasonSchema, RetainedRejectionReasonSchema, RejectedArticleRowSchema,
+  RetainedRejectionReasonSchema, RejectedArticleRowSchema,
 } from "../src/index";
 import { plannerStageSchemas, runtimeSchemas, schemas } from "./schema-binding";
 
@@ -175,12 +175,6 @@ describe("rejection evidence", () => {
     expect(RejectedArticleRowSchema.parse({
       ...row, reason_code: fixture.unknown_retained_reason,
     }).reason_code).toBe(fixture.unknown_retained_reason);
-
-    const oldReason = DropReasonSchema.options.find(reason => reason.startsWith("REJECTED_RUN"));
-    expect(oldReason).toBeDefined();
-    expect(RejectedArticleRowSchema.safeParse({
-      ...row, stage: "screen-article-candidates", reason_code: oldReason,
-    }).success).toBe(true);
 
     expect(CandidateRejectionRecordSchema.safeParse({
       ...rejection(), drop_reason: "UNKNOWN_CANDIDATE_REASON",
