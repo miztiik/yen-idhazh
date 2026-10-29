@@ -136,7 +136,7 @@ export async function runFeedPlan(raw: unknown, inputs: PlanInputs, runtime: Pla
         for (const entry of entries) {
           if (entry.link === null) continue;
           let identity;
-          try { identity = canonicalizeUrl(entry.link); }
+          try { identity = deriveArticleIdentity(entry.link); }
           catch { continue; }
           if (matchUrlExclusion(identity.canonical_url, inputs.harvest.config.harvest.url_exclusions) !== undefined) continue;
           sightings.push(DiscoveredArticleRowSchema.parse({
@@ -266,6 +266,6 @@ export function summarizePlan(result: FeedPlanResult) {
     })),
   };
 }
-import { canonicalizeUrl } from "./harvest-feeds/url-cleaner";
+import { deriveArticleIdentity } from "./harvest-feeds/article-identity";
 import { matchUrlExclusion } from "./harvest-feeds/url-exclusions";
 import { utcTimestamp } from "./harvest-feeds/harvest-types";

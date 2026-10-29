@@ -11,7 +11,7 @@ import { PlanError } from "./plan-request";
 import { stageStore } from "./stage-store";
 import { requireStageConfiguration } from "./selection-operation";
 import { checkFetchedDocument, documentExclusions, documentState } from "./document-state";
-import { canonicalizeUrl } from "../harvest-feeds/url-cleaner";
+import { deriveArticleIdentity } from "../harvest-feeds/article-identity";
 import { validateTargetName } from "../harvest-feeds/safe-target";
 import { documentWork } from "../harvest-feeds/document-work";
 import type { observeDocument } from "../harvest-feeds/document-observation";
@@ -54,7 +54,7 @@ export async function fetchDocument(
   }
   const state = await documentState(record, inputs, runtime, store, parent?.root);
   if (state.health_written) throw new PlanError("REQUEST_CONFLICT", "This execution finalized its health; start a new feed fetch for new work", "request_id");
-  const identity = canonicalizeUrl(url);
+  const identity = deriveArticleIdentity(url);
   const attemptObservations: ReturnType<typeof observeDocument>[] = [];
   const emit = createStageLogger(state.context, runtime.log);
   const work = documentWork({

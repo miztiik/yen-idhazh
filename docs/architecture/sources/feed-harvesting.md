@@ -1,6 +1,6 @@
 # Isolated feed harvesting
 
-**Last Updated**: 2026-10-26
+**Last Updated**: 2026-10-29
 
 How do configured feeds become sanitized article candidates?
 This build-time path leaves production Python discovery and extraction
@@ -34,6 +34,12 @@ Configuration fingerprints retain the actual content-affecting inputs.
 Reporting configuration does not change harvested content identity.
 Missing feed fields do not renumber later entries. Page canonical tags,
 scripts and prose never grant a new fetch destination.
+
+`article-identity.ts` exports `deriveArticleIdentity` to derive `canonical_url`
+and `url_key` from the offered address using the discovery identity rules.
+Invalid article addresses retain `InvalidArticleUrlError`.
+`http-request-target.ts` exports `cleanHttpRequestTarget` to clean and validate
+an HTTP request address, not derive persisted identity.
 
 With `harvest.tidy_urls` enabled, TidyURL cleans actual feed and article
 request targets, including redirect destinations. The original offered URL

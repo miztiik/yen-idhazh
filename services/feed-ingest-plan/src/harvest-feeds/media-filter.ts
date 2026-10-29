@@ -1,7 +1,7 @@
 /** Which configured enclosure type or structured address identifies a media offer? */
 import type { FeedIngestConfig, RejectionDetails } from "@idhazh/common-contracts";
 import { matchUrlExclusion, urlExclusionMarker } from "./url-exclusions";
-import { cleanRequestTarget } from "./request-url";
+import { cleanHttpRequestTarget } from "./http-request-target";
 import { UnsafeTargetError } from "./safe-target";
 
 export function matchMediaOffer(
@@ -22,7 +22,7 @@ export function matchMediaArticle(
   const matched = matchMediaOffer(canonicalUrl, mediaTypes, filter);
   if (matched !== null || !filter.enabled || !config.harvest.tidy_urls) return matched;
   let target: URL;
-  try { target = cleanRequestTarget(offeredUrl); }
+  try { target = cleanHttpRequestTarget(offeredUrl); }
   catch (error) {
     // Unsafe cleanup remains a typed fetch refusal, never a content exclusion.
     if (error instanceof UnsafeTargetError) return null;

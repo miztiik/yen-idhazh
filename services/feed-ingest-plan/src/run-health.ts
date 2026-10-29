@@ -7,7 +7,7 @@ import type {
 import type { RunContext } from "./resolve-run-context";
 import type { SourceHistoryEvidence } from "./read-ledger-history/read-feed-history";
 import type { FeedEntry, HarvestArticleResult } from "./harvest-feeds/harvest-types";
-import { canonicalizeUrl } from "./harvest-feeds/url-cleaner";
+import { deriveArticleIdentity } from "./harvest-feeds/article-identity";
 import { retryableStatus } from "./harvest-feeds/robots-policy";
 import { inputEndpointKey } from "./read-ledger-history/health-summary";
 import { attributeIngestOutcome } from "./attribute-ingest-outcomes";
@@ -202,7 +202,7 @@ export function createRunHealth(context: RunContext, sources: readonly SourceSna
       target.status = status;
       target.items = new Set(entries.flatMap(entry => {
         if (entry.link === null) return [];
-        try { return [canonicalizeUrl(entry.link).url_key]; }
+        try { return [deriveArticleIdentity(entry.link).url_key]; }
         catch { return []; }
       })).size;
       target.outcome = skipped ? "skipped" : robots ? "robots_denied" : failure === "unsafe-target" ? "blocked"

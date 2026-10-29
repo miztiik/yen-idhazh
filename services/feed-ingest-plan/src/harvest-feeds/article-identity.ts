@@ -15,7 +15,7 @@ function validateUrl(value: string): string {
   return parsed.data;
 }
 
-export function canonicalizeUrl(raw: string): { canonical_url: string; url_key: string } {
+export function deriveArticleIdentity(raw: string): { canonical_url: string; url_key: string } {
   const original = validateUrl(raw.trim().replace(/^https?:/i, scheme => scheme.toLowerCase()));
   let url: URL;
   try { url = new URL(original); }
