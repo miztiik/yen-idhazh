@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <script type="application/ld+json">{broken</script>
+    <title>Malformed Metadata Readable Article</title>
+  </head>
+  <body>
+    <article>
+      <h1>Malformed Metadata Readable Article</h1>
+      <p>The article remains readable even when the embedded metadata contains malformed JSON.</p>
+      <p>The production extractor reports the metadata warning but continues to sanitize the visible prose.</p>
+      <p>Three separate paragraphs provide enough source words for the production quality measurement.</p>
+      <p>This fourth paragraph keeps the fixture representative of a real long-form article.</p>
+      <p>The extraction result still has enough prose for the reader, despite the malformed metadata block.</p>
+      <p>The fixture also verifies that warning-only parser output stays separate from the pass or fail verdict.</p>
+    </article>
+  </body>
+</html>

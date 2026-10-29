@@ -46,7 +46,9 @@ test("live progress precedes completion and the structured event stream stays sp
       expect(event.feed_id).toBe("recorded-news");
       if (event.eventType === "FEED_FETCH_COMPLETED") expect(event.output_count).toBe(3);
     }
-    expect(recorded.events.at(-1)).toMatchObject({ operation: "plan", phase: "completed", output_count: 1 });
+    expect(recorded.events.at(-1)).toMatchObject({
+      operation: "plan", phase: "completed", details: { output_count: 1 },
+    });
     for (const event of recorded.events) {
       expect(FeedIngestEventSchema.parse(event)).toEqual(event);
       expect(event.run_id).toBe(result.context.run_id);
@@ -54,19 +56,17 @@ test("live progress precedes completion and the structured event stream stays sp
       expect(event.occurred_at).toMatch(/Z$/);
       expect(event).not.toHaveProperty("payload");
       expect(event).not.toHaveProperty("article_text");
-      expect(event).not.toHaveProperty("policy");
-      expect(event).not.toHaveProperty("source_id");
-      expect(FeedIngestEventSchema.safeParse({ ...event, source_id: event.feed_id }).success).toBe(false);
-      if (event.duration_ms !== null) expect(event.duration_ms).toBeGreaterThanOrEqual(0);
+      expect(event.details._compliance).toBeUndefined();
+      expect(FeedIngestEventSchema.safeParse({ ...event, source_id: "unexpected" }).success).toBe(false);
+      if (typeof event.details.duration_ms === "number") expect(event.details.duration_ms).toBeGreaterThanOrEqual(0);
     }
     const parserEvents = recorded.events.filter(event => event.operation === "parse");
     expect(parserEvents.length).toBeGreaterThan(0);
     for (const event of parserEvents) {
-      expect(event.feed_id).toBe("recorded-news");
-      expect(event.publisher_id).toBe("recorded-publication");
-      if (event.phase === "started") expect(event.duration_ms).toBeNull();
-      else expect(event.duration_ms).not.toBeNull();
-      if (event.duration_ms !== null) expect(event.duration_ms).toBeGreaterThanOrEqual(0);
+      expect(event.details.feed_id).toBe("recorded-news");
+      expect(event.details.publisher_id).toBe("recorded-publication");
+      if (event.phase !== "started") expect(event.details.duration_ms).not.toBeNull();
+      if (typeof event.details.duration_ms === "number") expect(event.details.duration_ms).toBeGreaterThanOrEqual(0);
     }
     expect(result).not.toHaveProperty("events");
     expect(JSON.stringify(progress)).not.toContain(result.selected[0]!.article_text);

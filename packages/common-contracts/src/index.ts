@@ -29,3 +29,4 @@ export * from "./schemas/rejected-article.schema";
 export * from "./schemas/plan-run.schema";
 export * from "./schemas/planner-maintenance.schema";
 export * from "./schemas/planner-file-validation.schema";
+export * from "./schemas/feed-probe.schema";
