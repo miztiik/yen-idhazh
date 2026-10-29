@@ -2,7 +2,7 @@
 import { randomUUID } from "node:crypto";
 import {
   FEED_OUTCOME_PAYLOAD_VERSION, FeedIngestCandidateSchema, ParsedFeedBatchSchema, PlannerHarvestObservationSchema,
-  deriveCandidateId,
+  deriveCandidateId, LEGACY_OPERATION_VERSION,
 } from "@idhazh/common-contracts";
 import type { FeedIngestCandidate, PlannerOperation, PlannerHarvestObservation, PlannerFeedOffer } from "@idhazh/common-contracts";
 import type { z } from "zod";
@@ -10,7 +10,7 @@ import { ParseRequestSchema } from "./operation-contracts";
 import type { OperationStore } from "./operation-store";
 import type { PlanInputs } from "../load-plan-inputs";
 import type { PlanRuntime } from "../run-feed-plan";
-import { checkFetchedDocument, documentState } from "./document-state";
+import { checkFetchedDocument, documentIdentities, documentState } from "./document-state";
 import { PlanError } from "./plan-request";
 import { operationConfigFingerprint } from "./operation-context";
 import { sourceSnapshot } from "../harvest-feeds/load-harvest-inputs";
@@ -36,6 +36,9 @@ export async function parseFetchedDocument(
   inputs: PlanInputs, runtime: PlanRuntime, store: OperationStore, signal?: AbortSignal,
 ) {
   const artifact = checkFetchedDocument(fetched, inputs);
+  if (artifact.version === LEGACY_OPERATION_VERSION && artifact.fetch_item_type === "article") {
+    throw new PlanError("REQUEST_CONFLICT", "Saved article uses the earlier identity policy; fetch it again", "fetch_request_id");
+  }
   if (fetched.config_sha256 !== record.config_sha256 || record.config_sha256 !== operationConfigFingerprint(inputs, runtime)) {
     throw new PlanError("REQUEST_CONFLICT", "Fetched configuration differs", "fetch_request_id");
   }
@@ -82,7 +85,7 @@ export async function parseFetchedDocument(
     });
     return { artifact: null, response_json: JSON.stringify({
       batch_id: batch.batch_id, fetch_request_id: fetched.request_id, run_id: fetched.run_id, fetch_item_type: "feed",
-      parsed_count: entries.length, failure: parsed.failure, offers: publicFeedOffers(batch),
+      parsed_count: entries.length, failure: parsed.failure, offers: publicFeedOffers(batch, inputs.harvest.config.harvest),
     }) };
   }
   const pool = runtime.parser_pool ?? new ArticleParserPool(inputs.settings.listener.parser_concurrency);
@@ -136,9 +139,12 @@ export async function parseFetchedDocument(
       own_rows: plannerMemory(inputs).discoveries(),
     });
     const instant = utcTimestamp(runtime.observation_clock);
-    const saved = await rememberDiscoveries(discovered.rows, candidate === null ? [] : [DiscoveredArticleRowSchema.parse({
+    const identities = await documentIdentities(state, inputs);
+    if (candidate !== null) identities.remember(artifact.canonical_url);
+    const saved = await rememberDiscoveries(discovered.rows, candidate === null ? [] : identities.discoveries([
+      ...discovered.rows, DiscoveredArticleRowSchema.parse({
       url_key: candidate.url_key, first_seen_at: instant, date: instant.slice(0, 10),
-    })], state.context, { outputRoot: inputs.outputRoot, registryEntry: inputs.registrations.discovered_articles, ledgerSettings: inputs.ledgerSettings });
+    })]), state.context, { outputRoot: inputs.outputRoot, registryEntry: inputs.registrations.discovered_articles, ledgerSettings: inputs.ledgerSettings });
     plannerMemory(inputs).rememberDiscoveries(saved.rows, requiredUtcDays(
       state.context.now, inputs.harvest.config.discovered_articles.lookback_days,
     )[0]!);

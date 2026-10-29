@@ -7,6 +7,7 @@ import { join } from "node:path";
 import {
   FeedIngestCandidateSchema, FetchedDocumentSchema, PlannerOperationSchema, PlannerStageContextSchema,
   SourceArticleOutcomeSchema, SourceSnapshotSchema, deriveCandidateId, deriveUrlKey,
+  LEGACY_OPERATION_VERSION, LEGACY_PLANNER_OPERATION_VERSION, PLANNER_OPERATION_VERSION,
 } from "@idhazh/common-contracts";
 import { HarvestArticleResultSchema } from "../src/harvest-feeds/harvest-types";
 import { resolveArticleSourceOutcome } from "../src/article-source-outcome";
@@ -14,6 +15,13 @@ import { createRunHealth } from "../src/run-health";
 import { summarizePlanningHealth } from "../src/read-ledger-history/health-summary";
 import { projectFeedHealthFields } from "../src/read-ledger-history/read-feed-health-fields";
 import { openOperationStore, sha256 } from "../src/api/operation-store";
+import { recordedPlan } from "./plan-recordings";
+import { deriveLegacyArticleIdentity } from "../src/harvest-feeds/legacy-article-identity";
+import { checkFetchedDocument } from "../src/api/document-state";
+import { parseFetchedDocument } from "../src/api/parse-operation";
+import { operationConfigFingerprint } from "../src/api/operation-context";
+import { executeDocumentOperation } from "../src/api/document-operations";
+import { FIRST_RUN_ATTEMPT, DEFAULT_PLANNER_PRODUCER } from "../src/resolve-run-context";
 
 function recording() {
   const at = "2026-10-27T12:00:00Z";
@@ -42,6 +50,97 @@ function recording() {
   return { at, source, context, article };
 }
 
+test("saved article receipts retain their old identity but cannot create current-policy candidates", async () => {
+  const held = await recordedPlan();
+  const store = await openOperationStore(held.inputs.outputRoot);
+  try {
+    const { at, context } = recording();
+    const identity = deriveLegacyArticleIdentity("https://news.example/second?edition=old");
+    const body = held.transport.recordings.bodies.article;
+    const artifact = FetchedDocumentSchema.parse({
+      version: LEGACY_OPERATION_VERSION, fetch_item_type: "article", canonical_url: identity.canonical_url,
+      article_id: identity.url_key, feed_id: "recorded-news", body, http_status: 200,
+      failure: null, robots: "allowed", error_code: null, robots_failure: null,
+      robots_http_status: null, attempts: [], attempt_observations: [], body_sha256: sha256(body),
+      observation: { event_id: "5ee218d4-8bf2-5d1b-bc69-c23fb7261a60", caused_by_event_id: null,
+        run_id: context.run_id, correlation_id: context.correlation_id, feed_id: "recorded-news",
+        article_id: identity.url_key, occurred_at: at, operation: "fetch" },
+      parent_fetch_request_id: null,
+    });
+    const request = {
+      request_id: randomUUID(), correlation_id: context.correlation_id,
+      feed_id: "recorded-news", fetch_item_type: "article" as const, url: identity.canonical_url,
+    };
+    const { digest_root, selected_days, ...originalInputs } = held.inputs.settings.inputs;
+    const legacyFingerprint = sha256(JSON.stringify({
+      harvest: held.inputs.harvest.config_sha256, settings: { ...held.inputs.settings, inputs: originalInputs },
+      clock: held.inputs.clock_config, ledger: held.inputs.ledgerSettings, registrations: held.inputs.registrations,
+      attempt: held.runtime.attempt ?? FIRST_RUN_ATTEMPT,
+      producer: held.runtime.producer ?? DEFAULT_PLANNER_PRODUCER, git_sha: held.runtime.git_sha,
+    }));
+    expect(legacyFingerprint).not.toBe(operationConfigFingerprint(held.inputs, held.runtime));
+    const proposed = PlannerOperationSchema.parse({
+      version: LEGACY_PLANNER_OPERATION_VERSION,
+      request_id: request.request_id, operation: "fetch", input_sha256: sha256(JSON.stringify(request)),
+      config_sha256: legacyFingerprint,
+      run_id: context.run_id, correlation_id: context.correlation_id, created_at: at,
+      state: "started", response_json: null, artifact: null,
+    });
+    const response = JSON.stringify({
+      fetch_request_id: request.request_id, batch_id: request.request_id, run_id: context.run_id,
+      correlation_id: context.correlation_id, fetch_item_type: "article", feed_id: request.feed_id,
+      article_id: identity.url_key, canonical_url: identity.canonical_url,
+      http_status: 200, failure: null, body_sha256: artifact.body_sha256,
+    }, null, 2);
+    const fetched = await store.execute(proposed, async () => ({ artifact, response_json: response }));
+    expect(await executeDocumentOperation("fetch", request, held.inputs, held.runtime)).toBe(response);
+    await expect(executeDocumentOperation("fetch", { ...request, url: "https://news.example/other" }, held.inputs, held.runtime))
+      .rejects.toMatchObject({ code: "REQUEST_CONFLICT" });
+    await expect(executeDocumentOperation("fetch", request, held.inputs, { ...held.runtime, git_sha: "f".repeat(40) }))
+      .rejects.toMatchObject({ code: "REQUEST_CONFLICT" });
+    const parseRequest = {
+      request_id: randomUUID(), fetch_request_id: fetched.request_id,
+      article_id: identity.url_key, correlation_id: context.correlation_id,
+    };
+    const parseResponse = JSON.stringify({
+      fetch_item_type: "article", batch_id: randomUUID(), fetch_request_id: fetched.request_id,
+      run_id: context.run_id, parsed_count: 1, failure: null, pending_offers: 0,
+    });
+    await store.execute({ ...proposed, operation: "parse", request_id: parseRequest.request_id,
+      input_sha256: sha256(JSON.stringify(parseRequest)) }, async () => ({ artifact: null, response_json: parseResponse }));
+    expect(await executeDocumentOperation("parse", parseRequest, held.inputs, held.runtime)).toBe(parseResponse);
+    for (const version of [LEGACY_PLANNER_OPERATION_VERSION, PLANNER_OPERATION_VERSION]) {
+      const mixedRequest = { ...request, request_id: randomUUID() };
+      const currentIdentity = deriveLegacyArticleIdentity("https://news.example/second");
+      const mixedArtifact = version === PLANNER_OPERATION_VERSION ? artifact : FetchedDocumentSchema.parse({
+        ...artifact, version: PLANNER_OPERATION_VERSION, canonical_url: currentIdentity.canonical_url,
+        article_id: currentIdentity.url_key, observation: { ...artifact.observation, article_id: currentIdentity.url_key },
+      });
+      await store.execute({ ...proposed, version, request_id: mixedRequest.request_id,
+        input_sha256: sha256(JSON.stringify(mixedRequest)) }, async () => ({ artifact: mixedArtifact, response_json: response }));
+      await expect(executeDocumentOperation("fetch", mixedRequest, held.inputs, held.runtime))
+        .rejects.toMatchObject({ code: "REQUEST_CONFLICT" });
+    }
+    const incompleteRequest = { ...request, request_id: randomUUID() };
+    await expect(store.execute({ ...proposed, request_id: incompleteRequest.request_id,
+      input_sha256: sha256(JSON.stringify(incompleteRequest)) }, async () => {
+      throw new Error("interrupted recorded receipt");
+    })).rejects.toThrow("interrupted recorded receipt");
+    await expect(executeDocumentOperation("fetch", incompleteRequest, held.inputs, held.runtime))
+      .rejects.toMatchObject({ code: "REQUEST_CONFLICT" });
+    expect(checkFetchedDocument(fetched, held.inputs)).toMatchObject({
+      version: LEGACY_OPERATION_VERSION, canonical_url: identity.canonical_url, article_id: identity.url_key,
+    });
+    await expect(parseFetchedDocument({
+      request_id: randomUUID(), fetch_request_id: fetched.request_id,
+      article_id: identity.url_key, correlation_id: context.correlation_id,
+    }, { ...proposed, operation: "parse" }, fetched, held.inputs, held.runtime, store))
+      .rejects.toMatchObject({ code: "REQUEST_CONFLICT" });
+    expect(held.transport.requests).toHaveLength(0);
+    expect(store.get(fetched.request_id)?.artifact?.canonical_url).toBe(identity.canonical_url);
+  } finally { store.close(); await held.close(); }
+});
+
 test("technical admission uses access and words, not publication age or selection", () => {
   const { at, article } = recording();
   expect(resolveArticleSourceOutcome(article(10), 10, [401, 403], at)).toEqual({
@@ -62,7 +161,7 @@ test("the source rate stays eight out of ten when only three articles are select
       ? { disposition: "admitted", reason_code: null, settled_at: at }
       : { disposition: "source_refused", reason_code: "REJECTED_SCREENING_MIN_WORDS", settled_at: at }),
   }));
-  const work = createRunHealth(context, [source], new Map(), { min_words: 10, blocked_http_statuses: [401, 403] });
+  const work = createRunHealth(context, [source], new Map(), { min_words: 10, blocked_http_statuses: [401, 403], tidy_urls: true });
   for (const capture of captures) {
     work.captureArticle(capture.id, source.feed_id, at, capture.outcome);
     work.captureArticle(capture.id, source.feed_id, at, capture.outcome);
@@ -80,7 +179,7 @@ test("the source rate stays eight out of ten when only three articles are select
   expect(summarize().article_pass_rate).toBe(0.8);
   expect(summarize([], true).article_pass_rate).toBeNull();
   expect(summarize(rows, false).article_pass_rate).toBeNull();
-  const recovered = createRunHealth(context, [source], new Map(), { min_words: 10, blocked_http_statuses: [] }, rows);
+  const recovered = createRunHealth(context, [source], new Map(), { min_words: 10, blocked_http_statuses: [], tidy_urls: true }, rows);
   for (const capture of captures) recovered.captureArticle(capture.id, source.feed_id, at, capture.outcome);
   expect(recovered.rows()).toEqual(rows);
   recovered.captureArticle(randomUUID(), source.feed_id, at, null);

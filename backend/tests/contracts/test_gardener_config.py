@@ -167,7 +167,7 @@ def test_every_ledger_uses_the_approved_live_retention_chain() -> None:
         for name, policy in tasks.items()
         if isinstance(policy, CompactionPolicy) and name.startswith("compact-")
         and not name.startswith("compact-trial-")
-    } == set(retained)
+    } == {*retained, "compact-visual-design-attempts"}
     for name in retained:
         policy = tasks[name]
         assert isinstance(policy, CompactionPolicy), name
@@ -177,6 +177,11 @@ def test_every_ledger_uses_the_approved_live_retention_chain() -> None:
             policy.yearly_keep_months, policy.yearly_prune_enable,
         ) == (False, 1, 45, 93, 36, True), name
         assert policy.monthly_window.unit == "forever", name
+    attempts = tasks["compact-visual-design-attempts"]
+    assert isinstance(attempts, CompactionPolicy)
+    assert attempts.monthly_window == MonthsWindow(unit="months", value=14)
+    assert attempts.monthly_keep_days is None
+    assert not attempts.dry_run and not attempts.month_deletes_dry_run
 
 
 def test_trial_compactions_keep_only_their_declared_roots_and_the_trial_window() -> None:

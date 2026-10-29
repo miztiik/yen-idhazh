@@ -601,7 +601,8 @@ adapter, which validates exact raw and compact Parquet members at one captured
 Git revision and returns verified bytes and exact source paths. Python applies
 that result through its existing pass and commit flow.
 
-Planner contracts still carry current schema stamps and changelogs. Strict
+Planner contracts still carry current schema stamps and changelogs. Except for
+the [article cleanup compatibility](#article-cleanup-compatibility), strict
 full-row validation has no Python copy, compatibility reader or migration;
 the TypeScript tests and the real gardener-adapter integration test own this
 boundary. Health consumers use the separate
@@ -728,8 +729,7 @@ contracts.
 The shared TypeScript ledger reader has no migration table. Strict full-row
 validation accepts only the contract's declared row stamps. The separate health
 field reader accepts the columns it needs without using their row schema date
-as an acceptance gate. The selected stamp is not bumped: the physical layout is
-unchanged, so committed `2026-10-26` files still read.
+as an acceptance gate. Article cleanup has its own named compatible stamps below.
 
 ### Field-based health history
 
@@ -825,6 +825,27 @@ when identity is invalid. Rest requires complete evidence; article admission
 is unknown if any required evidence is missing. Incomplete feed-read ratios
 remain labelled incomplete and are not substituted for the article-admission
 rate used by selection.
+
+### Article cleanup compatibility
+
+**User approval, 2026-10-29 UTC:** Article identity and initial request cleanup
+now share a policy that removes every article query string and fragment.
+Discovery rows, selected rows/artifacts, candidate and stage payloads, and private
+fetch receipts written with this policy use `2026-10-29` stamps. Feed identity
+and Python discovery do not change.
+
+The native reader accepts exact compatible discovery `2026-10-25` and selected
+`2026-10-27` rows/artifacts. Private fetched documents and operation journals also
+accept `2026-10-28`. Old row and receipt stamps remain unchanged on read; a
+compacted container can use its current stamp without relabeling historical rows.
+Earlier incompatible stamps still refuse. Existing published records and joins
+retain their original keys.
+
+Saved fetch responses remain replayable with their original identity. An old
+article fetch receipt cannot be parsed into a current-policy candidate; fetch
+the article again. There is no migration table, dual writer or permanent alias
+ledger. [Bounded saved-address recovery](../architecture/sources/article-identity-history.md)
+defines which old keys can prevent repeat work and which remain unknown.
 
 Targeted deletion of the same eight obsolete ledger prefixes named in Table F
 under both `state/raw/feed-ingest-plan/` and

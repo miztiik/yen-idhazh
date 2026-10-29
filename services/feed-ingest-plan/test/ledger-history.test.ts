@@ -299,7 +299,9 @@ test("native digest tampering, wrong ledger, schema and undeclared planner ident
     const written = await writeRows(root, "selected-articles", day, SelectedArticleRowContract, [selection()]);
     const path = join(root, written.files[0]!.path);
     await expect(readPlannerParquet(path, "plan-runs", SelectedArticleRowContract)).rejects.toThrow();
-    await expect(readPlannerParquet(path, "selected-articles", { ...SelectedArticleRowContract, schemaVersion: "2026-10-24" }))
+    await expect(readPlannerParquet(path, "selected-articles", {
+      ...SelectedArticleRowContract, schemaVersion: "2026-10-24", acceptedSchemaVersions: ["2026-10-24"],
+    }))
       .rejects.toThrow("unsupported row schema");
     const compact = await compactRows(join(root, "state"), "selected-articles", day,
       SelectedArticleRowContract, [selection()], "daily", root);

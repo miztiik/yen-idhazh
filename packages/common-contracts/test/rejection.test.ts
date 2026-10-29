@@ -25,7 +25,7 @@ import { plannerStageSchemas, runtimeSchemas, schemas } from "./schema-binding";
 const day = "2026-10-20";
 const at = `${day}T12:00:00Z`;
 const run = `${day}-7`;
-const url = "https://example.com/article?x=1";
+const url = "https://example.com/article";
 const digest = "a".repeat(64);
 const source = SourceSnapshotSchema.parse({
   feed_id: "example", feed_url: "https://example.com/feed", title: "Example",
@@ -420,7 +420,7 @@ describe("current planner contracts", () => {
     expect(schemas.FeedIngestCandidate?.required).not.toContain("version");
     for (const [name, path] of [["FetchedDocument", "fetched-document/refused.json"], ["PlannerOperation", "planner-operation/started.json"]] as const) {
       const original = await Bun.file(new URL(`../../../tests/fixtures/contracts/${path}`, import.meta.url)).json();
-      expect(runtimeSchemas[name].parse(original).version).toBe(name === "PlannerOperation" ? PLANNER_OPERATION_VERSION : OPERATION_VERSION);
+      expect(runtimeSchemas[name].parse(original).version).toBe(original.version);
       expect(runtimeSchemas[name].parse({ ...original, version: undefined }).version).toBe(name === "PlannerOperation" ? PLANNER_OPERATION_VERSION : OPERATION_VERSION);
       if (name === "PlannerOperation") {
         expect(runtimeSchemas[name].parse({ ...original, version: PLANNER_OPERATION_VERSION, created_at: `${at.slice(0, -1)}.123Z` }).created_at).toBe(`${at.slice(0, -1)}.123Z`);

@@ -15,7 +15,7 @@ import {
 import { RecordedInstantSchema } from "./recorded-instant.schema";
 import { SourceSnapshotSchema } from "./source.schema";
 import { UrlSchema } from "./primitives";
-import { PARSED_FEED_BATCH_VERSION } from "../version";
+import { PARSED_FEED_BATCH_VERSION, SELECTED_ARTICLE_VERSION } from "../version";
 import { PlannerRequestReportSchema } from "./planner-request-report.schema";
 export { PlannerRequestReportSchema } from "./planner-request-report.schema";
 export type { PlannerRequestReport } from "./planner-request-report.schema";
@@ -118,22 +118,24 @@ export const ParsedFeedBatchSchema = z.strictObject({
 }).meta({
   version: PARSED_FEED_BATCH_VERSION,
   changelog: [
-    { version: PARSED_FEED_BATCH_VERSION, change: "Link standalone article batches to their original source-outcome receipt." },
+    { version: PARSED_FEED_BATCH_VERSION, change: "Identify parsed candidates produced with shared query-free article cleanup." },
+    { version: "2026-10-27T18:30", change: "Link standalone article batches to their original source-outcome receipt." },
     { version: "2026-10-27", change: "Name planner discovery evidence and derive website groups from canonical URLs." },
     { version: "2026-10-25", change: "Declare complete parsed feed batches and their source evidence." },
   ],
 });
 export type ParsedFeedBatch = z.infer<typeof ParsedFeedBatchSchema>;
 export const SelectedFeedBatchSchema = z.strictObject({
-  ...batchIdentity, version: z.literal("2026-10-29").default("2026-10-29"), parsed_batch_id: z.uuid({ version: "v4" }),
+  ...batchIdentity, version: z.literal(SELECTED_ARTICLE_VERSION).default(SELECTED_ARTICLE_VERSION), parsed_batch_id: z.uuid({ version: "v4" }),
   selection_started_at_utc: TimestampSchema, evaluated_at: TimestampSchema,
   articles: z.array(SelectedArticleContentSchema), health_rows: z.array(FeedHealthStateRowSchema),
   rejected_articles: z.array(RejectedArticleRowSchema),
   exclusions: z.array(PlannerRejectionCountSchema), request_report: PlannerRequestReportSchema,
 }).meta({
-  version: "2026-10-29",
+  version: SELECTED_ARTICLE_VERSION,
   changelog: [
-    { version: "2026-10-29", change: "Carry independent request totals with explicit counter coverage." },
+    { version: SELECTED_ARTICLE_VERSION, change: "Carry independent request totals with explicit counter coverage." },
+    { version: SELECTED_ARTICLE_VERSION, change: "Identify selections produced with shared query-free article cleanup." },
     { version: "2026-10-27", change: "Carry terminal rejected article metadata with the complete selection." },
   ],
 });

@@ -25,6 +25,7 @@ from idhazh.classify import calls
 from idhazh.contracts.article import Article, ArticleStatus
 from idhazh.contracts.base import ServerJob, canonical_json
 from idhazh.contracts.eval_row import EvalRow
+from idhazh.contracts.file_envelope import WriterIdentity
 from idhazh.contracts.fingerprint import PipelineInputs
 from idhazh.contracts.item_health import FailureCode, ItemHealthRow, ItemOutcome, ItemStage
 from idhazh.contracts.ledger_name import LedgerName
@@ -65,7 +66,7 @@ from idhazh.stages.common import (
     shard_of,
 )
 from idhazh.stages.two_calls import two_calls_one_item
-from idhazh.telemetry import census, host
+from idhazh.telemetry import census, host, visual_attempts
 from idhazh.telemetry.host_control import enabled as host_telemetry_enabled
 from idhazh.telemetry.item_heartbeat import ItemHeartbeat
 from idhazh.telemetry.record import Flags, ItemRecorder, persist, shard_done
@@ -307,6 +308,7 @@ def stage_work(
     fetcher: Fetcher | None = None,
     model_endpoint: str | None = None,
     server_pid: int | None = None,
+    commit_sha: str = "0" * 40,
 ) -> None:
     """Fetch, extract, summarize and score one item at a time, writing as it goes."""
     if shards < 1 or not 0 <= shard < shards:
@@ -525,6 +527,21 @@ def stage_work(
                 published_marks=published_marks,
             )
             summarize_ms = int((time.monotonic() - model_started) * 1000)
+            if decision is not None:
+                visual_attempts.record(
+                    common.STATE_ROOT,
+                    decision,
+                    date=plan.date,
+                    identity=WriterIdentity(
+                        run_id=plan.run_id,
+                        attempt=run_context.run_attempt(),
+                        job=ServerJob.WORK,
+                        shard=shard,
+                        producer=visual_attempts.__name__,
+                        git_sha=commit_sha,
+                    ),
+                    extraction=common._extraction_health(article, settings),
+                )
             # What the stage spent NOT being served: the window check, the
             # prompt render, the parse, the element anchoring and the draw,
             # plus the transport around each request. The server's own two

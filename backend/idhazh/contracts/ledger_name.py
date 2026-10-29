@@ -52,6 +52,7 @@ class LedgerName(StrEnum):
     PUBLISHED = "published"
     FEED_RETIREMENTS = "feed-retirements"
     VISUAL_PRUNES = "visual-prunes"
+    VISUAL_DESIGN_ATTEMPTS = "visual-design-attempts"
     COUNTERFACTUAL_SCORES = "counterfactual-scores"
     CONTENT_SIMILARITY_JUDGE_SCORED_PAIRS = "scored-pairs"
     CONTENT_SIMILARITY_JUDGE_FITTED_THRESHOLDS = "fitted-thresholds"

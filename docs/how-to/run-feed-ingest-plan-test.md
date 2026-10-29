@@ -184,6 +184,12 @@ calls them complete. Exact coverage fields are defined in the
 was missing or invalid, or extraction produced no usable title. A grouped
 count does not identify the exact missing field and does not mean a feed
 configuration field is absent. The protocol reason code is unchanged.
+An unsafe cleaned target is `FETCH_FAILED`, not a missing-field count.
+The [article cleanup policy](../architecture/sources/feed-harvesting.md#inputs-and-identity)
+removes all article query parameters even when `tidy_urls` is false. Feed
+parameters remain intact. Sparse workflow preparation stages the bounded
+[saved-address history](../architecture/sources/article-identity-history.md);
+incomplete recovery is logged rather than treated as complete deduplication.
 
 ## CI and hosted verification
 
