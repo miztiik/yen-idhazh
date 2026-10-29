@@ -1,22 +1,6 @@
 {
   "families": [
     {
-      "name": "visual-design-attempts",
-      "lifecycle_status": "active",
-      "description": "Each settled visual-design attempt, including none, refusal and render failure.",
-      "onboarded": "2026-10-29",
-      "ledgers": [
-        {
-          "name": "visual-design-attempts",
-          "publish_to_data_explorer": false,
-          "grain": "raw-and-compact",
-          "prefix": ["visual-design-attempts"],
-          "stem": null,
-          "suffix": null
-        }
-      ]
-    },
-    {
       "name": "feed-ingest-plan",
       "lifecycle_status": "active",
       "description": "Global article discovery, selected metadata, per-run feed health and planner run results.",
@@ -395,6 +379,22 @@
           "publish_to_data_explorer": true,
           "grain": "raw-and-compact",
           "prefix": ["council-run-records"],
+          "stem": null,
+          "suffix": null
+        }
+      ]
+    },
+    {
+      "name": "visual-design-attempts",
+      "lifecycle_status": "active",
+      "description": "Each settled visual-design attempt, including none, refusal and render failure.",
+      "onboarded": "2026-10-29",
+      "ledgers": [
+        {
+          "name": "visual-design-attempts",
+          "publish_to_data_explorer": false,
+          "grain": "raw-and-compact",
+          "prefix": ["visual-design-attempts"],
           "stem": null,
           "suffix": null
         }
