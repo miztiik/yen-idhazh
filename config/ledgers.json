@@ -383,6 +383,22 @@
           "suffix": null
         }
       ]
+    },
+    {
+      "name": "visual-design-attempts",
+      "lifecycle_status": "active",
+      "description": "Each settled visual-design attempt, including none, refusal and render failure.",
+      "onboarded": "2026-10-29",
+      "ledgers": [
+        {
+          "name": "visual-design-attempts",
+          "publish_to_data_explorer": false,
+          "grain": "raw-and-compact",
+          "prefix": ["visual-design-attempts"],
+          "stem": null,
+          "suffix": null
+        }
+      ]
     }
   ]
 }

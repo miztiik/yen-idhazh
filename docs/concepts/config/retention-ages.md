@@ -1,6 +1,6 @@
 # Instrument switches and cleanup ages
 
-**Last Updated**: 2026-10-25
+**Last Updated**: 2026-10-29
 
 live in one JSON block - `observability` in `config/idhazh.json` - with the ages
 a publisher reads, because a switch that stops a record being written and an age
@@ -19,8 +19,6 @@ why these are knobs rather than constants, is [../config.md](../config.md).
 | `evaluation_enabled` | `true` | The faithfulness scorer, and so every row in the eval ledger. |
 | `tracing_enabled` | `true` | The span tree. False writes no trace under `state/traces/` and no span rollup. |
 | `sample_rate` | `1.0` | Nothing. It is the fraction of runs whose scorer runs. |
-| `visuals_full_grain_months` | `14` | Where `state/visuals/` stops being kept attempt by attempt. Past it a month folds to the eight-term group in `state/visual-aggregate/` and the shard is deleted. |
-| `visual_aggregate_keep_months` | `null` | Nothing by default. Null means a folded visual month is never removed. |
 | `cost_currency` | `"USD"` | Nothing. It is the ISO 4217 code the console prints a counterfactual cost in. |
 | `cost_input_per_million` | `0.20` | Nothing. It is what a hosted provider would charge for a million prompt tokens. |
 | `cost_output_per_million` | `0.60` | Nothing. The same, for a million written tokens. |
@@ -100,14 +98,21 @@ Now every tree has an age of its own, and each age is a value in a file rather
 than a constant (Guardrail #6). **A ledger's age sits with whatever reads it.**
 Where a gardener task deletes the ledger, the age is that task's window, and a
 task that keeps several native series - full-grain rows and summaries -
-names each one under `series`. Where the visual
-fold reads the age, it is a knob in `observability`, and
-`ObservabilityConfig.full_grain_months` returns the ones a console read opens so
-`refuse_windows_shorter_than` can check them against what that read still
-selects. `visuals_full_grain_months` is a full-grain window and is **not** in
-| `state/visuals/` | 14 months | forever, in `state/visual-aggregate/` | `visuals_full_grain_months` and `visual_aggregate_keep_months` (null) in `observability` |
+names each one under `series`.
+
+| Ledger | Full record retention | After expiry | Configuration |
+| --- | --- | --- | --- |
+| `state/raw/visual-design-attempts/`, `state/compact/visual-design-attempts/` | 45 to 76 days of daily files, then 14 absorbed months of full records | Delete expired month files and raw files in those months; no aggregate | `config/gardener/compact-visual-design-attempts.json` |
 | the feed-health ledger, `state/raw/feed-health/` and `state/compact/feed-health/` | the 14-month `monthly_window` of its compaction | none - a per-feed-per-run record is not a total worth keeping | `config/gardener/compact-feed-health.json` |
 | the host-fingerprint ledger, `state/raw/host-fingerprint/` and `state/compact/host-fingerprint/` | the 14-month `monthly_window` of its compaction | none - one job's silicon on one run, and a total over an old month names no machine | `config/gardener/compact-host-fingerprint.json`; native read floors stay enforced |
+
+Visual attempt retention has one authoritative value: `monthly_window.value`
+in its compaction declaration, set to 14 months. Standard compaction counts
+that window after the month becomes absorbable, 45 days after its UTC end.
+It packs full rows without loss and deletes expired months live, in bounded
+passes. It does not pack years or retain permanent totals. The old
+`observability.visuals_full_grain_months` and `visual_aggregate_keep_months`
+names are refused with the other retired knobs.
 
 The telemetry and run-timeline public copies and their switches and retention
 knobs are retired. A config still spelling a removed observability knob is

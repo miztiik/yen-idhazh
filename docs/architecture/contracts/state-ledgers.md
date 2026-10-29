@@ -1,6 +1,6 @@
 # The ledgers under state/
 
-**Last Updated**: 2026-10-27
+**Last Updated**: 2026-10-29
 
 `state/` is the only memory this pipeline has. Every run starts on a fresh machine with a fresh checkout, so anything one run needs to tell the next is committed (CLAUDE.md Guardrail #1). This page says what each committed ledger answers and why it files at the grain it does.
 
@@ -28,6 +28,7 @@ A window lets the reader name the files it wants and skip the rest. Without one 
 | `state/raw/item-health-summary/<YYYY>/<MM>/<DD>/<file_id>.parquet` | What is left of an item-health month. One row per date and stage, filed through the ledger door | raw and compact | the folded month |
 | `state/raw/feed-retirements/<YYYY>/<MM>/<DD>/<file_id>.parquet` | Is this address gone for good? One file per writer, under the day the address was retired | raw and compact | the whole tree |
 | `state/raw/visual-prunes/<YYYY>/<MM>/<DD>/<file_id>.parquet` | Is the picture backlog shrinking? One file per run | raw and compact | the whole tree |
+| `state/raw/visual-design-attempts/<YYYY>/<MM>/<DD>/<file_id>.parquet` | What did each actual visual-design attempt request and deliver, or why did it refuse? Includes none and render failure | raw and compact, lossless | named UTC days within the configured retention window |
 | `state/raw/gardener/<YYYY>/<MM>/<DD>/<file_id>.parquet` | What did each gardener task see, take and leave at one wake? One file per shard | raw and compact | none yet |
 | `state/raw/run-plan/<YYYY>/<MM>/<DD>/<file_id>.parquet` | What plan did the day hand to its later stages? One row per plan execution | raw and compact | the named UTC day |
 | `state/raw/run-shards/<YYYY>/<MM>/<DD>/<file_id>.parquet` | How many shards did the manifest record for this run? Only date, run identity and nullable count | raw and compact | the widest console window |
@@ -38,6 +39,11 @@ A window lets the reader name the files it wants and skip the rest. Without one 
 | `state/raw/feed-ingest-plan/plan-runs/<YYYY>/<MM>/<DD>/<file_id>.parquet` | What did one execution finish, including empty or partial results? | raw and compact | named run/day |
 
 The seen ledger has no published mirror at all, so unlike the two health ledgers there is no second grain anywhere near it.
+
+Visual attempts are not a census of planned stories or published pictures.
+The [registry entry](ledger-registry.md#visual-design-attempts) defines their
+exact decision identity, worker write point and publication ownership.
+No console surface, human keep-rate claim or aggregate store is implied.
 
 The four planner ledgers are declared, read, written and file-validated by
 TypeScript. Python has no planner row or stage model. The Python gardener keeps

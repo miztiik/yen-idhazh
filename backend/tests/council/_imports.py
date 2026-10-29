@@ -73,6 +73,7 @@ MODULE_NAMES = (
     "idhazh.contracts.visual_decision",
     "idhazh.contracts.visual_outcome",
     "idhazh.contracts.visual_prune",
+    "idhazh.contracts.visual_telemetry",
     "idhazh.contracts.visual_type",
     "idhazh.contracts.visual_validation",
     "idhazh.contracts.whowhat_grid",

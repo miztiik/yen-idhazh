@@ -88,6 +88,7 @@ def test_an_age_whose_store_is_gone_says_so_instead_of_naming_a_successor() -> N
         ("public_telemetry_keep_months", 13),
         ("public_run_timeline_keep_months", 13),
         ("telemetry_publish", False),
+        ("visual_aggregate_keep_months", 14),
     ):
         with pytest.raises(ValidationError, match="nothing replaces it") as raised:
             ObservabilityConfig.model_validate({removed: value})
@@ -112,6 +113,7 @@ def test_every_removed_name_is_sent_somewhere_or_said_to_be_gone() -> None:
         "public_telemetry_keep_months",
         "public_run_timeline_keep_months",
         "telemetry_publish",
+        "visual_aggregate_keep_months",
     }
     assert {name for name, successor in SUPERSEDED_RETENTION_NAMES.items() if not successor} == gone
     for name, successor in SUPERSEDED_RETENTION_NAMES.items():

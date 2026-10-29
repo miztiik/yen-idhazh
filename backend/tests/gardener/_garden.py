@@ -58,6 +58,7 @@ COMMITTED_DECLARATIONS: Final = (
     "compact-seen.json",
     "compact-summary-quality-evals.json",
     "compact-visual-prunes.json",
+    "compact-visual-design-attempts.json",
     "corpus-squash.json",
     "digest-fragments.json",
     "telemetry-aggregate.json",
