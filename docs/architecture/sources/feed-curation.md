@@ -1,6 +1,6 @@
 # Selecting an editorial portfolio
 
-**Last Updated**: 2026-10-28
+**Last Updated**: 2026-10-29
 
 How does the isolated planner choose articles from the admitted batch?
 It uses configured numeric rules and explicit factual evidence, not a model
@@ -11,7 +11,7 @@ that proposal is not a separate unfinished selection requirement. The
 production Python ranking path is unchanged, and further numeric priority
 terms still need their own approval.
 
-### Feed IDs, source classes and article-quality buckets
+### Feed IDs, source kinds, source tiers and article-quality buckets
 
 A **feed ID** is the stable name used in code for one configured feed. It is
 the `sources[].id` value in `config/sources.json`, such as `abc-au-world`, and
@@ -21,31 +21,37 @@ identifies one feed, not its quality, article-count target or age window.
 A **candidate ID** is a transient identity for one offered article in one run.
 It is not the feed identity and remains `candidate_id` throughout the planner.
 
-The project uses three distinct concepts with related IDs:
+The project uses four distinct concepts with related identifiers:
 
-1. A **source class** describes where the feed sits in the source hierarchy:
-   Institution, Trade press or Community. It supplies ranking weights of 1.0,
-   0.6 or 0.3.
-2. An **article-quality bucket** assigns a share of the article limit and an
+1. A **source kind** describes the publisher's role, such as Reporting,
+   Announcement or Community. It comes from `source_kinds` in
+   `config/taxonomy.json` and does not set a feed's authority weight or curation
+   bucket.
+2. A **source tier** identifies authority within the source registry. It comes
+   from `source_tiers` in `config/taxonomy.json`. Current authority tiers are
+   Institution, Trade press and Community, with weights 1.0, 0.6 and 0.3.
+   A numeric source-tier ID is a stable key, not an authority rank or bucket
+   priority.
+3. An **article-quality bucket** assigns a share of the article limit and an
    age window policy. The documentation name is `article_quality_buckets`.
-   The inner entry field `tier` remains a legacy source-class identifier.
-3. A **feed ID** identifies one feed entry. It is separate from both the
-   source class and article-quality bucket.
+   The inner entry field `tier` uses the matching source-tier ID.
+4. A **feed ID** identifies one feed entry. It is separate from the
+   source kind, source tier and article-quality bucket.
 
-This is why "Tier 1" is ambiguous. The 60-percent share and the source-class
+This is why "Tier 1" is ambiguous. A 60-percent share and the source-tier
 weight 1.0 belong to different calculations. High, Medium and Low are only
 examples of article-quality bucket names; they are not current config labels.
-The current implementation maps each numeric source class to a same-number
+The current implementation maps each numeric source-tier ID to a same-number
 bucket entry, but that correspondence is an implementation detail. A bucket
-does not change a source's class.
+does not change a source's tier or kind.
 
-#### Table A - Current source classes and article-quality buckets
+#### Table A - Current source tiers and matching article-quality buckets
 
-| Id | Source class | Ranking weight | Count target | Fresh ceiling | Allowed age steps |
+| Id | Source-tier ID and registry name | Authority weight | Count target | Fresh ceiling | Allowed age steps |
 | --- | --- | ---: | ---: | ---: | --- |
-| A1 | Institution | 1.0 | 60% | 70% | 24, 36, 48 hours |
-| A2 | Trade press | 0.6 | 30% | 35% | 24, 30 hours |
-| A3 | Community | 0.3 | 10% | 15% | 24 hours |
+| A1 | 1 - Institution | 1.0 | 60% | 70% | 24, 36, 48 hours |
+| A2 | 2 - Trade press | 0.6 | 30% | 35% | 24, 30 hours |
+| A3 | 3 - Community | 0.3 | 10% | 15% | 24 hours |
 
 ## Inputs and independent evidence
 
@@ -56,14 +62,14 @@ identities and work estimates must be supplied as explicit evidence.
 Unknown stays null; source titles and article prose do not fill it.
 
 For article `i`, configured feed authority is multiplied by its feed weight and
-applied source-class weight:
+applied source-tier weight:
 
 $$
-A_i = \alpha \, w_{\mathrm{feed},i} \, w_{\mathrm{class},i}
+A_i = \alpha \, w_{\mathrm{feed},i} \, w_{\mathrm{tier},i}
 $$
 
 `alpha` is `curate_articles.source_authority_weight`; the other two values are
-the configured feed weight and applied source-class weight. The selected row
+the configured feed weight and applied source-tier weight. The selected row
 keeps the legacy field name `applied_tier_weight`.
 
 The source's technical article-pass rate is:
@@ -152,10 +158,10 @@ The saved request's `article_limit`, or the configured default, is a positive
 finite safe integer. `curate_articles.article_quality_buckets` declares each
 article-quality bucket's share, additional fresh buffer and increasing age
 steps. Configured list order sets bucket priority; numeric IDs do not. Shares and
-source-class weights have different jobs: shares set count targets, while the
-applied source-class weight multiplies feed authority in the score above. A
-measured article-pass rate can change ranking inside a source class; it never
-moves a feed into another source class.
+source-tier weights have different jobs: shares set count targets, while the
+applied source-tier weight multiplies feed authority in the score above. A
+measured article-pass rate can change ranking inside a source tier; it never
+moves a feed into another source tier.
 
 For requested limit `L`, article-quality bucket `t` has an unrounded target and a fresh
 ceiling:
@@ -219,7 +225,7 @@ counts differ from those targets.
 
 Article-quality bucket shares set article counts. They are separate from
 ranking weights. The current TypeScript implementation uses each feed's
-configured weight, its source-class weight, recency, the technical article-pass
+configured weight, its source-tier weight, recency, the technical article-pass
 history and exposure penalties. Feed-read reliability and technical
 article-pass reliability are separate measurements.
 
@@ -266,42 +272,52 @@ publication-history or age checks. The selector below receives the admitted
 batch, not a fixed shortlist.
 
 ```mermaid
-%%{init: {"theme": "base", "htmlLabels": false, "themeVariables": {"background": "#ffffff", "primaryColor": "#f8fafc", "primaryTextColor": "#1f2937", "primaryBorderColor": "#64748b", "lineColor": "#64748b", "textColor": "#1f2937", "clusterBkg": "#f1f5f9", "clusterBorder": "#64748b", "titleColor": "#1f2937", "edgeLabelBackground": "#ffffff"}}}%%
+%%{init: {"theme": "base", "themeVariables": {"fontFamily": "sans-serif", "background": "#ffffff", "primaryColor": "#f8fafc", "primaryTextColor": "#1f2937", "primaryBorderColor": "#64748b", "lineColor": "#64748b", "textColor": "#1f2937", "clusterBkg": "#f8fafc", "clusterBorder": "#94a3b8", "edgeLabelBackground": "#ffffff"}}}%%
 flowchart TD
-  START["Admitted articles and saved request"] --> CALC["Calculate article-quality bucket targets,<br/>fresh ceilings and allowed age steps"]
-  CALC --> TARGET{"Phase 1<br/>Can a permitted fresh article fill<br/>an article-quality bucket target?"}
-  TARGET -->|"Candidate found"| ADD["Add the article"]
-  TARGET -->|"No permitted candidate"| BUFFER{"Phase 2<br/>Can a permitted fresh article fill<br/>an article-quality bucket fresh ceiling?"}
-  BUFFER -->|"Candidate found"| ADD
-  BUFFER -->|"No permitted candidate"| OLDER{"Phase 3<br/>Can a permitted older article fill<br/>an article-quality bucket target?"}
-  OLDER -->|"Candidate found"| ADD
-  OLDER -->|"No permitted candidate"| STOP["Stop selection"]
-  ADD --> ROOM{"Has the global article limit been reached?"}
-  ROOM -->|"No. Restart selection at Phase 1"| TARGET
-  ROOM -->|"Yes"| STOP
-  STOP --> RECORD["Record one terminal reason for each unchosen candidate"]
-  RECORD --> PARTITION["Partition selected articles among workers<br/>Workers do not add or remove articles"]
+  START["Admitted screened articles<br/>and saved request"] --> CALC["Resolve source tier and article-quality<br/>bucket data: targets, ceilings and age ladders"]
+  CALC --> ROOM{"Has article_limit<br/>been reached?"}
+  ROOM -->|"Yes"| STOP["Stop selection<br/>No remaining global capacity"]
+  ROOM -->|"No"| PHASE1{"Phase 1<br/>Can a fresh article fill<br/>a source tier target?"}
+  PHASE1 -->|"Yes"| RANK["Rank the permitted candidates<br/>Unique canonical URL and allowed concentration<br/>Highest marginal score; candidate ID tie-break"]
+  PHASE1 -->|"No"| PHASE2{"Phase 2<br/>Can a fresh article fill<br/>a bucket fresh ceiling?"}
+  PHASE2 -->|"Yes"| RANK
+  PHASE2 -->|"No"| PHASE3{"Phase 3<br/>Can an older ladder candidate fill<br/>a source tier target?"}
+  PHASE3 -->|"Yes"| RANK
+  PHASE3 -->|"No"| RELAX{"Can distinct_sources or<br/>source_share relax?"}
+  RELAX -->|"Yes"| RELAXED["Relax the next configured limit<br/>Restart at Phase 1"]
+  RELAXED -.-> PHASE1
+  RELAX -->|"No"| STOP
+  RANK --> ADD["Add the winner<br/>Recount its source tier and selected URLs"]
+  ADD --> ROOM
+  STOP --> RECORD[("Record one terminal reason<br/>for each unchosen candidate")]
+  RECORD --> PARTITION["Partition selected articles among workers<br/>Workers do not rerank, add or remove articles"]
 
   classDef stage fill:#f8fafc,stroke:#64748b,stroke-width:1.5px,color:#1f2937;
   classDef decision fill:#ecfeff,stroke:#0e7490,stroke-width:1.5px,color:#164e63;
-  classDef no fill:#fef2f2,stroke:#991b1b,stroke-width:1.5px,color:#991b1b;
+  classDef yes fill:#f0fdf4,stroke:#166534,stroke-width:1.5px,color:#14532d;
+  classDef warn fill:#fffbeb,stroke:#92400e,stroke-width:1.5px,color:#78350f;
   classDef ledger fill:#eff6ff,stroke:#1d4ed8,stroke-width:1.5px,color:#1e3a8a;
 
-  class START,CALC,ADD,PARTITION stage;
-  class TARGET,BUFFER,OLDER,ROOM decision;
-  class STOP no;
+  class START,CALC,RANK,PARTITION stage;
+  class ROOM,PHASE1,PHASE2,PHASE3,RELAX decision;
+  class ADD yes;
+  class STOP,RELAXED warn;
   class RECORD ledger;
 
-  linkStyle 2,4,6,9 stroke:#15803d,stroke-width:1.5px;
-  linkStyle 3,5,7,10 stroke:#dc2626,stroke-width:1.5px;
+  linkStyle 3,4,6,8,10 stroke:#15803d,stroke-width:1.5px;
+  linkStyle 2,5,7,9,12 stroke:#dc2626,stroke-width:1.5px;
 ```
 
-Selection starts at Phase 1. Phase 1 fills fresh articles to bucket targets.
-Phase 2 adds fresh articles up to the article-quality bucket fresh ceilings. Phase 3 uses
-permitted older articles only to fill a bucket target, never that bucket's
-fresh ceiling. Each permitted winner or cap relaxation restarts selection at
-Phase 1. Duplicate URLs and concentration limits remain enforced. Selection stops
-at the global limit or when no phase yields a permitted candidate.
+Selection starts at Phase 1. Phase 1 fills fresh articles to article-quality
+bucket targets keyed by source-tier ID. Phase 2 adds fresh articles up to the
+buckets' fresh ceilings. Phase 3 uses permitted older ladder steps only to
+fill a target, never a bucket's fresh ceiling. Phase order follows configured
+bucket list order. Within a bucket and age window, the highest marginal score
+wins, with `candidate_id` breaking score ties. Each permitted winner or cap
+relaxation restarts selection at Phase 1. Duplicate URLs remain enforced.
+The `distinct_sources` and `source_share` limits can relax in configured order;
+the website-group cap does not relax. Selection stops at the global limit or
+when no phase yields a permitted candidate.
 
 An underfilled result is therefore not proof of missing backfill. Check the
 saved age override, the deficient bucket's remaining age steps, eligible supply,
@@ -365,7 +381,7 @@ with a distinct recorded adjustment term. Unknown publisher IDs remain null.
 
 One chosen content population supplies compact metadata and the selected
 text artifact. Each article retains its rank, actual base and marginal
-scores, signed adjustments, source class/weight, work estimate, timing and
+scores, signed adjustments, source tier/weight, work estimate, timing and
 the quota or exploration exceptions used. No full policy, assessment or
 losing-score tree is copied.
 
