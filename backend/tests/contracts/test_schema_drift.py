@@ -101,6 +101,14 @@ def test_fixture_round_trips_without_losing_values(path: Path) -> None:
             }
         elif contract.__schema_stem__ == "host-fingerprint-row":
             expected = {"machine_memory_total_mib": None, **original}
+        elif contract.__schema_stem__ == "visual-attempt-row":
+            expected = {
+                "visual_id": None,
+                **original,
+                "planned_type": None,
+                "rendered_type": None,
+                "gate_floor_applied": None,
+            }
         elif contract.__schema_stem__ == "visual-decision":
             expected = {
                 **original,

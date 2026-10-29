@@ -364,7 +364,11 @@ def test_an_attempt_that_proposed_nothing_drew_nothing() -> None:
 
 def test_an_attempt_that_proposed_a_picture_names_no_refusing_gate() -> None:
     with pytest.raises(ValidationError):
-        published(1, none_reason=NoneReason.MODEL_DECLINED)
+        published(1, none_reason=NoneReason.VALIDATION_FAILED)
+    refused = published(
+        1, none_reason=NoneReason.VALIDATION_FAILED, state=VisualState.ABSENT, marks=None
+    )
+    assert refused.decision is PlanDecision.VISUAL
 
 
 def test_a_folded_row_refuses_a_spread_that_runs_backwards() -> None:
