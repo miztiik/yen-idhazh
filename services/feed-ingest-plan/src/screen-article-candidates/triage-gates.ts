@@ -68,7 +68,7 @@ export async function screenArticleCandidates(
     } else if (candidate.word_count < required) {
       rejection = { drop_reason: "REJECTED_SCREENING_MIN_WORDS", details: { words_found: candidate.word_count, words_required: required } };
     } else {
-      rejection = rejectArticleAge(planning.config, candidate.source.tier, freshness.age_hours, run.overrides?.freshness_hours);
+      rejection = rejectArticleAge(planning.config, candidate.source.tier, freshness.age_hours);
     }
     if (rejection === null) {
       admitted.push({ candidate, policy, freshness, observation, discovered_availability: discovered.availability });

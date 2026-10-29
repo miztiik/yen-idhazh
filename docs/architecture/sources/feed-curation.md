@@ -201,18 +201,9 @@ count and `article_limit`. Fresh buffer articles can fill the global limit
 while another bucket remains below target. A bucket cannot use older
 articles after it reaches its own target.
 
-The saved `freshness_hours` value is a run-level age override. It clamps every
-configured age step to that value and removes repeated steps. It does not
-replace a count target, buffer or ranking rule. With the current configuration,
-24 hours leaves Institution at `[24]`, Trade press at `[24]`, and Community at
-`[24]`. Institution cannot reach 36 or 48 hours; Trade press cannot reach 30
-hours; Community has no older step. A larger override never widens a configured
-step. Unknown-age candidates remain eligible in the base selection phase.
-
-The `Feed ingest plan test` workflow defaults `freshness_hours` to `24`.
-Leaving that default applies a fresh-only test run. Clearing the input or
-omitting it in the API or CLI removes the override and uses the configured age
-steps. The blank form value is not a request for the number zero.
+The configured `ladder_hours` value for each article-quality bucket is the age
+policy. Unknown-age candidates remain eligible in the base selection phase.
+The workflow uses those configured ladder steps without a run-level age control.
 
 The same workflow defaults `article_limit` to `100`, four workers, and
 `bin-pack`. Its worker controls affect only partitioning after article

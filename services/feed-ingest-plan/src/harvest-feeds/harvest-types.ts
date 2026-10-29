@@ -53,7 +53,6 @@ export type HarvestContext = {
     published_on: ReadonlyMap<string, string>;
     settled_failure_codes: ReadonlyMap<string, ItemHealthFailureCode>;
   };
-  overrides?: { freshness_hours?: number };
   clock?: () => Date;
   observation_clock?: () => Date;
   observations?: IngestObservations;

@@ -32,11 +32,11 @@ export function formatWorkflowPolicy(input: unknown, selectionRan: boolean) {
   const source = (key: keyof typeof supplied) => supplied[key] === undefined ? "configuration" : "workflow override";
   const maximum = `${request.article_limit} articles`;
   const ages = config.curate_articles.article_quality_buckets.map(rule =>
-    `Article-quality bucket ${rule.tier}: ${resolveArticleQualityBucketWindows(rule, request.freshness_hours).steps.join(" / ")} hours`).join("; ");
+    `Article-quality bucket ${rule.tier}: ${resolveArticleQualityBucketWindows(rule).steps.join(" / ")} hours`).join("; ");
   const workers = `${request.shards} workers; ${request.partition_strategy}`;
   const rows = [
     ["Application", selectionRan ? "Selection ran with these effective controls" : "Requested controls; selection did not run"],
-    ["Article age windows", `${ages} (${source("freshness_hours")})`],
+    ["Article age windows", `${ages} (configuration)`],
     ["Article limit", `${maximum} (${source("article_limit")})`],
     ["Worker assignment", `${workers} (count: ${source("shards")}; distribution: ${source("partition_strategy")})`],
     ["Extraction", `${config.harvest.concurrency} concurrent fetches; ${config.harvest.fetch_timeout_ms} milliseconds fetch timeout; ${parser_concurrency} parser workers`],

@@ -44,10 +44,11 @@ async function workflow() {
 test("workflow preparation validates dispatch data and requires execution controls before loading files", async () => {
   expect(readWorkflowRequest({ ARTICLE_LIMIT: "", SHARDS: "  " })).toEqual({});
   expect(readWorkflowRequest({
-    FRESHNESS_HOURS: "12", ARTICLE_LIMIT: "5", SHARDS: "2", PARTITION_STRATEGY: "round-robin",
-  })).toEqual({ freshness_hours: 12, article_limit: 5, shards: 2, partition_strategy: "round-robin" });
+    ARTICLE_LIMIT: "5", SHARDS: "2", PARTITION_STRATEGY: "round-robin",
+  })).toEqual({ article_limit: 5, shards: 2, partition_strategy: "round-robin" });
   expect(() => readWorkflowRequest({ ARTICLE_LIMIT: "0" })).toThrow();
   expect(() => readWorkflowRequest({ PARTITION_STRATEGY: "unknown" })).toThrow();
+  expect(readWorkflowRequest({ FRESHNESS_HOURS: "12" })).toEqual({});
   await expect(preparePlannerWorkflow(root, {})).rejects.toThrow("Workflow execution controls are missing");
 });
 
@@ -56,10 +57,10 @@ test("manual controls exercise the planner API and keep only required outputs", 
   expect(parsed.permissions).toEqual({ contents: "write" });
   expect(parsed.jobs["isolated-plan"]["timeout-minutes"]).toBe(360);
   const controls = parsed.on.workflow_dispatch.inputs;
-  expect(Object.keys(controls)).toEqual(["freshness_hours", "article_limit", "shards", "partition_strategy"]);
+  expect(Object.keys(controls)).toEqual(["article_limit", "shards", "partition_strategy"]);
   const config = FeedIngestConfigSchema.parse(await Bun.file(join(root, "config", "feed-ingest-plan.json")).json());
   for (const [field, value] of Object.entries({
-    freshness_hours: config.curate_articles.article_quality_buckets[0]!.ladder_hours[0]!, article_limit: config.curate_articles.article_limit,
+    article_limit: config.curate_articles.article_limit,
     shards: config.partition.default_shards, partition_strategy: config.partition.default_strategy,
   })) expect(controls[field]!.default).toBe(String(value));
   expect(controls.partition_strategy!.options).toEqual(PlanRequestSchema.shape.partition_strategy.unwrap().options);
@@ -68,7 +69,7 @@ test("manual controls exercise the planner API and keep only required outputs", 
   const plan = steps.find(step => step.id === "plan")!;
   expect(plan.run).toBe("bun run services/feed-ingest-plan/scripts/run-feed-ingest-plan.ts");
   expect(plan.env).toEqual({
-    FRESHNESS_HOURS: "${{ inputs.freshness_hours }}", ARTICLE_LIMIT: "${{ inputs.article_limit }}",
+    ARTICLE_LIMIT: "${{ inputs.article_limit }}",
     SHARDS: "${{ inputs.shards }}", PARTITION_STRATEGY: "${{ inputs.partition_strategy }}",
   });
   expect(plan.run).not.toContain("${{");
@@ -241,7 +242,7 @@ test("bounded discovery history preserves covered-day membership and planner raw
 test("hostile dispatch strings fail in the actual adapter before loading inputs or making requests", async () => {
   const child = Bun.spawn([process.execPath, join(root, "services", "feed-ingest-plan", "scripts", "run-feed-ingest-plan.ts")], {
     cwd: root, stdout: "pipe", stderr: "pipe",
-    env: { ...Bun.env, FRESHNESS_HOURS: '24; throw new Error("injected")', ARTICLE_LIMIT: "", SHARDS: "", PARTITION_STRATEGY: "" },
+    env: { ...Bun.env, ARTICLE_LIMIT: '24; throw new Error("injected")', SHARDS: "", PARTITION_STRATEGY: "" },
   });
   const [output, errors] = await Promise.all([new Response(child.stdout).text(), new Response(child.stderr).text()]);
   expect(await child.exited).toBe(2);

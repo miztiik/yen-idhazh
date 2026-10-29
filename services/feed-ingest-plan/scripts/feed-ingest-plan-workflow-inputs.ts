@@ -15,7 +15,7 @@ import { createPlannerStartup } from "./feed-ingest-plan-supervisor";
 export function readWorkflowRequest(environment: Record<string, string | undefined>) {
   const args = ["--cli"];
   for (const [name, flag] of [
-    ["FRESHNESS_HOURS", "--freshness-hours"], ["ARTICLE_LIMIT", "--article-limit"],
+    ["ARTICLE_LIMIT", "--article-limit"],
     ["SHARDS", "--shards"], ["PARTITION_STRATEGY", "--partition-strategy"],
   ] as const) {
     const value = environment[name];
