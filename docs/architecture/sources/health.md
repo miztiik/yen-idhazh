@@ -1,6 +1,6 @@
 # Feed Health and Quarantine
 
-**Last Updated**: 2026-10-08
+**Last Updated**: 2026-10-29
 What every feed did on every run, where that record lives, and how a run decides on its own to stop asking a dead source. Nothing on this page ever edits `config/sources.json`: a person owns the source list, and a run owns the evidence about it.
 
 The isolated TypeScript planner uses these native health rows for rest and
@@ -338,6 +338,14 @@ Three of those rows carry the whole design.
 
 A feed that has failed its last `availability_strikes_before_rest` (5) attempts is not asked on the next run. That is a rest.
 
+**A partial bounded history cannot prove a rest.** The Python run needs all 31
+recorded days in its health window before it may skip a feed for a failure
+streak. The TypeScript planner applies the same rule to its configured
+represented-day window. If either read is short or incomplete, the run asks the
+feed and reports its lifecycle as unknown in TypeScript, or unavailable in
+Python's source-health view; a visible tail of failures may hide a later success
+or rest cycle.
+
 **The rest ends on its own.** Once a feed has been skipped five times it is asked again regardless of its record. A source that came back is live on that very run; a source that is still dead costs one request per cycle instead of one per run.
 
 **A rest is transparent.** A `skipped` row neither adds a strike nor clears one, so the count picks up where it left off when the feed is next asked. Without that, a rest would erase the evidence that caused it. A robots result is transparent for the same reason and by the same rule - see the evidence table above.
@@ -625,6 +633,12 @@ The record came before the quarantine, and that order was the point: you cannot 
 Making a zero-item `200` a failure is the finding that justifies the whole ledger. Every other failure mode is visible in a log line at the moment it happens. A feed that quietly stops carrying entries looks healthy in every single run and is only visible as a shape across runs, which is exactly what a ledger is for.
 
 The self-lifting rest is there because the alternative was tested by imagination and failed: a quarantine that only a human can lift is a deletion with extra steps, and the human who has to lift it will not be reading a ledger file on a Sunday.
+
+The rest also needs a complete bounded history. A partial input can omit a
+successful read or enough previous skips to lift the rest, so its visible
+failure streak is not proof that the feed should be skipped. Asking again until
+the window is complete costs requests during a short history gap; it avoids
+silencing a feed on evidence the run cannot verify.
 
 **`telemetry.source_health.reliability` was drawn nowhere until 2026-09-14.** It is the per-feed multiplier the ranker applies to authority, recalculated every run over the trailing `collect.reliability_window_days`, clamped to `[collect.reliability_floor, 1.0]`, and 1.0 for a feed with no evidence in the window. It writes nothing to `config/` and it lives for the length of one run, which is why it went so long without a surface: nothing persisted it, so nothing could draw it. It is on `/console/voices/` now, one bar a feed, and the page reads the factor the run applied off the published view rather than reducing the shards a second time. Two derivations of one ranking factor is two verdicts, and the day they disagreed neither would be worth drawing. Placement plan row #13, decisions 4 and 7; that row reads the factor and changes no feed score.
 

@@ -121,6 +121,7 @@ def fold(
     retired_on: dict[str, str] | None = None,
     date: str = DATE,
     collect: CollectConfig = COLLECT,
+    history_complete: bool = True,
 ) -> SourceHealthView:
     return source_health.build(
         feeds=feeds,
@@ -131,6 +132,7 @@ def fold(
         date=date,
         run_id=f"{date}-1",
         generated_at=f"{date}T06:20:00Z",
+        history_complete=history_complete,
     )
 
 
@@ -189,7 +191,7 @@ def test_the_published_bytes_carry_no_address_key_or_robots_answer_body(tmp_path
         assert private not in payload, f"the published view carries {private!r}"
     published = SourceHealthView.from_json(payload)
     row = next(row for row in published.sources if row.source_id == known.id)
-    assert row.availability is SourceAvailability.ANSWERING
+    assert row.availability is SourceAvailability.UNAVAILABLE
     assert (row.opportunities, row.publications) == (1, 1)
 
 
@@ -320,6 +322,17 @@ def test_a_feed_past_the_strike_count_is_resting_rather_than_failing(
     assert only(fold(feeds=[feed("wire")], health_rows=rows, collect=collect)).availability is (
         expected
     )
+
+
+def test_partial_history_does_not_publish_a_resting_status() -> None:
+    collect = CollectConfig(availability_strikes_before_rest=3)
+    rows = [
+        health("wire", date=DATE, n=n, outcome=FetchOutcome.TRANSIENT, status=503)
+        for n in range(1, 4)
+    ]
+    assert only(fold(
+        feeds=[feed("wire")], health_rows=rows, collect=collect, history_complete=False
+    )).availability is SourceAvailability.UNAVAILABLE
 
 
 def test_retirement_is_rendered_and_never_re_derived() -> None:
@@ -558,7 +571,7 @@ def test_publish_writes_the_view_where_the_console_reads_it(tmp_path) -> None:  
     assert source_health.public_relpath() == "frontend/public/source-health.json"
     view = SourceHealthView.from_json(path.read_text(encoding="utf-8"))
     row = next(row for row in view.sources if row.source_id == known.id)
-    assert row.availability is SourceAvailability.ANSWERING
+    assert row.availability is SourceAvailability.UNAVAILABLE
     assert row.permission is SourcePermission.UNRECORDED
     assert (row.opportunities, row.publications, row.source_failures) == (2, 1, 1)
     assert view.to_json() == returned.to_json()
@@ -1036,6 +1049,7 @@ def test_publish_reads_the_selected_dates_and_writes_the_complete_read_s_bytes(
         date=_GAP_TODAY,
         run_id=run_id,
         generated_at=generated_at,
+        history_complete=False,
     )
     path = tmp_path / "public" / source_health.PUBLIC_FILENAME
     view = source_health.publish(

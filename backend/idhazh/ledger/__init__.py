@@ -120,10 +120,12 @@ from idhazh.ledger.raw_files import (
 )
 from idhazh.ledger.rows import (
     HEALTH_WINDOW_DAYS,
+    FeedHealthHistory,
     append_published,
     append_seen,
     load_fitted_thresholds,
     load_health,
+    load_health_history,
     load_published,
     load_retirements,
     load_seen,
@@ -249,10 +251,12 @@ __all__ = [  # noqa: RUF022
     "require_matching_header",
     # rows.py: how a caller puts rows in and gets them back.
     "HEALTH_WINDOW_DAYS",
+    "FeedHealthHistory",
     "append_published",
     "append_seen",
     "load_fitted_thresholds",
     "load_health",
+    "load_health_history",
     "load_published",
     "load_retirements",
     "load_seen",

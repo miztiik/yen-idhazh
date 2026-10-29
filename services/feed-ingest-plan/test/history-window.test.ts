@@ -135,12 +135,38 @@ test("precise, legacy and tied timestamps preserve the recorded lifecycle uncert
     run_id: `2026-10-20-${suffix}`, checked_at: `2026-10-20T10:00:00${testCase.times[index]}`,
     outcome: testCase.kinds[index]!, status: testCase.statuses[index]!, items: testCase.kinds[index] === "ok" ? 3 : 0,
   })));
-  const forward = summarize(setup, rows, { sources, policy: { ...setup.policy, availability_strikes_before_rest: recorded.threshold } });
-  const reverse = summarize(setup, [...rows].reverse(), { sources, policy: { ...setup.policy, availability_strikes_before_rest: recorded.threshold } });
+  const forward = summarize(setup, rows, {
+    sources, lifecycle_window_days: 1,
+    policy: { ...setup.policy, availability_strikes_before_rest: recorded.threshold },
+  });
+  const reverse = summarize(setup, [...rows].reverse(), {
+    sources, lifecycle_window_days: 1,
+    policy: { ...setup.policy, availability_strikes_before_rest: recorded.threshold },
+  });
   for (const testCase of recorded.cases) {
     expect(forward.sources.get(testCase.id)!.lifecycle, testCase.id).toBe(testCase.expected);
     expect(reverse.sources.get(testCase.id), testCase.id).toEqual(forward.sources.get(testCase.id)!);
   }
+});
+
+test("incomplete lifecycle history cannot establish a resting feed", async () => {
+  const setup = await input();
+  const rows = Array.from({ length: setup.policy.availability_strikes_before_rest }, (_, index) =>
+    work(undefined, {
+      run_id: `2026-10-20-${index + 1}`,
+      checked_at: `2026-10-20T06:00:0${index}Z`,
+      outcome: "transient",
+      items: 0,
+    }));
+  const days = closedRequestDays(now, setup.lifecycle_window_days).map(day => ({ day, complete: true }));
+  const complete = summarize(setup, rows, { days });
+  expect(complete.sources.get("recorded-news")!.lifecycle).toBe("resting");
+  const partial = summarize(setup, rows, {
+    days: days.map(day => day.day === "2026-10-19" ? { ...day, complete: false } : day),
+  });
+  expect(partial.sources.get("recorded-news")).toMatchObject({
+    lifecycle: "unknown", strikes: null, rested_runs: null,
+  });
 });
 
 test("a changed feed URL inherits neither the old endpoint reliability nor its request spend", async () => {
