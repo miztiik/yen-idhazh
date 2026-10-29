@@ -1,6 +1,6 @@
 # What a visual plan may say, and what happens to one that is refused
 
-**Last Updated**: 2026-10-28
+**Last Updated**: 2026-10-29
 
 The shape the model decodes into, the four things it may not carry, the ten
 deterministic checks a plan has to clear, and the ladder a refused plan may step
@@ -342,8 +342,10 @@ already: the programme requires an annotated mark on **every** visual, not only 
 **What the percentile cannot do, said next to it.** A mark count is bounded to the
 `min_chart_points`-to-`max_chart_points` window, 3 to 8 today, so a percentile over it is a
 low-resolution instrument and two adjacent rungs can land on one integer - at which point the ladder
-stops escalating. That is visible rather than silent, because each depth records the floor it
-applied, and the answer is to move the percentiles rather than the mechanism.
+stops escalating. `VisualDecision` records whether a numeric floor excluded a candidate and keeps
+the deepest rung reached separate from the selected replacement depth. Their exact nullable
+meanings are defined in [visual outcomes](visuals.md#every-none-says-which-gate-refused-it). The
+search can compare several rungs, so its evidence does not present one floor as representative.
 
 **The kill criterion is pre-committed here, before any data is read.** If downgraded visuals are
 kept materially less often than depth-0 ones, the ladder is manufacturing exactly the pointless

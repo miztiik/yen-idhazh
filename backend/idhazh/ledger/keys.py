@@ -34,6 +34,7 @@ from idhazh.contracts.run_plan import RunPlan
 from idhazh.contracts.run_shards import RunShards
 from idhazh.contracts.seen import PublishedRow, SeenRow
 from idhazh.contracts.visual_prune import VisualPruneRow
+from idhazh.contracts.visual_telemetry import VisualAttemptRow
 
 #: The column the door files a dated row under, read out of the row's own cells.
 #: Named once here because a second spelling of it would file a row under a day
@@ -317,6 +318,9 @@ class _DoorShape(NamedTuple):
 #: cannot disagree about which row of a key survives. A new door ledger gets its
 #: row here in the change that registers it.
 _DOOR_SHAPES: Final[dict[LedgerName, _DoorShape]] = {
+    LedgerName.VISUAL_DESIGN_ATTEMPTS: _DoorShape(
+        ("date", "run_id", "item_id", "visual_id"), VisualAttemptRow
+    ),
     LedgerName.GARDENER: _DoorShape(COLLECTION_PRUNE_KEY, CollectionPruneRow),
     LedgerName.VISUAL_PRUNES: _DoorShape(VISUAL_PRUNE_KEY, VisualPruneRow),
     LedgerName.FEED_RETIREMENTS: _DoorShape(FEED_RETIREMENT_KEY, FeedRetirementRow),

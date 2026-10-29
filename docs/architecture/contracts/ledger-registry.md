@@ -1,6 +1,6 @@
 # The ledger registry
 
-**Last Updated**: 2026-10-26
+**Last Updated**: 2026-10-29
 
 A ledger is a committed file or folder under `state/` that one run writes so that a later run can read it. A ledger exists in code only when it is registered, and registering it takes two edits. The first is one member of `LedgerName`, the ledger's one name in code. The second is one entry in `config/ledgers.json`, which puts the ledger in a family - one top-level folder under `state/` - and says where its files sit. When the code loads, it checks that the two edits agree, and the build stops if they do not.
 
@@ -15,6 +15,33 @@ Every ledger here has exactly one name in code: a member of `LedgerName` in `bac
 **The value says what the ledger holds, never the kind of thing it is.** Maintainer decision, 2026-09-27. `telemetry-aggregate` held what is left of an item-health month, so it is `item-health-summary`. A name for a kind of thing claims every ledger of that kind: a reader cannot tell from the folder which one it holds, and the next ledger of that kind has no name left. It was renamed while it held no files, so nothing moved.
 
 It sits at the bottom of the contract graph rather than inside `backend/idhazh/ledger/`, because a contract may not import another part of `idhazh` (CLAUDE.md section 4) and a persisted shape is typed by it.
+
+## Visual-design attempts
+
+`visual-design-attempts` is an active raw-and-compact family with explorer
+consent false. `VisualAttemptRow` is its contract. Its business key is
+`(date, run_id, item_id, visual_id)`. Historical rows without the new types,
+floor evidence or identity still read with nulls; new writes copy the exact
+decision identity.
+
+The worker calls `telemetry.visual_attempts.record` immediately after
+`two_calls_one_item` returns a decision. A writer identity uses the real run,
+attempt, work shard and checked-out commit. The producer's supported part
+suffix is the decision identity, so separate actual decisions do not replace
+one another during standard work-unit settlement. This is not a retry policy.
+
+The standard writer files immutable Parquet under
+`state/raw/visual-design-attempts/<YYYY>/<MM>/<DD>/<file_id>.parquet`.
+`ledger/staging.py` grants only WORK authority over that raw tree.
+`backend/utilities/digest_publish.py` collects the actual completed paths and
+the digest workflow publishes them even when a later item fails. Assemble does
+not rebuild or write a second attempt record.
+
+`compact-visual-design-attempts` owns both that raw root and
+`state/compact/visual-design-attempts`. Standard packing preserves all rows,
+including their identities. The [retention reference](../../concepts/config/retention-ages.md)
+defines its finite monthly window. There is no aggregate family or permanent
+summary.
 
 ## Families and ledgers
 

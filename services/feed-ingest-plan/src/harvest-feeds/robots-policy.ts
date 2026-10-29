@@ -10,7 +10,8 @@ import { UnsafeTargetError, resolveAddresses, validateTarget, validateTargetName
 import type { ResolveAddresses } from "./safe-target";
 import type { FetchAttempt } from "../api/operation-contracts";
 import { utcTimestamp } from "./harvest-types";
-import { cleanRequestTarget } from "./request-url";
+import { cleanArticleUrl } from "./article-url";
+import { InvalidArticleUrlError } from "./legacy-article-identity";
 
 export type FetchAttemptMeasurement = {
   attempt: FetchAttempt; occurred_at: string; outcome: "success" | "failed";
@@ -63,7 +64,7 @@ export function robotsPermits(document: ReturnType<typeof parseRobots>, url: str
 
 function transportFailure(error: unknown, signal: AbortSignal): FetchFailure {
   if (error instanceof ResponseReadError) return transportFailure(error.cause, signal);
-  if (error instanceof UnsafeTargetError) return "unsafe-target";
+  if (error instanceof UnsafeTargetError || error instanceof InvalidArticleUrlError) return "unsafe-target";
   if (signal.aborted) return "timeout";
   if (error instanceof BodyLimitError) return "body-too-large";
   const cause = error instanceof Error && error.cause instanceof Error ? error.cause : error;
@@ -257,7 +258,7 @@ export function createPermittedFetcher(
       // Syntax is refused without retries; transient initial DNS failures use the same retry policy.
       const started = performance.now();
       try {
-        url = config.tidy_urls ? cleanRequestTarget(target) : validateTargetName(target);
+        url = kind === "article" ? validateTargetName(cleanArticleUrl(target, config)) : validateTargetName(target);
         target = url.href;
       }
       catch (error) {

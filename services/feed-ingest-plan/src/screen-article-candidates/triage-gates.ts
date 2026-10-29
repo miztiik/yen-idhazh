@@ -53,10 +53,13 @@ export async function screenArticleCandidates(
       } };
     } else if (publishedOn !== undefined) {
       rejection = { drop_reason: "ALREADY_PUBLISHED", details: {
-        matched_url_key: candidate.url_key, published_on: publishedOn, history_window_days: exclusions!.published_window_days,
+        matched_url_key: exclusions?.matched_published_keys?.[candidate.url_key] ?? candidate.url_key,
+        published_on: publishedOn, history_window_days: exclusions!.published_window_days,
       } };
     } else if (failureCode !== undefined) {
-      rejection = { drop_reason: "SETTLED_FAILURE", details: { matched_url_key: candidate.url_key, failure_code: failureCode } };
+      rejection = { drop_reason: "SETTLED_FAILURE", details: {
+        matched_url_key: exclusions?.matched_failure_keys?.[candidate.url_key] ?? candidate.url_key, failure_code: failureCode,
+      } };
     } else if (observation?.paywall === true || blockedStatus) {
       rejection = { drop_reason: "PAYWALL_OR_BLOCKED", details: { http_status: observation?.http_status ?? null } };
     } else if (findBlockedCategory(candidate.categories, planning.config.harvest.blocked_categories) !== null) {

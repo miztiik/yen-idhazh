@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from enum import StrEnum
 from types import MappingProxyType
-from typing import Any, Final, Self
+from typing import Any, Final
 
 from pydantic import Field, StrictBool, model_validator
 
@@ -30,6 +30,10 @@ SUPERSEDED_RETENTION_NAMES: Final[Mapping[str, str]] = MappingProxyType(
         "public_scores_keep_months": "",
         "public_feed_health_keep_months": "",
         "runtime_counters_scrape": "",
+        "visuals_full_grain_months": (
+            "monthly_window.value in config/gardener/compact-visual-design-attempts.json"
+        ),
+        "visual_aggregate_keep_months": "",
         "trace_window_days": "window.value in config/gardener/traces.json",
         "item_health_full_grain_months": (
             "series.full-grain.value in config/gardener/telemetry-aggregate.json"
@@ -327,31 +331,6 @@ class ObservabilityConfig(Model):
             "destination a span has, so no run reaches a third party whatever this says."
         ),
     )
-    visuals_full_grain_months: int = Field(
-        default=14,
-        ge=1,
-        description=(
-            "How long state/visuals/ stays readable attempt by attempt. Past it a month "
-            "is folded to the eight-term group VisualAggregateRow declares and the "
-            "full-grain shard goes, so a reader keeps every cause breakdown and every "
-            "stratum and loses the per-attempt row and its join key. Fourteen matches "
-            "the two ledgers it is read beside; a shorter one would leave a day whose "
-            "failures are still readable and whose refused pictures are not. No console "
-            "read opens one of these shards today - the panels that will are their own "
-            "plan, and the retention-window check joins in the same commit as the first "
-            "of them."
-        ),
-    )
-    visual_aggregate_keep_months: int | None = Field(
-        default=None,
-        ge=1,
-        description=(
-            "Months after which a folded visual month is removed outright. Null means "
-            "never, on the same argument as the other two aggregates: the fold is the "
-            "only record that a gate ever refused anything, and it is kilobytes. Set, "
-            "it must sit ABOVE visuals_full_grain_months."
-        ),
-    )
     cost_currency: str = Field(
         default="USD",
         pattern=r"^[A-Z]{3}$",
@@ -415,13 +394,3 @@ class ObservabilityConfig(Model):
         would believe they had moved a window that did not move.
         """
         return refuse_a_removed_knob("observability", data, SUPERSEDED_RETENTION_NAMES)
-
-    @model_validator(mode="after")
-    def _a_summary_outlives_the_rows_it_replaces(self) -> Self:
-        months = self.visual_aggregate_keep_months
-        if months is not None and months <= self.visuals_full_grain_months:
-            raise ValueError(
-                "observability.visual_aggregate_keep_months must sit above "
-                "visuals_full_grain_months, or a month is deleted before it is ever summarised"
-            )
-        return self

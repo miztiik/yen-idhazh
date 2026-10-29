@@ -7,13 +7,21 @@ import { DEFAULT_PLANNER_PRODUCER, FIRST_RUN_ATTEMPT, resolveRunContext } from "
 import { sha256 } from "./operation-store";
 import type { PreparedOperation } from "./operation-store";
 
-export function operationConfigFingerprint(inputs: PlanInputs, runtime: PlanRuntime) {
-  return sha256(JSON.stringify({
+function operationConfiguration(inputs: PlanInputs, runtime: PlanRuntime) {
+  return {
     harvest: inputs.harvest.config_sha256, settings: inputs.settings, clock: inputs.clock_config,
     ledger: inputs.ledgerSettings, registrations: inputs.registrations,
     attempt: runtime.attempt ?? FIRST_RUN_ATTEMPT,
     producer: runtime.producer ?? DEFAULT_PLANNER_PRODUCER, git_sha: runtime.git_sha,
-  }));
+  };
+}
+export function operationConfigFingerprint(inputs: PlanInputs, runtime: PlanRuntime) {
+  return sha256(JSON.stringify(operationConfiguration(inputs, runtime)));
+}
+function legacyOperationConfigFingerprint(inputs: PlanInputs, runtime: PlanRuntime) {
+  const config = operationConfiguration(inputs, runtime);
+  const { digest_root, selected_days, ...originalInputs } = config.settings.inputs;
+  return sha256(JSON.stringify({ ...config, settings: { ...config.settings, inputs: originalInputs } }));
 }
 export function proposedOperation(
   operation: PlannerOperation["operation"], request_id: string, request: unknown, correlation_id: string,
@@ -36,6 +44,7 @@ export function prepareOperation(
 ): PreparedOperation {
   return {
     request_id, operation, input_sha256: sha256(JSON.stringify(request)), config_sha256: operationConfigFingerprint(inputs, runtime),
+    legacy_config_sha256: legacyOperationConfigFingerprint(inputs, runtime),
     capture: () => {
       const record = proposedOperation(operation, request_id, request, correlation_id, inputs, runtime);
       return runId === undefined ? record : { ...record, run_id: runId };

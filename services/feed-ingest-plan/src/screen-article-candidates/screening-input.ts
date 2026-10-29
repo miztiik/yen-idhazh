@@ -26,6 +26,8 @@ const ClockConfigSchema = z.object({ collect: z.object({ max_future_hours: NonNe
 const ExclusionsSchema = z.strictObject({
   published_window_days: CountSchema, published_on: z.record(Sha256Schema, DateStampSchema),
   settled_failure_codes: z.record(Sha256Schema, ItemHealthFailureCodeSchema),
+  matched_published_keys: z.record(Sha256Schema, Sha256Schema).optional(),
+  matched_failure_keys: z.record(Sha256Schema, Sha256Schema).optional(),
 });
 
 export type ScreeningInput = {

@@ -10,6 +10,7 @@ import { createPermittedFetcher } from "./robots-policy";
 import type { HarvestTransport } from "./transport";
 import type { ResolveAddresses } from "./safe-target";
 import { ArticleParserPool } from "./article-parser-pool";
+import { ArticleIdentityEvidence } from "../read-ledger-history/article-identity-evidence";
 
 export { loadHarvestInputs, readHarvestInputs } from "./load-harvest-inputs";
 export type { HarvestInputs } from "./load-harvest-inputs";
@@ -58,10 +59,11 @@ export async function harvestFeeds(
   const fetcher = createPermittedFetcher(inputs.config.harvest, inputs.extraction, boundary, context.observation_clock);
   const permit = workPool(inputs.config.harvest.concurrency);
   const boundedFetcher: Pick<typeof fetcher, "fetch"> = {
-    fetch: (url, emit) => permit(() => fetcher.fetch(url, emit)),
+    fetch: (url, emit, kind, signal) => permit(() => fetcher.fetch(url, emit, kind, signal)),
   };
   const ownedPool = context.parser_pool ?? new ArticleParserPool(inputs.config.harvest.concurrency);
-  const runContext = { ...context, parser_pool: ownedPool };
+  const runContext = { ...context, parser_pool: ownedPool,
+    identities: context.identities ?? new ArticleIdentityEvidence(inputs.config.harvest) };
   try {
     const feeds = await mapPool(inputs.sources, inputs.config.harvest.concurrency, async configured => {
       const source = sourceSnapshot(inputs, configured);
