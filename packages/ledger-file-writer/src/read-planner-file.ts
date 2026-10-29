@@ -113,7 +113,8 @@ export async function readPlannerParquet<T extends object>(
     throw new PlannerLedgerFileError("Planner raw filename differs from its file identity");
   }
   const table = tableFromIPC(parseContainer(() => readParquet(bytes)).intoIPCStream());
-  const columns = describeObjectSchema(contract.schema).fields;
+  const physicalSchema = contract.historicalSchemas?.[envelope.row_schema_version] ?? contract.schema;
+  const columns = describeObjectSchema(physicalSchema).fields;
   checkFields(table.schema.fields, columns);
   const records = table.toArray().map(value => {
     const row = normalize(value);
@@ -123,7 +124,7 @@ export async function readPlannerParquet<T extends object>(
   if (digestRows(records, columns) !== envelope.content_sha256) {
     throw new PlannerLedgerFileError("Planner row digest differs from its footer");
   }
-  const rows = records.map(record => contract.schema.parse(record));
+  const rows = records.map(record => contract.schema.parse(physicalSchema.parse(record)));
   return {
     envelope, rows, bytes: bytes.byteLength,
     file_sha256: createHash("sha256").update(bytes).digest("hex"),

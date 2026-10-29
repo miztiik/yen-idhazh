@@ -26,6 +26,7 @@ import { HarvestArticleResultSchema, utcTimestamp } from "../harvest-feeds/harve
 import { resolveArticleSourceOutcome } from "../article-source-outcome";
 import type { SourceArticleOutcome } from "@idhazh/common-contracts";
 import { createStageLogger } from "../logging/structured-logger";
+import { recordHarvestFailures } from "../record-harvest-failures";
 
 type FetchRequest = z.infer<typeof FetchRequestSchema>;
 const requestPools = new WeakMap<PlanInputs, ReturnType<typeof workPool>>();
@@ -115,6 +116,7 @@ export async function fetchDocument(
     sourceOutcome = resolveArticleSourceOutcome(result, inputs.harvest.config.triage.min_words,
       inputs.harvest.config.triage.blocked_http_statuses, utcTimestamp(runtime.observation_clock));
     state.work.article(result, record.request_id, sourceOutcome);
+    await recordHarvestFailures([rejection], state.context, inputs);
   }
   if (request.fetch_item_type === "article") {
     state.work.captureArticle(record.request_id, source.id, observation.occurred_at, sourceOutcome);

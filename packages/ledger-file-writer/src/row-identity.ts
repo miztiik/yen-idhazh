@@ -106,7 +106,9 @@ export function settlePlannerRows(
   if (fields === undefined) throw new Error("planner settlement requires a declared planner ledger");
   const kept = new Map<string, Record<string, unknown>>();
   for (const row of rows) {
-    const key = JSON.stringify(fields.map((field) => row[field]));
+    const key = JSON.stringify(fields.map((field) =>
+      ledger === "rejected-articles" && field === "candidate_id" && row[field] === null
+        ? [row.feed_id, row.url_key] : row[field]));
     const incumbent = kept.get(key);
     if (incumbent === undefined) kept.set(key, row);
     else if (ledger === "discovered-articles") {

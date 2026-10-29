@@ -1,6 +1,6 @@
 /** Which writer and recorded format identify one immutable ledger file? */
 import { z } from "zod";
-import { REJECTED_ARTICLE_ACCEPTED_SCHEMA_VERSIONS, REJECTED_ARTICLE_VERSION } from "./rejected-article.schema";
+import { REJECTED_ARTICLE_ACCEPTED_SCHEMA_VERSIONS } from "./rejected-article.schema";
 import {
   PLANNER_LEDGER_VERSION, PLANNER_ENVELOPE_VERSION, PLAN_RUN_VERSION, SELECTED_ARTICLE_VERSION, FEED_HEALTH_STATE_VERSION,
 } from "../version";
@@ -101,7 +101,7 @@ export const PLANNER_FOOTER_METADATA_KEYS = [
 export const PLANNER_OPTIONAL_FOOTER_METADATA_KEYS = ["period", "updated_at"] as const;
 export const PlannerFileEnvelopeSchema = z.strictObject({
   version: z.enum([PLANNER_LEDGER_VERSION, "2026-10-26", PLANNER_ENVELOPE_VERSION]).default(PLANNER_ENVELOPE_VERSION),
-  row_schema_version: z.enum([PLANNER_LEDGER_VERSION, PLANNER_ENVELOPE_VERSION, PLAN_RUN_VERSION, REJECTED_ARTICLE_VERSION]),
+  row_schema_version: z.enum([PLANNER_LEDGER_VERSION, PLANNER_ENVELOPE_VERSION, PLAN_RUN_VERSION, ...REJECTED_ARTICLE_ACCEPTED_SCHEMA_VERSIONS]),
   tier: TierSchema, ledger: PlannerLedgerNameSchema,
   covers: z.union([DateStampSchema, MonthStampSchema, YearStampSchema]),
   period: PeriodSchema.nullable().default(null), file_id: UuidSchema,

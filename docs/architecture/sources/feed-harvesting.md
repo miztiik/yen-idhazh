@@ -132,13 +132,22 @@ The [screening stage](feed-screening.md) applies admission to parsed candidates.
 
 ## Work facts and failures
 
-The harvester returns candidates and transient terminal outcomes, not native
-rejection files. Validated work facts feed the run's
+The harvester returns candidates and terminal outcomes. Its caller writes
+completed article-fetch and extraction failures to the registered
+`rejected-articles` ledger at run finalization; standalone fetch and parse save
+them at stage completion as well as retaining the private fetch receipt.
+Only terminal outcomes are retained, not each retry or successful article.
+The offered candidate and URL identities stay unchanged; missing addresses
+never gain invented identities. Article HTTP status and low-level failure
+codes remain separate from observed robots permission, status and failure,
+with null for unobserved values.
+Validated work facts feed the run's
 [batched health counters](../contracts/feed-ingest-feedback.md#completed-unit-persistence).
 Actual work-day clocks are separate from the saved age clock.
 
 On a pool failure, already-running siblings settle before the caller returns.
-Completed feed work remains available for partial-run finalization. No normal
+Completed feed work and article failures remain available for partial-run
+finalization even if a later stage fails. No normal
 response, event export or artifact archives the full parsed/rejected population.
 Only selected article text enters the summarizer artifact.
 

@@ -1,4 +1,4 @@
-/** Creates the time-ordered identity used as one physical ledger file's name. */
+/** Creates the UUIDv8 identity used as one physical ledger file's name. */
 import { createHash, randomBytes } from "node:crypto";
 
 const CLOCK_MASK = (1n << 48n) - 1n;
@@ -10,6 +10,16 @@ export type FileIdentity = {
   attempt: number;
   writtenAtMs: number;
 };
+
+export function createRejectedRawFileId(schemaVersion: string, day: string, contentSha256: string): string {
+  const bytes = createHash("sha256")
+    .update(JSON.stringify(["rejected-articles", schemaVersion, day, contentSha256]), "utf8")
+    .digest().subarray(0, 16);
+  bytes[6] = (bytes[6]! & 0x0f) | 0x80;
+  bytes[8] = (bytes[8]! & 0x3f) | 0x80;
+  const hex = bytes.toString("hex");
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+}
 
 export function createPlannerFileId(writtenAtMs: number): string {
   if (!Number.isSafeInteger(writtenAtMs) || writtenAtMs < 0) {

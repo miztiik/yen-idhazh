@@ -6,7 +6,7 @@ import { HarvestArticleResultSchema } from "./harvest-types";
 import type { HarvestInputs } from "./load-harvest-inputs";
 import type { PermittedFetcher } from "./robots-policy";
 import { extractArticle } from "./dom-extractor";
-import { fetchRejection, recordRejection } from "./record-rejection";
+import { fetchEvidence, fetchRejection, recordRejection } from "./record-rejection";
 import { fetchDiagnostics } from "./fetch-diagnostics";
 import { parseDocument } from "./parse-document";
 import { documentWork, describeArticleParse } from "./document-work";
@@ -71,7 +71,7 @@ export async function harvestArticle(
     return HarvestArticleResultSchema.parse({
       candidate: null,
       rejection: recordRejection(source, context, "EXTRACT_FAILED", {
-        http_status: fetched.http_status, diagnostics,
+        ...fetchEvidence(fetched), diagnostics,
       }, article),
       observation: { ...fetchedObservation, extraction: "failed", diagnostics },
     });
@@ -104,14 +104,14 @@ export async function harvestArticle(
     };
     return HarvestArticleResultSchema.parse({
       candidate: null,
-      rejection: recordRejection(source, context, "EXTRACT_FAILED", { http_status: fetched.http_status, diagnostics }, article),
+      rejection: recordRejection(source, context, "EXTRACT_FAILED", { ...fetchEvidence(fetched), diagnostics }, article),
       observation: { ...completeObservation, diagnostics },
     });
   }
   if (!article.title || !extracted.article_text) {
     return HarvestArticleResultSchema.parse({
       candidate: null, rejection: recordRejection(source, context, extracted.article_text ? "MISSING_REQUIRED_FIELDS" : "EXTRACT_EMPTY", {
-        http_status: fetched.http_status, diagnostics,
+        ...fetchEvidence(fetched), diagnostics,
       }, article),
       observation: completeObservation,
     });
