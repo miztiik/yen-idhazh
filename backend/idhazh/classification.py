@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import re
 from collections import defaultdict
 from collections.abc import Mapping
 from dataclasses import dataclass
@@ -17,6 +18,7 @@ from idhazh import embed, tag
 from idhazh.contracts.article import Article, ArticleStatus
 from idhazh.contracts.base import Slug
 from idhazh.contracts.knobs.classification_encoding import (
+    MODEL_METADATA_FILENAME,
     ClassificationEncodingConfig,
     ComparisonGroup,
 )
@@ -25,6 +27,9 @@ from idhazh.contracts.watchlist import Watchlist
 
 LOG = logging.getLogger("idhazh")
 _SLUG = TypeAdapter(Slug)
+_ENCODER_RUNTIME_FAILURES: tuple[type[Exception], ...] = (
+    ImportError, OSError, RuntimeError, MemoryError
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -49,6 +54,7 @@ class ClassificationContext:
     dimensions: int | None
     taxonomy: Taxonomy
     watchlist: Watchlist
+    runtime_failures: tuple[type[Exception], ...] = _ENCODER_RUNTIME_FAILURES
 
 
 def load_context(
@@ -89,40 +95,81 @@ def load_context(
                 f"config/idhazh.json classification_encoding.model_digests[{relative}] "
                 f"does not match {config.asset_directory}/{relative}"
             )
-    model_path = _asset_path(asset_root, config.model_file, "model_file")
-    tokenizer_path = _asset_path(asset_root, config.tokenizer_file, "tokenizer_file")
-
-    session = embed.build_encoder_session(model_path)
-    tokenizer = embed.build_tokenizer_file(tokenizer_path, max_tokens=config.max_tokens)
-    probe_text = " ".join(["classification"] * (config.max_tokens * 4))
-    if len(tokenizer.encode(probe_text).ids) != config.max_tokens:
-        raise ValueError(
-            "config/idhazh.json classification_encoding.max_tokens exceeds the "
-            "configured tokenizer capacity"
-        )
+    model_config_path = _asset_path(
+        asset_root, MODEL_METADATA_FILENAME, "model config"
+    )
     try:
-        probe = embed.encode_texts(session, tokenizer, [probe_text])[0]
-    except Exception as error:
+        model_metadata = json.loads(model_config_path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as error:
         raise ValueError(
-            "config/idhazh.json classification_encoding.max_tokens is not supported "
-            "by the configured model"
+            "classification_encoding model config.json is missing or invalid"
         ) from error
-    if len(probe) != config.dimensions:
+    if not isinstance(model_metadata, dict):
+        raise ValueError("classification_encoding model config.json must be an object")
+    model_capacity = model_metadata.get("max_position_embeddings")
+    if type(model_capacity) is not int or model_capacity < 1:
+        raise ValueError(
+            "classification_encoding model config.json.max_position_embeddings "
+            "must be a positive integer"
+        )
+    if config.max_tokens > model_capacity:
+        raise ValueError(
+            "config/idhazh.json classification_encoding.max_tokens exceeds "
+            "config.json.max_position_embeddings"
+        )
+    model_width = model_metadata.get("hidden_size")
+    if type(model_width) is not int or model_width < 1:
+        raise ValueError(
+            "classification_encoding model config.json.hidden_size must be a positive integer"
+        )
+    if config.dimensions != model_width:
         raise ValueError(
             "config/idhazh.json classification_encoding.dimensions is "
-            f"{config.dimensions}, but the configured model emits {len(probe)}"
+            f"{config.dimensions}, but config.json.hidden_size is {model_width}"
         )
+
+    model_path = _asset_path(asset_root, config.model_file, "model_file")
+    tokenizer_path = _asset_path(asset_root, config.tokenizer_file, "tokenizer_file")
+    runtime_failures = _ENCODER_RUNTIME_FAILURES
+    try:
+        runtime_failures = _encoder_failure_types()
+        session = embed.build_encoder_session(model_path)
+        tokenizer = embed.build_tokenizer_file(tokenizer_path, max_tokens=config.max_tokens)
+        outputs = session.get_outputs()
+    except runtime_failures as error:
+        return _phrase_fallback(
+            groups, config.dimensions, taxonomy, watchlist, "loading", error
+        )
+    if not outputs or not outputs[0].shape:
+        raise ValueError(
+            "classification encoder output metadata does not declare a vector width"
+        )
+    output_width = outputs[0].shape[-1]
+    if isinstance(output_width, int) and output_width != config.dimensions:
+        raise ValueError(
+            "config/idhazh.json classification_encoding.dimensions is "
+            f"{config.dimensions}, but the configured model emits {output_width}"
+        )
+    if not isinstance(output_width, int):
+        try:
+            probe = embed.encode_texts(session, tokenizer, ["classification"])[0]
+        except runtime_failures as error:
+            return _phrase_fallback(
+                groups, config.dimensions, taxonomy, watchlist, "checking model width", error
+            )
+        if len(probe) != config.dimensions:
+            raise ValueError(
+                "config/idhazh.json classification_encoding.dimensions is "
+                f"{config.dimensions}, but the configured model emits {len(probe)}"
+            )
 
     texts = [target.text for group in groups for target in group.targets]
     try:
         vectors = embed.encode_texts(session, tokenizer, texts)
-    except Exception as error:
-        LOG.warning(
-            "classification encoder failed while preparing targets; phrase tags will "
-            "be used for this work run: %s",
-            type(error).__name__,
+    except runtime_failures as error:
+        return _phrase_fallback(
+            groups, config.dimensions, taxonomy, watchlist, "preparing targets", error
         )
-        return ClassificationContext(groups, None, None, config.dimensions, taxonomy, watchlist)
     if len(vectors) != len(texts) or any(
         len(vector) != config.dimensions for vector in vectors
     ):
@@ -148,7 +195,57 @@ def load_context(
         for group in groups
     )
     return ClassificationContext(
-        encoded_groups, session, tokenizer, config.dimensions, taxonomy, watchlist
+        encoded_groups, session, tokenizer, config.dimensions, taxonomy, watchlist,
+        runtime_failures,
+    )
+
+
+def _phrase_fallback(
+    groups: tuple[Group, ...],
+    dimensions: int,
+    taxonomy: Taxonomy,
+    watchlist: Watchlist,
+    stage: str,
+    error: Exception,
+) -> ClassificationContext:
+    LOG.warning(
+        "classification encoder failed while %s; phrase tags will be used for this work run: %s",
+        stage,
+        _failure_reason(error),
+    )
+    return ClassificationContext(groups, None, None, dimensions, taxonomy, watchlist)
+
+
+def _encoder_failure_types() -> tuple[type[Exception], ...]:
+    return (*_ENCODER_RUNTIME_FAILURES, *_onnx_runtime_failures())
+
+
+def _failure_reason(error: Exception) -> str:
+    detail = str(error).splitlines()[0] if str(error) else "no error detail"
+    detail = re.sub(r"(?i)\b[A-Z]:\\[^,;\r\n]+|\\\\[^,;\r\n]+", "<local path>", detail)
+    detail = re.sub(r"(?<![\w.])/(?:[^,;\r\n]+)", "<local path>", detail)
+    return f"{type(error).__name__}: {detail}"
+
+
+def _onnx_runtime_failures() -> tuple[type[Exception], ...]:
+    try:
+        import onnxruntime.capi.onnxruntime_pybind11_state as state
+    except ImportError:
+        return ()
+    names = (
+        "DeviceReset",
+        "EPFail",
+        "EngineError",
+        "Fail",
+        "ModelLoadCanceled",
+        "ModelRequiresCompilation",
+        "RuntimeException",
+    )
+    return tuple(
+        error_type
+        for name in names
+        if isinstance((error_type := getattr(state, name, None)), type)
+        and issubclass(error_type, Exception)
     )
 
 
@@ -162,22 +259,20 @@ def assign(article: Article, context: ClassificationContext) -> Article:
     text = f"{article.title or ''}. {article.text or ''}"
     try:
         vector = embed.encode_texts(context.session, context.tokenizer, [text])[0]
-    except Exception as error:
+    except context.runtime_failures as error:
         LOG.warning(
             "classification encoder failed for article %s; phrase tags are used: %s",
             article.item_id,
-            type(error).__name__,
+            _failure_reason(error),
         )
         return tag.tagged(article, taxonomy=context.taxonomy, watchlist=context.watchlist)
     if context.dimensions is None:
         raise ValueError("classification context has no declared dimensions")
     if len(vector) != context.dimensions:
-        LOG.warning(
-            "classification encoder returned an unexpected width for article %s; "
-            "phrase tags are used",
-            article.item_id,
+        raise ValueError(
+            "classification encoder returned an unexpected article vector width: "
+            f"expected {context.dimensions}, got {len(vector)}"
         )
-        return tag.tagged(article, taxonomy=context.taxonomy, watchlist=context.watchlist)
 
     comparisons: dict[str, dict[str, float]] = {}
     for group in context.groups:
@@ -192,9 +287,11 @@ def assign(article: Article, context: ClassificationContext) -> Article:
         destination = group.config.destination
         scores = comparisons[group.config.id]
         if destination == "desk":
-            chosen = _unambiguous_best(group.config, scores)
-            if chosen is not None:
-                updates["desk"] = chosen
+            chosen = _unambiguous_desks(group.config, scores)
+            if chosen:
+                updates["desk"] = chosen[0]
+            if len(chosen) > 1:
+                updates["secondary_desk"] = chosen[1]
         elif destination in {"lenses", "events"}:
             floor = _required_similarity(group.config)
             updates[destination] = sorted(
@@ -321,20 +418,24 @@ def _required_similarity(config: ComparisonGroup) -> float:
     return config.minimum_similarity
 
 
-def _unambiguous_best(config: ComparisonGroup, scores: dict[str, float]) -> str | None:
+def _unambiguous_desks(config: ComparisonGroup, scores: dict[str, float]) -> tuple[str, ...]:
     floor = _required_similarity(config)
     candidates = sorted(
         ((score, identity) for identity, score in scores.items() if score >= floor),
         key=lambda item: (-item[0], item[1]),
     )
     if not candidates:
-        return None
+        return ()
     margin = config.ambiguity_margin
     if margin is None:
         raise ValueError(f"classification group {config.id} has no ambiguity margin")
     if len(candidates) > 1 and candidates[0][0] - candidates[1][0] < margin:
-        return None
-    return candidates[0][1]
+        return ()
+    if len(candidates) == 1:
+        return (candidates[0][1],)
+    if len(candidates) > 2 and candidates[1][0] - candidates[2][0] < margin:
+        return (candidates[0][1],)
+    return tuple(identity for _, identity in candidates[:2])
 
 
 def _named_entities(group: Group, scores: dict[str, float], text: str) -> list[str]:

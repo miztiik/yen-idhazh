@@ -18,6 +18,7 @@ RelativePath = Annotated[str, StringConstraints(pattern=REL_PATH_PATTERN)]
 FieldName = Annotated[str, StringConstraints(pattern=r"^[a-z][a-z0-9_]*$")]
 GroupId = Annotated[str, StringConstraints(pattern=SLUG_PATTERN)]
 Sha256 = Annotated[str, StringConstraints(pattern=SHA256_PATTERN)]
+MODEL_METADATA_FILENAME = "config.json"
 
 
 class ComparisonGroup(Model):
@@ -71,7 +72,7 @@ class ClassificationEncodingConfig(Model):
 
     @model_validator(mode="after")
     def refuse_incomplete_assets_and_repeated_groups(self) -> Self:
-        for name in (self.model_file, self.tokenizer_file):
+        for name in (self.model_file, self.tokenizer_file, MODEL_METADATA_FILENAME):
             if name not in self.model_digests:
                 raise ValueError(f"classification_encoding.model_digests must name {name}")
         if self.model_file == self.tokenizer_file:

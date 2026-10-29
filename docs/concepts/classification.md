@@ -112,7 +112,8 @@ nobody had seen, on an item where it happened to look right.
 `classification_encoding` in `config/idhazh.json` controls semantic assignment
 independently of `assist`, which controls archive search. It declares its own
 model revision, assets, digests, width, token limit, encoding modes, comparison
-groups and assignment thresholds. The current declaration points to the same
+groups and assignment thresholds. `model_digests` must include `config.json`,
+whose declared capacity and hidden width are checked before encoding. The current declaration points to the same
 committed model bytes as search, but neither settings nor defaults are shared.
 
 Each comparison group names a JSON source, one entry list, the identity field,
@@ -128,12 +129,16 @@ the declared descriptor shape and its destination is already supported.
 At the start of a work run, the consumer validates each configured source and
 encodes each selected target once. After extraction sanitizes fetched text, each
 article is encoded and compared with all groups in memory. The desk destination
-may set `article.desk`; it never changes `article.vertical`, which remains the
-feed's identity. Lens and event destinations assign configured ids above their
-own thresholds. Entity assignment also requires literal evidence from a
-configured name or alias; topical similarity alone cannot prove which named
-organisation appears in a story. The existing phrase tagger remains the explicit
-fallback when a valid encoder fails during target or article encoding. Invalid
+may set `article.desk` and its unambiguous runner-up as `article.secondary_desk`;
+both must clear the group's score floor, and each must clear the configured
+ambiguity margin against the next candidate. It never changes `article.vertical`,
+which remains the feed's identity. Lens and event destinations assign configured
+ids above their own thresholds. Entity assignment also requires literal evidence
+from a configured name or alias; topical similarity alone cannot prove which
+named organisation appears in a story. The model's verified `config.json`
+supplies its maximum token capacity and hidden width; values beyond those known
+limits fail validation. A valid encoder that cannot load or run logs its failure
+reason and uses the existing phrase tagger for the work run. Invalid
 configuration, missing assets, bad digests, or malformed source entries fail
 with a named validation error instead of looking like an empty classification.
 
