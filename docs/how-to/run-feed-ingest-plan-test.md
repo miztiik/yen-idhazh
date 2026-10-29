@@ -150,9 +150,10 @@ when the supervisor disappears. Only the exact spawned child can be forcibly
 killed. The server is never detached or kept alive across workflow steps.
 
 The Markdown report reads the body-free response, health result, effective
-settings and host fingerprint after metadata delivery. It writes the report
-before upload, includes the Git delivery status and commit when confirmed,
-and writes the same Markdown to the job summary. It emits five grouped notices:
+settings and host fingerprint. It places the host fingerprint before the
+run facts, writes the report before upload and writes the same Markdown to
+the job summary. The report stays separate from the delivery receipt.
+It emits five grouped notices:
 Host fingerprint, This run's feed work,
 Closed-day request spend, Grouped exclusions, and Policy used. Full per-feed
 details stay in the summary rather than one notice per feed or article.

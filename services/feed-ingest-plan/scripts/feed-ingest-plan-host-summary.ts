@@ -21,15 +21,10 @@ export function formatHostFingerprintSummary(input: unknown) {
       { measurement: "CPU", value: cpu },
       { measurement: "Logical / allowed processors",
         value: `${measurement(row.cpu_logical_processors, "processors", reason("cpu_logical_processors"))} / ${measurement(row.cpu_allowed_processors, "processors", reason("cpu_allowed_processors"))}` },
-      { measurement: "CPU quota", value: row.cpu_quota_state === "unlimited"
-        ? "No quota" : measurement(row.cpu_quota_cores, "cores", reason("cpu_quota_cores")) },
       { measurement: "L3 cache", value: cache },
       { measurement: "Total machine RAM capacity", value: capacity },
-      { measurement: "Fingerprint file", value: `${host.files.length} raw Parquet file; commit status is reported separately` },
-      { measurement: "Hardware fingerprint",
-        value: row.fingerprint ?? `Unavailable (${unavailable.platform ?? "not observed"})` },
-      { measurement: "Observation clock",
-        value: row.measured_at === null ? "Unavailable" : `${row.measured_at} UTC` },
+      { measurement: "Measurement time (UTC)",
+        value: row.measured_at === null ? "Unavailable" : row.measured_at },
     );
     notice = `Host fingerprint recorded: ${cpu}; ${measurement(row.cpu_allowed_processors, "allowed processors", reason("cpu_allowed_processors"))}; L3 ${cache}; total RAM ${capacity}`;
   } else {

@@ -120,6 +120,9 @@ test("one real result and every native file stay unchanged through both report m
       annotate: line => annotations.push(line) });
     const workflowReport = renderWorkflowPlanMarkdown(evidence);
     expect(await readFile(summary, "utf8")).toBe(workflowReport.markdown);
+    expect(workflowReport.markdown.indexOf("## Table G - Host fingerprint"))
+      .toBeLessThan(workflowReport.markdown.indexOf("## Table A - Run facts"));
+    expect(workflowReport.markdown).not.toContain("Metadata delivery");
     expect(annotations).toEqual(workflowReport.notices.map(formatWorkflowAnnotation));
     expect(annotations.map(line => line.slice(0, line.indexOf("::", 2)))).toEqual([
       "::notice title=Host fingerprint", "::notice title=This run's feed work", "::notice title=Closed-day request spend",
