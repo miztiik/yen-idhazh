@@ -1183,7 +1183,6 @@ def test_the_dispatcher_routes_every_registered_projection_exactly_once(
         day=_day(NEWEST_DAY, items=3, charts=1),
         manifest=_manifest(NEWEST_DAY, planned=4, succeeded=3, failed=1, site_bytes=1_000_000),
         settings=config.load(),
-        taxonomy_vectors=None,
     )
 
     declared = tuple(projection.name for projection in dispatch.PROJECTIONS)

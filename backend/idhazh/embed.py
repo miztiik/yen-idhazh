@@ -50,14 +50,6 @@ EMBEDDER_ID: Final = "all-minilm-l6-v2-quantized"
 # the first time a revision was corrected without the bytes changing.
 ENCODER_DIRECTORY: Final = "2026-08-22"
 
-# The two lines above, fused, so anything that has to record WHICH WEIGHTS wrote
-# a vector records one string and compares one string. `EMBEDDER_ID` alone does
-# not answer that question - it does not move when the weights move, only the
-# directory does - so a field carrying the id alone reads as an encoder identity
-# and is not one. `config/taxonomy-vectors.bin` carries this in its header and
-# `DayLabelSimilarity` carries it on the day record.
-ENCODER_REF: Final = f"{EMBEDDER_ID}/{ENCODER_DIRECTORY}"
-
 # Relative to the repository root, and the same directory the published page
 # fetches. `frontend/static/` rather than `frontend/public/`: the latter is where
 # the pipeline writes its payloads, which the site reads at BUILD time through
@@ -130,12 +122,50 @@ def build_tokenizer(root: Path, *, max_tokens: int = MAX_TOKENS) -> Any:
     up to 1.6e-2 per component. The browser pads a lone query to nothing, so the
     runner does too.
     """
+    return build_tokenizer_file(root / TOKENIZER_RELPATH, max_tokens=max_tokens)
+
+
+def build_tokenizer_file(path: Path, *, max_tokens: int) -> Any:
     from tokenizers import Tokenizer
 
-    tokenizer = Tokenizer.from_file(str(root / TOKENIZER_RELPATH))
+    tokenizer = Tokenizer.from_file(str(path))
     tokenizer.enable_truncation(max_length=max_tokens)
     tokenizer.no_padding()
     return tokenizer
+
+
+def build_encoder_session(model_path: Path) -> Any:
+    import onnxruntime
+
+    return onnxruntime.InferenceSession(
+        str(model_path),
+        session_options(),
+        providers=["CPUExecutionProvider"],
+    )
+
+
+def encode_texts(session: Any, tokenizer: Any, texts: list[str]) -> list[list[float]]:
+    """Mean-pool and L2-normalise text with the runner's pinned arithmetic."""
+    import numpy as np
+
+    vectors: list[list[float]] = []
+    for text in texts:
+        encoding = tokenizer.encode(text)
+        ids = np.array([encoding.ids], dtype=np.int64)
+        mask = np.array([encoding.attention_mask], dtype=np.int64)
+        hidden = session.run(
+            None,
+            {
+                "input_ids": ids,
+                "attention_mask": mask,
+                "token_type_ids": np.zeros_like(ids),
+            },
+        )[0]
+        weights = mask[..., None].astype(np.float32)
+        pooled = (hidden * weights).sum(axis=1) / np.clip(weights.sum(axis=1), 1e-9, None)
+        unit_length = np.clip(np.linalg.norm(pooled, axis=1, keepdims=True), 1e-9, None)
+        vectors.append((pooled / unit_length)[0].tolist())
+    return vectors
 
 
 class Embedder:
@@ -163,15 +193,9 @@ class Embedder:
         return readable_share(text) >= self._assist.min_readable_letter_share
 
     def load(self) -> None:
-        import onnxruntime
-
         # Naming the provider stops a machine with a second one installed from
         # quietly answering with different kernels.
-        self._session = onnxruntime.InferenceSession(
-            str(self._root / ONNX_RELPATH),
-            session_options(),
-            providers=["CPUExecutionProvider"],
-        )
+        self._session = build_encoder_session(self._root / ONNX_RELPATH)
         self._tokenizer = build_tokenizer(self._root, max_tokens=self._assist.max_tokens)
 
     def encode(self, texts: list[str]) -> list[list[float]]:
@@ -189,26 +213,7 @@ class Embedder:
         if self._session is None or self._tokenizer is None:
             raise RuntimeError("the embedder was used before it was loaded")
 
-        import numpy as np
-
-        vectors: list[list[float]] = []
-        for text in texts:
-            encoding = self._tokenizer.encode(text)
-            ids = np.array([encoding.ids], dtype=np.int64)
-            mask = np.array([encoding.attention_mask], dtype=np.int64)
-            hidden = self._session.run(
-                None,
-                {
-                    "input_ids": ids,
-                    "attention_mask": mask,
-                    "token_type_ids": np.zeros_like(ids),
-                },
-            )[0]
-            weights = mask[..., None].astype(np.float32)
-            pooled = (hidden * weights).sum(axis=1) / np.clip(weights.sum(axis=1), 1e-9, None)
-            unit_length = np.clip(np.linalg.norm(pooled, axis=1, keepdims=True), 1e-9, None)
-            vectors.append((pooled / unit_length)[0].tolist())
-        return vectors
+        return encode_texts(self._session, self._tokenizer, texts)
 
 
 class EncoderOnFirstUse:

@@ -203,12 +203,12 @@ problem wearing the same coat.** The metric above survives a vocabulary change
 by holding its denominator still. The month shards do not: the daily run
 rebuilds only the month it is publishing into, nothing records which vocabulary a
 shard was built under, and walking every shard to find out is a read that grows
-with the archive. `config/taxonomy-vectors.bin` has the matching gap on the
-classification side, where a person has to run a rebuild by hand.
-[autotune-desk-assignment.md](autotune-desk-assignment.md) owns both and says
-what a delta update would have to carry. Nothing here waits on it - a reading
-taken today is still a reading - but a plan that autotunes the floor and a plan
-that keeps the shards current share one record of which vocabulary wrote what.
+with the archive. Classification targets are encoded from current configuration
+once per work run and kept in memory; no committed label-vector file needs a
+manual rebuild. Earlier published article labels still do not change
+automatically. [autotune-desk-assignment.md](autotune-desk-assignment.md) owns
+the remaining question of bounded updates to older month shards. Nothing here
+waits on it - a reading taken today is still a reading.
 
 ## The persisted metric
 
@@ -341,7 +341,7 @@ story published**.
 
 - [llm-council.md](llm-council.md) - the venue a judge for this would be a tenant of.
 - [autotune-content-similarity.md](autotune-content-similarity.md) - the working precedent: a judged line that fits itself nightly.
-- [autotune-desk-assignment.md](autotune-desk-assignment.md) - who rebuilds the index and the label vectors when the vocabulary moves, and why neither is rebuilt today.
+- [autotune-desk-assignment.md](autotune-desk-assignment.md) - how semantic targets use current vocabulary and why older month shards need a bounded update rule.
 - [../../concepts/search-quality.md](../../concepts/search-quality.md) - the measured baseline, the bar, and why the number is a lower bound.
 - [../../../CLAUDE.md](../../../CLAUDE.md) Guardrail #12 - every read must have a fixed-size input.
 - [retention.md](retention.md) - why a reading not taken on the day cannot be recomputed.

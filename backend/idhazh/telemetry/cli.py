@@ -203,7 +203,6 @@ def main(argv: Sequence[str] | None, *, state_root: Path, digest_root: Path) -> 
             digest_root=digest,
             date=date,
             settings=settings,
-            repo_root=config.REPO_ROOT,
         )
         print(f"{date}: {len(published.dispatched)} projections written")
         print("  " + ", ".join(published.dispatched))

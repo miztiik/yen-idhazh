@@ -16,6 +16,7 @@ from idhazh.contracts.day_metrics import (
 )
 from idhazh.contracts.eval_row import BandReason, ConfidenceBand
 from idhazh.contracts.item_health import ItemStage
+from support.paths import CONTRACT_FIXTURES_DIR, read_text
 
 pytestmark = pytest.mark.contract
 
@@ -108,6 +109,12 @@ def test_day_metrics_round_trips_and_a_built_record_reads_back_identically() -> 
     assert hhem.stat.p50 == 0.88
     # Decision 4: the revision stamp survives, so a later run can spot a stale record.
     assert reloaded.revision == 5
+
+    historical = DayMetrics.from_json(
+        read_text(CONTRACT_FIXTURES_DIR / "day-metrics" / "with-label-similarity.json")
+    )
+    assert historical.label_similarity is not None
+    assert '"label_similarity"' not in historical.to_json()
 
 
 def test_day_metrics_keeps_an_empty_aggregate_apart_from_a_zero_one() -> None:

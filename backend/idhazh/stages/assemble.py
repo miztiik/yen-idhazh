@@ -449,10 +449,6 @@ def stage_assemble(
     # than anything in memory here, so a run that failed to append publishes the
     # record as it stands rather than as it hoped.
     #
-    # The label vectors are read here rather than inside a producer, so a stale
-    # file fails the run at the place the config is read and never half way
-    # through a record. Absent is not stale: a checkout without the file records
-    # no label similarity and publishes exactly as before.
     instrument = dispatch.publish_all(
         state_root=common.STATE_ROOT,
         digest_root=common.PUBLIC_ROOT,
@@ -469,13 +465,9 @@ def stage_assemble(
         day=day,
         manifest=manifest,
         settings=settings,
-        taxonomy_vectors=assemble.read_taxonomy_vectors(config.REPO_ROOT, settings.taxonomy),
         # Nothing waits any more. Every writer files its own path under the day
         # its rows name, so a run that died three days ago left those rows in
-        # that day rather than in a ledger somebody had to drain. The two
-        # readings stay on the published payload at zero, because a reader of an
-        # older day still finds them there and a field removed is a contract
-        # break for a page nobody re-publishes.
+        # that day rather than in a ledger somebody had to drain.
         compaction_lag_days=0,
         rows_uncompacted=0,
         # The day this run assembled. It is the newest day the record can cover,

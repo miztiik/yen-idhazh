@@ -12,11 +12,13 @@ Anything stated as future is an intention, not a design of record.
 
 ## What is hand-set today
 
-`config/watchlist.json` is the registry, written by a person. A story that names
-an entity on it takes `collect.watchlist_bonus` (0.5), a flat step somebody
-chose. Matching is by term, so an alias nobody wrote down is an entity nobody
-finds. [../sources/discovery.md](../sources/discovery.md) owns how the match
-reaches the ranking arithmetic.
+`config/watchlist.json` is the registry. The work stage compares an article
+with active organisation names and aliases from this file, but assigns an
+entity only when the configured name or alias appears in the sanitized text.
+Similarity and ambiguity thresholds are provisional config estimates, not
+measured accuracy. Separately, `collect.watchlist_bonus` (0.5) still uses term
+matching during discovery; [../sources/discovery.md](../sources/discovery.md)
+owns how that match reaches ranking arithmetic.
 
 ## Relationships have no maintainer yet, and that is the larger gap
 
@@ -35,7 +37,7 @@ so any work here starts as an operator surface rather than a reader-facing one.
 - A written definition of a relationship, and of what a reader would be told by one.
 - A judged sample of matches and non-matches, including the aliases and the near-misses a term list cannot see.
 - A rule for what a false match costs, because a wrong entity on a story is a claim we made about a person.
-- A home for the rebuild the registry sets off, because the registry is vocabulary and it moves the same derived files a desk or a lens moves. `config/watchlist.json` is not encoded into `config/taxonomy-vectors.bin` - only active verticals and lenses are - but a new alias does add a question to the self-hydrating search key, and the published month index carries no entity tag at all, so nothing in the archive changes when a name is added. [autotune-desk-assignment.md](autotune-desk-assignment.md) owns that question and it is open there too.
+- A bounded way to update old published article records if a future change must reclassify them. The work stage reads the current registry and encodes its selected entries in memory, so a new alias needs no vector-file rebuild. Entity fields are not carried into the published month index today.
 
 ## See also
 

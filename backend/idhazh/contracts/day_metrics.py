@@ -268,50 +268,21 @@ class DayInstrument(Model):
 
 
 class DayLabelSimilarity(Model):
-    """How close the day's own item vectors sat to the committed label vectors.
-
-    **Neither end of this is better than the other, and nothing here is a
-    grade.** The cosine between a 384-dimension int8 item vector and a label
-    vector is uncalibrated - one encodes a news sentence and the other a
-    definitional one - so a fixed threshold would be a number somebody picked
-    (Carmack). Only a change says anything, and a day file cannot hold a change:
-    it holds the level, and a reducer over a window is what reads a change out
-    of two of them.
-
-    **No label is picked and no per-item value survives.** The closest label is
-    computed and thrown away; `nearest` is the aggregate and nothing anywhere
-    says what one item scored. That used to be what kept this clear of the
-    LLM-as-judge ban, and `CLAUDE.md` section 1a has since lifted the ban. The
-    shape stays for the reason underneath it: the moment a per-item value
-    survived, this would need everything a classifier needs.
-
-    **The two rulers travel with the reading**, because a number is only
-    comparable against another number taken under the same ones. `taxonomy_digest`
-    pins the words that were encoded; `encoder_ref` pins the weights that
-    encoded them. Two different values of either inside one window is a step in
-    the ruler and not a change in the days, so a reducer refuses the comparison
-    rather than drawing it.
-    """
+    """Read the historical aggregate written before label-similarity production stopped."""
 
     taxonomy_digest: Sha256 = Field(
         description=(
-            "The digest of the label sentences the vectors were built from, exactly as "
-            "`config/taxonomy-vectors.bin` carries it. A vocabulary edit moves it."
+            "The digest of the historical label sentences encoded for this reading."
         )
     )
     encoder_ref: EncoderRef = Field(
         description=(
-            "Which weights encoded both sides, as `<embedder id>/<encoder directory>`. "
-            "The id alone does not move when the weights move, so it is not an encoder "
-            "identity on its own."
+            "Which encoder weights produced the historical reading."
         )
     )
     nearest: DayDistribution = Field(
         description=(
-            "The day's distribution of each item's cosine to its closest label vector. "
-            "`count` and `total` are additive, so a window mean is a sum over items and "
-            "never a mean of daily means; `count` is also the denominator, and it moves "
-            "on its own when the share of items the encoder could read moves."
+            "The historical distribution of item cosine to the closest label vector."
         )
     )
 
@@ -408,6 +379,11 @@ class DayMetrics(Contract):
     __schema_stem__: ClassVar[str] = "day-metrics"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-10-29",
+            change="New day records omit the historical label_similarity diagnostic.",
+            why="Classification compares labels during the consuming run.",
+        ),
+        ChangelogEntry(
             version="2026-09-29",
             change="An instrument names the three renamed eval word counts by their new names.",
             why="The eval row renamed them, and a day recorded before reads under the new name.",
@@ -421,11 +397,6 @@ class DayMetrics(Contract):
             version="2026-09-13T22:00",
             change="Removed pipeline_fingerprint.",
             why="The stamp gated nothing and no writer had filled it for a month.",
-        ),
-        ChangelogEntry(
-            version="2026-09-13",
-            change="Added the optional label_similarity block: the day's distribution.",
-            why="Nothing said whether the encoder's geometry had moved.",
         ),
         ChangelogEntry(
             version="2026-09-07",
@@ -530,16 +501,14 @@ class DayMetrics(Contract):
     label_similarity: DayLabelSimilarity | None = Field(
         default=None,
         description=(
-            "How close the day's item vectors sat to the committed label vectors, or null "
-            "when the day carried no vectors, the label vectors are not committed in this "
-            "checkout, or the record was written before 2026-09-13. Not a grade and not a "
-            "verdict: neither end of it is better than the other."
+            "Historical reading of how close the day's item vectors sat to committed label "
+            "vectors. Retained only so records written before 2026-10-29 remain readable."
         ),
     )
 
     def to_json(self) -> str:
         return records_json(
-            self.model_dump(mode="json"),
+            self.model_dump(mode="json", exclude={"label_similarity"}),
             record_lists=frozenset({"sources", "instruments", "stage_timing"}),
         )
 

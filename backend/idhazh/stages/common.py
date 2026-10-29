@@ -28,9 +28,9 @@ from idhazh import (
     extract,
     fetch,
     ledger,
-    tag,
     telemetry,
 )
+from idhazh.classification import ClassificationContext, assign as classify
 from idhazh.contracts.article import Article
 from idhazh.contracts.digest_day import DigestDay
 from idhazh.contracts.feed_health import (
@@ -225,6 +225,7 @@ def _fetch_one(
     item: PlannedItem,
     settings: config.Settings,
     read_url: Fetcher,
+    classification: ClassificationContext,
     tracer: telemetry.Tracer | None = None,
 ) -> FetchedItem:
     """The article, the body it was cut from, and how long each step took.
@@ -260,7 +261,7 @@ def _fetch_one(
             item, result, config=settings.app.extract, fetched_at=assemble.utc_now()
         )
         with trace.span(telemetry.SpanName.TAG) as tag_span:
-            article = tag.tagged(article, taxonomy=settings.taxonomy, watchlist=settings.watchlist)
+            article = classify(article, classification)
             tag_span.set(telemetry.AttrKey.LENS_COUNT, len(article.lenses))
             tag_span.set(telemetry.AttrKey.ENTITY_COUNT, len(article.entities))
             tag_span.set(telemetry.AttrKey.EVENT_COUNT, len(article.events))
