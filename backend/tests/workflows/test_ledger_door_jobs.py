@@ -30,6 +30,7 @@ COMMIT_FLAG: Final = "--commit"
 #: it writes. Declared by hand rather than derived: see `idhazh.ledger.staging`
 #: for the fuller per-ledger table this summarizes at the verb level.
 DOOR_WRITING_VERBS: Final[dict[str, str]] = {
+    "work": "idhazh.telemetry.visual_attempts (visual-design-attempts)",
     "plan": (
         "idhazh.stages.plan (seen, feed-health, counterfactual-scores, "
         "feed-retirements) and idhazh.telemetry.silicon (host-fingerprint)"

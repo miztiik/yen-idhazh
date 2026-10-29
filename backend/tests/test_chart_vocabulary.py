@@ -13,6 +13,7 @@ import pytest
 from pipeline._builders import (
     DRAWS_LABEL,
     DRAWS_SUMMARIZE_AND_PLAN,
+    a_server_that_refuses_every_completion,
     drawable_article_fetch,
     isolate_ledgers,
 )
@@ -42,7 +43,7 @@ from idhazh.contracts.visual_decision import (
     VisualKind,
     VisualState,
 )
-from idhazh.contracts.visual_telemetry import ValidatorCheck
+from idhazh.contracts.visual_telemetry import ValidatorCheck, VisualAttemptRow
 from idhazh.fetch import FetchResult
 from idhazh.render import asset_relpath
 from idhazh.stages import common
@@ -211,7 +212,10 @@ def test_downgrade_records_floor_effect_separately_from_selected_depth(
     history_marks: int,
     selected_depth: int,
     floor_applied: bool,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    isolate_ledgers(tmp_path, monkeypatch)
     decision = draw(
         settings(downgrade_enabled=True, downgrade_floor_percentiles=[50]),
         population={VisualType.BAR: (history_marks,)},
@@ -322,6 +326,19 @@ def test_real_shard_projects_outcomes_before_sealing_and_reuses_its_starting_pop
         and row.marks == 4
         for row in rows
     )
+    attempts = ledger.load_days(
+        common.STATE_ROOT, LedgerName.VISUAL_DESIGN_ATTEMPTS,
+        [run_plan.date], model=VisualAttemptRow,
+    )
+    assert len(attempts) == len(run_plan.items)
+    for row in attempts:
+        decision = VisualDecision.read(
+            common._run_dir(run_plan.date) / "items" / f"{row.item_id}{PAYLOAD_SUFFIX}"
+        )
+        assert row.visual_id == decision.visual_id
+        assert row.elements_found is not None
+        assert row.potential_primary is not None
+        assert row.downgrade_depth == decision.deepest_downgrade_depth
     assert load_visual_population(
         common.STATE_ROOT, on=run_plan.date, visuals=knobs.app.visuals
     ) == {VisualType.BAR: (8,)}
@@ -387,3 +404,53 @@ def test_real_shard_keeps_story_when_pie_fallback_parts_do_not_match_its_whole(
     assert decision.gate_floor_applied is None
     assert decision.spec is None and decision.data_path is None
     assert decision.rationale and "stacked_bar_exhaustive" in decision.rationale
+    (attempt,) = ledger.load_days(
+        common.STATE_ROOT, LedgerName.VISUAL_DESIGN_ATTEMPTS,
+        [run_plan.date], model=VisualAttemptRow,
+    )
+    assert attempt.visual_id == decision.visual_id
+    assert attempt.downgrade_depth == 1
+    assert attempt.none_reason is NoneReason.VALIDATION_FAILED
+
+
+def test_settled_visuals_survive_a_later_summary_write_failure(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    isolate_ledgers(tmp_path, monkeypatch)
+    run_plan = fixture_plan(item_count=2)
+    items = common._run_dir(run_plan.date) / "items"
+    (items / f"{run_plan.items[1].item_id}.summary.json").mkdir(parents=True)
+    with RecordedEndpoint(
+        200, DRAWS_LABEL.read_bytes(), DRAWS_SUMMARIZE_AND_PLAN.read_bytes()
+    ) as server:
+        with pytest.raises(OSError):
+            stage_work(
+                run_plan, settings=settings(), scorer=None, fetcher=drawable_article_fetch,
+                model_endpoint=server.endpoint, commit_sha="a" * 40,
+            )
+    attempts = ledger.load_days(
+        common.STATE_ROOT, LedgerName.VISUAL_DESIGN_ATTEMPTS,
+        [run_plan.date], model=VisualAttemptRow,
+    )
+    assert {row.item_id for row in attempts} == {item.item_id for item in run_plan.items}
+    for raw in ledger.list_raw_files(
+        common.STATE_ROOT, LedgerName.VISUAL_DESIGN_ATTEMPTS, days=[run_plan.date]
+    ):
+        envelope = ledger.read_envelope(raw.path)
+        assert envelope.identity.git_sha == "a" * 40
+
+
+def test_work_without_a_summary_does_not_invent_a_visual_attempt(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    isolate_ledgers(tmp_path, monkeypatch)
+    run_plan = fixture_plan(item_count=1)
+    with a_server_that_refuses_every_completion() as server:
+        stage_work(
+            run_plan, settings=settings(), scorer=None, fetcher=drawable_article_fetch,
+            model_endpoint=server.endpoint,
+        )
+    assert ledger.load_days(
+        common.STATE_ROOT, LedgerName.VISUAL_DESIGN_ATTEMPTS,
+        [run_plan.date], model=VisualAttemptRow,
+    ) == []

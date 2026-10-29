@@ -67,6 +67,11 @@ class LedgerStaging:
 #: contract and reader registration. A planned writer may follow in a later
 #: phase, but the staging entry is never added silently after the ledger.
 REGISTRY: Final[dict[LedgerName, LedgerStaging]] = {
+    LedgerName.VISUAL_DESIGN_ATTEMPTS: LedgerStaging(
+        writer="idhazh.telemetry.visual_attempts.record, as each work item settles its visual",
+        symbol="idhazh.telemetry.visual_attempts.record",
+        job_labels=frozenset({"work"}),
+    ),
     LedgerName.FEED_INGEST_PLAN_DISCOVERED_ARTICLES: LedgerStaging(
         writer=(
             "TypeScript services/feed-ingest-plan discovery writer through "

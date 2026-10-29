@@ -1,6 +1,6 @@
 # Telemetry
 
-**Last Updated**: 2026-10-23
+**Last Updated**: 2026-10-29
 
 How the pipeline records progress, timings and outcomes. Logs explain a running process; committed, validated rows supply later runs and operator views.
 
@@ -100,6 +100,33 @@ Item health records every planned item, including failures and items not attempt
 The worker seals a validated row while it can still observe host samples, request waits and model timings. Worker publication and assemble prefer that same row. Reconstruct from article and summary payloads only when the sealed row is missing, and leave unobservable cells absent.
 
 Workers file settled items. Assemble accounts for missing work after it knows what arrived. Shared ledger identity and settlement rules prevent the two writers or a retry from counting one item twice. [Item health](../architecture/sources/item-health.md) owns column meanings and failure codes.
+
+## Visual-design attempts
+
+The work stage records each settled visual decision before writing the summary
+or starting scoring. Items that never reached visual planning write no attempt.
+Model none, reachability refusal, output-budget and window cuts, validation,
+shape/config/compiler refusals, chart/grid delivery and render failure all use
+the same mapping in `telemetry/visual_attempts.py` and the standard ledger writer.
+Completed immutable writes remain available to the publisher if later work fails.
+
+`VisualAttemptRow` copies the exact decision `visual_id`, requested and delivered
+types, first validator rejection, delivered marks and nullable floor evidence.
+Its `downgrade_depth` means the deepest searched rung, not the selected
+replacement's depth. Extraction count and class use the same article measurement
+as item health. Missing measurements stay null.
+
+A drafted plan remains `decision=visual` when refused: `none_reason` names the
+gate and `state=absent` records no delivery. Five implemented reason members
+name gates, not call sites. Several shape/config/compiler refusals intentionally
+share `validation_failed`. `rendered` means a data file was written; it does not
+prove publication or a human decision to keep the visual.
+
+The [ledger registry](../architecture/contracts/ledger-registry.md#visual-design-attempts)
+owns identities and staging. The
+[retention reference](config/retention-ages.md#every-tree-names-its-own-cleanup-age)
+owns expiry. No aggregate ledger, permanent summary, retry feature or new
+publication rule is part of this record.
 
 ## What the machine was doing
 
