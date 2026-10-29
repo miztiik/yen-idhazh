@@ -163,11 +163,22 @@ Reporting is controlled by `workflow_reporting.enabled`; it cannot change
 ledger bytes or establish completion.
 The exported Markdown renderer and its separation from production digest
 presentation are documented in the [operator API reference](../architecture/sources/feed-operator-api.md#markdown-rendering-api).
+Table C sorts its report rows by admitted articles, highest first, then by feed
+name in alphabetical order. Table D reports actual request spend over the
+configured closed UTC days, not a waste score or selection penalty. Its
+`Unavailable` values mean that a complete closed-day history was not available;
+they do not mean zero requests.
 
 `MISSING_REQUIRED_FIELDS` is an article rejection: its offered URL or identity
 was missing or invalid, or extraction produced no usable title. A grouped
 count does not identify the exact missing field and does not mean a feed
 configuration field is absent. The protocol reason code is unchanged.
+An unsafe cleaned target is `FETCH_FAILED`, not a missing-field count.
+The [article cleanup policy](../architecture/sources/feed-harvesting.md#inputs-and-identity)
+removes all article query parameters even when `tidy_urls` is false. Feed
+parameters remain intact. Sparse workflow preparation stages the bounded
+[saved-address history](../architecture/sources/article-identity-history.md);
+incomplete recovery is logged rather than treated as complete deduplication.
 
 ## CI and hosted verification
 

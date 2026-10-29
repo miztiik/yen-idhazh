@@ -1,6 +1,6 @@
 # Freshness and Identity
 
-**Last Updated**: 2026-10-08
+**Last Updated**: 2026-10-29
 
 How often the pipeline runs, what makes an article worth today's slot, what stops the same article being published twice, and how an item keeps its name across the runs of one day. This page owns the decisions the planning step makes before any model loads.
 
@@ -61,6 +61,11 @@ With the shipped values (`recency_weight` 0.6, `recency_half_life_hours` 18.0) a
 **This reverses the rule that stood until 2026-08-30**, and the entry under "Design rationale" says what the measurement was.
 
 The gate reads the date the run believes, not the date the feed printed - so a future stamp cannot buy an item its way past the gate, and an undated article is judged on when we first saw it.
+
+For RSS, only a timestamp on the item can date that article. A channel
+publication or build timestamp describes the feed, not its individual stories,
+so both the Python digest and TypeScript planner leave an undated item without a
+source date. They then use their existing first-sighting timing for freshness.
 
 ## An undated article still has an age
 

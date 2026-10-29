@@ -1,4 +1,4 @@
-/** Clean a request address without changing the offered article's persisted identity. */
+/** Apply optional URL-library transformations between public-name checks. */
 import { TidyCleaner } from "tidy-url";
 import { UnsafeTargetError, validateTargetName } from "./safe-target";
 

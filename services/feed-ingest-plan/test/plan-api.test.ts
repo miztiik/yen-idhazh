@@ -55,7 +55,7 @@ test("actual API and awaited CLI compose the same recorded plan and disclose the
   );
   const cli = await recordedPlan();
   for (const recorded of [api, cli]) {
-    for (const url of ["https://news.example/feed.xml", "https://news.example/story/?b=2&a=1#section"]) {
+    for (const url of ["https://news.example/feed.xml", "https://news.example/story/"]) {
       recorded.transport.recordings.responses[url]!.unshift({ status: 403, body: "" });
     }
   }
@@ -71,7 +71,7 @@ test("actual API and awaited CLI compose the same recorded plan and disclose the
     const summary = await response.json();
     const requests = api.transport.requests.length;
     expect(api.transport.requests.find(request => request.url.pathname === "/story/")?.url.href)
-      .toBe("https://news.example/story/?b=2&a=1#section");
+      .toBe("https://news.example/story/");
     expect(summary.selected_count).toBe(1);
     expect(summary.api_timings.filter((timing: { operation: string }) => timing.operation.startsWith("feed-health-")))
       .toMatchObject([

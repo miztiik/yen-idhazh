@@ -11,6 +11,7 @@ import { appendIdentityColumns, describeObjectSchema } from "./row-schema";
 import type {
   LedgerPeriod,
   LedgerRegistration,
+  LedgerRowContract,
   PersistLedgerInput,
   ValidatedLedgerWrite,
 } from "./ledger-types";
@@ -91,13 +92,15 @@ export function validateLedgerInput<T extends object>(
   const writerContext = planner ? null : WriterIdentitySchema.parse(input.writerContext);
   let rowSchema: z.ZodType<object> = input.rowContract.schema;
   if (plannerName.success) {
-    const declared = PLANNER_CONTRACTS[plannerName.data];
+    const declared: LedgerRowContract<object> = PLANNER_CONTRACTS[plannerName.data];
     rowSchema = declared.schema;
     if (input.registryEntry.family !== "feed-ingest-plan"
       || input.registryEntry.prefix.join("/") !== `feed-ingest-plan/${ledger}`) {
       throw new Error(`${ledger} requires its registered planner family prefix`);
     }
-    if (input.rowContract.schemaVersion !== declared.schemaVersion
+    const writableVersions = (declared.acceptedSchemaVersions ?? [declared.schemaVersion])
+      .filter(version => declared.historicalSchemas?.[version] === undefined);
+    if (!writableVersions.includes(input.rowContract.schemaVersion)
       || JSON.stringify(z.toJSONSchema(input.rowContract.schema)) !== JSON.stringify(z.toJSONSchema(declared.schema))) {
       throw new Error(`${ledger} requires its declared current planner row contract`);
     }

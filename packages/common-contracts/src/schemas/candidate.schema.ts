@@ -17,13 +17,15 @@ export const FeedIngestCandidateSchema = z.strictObject({
   published_at: TimestampSchema.nullable(), fetched_at: TimestampSchema,
 }).superRefine((value, ctx) => {
   checkUrlIdentity(value, ctx);
+  if (/[?#]/.test(value.canonical_url)) reject(ctx, "candidate article address must not contain a query or fragment");
   if (value.feed_id !== value.source.feed_id) reject(ctx, "candidate feed must match configured feed facts");
   if (value.candidate_id !== deriveCandidateId(value.run_id, value.feed_id, value.entry_ordinal)) reject(ctx, "candidate identity must match run, feed and offered ordinal");
   if (value.date !== value.fetched_at.slice(0, 10)) reject(ctx, "candidate date must match its actual UTC fetch day");
 }).meta({
   version: FEED_INGEST_CANDIDATE_VERSION,
   changelog: [
-    { version: FEED_INGEST_CANDIDATE_VERSION, change: "Rename the configured feed identity from source_id to feed_id." },
+    { version: FEED_INGEST_CANDIDATE_VERSION, change: "Identify candidates with the shared query-free article cleanup policy." },
+    { version: "2026-10-28", change: "Rename the configured feed identity from source_id to feed_id." },
     { version: "2026-10-27", change: "Remove source classification fields from planner candidates." },
     { version: "2026-10-25", change: "Bind candidates to their actual fetch and configured source facts." },
   ],

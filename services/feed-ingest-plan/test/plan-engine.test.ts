@@ -47,7 +47,7 @@ test("real composition separates run and selection clocks and reads native dispa
     expect(result.row.evaluated_at).toBe("2026-10-21T23:59:59Z");
     expect(result.row.selection_started_at_utc).toBe("2026-10-22T00:00:02Z");
     expect(result.selected.map(article => article.url_key)).toEqual([
-      deriveUrlKey("https://news.example/second"), deriveUrlKey("https://news.example/story?a=1&b=2"),
+      deriveUrlKey("https://news.example/second"), deriveUrlKey("https://news.example/story/"),
     ]);
     expect(result.selected.map(article => article.worker_assignment)).toEqual([0, 1]);
     const selected = await readPlannerParquet(join(recorded.inputs.outputRoot, result.files.selected_articles!.files[0]!.path),

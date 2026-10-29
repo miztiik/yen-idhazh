@@ -1,16 +1,21 @@
 /** Can a public-package consumer reproduce a real file's canonical row commitment? */
 import { expect, test } from "bun:test";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tableFromIPC } from "apache-arrow";
 import initialize, { readMetadata, readParquet } from "parquet-wasm/esm";
-import { WriterIdentitySchema } from "@idhazh/common-contracts";
+import {
+  WriterIdentitySchema,
+  LEGACY_DISCOVERED_ARTICLE_VERSION, LEGACY_SELECTED_ARTICLE_VERSION,
+  PLANNER_ENVELOPE_VERSION,
+  deriveUrlKey,
+} from "@idhazh/common-contracts";
 import { z } from "zod";
 import {
-  appendIdentityColumns, describeObjectSchema, digestRows, persistLedger,
+  appendIdentityColumns, describeObjectSchema, digestRows, persistLedger, readPlannerParquet,
 } from "@idhazh/ledger-file-writer";
 import { plannerRecordings } from "./planner-recordings";
+import { serializeParquet } from "../src/parquet/wasm-serializer";
 
 function normalizeValue(value: unknown): unknown {
   if (typeof value === "bigint") return Number(value);
@@ -21,7 +26,7 @@ function normalizeValue(value: unknown): unknown {
 }
 
 test("public schema descriptors and digest verify native raw readback", async () => {
-  const root = await mkdtemp(join(tmpdir(), "ledger-reader-integrity-"));
+  const root = await mkdtemp(join(process.cwd(), ".tmp_ledger-reader-integrity-"));
   try {
     await initialize();
     const schema = z.strictObject({ date: z.string(), label: z.string(), score: z.number(), count: z.int() });
@@ -87,6 +92,63 @@ test("public schema descriptors and digest verify native raw readback", async ()
       } finally {
         footer.free();
         footerMetadata.free();
+      }
+    }
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+test("native discovery and selected files retain exact historical rows and envelope versions", async () => {
+  const root = await mkdtemp(join(process.cwd(), ".tmp_article-reader-"));
+  try {
+    await initialize();
+    for (const recording of plannerRecordings().slice(0, 2)) {
+      const historicalVersion = recording.name === "discovered-articles"
+        ? LEGACY_DISCOVERED_ARTICLE_VERSION : LEGACY_SELECTED_ARTICLE_VERSION;
+      for (const historical of [true, false]) {
+        const canonical_url = historical
+          ? "https://example.org/article/1?edition=morning&utm_source=feed"
+          : "https://example.org/article/2";
+        const row = {
+          ...recording.row, url_key: deriveUrlKey(canonical_url),
+          ...(recording.name === "selected-articles" ? { canonical_url } : {}),
+        };
+        const contract = {
+          ...recording.contract,
+          schemaVersion: historical ? historicalVersion : recording.contract.schemaVersion,
+        };
+        const result = await persistLedger({
+          ledger: recording.name, outputRoot: root, rowContract: contract,
+          registryEntry: {
+            name: recording.name, family: "feed-ingest-plan", grain: "raw-and-compact",
+            lifecycle_status: "active", prefix: ["feed-ingest-plan", recording.name],
+          },
+          ledgerSettings: { format: "parquet", compression_raw: "snappy", compression_compact: "zstd" },
+          period: { tier: "raw", covers: "2026-10-20" }, rows: [row],
+        });
+        expect(result.status).toBe("written");
+        const path = join(root, result.files[0]!.path);
+        if (historical) {
+          const bytes = await readFile(path);
+          const metadata = readMetadata(bytes);
+          const footer = metadata.fileMetadata();
+          try {
+            const values = new Map(footer.keyValueMetadata());
+            values.set("envelope_version", historicalVersion);
+            const table = tableFromIPC(readParquet(bytes).intoIPCStream());
+            const rewritten = await serializeParquet(table, values, "snappy");
+            await writeFile(path, rewritten.data);
+          } finally {
+            footer.free();
+            metadata.free();
+          }
+        }
+        const before = await readFile(path);
+        const actual = await readPlannerParquet(path, recording.name, recording.contract);
+        expect(actual.envelope.version).toBe(historical ? historicalVersion : PLANNER_ENVELOPE_VERSION);
+        expect<string>(actual.envelope.row_schema_version).toBe(contract.schemaVersion);
+        expect(actual.rows).toEqual([row]);
+        expect(await readFile(path)).toEqual(before);
       }
     }
   } finally {
