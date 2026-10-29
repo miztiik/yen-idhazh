@@ -62,37 +62,32 @@ export async function runFeedPlan(raw: unknown, inputs: PlanInputs, runtime: Pla
   let parseStarted: number | undefined;
   let parseFinished: number | undefined;
   let parseFailed = false;
-  const parserActivity = (
+  const recordParseActivity = (
     phase: "started" | "completed" | "failed",
-    duration_ms: number | null,
-    feed_id: string | null = null,
-    publisher_id: string | null = null,
   ) => {
     const now = performance.now();
     if (phase === "started") parseStarted ??= now;
     else parseFinished = now;
     if (phase === "failed") parseFailed = true;
-    emit("parse", phase, { duration_ms, feed_id, publisher_id },
-      feed_id === null ? [] : ["feed_id", "publisher_id"]);
   };
   const parserPool = runtime.parser_pool ?? new ArticleParserPool(inputs.settings.listener.parser_concurrency);
   let work: ReturnType<typeof createRunHealth> | undefined;
   let history: Awaited<ReturnType<typeof prepareFeedHealthState>> | undefined;
   let discovery: Awaited<ReturnType<typeof readDiscoveredEvidence>> | undefined;
   const sightings: DiscoveredArticleRow[] = [];
-  async function phase<T>(operation: PlanRunRow["api_timings"][number]["operation"], execute: () => Promise<T>): Promise<T> {
+  async function phase<T>(operation: PlanRunRow["api_timings"][number]["operation"], execute: () => Promise<T>, publish = true): Promise<T> {
     const begin = performance.now();
-    emit(operation, "started");
+    if (publish) emit(operation, "started", { scope: "plan" });
     try {
       const result = await execute();
       const duration_ms = Math.round(performance.now() - begin);
       timings.push({ operation, duration_ms, status: "completed" });
-      emit(operation, "completed", { duration_ms });
+      if (publish) emit(operation, "completed", { scope: "plan", duration_ms });
       return result;
     } catch (error) {
       const duration_ms = Math.round(performance.now() - begin);
       timings.push({ operation, duration_ms, status: "failed" });
-      emit(operation, "failed", { duration_ms, failure_code: "PLANNER_PHASE_FAILED" });
+      if (publish) emit(operation, "failed", { scope: "plan", duration_ms, failure_code: "PLANNER_PHASE_FAILED" });
       throw error;
     }
   }
@@ -129,7 +124,11 @@ export async function runFeedPlan(raw: unknown, inputs: PlanInputs, runtime: Pla
       max_future_hours: inputs.clock_config.collect.max_future_hours,
       exclusions: { ...loaded[2], published_window_days: inputs.clock_config.collect.published_window_days },
       feed_history: initialHistory.sources, observations, parser_pool: parserPool,
-      parser_options: { activity: parserActivity, ...(runtime.signal === undefined ? {} : { signal: runtime.signal }) },
+      document_activity: (operation, phase, details, url) => {
+        if (operation === "parse") recordParseActivity(phase);
+        emit(operation, phase, details, ["feed_id", "publisher_id"], url);
+      },
+      parser_options: { ...(runtime.signal === undefined ? {} : { signal: runtime.signal }) },
       overrides: request.freshness_hours === undefined ? {} : { freshness_hours: request.freshness_hours },
       clock: () => new Date(context.now), observation_clock: runtime.observation_clock ?? (() => new Date()),
       log: () => {},
@@ -203,7 +202,7 @@ export async function runFeedPlan(raw: unknown, inputs: PlanInputs, runtime: Pla
       batches.partition_batch_id = partitioned.batch_id;
     }
     if (partitioned !== undefined) {
-      const persisted = await phase("persist", () => executePersistence({ batch_id: partitioned!.batch_id }, inputs, runtime));
+      const persisted = await phase("persist", () => executePersistence({ batch_id: partitioned!.batch_id }, inputs, runtime), false);
       files.selected_articles = persisted.files;
       files.rejected_articles = persisted.rejected_files;
       artifact = persisted.artifact;

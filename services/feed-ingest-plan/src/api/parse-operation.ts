@@ -56,7 +56,9 @@ export async function parseFetchedDocument(
   }
   const state = await documentState(fetched, inputs, runtime, store, parent);
   if (state.health_written) throw new PlanError("REQUEST_CONFLICT", "This execution finalized its health; parse in a new execution", "request_id");
+  const emit = createStageLogger(state.context, runtime.log);
   const work = documentWork({
+    document_activity: (operation, phase, details, url) => emit(operation, phase, details, ["feed_id", "publisher_id"], url),
     observations: createIngestObservations(state.work.observe), observation_clock: runtime.observation_clock ?? (() => new Date()),
   }, { run_id: fetched.run_id, correlation_id: fetched.correlation_id, article_id: artifact.article_id, feed_id: source.id },
   record.request_id, {
@@ -65,7 +67,7 @@ export async function parseFetchedDocument(
   });
   if (artifact.fetch_item_type === "feed") {
     const parsed = await work.parse(() => parseDocument("feed", artifact.body!, artifact.canonical_url),
-      artifact.observation.event_id, describeFeedParse);
+      artifact.observation.event_id, describeFeedParse, artifact.canonical_url);
     const entries = parsed.parsed ?? [];
     state.work.feed({
       version: FEED_OUTCOME_PAYLOAD_VERSION, kind: "feed_outcome",
@@ -84,15 +86,11 @@ export async function parseFetchedDocument(
     }) };
   }
   const pool = runtime.parser_pool ?? new ArticleParserPool(inputs.settings.listener.parser_concurrency);
-  const emit = createStageLogger(state.context, runtime.log);
   let parsed;
   try {
     parsed = await work.parse(() => parseDocument("article", artifact.body!, artifact.canonical_url, inputs.harvest.extraction, pool, {
-      activity: (phase, duration_ms) => emit("parse", phase, {
-        feed_id: source.id, publisher_id: source.publisher_id, duration_ms,
-      }, ["feed_id", "publisher_id"]),
       ...(signal === undefined ? {} : { signal }),
-    }), artifact.observation.event_id, describeArticleParse);
+    }), artifact.observation.event_id, describeArticleParse, artifact.canonical_url);
   } finally { if (runtime.parser_pool === undefined) pool.close(); }
   const candidateId = offer?.offer_id ?? deriveCandidateId(state.context.run_id, source.id, 0);
   const observation = PlannerHarvestObservationSchema.parse({

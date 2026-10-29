@@ -73,8 +73,11 @@ test("manual controls exercise the planner API and keep only required outputs", 
   });
   expect(plan.run).not.toContain("${{");
   const closing = steps.slice(steps.indexOf(plan) + 1);
-  expect(closing).toHaveLength(4);
-  const [cancellation, finalize, upload, finish] = closing;
+  expect(closing).toHaveLength(5);
+  const [cancellation, finalize, inventory, upload, finish] = closing;
+  expect(inventory?.run).toBe("bun run services/feed-ingest-plan/scripts/feed-ingest-plan-upload-inventory.ts");
+  expect(inventory?.if).toBe(upload?.if);
+  expect(inventory?.env?.ARTIFACT_DIRECTORY).toBe("${{ steps.finalize.outputs.artifact_directory }}");
   expect(cancellation?.id).toBe("cancellation");
   expect(cancellation?.if).toBe("${{ cancelled() }}");
   expect(cancellation?.run).toBe('echo "cancelled=true" >> "$GITHUB_OUTPUT"');
@@ -96,6 +99,7 @@ test("manual controls exercise the planner API and keep only required outputs", 
   expect(upload?.if).toContain("always()");
   expect(upload?.if).toContain("steps.finalize.outputs.artifact_directory != ''");
   expect(upload?.with?.["if-no-files-found"]).toBe("error");
+  expect(upload?.with?.["include-hidden-files"]).toBe(false);
   expect(finish?.if).toContain("always()");
   expect(finish?.run).toBe("bun run services/feed-ingest-plan/scripts/finish-run-output.ts");
   expect(finish?.env).toEqual({

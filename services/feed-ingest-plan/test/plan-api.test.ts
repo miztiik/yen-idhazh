@@ -14,6 +14,7 @@ import { DiscoveredArticleRowContract, FeedHealthStateRowContract, ParsedFeedBat
 import { readPlannerParquet } from "../src/read-ledger-history/read-planner-parquet";
 import { currentExecutionState } from "../src/api/document-state";
 import { stageStore } from "../src/api/stage-store";
+import { ArticleParserPool } from "../src/harvest-feeds/article-parser-pool";
 
 const prefix = "/api/2026-10-20";
 const json = (body: unknown) => ({ method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
@@ -416,10 +417,12 @@ test("one listener retains durable seen receipts from an output root outside the
   const parsing = new Promise<void>(resolve => { notify = resolve; });
   recorded.runtime.log = event => {
     recorded.events.push(event);
-    if (event.operation !== "parse") return;
-    if (event.phase === "started") { activeParsers++; peak = Math.max(peak, activeParsers); notify(); }
-    else activeParsers--;
   };
+  const pool = new ArticleParserPool(recorded.inputs.settings.listener.parser_concurrency, phase => {
+    if (phase === "started") { activeParsers++; peak = Math.max(peak, activeParsers); notify(); }
+    else activeParsers--;
+  });
+  recorded.runtime.parser_pool = pool;
   const server = servePlan(recorded.inputs, recorded.runtime);
   try {
     const url = `http://127.0.0.1:${server.port}${prefix}`;
@@ -446,7 +449,7 @@ test("one listener retains durable seen receipts from an output root outside the
       const row = await readPlannerParquet(join(recorded.inputs.outputRoot, result.files.plan_runs.files[0].path), "plan-runs", PlanRunRowContract);
       expect(row.rows[0]!.run_id).toBe(result.run_id);
     }
-  } finally { await server.stop(true); await recorded.close(); }
+  } finally { await server.stop(true); pool.close(); await recorded.close(); }
 });
 
 test("a later dispatch failure does not lose discovery already persisted by this listener", async () => {

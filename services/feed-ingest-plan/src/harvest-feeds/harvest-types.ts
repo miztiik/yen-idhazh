@@ -57,6 +57,10 @@ export type HarvestContext = {
   clock?: () => Date;
   observation_clock?: () => Date;
   observations?: IngestObservations;
+  document_activity?: (
+    operation: "fetch" | "parse", phase: "started" | "completed" | "failed",
+    details: Record<string, unknown>, failureArticleUrl?: string,
+  ) => void;
   parser_pool?: ArticleParserPool;
   parser_options?: Parameters<ArticleParserPool["parse"]>[3];
   on_feed?: (outcome: FeedOutcomePayload, entries: readonly FeedEntry[], checked_at: string) => void;

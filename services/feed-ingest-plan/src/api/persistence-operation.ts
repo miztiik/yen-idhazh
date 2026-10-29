@@ -17,6 +17,7 @@ import { PlanError } from "./plan-request";
 import { appendDocumentTiming, currentExecutionState, registerStageExecution } from "./document-state";
 import { recordStandaloneRun } from "./record-standalone-run";
 import { healthFingerprint } from "./feed-health-state-operation";
+import { createStageLogger } from "../logging/structured-logger";
 
 type Result = {
   files: PersistLedgerResult; artifact: string; selected_count: number;
@@ -59,32 +60,42 @@ export async function executePersistence(raw: unknown, inputs: PlanInputs, runti
   }
   const result = (async (): Promise<Result> => {
     const began = performance.now();
-    const metadata = batch.articles.map(article => ({
-      ...selectedArticleMetadata(article), run_id: batch.context.run_id, attempt: batch.context.writer.attempt, date: batch.context.date,
-    }));
-    const directory = dirname(target);
-    const temporary = `${target}.${randomUUID()}.tmp`;
-    await mkdir(directory, { recursive: true });
+    const emit = createStageLogger(batch.context, runtime.log);
+    emit("persist", "started", { batch_id: batch.batch_id });
     try {
-      await writeFile(temporary, bytes, { flag: "wx" });
-      await rename(temporary, target);
-    } finally { await rm(temporary, { force: true }); }
-    const files = await persistLedger({
-      ledger: "selected-articles", rowContract: SelectedArticleRowContract, rows: metadata,
-      registryEntry: inputs.registrations.selected_articles, outputRoot: inputs.outputRoot,
-      writerContext: batch.context.writer, ledgerSettings: inputs.ledgerSettings, period: { tier: "raw", covers: batch.context.date },
-    });
-    if (files.status === "skipped") throw new Error("Selected metadata write was refused");
-    const rejectedFiles = await persistLedger({
-      ledger: "rejected-articles", rowContract: RejectedArticleRowContract, rows: batch.rejected_articles,
-      registryEntry: inputs.registrations.rejected_articles, outputRoot: inputs.outputRoot,
-      writerContext: batch.context.writer, ledgerSettings: inputs.ledgerSettings, period: { tier: "raw", covers: batch.context.date },
-    });
-    if (rejectedFiles.status === "skipped") throw new Error("Rejected metadata write was refused");
-    await appendDocumentTiming(inputs, batch.context.run_id, { operation: "persist", duration_ms: Math.round(performance.now() - began), status: "completed" });
-    const run = await recordStandaloneRun(inputs, batch, path);
-    return { files, rejected_files: rejectedFiles, artifact: path, selected_count: metadata.length,
-      ...(run === undefined ? {} : { run_files: run.files, run_status: run.row.status }) };
+      const metadata = batch.articles.map(article => ({
+        ...selectedArticleMetadata(article), run_id: batch.context.run_id, attempt: batch.context.writer.attempt, date: batch.context.date,
+      }));
+      const directory = dirname(target);
+      const temporary = `${target}.${randomUUID()}.tmp`;
+      await mkdir(directory, { recursive: true });
+      try {
+        await writeFile(temporary, bytes, { flag: "wx" });
+        await rename(temporary, target);
+      } finally { await rm(temporary, { force: true }); }
+      const files = await persistLedger({
+        ledger: "selected-articles", rowContract: SelectedArticleRowContract, rows: metadata,
+        registryEntry: inputs.registrations.selected_articles, outputRoot: inputs.outputRoot,
+        writerContext: batch.context.writer, ledgerSettings: inputs.ledgerSettings, period: { tier: "raw", covers: batch.context.date },
+      });
+      if (files.status === "skipped") throw new Error("Selected metadata write was refused");
+      const rejectedFiles = await persistLedger({
+        ledger: "rejected-articles", rowContract: RejectedArticleRowContract, rows: batch.rejected_articles,
+        registryEntry: inputs.registrations.rejected_articles, outputRoot: inputs.outputRoot,
+        writerContext: batch.context.writer, ledgerSettings: inputs.ledgerSettings, period: { tier: "raw", covers: batch.context.date },
+      });
+      if (rejectedFiles.status === "skipped") throw new Error("Rejected metadata write was refused");
+      await appendDocumentTiming(inputs, batch.context.run_id, { operation: "persist", duration_ms: Math.round(performance.now() - began), status: "completed" });
+      const run = await recordStandaloneRun(inputs, batch, path);
+      emit("persist", "completed", { batch_id: batch.batch_id, output_count: metadata.length,
+        duration_ms: Math.round(performance.now() - began), artifact: path });
+      return { files, rejected_files: rejectedFiles, artifact: path, selected_count: metadata.length,
+        ...(run === undefined ? {} : { run_files: run.files, run_status: run.row.status }) };
+    } catch (error) {
+      emit("persist", "failed", { batch_id: batch.batch_id, failure_code: "PERSIST_FAILED",
+        duration_ms: Math.round(performance.now() - began) });
+      throw error;
+    }
   })();
   finalized.set(claim, { fingerprint, result });
   try { return await result; }

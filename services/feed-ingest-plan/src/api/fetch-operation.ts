@@ -25,6 +25,7 @@ import { sourceSnapshot } from "../harvest-feeds/load-harvest-inputs";
 import { HarvestArticleResultSchema, utcTimestamp } from "../harvest-feeds/harvest-types";
 import { resolveArticleSourceOutcome } from "../article-source-outcome";
 import type { SourceArticleOutcome } from "@idhazh/common-contracts";
+import { createStageLogger } from "../logging/structured-logger";
 
 type FetchRequest = z.infer<typeof FetchRequestSchema>;
 const requestPools = new WeakMap<PlanInputs, ReturnType<typeof workPool>>();
@@ -55,7 +56,9 @@ export async function fetchDocument(
   if (state.health_written) throw new PlanError("REQUEST_CONFLICT", "This execution finalized its health; start a new feed fetch for new work", "request_id");
   const identity = canonicalizeUrl(url);
   const attemptObservations: ReturnType<typeof observeDocument>[] = [];
+  const emit = createStageLogger(state.context, runtime.log);
   const work = documentWork({
+    document_activity: (operation, phase, details, url) => emit(operation, phase, details, ["feed_id", "publisher_id"], url),
     observations: createIngestObservations(state.work.observe), observation_clock: runtime.observation_clock ?? (() => new Date()),
     on_attempt: observation => { attemptObservations.push(observation); },
   }, { run_id: record.run_id, correlation_id: record.correlation_id, article_id: identity.url_key, feed_id: source.id },
@@ -76,6 +79,7 @@ export async function fetchDocument(
     });
     if (prepared.status === "rejected") {
       await work.skip();
+      work.rejectFetch(url, "ARTICLE_EXCLUDED");
       state.work.article(prepared.result);
       if (parent !== null) updateFeedOffer(inputs, state, parent.batch.batch_id, parent.offer.offer_id, "rejected");
       throw new PlanError("ARTICLE_EXCLUDED", prepared.result.rejection!.drop_reason, parent === null ? "url" : "offer_id");
