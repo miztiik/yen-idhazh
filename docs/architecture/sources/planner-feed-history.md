@@ -1,12 +1,13 @@
 # Feed history used by the TypeScript planner
 
-**Last Updated**: 2026-10-27
+**Last Updated**: 2026-10-29
 
 Which saved observations can change feed rest and measured reliability?
-The isolated planner reads only its current `feed-health-state` format and its
+The isolated planner reads its current `feed-health-state` format and its
 planner-owned `discovered-articles` ledger. The native Python `seen` ledger
 remains separate and is not the planner's discovery source.
-The global Python `feed-health` ledger and public health JSON are unchanged.
+The global Python `feed-health` ledger and public health JSON remain separate
+and keep their own formats.
 
 ## Named evidence and independent windows
 
@@ -74,6 +75,12 @@ No logical feed evidence means unknown lifecycle and unavailable reliability.
 Partial history does not become perfect health. Current work does not turn
 an unverified earlier day into a measured zero.
 
+Lifecycle is known only when the full configured represented-day window is
+complete. A failure streak in a partial window cannot prove that no later
+success or rest cycle is missing, so the lifecycle stays unknown until the
+bounded window is complete. Complete histories retain the existing rest and
+retry rules.
+
 ## Curated retirement and external outcomes
 
 Article technical admission is a separate derived fraction: admitted original
@@ -119,6 +126,7 @@ time, without a persistent cache or benchmark gate.
 ## See also
 
 - [Ledger reference](../../reference/feed-planner-ledgers.md)
+- [Saved article keys](article-identity-history.md)
 - [Feedback recording](../contracts/feed-ingest-feedback.md)
 - [Curation](feed-curation.md)
 - [Operator APIs](feed-operator-api.md)

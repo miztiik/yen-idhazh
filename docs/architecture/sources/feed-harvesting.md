@@ -35,18 +35,31 @@ Reporting configuration does not change harvested content identity.
 Missing feed fields do not renumber later entries. Page canonical tags,
 scripts and prose never grant a new fetch destination.
 
-`article-identity.ts` exports `deriveArticleIdentity` to derive `canonical_url`
-and `url_key` from the offered address using the discovery identity rules.
-Invalid article addresses retain `InvalidArticleUrlError`.
-`http-request-target.ts` exports `cleanHttpRequestTarget` to clean and validate
-an HTTP request address, not derive persisted identity.
+Every article loses its entire query string and fragment. This includes
+required article identifiers: a query-dependent article can stop working.
+`harvest.tidy_urls` enables additional cleanup before that removal, including
+unwrapping supported redirect addresses. Setting it to false does not preserve
+article queries. Feeds and robots downloads bypass this cleanup and retain
+their request parameters. Feed identity and Python discovery remain unchanged.
 
-With `harvest.tidy_urls` enabled, TidyURL cleans actual feed and article
-request targets, including redirect destinations. The original offered URL
-still supplies `canonical_url`, `url_key` and configured source provenance.
-Cleanup does not rewrite earlier records. Each transformed address passes
-public-address validation, the applicable robots policy and pinned dispatch
-before use. An unsafe transformed address is never dispatched.
+`article-url.ts` exports `cleanArticleUrl`, the shared article cleanup policy.
+`article-identity.ts` hashes its exact serialized result as `url_key` and retains
+that result as `canonical_url`. The permitted fetcher uses the same policy for
+robots permission and each dispatched article hop. Redirects do not change
+the initial identity. The lower-level `http-request-target.ts` applies the
+optional cleaner; it does not hash addresses.
+
+Cleanup and network permission remain separate responsibilities. Invalid
+article addresses retain `InvalidArticleUrlError`. Feed offers normalize only
+the HTTP scheme spelling before storage, retaining their original query and
+fragment as historical evidence. The final serialized article address must
+pass the same URL format and length contract as downstream payloads before
+hashing or dispatch; percent-encoding cannot bypass that bound. Each transformed address
+passes public-address validation, DNS checks, the applicable robots policy
+and pinned dispatch before use. An unsafe transformed address is never dispatched.
+The [bounded saved-key lookup](article-identity-history.md)
+avoids unnecessary repeat processing where earlier addresses can be recovered.
+It does not rewrite existing publication or history records.
 
 Feedsmith normalizes RSS, Atom, RDF and JSON Feed entries. They retain
 categories, authors, offered ordinals and entry-level UTC dates. A feed's
@@ -63,9 +76,9 @@ path or query is not a match. Excluded offers retain their original ordinal,
 actual title or null, first sight and ordinary article-exclusion accounting.
 Public offer fetches and `/plan` share this preflight; standalone article
 fetches use the same address checks. A valid supplying feed remains successful.
-Both offered identity and the configured cleaned request target are checked,
+Both the offered address and the configured cleaned request target are checked,
 so a known URL wrapper cannot hide a media destination. This adds no request
-and never changes `canonical_url` or `url_key`. Unsafe cleaned targets remain
+and never adds a second identity policy. Unsafe cleaned targets remain
 typed fetch refusals, not media exclusions.
 
 ## Request and extraction controls

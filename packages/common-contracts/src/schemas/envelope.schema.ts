@@ -2,7 +2,10 @@
 import { z } from "zod";
 import { REJECTED_ARTICLE_ACCEPTED_SCHEMA_VERSIONS } from "./rejected-article.schema";
 import {
-  PLANNER_LEDGER_VERSION, PLANNER_ENVELOPE_VERSION, PLAN_RUN_VERSION, SELECTED_ARTICLE_VERSION, FEED_HEALTH_STATE_VERSION,
+  DISCOVERED_ARTICLE_ACCEPTED_SCHEMA_VERSIONS, DISCOVERED_ARTICLE_VERSION,
+  LEGACY_PLANNER_ENVELOPE_VERSION, PLANNER_ENVELOPE_ACCEPTED_SCHEMA_VERSIONS,
+  PLANNER_LEDGER_VERSION, PLANNER_ENVELOPE_VERSION, PLAN_RUN_VERSION,
+  SELECTED_ARTICLE_ACCEPTED_SCHEMA_VERSIONS, SELECTED_ARTICLE_VERSION, FEED_HEALTH_STATE_VERSION,
 } from "../version";
 import { RecordedInstantSchema } from "./recorded-instant.schema";
 import { CommitShaSchema, CountSchema, DateStampSchema, JobNameSchema, MonthStampSchema, NonEmptySchema, PositiveCountSchema, RunIdSchema, SchemaVersionSchema, ServerJobSchema, Sha256Schema, YearStampSchema, reject } from "./primitives";
@@ -100,8 +103,11 @@ export const PLANNER_FOOTER_METADATA_KEYS = [
 ] as const;
 export const PLANNER_OPTIONAL_FOOTER_METADATA_KEYS = ["period", "updated_at"] as const;
 export const PlannerFileEnvelopeSchema = z.strictObject({
-  version: z.enum([PLANNER_LEDGER_VERSION, "2026-10-26", PLANNER_ENVELOPE_VERSION]).default(PLANNER_ENVELOPE_VERSION),
-  row_schema_version: z.enum([PLANNER_LEDGER_VERSION, PLANNER_ENVELOPE_VERSION, PLAN_RUN_VERSION, ...REJECTED_ARTICLE_ACCEPTED_SCHEMA_VERSIONS]),
+  version: z.enum(PLANNER_ENVELOPE_ACCEPTED_SCHEMA_VERSIONS).default(PLANNER_ENVELOPE_VERSION),
+  row_schema_version: z.enum([
+    ...DISCOVERED_ARTICLE_ACCEPTED_SCHEMA_VERSIONS, ...SELECTED_ARTICLE_ACCEPTED_SCHEMA_VERSIONS,
+    PLAN_RUN_VERSION, ...REJECTED_ARTICLE_ACCEPTED_SCHEMA_VERSIONS, FEED_HEALTH_STATE_VERSION,
+  ]),
   tier: TierSchema, ledger: PlannerLedgerNameSchema,
   covers: z.union([DateStampSchema, MonthStampSchema, YearStampSchema]),
   period: PeriodSchema.nullable().default(null), file_id: UuidSchema,
@@ -111,11 +117,16 @@ export const PlannerFileEnvelopeSchema = z.strictObject({
   updated_at: RecordedInstantSchema.nullable().default(null),
 }).superRefine((value, ctx) => {
   const rowVersions = {
-    "discovered-articles": PLANNER_LEDGER_VERSION, "selected-articles": SELECTED_ARTICLE_VERSION,
+    "discovered-articles": DISCOVERED_ARTICLE_ACCEPTED_SCHEMA_VERSIONS,
+    "selected-articles": SELECTED_ARTICLE_ACCEPTED_SCHEMA_VERSIONS,
     "rejected-articles": REJECTED_ARTICLE_ACCEPTED_SCHEMA_VERSIONS, "feed-health-state": FEED_HEALTH_STATE_VERSION, "plan-runs": PLAN_RUN_VERSION,
   } as const;
   if ((value.version === PLANNER_LEDGER_VERSION && value.row_schema_version !== PLANNER_LEDGER_VERSION)
-    || (value.row_schema_version === PLANNER_ENVELOPE_VERSION && value.version !== PLANNER_ENVELOPE_VERSION)) {
+    || (value.row_schema_version === LEGACY_PLANNER_ENVELOPE_VERSION
+      && value.version !== LEGACY_PLANNER_ENVELOPE_VERSION && value.version !== PLANNER_ENVELOPE_VERSION)
+    || (["discovered-articles", "selected-articles"].includes(value.ledger)
+      && ([DISCOVERED_ARTICLE_VERSION, SELECTED_ARTICLE_VERSION] as readonly string[]).includes(value.row_schema_version)
+      && value.version !== PLANNER_ENVELOPE_VERSION)) {
     reject(ctx, "row schema requires its declared envelope revision");
   }
   const acceptedVersions = typeof rowVersions[value.ledger] === "string"
@@ -131,7 +142,8 @@ export const PlannerFileEnvelopeSchema = z.strictObject({
 }).meta({
   version: PLANNER_ENVELOPE_VERSION,
   changelog: [
-    { version: PLANNER_ENVELOPE_VERSION, change: "Register rejected articles and current selection and article-outcome row stamps." },
+    { version: PLANNER_ENVELOPE_VERSION, change: "Accept named historical discovery and selected stamps without rewriting article identity." },
+    { version: LEGACY_PLANNER_ENVELOPE_VERSION, change: "Register rejected articles and current selection and article-outcome row stamps." },
     { version: "2026-10-26", change: "Require the current row stamp for selected articles and plan runs." },
     { version: PLANNER_LEDGER_VERSION, change: "Declare planner-only file metadata without generic writer identity." },
   ],

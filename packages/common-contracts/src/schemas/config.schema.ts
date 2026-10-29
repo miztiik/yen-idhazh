@@ -83,7 +83,7 @@ export const FeedHarvestConfigSchema = z.strictObject({
     "Enforce article robots permission or retain it as evidence without blocking article requests. Feeds always enforce.",
   ),
   tidy_urls: z.boolean().describe(
-    "Clean request targets only. Remove this switch and the disabled path when request cleanup becomes mandatory.",
+    "Apply additional article cleanup before removing all queries and fragments. Remove this switch and the disabled path when additional cleanup becomes mandatory.",
   ),
   user_agent: NonEmptySchema,
   request_headers: FeedRequestHeadersSchema,

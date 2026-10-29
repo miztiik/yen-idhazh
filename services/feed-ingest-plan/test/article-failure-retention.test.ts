@@ -130,7 +130,7 @@ test("observed denial retains actual terminal target failures in one all-failed 
     const rows = await rejectedRows(recorded, result.files.rejected_articles!.files.map(file => file.path));
     expect(rows).toHaveLength(cases.length);
     for (const entry of cases) {
-      expect(rows.find(row => row.url_key === deriveArticleIdentity(entry.url).url_key), entry.name).toMatchObject({
+      expect(rows.find(row => row.url_key === deriveArticleIdentity(entry.url, recorded.inputs.harvest.config.harvest).url_key), entry.name).toMatchObject({
         ...entry.expected, robots: "denied",
       });
       expect(recorded.transport.requests.some(request => request.url.href === entry.url)).toBe(true);

@@ -10,9 +10,10 @@ import type { PlanRuntime } from "../run-feed-plan";
 import { PlanError } from "./plan-request";
 import { stageStore } from "./stage-store";
 import { requireStageConfiguration } from "./selection-operation";
-import { checkFetchedDocument, documentExclusions, documentState } from "./document-state";
-import { deriveArticleIdentity } from "../harvest-feeds/article-identity";
-import { validateTargetName } from "../harvest-feeds/safe-target";
+import { checkFetchedDocument, documentExclusions, documentIdentities, documentState } from "./document-state";
+import { deriveArticleIdentity, InvalidArticleUrlError } from "../harvest-feeds/article-identity";
+import { deriveFeedIdentity } from "../harvest-feeds/feed-identity";
+import { validateTargetName, UnsafeTargetError } from "../harvest-feeds/safe-target";
 import { documentWork } from "../harvest-feeds/document-work";
 import type { observeDocument } from "../harvest-feeds/document-observation";
 import { createIngestObservations } from "../ingest-observations";
@@ -51,11 +52,21 @@ export async function fetchDocument(
   if (url == null) throw new PlanError("INVALID_REQUEST", "Article fetch requires its authorized address", "url");
   if (parent === null) {
     try { validateTargetName(url); }
-    catch { throw new PlanError("INVALID_REQUEST", "Fetch requires a public HTTP address without credentials", "url"); }
+    catch (error) {
+      if (!(error instanceof UnsafeTargetError)) throw error;
+      throw new PlanError("INVALID_REQUEST", "Fetch requires a public HTTP address without credentials", "url");
+    }
   }
   const state = await documentState(record, inputs, runtime, store, parent?.root);
   if (state.health_written) throw new PlanError("REQUEST_CONFLICT", "This execution finalized its health; start a new feed fetch for new work", "request_id");
-  const identity = deriveArticleIdentity(url);
+  let identity: ReturnType<typeof deriveArticleIdentity>;
+  try {
+    identity = request.fetch_item_type === "feed" ? deriveFeedIdentity(url)
+      : deriveArticleIdentity(url, inputs.harvest.config.harvest);
+  } catch (error) {
+    if (!(error instanceof InvalidArticleUrlError || error instanceof UnsafeTargetError)) throw error;
+    throw new PlanError("INVALID_REQUEST", "Cleaned fetch address is invalid or unsafe", "url");
+  }
   const attemptObservations: ReturnType<typeof observeDocument>[] = [];
   const emit = createStageLogger(state.context, runtime.log);
   const work = documentWork({
@@ -77,6 +88,7 @@ export async function fetchDocument(
       max_future_hours: inputs.clock_config.collect.max_future_hours, clock: () => new Date(state.context.now),
       observation_clock: runtime.observation_clock ?? (() => new Date()),
       exclusions: { ...exclusions, published_window_days: inputs.clock_config.collect.published_window_days },
+      identities: await documentIdentities(state, inputs),
     });
     if (prepared.status === "rejected") {
       await work.skip();
