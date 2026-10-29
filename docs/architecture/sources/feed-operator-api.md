@@ -121,9 +121,9 @@ package API, not an HTTP route.
 The manual workflow uses an adapter to write that Markdown to its job summary
 and turn notices into workflow annotations. Its finalization task first calls
 the separate safe Git delivery API, then renders the report before the artifact
-upload. The workflow adapter adds the actual Git delivery result; the pure
-renderer does not commit or upload files. This workflow presentation is not the
-production digest renderer; production can choose a reader-facing format
+upload. The delivery receipt stays separate from the rendered report; the pure
+renderer does not commit or upload files. This workflow presentation is not
+the production digest renderer; production can choose a reader-facing format
 without changing the planner API.
 
 ## Request flow

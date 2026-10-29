@@ -73,8 +73,9 @@ changes the failed result. The artifact contains selected full text for the
 next summarizer, the report and delivery receipt, plus exact uncommitted
 metadata only when Git delivery was not confirmed. Ledger rows remain
 body-free and go to their normal Git locations, not to an archive in Git.
-The Markdown summary includes the actual Git delivery result and host
-fingerprint facts, with L3 cache and total RAM capacity displayed in MiB.
+The Markdown summary shows the host fingerprint first, with L3 cache and total
+RAM capacity displayed in MiB. The Git delivery receipt stays in the separate
+`delivery-result.json` artifact.
 Failed finalization or upload leaves temporary output untouched. Independent
 host-probe checks remain in CI and are not part of this manual workflow.
 The [manual workflow guide](../how-to/run-feed-ingest-plan-test.md#saved-output-and-failures)

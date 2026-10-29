@@ -78,8 +78,8 @@ test("one Git delivery precedes the report and prepares only the selected handof
     expect(await readFile(join(artifacts, "700-1-selected-articles.json"))).toEqual(selected);
     const report = await readFile(join(artifacts, "700-1-report.md"), "utf8");
     expect(report).toBe(await readFile(f.finalize.summaryPath, "utf8"));
-    expect(report).toContain(receipt.commit!);
-    expect(report).toContain("Git delivery: **landed**");
+    expect(report).not.toContain("Metadata delivery");
+    expect(report).not.toContain("Git delivery");
     expect(report).not.toContain(JSON.parse(selected.toString()).articles[0].article_text);
     expect(await readFile(f.finalize.outputPath, "utf8")).toContain("artifact_directory<<");
 
@@ -115,7 +115,7 @@ test("a refused Git delivery still writes the report and prepares exact metadata
     }
     expect(await readFile(join(artifacts, "700-1-selected-articles.json")))
       .toEqual(await readFile(join(f.repository, f.summary.selected_articles_artifact!)));
-    expect(await readFile(join(artifacts, "700-1-report.md"), "utf8")).toContain("Git delivery: **failed**");
+    expect(await readFile(join(artifacts, "700-1-report.md"), "utf8")).not.toContain("Git delivery");
     expect(await readFile(f.finalize.outputPath, "utf8")).toContain("artifact_directory<<");
     expect(await fixtureGit(f.origin, ["--git-dir", f.origin, "rev-parse", "main"])).toBe(f.head);
     await expect(finishRunOutput({ ...f.finish, finalizationOutcome: "failure" })).rejects.toThrow("Run output is incomplete");
@@ -142,7 +142,7 @@ test("cancelled finalization preserves recovery and a report without creating a 
     await finalizeRunOutput({ ...f.finalize, cancelled: true });
     expect(await fixtureGit(f.origin, ["--git-dir", f.origin, "rev-parse", "main"])).toBe(f.head);
     expect(await Bun.file(join(f.directory, "delivery-result.json")).exists()).toBe(false);
-    expect(await readFile(join(f.directory, "artifacts", "700-1-report.md"), "utf8")).toContain("Git delivery was not confirmed");
+    expect(await readFile(join(f.directory, "artifacts", "700-1-report.md"), "utf8")).not.toContain("Git delivery");
     expect(await Bun.file(join(f.directory, "artifacts", "uncommitted-metadata-700-1", "current-run-files.json")).json())
       .toEqual(f.paths);
     const finished = await runScript("finish-run-output.ts", f.repository, {
