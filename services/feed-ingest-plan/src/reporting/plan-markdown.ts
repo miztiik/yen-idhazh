@@ -77,6 +77,15 @@ export function renderPlanMarkdown(input: PlanMarkdownEvidence): PlannerMarkdown
     throw new Error("Health report belongs to another execution");
   }
   const feedRows = health?.rows ?? [];
+  const tableFeedRows = [...feedRows].sort((left, right) => {
+    if (left.article_candidates === null && right.article_candidates !== null) return 1;
+    if (left.article_candidates !== null && right.article_candidates === null) return -1;
+    if (left.article_candidates !== null && right.article_candidates !== null
+      && left.article_candidates !== right.article_candidates) {
+      return right.article_candidates - left.article_candidates;
+    }
+    return left.feed_id.localeCompare(right.feed_id) || left.date.localeCompare(right.date);
+  });
   const causes = feedRows.flatMap(feed => feed.rejection_counts.map(cause =>
     ({ ...cause, feed_id: feed.feed_id, date: feed.date })));
   const requests = health?.request_report;
@@ -112,7 +121,7 @@ export function renderPlanMarkdown(input: PlanMarkdownEvidence): PlannerMarkdown
     "", "## Table C - This run's feed work", "",
     "| Id | Feed | UTC work day | Feed checks | Admitted articles | Chosen articles | Feed / article / robots requests | Feed read result |",
     "| --- | --- | --- | --- | --- | --- | --- | --- |",
-    ...feedRows.map((feed, index) =>
+    ...tableFeedRows.map((feed, index) =>
       `| C${index + 1} | ${escapeMarkdown(feed.feed_id)} | ${feed.date} | ${known(feed.feed_reads, "checks")} | ${known(feed.article_candidates, "articles")} | ${known(feed.articles_selected, "articles")} | ${[feed.feed_requests, feed.article_requests, feed.robots_requests].map(value => known(value, "requests")).join(" / ")} | ${escapeMarkdown(describeFeedRead(feed))} |`),
     ...(feedRows.length ? [] : ["", health === null ? "Feed work is unavailable." : "The supplied run has zero recorded feed rows."]),
     "", "Feed read results combine the recorded download result, usable URL count and failure code. The saved download outcome is unchanged.",
