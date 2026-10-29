@@ -8,7 +8,7 @@ import { createRunHealth } from "../run-health";
 import { sourceSnapshot } from "../harvest-feeds/load-harvest-inputs";
 import { createPermittedFetcher } from "../harvest-feeds/robots-policy";
 import { prepareFeedHealthState } from "./feed-health-state-operation";
-import { canonicalizeUrl } from "../harvest-feeds/url-cleaner";
+import { deriveArticleIdentity } from "../harvest-feeds/article-identity";
 import { PlanError } from "./plan-request";
 import { sha256 } from "./operation-store";
 import { readExclusionEvidence } from "../read-ledger-history/read-exclusion-evidence";
@@ -62,7 +62,7 @@ export function executionHasArtifact(inputs: PlanInputs, context: RunContext) {
 export function checkFetchedDocument(record: PlannerOperation, inputs: PlanInputs) {
   if (record.operation !== "fetch" || record.state !== "complete") throw new PlanError("ARTIFACT_NOT_FOUND", "No completed fetched document exists", "fetch_request_id");
   const artifact = FetchedDocumentSchema.parse(record.artifact);
-  const identity = canonicalizeUrl(artifact.canonical_url);
+  const identity = deriveArticleIdentity(artifact.canonical_url);
   if (artifact.article_id !== identity.url_key || artifact.observation.run_id !== record.run_id
     || artifact.observation.correlation_id !== record.correlation_id
     || artifact.body_sha256 !== (artifact.body === null ? null : sha256(artifact.body))

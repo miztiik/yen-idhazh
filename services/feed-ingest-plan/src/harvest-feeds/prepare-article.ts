@@ -4,7 +4,7 @@ import type { DropReason, RejectionDetails } from "@idhazh/common-contracts";
 import type { HarvestContext, OfferedArticle, HarvestArticleResult } from "./harvest-types";
 import { HarvestArticleResultSchema, utcTimestamp } from "./harvest-types";
 import type { HarvestInputs } from "./load-harvest-inputs";
-import { canonicalizeUrl } from "./url-cleaner";
+import { deriveArticleIdentity } from "./article-identity";
 import { matchUrlExclusion, urlExclusionMarker } from "./url-exclusions";
 import { recordRejection } from "./record-rejection";
 import { calculateFreshness } from "../screen-article-candidates/freshness-decay";
@@ -22,9 +22,9 @@ export function resolveArticleTitle(feedTitle: string | null, pageTitle: string 
 export function prepareArticle(offered: OfferedArticle, inputs: HarvestInputs, context: HarvestContext) {
   const { source, entry } = offered;
   const candidateId = deriveCandidateId(context.writer.run_id, source.feed_id, entry.entry_ordinal);
-  let identity: ReturnType<typeof canonicalizeUrl> | null = null;
+  let identity: ReturnType<typeof deriveArticleIdentity> | null = null;
   if (entry.link) {
-    try { identity = canonicalizeUrl(entry.link); }
+    try { identity = deriveArticleIdentity(entry.link); }
     catch { /* Malformed discovery addresses are never requested. */ }
   }
   const article = {

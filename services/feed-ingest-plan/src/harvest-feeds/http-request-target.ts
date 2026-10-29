@@ -2,7 +2,7 @@
 import { TidyCleaner } from "tidy-url";
 import { UnsafeTargetError, validateTargetName } from "./safe-target";
 
-export function cleanRequestTarget(raw: string): URL {
+export function cleanHttpRequestTarget(raw: string): URL {
   const offered = validateTargetName(raw);
   const cleaner = new TidyCleaner();
   // This pinned release suppresses console output when silent is false.
