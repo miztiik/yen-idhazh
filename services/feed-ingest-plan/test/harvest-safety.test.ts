@@ -99,10 +99,9 @@ test("literal, encoded and named unsafe addresses fail before transport", async 
 });
 
 test("recorded robots rules and structured URL exclusions bind configured policy", async () => {
-  const fixture = await readSafety();
   const loaded = await inputs();
   const agent = loaded.config.harvest.user_agent;
-  expect(crawlerProduct(agent)).toBe("YenIdhazhBot");
+  const fixture = await readSafety();
   expect(loaded.config.harvest.url_exclusions).toEqual(fixture.url_exclusions);
   for (const rule of fixture.url_exclusions) expect(FeedUrlExclusionSchema.safeParse(rule).success).toBe(true);
   for (const rule of fixture.invalid_url_exclusions) expect(FeedUrlExclusionSchema.safeParse(rule).success).toBe(false);

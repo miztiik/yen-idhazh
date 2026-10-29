@@ -6,9 +6,11 @@ import type { HarvestContext } from "../src/harvest-feeds/harvest-types";
 import type { HarvestTransport, TransportRequest, TransportResponse } from "../src/harvest-feeds/transport";
 import type { ResolveAddresses } from "../src/harvest-feeds/safe-target";
 import { parseHTML } from "linkedom";
+import { crawlerProduct } from "../src/harvest-feeds/robots-policy";
 
 const root = new URL("../../../", import.meta.url);
 const fixtures = new URL("tests/fixtures/feed-ingest-plan/", root);
+const CRAWLER_PRODUCT_PLACEHOLDER = "{{crawler_product}}";
 const AddressSchema = z.object({ address: z.string(), family: z.union([z.literal(4), z.literal(6)]) });
 const ResponseSchema = z.object({
   status: z.int().optional(), body: z.string().optional(), fixture: z.enum(["rss", "atom", "article"]).optional(),
@@ -20,6 +22,22 @@ const RecordingsSchema = z.object({
 });
 export type RecordedResponse = z.infer<typeof ResponseSchema>;
 
+function expandCrawlerProduct(value: unknown, product: string): unknown {
+  if (typeof value === "string") return value.replaceAll(CRAWLER_PRODUCT_PLACEHOLDER, product);
+  if (Array.isArray(value)) return value.map(item => expandCrawlerProduct(item, product));
+  if (value !== null && typeof value === "object") {
+    return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, expandCrawlerProduct(item, product)]));
+  }
+  return value;
+}
+
+async function configuredCrawlerProduct(): Promise<string> {
+  const planning = z.object({
+    harvest: z.object({ user_agent: z.string() }),
+  }).parse(await Bun.file(new URL("config/feed-ingest-plan.json", root)).json());
+  return crawlerProduct(planning.harvest.user_agent);
+}
+
 export async function readHeaderRecovery() {
   const cases = z.array(z.object({ name: z.string(), responses: z.array(ResponseSchema).min(1) }));
   return z.object({
@@ -29,13 +47,14 @@ export async function readHeaderRecovery() {
 }
 
 export async function readRecordings() {
-  const [raw, rss, atom, article] = await Promise.all([
+  const [raw, rss, atom, article, product] = await Promise.all([
     Bun.file(new URL("harvest-responses.json", fixtures)).json(),
     Bun.file(new URL("harvest-rss.xml", fixtures)).text(),
     Bun.file(new URL("harvest-atom.xml", fixtures)).text(),
     Bun.file(new URL("harvest-article.html", fixtures)).text(),
+    configuredCrawlerProduct(),
   ]);
-  return { ...RecordingsSchema.parse(raw), bodies: { rss, atom, article } };
+  return { ...RecordingsSchema.parse(expandCrawlerProduct(raw, product)), bodies: { rss, atom, article } };
 }
 export type Recordings = Awaited<ReturnType<typeof readRecordings>>;
 
@@ -186,6 +205,10 @@ export function context(log: HarvestContext["log"] = () => {}): HarvestContext {
 }
 
 export async function readSafety() {
+  const [raw, product] = await Promise.all([
+    Bun.file(new URL("harvest-safety.json", fixtures)).json(),
+    configuredCrawlerProduct(),
+  ]);
   return z.object({
     sanitizer_version: z.string(),
     sanitizer: z.array(z.object({ input: z.string(), expected: z.string() })),
@@ -205,5 +228,5 @@ export async function readSafety() {
     robots_responses: z.array(ResponseSchema.extend({
       expected: z.enum(["robots-denied", "robots-unknown"]).nullable(),
     })),
-  }).parse(await Bun.file(new URL("harvest-safety.json", fixtures)).json());
+  }).parse(expandCrawlerProduct(raw, product));
 }
