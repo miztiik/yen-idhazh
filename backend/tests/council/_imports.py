@@ -74,6 +74,7 @@ MODULE_NAMES = (
     "idhazh.contracts.visual_outcome",
     "idhazh.contracts.visual_prune",
     "idhazh.contracts.visual_type",
+    "idhazh.contracts.visual_validation",
     "idhazh.contracts.whowhat_grid",
     "idhazh.contracts.watchlist",
     "idhazh.council",

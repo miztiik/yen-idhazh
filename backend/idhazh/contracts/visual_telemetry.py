@@ -47,46 +47,7 @@ from idhazh.contracts.base import ChangelogEntry, Contract, DateStamp, ItemId, R
 from idhazh.contracts.item_health import ElementClass
 from idhazh.contracts.visual import PlanDecision, VisualType
 from idhazh.contracts.visual_decision import NoneReason, VisualState
-
-
-class ValidatorCheck(StrEnum):
-    """The eleven checks, in the order the validator runs them.
-
-    Each member is the property that must HOLD, not the failure - the same way
-    `span_integrity_pass` and `derived_provenance_complete` are named.
-
-    **It lives in `contracts/` because a ledger column now carries it.** It was
-    declared in `idhazh.visual_validator` beside the code that runs the checks,
-    with a note saying it moves here on the day something persists it. That day
-    is this one: `rejection_reason` is a fold key term, so the vocabulary has to
-    be declared at or below the level of the row that persists it (CLAUDE.md
-    section 4). `visual_validator` imports it from here, so there is still one
-    list and not two.
-    """
-
-    #: Every element the plan declares is one the article's table holds.
-    ELEMENT_EXISTS = "element_exists"
-    #: Each element's kind fits the channel it fills.
-    SEMANTICALLY_COMPATIBLE = "semantically_compatible"
-    #: Within one measured channel, every unit is convertible or identical.
-    UNITS_CONVERTIBLE = "units_convertible"
-    #: The filled roles are the ones this type declares.
-    ROLES_VALID_FOR_TYPE = "roles_valid_for_type"
-    #: Stacked parts exactly make a separate source-declared whole.
-    STACKED_BAR_EXHAUSTIVE = "stacked_bar_exhaustive"
-    #: Pie parts exactly make a separate source-declared whole.
-    PIE_EXHAUSTIVE = "pie_exhaustive"
-    #: The marks fit between the two committed chart-point knobs - and for a
-    #: histogram, whose marks are its bins, there is a value for every bin.
-    ENOUGH_DATA = "enough_data"
-    #: No element fills one channel twice.
-    NO_DUPLICATE_IN_ROLE = "no_duplicate_in_role"
-    #: Every drawn figure reads out of the characters the element names.
-    NO_INVENTED_VALUES = "no_invented_values"
-    #: Every numeral in the prose is one a cited element states.
-    NUMERALS_MATCHED = "numerals_matched"
-    #: The plan met the vocabulary this build holds.
-    PLAN_VERSION_CURRENT = "plan_version_current"
+from idhazh.contracts.visual_validation import ValidatorCheck as ValidatorCheck
 
 
 class VisualFamily(StrEnum):

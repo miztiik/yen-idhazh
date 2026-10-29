@@ -17,6 +17,7 @@ drafted, the ladder that steps a plan down, and the reason every `none` carries.
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
+from dataclasses import dataclass
 from math import ceil
 from typing import NamedTuple
 
@@ -371,6 +372,26 @@ class Downgrade(NamedTuple):
     floor: int
 
 
+@dataclass(slots=True)
+class DowngradeEvidence:
+    """Evidence about rungs reached and numeric floors compared during one search."""
+
+    deepest_depth: int = 0
+    gate_floor_applied: bool | None = None
+
+    def reach(self, depth: int) -> None:
+        self.deepest_depth = max(self.deepest_depth, depth)
+
+    def compare_floor(self, marks: int, floor: int) -> bool:
+        """Return eligibility and record whether a floor excluded this candidate."""
+        if self.gate_floor_applied is None:
+            self.gate_floor_applied = False
+        cleared = marks >= floor
+        if not cleared:
+            self.gate_floor_applied = True
+        return cleared
+
+
 def _restyled(plan: VisualPlan, target: VisualType) -> VisualPlan:
     """The same plan drawn as `target`: the element set unchanged, extra channels empty.
 
@@ -439,6 +460,7 @@ def downgrade(
     visuals: VisualsConfig,
     published_marks: Mapping[VisualType, Sequence[int]],
     rejected: list[Rejection] | None = None,
+    evidence: DowngradeEvidence | None = None,
 ) -> Downgrade | None:
     """The weakest legal re-drawing of this plan that still earns its place, or nothing.
 
@@ -488,6 +510,8 @@ def downgrade(
                     continue
                 walked.add(edge.target)
                 onward.append(edge.target)
+                if evidence is not None:
+                    evidence.reach(depth)
                 if not can_compile(edge.target) or edge.target not in visuals.select_types():
                     continue
                 if edge.target is VisualType.BAR and any(
@@ -509,7 +533,14 @@ def downgrade(
                 if source is VisualType.PIE and pie_whole_rejected:
                     continue
                 floor = depth_floor(published_marks.get(edge.target, ()), percentile)
-                if floor is None or _marks(candidate) < floor:
+                if floor is None:
+                    continue
+                clears_floor = (
+                    evidence.compare_floor(_marks(candidate), floor)
+                    if evidence is not None
+                    else _marks(candidate) >= floor
+                )
+                if not clears_floor:
                     continue
                 return Downgrade(candidate, depth, (source, edge.target), floor)
         frontier = onward
