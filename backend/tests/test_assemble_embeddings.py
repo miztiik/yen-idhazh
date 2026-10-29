@@ -23,7 +23,6 @@ from support.paths import CONFIG_DIR, CONTRACT_FIXTURES_DIR, REPO_ROOT, read_tex
 from idhazh import assemble, config
 from idhazh.contracts.article import Article
 from idhazh.contracts.digest_day import DigestEmbeddings
-from idhazh.contracts.run_manifest import RunManifest
 from idhazh.contracts.run_plan import PlannedItem, RunPlan
 from idhazh.contracts.summary import Summary
 from idhazh.embed import DIMENSIONS, DTYPE, EMBEDDER_ID, Embedder, to_base64

@@ -30,7 +30,8 @@ from idhazh import (
     ledger,
     telemetry,
 )
-from idhazh.classification import ClassificationContext, assign as classify
+from idhazh.classification import ClassificationContext
+from idhazh.classification import assign as classify
 from idhazh.contracts.article import Article
 from idhazh.contracts.digest_day import DigestDay
 from idhazh.contracts.feed_health import (

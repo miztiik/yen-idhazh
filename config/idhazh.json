@@ -71,6 +71,7 @@
         ]
       },
       {
+        "ambiguity_margin": null,
         "destination": "lenses",
         "entries_key": "lenses",
         "id": "lenses",
@@ -86,6 +87,7 @@
         ]
       },
       {
+        "ambiguity_margin": null,
         "destination": "events",
         "entries_key": "events",
         "id": "events",

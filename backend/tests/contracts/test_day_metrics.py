@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import pytest
+from support.paths import CONTRACT_FIXTURES_DIR, read_text
 
 from idhazh.contracts.day_metrics import (
     DayBands,
@@ -16,7 +17,6 @@ from idhazh.contracts.day_metrics import (
 )
 from idhazh.contracts.eval_row import BandReason, ConfidenceBand
 from idhazh.contracts.item_health import ItemStage
-from support.paths import CONTRACT_FIXTURES_DIR, read_text
 
 pytestmark = pytest.mark.contract
 

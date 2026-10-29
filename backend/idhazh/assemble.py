@@ -13,7 +13,6 @@ from __future__ import annotations
 
 import base64
 import binascii
-import hashlib
 import logging
 import math
 import re
@@ -71,7 +70,6 @@ from idhazh.embed import (
     EMBEDDER_ID,
     VECTOR_SCALE,
     Embedder,
-    quantise,
     text_for,
     to_base64,
 )

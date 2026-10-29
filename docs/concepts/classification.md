@@ -53,7 +53,7 @@ fallback. `entity` also appears in
 `backend/idhazh/prompts/label_article_elements.txt`, as the field naming what a
 number in the element table is about. Different word, different job.
 
-**Two of the five reach no reader at all.** `events` and `entities` are matched,
+`events` and `entities` reach no reader at all. They are matched,
 stored, versioned and schema-gated, and `FORBIDDEN_FIELDS` in
 `frontend/src/lib/payload/project.ts` strips both out of the published day
 payload. That is a cost carried knowingly rather than a defect: it is written
@@ -177,6 +177,7 @@ second, non-reader-facing measure with no demonstrated use.
 **Test scope for this change.** The maintainer directed that these two changes
 add no tests or tooling. Existing affected expectations may be updated; this
 ruling is limited to this work and does not change the general test policy.
+
 ## See also
 
 - [taxonomy.md](taxonomy.md) - what a vertical, a desk, a lens and an event are, and how they differ.
