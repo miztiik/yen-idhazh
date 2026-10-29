@@ -16,13 +16,13 @@ from __future__ import annotations
 
 import dataclasses
 import json
-import shutil
 import tempfile
 from datetime import date as date_type
 from datetime import timedelta
 from pathlib import Path
 
 import pytest
+from council._config import copy_config
 from support.config import collect_config
 from support.ledger import (
     seed_feed_health,
@@ -33,7 +33,6 @@ from support.ledger import (
 from support.paths import CONFIG_DIR, FIXTURES_DIR, read_text
 
 from idhazh import cli, config, fetch, ledger
-from idhazh.contracts.app_config import AppConfig
 from idhazh.contracts.base import derive_url_key
 from idhazh.contracts.feed_health import (
     FeedHealthRow,
@@ -230,19 +229,18 @@ def settings_for(
     retired: list[FeedDef] | None = None,
     vertical_feed_floors: dict[str, int] | None = None,
 ) -> config.Settings:
-    """The committed config, with the source list and the verticals swapped out.
+    """Production ranking settings with fixture feeds, verticals and feed floors.
 
-    Every threshold, weight and cap under test is the real one from `config/`.
-    Only the feed list is a fixture, because the feed list is what a test has to
-    hold still.
+    Weights and source quotas come from `config/`. Each fixture vertical needs
+    three feeds unless a test explicitly sets its floor.
     """
     base = config.load()
+    planned_verticals = verticals or [AI]
     collect = base.app.collect.model_copy(
         update={
-            "vertical_feed_floors": vertical_feed_floors or {
-                "ai": 3,
-                "energy": 3,
-            }
+            "vertical_feed_floors": vertical_feed_floors
+            if vertical_feed_floors is not None
+            else {vertical.id: 3 for vertical in planned_verticals}
         }
     )
     app = base.app.model_copy(update={"collect": collect})
@@ -255,7 +253,7 @@ def settings_for(
             salience=salience or [],
             retired=retired or [],
         ),
-        taxonomy=base.taxonomy.model_copy(update={"verticals": verticals or [AI]}),
+        taxonomy=base.taxonomy.model_copy(update={"verticals": planned_verticals}),
     )
 
 
@@ -602,8 +600,8 @@ def test_no_single_feed_becomes_the_vertical(tmp_path: Path) -> None:
         "https://blog.example-lab.org/2026/08/decoding-notes",
         "https://blog.example-lab.org/2026/08/supply-agreement",
     }
-    collect = config.load().app.collect
     settings = settings_for([LAB, TRADE, COMMUNITY])
+    collect = settings.app.collect
     available_collect = collect_config(
         **{
             **collect.model_dump(),
@@ -674,6 +672,7 @@ def test_cross_vertical_duplicate_drops_once_before_the_safety_ceiling(
     built = plan(
         [LAB, TRADE, COMMUNITY, DUPLICATE],
         verticals=[AI, energy],
+        vertical_feed_floors={"ai": 3, "energy": 1},
         safety_ceiling=2,
     )
 
@@ -686,6 +685,7 @@ def test_cross_vertical_duplicate_drops_once_before_the_safety_ceiling(
     assert len({item.url_key for item in built.items}) == len(built.items)
     assert built.verticals[0].planned == 2
     assert built.verticals[1].planned == 0
+    assert not built.verticals[1].below_feed_floor
 
     key = matching[0].url_key
     assert f"plan duplicates dropped count=1 url_keys={key} source_ids=energy-wire" in caplog.text
@@ -899,15 +899,14 @@ def test_the_cap_flag_reaches_the_plan_stage(
     because `main` builds its own.
     """
     settings = settings_for([LAB, TRADE, COMMUNITY])
-    config_dir = tmp_path / "config"
-    shutil.copytree(CONFIG_DIR, config_dir)
+    config_dir = copy_config(tmp_path)
     (config_dir / "sources.json").write_text(settings.sources.to_json(), encoding="utf-8")
     (config_dir / "taxonomy.json").write_text(settings.taxonomy.to_json(), encoding="utf-8")
     # `main` builds its own clock from the wall, not from DATE, so the captured
     # feeds age by a day for every real day that passes. The window is widened
     # here so this stays a test of `--cap` and not a calendar.
     tuned = config_dir / "idhazh.json"
-    app = AppConfig.from_json(tuned.read_text(encoding="utf-8"))
+    app = settings.app
     tuned.write_text(
         app.model_copy(
             update={"collect": app.collect.model_copy(update={"max_age_hours": 24.0 * 365 * 50})}
