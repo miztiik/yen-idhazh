@@ -1,8 +1,9 @@
 name: CI
 
-# Every gate CLAUDE.md section 9 names, on every change. The suite includes the
-# five injection canaries (row 5), so a prompt, sanitizer or contract edit that
-# lets an attack through fails the build rather than shipping.
+# Pull requests run every regression check before merge. Main pushes keep this
+# workflow as the publication verdict, without repeating the regression suite.
+# The required `ci-required` check must be enforced on main before this change
+# is merged.
 #
 # The runner here is the same stock ubuntu-latest the pipeline runs on
 # (Guardrail #2), so a gate that would not fit the pipeline's budget does not
@@ -24,11 +25,9 @@ concurrency:
   # group with nothing and is neither cancelled nor queued behind the next
   # push.
   #
-  # A trunk push is not superseded by the next one, because `scope` answers
-  # from each push's own changed paths. Measured 2026-09-12, before this was
-  # fixed: two pushes carrying 14 code files between them were cancelled by a
-  # third that changed one plan-doc, and that third run correctly skipped every
-  # application job - so the code reached `main` with no verdict on `main`.
+  # A trunk push is not superseded by the next one: Pages reads the changed
+  # range from each completed push's CI run. A later documentation push must not
+  # replace the publication verdict for an earlier code push.
   group: ci-${{ github.event_name == 'push' && github.sha || github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
@@ -42,12 +41,9 @@ jobs:
   # either event, and a merge that runs the whole suite over a changed sentence
   # buys nothing.
   #
-  # `browser` asks which half of the site gate a pull request buys: the canary
-  # and browser half only reads the published surface, so a change that cannot
-  # move that surface should not spend four minutes proving it. That one is a
-  # wager that nobody forgot a path, so a push that carries any code does not
-  # consult it at all - a pull request the list was wrong about reddens `main`
-  # on the merge push, which is where the wager is settled.
+  # A code pull request buys the complete regression suite, including checks
+  # that previously ran only after merge. Main pushes use changed paths only
+  # for the publication decision.
   scope:
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -106,7 +102,7 @@ jobs:
 
   gates:
     needs: scope
-    if: needs.scope.outputs.code == 'true'
+    if: github.event_name != 'push' && needs.scope.outputs.code == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -245,22 +241,13 @@ jobs:
       # stories past it. This opens all of them, against the committed shape the
       # build reads and the served shape a reader's browser fetches.
       #
-      # The guarantee is weaker than the one it replaces, and that is stated
-      # rather than hidden: a broken day can no longer be built, it can only no
-      # longer be MERGED. The publishing jobs run the same command before their
-      # own commit, which is what covers a day the pipeline pushes on its own.
-      #
-      # Only when the shape can have moved. A published day is frozen, so a
-      # contract, schema, config or harness change - or an edit to the tree
-      # itself - is the only thing that can invalidate one, and a merge to `main`
-      # always counts. Measured 2026-09-05: 16 days took 6.6 s, about 0.27 s a
-      # day, so a year of publishing would be around 100 s of every run
-      # (Guardrail #12).
+      # Re-read every committed day on the required pull request check. The
+      # publishing jobs also validate the day they create before their commit.
       - name: Every committed day still matches its contracts
         if: needs.scope.outputs.validate_all == 'true'
         run: python -m idhazh check-publication
 
-  # The one gate `gates` cannot be: it runs on ONE interpreter, and the thing
+  # The one check `gates` cannot provide: it runs on ONE interpreter, and the thing
   # under test here is whether two of them agree. `robots.txt` is a permission,
   # and until 2026-09-02 the standard library read one file two ways across the
   # range `pyproject.toml` declares - so a page this crawler may read depended
@@ -270,11 +257,10 @@ jobs:
   # The whole file, not a selection: the address rules and the RFC 9309 status
   # reading sit beside the fixture matrix and are the same kind of decision.
   #
-  # Only when the answer can have moved: a change to the extraction code, its
-  # tests, or the interpreter range. Every push to `main` still runs it.
+  # Run on every code pull request, before it can merge.
   robots:
     needs: scope
-    if: needs.scope.outputs.robots == 'true'
+    if: github.event_name != 'push' && needs.scope.outputs.robots == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -296,7 +282,7 @@ jobs:
 
   site:
     needs: scope
-    if: needs.scope.outputs.code == 'true'
+    if: github.event_name != 'push' && needs.scope.outputs.code == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -352,7 +338,7 @@ jobs:
       # Every route still has to render. What the build no longer proves is that
       # every STORY does: a reading document carries a seed and the browser
       # fetches the rest, so the stories past the seed are never serialised here.
-      # The `gates` job runs `idhazh check-publication` for those.
+      # The `gates` job runs `idhazh check-publication` for those before merge.
       - name: Build the site
         working-directory: frontend
         run: npm run build
@@ -409,7 +395,7 @@ jobs:
   # so it is skipped when nothing a published page reads has moved.
   browser:
     needs: scope
-    if: needs.scope.outputs.browser == 'true'
+    if: github.event_name != 'push' && needs.scope.outputs.browser == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
@@ -475,7 +461,7 @@ jobs:
       # A very narrow representative set of journeys and independent runtime
       # boundaries, including real hostile-input and retrieval checks. Never
       # multiply browser cases by page, panel, width, theme, state or chart.
-      # The shared selector chooses groups; main runs all representative groups.
+      # The required pull request check runs all representative groups.
       # The site job runs deterministic rules without a browser.
       - name: Browser suite - canaries and retrieval
         working-directory: frontend
@@ -504,3 +490,33 @@ jobs:
             !frontend/test-results/browser/results.json
           retention-days: 7
           if-no-files-found: ignore
+
+  ci-required:
+    name: ci-required
+    needs: [scope, gates, robots, site, browser]
+    if: always() && github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Require every selected regression job to pass
+        env:
+          SCOPE: ${{ needs.scope.result }}
+          CODE: ${{ needs.scope.outputs.code }}
+          GATES: ${{ needs.gates.result }}
+          ROBOTS: ${{ needs.robots.result }}
+          SITE: ${{ needs.site.result }}
+          BROWSER: ${{ needs.browser.result }}
+        run: |
+          set -euo pipefail
+          test "$SCOPE" = success
+          if [[ "$CODE" == "true" ]]; then
+            test "$GATES" = success
+            test "$ROBOTS" = success
+            test "$SITE" = success
+            test "$BROWSER" = success
+          else
+            test "$GATES" = skipped
+            test "$ROBOTS" = skipped
+            test "$SITE" = skipped
+            test "$BROWSER" = skipped
+          fi

@@ -63,7 +63,7 @@ function configuredBrowserProjects(skipConsole, args = []) {
 	}));
 }
 
-test('the actual browser config defers only console and preserves its offline safety dependency', () => {
+test('the actual browser config runs every group for a code pull request', () => {
 	const inventory = groupedSpecs(join(FRONTEND, 'tests'));
 	const expected = FRONTEND_GROUPS.filter((group) => group !== 'logic').map((name) => ({
 		name,
@@ -81,8 +81,8 @@ test('the actual browser config defers only console and preserves its offline sa
 	]) {
 		const answer = ciAnswer([path], isPr);
 		assert.equal(answer.browser, true);
-		assert.deepEqual(configuredBrowserProjects(String(!answer.console)),
-			expected.filter(({ name }) => name !== 'console' || answer.console), path);
+		assert.equal(answer.console, true);
+		assert.deepEqual(configuredBrowserProjects('false'), expected, path);
 	}
 });
 
@@ -150,7 +150,7 @@ test('named frontend specs map to their declared groups', () => {
 	]) {
 		assert.equal(groupForSpec(`${name}.spec.ts`), 'logic', name);
 		assert.deepEqual(selectPaths([`frontend/tests/${name}.spec.ts`]).groups, ['logic'], name);
-		assert.equal(ciAnswer([`frontend/tests/${name}.spec.ts`], true).browser, false, name);
+		assert.equal(ciAnswer([`frontend/tests/${name}.spec.ts`], true).browser, true, name);
 	}
 	assert.equal(groupForSpec('frame.spec.ts'), 'logic');
 	assert.equal(groupForSpec('panel-captures.spec.ts'), undefined);
@@ -244,7 +244,7 @@ test('shared styles, layouts and dependencies include console coverage', () => {
 	}
 });
 
-test('data helpers select ledger logic and console consumers without unrelated frontend groups', () => {
+test('data helpers select narrow local groups but code pull requests run every group', () => {
 	for (const path of [
 		'frontend/src/lib/data/ledger.ts', 'frontend/src/lib/data/engine.ts',
 		'frontend/src/lib/data/nested/query.ts', String.raw`frontend\src\lib\data\page-keeper.ts`
@@ -256,7 +256,7 @@ test('data helpers select ledger logic and console consumers without unrelated f
 		assert.equal(selection.tooling, false);
 		assert.equal(selection.reasons[0].reason, 'ledger queries and console consumers');
 		assert.deepEqual(ciAnswer([path], true), {
-			browser: true, code: true, modelAbsent: false, console: false, robots: false, validateAll: false
+			browser: true, code: true, modelAbsent: true, console: true, robots: true, validateAll: true
 		});
 	}
 });
@@ -292,8 +292,8 @@ test('route-owned expectations remain console inputs after extraction', () => {
 			}
 		}
 	}
-	assert.equal(ciAnswer(['frontend/tests/support/console-expect-other/machine.ts'], true).console, false);
-	assert.equal(ciAnswer(['frontend/tests/support/panel-gates.ts'], true).console, false);
+	assert.equal(ciAnswer(['frontend/tests/support/console-expect-other/machine.ts'], true).console, true);
+	assert.equal(ciAnswer(['frontend/tests/support/panel-gates.ts'], true).console, true);
 });
 
 test('the shared panel frame uses the representative browser selection', () => {
@@ -306,11 +306,11 @@ test('the shared panel frame uses the representative browser selection', () => {
 	for (const path of [
 		'frontend/src/lib/components/PanelGroup.svelte', 'frontend/src/lib/components/ChartReadout.svelte'
 	]) {
-		assert.equal(ciAnswer([path], true).console, false, path);
+		assert.equal(ciAnswer([path], true).console, true, path);
 	}
 });
 
-test('the model-absent build runs for asset dependencies, unknown inputs and every code merge', () => {
+test('the model-absent build runs for every code pull request', () => {
 	for (const path of [
 		'frontend/src/lib/assist/loader.ts', 'frontend/src/routes/archive/+page.svelte',
 		'frontend/src/lib/server/payload.ts', 'frontend/src/routes/+layout.svelte',
@@ -321,32 +321,20 @@ test('the model-absent build runs for asset dependencies, unknown inputs and eve
 	]) {
 		assert.equal(ciAnswer([path], true).modelAbsent, true, path);
 	}
-	for (const path of [
-		'docs/a.md', 'backend/idhazh/discover.py', 'backend/tests/test_discover.py',
-		'frontend/tests/console-machine-data.spec.ts', 'frontend/src/routes/console/+page.svelte',
-		'frontend/src/lib/charts/frame.ts', 'frontend/src/styles/tokens.css',
-		'frontend/src/lib/data/ledger.ts'
-	]) {
-		assert.equal(ciAnswer([path], true).modelAbsent, false, path);
-	}
+	assert.equal(ciAnswer(['docs/a.md'], true).modelAbsent, false);
 	assert.equal(ciAnswer(['frontend/src/routes/console/+page.svelte', 'frontend/src/lib/assist/day.ts'], true).modelAbsent, true);
 	assert.equal(ciAnswer(['full-ci-run'], false).modelAbsent, true);
 	assert.equal(ciAnswer(['docs/a.md'], false).modelAbsent, false);
 });
 
-test('the second-interpreter robots job runs only when its tests can have moved', () => {
+test('the second-interpreter robots job runs for every code pull request', () => {
 	for (const path of [
 		'backend/idhazh/extract.py', 'backend/idhazh/sanitize.py', 'backend/tests/test_extract.py',
 		'pyproject.toml', 'new-area/module.ts', 'full-ci-run', 'unresolved-change-base'
 	]) {
 		assert.equal(ciAnswer([path], true).robots, true, path);
 	}
-	for (const path of [
-		'docs/a.md', 'frontend/src/routes/+page.svelte', 'backend/idhazh/ledger.py',
-		'backend/tests/test_ledger.py'
-	]) {
-		assert.equal(ciAnswer([path], true).robots, false, path);
-	}
+	assert.equal(ciAnswer(['docs/a.md'], true).robots, false);
 });
 
 test('the data mapping preserves broader mixed edits and the unknown-path fallback', () => {
@@ -368,7 +356,7 @@ test('an unmapped backend module buys the whole backend suite and no browser', (
 	for (const path of ['backend/idhazh/assemble.py', 'backend/idhazh/render/write.py']) {
 		assert.deepEqual(selectPaths([path]).groups, ['backend'], path);
 		assert.equal(selectPaths([path]).backendFiles, null, path);
-		assert.equal(ciAnswer([path], true).browser, false, path);
+		assert.equal(ciAnswer([path], true).browser, true, path);
 	}
 });
 
@@ -399,26 +387,26 @@ test('a change carrying no code buys no code job, on a merge as well as a branch
 	assert.equal(ciAnswer(['docs/a.md'], false).browser, false);
 });
 
-test('the protected model-label document selects its logic contract and no browser journey', () => {
+test('the protected model-label document selects its logic contract and complete PR coverage', () => {
 	const page = CONSOLE_MODEL_LABELS_PAGE;
 	assert.ok(existsSync(join(FRONTEND, '..', page)));
 	assert.deepEqual(selectPaths([page]).groups, ['logic']);
 	assert.equal(selectPaths([page]).reasons[0].reason, 'documentation a test reads');
 	const answer = ciAnswer([page], true);
 	assert.equal(answer.code, true);
-	assert.equal(answer.browser, false);
-	assert.equal(answer.console, false);
+	assert.equal(answer.browser, true);
+	assert.equal(answer.console, true);
 });
 
-test('the chart vocabulary page buys the logic spec that reads it, and no browser', () => {
+test('the chart vocabulary page buys the logic spec and complete PR coverage', () => {
 	const page = CHART_VOCABULARY_PAGE;
 	assert.ok(existsSync(join(FRONTEND, '..', page)), `${page} is gone, so the spec that reads it cannot pass`);
 	assert.deepEqual(selectPaths([page]).groups, ['logic']);
 	assert.equal(selectPaths([page]).reasons[0].reason, 'documentation a test reads');
 	const answer = ciAnswer([page], true);
 	assert.equal(answer.code, true);
-	assert.equal(answer.browser, false);
-	assert.equal(answer.console, false);
+	assert.equal(answer.browser, true);
+	assert.equal(answer.console, true);
 });
 
 test('specific backend modules select existing module and integration tests', () => {
@@ -435,7 +423,7 @@ test('a utility nothing else runs selects only its own test module', () => {
 	assert.deepEqual(selection.groups, ['backend']);
 	assert.deepEqual(selection.backendFiles, ['backend/tests/test_doc_load.py']);
 	assert.deepEqual(ciAnswer([path], true), {
-		browser: false, code: true, modelAbsent: false, console: false, robots: false, validateAll: false
+		browser: true, code: true, modelAbsent: true, console: true, robots: true, validateAll: true
 	});
 	// A closed list, not a directory rule: the canary build runs this one.
 	assert.equal(selectPaths(['backend/utilities/build_canary_day.py']).backendFiles, null);
@@ -459,120 +447,49 @@ test('contract and config changes include both languages and revalidate the arch
 	}
 });
 
-//: A change, and what the `scope` job has to buy for it on a pull request: the
-//: browser half at all and the representative operator-console journey. The
-//: backend rows are the trap the allow-list exists
-//: to avoid - a module the canary day is built through, and a fixture the attack
-//: text is read from, can move a published page without touching `frontend/`.
-const PULL_REQUEST_SCOPE = [
-	// The console's own files, the only thing that buys its specs before merge.
-	['frontend/src/routes/console/+page.svelte', true, true],
-	['frontend/src/lib/console/window.ts', true, true],
-	['frontend/src/lib/components/ConsoleNav.svelte', true, true],
-	['frontend/src/lib/server/console-shell.ts', true, true],
-	// A deterministic console rule needs no browser.
-	['frontend/tests/console-voices-feeds.spec.ts', false, false],
-	// The harness itself, which has to prove itself on every group it selects.
-	['frontend/package.json', true, true],
-	['frontend/package-lock.json', true, true],
-	['frontend/scripts/test-groups.ts', true, true],
-	['.github/workflows/ci.yml', true, true],
-	// The shared panel frame reaches every console route (known defect 45).
-	['frontend/src/lib/components/Panel.svelte', true, true],
-	['config/console/machine.json', true, true],
-	// Deterministic panel rules and fixtures stay below the browser.
-	['frontend/tests/fixtures/panels/WitnessPanel.svelte', false, false],
-	['frontend/tests/support/panel-gates.ts', true, false],
-	['frontend/src/lib/components/ChartReadout.svelte', true, false],
-	['frontend/src/lib/charts/d3/DateSeries.svelte', true, false],
-	['frontend/src/lib/charts/readout.ts', true, false],
-	['frontend/src/styles/tokens.css', true, false],
-	['config/appearance.json', true, false],
-	// Reaches a published page, but not the console before merge.
-	['frontend/src/lib/components/KpiCard.svelte', true, false],
-	['frontend/src/lib/server/payload.ts', true, false],
-	['frontend/src/app.html', true, false],
-	['frontend/src/routes/+layout.svelte', true, false],
-	['frontend/src/routes/[date]/+page.svelte', true, false],
-	['frontend/src/lib/assist/loader.ts', true, false],
-	['config/idhazh.json', true, false],
-	['backend/idhazh/contracts/item_health.py', true, false],
-	['backend/utilities/build_canary_day.py', true, false],
-	['backend/idhazh/sanitize.py', true, false],
-	['tests/fixtures/canaries/fake-system-delimiter.json', true, false],
-	['unknown-area/module.ts', true, false],
-	// Cannot reach a page at all.
-	['frontend/tests/frame.spec.ts', false, false],
-	['docs/reference/pipeline-cost.md', false, false],
-	['backend/tests/test_discover.py', false, false],
-	['backend/idhazh/discover.py', false, false],
-	// Reaches a page only through the canary build; the merge push settles it.
-	['backend/idhazh/render/write.py', false, false],
-	['TODO/some-plan.md', false, false]
+//: Every code pull request must cover the full suite before merge, including
+//: groups and archive checks that previously ran only after merge.
+const CODE_PULL_REQUEST_PATHS = [
+	'frontend/src/routes/console/+page.svelte',
+	'frontend/tests/console-voices-feeds.spec.ts',
+	'frontend/tests/fixtures/panels/WitnessPanel.svelte',
+	'frontend/src/lib/components/ChartReadout.svelte',
+	'frontend/src/styles/tokens.css',
+	'frontend/src/lib/components/KpiCard.svelte',
+	'frontend/src/routes/[date]/+page.svelte',
+	'backend/idhazh/contracts/item_health.py',
+	'backend/idhazh/sanitize.py',
+	'backend/tests/test_discover.py',
+	'backend/idhazh/render/write.py',
+	'frontend/scripts/test-groups.ts',
+	'.github/workflows/ci.yml',
+	'unknown-area/module.ts'
 ];
 
-test('a pull request buys the console specs only for the console or the harness', () => {
-	for (const [path, browser, console_] of PULL_REQUEST_SCOPE) {
-		const answer = ciAnswer([path], true);
-		assert.equal(answer.browser, browser, path);
-		assert.equal(answer.console, console_, path);
+test('every code pull request buys the full regression suite', () => {
+	for (const path of CODE_PULL_REQUEST_PATHS) {
+		assert.deepEqual(ciAnswer([path], true), {
+			browser: true, code: true, modelAbsent: true, console: true, robots: true, validateAll: true
+		}, path);
+	}
+	for (const path of ['docs/reference/pipeline-cost.md', 'TODO/some-plan.md']) {
+		assert.deepEqual(ciAnswer([path], true), {
+			browser: false, code: false, modelAbsent: false, console: false, robots: false, validateAll: false
+		}, path);
 	}
 });
 
-//: A change, and whether it can invalidate a day that is already committed. A
-//: published day is frozen, so only the shape it is read through - or an edit to
-//: the day itself - can, and everything else leaves an answer settled when the
-//: day was written.
-const REVALIDATES_THE_ARCHIVE = [
-	'backend/idhazh/contracts/item_health.py',
-	'config/idhazh.json',
-	'pyproject.toml',
-	'frontend/package.json',
-	'frontend/scripts/test-groups.ts',
-	'.github/workflows/ci.yml',
-	'frontend/public/digest/2026/08/26/digest.json',
-	'frontend/public/telemetry/2026-08.csv',
-	'frontend/public/assist/index/2026-08.json'
-];
-
-const LEAVES_THE_ARCHIVE_ALONE = [
-	'frontend/src/routes/console/+page.svelte',
-	'frontend/src/lib/charts/readout.ts',
-	'frontend/src/styles/tokens.css',
-	'backend/idhazh/discover.py',
-	'backend/tests/test_discover.py',
-	'docs/reference/pipeline-cost.md'
-];
-
-test('only a change that can invalidate a committed day re-reads every day', () => {
-	for (const path of REVALIDATES_THE_ARCHIVE) {
-		assert.equal(ciAnswer([path], true).validateAll, true, path);
-	}
-	for (const path of LEAVES_THE_ARCHIVE_ALONE) {
-		assert.equal(ciAnswer([path], true).validateAll, false, path);
-	}
-	// One path in a mixed change is enough, and a merge always re-reads.
-	assert.equal(ciAnswer(['docs/a.md', 'config/idhazh.json'], true).validateAll, true);
+test('only code pull requests validate the full committed archive', () => {
+	assert.equal(ciAnswer(['frontend/public/digest/2026/08/26/digest.json'], true).validateAll, true);
+	assert.equal(ciAnswer(['docs/reference/pipeline-cost.md'], true).validateAll, false);
 	assert.equal(ciAnswer(['full-ci-run'], false).validateAll, true);
 	assert.equal(ciAnswer(['unresolved-change-base'], true).validateAll, true);
 });
 
-test('the console half is never bought without the browser half', () => {
-	for (const [path, browser, console_] of PULL_REQUEST_SCOPE) {
-		assert.ok(!console_ || browser, `${path} asks for the console with no job`);
-	}
-});
-
-test('a merge to main runs every group, which is what the deferral leans on', () => {
-	// Not a path list: outside a pull request the caller passes this sentinel and
-	// the selector answers with full coverage, so nothing deferred can reach a
-	// reader without the console specs having run over it first.
-	const merged = ciAnswer(['full-ci-run'], false);
-	assert.equal(merged.browser, true);
-	assert.equal(merged.console, true);
-	const unresolved = ciAnswer(['unresolved-change-base'], true);
-	assert.equal(unresolved.browser, true);
-	assert.equal(unresolved.console, true);
+test('a code pull request includes console coverage alongside browser coverage', () => {
+	const answer = ciAnswer(['frontend/src/routes/+page.svelte'], true);
+	assert.equal(answer.browser, true);
+	assert.equal(answer.console, true);
 });
 
 test('one reaching path in a mixed change still buys the browser suite', () => {
@@ -581,7 +498,7 @@ test('one reaching path in a mixed change still buys the browser suite', () => {
 		true
 	);
 	assert.equal(mixed.browser, true);
-	assert.equal(mixed.console, false);
+	assert.equal(mixed.console, true);
 	const withConsole = ciAnswer(['docs/a.md', 'frontend/src/routes/console/+page.svelte'], true);
 	assert.equal(withConsole.browser, true);
 	assert.equal(withConsole.console, true);

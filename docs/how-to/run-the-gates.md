@@ -125,9 +125,11 @@ it. Its tests also prove
 that shared and unknown paths select broader coverage. New dependencies between
 areas need a selector regression test, not only a new group label. The selector
 lives in `frontend/scripts/test-scope.ts`; the group inventory lives beside it
-in `test-groups.ts`. CI uses that same selector for its browser/console choice,
-keeps the full backend suite, and runs all frontend groups on a `main` push that
-carries code.
+in `test-groups.ts`. Every code pull request runs the full backend suite, all
+frontend groups, the second-interpreter robots check, the model-absent build
+and validation of every committed day. Documentation-only pull requests run
+the scope checks. On a push to `main`, the workflow keeps the publication
+verdict but skips those regression jobs.
 
 Build-independent machine arithmetic (`console-host-spans`, `console-machine-cards`,
 `console-machine-split`, `console-machine`) and token-file checks belong to
@@ -143,40 +145,26 @@ requirement at the start of this page. The test fails, rather than skips, if
 Node or the required reader `frontend/src/lib/charts/series.ts` is missing.
 It needs no frontend package installation.
 
-**A pull request runs the operator console's specs only when the change is the
-console's own, or the harness that chooses.** The console is a page one
-operator opens rather than anything a reader is served. What that costs, stated rather
-than implied: a shared component or a token edit that breaks the console is
-found on the merge push to `main` instead of on the pull request. A `main` push
-carrying code runs every group, which is what the deferral leans on - there is
-no separate nightly job, because a second copy of the browser job would be a
-second thing to keep correct. `ciAnswer` in `test-scope.ts` is the one place
-that decides, and the truth table is in
-`frontend/scripts/tests/test-scope.test.mjs`.
+`ciAnswer` distinguishes documentation-only changes from code changes. A code
+pull request enables every regression job, so console journeys, browser checks,
+the second interpreter, the model-absent build and all committed-day checks
+finish before merge. Unknown paths also select full coverage. The document a
+test reads is treated as test input, not ordinary documentation; its path is
+named once in `frontend/scripts/doc-test-inputs.ts`.
 
-`ciAnswer` returns six answers. **`code` says whether the change carries
-anything but documentation, and `gates` and `site` skip when it does
-not** - a changed sentence cannot break an application check, on a branch or on
-a merge. **`robots` says whether the change selects
-`backend/tests/test_extract.py`**, the one module the `robots` job runs on the
-newest supported interpreter; an unknown change and every `main` push carrying
-code select it. That branch is a closed list of prefixes rather than a guess, so a path
-nobody classified falls to full coverage instead; and a document that a test
-reads is that test's input rather than documentation, which is why an edit to
-the page listing chart vocabulary buys its logic spec. Such a page
-is named once, in `frontend/scripts/doc-test-inputs.ts`: the spec reads its
-path from there and the selector keys on the same constant, so a page that
-moves takes the selector with it. `validate_all` decides
-whether the `gates` job opens every committed day or none of them: a `main` push
-carrying code, and any change to the contracts, the tooling or a committed
-payload under `frontend/public/`, open all of them; every other change opens
-none.
+The `ci-required` check depends on the scope job and all four regression jobs.
+It fails if any code job fails or is unexpectedly skipped; for a documentation-
+only change it accepts the application jobs being skipped. Before merging this
+change, main must require `ci-required` and require branches to be up to date.
+Automated publishers that write directly to main must keep their existing
+validated write path through a narrowly controlled ruleset exception.
 
-**`model_absent` buys the second site build with model assets removed.**
-Every code push to `main` runs it. On a pull request, backend-only changes,
-test-only changes, and changes confined to console routes, charts, data helpers
-or styles skip it. Asset loading, build tooling, contracts, config and unknown
-inputs still run it.
+Main still runs CI after a push. Pages uses that completed run and its changed
+range to decide whether to publish the current main tree. The regression jobs
+skip there because the required pull request check already ran them against
+the up-to-date merge candidate. The pipeline's own pushes use the workflow
+token and start no CI run; their publishing workflows validate the day before
+committing it.
 
 **There is no panel browser group or bulk capture job.** Shared drawing rules
 run in the logic tier; the representative journeys cover live layout and chart
@@ -189,14 +177,10 @@ measuring elapsed savings. Redundant coverage is removed on its merits, not
 retained until a timing threshold is met. Test durations sum worker time,
 not elapsed job time.
 
-**A push to `main` keeps the run it started.** A pull request cancels its own
-older run, because a newer commit supersedes it. A push does not, and the two
-rules are linked: `scope` answers from each push's own changed paths, so a
-documentation push that cancelled a code push would leave that code with no
-verdict on the trunk - the surviving run checks nothing, correctly, because
-nothing in its own range needed checking. The cost, stated rather than implied: several pushes
-landing together now run several suites at once instead of one, against the
-account's twenty concurrent jobs (`CLAUDE.md` Guardrail #2).
+**A push to `main` keeps its own run.** A pull request cancels its older run,
+because a newer commit supersedes it. A push does not: Pages reads that push's
+changed range from its CI run. A later documentation push must not replace the
+publication verdict for an earlier code push.
 
 **The pipeline's own pushes start no run at all.** A commit pushed with the
 workflow token does not trigger another workflow, which is GitHub's loop guard
@@ -294,6 +278,21 @@ exits, including refusals and no-range notices. The two Python checks in
 `backend/tests/contracts/test_no_csv_ledger_is_left.py` retain registry
 grain/suffix and no-union-merge coverage. This section stays on the gate page
 because it defines what the CI gate certifies, not a second test policy.
+
+### Run the full suite before merge
+
+A code pull request runs every regression job, including console journeys,
+second-interpreter checks, the model-absent build and validation of every
+committed day. After merge, CI still reports the push for static-site
+deployment, but it does not repeat those jobs.
+
+This is safe only when main requires the `ci-required` check and rejects a pull
+request whose base changed after its check passed. The workflow app can bypass
+that rule for automated publishers that validate their output before writing
+to main. That permission applies to all workflows with write access, not only
+the current publishers. A new main commit makes an open pull request stale and
+requires the full suite to run again; this is the cost of checking the exact
+content that will land.
 
 ## Direct backend checks
 
@@ -659,7 +658,8 @@ committed day checks nothing and a publish checks the day it just wrote:
 python -m idhazh check-publication --day 2026-08-30 --day 2026-08-31
 ```
 
-Naming no day checks every committed day, which is what a push to `main` does.
+Naming no day checks every committed day, which is what each code pull request
+does before merge.
 **A named day that is not there exits non-zero** rather than reporting a clean
 run over nothing - a workflow typo must not read as a pass. Opening a published
 day costs a fraction of a second, so a year of them is about a hundred seconds a

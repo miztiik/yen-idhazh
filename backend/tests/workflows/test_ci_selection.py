@@ -84,7 +84,7 @@ def test_documentation_only_changes_run_whitespace_not_application_gates() -> No
     checkout = _step(workflow, "scope", "uses", "actions/checkout@v6")
     assert steps.index(checkout) < steps.index(whitespace)
     assert _script(whitespace, "scope whitespace") == "git diff --check HEAD^1 HEAD"
-    assert gates["if"] == "needs.scope.outputs.code == 'true'"
+    assert gates["if"] == "github.event_name != 'push' && needs.scope.outputs.code == 'true'"
     assert not any(step.get("name") == "Whitespace" for step in _steps(workflow, "gates"))
     assert not scope.get("if")
 
@@ -93,7 +93,9 @@ def test_the_robots_job_runs_the_module_the_selector_keys_on() -> None:
     """The selector buys `robots` only when it selects the module this job runs,
     so the two must name the same file."""
     workflow = _load_workflows()["ci.yml"]
-    assert _job(workflow, "robots")["if"] == "needs.scope.outputs.robots == 'true'"
+    assert _job(workflow, "robots")["if"] == (
+        "github.event_name != 'push' && needs.scope.outputs.robots == 'true'"
+    )
     outputs = _mapping(_job(workflow, "scope").get("outputs"), "ci.yml scope outputs")
     assert outputs["robots"] == "${{ steps.decide.outputs.robots }}"
     run = _step(workflow, "robots", "name", "The robots fixtures, on the newest supported interpreter")
@@ -112,9 +114,9 @@ def test_the_robots_job_runs_the_module_the_selector_keys_on() -> None:
 #: without the console, one that re-reads the archive because it moved the shape a
 #: day is read through, one that buys only logic, and one that buys nothing.
 BROWSER_SCOPE_CASES: Final = (
-    ("frontend/src/routes/console/+page.svelte", True, True, True, False, False, False),
-    ("frontend/src/routes/[date]/+page.svelte", True, True, False, False, False, True),
-    ("config/idhazh.json", True, True, False, True, True, True),
+    ("frontend/src/routes/console/+page.svelte", True, True, True, True, True, True),
+    ("frontend/src/routes/[date]/+page.svelte", True, True, True, True, True, True),
+    ("config/idhazh.json", True, True, True, True, True, True),
     ("docs/reference/pipeline-cost.md", False, False, False, False, False, False),
 )
 
@@ -228,7 +230,7 @@ def _browser_scope(
     ("changed", "browser", "code", "console", "robots", "validate_all", "model_absent"),
     BROWSER_SCOPE_CASES,
 )
-def test_the_browser_half_is_skipped_only_for_a_change_that_cannot_reach_a_page(
+def test_every_code_pull_request_buys_the_complete_regression_suite(
     changed: str,
     browser: bool,
     code: bool,
@@ -245,10 +247,8 @@ def test_the_browser_half_is_skipped_only_for_a_change_that_cannot_reach_a_page(
     builds a real two-commit history, runs the command the workflow runs, and
     reads the lines it writes to `$GITHUB_OUTPUT`.
 
-    What is under test here is the plumbing - the invocation, the git range and
-    the output format. Which paths select which groups is decided by a pure
-    function and checked case by case in
-    `frontend/scripts/tests/test-scope.test.mjs`.
+    Code pull requests must select the complete suite. Documentation-only
+    changes still select no application jobs.
     """
     assert _browser_scope(tmp_path, [changed]) == {
         "browser": str(browser).lower(),
@@ -272,21 +272,17 @@ def test_one_reaching_path_in_a_mixed_change_still_buys_the_browser_suite(
 
 
 @requires_node
-def test_a_push_carrying_code_still_never_consults_the_list(tmp_path: Path) -> None:
-    """The group each path selects is a wager that nobody forgot a path. The
-    merge commit is where that wager is settled, so a push that carries any code
-    buys everything - a pull request the list was wrong about reddens `main`
-    within minutes instead of reaching a reader.
-    """
+def test_a_push_uses_its_changed_paths_for_the_publication_verdict(tmp_path: Path) -> None:
+    """Regression jobs run before merge; main reads its range for publication."""
     assert _browser_scope(
         tmp_path, ["docs/x.md", "backend/idhazh/discover.py"], event="push"
     ) == {
-        "browser": "true",
+        "browser": "false",
         "code": "true",
-        "model_absent": "true",
-        "console": "true",
-        "robots": "true",
-        "validate_all": "true",
+        "model_absent": "false",
+        "console": "false",
+        "robots": "false",
+        "validate_all": "false",
     }
 
 
@@ -295,9 +291,8 @@ def test_a_push_carrying_no_code_starts_no_code_job(tmp_path: Path) -> None:
     """The one question a push does read the paths for.
 
     A changed sentence cannot break an application check, so the merge that
-    carries it should not spend the suite proving that. This is safe where the
-    wager above is not, because the documentation branch is a closed list of
-    prefixes: a path nobody classified falls to full coverage instead.
+    carries it should not spend the suite proving that. Unknown paths still
+    select full coverage on pull requests.
     """
     assert _browser_scope(tmp_path, ["docs/x.md"], event="push") == {
         "browser": "false",
@@ -310,15 +305,11 @@ def test_a_push_carrying_no_code_starts_no_code_job(tmp_path: Path) -> None:
 
 
 def test_a_trunk_push_is_never_cancelled_by_the_next_one() -> None:
-    """The rule that makes the `scope` job safe on a push.
+    """Keep the per-push publication verdict alive through later pushes.
 
-    `scope` answers from each push's own changed paths, so a push carrying only
-    documentation correctly checks nothing. That is only sound while it cannot
-    cancel a push that carried code: the surviving run checks nothing because
-    nothing in ITS range needed checking, and the code reaches the trunk with no
-    verdict on the trunk. Measured 2026-09-12, before this was fixed: two pushes
-    carrying 14 code files between them were cancelled by a third that changed
-    one plan-doc.
+    Pages reads the changed range from the completed push's check suite. A later
+    documentation-only run cannot replace an earlier code push's publication
+    verdict.
     """
     concurrency = _mapping(_load_workflows()["ci.yml"]["concurrency"], "ci.yml concurrency")
     cancel = str(concurrency["cancel-in-progress"])
@@ -333,8 +324,31 @@ def test_a_trunk_push_is_never_cancelled_by_the_next_one() -> None:
     )
 
 
-def test_console_deferral_is_wired_without_the_retired_panel_capture_branch() -> None:
-    """CI defers console browser journeys, not deterministic panel rules."""
+def test_main_pushes_keep_ci_without_repeating_regression_jobs() -> None:
+    workflow = _load_workflows()["ci.yml"]
+    for name in ("gates", "robots", "site", "browser"):
+        assert _job(workflow, name)["if"].startswith("github.event_name != 'push'")
+    assert not _job(workflow, "scope").get("if")
+
+
+def test_required_pull_request_check_fails_if_a_code_regression_job_is_skipped() -> None:
+    workflow = _load_workflows()["ci.yml"]
+    required = _job(workflow, "ci-required")
+    assert required["name"] == "ci-required"
+    assert required["needs"] == ["scope", "gates", "robots", "site", "browser"]
+    assert required["if"] == "always() && github.event_name == 'pull_request'"
+    step = _step(workflow, "ci-required", "name", "Require every selected regression job to pass")
+    script = _script(step, "ci-required")
+    for name in ("SCOPE", "CODE", "GATES", "ROBOTS", "SITE", "BROWSER"):
+        assert name in step["env"]
+    assert 'test "$SCOPE" = success' in script
+    for name in ("GATES", "ROBOTS", "SITE", "BROWSER"):
+        assert f'test "${name}" = success' in script
+        assert f'test "${name}" = skipped' in script
+
+
+def test_console_coverage_is_wired_to_the_complete_pull_request_suite() -> None:
+    """The browser suite includes console journeys on every code pull request."""
     workflow = _load_workflows()["ci.yml"]
     outputs = _mapping(_job(workflow, "scope").get("outputs"), "ci.yml scope outputs")
     assert outputs["console"] == "${{ steps.decide.outputs.console }}"
