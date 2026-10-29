@@ -642,13 +642,14 @@ def plan_vertical(
         for url_key, carried in merge(candidates).items()
         if url_key not in dropped
     }
-    below_floor = eligible_feeds < vertical.min_feeds
+    feed_floor = config.vertical_feed_floor(vertical.id)
+    below_floor = feed_floor is not None and eligible_feeds < feed_floor
     summary = VerticalPlan(
         id=vertical.id,
         considered=len(grouped),
         planned=0,
         eligible_feeds=eligible_feeds,
-        feed_floor=vertical.min_feeds,
+        feed_floor=feed_floor,
         below_feed_floor=below_floor,
     )
     if below_floor:

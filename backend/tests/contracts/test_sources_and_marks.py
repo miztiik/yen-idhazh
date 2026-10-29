@@ -10,6 +10,7 @@ from pydantic import ValidationError
 from support.paths import CONTRACT_FIXTURES_DIR, FIXTURES_DIR, read_text
 
 from idhazh.contracts.digest_day import DigestDay, DigestItem
+from idhazh.contracts.knobs.collect import CollectConfig
 from idhazh.contracts.run_manifest import RunManifest
 from idhazh.contracts.sources import Sources
 from idhazh.contracts.taxonomy import LifecycleStatus, Taxonomy
@@ -147,12 +148,16 @@ def test_a_taxonomy_with_no_floor_and_no_ceiling_still_validates() -> None:
 
     assert "floor" not in required
     assert "ceiling" not in required
+    assert "min_feeds" not in schema["$defs"]["VerticalDef"]["properties"]
 
     for stem in ("definitions-a", "definitions-b", "retired-event"):
         for desk in taxonomy_fixture(stem).verticals:
             assert (desk.floor, desk.ceiling) == (0, 1.0), (
                 f"{stem}.json carries no bounds, so {desk.id} must read as having no rule"
             )
+
+    collect_schema = CollectConfig.model_json_schema()
+    assert "vertical_feed_floors" in collect_schema["properties"]
 
 
 def test_a_published_item_carrying_a_retired_lens_still_reads() -> None:

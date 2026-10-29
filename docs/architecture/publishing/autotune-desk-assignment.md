@@ -13,7 +13,7 @@ Anything stated as future is an intention, not a design of record.
 ## What is hand-set today
 
 Every vertical in `config/taxonomy.json` carries a `definition`, a `floor`, a
-`ceiling` and a `min_feeds`, and every one of those is a person's judgement
+`ceiling` and a collection feed floor, and every one of those is a person's judgement
 written down. A lens is a named rule in the same file. Nothing measures whether a
 definition is still drawing the line where a reader would draw it.
 
@@ -32,7 +32,7 @@ the next begins, and how confident a label has to be before it is used.
 
 - A judged sample of articles whose desk a person agreed, held separately from anything the fit reads.
 - A statement of what a wrong desk costs a reader, because that is what sets how cautious the fit may be.
-- A rule that a desk below its `min_feeds` floor is never fitted onto, since a run already refuses to plan for one.
+- A rule that a desk below its collection feed floor is never fitted onto, since a run already refuses to plan for one.
 
 ## A fit that moves a word has to rebuild two files, and today neither is rebuilt
 

@@ -24,7 +24,7 @@ def bind_source_classification(
         raise ValueError("taxonomy.default_source_kind must name an active source kind")
     if tiers[default_tier].status is not LifecycleStatus.ACTIVE:
         raise ValueError("taxonomy.default_entity_tier must name an active source tier")
-    verticals = {entry.id for entry in taxonomy.verticals}
+    verticals = {entry.id: entry for entry in taxonomy.verticals}
     for feed in sources.known_feeds():
         if "kind" not in feed.model_fields_set:
             feed.kind = default_kind
@@ -39,6 +39,25 @@ def bind_source_classification(
             raise ValueError(f"source {feed.id} tier {feed.tier} is not active and registered")
         if live and feed.vertical not in verticals:
             raise ValueError(f"source {feed.id} vertical {feed.vertical} is not registered")
+        if (
+            live
+            and feed.vertical in verticals
+            and verticals[feed.vertical].status is not LifecycleStatus.ACTIVE
+        ):
+            raise ValueError(f"source {feed.id} vertical {feed.vertical} is not active")
+    for vertical_id in collect.vertical_feed_floors:
+        if vertical_id not in verticals:
+            raise ValueError(
+                f"collect.vertical_feed_floors names unknown vertical {vertical_id}"
+            )
+    active_feed_verticals = {
+        feed.vertical for feed in sources.feeds if feed.status is LifecycleStatus.ACTIVE
+    }
+    for vertical_id in active_feed_verticals:
+        if collect.vertical_feed_floor(vertical_id) is None:
+            raise ValueError(
+                f"collect.vertical_feed_floors is missing active vertical {vertical_id}"
+            )
     for entity in watchlist.entities:
         for entity_feed in entity.feeds:
             if "tier" not in entity_feed.model_fields_set:
