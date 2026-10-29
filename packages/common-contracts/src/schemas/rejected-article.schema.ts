@@ -8,6 +8,7 @@ import {
 } from "./primitives";
 
 export const REJECTED_ARTICLE_VERSION = "2026-10-29";
+export const REJECTED_ARTICLE_ACCEPTED_SCHEMA_VERSIONS = ["2026-10-27", "2026-10-29"] as const;
 export const RejectedArticleRowSchema = z.strictObject({
   run_id: RunIdSchema, attempt: PositiveCountSchema, date: DateStampSchema,
   candidate_id: Sha256Schema, url_key: Sha256Schema, feed_id: SlugSchema,
@@ -30,4 +31,5 @@ export const RejectedArticleRowSchema = z.strictObject({
 export type RejectedArticleRow = z.infer<typeof RejectedArticleRowSchema>;
 export const RejectedArticleRowContract = {
   schema: RejectedArticleRowSchema, schemaVersion: REJECTED_ARTICLE_VERSION,
+  acceptedSchemaVersions: REJECTED_ARTICLE_ACCEPTED_SCHEMA_VERSIONS,
 } as const;
