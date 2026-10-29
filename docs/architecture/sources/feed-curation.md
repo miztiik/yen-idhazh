@@ -115,11 +115,10 @@ The recency contribution uses the original age in hours. A missing age gives
 zero recency; near-future ages do not increase the bonus:
 
 $$
-R_i =
+R_{i} =
 \begin{cases}
 0 & \text{if age is unknown} \\
-\mathrm{recency\_weight} \left(\frac{1}{2}\right)^{
-\max(0,\mathrm{age\_hours}_i) / \mathrm{recency\_half\_life\_hours}}
+\mathrm{recency\_weight}\left(\frac{1}{2}\right)^{\frac{\max(0,\mathrm{age\_hours}_{i})}{\mathrm{recency\_half\_life\_hours}}}
 & \text{otherwise}
 \end{cases}
 $$
