@@ -216,7 +216,7 @@ every run for good.
 
 ## The feed floor counts the addresses we may ask
 
-A vertical below `min_feeds` publishes nothing at all - the desk does not thin
+A vertical below `collect.vertical_feed_floors` publishes nothing at all - the desk does not thin
 out, it goes silent. From 2026-09-02 the count it is compared against is
 `eligible_feeds`, and four different things take an address out of it:
 

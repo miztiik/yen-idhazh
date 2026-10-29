@@ -34,9 +34,10 @@ article that feed carries inherits it. Two things then hang off that one word:
   beside it. That is also why the vertical can never be repointed at a reading
   of the article: repointing it would reject, at read time, every item whose
   desk moved.
-- **Whether that vertical's feeds are asked at all.** `min_feeds` is a floor on
-  how many of its addresses a run may lawfully ask - 35 for `ai` and 21 for the
-  other four, in the committed config today. Below the floor it **plans nothing**
+- **Whether that vertical's feeds are asked at all.** `collect.vertical_feed_floors`
+  is a policy floor on how many of its addresses a run may lawfully ask - 35 for
+  `ai` and 21 for the four currently mapped desks, in the committed config today.
+  Below the floor it **plans nothing**
   rather than thinning out: `rank.plan_vertical` returns an empty list, the run
   succeeds, the digest publishes, and that section is simply absent.
 
@@ -187,12 +188,12 @@ climate desk and lens (11), and four more nobody has built yet. Roughly one
 article in five had been filed on a desk that named nothing about it, mostly
 absorbed by `business-economy` as a shrug.
 
-**They are drafts because no feed declares either word.** `min_feeds` is 21 and
-the supply is zero, so an active desk would publish nothing while claiming a
-page - which is the failure `test_every_vertical_clears_its_own_feed_floor` was
-written to catch. The `climate` lens carries no keywords for the mirror reason:
-keywords would start tagging published items before anybody chose to. Promotion
-is a person adding feeds, or keywords, and flipping one word.
+**They are drafts until they have a feed.** Their `status` is separate from the
+collection floor: a draft needs neither feeds nor a floor entry, while an active
+desk with feeds must have `collect.vertical_feed_floors` for that id. The config
+loader refuses an active desk that has feeds without its floor, and no floor is
+required for a desk with no feed declared. Promotion is a person adding feeds,
+the matching floor and flipping the status word.
 
 **The eight tie-breaks below are the interesting part, and every one of them came
 from a labeller who hit it and could not resolve it from the definitions alone.**

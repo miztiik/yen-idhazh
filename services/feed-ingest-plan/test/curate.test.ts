@@ -407,21 +407,6 @@ test("stable ties, finite article limit and global source authority substitution
   expect(run(setup).articles.map(row => row.ratings.base_article_score)).toEqual([3, 2.5, 2.25]);
 });
 
-test("run freshness overrides remain separate from the unchanged harvested content", async () => {
-  const setup = await inputs();
-  const candidates = setup.fixture.candidates.map(spec => article(spec, setup).candidate);
-  const before = structuredClone(candidates);
-  const screened = await screenArticleCandidates({
-    candidates, observations: {}, discovered: { availability: "unavailable" }, planning: setup.planning,
-    clock_config: { collect: { max_future_hours: 0 } },
-    run: { now: setup.context.now, run_id: setup.context.run_id, correlation_id: setup.context.correlation_id, overrides: { freshness_hours: 6 } },
-  });
-  expect(screened.admitted).toHaveLength(1);
-  expect(screened.rejections.map(row => row.drop_reason)).toEqual(["REJECTED_RUN_FRESHNESS_OVERRIDE", "REJECTED_RUN_FRESHNESS_OVERRIDE"]);
-  expect(curateArticles(selectionInput(setup, screened.admitted)).articles[0]!.article_text).toBe(candidates[0]!.article_text);
-  expect(candidates).toEqual(before);
-});
-
 test("real screening results compose into exact curation without losing harvested content", async () => {
   const setup = await inputs();
   const candidates = setup.fixture.candidates.map(spec => article(spec, setup).candidate);
@@ -430,7 +415,7 @@ test("real screening results compose into exact curation without losing harveste
   const screened = await screenArticleCandidates({
     candidates: [...candidates, short], observations: {}, discovered: { availability: "unavailable" }, planning: setup.planning,
     clock_config: { collect: { max_future_hours: 0 } },
-    run: { now: setup.context.now, run_id: setup.context.run_id, correlation_id: setup.context.correlation_id, overrides: {} },
+    run: { now: setup.context.now, run_id: setup.context.run_id, correlation_id: setup.context.correlation_id },
   });
   expect(screened.rejections.map(row => row.drop_reason)).toEqual(["REJECTED_SCREENING_MIN_WORDS"]);
   expect(screened).not.toHaveProperty("sealing");
@@ -489,7 +474,7 @@ test("screening and packing retain the owning run day even when evaluation happe
     const screened = await screenArticleCandidates({
       candidates: [original], observations: {}, discovered: { availability: "unavailable" }, planning: setup.planning,
       clock_config: { collect: { max_future_hours: 0 } },
-      run: { now, run_id: setup.context.run_id, correlation_id: setup.context.correlation_id, overrides: {} },
+      run: { now, run_id: setup.context.run_id, correlation_id: setup.context.correlation_id },
     });
     const selected = curateArticles(selectionInput(setup, screened.admitted)).articles;
     const row = partitionArticles(selected, { strategy: "none", dispatch_count: 1 }).articles[0]!;

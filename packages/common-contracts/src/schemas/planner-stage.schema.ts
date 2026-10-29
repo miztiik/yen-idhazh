@@ -28,7 +28,6 @@ export const PlannerStageContextSchema = z.strictObject({
 });
 export type PlannerStageContext = z.infer<typeof PlannerStageContextSchema>;
 export const PlannerStageRequestSchema = z.strictObject({
-  freshness_hours: z.number().finite().positive().optional(),
   article_limit: PositiveCountSchema.optional(), shards: PositiveCountSchema.optional(),
   partition_strategy: z.enum(["bin-pack", "round-robin", "none"]).optional(),
 });

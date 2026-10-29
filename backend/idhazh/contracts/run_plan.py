@@ -272,7 +272,8 @@ class VerticalPlan(Model):
         default=None,
         ge=0,
         description=(
-            "The vertical's own min_feeds this count was measured against, so a "
+            "The vertical feed floor from collect.vertical_feed_floors this count "
+            "was measured against, so a "
             "payload can be read without the config that produced it. Null on a plan "
             "written before the field existed - unknown, never a floor of zero."
         ),

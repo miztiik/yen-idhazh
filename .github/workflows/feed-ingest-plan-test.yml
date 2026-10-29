@@ -4,11 +4,6 @@ on:
   workflow_dispatch:
     inputs:
       # CI checks these form defaults against the committed planner config.
-      freshness_hours:
-        description: Maximum article age in hours for this run
-        required: true
-        default: '24'
-        type: string
       article_limit:
         description: Optional positive article limit; blank uses configuration
         required: false
@@ -76,7 +71,6 @@ jobs:
       - name: Collect and select articles with a supervised server
         id: plan
         env:
-          FRESHNESS_HOURS: ${{ inputs.freshness_hours }}
           ARTICLE_LIMIT: ${{ inputs.article_limit }}
           SHARDS: ${{ inputs.shards }}
           PARTITION_STRATEGY: ${{ inputs.partition_strategy }}

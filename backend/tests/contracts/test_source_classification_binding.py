@@ -148,11 +148,13 @@ def test_config_only_extension_reaches_plan_publication_and_frontend(tmp_path: P
     assert authority_terms(candidate, settings.app.collect).tier_score == expected_tier_weight
     vertical = settings.taxonomy.vertical(feed.vertical)
     assert vertical is not None
+    feed_floor = settings.app.collect.vertical_feed_floor(feed.vertical)
+    assert feed_floor is not None
     planned = plan_vertical(
         vertical,
         [candidate],
         config=settings.app.collect,
-        eligible_feeds=vertical.min_feeds,
+        eligible_feeds=feed_floor,
         now="2026-10-20T07:00:00Z",
     ).items[0]
     assert planned.tier == feed.tier
@@ -212,6 +214,8 @@ def test_config_only_extension_reaches_plan_publication_and_frontend(tmp_path: P
         "invalid-property",
         "inactive-kind",
         "conflicting-legacy-weight",
+        "missing-feed-floor",
+        "unknown-feed-floor",
     ],
 )
 def test_invalid_registry_refuses_loading_by_name(tmp_path: Path, change: str) -> None:
@@ -247,6 +251,14 @@ def test_invalid_registry_refuses_loading_by_name(tmp_path: Path, change: str) -
             "community": 0.3,
         }
         write(root, "idhazh.json", app)
+    elif change == "missing-feed-floor":
+        app = read(root, "idhazh.json")
+        del app["collect"]["vertical_feed_floors"]["ai"]
+        write(root, "idhazh.json", app)
+    elif change == "unknown-feed-floor":
+        app = read(root, "idhazh.json")
+        app["collect"]["vertical_feed_floors"]["unknown-desk"] = 21
+        write(root, "idhazh.json", app)
     write(root, "taxonomy.json", taxonomy)
     expected_error = {
         "missing-weight": "weight",
@@ -260,6 +272,8 @@ def test_invalid_registry_refuses_loading_by_name(tmp_path: Path, change: str) -
         "invalid-property": "invented_rule",
         "inactive-kind": source_kind_id,
         "conflicting-legacy-weight": "conflicts",
+        "missing-feed-floor": "collect.vertical_feed_floors is missing active vertical ai",
+        "unknown-feed-floor": "collect.vertical_feed_floors names unknown vertical unknown-desk",
     }[change]
     with pytest.raises((ValueError, ValidationError), match=expected_error):
         load(root)

@@ -26,7 +26,6 @@ from support.paths import CONFIG_DIR, FIXTURES_DIR, REPO_ROOT, read_text
 
 from idhazh import config
 from idhazh import measured as measured_module
-from idhazh.contracts.app_config import AppConfig
 from idhazh.contracts.taxonomy import LifecycleStatus
 from idhazh.contracts.visual import PlanEncodings
 from idhazh.measured import (
@@ -188,32 +187,31 @@ def test_the_definition_reading_divides_by_what_it_counted(
     assert reading.record == "DEFINITION_SENTENCE_TOKENS"
     assert reading.working["entries_offered"] == offered
     assert reading.value == tokenizer.count(block)
-    assert reading.working["tokens_an_entry"] == pytest.approx(reading.value / offered)
+    assert reading.working["tokens_an_entry"] == reading.value / offered
+    assert reading.working["characters_an_entry"] == len(block) / offered
     assert reading.working["characters"] == len(block)
 
 
 def a_config_dir(root: Path, taxonomy: dict[str, Any]) -> Path:
-    """A whole config tree with one file replaced, because `config.load` reads them all."""
+    """Only the vocabulary the definition probe reads, with no pipeline configuration."""
     root.mkdir(parents=True, exist_ok=True)
-    for name in (
-        "idhazh.json",
-        "ledgers.json",
-        "sources.json",
-        "watchlist.json",
-        "appearance.json",
-        "llm_council.json",
-        "judges/content-similarity-judge.json",
-    ):
-        target = root / name
-        target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_bytes((CONFIG_DIR / name).read_bytes())
-    app = AppConfig.from_json(read_text(CONFIG_DIR / "idhazh.json"))
-    model = config.models_path(CONFIG_DIR, app)
-    target = config.models_path(root, app)
-    target.parent.mkdir(parents=True, exist_ok=True)
-    target.write_bytes(model.read_bytes())
     (root / "taxonomy.json").write_text(json.dumps(taxonomy), encoding="utf-8")
     return root
+
+
+@pytest.mark.parametrize("definition", ["", "x" * 241])
+def test_the_definition_probe_refuses_an_invalid_vocabulary(
+    tokenizer: RecordedTokenizer, tmp_path: Path, definition: str
+) -> None:
+    taxonomy = json.loads(read_text(CONFIG_DIR / "taxonomy.json"))
+    taxonomy["lenses"][0].update(status="active", definition=definition)
+
+    with pytest.raises(ValidationError):
+        read_definition_budget(
+            tokenizer, config_dir=a_config_dir(tmp_path, taxonomy), stamp=STAMP
+        )
+
+    assert tokenizer.seen == [], "an invalid vocabulary must fail before tokenization"
 
 
 def test_a_vocabulary_that_offers_nothing_yields_no_reading(

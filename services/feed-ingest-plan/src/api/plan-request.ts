@@ -1,12 +1,11 @@
 /** Which API and CLI controls are valid before a feed can be requested? */
 import { z } from "zod";
 import { relative } from "node:path";
-import { PositiveCountSchema, PositiveSchema } from "@idhazh/common-contracts";
+import { PositiveCountSchema } from "@idhazh/common-contracts";
 import type { FeedIngestConfig } from "@idhazh/common-contracts";
 import { resolvePartitionRequest } from "../partition-article-shards/partition-input";
 
 export const PlanRequestSchema = z.strictObject({
-  freshness_hours: PositiveSchema.optional(),
   article_limit: PositiveCountSchema.optional(),
   shards: PositiveCountSchema.optional(),
   partition_strategy: z.enum(["bin-pack", "round-robin", "none"]).optional(),
@@ -40,7 +39,7 @@ export function resolvePlanRequest(raw: unknown, config: FeedIngestConfig) {
 export function parseCliRequest(args: readonly string[]) {
   const raw: Record<string, unknown> = {};
   let mode: "cli" | "serve" | undefined;
-  const fields = new Set(["freshness_hours", "article_limit", "shards", "partition_strategy"]);
+  const fields = new Set(["article_limit", "shards", "partition_strategy"]);
   for (let index = 0; index < args.length; index++) {
     const token = args[index]!;
     if (token === "--cli" || token === "--serve") {

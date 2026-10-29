@@ -52,14 +52,14 @@ killing only its owned child. Defaults allow 30 seconds for readiness, 10 second
 for drain and 5 seconds to confirm forced exit. The child also applies its own
 drain bound if its supervisor disappears. No process is detached, no process
 name is used for cleanup, and runner process tracking remains enabled.
-`POST /api/2026-10-20/plan` accepts optional numeric `freshness_hours`,
-`article_limit`, `shards` and a configured partition strategy. Unknown fields,
-strings in numeric API fields, invalid counts and null controls fail before
-work. CLI blanks mean omission. There is no date control.
+`POST /api/2026-10-20/plan` accepts optional numeric `article_limit`, `shards`
+and a configured partition strategy. Unknown fields, strings in numeric API
+fields, invalid counts and null controls fail before work. CLI blanks mean
+omission. There is no date control.
 
-An article limit bounds the chosen result, not the offered input. Freshness
-changes the age cutoff without changing recency half-life. Strategy `none`
-requires one worker; other counts obey the configured partition bounds.
+An article limit bounds the chosen result, not the offered input. Age eligibility
+uses the configured article-quality ladder. Strategy `none` requires one worker;
+other counts obey the configured partition bounds.
 
 ## Real composition and identity
 

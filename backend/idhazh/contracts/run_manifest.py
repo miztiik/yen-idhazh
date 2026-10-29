@@ -82,7 +82,8 @@ class VerticalCount(Model):
         default=None,
         ge=0,
         description=(
-            "The floor that count was measured against, so below_feed_floor can be "
+            "The collect.vertical_feed_floors value that count was measured against, "
+            "so below_feed_floor can be "
             "checked against the two numbers that decided it rather than taken on "
             "trust. Null on a manifest written before it was recorded."
         ),

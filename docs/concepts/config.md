@@ -70,6 +70,12 @@ Knobs, by the surface they tune:
 
 These are the *surfaces*, not a field list. The pipeline's field-level truth is the `AppConfig` model. Standalone utilities read their own authored config by name and refuse missing keys. Read the owning reader rather than restating the fields here, because a list copied into prose is a list that goes stale.
 
+A probe validates only the configuration it measures. The definition probe in
+`backend/utilities/measure_budgets.py` reads `config/taxonomy.json` through its
+native model, without loading source references or collection floors. No active
+labels means no reading. Derived per-entry counts retain the full quotient;
+rounding belongs to the printed display, not the calculation.
+
 The knobs are spread across files rather than one, along the line of who edits them and how often: `config/idhazh.json` for pipeline behaviour, `config/models/<name>.json` for everything that is a fact about one set of weights, `config/appearance.json` for everything the published surface is drawn from, and `config/taxonomy.json`, `config/sources.json` and `config/watchlist.json` for the source model ([../architecture/sources/discovery.md](../architecture/sources/discovery.md)). Curating a feed list and tuning a threshold are different activities with different review cadences, and putting them in one file means every feed addition touches the file that also holds the decoding parameters.
 
 **Three of those files are lists rather than settings, and they are written one record a line.** `config/sources.json` holds a feed per line, `config/taxonomy.json` a word per line and `config/watchlist.json` an entity per line, keys sorted, every field spelled out even at its default. Adding a feed is one line; changing a tier is a one-line diff; adding a keyword to a lens moves that lens and nothing else. A test holds the layout still, because nothing else can - every layout parses to the same payload, so a record hand-indented across ten lines is invisible to the schema and to every reader. See [../architecture/contracts/schemas.md](../architecture/contracts/schemas.md).
@@ -93,7 +99,6 @@ A knob that no code path reads is worse than clutter. It reads as a control, so 
 
 Three were removed this way, each describing a mechanism that does not exist:
 
-- `collect.min_feeds_floor` claimed to be the default feed floor. The floor a vertical is actually held to is its own `min_feeds` in `taxonomy.json`. Nothing read the default.
 - A per-feed `weight` on a salience feed. An aggregator has no subject taxonomy to be graded on, so there was nothing for a per-feed weight to express, and what a vote was worth was one number for every aggregator rather than one per feed. That number, `collect.front_page_bonus`, was itself removed on 2026-09-13 under the retirement condition it shipped with ([../architecture/sources/discovery.md](../architecture/sources/discovery.md#a-speculative-term-ships-with-the-condition-that-retires-it)) - so a vote is now a published fact about a story and moves no score at all. **The feed weight on ordinary sources is untouched and load-bearing** - it multiplies the tier score ([../architecture/sources/discovery.md](../architecture/sources/discovery.md)).
 - `Sources.live_feeds_for`, a method with no caller that also disagreed with the code doing the job: it honoured `retired_on` and ignored `status`, so it would have read a draft feed. One concept, one home.
 

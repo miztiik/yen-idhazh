@@ -128,8 +128,7 @@ export async function runFeedPlan(raw: unknown, inputs: PlanInputs, runtime: Pla
         if (operation === "parse") recordParseActivity(phase);
         emit(operation, phase, details, ["feed_id", "publisher_id"], url);
       },
-      parser_options: { ...(runtime.signal === undefined ? {} : { signal: runtime.signal }) },
-      overrides: request.freshness_hours === undefined ? {} : { freshness_hours: request.freshness_hours },
+      parser_options: { ...(runtime.signal === undefined ? {} : { signal: runtime.signal })       },
       clock: () => new Date(context.now), observation_clock: runtime.observation_clock ?? (() => new Date()),
       log: () => {},
       on_feed: (outcome, entries, checkedAt) => {
@@ -159,7 +158,6 @@ export async function runFeedPlan(raw: unknown, inputs: PlanInputs, runtime: Pla
     const parsed = stageStore(inputs).write("parsed", ParsedFeedBatchSchema, {
       batch_id: randomUUID(), config_sha256: operationConfigFingerprint(inputs, runtime), context,
       request: {
-        ...(request.freshness_hours === undefined ? {} : { freshness_hours: request.freshness_hours }),
         ...(request.article_limit === null ? {} : { article_limit: request.article_limit }),
         shards: request.shards, partition_strategy: request.partition_strategy,
       },

@@ -14,13 +14,16 @@ export const DropReasonSchema = z.enum([
   "FEED_EMPTY", "MISSING_REQUIRED_FIELDS", "CATEGORY_EXCLUDED",
   "MEDIA_CONTENT", "PRESS_RELEASE", "LINK_HEAVY",
   "REJECTED_SCREENING_MIN_WORDS", "REJECTED_AGE_EXCEEDS_MAX_TIER_ENVELOPE",
-  "REJECTED_RUN_FRESHNESS_OVERRIDE", "REJECTED_DUPLICATE_CANONICAL_CARRIER",
+  "REJECTED_DUPLICATE_CANONICAL_CARRIER",
   "REJECTED_LADDER_WINDOW_NOT_ACTIVATED", "REJECTED_SLACK_DEFICIT_FULFILLED",
   "REJECTED_GLOBAL_CAPACITY_REACHED", "REJECTED_SOURCE_SHARE_LIMIT_REACHED",
   "REJECTED_DOMAIN_SHARE_LIMIT_REACHED", "REJECTED_TIER_BUFFER_CEILING_REACHED",
   "REJECTED_DISTINCT_SOURCE_REQUIREMENT_UNMET",
 ]);
 export type DropReason = z.infer<typeof DropReasonSchema>;
+export const RetainedRejectionReasonSchema = z.string().min(1).max(128)
+  .regex(/^[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)*$/, "Retained rejection reason must be an uppercase underscore-delimited code");
+export type RetainedRejectionReason = z.infer<typeof RetainedRejectionReasonSchema>;
 export const SourceArticleRefusalReasonSchema = DropReasonSchema.extract([
   "FETCH_FAILED", "FETCH_FAILED_HTTP", "EXTRACT_FAILED", "EXTRACT_EMPTY", "MISSING_REQUIRED_FIELDS",
   "PAYWALL_OR_BLOCKED", "REJECTED_SCREENING_MIN_WORDS",
@@ -52,7 +55,6 @@ export const REASON_STAGES: Readonly<Record<DropReason, readonly RejectionStage[
   PRESS_RELEASE: ["screen-article-candidates"], LINK_HEAVY: ["screen-article-candidates"],
   REJECTED_SCREENING_MIN_WORDS: ["screen-article-candidates"],
   REJECTED_AGE_EXCEEDS_MAX_TIER_ENVELOPE: ["harvest-feeds", "screen-article-candidates"],
-  REJECTED_RUN_FRESHNESS_OVERRIDE: ["harvest-feeds", "screen-article-candidates"],
   REJECTED_DUPLICATE_CANONICAL_CARRIER: ["curate-article-portfolio"],
   REJECTED_LADDER_WINDOW_NOT_ACTIVATED: ["curate-article-portfolio"],
   REJECTED_SLACK_DEFICIT_FULFILLED: ["curate-article-portfolio"],
@@ -66,7 +68,6 @@ export const REQUIRED_DETAILS: Readonly<Partial<Record<DropReason, readonly (key
   FETCH_FAILED_HTTP: ["http_status"], FETCH_TIMEOUT: ["timeout_ms"],
   REJECTED_SCREENING_MIN_WORDS: ["words_found", "words_required"],
   REJECTED_AGE_EXCEEDS_MAX_TIER_ENVELOPE: ["age_hours", "max_age_hours"],
-  REJECTED_RUN_FRESHNESS_OVERRIDE: ["age_hours", "max_age_hours"],
   ALREADY_PUBLISHED: ["matched_url_key", "published_on", "history_window_days"],
   SETTLED_FAILURE: ["matched_url_key", "failure_code"], BLOCKED_URL_MARKER: ["matched_url_key", "matched_url_marker"],
   MEDIA_CONTENT: ["media_match"],
