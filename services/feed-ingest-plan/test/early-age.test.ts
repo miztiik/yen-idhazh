@@ -27,15 +27,15 @@ function feed(items: { title?: string; path: string; date: string | null }[]) {
       item.date === null ? "" : `<pubDate>${item.date}</pubDate>`}</item>`).join("")}</channel></rss>`;
 }
 
-test("preflight uses the configured age override, strict boundary and future tolerance without fetching expired pages", async () => {
+test("preflight uses the configured age ladder, strict boundary and future tolerance without fetching expired pages", async () => {
   const root = await mkdtemp(join(tmpdir(), "early-age-"));
   try {
     const recordings = await readRecordings();
     const loaded = await inputs();
-    const run = { ...context(), clock: () => new Date("2026-10-22T12:00:00Z"), overrides: { freshness_hours: 12 } };
+    const run = { ...context(), clock: () => new Date("2026-10-22T12:00:00Z") };
     run.writer = { ...run.writer, run_id: "2026-10-22-700" };
     const items = [
-      { title: "Expired", path: "stale", date: "2026-10-21T23:59:59Z" },
+      { title: "Expired", path: "stale", date: "2026-10-21T05:59:59Z" },
       { title: "Boundary", path: "boundary", date: "2026-10-22T00:00:00Z" },
       { title: "Undated", path: "undated", date: null },
       { title: "Beyond future tolerance", path: "future", date: "2026-10-23T00:00:00Z" },
@@ -81,7 +81,7 @@ test("preflight uses the configured age override, strict boundary and future tol
     run.exclusions = { ...history, published_window_days: 1 };
     const result = await harvestFeeds(loaded, run, { transport, resolve: transport.resolve });
     expect(result.rejections.map(row => row.drop_reason).sort()).toEqual([
-      "ALREADY_PUBLISHED", "BLOCKED_URL_MARKER", "REJECTED_RUN_FRESHNESS_OVERRIDE", "SETTLED_FAILURE",
+      "ALREADY_PUBLISHED", "BLOCKED_URL_MARKER", "REJECTED_AGE_EXCEEDS_MAX_TIER_ENVELOPE", "SETTLED_FAILURE",
     ]);
     expect(history.history.published).toMatchObject({ required_day_count: 2, known_day_count: 1 });
     expect(history.history.published.missing_days).toHaveLength(1);
@@ -98,8 +98,8 @@ test("preflight uses the configured age override, strict boundary and future tol
       url_key: deriveUrlKey(blockedUrl), details: { matched_url_key: deriveUrlKey(blockedUrl), matched_url_marker: "fool.com/the-ascent/" },
     });
     const early = result.articles[0]!;
-    expect(early.rejection?.details.age_hours).toBeCloseTo(12 + 1 / 3600, 8);
-    expect(early.rejection?.details.max_age_hours).toBe(12);
+    expect(early.rejection?.details.age_hours).toBeCloseTo(30 + 1 / 3600, 8);
+    expect(early.rejection?.details.max_age_hours).toBe(30);
     expect(early.observation).toMatchObject({
       extraction: "not-attempted", http_status: null, paywall: null, robots: null,
       preflight_freshness: { timing_source: "published_at", timing_at: items[0]!.date },

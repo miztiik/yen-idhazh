@@ -36,7 +36,7 @@ export function writer(runId: string, attempt = 1, shard = 0): WriterIdentity {
     shard, producer: "tests.partition", git_sha: "a".repeat(40),
   });
 }
-export async function fixtureInput(root: string, options: { count?: number; freshness?: number; words?: number[] } = {}) {
+export async function fixtureInput(root: string, options: { count?: number; words?: number[] } = {}) {
   const [fixture, loaded] = await Promise.all([
     Bun.file(new URL("../../../tests/fixtures/feed-ingest-plan/ledger-history.json", import.meta.url)).json() as Promise<HistoryFixture>,
     loadPlanInputs(fileURLToPath(new URL("../../../", import.meta.url))),
@@ -64,7 +64,6 @@ export async function fixtureInput(root: string, options: { count?: number; fres
     loaded.settings, "a".repeat(40), new Date(fixture.observed_at),
     fixture.run_id.slice(11), "a2742c40-bc4e-461b-9f0f-5e8ab9c58c04",
   );
-  const overrides = options.freshness === undefined ? {} : { freshness_hours: options.freshness };
   const words = options.words ?? fixture.word_work.slice(0, options.count ?? fixture.word_work.length);
   const candidates = words.map((work, ordinal) => {
     const sourceId = `source-${ordinal}`;
@@ -87,10 +86,10 @@ export async function fixtureInput(root: string, options: { count?: number; fres
   const screening = await screenArticleCandidates({
     candidates, observations: {}, discovered: { availability: "unavailable" }, planning,
     clock_config: { collect: { max_future_hours: 1 } },
-    run: { now: fixture.observed_at, run_id: context.run_id, correlation_id: context.correlation_id, overrides },
+    run: { now: fixture.observed_at, run_id: context.run_id, correlation_id: context.correlation_id },
   });
   const batch = ParsedFeedBatchSchema.parse({
-    batch_id: randomUUID(), config_sha256: "b".repeat(64), context, request: overrides,
+    batch_id: randomUUID(), config_sha256: "b".repeat(64), context, request: {},
     candidates,
     observations: Object.fromEntries(candidates.map(candidate => [candidate.candidate_id, {
       candidate_id: candidate.candidate_id, http_status: 200, paywall: false, robots: "allowed",

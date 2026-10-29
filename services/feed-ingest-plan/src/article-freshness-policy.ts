@@ -5,10 +5,9 @@ import type { FeedIngestConfig } from "@idhazh/common-contracts";
 type ArticleQualityBucketRule = FeedIngestConfig["curate_articles"]["article_quality_buckets"][number];
 const millisecondsPerHour = 60 * 60 * 1000;
 
-export function resolveArticleQualityBucketWindows(rule: ArticleQualityBucketRule, freshnessHours?: number) {
-  const steps = [...new Set(rule.ladder_hours.map(hours =>
-    freshnessHours === undefined ? hours : Math.min(hours, freshnessHours)))];
-  return { steps, normalMaximum: rule.ladder_hours.at(-1)!, maximum: steps.at(-1)! };
+export function resolveArticleQualityBucketWindows(rule: ArticleQualityBucketRule) {
+  const steps = [...new Set(rule.ladder_hours)];
+  return { steps, maximum: steps.at(-1)! };
 }
 
 export function requireArticleQualityBucket(config: FeedIngestConfig, sourceClass: number): ArticleQualityBucketRule {
@@ -21,15 +20,11 @@ export function freshnessCutoff(evaluatedAt: string, hours: number): string {
   return new Date(Date.parse(evaluatedAt) - hours * millisecondsPerHour).toISOString();
 }
 
-export function rejectArticleAge(config: FeedIngestConfig, sourceClass: number, ageHours: number | null, freshnessHours?: number) {
-  const windows = resolveArticleQualityBucketWindows(requireArticleQualityBucket(config, sourceClass), freshnessHours);
+export function rejectArticleAge(config: FeedIngestConfig, sourceClass: number, ageHours: number | null) {
+  const windows = resolveArticleQualityBucketWindows(requireArticleQualityBucket(config, sourceClass));
   if (ageHours === null) return null;
-  if (ageHours > windows.normalMaximum) return {
-    drop_reason: "REJECTED_AGE_EXCEEDS_MAX_TIER_ENVELOPE" as const,
-    details: { age_hours: ageHours, max_age_hours: windows.normalMaximum },
-  };
   if (ageHours > windows.maximum) return {
-    drop_reason: "REJECTED_RUN_FRESHNESS_OVERRIDE" as const,
+    drop_reason: "REJECTED_AGE_EXCEEDS_MAX_TIER_ENVELOPE" as const,
     details: { age_hours: ageHours, max_age_hours: windows.maximum },
   };
   return null;

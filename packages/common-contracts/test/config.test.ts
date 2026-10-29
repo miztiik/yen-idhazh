@@ -95,10 +95,6 @@ if (Bun.argv.includes("--emit-schemas")) {
     }
   });
 
-  test.each([0, -1, "12", NaN, Infinity, null, false])("rejects invalid freshness %j", value => {
-    expect(policies.PlanningRunOverridesSchema.safeParse({ freshness_hours: value }).success).toBe(false);
-  });
-
   test("global config rejects bad bounds, unknown keys, and invalid references", async () => {
     const config = await readConfig();
     const profiles = config.harvest.request_headers;

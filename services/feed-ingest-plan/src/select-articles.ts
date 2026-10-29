@@ -40,7 +40,6 @@ export async function selectArticles(batch: ParsedFeedBatch, inputs: PlanInputs,
     candidates: batch.candidates, observations: batch.observations, discovered: batch.discovered, planning,
     clock_config: inputs.clock_config, run: {
       now: batch.context.now, run_id: batch.context.run_id, correlation_id: batch.context.correlation_id,
-      overrides: request.freshness_hours === undefined ? {} : { freshness_hours: request.freshness_hours },
     },
     exclusions: {
       published_window_days: inputs.clock_config.collect.published_window_days,

@@ -22,9 +22,5 @@ export const EffectiveFeedPolicySchema = z.strictObject({
   triage: FeedScreeningPolicySchema,
   curate_articles: FeedCurationPolicySchema,
 });
-export const PlanningRunOverridesSchema = z.strictObject({
-  freshness_hours: PositiveSchema.optional(),
-});
 
 export type EffectiveFeedPolicy = z.infer<typeof EffectiveFeedPolicySchema>;
-export type PlanningRunOverrides = z.infer<typeof PlanningRunOverridesSchema>;

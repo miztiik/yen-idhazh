@@ -1,7 +1,7 @@
 /** Which bounded candidate, harvest, discovery and run inputs can screening trust? */
 import { z } from "zod";
 import {
-  FeedIngestCandidateSchema, NonEmptySchema, PlanningRunOverridesSchema,
+  FeedIngestCandidateSchema, NonEmptySchema,
   NonNegativeSchema, RunIdSchema, Sha256Schema,
   DateStampSchema, ItemHealthFailureCodeSchema, CountSchema,
 } from "@idhazh/common-contracts";
@@ -12,7 +12,7 @@ import type { PlanningConfig } from "../config/resolve-policy";
 import { DiscoveredEvidenceSchema } from "./discovered-evidence";
 import type { DiscoveredEvidence } from "./discovered-evidence";
 import { UtcInstantSchema } from "../utc-instant";
-import type { FeedIngestCandidate, PlanningRunOverrides } from "@idhazh/common-contracts";
+import type { FeedIngestCandidate } from "@idhazh/common-contracts";
 
 export type { HarvestObservation } from "@idhazh/feed-ingest-plan/harvest-feeds";
 
@@ -20,7 +20,6 @@ const ScreeningRunSchema = z.strictObject({
   now: UtcInstantSchema,
   run_id: RunIdSchema,
   correlation_id: NonEmptySchema,
-  overrides: PlanningRunOverridesSchema,
 });
 // Only the existing authored setting used by this reader is declared.
 const ClockConfigSchema = z.object({ collect: z.object({ max_future_hours: NonNegativeSchema }) });
@@ -35,7 +34,7 @@ export type ScreeningInput = {
   discovered: DiscoveredEvidence;
   planning: PlanningConfig;
   clock_config: { collect: { max_future_hours: number } };
-  run: { now: string; run_id: string; correlation_id: string; overrides: PlanningRunOverrides };
+  run: { now: string; run_id: string; correlation_id: string };
   exclusions?: z.infer<typeof ExclusionsSchema>;
 };
 
