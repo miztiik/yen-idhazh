@@ -1,7 +1,9 @@
 /** Read one named planner UTC day, merging raw and compact representations of its facts. */
 import { realpath } from "node:fs/promises";
 import { resolve, relative } from "node:path";
-import { PlannerLedgerNameSchema } from "@idhazh/common-contracts";
+import { DateStampSchema, PlannerLedgerNameSchema } from "@idhazh/common-contracts";
+import type { PlannerStoredFileEnvelope } from "@idhazh/common-contracts";
+import { readStoredPlannerParquet } from "@idhazh/ledger-file-writer";
 import type { LedgerRegistration, LedgerRowContract } from "@idhazh/ledger-file-writer";
 import type { LedgerDayInput } from "../config/service-settings";
 import { readPlannerParquet } from "./read-planner-parquet";
@@ -11,8 +13,11 @@ import {
   compactPeriodFile, fixedHistoryRevision, listExactRawDayMembers, rawDayDirectory,
   readNamedGitMember, verifiedHistoryRevision, verifyRawDayMember,
 } from "./raw-day-members";
+type PlannerHistoryFile<T extends object> = {
+  envelope: PlannerStoredFileEnvelope; rows: T[]; bytes: number; file_sha256: string;
+};
 export type PlannerHistoryCache<T extends object> = {
-  files: Map<string, Promise<Awaited<ReturnType<typeof readPlannerParquet<T>>>>>;
+  files: Map<string, Promise<PlannerHistoryFile<T>>>;
   revision?: Promise<string>;
   trees: Map<string, Promise<string>>;
 };
@@ -23,18 +28,39 @@ export async function readPlannerDay<T extends object>(
   root: string, registration: LedgerRegistration, day: LedgerDayInput, contract: LedgerRowContract<T>,
   cache: PlannerHistoryCache<T> = createPlannerHistoryCache<T>(),
 ) {
+  return readPlannerDayUsing(root, registration, day, cache, "strict",
+    (path, ledger) => readPlannerParquet(path, ledger, contract),
+    row => "date" in row && row.date === day.day);
+}
+
+export async function readStoredPlannerDay(
+  root: string, registration: LedgerRegistration, day: LedgerDayInput,
+  cache: PlannerHistoryCache<Record<string, unknown>> = createPlannerHistoryCache(),
+) {
+  return readPlannerDayUsing(root, registration, day, cache, "stored", readStoredPlannerParquet,
+    (row, envelope) => envelope.tier === "raw"
+      || row.date === day.day || !DateStampSchema.safeParse(row.date).success);
+}
+
+async function readPlannerDayUsing<T extends object>(
+  root: string, registration: LedgerRegistration, day: LedgerDayInput, cache: PlannerHistoryCache<T>,
+  mode: "stored" | "strict",
+  readFile: (path: string, ledger: PlannerStoredFileEnvelope["ledger"]) => Promise<PlannerHistoryFile<T>>,
+  includesRow: (row: T, envelope: PlannerStoredFileEnvelope) => boolean,
+) {
   if (day.raw_index !== undefined) throw new LedgerHistoryReadError("Planner raw days do not accept raw_index");
   if (day.indexes !== undefined) throw new LedgerHistoryReadError("Planner compact indexes are no longer accepted");
   rawDayDirectory(registration, day.day);
   const ledger = PlannerLedgerNameSchema.parse(registration.name);
-  const files: Awaited<ReturnType<typeof readPlannerParquet<T>>>[] = [];
+  const files: PlannerHistoryFile<T>[] = [];
   let represented: boolean | null = null;
   let covered = false;
   let complete = true;
   const gaps = new Map<string, string>();
   function readParquet(path: string) {
-    let pending = cache.files.get(path);
-    if (pending === undefined) { pending = readPlannerParquet(path, ledger, contract); cache.files.set(path, pending); }
+    const key = `${mode}:${path}`;
+    let pending = cache.files.get(key);
+    if (pending === undefined) { pending = readFile(path, ledger); cache.files.set(key, pending); }
     return pending;
   }
   async function attempt<R>(path: string, read: () => Promise<R>): Promise<R | undefined> {
@@ -134,7 +160,7 @@ export async function readPlannerDay<T extends object>(
   for (const [code, path] of gaps) console.error(JSON.stringify({ event: "planner_history_gap", ledger, day: day.day, code, path }));
   return {
     day: day.day, represented, complete: covered && complete,
-    rows: files.flatMap(file => file.rows.filter(row => "date" in row && row.date === day.day)),
+    rows: files.flatMap(file => file.rows.filter(row => includesRow(row, file.envelope))),
     gaps: [...gaps.keys()],
   };
 }

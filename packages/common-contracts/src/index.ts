@@ -22,6 +22,7 @@ export * from "./schemas/planner-operation.schema";
 export * from "./schemas/planner-stage.schema";
 export * from "./schemas/document-work.schema";
 export * from "./schemas/feed-health-state.schema";
+export * from "./schemas/feed-health-fields.schema";
 export * from "./schemas/publication-input.schema";
 export * from "./schemas/discovered-article.schema";
 export * from "./schemas/selected-article.schema";
