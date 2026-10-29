@@ -60,6 +60,7 @@ export function summarizeHealth(input: {
       outcome: row.outcome!, items: row.items!,
     }));
     const lifecycleRows = logical.filter(row => lifecycleDays.includes(row.date));
+    const lifecycleComplete = complete(lifecycleDays, input.lifecycle_window_days);
     const availability = availabilityEvidence(lifecycleRows,
       input.policy.availability_strikes_before_rest);
     const measured = logical.filter(row => reliabilityDays.includes(row.date)
@@ -76,10 +77,11 @@ export function summarizeHealth(input: {
       .reduce((count, reason) => count + reason.count, 0), 0);
     sources.set(source.feed_id, {
       endpoint_key: inputEndpointKey(endpoint),
-      lifecycle: source.status === "retired" ? "retired" : lifecycleRows.length === 0 ? "unknown"
+      lifecycle: source.status === "retired" ? "retired"
+        : lifecycleRows.length === 0 || !lifecycleComplete ? "unknown"
         : availability.resting === true ? "resting" : availability.resting === null ? "unknown" : "eligible",
-      strikes: lifecycleRows.length === 0 ? null : availability.strikes,
-      rested_runs: lifecycleRows.length === 0 ? null : availability.rested_runs,
+      strikes: lifecycleRows.length === 0 || !lifecycleComplete ? null : availability.strikes,
+      rested_runs: lifecycleRows.length === 0 || !lifecycleComplete ? null : availability.rested_runs,
       article_pass_rate: articleKnown && admitted + refused > 0 ? admitted / (admitted + refused) : null,
       reliability: measured.length === 0 ? null : {
         productive, attempted: measured.length, success_fraction: productive / measured.length,

@@ -192,15 +192,8 @@ def test_a_published_date_becomes_a_utc_timestamp() -> None:
     assert first.published_at == "2026-08-21T06:00:00Z"
 
 
-def test_an_entry_with_no_date_of_its_own_takes_the_channel_s() -> None:
-    """The publisher's answer at a coarser grain, not a guess.
-
-    The alternative to the channel stamp is not a better date, it is
-    `first_seen` - our own ingest clock, which says nothing about when the story
-    was published. So a hand-rolled feed that dates the channel and not the
-    entry now yields the channel's date, and the rail stops attributing our
-    clock to a publisher who did give us one.
-    """
+def test_an_entry_without_its_own_date_ignores_the_channel_date() -> None:
+    """A feed build date cannot stand in for the publication date of an article."""
     feed = (
         '<?xml version="1.0"?><rss version="2.0"><channel>'
         "<title>Undated entries</title>"
@@ -211,11 +204,11 @@ def test_an_entry_with_no_date_of_its_own_takes_the_channel_s() -> None:
 
     found = candidates_from_feed(LAB, feed)
 
-    assert [candidate.published_at for candidate in found] == ["2026-08-21T06:00:00Z"]
+    assert [candidate.published_at for candidate in found] == [None]
 
 
-def test_the_entry_s_own_date_still_wins_over_the_channel_s() -> None:
-    """The channel is the fallback, never the answer where the entry has one."""
+def test_the_entry_s_own_date_is_used_even_when_the_channel_has_one() -> None:
+    """Only the item's timestamp can supply its publication date."""
     feed = (
         '<?xml version="1.0"?><rss version="2.0"><channel>'
         "<title>Both dated</title>"
@@ -456,13 +449,15 @@ def health(*outcomes: str, feed_id: str = "trade-press", items: int = 3) -> list
     ]
 
 
-def rests(*outcomes: str) -> bool:
-    return "trade-press" in resting(health(*outcomes), after_failures=REST_AFTER)
+def rests(*outcomes: str, history_complete: bool = True) -> bool:
+    return "trade-press" in resting(
+        health(*outcomes), after_failures=REST_AFTER, history_complete=history_complete
+    )
 
 
 def test_a_feed_with_no_history_is_asked() -> None:
     """A source nobody has tried is not a source that has failed."""
-    assert resting([], after_failures=REST_AFTER) == frozenset()
+    assert resting([], after_failures=REST_AFTER, history_complete=True) == frozenset()
 
 
 def test_a_feed_that_keeps_answering_is_never_rested() -> None:
@@ -482,10 +477,16 @@ def test_failing_the_threshold_in_a_row_starts_the_rest() -> None:
     assert rests("transient", "transient", "transient")
 
 
+def test_partial_history_cannot_establish_a_rest() -> None:
+    assert not rests("transient", "transient", "transient", history_complete=False)
+
+
 def test_answering_with_nothing_counts_the_same_as_not_answering() -> None:
     """A feed that returns 200 and parses to zero entries is the quiet kind of dead."""
     empty = [row.model_copy(update={"items": 0}) for row in health("ok", "ok", "ok")]
-    assert "trade-press" in resting(empty, after_failures=REST_AFTER)
+    assert "trade-press" in resting(
+        empty, after_failures=REST_AFTER, history_complete=True
+    )
 
 
 def test_a_robots_refusal_never_rests_a_feed() -> None:
@@ -509,7 +510,7 @@ def test_a_source_that_came_back_is_live_again_immediately() -> None:
 
 def test_one_sick_feed_never_rests_a_healthy_one() -> None:
     history = health("transient", "transient", "transient") + health("ok", "ok", feed_id="lab-blog")
-    assert resting(history, after_failures=REST_AFTER) == {"trade-press"}
+    assert resting(history, after_failures=REST_AFTER, history_complete=True) == {"trade-press"}
 
 
 # --- The evidence table: eight kinds of row, three effects ------------------
@@ -604,7 +605,7 @@ def test_a_run_written_twice_is_one_event() -> None:
     assert len(settled(twice)) == 3
     assert streak(settled(twice)) == 3
     # `resting` settles before it counts, so a rest is decided on runs, not rows.
-    assert resting(twice, after_failures=5) == frozenset()
+    assert resting(twice, after_failures=5, history_complete=True) == frozenset()
 
 
 def test_the_attempt_that_carried_articles_wins_however_late_it_ran() -> None:
@@ -683,7 +684,7 @@ def test_the_oracle_counts_one_strike_and_two_without_the_settlement() -> None:
     rows = oracle_rows()
     assert streak(rows) == 2
     assert streak(settled(rows)) == 1
-    assert resting(rows, after_failures=5) == frozenset()
+    assert resting(rows, after_failures=5, history_complete=True) == frozenset()
 
 
 # --- The day's order --------------------------------------------------------

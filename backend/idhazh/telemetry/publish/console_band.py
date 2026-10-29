@@ -353,7 +353,9 @@ class FeedTrouble:
     runs: int
 
 
-def feed_trouble(rows: Sequence[FeedHealthRow], quarantine_after: int) -> FeedTrouble:
+def feed_trouble(
+    rows: Sequence[FeedHealthRow], quarantine_after: int, *, history_complete: bool = True
+) -> FeedTrouble:
     """What the feed ledger says is wrong, over the span the caller handed in.
 
     `discover.settled` first, so a second attempt at a run cannot count a feed
@@ -368,7 +370,9 @@ def feed_trouble(rows: Sequence[FeedHealthRow], quarantine_after: int) -> FeedTr
     by_feed: dict[str, list[FeedHealthRow]] = defaultdict(list)
     for row in ordered:
         by_feed[row.feed_id].append(row)
-    rested = discover.resting(ordered, after_failures=quarantine_after)
+    rested = discover.resting(
+        ordered, after_failures=quarantine_after, history_complete=history_complete
+    )
     failed = 0
     unread = 0
     for feed_id, group in by_feed.items():
@@ -1052,6 +1056,7 @@ def build(
     covers_through: str | None = None,
     settings_changes: BandSettingsMoved | None = None,
     checker_changes: BandCheckerMoved | None = None,
+    feed_history_complete: bool = True,
 ) -> ConsoleBand:
     """The whole band, from rows a caller read. Pure, so a fixture drives it.
 
@@ -1069,7 +1074,9 @@ def build(
     newest = ordered[-1] if ordered else None
     floor_pct = run.success_floor_pct
     quarantine_after = collect.availability_strikes_before_rest
-    trouble = feed_trouble(feeds, quarantine_after)
+    trouble = feed_trouble(
+        feeds, quarantine_after, history_complete=feed_history_complete
+    )
     newest_model = None if newest is None else band_model(health_rows, record)
 
     verdict = _verdict(newest, floor_pct)
@@ -1423,7 +1430,9 @@ def publish(
         if any(held):
             versions[stamp] = held
             break
-    feeds = ledger.load_health(state_root, today=anchor, within_days=widest)
+    feed_history = ledger.load_health_history(
+        state_root, today=anchor, within_days=widest
+    )
     health_rows = (
         []
         if newest_date is None
@@ -1434,7 +1443,7 @@ def publish(
     band = build(
         generated_at=generated_at,
         days=[row for row in days if _within(row.date, anchor, widest)],
-        feeds=feeds,
+        feeds=feed_history.rows,
         health_rows=health_rows,
         record=record,
         machine_rows=machine_rows,
@@ -1446,6 +1455,7 @@ def publish(
         run=run,
         collect=collect,
         sources=sources,
+        feed_history_complete=feed_history.complete,
         # Nothing produces a decline rate yet. With no gating kind to read, the
         # two-sided rule in `dead_gate_candidates` costs nothing and fires on
         # nothing.

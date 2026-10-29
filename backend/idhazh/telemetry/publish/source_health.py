@@ -96,7 +96,7 @@ def active_feeds(sources: Sources, verticals: Iterable[str]) -> list[FeedDef]:
 
 def _availability(
     rows: Sequence[FeedHealthRow], *, resting_ids: frozenset[str], feed_id: str,
-    after_failures: int,
+    after_failures: int, history_complete: bool,
 ) -> SourceAvailability:
     """What the committed record says about this address now.
 
@@ -111,6 +111,8 @@ def _availability(
     failed. `preserves` is the same predicate the strike rule uses, so the two
     cannot drift into two definitions of an ask.
     """
+    if not history_complete:
+        return SourceAvailability.UNAVAILABLE
     if feed_id in resting_ids:
         return SourceAvailability.RESTING
     ordered = _chronological(rows)
@@ -255,6 +257,7 @@ def build(
     date: str,
     run_id: str,
     generated_at: str,
+    history_complete: bool = True,
 ) -> SourceHealthView:
     """Fold the committed record into the shape a page may read.
 
@@ -276,7 +279,11 @@ def build(
     by_feed: dict[str, list[FeedHealthRow]] = defaultdict(list)
     for row in settled_rows:
         by_feed[row.feed_id].append(row)
-    resting_ids = resting(settled_rows, after_failures=collect.availability_strikes_before_rest)
+    resting_ids = resting(
+        settled_rows,
+        after_failures=collect.availability_strikes_before_rest,
+        history_complete=history_complete,
+    )
     records = endpoint_records(settled_rows)
     factors = _reliability_evidence(health, date=date, window=collect.reliability_window_days)
 
@@ -320,6 +327,7 @@ def build(
                 availability=_availability(
                     by_feed.get(feed.id, []), resting_ids=resting_ids, feed_id=feed.id,
                     after_failures=collect.availability_strikes_before_rest,
+                    history_complete=history_complete,
                 ),
                 retired=key in retired_on,
                 retired_on=retired_on.get(key),
@@ -547,7 +555,7 @@ def publish(
     Returns the view rather than the path because `yield_alarm` reads it and the
     caller already holds the path it passed in.
     """
-    health = ledger.load_health(
+    health = ledger.load_health_history(
         state_root,
         today=date,
         within_days=max(ledger.HEALTH_WINDOW_DAYS, collect.reliability_window_days),
@@ -555,7 +563,7 @@ def publish(
     view = build(
         feeds=active_feeds(sources, [vertical.id for vertical in taxonomy.verticals]),
         collect=collect,
-        health=health,
+        health=health.rows,
         items=_recent_item_health(
             state_root, today=date, keep=collect.source_yield_min_complete_days
         ),
@@ -565,6 +573,7 @@ def publish(
         date=date,
         run_id=run_id,
         generated_at=generated_at,
+        history_complete=health.complete,
     )
     write_atomic(path, view.to_json())
     return view

@@ -1561,14 +1561,14 @@ def test_reading_a_history_that_was_never_written_is_empty_not_an_error() -> Non
 # --- quarantine --------------------------------------------------------------
 
 
-def a_failed_read(feed_id: str, run_n: int) -> FeedHealthRow:
+def a_failed_read(feed_id: str, run_n: int, *, day: str = DATE) -> FeedHealthRow:
     """One run's account of one feed that would not answer."""
     return FeedHealthRow(
         version=FeedHealthRow.schema_version(),
-        run_id=f"{DATE}-{run_n}",
-        date=DATE,
+        run_id=f"{day}-{run_n}",
+        date=day,
         feed_id=feed_id,
-        checked_at=f"2026-08-22T0{run_n}:00:00Z",
+        checked_at=f"{day}T0{run_n}:00:00Z",
         outcome=FetchOutcome.TRANSIENT,
         status=503,
         items=0,
@@ -1577,12 +1577,33 @@ def a_failed_read(feed_id: str, run_n: int) -> FeedHealthRow:
 
 
 def seed_failures(state: Path, feed_id: str, runs: int) -> None:
-    """A history of nothing but failed reads, filed the way the runs that made it would.
+    """A complete bounded history ending in failed reads.
 
     One run writes one file holding every feed it read, and a second write under
     that run's identity replaces the first, so a second feed's history joins the
-    rows already on disk for that run rather than replacing them.
+    rows already on disk for that run rather than replacing them. Successful
+    reads fill the earlier represented dates so the final failures are a
+    complete lifecycle window.
     """
+    for offset in range(ledger.HEALTH_WINDOW_DAYS - 1, 0, -1):
+        day = (date_type.fromisoformat(DATE) - timedelta(days=offset)).isoformat()
+        run_id = f"{day}-1"
+        already = [
+            row
+            for row in ledger.load_days(state, LedgerName.FEED_HEALTH, [day], model=FeedHealthRow)
+            if row.run_id == run_id
+        ]
+        success = FeedHealthRow(
+            version=FeedHealthRow.schema_version(),
+            run_id=run_id,
+            date=day,
+            feed_id=feed_id,
+            checked_at=f"{day}T06:00:00Z",
+            outcome=FetchOutcome.OK,
+            status=200,
+            items=1,
+        )
+        seed_feed_health(state, day, [*already, success], run_id=run_id)
     for run_n in range(1, runs + 1):
         run_id = f"{DATE}-{run_n}"
         already = [
@@ -1590,7 +1611,9 @@ def seed_failures(state: Path, feed_id: str, runs: int) -> None:
             for row in ledger.load_days(state, LedgerName.FEED_HEALTH, [DATE], model=FeedHealthRow)
             if row.run_id == run_id
         ]
-        seed_feed_health(state, DATE, [*already, a_failed_read(feed_id, run_n)], run_id=run_id)
+        seed_feed_health(
+            state, DATE, [*already, a_failed_read(feed_id, run_n)], run_id=run_id
+        )
 
 
 def failures_to_rest() -> int:
@@ -1603,6 +1626,10 @@ def test_a_feed_that_has_failed_enough_is_not_even_asked() -> None:
     so asking a rested feed would fail this test by name rather than by a count."""
     state = Path(tempfile.mkdtemp())
     seed_failures(state, "trade-press", failures_to_rest())
+    history = ledger.load_health_history(
+        state, today=DATE, within_days=ledger.HEALTH_WINDOW_DAYS
+    )
+    assert history.complete
     built = plan(
         [LAB, TRADE, COMMUNITY],
         fetcher=fetcher_over(LAB_URL, COMMUNITY_URL),
@@ -1611,6 +1638,76 @@ def test_a_feed_that_has_failed_enough_is_not_even_asked() -> None:
     )
     assert (built.feeds_read, built.feeds_failed, built.feeds_skipped) == (2, 0, 1)
     assert built.items, "the run still makes a day out of the feeds that work"
+
+
+def test_partial_health_history_does_not_rest_a_feed() -> None:
+    state = Path(tempfile.mkdtemp())
+    threshold = failures_to_rest()
+    for run_n in range(1, threshold + 1):
+        seed_feed_health(
+            state,
+            DATE,
+            [a_failed_read("trade-press", run_n)],
+            run_id=f"{DATE}-{run_n}",
+        )
+    history = ledger.load_health_history(
+        state, today=DATE, within_days=ledger.HEALTH_WINDOW_DAYS
+    )
+    assert not history.complete
+    built = plan(
+        [LAB, TRADE, COMMUNITY],
+        fetcher=fetcher_over(LAB_URL, TRADE_URL, COMMUNITY_URL),
+        state=state,
+        run_n=threshold + 1,
+    )
+    assert built.feeds_skipped == 0
+
+
+def test_unreadable_health_file_does_not_make_a_complete_rest_window() -> None:
+    state = Path(tempfile.mkdtemp())
+    threshold = failures_to_rest()
+    seed_failures(state, "trade-press", threshold)
+    first_day = (
+        date_type.fromisoformat(DATE) - timedelta(days=ledger.HEALTH_WINDOW_DAYS - 1)
+    ).isoformat()
+    seed_feed_health(
+        state,
+        first_day,
+        [
+            FeedHealthRow(
+                version=FeedHealthRow.schema_version(),
+                run_id=f"{first_day}-2",
+                date=first_day,
+                feed_id="lab-blog",
+                checked_at=f"{first_day}T07:00:00Z",
+                outcome=FetchOutcome.OK,
+                status=200,
+                items=1,
+            )
+        ],
+        run_id=f"{first_day}-2",
+        shard=1,
+    )
+    trade_file = next(
+        held
+        for held in ledger.list_registered_raw_files(
+            state, LedgerName.FEED_HEALTH, days=[first_day]
+        )
+        if held.envelope.identity.run_id == f"{first_day}-1"
+    )
+    trade_file.path.write_text("not a ledger file", encoding="utf-8")
+
+    history = ledger.load_health_history(
+        state, today=DATE, within_days=ledger.HEALTH_WINDOW_DAYS
+    )
+    assert not history.complete
+    built = plan(
+        [LAB, TRADE, COMMUNITY],
+        fetcher=fetcher_over(LAB_URL, TRADE_URL, COMMUNITY_URL),
+        state=state,
+        run_n=threshold + 1,
+    )
+    assert built.feeds_skipped == 0
 
 
 def test_a_rested_feed_still_leaves_a_row_that_run() -> None:
