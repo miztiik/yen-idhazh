@@ -7,7 +7,7 @@ import type { PlanInputs } from "../load-plan-inputs";
 import type { PlanRuntime } from "../run-feed-plan";
 import type { DocumentState } from "./document-state";
 import { sourceSnapshot } from "../harvest-feeds/load-harvest-inputs";
-import { canonicalizeUrl } from "../harvest-feeds/url-cleaner";
+import { deriveArticleIdentity } from "../harvest-feeds/article-identity";
 import { matchUrlExclusion } from "../harvest-feeds/url-exclusions";
 import { recordRejection } from "../harvest-feeds/record-rejection";
 import { readDiscoveredEvidence, rememberDiscoveries } from "../read-ledger-history/read-discovered-evidence";
@@ -29,7 +29,7 @@ export async function createParsedFeedBatch(input: {
   for (const entry of input.entries) {
     let valid = false;
     if (entry.link !== null) {
-      try { canonicalizeUrl(entry.link); valid = true; }
+      try { deriveArticleIdentity(entry.link); valid = true; }
       catch { /* Invalid offered addresses remain terminal exclusions, never destinations. */ }
     }
     if (!valid) {
@@ -52,7 +52,7 @@ export async function createParsedFeedBatch(input: {
     own_rows: plannerMemory(inputs).discoveries(),
   });
   const sightings = offers.flatMap(offer => {
-    const identity = canonicalizeUrl(offer.entry.link!);
+    const identity = deriveArticleIdentity(offer.entry.link!);
     if (matchUrlExclusion(identity.canonical_url, inputs.harvest.config.harvest.url_exclusions) !== undefined) return [];
     return [DiscoveredArticleRowSchema.parse({
       url_key: identity.url_key, first_seen_at: input.observed_at, date: input.observed_at.slice(0, 10),
@@ -97,7 +97,7 @@ export function updateFeedOffer(
 }
 export function publicFeedOffers(batch: ParsedFeedBatch) {
   return batch.offers.map(offer => ({
-    offer_id: offer.offer_id, feed_id: offer.source.feed_id, canonical_url: canonicalizeUrl(offer.entry.link!).canonical_url,
+    offer_id: offer.offer_id, feed_id: offer.source.feed_id, canonical_url: deriveArticleIdentity(offer.entry.link!).canonical_url,
     title: offer.entry.title, categories: offer.entry.categories, published_at: offer.entry.published_at,
   }));
 }

@@ -16,7 +16,7 @@ import { parseDocument } from "../src/harvest-feeds/parse-document";
 import { EXTRACTOR_VERSION, SANITIZER_FINGERPRINT } from "../src/harvest-feeds/extraction-provenance";
 import { countWords, measureExtractionQuality } from "../src/harvest-feeds/extraction-quality";
 import { extractSemanticContent } from "../src/harvest-feeds/semantic-extractor";
-import { canonicalizeUrl, InvalidArticleUrlError } from "../src/harvest-feeds/url-cleaner";
+import { deriveArticleIdentity, InvalidArticleUrlError } from "../src/harvest-feeds/article-identity";
 import { createPinnedDispatcher, readResponseBody } from "../src/harvest-feeds/transport";
 import { addAbortSignal, PassThrough, Readable } from "node:stream";
 import { createGunzip, gzipSync } from "node:zlib";
@@ -152,7 +152,7 @@ test("Feedsmith formats retain categories, author, ordinal and only entry-level 
     });
     expect(transport.requests.some(request => request.url.href === media[0]!.link)).toBe(false);
     expect(result.feed_outcomes[0]).toMatchObject({ fetch_status: "success", parse_status: "success", parsed_count: media.length });
-    expect(result.discovered_candidates.map(candidate => candidate.url_key)).toContain(canonicalizeUrl(media[0]!.link!).url_key);
+    expect(result.discovered_candidates.map(candidate => candidate.url_key)).toContain(deriveArticleIdentity(media[0]!.link!).url_key);
     expect(result.candidates.map(candidate => candidate.entry_ordinal))
       .toEqual(media.slice(1).filter(entry => entry.link !== null).map(entry => entry.entry_ordinal));
   }
@@ -529,14 +529,14 @@ test("real inert DOM extraction retains prose and author but never calls a page 
 });
 
 test("URL identity uses discovery sorting, tracking removal and shared hashing", () => {
-  const result = canonicalizeUrl(" HTTPS://www.News.Example:443/a///?b=2&utm_campaign=x&a=2&a=1&ref=feed#fragment ");
+  const result = deriveArticleIdentity(" HTTPS://www.News.Example:443/a///?b=2&utm_campaign=x&a=2&a=1&ref=feed#fragment ");
   expect(result.canonical_url).toBe("https://news.example/a?a=1&a=2&b=2");
   expect(result.url_key).toBe(deriveUrlKey(result.canonical_url));
-  expect(canonicalizeUrl("https://news.example/a/../caf\u00e9/").canonical_url).toBe("https://news.example/a/../caf\u00e9");
+  expect(deriveArticleIdentity("https://news.example/a/../caf\u00e9/").canonical_url).toBe("https://news.example/a/../caf\u00e9");
   for (const address of ["not-a-url", "https://[invalid-host/", "https://news.example/a?x=%20"]) {
-    expect(() => canonicalizeUrl(address)).toThrow(InvalidArticleUrlError);
+    expect(() => deriveArticleIdentity(address)).toThrow(InvalidArticleUrlError);
   }
-  expect(() => Reflect.apply(canonicalizeUrl, undefined, [null])).toThrow(TypeError);
+  expect(() => Reflect.apply(deriveArticleIdentity, undefined, [null])).toThrow(TypeError);
 });
 
 test("rootless extraction, empty content and article request failures do not kill valid siblings", async () => {

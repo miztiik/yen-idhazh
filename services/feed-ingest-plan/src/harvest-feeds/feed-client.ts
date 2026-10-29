@@ -6,7 +6,7 @@ import type { PermittedFetcher } from "./robots-policy";
 import { fetchRejection, recordRejection } from "./record-rejection";
 import { fetchDiagnostics } from "./fetch-diagnostics";
 import { parseDocument } from "./parse-document";
-import { canonicalizeUrl } from "./url-cleaner";
+import { deriveArticleIdentity } from "./article-identity";
 import { documentWork, describeFeedParse } from "./document-work";
 
 export { parseFeed } from "./parse-feed";
@@ -14,7 +14,7 @@ export { parseFeed } from "./parse-feed";
 export function feedDocumentWork(source: SourceSnapshot, context: HarvestContext) {
   return documentWork(context, {
     run_id: context.writer.run_id, correlation_id: context.correlation_id,
-    article_id: canonicalizeUrl(source.feed_url).url_key, feed_id: source.feed_id,
+    article_id: deriveArticleIdentity(source.feed_url).url_key, feed_id: source.feed_id,
   }, `${context.writer.run_id}\n${source.feed_id}\nfeed`, {
     document_kind: "feed", feed_id: source.feed_id, publisher_id: source.publisher_id,
     candidate_id: null, observed_run_id: context.writer.run_id, observed_attempt: context.writer.attempt,
