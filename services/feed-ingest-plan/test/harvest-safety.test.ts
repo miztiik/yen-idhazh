@@ -14,7 +14,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { z } from "zod";
-import { canonicalizeUrl } from "../src/harvest-feeds/url-cleaner";
+import { deriveArticleIdentity } from "../src/harvest-feeds/article-identity";
 import { matchMediaArticle, matchMediaOffer } from "../src/harvest-feeds/media-filter";
 import { harvestArticle } from "../src/harvest-feeds/harvest-article";
 import { sourceSnapshot } from "../src/harvest-feeds/load-harvest-inputs";
@@ -53,13 +53,13 @@ test("literal, encoded and named unsafe addresses fail before transport", async 
   )).json());
   for (const vector of fixture.allowed) {
     const transport = new RecordedTransport(await readRecordings());
-    const identity = canonicalizeUrl(vector.offered);
+    const identity = deriveArticleIdentity(vector.offered, loaded.config.harvest);
     const result = await createPermittedFetcher(loaded.config.harvest, loaded.extraction,
       { transport, resolve: transport.resolve }).fetch(vector.offered);
     expect(result.failure, vector.offered).toBeNull();
     expect(transport.requests.at(-1)?.url.href).toBe(vector.target);
     expect(identity.canonical_url).toBe(vector.canonical_url);
-    expect(canonicalizeUrl(vector.offered)).toEqual(identity);
+    expect(deriveArticleIdentity(vector.offered, loaded.config.harvest)).toEqual(identity);
     expect(transport.requests.some(request => request.url.hostname === "www.google.com")).toBe(false);
   }
   for (const vector of fixture.refused) {
@@ -71,7 +71,7 @@ test("literal, encoded and named unsafe addresses fail before transport", async 
   }
   for (const vector of fixture.media) {
     const transport = new RecordedTransport(await readRecordings());
-    const identity = canonicalizeUrl(vector.offered);
+    const identity = deriveArticleIdentity(vector.offered, loaded.config.harvest);
     expect(identity.canonical_url).toBe(vector.canonical_url);
     const matched = matchMediaArticle(vector.offered, identity.canonical_url, [], loaded.config);
     expect(matched !== null).toBe(vector.excluded);
@@ -95,7 +95,7 @@ test("literal, encoded and named unsafe addresses fail before transport", async 
   const transport = new RecordedTransport(recordings);
   expect((await createPermittedFetcher({ ...loaded.config.harvest, tidy_urls: false }, loaded.extraction,
     { transport, resolve: transport.resolve }).fetch(vector.offered)).failure).toBeNull();
-  expect(transport.requests.at(-1)?.url.href).toBe(vector.offered);
+  expect(transport.requests.at(-1)?.url.href).toBe("https://news.example/second");
 });
 
 test("recorded robots rules and structured URL exclusions bind configured policy", async () => {

@@ -1,4 +1,4 @@
-/** Spell one article address using the existing discovery identity rules. */
+/** Recover a prior discovery key without changing the address rules used to write it. */
 import { UrlSchema, deriveUrlKey } from "@idhazh/common-contracts";
 
 // Identity constants mirror discover.py; changing them changes article identity.
@@ -15,7 +15,7 @@ function validateUrl(value: string): string {
   return parsed.data;
 }
 
-export function canonicalizeUrl(raw: string): { canonical_url: string; url_key: string } {
+export function deriveLegacyArticleIdentity(raw: string): { canonical_url: string; url_key: string } {
   const original = validateUrl(raw.trim().replace(/^https?:/i, scheme => scheme.toLowerCase()));
   let url: URL;
   try { url = new URL(original); }

@@ -37,6 +37,7 @@ pytestmark = pytest.mark.contract
 ENVELOPE_NAMED_FIELDS: Final[Mapping[LedgerName, frozenset[str]]] = {
     LedgerName.GARDENER: frozenset({"attempt", "job", "run_id", "shard"}),
     LedgerName.VISUAL_PRUNES: frozenset({"run_id"}),
+    LedgerName.VISUAL_DESIGN_ATTEMPTS: frozenset({"run_id"}),
     LedgerName.FEED_RETIREMENTS: frozenset(),
     LedgerName.ITEM_HEALTH: frozenset({"run_id", "tier"}),
     LedgerName.ITEM_HEALTH_SUMMARY: frozenset(),

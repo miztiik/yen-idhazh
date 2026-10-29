@@ -6,10 +6,13 @@ import type { FeedEntry, HarvestArticleResult } from "../harvest-feeds/harvest-t
 import type { PlanInputs } from "../load-plan-inputs";
 import type { PlanRuntime } from "../run-feed-plan";
 import type { DocumentState } from "./document-state";
+import { documentIdentities } from "./document-state";
 import { sourceSnapshot } from "../harvest-feeds/load-harvest-inputs";
-import { canonicalizeUrl } from "../harvest-feeds/url-cleaner";
+import { deriveArticleIdentity, InvalidArticleUrlError } from "../harvest-feeds/article-identity";
+import { UnsafeTargetError } from "../harvest-feeds/safe-target";
+import type { ArticleUrlPolicy } from "../harvest-feeds/article-url";
 import { matchUrlExclusion } from "../harvest-feeds/url-exclusions";
-import { recordRejection } from "../harvest-feeds/record-rejection";
+import { prepareArticle } from "../harvest-feeds/prepare-article";
 import { readDiscoveredEvidence, rememberDiscoveries } from "../read-ledger-history/read-discovered-evidence";
 import { requiredUtcDays } from "../utc-instant";
 import { resolveArticleEvidence } from "../website-group";
@@ -29,17 +32,18 @@ export async function createParsedFeedBatch(input: {
   for (const entry of input.entries) {
     let valid = false;
     if (entry.link !== null) {
-      try { canonicalizeUrl(entry.link); valid = true; }
-      catch { /* Invalid offered addresses remain terminal exclusions, never destinations. */ }
+      try { deriveArticleIdentity(entry.link, inputs.harvest.config.harvest); valid = true; }
+      catch (error) {
+        if (!(error instanceof InvalidArticleUrlError || error instanceof UnsafeTargetError)) throw error;
+      }
     }
     if (!valid) {
-      state.work.reject(recordRejection(source, {
+      const prepared = prepareArticle({ source, entry }, inputs.harvest, {
         writer: state.context.writer, correlation_id: state.context.correlation_id, max_future_hours: inputs.clock_config.collect.max_future_hours,
         clock: () => new Date(state.context.now), observation_clock: runtime.observation_clock ?? (() => new Date()),
-      }, "MISSING_REQUIRED_FIELDS", {}, {
-        candidate_id: deriveCandidateId(state.context.run_id, source.feed_id, entry.entry_ordinal),
-        canonical_url: null, url_key: null, title: entry.title, categories: entry.categories,
-      }));
+      });
+      if (prepared.status !== "rejected") throw new Error("Invalid feed offer passed article preparation");
+      state.work.article(prepared.result);
       continue;
     }
     offers.push({ offer_id: deriveCandidateId(state.context.run_id, source.feed_id, entry.entry_ordinal),
@@ -51,14 +55,15 @@ export async function createParsedFeedBatch(input: {
     lookback_days: inputs.harvest.config.discovered_articles.lookback_days, concurrency: inputs.harvest.config.harvest.concurrency,
     own_rows: plannerMemory(inputs).discoveries(),
   });
+  const identities = await documentIdentities(state, inputs);
   const sightings = offers.flatMap(offer => {
-    const identity = canonicalizeUrl(offer.entry.link!);
+    const identity = identities.remember(offer.entry.link!);
     if (matchUrlExclusion(identity.canonical_url, inputs.harvest.config.harvest.url_exclusions) !== undefined) return [];
     return [DiscoveredArticleRowSchema.parse({
       url_key: identity.url_key, first_seen_at: input.observed_at, date: input.observed_at.slice(0, 10),
     })];
   });
-  const saved = await rememberDiscoveries(discovered.rows, sightings, state.context, {
+  const saved = await rememberDiscoveries(discovered.rows, identities.discoveries([...discovered.rows, ...sightings]), state.context, {
     outputRoot: inputs.outputRoot, registryEntry: inputs.registrations.discovered_articles, ledgerSettings: inputs.ledgerSettings,
   });
   plannerMemory(inputs).rememberDiscoveries(saved.rows, requiredUtcDays(
@@ -95,9 +100,9 @@ export function updateFeedOffer(
     };
   });
 }
-export function publicFeedOffers(batch: ParsedFeedBatch) {
+export function publicFeedOffers(batch: ParsedFeedBatch, policy: ArticleUrlPolicy) {
   return batch.offers.map(offer => ({
-    offer_id: offer.offer_id, feed_id: offer.source.feed_id, canonical_url: canonicalizeUrl(offer.entry.link!).canonical_url,
+    offer_id: offer.offer_id, feed_id: offer.source.feed_id, canonical_url: deriveArticleIdentity(offer.entry.link!, policy).canonical_url,
     title: offer.entry.title, categories: offer.entry.categories, published_at: offer.entry.published_at,
   }));
 }

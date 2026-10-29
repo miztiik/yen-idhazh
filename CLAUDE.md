@@ -263,8 +263,9 @@ The commands behind these gates are in [`docs/how-to/run-the-gates.md`](docs/how
 **TypeScript planner exception (2026-10-27 UTC):** The maintainer-approved
 [planner contract cutover](docs/reference/feed-planner-ledgers.md#typescript-contract-ownership)
 places planner requests, artifacts and four ledgers under TypeScript
-validation. Full-row validation refuses old planner formats without Python mirrors,
-comparison copies or read-side migrations. The user-directed field-read ruling
+validation. Full-row validation refuses incompatible old planner formats without Python
+mirrors, comparison copies or read-side migrations. The article cleanup exception
+below accepts only its named compatible stamps. The user-directed field-read ruling
 of 2026-10-29 UTC allows health consumers to validate only their required fields,
 regardless of the row schema date; stored-file integrity and strict writer
 validation remain required. Python retains the gardener scheduler and
@@ -285,6 +286,17 @@ refused; those stories retain their text and have no chart. No historical
 corpus is deleted. Schema stamps and changelogs still apply.
 
 What the base model enforces, how a same-day revision extends the stamp, which surfaces this covers, and the one model that pins a published key while its Python name moves: [`docs/architecture/contracts/schemas.md`](docs/architecture/contracts/schemas.md).
+
+**Article cleanup exception (2026-10-29 UTC, user-approved):** Unified article
+cleanup preserves exact compatible discovery `2026-10-25`, selected
+rows/artifacts `2026-10-27`, and fetched documents/operation journals
+`2026-10-28`. Old row and receipt stamps and published keys remain unchanged.
+Bounded saved-address associations recover known earlier keys without a
+migration walk, durable aliases or a Python discovery change. Earlier
+incompatible formats still refuse. The current native contracts and
+[compatibility rules](docs/reference/feed-planner-ledgers.md#article-cleanup-compatibility)
+declare the complete accepted sets. This narrows the planner refusal exception
+in Guardrail #3 and section 11; it does not change other payload families.
 
 ## 12. Published-Site Verification (Browser Smoke)
 

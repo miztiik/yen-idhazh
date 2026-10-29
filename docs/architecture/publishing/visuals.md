@@ -1,6 +1,6 @@
 # Visual planning and rendering
 
-**Last Updated**: 2026-10-28
+**Last Updated**: 2026-10-29
 
 How an item gets a chart, a whowhat grid or - most of the time - nothing at
 all: which pass decides, which gate refuses, and what every refusal is called.
@@ -233,6 +233,7 @@ because a console counts members and cannot count prose.
 | `model_declined` | The model was asked and answered `none`. The ordinary answer, and the one the design wants to stay common. |
 | `validation_failed` | A plan was drafted, the validator refused it, and the ladder reached no depth that validates. |
 | `output_budget_cut` | The reply ran out of output budget after the summary closed, so the plan was never written. The item publishes; the picture is what was lost. |
+| `window_exhausted` | The article and earlier reply filled the context window, so the plan was cut before it was written. |
 
 **One member per gate, never one per call site.** The reachability gate refuses in two places - the
 single-call prefilter above and the two-call suppression - and both record `not_reachable`, because
@@ -242,21 +243,33 @@ what an operator acts on is the gate rather than the line of code. And **which**
 `validation_failed` means a plan was drafted and this build refused it. Its
 `rationale` distinguishes invalid evidence, an unsupported compiler, an
 unselected request and a replacement that cleared no measured floor. The
-summary remains publishable.
+summary remains publishable. `rejection_reason` records the first
+`ValidatorCheck` that rejected the original request, and remains on the
+decision if a replacement is later selected or refused. It stays null when
+the original request passed validation. A shape, configuration or compiler
+refusal does not create a rejection, but does not erase one already recorded
+for the original request.
 
 The final `VisualDecision` records the original `planned_type` and the
 successfully written `rendered_type` separately. `downgrade_depth` is zero
 without a selected replacement and positive after one is selected, even if its
-later write fails. `marks` counts delivered marks, not the flat mark pool.
-Without successful delivery, the delivered type and mark count are null.
-Untyped requests and older unmeasured outcomes leave all four fields null;
-never infer an old request from its final drawing.
+later write fails. `deepest_downgrade_depth` records the deepest rung reached
+even when no replacement is selected; it is the attempt depth used by
+`VisualAttemptRow`, and is distinct from the selected depth above.
+`gate_floor_applied` is true if a numeric mark-count floor excluded a
+replacement candidate, false if numeric floors were compared but excluded
+none, and null if no numeric floor was compared. `marks` counts delivered
+marks, not the flat mark pool. Without successful delivery, the delivered type
+and mark count are null. Untyped requests and older unmeasured outcomes leave
+the new evidence fields null; never infer an old request from its final drawing.
 
-The worker copies these fields into its sealed item record before either
-completion path. The record stage writes that same row through the existing
-item-health ledger under `state/raw/item-health/`; its compactor later writes
-the corresponding `state/compact/item-health/` files. No second visual ledger
-or browser observation is implied.
+The worker projects the requested type, delivered type, selected depth, marks
+and identity into its sealed item record before either completion path. The
+full decision remains in the item's visual-decision payload, including the
+first rejection and deepest rung needed to record an attempt without parsing
+`rationale`. The record stage writes the item-health row through
+`state/raw/item-health/`; its compactor later writes the corresponding
+`state/compact/item-health/` files.
 
 The shard's `visual_outcomes` report counts requested types and computes
 `wasted_decode_rate`: measured typed requests not delivered in their requested
@@ -268,17 +281,15 @@ null, not zero. Declines, suppressed or unparseable requests and historical
 unknown outcomes do not enter its denominator. The stored item rows preserve
 the inputs, not a second copy of the derived rate.
 
-**Four members, because four routes have a writer.** The design record names six gates and the
-two-call flow adds a seventh. The potential class, the novelty floor, the sufficiency bar and the
-per-visual byte cap are not built, so a member for each would be a word nobody can produce, nobody
-can retire and nobody can tell from a bug. Each arrives as an additive member with the row that
-builds its gate. The oracle holds the enum to that: every route is driven from its own fixture and
-the set collected must equal the enum exactly.
+**Five members, because five routes have writers.** Reachability, model decline,
+drafted-plan refusal, output-budget cut and context-window cut each have a
+producer. A proposed gate without a writer gets no member. The oracle holds the
+enum to that: every route is driven from its own fixture and the set collected
+must equal the enum exactly.
 
-The single-call planner these four replace writes null. Its causes are sentences in `rationale`, and
-several of them - no summary to illustrate, a reply that lost its shape, a kind with no renderer -
-are not gates at all, so typing them into this vocabulary would be work the row that retires that
-planner deletes. A payload written before the field existed writes null for the same reason, and
+The retired single-call planner writes null. Its causes are sentences in
+`rationale`, and several - no summary to illustrate, a reply that lost its
+shape, a kind with no renderer - are not gates at all. A payload written before the field existed writes null for the same reason, and
 that is the honest reading: nothing committed says which gate refused it.
 
 ## Two controls that run after the model has answered
@@ -423,6 +434,13 @@ The existing item ledger carries terminal measurements so requested forms
 remain visible through both replacement and refusal. A failed file write is
 not delivery, and a useful replacement is still an unmet original request.
 Maintainer approval: 2026-10-25 UTC.
+
+**Why attempt evidence stays separate from delivery.** Selected depth says
+which replacement was chosen; deepest depth and first rejection explain the
+search even when it ends in refusal. An attempt writer can read these typed
+facts from `VisualDecision` instead of parsing `rationale`. A search may
+compare several numeric floors, so nullable boolean evidence records whether
+any floor excluded a candidate without presenting one floor as representative.
 
 **Why the model picks an index instead of writing a spec.** The obvious design is to ask the model
 for a Vega-Lite object. It is also the design where a hallucinated axis value is one sampling

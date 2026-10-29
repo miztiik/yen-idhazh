@@ -6,10 +6,11 @@ import { createHash } from "node:crypto";
 import { PlanError } from "./plan-request";
 import { PlannerOperationSchema, RequestIdSchema } from "./operation-contracts";
 import type { PlannerOperation } from "./operation-contracts";
-import { SourceArticleOutcomeSchema } from "@idhazh/common-contracts";
+import { SourceArticleOutcomeSchema, LEGACY_PLANNER_OPERATION_VERSION, LEGACY_OPERATION_VERSION } from "@idhazh/common-contracts";
 import type { SourceArticleOutcome } from "@idhazh/common-contracts";
 
-type RequestIdentity = Pick<PlannerOperation, "request_id" | "operation" | "input_sha256" | "config_sha256">;
+type RequestIdentity = Pick<PlannerOperation, "request_id" | "operation" | "input_sha256" | "config_sha256">
+  & { legacy_config_sha256?: string };
 export type PreparedOperation = Readonly<RequestIdentity & { capture: () => PlannerOperation }>;
 
 export function sha256(value: string): string {
@@ -45,8 +46,12 @@ export async function openOperationStore(outputRoot: string) {
   }
   function readRequest(proposed: RequestIdentity) {
     const previous = get(proposed.request_id);
+    const legacyReplay = previous?.version === LEGACY_PLANNER_OPERATION_VERSION && previous.state === "complete"
+      && previous.config_sha256 === proposed.legacy_config_sha256
+      && (previous.artifact === null || previous.artifact.version === LEGACY_OPERATION_VERSION);
     if (previous && (previous.operation !== proposed.operation
-      || previous.input_sha256 !== proposed.input_sha256 || previous.config_sha256 !== proposed.config_sha256)) {
+      || previous.input_sha256 !== proposed.input_sha256
+      || (previous.config_sha256 !== proposed.config_sha256 && !legacyReplay))) {
       throw new PlanError("REQUEST_CONFLICT", "Request key was already used with different input or configuration", "request_id");
     }
     return previous;
