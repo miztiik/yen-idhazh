@@ -160,10 +160,6 @@ class VerticalDef(VocabularyEntry, Lifecycled):
     """
 
     id: Slug
-    min_feeds: int = Field(
-        ge=1,
-        description="Feed floor below which the vertical does not render at all.",
-    )
     floor: int = Field(
         default=0,
         ge=0,

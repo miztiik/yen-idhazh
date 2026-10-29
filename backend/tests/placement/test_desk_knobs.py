@@ -44,7 +44,7 @@ def test_changing_a_floor_changes_the_filing_with_no_source_edit() -> None:
 
 def test_a_desk_with_no_rule_may_hold_the_whole_day() -> None:
     """An absent rule is no rule, so the defaults are the two identity values."""
-    default = VerticalDef(id="ai", display_name="AI", definition="A desk.", min_feeds=21)
+    default = VerticalDef(id="ai", display_name="AI", definition="A desk.")
 
     assert (default.floor, default.ceiling) == (0, 1.0)
 
@@ -63,9 +63,9 @@ def test_the_bounds_come_off_the_taxonomy_including_a_retired_desk() -> None:
     taxonomy = Taxonomy(
         version=Taxonomy.schema_version(),
         verticals=[
-            VerticalDef(id="ai", display_name="AI", definition="A desk.", min_feeds=21,
+            VerticalDef(id="ai", display_name="AI", definition="A desk.",
                         floor=6, ceiling=0.35),
-            VerticalDef(id="legacy", display_name="Legacy", min_feeds=21, floor=4, ceiling=0.1,
+            VerticalDef(id="legacy", display_name="Legacy", floor=4, ceiling=0.1,
                         status=LifecycleStatus.RETIRED, retired_on="2026-04-12"),
         ],
         lenses=[],

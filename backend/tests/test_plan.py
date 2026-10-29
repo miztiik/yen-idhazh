@@ -162,7 +162,7 @@ FRONT_PAGE = SalienceFeedDef(
 #: (`docs/concepts/taxonomy.md`).
 DEFINITION = "A fixture desk, defined so the vocabulary it sits in still validates."
 
-AI = VerticalDef(id="ai", display_name="AI", min_feeds=3, definition=DEFINITION)
+AI = VerticalDef(id="ai", display_name="AI", definition=DEFINITION)
 
 #: A fixed morning. Every date in the fixtures is placed relative to it.
 NOW = "2026-08-22T06:00:00Z"
@@ -228,6 +228,7 @@ def settings_for(
     salience: list[SalienceFeedDef] | None = None,
     verticals: list[VerticalDef] | None = None,
     retired: list[FeedDef] | None = None,
+    vertical_feed_floors: dict[str, int] | None = None,
 ) -> config.Settings:
     """The committed config, with the source list and the verticals swapped out.
 
@@ -236,8 +237,18 @@ def settings_for(
     hold still.
     """
     base = config.load()
+    collect = base.app.collect.model_copy(
+        update={
+            "vertical_feed_floors": vertical_feed_floors or {
+                "ai": 3,
+                "energy": 3,
+            }
+        }
+    )
+    app = base.app.model_copy(update={"collect": collect})
     return dataclasses.replace(
         base,
+        app=app,
         sources=Sources(
             version=Sources.schema_version(),
             feeds=feeds,
@@ -296,8 +307,15 @@ def plan(
     article_limit: int | None = None,
     shards: int | None = None,
     run: RunConfig | None = None,
+    vertical_feed_floors: dict[str, int] | None = None,
 ) -> RunPlan:
-    settings = settings_for(feeds, salience=salience, verticals=verticals, retired=retired)
+    settings = settings_for(
+        feeds,
+        salience=salience,
+        verticals=verticals,
+        retired=retired,
+        vertical_feed_floors=vertical_feed_floors,
+    )
     if run is not None:
         settings = dataclasses.replace(settings, app=settings.app.model_copy(update={"run": run}))
     if safety_ceiling is not None:
@@ -549,7 +567,7 @@ def test_a_desk_that_goes_silent_on_its_floor_says_so_in_the_run(
 
 def test_a_second_vertical_with_no_feeds_still_appears_in_the_plan() -> None:
     """A desk that planned nothing is a fact about the day, not an absence."""
-    energy = VerticalDef(id="energy", display_name="Energy", min_feeds=3, definition=DEFINITION)
+    energy = VerticalDef(id="energy", display_name="Energy", definition=DEFINITION)
     built = plan([LAB, TRADE, COMMUNITY], verticals=[AI, energy])
     assert [vertical.id for vertical in built.verticals] == ["ai", "energy"]
     assert built.verticals[1].eligible_feeds == 0
@@ -650,7 +668,7 @@ def test_cross_vertical_duplicate_drops_once_before_the_safety_ceiling(
     caplog: pytest.LogCaptureFixture,
 ) -> None:
     """One address may arrive through two desks. It still gets one planned item."""
-    energy = VerticalDef(id="energy", display_name="Energy", min_feeds=1, definition=DEFINITION)
+    energy = VerticalDef(id="energy", display_name="Energy", definition=DEFINITION)
     caplog.set_level("INFO", logger="idhazh")
 
     built = plan(
@@ -811,7 +829,7 @@ def test_an_article_limit_keeps_the_best_stories_of_the_whole_run() -> None:
     replies = {**ai_replies, **energy_replies}
     verticals = [
         AI,
-        VerticalDef(id="energy", display_name="Energy", min_feeds=3, definition=DEFINITION),
+        VerticalDef(id="energy", display_name="Energy", definition=DEFINITION),
     ]
     full = plan(feeds, fetcher=replies.__getitem__, verticals=verticals, run=run)
     assert len(full.items) == 6
@@ -1004,8 +1022,12 @@ def test_a_date_too_far_in_the_future_is_not_a_date() -> None:
     and it is replaced rather than dropped - a bad date is not a reason to lose
     a story. `max_per_source` is 2, so the oldest of the three does not land.
     """
-    pair = VerticalDef(id="ai", display_name="AI", min_feeds=2, definition=DEFINITION)
-    built = plan([FORWARD, TRADE], verticals=[pair])
+    pair = VerticalDef(id="ai", display_name="AI", definition=DEFINITION)
+    built = plan(
+        [FORWARD, TRADE],
+        verticals=[pair],
+        vertical_feed_floors={"ai": 2},
+    )
     dated = {item.title: item.published_at for item in built.items}
     assert dated["Datacentre build announced for the northern corridor"] == NOW, (
         "14 hours ahead is not a date - first sight replaces it"
@@ -1129,8 +1151,12 @@ def test_a_date_too_far_ahead_is_labelled_as_our_clock_not_the_feeds() -> None:
     the reader sees is `NOW`, and without the label nothing on the payload says
     it is ours rather than the publisher's.
     """
-    pair = VerticalDef(id="ai", display_name="AI", min_feeds=2, definition=DEFINITION)
-    built = plan([FORWARD, TRADE], verticals=[pair])
+    pair = VerticalDef(id="ai", display_name="AI", definition=DEFINITION)
+    built = plan(
+        [FORWARD, TRADE],
+        verticals=[pair],
+        vertical_feed_floors={"ai": 2},
+    )
     labelled = {item.title: item.time_source for item in built.items}
     assert (
         labelled["Datacentre build announced for the northern corridor"] is TimeSource.FIRST_SEEN
@@ -1965,7 +1991,7 @@ def test_a_resting_feed_still_counts_toward_the_feed_floor() -> None:
 def test_a_plan_records_the_floor_it_was_measured_against() -> None:
     """So a payload can be read without the config that produced it."""
     built = plan([LAB, TRADE, COMMUNITY])
-    assert built.verticals[0].feed_floor == AI.min_feeds
+    assert built.verticals[0].feed_floor == 3
 
 
 # --- sharding ----------------------------------------------------------------

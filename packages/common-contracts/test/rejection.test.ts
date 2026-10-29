@@ -175,7 +175,6 @@ describe("rejection evidence", () => {
     expect(RejectedArticleRowSchema.parse({
       ...row, reason_code: fixture.unknown_retained_reason,
     }).reason_code).toBe(fixture.unknown_retained_reason);
-
     expect(CandidateRejectionRecordSchema.safeParse({
       ...rejection(), drop_reason: "UNKNOWN_CANDIDATE_REASON",
     }).success).toBe(false);

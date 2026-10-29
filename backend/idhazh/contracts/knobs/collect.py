@@ -4,11 +4,11 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from types import MappingProxyType
-from typing import Any, Final, Self
+from typing import Annotated, Any, Final, Self
 
 from pydantic import Field, PrivateAttr, model_validator
 
-from idhazh.contracts.base import Model
+from idhazh.contracts.base import Model, Slug
 from idhazh.contracts.item_health import FailureCode
 from idhazh.contracts.knobs.removed import refuse_a_removed_knob
 from idhazh.contracts.taxonomy import SourceTierDefinition
@@ -58,6 +58,19 @@ class CollectConfig(Model):
             return self._source_tier_weights[tier]
         except KeyError as error:
             raise ValueError(f"source tier {tier} has no configured weight") from error
+
+    vertical_feed_floors: dict[Slug, Annotated[int, Field(ge=1)]] = Field(
+        default_factory=dict,
+        description=(
+            "The fewest active feeds each vertical may collect from in a run. "
+            "Draft and retired desks need no floor. Active desks with feeds need "
+            "one entry here; missing or unknown entries fail configuration loading."
+        ),
+    )
+
+    def vertical_feed_floor(self, vertical_id: str) -> int | None:
+        """Return the source floor for one desk, or no rule when the desk has none."""
+        return self.vertical_feed_floors.get(vertical_id)
 
     availability_strikes_before_rest: int = Field(
         default=5,

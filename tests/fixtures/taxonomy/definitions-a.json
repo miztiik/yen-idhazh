@@ -302,7 +302,6 @@
       "display_name": "AI",
       "id": "ai",
       "is_auto_discovered": false,
-      "min_feeds": 35,
       "retired_on": null,
       "status": "active"
     },
@@ -311,7 +310,6 @@
       "display_name": "Energy",
       "id": "energy",
       "is_auto_discovered": false,
-      "min_feeds": 21,
       "retired_on": null,
       "status": "active"
     },
@@ -320,7 +318,6 @@
       "display_name": "Proposed desk",
       "id": "proposed-desk",
       "is_auto_discovered": true,
-      "min_feeds": 21,
       "retired_on": null,
       "status": "draft"
     }

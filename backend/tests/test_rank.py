@@ -172,7 +172,7 @@ def test_a_reduced_feed_scores_below_the_same_story_at_full_reliability() -> Non
 #: assertion below answer differently tomorrow.
 ORDER_NOW: Final = "2026-09-13T12:00:00Z"
 
-AI: Final = VerticalDef(id="ai", display_name="AI", min_feeds=1)
+AI: Final = VerticalDef(id="ai", display_name="AI")
 
 
 def _story(
