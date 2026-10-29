@@ -58,7 +58,7 @@ export function prepareArticle(offered: OfferedArticle, inputs: HarvestInputs, c
   if (article.title) {
     const policy = resolvePolicy(inputs);
     const freshness = calculateFreshness(entry, undefined, observation.observed_at, context.max_future_hours, policy);
-    const ageRefusal = rejectArticleAge(inputs.config, source.tier, freshness.age_hours, context.overrides?.freshness_hours);
+    const ageRefusal = rejectArticleAge(inputs.config, source.tier, freshness.age_hours);
     if (freshness.timing_source === "published_at" && freshness.age_hours !== null && freshness.timing_at !== null
       && ageRefusal !== null) {
       return reject(ageRefusal.drop_reason, ageRefusal.details,

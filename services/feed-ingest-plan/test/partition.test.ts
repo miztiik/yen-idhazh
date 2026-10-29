@@ -100,10 +100,10 @@ test("packing retains actual timing, accounting dates and text rather than recon
   } finally { await rm(root, { recursive: true, force: true }); }
 });
 
-test("a consistent freshness override passes actual screening, curation and packing without changing originals", async () => {
-  const root = await mkdtemp(join(tmpdir(), "partition-override-"));
+test("configured screening, curation and packing preserve chosen originals", async () => {
+  const root = await mkdtemp(join(tmpdir(), "partition-configured-"));
   try {
-    const input = await fixtureInput(root, { count: 2, freshness: 72 });
+    const input = await fixtureInput(root, { count: 2 });
     const original = structuredClone(input.candidates);
     expect(input.screening.admitted).toHaveLength(2);
     const result = partitionArticles(input.curation.articles, { strategy: "bin-pack", dispatch_count: 2 });

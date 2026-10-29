@@ -1,7 +1,6 @@
 /** Does one global planner policy substitute cleanly without vertical-specific controls? */
 import { expect, test } from "bun:test";
 import { loadPlanningConfig, resolvePolicy } from "../src/config/resolve-policy";
-import { PlanningRunOverridesSchema } from "@idhazh/common-contracts";
 
 const readInputs = () => Bun.file(new URL("../../../config/feed-ingest-plan.json", import.meta.url)).json();
 
@@ -90,12 +89,6 @@ test("reporting and global portfolio controls cannot change candidate policies",
 test("removed controls, invalid run fields and null global policy fail before resolution", async () => {
   const config = await readInputs();
   expect(() => loadPlanningConfig({ ...config, triage: { ...config.triage, recency_weight: null } })).toThrow("recency_weight");
-  for (const freshness_hours of [0, -1, NaN, Infinity]) {
-    expect(() => PlanningRunOverridesSchema.parse({ freshness_hours })).toThrow("freshness_hours");
-  }
-  expect(() => PlanningRunOverridesSchema.parse({ recency_half_life_hours: 3, freshness_hours: 8 }))
-    .toThrow("recency_half_life_hours");
-  expect(() => PlanningRunOverridesSchema.parse({ vertical: "world" })).toThrow("vertical");
   for (const removed of ["lambda_vertical", "lambda_desk", "lambda_lens", "lambda_event_type", "lambda_event_cluster", "lambda_entity", "lambda_coverage"]) {
     expect(() => loadPlanningConfig({
       ...config, curate_articles: {

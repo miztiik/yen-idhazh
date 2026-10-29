@@ -64,7 +64,7 @@ async function inputs() {
       ] },
     }),
     clock_config: { collect: { max_future_hours: 6 } },
-    run: { now: fixture.now, run_id: candidate.run_id, correlation_id: candidate.correlation_id, overrides: {} },
+    run: { now: fixture.now, run_id: candidate.run_id, correlation_id: candidate.correlation_id },
   };
   const discovered = {
     old: DiscoveredRowSchema.parse({
@@ -191,17 +191,17 @@ test("recorded word, blocking, precedence and exact freshness boundaries", async
   }
 });
 
-test("global and run policies change only their declared gates for every feed", async () => {
+test("global policies change only their declared gates for every feed", async () => {
   const { input, candidate } = await inputs();
   const change = async (
-    words: number, published_at: string, overrides: ScreeningInput["run"]["overrides"] = {},
+    words: number, published_at: string,
     feed_id = candidate.feed_id,
   ) => screenArticleCandidates({
     ...input, candidates: [FeedIngestCandidateSchema.parse({
       ...candidate, feed_id, source: { ...candidate.source, feed_id },
       candidate_id: deriveCandidateId(candidate.run_id, feed_id, candidate.entry_ordinal),
       word_count: words, article_text: candidate.article_text.split(/\s+/u).slice(0, words).join(" "), published_at,
-    })], observations: {}, run: { ...input.run, overrides },
+    })], observations: {}, run: input.run,
   });
   input.planning = loadPlanningConfig({
     ...input.planning.config,
@@ -211,20 +211,16 @@ test("global and run policies change only their declared gates for every feed", 
     ] },
   });
   for (const feed of [candidate.feed_id, "another-configured-feed"]) {
-    expect((await change(189, "2026-10-21T11:00:00Z", {}, feed)).rejections[0]?.details.words_required).toBe(190);
-    expect((await change(190, "2026-10-21T11:00:00Z", {}, feed)).admitted).toHaveLength(1);
+    expect((await change(189, "2026-10-21T11:00:00Z", feed)).rejections[0]?.details.words_required).toBe(190);
+    expect((await change(190, "2026-10-21T11:00:00Z", feed)).admitted).toHaveLength(1);
   }
   expect((await change(200, "2026-10-20T18:00:00Z")).rejections[0]?.drop_reason).toBe("REJECTED_AGE_EXCEEDS_MAX_TIER_ENVELOPE");
-  expect((await change(200, "2026-10-20T18:00:00Z", { freshness_hours: 18 })).rejections[0]?.drop_reason)
-    .toBe("REJECTED_AGE_EXCEEDS_MAX_TIER_ENVELOPE");
-  const admitted = await change(200, "2026-10-21T00:00:00Z", { freshness_hours: 18 });
+  const admitted = await change(200, "2026-10-21T00:00:00Z");
   expect(admitted.admitted[0]?.freshness.recency_bonus).toBeCloseTo(0.6 * 0.5 ** (12 / 18));
   expect(admitted.admitted[0]?.policy.triage.recency_half_life_hours).toBe(18);
-  expect((await change(200, "2026-10-20T18:00:00Z", { freshness_hours: 17.99 })).rejections).toHaveLength(1);
   expect(input.planning.config.curate_articles.article_quality_buckets[0]!.ladder_hours).toEqual([12]);
   input.planning.config.triage.min_words = 200;
   expect((await change(199, "2026-10-21T11:00:00Z")).rejections[0]?.details.words_required).toBe(200);
-  expect((await change(200, "2026-10-21T11:30:00Z", { freshness_hours: 0.5 })).admitted).toHaveLength(1);
   input.planning.config.triage.recency_weight = 0;
   input.planning.config.triage.recency_half_life_hours = 9;
   const zero = await change(200, "2026-10-21T11:00:00Z");
@@ -306,19 +302,9 @@ test("current discovery rows validate UTC dates and contain only planner-owned p
   expect(() => DiscoveredArticleRowSchema.parse({ ...row, first_seen_at: "2026-10-19T10:00:00+02:00" })).toThrow("first_seen_at");
 });
 
-test("invalid overrides, config, observations and batch identities fail by name without mutation", async () => {
+test("invalid config, observations and batch identities fail by name without mutation", async () => {
   const { input, candidate, observation } = await inputs();
   const before = structuredClone(input);
-  for (const freshness_hours of [0, -1, NaN, Infinity, "12", null]) {
-    await expect(screenArticleCandidates({
-      ...input, run: { ...input.run, overrides: JSON.parse(JSON.stringify({ freshness_hours })) },
-    })).rejects.toThrow("freshness_hours");
-  }
-  for (const freshness_hours of [NaN, Infinity]) {
-    await expect(screenArticleCandidates({
-      ...input, run: { ...input.run, overrides: { freshness_hours } },
-    })).rejects.toThrow("freshness_hours");
-  }
   await expect(screenArticleCandidates({
     ...input, observations: { [candidate.candidate_id]: { ...observation, http_status: 600, paywall: false } },
   })).rejects.toThrow("http_status");
@@ -343,9 +329,6 @@ test("invalid overrides, config, observations and batch identities fail by name 
   await expect(screenArticleCandidates({
     ...input, run: { ...input.run, now: "2026-02-30T12:00:00Z" },
   })).rejects.toThrow("now");
-  await expect(screenArticleCandidates({
-    ...input, run: { ...input.run, overrides: { vertical: "world" } as never },
-  })).rejects.toThrow("vertical");
   await expect(screenArticleCandidates({
     ...input, planning: {
       config: { ...input.planning.config, triage: { ...input.planning.config.triage, min_words: 0 } },
