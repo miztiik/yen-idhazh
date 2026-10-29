@@ -67,10 +67,13 @@ test("absent progress stays unavailable and zero counts do not certify publicati
       host_request: f.apiInput, host: { ...host, status: "recorded" },
     });
     expect(summary.notice).toContain("Host fingerprint recorded:");
-    expect(summary.summary).toContain("Hardware fingerprint");
     expect(summary.summary).toContain("Total machine RAM capacity");
+    expect(summary.summary).not.toContain("CPU quota");
+    expect(summary.summary).not.toContain("Fingerprint file");
+    expect(summary.summary).not.toContain("Hardware fingerprint");
     const rendered = Bun.markdown.html(summary.summary);
     expect((rendered.match(/<table>/g) ?? [])).toHaveLength(1);
+    expect(rendered).toContain("Measurement time (UTC)");
     expect(rendered).not.toContain("Live planner process");
   } finally { await f.cleanup(); }
   const settings = await Bun.file(new URL("../../../config/idhazh.json", import.meta.url)).json();

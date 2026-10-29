@@ -10,7 +10,6 @@ import type { PlannerMarkdown } from "../src/reporting";
 import { formatHostFingerprintSummary } from "./feed-ingest-plan-host-summary";
 import { formatPolicyTable } from "./feed-ingest-plan-policy-report";
 import { formatWorkflowAnnotation } from "./feed-ingest-plan-report-format";
-import { MetadataDeliveryResultSchema } from "./feed-ingest-plan-delivery-result";
 
 export type WorkflowReportEvidence = {
   response: unknown; health?: unknown; policy?: unknown; host?: unknown;
@@ -20,11 +19,19 @@ export function renderWorkflowPlanMarkdown(input: WorkflowReportEvidence): Plann
   const response = PlanResponseSchema.parse(input.response);
   const policy = formatPolicyTable(input.policy, response.selection_started_at_utc !== null);
   const host = formatHostFingerprintSummary(input.host);
-  return renderPlanMarkdown({
-    response, health: input.health,
-    policy: { markdown: policy.summary, notice: policy.notice },
-    host: { markdown: host.summary, notice: host.notice },
+  const report = renderPlanMarkdown({
+    response, health: input.health, policy: { markdown: policy.summary, notice: policy.notice },
   });
+  return {
+    markdown: placeHostFingerprintFirst(report.markdown, host.summary),
+    notices: [{ level: "notice", title: "Host fingerprint", message: host.notice }, ...report.notices],
+  };
+}
+
+function placeHostFingerprintFirst(markdown: string, hostSummary: string): string {
+  const title = "# Feed planner run\n\n";
+  if (!markdown.startsWith(title)) throw new Error("Planner report is missing its title");
+  return `${title}${hostSummary}\n\n${markdown.slice(title.length)}`;
 }
 
 export async function writePlannerReport(input: {
@@ -72,14 +79,13 @@ export async function writeWorkflowReport(input: {
   } else {
     const hostFile = Bun.file(join(input.directory, "host-fingerprint.json"));
     const host = formatHostFingerprintSummary(await hostFile.exists() ? await hostFile.json() : undefined);
-    report = renderUnavailablePlanMarkdown({ host: { markdown: host.summary, notice: host.notice } });
+    const unavailable = renderUnavailablePlanMarkdown();
+    report = {
+      markdown: placeHostFingerprintFirst(unavailable.markdown, host.summary),
+      notices: [...unavailable.notices, { level: "notice", title: "Host fingerprint", message: host.notice }],
+    };
   }
-  const receiptFile = Bun.file(join(input.directory, "delivery-result.json"));
-  const receipt = await receiptFile.exists() ? MetadataDeliveryResultSchema.parse(await receiptFile.json()) : null;
-  const delivery = receipt === null ? "Git delivery was not confirmed."
-    : `Git delivery: **${receipt.status}**. ${receipt.files} verified files.`
-      + (receipt.commit === null ? "" : ` Commit: \`${receipt.commit}\`.`);
-  const markdown = `${report.markdown}\n\n## Metadata delivery\n\n${delivery}\n`;
+  const markdown = report.markdown;
   await writeFile(join(input.directory, "report.md"), markdown, "utf8");
   await appendFile(input.summaryPath, markdown, "utf8");
   for (const notice of report.notices) console.log(formatWorkflowAnnotation(notice));

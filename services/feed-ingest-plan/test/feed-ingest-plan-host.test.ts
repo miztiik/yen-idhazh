@@ -42,6 +42,8 @@ test("real API receipts survive a missing planner result and keep byte-valued ca
       host: { markdown: hostSummary.summary, notice: hostSummary.notice },
     });
     expect(report.markdown).toContain("Planning result unavailable");
+    expect(report.markdown.indexOf("Planning result unavailable"))
+      .toBeLessThan(report.markdown.indexOf("## Table G - Host fingerprint"));
     const hostNotice = hostSummary.notice;
     expect(hostNotice).toContain("L3 48.00 MiB");
     expect(hostNotice).toContain("total RAM 16383.750 MiB");
