@@ -20,7 +20,8 @@ import { operationConfigFingerprint } from "./api/document-operations";
 import { executeSelection } from "./api/selection-operation";
 import { executePartition } from "./api/partition-operation";
 import { executePersistence } from "./api/persistence-operation";
-import { prepareFeedHealthState, recordFeedHealthState } from "./api/feed-health-state-operation";
+import { recordFeedHealthState } from "./api/feed-health-state-operation";
+import { preparePlanningHealth } from "./api/prepare-planning-health";
 import type { PlanInputs } from "./load-plan-inputs";
 import type { ProgressRecord } from "./logging/progress-logger";
 import { createIngestObservations } from "./ingest-observations";
@@ -76,7 +77,6 @@ export async function runFeedPlan(raw: unknown, inputs: PlanInputs, runtime: Pla
   };
   const parserPool = runtime.parser_pool ?? new ArticleParserPool(inputs.settings.listener.parser_concurrency);
   let work: ReturnType<typeof createRunHealth> | undefined;
-  let history: Awaited<ReturnType<typeof prepareFeedHealthState>> | undefined;
   let discovery: Awaited<ReturnType<typeof readDiscoveredEvidence>> | undefined;
   const sightings: DiscoveredArticleRow[] = [];
   const offers: OfferedArticle[] = [];
@@ -99,7 +99,7 @@ export async function runFeedPlan(raw: unknown, inputs: PlanInputs, runtime: Pla
   emit("plan", "started");
   try {
     const loaded = await Promise.all([
-      phase("feed-health-before-fetch", () => prepareFeedHealthState(inputs, context.now)),
+      phase("feed-health-before-fetch", () => preparePlanningHealth(inputs, context.now, { context, rows: [] })),
       readDiscoveredEvidence({
         root: inputs.root, discovered_files: inputs.settings.inputs.discovered_files, discovered_days: inputs.settings.inputs.discovered_days,
         registration: inputs.registrations.discovered_articles, now: context.now,
@@ -115,12 +115,10 @@ export async function runFeedPlan(raw: unknown, inputs: PlanInputs, runtime: Pla
       }),
     ]);
     const initialHistory = loaded[0];
-    history = initialHistory;
     discovery = loaded[1];
     const identities = await readArticleIdentityHistory(inputs, context.now, discovery.rows, loaded[2].published_rows);
     // The measured initial capture already includes bounded in-memory evidence and its summary.
     // Selection performs a separate fresh capture; no membership/index cache crosses that boundary.
-    const historyRows = initialHistory.rows;
     work = createRunHealth(context, sources, initialHistory.sources,
       { ...inputs.harvest.config.triage, tidy_urls: inputs.harvest.config.harvest.tidy_urls,
         clock: runtime.observation_clock ?? (() => new Date()) });
@@ -189,7 +187,7 @@ export async function runFeedPlan(raw: unknown, inputs: PlanInputs, runtime: Pla
           candidate, supplied, inputs.harvest.config.curate_articles.website_grouping.include_private_suffixes,
         )];
       })),
-      history_rows: historyRows, history_days: history.days, work_rows: currentWork.rows(), exclusions: currentWork.exclusions(),
+      history_rows: [], history_days: initialHistory.days, work_rows: currentWork.rows(), exclusions: currentWork.exclusions(),
     });
     PlannerWorkEventSchema.parse({ stage: "parsed", payload: parsed });
     batches.parsed_batch_id = parsed.batch_id;
