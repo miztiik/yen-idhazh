@@ -792,6 +792,7 @@ def _dispatch(
         work.stage_work(
             work_plan,
             settings=settings,
+            commit_sha=args.commit,
             scorer=_scorer(
                 _scores_this_run(
                     settings.app.observability,

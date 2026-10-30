@@ -30,6 +30,7 @@ from idhazh.contracts.base import (
 from idhazh.contracts.chart_evidence import ChartEvidence
 from idhazh.contracts.visual_outcome import validate_visual_outcome
 from idhazh.contracts.visual_type import VisualType
+from idhazh.contracts.visual_validation import ValidatorCheck
 from idhazh.contracts.whowhat_grid import WhowhatGridData
 
 #: What one item's decision is filed as, under `backend/var/run/<date>/items/`.
@@ -65,18 +66,11 @@ class NoneReason(StrEnum):
     refuses in two places and both record `not_reachable`, because what an
     operator acts on is the gate rather than the line of code.
 
-    **And one member per gate that has a writer.** The design record names six
-    gates and the two-call flow adds a seventh; the potential class, the novelty
-    floor, the sufficiency bar and the per-visual byte cap are not built, so a
-    member for each would be a word nobody can produce, nobody can retire and
-    nobody can tell from a bug. Each arrives as an additive member with the row
-    that builds its gate.
+    **And one member per gate that has a writer.** Proposed gates without a
+    producer do not get a member until their behavior exists.
 
-    The single-call planner these five replace writes nothing here. Its causes
-    are sentences in `rationale` and several of them - no summary to illustrate,
-    a reply that lost its shape, a kind with no renderer - are not gates at all,
-    so typing them into this vocabulary would be work the row that retires that
-    planner deletes.
+    The retired single-call planner writes nothing here. Its causes are
+    sentences in `rationale`, and several are not gates at all.
     """
 
     #: The reachability gate refused before a plan was drafted: no choice over
@@ -108,6 +102,11 @@ class VisualDecision(Contract):
     __schema_stem__: ClassVar[str] = "visual-decision"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-10-29",
+            change="Record first rejection and downgrade search evidence.",
+            why="Attempt records need typed evidence from the decision producer.",
+        ),
+        ChangelogEntry(
             version="2026-10-28",
             change="Add a separate whowhat grid payload and visual kind.",
             why="Actor/claim grids must not be encoded as chart data.",
@@ -121,11 +120,6 @@ class VisualDecision(Contract):
             version="2026-10-10",
             change="Added chart_evidence counts and rates for compiled numeric figures.",
             why="Run reports need exact counts from the compiler's single resolution.",
-        ),
-        ChangelogEntry(
-            version="2026-09-13T22:30",
-            change="Retired asset_path.",
-            why="The build-time renderer is deleted, so nothing writes an SVG to name.",
         ),
         ChangelogEntry(
             version="2026-08-21",
@@ -224,6 +218,31 @@ class VisualDecision(Contract):
         default=None, ge=0,
         description="Selected replacement depth; zero without replacement, null when unmeasured.",
     )
+    deepest_downgrade_depth: int | None = Field(
+        default=None,
+        ge=0,
+        description=(
+            "Deepest downgrade rung reached while evaluating this request, including a "
+            "refused replacement. Zero when no deeper rung was reached; null on older "
+            "decisions or when no typed request was made."
+        ),
+    )
+    rejection_reason: ValidatorCheck | None = Field(
+        default=None,
+        description=(
+            "The first check that rejected the original requested plan. Retained if a "
+            "replacement is later selected or refused. Null when that plan passed, no "
+            "validator rejection occurred, or the payload predates this field."
+        ),
+    )
+    gate_floor_applied: bool | None = Field(
+        default=None,
+        description=(
+            "Whether any evaluated mark-count floor excluded a replacement candidate. "
+            "False when numeric floors were compared but excluded none; null when no "
+            "numeric floor was compared or on older decisions."
+        ),
+    )
     marks: int | None = Field(
         default=None, ge=1,
         description="Delivered mark count, not the flat mark pool; null without delivery.",
@@ -234,6 +253,25 @@ class VisualDecision(Contract):
         validate_visual_outcome(
             self.planned_type, self.rendered_type, self.downgrade_depth, self.marks
         )
+        if self.planned_type is None and any(
+            value is not None
+            for value in (
+                self.deepest_downgrade_depth,
+                self.rejection_reason,
+                self.gate_floor_applied,
+            )
+        ):
+            raise ValueError("visual attempt evidence requires a typed visual request")
+        if (
+            self.downgrade_depth is not None
+            and self.deepest_downgrade_depth is not None
+            and self.downgrade_depth > self.deepest_downgrade_depth
+        ):
+            raise ValueError("the selected replacement depth was reached by the ladder")
+        if self.gate_floor_applied is not None and (
+            self.deepest_downgrade_depth is None or self.deepest_downgrade_depth == 0
+        ):
+            raise ValueError("floor evidence requires a reached downgrade rung")
         if self.planned_type is not None:
             if (self.rendered_type is not None) != (self.visual_state is VisualState.RENDERED):
                 raise ValueError("a measured rendered type and rendered state arrive together")

@@ -1,5 +1,7 @@
 {
-  "entries": [],
+  "entries": [
+    {"bytes": 421412,"covers": "2026-10-28","file_sha256": "087d22e913e9f12be9c2d02e22058212ba3f336de296d846fc9d5ee59825967c","lost_days": [],"rows": 8208,"set_aside": 0,"state": "packed"}
+  ],
   "ledger": "rejected-articles",
   "period": "daily",
   "version": "2026-10-25"

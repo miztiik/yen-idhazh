@@ -93,6 +93,7 @@ export async function readExclusionEvidence(input: {
     }),
   }));
   const publishedOn = new Map<string, string>();
+  const publishedRows = publishedHeld.flatMap(({ held }) => held.rows.map(({ row }) => row));
   for (const { input: day, held } of publishedHeld) {
     for (const { row } of held.rows) {
       if (row.published_on !== day.day) throw new Error("published row date differs from its named UTC day");
@@ -106,6 +107,7 @@ export async function readExclusionEvidence(input: {
   if (codes.length !== wantedCodes.size) throw new Error("collect.settled_failure_codes must be distinct");
   if (wantedCodes.size === 0) return {
     published_on: publishedOn,
+    published_rows: publishedRows,
     settled_failure_codes: new Map<string, ItemHealthFailureCode>(),
     history: { published: coverage(publishedHeld), settled_failures: null },
   };
@@ -131,7 +133,7 @@ export async function readExclusionEvidence(input: {
     }
   }
   return {
-    published_on: publishedOn, settled_failure_codes: settledCodes,
+    published_on: publishedOn, published_rows: publishedRows, settled_failure_codes: settledCodes,
     history: {
       published: coverage(publishedHeld),
       settled_failures: {

@@ -3,6 +3,7 @@ import { parseFeed as decodeFeed, type AnyFeed, type RssFeed, type RdfFeed, type
 import { TimestampSchema } from "@idhazh/common-contracts";
 import type { FeedEntry } from "./harvest-types";
 import { cleanText } from "./dom-extractor";
+import { normalizeArticleUrlInput } from "./article-url";
 
 export class FeedParseError extends Error {
   constructor(cause: unknown) { super("malformed-feed", { cause }); }
@@ -30,7 +31,7 @@ function publishedTimestamp(values: readonly (string | undefined)[]): string | n
   return parsed.success ? parsed.data : null;
 }
 function address(value: string | undefined): string | null {
-  return value?.trim() || null;
+  return value === undefined ? null : normalizeArticleUrlInput(value) || null;
 }
 function identifierAddress(value: string | undefined): string | null {
   return value && /^https?:\/\//i.test(value) ? address(value) : null;

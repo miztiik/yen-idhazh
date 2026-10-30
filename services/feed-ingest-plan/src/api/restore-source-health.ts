@@ -21,7 +21,7 @@ export async function restoreSourceHealth(batch: ParsedFeedBatch, inputs: PlanIn
     const original = checkFetchedDocument(root, inputs);
     const ids = original.fetch_item_type === "article" ? [rootId] : root.article_capture_request_ids;
     const work = createRunHealth(batch.context, inputs.harvest.sources.map(source => sourceSnapshot(inputs.harvest, source)),
-      new Map(), inputs.harvest.config.triage, batch.work_rows);
+      new Map(), { ...inputs.harvest.config.triage, tidy_urls: inputs.harvest.config.harvest.tidy_urls }, batch.work_rows);
     for (const id of ids) {
       const capture = store.get(id);
       if (capture?.state !== "complete" || capture.operation !== "fetch" || capture.run_id !== root.run_id
