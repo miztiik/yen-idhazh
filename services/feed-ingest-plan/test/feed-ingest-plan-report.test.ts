@@ -7,7 +7,7 @@ import { FeedIngestConfigSchema, readFeedIngestEvent } from "../../../packages/c
 import { prepareProgressEvent } from "../src/logging/structured-logger";
 import { writePlannerReport } from "../scripts/feed-ingest-plan-report";
 import { formatHostFingerprintSummary } from "../scripts/feed-ingest-plan-host-summary";
-import { formatWorkflowPolicy } from "../scripts/feed-ingest-plan-policy-report";
+import { formatPolicyTable, formatWorkflowPolicy } from "../scripts/feed-ingest-plan-policy-report";
 import { formatWorkflowAnnotation } from "../scripts/feed-ingest-plan-report-format";
 import { renderPlannerProgressMarkdown } from "../src/reporting";
 import { fixture as hostFixture } from "../../host-fingerprints/test/fixture";
@@ -74,6 +74,8 @@ test("absent progress stays unavailable and zero counts do not certify publicati
     const rendered = Bun.markdown.html(summary.summary);
     expect((rendered.match(/<table>/g) ?? [])).toHaveLength(1);
     expect(rendered).toContain("Measurement time (UTC)");
+    expect(rendered).toContain(`<td>Logical processors</td><td>${host.row.cpu_logical_processors}</td>`);
+    expect(rendered).toContain(`<td>Allowed processors</td><td>${host.row.cpu_allowed_processors}</td>`);
     expect(rendered).not.toContain("Live planner process");
   } finally { await f.cleanup(); }
   const settings = await Bun.file(new URL("../../../config/idhazh.json", import.meta.url)).json();
@@ -85,17 +87,19 @@ test("absent progress stays unavailable and zero counts do not certify publicati
   },
     request: { article_limit: 10, shards: 4, partition_strategy: "bin-pack" },
     history: settings.collect, parser_concurrency: 4 }, true);
-  expect(policy.notice).toContain("max 10 articles (workflow override); 4 workers (bin-pack)");
-  expect(policy.rows.find(([name]) => name === "Age windows")?.[2]).toBe(
-    `${config.curate_articles.article_quality_buckets.map(rule => `Tier ${rule.tier}: 6 / 12 hours`).join("; ")} (configuration)`,
-  );
-  expect(policy.rows.find(([name]) => name === "Article cap")?.[2]).toBe("10 articles (workflow override)");
-  expect(policy.rows.find(([name]) => name === "Feed-status lookback")?.[2])
-    .toContain(`${config.feedback.lifecycle_window_days} UTC days`);
-  expect(policy.rows.find(([name]) => name === "Reliability adjustment")?.[2])
-    .toContain(`${settings.collect.reliability_window_days} UTC days`);
-  expect(policy.rows.find(([name]) => name === "Request history")?.[2])
-    .toBe(`${config.feedback.request_report_closed_days} days`);
+  expect(policy.notice).toContain("article limit: 10 (workflow override); article assignments: 4; strategy: bin-pack");
+  for (const rule of config.curate_articles.article_quality_buckets) {
+    expect(policy.rows.find(([name]) => name === `Tier ${rule.tier} age steps (hours)`))
+      .toEqual([`Tier ${rule.tier} age steps (hours)`, "6 / 12", "configuration"]);
+  }
+  expect(policy.rows.find(([name]) => name === "Article limit")).toEqual(["Article limit", "10", "workflow override"]);
+  expect(policy.rows.find(([name]) => name === "Policy config version")?.[1]).toBe(config.version);
+  expect(policy.rows.find(([name]) => name === "Feed-status history (represented UTC days)")?.[1])
+    .toBe(String(config.feedback.lifecycle_window_days));
+  expect(policy.rows.find(([name]) => name === "Reliability history (represented UTC days)")?.[1])
+    .toBe(String(settings.collect.reliability_window_days));
+  expect(policy.rows.find(([name]) => name === "Request history (closed UTC days)")?.[1])
+    .toBe(String(config.feedback.request_report_closed_days));
   expect(formatWorkflowPolicy(undefined, false).notice).toContain("defaults do not prove");
 });
 
@@ -113,6 +117,50 @@ test("escapes command data and refuses URLs or arbitrary progress fields", async
   expect(unsafe.details._compliance).toMatchObject({ status: "NON_COMPLIANT" });
   expect(JSON.stringify(unsafe)).not.toContain("news.example");
   expect(() => renderPlannerProgressMarkdown([{ ...events[0], url: "https://news.example/private" }])).toThrow();
+});
+
+test("policy cells preserve effective JSON values and override sources without inventing enablement", async () => {
+  const config = FeedIngestConfigSchema.parse(await Bun.file(
+    new URL("../../../config/feed-ingest-plan.json", import.meta.url),
+  ).json());
+  const settings = await Bun.file(new URL("../../../config/idhazh.json", import.meta.url)).json();
+  const input = {
+    config: { ...config, harvest: { ...config.harvest, concurrency: 7, fetch_timeout_ms: 4321 },
+      curate_articles: { ...config.curate_articles, source_authority_weight: 1.25, source_reliability_penalty_enabled: false } },
+    request: { article_limit: 17, shards: 3, partition_strategy: "round-robin" },
+    history: { ...settings.collect, availability_strikes_before_rest: 4, reliability_floor: 0.3 },
+    parser_concurrency: 2,
+  };
+  const before = structuredClone(input);
+  const policy = formatWorkflowPolicy(input, false);
+  const cells = Object.fromEntries(policy.rows.map(([label, value, source]) => [label, { value, source }]));
+  expect(cells).toMatchObject({
+    "Policy config version": { value: config.version },
+    "Article limit": { value: "17", source: "workflow override" },
+    "Article assignments": { value: "3", source: "workflow override" },
+    "Assignment strategy": { value: "round-robin", source: "workflow override" },
+    "Fetch concurrency": { value: "7", source: "configuration" },
+    "Fetch timeout (ms)": { value: "4321" },
+    "Parser workers": { value: "2" },
+    "Authority coefficient": { value: "1.25" },
+    "Article-pass adjustment enabled": { value: "false" },
+    "Failing checks before rest": { value: "4" },
+    "Rested runs before retry": { value: "4" },
+    "Reliability floor (fraction)": { value: "0.3" },
+  });
+  expect(cells).not.toHaveProperty("Selection");
+  expect(policy.notice).toContain("selection started: false");
+  expect(formatWorkflowPolicy({ ...input, request: {} }, false).rows.find(([name]) => name === "Article limit"))
+    .toEqual(["Article limit", String(config.curate_articles.article_limit), "configuration"]);
+  const html = Bun.markdown.html(formatPolicyTable(input, false).summary);
+  expect(html).toContain("<td>0.3</td>");
+  expect(html).toContain("<td>false</td>");
+  expect(html).toContain("<td>round-robin</td>");
+  expect(html).toContain("<td>1.25</td>");
+  expect(html).not.toContain("<th>Source</th>");
+  expect(html).not.toContain("<td>workflow override</td>");
+  expect(html).toContain("Workflow overrides: Article limit, Article assignments, Assignment strategy.");
+  expect(input).toEqual(before);
 });
 
 test("publisher keeps flexible details and records missing or unsafe details without leaking values", async () => {

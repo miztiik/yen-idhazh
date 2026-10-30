@@ -7,6 +7,8 @@ import { PlanResponseSchema } from "../api/plan-response.schema";
 import { FeedHealthStateUpdateResponseSchema } from "../api/feed-health-state.schema";
 import { escapeMarkdown } from "./markdown-format";
 import { renderRequestReport } from "./request-report-markdown";
+import { renderRunFacts } from "./run-facts-markdown";
+import { renderFeedRest } from "./feed-rest-markdown";
 
 export type MarkdownSection = Readonly<{ markdown: string; notice: string }>;
 export type PlannerMarkdownNotice = Readonly<{
@@ -79,15 +81,16 @@ export function renderPlanMarkdown(input: PlanMarkdownEvidence): PlannerMarkdown
   }
   const feedRows = health?.rows ?? [];
   const tableFeedRows = [...feedRows].sort((left, right) => {
-    return compareKnownDescending(left.articles_selected, right.articles_selected)
-      || compareKnownDescending(left.article_candidates, right.article_candidates)
+    return compareKnownDescending(left.article_candidates, right.article_candidates)
+      || compareKnownDescending(left.articles_selected, right.articles_selected)
       || left.feed_id.localeCompare(right.feed_id) || left.date.localeCompare(right.date);
   });
   const causes = feedRows.flatMap(feed => feed.rejection_counts.map(cause =>
     ({ ...cause, feed_id: feed.feed_id, date: feed.date })))
     .sort((left, right) => right.count - left.count || left.reason_code.localeCompare(right.reason_code)
       || left.feed_id.localeCompare(right.feed_id) || left.date.localeCompare(right.date));
-  const requestReport = renderRequestReport(health?.request_report);
+  const requestReport = renderRequestReport(health?.request_report, feedRows);
+  const facts = renderRunFacts(row, health?.rows);
   const known = (value: number | null, unit: string) => value === null ? "Not recorded"
     : `${value} ${value === 1 && unit.endsWith("s") ? unit.slice(0, -1) : unit}`;
   const operationName = (operation: typeof row.api_timings[number]["operation"]) => ({
@@ -97,36 +100,24 @@ export function renderPlanMarkdown(input: PlanMarkdownEvidence): PlannerMarkdown
     fetch: "Fetch and article work", parse: "HTML parsing", select: "Article selection",
     partition: "Worker assignment", persist: "Selected output",
   })[operation];
-  const strategy = { "bin-pack": "work-balanced", "round-robin": "in order", none: "one worker" }[row.strategy];
   const missingFields = "MISSING_REQUIRED_FIELDS rejects an article with a missing or invalid offered URL or identity, or no usable title after extraction. "
     + "The grouped count cannot identify which field failed. It does not mean a feed configuration field is missing.";
   const summary = [
-    "# Feed planner run", "", `**Status: ${row.status}.** ${row.failure_code === null ? "The requested planning stages finished." : `Cause: ${escapeMarkdown(row.failure_code)}.`}`,
-    "", "This is planning output, not proof of summarization or publication. Article bodies are kept only in the selected text artifact.", "",
-    "## Table A - Run facts", "", "| Id | Fact | Recorded value |", "| --- | --- | --- |",
-    `| A1 | Run and attempt | ${escapeMarkdown(row.run_id)}; attempt ${row.attempt} |`,
-    `| A2 | Feeds with saved run rows | ${health === null ? "Not recorded" : known(new Set(feedRows.map(feed => feed.feed_id)).size, "feeds")} |`,
-    `| A3 | Feed checks | ${health === null ? "Not recorded" : known(total(feedRows, feed => feed.feed_reads), "checks")} |`,
-    `| A4 | Admitted articles | ${health === null ? "Not recorded" : known(total(feedRows, feed => feed.article_candidates), "articles")} |`,
-    `| A5 | Chosen articles | ${row.selected_count} articles |`,
-    `| A6 | Worker groups | ${row.dispatch_count} groups; ${strategy} |`,
-    `| A7 | Elapsed planning time | ${known(row.duration_ms, "milliseconds")} |`,
-    `| A8 | Age evaluated at | ${escapeMarkdown(row.evaluated_at)} UTC |`,
-    `| A9 | Selection began at | ${row.selection_started_at_utc === null ? "Selection did not run" : `${escapeMarkdown(row.selection_started_at_utc)} UTC`} |`,
+    "# Feed planner run", "", facts.markdown,
     ...(input.policy === undefined
-      ? ["", "## Table B - Applied policy", "", "| Id | Setting | What it controls | Effective value |", "| --- | --- | --- | --- |",
-        "| B1 | Effective settings | Values used by this run | Not recorded; policy evidence was not supplied |"]
+      ? ["", "## Table B - Effective policy", "", "| Id | Setting | Effective value |", "| --- | --- | --- |",
+        "| B1 | Effective settings | Not recorded |", "", "Policy evidence was not supplied; committed defaults are not evidence."]
       : ["", input.policy.markdown]),
     "", "## Table C - Measured operations", "", "| Id | Operation | Duration | State |", "| --- | --- | --- | --- |",
     ...row.api_timings.map((span, index) =>
-      `| C${index + 1} | ${operationName(span.operation)} | ${span.duration_ms} milliseconds | ${span.status} |`),
+      `| C${index + 1} | ${operationName(span.operation)} | ${span.duration_ms} ms | ${span.status} |`),
     "", "Concurrent spans can overlap. Do not add them to estimate elapsed run time.",
     "", "<details>", "<summary>Per-feed article results</summary>", "",
     "## Table D - Per-feed article results", "",
-    "| Id | Feed | UTC work day | Chosen articles | Admitted articles | Feed checks | Feed / article / robots requests | Feed read result |",
+    "| Id | Feed | UTC work day | Admitted articles | Chosen articles | Feed checks | Feed / article / robots requests | Feed read result |",
     "| --- | --- | --- | --- | --- | --- | --- | --- |",
     ...tableFeedRows.map((feed, index) =>
-      `| D${index + 1} | ${escapeMarkdown(feed.feed_id)} | ${feed.date} | ${known(feed.articles_selected, "articles")} | ${known(feed.article_candidates, "articles")} | ${known(feed.feed_reads, "checks")} | ${[feed.feed_requests, feed.article_requests, feed.robots_requests].map(value => known(value, "requests")).join(" / ")} | ${escapeMarkdown(describeFeedRead(feed))} |`),
+      `| D${index + 1} | ${escapeMarkdown(feed.feed_id)} | ${feed.date} | ${feed.article_candidates ?? "Not recorded"} | ${feed.articles_selected ?? "Not recorded"} | ${feed.feed_reads ?? "Not recorded"} | ${[feed.feed_requests, feed.article_requests, feed.robots_requests].map(value => value ?? "Not recorded").join(" / ")} | ${escapeMarkdown(describeFeedRead(feed))} |`),
     ...(feedRows.length ? [] : ["", health === null ? "Feed work was not recorded." : "Zero feed rows were recorded."]),
     "", "Feed read results combine the recorded download result, usable URL count and failure code. The saved download outcome is unchanged.",
     "", "</details>", "", requestReport.markdown,
@@ -134,26 +125,12 @@ export function renderPlanMarkdown(input: PlanMarkdownEvidence): PlannerMarkdown
     "## Table G - Grouped exclusions", "", "| Id | Feed | UTC day | Subject / stage | Reason | Count | Attribution |",
     "| --- | --- | --- | --- | --- | --- | --- |",
     ...causes.map((cause, index) =>
-      `| G${index + 1} | ${escapeMarkdown(cause.feed_id)} | ${cause.date} | ${escapeMarkdown(`${cause.subject} / ${cause.stage}`)} | ${escapeMarkdown(cause.reason_code)} | ${known(cause.count, "decisions")} | ${cause.attribution ?? "Not a failure"} |`),
+      `| G${index + 1} | ${escapeMarkdown(cause.feed_id)} | ${cause.date} | ${escapeMarkdown(`${cause.subject} / ${cause.stage}`)} | ${escapeMarkdown(cause.reason_code)} | ${cause.count} | ${cause.attribution ?? "Not a failure"} |`),
     ...(causes.length ? [] : ["", health === null ? "Exclusion evidence was not recorded." : "No exclusions were recorded."]),
     ...(causes.some(cause => cause.reason_code === "MISSING_REQUIRED_FIELDS") ? ["", missingFields] : []),
-    "", "</details>",
+    "", "</details>", "", renderFeedRest(feedRows),
     ...(input.host === undefined ? [] : ["", input.host.markdown]),
   ].join("\n");
-  function total<T>(rows: readonly T[], value: (row: T) => number | null) {
-    const values = rows.map(value);
-    return values.some(value => value === null) ? null : values.reduce<number>((sum, value) => sum + value!, 0);
-  }
-  const feedWork = health === null ? "No feed-health result was saved for this run."
-    : feedRows.length === 0 ? "Zero feed rows were recorded for this run."
-    : `${known(new Set(feedRows.map(feed => feed.feed_id)).size, "feeds with run rows")}; `
-      + `${known(total(feedRows, feed => feed.feed_reads), "feed checks")}; `
-      + `${known(total(feedRows, feed => feed.article_candidates), "admitted articles")}; `
-      + `${known(total(feedRows, feed => feed.articles_selected), "chosen articles")}; `
-      + `feed / article / robots requests: ${[total(feedRows, feed => feed.feed_requests),
-        total(feedRows, feed => feed.article_requests), total(feedRows, feed => feed.robots_requests)]
-        .map(value => known(value, "requests")).join(" / ")}. `
-      + `Request counts ${feedRows.every(feed => feed.counts_complete) ? "complete" : "incomplete; some counts were not recorded"}.`;
   const grouped = new Map<string, number>();
   for (const cause of causes) grouped.set(cause.reason_code, (grouped.get(cause.reason_code) ?? 0) + cause.count);
   const exclusions = health === null ? "Exclusion evidence was not recorded."
@@ -166,10 +143,10 @@ export function renderPlanMarkdown(input: PlanMarkdownEvidence): PlannerMarkdown
     ...(input.host === undefined ? [] : [
       { level: "notice" as const, title: "Host fingerprint", message: input.host.notice },
     ]),
-    { level: "notice", title: "Feed work", message: feedWork },
+    { level: "notice", title: "Feed work", message: facts.notice },
     { level: "notice", title: "Request counts", message: requestReport.notice },
     { level: "notice", title: "Grouped exclusions", message: exclusions },
-    ...(input.policy === undefined ? [] : [{ level: "notice" as const, title: "Applied policy", message: input.policy.notice }]),
+    ...(input.policy === undefined ? [] : [{ level: "notice" as const, title: "Effective policy", message: input.policy.notice }]),
   ];
   if (row.failure_code !== null) notices.push({
     level: "warning", title: "Feed planner outcome",
