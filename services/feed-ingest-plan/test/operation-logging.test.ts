@@ -52,7 +52,9 @@ test("standalone document work logs failure addresses only and persistence logs 
       }
       for (const event of events) {
         expect(event.details._compliance).toBeUndefined();
-        expect(event.details.article_id).toBe(fetched.article_id);
+        if (event.operation === "fetch" || event.operation === "parse") {
+          expect(event.details.article_id).toBe(fetched.article_id);
+        }
         if (event.operation === failedOperation && event.phase === "failed") {
           expect(event.details.article_url).toBe(url);
         } else expect(JSON.stringify(event)).not.toContain("https://");

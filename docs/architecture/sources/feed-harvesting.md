@@ -57,9 +57,6 @@ pass the same URL format and length contract as downstream payloads before
 hashing or dispatch; percent-encoding cannot bypass that bound. Each transformed address
 passes public-address validation, DNS checks, the applicable robots policy
 and pinned dispatch before use. An unsafe transformed address is never dispatched.
-The [bounded saved-key lookup](article-identity-history.md)
-avoids unnecessary repeat processing where earlier addresses can be recovered.
-It does not rewrite existing publication or history records.
 
 Feedsmith normalizes RSS, Atom, RDF and JSON Feed entries. They retain
 categories, authors, offered ordinals and entry-level UTC dates. A feed's
@@ -225,6 +222,12 @@ Early factual refusals avoid downloading work the same admission rule would
 reject later. Shared production parsing and bounded native workers preserve
 the trust checks while allowing independent requests to make real progress.
 Article limits constrain output only; they are not an input truncation policy.
+
+User-directed policy change, 2026-10-30 UTC: only the current cleaned article
+address is used to match discovery, publication and settled-failure keys.
+Older recorded keys remain unchanged and do not link to the current address;
+this avoids extra history reads and alternate-policy checks, but can repeat
+processing for an address whose older key differs.
 
 ## See also
 

@@ -11,6 +11,7 @@ import type { LedgerDayInput } from "../config/service-settings";
 import { LedgerHistoryReadError } from "./ledger-history-error";
 import { createPlannerHistoryCache, readStoredPlannerDay } from "./read-planner-history";
 import type { PlannerHistoryCache } from "./read-planner-history";
+import type { StageLogger } from "../logging/structured-logger";
 
 export type FeedHealthFieldGap = {
   use: FeedHealthFieldUse; field: string; day: string;
@@ -77,16 +78,22 @@ export async function readFeedHealthFieldsDay(
   root: string, registration: LedgerRegistration, day: LedgerDayInput,
   cache: PlannerHistoryCache<Record<string, unknown>> = createPlannerHistoryCache(),
   excludeExecution?: { run_id: string; attempt: number },
+  log?: StageLogger,
 ) {
   if (registration.name !== "feed-health-state") {
     throw new LedgerHistoryReadError("Health field reads require the feed-health-state ledger");
   }
-  const { rows, ...stored } = await readStoredPlannerDay(root, registration, day, cache);
+  const { rows, ...stored } = await readStoredPlannerDay(root, registration, day, cache, log);
   const records = rows.filter(row => excludeExecution === undefined
     || row.run_id !== excludeExecution.run_id || row.attempt !== excludeExecution.attempt);
   const uses = projectFeedHealthFields(day.day, records);
-  for (const view of Object.values(uses)) for (const gap of view.gaps) {
-    console.error(JSON.stringify({ event: "planner_health_field_gap", ...gap }));
+  if (log !== undefined) {
+    for (const view of Object.values(uses)) for (const gap of view.gaps) {
+      log("history", "failed", {
+        source: "feed-health-field", failed_check: gap.field, reason: gap.code,
+        field: gap.field, use: gap.use, day: gap.day, identity: gap.identity,
+      });
+    }
   }
   return { ...stored, records, uses };
 }

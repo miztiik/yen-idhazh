@@ -71,7 +71,7 @@ test("saved article receipts retain their old identity but cannot create current
       request_id: randomUUID(), correlation_id: context.correlation_id,
       feed_id: "recorded-news", fetch_item_type: "article" as const, url: identity.canonical_url,
     };
-    const { digest_root, selected_days, ...originalInputs } = held.inputs.settings.inputs;
+    const { digest_root, ...originalInputs } = held.inputs.settings.inputs;
     const legacyFingerprint = sha256(JSON.stringify({
       harvest: held.inputs.harvest.config_sha256, settings: { ...held.inputs.settings, inputs: originalInputs },
       clock: held.inputs.clock_config, ledger: held.inputs.ledgerSettings, registrations: held.inputs.registrations,

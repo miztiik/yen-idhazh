@@ -13,7 +13,6 @@ import { calculateFreshness } from "../screen-article-candidates/freshness-decay
 import { resolvePolicy } from "../config/resolve-policy";
 import { matchMediaArticle } from "./media-filter";
 import { rejectArticleAge } from "../article-freshness-policy";
-import { ArticleIdentityEvidence } from "../read-ledger-history/article-identity-evidence";
 
 // These existing feed and extracted headline bounds define the input format.
 const feedTitleLimit = 500;
@@ -25,11 +24,10 @@ export function resolveArticleTitle(feedTitle: string | null, pageTitle: string 
 export function prepareArticle(offered: OfferedArticle, inputs: HarvestInputs, context: HarvestContext) {
   const { source, entry } = offered;
   const candidateId = deriveCandidateId(context.writer.run_id, source.feed_id, entry.entry_ordinal);
-  const identities = context.identities ?? new ArticleIdentityEvidence(inputs.config.harvest);
   let identity: ReturnType<typeof deriveArticleIdentity> | null = null;
   let unsafe = false;
   if (entry.link) {
-    try { identity = identities.remember(entry.link); }
+    try { identity = deriveArticleIdentity(entry.link, inputs.config.harvest); }
     catch (error) {
       if (error instanceof UnsafeTargetError) unsafe = true;
       else if (!(error instanceof InvalidArticleUrlError)) throw error;
@@ -60,20 +58,14 @@ export function prepareArticle(offered: OfferedArticle, inputs: HarvestInputs, c
   if (blocked !== undefined) return reject("BLOCKED_URL_MARKER", {
     matched_url_key: identity.url_key, matched_url_marker: urlExclusionMarker(blocked),
   });
-  const keys = identities.keysFor(identity.url_key);
-  const published = keys.flatMap(key => {
-    const day = context.exclusions?.published_on.get(key);
-    return day === undefined ? [] : [{ key, day }];
-  }).sort((a, b) => a.day.localeCompare(b.day) || a.key.localeCompare(b.key))[0];
-  const publishedOn = published?.day;
+  const publishedOn = context.exclusions?.published_on.get(identity.url_key);
   if (publishedOn !== undefined) return reject("ALREADY_PUBLISHED", {
-    matched_url_key: published!.key, published_on: publishedOn, history_window_days: context.exclusions!.published_window_days,
+    matched_url_key: identity.url_key, published_on: publishedOn, history_window_days: context.exclusions!.published_window_days,
   });
-  const failure = keys.flatMap(key => {
-    const code = context.exclusions?.settled_failure_codes.get(key);
-    return code === undefined ? [] : [{ key, code }];
-  }).sort((a, b) => a.code.localeCompare(b.code) || a.key.localeCompare(b.key))[0];
-  if (failure !== undefined) return reject("SETTLED_FAILURE", { matched_url_key: failure.key, failure_code: failure.code });
+  const failureCode = context.exclusions?.settled_failure_codes.get(identity.url_key);
+  if (failureCode !== undefined) return reject("SETTLED_FAILURE", {
+    matched_url_key: identity.url_key, failure_code: failureCode,
+  });
   const media = matchMediaArticle(entry.link, identity.canonical_url, entry.media_types ?? [], inputs.config);
   if (media !== null) return reject("MEDIA_CONTENT", media);
   if (article.title) {

@@ -1,7 +1,7 @@
 /** Stage only named native indexes and their bounded planner history files. */
 import { resolve } from "node:path";
 import {
-  CompactIndexSchema, LedgerNameSchema, FeedHealthStateRowContract, DiscoveredArticleRowContract, RawDayIndexSchema, PlannerLedgerNameSchema,
+  CompactIndexSchema, LedgerNameSchema, FeedHealthStateRowContract, RawDayIndexSchema, PlannerLedgerNameSchema,
 } from "../../../packages/common-contracts/src/index";
 import type { CompactIndex } from "../../../packages/common-contracts/src/index";
 import type { PlanInputs } from "../src/load-plan-inputs";
@@ -14,8 +14,7 @@ import { closedRequestDays } from "../src/read-ledger-history/request-summary";
 import { completeHistoryDayInputs, createHistoryDayInputs, resolveHistoryIndexes, resolveHistoryInventory, sparseCheckoutPath } from "./feed-ingest-plan-outputs";
 import { stageFeedHistory } from "./feed-ingest-plan-feed-history";
 import { LedgerHistoryReadError } from "../src/read-ledger-history/ledger-history-error";
-import { compactPeriodFile, fixedHistoryRevision, listExactRawDayMembers, readNamedGitFile, readNamedGitMember, verifyRawDayMember } from "../src/read-ledger-history/raw-day-members";
-import { articleIdentityDays } from "../src/read-ledger-history/read-article-identity-history";
+import { compactPeriodFile, fixedHistoryRevision, listExactRawDayMembers, readNamedGitFile, verifyRawDayMember } from "../src/read-ledger-history/raw-day-members";
 
 export async function stageNamedFiles(repository: string, paths: readonly string[]) {
   const names = [...new Set(paths)].map(sparseCheckoutPath);
@@ -41,15 +40,6 @@ export async function stagePlannerHistory(root: string, inputs: PlanInputs, now:
   const withBoundary = (days: string[]) => [...new Set([...days, nextDay])].sort();
   const revision = await fixedHistoryRevision(root);
   await stageNamedFiles(root, inputs.settings.inputs.discovered_files);
-  const explicitDiscoveries = (await mapPool(inputs.settings.inputs.discovered_files,
-    inputs.harvest.config.harvest.concurrency, async path => {
-      const member = await readNamedGitMember(root, path, revision);
-      if (member === undefined) throw new LedgerHistoryReadError("Named discovery file is absent at staging revision");
-      const held = await readPlannerParquet(resolve(root, path), "discovered-articles", DiscoveredArticleRowContract);
-      if (held.file_sha256 !== member.file_sha256) throw new LedgerHistoryReadError("Named discovery bytes changed during staging");
-      return held.rows;
-    })).flat();
-  const selectedDays = withBoundary(articleIdentityDays(inputs, now, explicitDiscoveries));
   const plans = [
     { entry: inputs.registrations.discovered_articles,
       days: withBoundary(requiredUtcDays(now, inputs.harvest.config.discovered_articles.lookback_days)),
@@ -58,7 +48,6 @@ export async function stagePlannerHistory(root: string, inputs: PlanInputs, now:
       authored: inputs.settings.inputs.published_days },
     { entry: inputs.registrations.item_health, days: withBoundary([now.slice(0, 10)]),
       authored: inputs.settings.inputs.settled_failure_days },
-    { entry: inputs.registrations.selected_articles, days: selectedDays, authored: inputs.settings.inputs.selected_days },
   ];
   const healthDays = withBoundary([...closedRequestDays(now, inputs.harvest.config.feedback.request_report_closed_days), now.slice(0, 10)]);
   const trees = new Map<string, Promise<string>>();
@@ -163,10 +152,6 @@ export async function stagePlannerHistory(root: string, inputs: PlanInputs, now:
     }
   }
   return {
-    selected_days: createPlannerHistoryInputs(await Promise.all(selectedDays.map(async day => ({
-      day, raw_files: (await listExactRawDayMembers(root, inputs.registrations.selected_articles, day, revision, trees))
-        .members.map(member => member.path),
-    }))), revision),
     feed_health_days: createPlannerHistoryInputs(health.inputs, revision),
     feed_health_input_gap: health.notices.some(notice => notice.startsWith("health_")),
     notices: health.notices,

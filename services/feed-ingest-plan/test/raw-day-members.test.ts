@@ -4,7 +4,7 @@ import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { DiscoveredArticleRowContract, PlanRunRowContract } from "@idhazh/common-contracts";
+import { DiscoveredArticleRowContract, FeedIngestEventSchema, PlanRunRowContract } from "@idhazh/common-contracts";
 import { plannerRecordings } from "../../../packages/ledger-file-writer/test/planner-recordings";
 import { fixtureGit } from "./publication-recordings";
 import { registration, writeRows } from "./partition-fixtures";
@@ -13,6 +13,8 @@ import { createPlannerHistoryCache, readPlannerDay } from "../src/read-ledger-hi
 import { stageNamedFiles, stagePlannerHistory } from "../scripts/feed-ingest-plan-history";
 import { PlannerDayInputSchema } from "../src/config/service-settings";
 import { loadPlanInputs } from "../src/load-plan-inputs";
+import { createStageLogger } from "../src/logging/structured-logger";
+import { randomUUID } from "node:crypto";
 
 test("one revision proves absent days, every sibling and sparse staging without raw indexes", async () => {
   const root = await mkdtemp(join(tmpdir(), "planner-named-git-day-"));
@@ -70,9 +72,21 @@ test("one revision proves absent days, every sibling and sparse staging without 
     expect(incomplete.complete).toBe(false);
     expect(incomplete.rows).toEqual([]);
     await expect(listExactRawDayMembers(root, entry, day, "0".repeat(40))).rejects.toThrow("Git");
-    const failed = await readPlannerDay(root, entry, { day, raw_revision: "0".repeat(40) }, PlanRunRowContract);
+    const logged: unknown[] = [];
+    const correlation_id = randomUUID();
+    const log = createStageLogger({ run_id: `${day}-999`, correlation_id }, event => logged.push(event));
+    const failed = await readPlannerDay(
+      root, entry, { day, raw_revision: "0".repeat(40) }, PlanRunRowContract, undefined, log,
+    );
     expect(failed.complete).toBe(false);
     expect(failed.gaps.length).toBeGreaterThan(0);
+    expect(FeedIngestEventSchema.parse(logged[0])).toMatchObject({
+      run_id: `${day}-999`, correlation_id, operation: "history", phase: "failed",
+      details: {
+        source: "planner-ledger", failed_check: "named-day-read", reason: expect.any(String),
+        ledger: "plan-runs", day, path: expect.any(String),
+      },
+    });
     await expect(listExactRawDayMembers(root, { ...entry, prefix: [".."] }, day, revision)).rejects.toThrow("registered");
     await expect(listExactRawDayMembers(root, entry, "2026-02-30", revision)).rejects.toThrow("UTC day");
     const original = await readFile(join(root, paths[0]!));

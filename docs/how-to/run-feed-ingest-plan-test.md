@@ -189,9 +189,7 @@ configuration field is absent. The protocol reason code is unchanged.
 An unsafe cleaned target is `FETCH_FAILED`, not a missing-field count.
 The [article cleanup policy](../architecture/sources/feed-harvesting.md#inputs-and-identity)
 removes all article query parameters even when `tidy_urls` is false. Feed
-parameters remain intact. Sparse workflow preparation stages the bounded
-[saved-address history](../architecture/sources/article-identity-history.md);
-incomplete recovery is logged rather than treated as complete deduplication.
+parameters remain intact.
 
 ## CI and hosted verification
 
