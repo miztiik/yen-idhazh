@@ -48,6 +48,10 @@ data is not a saved artifact and is never accepted by an HTTP route. Plain
 Workflow age overrides travel in that private policy, not as extra `/plan`
 request fields. Each child receives its own policy without editing authored
 configuration.
+Selection and health recording use the bounded planning capture. The separate
+request report may read additional closed days; an error in those report-only
+days cannot discard completed feed or article work. Collection startup failures
+still write a failed run, and cleanup errors do not replace the original cause.
 
 `supervision.readiness_timeout_ms` bounds startup and its health check.
 `shutdown_timeout_ms` allows graceful drain after success, failure, cancellation

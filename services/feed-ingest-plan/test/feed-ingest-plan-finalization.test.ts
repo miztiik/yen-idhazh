@@ -117,7 +117,7 @@ test("a refused Git delivery still writes the report and prepares exact metadata
       .toEqual(await readFile(join(f.repository, f.summary.selected_articles_artifact!)));
     expect(await readFile(join(artifacts, "700-1-report.md"), "utf8")).not.toContain("Git delivery");
     expect(await readFile(f.finalize.outputPath, "utf8")).toContain("artifact_directory<<");
-    expect(await fixtureGit(f.origin, ["--git-dir", f.origin, "rev-parse", "main"])).toBe(f.head);
+    expect(await fixtureGit(f.origin, ["--git-dir", f.origin, "rev-parse", "main"])).toBe(f.availabilityHead);
     await expect(finishRunOutput({ ...f.finish, finalizationOutcome: "failure" })).rejects.toThrow("Run output is incomplete");
     expect((await stat(f.directory)).isDirectory()).toBe(true);
   } finally { await f.close(); }
@@ -140,7 +140,7 @@ test("cancelled finalization preserves recovery and a report without creating a 
   const f = await recording();
   try {
     await finalizeRunOutput({ ...f.finalize, cancelled: true });
-    expect(await fixtureGit(f.origin, ["--git-dir", f.origin, "rev-parse", "main"])).toBe(f.head);
+    expect(await fixtureGit(f.origin, ["--git-dir", f.origin, "rev-parse", "main"])).toBe(f.availabilityHead);
     expect(await Bun.file(join(f.directory, "delivery-result.json")).exists()).toBe(false);
     expect(await readFile(join(f.directory, "artifacts", "700-1-report.md"), "utf8")).not.toContain("Git delivery");
     expect(await Bun.file(join(f.directory, "artifacts", "uncommitted-metadata-700-1", "current-run-files.json")).json())

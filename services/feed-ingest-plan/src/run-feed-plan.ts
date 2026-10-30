@@ -19,7 +19,7 @@ import { SelectionResponseSchema, PartitionResponseSchema, PersistenceResponseSc
 import { FeedHealthStateUpdateResponseSchema } from "./api/feed-health-state.schema";
 import { stageStore } from "./api/stage-store";
 import { currentExecutionState } from "./api/document-state";
-import { getCollection, prepareCollectionContext, discardCollectionContext } from "./api/collection-operation";
+import { getCollection, collectionForRun, prepareCollectionContext, discardCollectionContext } from "./api/collection-operation";
 import { resolveRunContext } from "./resolve-run-context";
 
 export type PlanRuntime = {
@@ -65,11 +65,24 @@ export async function runFeedPlan(raw: unknown, inputs: PlanInputs, runtime: Pla
     }
     return schema.parse(value);
   }
-  prepareCollectionContext(inputs, collectionId, resolveRunContext(inputs.settings, runtime.git_sha, runtime.clock?.() ?? new Date(),
-    runtime.run_number, runtime.correlation_id, runtime.captured_at, runtime.attempt, runtime.producer));
-  const begin = await call("collections", { collection_id: collectionId, request: raw }, CollectionResponseSchema)
-    .finally(() => discardCollectionContext(inputs, collectionId));
-  const context = begin.context;
+  const context = resolveRunContext(inputs.settings, runtime.git_sha, runtime.clock?.() ?? new Date(),
+    runtime.run_number, runtime.correlation_id, runtime.captured_at, runtime.attempt, runtime.producer);
+  prepareCollectionContext(inputs, collectionId, context);
+  let begin: z.infer<typeof CollectionResponseSchema>;
+  try { begin = await call("collections", { collection_id: collectionId, request: raw }, CollectionResponseSchema); }
+  catch (error) {
+    if (collectionForRun(inputs, context.run_id) !== undefined) throw error;
+    const failureCode = error instanceof PlanError ? error.code : "PLANNER_EXECUTION_FAILED";
+    createStageLogger(context, runtime.log)("plan", "failed", { failure_code: failureCode });
+    const recorded = await recordPlanRun(inputs, context, {
+      status: "failed", failure_code: failureCode, duration_ms: Math.round(performance.now() - started),
+      selected_count: 0, dispatch_count: 0, strategy: request.partition_strategy,
+      selected_articles_artifact: null, evaluated_at: context.now, selection_started_at_utc: null,
+      api_timings: [{ operation: "feed-health-before-fetch",
+        duration_ms: Math.round(performance.now() - started), status: "failed" }],
+    });
+    return { context, row: recorded.row, batches: {}, files: { plan_runs: recorded.files }, selected: [] };
+  } finally { discardCollectionContext(inputs, collectionId); }
   const emit = createStageLogger(context, runtime.log);
   const files: Partial<Record<"discovered_articles" | "selected_articles" | "rejected_articles" | "feed_health_state" | "plan_runs", PersistLedgerResult>> = {};
   const batches: { parsed_batch_id?: string; selection_batch_id?: string; partition_batch_id?: string } = {};
@@ -182,8 +195,7 @@ export async function runFeedPlan(raw: unknown, inputs: PlanInputs, runtime: Pla
       files.rejected_articles ??= cancelled.rejected_articles;
       partialBatchId = cancelled.batch_id;
     } catch {
-      failureCode = "COLLECTION_CANCEL_FAILED";
-      emit("plan", "failed", { failure_code: failureCode });
+      emit("plan", "failed", { failure_code: "COLLECTION_CANCEL_FAILED" });
     }
     if (partialBatchId !== undefined && files.feed_health_state === undefined
       && collection.state.work.rows().some(row => row.checked_at !== null)) {
@@ -192,8 +204,7 @@ export async function runFeedPlan(raw: unknown, inputs: PlanInputs, runtime: Pla
           FeedHealthStateUpdateResponseSchema, true);
         if (health.files !== undefined) files.feed_health_state = health.files;
       } catch {
-        failureCode = "FEED_HEALTH_WRITE_FAILED";
-        emit("persist", "failed", { failure_code: failureCode });
+        emit("persist", "failed", { failure_code: "FEED_HEALTH_WRITE_FAILED" });
       }
     }
   }

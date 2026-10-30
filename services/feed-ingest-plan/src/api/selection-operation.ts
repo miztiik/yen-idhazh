@@ -9,7 +9,7 @@ import { PlanError } from "./plan-request";
 import { stageStore } from "./stage-store";
 import { selectArticles } from "../select-articles";
 import { utcTimestamp } from "../harvest-feeds/harvest-types";
-import { prepareFeedHealthState } from "./feed-health-state-operation";
+import { prepareExecutionHealth } from "./feed-health-state-operation";
 import { appendDocumentTiming, currentExecutionState, executionHasArtifact, registerStageExecution } from "./document-state";
 import { resolveRunContext } from "../resolve-run-context";
 import { recordFinalizedDocumentWork } from "./record-standalone-run";
@@ -63,7 +63,7 @@ export async function executeSelection(raw: unknown, inputs: PlanInputs, runtime
   let healthDuration: number;
   let healthStatus: PlanApiTiming["status"] = "failed";
   try {
-    health = await prepareFeedHealthState(inputs, selectionStartedAt, { context: parsed.context, rows: parsed.work_rows });
+    health = await prepareExecutionHealth(inputs, selectionStartedAt, { context: parsed.context, rows: parsed.work_rows });
     healthStatus = "completed";
   } finally {
     healthDuration = Math.round(performance.now() - healthStarted);

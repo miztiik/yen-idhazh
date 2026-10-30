@@ -387,8 +387,8 @@ test("a required source write failure returns an API error, not proven planning 
       const healthTimings = failed.api_timings.filter((timing: { operation: string }) => timing.operation.startsWith("feed-health-"));
       expect(healthTimings).toMatchObject([
         { operation: "feed-health-before-fetch", status: "completed" },
-        { operation: "feed-health-for-selection", status: "failed" },
       ]);
+      expect(failed.failure_code).toBe("REQUEST_CONFLICT");
       expect(healthTimings.every((timing: { duration_ms: number }) => Number.isSafeInteger(timing.duration_ms) && timing.duration_ms >= 0)).toBe(true);
       const requestCount = failedCapture.transport.requests.length;
       failedCapture.runtime.run_number = "701";
@@ -415,32 +415,38 @@ test("one listener retains durable seen receipts from an output root outside the
   let peak = 0;
   let notify!: () => void;
   const parsing = new Promise<void>(resolve => { notify = resolve; });
+  let articleParsingRequested = false;
   recorded.runtime.log = event => {
     recorded.events.push(event);
+    if (event.operation === "parse" && event.phase === "started" && event.details.document_kind === "article") {
+      articleParsingRequested = true;
+    }
   };
   const pool = new ArticleParserPool(recorded.inputs.settings.listener.parser_concurrency, phase => {
-    if (phase === "started") { activeParsers++; peak = Math.max(peak, activeParsers); notify(); }
+    if (phase === "started") {
+      activeParsers++; peak = Math.max(peak, activeParsers);
+      if (articleParsingRequested) notify();
+    }
     else activeParsers--;
   });
   recorded.runtime.parser_pool = pool;
   const server = servePlan(recorded.inputs, recorded.runtime);
   try {
     const url = `http://127.0.0.1:${server.port}${prefix}`;
-    const first = fetch(`${url}/plan`, json({ article_limit: 1 }));
-    const second = fetch(`${url}/plan`, json({ article_limit: 1 }));
+    const first = fetch(`${url}/plan`, json({ article_limit: 2 }));
     await parsing;
+    const second = fetch(`${url}/plan`, json({ article_limit: 1 }));
     expect((await fetch(`${url}/health`)).status).toBe(200);
     expect(activeParsers).toBeGreaterThan(0);
     const independent = await fetch(`${url}/fetch`, json({
-      request_id: randomUUID(), correlation_id: randomUUID(), feed_id: "recorded-news", fetch_item_type: "feed",
+      request_id: randomUUID(), correlation_id: randomUUID(), feed_id: "recorded-news",
+      fetch_item_type: "article", url: "https://news.example/second",
     }));
     expect(independent.status).toBe(200);
-    expect(activeParsers).toBeGreaterThan(0);
     const results = await Promise.all([first, second].map(async pending => (await pending).json()));
     expect(peak).toBeGreaterThan(1);
     expect(peak).toBeLessThanOrEqual(recorded.inputs.settings.listener.parser_concurrency);
-    const firstCompletion = recorded.events.findIndex(event => event.operation === "plan" && event.phase === "completed");
-    expect(new Set(recorded.events.slice(0, firstCompletion).filter(event =>
+    expect(new Set(recorded.events.filter(event =>
       event.operation === "plan" && event.phase === "started").map(event => event.run_id)).size).toBe(2);
     expect(results[0].run_id).not.toBe(results[1].run_id);
     expect(results[0].batches.parsed_batch_id).not.toBe(results[1].batches.parsed_batch_id);

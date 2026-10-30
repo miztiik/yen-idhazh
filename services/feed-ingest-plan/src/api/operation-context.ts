@@ -20,7 +20,7 @@ export function operationConfigFingerprint(inputs: PlanInputs, runtime: PlanRunt
   return sha256(JSON.stringify(operationConfiguration(inputs, runtime)));
 }
 function legacyOperationConfigFingerprint(inputs: PlanInputs, runtime: PlanRuntime) {
-  const config = operationConfiguration(inputs, runtime);
+  const { policy: _policy, availability: _availability, ...config } = operationConfiguration(inputs, runtime);
   const { digest_root, ...originalInputs } = config.settings.inputs;
   return sha256(JSON.stringify({ ...config, settings: { ...config.settings, inputs: originalInputs } }));
 }

@@ -28,6 +28,7 @@ import { selectArticles } from "../src/select-articles";
 import { endpointKey } from "../src/read-ledger-history/read-feed-history";
 import { plannerRecordings } from "../../../packages/ledger-file-writer/test/planner-recordings";
 import { source } from "./harvest-recordings";
+import { recordedPlan } from "./plan-recordings";
 
 type CandidateCase = {
   name: string; source: string; ordinal: number;
@@ -423,20 +424,22 @@ test("real screening results compose into exact curation without losing harveste
   expect(names(result)).toEqual(setup.fixture.expected.baseline);
   expect(result.articles.map(row => row.article_text)).toEqual(candidates.slice(0, 2).map(row => row.article_text));
   expect(result.articles.length + result.losses.length + screened.rejections.length).toBe(4);
-  const root = await mkdtemp(join(tmpdir(), "screened-health-counts-"));
+  const first = article(setup.fixture.candidates[0]!, setup);
+  const configured = source({
+    id: first.candidate.feed_id, url: first.candidate.source.feed_url,
+    title: first.candidate.source.title, tier: first.candidate.source.tier,
+    weight: first.candidate.source.weight, publisher_id: first.candidate.source.publisher_id,
+  });
+  const publishers = first.candidate.source.publisher_id === null ? [] : [{
+    id: first.candidate.source.publisher_id, display_name: "Recorded publisher",
+  }];
+  const recorded = await recordedPlan([configured], publishers);
+  const root = recorded.directory;
   try {
     setup.inputs.root = root;
-    const first = article(setup.fixture.candidates[0]!, setup);
-    setup.inputs.harvest.sources = [source({
-      id: first.candidate.feed_id, url: first.candidate.source.feed_url,
-      title: first.candidate.source.title,
-      tier: first.candidate.source.tier, weight: first.candidate.source.weight,
-      publisher_id: first.candidate.source.publisher_id,
-    })];
+    setup.inputs.harvest.sources = [configured];
     setup.inputs.harvest.retired_sources = [];
-    if (first.candidate.source.publisher_id !== null) setup.inputs.harvest.publishers = [{
-      id: first.candidate.source.publisher_id, display_name: "Recorded publisher",
-    }];
+    setup.inputs.harvest.publishers = publishers;
     const pair = selectionInput(setup, [first, { ...first, candidate: short }]).batch;
     pair.work_rows = [FeedHealthStateRowSchema.parse({
       ...plannerRecordings(setup.context.date).find(record => record.name === "feed-health-state")!.row,
@@ -464,8 +467,8 @@ test("real screening results compose into exact curation without losing harveste
       article_requests: 0, robots_requests: 0, article_candidates: 0, articles_selected: 1,
     });
     expect(pair).toEqual(originalBatch);
-  } finally { await rm(root, { recursive: true, force: true }); }
-});
+  } finally { await recorded.close(); }
+}, 120000);
 
 test("screening and packing retain the owning run day even when evaluation happens on a later UTC day", async () => {
   const setup = await inputs();

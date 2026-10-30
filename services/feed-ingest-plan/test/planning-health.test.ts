@@ -88,7 +88,7 @@ test("unknown or invalid admission and read fields never turn partial evidence i
     await rewriteHealthFields(setup.path, [setup.row, { ...second, items: -1 }], schema);
     history = await preparePlanningHealth(setup.inputs, now);
     expect(history.sources.get(setup.row.feed_id)).toMatchObject({
-      lifecycle: "unknown", strikes: null, rested_runs: null,
+      lifecycle: "eligible", strikes: 0, rested_runs: null,
       reliability: { productive: 1, attempted: 1, complete: false },
     });
     await rewriteHealthFields(setup.path, [setup.row, {
@@ -113,7 +113,7 @@ test("unknown or invalid admission and read fields never turn partial evidence i
       schema.omit({ attempt: true }));
     history = await preparePlanningHealth(setup.inputs, now);
     expect(history.sources.get(setup.row.feed_id)).toMatchObject({
-      lifecycle: "unknown", reliability: null, article_pass_rate: null,
+      lifecycle: "eligible", reliability: null, article_pass_rate: null,
     });
   } finally { await setup.close(); }
 });

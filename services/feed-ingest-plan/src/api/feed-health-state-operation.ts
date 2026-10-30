@@ -24,6 +24,15 @@ import { rememberDocumentHealth } from "./document-state";
 import { restoreSourceHealth } from "./restore-source-health";
 import { plannerMemory } from "../planner-memory";
 import { readFeedAvailability } from "../availability/feed-availability";
+import { summarizeRequestReport } from "../read-ledger-history/request-summary";
+
+export async function prepareExecutionHealth(inputs: PlanInputs, now: string, current?: CurrentHealthWork) {
+  const planning = await preparePlanningHealth(inputs, now, current);
+  return { ...planning, request_report: summarizeRequestReport({
+    ...healthHistoryInput(inputs, now, current), ...planning.uses.request_totals,
+    days: planning.request_days, input_complete: !inputs.settings.inputs.feed_health_input_gap,
+  }) };
+}
 
 export async function prepareRequestReport(inputs: PlanInputs, now: string, current?: CurrentHealthWork,
   cache = createPlannerHistoryCache<Record<string, unknown>>()) {
@@ -74,7 +83,8 @@ export async function executeFeedHealthState(raw: unknown, inputs: PlanInputs, r
   const reliability = { window_days: inputs.clock_config.collect.reliability_window_days };
   if (!stageStore(inputs).has(request.batch_id)) {
     const document = await readDocumentHealthBatch(request.batch_id, inputs, runtime);
-    const summary = await prepareFeedHealthState(inputs, utcTimestamp(runtime.selection_clock ?? runtime.clock),
+    const prepare = request.action === "record" ? prepareExecutionHealth : prepareFeedHealthState;
+    const summary = await prepare(inputs, utcTimestamp(runtime.selection_clock ?? runtime.clock),
       { context: document.context, rows: document.work.rows() });
     const rows = captureHealthRows(document.work.rows(), summary.sources);
     const files = request.action === "record" ? await recordFeedHealthState(rows, document.context, inputs) : null;
@@ -88,7 +98,8 @@ export async function executeFeedHealthState(raw: unknown, inputs: PlanInputs, r
     if (stageStore(inputs).ownership(parsed.batch_id).health_fingerprint === null) {
       parsed = stageStore(inputs).replace("parsed", ParsedFeedBatchSchema, await restoreSourceHealth(parsed, inputs));
     }
-    const summary = await prepareFeedHealthState(inputs, utcTimestamp(runtime.selection_clock ?? runtime.clock),
+    const prepare = request.action === "record" ? prepareExecutionHealth : prepareFeedHealthState;
+    const summary = await prepare(inputs, utcTimestamp(runtime.selection_clock ?? runtime.clock),
       { context: parsed.context, rows: parsed.work_rows });
     const rows = captureHealthRows(parsed.work_rows, summary.sources);
     const files = request.action === "record" ? await recordFeedHealthState(rows, parsed.context, inputs) : null;
