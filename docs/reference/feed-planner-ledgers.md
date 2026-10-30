@@ -790,8 +790,32 @@ validated request rows, partial request rows, field gaps and file coverage.
 `prepareRequestReport` is its request-only reporting entry point.
 Selection and explicit health summaries combine planning evidence with that
 report through `prepareFeedHealthState`; their shared capture cache keeps one
-stored file read and Git revision per capture. The report contract remains
-all-or-unknown for each feed's three counters.
+stored file read and Git revision per capture.
+
+The request report adds each usable feed, article and robots counter
+independently, including individually valid fields from partial rows.
+Absent, invalid and null counters remain unknown; a known zero is retained.
+For each feed and counter, `coverage` declares `status` (`complete`, `partial`
+or `none`), `known_records`, `unknown_records`, `recorded_days` and
+`complete_days`. Recorded days have at least one usable counter. Complete days
+have complete file evidence and no unknown matching counter or unattributable
+record. Known-empty complete windows produce zero; incomplete windows without
+any usable counter produce null, not an estimated zero.
+
+`missing_days` names missing or incomplete day files. `unattributed_days`
+names days with invalid row identities that cannot be assigned to a feed.
+`input_complete` preserves the staged-input gap flag; when false, no day can
+be claimed complete, but known counters remain usable. Unknown-record counts
+cover attributable rows only; missing files and unattributable rows are
+reported separately, never presented as a count of lost records. Each
+counter is complete only when all configured closed days are complete.
+Feed and report completeness require every counter to be complete.
+
+The report schema and selected/partitioned stage payloads are stamped
+`2026-10-29`. Current stage readers refuse earlier formats under the
+TypeScript planner compatibility rule; no historical ledger is rewritten.
+The [operator report guide](../how-to/run-feed-ingest-plan-test.md) defines
+the partial-total marker and report-only ordering.
 
 Before projection, stored and finalized in-memory facts from the current run
 and attempt are excluded. Supplied current work then replaces that execution.

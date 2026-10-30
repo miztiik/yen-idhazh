@@ -6,6 +6,7 @@ import type { FeedHealthStateRow } from "../../../../packages/common-contracts/s
 import { PlanResponseSchema } from "../api/plan-response.schema";
 import { FeedHealthStateUpdateResponseSchema } from "../api/feed-health-state.schema";
 import { escapeMarkdown } from "./markdown-format";
+import { renderRequestReport } from "./request-report-markdown";
 
 export type MarkdownSection = Readonly<{ markdown: string; notice: string }>;
 export type PlannerMarkdownNotice = Readonly<{
@@ -88,7 +89,7 @@ export function renderPlanMarkdown(input: PlanMarkdownEvidence): PlannerMarkdown
   });
   const causes = feedRows.flatMap(feed => feed.rejection_counts.map(cause =>
     ({ ...cause, feed_id: feed.feed_id, date: feed.date })));
-  const requests = health?.request_report;
+  const requestReport = renderRequestReport(health?.request_report);
   const known = (value: number | null, unit: string) => value === null ? "Unavailable"
     : `${value} ${value === 1 && unit.endsWith("s") ? unit.slice(0, -1) : unit}`;
   const operationName = (operation: typeof row.api_timings[number]["operation"]) => ({
@@ -125,11 +126,7 @@ export function renderPlanMarkdown(input: PlanMarkdownEvidence): PlannerMarkdown
       `| C${index + 1} | ${escapeMarkdown(feed.feed_id)} | ${feed.date} | ${known(feed.feed_reads, "checks")} | ${known(feed.article_candidates, "articles")} | ${known(feed.articles_selected, "articles")} | ${[feed.feed_requests, feed.article_requests, feed.robots_requests].map(value => known(value, "requests")).join(" / ")} | ${escapeMarkdown(describeFeedRead(feed))} |`),
     ...(feedRows.length ? [] : ["", health === null ? "Feed work is unavailable." : "The supplied run has zero recorded feed rows."]),
     "", "Feed read results combine the recorded download result, usable URL count and failure code. The saved download outcome is unchanged.",
-    "", "## Table D - Closed-day request spend", "",
-    requests === undefined ? "Request evidence is unavailable." : `Window: ${requests.from_day} through ${requests.through_day} UTC. Coverage: ${requests.complete ? "complete" : "incomplete"}. This is spend, not waste or a ranking penalty.`,
-    "", "| Id | Feed | Feed requests | Article requests | Robots requests | Accounting |", "| --- | --- | --- | --- | --- | --- |",
-    ...(requests?.feeds ?? []).map((feed, index) =>
-      `| D${index + 1} | ${escapeMarkdown(feed.feed_id)} | ${known(feed.feed_requests, "requests")} | ${known(feed.article_requests, "requests")} | ${known(feed.robots_requests, "requests")} | ${feed.counts_complete ? "Complete" : "Incomplete"} |`),
+    "", requestReport.markdown,
     "", "## Table E - Grouped exclusions", "", "| Id | Feed | UTC day | Subject / stage | Reason | Count | Attribution |",
     "| --- | --- | --- | --- | --- | --- | --- |",
     ...causes.map((cause, index) =>
@@ -153,11 +150,6 @@ export function renderPlanMarkdown(input: PlanMarkdownEvidence): PlannerMarkdown
         total(feedRows, feed => feed.article_requests), total(feedRows, feed => feed.robots_requests)]
         .map(value => known(value, "requests")).join(" / ")}. `
       + `Accounting ${feedRows.every(feed => feed.counts_complete) ? "complete" : "incomplete; missing counts are unavailable"}.`;
-  const requestSpend = requests === undefined ? "Closed-day request evidence is unavailable."
-    : `${requests.from_day} through ${requests.through_day} UTC; coverage ${requests.complete ? "complete" : "incomplete"}. `
-      + `Feed / article / robots requests: ${[total(requests.feeds, feed => feed.feed_requests),
-        total(requests.feeds, feed => feed.article_requests), total(requests.feeds, feed => feed.robots_requests)]
-        .map(value => known(value, "requests")).join(" / ")}. This is spend, not waste or a ranking penalty.`;
   const grouped = new Map<string, number>();
   for (const cause of causes) grouped.set(cause.reason_code, (grouped.get(cause.reason_code) ?? 0) + cause.count);
   const exclusions = health === null ? "Exclusion evidence is unavailable."
@@ -170,7 +162,7 @@ export function renderPlanMarkdown(input: PlanMarkdownEvidence): PlannerMarkdown
       { level: "notice" as const, title: "Host fingerprint", message: input.host.notice },
     ]),
     { level: "notice", title: "This run's feed work", message: feedWork },
-    { level: "notice", title: "Closed-day request spend", message: requestSpend },
+    { level: "notice", title: "Closed-day request spend", message: requestReport.notice },
     { level: "notice", title: "Grouped exclusions", message: exclusions },
     ...(input.policy === undefined ? [] : [
       { level: "notice" as const, title: "Policy used", message: input.policy.notice },

@@ -478,9 +478,12 @@ describe("current planner contracts", () => {
       batch_id, config_sha256: digest, parsed_batch_id: batch_id, context, articles: [],
       rejected_articles: [],
       selection_started_at_utc: at, evaluated_at: at, health_rows: [], exclusions: [],
-      request_report: { from_day: day, through_day: day, complete: false, feeds: [] },
+      request_report: { from_day: day, through_day: day, complete: false,
+        missing_days: [day], unattributed_days: [], input_complete: true, feeds: [] },
     });
-    expect(PartitionedFeedBatchSchema.parse({ ...selected, selection_batch_id: batch_id, strategy: "none", dispatch_count: 1, work: [0] }).version).toBe(SELECTED_ARTICLE_VERSION);
+    expect(selected.version).toBe("2026-10-29");
+    expect(SelectedFeedBatchSchema.safeParse({ ...selected, version: "2026-10-27" }).success).toBe(false);
+    expect(PartitionedFeedBatchSchema.parse({ ...selected, selection_batch_id: batch_id, strategy: "none", dispatch_count: 1, work: [0] }).version).toBe(selected.version);
     const observation = PlannerHarvestObservationSchema.parse({
       candidate_id: digest, http_status: null, robots: null, fetch_failure: null, paywall: null,
       paywall_evidence: "not-observed", extraction: "not-attempted", observed_at: context.now,

@@ -6,7 +6,7 @@ import type { SourceSnapshot } from "@idhazh/common-contracts";
 import { closedRequestDays, summarizeRequestReport } from "./request-summary";
 
 export async function readRequestHistory(input: HealthCaptureInput & {
-  sources: readonly SourceSnapshot[]; request_report_closed_days: number;
+  sources: readonly SourceSnapshot[]; request_report_closed_days: number; input_complete?: boolean;
 }, cache?: HealthCaptureCache) {
   const days = closedRequestDays(input.now, input.request_report_closed_days);
   const capture = await readHealthCapture({
@@ -18,7 +18,7 @@ export async function readRequestHistory(input: HealthCaptureInput & {
   return {
     ...fields, days: capture.request_days,
     request_report: summarizeRequestReport({
-      ...input, rows: fields.rows, gaps: fields.gaps, days: capture.request_days,
+      ...input, ...fields, days: capture.request_days,
     }),
   };
 }
