@@ -4,6 +4,7 @@ import { FeedHealthStateRowSchema, SourceArticleRefusalReasonSchema } from "@idh
 import type { FeedHealthStateRow, SourceSnapshot } from "@idhazh/common-contracts";
 import type { SourceHistoryEvidence, FeedHistoryPolicy } from "./read-feed-history";
 import type { HealthCapture } from "./read-health-capture";
+import { feedReliability } from "./feed-reliability";
 
 export function settleHealthRows(rows: readonly FeedHealthStateRow[]): FeedHealthStateRow[] {
   const facts = new Map<string, FeedHealthStateRow>();
@@ -73,9 +74,9 @@ export function summarizePlanningHealth(input: {
       strikes: null, rested_runs: null,
       article_pass_rate: articleKnown && admitted + refused > 0 ? admitted / (admitted + refused) : null,
       reliability: measured.length === 0 ? null : {
-        productive, attempted: measured.length, success_fraction: productive / measured.length,
+        productive, attempted: measured.length,
+        ...feedReliability(productive, measured.length, input.policy.reliability_floor),
         from_day: reliabilityDays[0] ?? null, through_day: reliabilityDays.at(-1) ?? null,
-        production_factor: Math.max(input.policy.reliability_floor, productive / measured.length),
         complete: fieldsComplete("feed_reliability", reliabilityDays, input.policy.reliability_window_days),
       },
     });

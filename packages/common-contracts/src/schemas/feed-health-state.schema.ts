@@ -1,14 +1,16 @@
 /** What feed work did one run attempt perform on one actual UTC day? */
 import { z } from "zod";
-import { FEED_HEALTH_STATE_VERSION } from "../version";
+import { FEED_HEALTH_STATE_ACCEPTED_SCHEMA_VERSIONS, FEED_HEALTH_STATE_VERSION, LEGACY_FEED_HEALTH_STATE_VERSION } from "../version";
 import { CountSchema, DateStampSchema, FiniteSchema, NonEmptySchema, PositiveCountSchema, RunIdSchema, Sha256Schema, SlugSchema, reject } from "./primitives";
 import { RecordedInstantSchema } from "./recorded-instant.schema";
 
 const Ratio = FiniteSchema.min(0).max(1);
 export const FeedHealthReliabilitySchema = z.strictObject({
   productive: CountSchema.nullable(), attempted: CountSchema.nullable(),
-  success_fraction: Ratio.nullable(), from_day: DateStampSchema.nullable(),
-  through_day: DateStampSchema.nullable(), production_factor: Ratio.nullable(),
+  success_fraction: Ratio.nullable().describe("Productive reads divided by attempted reads, saved downward to three decimal places by current producers."),
+  from_day: DateStampSchema.nullable(),
+  through_day: DateStampSchema.nullable(),
+  production_factor: Ratio.nullable().describe("The original read fraction with its configured floor applied, then saved downward to three decimal places by current producers."),
   complete: z.boolean(),
 }).superRefine((value, ctx) => {
   if (value.productive !== null && value.attempted !== null && value.productive > value.attempted) reject(ctx, "productive reads cannot exceed attempted reads");
@@ -41,11 +43,15 @@ export const FeedHealthStateRowSchema = z.strictObject({
   ].some((count) => count === null)) reject(ctx, "complete accounting requires every run counter");
 }).meta({
   version: FEED_HEALTH_STATE_VERSION,
-  changelog: [{ version: FEED_HEALTH_STATE_VERSION, change: "Count admitted original article captures before selection instead of screening admissions." }],
+  changelog: [
+    { version: FEED_HEALTH_STATE_VERSION, change: "Save feed-read fractions and floor-applied factors downward to three decimal places." },
+    { version: LEGACY_FEED_HEALTH_STATE_VERSION, change: "Count admitted original article captures before selection instead of screening admissions." },
+  ],
 });
 export type FeedHealthStateRow = z.infer<typeof FeedHealthStateRowSchema>;
 export type FeedHealthReliability = z.infer<typeof FeedHealthReliabilitySchema>;
 export type FeedHealthRejectionCount = z.infer<typeof FeedHealthRejectionCountSchema>;
 export const FeedHealthStateRowContract = {
   schema: FeedHealthStateRowSchema, schemaVersion: FEED_HEALTH_STATE_VERSION,
+  acceptedSchemaVersions: FEED_HEALTH_STATE_ACCEPTED_SCHEMA_VERSIONS,
 } as const;

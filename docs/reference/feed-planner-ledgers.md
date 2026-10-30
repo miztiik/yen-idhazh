@@ -154,7 +154,8 @@ projection use the same chosen values.
 
 The TypeScript planner reader accepts the current native ledger stamps:
 `2026-10-29` for discovered and selected articles, `2026-10-26` for plan runs
-and `2026-10-27` for feed health. Discovery and selected history also retain
+and `2026-10-30` for feed health. Health retains compatible `2026-10-27`
+files without rewriting their saved fractions. Discovery and selected history also retain
 the exact earlier stamps listed in [article cleanup compatibility](#article-cleanup-compatibility).
 Rejected articles use `2026-10-29T20:15`;
 their exact `2026-10-27` and `2026-10-29` predecessors remain readable with null fetch-evidence
@@ -206,10 +207,10 @@ totals or add together saved rolling reliability results.
 | C13 | `status` | Feed/run/day | Actual feed HTTP status; nullable; not catalog membership |
 | C14 | `reliability.productive` | Captured lookback | Productive reads in the measured lookback used for this run |
 | C15 | `reliability.attempted` | Captured lookback | Evidence-bearing reads; excludes rest/robots skips |
-| C16 | `reliability.success_fraction` | Captured lookback | Measured productive fraction |
+| C16 | `reliability.success_fraction` | Captured lookback | Measured productive fraction, saved downward to three decimal places |
 | C18 | `reliability.from_day` | Captured lookback | Beginning of the represented evidence window |
 | C19 | `reliability.through_day` | Captured lookback | End of that window |
-| C20 | `reliability.production_factor` | Captured lookback | Saved factor after applying the run's floor |
+| C20 | `reliability.production_factor` | Captured lookback | Original fraction with the run's floor applied, then saved downward to three decimal places |
 | C21 | `reliability.complete` | Captured lookback | Distinguish complete lookback coverage from partial history |
 | C22 | `date` | Feed/run/day | UTC day of the work being counted |
 | C23 | `feed_reads` | Run counters | Logical feed checks represented by this row, not retry requests |

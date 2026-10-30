@@ -9,6 +9,7 @@ import { escapeMarkdown } from "./markdown-format";
 import { renderRequestReport } from "./request-report-markdown";
 import { renderRunFacts } from "./run-facts-markdown";
 import { renderFeedRest } from "./feed-rest-markdown";
+import { renderFailureEvidence } from "./failure-evidence-markdown";
 
 export type MarkdownSection = Readonly<{ markdown: string; notice: string }>;
 export type PlannerMarkdownNotice = Readonly<{
@@ -91,6 +92,7 @@ export function renderPlanMarkdown(input: PlanMarkdownEvidence): PlannerMarkdown
       || left.feed_id.localeCompare(right.feed_id) || left.date.localeCompare(right.date));
   const requestReport = renderRequestReport(health?.request_report, feedRows);
   const facts = renderRunFacts(row, health?.rows);
+  const failureEvidence = renderFailureEvidence(health?.rows);
   const known = (value: number | null, unit: string) => value === null ? "Not recorded"
     : `${value} ${value === 1 && unit.endsWith("s") ? unit.slice(0, -1) : unit}`;
   const operationName = (operation: typeof row.api_timings[number]["operation"]) => ({
@@ -128,7 +130,7 @@ export function renderPlanMarkdown(input: PlanMarkdownEvidence): PlannerMarkdown
       `| G${index + 1} | ${escapeMarkdown(cause.feed_id)} | ${cause.date} | ${escapeMarkdown(`${cause.subject} / ${cause.stage}`)} | ${escapeMarkdown(cause.reason_code)} | ${cause.count} | ${cause.attribution ?? "Not a failure"} |`),
     ...(causes.length ? [] : ["", health === null ? "Exclusion evidence was not recorded." : "No exclusions were recorded."]),
     ...(causes.some(cause => cause.reason_code === "MISSING_REQUIRED_FIELDS") ? ["", missingFields] : []),
-    "", "</details>", "", renderFeedRest(health?.availability),
+    "", "</details>", "", renderFeedRest(health?.availability), "", failureEvidence.markdown,
     ...(input.host === undefined ? [] : ["", input.host.markdown]),
   ].join("\n");
   const grouped = new Map<string, number>();
@@ -146,6 +148,7 @@ export function renderPlanMarkdown(input: PlanMarkdownEvidence): PlannerMarkdown
     { level: "notice", title: "Feed work", message: facts.notice },
     { level: "notice", title: "Request counts", message: requestReport.notice },
     { level: "notice", title: "Grouped exclusions", message: exclusions },
+    { level: "notice", title: "Failure evidence", message: failureEvidence.notice },
     ...(input.policy === undefined ? [] : [{ level: "notice" as const, title: "Effective policy", message: input.policy.notice }]),
   ];
   if (row.failure_code !== null) notices.push({
