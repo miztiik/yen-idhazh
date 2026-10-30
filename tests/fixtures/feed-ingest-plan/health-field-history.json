@@ -1,0 +1,35 @@
+{
+  "date": "2026-10-25",
+  "run_id": "2026-10-25-1234",
+  "attempt": 1,
+  "feed_id": "recorded-feed",
+  "endpoint_key": "1111111111111111111111111111111111111111111111111111111111111111",
+  "checked_at": "2026-10-25T10:00:00.123Z",
+  "permission": "allowed",
+  "availability": "eligible",
+  "strikes": 0,
+  "rested_runs": 0,
+  "last_failure_code": null,
+  "status": 200,
+  "reliability": null,
+  "feed_reads": 1,
+  "productive_reads": 1,
+  "failed_reads": 0,
+  "article_candidates": 3,
+  "articles_selected": 2,
+  "feed_requests": 2,
+  "article_requests": 4,
+  "robots_requests": 0,
+  "counts_complete": true,
+  "rejection_counts": [
+    {
+      "reason_code": "EXTRACT_EMPTY",
+      "count": 1,
+      "subject": "article",
+      "stage": "harvest-feeds",
+      "attribution": "feed"
+    }
+  ],
+  "items": 4,
+  "outcome": "ok"
+}

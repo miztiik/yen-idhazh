@@ -602,10 +602,11 @@ Git revision and returns verified bytes and exact source paths. Python applies
 that result through its existing pass and commit flow.
 
 Planner contracts still carry current schema stamps and changelogs. Except for
-the [article cleanup compatibility](#article-cleanup-compatibility), the
-current-format refusal has no Python copy, compatibility reader or migration;
+the [article cleanup compatibility](#article-cleanup-compatibility), strict
+full-row validation has no Python copy, compatibility reader or migration;
 the TypeScript tests and the real gardener-adapter integration test own this
-boundary.
+boundary. Health consumers use the separate
+[field-read contract](#field-based-health-history) rather than full-row compliance.
 
 ## Raw-day membership
 
@@ -725,11 +726,57 @@ contract copies are retired. The gardener registry and scheduler remain; the
 published-file validator and compact writer use the current TypeScript
 contracts.
 
-The shared TypeScript ledger reader has no migration table. A full-row contract
-accepts its declared compatible stamps only. A projection contract, which names only
-the fields it reads, refuses a stamp newer than it declares and reads older
-stamps for those fields without any migration. The selected stamp is not
-bumped by that change: the physical layout was unchanged.
+The shared TypeScript ledger reader has no migration table. Strict full-row
+validation accepts only the contract's declared row stamps. The separate health
+field reader accepts the columns it needs without using their row schema date
+as an acceptance gate. Article cleanup has its own named compatible stamps below.
+
+### Field-based health history
+
+**User-directed ruling, 2026-10-29 UTC:** A row schema date identifies a format;
+it does not prove that a consumer's required fields are missing or invalid.
+Health history reads accept compatible required fields from older and newer
+row stamps. Writers, compaction and full-file publication validation still
+require their full declared row schema. No stored history is rewritten.
+
+The shared writer package exports `readStoredPlannerParquet` for stored-file
+validation and retains `readPlannerParquet` for strict full-row validation.
+Both verify the registered ledger, supported file envelope, raw filename,
+and whole-file canonical digest. Stored-file validation computes that digest
+from the actual Arrow columns, including nested and unrelated columns, not
+from the consumer's projection. A changed unrelated cell still fails integrity.
+An unsupported stored physical type fails explicitly rather than skipping
+part of the digest.
+
+`readFeedHealthFieldsDay` in the planner service reads one named UTC day through
+the same raw/compact membership, captured Git revision and file-byte checks.
+It returns independent `uses`: `request_totals`, `feed_rest`,
+`feed_reliability` and `article_admission`. Their schemas are declared once in
+`packages/common-contracts/src/schemas/feed-health-fields.schema.ts`:
+
+- Every use requires `date`, `run_id`, `attempt`, `feed_id` and `endpoint_key`.
+- Request totals require `feed_requests`, `article_requests` and `robots_requests`.
+- Rest and feed-read reliability each require `checked_at`, `outcome` and `items`.
+  Their observation time must agree with the UTC work day.
+- Article admission requires `article_candidates`, `counts_complete` and the
+  rejection reason, count, subject and attribution fields.
+
+Each use returns validated `rows`, `partial_rows` containing only individually
+valid fields from rejected rows, and `gaps` naming the use, field, UTC day,
+missing/invalid reason and row identity when known. A row with invalid identity
+is never exposed as partial attributable evidence. Null remains null, and
+missing or invalid counters are omitted from partial rows, never replaced with
+zero. This lets a later request report account for each counter independently.
+File coverage (`complete`, `represented`, file `gaps`) is separate from field
+coverage: `complete` alone never proves every required counter is known.
+
+Identical copies of a fact count once. Conflicting copies fail before any
+projection, including conflicts in fields a use does not read. The identity
+includes the endpoint and run attempt, so neither changed endpoints nor real
+repeated work collapse into another fact. Missing request columns do not remove
+valid feed-check evidence. No rest, reliability or article selection policy is
+changed by this read contract. The existing production consumers still use the
+strict full-row reader; the field reader is the reusable consumer boundary.
 
 ### Article cleanup compatibility
 

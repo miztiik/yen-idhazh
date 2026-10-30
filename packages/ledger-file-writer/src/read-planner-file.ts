@@ -1,4 +1,4 @@
-/** What one current planner Parquet file proves about its rows and writer. */
+/** What one planner Parquet file proves before a consumer validates its fields. */
 import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { basename } from "node:path";
@@ -6,9 +6,9 @@ import { DataType, tableFromIPC } from "apache-arrow";
 import type { Field } from "apache-arrow";
 import initializeParquet, { readMetadata, readParquet } from "parquet-wasm/esm";
 import {
-  PlannerFileEnvelopeSchema, PLANNER_FOOTER_METADATA_KEYS, PLANNER_OPTIONAL_FOOTER_METADATA_KEYS,
+  PlannerFileEnvelopeSchema, PlannerStoredFileEnvelopeSchema, PLANNER_FOOTER_METADATA_KEYS, PLANNER_OPTIONAL_FOOTER_METADATA_KEYS,
 } from "@idhazh/common-contracts";
-import type { PlannerFileEnvelope } from "@idhazh/common-contracts";
+import type { PlannerStoredFileEnvelope } from "@idhazh/common-contracts";
 import { describeObjectSchema } from "./row-schema";
 import { digestRows } from "./parquet/row-digest";
 import type { LedgerRowContract } from "./ledger-types";
@@ -58,6 +58,30 @@ function checkFields(fields: readonly Field[], expected: readonly LogicalField[]
   }
 }
 
+function storedFields(fields: readonly Field[]): LogicalField[] {
+  if (new Set(fields.map(field => field.name)).size !== fields.length) {
+    throw new PlannerLedgerFileError("Planner Arrow columns repeat a name");
+  }
+  return fields.map(field => {
+    const arrow = field.type;
+    let type: LogicalType;
+    if (DataType.isStruct(arrow)) {
+      type = { kind: "struct", nullable: field.nullable, fields: storedFields(arrow.children) };
+    } else if (DataType.isList(arrow) && arrow.children.length === 1) {
+      const item = storedFields(arrow.children)[0]!;
+      type = { kind: "list", nullable: field.nullable, itemType: item.type, itemNullable: item.nullable };
+    } else {
+      const scalar = DataType.isUtf8(arrow) ? "string"
+        : DataType.isInt(arrow) ? "int64"
+        : DataType.isFloat(arrow) ? "float64"
+        : DataType.isBool(arrow) ? "bool" : null;
+      if (scalar === null) throw new PlannerLedgerFileError(`Planner Arrow column has an unsupported stored type at ${field.name}`);
+      type = { kind: "scalar", scalar, nullable: field.nullable };
+    }
+    return { name: field.name, nullable: field.nullable, type };
+  });
+}
+
 function parseContainer<T>(read: () => T): T {
   try { return read(); }
   catch (error) {
@@ -68,15 +92,13 @@ function parseContainer<T>(read: () => T): T {
   }
 }
 
-export async function readPlannerParquet<T extends object>(
-  path: string, ledger: PlannerFileEnvelope["ledger"], contract: LedgerRowContract<T>,
-) {
+async function loadStoredPlannerParquet(path: string, ledger: PlannerStoredFileEnvelope["ledger"]) {
   initialization ??= initializeParquet();
   await initialization;
   const bytes = await readFile(path);
   const metadata = parseContainer(() => readMetadata(bytes));
   const footer = metadata.fileMetadata();
-  let envelope: PlannerFileEnvelope;
+  let envelope: PlannerStoredFileEnvelope;
   try {
     const values = footer.keyValueMetadata();
     const permitted = new Set<string>([...PLANNER_FOOTER_METADATA_KEYS, "ARROW:schema"]);
@@ -90,13 +112,7 @@ export async function readPlannerParquet<T extends object>(
     }
     const footerLedger = values.get("ledger");
     const rowSchemaVersion = values.get("schema_version");
-    const acceptedSchemaVersions = contract.acceptedSchemaVersions ?? [contract.schemaVersion];
-    if (footerLedger === ledger && (rowSchemaVersion === undefined || !acceptedSchemaVersions.includes(rowSchemaVersion))) {
-      throw new PlannerLedgerFileError(
-        `Planner ${ledger} uses an unsupported row schema; accepted ledger contract versions are ${acceptedSchemaVersions.join(", ")}`,
-      );
-    }
-    envelope = PlannerFileEnvelopeSchema.parse({
+    envelope = PlannerStoredFileEnvelopeSchema.parse({
       version: values.get("envelope_version"), row_schema_version: rowSchemaVersion,
       tier: values.get("tier"), ledger: footerLedger, covers: values.get("covers"),
       period: values.get("period") ?? null, file_id: values.get("file_id"),
@@ -105,27 +121,50 @@ export async function readPlannerParquet<T extends object>(
       updated_at: values.get("updated_at") ?? null,
     });
   } finally { footer.free(); metadata.free(); }
-  const acceptedSchemaVersions = contract.acceptedSchemaVersions ?? [contract.schemaVersion];
-  if (envelope.ledger !== ledger || !acceptedSchemaVersions.includes(envelope.row_schema_version)) {
-    throw new PlannerLedgerFileError("Planner file does not match its current ledger contract");
+  if (envelope.ledger !== ledger) {
+    throw new PlannerLedgerFileError("Planner file does not match its registered ledger");
   }
   if (envelope.tier === "raw" && basename(path) !== `${envelope.file_id}.parquet`) {
     throw new PlannerLedgerFileError("Planner raw filename differs from its file identity");
   }
   const table = tableFromIPC(parseContainer(() => readParquet(bytes)).intoIPCStream());
-  const columns = describeObjectSchema(contract.schema).fields;
-  checkFields(table.schema.fields, columns);
+  const columns = storedFields(table.schema.fields);
   const records = table.toArray().map(value => {
     const row = normalize(value);
     if (typeof row !== "object" || row === null || Array.isArray(row)) throw new PlannerLedgerFileError("Planner row must be an object");
     return row as Record<string, unknown>;
   });
-  if (digestRows(records, columns) !== envelope.content_sha256) {
+  let digest: string;
+  try { digest = digestRows(records, columns); }
+  catch (error) {
+    if (!(error instanceof TypeError)) throw error;
+    throw new PlannerLedgerFileError("Planner stored values cannot reproduce their row digest", { cause: error });
+  }
+  if (digest !== envelope.content_sha256) {
     throw new PlannerLedgerFileError("Planner row digest differs from its footer");
   }
-  const rows = records.map(record => contract.schema.parse(record));
   return {
-    envelope, rows, bytes: bytes.byteLength,
+    envelope, rows: records, fields: table.schema.fields, bytes: bytes.byteLength,
     file_sha256: createHash("sha256").update(bytes).digest("hex"),
   };
+}
+
+export async function readStoredPlannerParquet(path: string, ledger: PlannerStoredFileEnvelope["ledger"]) {
+  const { fields, ...stored } = await loadStoredPlannerParquet(path, ledger);
+  return stored;
+}
+
+export async function readPlannerParquet<T extends object>(
+  path: string, ledger: PlannerStoredFileEnvelope["ledger"], contract: LedgerRowContract<T>,
+) {
+  const { fields, ...stored } = await loadStoredPlannerParquet(path, ledger);
+  const accepted = contract.acceptedSchemaVersions ?? [contract.schemaVersion];
+  if (!accepted.includes(stored.envelope.row_schema_version)) {
+    throw new PlannerLedgerFileError(
+      `Planner ${ledger} uses an unsupported row schema; accepted ledger contract versions are ${accepted.join(", ")}`,
+    );
+  }
+  const envelope = PlannerFileEnvelopeSchema.parse(stored.envelope);
+  checkFields(fields, describeObjectSchema(contract.schema).fields);
+  return { ...stored, envelope, rows: stored.rows.map(row => contract.schema.parse(row)) };
 }
