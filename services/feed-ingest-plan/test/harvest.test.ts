@@ -68,8 +68,17 @@ test("real response streams enforce decoded byte limits and release an aborted b
   const decoded = Readable.from([gzipSync(body)]).pipe(createGunzip());
   expect(await readResponseBody(decoded, 200, Buffer.byteLength(body))).toBe(body);
   const oversized = Readable.from([Buffer.from(body)]);
-  await expect(readResponseBody(oversized, 200, Buffer.byteLength(body) - 1)).rejects.toThrow("max_body_bytes");
+  await expect(readResponseBody(oversized, 200, Buffer.byteLength(body) - 1))
+    .rejects.toMatchObject({
+      http_status: 200, configured_limit_bytes: Buffer.byteLength(body) - 1,
+      observed_at_least_bytes: Buffer.byteLength(body),
+    });
   expect(oversized.destroyed).toBe(true);
+  const cutoff = Readable.from([Buffer.alloc(1024), Buffer.alloc(32), Buffer.alloc(1024)]);
+  await expect(readResponseBody(cutoff, 200, 1024)).rejects.toMatchObject({
+    configured_limit_bytes: 1024, observed_at_least_bytes: 1056,
+  });
+  expect(cutoff.destroyed).toBe(true);
   const controller = new AbortController();
   const pending = addAbortSignal(controller.signal, new PassThrough());
   const reading = readResponseBody(pending, 200, 100);

@@ -1,5 +1,5 @@
 {
-  "version": "2026-10-27",
+  "version": "2026-10-30",
   "harvest": {
     "concurrency": 24,
     "fetch_timeout_ms": 6000,
@@ -75,7 +75,10 @@
         { "host": "apple.com", "path_prefix": "/podcasts", "include_subdomains": true },
         { "host": "podcasts.apple.com", "path_prefix": "/", "include_subdomains": true },
         { "host": "soundcloud.com", "path_prefix": "/", "include_subdomains": true },
-        { "host": "vimeo.com", "path_prefix": "/", "include_subdomains": true }
+        { "host": "vimeo.com", "path_prefix": "/", "include_subdomains": true },
+        { "host": "businesstoday.in", "path_prefix": "/bt-tv/market-today/short-video", "include_subdomains": true },
+        { "host": "businesstoday.in", "path_prefix": "/bt-tv/whats-hot/short-video", "include_subdomains": true },
+        { "host": "businesstoday.in", "path_prefix": "/bt-tv/short-video", "include_subdomains": true }
       ]
     },
     "press_release": {

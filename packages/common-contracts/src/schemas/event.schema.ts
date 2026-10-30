@@ -7,7 +7,8 @@ import { HarvestDiagnosticsSchema } from "./harvest-diagnostics.schema";
 import { ParsedFeedBatchSchema, SelectedFeedBatchSchema, PartitionedFeedBatchSchema } from "./planner-stage.schema";
 import { PlanApiTimingSchema } from "./plan-run.schema";
 import {
-  FEED_INGEST_EVENT_VERSION, FEED_OUTCOME_PAYLOAD_VERSION, LEGACY_FEED_INGEST_EVENT_VERSION,
+  FEED_INGEST_EVENT_VERSION, FEED_OUTCOME_PAYLOAD_VERSION, INTERMEDIATE_FEED_INGEST_EVENT_VERSION,
+  LEGACY_FEED_INGEST_EVENT_VERSION,
 } from "../version";
 
 const LEGACY_FEED_INGEST_EVENT_OPERATIONS = ["history", ...PlanApiTimingSchema.shape.operation.options, "plan", "artifact-upload"] as const;
@@ -21,17 +22,24 @@ export const FeedIngestEventSchema = z.strictObject({
 }).meta({
   version: FEED_INGEST_EVENT_VERSION,
   changelog: [
-    { version: FEED_INGEST_EVENT_VERSION, change: "Add separate quality-rejection events beside artifact inventory and safe article addresses." },
+    { version: FEED_INGEST_EVENT_VERSION, change: "Add separate typed quality-rejection events." },
+    { version: INTERMEDIATE_FEED_INGEST_EVENT_VERSION, change: "Record safe feed failure targets and response byte-limit evidence." },
+    { version: LEGACY_FEED_INGEST_EVENT_VERSION, change: "Add artifact-upload inventory and safe article addresses." },
     { version: "2026-10-29", change: "Move operation-specific fields into flexible details." },
-    { version: "2026-10-28", change: "Name the publisher on sparse article progress events." },
-    { version: "2026-10-26", change: "Name pre-fetch and selection health captures separately." },
+    { version: "2026-10-26", change: "Earlier changes are in git." },
   ],
 });
 export type FeedIngestEvent = z.infer<typeof FeedIngestEventSchema>;
-const LegacyFeedIngestEventSchema = FeedIngestEventSchema.extend({
-  version: z.literal(LEGACY_FEED_INGEST_EVENT_VERSION),
-  operation: z.enum(LEGACY_FEED_INGEST_EVENT_OPERATIONS),
-});
+const LegacyFeedIngestEventSchema = z.discriminatedUnion("version", [
+  FeedIngestEventSchema.extend({
+    version: z.literal(LEGACY_FEED_INGEST_EVENT_VERSION),
+    operation: z.enum(LEGACY_FEED_INGEST_EVENT_OPERATIONS),
+  }),
+  FeedIngestEventSchema.extend({
+    version: z.literal(INTERMEDIATE_FEED_INGEST_EVENT_VERSION),
+    operation: z.enum(LEGACY_FEED_INGEST_EVENT_OPERATIONS),
+  }),
+]);
 export function readFeedIngestEvent(raw: unknown): FeedIngestEvent {
   const current = FeedIngestEventSchema.safeParse(raw);
   if (current.success) return current.data;
@@ -57,7 +65,8 @@ export const FeedOutcomePayloadSchema = z.strictObject({
 }).meta({
   version: FEED_OUTCOME_PAYLOAD_VERSION,
   changelog: [
-    { version: FEED_OUTCOME_PAYLOAD_VERSION, change: "Remove source classification fields from planner feed outcomes." },
+    { version: FEED_OUTCOME_PAYLOAD_VERSION, change: "Retain decoded response byte-limit evidence." },
+    { version: "2026-10-27", change: "Remove source classification fields from planner feed outcomes." },
   ],
 });
 export type FeedOutcomePayload = z.infer<typeof FeedOutcomePayloadSchema>;

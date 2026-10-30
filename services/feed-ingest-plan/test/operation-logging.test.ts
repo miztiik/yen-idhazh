@@ -110,6 +110,46 @@ test("composed document failures include addresses without success leaks or dupl
   } finally { await f.close(); }
 });
 
+test("failed redirected feeds identify the requested URL and final dispatched target", async () => {
+  const f = await recordedPlan([source({ url: "https://news.example/feed-redirect" })]);
+  try {
+    await runFeedPlan({ partition_strategy: "none" }, f.inputs, f.runtime);
+    const event = f.events.find(item => item.operation === "fetch" && item.phase === "failed"
+      && item.details.document_kind === "feed");
+    expect(event?.details).toMatchObject({
+      requested_feed_url: "https://news.example/feed-redirect",
+      final_attempted_feed_url: "https://news.example/not-found",
+    });
+  } finally { await f.close(); }
+});
+
+test("feed byte cutoffs include the limit and observed lower bound in failure events", async () => {
+  const f = await recordedPlan([source({ url: "https://news.example/article-failures.xml" })]);
+  try {
+    f.inputs.harvest.extraction.max_body_bytes = 700;
+    await runFeedPlan({ partition_strategy: "none" }, f.inputs, f.runtime);
+    const event = f.events.find(item => item.operation === "fetch" && item.phase === "failed"
+      && item.details.document_kind === "feed");
+    expect(event?.details.body_limit).toMatchObject({ configured_limit_bytes: 700 });
+    expect((event?.details.body_limit as { observed_at_least_bytes: number }).observed_at_least_bytes).toBeGreaterThan(700);
+  } finally { await f.close(); }
+});
+
+test("robots byte cutoffs identify the feed but never claim its target request was dispatched", async () => {
+  const f = await recordedPlan([source({ url: "https://news.example/article-failures.xml" })]);
+  try {
+    f.inputs.harvest.extraction.max_body_bytes = 30;
+    await runFeedPlan({ partition_strategy: "none" }, f.inputs, f.runtime);
+    const event = f.events.find(item => item.operation === "fetch" && item.phase === "failed"
+      && item.details.document_kind === "feed");
+    expect(event?.details.body_limit).toMatchObject({ configured_limit_bytes: 30 });
+    expect((event?.details.body_limit as { observed_at_least_bytes: number }).observed_at_least_bytes).toBeGreaterThan(30);
+    expect(event?.details.body_limit_source).toBe("robots");
+    expect(event?.details.final_attempted_feed_url).toBeNull();
+    expect(f.transport.requests.some(request => request.url.pathname === "/article-failures.xml")).toBe(false);
+  } finally { await f.close(); }
+});
+
 test("publisher alone authorizes failure URLs and rejects secrets and spoofed markers", () => {
   const base = {
     run_id: "2026-10-29-700", correlation_id: randomUUID(), occurred_at: "2026-10-29T08:00:00Z",
@@ -117,6 +157,14 @@ test("publisher alone authorizes failure URLs and rejects secrets and spoofed ma
   };
   expect(prepareProgressEvent(base, [], "https://news.example/story?page=2#section").details)
     .toEqual({ article_url: "https://news.example/story" });
+  expect(prepareProgressEvent({ ...base, details: { document_kind: "feed" } }, [], undefined, {
+    requested: "https://news.example/feed.xml?page=2#section",
+    final_attempted: "https://cdn.example/feed.xml?tracking=removed",
+  }).details).toEqual({
+    document_kind: "feed",
+    requested_feed_url: "https://news.example/feed.xml",
+    final_attempted_feed_url: "https://cdn.example/feed.xml",
+  });
   for (const url of [
     "https://private:password@news.example/story", "https://news.example/story?token=private",
     "https://news.example/story?X-Amz-Signature=private", "file:///private", "invalid",
@@ -125,6 +173,17 @@ test("publisher alone authorizes failure URLs and rejects secrets and spoofed ma
     expect(event.details.article_url).toBeUndefined();
     expect(event.details._compliance).toMatchObject({ status: "NON_COMPLIANT" });
     expect(JSON.stringify(event)).not.toContain("private");
+  }
+  for (const requested of [
+    "https://news.example/feed.xml?token=private",
+    "https://user:password@news.example/feed.xml",
+  ]) {
+    const event = prepareProgressEvent({ ...base, details: { document_kind: "feed" } }, [], undefined, {
+      requested, final_attempted: null,
+    });
+    expect(event.details.requested_feed_url).toBeUndefined();
+    expect(JSON.stringify(event)).not.toContain("private");
+    expect(event.details._compliance).toMatchObject({ status: "NON_COMPLIANT" });
   }
   for (const phase of ["started", "completed"]) {
     expect(prepareProgressEvent({ ...base, phase }, [], "https://news.example/story").details.article_url).toBeUndefined();

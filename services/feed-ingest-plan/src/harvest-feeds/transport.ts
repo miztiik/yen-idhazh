@@ -6,7 +6,11 @@ import type { Readable } from "node:stream";
 import type { ResolvedAddress } from "./safe-target";
 
 export class BodyLimitError extends Error {
-  constructor(readonly http_status: number) { super("response exceeds extract.max_body_bytes"); }
+  constructor(
+    readonly http_status: number,
+    readonly configured_limit_bytes: number,
+    readonly observed_at_least_bytes: number,
+  ) { super("response exceeds extract.max_body_bytes"); }
 }
 export class ResponseReadError extends Error {
   constructor(readonly http_status: number, cause: unknown) {
@@ -18,6 +22,7 @@ export type TransportResponse = {
   body: string;
   location: string | null;
 };
+export type BodyLimitEvidence = Pick<BodyLimitError, "configured_limit_bytes" | "observed_at_least_bytes">;
 export type TransportRequest = {
   url: URL;
   addresses: readonly ResolvedAddress[];
@@ -47,7 +52,7 @@ export async function readResponseBody(body: Readable, status: number, limit: nu
   for await (const value of body) {
     const chunk = Buffer.isBuffer(value) ? value : Buffer.from(value);
     bytes += chunk.byteLength;
-    if (bytes > limit) throw new BodyLimitError(status);
+    if (bytes > limit) throw new BodyLimitError(status, limit, bytes);
     chunks.push(chunk);
   }
   return Buffer.concat(chunks, bytes).toString("utf8");

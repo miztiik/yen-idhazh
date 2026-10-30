@@ -111,6 +111,10 @@ test("recorded robots rules and structured URL exclusions bind configured policy
     if (matched !== undefined) expect(vector.rules ?? fixture.url_exclusions).toContainEqual(matched);
   }
   const media = loaded.config.content_filters.media;
+  expect(matchMediaOffer(
+    "https://businesstoday.in/technology/news/story/iphone-air-2-apple-may-finally-address-one-of-the-biggest-concerns-with-its-slim-iphone-564691-2026-10-30",
+    [], media,
+  )).toBeNull();
   for (const rule of media.url_rules) {
     for (const url of [
       `https://${rule.host}${rule.path_prefix}`,
@@ -464,5 +468,9 @@ test("existing byte controls reject a complete oversized recorded body without l
   const fetcher = createPermittedFetcher(loaded.config.harvest, loaded.extraction, { transport, resolve: transport.resolve });
   const result = await fetcher.fetch("https://news.example/second");
   expect(result).toMatchObject({ body: null, failure: "body-too-large", http_status: 200 });
+  expect(fetchDiagnostics(result, 0).body_limit).toEqual({
+    configured_limit_bytes: 1024,
+    observed_at_least_bytes: Buffer.byteLength((await readRecordings()).bodies.article),
+  });
   expect(transport.requests.every(request => request.max_body_bytes === 1024)).toBe(true);
 });

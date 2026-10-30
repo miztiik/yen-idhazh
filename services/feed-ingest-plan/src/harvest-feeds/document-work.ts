@@ -25,16 +25,24 @@ type Context = Pick<HarvestContext, "progress" | "observations" | "observation_c
 export function documentWork(context: Context, identity: DocumentIdentity, key: string, scope: Scope) {
   const publish = (operation: "fetch" | "parse" | "quality", phase: "started" | "completed" | "failed",
     duration_ms: number | null, url?: string, failure_code?: string | null,
-    quality_rejection?: QualityRejection) => context.document_activity?.(
+    quality_rejection?: QualityRejection,
+    fetched?: Pick<FetchResult, "body_limit" | "final_attempted_url" | "robots_failure">) => context.document_activity?.(
     operation, phase, {
       scope: "document",
       request_id: key, article_id: identity.article_id, document_kind: scope.document_kind,
       feed_id: scope.feed_id, publisher_id: scope.publisher_id, duration_ms,
       ...(failure_code == null ? {} : { failure_code }),
       ...(quality_rejection === undefined ? {} : { quality_rejection }),
-    }, scope.document_kind === "article" && phase === "failed" ? url : undefined,
+      ...(phase === "failed" && fetched?.body_limit != null ? {
+        body_limit: fetched.body_limit,
+        body_limit_source: fetched.robots_failure === "body-too-large" ? "robots" : "document",
+      } : {}),
+    }, phase === "failed" && scope.document_kind === "article" ? url : undefined,
+    phase === "failed" && scope.document_kind === "feed" && url !== undefined
+      ? { requested: url, final_attempted: fetched?.final_attempted_url ?? null } : undefined,
   );
   let fetchedUrl: string | undefined;
+  let finalAttemptedUrl: string | null = null;
   const timestamp = () => utcTimestamp(context.observation_clock);
   const event = (operation: "fetch" | "parse" | "attempt", cause: string | null, occurred_at = timestamp(), suffix = key) =>
     observeDocument(identity, suffix, operation, cause, occurred_at);
@@ -83,9 +91,10 @@ export function documentWork(context: Context, identity: DocumentIdentity, key: 
             Math.round(performance.now() - started), null);
           throw error;
         }
+        finalAttemptedUrl = fetched.final_attempted_url ?? null;
         const observation = event("fetch", cause);
         publish("fetch", fetched.failure !== null || fetched.body === null ? "failed" : "completed",
-          Math.round(performance.now() - started), url, fetched.failure);
+          Math.round(performance.now() - started), url, fetched.failure, undefined, fetched);
         await save(observation, {
           outcome: fetched.failure !== null ? "failed" : fetched.body === null ? "unavailable" : "success",
           failure_code: fetched.failure,
@@ -105,7 +114,9 @@ export function documentWork(context: Context, identity: DocumentIdentity, key: 
       } catch (error) {
         const observation = event("parse", cause);
         failure = error instanceof ArticleExtractionError ? error.reason : error instanceof FeedParseError ? "malformed-feed" : null;
-        publish("parse", "failed", Math.round(performance.now() - started), url, failure ?? "PARSE_FAILED");
+        publish("parse", "failed", Math.round(performance.now() - started), url, failure ?? "PARSE_FAILED", undefined, {
+          final_attempted_url: finalAttemptedUrl,
+        });
         await save(observation, { outcome: "failed", failure_code: failure }, Math.round(performance.now() - started), null);
         if (failure === null) throw error;
         return { parsed, failure, observation };
@@ -113,7 +124,9 @@ export function documentWork(context: Context, identity: DocumentIdentity, key: 
       const observation = event("parse", cause);
       const { quality_rejection, ...workResult } = result;
       publish("parse", workResult.outcome === "failed" ? "failed" : "completed",
-        Math.round(performance.now() - started), url, workResult.failure_code);
+        Math.round(performance.now() - started), url, workResult.failure_code, undefined, {
+          final_attempted_url: finalAttemptedUrl,
+        });
       await save(observation, workResult, Math.round(performance.now() - started), null);
       if (quality_rejection !== undefined) publish("quality", "failed", null, url, null, quality_rejection);
       return { parsed, failure, observation };

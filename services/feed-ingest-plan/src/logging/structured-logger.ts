@@ -17,7 +17,7 @@ const QualityRejectionSchema = z.strictObject({
 type ComplianceViolation = Readonly<{ code: string; path: string }>;
 
 /** A diagnostic address never retains credentials, query values or fragments. */
-function diagnosticArticleUrl(value: string): string | undefined {
+function diagnosticUrl(value: string): string | undefined {
   try {
     const url = new URL(value);
     if (!["http:", "https:"].includes(url.protocol) || url.username || url.password) return undefined;
@@ -43,7 +43,10 @@ function hasQualityRejection(value: unknown): boolean {
   return QualityRejectionSchema.safeParse(value.quality_rejection).success;
 }
 
-export function prepareProgressEvent(raw: unknown, requiredDetails: readonly string[] = [], failureArticleUrl?: string): FeedIngestEvent {
+export function prepareProgressEvent(
+  raw: unknown, requiredDetails: readonly string[] = [], failureArticleUrl?: string,
+  failureFeedUrls?: Readonly<{ requested: string; final_attempted: string | null }>,
+): FeedIngestEvent {
   if (!isRecord(raw)) throw new TypeError("Progress event must be an object");
   const { details: rawDetails, ...envelope } = raw;
   const base = FeedIngestEventSchema.omit({ details: true }).parse(envelope);
@@ -137,12 +140,25 @@ export function prepareProgressEvent(raw: unknown, requiredDetails: readonly str
     if (!Object.hasOwn(details, key)) addViolation("required_detail_missing", `details.${key}`);
   }
   if (failureArticleUrl !== undefined) {
-    const url = diagnosticArticleUrl(failureArticleUrl);
+    const url = diagnosticUrl(failureArticleUrl);
     const qualityRejection = qualityEvent && hasQualityRejection(rawDetails);
     if (((base.phase === "failed" && (base.operation === "fetch" || base.operation === "parse")) || qualityRejection)
       && url !== undefined) {
       details.article_url = url;
     } else addViolation("unsafe_article_url", "details.article_url");
+  }
+  if (failureFeedUrls !== undefined) {
+    const requested = diagnosticUrl(failureFeedUrls.requested);
+    if (base.phase === "failed" && (base.operation === "fetch" || base.operation === "parse")
+      && rawDetails !== null && isRecord(rawDetails) && rawDetails.document_kind === "feed" && requested !== undefined) {
+      details.requested_feed_url = requested;
+      if (failureFeedUrls.final_attempted === null) details.final_attempted_feed_url = null;
+      else {
+        const attempted = diagnosticUrl(failureFeedUrls.final_attempted);
+        if (attempted !== undefined) details.final_attempted_feed_url = attempted;
+        else addViolation("unsafe_feed_url", "details.final_attempted_feed_url");
+      }
+    } else addViolation("unsafe_feed_url", "details.requested_feed_url");
   }
   let serialized = JSON.stringify(details);
   if (Buffer.byteLength(serialized, "utf8") > DETAIL_LIMITS.bytes) {
@@ -167,11 +183,12 @@ export function createStageLogger(
   write: (event: FeedIngestEvent) => void = writeJsonLine,
 ) {
   return (operation: FeedIngestEvent["operation"], phase: FeedIngestEvent["phase"],
-    details: Record<string, unknown> = {}, requiredDetails: readonly string[] = [], failureArticleUrl?: string) => {
+    details: Record<string, unknown> = {}, requiredDetails: readonly string[] = [], failureArticleUrl?: string,
+    failureFeedUrls?: Readonly<{ requested: string; final_attempted: string | null }>) => {
     write(prepareProgressEvent({
       run_id: context.run_id, correlation_id: context.correlation_id, occurred_at: new Date().toISOString(),
       operation, phase, details,
-    }, requiredDetails, failureArticleUrl));
+    }, requiredDetails, failureArticleUrl, failureFeedUrls));
   };
 }
 export type StageLogger = ReturnType<typeof createStageLogger>;
