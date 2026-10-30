@@ -35,6 +35,7 @@ MODULE_NAMES = (
     "idhazh.contracts.item_health_summary",
     "idhazh.contracts.knobs.assist",
     "idhazh.contracts.knobs.bench",
+    "idhazh.contracts.knobs.classification_encoding",
     "idhazh.contracts.knobs.collect",
     "idhazh.contracts.knobs.console",
     "idhazh.contracts.knobs.council",

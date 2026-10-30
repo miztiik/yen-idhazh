@@ -1,6 +1,6 @@
 # Classification
 
-**Last Updated**: 2026-09-23
+**Last Updated**: 2026-10-29
 
 Every label this project puts on an article: what the word means, who decided
 it, and whether a reader ever sees it.
@@ -103,6 +103,60 @@ numbers, then decide whether a reader is better off seeing it.
 prevent**: a mark shipped on the day the field was added, drawn on a distribution
 nobody had seen, on an item where it happened to look right.
 
+## Independent classification encoding configuration
+
+`classification_encoding` in `config/idhazh.json` declares the local encoder
+for future classification comparisons. This configuration-only change does not
+connect it to article tagging, desk assignment or the diagnostic described
+below. Existing phrase matching and feed provenance remain unchanged.
+
+The block is separate from `assist`, which continues to control archive search.
+No classification setting or default is read from `assist`. An absent block is
+unconfigured (`None`), not permission to use search settings; the future
+classification consumer must require an explicit block.
+
+`model_id` is the readable model name; `model_revision` pins its upstream
+commit. `asset_directory` is repository-relative. `model_file`,
+`tokenizer_file` and every `model_digests` key are relative to that directory;
+each digest is SHA-256. Initially this points at the existing committed local
+assets without copying model bytes. Changing the classification block changes
+neither search configuration nor its encoder metadata.
+
+`dimensions` declares the vector width and `max_tokens` the truncation limit.
+The supported encoding is `pooling: "attention-mask-mean"` with
+`normalization: "l2"`: average token vectors using the attention mask, then
+scale the result to unit length. Other modes are refused rather than ignored.
+Asset hashes, declared width and the model's token capacity must be checked
+by the consumer when it loads those assets.
+
+`comparison_groups` is a list of source descriptors:
+
+- `id` names the group; group ids must be unique.
+- `source` is a repository-relative path including `config/`, for example
+  `config/taxonomy.json`, never `taxonomy.json`. Only named JSON files directly
+  under `config/` are supported; there is no directory discovery.
+- `entries_key` names one top-level list in that file.
+- `id_field` names each entry's string identity.
+- `text_fields` lists fields in encoding order. Each must contain a string or
+  a list of strings. Flatten lists in order and join the text with `. `.
+- `match` requires exact string equality for every named field; `{}` selects
+  all entries. It supports no expressions or nested lookups.
+- `destination` is `desk`, `lenses`, `events`, `entities` or `comparison_only`.
+  Each assignment destination may occur once; `comparison_only` may repeat.
+  It does not name or create an arbitrary persisted article field.
+
+The initial groups select active vertical definitions for desk comparisons,
+active lenses, active events, and active organisation names and aliases from
+`config/watchlist.json`. "Labels" is the umbrella term, not another registry;
+desks use vertical definitions rather than duplicate entries. A new compatible
+descriptor can make another source group available for comparison without a
+code edit. New assignment destinations or source shapes require implementation.
+Paths, field names, digest syntax, supported modes and duplicate declarations
+are validated now. Source existence, entry identities, field types and
+non-empty selected text must be validated at the future consumer's read boundary,
+including refusing unknown fields rather than treating them as no matches.
+No classification vectors or comparison scores are persisted by this block.
+
 ## The encoder alarm: a number that labels nothing
 
 The pipeline already encodes every published item - the headline and our
@@ -184,6 +238,15 @@ to whatever surface draws the series, because both are properties of a
 comparison and this record carries no comparison.
 
 ## Design rationale
+
+**Why separate configuration can share asset bytes.** Classification must evolve
+without moving the search model or its settings. An independent declaration
+provides that control; another copy of identical weights provides none. This
+first change only declares configuration; the dependent change connects the
+consumer. Maintainer ruling, 2026-10-29 UTC: no new tests or tooling for these
+two changes. Run existing checks and adjust directly affected existing tests
+only when required. This is the named exception to section 13's new-test
+requirement, not a change to the general test policy.
 
 **Why a register page at all.** The words are defined once in
 [taxonomy.md](taxonomy.md) and drawn once in
