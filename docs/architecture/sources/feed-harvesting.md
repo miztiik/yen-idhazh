@@ -1,6 +1,6 @@
 # Isolated feed harvesting
 
-**Last Updated**: 2026-10-29
+**Last Updated**: 2026-10-30
 
 How do configured feeds become sanitized article candidates?
 This build-time path leaves production Python discovery and extraction
@@ -157,10 +157,14 @@ The [screening stage](feed-screening.md) applies admission to parsed candidates.
 
 ## Work facts and failures
 
-The harvester returns candidates and terminal outcomes. Its caller writes
-completed article-fetch and extraction failures to the registered
-`rejected-articles` ledger at run finalization; standalone fetch and parse save
-them at stage completion as well as retaining the private fetch receipt.
+The harvester returns candidates and terminal outcomes. During `/plan`, the
+caller collects completed article-fetch and extraction failures in memory.
+Its `finally` block writes them through the registered `rejected-articles`
+ledger writer, including when a later stage fails. Standalone fetch and parse
+write their terminal failures to local ledger files at stage completion;
+the private fetch receipt is not their sole store.
+Writing a local ledger file is separate from
+[verified Git delivery](feed-ingest-audit.md#what-is-checked-and-written).
 Only terminal outcomes are retained, not each retry or successful article.
 The offered candidate and URL identities stay unchanged; missing addresses
 never gain invented identities. Article HTTP status and low-level failure
@@ -178,7 +182,9 @@ Actual work-day clocks are separate from the saved age clock.
 
 On a pool failure, already-running siblings settle before the caller returns.
 Completed feed work and article failures remain available for partial-run
-finalization even if a later stage fails. No normal
+finalization even if a later stage fails. Terminal failures not yet written
+remain process-local: abrupt process termination before finalization can lose
+them. This path does not provide crash recovery. No normal
 response, event export or artifact archives the full parsed/rejected population.
 Only selected article text enters the summarizer artifact.
 
@@ -200,6 +206,12 @@ runtime bytes to this dependency tree. Its type declarations are build-only.
 Neither parser nor converter executes page scripts or fetches resources.
 
 ## Design rationale
+
+Run finalization writes harvest failures independently of selected-output
+persistence, so a later stage failure need not discard completed failures.
+Passing those rows through parsed, selected and partitioned batches would not
+add restart recovery: `StageStore` holds those batches in a bounded in-memory
+`Map`, not on disk.
 
 User-directed policy change, 2026-10-29 UTC: article robots permission is
 advisory in the committed planner settings. Retain the robots verdict, HTTP

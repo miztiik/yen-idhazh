@@ -1,6 +1,6 @@
 # Feed planner ledgers
 
-**Last Updated**: 2026-10-29
+**Last Updated**: 2026-10-30
 
 Which planner data is retained, and where is it stored?
 
@@ -595,8 +595,10 @@ window. Age refusals use the failed threshold. An unopened older step is not
 an applied cutoff. Harvest rows require an actual offered URL identity, not a
 replacement for a malformed or absent address. Retries produce one terminal
 row per candidate and run, not one row per attempt; a recovered fetch produces
-no stale failure row. Completed failures remain retained if selection,
-partitioning or selected-output persistence later fails. Feed-health counters
+no stale failure row. Run finalization retains completed failures if selection,
+partitioning or selected-output persistence later fails; see the
+[write timing and process-loss limit](../architecture/sources/feed-harvesting.md#work-facts-and-failures).
+Feed-health counters
 remain grouped and never count these detail rows again.
 Repeated writes of an identical raw rejection batch use the same physical
 file identity and verify that existing file before reusing it. Other planner
