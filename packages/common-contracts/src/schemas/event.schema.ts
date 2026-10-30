@@ -18,10 +18,11 @@ export const FeedIngestEventSchema = z.strictObject({
 }).meta({
   version: FEED_INGEST_EVENT_VERSION,
   changelog: [
-    { version: FEED_INGEST_EVENT_VERSION, change: "Add artifact-upload inventory and publisher-controlled failure article addresses." },
+    { version: FEED_INGEST_EVENT_VERSION, change: "Record safe feed failure targets and response byte-limit evidence." },
+    { version: "2026-10-29T08:00", change: "Add artifact-upload inventory and publisher-controlled failure article addresses." },
     { version: "2026-10-29", change: "Move operation-specific fields into flexible details." },
     { version: "2026-10-28", change: "Name the publisher on sparse article progress events." },
-    { version: "2026-10-26", change: "Name pre-fetch and selection health captures separately." },
+    { version: "2026-10-26", change: "Earlier changes are in git." },
   ],
 });
 export type FeedIngestEvent = z.infer<typeof FeedIngestEventSchema>;
@@ -46,7 +47,8 @@ export const FeedOutcomePayloadSchema = z.strictObject({
 }).meta({
   version: FEED_OUTCOME_PAYLOAD_VERSION,
   changelog: [
-    { version: FEED_OUTCOME_PAYLOAD_VERSION, change: "Remove source classification fields from planner feed outcomes." },
+    { version: FEED_OUTCOME_PAYLOAD_VERSION, change: "Retain decoded response byte-limit evidence." },
+    { version: "2026-10-27", change: "Remove source classification fields from planner feed outcomes." },
   ],
 });
 export type FeedOutcomePayload = z.infer<typeof FeedOutcomePayloadSchema>;

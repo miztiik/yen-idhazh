@@ -30,6 +30,7 @@
     "https://news.example/unsafe-redirect": [{"status": 302, "body": "", "location": "http://127.0.0.1/secret"}],
     "https://news.example/denied-redirect": [{"status": 302, "body": "", "location": "https://denied.example/story"}],
     "https://news.example/safe-redirect": [{"status": 302, "body": "", "location": "/second"}],
+    "https://news.example/feed-redirect": [{"status": 302, "body": "", "location": "/not-found"}],
     "https://news.example/loop": [{"status": 302, "body": "", "location": "/loop"}],
     "https://atom.example/robots.txt": [{"status": 404, "body": ""}],
     "https://atom.example/feed.xml": [{"status": 200, "fixture": "atom"}],

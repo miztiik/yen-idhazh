@@ -28,16 +28,25 @@ export const FetchFailureSchema = z.enum([
   "http", "timeout", "unsafe-target", "dns", "network", "robots-denied",
   "robots-unknown", "body-too-large", "redirect-loop",
 ]);
+export const BodyLimitEvidenceSchema = z.strictObject({
+  configured_limit_bytes: CountSchema, observed_at_least_bytes: CountSchema,
+}).superRefine((value, ctx) => {
+  if (value.observed_at_least_bytes <= value.configured_limit_bytes) {
+    reject(ctx, "cutoff evidence must exceed the configured byte limit");
+  }
+});
+export type BodyLimitEvidence = z.infer<typeof BodyLimitEvidenceSchema>;
 export const ExtractionFailureSchema = z.enum([
   "missing-document-root", "dom-depth-exceeded", "empty-content", "missing-title",
   "parser-timeout", "parser-cancelled", "parser-failed",
 ]);
-export const HarvestDiagnosticsSchema = z.strictObject({
+const HarvestDiagnosticsBaseSchema = z.strictObject({
   http_status: z.int().min(100).max(599).nullable().default(null),
   robots: z.enum(["allowed", "denied", "unknown"]).nullable().default(null),
   fetch_failure: FetchFailureSchema.nullable().default(null),
   robots_failure: FetchFailureSchema.nullable().default(null),
   robots_http_status: z.int().min(100).max(599).nullable().default(null),
+  body_limit: BodyLimitEvidenceSchema.nullable().default(null),
   error_code: z.string().max(64).regex(/^[A-Z][A-Z0-9_]*$/).nullable().default(null),
   extraction_failure: ExtractionFailureSchema.nullable().default(null),
   failure_code: z.enum([
@@ -60,8 +69,14 @@ export const HarvestDiagnosticsSchema = z.strictObject({
     { version: "2026-10-30", change: "Distinguish parser deadline, cancellation and worker failures from source failures." },
   ],
 });
+export const HarvestDiagnosticsSchema = HarvestDiagnosticsBaseSchema.superRefine((value, ctx) => {
+  if (value.body_limit !== null && value.fetch_failure !== "body-too-large"
+    && value.robots_failure !== "body-too-large") {
+    reject(ctx, "byte-limit evidence requires a body-too-large fetch or robots failure", ["body_limit"]);
+  }
+});
 export type HarvestDiagnostics = z.infer<typeof HarvestDiagnosticsSchema>;
-export const ArticleFetchEvidenceSchema = HarvestDiagnosticsSchema.pick({
+export const ArticleFetchEvidenceSchema = HarvestDiagnosticsBaseSchema.pick({
   http_status: true, fetch_failure: true, error_code: true,
   robots: true, robots_http_status: true, robots_failure: true,
 });

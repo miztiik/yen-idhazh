@@ -15,7 +15,9 @@ import {
 import { RecordedInstantSchema } from "./recorded-instant.schema";
 import { SourceSnapshotSchema } from "./source.schema";
 import { UrlSchema } from "./primitives";
-import { PARSED_FEED_BATCH_VERSION, SELECTED_ARTICLE_VERSION } from "../version";
+import {
+  PARSED_FEED_BATCH_ACCEPTED_SCHEMA_VERSIONS, PARSED_FEED_BATCH_VERSION, SELECTED_ARTICLE_VERSION,
+} from "../version";
 import { PlannerRequestReportSchema } from "./planner-request-report.schema";
 export { PlannerRequestReportSchema } from "./planner-request-report.schema";
 export type { PlannerRequestReport } from "./planner-request-report.schema";
@@ -92,7 +94,7 @@ const batchIdentity = {
   batch_id: z.uuid({ version: "v4" }), config_sha256: Sha256Schema, context: PlannerStageContextSchema,
 };
 export const ParsedFeedBatchSchema = z.strictObject({
-  ...batchIdentity, version: z.literal(PARSED_FEED_BATCH_VERSION).default(PARSED_FEED_BATCH_VERSION), request: PlannerStageRequestSchema,
+  ...batchIdentity, version: z.enum(PARSED_FEED_BATCH_ACCEPTED_SCHEMA_VERSIONS).default(PARSED_FEED_BATCH_VERSION), request: PlannerStageRequestSchema,
   candidates: z.array(FeedIngestCandidateSchema),
   observations: z.record(Sha256Schema, PlannerHarvestObservationSchema),
   discovered: PlannerDiscoveredEvidenceSchema,
@@ -118,7 +120,7 @@ export const ParsedFeedBatchSchema = z.strictObject({
 }).meta({
   version: PARSED_FEED_BATCH_VERSION,
   changelog: [
-    { version: PARSED_FEED_BATCH_VERSION, change: "Retain bounded parser failures and complete run-owned collections before selection." },
+    { version: PARSED_FEED_BATCH_VERSION, change: "Retain parser deadlines, collection completion and response byte-limit evidence." },
     { version: "2026-10-29", change: "Identify parsed candidates produced with shared query-free article cleanup." },
     { version: "2026-10-27T18:30", change: "Link standalone article batches to their original source-outcome receipt." },
     { version: "2026-10-27", change: "Name planner discovery evidence and derive website groups from canonical URLs." },

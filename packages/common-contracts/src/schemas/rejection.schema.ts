@@ -77,7 +77,7 @@ export const REQUIRED_DETAILS: Readonly<Partial<Record<DropReason, readonly (key
   PRESS_RELEASE: ["content_evidence", "sample_chars_limit"],
   LINK_HEAVY: ["content_evidence", "max_link_density", "max_list_items", "words_found", "list_word_limit"],
 };
-export const CANDIDATE_REJECTION_VERSION = "2026-10-29";
+export const CANDIDATE_REJECTION_VERSION = "2026-10-30";
 export const CandidateRejectionRecordSchema = z.strictObject({
   version: z.literal(CANDIDATE_REJECTION_VERSION).default(CANDIDATE_REJECTION_VERSION), date: DateStampSchema, correlation_id: NonEmptySchema,
   feed_id: SlugSchema, feed_url: UrlSchema, subject: z.enum(["feed", "article"]),
@@ -123,7 +123,8 @@ export const CandidateRejectionRecordSchema = z.strictObject({
 }).meta({
   version: CANDIDATE_REJECTION_VERSION,
   changelog: [
-    { version: CANDIDATE_REJECTION_VERSION, change: "Retain fetch evidence and allow harvest failures without parsed candidate identities." },
+    { version: CANDIDATE_REJECTION_VERSION, change: "Retain response byte-limit evidence in fetch diagnostics." },
+    { version: "2026-10-29", change: "Retain fetch evidence and allow harvest failures without parsed candidate identities." },
     { version: "2026-10-28", change: "Rename the feed identity from source_id to feed_id." },
   ],
 });

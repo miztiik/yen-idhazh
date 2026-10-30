@@ -105,6 +105,10 @@ settings default to `enforce`; committed planner configuration uses `observe`.
 In `observe`, denied or unknown robots permission does not block a safe article
 request. Actual retry and redirect dispatches
 each count; cache reuse adds no request.
+The fetch stops at the first decoded stream chunk that takes the running byte
+count over `extract.max_body_bytes`. Its diagnostic records that configured
+limit and the bytes observed so far as a lower bound; it does not read the rest
+of the response or claim its full size.
 
 `harvest.request_headers` supplies primary and nullable secondary navigation
 profiles. Both feed and article targets use them; robots downloads do not.
@@ -244,6 +248,10 @@ address is used to match discovery, publication and settled-failure keys.
 Older recorded keys remain unchanged and do not link to the current address;
 this avoids extra history reads and alternate-policy checks, but can repeat
 processing for an address whose older key differs.
+
+Configured `/short-video` route prefixes identify media offers and reject them
+before article requests. Host/path boundaries keep other story routes eligible
+without relying on titles or extraction outcomes.
 
 ## See also
 

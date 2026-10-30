@@ -875,6 +875,10 @@ compacted container can use its current stamp without relabeling historical rows
 Earlier incompatible stamps still refuse. Existing published records and joins
 retain their original keys.
 
+Parsed feed batches written with `2026-10-29` remain readable because the new
+`body_limit` diagnostic is nullable and defaults to `null`. New batches use
+`2026-10-30`; reading an older batch preserves its original stamp.
+
 Saved fetch responses remain replayable with their original identity. An old
 article fetch receipt cannot be parsed into a current-policy candidate; fetch
 the article again. There is no migration table, dual writer or permanent alias

@@ -59,6 +59,7 @@ export type HarvestContext = {
   document_activity?: (
     operation: "fetch" | "parse", phase: "started" | "completed" | "failed",
     details: Record<string, unknown>, failureArticleUrl?: string,
+    failureFeedUrls?: Readonly<{ requested: string; final_attempted: string | null }>,
   ) => void;
   parser_pool?: ArticleParserPool;
   parser_options?: Parameters<ArticleParserPool["parse"]>[3];
