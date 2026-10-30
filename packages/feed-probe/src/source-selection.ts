@@ -136,7 +136,7 @@ function validateCatalog(raw: unknown): { sources: CatalogSource[] } {
       throw new FeedProbeInputError(`Catalog feed ${source.id} must not use retired status`);
     }
     SourceSnapshotSchema.parse({
-      feed_id: source.id,
+      source_id: source.id,
       feed_url: source.url,
       title: source.title ?? source.id,
       publisher_id: source.publisher_id ?? null,
@@ -151,7 +151,7 @@ function validateCatalog(raw: unknown): { sources: CatalogSource[] } {
       throw new FeedProbeInputError(`Catalog retired source ${source.id} must use retired status`);
     }
     SourceSnapshotSchema.parse({
-      feed_id: source.id,
+      source_id: source.id,
       feed_url: source.url,
       title: source.title ?? source.id,
       publisher_id: source.publisher_id ?? null,
