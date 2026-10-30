@@ -1,6 +1,6 @@
 # Feed-ingest feedback
 
-**Last Updated**: 2026-10-29
+**Last Updated**: 2026-10-30
 
 Which actual feed work informs a later selection?
 The planner records per-run, per-feed facts for each actual UTC work day in
@@ -20,8 +20,10 @@ Terminal article-fetch and extraction failures also have individual rows in
 standalone-stage finalization. Each row keeps the actual article status,
 download failure and low-level code separately from robots permission, status
 and failure. Unobserved facts remain null. Retries do not create extra rows,
-and successful recovery creates no stale rejection. Completed failures survive
-a later stage failure, including when no article is selected.
+and successful recovery creates no stale rejection. Run finalization retains
+completed failures after a later stage fails, including when no article is
+selected. The [harvesting failure flow](../sources/feed-harvesting.md#work-facts-and-failures)
+defines local writes, separate Git delivery and the process-loss limit.
 These detail rows are not new health contributions: existing grouped work facts
 remain the only input to feed-health aggregation. The field meanings and old
 file compatibility are defined in
