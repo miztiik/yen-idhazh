@@ -152,9 +152,13 @@ and `age_hours = null`. It does not create a fabricated historical publication
 source or rewrite the selection-start fallback. The artifact and metadata
 projection use the same chosen values.
 
-The TypeScript planner reader accepts only the current native ledger stamps:
-`2026-10-25` for discovered articles, `2026-10-26` for plan runs and `2026-10-27`
-for selected articles, rejected articles and feed health. It verifies the physical fields, file identity
+The TypeScript planner reader accepts the current native ledger stamps:
+`2026-10-29` for discovered and selected articles, `2026-10-26` for plan runs
+and `2026-10-27` for feed health. Discovery and selected history also retain
+the exact earlier stamps listed in [article cleanup compatibility](#article-cleanup-compatibility).
+Rejected articles use `2026-10-29T20:15`;
+their exact `2026-10-27` and `2026-10-29` predecessors remain readable with null fetch-evidence
+fields. It verifies the physical fields, file identity
 and canonical digest, then parses every row with the matching current schema.
 The selected and plan-run `2026-10-25` rows and the selected `2026-10-25`
 artifact are obsolete and refuse explicitly; they are unchanged on disk and
@@ -560,8 +564,11 @@ captures. There is no per-candidate history read or persistent result cache.
 ## M. rejected-articles
 
 Explicit selection persistence writes one row for each parsed candidate not
-selected, including runs with zero selected articles. Fetch/parse failures are
-not parsed selection candidates. This ledger has no title, body, policy or score
+selected, including runs with zero selected articles. Run finalization also
+retains completed terminal article-fetch and extraction failures. Standalone
+fetch and parse operations save those failures when their stage completes;
+the private fetch receipt is not their sole store.
+This ledger has no title, body, policy or score
 tree and no explorer consent.
 Without explorer consent, its files are not staged in the site and it has no
 published-payload ceiling in `config/idhazh.json`.
@@ -571,16 +578,35 @@ published-payload ceiling in `config/idhazh.json`.
 | Id | Field | Meaning |
 | --- | --- | --- |
 | M1 | `schema_version` | File metadata declaring the current row format |
-| M2 | `run_id`, `attempt`, `date` | Selection execution identity and its UTC accounting day |
-| M3 | `candidate_id` | Original parsed candidate identity |
+| M2 | `run_id`, `attempt`, `date` | Execution identity and its UTC accounting day |
+| M3 | `candidate_id` | Original offered or parsed candidate identity; null only for a harvest failure without one |
 | M4 | `url_key`, `feed_id` | Canonical URL hash and supplying feed |
-| M5 | `stage`, `reason_code` | Final screening or curation refusal; retained rows accept bounded historical reason strings |
+| M5 | `stage`, `reason_code` | Terminal harvest failure or final screening/curation refusal; retained rows accept bounded historical reason strings |
 | M6 | `freshness_cutoff_at` | Applied UTC age cutoff, or null when no cutoff was applied |
+| M7 | `http_status` | Actual article response status, or null if not observed; never the robots response |
+| M8 | `fetch_failure` | Typed terminal download failure, or null when no fetch failure was observed |
+| M9 | `error_code` | Validated low-level transport code, or null if not observed |
+| M10 | `robots` | Observed `allowed`, `denied` or `unknown` permission, or null before observation |
+| M11 | `robots_http_status` | Actual robots response status, or null if not observed |
+| M12 | `robots_failure` | Typed robots download failure, or null if not observed |
 
 Row identity is run, attempt and candidate. Selected cutoffs use their admitted
 window. Age refusals use the failed threshold. An unopened older step is not
-an applied cutoff. Current schemas refuse harvest-stage or mismatched
-stage/reason rows. Known current reasons keep their stage checks; unknown or
+an applied cutoff. Harvest rows require an actual offered URL identity, not a
+replacement for a malformed or absent address. Retries produce one terminal
+row per candidate and run, not one row per attempt; a recovered fetch produces
+no stale failure row. Completed failures remain retained if selection,
+partitioning or selected-output persistence later fails. Feed-health counters
+remain grouped and never count these detail rows again.
+Repeated writes of an identical raw rejection batch use the same physical
+file identity and verify that existing file before reusing it. Other planner
+ledgers keep their existing file identities.
+
+The reader checks the physical Arrow schema and original digest against the
+file's exact accepted version before filling the six absent evidence fields
+with null. Old files are not rewritten. Compaction accepts old and current
+members together and writes the current format. Unknown versions still refuse.
+Known current reasons keep their stage checks; unknown or
 retired reason strings remain readable evidence when they follow the bounded
 uppercase reason-code pattern.
 
@@ -601,10 +627,11 @@ adapter, which validates exact raw and compact Parquet members at one captured
 Git revision and returns verified bytes and exact source paths. Python applies
 that result through its existing pass and commit flow.
 
-Planner contracts still carry current schema stamps and changelogs. Except for
-the [article cleanup compatibility](#article-cleanup-compatibility), the
-current-format refusal has no Python copy, compatibility reader or migration;
-the TypeScript tests and the real gardener-adapter integration test own this
+Planner contracts still carry current schema stamps and changelogs. The
+version checks have no Python copy. Rejected-article compatibility and
+[article cleanup compatibility](#article-cleanup-compatibility) belong to
+the native TypeScript reader. The TypeScript tests and the real
+gardener-adapter integration test own this
 boundary.
 
 ## Raw-day membership

@@ -9,6 +9,7 @@ import { validateLedgerInput, isMaintenanceJob } from "./registration";
 import { buildStoredRawRow, settlePlannerRows } from "./row-identity";
 import { renderLedgerFile } from "./render-ledger-file";
 import { createUnitId } from "./uuid/unit-id";
+import { readPlannerParquet } from "./read-planner-file";
 import type { PersistedLedgerFile } from "./ledger-types";
 
 function isObject(value: unknown): value is Record<string, unknown> {
@@ -85,6 +86,22 @@ export async function persistRawLedger<T extends object>(
   }
   await mkdir(context.outputRoot, { recursive: true });
   await Promise.all(rendered.map(({ target }) => checkTrustedParent(context.outputRoot, target)));
-  for (const { target, data } of rendered) await writeAtomically(target, data);
+  for (const { target, data, file } of rendered) {
+    if (context.ledger === "rejected-articles") {
+      try {
+        const existing = await readPlannerParquet(target, "rejected-articles", input.rowContract);
+        if (existing.envelope.row_schema_version !== input.rowContract.schemaVersion
+          || existing.envelope.tier !== "raw" || existing.envelope.covers !== file.covers
+          || existing.envelope.content_sha256 !== file.content_sha256
+          || existing.rows.length !== file.row_count) {
+          throw new Error("existing rejected-article file differs from its replayed rows");
+        }
+        continue;
+      } catch (error) {
+        if (!(error instanceof Error && "code" in error && error.code === "ENOENT")) throw error;
+      }
+    }
+    await writeAtomically(target, data);
+  }
   return { status: "written", files: rendered.map(({ file }) => file) };
 }

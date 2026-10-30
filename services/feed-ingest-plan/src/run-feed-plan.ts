@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import {
   DiscoveredArticleRowSchema, ParsedFeedBatchSchema, PlannerWorkEventSchema, deriveCandidateId,
 } from "@idhazh/common-contracts";
-import type { FeedIngestEvent, PlannerArticleEvidence, DiscoveredArticleRow, PlanRunRow } from "@idhazh/common-contracts";
+import type { CandidateRejectionRecord, FeedIngestEvent, PlannerArticleEvidence, DiscoveredArticleRow, PlanRunRow } from "@idhazh/common-contracts";
 import type { PersistLedgerResult } from "@idhazh/ledger-file-writer";
 import { harvestFeeds } from "./harvest-feeds/harvest-pool";
 import { sourceSnapshot } from "./harvest-feeds/load-harvest-inputs";
@@ -28,6 +28,7 @@ import { createRunHealth } from "./run-health";
 import { plannerMemory } from "./planner-memory";
 import { recordPlanRun } from "./record-plan-run";
 import { registerStageExecution } from "./api/document-state";
+import { recordHarvestFailures } from "./record-harvest-failures";
 import { readArticleIdentityHistory } from "./read-ledger-history/read-article-identity-history";
 import { InvalidArticleUrlError } from "./harvest-feeds/article-identity";
 import { UnsafeTargetError } from "./harvest-feeds/safe-target";
@@ -79,6 +80,7 @@ export async function runFeedPlan(raw: unknown, inputs: PlanInputs, runtime: Pla
   let history: Awaited<ReturnType<typeof prepareFeedHealthState>> | undefined;
   let discovery: Awaited<ReturnType<typeof readDiscoveredEvidence>> | undefined;
   const sightings: DiscoveredArticleRow[] = [];
+  const harvestFailures: CandidateRejectionRecord[] = [];
   const offers: OfferedArticle[] = [];
   async function phase<T>(operation: PlanRunRow["api_timings"][number]["operation"], execute: () => Promise<T>, publish = true): Promise<T> {
     const begin = performance.now();
@@ -156,7 +158,10 @@ export async function runFeedPlan(raw: unknown, inputs: PlanInputs, runtime: Pla
           }));
         }
       },
-      on_article: currentWork.article,
+      on_article: result => {
+        currentWork.article(result);
+        if (result.rejection !== null) harvestFailures.push(result.rejection);
+      },
       progress: (eventType, details) => runtime.progress?.({
         eventType, feed_id: details?.feed_id ?? null, output_count: details?.output_count ?? null,
       }),
@@ -254,6 +259,15 @@ export async function runFeedPlan(raw: unknown, inputs: PlanInputs, runtime: Pla
     }
   } finally {
     if (runtime.parser_pool === undefined) parserPool.close();
+    try {
+      const saved = await recordHarvestFailures(harvestFailures, context, inputs);
+      const previous = files.rejected_articles;
+      files.rejected_articles = previous?.status === "written"
+        ? { status: "written", files: [...previous.files, ...saved.files] } : saved;
+    } catch {
+      failureCode = "REJECTED_ARTICLES_WRITE_FAILED";
+      emit("persist", "failed", { failure_code: failureCode });
+    }
     if (parseStarted !== undefined) timings.push({
       operation: "parse", duration_ms: Math.round((parseFinished ?? performance.now()) - parseStarted),
       status: parseFailed ? "failed" : "completed",

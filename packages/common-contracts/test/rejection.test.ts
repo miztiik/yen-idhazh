@@ -18,7 +18,8 @@ import {
   FetchRequestSchema,
   SelectedArticleRowSchema, SelectedArticlesArtifactSchema, SelectedArtifactArticleSchema,
   selectedArticleMetadata, readSelectedArticlesArtifact, FeedHealthStateRowSchema, PlanRunRowSchema,
-  RetainedRejectionReasonSchema, RejectedArticleRowSchema,
+  RetainedRejectionReasonSchema, RejectedArticleRowSchema, ArticleFetchEvidenceSchema,
+  CANDIDATE_REJECTION_VERSION, REJECTED_ARTICLE_VERSION,
 } from "../src/index";
 import { plannerStageSchemas, runtimeSchemas, schemas } from "./schema-binding";
 
@@ -110,6 +111,63 @@ function event() {
 }
 
 describe("rejection evidence", () => {
+  test("retains article response evidence separately from policy and health outcomes", () => {
+    const evidence = {
+      http_status: 200, fetch_failure: null, error_code: null,
+      robots: "allowed" as const, robots_http_status: 404, robots_failure: "http" as const,
+    };
+    const transient = CandidateRejectionRecordSchema.parse({
+      ...rejection(), version: CANDIDATE_REJECTION_VERSION, candidate_id: null, title: null,
+      stage: "harvest-feeds", drop_reason: "EXTRACT_EMPTY", details: evidence,
+    });
+    expect(transient.details).toMatchObject(evidence);
+    const row = {
+      run_id: run, attempt: 1, date: day, candidate_id: null, url_key: deriveUrlKey(url),
+      feed_id: source.feed_id, stage: "harvest-feeds" as const, reason_code: "EXTRACT_EMPTY",
+      freshness_cutoff_at: null, ...evidence,
+    };
+    expect(RejectedArticleRowSchema.parse(row)).toEqual(row);
+    const unobserved = ArticleFetchEvidenceSchema.parse({});
+    expect(Object.values(unobserved)).toEqual([null, null, null, null, null, null]);
+    expect(RejectedArticleRowSchema.parse({ ...row, ...unobserved })).toMatchObject(unobserved);
+    expect(ArticleFetchEvidenceSchema.parse({
+      http_status: null, fetch_failure: "robots-unknown", error_code: "ECONNRESET",
+      robots: "unknown", robots_http_status: null, robots_failure: "network",
+    }).error_code).toBe("ECONNRESET");
+    expect(RejectedArticleRowSchema.meta()?.version).toBe(REJECTED_ARTICLE_VERSION);
+    expect(CandidateRejectionRecordSchema.meta()?.version).toBe(CANDIDATE_REJECTION_VERSION);
+  });
+
+  test("refuses malformed fetch evidence and missing non-harvest candidate identities", () => {
+    const base = rejection();
+    const row = {
+      run_id: run, attempt: 1, date: day, candidate_id: digest, url_key: digest,
+      feed_id: "example", stage: "curate-article-portfolio",
+      reason_code: "REJECTED_GLOBAL_CAPACITY_REACHED", freshness_cutoff_at: null,
+    };
+    for (const invalid of [
+      { http_status: 99 }, { http_status: 600 }, { http_status: "503" },
+      { robots_http_status: 600 }, { robots_http_status: 0 },
+      { fetch_failure: "connection-refused" }, { robots_failure: "not-observed" },
+      { error_code: "network_error" }, { error_code: "A".repeat(65) },
+      { robots: "permitted" },
+    ]) {
+      expect(CandidateRejectionRecordSchema.safeParse({ ...base, details: invalid }).success).toBe(false);
+      expect(RejectedArticleRowSchema.safeParse({ ...row, ...invalid }).success).toBe(false);
+    }
+    expect(CandidateRejectionRecordSchema.safeParse({ ...base, candidate_id: null }).success).toBe(false);
+    expect(CandidateRejectionRecordSchema.safeParse({
+      ...base, version: "2026-10-28",
+    }).success).toBe(false);
+    expect(RejectedArticleRowSchema.safeParse({ ...row, candidate_id: null }).success).toBe(false);
+    expect(RejectedArticleRowSchema.safeParse({
+      ...row, stage: "harvest-feeds", reason_code: "FEED_EMPTY",
+    }).success).toBe(false);
+    expect(RejectedArticleRowSchema.safeParse({
+      ...row, candidate_id: null, url_key: null, stage: "harvest-feeds", reason_code: "FETCH_FAILED",
+    }).success).toBe(false);
+  });
+
   test("preserves missing article fields without fabricating feed identities", () => {
     const base = rejection();
     expect(base.details.timeout_ms).toBeNull();
