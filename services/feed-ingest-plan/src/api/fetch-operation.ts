@@ -10,7 +10,7 @@ import type { PlanRuntime } from "../run-feed-plan";
 import { PlanError } from "./plan-request";
 import { stageStore } from "./stage-store";
 import { requireStageConfiguration } from "./selection-operation";
-import { checkFetchedDocument, documentExclusions, documentIdentities, documentState } from "./document-state";
+import { checkFetchedDocument, documentExclusions, documentState } from "./document-state";
 import { deriveArticleIdentity, InvalidArticleUrlError } from "../harvest-feeds/article-identity";
 import { deriveFeedIdentity } from "../harvest-feeds/feed-identity";
 import { validateTargetName, UnsafeTargetError } from "../harvest-feeds/safe-target";
@@ -99,7 +99,6 @@ export async function fetchDocument(
       max_future_hours: inputs.clock_config.collect.max_future_hours, clock: () => new Date(state.context.now),
       observation_clock: runtime.observation_clock ?? (() => new Date()),
       exclusions: { ...exclusions, published_window_days: inputs.clock_config.collect.published_window_days },
-      identities: await documentIdentities(state, inputs),
     });
     if (prepared.status === "rejected") {
       await work.skip();

@@ -5,8 +5,9 @@ import { randomUUID } from "node:crypto";
 import { tmpdir } from "node:os";
 import { dirname, join, relative } from "node:path";
 import { z } from "zod";
-import { FeedHealthStateRowContract, FeedHealthStateRowSchema } from "@idhazh/common-contracts";
+import { FeedHealthStateRowContract, FeedHealthStateRowSchema, FeedIngestEventSchema } from "@idhazh/common-contracts";
 import { persistLedger, readPlannerParquet, readStoredPlannerParquet } from "@idhazh/ledger-file-writer";
+import { createStageLogger } from "../src/logging/structured-logger";
 import { readFeedHealthFieldsDay } from "../src/read-ledger-history/read-feed-health-fields";
 import { createPlannerHistoryCache, readPlannerDay } from "../src/read-ledger-history/read-planner-history";
 import { healthFieldFixture, rewriteHealthFields } from "./health-field-fixtures";
@@ -86,9 +87,12 @@ test("request field gaps retain independent checks and individual valid counters
     const variant = schema.omit({ article_requests: true });
     const stored = { ...variant.parse(row), feed_requests: -1, robots_requests: null };
     await rewriteHealthFields(path, [stored], variant);
+    const logged: unknown[] = [];
+    const correlation_id = randomUUID();
+    const log = createStageLogger({ run_id: row.run_id, correlation_id }, event => logged.push(event));
     const read = await readFeedHealthFieldsDay(root, registration("feed-health-state"), {
       day: row.date, raw_files: [written.files[0]!.path],
-    });
+    }, createPlannerHistoryCache(), undefined, log);
     expect(read.complete).toBe(true);
     expect(read.uses.request_totals.rows).toEqual([]);
     expect(read.uses.request_totals.partial_rows).toEqual([{
@@ -99,6 +103,22 @@ test("request field gaps retain independent checks and individual valid counters
       expect.objectContaining({ use: "request_totals", field: "feed_requests", day: row.date, code: "invalid" }),
       expect.objectContaining({ use: "request_totals", field: "article_requests", day: row.date, code: "missing" }),
     ]);
+    expect(logged).toHaveLength(2);
+    expect(logged.map(event => FeedIngestEventSchema.parse(event))).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        run_id: row.run_id, correlation_id, operation: "history", phase: "failed",
+        details: expect.objectContaining({
+          source: "feed-health-field", failed_check: "feed_requests", reason: "invalid",
+        }),
+      }),
+      expect.objectContaining({
+        run_id: row.run_id, correlation_id, operation: "history", phase: "failed",
+        details: expect.objectContaining({
+          source: "feed-health-field", failed_check: "article_requests", reason: "missing",
+        }),
+      }),
+    ]));
+    expect(logged.every(event => FeedIngestEventSchema.parse(event).occurred_at.endsWith("Z"))).toBe(true);
     for (const use of [read.uses.feed_rest, read.uses.feed_reliability, read.uses.article_admission]) {
       expect(use.rows).toHaveLength(1);
       expect(use.gaps).toEqual([]);

@@ -9,6 +9,7 @@ import type { LedgerDayInput } from "../config/service-settings";
 import { readPlannerParquet } from "./read-planner-parquet";
 import { LedgerHistoryReadError } from "./ledger-history-error";
 import { classifyPlannerHistoryGap } from "./planner-history-gap";
+import type { StageLogger } from "../logging/structured-logger";
 import {
   compactPeriodFile, fixedHistoryRevision, listExactRawDayMembers, rawDayDirectory,
   readNamedGitMember, verifiedHistoryRevision, verifyRawDayMember,
@@ -27,8 +28,9 @@ export function createPlannerHistoryCache<T extends object>(): PlannerHistoryCac
 export async function readPlannerDay<T extends object>(
   root: string, registration: LedgerRegistration, day: LedgerDayInput, contract: LedgerRowContract<T>,
   cache: PlannerHistoryCache<T> = createPlannerHistoryCache<T>(),
+  log?: StageLogger,
 ) {
-  return readPlannerDayUsing(root, registration, day, cache, "strict",
+  return readPlannerDayUsing(root, registration, day, cache, "strict", log,
     (path, ledger) => readPlannerParquet(path, ledger, contract),
     row => "date" in row && row.date === day.day);
 }
@@ -36,15 +38,16 @@ export async function readPlannerDay<T extends object>(
 export async function readStoredPlannerDay(
   root: string, registration: LedgerRegistration, day: LedgerDayInput,
   cache: PlannerHistoryCache<Record<string, unknown>> = createPlannerHistoryCache(),
+  log?: StageLogger,
 ) {
-  return readPlannerDayUsing(root, registration, day, cache, "stored", readStoredPlannerParquet,
+  return readPlannerDayUsing(root, registration, day, cache, "stored", log, readStoredPlannerParquet,
     (row, envelope) => envelope.tier === "raw"
       || row.date === day.day || !DateStampSchema.safeParse(row.date).success);
 }
 
 async function readPlannerDayUsing<T extends object>(
   root: string, registration: LedgerRegistration, day: LedgerDayInput, cache: PlannerHistoryCache<T>,
-  mode: "stored" | "strict",
+  mode: "stored" | "strict", log: StageLogger | undefined,
   readFile: (path: string, ledger: PlannerStoredFileEnvelope["ledger"]) => Promise<PlannerHistoryFile<T>>,
   includesRow: (row: T, envelope: PlannerStoredFileEnvelope) => boolean,
 ) {
@@ -69,7 +72,7 @@ async function readPlannerDayUsing<T extends object>(
       const code = classifyPlannerHistoryGap(error);
       if (code === null) throw error;
       complete = false;
-      if (!gaps.has(code)) gaps.set(code, relative(root, path).replaceAll("\\", "/"));
+      if (!gaps.has(code)) gaps.set(code, relative(root, path).replaceAll("\\", "/") || ".");
       return undefined;
     }
   }
@@ -157,7 +160,11 @@ async function readPlannerDayUsing<T extends object>(
       });
     }
   }
-  for (const [code, path] of gaps) console.error(JSON.stringify({ event: "planner_history_gap", ledger, day: day.day, code, path }));
+  if (log !== undefined) {
+    for (const [code, path] of gaps) log("history", "failed", {
+      source: "planner-ledger", failed_check: "named-day-read", reason: code, ledger, day: day.day, path,
+    });
+  }
   return {
     day: day.day, represented, complete: covered && complete,
     rows: files.flatMap(file => file.rows.filter(row => includesRow(row, file.envelope))),

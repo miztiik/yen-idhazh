@@ -6,14 +6,13 @@ import type { FeedEntry, HarvestArticleResult } from "../harvest-feeds/harvest-t
 import type { PlanInputs } from "../load-plan-inputs";
 import type { PlanRuntime } from "../run-feed-plan";
 import type { DocumentState } from "./document-state";
-import { documentIdentities } from "./document-state";
 import { sourceSnapshot } from "../harvest-feeds/load-harvest-inputs";
 import { deriveArticleIdentity, InvalidArticleUrlError } from "../harvest-feeds/article-identity";
 import { UnsafeTargetError } from "../harvest-feeds/safe-target";
 import type { ArticleUrlPolicy } from "../harvest-feeds/article-url";
 import { matchUrlExclusion } from "../harvest-feeds/url-exclusions";
 import { prepareArticle } from "../harvest-feeds/prepare-article";
-import { readDiscoveredEvidence, rememberDiscoveries } from "../read-ledger-history/read-discovered-evidence";
+import { foldDiscoveryHistory, readDiscoveredEvidence, rememberDiscoveries } from "../read-ledger-history/read-discovered-evidence";
 import { requiredUtcDays } from "../utc-instant";
 import { resolveArticleEvidence } from "../website-group";
 import { plannerMemory } from "../planner-memory";
@@ -21,6 +20,7 @@ import { stageStore } from "./stage-store";
 import { operationConfigFingerprint } from "./operation-context";
 import { collectionForRun } from "./collection-operation";
 import { recordDocumentRejections } from "./record-document-rejections";
+import { createStageLogger } from "../logging/structured-logger";
 
 export async function createParsedFeedBatch(input: {
   state: DocumentState; inputs: PlanInputs; runtime: PlanRuntime;
@@ -56,11 +56,10 @@ export async function createParsedFeedBatch(input: {
     root: inputs.root, discovered_files: inputs.settings.inputs.discovered_files, discovered_days: inputs.settings.inputs.discovered_days,
     registration: inputs.registrations.discovered_articles, now: state.context.now,
     lookback_days: inputs.harvest.config.discovered_articles.lookback_days, concurrency: inputs.harvest.config.harvest.concurrency,
-    own_rows: plannerMemory(inputs).discoveries(),
+    own_rows: plannerMemory(inputs).discoveries(), log: createStageLogger(state.context, runtime.log),
   });
-  const identities = await documentIdentities(state, inputs);
   const sightings = offers.flatMap(offer => {
-    const identity = identities.remember(offer.entry.link!);
+    const identity = deriveArticleIdentity(offer.entry.link!, inputs.harvest.config.harvest);
     if (matchUrlExclusion(identity.canonical_url, inputs.harvest.config.harvest.url_exclusions) !== undefined) return [];
     return [DiscoveredArticleRowSchema.parse({
       url_key: identity.url_key, first_seen_at: input.observed_at, date: input.observed_at.slice(0, 10),
@@ -70,14 +69,14 @@ export async function createParsedFeedBatch(input: {
   if (collection !== undefined) {
     collection.discovery_baseline ??= discovered.rows;
     collection.feed_requests.set(input.feed_id, input.fetched_request_id);
-    const rows = plannerMemory(inputs).rememberDiscoveries(identities.discoveries([...discovered.rows, ...sightings]),
+    const rows = plannerMemory(inputs).rememberDiscoveries(foldDiscoveryHistory([...discovered.rows, ...sightings]),
       requiredUtcDays(state.context.now, inputs.harvest.config.discovered_articles.lookback_days)[0]!);
     return stageStore(inputs).update("parsed", collection.parsed_batch_id, ParsedFeedBatchSchema, current => ({
       ...current, offers: [...current.offers, ...offers], discovered: { availability: "available" as const, rows },
       work_rows: state.work.rows(), exclusions: state.work.exclusions(), input_complete: false,
     }));
   }
-  const saved = await rememberDiscoveries(discovered.rows, identities.discoveries([...discovered.rows, ...sightings]), state.context, {
+  const saved = await rememberDiscoveries(discovered.rows, foldDiscoveryHistory([...discovered.rows, ...sightings]), state.context, {
     outputRoot: inputs.outputRoot, registryEntry: inputs.registrations.discovered_articles, ledgerSettings: inputs.ledgerSettings,
   });
   if (state.plan_owned) {

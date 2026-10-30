@@ -171,7 +171,7 @@ settings and host fingerprint. It places the host fingerprint before the
 run facts, writes the report before upload and writes the same Markdown to
 the job summary. The report stays separate from the delivery receipt.
 It emits five grouped notices: Host fingerprint, Feed work, Request counts,
-Grouped exclusions and Applied policy. Full per-feed details stay in the
+Grouped exclusions and Effective policy. Full per-feed details stay in the
 summary rather than one notice per feed or article. Effective settings include
 workflow overrides, not just committed defaults. Missing policy evidence is
 reported as not recorded; defaults are not substituted.
@@ -179,14 +179,53 @@ Reporting is controlled by `workflow_reporting.enabled`; it cannot change
 ledger bytes or establish completion.
 The exported Markdown renderer and its separation from production digest
 presentation are documented in the [operator API reference](../architecture/sources/feed-operator-api.md#markdown-rendering-api).
-The applied-policy table follows run facts. Its article limit is a maximum,
-not a promised article count. Per-feed article results are collapsed and sort
-by chosen articles, admitted articles, then feed name. The collapsed request
+Run facts hold status, run identity and attempt in separate rows. Count cells
+are numeric; labels carry their meaning, while measurements retain useful
+units. Feeds checked counts distinct feeds with recorded checks, not the sum
+of checks across work days. Selection started is an observed boolean, not
+an invented enablement setting. The report has no planning-not-publication
+disclaimer; its title, status and operation names state the scope.
+
+The effective-policy table follows run facts. It separates one control per
+row from its effective JSON value; workflow override sources are named once
+below the table instead of repeated beside each value.
+The policy config version comes from the saved configuration's
+`version`, not a new whole-policy revision. Shares remain fractions and switches
+remain booleans. The article limit is a maximum, not a promised count.
+The authority coefficient is not a source-tier weight; the
+[curation rules](../architecture/sources/feed-curation.md#inputs-and-independent-evidence)
+define the separate feed and tier factors.
+Fetch concurrency, parser workers, downstream article assignments and the raw
+assignment strategy have separate rows. Assignment does not execute downstream
+workers. The report shows both the failing-check threshold for rest and the
+skipped-run threshold for retry from the existing policy. A collapsed feed
+rest table shows availability, failing checks and rested runs; unknown history
+stays unknown. It never invents a timed retry or a rest-entry timestamp.
+
+Per-feed article results are collapsed and sort
+by admitted articles, chosen articles, then feed name. Unknown counts sort
+last; UTC work day breaks remaining ties. The collapsed request
 section contains a coverage table and request-count table. Coverage separates
 expected closed UTC days, complete day files, days with recorded counts and
 feeds with complete counters. The request rows sort by article requests,
 feed requests, then feed name; unknown counts sort last. This does not change
 saved source order or other views.
+
+An unavailable admission total does not erase the other feeds' recorded
+admissions. Run facts label their sum as known admitted articles, state how many
+feed totals are unavailable and name those feeds below the table. An exact run
+total remains unavailable. If every admission total is unknown, the subtotal
+is unavailable too; known-empty rows still give zero. Request completeness is
+assessed from its own three counters, not the shared health-row completeness
+flag, which can be false because admission evidence is missing.
+
+Request counts by feed also show feed-read reliability, completeness and its
+own represented-day window from the current run's latest saved health row
+for that feed. This is the productive-read fraction, not the technical
+article-pass adjustment or an overall article score. Its window is separate
+from the closed request window. An incomplete fraction is shown with
+`Reliability complete = false`; an absent value is not replaced with zero.
+No new score, history read or saved field is introduced.
 
 Each request category is added independently. A partial value carries an
 ASCII `*`; only recorded counts are added, never estimates. The coverage table
@@ -206,9 +245,7 @@ configuration field is absent. The protocol reason code is unchanged.
 An unsafe cleaned target is `FETCH_FAILED`, not a missing-field count.
 The [article cleanup policy](../architecture/sources/feed-harvesting.md#inputs-and-identity)
 removes all article query parameters even when `tidy_urls` is false. Feed
-parameters remain intact. Sparse workflow preparation stages the bounded
-[saved-address history](../architecture/sources/article-identity-history.md);
-incomplete recovery is logged rather than treated as complete deduplication.
+parameters remain intact.
 
 ## CI and hosted verification
 

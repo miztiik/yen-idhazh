@@ -142,7 +142,6 @@ without making the report an execution prerequisite.
 ## See also
 
 - [Ledger reference](../../reference/feed-planner-ledgers.md)
-- [Saved article keys](article-identity-history.md)
 - [Feedback recording](../contracts/feed-ingest-feedback.md)
 - [Curation](feed-curation.md)
 - [Operator APIs](feed-operator-api.md)

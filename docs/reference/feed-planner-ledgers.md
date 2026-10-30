@@ -872,8 +872,7 @@ retain their original keys.
 Saved fetch responses remain replayable with their original identity. An old
 article fetch receipt cannot be parsed into a current-policy candidate; fetch
 the article again. There is no migration table, dual writer or permanent alias
-ledger. [Bounded saved-address recovery](../architecture/sources/article-identity-history.md)
-defines which old keys can prevent repeat work and which remain unknown.
+ledger.
 
 Targeted deletion of the same eight obsolete ledger prefixes named in Table F
 under both `state/raw/feed-ingest-plan/` and

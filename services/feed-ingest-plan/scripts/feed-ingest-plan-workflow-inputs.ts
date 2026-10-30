@@ -44,8 +44,8 @@ export async function preparePlannerWorkflow(root: string, environment: Record<s
   const staged = await stagePlannerHistory(root, inputs, new Date().toISOString().replace(/\.\d{3}Z$/, "Z"));
   inputs.settings = ServiceSettingsSchema.parse({
     ...inputs.settings, enabled: true,
-    inputs: { ...inputs.settings.inputs, selected_days: staged.selected_days,
-      feed_health_days: staged.feed_health_days, feed_health_input_gap: staged.feed_health_input_gap },
+    inputs: { ...inputs.settings.inputs, feed_health_days: staged.feed_health_days,
+      feed_health_input_gap: staged.feed_health_input_gap },
   });
   inputs.outputRoot = join(directory, "state");
   const git = Bun.spawn(["git", "rev-parse", "HEAD"], { cwd: root, stdout: "pipe", stderr: "pipe" });

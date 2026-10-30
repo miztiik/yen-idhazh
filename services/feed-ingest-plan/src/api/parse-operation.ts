@@ -11,7 +11,7 @@ import { ParseRequestSchema } from "./operation-contracts";
 import type { OperationStore } from "./operation-store";
 import type { PlanInputs } from "../load-plan-inputs";
 import type { PlanRuntime } from "../run-feed-plan";
-import { checkFetchedDocument, documentIdentities, documentState } from "./document-state";
+import { checkFetchedDocument, documentState } from "./document-state";
 import { PlanError } from "./plan-request";
 import { operationConfigFingerprint } from "./operation-context";
 import { sourceSnapshot } from "../harvest-feeds/load-harvest-inputs";
@@ -190,15 +190,14 @@ export async function parseFetchedDocument(
       root: inputs.root, discovered_files: inputs.settings.inputs.discovered_files, discovered_days: inputs.settings.inputs.discovered_days,
       registration: inputs.registrations.discovered_articles, now: state.context.now,
       lookback_days: inputs.harvest.config.discovered_articles.lookback_days, concurrency: inputs.harvest.config.harvest.concurrency,
-      own_rows: plannerMemory(inputs).discoveries(),
+      own_rows: plannerMemory(inputs).discoveries(), log: emit,
     });
     const instant = utcTimestamp(runtime.observation_clock);
-    const identities = await documentIdentities(state, inputs);
-    if (candidate !== null) identities.remember(artifact.canonical_url);
-    const saved = await rememberDiscoveries(discovered.rows, candidate === null ? [] : identities.discoveries([
-      ...discovered.rows, DiscoveredArticleRowSchema.parse({
+    const saved = await rememberDiscoveries(discovered.rows, candidate === null ? [] : [
+      DiscoveredArticleRowSchema.parse({
       url_key: candidate.url_key, first_seen_at: instant, date: instant.slice(0, 10),
-    })]), state.context, { outputRoot: inputs.outputRoot, registryEntry: inputs.registrations.discovered_articles, ledgerSettings: inputs.ledgerSettings });
+      }),
+    ], state.context, { outputRoot: inputs.outputRoot, registryEntry: inputs.registrations.discovered_articles, ledgerSettings: inputs.ledgerSettings });
     plannerMemory(inputs).rememberDiscoveries(saved.rows, requiredUtcDays(
       state.context.now, inputs.harvest.config.discovered_articles.lookback_days,
     )[0]!);

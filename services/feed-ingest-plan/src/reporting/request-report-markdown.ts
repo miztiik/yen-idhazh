@@ -1,5 +1,5 @@
 /** How are complete, partial and absent request totals shown with their coverage? */
-import type { PlannerRequestReport } from "@idhazh/common-contracts";
+import type { FeedHealthStateRow, PlannerRequestReport } from "@idhazh/common-contracts";
 import { escapeMarkdown } from "./markdown-format";
 
 type RequestFeed = PlannerRequestReport["feeds"][number];
@@ -9,7 +9,7 @@ const fieldLabel: Record<RequestField, string> = {
   article_requests: "Article requests", feed_requests: "Feed requests", robots_requests: "Robots requests",
 };
 function formatCounter(value: number | null, status: string) {
-  return value === null ? "Not recorded" : `${value} ${value === 1 ? "request" : "requests"}${status === "partial" ? "*" : ""}`;
+  return value === null ? "Not recorded" : `${value}${status === "partial" ? "*" : ""}`;
 }
 function compareCount(left: number | null, right: number | null) {
   if (left === null) return right === null ? 0 : 1;
@@ -21,7 +21,7 @@ function describeCoverage(feed: RequestFeed, field: RequestField, periodDays: nu
     + `${cell.complete_days.length} of ${periodDays} days complete; ${cell.known_records} known records; `
     + `${cell.unknown_records} ${cell.unknown_records === 1 ? "record" : "records"} with missing or invalid counts`;
 }
-export function renderRequestReport(requests: PlannerRequestReport | undefined) {
+export function renderRequestReport(requests: PlannerRequestReport | undefined, health: readonly FeedHealthStateRow[] = []) {
   if (requests === undefined) return {
     markdown: "## Table E - Request coverage\n\nRequest history was not recorded.",
     notice: "Request history was not recorded.",
@@ -55,29 +55,46 @@ export function renderRequestReport(requests: PlannerRequestReport | undefined) 
     requests.feeds.filter(feed => feed.coverage[field].known_records > 0).length;
   const recordedDays = (field: RequestField) => new Set(requests.feeds.flatMap(feed =>
     feed.coverage[field].recorded_days)).size;
-  const coverageRows = fields.map((field, index) =>
-    `| E${index + 5} | ${fieldLabel[field]} | ${recordedDays(field)}/${periodDays} days with records; `
-      + `${feedsWithCounts(field)}/${requests.feeds.length} feeds with counts; `
-      + `${completeFeeds(field)}/${requests.feeds.length} feeds complete |`);
+  const coverageRows = [
+    ["Window (UTC)", `${requests.from_day} through ${requests.through_day}`],
+    ["Expected closed UTC days", String(periodDays)],
+    ["Complete day files / expected", `${completeFiles} / ${periodDays}`],
+    ["Feeds listed", String(requests.feeds.length)],
+    ...fields.flatMap(field => [
+      [`${fieldLabel[field]}: recorded days / expected`, `${recordedDays(field)} / ${periodDays}`],
+      [`${fieldLabel[field]}: feeds with counts / listed`, `${feedsWithCounts(field)} / ${requests.feeds.length}`],
+      [`${fieldLabel[field]}: complete feeds / listed`, `${completeFeeds(field)} / ${requests.feeds.length}`],
+    ]),
+    ["Unattributed days", String(requests.unattributed_days.length)],
+    ["History inputs complete", String(requests.input_complete)],
+  ];
   const feedCoverage = (feed: RequestFeed) => feed.counts_complete ? "Complete"
     : fields.some(field => feed.coverage[field].known_records > 0) ? "Partial" : "No recorded counts";
+  const latestHealth = new Map<string, FeedHealthStateRow>();
+  for (const row of health) {
+    const previous = latestHealth.get(row.feed_id);
+    if (previous === undefined || row.date > previous.date) latestHealth.set(row.feed_id, row);
+  }
+  const reliabilityCells = (feedId: string) => {
+    const value = latestHealth.get(feedId)?.reliability;
+    return value == null ? "Not recorded | Not recorded | Not recorded"
+      : `${value.success_fraction ?? "Not recorded"} | ${value.complete} | `
+        + `${value.from_day === null ? "Not recorded" : `${value.from_day} through ${value.through_day}`}`;
+  };
   return {
     markdown: [
-      "<details>", `<summary>Request counts and coverage (${periodDays} closed UTC days)</summary>`, "",
+      "<details>", "<summary>Request counts and coverage</summary>", "",
       "## Table E - Request coverage", "",
       "| Id | Measure | Result |", "| --- | --- | --- |",
-      `| E1 | Window | ${requests.from_day} through ${requests.through_day} UTC |`,
-      `| E2 | Expected closed days | ${periodDays} |`,
-      `| E3 | Complete day files | ${completeFiles}/${periodDays} |`,
-      `| E4 | Feeds listed | ${requests.feeds.length} |`,
-      ...coverageRows,
-      `| E${fields.length + 5} | Unattributed days | ${requests.unattributed_days.length} |`,
-      `| E${fields.length + 6} | History inputs | ${requests.input_complete ? "Complete" : "Incomplete"} |`,
+      ...coverageRows.map(([label, value], index) => `| E${index + 1} | ${label} | ${value} |`),
       "", "## Table F - Request counts by feed", "",
-      "| Id | Feed | Article requests | Feed requests | Robots requests | Coverage |",
-      "| --- | --- | --- | --- | --- | --- |",
+      "| Id | Feed | Article requests | Feed requests | Robots requests | Request coverage | Feed-read reliability (fraction) | Reliability complete | Reliability window (UTC) |",
+      "| --- | --- | --- | --- | --- | --- | --- | --- | --- |",
       ...sorted.map((feed, index) =>
-        `| F${index + 1} | ${escapeMarkdown(feed.feed_id)} | ${fields.map(field => formatCounter(feed[field], feed.coverage[field].status)).join(" | ")} | ${feedCoverage(feed)} |`),
+        `| F${index + 1} | ${escapeMarkdown(feed.feed_id)} | ${fields.map(field => formatCounter(feed[field], feed.coverage[field].status)).join(" | ")} | ${feedCoverage(feed)} | ${reliabilityCells(feed.feed_id)} |`),
+      "", "Feed-read reliability is productive checks / attempted checks, from 0 to 1. A productive check returns at least one usable URL.",
+      "Reliability comes from the current run's latest saved health row per feed. Its represented-day window is separate from the closed request window.",
+      "Incomplete reliability is an observed fraction, not a complete-history score. Missing reliability is not zero. Feed-read reliability does not score article selection.",
       ...note,
       "", "</details>",
     ].join("\n"),

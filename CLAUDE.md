@@ -1,6 +1,6 @@
 # CLAUDE.md - Yen Idhazh: Engineering Contract
 
-**Last Updated**: 2026-10-29
+**Last Updated**: 2026-10-30
 
 Non-negotiable contract for any human or AI agent working in this repo.
 
@@ -292,9 +292,10 @@ What the base model enforces, how a same-day revision extends the stamp, which s
 cleanup preserves exact compatible discovery `2026-10-25`, selected
 rows/artifacts `2026-10-27`, and fetched documents/operation journals
 `2026-10-28`. Old row and receipt stamps and published keys remain unchanged.
-Bounded saved-address associations recover known earlier keys without a
-migration walk, durable aliases or a Python discovery change. Earlier
-incompatible formats still refuse. The current native contracts and
+User approval, 2026-10-30 UTC: the planner uses only the current cleaned
+address to match discovery, publication and settled-failure keys. It does not
+recover older keys through saved-address associations or alternate policies;
+earlier incompatible formats still refuse. The current native contracts and
 [compatibility rules](docs/reference/feed-planner-ledgers.md#article-cleanup-compatibility)
 declare the complete accepted sets. This narrows the planner refusal exception
 in Guardrail #3 and section 11; it does not change other payload families.
