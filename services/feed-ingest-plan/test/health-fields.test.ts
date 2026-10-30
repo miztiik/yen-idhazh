@@ -17,12 +17,12 @@ import { fixtureGit } from "./publication-recordings";
 const shape = FeedHealthStateRowSchema.shape;
 const schema = z.object(shape);
 
-test("compatible health columns accept older and newer row stamps while strict readers and writers refuse", async () => {
+test("field readers accept compatible columns while full readers and writers require an accepted stamp", async () => {
   const root = await mkdtemp(join(tmpdir(), "health-field-stamps-"));
   try {
     const { row, written } = await healthFieldFixture(root);
     const path = join(root, written.files[0]!.path);
-    for (const stamp of ["2026-10-25", "2026-10-27", "2027-01-01"]) {
+    for (const stamp of ["2026-10-25", "2026-10-27", FeedHealthStateRowContract.schemaVersion, "2027-01-01"]) {
       await rewriteHealthFields(path, [row], schema, { stamp });
       const cache = createPlannerHistoryCache<Record<string, unknown>>();
       const input = {
@@ -35,7 +35,7 @@ test("compatible health columns accept older and newer row stamps while strict r
         expect(use.gaps).toEqual([]);
         expect(use.partial_rows).toEqual([]);
       }
-      if (stamp !== FeedHealthStateRowContract.schemaVersion) {
+      if (!FeedHealthStateRowContract.acceptedSchemaVersions.some(accepted => accepted === stamp)) {
         expect((await readPlannerDay<Record<string, unknown>>(root, registration("feed-health-state"),
           input, FeedHealthStateRowContract, cache)).complete).toBe(false);
         await expect(readPlannerParquet(path, "feed-health-state", FeedHealthStateRowContract)).rejects.toThrow();
@@ -44,6 +44,15 @@ test("compatible health columns accept older and newer row stamps while strict r
           rowContract: { ...FeedHealthStateRowContract, schemaVersion: stamp }, ledgerSettings: settings,
           period: { tier: "raw", covers: row.date }, rows: [row], updatedAt: row.checked_at!,
         })).rejects.toThrow();
+      } else {
+        expect((await readPlannerDay<Record<string, unknown>>(root, registration("feed-health-state"),
+          input, FeedHealthStateRowContract, cache)).complete).toBe(true);
+        expect((await readPlannerParquet(path, "feed-health-state", FeedHealthStateRowContract)).rows).toEqual([row]);
+        await expect(persistLedger({
+          ledger: "feed-health-state", outputRoot: root, registryEntry: registration("feed-health-state"),
+          rowContract: { ...FeedHealthStateRowContract, schemaVersion: stamp }, ledgerSettings: settings,
+          period: { tier: "raw", covers: row.date }, rows: [row], updatedAt: row.checked_at!,
+        })).resolves.toBeDefined();
       }
     }
   } finally { await rm(root, { recursive: true, force: true }); }

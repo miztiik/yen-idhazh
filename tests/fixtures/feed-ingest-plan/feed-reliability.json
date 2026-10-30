@@ -1,0 +1,18 @@
+{
+  "cases": [
+    { "productive": 21, "attempted": 22, "floor": 0.5, "success_fraction": 0.954, "production_factor": 0.954 },
+    { "productive": 0, "attempted": 1, "floor": 0, "success_fraction": 0, "production_factor": 0 },
+    { "productive": 0, "attempted": 1, "floor": 0.001, "success_fraction": 0, "production_factor": 0.001 },
+    { "productive": 0, "attempted": 1, "floor": 0.579, "success_fraction": 0, "production_factor": 0.579 },
+    { "productive": 0, "attempted": 1, "floor": 1, "success_fraction": 0, "production_factor": 1 },
+    { "productive": 1, "attempted": 1, "floor": 0.5, "success_fraction": 1, "production_factor": 1 },
+    { "productive": 1, "attempted": 2, "floor": 0.5005, "success_fraction": 0.5, "production_factor": 0.5 },
+    { "productive": 1, "attempted": 3, "floor": 0.6669, "success_fraction": 0.333, "production_factor": 0.666 },
+    { "productive": 29, "attempted": 100, "floor": 0, "success_fraction": 0.29, "production_factor": 0.29 },
+    { "productive": 579, "attempted": 1000, "floor": 0, "success_fraction": 0.579, "production_factor": 0.579 },
+    { "productive": 578999, "attempted": 1000000, "floor": 0, "success_fraction": 0.578, "production_factor": 0.578 },
+    { "productive": 1, "attempted": 1001, "floor": 5e-324, "success_fraction": 0, "production_factor": 0 },
+    { "productive": 0, "attempted": 1, "floor": 0.9999999999999999, "success_fraction": 0, "production_factor": 0.999 },
+    { "productive": 9007199254740990, "attempted": 9007199254740991, "floor": 0, "success_fraction": 0.999, "production_factor": 0.999 }
+  ]
+}
