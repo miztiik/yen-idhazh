@@ -153,31 +153,33 @@ The Markdown report reads the body-free response, health result, effective
 settings and host fingerprint. It places the host fingerprint before the
 run facts, writes the report before upload and writes the same Markdown to
 the job summary. The report stays separate from the delivery receipt.
-It emits five grouped notices:
-Host fingerprint, This run's feed work,
-Closed-day request spend, Grouped exclusions, and Policy used. Full per-feed
-details stay in the summary rather than one notice per feed or article.
-Effective settings include workflow overrides, not just committed defaults.
-Missing policy evidence stays unavailable; defaults are not substituted.
+It emits five grouped notices: Host fingerprint, Feed work, Request counts,
+Grouped exclusions and Applied policy. Full per-feed details stay in the
+summary rather than one notice per feed or article. Effective settings include
+workflow overrides, not just committed defaults. Missing policy evidence is
+reported as not recorded; defaults are not substituted.
 Reporting is controlled by `workflow_reporting.enabled`; it cannot change
 ledger bytes or establish completion.
 The exported Markdown renderer and its separation from production digest
 presentation are documented in the [operator API reference](../architecture/sources/feed-operator-api.md#markdown-rendering-api).
-Table C sorts its report rows by admitted articles, highest first, then by feed
-name in alphabetical order. Table D reports actual request spend over the
-configured closed UTC days, excluding the current UTC day, not a waste score
-or selection penalty. It sorts feed requests highest first, then article
-requests highest first, then feed name alphabetically. Unknown values sort
-last. This does not change saved source order or other views.
+The applied-policy table follows run facts. Its article limit is a maximum,
+not a promised article count. Per-feed article results are collapsed and sort
+by chosen articles, admitted articles, then feed name. The collapsed request
+section contains a coverage table and request-count table. Coverage separates
+expected closed UTC days, complete day files, days with recorded counts and
+feeds with complete counters. The request rows sort by article requests,
+feed requests, then feed name; unknown counts sort last. This does not change
+saved source order or other views.
 
-Each usable request category is added independently. A partial total carries
-an ASCII `*` and a "Not full data" note, with the configured UTC period,
-recorded counter days, complete-day counts and records with unknown counters.
-Missing or incomplete day files, unattributable records and staged-input gaps
-are stated separately. "No recorded data" means no usable counter is present,
-not zero requests. A complete known-empty period reports zero. The grouped
-request notice adds only known totals and marks partial totals too; it never
-calls them complete. Exact coverage fields are defined in the
+Each request category is added independently. A partial value carries an
+ASCII `*`; only recorded counts are added, never estimates. The coverage table
+and notes show the UTC period, recorded counter days, complete-day counts and
+records with unknown counters. Missing or incomplete day files, unattributable
+records and staged-input gaps are stated separately. "Not recorded" means no
+usable counter is present, not zero requests. A complete known-empty period
+reports zero. The request notice adds only known totals and marks partial
+totals too; it never calls them complete. Grouped exclusions are collapsed and
+sort by count descending, then reason code. Exact coverage fields are defined in the
 [ledger reference](../reference/feed-planner-ledgers.md#design-rationale).
 
 `MISSING_REQUIRED_FIELDS` is an article rejection: its offered URL or identity

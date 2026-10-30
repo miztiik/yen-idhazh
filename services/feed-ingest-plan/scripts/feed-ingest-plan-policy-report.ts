@@ -22,41 +22,43 @@ export const WorkflowPolicySchema = z.strictObject({
 
 export function formatWorkflowPolicy(input: unknown, selectionRan: boolean) {
   if (input === undefined) return {
-    notice: "Effective settings were not saved. Committed defaults do not prove which controls this run used.",
-    rows: [["Effective settings", "Unavailable; committed defaults are not evidence of the controls used"]],
+    notice: "Applied settings were not recorded; committed defaults do not prove what this run used.",
+    rows: [["Effective settings", "Settings used by the run", "Not recorded; defaults are not evidence"]],
   };
   const { config, request: supplied, history, parser_concurrency } = WorkflowPolicySchema.parse(input);
   const request = resolvePlanRequest(supplied, config);
   const policy = resolvePolicy({ config });
   const percent = (value: number) => `${(value * 100).toFixed(2)} percent`;
   const source = (key: keyof typeof supplied) => supplied[key] === undefined ? "configuration" : "workflow override";
-  const maximum = `${request.article_limit} articles`;
+  const maximum = `${request.article_limit} articles (${source("article_limit")})`;
   const ages = config.curate_articles.article_quality_buckets.map(rule =>
-    `Article-quality bucket ${rule.tier}: ${resolveArticleQualityBucketWindows(rule).steps.join(" / ")} hours`).join("; ");
-  const workers = `${request.shards} workers; ${request.partition_strategy}`;
+    `Tier ${rule.tier}: ${resolveArticleQualityBucketWindows(rule).steps.join(" / ")} hours`).join("; ");
   const rows = [
-    ["Application", selectionRan ? "Selection ran with these effective controls" : "Requested controls; selection did not run"],
-    ["Article age windows", `${ages} (configuration)`],
-    ["Article limit", `${maximum} (${source("article_limit")})`],
-    ["Worker assignment", `${workers} (count: ${source("shards")}; distribution: ${source("partition_strategy")})`],
-    ["Extraction", `${config.harvest.concurrency} concurrent fetches; ${config.harvest.fetch_timeout_ms} milliseconds fetch timeout; ${parser_concurrency} parser workers`],
-    ["Minimum text", `${policy.triage.min_words} words per parsed item`],
-    ["Recency score", `${policy.triage.recency_half_life_hours} hours half-life; weight ${policy.triage.recency_weight}`],
-    ["Feed authority score", `Weight ${policy.curate_articles.source_authority_weight}; technical article-pass adjustment ${config.curate_articles.source_reliability_penalty_enabled ? "enabled" : "disabled"}; RSS reliability controls access only`],
-    ["Article-quality bucket budgets", allocateArticleQualityBucketBudgets(config, request.article_limit).map(budget =>
-      `Article-quality bucket ${budget.rule.tier}: target ${budget.target} articles; fresh ceiling ${budget.ceiling} articles`).join("; ")],
-    ["Portfolio limits", `${percent(config.curate_articles.soft_caps.max_source_share)} per feed; ${percent(config.curate_articles.soft_caps.max_website_group_share)} per known website group; target ${config.curate_articles.soft_caps.min_distinct_sources} distinct feeds`],
-    ["Limit relaxation order", config.curate_articles.soft_caps.relaxation_order.map(limit =>
-      ({ distinct_sources: "distinct-feed target", source_share: "per-feed share" })[limit]).join(", ") || "No relaxation"],
-    ["Diversity score deductions", `Publisher exposure ${policy.curate_articles.mmr_weights.lambda_source}; known website group ${policy.curate_articles.mmr_weights.lambda_website_group}`],
-    ["Exploration slots", `${percent(config.curate_articles.exploration_slot_share)} for feeds not yet chosen when available`],
-    ["History", `${config.discovered_articles.lookback_days} UTC days for article discovery; ${history.published_window_days} UTC days for prior publication; ${history.max_future_hours} hours future-time tolerance`],
-    ["Article exclusions", `Blocked HTTP statuses: ${config.triage.blocked_http_statuses.join(", ")}; blocked categories: ${config.harvest.blocked_categories.join(", ") || "none"}; ${config.harvest.url_exclusions.length} configured URL exclusions`],
+    ["Selection", "Whether these controls governed selection", selectionRan ? "Applied" : "Requested; selection did not run"],
+    ["Age windows", "Article freshness tiers", `${ages} (configuration)`],
+    ["Article cap", "Maximum articles selected", maximum],
+    ["Workers", "Count and assignment method", `${request.shards}; ${request.partition_strategy} (count: ${source("shards")}; method: ${source("partition_strategy")})`],
+    ["Fetch and parse", "Fetch concurrency / timeout / parser workers", `${config.harvest.concurrency} / ${config.harvest.fetch_timeout_ms} ms / ${parser_concurrency}`],
+    ["Minimum text", "Parsed words required", `${policy.triage.min_words} words`],
+    ["Recency", "Half-life / score weight", `${policy.triage.recency_half_life_hours} hours / ${policy.triage.recency_weight}`],
+    ["Feed authority", "Base authority weight", `${policy.curate_articles.source_authority_weight}`],
+    ["Quality budgets", "Article targets / freshness ceilings by tier", allocateArticleQualityBucketBudgets(config, request.article_limit).map(budget =>
+      `Tier ${budget.rule.tier}: ${budget.target} / ${budget.ceiling}`).join("; ")],
+    ["Portfolio limits", "Per-feed share / website-group share / distinct feeds", `${percent(config.curate_articles.soft_caps.max_source_share)} / ${percent(config.curate_articles.soft_caps.max_website_group_share)} / ${config.curate_articles.soft_caps.min_distinct_sources}`],
+    ["Limit relaxation", "Order when portfolio limits conflict", config.curate_articles.soft_caps.relaxation_order.map(limit =>
+      ({ distinct_sources: "distinct-feed target", source_share: "per-feed share" })[limit]).join(", ") || "None"],
+    ["Diversity", "Publisher / website-group deductions", `${policy.curate_articles.mmr_weights.lambda_source} / ${policy.curate_articles.mmr_weights.lambda_website_group}`],
+    ["Exploration", "Share for feeds not yet chosen", percent(config.curate_articles.exploration_slot_share)],
+    ["Feed-status lookback", "Days / failed checks before a feed rests", `${config.feedback.lifecycle_window_days} UTC days / ${history.availability_strikes_before_rest}`],
+    ["Reliability adjustment", "History days / minimum authority / article-pass adjustment", `${history.reliability_window_days} UTC days / ${percent(history.reliability_floor)} / ${config.curate_articles.source_reliability_penalty_enabled ? "on" : "off"}`],
+    ["Request history", "Completed UTC days counted", `${config.feedback.request_report_closed_days} days`],
+    ["Article history", "Discovery / prior-publication window / future tolerance", `${config.discovered_articles.lookback_days} / ${history.published_window_days} UTC days / ${history.max_future_hours} hours`],
+    ["Article exclusions", "Blocked HTTP statuses / categories / URL rules", `${config.triage.blocked_http_statuses.join(", ")} / ${config.harvest.blocked_categories.join(", ") || "none"} / ${config.harvest.url_exclusions.length}`],
   ];
   return {
-    notice: `${selectionRan ? "Used" : "Requested; selection did not run"}: ${ages}; `
-      + `${maximum}; ${workers}; technical article-pass adjustment ${config.curate_articles.source_reliability_penalty_enabled ? "enabled" : "disabled"}. `
-      + "The job summary records the effective scoring, exclusions, tier budgets and portfolio limits.",
+    notice: `${selectionRan ? "Applied" : "Requested only"}: max ${maximum}; ${request.shards} workers (${request.partition_strategy}); `
+      + `authority floor ${percent(history.reliability_floor)}; article-pass adjustment `
+      + `${config.curate_articles.source_reliability_penalty_enabled ? "on" : "off"}. Full settings are in Applied policy.`,
     rows,
   };
 }
@@ -66,9 +68,10 @@ export function formatPolicyTable(input: unknown, selectionRan: boolean) {
   return {
     notice: policy.notice,
     summary: [
-      "## Table F - Policy used", "",
-      "| Id | Control | Effective value |", "| --- | --- | --- |",
-      ...policy.rows.map(([control, value], index) => `| F${index + 1} | ${escapeMarkdown(control!)} | ${escapeMarkdown(value!)} |`),
+      "## Table B - Applied policy", "",
+      "| Id | Setting | What it controls | Effective value |", "| --- | --- | --- | --- |",
+      ...policy.rows.map(([setting, meaning, value], index) =>
+        `| B${index + 1} | ${escapeMarkdown(setting!)} | ${escapeMarkdown(meaning!)} | ${escapeMarkdown(value!)} |`),
       "",
     ].join("\n"),
   };

@@ -85,11 +85,17 @@ test("absent progress stays unavailable and zero counts do not certify publicati
   },
     request: { article_limit: 10, shards: 4, partition_strategy: "bin-pack" },
     history: settings.collect, parser_concurrency: 4 }, true);
-  expect(policy.notice).toContain("10 articles; 4 workers; bin-pack");
-  expect(policy.rows.find(([name]) => name === "Article age windows")?.[1]).toBe(
-    `${config.curate_articles.article_quality_buckets.map(rule => `Article-quality bucket ${rule.tier}: 6 / 12 hours`).join("; ")} (configuration)`,
+  expect(policy.notice).toContain("max 10 articles (workflow override); 4 workers (bin-pack)");
+  expect(policy.rows.find(([name]) => name === "Age windows")?.[2]).toBe(
+    `${config.curate_articles.article_quality_buckets.map(rule => `Tier ${rule.tier}: 6 / 12 hours`).join("; ")} (configuration)`,
   );
-  expect(policy.rows.find(([name]) => name === "Article limit")?.[1]).toBe("10 articles (workflow override)");
+  expect(policy.rows.find(([name]) => name === "Article cap")?.[2]).toBe("10 articles (workflow override)");
+  expect(policy.rows.find(([name]) => name === "Feed-status lookback")?.[2])
+    .toContain(`${config.feedback.lifecycle_window_days} UTC days`);
+  expect(policy.rows.find(([name]) => name === "Reliability adjustment")?.[2])
+    .toContain(`${settings.collect.reliability_window_days} UTC days`);
+  expect(policy.rows.find(([name]) => name === "Request history")?.[2])
+    .toBe(`${config.feedback.request_report_closed_days} days`);
   expect(formatWorkflowPolicy(undefined, false).notice).toContain("defaults do not prove");
 });
 

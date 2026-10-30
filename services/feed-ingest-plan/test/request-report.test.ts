@@ -57,9 +57,9 @@ test("sums each usable counter across full and partial records without double co
   });
   expect(() => report([row, { ...row, permission: "denied" }])).toThrow("Conflicting copies");
   const rendered = renderRequestReport(result);
-  expect(rendered.markdown).toContain("| 8 requests | 4 requests* | 0 requests | Partial* |");
+  expect(rendered.markdown).toContain("| 4 requests* | 8 requests | 0 requests | Partial |");
   expect(Bun.markdown.html(rendered.markdown)).toContain("<td>4 requests*</td>");
-  expect(rendered.notice).toContain("8 requests / 4 requests* / 0 requests");
+  expect(rendered.notice).toContain("4 requests* / 8 requests / 0 requests");
   expect(rendered.markdown).toContain("3 records with missing or invalid counts");
 });
 
@@ -81,7 +81,7 @@ test("reports missing files, unidentifiable records and staged input gaps withou
   expect(staged.feeds[0]!.coverage.article_requests).toMatchObject({ status: "partial", complete_days: [] });
   const rendered = renderRequestReport(staged);
   expect(rendered.markdown).toContain("Staged history inputs: incomplete");
-  expect(rendered.notice).toContain("2 requests* / 4 requests* / 0 requests*");
+  expect(rendered.notice).toContain("4 requests* / 2 requests* / 0 requests*");
 });
 
 test("distinguishes known zero from absent counts and leaves unrelated counters complete", async () => {
@@ -95,20 +95,20 @@ test("distinguishes known zero from absent counts and leaves unrelated counters 
   expect(empty).toMatchObject({ complete: true, feeds: [{ feed_requests: 0, article_requests: 0, robots_requests: 0 }] });
   const absent = report([], { days: [] });
   expect(absent.feeds[0]).toMatchObject({ feed_requests: null, article_requests: null, robots_requests: null });
-  expect(renderRequestReport(absent).markdown).toContain("| No recorded data | No recorded data | No recorded data |");
-  expect(renderRequestReport(unknown).markdown).toContain("| 0 requests | No recorded data | 0 requests |");
+  expect(renderRequestReport(absent).markdown).toContain("| Not recorded | Not recorded | Not recorded |");
+  expect(renderRequestReport(unknown).markdown).toContain("| Not recorded | 0 requests | 0 requests |");
   const articleOnly = report([{ ...row, feed_requests: null, robots_requests: -1 }]);
   expect(articleOnly.feeds[0]).toMatchObject({
     feed_requests: null, article_requests: 4, robots_requests: null,
     coverage: { article_requests: { status: "complete" }, robots_requests: { status: "none", unknown_records: 1 } },
   });
-  expect(renderRequestReport(articleOnly).markdown).toContain("| No recorded data | 4 requests | No recorded data |");
+  expect(renderRequestReport(articleOnly).markdown).toContain("| 4 requests | Not recorded | Not recorded |");
   expect(Bun.markdown.html(renderRequestReport(report([{ ...row, feed_requests: 0 }], { days: [] })).markdown))
     .toContain("<td>0 requests*</td>");
-  expect(renderRequestReport(undefined).notice).toContain("No recorded data");
+  expect(renderRequestReport(undefined).notice).toContain("was not recorded");
 });
 
-test("sorts only Table D by feed requests, article requests, then name with unknown values last", async () => {
+test("sorts request rows by article requests, feed requests, then name with unknown values last", async () => {
   const { row, source, report } = await fixture();
   const cases = [
     { feed_id: "unknown", feed_requests: null, article_requests: 100 },
@@ -130,18 +130,50 @@ test("sorts only Table D by feed requests, article requests, then name with unkn
       fixturePlan.inputs, fixturePlan.runtime);
     const original = renderPlanMarkdown({ response, health });
     const rendered = renderPlanMarkdown({ response, health: { ...health, request_report } });
-    const lines = rendered.markdown.split("\n").filter(line => /^\| D\d+ \|/.test(line));
+    const lines = rendered.markdown.split("\n").filter(line => /^\| F\d+ \|/.test(line));
     expect(lines.map(line => line.split(" | ")[1])).toEqual([
-      "most-feeds", "most-articles", "alpha", "beta", "missing-article", "zero", "unknown",
+      "zero", "unknown", "most-articles", "alpha", "beta", "most-feeds", "missing-article",
     ].map(escapeMarkdown));
-    expect(rendered.markdown.split("## Table C")[1]!.split("## Table D")[0])
-      .toBe(original.markdown.split("## Table C")[1]!.split("## Table D")[0]);
+    expect(rendered.markdown.split("<details>\n<summary>Request counts and coverage")[0])
+      .toBe(original.markdown.split("<details>\n<summary>Request counts and coverage")[0]);
     expect(request_report).toEqual(before);
     const html = Bun.markdown.html(rendered.markdown);
-    expect(html).toContain("<td>Partial*</td>");
-    expect(html).toContain("Not full data");
-    expect(rendered.notices.find(notice => notice.title === "Closed-day request spend")!.message)
-      .toContain("Not full data; only known counts are added");
+    expect(html).toContain("<td>Partial</td>");
+    expect(html).toContain("Partial totals include recorded counts only");
+    expect(rendered.markdown).toContain("<summary>Request counts and coverage");
     expect(renderRequestReport(report([row])).markdown).not.toContain("Partial*");
+  } finally { await fixturePlan.close(); }
+});
+
+test("sorts feed results by chosen and admitted articles, and exclusions by count then reason", async () => {
+  const fixturePlan = await recordedPlan();
+  try {
+    const response = summarizePlan(await runFeedPlan({}, fixturePlan.inputs, fixturePlan.runtime));
+    const health = await executeFeedHealthState({ batch_id: response.batches.selection_batch_id, action: "summarize" },
+      fixturePlan.inputs, fixturePlan.runtime);
+    const base = health.rows[0]!;
+    const cause = base.rejection_counts[0]!;
+    const rows = [
+      { feed_id: "alpha", chosen: 5, admitted: 10, reason: "MISSING_REQUIRED_FIELDS", count: 5 },
+      { feed_id: "beta", chosen: 5, admitted: 12, reason: "EXTRACT_EMPTY", count: 8 },
+      { feed_id: "charlie", chosen: 7, admitted: 7, reason: "REJECTED_SCREENING_MIN_WORDS", count: 5 },
+      { feed_id: "delta", chosen: 5, admitted: 12, reason: "EXTRACT_EMPTY", count: 5 },
+    ];
+    const rendered = renderPlanMarkdown({ response, health: { ...health, rows: rows.map(value => ({
+      ...base, feed_id: value.feed_id, article_candidates: value.admitted, articles_selected: value.chosen,
+      rejection_counts: [{ ...cause, reason_code: value.reason, count: value.count }],
+    })) } });
+    const lines = rendered.markdown.split("\n");
+    const feedRows = lines.filter(line => /^\| D\d+ \|/.test(line));
+    expect(feedRows.map(line => line.split(" | ")[1])).toEqual(["charlie", "beta", "delta", "alpha"]);
+    const exclusionRows = lines.filter(line => /^\| G\d+ \|/.test(line));
+    expect(exclusionRows.map(line => line.split(" | ")[4])).toEqual([
+      "EXTRACT&#95;EMPTY", "EXTRACT&#95;EMPTY", "MISSING&#95;REQUIRED&#95;FIELDS", "REJECTED&#95;SCREENING&#95;MIN&#95;WORDS",
+    ]);
+    expect(rendered.notices[2]!.message).toContain(
+      "EXTRACT_EMPTY: 13 decisions; MISSING_REQUIRED_FIELDS: 5 decisions; REJECTED_SCREENING_MIN_WORDS: 5 decisions",
+    );
+    expect(rendered.markdown).toContain("<summary>Per-feed article results</summary>");
+    expect(rendered.markdown).toContain("<summary>Grouped exclusions</summary>");
   } finally { await fixturePlan.close(); }
 });

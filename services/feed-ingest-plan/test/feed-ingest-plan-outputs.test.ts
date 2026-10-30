@@ -109,7 +109,7 @@ test("one real result and every native file stay unchanged through both report m
     } };
     const markdownApi = renderPlanMarkdown({ response, health });
     expect(markdownApi.markdown).toContain("# Feed planner run");
-    expect(markdownApi.notices.some(notice => notice.title === "This run's feed work")).toBe(true);
+    expect(markdownApi.notices.some(notice => notice.title === "Feed work")).toBe(true);
     const summary = join(fixture.directory, "summary.md");
     const annotations: string[] = [];
     await writePlannerReport({ config: { ...fixture.inputs.harvest.config, workflow_reporting: {
@@ -120,13 +120,13 @@ test("one real result and every native file stay unchanged through both report m
       annotate: line => annotations.push(line) });
     const workflowReport = renderWorkflowPlanMarkdown(evidence);
     expect(await readFile(summary, "utf8")).toBe(workflowReport.markdown);
-    expect(workflowReport.markdown.indexOf("## Table G - Host fingerprint"))
+    expect(workflowReport.markdown.indexOf("## Table H - Host fingerprint"))
       .toBeLessThan(workflowReport.markdown.indexOf("## Table A - Run facts"));
     expect(workflowReport.markdown).not.toContain("Metadata delivery");
     expect(annotations).toEqual(workflowReport.notices.map(formatWorkflowAnnotation));
     expect(annotations.map(line => line.slice(0, line.indexOf("::", 2)))).toEqual([
-      "::notice title=Host fingerprint", "::notice title=This run's feed work", "::notice title=Closed-day request spend",
-      "::notice title=Grouped exclusions", "::notice title=Policy used",
+      "::notice title=Host fingerprint", "::notice title=Feed work", "::notice title=Request counts",
+      "::notice title=Grouped exclusions", "::notice title=Applied policy",
     ]);
     const rendered = Bun.markdown.html(await readFile(summary, "utf8"));
     expect(rendered).toContain("Feed health before requests");
@@ -139,19 +139,22 @@ test("one real result and every native file stay unchanged through both report m
     expect(legacyTiming).toContain("Legacy feed-health capture (purpose not recorded)");
     expect(legacyTiming).not.toContain("| Feed health before requests |");
     expect(legacyTiming).not.toContain("| Fresh feed health for selection |");
-    expect((rendered.match(/<table>/g) ?? [])).toHaveLength(7);
+    expect((rendered.match(/<table>/g) ?? [])).toHaveLength(8);
     expect(rendered).toContain("<th>Feed read result</th>");
     expect(rendered).not.toContain("<th>Outcome</th>");
+    expect(rendered).toContain("<details>");
+    expect(rendered).toContain("<summary>Request counts and coverage");
     for (const [feedId, code, description] of [
       ["recorded-empty", "FEED_EMPTY", "No usable feed URLs"],
       ["recorded-malformed", "FEED_PARSE_FAILED", "Feed parsing failed"],
     ] as const) {
-      const index = health.rows.findIndex(row => row.feed_id === feedId);
-      expect(index).toBeGreaterThanOrEqual(0);
-      expect(health.rows[index]).toMatchObject({
+      const feed = health.rows.find(row => row.feed_id === feedId);
+      expect(feed).toBeDefined();
+      expect(feed).toMatchObject({
         status: 200, outcome: "ok", items: 0, failed_reads: 1, last_failure_code: code,
       });
-      const cell = workflowReport.markdown.split("\n").find(line => line.startsWith(`| C${index + 1} |`));
+      const cell = workflowReport.markdown.split("\n").find(line =>
+        line.startsWith("| D") && line.includes(`| ${escapeMarkdown(feedId)} |`));
       expect(cell).toContain(`| ${description} |`);
     }
     expect(rendered).toContain("Feed read succeeded");
@@ -168,7 +171,7 @@ test("one real result and every native file stay unchanged through both report m
     const firstHealth = health.rows[0]!;
     for (const [outcome, description] of [
       ["ok", "Download succeeded; parsing not recorded"],
-      [null, "Unavailable (download outcome not recorded)"],
+      [null, "Not recorded (download result missing)"],
     ] as const) {
       const missing = { ...evidence, health: { ...health, rows: [{ ...firstHealth,
         outcome, items: null, last_failure_code: null,
