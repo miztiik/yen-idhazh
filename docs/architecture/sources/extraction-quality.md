@@ -64,11 +64,13 @@ to override authored configuration.
 
 A configured rejection uses existing `EXTRACT_FAILED` with the selected typed
 signal and full measurements in diagnostics. Parsing remains successful. Its
-completion event carries a separate `quality_rejection` reason and measured
-source/body word counts, plus the safe article address when available.
-Attribution reads that typed reason as a quality decision, not a source failure.
-The capture is not counted as admitted or source-refused, so its admission total
-and source pass rate remain unavailable rather than assigning source blame.
+completed parse event is followed by a separate failed `quality` event carrying
+the typed `quality_rejection`, measured source/body word counts, and safe article
+address when available. That event is diagnostic only; it creates no second
+work fact or accounting charge. Attribution reads the reason as a quality
+decision, not a source failure. The capture is not counted as admitted or
+source-refused, so its admission total and source pass rate remain unavailable
+rather than assigning source blame.
 Other refusals, rankings, source quotas and screening thresholds are unchanged.
 An acceptable body with no source title is measured, but the planner's existing
 required-title rejection remains; this increment does not change that contract.

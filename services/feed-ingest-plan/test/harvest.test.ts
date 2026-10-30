@@ -625,16 +625,20 @@ test("configured quality rejection keeps parsing complete and reports measured r
   const successfulArticleParseFacts = articleParseFacts.filter(fact => fact.outcome === "success");
   expect(successfulArticleParseFacts.length).toBeGreaterThan(0);
   expect(successfulArticleParseFacts.every(fact => fact.failure_code === null && fact.attribution === null)).toBe(true);
-  const activity = activities.find(item => item.operation === "parse" && item.phase === "completed"
+  const parseActivity = activities.find(item => item.operation === "parse" && item.phase === "completed"
+    && item.details.request_id === rejected?.rejection?.candidate_id);
+  expect(parseActivity?.details.quality_rejection).toBeUndefined();
+  const qualityActivities = activities.filter(item => item.operation === "quality" && item.phase === "failed"
     && item.details.request_id === rejected?.rejection?.candidate_id && item.details.quality_rejection !== undefined);
-  expect(activity).toMatchObject({
+  expect(qualityActivities).toHaveLength(1);
+  expect(qualityActivities[0]).toMatchObject({
     details: { quality_rejection: {
       failure_code: "contaminated",
       source_word_count: rejected?.observation.diagnostics?.quality?.source_word_count,
       word_count: rejected?.observation.diagnostics?.quality?.word_count,
     } },
   });
-  expect(activity?.url).toBe("https://news.example/story/?utm_source=feed&b=2&a=1#section");
+  expect(qualityActivities[0]?.url).toBe("https://news.example/story/?utm_source=feed&b=2&a=1#section");
 });
 
 test("report settings remain available without changing the planning fingerprint", async () => {

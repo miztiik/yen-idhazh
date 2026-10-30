@@ -6,27 +6,38 @@ import { SourceSnapshotSchema } from "./source.schema";
 import { HarvestDiagnosticsSchema } from "./harvest-diagnostics.schema";
 import { ParsedFeedBatchSchema, SelectedFeedBatchSchema, PartitionedFeedBatchSchema } from "./planner-stage.schema";
 import { PlanApiTimingSchema } from "./plan-run.schema";
-import { FEED_INGEST_EVENT_VERSION, FEED_OUTCOME_PAYLOAD_VERSION } from "../version";
+import {
+  FEED_INGEST_EVENT_VERSION, FEED_OUTCOME_PAYLOAD_VERSION, LEGACY_FEED_INGEST_EVENT_VERSION,
+} from "../version";
 
+const LEGACY_FEED_INGEST_EVENT_OPERATIONS = ["history", ...PlanApiTimingSchema.shape.operation.options, "plan", "artifact-upload"] as const;
 export const FeedIngestEventSchema = z.strictObject({
   version: z.literal(FEED_INGEST_EVENT_VERSION).default(FEED_INGEST_EVENT_VERSION),
   run_id: RunIdSchema, correlation_id: z.uuid({ version: "v4" }),
   occurred_at: RecordedInstantSchema,
-  operation: z.enum(["history", ...PlanApiTimingSchema.shape.operation.options, "plan", "artifact-upload"]),
+  operation: z.enum([...LEGACY_FEED_INGEST_EVENT_OPERATIONS, "quality"]),
   phase: z.enum(["started", "completed", "failed"]),
   details: z.record(z.string(), z.json()),
 }).meta({
   version: FEED_INGEST_EVENT_VERSION,
   changelog: [
-    { version: FEED_INGEST_EVENT_VERSION, change: "Add artifact-upload inventory and publisher-controlled failure article addresses." },
+    { version: FEED_INGEST_EVENT_VERSION, change: "Add separate quality-rejection events beside artifact inventory and safe article addresses." },
     { version: "2026-10-29", change: "Move operation-specific fields into flexible details." },
     { version: "2026-10-28", change: "Name the publisher on sparse article progress events." },
     { version: "2026-10-26", change: "Name pre-fetch and selection health captures separately." },
   ],
 });
 export type FeedIngestEvent = z.infer<typeof FeedIngestEventSchema>;
+const LegacyFeedIngestEventSchema = FeedIngestEventSchema.extend({
+  version: z.literal(LEGACY_FEED_INGEST_EVENT_VERSION),
+  operation: z.enum(LEGACY_FEED_INGEST_EVENT_OPERATIONS),
+});
 export function readFeedIngestEvent(raw: unknown): FeedIngestEvent {
-  return FeedIngestEventSchema.parse(raw);
+  const current = FeedIngestEventSchema.safeParse(raw);
+  if (current.success) return current.data;
+  const legacy = LegacyFeedIngestEventSchema.safeParse(raw);
+  if (!legacy.success) return FeedIngestEventSchema.parse(raw);
+  return FeedIngestEventSchema.parse({ ...legacy.data, version: FEED_INGEST_EVENT_VERSION });
 }
 export const PlannerWorkEventSchema = z.discriminatedUnion("stage", [
   z.strictObject({ stage: z.literal("parsed"), payload: ParsedFeedBatchSchema }),

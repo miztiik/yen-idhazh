@@ -23,7 +23,7 @@ type Context = Pick<HarvestContext, "progress" | "observations" | "observation_c
 };
 
 export function documentWork(context: Context, identity: DocumentIdentity, key: string, scope: Scope) {
-  const publish = (operation: "fetch" | "parse", phase: "started" | "completed" | "failed",
+  const publish = (operation: "fetch" | "parse" | "quality", phase: "started" | "completed" | "failed",
     duration_ms: number | null, url?: string, failure_code?: string | null,
     quality_rejection?: QualityRejection) => context.document_activity?.(
     operation, phase, {
@@ -32,9 +32,7 @@ export function documentWork(context: Context, identity: DocumentIdentity, key: 
       feed_id: scope.feed_id, publisher_id: scope.publisher_id, duration_ms,
       ...(failure_code == null ? {} : { failure_code }),
       ...(quality_rejection === undefined ? {} : { quality_rejection }),
-    }, scope.document_kind === "article"
-      && (phase === "failed" || (operation === "parse" && phase === "completed" && quality_rejection !== undefined))
-      ? url : undefined,
+    }, scope.document_kind === "article" && phase === "failed" ? url : undefined,
   );
   let fetchedUrl: string | undefined;
   const timestamp = () => utcTimestamp(context.observation_clock);
@@ -115,8 +113,9 @@ export function documentWork(context: Context, identity: DocumentIdentity, key: 
       const observation = event("parse", cause);
       const { quality_rejection, ...workResult } = result;
       publish("parse", workResult.outcome === "failed" ? "failed" : "completed",
-        Math.round(performance.now() - started), url, workResult.failure_code, quality_rejection);
+        Math.round(performance.now() - started), url, workResult.failure_code);
       await save(observation, workResult, Math.round(performance.now() - started), null);
+      if (quality_rejection !== undefined) publish("quality", "failed", null, url, null, quality_rejection);
       return { parsed, failure, observation };
     },
     async skip() {

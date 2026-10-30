@@ -51,14 +51,19 @@ export function prepareProgressEvent(raw: unknown, requiredDetails: readonly str
   const addViolation = (code: string, path: string) => violations.set(`${code}:${path}`, { code, path });
   const ancestors = new WeakSet<object>();
   let entries = 0;
-  const qualityPayload = isRecord(rawDetails) && Object.hasOwn(rawDetails, "quality_rejection")
+  const qualityEvent = base.operation === "quality" && base.phase === "failed";
+  const hasQualityPayload = isRecord(rawDetails) && Object.hasOwn(rawDetails, "quality_rejection");
+  const qualityPayload = isRecord(rawDetails) && hasQualityPayload
     ? QualityRejectionSchema.safeParse(rawDetails.quality_rejection) : null;
   let detailsInput = rawDetails;
-  if (qualityPayload !== null && !qualityPayload.success && isRecord(rawDetails)) {
+  if ((qualityEvent && qualityPayload?.success !== true)
+    || (!qualityEvent && hasQualityPayload)) {
     addViolation("invalid_quality_rejection", "details.quality_rejection");
-    const cleanable = { ...rawDetails };
-    delete cleanable.quality_rejection;
-    detailsInput = cleanable;
+    if (isRecord(rawDetails)) {
+      const cleanable = { ...rawDetails };
+      delete cleanable.quality_rejection;
+      detailsInput = cleanable;
+    }
   }
 
   function clean(value: unknown, depth: number): unknown {
@@ -133,7 +138,7 @@ export function prepareProgressEvent(raw: unknown, requiredDetails: readonly str
   }
   if (failureArticleUrl !== undefined) {
     const url = diagnosticArticleUrl(failureArticleUrl);
-    const qualityRejection = base.operation === "parse" && base.phase === "completed" && hasQualityRejection(rawDetails);
+    const qualityRejection = qualityEvent && hasQualityRejection(rawDetails);
     if (((base.phase === "failed" && (base.operation === "fetch" || base.operation === "parse")) || qualityRejection)
       && url !== undefined) {
       details.article_url = url;

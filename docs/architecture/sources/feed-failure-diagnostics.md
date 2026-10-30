@@ -58,12 +58,14 @@ remain intact: HTTP 404 means not found, 429 means rate limited, and 503 means
 service unavailable.
 
 A configured quality rejection follows a successful parse. Its parse work fact
-remains successful; the completion event carries the typed
-`quality_rejection` reason and measured source/body word counts. The event's
-article address uses the safe diagnostic projection: credentials and query or
-fragment values are removed, and signed addresses are omitted. The same
-measured reason reaches attribution as a quality decision and remains
-unresolved; it does not create a source refusal.
+remains successful and the completed parse event stays separate from a failed
+`quality` event. That diagnostic-only event carries the typed
+`quality_rejection` reason and measured source/body word counts; it creates no
+second work fact or accounting charge. Its article address uses the safe
+diagnostic projection: credentials and query or fragment values are removed,
+and signed addresses are omitted. The same measured reason reaches attribution
+as a quality decision and remains unresolved; it does not create a source
+refusal.
 
 ## Clocks and warnings
 
@@ -111,7 +113,8 @@ shape and physical digest before migrating them. Logical record commitments
 also use the original shape and stamp. A current row with actual new
 diagnostics cannot be encoded as an old proof that would discard them.
 Historical event reads validate the old envelope and nested payload before
-upgrading the stamps and applying null defaults.
+upgrading the event stamp in memory. The earlier operation vocabulary remains
+accepted; historical files are not rewritten.
 
 ## Remaining production differences
 
