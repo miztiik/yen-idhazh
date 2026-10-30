@@ -19,8 +19,10 @@ export function formatHostFingerprintSummary(input: unknown) {
     const capacity = measurement(row.machine_memory_total_mib, "MiB", reason("machine_memory_total_mib"));
     rows.push(
       { measurement: "CPU", value: cpu },
-      { measurement: "Logical / allowed processors",
-        value: `${measurement(row.cpu_logical_processors, "processors", reason("cpu_logical_processors"))} / ${measurement(row.cpu_allowed_processors, "processors", reason("cpu_allowed_processors"))}` },
+      { measurement: "Logical processors",
+        value: row.cpu_logical_processors === null ? `Unavailable (${reason("cpu_logical_processors")})` : String(row.cpu_logical_processors) },
+      { measurement: "Allowed processors",
+        value: row.cpu_allowed_processors === null ? `Unavailable (${reason("cpu_allowed_processors")})` : String(row.cpu_allowed_processors) },
       { measurement: "L3 cache", value: cache },
       { measurement: "Total machine RAM capacity", value: capacity },
       { measurement: "Measurement time (UTC)",

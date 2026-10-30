@@ -22,56 +22,80 @@ export const WorkflowPolicySchema = z.strictObject({
 
 export function formatWorkflowPolicy(input: unknown, selectionRan: boolean) {
   if (input === undefined) return {
-    notice: "Applied settings were not recorded; committed defaults do not prove what this run used.",
-    rows: [["Effective settings", "Settings used by the run", "Not recorded; defaults are not evidence"]],
+    notice: "Effective settings were not recorded; committed defaults do not prove what this run used.",
+    rows: [["Effective settings", "Not recorded", "Policy evidence unavailable"]],
   };
   const { config, request: supplied, history, parser_concurrency } = WorkflowPolicySchema.parse(input);
   const request = resolvePlanRequest(supplied, config);
   const policy = resolvePolicy({ config });
-  const percent = (value: number) => `${(value * 100).toFixed(2)} percent`;
   const source = (key: keyof typeof supplied) => supplied[key] === undefined ? "configuration" : "workflow override";
-  const maximum = `${request.article_limit} articles (${source("article_limit")})`;
-  const ages = config.curate_articles.article_quality_buckets.map(rule =>
-    `Tier ${rule.tier}: ${resolveArticleQualityBucketWindows(rule).steps.join(" / ")} hours`).join("; ");
-  const rows = [
-    ["Selection", "Whether these controls governed selection", selectionRan ? "Applied" : "Requested; selection did not run"],
-    ["Age windows", "Article freshness tiers", `${ages} (configuration)`],
-    ["Article cap", "Maximum articles selected", maximum],
-    ["Workers", "Count and assignment method", `${request.shards}; ${request.partition_strategy} (count: ${source("shards")}; method: ${source("partition_strategy")})`],
-    ["Fetch and parse", "Fetch concurrency / timeout / parser workers", `${config.harvest.concurrency} / ${config.harvest.fetch_timeout_ms} ms / ${parser_concurrency}`],
-    ["Minimum text", "Parsed words required", `${policy.triage.min_words} words`],
-    ["Recency", "Half-life / score weight", `${policy.triage.recency_half_life_hours} hours / ${policy.triage.recency_weight}`],
-    ["Feed authority", "Base authority weight", `${policy.curate_articles.source_authority_weight}`],
-    ["Quality budgets", "Article targets / freshness ceilings by tier", allocateArticleQualityBucketBudgets(config, request.article_limit).map(budget =>
-      `Tier ${budget.rule.tier}: ${budget.target} / ${budget.ceiling}`).join("; ")],
-    ["Portfolio limits", "Per-feed share / website-group share / distinct feeds", `${percent(config.curate_articles.soft_caps.max_source_share)} / ${percent(config.curate_articles.soft_caps.max_website_group_share)} / ${config.curate_articles.soft_caps.min_distinct_sources}`],
-    ["Limit relaxation", "Order when portfolio limits conflict", config.curate_articles.soft_caps.relaxation_order.map(limit =>
-      ({ distinct_sources: "distinct-feed target", source_share: "per-feed share" })[limit]).join(", ") || "None"],
-    ["Diversity", "Publisher / website-group deductions", `${policy.curate_articles.mmr_weights.lambda_source} / ${policy.curate_articles.mmr_weights.lambda_website_group}`],
-    ["Exploration", "Share for feeds not yet chosen", percent(config.curate_articles.exploration_slot_share)],
-    ["Feed-status lookback", "Days / failed checks before a feed rests", `${config.feedback.lifecycle_window_days} UTC days / ${history.availability_strikes_before_rest}`],
-    ["Reliability adjustment", "History days / minimum authority / article-pass adjustment", `${history.reliability_window_days} UTC days / ${percent(history.reliability_floor)} / ${config.curate_articles.source_reliability_penalty_enabled ? "on" : "off"}`],
-    ["Request history", "Completed UTC days counted", `${config.feedback.request_report_closed_days} days`],
-    ["Article history", "Discovery / prior-publication window / future tolerance", `${config.discovered_articles.lookback_days} / ${history.published_window_days} UTC days / ${history.max_future_hours} hours`],
-    ["Article exclusions", "Blocked HTTP statuses / categories / URL rules", `${config.triage.blocked_http_statuses.join(", ")} / ${config.harvest.blocked_categories.join(", ") || "none"} / ${config.harvest.url_exclusions.length}`],
+  const configured = (label: string, value: string | number | boolean): [string, string, string] =>
+    [label, String(value), "configuration"];
+  const rows: [string, string, string][] = [
+    configured("Policy config version", config.version),
+    ["Article limit", String(request.article_limit), source("article_limit")],
+    ["Article assignments", String(request.shards), source("shards")],
+    ["Assignment strategy", request.partition_strategy, source("partition_strategy")],
+    configured("Fetch concurrency", config.harvest.concurrency),
+    configured("Fetch timeout (ms)", config.harvest.fetch_timeout_ms),
+    configured("Parser workers", parser_concurrency),
+    configured("Minimum article words", policy.triage.min_words),
+    configured("Recency half-life (hours)", policy.triage.recency_half_life_hours),
+    configured("Recency weight", policy.triage.recency_weight),
+    configured("Authority coefficient", policy.curate_articles.source_authority_weight),
+    ...allocateArticleQualityBucketBudgets(config, request.article_limit).flatMap(budget => [
+      configured(`Tier ${budget.rule.tier} age steps (hours)`, resolveArticleQualityBucketWindows(budget.rule).steps.join(" / ")),
+      [`Tier ${budget.rule.tier} article target / ceiling`, `${budget.target} / ${budget.ceiling}`, "effective article limit and configuration"] satisfies [string, string, string],
+    ]),
+    configured("Per-feed share limit (fraction)", config.curate_articles.soft_caps.max_source_share),
+    configured("Website-group share limit (fraction)", config.curate_articles.soft_caps.max_website_group_share),
+    configured("Distinct-feed target", config.curate_articles.soft_caps.min_distinct_sources),
+    configured("Limit relaxation order", JSON.stringify(config.curate_articles.soft_caps.relaxation_order)),
+    configured("Publisher exposure weight", policy.curate_articles.mmr_weights.lambda_source),
+    configured("Website-group exposure weight", policy.curate_articles.mmr_weights.lambda_website_group),
+    configured("Exploration share (fraction)", config.curate_articles.exploration_slot_share),
+    configured("Feed-status history (represented UTC days)", config.feedback.lifecycle_window_days),
+    configured("Failing checks before rest", history.availability_strikes_before_rest),
+    configured("Rested runs before retry", history.availability_strikes_before_rest),
+    configured("Reliability history (represented UTC days)", history.reliability_window_days),
+    configured("Reliability floor (fraction)", history.reliability_floor),
+    configured("Article-pass adjustment enabled", config.curate_articles.source_reliability_penalty_enabled),
+    configured("Request history (closed UTC days)", config.feedback.request_report_closed_days),
+    configured("Discovery history (UTC days)", config.discovered_articles.lookback_days),
+    configured("Prior-publication history (UTC days)", history.published_window_days),
+    configured("Future-date tolerance (hours)", history.max_future_hours),
+    configured("Blocked HTTP statuses", JSON.stringify(config.triage.blocked_http_statuses)),
+    configured("Blocked categories", JSON.stringify(config.harvest.blocked_categories)),
+    configured("URL exclusion rules", config.harvest.url_exclusions.length),
   ];
   return {
-    notice: `${selectionRan ? "Applied" : "Requested only"}: max ${maximum}; ${request.shards} workers (${request.partition_strategy}); `
-      + `authority floor ${percent(history.reliability_floor)}; article-pass adjustment `
-      + `${config.curate_articles.source_reliability_penalty_enabled ? "on" : "off"}. Full settings are in Applied policy.`,
+    notice: `Policy config version: ${config.version}; selection started: ${selectionRan}; `
+      + `article limit: ${request.article_limit} (${source("article_limit")}); article assignments: ${request.shards}; `
+      + `strategy: ${request.partition_strategy}; article-pass adjustment enabled: `
+      + `${config.curate_articles.source_reliability_penalty_enabled}. Full settings are in Effective policy.`,
     rows,
   };
 }
 
 export function formatPolicyTable(input: unknown, selectionRan: boolean) {
   const policy = formatWorkflowPolicy(input, selectionRan);
+  const overrides = policy.rows.filter(([, , source]) => source === "workflow override").map(([setting]) => setting);
   return {
     notice: policy.notice,
     summary: [
-      "## Table B - Applied policy", "",
-      "| Id | Setting | What it controls | Effective value |", "| --- | --- | --- | --- |",
-      ...policy.rows.map(([setting, meaning, value], index) =>
-        `| B${index + 1} | ${escapeMarkdown(setting!)} | ${escapeMarkdown(meaning!)} | ${escapeMarkdown(value!)} |`),
+      "## Table B - Effective policy", "",
+      "| Id | Setting | Effective value |", "| --- | --- | --- |",
+      ...policy.rows.map(([setting, value], index) =>
+        `| B${index + 1} | ${escapeMarkdown(setting!)} | ${escapeMarkdown(value!)} |`),
+      ...(input === undefined ? ["", "Policy evidence was not supplied; committed defaults are not evidence."] : [
+        "", `Workflow overrides: ${overrides.length ? overrides.map(value => escapeMarkdown(value!)).join(", ") : "none"}. `
+          + "Other controls use configuration; tier targets and ceilings use the effective article limit.",
+      ]),
+      "", "The article limit is a maximum. Selection started is a run fact, not an enabled setting.",
+      "Shares and the reliability floor use the JSON fractions: 0 means none; 1 means the whole.",
+      "Authority multiplies the coefficient by each feed's configured weight and source-tier weight; it is not the tier weight alone.",
+      "A productive feed check returns at least one usable URL. Rest requires known failure history; retry follows the configured skipped-run count, not a UTC timer.",
+      "bin-pack balances estimated article work; round-robin assigns in selected order; none uses one assignment.",
       "",
     ].join("\n"),
   };
