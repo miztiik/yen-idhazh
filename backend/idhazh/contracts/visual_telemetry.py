@@ -1,39 +1,8 @@
-"""The visual ledger's two grains: one row per attempt, and what survives the fold.
+"""What one visual-design attempt records, including refusal and failed delivery.
 
-`state/visuals/<YYYY-MM>.csv` records one row per **attempt** at a picture -
-every refusal, every `none` and every published chart. `none` is the majority
-outcome by design, so a `none` with no cause makes the largest number an
-operator reads the one that explains nothing.
-
-`observability.visuals_full_grain_months` decides how long that stays readable
-attempt by attempt. Past it a month is folded to `VisualAggregateRow` and the
-full-grain shard is deleted.
-
-**The fold key is settled here, before anything writes a row, because the fold
-cannot be revised.** A key is not a summary a later reader can re-derive: at the
-window edge the attempts are gone, so a term left out of the key is a breakdown
-nobody can ever ask for again. `FOLD_KEY` below is that key, spelled once and
-checked at import against the fields of the folded row.
-
-**Eight terms, in two halves.** `(date, decision, none_reason,
-rejection_reason)` is the cause breakdown - which gate refused, and which check
-inside the validator. `(potential_primary, family, element_band,
-downgrade_depth)` is the stratum - what the article could have carried, what was
-attempted over it, how many facts were available, and how far down the ladder
-the attempt went. Folding on date alone would keep the daily totals and lose
-both halves, which is the half that decides whether the typed reason was worth
-building.
-
-**The row carries a distribution and never a mean.** A bimodal spread is the
-interesting finding and a mean hides it, so each measured column keeps a count,
-the two outer quartiles, the median and both ends. A mean cannot be re-derived
-from those and does not need to be: what a reader asks of a folded month is
-where the mass sits, not where its centre of gravity is.
-
-**What is deliberately lost once the shard goes**, stated rather than implied:
-the per-item lookup and its join key, any percentile the quartiles do not carry,
-correlation between two measured columns, the rationale text behind a refusal,
-and any slice the eight terms above do not name.
+The registered visual-design-attempts ledger uses immutable raw Parquet files
+and lossless daily/monthly packing. Expired months are deleted, not summarized.
+The older aggregate contract below remains readable but has no production writer.
 """
 
 from __future__ import annotations
@@ -47,46 +16,8 @@ from idhazh.contracts.base import ChangelogEntry, Contract, DateStamp, ItemId, R
 from idhazh.contracts.item_health import ElementClass
 from idhazh.contracts.visual import PlanDecision, VisualType
 from idhazh.contracts.visual_decision import NoneReason, VisualState
-
-
-class ValidatorCheck(StrEnum):
-    """The eleven checks, in the order the validator runs them.
-
-    Each member is the property that must HOLD, not the failure - the same way
-    `span_integrity_pass` and `derived_provenance_complete` are named.
-
-    **It lives in `contracts/` because a ledger column now carries it.** It was
-    declared in `idhazh.visual_validator` beside the code that runs the checks,
-    with a note saying it moves here on the day something persists it. That day
-    is this one: `rejection_reason` is a fold key term, so the vocabulary has to
-    be declared at or below the level of the row that persists it (CLAUDE.md
-    section 4). `visual_validator` imports it from here, so there is still one
-    list and not two.
-    """
-
-    #: Every element the plan declares is one the article's table holds.
-    ELEMENT_EXISTS = "element_exists"
-    #: Each element's kind fits the channel it fills.
-    SEMANTICALLY_COMPATIBLE = "semantically_compatible"
-    #: Within one measured channel, every unit is convertible or identical.
-    UNITS_CONVERTIBLE = "units_convertible"
-    #: The filled roles are the ones this type declares.
-    ROLES_VALID_FOR_TYPE = "roles_valid_for_type"
-    #: Stacked parts exactly make a separate source-declared whole.
-    STACKED_BAR_EXHAUSTIVE = "stacked_bar_exhaustive"
-    #: Pie parts exactly make a separate source-declared whole.
-    PIE_EXHAUSTIVE = "pie_exhaustive"
-    #: The marks fit between the two committed chart-point knobs - and for a
-    #: histogram, whose marks are its bins, there is a value for every bin.
-    ENOUGH_DATA = "enough_data"
-    #: No element fills one channel twice.
-    NO_DUPLICATE_IN_ROLE = "no_duplicate_in_role"
-    #: Every drawn figure reads out of the characters the element names.
-    NO_INVENTED_VALUES = "no_invented_values"
-    #: Every numeral in the prose is one a cited element states.
-    NUMERALS_MATCHED = "numerals_matched"
-    #: The plan met the vocabulary this build holds.
-    PLAN_VERSION_CURRENT = "plan_version_current"
+from idhazh.contracts.visual_outcome import validate_visual_outcome
+from idhazh.contracts.visual_validation import ValidatorCheck as ValidatorCheck
 
 
 class VisualFamily(StrEnum):
@@ -210,21 +141,24 @@ def band_of(elements_found: int | None) -> ElementBand | None:
 
 
 class VisualAttemptRow(Contract):
-    """One attempt at one picture, on one run: the full grain the fold replaces.
+    """One actual visual-design attempt, whether delivered, refused or failed.
 
     **One row per attempt, never one per published visual.** A per-publication
     ledger leaves every refusal uncommitted, so the machine loop stops being
     auditable while still being the gate, and a later run cannot tell a refused
     visual from one never attempted.
 
-    This is the shape the fold reads. It carries the eight terms of `FOLD_KEY`,
-    the two measured columns the folded row keeps a distribution of, and the
-    optional decision key used to join human labels. The fold deliberately
-    drops per-item identity when it replaces this row.
+    Older rows may lack typed outcomes and visual identity. New rows copy the
+    decision's exact identity; compaction keeps the full record until expiry.
     """
 
     __schema_stem__: ClassVar[str] = "visual-attempt-row"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-10-29",
+            change="Record requested and delivered types and nullable floor evidence.",
+            why="Refused drafted plans and delivery failures remain distinct attempts.",
+        ),
         ChangelogEntry(
             version="2026-10-27T11:32",
             change="Add the visual decision join key to full-grain attempts.",
@@ -241,9 +175,9 @@ class VisualAttemptRow(Contract):
             why="A refused chart must say which check stopped it.",
         ),
         ChangelogEntry(
-            version="2026-09-13T23:50",
-            change="Initial shape: one row per attempt at a visual, carrying the eight terms.",
-            why="The fold this ledger takes at the window edge deletes the full-grain shard.",
+            version="2026-09-13",
+            change="Earlier changes are in this file's git history.",
+            why="Git retains the earlier contract history.",
         ),
     )
 
@@ -251,24 +185,20 @@ class VisualAttemptRow(Contract):
     run_id: RunId
     item_id: ItemId
     decision: PlanDecision = Field(
-        description="Whether this attempt proposed a picture at all. Half of the key."
+        description="Whether a plan was drafted, including one later refused."
     )
     none_reason: NoneReason | None = Field(
         default=None,
         description=(
-            "Which gate decided this item carries no picture. Empty on an attempt "
-            "that proposed one, and on a refusal by a producer that recorded no gate - "
-            "empty reads as nothing said which, never as a gate named none."
+            "Which implemented gate refused delivery. May accompany a drafted plan. "
+            "Null on delivery, render failure, or an older unrecorded cause."
         ),
     )
     rejection_reason: ValidatorCheck | None = Field(
         default=None,
         description=(
-            "The FIRST validator check that did not hold. The validator runs its nine "
-            "checks in order and a refused plan usually fails several, so one cell "
-            "holds the first rather than a list: a list in a CSV cell is unaggregatable, "
-            "and the check an operator acts on is the one that fired first. Empty where "
-            "no plan reached the validator."
+            "First validator check rejecting the original request, retained through "
+            "replacement or refusal. Null if no validator rejection occurred."
         ),
     )
     potential_primary: ElementClass | None = Field(
@@ -292,9 +222,8 @@ class VisualAttemptRow(Contract):
         default=None,
         ge=0,
         description=(
-            "Tier 1 elements the extraction pass kept for this article. The raw count, "
-            "banded into the key by band_of and kept whole as a distribution on the "
-            "folded row. Empty on the same terms as potential_primary."
+            "Elements measured by the article extraction pass. Null when unmeasured "
+            "or when spans did not re-slice."
         ),
     )
     downgrade_depth: int | None = Field(
@@ -303,24 +232,21 @@ class VisualAttemptRow(Contract):
         description=(
             "The deepest rung of the downgrade ladder this attempt reached. Zero means "
             "the plan was accepted or refused as drafted. It is recorded on a refused "
-            "attempt as well as a published one, because a keep rate by depth needs a "
-            "denominator at that depth. Empty where no plan was drafted."
+            "attempt as well as a delivered one. Null where no typed plan was drafted "
+            "or where older decisions did not measure the search."
         ),
     )
     marks: int | None = Field(
         default=None,
         ge=0,
         description=(
-            "How many marks the accepted plan drew, in the channel its type counts in. "
-            "The ladder's own currency: each rung reads a percentile of the depth-0 "
-            "published mark counts, so this is the population that floor is taken over. "
-            "Empty on an attempt that proposed nothing."
+            "Delivered mark count from the decision; null without delivery."
         ),
     )
     state: VisualState = Field(
         description=(
-            "What became of the visual. `rendered` is the one value that means a reader "
-            "saw it, so it is the numerator of every keep rate here."
+            "Whether visual data was written, absent or failed to render. A written "
+            "file does not prove publication or a human decision to keep it."
         )
     )
     visual_id: Sha256 | None = Field(
@@ -330,17 +256,58 @@ class VisualAttemptRow(Contract):
             "rows written before this field existed."
         ),
     )
+    planned_type: VisualType | None = Field(
+        default=None,
+        description="Original typed request, including later refusal; null on older rows.",
+    )
+    rendered_type: VisualType | None = Field(
+        default=None,
+        description="Successfully written type; null without delivery or on older rows.",
+    )
+    gate_floor_applied: bool | None = Field(
+        default=None,
+        description=(
+            "True if an evaluated numeric floor excluded a candidate, false if compared "
+            "floors excluded none, null when no numeric floor was evaluated or unmeasured."
+        ),
+    )
 
     @model_validator(mode="after")
     def _an_attempt_that_proposed_nothing_drew_nothing(self) -> Self:
         if self.decision is PlanDecision.VISUAL:
-            if self.none_reason is not None:
-                raise ValueError("an attempt that proposed a picture names no refusing gate")
+            if self.none_reason is not None and self.state is not VisualState.ABSENT:
+                raise ValueError("a refusing gate records an absent visual")
+            if self.planned_type is not None:
+                if self.downgrade_depth is not None:
+                    validate_visual_outcome(
+                        self.planned_type,
+                        self.rendered_type,
+                        0 if self.planned_type is self.rendered_type else self.downgrade_depth,
+                        self.marks,
+                    )
+                if (self.rendered_type is not None) != (self.state is VisualState.RENDERED):
+                    raise ValueError("a typed rendered outcome records its delivered type")
+                if self.rendered_type is None and self.marks is not None:
+                    raise ValueError("only delivery records marks")
             return self
+        if self.planned_type is not None or self.rendered_type is not None:
+            raise ValueError("a typed request is a drafted visual plan")
         if self.state is not VisualState.ABSENT:
             raise ValueError("an attempt that proposed nothing cannot have rendered")
         if self.marks is not None:
             raise ValueError("an attempt that proposed nothing drew no marks")
+        return self
+
+    @model_validator(mode="after")
+    def _floor_evidence_requires_a_reached_rung(self) -> Self:
+        if self.rendered_type is not None and self.planned_type is None:
+            raise ValueError("a delivered type requires its original request")
+        if self.gate_floor_applied is not None and (
+            self.planned_type is None
+            or self.downgrade_depth is None
+            or self.downgrade_depth == 0
+        ):
+            raise ValueError("floor evidence requires a reached downgrade rung")
         return self
 
     @classmethod

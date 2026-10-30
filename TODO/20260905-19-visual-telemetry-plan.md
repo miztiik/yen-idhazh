@@ -1,7 +1,16 @@
 # 19 - Every attempt is recorded
 
-**Last Updated**: 2026-09-05
-**Level**: 4 (a new committed ledger whose fold key is irreversible, plus the payload a corpus re-render depends on)
+**Last Updated**: 2026-10-29
+**Level**: 5 contract decisions authorized for delivery; row 4 remains deferred.
+
+**Current ruling, 2026-10-29 UTC:** the maintainer authorized implementation
+and stacked PR delivery. Row 3 uses the registered name
+`visual-design-attempts`, one row per actual attempt, including none/refusal
+and render failure. No aggregate store, fold writer, permanent summary or
+custom retry feature is authorized. Standard lossless compaction is storage
+packing, not an aggregate. These rulings supersede the historical aggregate
+design in row 1 and the older read-only scope below. Plans 20 and 22 are not
+closed by this work.
 
 **Chain**: diagrams are [deferred](../docs/architecture/publishing/visuals.md#diagrams-deferred), not a prerequisite | next [`20260905-20-visual-console-plan.md`](20260905-20-visual-console-plan.md).
 **Reference**: [`20260902-visual-planner-pseudo-plan.md`](20260902-visual-planner-pseudo-plan.md) - rows 54, 55, sections 12.6 G1, 12.7 G7, G10, G11, 12.9 G12, 12.13 G37, 12.14 G40, G41, section 9.2, 9.3.
@@ -15,10 +24,10 @@ Execute per docs/how-to/execute-a-plan.md: one maintainer carries the plan and d
 | Field | Value |
 | --- | --- |
 | Why this plan exists | Everything from plan 11 onward gates publication on machine judgement, and none of it is recorded. Today "no visual was possible" and "the visual stage broke" are the same row. **`none` is the majority outcome by design**, so a majority outcome with no cause breakdown means the largest number an operator sees explains nothing |
-| Hard scope - in | A visual pipeline stage; a ledger with **one row per attempt**; a typed reason for every refusal; the join key a human label needs; the fold key, settled before the first row is written; the payload a whole-day re-render needs |
+| Hard scope - in | Row 3: a registered ledger with one row per actual visual-design attempt, typed refusal causes, exact visual identity, full-grain retention and standard lossless packing |
 | Hard scope - out | The console panels (plan 20). Any human review surface (plan 21). Any change to what publishes |
-| ESCALATE triggers | 1. The ledger is proposed as one row per **published** visual - that leaves every refusal uncommitted and the machine loop stops being auditable while still being the gate. 2. A route to `none` exists that carries no reason. 3. The fold key is settled without the stratum terms - **the fold is irreversible and a key settled narrow cannot be widened later against data that no longer exists** |
-| Chosen strategy | Settle the fold key first, because it is the only decision here that cannot be revised. Then the stage, then the ledger, then the re-render payload |
+| ESCALATE triggers | Attempts are replaced by publications; a current refusal loses its typed cause; an aggregate, permanent summary or custom retry feature is proposed |
+| Chosen strategy | Producer evidence first, then registered persistence, publication ownership and bounded retention. Whole-day re-rendering and rejected-plan bodies remain row 4 |
 | Execution | `autonomous orchestrator per docs/how-to/execute-a-plan.md. Parallel N = 4.` |
 
 ---
@@ -29,8 +38,8 @@ Execute per docs/how-to/execute-a-plan.md: one maintainer carries the plan and d
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | 1 | The fold key, decided before anything writes a row | - | A | DONE #686 | p19-r1 | #686 | worker |
 | 2 | A stage of its own | 1 | B | DONE #695 | p19-r2 | #695 | worker |
-| 3 | One row per attempt, and a reason for every refusal | 2 | C | PENDING | - | - | - |
-| 4 | What a re-render needs, and where a rejected plan lives | 3 | D | PENDING | - | - | - |
+| 3 | One row per attempt, and a reason for every refusal | 2 | C | DONE | visual-design-attempt-ledger | - | - |
+| 4 | What a re-render needs, and where a rejected plan lives | 3 | D | DEFERRED | - | - | - |
 
 ---
 
@@ -86,27 +95,30 @@ Execute per docs/how-to/execute-a-plan.md: one maintainer carries the plan and d
 
 ## 4. Row #3 - One row per attempt, and a reason for every refusal
 
-- **Scope:** `state/visuals/<YYYY-MM>.csv`: one row per **attempt**, carrying `decision`, `none_reason`, `visual_id` and the full outcome family.
-- **Files touched:** `backend/idhazh/contracts/visual_telemetry.py`, `schemas/*.schema.json`, `backend/idhazh/visual_planner.py`, `state/visuals/` (header committed), `.github/scripts/commit-and-push.sh`, `.github/workflows/digest.yml`, `tests/fixtures/**`, `backend/tests/**`, `docs/concepts/telemetry.md`
-- **Acceptance gates:** `ruff`; `mypy --strict`; export + drift; `shellcheck`; the full suite; one dispatch writing rows.
-- **Oracle:** Drive every gate independently and collect the reasons observed; the set must **equal the enum exactly**. A gate whose refusal is indistinguishable from another's, or an enum member no gate can produce, both fail.
+- **Scope:** `state/raw/visual-design-attempts/` and `state/compact/visual-design-attempts/`: each actual attempt, including none/refusal and render failure; no attempt for work that never reached visual planning.
+- **Implementation:** `VisualAttemptRow`, shared `telemetry.visual_attempts` mapping, worker settlement, native ledger name/key/staging registry, compaction declaration and gardener enrollment. The publisher is `backend/utilities/digest_publish.py`; no hand-written CSV or second assemble writer. JSON Schema is computed on demand, not committed under `schemas/`.
+- **Acceptance gates:** changed-file Ruff and strict mypy, shared changed-test selector, bounded producer/store/read/compact/expiry and workflow-ownership tests; full CI on the merge candidate.
+- **Oracle:** Real producer decisions map to registered raw Parquet, read back and survive standard lossless packing. The observed refusal set equals the five implemented `NoneReason` members; call sites may intentionally share a gate. Completed attempts survive later work failure.
 
 ### Decisions
 
 | # | Decision | Authority |
 | --- | --- | --- |
 | 1 | **One row per attempt, not per publication.** A per-publication ledger leaves every refusal, every `none` and every typed rejection reason uncommitted - the machine loop stops being auditable while still being the gate, and a later run cannot tell a refused visual from one never attempted | 12.7 G7, row 55 |
-| 2 | `none_reason` covers **all six gates**, not only the ones the validator sees. The pre-model refusal is the cheapest gate and therefore the most common, so it would otherwise be the least explained | 12.6 G1, 12.7 G11 |
-| 3 | `visual_id` is the join key. **Without it there is no overlap to compute reviewer agreement from, and by the project's own rule no keep rate is quotable** | 12.14 G41 |
-| 4 | `gate_floor_applied` becomes real only once the ladder's depth-2 and depth-3 percentiles exist, which plan 11 settled | 12.7 |
+| 2 | `none_reason` covers the five implemented gate members. Shape, configuration and compiler refusal may share `validation_failed`; no future gate is invented | Current production path |
+| 3 | `visual_id` is copied exactly from the decision. Requested/delivered types and delivered marks are evidence of file delivery, not proof of publication or a human keep rate | Maintainer ruling, 2026-10-29 UTC |
+| 4 | `gate_floor_applied` is a nullable boolean: true if an evaluated floor excluded a candidate, false if evaluated floors excluded none, null if no floor was evaluated. The ladder remains disabled by existing config | Producer contract |
 | 5 | No query surface. There is no server | Row 55, Guardrail #1 |
+| 6 | Attempt `downgrade_depth` means the deepest searched rung, including refusal; copy `deepest_downgrade_depth`, not the selected replacement depth | Existing attempt meaning |
+| 7 | Full records stay for the compaction declaration's 14-month window plus its daily tier, then expire with no aggregate or permanent summary. No custom retry feature | Maintainer ruling, 2026-10-29 UTC |
 
 ### Rejected alternatives
 
 | # | Option | Why rejected | Authority |
 | --- | --- | --- | --- |
 | 1 | One row per published visual | See decision 1 - it is the failure this row exists to prevent | Fowler |
-| 2 | Free-text refusal reasons | Unaggregatable, and a free-text cell is a `merge=union` hazard on a ledger eight shards append to | Carmack |
+| 2 | Free-text-only refusal reasons | Typed gates and first validator checks support reliable comparisons without parsing prose | Current contract |
+| 3 | Aggregate storage or permanent summary retention | Rejected as waste; full-grain records expire instead | Maintainer ruling, 2026-10-29 UTC |
 
 ---
 

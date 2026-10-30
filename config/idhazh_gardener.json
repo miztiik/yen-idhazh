@@ -30,6 +30,7 @@
     "compact-trial-host-fingerprint",
     "compact-trial-item-health",
     "compact-visual-prunes",
+    "compact-visual-design-attempts",
     "corpus-squash",
     "digest-fragments",
     "telemetry-aggregate",

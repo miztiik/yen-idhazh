@@ -1,6 +1,6 @@
 # Adaptive Pruning
 
-**Last Updated**: 2026-10-25
+**Last Updated**: 2026-10-29
 
 One question, asked of every file this project writes:
 
@@ -174,9 +174,8 @@ is the count of month shards a console read opens, and no read opens a visual
 | `state/traces/` | Delete (lookup) | 7 days, the window of `config/gardener/traces.json` | a trace is what an operator opens to see one recent run step by step. No committed instance yet |
 | `state/raw/item-health/`, `state/compact/item-health/` | **Fold** -> `state/raw/item-health-summary/`, packed under `state/compact/item-health-summary/` | summarised at 14 months, the `full-grain` series of `config/gardener/telemetry-aggregate.json`; the rows go at 15 months, the `monthly_window` of `config/gardener/compact-item-health.json` | every console rate divides by this census, so the daily totals have to outlive the per-item grain |
 | `state/raw/summary-quality-evals/`, `state/compact/summary-quality-evals/` | Keep | forever, the `monthly_window` of `config/gardener/compact-summary-quality-evals.json`, which may pack a month or a finished year and never drops one | the evidence behind every published quality claim, so every row is kept and a monthly figure is computed from the rows when a chart draws it ([evaluation.md](evaluation.md#design-rationale)) |
-| `state/visuals/` | **Fold** -> `state/visual-aggregate/` | `observability.visuals_full_grain_months` | one row per attempt at a picture, and `none` is the majority outcome by design - so the cause breakdown has to outlive the attempts. The [fold key](#the-visual-fold-key-is-eight-terms-and-it-could-not-wait) is what decides that, and it is settled. No committed instance yet |
+| `state/raw/visual-design-attempts/`, `state/compact/visual-design-attempts/` | Lossless pack, then delete | 14 absorbed months plus the daily tier; `config/gardener/compact-visual-design-attempts.json` | preserve each actual attempt, including none and refusal, until expiry; no aggregate or permanent summary |
 | `state/raw/item-health-summary/`, `state/compact/item-health-summary/` | Keep | forever, the `monthly_window` of `config/gardener/compact-item-health-summary.json` | the fold costs a measured 63.8 bytes a row over four stages - about 93 KB a year against the shard's 77 MB - and deleting it would make a year-over-year comparison unanswerable. No committed instance yet |
-| `state/visual-aggregate/` | Keep | `observability.visual_aggregate_keep_months`, null | the same argument again, and one more of its own: it is the only record that a gate ever refused anything. No committed instance yet |
 | `state/raw/published/`, `state/compact/published/` | Keep | forever, the `monthly_window` of `config/gardener/compact-published.json`, which may pack a month or a finished year and never drops one. The **read** carries the cover, `collect.published_window_days` | forgetting an address republishes it as new |
 | `state/day-metrics/` | Keep | none of its own | about 13 KB a day, measured 2026-09-12 over 23 committed days, and the only place a band count or an extraction census survives the fold above |
 | `state/raw/visual-prunes/` | Keep | none | it is property 5 - the record of what the prune did, including the runs it did nothing |
@@ -227,56 +226,19 @@ is delete, with an age of its own. Nobody has set one, so the row reads none.
 
 ## Design rationale
 
-### The visual fold key is eight terms, and it could not wait
+### Visual attempts retain full records, not permanent summaries
 
-Every other decision about `state/visuals/` can be revised. This one cannot: the
-fold deletes the full-grain shard, so a term left out of the key is a breakdown
-nobody can ever ask for again - not hidden behind a slower query, gone, because
-the rows it would have been computed from are unlinked. That is why the key was
-settled before the ledger had a writer rather than on the day the first fold came
-due, when the attempts outside the window would already have been deleted.
+The maintainer ruling of 2026-10-29 UTC replaces the proposed visual aggregate
+with bounded full-grain storage named `visual-design-attempts`. Standard
+daily/monthly compaction packs the same rows without loss; it is not the
+rejected statistical fold. At expiry the gardener deletes the records and
+retains no permanent visual summary. There is no aggregate prerequisite or
+custom retry feature.
 
-**Four terms of cause and four of stratum.** `(date, decision, none_reason,
-rejection_reason)` says which gate refused and which check inside the validator.
-`(potential_primary, family, element_band, downgrade_depth)` says what the
-article could have carried, which vocabulary was attempted over it, how many
-facts were available and how far down the ladder the attempt went. A fold on
-date alone would keep the daily totals and lose both halves - and the cause
-breakdown is the half that decides whether the typed refusal reason was worth
-building at all.
-
-**The row carries a distribution and never a mean**, at minimum a count, a
-median and the two outer quartiles. A bimodal spread is the interesting finding
-and a mean hides it: eight attempts at 16 and 200 elements have a mean of 108,
-which no attempt had and which sits in the empty gap between the two clumps.
-
-**The element band is a band because the count is the thing being folded.** A
-key carrying the raw count would put almost every attempt in a group of its own
-and the fold would summarise nothing. The five boundaries are 0, 1, 4, 8 and 16,
-chosen as powers of two and confirmed by the archive: counted 2026-09-13 over the
-21 committed `state/item-health/` day files, 1,716 rows carrying
-`elements_found` put p25 at 3, the median at 7 and p75 at 16. The bands then hold
-8.0, 20.0, 22.6, 23.7 and 25.7 percent of that population, so none of them is a
-rounding error and none is half the archive. Counting committed rows is exact,
-so the spread is zero. The boundaries live in the contract rather than in
-`config/` because they are a persisted key term on an irreversible fold: move
-one and two folded months stop being comparable, with nothing left to re-fold
-either of them from, so it has to move the way a contract moves rather than the
-way a knob does.
-
-**The fold can only shrink the ledger**, and that is a property rather than a
-hope. Every group holds at least one attempt, so the row count never rises, and
-the folded row is narrower than the attempt row it replaces. The pathological
-month in which every attempt lands in its own group folds to the same number of
-rows, each one smaller - the fold buying nothing rather than costing something.
-
-**One gap is open and it is named rather than left.**
-`observability.visuals_full_grain_months` is not yet in
-`ObservabilityConfig.full_grain_months()`, so `refuse_windows_shorter_than` does
-not hold it against the shards a console read can select. Today nothing is lost
-by that: no console read opens one of these shards, because the panels that will
-are their own plan. It stops being true the day the first of them ships, and the
-window joins that check in the same commit. Fowler, 2026-09-13.
+The former eight-term aggregate contract remains readable for compatibility
+and is not registered or written by this production path. It does not set
+retention. The [retention reference](config/retention-ages.md)
+names the one authoritative window and its daily-tier delay.
 
 ### Why 13, and why the bytes did not choose it
 

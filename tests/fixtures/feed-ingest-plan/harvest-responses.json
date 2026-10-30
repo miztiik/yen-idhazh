@@ -11,7 +11,7 @@
   "responses": {
     "https://news.example/robots.txt": [{"status": 200, "body": "User-agent: {{crawler_product}}\nAllow: /\nDisallow: /denied\n"}],
     "https://news.example/feed.xml": [{"status": 200, "fixture": "rss"}],
-    "https://news.example/story/?b=2&a=1#section": [{"status": 200, "fixture": "article"}],
+    "https://news.example/story/": [{"status": 200, "fixture": "article"}],
     "https://news.example/second": [{"status": 200, "fixture": "article"}],
     "https://news.example/empty.xml": [{"status": 200, "body": "<rss version=\"2.0\"><channel><title>Empty</title></channel></rss>"}],
     "https://news.example/malformed.xml": [{"status": 200, "body": "<rss><channel><item></channel>"}],

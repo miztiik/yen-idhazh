@@ -7,7 +7,8 @@ import type {
 import type { RunContext } from "./resolve-run-context";
 import type { SourceHistoryEvidence } from "./read-ledger-history/read-feed-history";
 import type { FeedEntry, HarvestArticleResult } from "./harvest-feeds/harvest-types";
-import { canonicalizeUrl } from "./harvest-feeds/url-cleaner";
+import { deriveArticleIdentity, InvalidArticleUrlError } from "./harvest-feeds/article-identity";
+import { UnsafeTargetError } from "./harvest-feeds/safe-target";
 import { retryableStatus } from "./harvest-feeds/robots-policy";
 import { inputEndpointKey } from "./read-ledger-history/health-summary";
 import { attributeIngestOutcome } from "./attribute-ingest-outcomes";
@@ -16,7 +17,7 @@ import { hasArticleCapture, resolveArticleSourceOutcome } from "./article-source
 
 export function createRunHealth(context: RunContext, sources: readonly SourceSnapshot[],
   history: ReadonlyMap<string, SourceHistoryEvidence>,
-  admission: { min_words: number; blocked_http_statuses: readonly number[]; clock?: () => Date },
+  admission: { min_words: number; blocked_http_statuses: readonly number[]; tidy_urls: boolean; clock?: () => Date },
   initialRows: readonly FeedHealthStateRow[] = []) {
   const rows = new Map<string, FeedHealthStateRow>();
   const exclusions = new Map<string, PlannerRejectionCount>();
@@ -202,8 +203,11 @@ export function createRunHealth(context: RunContext, sources: readonly SourceSna
       target.status = status;
       target.items = new Set(entries.flatMap(entry => {
         if (entry.link === null) return [];
-        try { return [canonicalizeUrl(entry.link).url_key]; }
-        catch { return []; }
+        try { return [deriveArticleIdentity(entry.link, admission).url_key]; }
+        catch (error) {
+          if (error instanceof InvalidArticleUrlError || error instanceof UnsafeTargetError) return [];
+          throw error;
+        }
       })).size;
       target.outcome = skipped ? "skipped" : robots ? "robots_denied" : failure === "unsafe-target" ? "blocked"
         : failure === "http" && status !== null ? retryableStatus.has(status) ? "transient" : "permanent"

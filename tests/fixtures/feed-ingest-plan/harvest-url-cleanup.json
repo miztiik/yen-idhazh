@@ -1,26 +1,26 @@
 {
-  "description": "Bounded request-cleanup protocol vectors; offered identities remain independent of dispatched destinations.",
+  "description": "Bounded article cleanup vectors; identity and initial dispatch use one query-free address.",
   "allowed": [
     {
       "offered": "https://news.example/second?utm_source=feed&oly_enc_id=tracking",
       "target": "https://news.example/second",
-      "canonical_url": "https://news.example/second?oly_enc_id=tracking"
+      "canonical_url": "https://news.example/second"
     },
     {
       "offered": "https://www.google.com/url?url=https%3A%2F%2Fnews.example%2Fsecond%3Futm_source%3Dfeed",
       "target": "https://news.example/second",
-      "canonical_url": "https://google.com/url?url=https://news.example/second?utm_source=feed"
+      "canonical_url": "https://news.example/second"
     }
   ],
   "media": [
     {
       "offered": "https://www.google.com/url?url=https%3A%2F%2Fwww.youtube.com%2Fwatch%3Fv%3Drecorded",
-      "canonical_url": "https://google.com/url?url=https://www.youtube.com/watch?v=recorded",
+      "canonical_url": "https://www.youtube.com/watch",
       "excluded": true
     },
     {
       "offered": "https://www.google.com/url?url=https%3A%2F%2Fnews.example%2Fsecond%3Futm_source%3Dfeed",
-      "canonical_url": "https://google.com/url?url=https://news.example/second?utm_source=feed",
+      "canonical_url": "https://news.example/second",
       "excluded": false
     }
   ],

@@ -4,10 +4,10 @@ import { expect, setDefaultTimeout, test } from "bun:test";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import { delimiter, dirname, join, resolve } from "node:path";
-import { tmpdir } from "node:os";
 import {
   PLANNER_FILE_VALIDATION_VERSION,
   PLANNER_MAINTENANCE_VERSION, PlannerMaintenanceRequestSchema,
+  LEGACY_DISCOVERED_ARTICLE_VERSION, LEGACY_SELECTED_ARTICLE_VERSION, deriveUrlKey,
 } from "@idhazh/common-contracts";
 import { maintainPlannerPeriod, persistLedger, readPlannerParquet } from "../src";
 import { validatePlannerFiles } from "../src/validate-planner-files";
@@ -33,7 +33,7 @@ function git(root: string, ...args: string[]): string {
 }
 
 async function fixtureRoot(): Promise<string> {
-  const root = await mkdtemp(join(tmpdir(), "planner-maintenance-"));
+  const root = await mkdtemp(join(process.cwd(), ".tmp_planner-maintenance-"));
   git(root, "init", "--quiet");
   git(root, "config", "user.name", "Fixture");
   git(root, "config", "user.email", "fixture@example.invalid");
@@ -56,7 +56,77 @@ async function addRawDay(root: string, day: string): Promise<string> {
   return path;
 }
 
-async function request(
+  test("daily, monthly and yearly maintenance retain mixed article generations verbatim", async () => {
+    const root = await fixtureRoot();
+    const day = "2026-10-20";
+    try {
+      for (const recording of plannerRecordings(day).slice(0, 2)) {
+        const ledger = recording.name;
+        const registry_entry = { ...registration, name: ledger, prefix: ["feed-ingest-plan", ledger] };
+        const expected = [];
+        const inputs = [];
+        for (const historical of [true, false]) {
+          const canonical_url = historical
+            ? "https://example.org/article/legacy?edition=morning&utm_source=feed"
+            : "https://example.org/article/current";
+          const row = {
+            ...recording.row, url_key: deriveUrlKey(canonical_url),
+            ...(ledger === "selected-articles" ? { canonical_url } : {}),
+          };
+          const historicalVersion = ledger === "discovered-articles"
+            ? LEGACY_DISCOVERED_ARTICLE_VERSION : LEGACY_SELECTED_ARTICLE_VERSION;
+          const written = await persistLedger({
+            ledger, rowContract: {
+              ...recording.contract,
+              schemaVersion: historical ? historicalVersion : recording.contract.schemaVersion,
+            },
+            outputRoot: join(root, "state"), registryEntry: registry_entry, ledgerSettings,
+            period: { tier: "raw", covers: day }, rows: [row],
+          });
+          expect(written.status).toBe("written");
+          expected.push(row);
+          inputs.push(`state/${written.files[0]!.path}`);
+        }
+        git(root, "add", "state");
+        git(root, "commit", "--quiet", "-m", "record mixed article generations");
+        const sortRows = (rows: Record<string, unknown>[]) =>
+          [...rows].sort((a, b) => String(a.url_key).localeCompare(String(b.url_key)));
+        for (const [period, covers] of [
+          ["daily", day], ["monthly", "2026-10"], ["yearly", "2026"],
+        ] as const) {
+          const revision = git(root, "rev-parse", "HEAD");
+          const requested = await request(root, revision, period, covers);
+          const result = await maintainPlannerPeriod(root, {
+            ...requested, ledger, registry_entry,
+          });
+          expect(result.status).toBe("written");
+          if (result.status !== "written") throw new Error("mixed article compaction did not write");
+          expect(result.row_count).toBe(expected.length);
+          if (period === "daily") expect(result.input_files.map(file => file.path).sort()).toEqual(inputs.sort());
+          const staged = join(root, ...result.output_path.split("/"));
+          const actual = await readPlannerParquet(staged, ledger, recording.contract);
+          expect(sortRows(actual.rows)).toEqual(sortRows(expected));
+          expect<string>(actual.envelope.row_schema_version).toBe(recording.contract.schemaVersion);
+          const target = join(root, ...result.target_path.split("/"));
+          await mkdir(dirname(target), { recursive: true });
+          await writeFile(target, await readFile(staged));
+          const validation = await validatePlannerFiles(root, {
+            version: PLANNER_FILE_VALIDATION_VERSION,
+            files: [{ ledger, path: result.target_path }],
+          });
+          expect(validation.files[0]?.status).toBe("valid");
+          for (const path of result.delete_paths) await rm(join(root, ...path.split("/")));
+          await rm(join(root, result.output_path.split("/")[0]!), { recursive: true });
+          git(root, "add", "state");
+          git(root, "commit", "--quiet", "-m", `retain mixed article rows in ${period} compact`);
+        }
+      }
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  }, 180_000);
+
+  async function request(
   root: string,
   revision: string,
   period: "daily" | "monthly" | "yearly",

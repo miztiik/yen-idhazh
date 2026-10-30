@@ -5,9 +5,15 @@ import { FetchFailureSchema } from "./harvest-diagnostics.schema";
 import { RecordedInstantSchema } from "./recorded-instant.schema";
 import { SourceArticleRefusalReasonSchema } from "./rejection.schema";
 
-export const OPERATION_VERSION = "2026-10-28";
-const OperationVersionSchema = z.literal(OPERATION_VERSION).default(OPERATION_VERSION);
-export const PLANNER_OPERATION_VERSION = "2026-10-28";
+export const LEGACY_OPERATION_VERSION = "2026-10-28" as const;
+export const OPERATION_VERSION = "2026-10-29" as const;
+export const OPERATION_ACCEPTED_SCHEMA_VERSIONS = [LEGACY_OPERATION_VERSION, OPERATION_VERSION] as const;
+const OperationVersionSchema = z.enum(OPERATION_ACCEPTED_SCHEMA_VERSIONS).default(OPERATION_VERSION);
+export const LEGACY_PLANNER_OPERATION_VERSION = "2026-10-28" as const;
+export const PLANNER_OPERATION_VERSION = "2026-10-29" as const;
+export const PLANNER_OPERATION_ACCEPTED_SCHEMA_VERSIONS = [
+  LEGACY_PLANNER_OPERATION_VERSION, PLANNER_OPERATION_VERSION,
+] as const;
 export const SourceArticleOutcomeSchema = z.strictObject({
   disposition: z.enum(["admitted", "source_refused"]),
   reason_code: SourceArticleRefusalReasonSchema.nullable(), settled_at: RecordedInstantSchema,
@@ -46,6 +52,9 @@ export const FetchedDocumentSchema = z.strictObject({
   parent_batch_id: RequestIdSchema.nullable().default(null),
   entry_ordinal: CountSchema.nullable().default(null),
 }).superRefine((value, ctx) => {
+  if (value.version === OPERATION_VERSION && value.fetch_item_type === "article" && /[?#]/.test(value.canonical_url)) {
+    ctx.addIssue({ code: "custom", message: "current article address must not contain a query or fragment" });
+  }
   if (value.body === null ? value.body_sha256 !== null : value.body_sha256 === null) {
     ctx.addIssue({ code: "custom", message: "body and body digest must be available together" });
   }
@@ -64,15 +73,15 @@ export const FetchedDocumentSchema = z.strictObject({
 }).meta({
   version: OPERATION_VERSION,
   changelog: [
-    { version: OPERATION_VERSION, change: "Rename fetched document and observation feed identity from source_id to feed_id." },
+    { version: OPERATION_VERSION, change: "Identify shared query-free article captures while preserving legacy receipts unchanged." },
+    { version: LEGACY_OPERATION_VERSION, change: "Rename fetched document and observation feed identity from source_id to feed_id." },
     { version: "2026-10-27", change: "Name the fetched item type and refuse older fetch artifacts." },
     { version: "2026-10-26", change: "Link fetched articles to bounded server-owned feed offers." },
-    { version: "2026-10-23T09:22", change: "Record actual retry waits and elapsed retry time." },
-    { version: "2026-10-23", change: "Declare durable fetched documents and causal observations." },
+    { version: "2026-10-23", change: "Earlier changes are in git." },
   ],
 });
 export const PlannerOperationSchema = z.strictObject({
-  version: z.literal(PLANNER_OPERATION_VERSION).default(PLANNER_OPERATION_VERSION),
+  version: z.enum(PLANNER_OPERATION_ACCEPTED_SCHEMA_VERSIONS).default(PLANNER_OPERATION_VERSION),
   request_id: RequestIdSchema, operation: z.enum(["fetch", "parse", "plan"]),
   input_sha256: Sha256Schema, config_sha256: Sha256Schema, run_id: RunIdSchema,
   correlation_id: RequestIdSchema, created_at: RecordedInstantSchema, state: z.enum(["started", "complete"]),
@@ -102,11 +111,10 @@ export const PlannerOperationSchema = z.strictObject({
 }).meta({
   version: PLANNER_OPERATION_VERSION,
   changelog: [
-    { version: PLANNER_OPERATION_VERSION, change: "Rename nested fetched feed identity from source_id to feed_id." },
+    { version: PLANNER_OPERATION_VERSION, change: "Retain legacy operation responses and identify shared article-cleanup captures." },
+    { version: LEGACY_PLANNER_OPERATION_VERSION, change: "Rename nested fetched feed identity from source_id to feed_id." },
     { version: "2026-10-27T18:30", change: "Settle original article outcomes and retain their bounded receipt membership on the feed capture." },
     { version: "2026-10-27", change: "Refuse prior operation formats after renaming fetch routing." },
-    { version: "2026-10-26", change: "Retain current fetched offer references through request replay." },
-    { version: "2026-10-23T18:50", change: "Retain the original captured clock precision through replay." },
     { version: "2026-10-23", change: "Earlier changes are in git." },
   ],
 });
