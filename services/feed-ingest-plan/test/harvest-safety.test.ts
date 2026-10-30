@@ -464,5 +464,9 @@ test("existing byte controls reject a complete oversized recorded body without l
   const fetcher = createPermittedFetcher(loaded.config.harvest, loaded.extraction, { transport, resolve: transport.resolve });
   const result = await fetcher.fetch("https://news.example/second");
   expect(result).toMatchObject({ body: null, failure: "body-too-large", http_status: 200 });
+  expect(fetchDiagnostics(result, 0).body_limit).toEqual({
+    configured_limit_bytes: 1024,
+    observed_at_least_bytes: Buffer.byteLength((await readRecordings()).bodies.article),
+  });
   expect(transport.requests.every(request => request.max_body_bytes === 1024)).toBe(true);
 });

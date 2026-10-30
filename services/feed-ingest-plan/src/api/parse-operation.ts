@@ -62,7 +62,8 @@ export async function parseFetchedDocument(
   if (state.health_written) throw new PlanError("REQUEST_CONFLICT", "This execution finalized its health; parse in a new execution", "request_id");
   const emit = createStageLogger(state.context, runtime.log);
   const work = documentWork({
-    document_activity: (operation, phase, details, url) => emit(operation, phase, details, ["feed_id", "publisher_id"], url),
+    document_activity: (operation, phase, details, url, feedUrls) =>
+      emit(operation, phase, details, ["feed_id", "publisher_id"], url, feedUrls),
     observations: createIngestObservations(state.work.observe), observation_clock: runtime.observation_clock ?? (() => new Date()),
   }, { run_id: fetched.run_id, correlation_id: fetched.correlation_id, article_id: artifact.article_id, feed_id: source.id },
   record.request_id, {

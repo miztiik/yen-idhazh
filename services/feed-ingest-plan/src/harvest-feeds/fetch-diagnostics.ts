@@ -19,10 +19,11 @@ function failureCode(result: FetchResult): HarvestDiagnostics["failure_code"] {
   }
 }
 
-export function fetchDiagnostics(result: FetchResult, fetch_ms: number): HarvestDiagnostics {
+export function fetchDiagnostics(result: FetchResult, fetch_ms: number | null): HarvestDiagnostics {
   return HarvestDiagnosticsSchema.parse({
     http_status: result.http_status, robots: result.robots, fetch_failure: result.failure,
     robots_failure: result.robots_failure ?? null, robots_http_status: result.robots_http_status ?? null,
+    body_limit: result.body_limit ?? null,
     error_code: result.error_code ?? null,
     failure_code: failureCode(result), stopped_stage: result.failure === null ? null : "fetch",
     detail: result.failure, fetch_ms,

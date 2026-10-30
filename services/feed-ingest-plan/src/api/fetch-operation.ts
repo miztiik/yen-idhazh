@@ -21,6 +21,7 @@ import { prepareArticle } from "../harvest-feeds/prepare-article";
 import { updateFeedOffer } from "./feed-offers";
 import { workPool } from "../harvest-feeds/harvest-pool";
 import { fetchRejection, recordRejection } from "../harvest-feeds/record-rejection";
+import { fetchDiagnostics } from "../harvest-feeds/fetch-diagnostics";
 import { deriveCandidateId } from "@idhazh/common-contracts";
 import { sourceSnapshot } from "../harvest-feeds/load-harvest-inputs";
 import { HarvestArticleResultSchema, utcTimestamp } from "../harvest-feeds/harvest-types";
@@ -70,7 +71,8 @@ export async function fetchDocument(
   const attemptObservations: ReturnType<typeof observeDocument>[] = [];
   const emit = createStageLogger(state.context, runtime.log);
   const work = documentWork({
-    document_activity: (operation, phase, details, url) => emit(operation, phase, details, ["feed_id", "publisher_id"], url),
+    document_activity: (operation, phase, details, url, feedUrls) =>
+      emit(operation, phase, details, ["feed_id", "publisher_id"], url, feedUrls),
     observations: createIngestObservations(state.work.observe), observation_clock: runtime.observation_clock ?? (() => new Date()),
     on_attempt: observation => { attemptObservations.push(observation); },
   }, { run_id: record.run_id, correlation_id: record.correlation_id, article_id: identity.url_key, feed_id: source.id },
@@ -107,7 +109,7 @@ export async function fetchDocument(
   if (request.fetch_item_type === "feed") state.work.pendingFeed(source.id, fetched, observation.occurred_at);
   let sourceOutcome: SourceArticleOutcome | null = null;
   if (request.fetch_item_type === "article" && fetched.body === null) {
-    const refusal = fetchRejection(fetched, inputs.harvest.config.harvest.fetch_timeout_ms, null);
+    const refusal = fetchRejection(fetched, inputs.harvest.config.harvest.fetch_timeout_ms, fetchDiagnostics(fetched, null));
     const rejection = recordRejection({ feed_id: source.id, feed_url: source.url }, {
       writer: state.context.writer, correlation_id: state.context.correlation_id,
       max_future_hours: inputs.clock_config.collect.max_future_hours,
@@ -134,8 +136,9 @@ export async function fetchDocument(
   }
   if (parent !== null) updateFeedOffer(inputs, state, parent.batch.batch_id, parent.offer.offer_id,
     fetched.failure === null && fetched.body !== null ? "fetched" : "rejected", record.request_id);
+  const { final_attempted_url: _finalAttemptedUrl, ...fetchedDocument } = fetched;
   const artifact = FetchedDocumentSchema.parse({
-    ...fetched, fetch_item_type: request.fetch_item_type, canonical_url: identity.canonical_url, article_id: identity.url_key, feed_id: source.id,
+    ...fetchedDocument, fetch_item_type: request.fetch_item_type, canonical_url: identity.canonical_url, article_id: identity.url_key, feed_id: source.id,
     error_code: fetched.error_code ?? null, robots_failure: fetched.robots_failure ?? null, robots_http_status: fetched.robots_http_status ?? null,
     body_sha256: fetched.body === null ? null : sha256(fetched.body), attempts: fetched.attempts ?? [],
     observation, attempt_observations: attemptObservations,
