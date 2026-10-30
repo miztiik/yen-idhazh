@@ -18,6 +18,7 @@ RelativePath = Annotated[str, StringConstraints(pattern=REL_PATH_PATTERN)]
 FieldName = Annotated[str, StringConstraints(pattern=r"^[a-z][a-z0-9_]*$")]
 GroupId = Annotated[str, StringConstraints(pattern=SLUG_PATTERN)]
 Sha256 = Annotated[str, StringConstraints(pattern=SHA256_PATTERN)]
+MODEL_METADATA_FILENAME = "config.json"
 
 
 class ComparisonGroup(Model):
@@ -32,11 +33,25 @@ class ComparisonGroup(Model):
     text_fields: tuple[FieldName, ...] = Field(min_length=1)
     match: dict[FieldName, Annotated[str, StringConstraints(min_length=1)]]
     destination: Literal["desk", "lenses", "events", "entities", "comparison_only"]
+    minimum_similarity: float | None = Field(default=None, ge=-1.0, le=1.0, allow_inf_nan=False)
+    ambiguity_margin: float | None = Field(default=None, ge=0.0, le=2.0, allow_inf_nan=False)
 
     @model_validator(mode="after")
-    def refuse_repeated_text_fields(self) -> Self:
+    def refuse_invalid_fields_and_policy(self) -> Self:
         if len(set(self.text_fields)) != len(self.text_fields):
             raise ValueError(f"comparison group {self.id}: text_fields must be unique")
+        needs_margin = self.destination in {"desk", "entities"}
+        needs_similarity = self.destination in {"desk", "lenses", "events", "entities"}
+        if needs_similarity != (self.minimum_similarity is not None):
+            raise ValueError(
+                f"comparison group {self.id}: minimum_similarity is required only for "
+                "assignment destinations"
+            )
+        if needs_margin != (self.ambiguity_margin is not None):
+            raise ValueError(
+                f"comparison group {self.id}: ambiguity_margin is required for desk and "
+                "entities, and forbidden for other destinations"
+            )
         return self
 
 
@@ -57,7 +72,7 @@ class ClassificationEncodingConfig(Model):
 
     @model_validator(mode="after")
     def refuse_incomplete_assets_and_repeated_groups(self) -> Self:
-        for name in (self.model_file, self.tokenizer_file):
+        for name in (self.model_file, self.tokenizer_file, MODEL_METADATA_FILENAME):
             if name not in self.model_digests:
                 raise ValueError(f"classification_encoding.model_digests must name {name}")
         if self.model_file == self.tokenizer_file:

@@ -45,7 +45,7 @@ RETIRED_OPTION_RECORD = "a-run-that-pinned-a-retired-option.json"
 
 @pytest.mark.parametrize("path", fixture_paths(), ids=fixture_id)
 def test_fixture_round_trips_without_losing_values(path: Path) -> None:
-    """Keep every written value, and once a stamp advances, keep the migrated form stable.
+    """Keep every written value except the retired diagnostic, and keep migrations stable.
 
     Formatting is not compared here. `test_json_serialization.py` holds the bytes.
     """
@@ -120,12 +120,17 @@ def test_fixture_round_trips_without_losing_values(path: Path) -> None:
                 expected["visual_id"] = None
         elif "visual_id" in contract.model_fields and "visual_id" not in original:
             expected = {**original, "visual_id": None}
+        if contract.__schema_stem__ == "day-metrics":
+            expected.pop("label_similarity", None)
         assert json.loads(once) == expected
     else:
         assert original["version"] < record.version
         assert record.version == contract.schema_version()
     reloaded = contract.from_json(once)
-    assert reloaded == record
+    if contract.__schema_stem__ == "day-metrics":
+        assert reloaded == record.model_copy(update={"label_similarity": None})
+    else:
+        assert reloaded == record
     assert reloaded.to_json() == once
 
 

@@ -27,6 +27,7 @@ from support.paths import CONFIG_DIR, FIXTURES_DIR, read_text
 
 from idhazh import config
 from idhazh import fetch as fetch_module
+from idhazh.classification import ClassificationContext
 from idhazh.contracts.article import Article, ArticleStatus, TitleSource
 from idhazh.contracts.base import derive_url_key
 from idhazh.contracts.feed_health import FetchOutcome, RobotsOutcome
@@ -630,7 +631,11 @@ def test_the_fetch_split_travels_with_the_item_it_was_measured_for() -> None:
     def reader(_url: str) -> FetchResult:
         return replace(ok("article.html"), timings=measured)
 
-    fetched = common._fetch_one(ITEM, config.load(CONFIG_DIR), reader)
+    settings = config.load(CONFIG_DIR)
+    classification = ClassificationContext(
+        (), None, None, None, settings.taxonomy, settings.watchlist
+    )
+    fetched = common._fetch_one(ITEM, settings, reader, classification)
 
     assert fetched.article.url_key == ITEM.url_key
     assert fetched.timings == measured
@@ -1453,6 +1458,9 @@ def test_a_headless_item_and_its_named_sibling_both_keep_their_bodies(
 ) -> None:
     """Source headline availability does not decide which body survives."""
     settings = config.load(CONFIG_DIR)
+    classification = ClassificationContext(
+        (), None, None, None, settings.taxonomy, settings.watchlist
+    )
     pages = {
         "/silent": built_page(None),
         "/named": built_page("Four countries approve offshore wind capacity"),
@@ -1463,7 +1471,10 @@ def test_a_headless_item_and_its_named_sibling_both_keep_their_bodies(
             planned_at(site.url("/silent"), item_id="energy-01"),
             planned_at(site.url("/named"), item_id="energy-02"),
         ]
-        fetched = [common._fetch_one(item, settings, read_over_the_loopback) for item in items]
+        fetched = [
+            common._fetch_one(item, settings, read_over_the_loopback, classification)
+            for item in items
+        ]
 
     silent, named = (one.article for one in fetched)
     assert silent.status is ArticleStatus.OK

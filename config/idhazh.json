@@ -55,6 +55,7 @@
     "asset_directory": "frontend/static/assist/models/all-minilm-l6-v2-quantized/2026-08-22",
     "comparison_groups": [
       {
+        "ambiguity_margin": 0.05,
         "destination": "desk",
         "entries_key": "verticals",
         "id": "verticals",
@@ -62,6 +63,7 @@
         "match": {
           "status": "active"
         },
+        "minimum_similarity": 0.2,
         "source": "config/taxonomy.json",
         "text_fields": [
           "display_name",
@@ -69,6 +71,7 @@
         ]
       },
       {
+        "ambiguity_margin": null,
         "destination": "lenses",
         "entries_key": "lenses",
         "id": "lenses",
@@ -76,6 +79,7 @@
         "match": {
           "status": "active"
         },
+        "minimum_similarity": 0.2,
         "source": "config/taxonomy.json",
         "text_fields": [
           "display_name",
@@ -83,6 +87,7 @@
         ]
       },
       {
+        "ambiguity_margin": null,
         "destination": "events",
         "entries_key": "events",
         "id": "events",
@@ -90,6 +95,7 @@
         "match": {
           "status": "active"
         },
+        "minimum_similarity": 0.25,
         "source": "config/taxonomy.json",
         "text_fields": [
           "display_name",
@@ -97,6 +103,7 @@
         ]
       },
       {
+        "ambiguity_margin": 0.05,
         "destination": "entities",
         "entries_key": "entities",
         "id": "organizations",
@@ -105,6 +112,7 @@
           "kind": "organisation",
           "status": "active"
         },
+        "minimum_similarity": 0.2,
         "source": "config/watchlist.json",
         "text_fields": [
           "display_name",
@@ -422,7 +430,7 @@
     "tagline": "A daily digest that checks its own work.",
     "theme_default": "dark"
   },
-  "version": "2026-10-28",
+  "version": "2026-10-29",
   "visuals": {
     "asset_base_url": "",
     "downgrade_enabled": false,

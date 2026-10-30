@@ -43,6 +43,8 @@ def test_published_contracts_compact_only_selected_lists(
     record = model.from_json(canonical_json(payload))
     text = record.to_json()
     expected = record.model_dump(mode="json")
+    if model is DayMetrics:
+        expected.pop("label_similarity", None)
     assert json.loads(text) == expected
     assert model.from_json(text).to_json() == text
     for name in lists:
@@ -94,10 +96,12 @@ def test_state_producer_keeps_days_expanded_and_sources_on_one_line(tmp_path: Pa
     state = tmp_path / "state"
     state_path = day_metrics.write(state, metrics)
     state_text = state_path.read_text(encoding="utf-8")
+    expected = metrics.model_dump(mode="json")
+    expected.pop("label_similarity", None)
     assert state_text.startswith("{\n")
     assert '  "bands": {\n' in state_text
-    assert json.loads(state_text) == metrics.model_dump(mode="json")
-    assert DayMetrics.read(state_path) == metrics
+    assert json.loads(state_text) == expected
+    assert DayMetrics.read(state_path).label_similarity is None
     assert state_text == metrics.to_json()
     assert "\r" not in state_text and state_text.endswith("\n")
     for records in (metrics.sources, metrics.instruments, metrics.stage_timing):

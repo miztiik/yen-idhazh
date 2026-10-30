@@ -167,8 +167,8 @@ class AppConfig(Contract):
         default=None,
         description=(
             "Independent local classification encoder and comparison sources. "
-            "Absent means unconfigured, never inherited from assist. Declared here "
-            "before the classification consumer is connected; no behavior changes yet."
+            "The work stage requires this for non-empty runs. Absent is unconfigured, "
+            "never inherited from assist."
         ),
     )
     console: ConsoleConfig = Field(default_factory=ConsoleConfig)

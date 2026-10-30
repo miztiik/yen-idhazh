@@ -46,7 +46,6 @@ from idhazh.assemble import (
     cosine_int8,
     day_dir,
     month_of,
-    read_taxonomy_vectors,
     reader_note,
     rebuild_search_index,
     to_digest_visual,
@@ -2001,11 +2000,6 @@ def main() -> int:
         date=DATE,
         day=day,
         manifest=runs,
-        # The committed label vectors, so the fixture record carries the same
-        # label-similarity block a real day does and the console has a shape to
-        # draw. Read through the same function the pipeline reads it through, so
-        # a stale file stops the canary build too.
-        taxonomy_vectors=read_taxonomy_vectors(Path.cwd(), config.load().taxonomy),
     )
     # Every writer of a committed day payload owes its month a rebuild
     # (docs/architecture/publishing/layout.md). The archive browses this tree in
