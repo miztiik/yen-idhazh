@@ -91,20 +91,23 @@ test("one concurrent reservation wins, its completion survives a fresh planner o
     ));
     const retired = state.feeds.find(feed => feed.feed_id === source.id)!;
     retired.retired_at = at;
+    retired.retirement_reason = "confirmed-recovery-failures";
     retired.rest_until = null;
     retired.reservation = null;
     const retiredBytes = new TextEncoder().encode(`${JSON.stringify(FeedAvailabilityStateSchema.parse(state))}\n`);
     const retirement = await replaceAvailabilityFile(recorded.inputs, paths[0]!, retiredBytes, saved.revision);
     expect(retirement.status).toBe("published");
     const retiredView = await readFeedAvailability(restartedInputs, at);
-    expect(retiredView.feeds.find(feed => feed.feed_id === source.id)?.status).toBe("retired");
+    expect(retiredView.feeds.find(feed => feed.feed_id === source.id)).toMatchObject({
+      status: "retired", retirement_reason: "confirmed-recovery-failures",
+    });
 
     recorded.inputs.availability.operator_enrollments = [{
       feed_id: source.id, enrollment_id: randomUUID(),
     }];
     const reenrolled = await readFeedAvailability(restartedInputs, at);
     expect(reenrolled.feeds.find(feed => feed.feed_id === source.id)).toMatchObject({
-      status: "eligible", consecutive_failed_checks: 0, retired_at: null, first_confirmed_failure_at: null,
+      status: "eligible", consecutive_failed_checks: 0, retired_at: null, retirement_reason: null, first_confirmed_failure_at: null,
     });
 
     await git(restartRoot, ["fetch", "--quiet", "origin", "refs/heads/main"]);

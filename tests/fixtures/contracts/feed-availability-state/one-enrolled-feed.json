@@ -12,6 +12,7 @@
       "consecutive_failed_checks": 0,
       "rest_until": null,
       "retired_at": null,
+      "retirement_reason": null,
       "episode": null,
       "reservation": {
         "request_id": "7251dc83-a947-4333-a885-7b6fc84fcb49",

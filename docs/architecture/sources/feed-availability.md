@@ -62,6 +62,9 @@ the minimum episode age. These are independent controls.
 With these defaults, the seventh recovery check is no earlier than 168 hours
 after entering rest. The 36-hour age gate starts at the first confirmed source
 failure, not at rest entry, and does not promise retirement after 36 hours.
+Retirement stores the reason `confirmed-recovery-failures` beside its UTC
+instant. The last completed check retains the target HTTP status; the current
+health response and workflow report expose the reason.
 
 Timeouts, robots decisions, parser failures, cancellation, local errors and
 ambiguous transport outcomes do not advance retirement. A timeout still counts

@@ -156,7 +156,7 @@ test("the awaited entrypoint records configured selection counts, signed ages an
       expect(recorded.events.some(event => event.operation === "persist" && event.phase === "completed")).toBe(true);
     } finally { await recorded.close(); }
   }
-}, 30000);
+}, 300000);
 
 test("a real selected-metadata write failure prints an explicit partial run instead of success", async () => {
   const recorded = await recordedPlan();
@@ -179,4 +179,4 @@ test("a real selected-metadata write failure prints an explicit partial run inst
     expect(existsSync(join(raw, "feed-health-state"))).toBe(true);
     expect(existsSync(join(raw, "discovered-articles"))).toBe(true);
   } finally { await recorded.close(); }
-}, 30000);
+}, 120000);

@@ -45,11 +45,16 @@ export const FeedAvailabilityRecordSchema = z.strictObject({
   consecutive_failed_checks: CountSchema,
   rest_until: RecordedInstantSchema.nullable(),
   retired_at: RecordedInstantSchema.nullable(),
+  retirement_reason: z.literal("confirmed-recovery-failures").nullable()
+    .describe("Confirmed target HTTP recovery failures met both configured retirement gates."),
   episode: FeedAvailabilityEpisodeSchema.nullable(),
   reservation: FeedAvailabilityReservationSchema.nullable(),
   last_completion: FeedAvailabilityCompletionSchema.nullable(),
   operator_enrollment_id: RequestIdSchema.nullable(),
 }).superRefine((value, context) => {
+  if ((value.retired_at === null) !== (value.retirement_reason === null)) {
+    reject(context, "retirement instant and reason must be recorded together", ["retirement_reason"]);
+  }
   if (value.retired_at !== null && value.reservation !== null) {
     reject(context, "retired feeds cannot have an in-flight reservation", ["reservation"]);
   }

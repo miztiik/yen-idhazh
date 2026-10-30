@@ -15,6 +15,7 @@ export const FeedAvailabilityViewSchema = z.strictObject({
   consecutive_failed_checks: FeedAvailabilityRecordSchema.shape.consecutive_failed_checks,
   rest_until: FeedAvailabilityRecordSchema.shape.rest_until,
   retired_at: FeedAvailabilityRecordSchema.shape.retired_at,
+  retirement_reason: FeedAvailabilityRecordSchema.shape.retirement_reason,
   status: z.enum(["eligible", "resting", "retired", "unknown"]),
   failed_recovery_checks: CountSchema, first_confirmed_failure_at: RecordedInstantSchema.nullable(),
 });

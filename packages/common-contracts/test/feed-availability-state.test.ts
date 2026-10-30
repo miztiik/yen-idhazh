@@ -31,6 +31,7 @@ test("availability state refuses duplicate feeds, unsorted feeds and retired res
       consecutive_failed_checks: 0,
       rest_until: null,
       retired_at: null,
+      retirement_reason: null,
       episode: null,
       reservation: null,
       last_completion: null,
@@ -43,6 +44,7 @@ test("availability state refuses duplicate feeds, unsorted feeds and retired res
     feeds: [{
       ...base.feeds[0],
       retired_at: "2026-10-30T12:00:00Z",
+      retirement_reason: "confirmed-recovery-failures",
       reservation: {
         request_id: "7251dc83-a947-4333-a885-7b6fc84fcb49",
         run_id: "2026-10-30-1",
@@ -52,5 +54,8 @@ test("availability state refuses duplicate feeds, unsorted feeds and retired res
         status: "unknown",
       },
     }],
+  }).success).toBe(false);
+  expect(FeedAvailabilityStateSchema.safeParse({
+    ...base, feeds: [{ ...base.feeds[0], retired_at: "2026-10-30T12:00:00Z" }],
   }).success).toBe(false);
 });

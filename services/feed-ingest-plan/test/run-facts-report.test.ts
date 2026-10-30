@@ -93,17 +93,23 @@ test("shows durable UTC recovery deadlines without inventing schedules from hist
       feed_id: "resting-feed", endpoint_key: feed.endpoint_key, status: "resting",
       consecutive_failed_checks: 5, failed_recovery_checks: 2,
       first_confirmed_failure_at: "2026-10-25T00:00:00Z",
-      rest_until: "2026-10-30T12:00:00Z", retired_at: null,
+      rest_until: "2026-10-30T12:00:00Z", retired_at: null, retirement_reason: null,
     }, {
       feed_id: "unknown-feed", endpoint_key: feed.endpoint_key, status: "unknown",
       consecutive_failed_checks: 0, failed_recovery_checks: 0,
-      first_confirmed_failure_at: null, rest_until: null, retired_at: null,
+      first_confirmed_failure_at: null, rest_until: null, retired_at: null, retirement_reason: null,
+    }, {
+      feed_id: "retired-feed", endpoint_key: feed.endpoint_key, status: "retired",
+      consecutive_failed_checks: 12, failed_recovery_checks: 7,
+      first_confirmed_failure_at: "2026-10-20T00:00:00Z", rest_until: null,
+      retired_at: "2026-10-30T00:00:00Z", retirement_reason: "confirmed-recovery-failures",
     }],
   }));
   expect(html).toContain("<td>resting</td><td>5</td><td>2</td>");
   expect(html).toContain("2026-10-30T12:00:00Z");
   expect(html).toContain("2026-10-25T00:00:00Z");
   expect(html).toContain("Unknown availability preserves interrupted work");
+  expect(html).toContain("Confirmed HTTP recovery failures met both limits");
   expect(html).not.toContain("skipped logical runs");
   expect(renderFeedRest()).toContain("Current feed availability was not recorded");
 });

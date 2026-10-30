@@ -26,7 +26,7 @@ import type { FeedAvailabilityConfig } from "./availability-config";
 
 const STATE_PATH_PREFIX = "state/raw/planner/feed-availability/";
 const STATE_PERMISSION = "state/raw/planner/feed-availability";
-const CHANGE = "Add durable per-feed reservations, rest deadlines and recovery retirement.";
+const CHANGE = "Add durable per-feed reservations, rest deadlines and recovery retirement evidence.";
 const requestsInFlight = new WeakMap<PlanInputs, Set<string>>();
 const transactionTails = new Map<string, Promise<void>>();
 
@@ -38,6 +38,7 @@ export type FeedAvailabilityView = Readonly<{
   consecutive_failed_checks: number;
   rest_until: string | null;
   retired_at: string | null;
+  retirement_reason: FeedAvailabilityRecord["retirement_reason"];
   failed_recovery_checks: number;
   first_confirmed_failure_at: string | null;
 }>;
@@ -100,6 +101,7 @@ function initialRecord(source: ActiveSource, enrollmentId: string | null = null)
     consecutive_failed_checks: 0,
     rest_until: null,
     retired_at: null,
+    retirement_reason: null,
     episode: null,
     reservation: null,
     last_completion: null,
@@ -165,6 +167,7 @@ function view(record: FeedAvailabilityRecord, at: string): FeedAvailabilityView 
     consecutive_failed_checks: record.consecutive_failed_checks,
     rest_until: record.rest_until,
     retired_at: record.retired_at,
+    retirement_reason: record.retirement_reason,
     failed_recovery_checks: record.episode?.failed_recovery_checks ?? 0,
     first_confirmed_failure_at: record.episode?.first_confirmed_failure_at ?? null,
   };
@@ -463,6 +466,7 @@ export function applyAvailabilityCompletion(
     record.rest_until = null;
     record.episode = null;
     record.retired_at = null;
+    record.retirement_reason = null;
     record.last_completion = completion;
     record.reservation = null;
     return;
@@ -482,6 +486,7 @@ export function applyAvailabilityCompletion(
   record.reservation = null;
   if (check.result === "confirmed-http-failure" && recovery && canRetire(record, check, config)) {
     record.retired_at = check.completed_at;
+    record.retirement_reason = "confirmed-recovery-failures";
     record.rest_until = null;
   }
 }

@@ -45,6 +45,9 @@ policy, then reconstructs its fixed run-start clock and live selection
 clock. No function, map, credential or article body crosses this pipe. Startup
 data is not a saved artifact and is never accepted by an HTTP route. Plain
 `--serve` does not stage history or supply workflow controls.
+Workflow age overrides travel in that private policy, not as extra `/plan`
+request fields. Each child receives its own policy without editing authored
+configuration.
 
 `supervision.readiness_timeout_ms` bounds startup and its health check.
 `shutdown_timeout_ms` allows graceful drain after success, failure, cancellation

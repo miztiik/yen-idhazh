@@ -28,6 +28,7 @@ function record() {
     consecutive_failed_checks: 0,
     rest_until: null,
     retired_at: null,
+    retirement_reason: null,
     episode: null,
     reservation: null,
     last_completion: null,
@@ -77,6 +78,7 @@ test("retirement requires seven failed recovery checks and the independent 36-ho
   }
   applyAvailabilityCompletion(state, complete("confirmed-http-failure", atHours(168)), config);
   expect(state.retired_at).toBe(atHours(168));
+  expect(state.retirement_reason).toBe("confirmed-recovery-failures");
   expect(state.rest_until).toBeNull();
 });
 
@@ -88,6 +90,7 @@ test("timeout recovery rests without advancing retirement and a valid empty feed
   applyAvailabilityCompletion(state, complete("timeout", atHours(24)), config);
   expect(state.episode?.failed_recovery_checks).toBe(0);
   expect(state.retired_at).toBeNull();
+  expect(state.retirement_reason).toBeNull();
   expect(state.rest_until).toBe(atHours(48));
 
   applyAvailabilityCompletion(state, complete("valid-feed", atHours(48)), config);
