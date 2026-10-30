@@ -18,7 +18,6 @@ from pathlib import Path
 from typing import Final
 
 from idhazh import publication
-from idhazh.assemble import TaxonomyVectors
 from idhazh.config import Settings
 from idhazh.contracts.digest_day import DigestDay
 from idhazh.contracts.run_manifest import RunManifest
@@ -70,7 +69,6 @@ def publish_all(
     day: DigestDay,
     manifest: RunManifest,
     settings: Settings,
-    taxonomy_vectors: TaxonomyVectors | None,
     compaction_lag_days: int = 0,
     rows_uncompacted: int = 0,
     covers_through: str | None = None,
@@ -117,7 +115,6 @@ def publish_all(
             date=date,
             day=day,
             manifest=manifest,
-            taxonomy_vectors=taxonomy_vectors,
         ),
         "console-band": lambda: console_band.publish(
             state_root=state_root,

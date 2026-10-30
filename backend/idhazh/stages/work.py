@@ -21,6 +21,7 @@ from idhazh import (
     summarize,
     telemetry,
 )
+from idhazh.classification import load_context as load_classification_context
 from idhazh.classify import calls
 from idhazh.contracts.article import Article, ArticleStatus
 from idhazh.contracts.base import ServerJob, canonical_json
@@ -366,6 +367,13 @@ def stage_work(
     # one back, so composing the column anywhere else would leave the durable
     # per-item payload carrying a null forever (`docs/concepts/evaluation.md`).
     encoder = encoder_if_committed(config.REPO_ROOT, settings.app.assist)
+    classification = load_classification_context(
+        config=settings.app.classification_encoding,
+        repo_root=config.REPO_ROOT,
+        config_dir=settings.config_dir,
+        taxonomy=settings.taxonomy,
+        watchlist=settings.watchlist,
+    )
 
     items_dir = _run_dir(plan.date) / "items"
     _write_inputs(items_dir, inputs=inputs)
@@ -403,7 +411,7 @@ def stage_work(
             tracer.span(telemetry.SpanName.ITEM) as span,
         ):
             telemetry.item_attributes(span, item, run_id=plan.run_id, shard=shard)
-            fetched = _fetch_one(item, settings, read_url, tracer)
+            fetched = _fetch_one(item, settings, read_url, classification, tracer)
         article, source_text = fetched.article, fetched.source_text
         fetch_ms, extract_ms = fetched.fetch_ms, fetched.extract_ms
         # One reading of the pair, split across the two cells the stage records

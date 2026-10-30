@@ -37,6 +37,7 @@ from pydantic import Field, StringConstraints, model_validator
 
 from idhazh.contracts.base import ChangelogEntry, Contract
 from idhazh.contracts.knobs.assist import AssistConfig
+from idhazh.contracts.knobs.classification_encoding import ClassificationEncodingConfig
 from idhazh.contracts.knobs.collect import CollectConfig
 from idhazh.contracts.knobs.console import ConsoleConfig
 from idhazh.contracts.knobs.evaluation import DriftConfig, EvaluationConfig
@@ -162,6 +163,14 @@ class AppConfig(Contract):
     similarity: SimilarityConfig = Field(default_factory=SimilarityConfig)
     ui: UiConfig = Field(default_factory=UiConfig)
     assist: AssistConfig = Field(default_factory=AssistConfig)
+    classification_encoding: ClassificationEncodingConfig | None = Field(
+        default=None,
+        description=(
+            "Independent local classification encoder and comparison sources. "
+            "The work stage requires this for non-empty runs. Absent is unconfigured, "
+            "never inherited from assist."
+        ),
+    )
     console: ConsoleConfig = Field(default_factory=ConsoleConfig)
     page_weight: PageWeightConfig = Field(default_factory=PageWeightConfig)
     finetune: FinetuneConfig = Field(default_factory=FinetuneConfig)

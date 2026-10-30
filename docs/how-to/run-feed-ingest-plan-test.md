@@ -165,9 +165,20 @@ The exported Markdown renderer and its separation from production digest
 presentation are documented in the [operator API reference](../architecture/sources/feed-operator-api.md#markdown-rendering-api).
 Table C sorts its report rows by admitted articles, highest first, then by feed
 name in alphabetical order. Table D reports actual request spend over the
-configured closed UTC days, not a waste score or selection penalty. Its
-`Unavailable` values mean that a complete closed-day history was not available;
-they do not mean zero requests.
+configured closed UTC days, excluding the current UTC day, not a waste score
+or selection penalty. It sorts feed requests highest first, then article
+requests highest first, then feed name alphabetically. Unknown values sort
+last. This does not change saved source order or other views.
+
+Each usable request category is added independently. A partial total carries
+an ASCII `*` and a "Not full data" note, with the configured UTC period,
+recorded counter days, complete-day counts and records with unknown counters.
+Missing or incomplete day files, unattributable records and staged-input gaps
+are stated separately. "No recorded data" means no usable counter is present,
+not zero requests. A complete known-empty period reports zero. The grouped
+request notice adds only known totals and marks partial totals too; it never
+calls them complete. Exact coverage fields are defined in the
+[ledger reference](../reference/feed-planner-ledgers.md#design-rationale).
 
 `MISSING_REQUIRED_FIELDS` is an article rejection: its offered URL or identity
 was missing or invalid, or extraction produced no usable title. A grouped

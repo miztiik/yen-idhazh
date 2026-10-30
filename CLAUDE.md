@@ -1,6 +1,6 @@
 # CLAUDE.md - Yen Idhazh: Engineering Contract
 
-**Last Updated**: 2026-10-12
+**Last Updated**: 2026-10-29
 
 Non-negotiable contract for any human or AI agent working in this repo.
 
@@ -263,9 +263,12 @@ The commands behind these gates are in [`docs/how-to/run-the-gates.md`](docs/how
 **TypeScript planner exception (2026-10-27 UTC):** The maintainer-approved
 [planner contract cutover](docs/reference/feed-planner-ledgers.md#typescript-contract-ownership)
 places planner requests, artifacts and four ledgers under TypeScript
-validation. Incompatible old planner formats refuse without Python mirrors, comparison
-copies or read-side migrations. The article cleanup exception below accepts
-only its named compatible stamps. Python retains the gardener scheduler and
+validation. Full-row validation refuses incompatible old planner formats without Python
+mirrors, comparison copies or read-side migrations. The article cleanup exception
+below accepts only its named compatible stamps. The user-directed field-read ruling
+of 2026-10-29 UTC allows health consumers to validate only their required fields,
+regardless of the row schema date; stored-file integrity and strict writer
+validation remain required. Python retains the gardener scheduler and
 delegates planner file validation and compaction to TypeScript. Other families
 retain their existing compatibility rules.
 

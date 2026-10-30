@@ -129,10 +129,11 @@ test("zero selected articles still persist every parsed refusal without article 
 
 test("persisted discovery wins for undated articles; empty history does not prove absence", async () => {
   const recorded = await recordedPlan();
+  recorded.inputs.settings.inputs.feed_health_days.push({ day: "2026-10-20" });
   try {
     const first = await runFeedPlan({}, recorded.inputs, recorded.runtime);
-    const originalSettings = JSON.stringify(recorded.inputs.settings);
     await writeHistoricalHealth(recorded, "2026-10-20");
+    const originalSettings = JSON.stringify(recorded.inputs.settings);
     const fresh = await executeSelection({ batch_id: first.batches.parsed_batch_id! }, recorded.inputs, {
       ...recorded.runtime, selection_clock: () => new Date("2026-10-22T00:10:00Z"),
     });
@@ -168,6 +169,7 @@ test("persisted discovery wins for undated articles; empty history does not prov
 
 test("invalid controls, disabled runs, inactive ledgers and unavailable named history fail before fetching", async () => {
   const recorded = await recordedPlan();
+  recorded.inputs.settings.inputs.feed_health_days.push({ day: "2026-10-19" }, { day: "2026-10-20" });
   try {
     for (const request of [{ article_limit: 0 }, { shards: 3, partition_strategy: "none" }, { unknown: true }]) {
       await expect(runFeedPlan(request, recorded.inputs, recorded.runtime)).rejects.toThrow();

@@ -102,12 +102,9 @@ export const PLANNER_FOOTER_METADATA_KEYS = [
   "file_id", "content_sha256", "writer", "writer_version", "compression", "updated_at",
 ] as const;
 export const PLANNER_OPTIONAL_FOOTER_METADATA_KEYS = ["period", "updated_at"] as const;
-export const PlannerFileEnvelopeSchema = z.strictObject({
+export const PlannerStoredFileEnvelopeSchema = z.strictObject({
   version: z.enum(PLANNER_ENVELOPE_ACCEPTED_SCHEMA_VERSIONS).default(PLANNER_ENVELOPE_VERSION),
-  row_schema_version: z.enum([
-    ...DISCOVERED_ARTICLE_ACCEPTED_SCHEMA_VERSIONS, ...SELECTED_ARTICLE_ACCEPTED_SCHEMA_VERSIONS,
-    PLAN_RUN_VERSION, ...REJECTED_ARTICLE_ACCEPTED_SCHEMA_VERSIONS, FEED_HEALTH_STATE_VERSION,
-  ]),
+  row_schema_version: SchemaVersionSchema,
   tier: TierSchema, ledger: PlannerLedgerNameSchema,
   covers: z.union([DateStampSchema, MonthStampSchema, YearStampSchema]),
   period: PeriodSchema.nullable().default(null), file_id: UuidSchema,
@@ -115,6 +112,21 @@ export const PlannerFileEnvelopeSchema = z.strictObject({
   writer: z.enum(["idhazh.ledger.parquet", "idhazh_typescript.ledger.parquet"]),
   writer_version: NonEmptySchema, compression: CompressionSchema,
   updated_at: RecordedInstantSchema.nullable().default(null),
+}).superRefine((value, ctx) => {
+  if ((value.tier === "compact") !== (value.period !== null)) reject(ctx, "planner compact files require a period; raw files name none");
+  const stamp = value.tier === "raw" || value.period === "daily" ? DateStampSchema
+    : value.period === "monthly" ? MonthStampSchema : YearStampSchema;
+  if (!stamp.safeParse(value.covers).success) reject(ctx, "planner covers must match its tier and period");
+  if (value.file_id[14] !== "8") reject(ctx, "planner file_id must be UUID version 8");
+  if ((value.ledger === "feed-health-state") !== (value.updated_at !== null)) reject(ctx, "only feed-health-state files require updated_at");
+});
+export type PlannerStoredFileEnvelope = z.infer<typeof PlannerStoredFileEnvelopeSchema>;
+
+export const PlannerFileEnvelopeSchema = PlannerStoredFileEnvelopeSchema.safeExtend({
+  row_schema_version: z.enum([
+    ...DISCOVERED_ARTICLE_ACCEPTED_SCHEMA_VERSIONS, ...SELECTED_ARTICLE_ACCEPTED_SCHEMA_VERSIONS,
+    PLAN_RUN_VERSION, ...REJECTED_ARTICLE_ACCEPTED_SCHEMA_VERSIONS, FEED_HEALTH_STATE_VERSION,
+  ]),
 }).superRefine((value, ctx) => {
   const rowVersions = {
     "discovered-articles": DISCOVERED_ARTICLE_ACCEPTED_SCHEMA_VERSIONS,
@@ -133,15 +145,10 @@ export const PlannerFileEnvelopeSchema = z.strictObject({
     ? [rowVersions[value.ledger] as string]
     : rowVersions[value.ledger] as readonly string[];
   if (!acceptedVersions.includes(value.row_schema_version)) reject(ctx, `${value.ledger} requires an accepted row schema`);
-  if ((value.tier === "compact") !== (value.period !== null)) reject(ctx, "planner compact files require a period; raw files name none");
-  const stamp = value.tier === "raw" || value.period === "daily" ? DateStampSchema
-    : value.period === "monthly" ? MonthStampSchema : YearStampSchema;
-  if (!stamp.safeParse(value.covers).success) reject(ctx, "planner covers must match its tier and period");
-  if (value.file_id[14] !== "8") reject(ctx, "planner file_id must be UUID version 8");
-  if ((value.ledger === "feed-health-state") !== (value.updated_at !== null)) reject(ctx, "only feed-health-state files require updated_at");
 }).meta({
   version: PLANNER_ENVELOPE_VERSION,
   changelog: [
+    { version: "2026-10-29", change: "Separate stored-file integrity from current row-schema compliance." },
     { version: PLANNER_ENVELOPE_VERSION, change: "Accept named historical discovery and selected stamps without rewriting article identity." },
     { version: LEGACY_PLANNER_ENVELOPE_VERSION, change: "Register rejected articles and current selection and article-outcome row stamps." },
     { version: "2026-10-26", change: "Require the current row stamp for selected articles and plan runs." },

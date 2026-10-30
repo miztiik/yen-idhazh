@@ -10,7 +10,7 @@ import { requiredUtcDays } from "../src/utc-instant";
 import { PlannerDayInputSchema } from "../src/config/service-settings";
 import type { LedgerDayInput } from "../src/config/service-settings";
 import { readPlannerParquet } from "../src/read-ledger-history/read-planner-parquet";
-import { closedRequestDays } from "../src/read-ledger-history/health-summary";
+import { closedRequestDays } from "../src/read-ledger-history/request-summary";
 import { completeHistoryDayInputs, createHistoryDayInputs, resolveHistoryIndexes, resolveHistoryInventory, sparseCheckoutPath } from "./feed-ingest-plan-outputs";
 import { stageFeedHistory } from "./feed-ingest-plan-feed-history";
 import { LedgerHistoryReadError } from "../src/read-ledger-history/ledger-history-error";

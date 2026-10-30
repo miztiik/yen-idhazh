@@ -559,7 +559,12 @@ shards, the search index, the corpus, and anything added later. Drive a per-item
 rule from the canary day instead; ask a whole-tree question once and assert on
 the total. For the search index, `frontend/tests/support/month-shard.ts` builds
 a month in memory with the published shape, so a search spec needs no
-committed shard. For a derived file the build writes from committed config, such as the label vectors, generate a small one with its packer and read it back: the run refuses a stale or damaged committed file by name, and no test reads the committed asset ([CLAUDE.md section 13](../../CLAUDE.md#13-test-coverage-policy)). **This one is caught by review rather than by a check.** A guard thatlists the paths cannot do it: such a list only ever holds the collections
+committed shard. When a producer writes a derived file from committed config,
+build a bounded artifact through its producer and read it back; tests must not
+rely on a generated file committed to the repository
+([CLAUDE.md section 13](../../CLAUDE.md#13-test-coverage-policy)). **This one
+is caught by review rather than by a check.** A guard that lists the paths
+cannot do it: such a list only ever holds the collections
 somebody remembered, and its own upkeep grows with the rest. The
 question to ask in review is the rule's own: does a run that changed no code
 make this slower.

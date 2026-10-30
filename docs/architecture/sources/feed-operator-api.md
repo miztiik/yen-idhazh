@@ -37,6 +37,14 @@ batch. Selection refuses while any offer is still pending. A separate
 operator article URL can produce its own batch; unrelated documents are
 not silently combined.
 
+Combined planning and standalone document work prepare the same required
+health fields before fetching. They do not read extra request-report days or
+calculate historical spend during fetch/parse setup. Report-only evidence
+cannot block those operations; current-run request recording remains active.
+Selection and explicit health summaries calculate reports when their response
+needs them, under the
+[field-read contract](../../reference/feed-planner-ledgers.md#field-based-health-history).
+
 ## Identity and causes
 
 `article_id` is the canonical URL hash called `url_key` in the retained

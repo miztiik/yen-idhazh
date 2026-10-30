@@ -51,6 +51,91 @@
     "search_months": 1,
     "similarity_floor": 0.35
   },
+  "classification_encoding": {
+    "asset_directory": "frontend/static/assist/models/all-minilm-l6-v2-quantized/2026-08-22",
+    "comparison_groups": [
+      {
+        "ambiguity_margin": 0.05,
+        "destination": "desk",
+        "entries_key": "verticals",
+        "id": "verticals",
+        "id_field": "id",
+        "match": {
+          "status": "active"
+        },
+        "minimum_similarity": 0.2,
+        "source": "config/taxonomy.json",
+        "text_fields": [
+          "display_name",
+          "definition"
+        ]
+      },
+      {
+        "ambiguity_margin": null,
+        "destination": "lenses",
+        "entries_key": "lenses",
+        "id": "lenses",
+        "id_field": "id",
+        "match": {
+          "status": "active"
+        },
+        "minimum_similarity": 0.2,
+        "source": "config/taxonomy.json",
+        "text_fields": [
+          "display_name",
+          "definition"
+        ]
+      },
+      {
+        "ambiguity_margin": null,
+        "destination": "events",
+        "entries_key": "events",
+        "id": "events",
+        "id_field": "id",
+        "match": {
+          "status": "active"
+        },
+        "minimum_similarity": 0.25,
+        "source": "config/taxonomy.json",
+        "text_fields": [
+          "display_name",
+          "definition"
+        ]
+      },
+      {
+        "ambiguity_margin": 0.05,
+        "destination": "entities",
+        "entries_key": "entities",
+        "id": "organizations",
+        "id_field": "id",
+        "match": {
+          "kind": "organisation",
+          "status": "active"
+        },
+        "minimum_similarity": 0.2,
+        "source": "config/watchlist.json",
+        "text_fields": [
+          "display_name",
+          "aliases"
+        ]
+      }
+    ],
+    "dimensions": 384,
+    "max_tokens": 256,
+    "model_digests": {
+      "config.json": "7135149f7cffa1a573466c6e4d8423ed73b62fd2332c575bf738a0d033f70df7",
+      "onnx/model_quantized.onnx": "afdb6f1a0e45b715d0bb9b11772f032c399babd23bfc31fed1c170afc848bdb1",
+      "special_tokens_map.json": "b6d346be366a7d1d48332dbc9fdf3bf8960b5d879522b7799ddba59e76237ee3",
+      "tokenizer.json": "da0e79933b9ed51798a3ae27893d3c5fa4a201126cef75586296df9b4d2c62a0",
+      "tokenizer_config.json": "9261e7d79b44c8195c1cada2b453e55b00aeb81e907a6664974b4d7776172ab3"
+    },
+    "model_file": "onnx/model_quantized.onnx",
+    "model_id": "all-minilm-l6-v2-quantized",
+    "model_revision": "751bff37182d3f1213fa05d7196b954e230abad9",
+    "normalization": "l2",
+    "pooling": "attention-mask-mean",
+    "tokenizer_file": "tokenizer.json"
+  },
   "collect": {
     "availability_rest_runs": 5,
     "availability_strikes_before_rest": 5,
@@ -345,7 +430,7 @@
     "tagline": "A daily digest that checks its own work.",
     "theme_default": "dark"
   },
-  "version": "2026-10-28",
+  "version": "2026-10-29",
   "visuals": {
     "asset_base_url": "",
     "downgrade_enabled": false,

@@ -631,8 +631,8 @@ Planner contracts still carry current schema stamps and changelogs. The
 version checks have no Python copy. Rejected-article compatibility and
 [article cleanup compatibility](#article-cleanup-compatibility) belong to
 the native TypeScript reader. The TypeScript tests and the real
-gardener-adapter integration test own this
-boundary.
+gardener-adapter integration test own this boundary. Health consumers use the separate
+[field-read contract](#field-based-health-history) rather than full-row compliance.
 
 ## Raw-day membership
 
@@ -752,11 +752,105 @@ contract copies are retired. The gardener registry and scheduler remain; the
 published-file validator and compact writer use the current TypeScript
 contracts.
 
-The shared TypeScript ledger reader has no migration table. A full-row contract
-accepts its declared compatible stamps only. A projection contract, which names only
-the fields it reads, refuses a stamp newer than it declares and reads older
-stamps for those fields without any migration. The selected stamp is not
-bumped by that change: the physical layout was unchanged.
+The shared TypeScript ledger reader has no migration table. Strict full-row
+validation accepts only the contract's declared row stamps. The separate health
+field reader accepts the columns it needs without using their row schema date
+as an acceptance gate. Article cleanup has its own named compatible stamps below.
+
+### Field-based health history
+
+**User-directed ruling, 2026-10-29 UTC:** A row schema date identifies a format;
+it does not prove that a consumer's required fields are missing or invalid.
+Health history reads accept compatible required fields from older and newer
+row stamps. Writers, compaction and full-file publication validation still
+require their full declared row schema. No stored history is rewritten.
+
+The shared writer package exports `readStoredPlannerParquet` for stored-file
+validation and retains `readPlannerParquet` for strict full-row validation.
+Both verify the registered ledger, supported file envelope, raw filename,
+and whole-file canonical digest. Stored-file validation computes that digest
+from the actual Arrow columns, including nested and unrelated columns, not
+from the consumer's projection. A changed unrelated cell still fails integrity.
+An unsupported stored physical type fails explicitly rather than skipping
+part of the digest.
+
+`readFeedHealthFieldsDay` in the planner service reads one named UTC day through
+the same raw/compact membership, captured Git revision and file-byte checks.
+It returns independent `uses`: `request_totals`, `feed_rest`,
+`feed_reliability` and `article_admission`. Their schemas are declared once in
+`packages/common-contracts/src/schemas/feed-health-fields.schema.ts`:
+
+- Every use requires `date`, `run_id`, `attempt`, `feed_id` and `endpoint_key`.
+- Request totals require `feed_requests`, `article_requests` and `robots_requests`.
+- Rest and feed-read reliability each require `checked_at`, `outcome` and `items`.
+  Their observation time must agree with the UTC work day.
+- Article admission requires `article_candidates`, `counts_complete` and the
+  rejection reason, count, subject and attribution fields.
+
+Each use returns validated `rows`, `partial_rows` containing only individually
+valid fields from rejected rows, and `gaps` naming the use, field, UTC day,
+missing/invalid reason and row identity when known. A row with invalid identity
+is never exposed as partial attributable evidence. Null remains null, and
+missing or invalid counters are omitted from partial rows, never replaced with
+zero. This lets a later request report account for each counter independently.
+File coverage (`complete`, `represented`, file `gaps`) is separate from field
+coverage: `complete` alone never proves every required counter is known.
+
+Identical copies of a fact count once. Conflicting copies fail before any
+projection, including conflicts in fields a use does not read. The identity
+includes the endpoint and run attempt, so neither changed endpoints nor real
+repeated work collapse into another fact. Missing request columns do not remove
+valid feed-check evidence. No rest, reliability or article selection policy is
+changed by this read contract. Production planning, standalone document work,
+selection and health summaries use these field projections. Strict full-row
+validation remains on the write and maintenance paths.
+
+`readFeedHistory` returns rest, feed-read reliability and article-admission
+inputs from the named represented-day inventory. `preparePlanningHealth`
+supplies those inputs before both combined and standalone fetch work. Neither
+path adds closed request-report days or calculates historical request totals.
+Current-run request recording is unchanged.
+
+`readRequestHistory` reads only the configured closed calendar days and returns
+validated request rows, partial request rows, field gaps and file coverage.
+`prepareRequestReport` is its request-only reporting entry point.
+Selection and explicit health summaries combine planning evidence with that
+report through `prepareFeedHealthState`; their shared capture cache keeps one
+stored file read and Git revision per capture.
+
+The request report adds each usable feed, article and robots counter
+independently, including individually valid fields from partial rows.
+Absent, invalid and null counters remain unknown; a known zero is retained.
+For each feed and counter, `coverage` declares `status` (`complete`, `partial`
+or `none`), `known_records`, `unknown_records`, `recorded_days` and
+`complete_days`. Recorded days have at least one usable counter. Complete days
+have complete file evidence and no unknown matching counter or unattributable
+record. Known-empty complete windows produce zero; incomplete windows without
+any usable counter produce null, not an estimated zero.
+
+`missing_days` names missing or incomplete day files. `unattributed_days`
+names days with invalid row identities that cannot be assigned to a feed.
+`input_complete` preserves the staged-input gap flag; when false, no day can
+be claimed complete, but known counters remain usable. Unknown-record counts
+cover attributable rows only; missing files and unattributable rows are
+reported separately, never presented as a count of lost records. Each
+counter is complete only when all configured closed days are complete.
+Feed and report completeness require every counter to be complete.
+
+The report schema and selected/partitioned stage payloads are stamped
+`2026-10-29`. Current stage readers refuse earlier formats under the
+TypeScript planner compatibility rule; no historical ledger is rewritten.
+The [operator report guide](../how-to/run-feed-ingest-plan-test.md) defines
+the partial-total marker and report-only ordering.
+
+Before projection, stored and finalized in-memory facts from the current run
+and attempt are excluded. Supplied current work then replaces that execution.
+Endpoint matching and productive logical-read settlement remain unchanged.
+A required-field gap affects only its use and matching endpoint, or all feeds
+when identity is invalid. Rest requires complete evidence; article admission
+is unknown if any required evidence is missing. Incomplete feed-read ratios
+remain labelled incomplete and are not substituted for the article-admission
+rate used by selection.
 
 ### Article cleanup compatibility
 
@@ -806,8 +900,9 @@ safety checks and the artifact-only article-text boundary remain unchanged.
 
 The pre-fetch decision and fresh selection feedback answer different questions
 at different instants. A run needs both when work or external evidence changes
-between them. Each capture derives lifecycle, reliability and request spend
-together and shares bounded file reads among its consumers. The run records
+between them. Pre-fetch captures derive planning evidence only; selection and
+explicit summaries also derive the request report. Each capture shares bounded
+file reads among its consumers. The run records
 the full measured health-summary cost through D11-D13, not only its last
 refresh. This is a measured operation cost, not a claim of a speed improvement.
 

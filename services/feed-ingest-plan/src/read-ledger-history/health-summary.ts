@@ -1,15 +1,9 @@
-/** Derive independent lifecycle, reliability and closed-day spend views from run facts. */
+/** Derive rest, feed-read reliability and article admission from their own required fields. */
 import { availabilityEvidence, definitelyAfter } from "@idhazh/common-contracts";
 import { FeedHealthStateRowSchema, SourceArticleRefusalReasonSchema } from "@idhazh/common-contracts";
 import type { FeedHealthStateRow, SourceSnapshot } from "@idhazh/common-contracts";
 import type { SourceHistoryEvidence, FeedHistoryPolicy } from "./read-feed-history";
-
-const dayMilliseconds = 86_400_000;
-export function closedRequestDays(now: string, count: number): string[] {
-  const midnight = Date.parse(`${now.slice(0, 10)}T00:00:00Z`);
-  return Array.from({ length: count }, (_, index) =>
-    new Date(midnight - (count - index) * dayMilliseconds).toISOString().slice(0, 10));
-}
+import type { HealthCapture } from "./read-health-capture";
 
 export function settleHealthRows(rows: readonly FeedHealthStateRow[]): FeedHealthStateRow[] {
   const facts = new Map<string, FeedHealthStateRow>();
@@ -24,51 +18,54 @@ export function settleHealthRows(rows: readonly FeedHealthStateRow[]): FeedHealt
   return [...facts.values()];
 }
 
-export function summarizeHealth(input: {
-  rows: readonly FeedHealthStateRow[];
+export function summarizePlanningHealth(input: {
+  uses: Pick<HealthCapture["uses"], "feed_rest" | "feed_reliability" | "article_admission">;
   days: readonly { day: string; complete: boolean }[];
-  request_days?: readonly { day: string; complete: boolean }[];
   sources: readonly SourceSnapshot[]; now: string; policy: FeedHistoryPolicy;
-  lifecycle_window_days: number; request_report_closed_days: number;
+  lifecycle_window_days: number;
 }) {
   const now = Date.parse(input.now);
   if (!Number.isFinite(now)) throw new Error("Health summary needs a valid UTC clock");
-  const rows = settleHealthRows(input.rows).filter(row =>
-    row.date <= input.now.slice(0, 10) && (row.checked_at === null || Date.parse(row.checked_at) <= now));
   const represented = [...new Set(input.days.filter(day => day.day <= input.now.slice(0, 10)).map(day => day.day))].sort();
   const lifecycleDays = represented.slice(-input.lifecycle_window_days);
   const reliabilityDays = represented.slice(-input.policy.reliability_window_days);
-  const complete = (days: readonly string[], required: number, coverage = input.days) => days.length >= required
-    && days.every(day => coverage.find(value => value.day === day)?.complete === true);
+  const complete = (days: readonly string[], required: number) => days.length >= required
+    && days.every(day => input.days.find(value => value.day === day)?.complete === true);
   const sources = new Map<string, SourceHistoryEvidence>();
   for (const source of input.sources) {
     const endpoint = source.feed_url;
-    const matching = rows.filter(row => row.feed_id === source.feed_id && row.endpoint_key === inputEndpointKey(endpoint)
-      && row.checked_at !== null && row.outcome !== null && row.items !== null);
-    // Logical reads retain native successful-attempt settlement; spend retains every attempt below.
-    const reads = new Map<string, typeof matching[number]>();
-    for (const row of matching) {
-      const key = `${row.run_id}:${row.feed_id}`;
-      const previous = reads.get(key);
-      const productive = row.outcome === "ok" && row.items! > 0;
-      const priorProductive = previous?.outcome === "ok" && previous.items! > 0;
-      if (previous === undefined || (productive && !priorProductive)
-        || (productive === priorProductive && definitelyAfter(row.checked_at!, previous.checked_at!))) reads.set(key, row);
-    }
-    const logical = [...reads.values()].map(row => ({
-      date: row.date, run_id: row.run_id, checked_at: row.checked_at!,
-      outcome: row.outcome!, items: row.items!,
-    }));
-    const lifecycleRows = logical.filter(row => lifecycleDays.includes(row.date));
-    const lifecycleComplete = complete(lifecycleDays, input.lifecycle_window_days);
+    const matches = (row: { feed_id: string; endpoint_key: string }) =>
+      row.feed_id === source.feed_id && row.endpoint_key === inputEndpointKey(endpoint);
+    const fieldsComplete = (use: keyof typeof input.uses, days: readonly string[], required: number) =>
+      complete(days, required) && !input.uses[use].gaps.some(gap => days.includes(gap.day)
+        && (gap.identity === null || matches(gap.identity)));
+    const logical = (use: "feed_rest" | "feed_reliability") => {
+      const matching = input.uses[use].rows.filter(row => matches(row)
+        && row.date <= input.now.slice(0, 10) && row.checked_at !== null && Date.parse(row.checked_at) <= now
+        && row.outcome !== null && row.items !== null);
+      const reads = new Map<string, typeof matching[number]>();
+      for (const row of matching) {
+        const key = `${row.run_id}:${row.feed_id}`;
+        const previous = reads.get(key);
+        const productive = row.outcome === "ok" && row.items! > 0;
+        const priorProductive = previous?.outcome === "ok" && previous.items! > 0;
+        if (previous === undefined || (productive && !priorProductive)
+          || (productive === priorProductive && definitelyAfter(row.checked_at!, previous.checked_at!))) reads.set(key, row);
+      }
+      return [...reads.values()].map(row => ({
+        date: row.date, run_id: row.run_id, checked_at: row.checked_at!, outcome: row.outcome!, items: row.items!,
+      }));
+    };
+    const lifecycleRows = logical("feed_rest").filter(row => lifecycleDays.includes(row.date));
+    const lifecycleComplete = fieldsComplete("feed_rest", lifecycleDays, input.lifecycle_window_days);
     const availability = availabilityEvidence(lifecycleRows,
       input.policy.availability_strikes_before_rest);
-    const measured = logical.filter(row => reliabilityDays.includes(row.date)
+    const measured = logical("feed_reliability").filter(row => reliabilityDays.includes(row.date)
       && row.outcome !== "skipped" && row.outcome !== "robots_denied");
     const productive = measured.filter(row => row.outcome === "ok" && row.items > 0).length;
-    const articleRows = rows.filter(row => row.feed_id === source.feed_id
+    const articleRows = input.uses.article_admission.rows.filter(row => row.feed_id === source.feed_id
       && row.endpoint_key === inputEndpointKey(endpoint) && reliabilityDays.includes(row.date));
-    const articleKnown = complete(reliabilityDays, input.policy.reliability_window_days)
+    const articleKnown = fieldsComplete("article_admission", reliabilityDays, input.policy.reliability_window_days)
       && articleRows.every(row => row.counts_complete && row.article_candidates !== null);
     const admitted = articleRows.reduce((total, row) => total + (row.article_candidates ?? 0), 0);
     const refused = articleRows.reduce((total, row) => total + row.rejection_counts
@@ -87,28 +84,11 @@ export function summarizeHealth(input: {
         productive, attempted: measured.length, success_fraction: productive / measured.length,
         from_day: reliabilityDays[0] ?? null, through_day: reliabilityDays.at(-1) ?? null,
         production_factor: Math.max(input.policy.reliability_floor, productive / measured.length),
-        complete: complete(reliabilityDays, input.policy.reliability_window_days),
+        complete: fieldsComplete("feed_reliability", reliabilityDays, input.policy.reliability_window_days),
       },
     });
   }
-  const requestDays = closedRequestDays(input.now, input.request_report_closed_days);
-  const windowComplete = complete(requestDays, input.request_report_closed_days, input.request_days ?? input.days);
-  const request_report = {
-    from_day: requestDays[0]!, through_day: requestDays.at(-1)!, complete: windowComplete,
-    feeds: input.sources.map(source => {
-      const work = rows.filter(row => row.feed_id === source.feed_id
-        && row.endpoint_key === inputEndpointKey(source.feed_url) && requestDays.includes(row.date));
-      const known = windowComplete && work.every(row =>
-        row.feed_requests !== null && row.article_requests !== null && row.robots_requests !== null);
-      const sum = (field: "feed_requests" | "article_requests" | "robots_requests") =>
-        !known || work.some(row => row[field] === null) ? null : work.reduce((total, row) => total + row[field]!, 0);
-      return {
-        feed_id: source.feed_id, feed_requests: sum("feed_requests"), article_requests: sum("article_requests"),
-        robots_requests: sum("robots_requests"), counts_complete: known,
-      };
-    }),
-  };
-  return { sources, request_report, represented_days: represented };
+  return { sources, represented_days: represented };
 }
 
 export function captureHealthRows(rows: readonly FeedHealthStateRow[], sources: ReadonlyMap<string, SourceHistoryEvidence>) {

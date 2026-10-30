@@ -24,7 +24,7 @@ from __future__ import annotations
 from datetime import date as date_type
 from pathlib import Path
 
-from idhazh.assemble import day_dir, month_of, read_taxonomy_vectors
+from idhazh.assemble import day_dir, month_of
 from idhazh.config import Settings
 from idhazh.contracts.digest_day import DigestDay
 from idhazh.contracts.run_manifest import RunManifest
@@ -37,7 +37,6 @@ def republish_day(
     digest_root: Path,
     date: str,
     settings: Settings,
-    repo_root: Path,
 ) -> Published:
     """Dispatch every projection again for one published day.
 
@@ -59,5 +58,4 @@ def republish_day(
         day=day,
         manifest=manifest,
         settings=settings,
-        taxonomy_vectors=read_taxonomy_vectors(repo_root, settings.taxonomy),
     )

@@ -1,6 +1,6 @@
 # Classification
 
-**Last Updated**: 2026-09-23
+**Last Updated**: 2026-10-29
 
 Every label this project puts on an article: what the word means, who decided
 it, and whether a reader ever sees it.
@@ -30,26 +30,30 @@ on the page its credibility.
 
 ## The register: what an item carries today
 
-Every label below is decided **without a model**. One comes from the feed's own
-declaration; the rest come from the article's words matched against curated
-terms.
+The feed declares the article's source vertical. The work stage uses configured
+semantic comparison groups to assign the desk and supported taxonomy labels;
+the curated phrase tagger remains the explicit fallback if valid classification
+encoding fails.
 
 | Field | Vocabulary | Who decided it | What a reader sees |
 | --- | --- | --- | --- |
 | `vertical` | `verticals` in `config/taxonomy.json` | the feed that carried the item, through `FeedDef.vertical` | the desk heading, and the item's own address |
+| `desk` | active vertical definitions in `config/taxonomy.json` | the article classifier, when the configured confidence and ambiguity rules allow one | the desk heading |
 | `source_kind` | `SourceKind`, a closed enum | the feed's own declaration in `config/sources.json` | a mark on four of the six kinds, and nothing on the other two |
-| `lenses` | `lenses` in `config/taxonomy.json` | the item's words, whole-word and case-folded | a tinted chip the item earned, in one wrapper |
-| `events` | `events` in `config/taxonomy.json` | the same matching rule | **nothing** |
-| `entities` | `config/watchlist.json` | the same matching rule | **nothing** |
+| `lenses` | active entries in `config/taxonomy.json` | the article classifier, with phrase tags as the encoder-failure fallback | a tinted chip the item earned, in one wrapper |
+| `events` | active entries in `config/taxonomy.json` | the article classifier, with phrase tags as the encoder-failure fallback | **nothing** |
+| `entities` | active organisation entries in `config/watchlist.json` | the article classifier, requiring a configured name or alias as evidence | **nothing** |
 
-**No model labels anything on this page today.** No prompt this pipeline sends
-names a lens or an event, and every label above is either a feed's declaration
-or a deterministic string match. A bare search is not clean and the reason is
-worth recording: `entity` does appear in
+The article classifier uses a local encoder and configured comparison text; it
+does not ask a prompt to name a lens or event. The article's sanitized title and
+body are compared with configured target descriptions. Feed vertical remains
+the identity and provenance of the source; semantic assignment never rewrites
+it. On an encoder failure only, the deterministic phrase tagger remains a
+fallback. `entity` also appears in
 `backend/idhazh/prompts/label_article_elements.txt`, as the field naming what a
 number in the element table is about. Different word, different job.
 
-**Two of the five reach no reader at all.** `events` and `entities` are matched,
+`events` and `entities` reach no reader at all. They are matched,
 stored, versioned and schema-gated, and `FORBIDDEN_FIELDS` in
 `frontend/src/lib/payload/project.ts` strips both out of the published day
 payload. That is a cost carried knowingly rather than a defect: it is written
@@ -103,124 +107,81 @@ numbers, then decide whether a reader is better off seeing it.
 prevent**: a mark shipped on the day the field was added, drawn on a distribution
 nobody had seen, on an item where it happened to look right.
 
-## The encoder alarm: a number that labels nothing
+## Independent classification encoding configuration
 
-The pipeline already encodes every published item - the headline and our
-summary - into a 384-dimension vector, so a reader can search a day on their own
-device. `config/taxonomy-vectors.bin` holds one vector for each label the
-vocabulary still offers, encoded from the same words a model would be asked to
-choose against. Once a day, the run asks each item's vector how close it sits to
-the closest of those label vectors, and writes the day's spread of that answer
-onto `state/day-metrics/<YYYY>/<MM>/<DD>.json`.
+`classification_encoding` in `config/idhazh.json` controls semantic assignment
+independently of `assist`, which controls archive search. It declares its own
+model revision, assets, digests, width, token limit, encoding modes, comparison
+groups and assignment thresholds. `model_digests` must include `config.json`,
+whose declared capacity and hidden width are checked before encoding. The current declaration points to the same
+committed model bytes as search, but neither settings nor defaults are shared.
 
-**Here is what it touches and what it does not, written down so nobody has to
-work it out again.** The number
-reaches no reader: it lands on an operator record and never on a page a reader
-opens. It selects nothing: no item is ordered by it, held back by it or
-published because of it. It picks no label - the closest label is worked out and
-thrown away, and nothing anywhere records what one item scored. So it measures
-the day's spread and nothing else, whatever section 1a would now let a model
-verdict decide. **The day it starts choosing anything, it is a classifier and it
-needs everything a classifier needs.**
+Each comparison group names a JSON source, one entry list, the identity field,
+ordered text fields, exact-match filters and a destination. Text fields accept
+strings or string lists; lists are flattened in order and joined with `. `.
+Sources are fixed paths in config, not discovered directories. Active vertical
+definitions feed desk assignment, active lenses and events feed their own fields,
+and active organisation entries from the watchlist feed entity assignment. A
+`comparison_only` group may provide an additional comparison set without writing
+an article field. Adding a group requires configuration only when its source fits
+the declared descriptor shape and its destination is already supported.
 
-**Neither end of the number is better than the other.** A day at 0.34 is not a
-better day than one at 0.31, and nobody can say which way is good. The cosine
-between an item vector and a label vector is uncalibrated - one encodes a news
-sentence and the other a definitional one - so a fixed threshold would be a
-number somebody picked rather than a fact. Only a change means anything, and a
-day file cannot hold a change: it holds the level, and comparing days is
-somebody else's job.
+At the start of a work run, the consumer validates each configured source and
+encodes each selected target once. After extraction sanitizes fetched text, each
+article is encoded and compared with all groups in memory. The desk destination
+may set `article.desk` and its unambiguous runner-up as `article.secondary_desk`;
+both must clear the group's score floor, and each must clear the configured
+ambiguity margin against the next candidate. It never changes `article.vertical`,
+which remains the feed's identity. Lens and event destinations assign configured
+ids above their own thresholds. Entity assignment also requires literal evidence
+from a configured name or alias; topical similarity alone cannot prove which
+named organisation appears in a story. The model's verified `config.json`
+supplies its maximum token capacity and hidden width; values beyond those known
+limits fail validation. A valid encoder that cannot load or run logs its failure
+reason and uses the existing phrase tagger for the work run. Invalid
+configuration, missing assets, bad digests, or malformed source entries fail
+with a named validation error instead of looking like an empty classification.
 
-**What a change has to beat, measured rather than guessed.** Over the 23
-committed days - 8,266 item vectors, Windows 11, 8 vCPU, 2026-09-13, under
-`config/taxonomy.json` version 2026-09-12 - the day mean ran from **0.1870 to
-0.2324**, a spread of **0.0455**, and the step from one day to the next had a
-median of **0.0124** and a worst case of **0.0357**. Those steps are the day's
-own story mix moving, not the encoder. Under them sits the rounding floor: both
-sides are stored as int8, which shifts the reading by a median of **0.0017** and
-at worst **0.0062** against the same comparison done in full precision. So the
-noise floor is about seven times smaller than ordinary day-to-day movement,
-which is what leaves room for a real change to show - and any firing rule has to
-clear roughly **0.036**, the worst ordinary step, before it is saying anything.
-
-**Say what it actually moves on, because the name oversells it.** The encoder
-weights are committed and digest-checked, and the pooling, the quantisation and
-the text that gets encoded all have tests. On any green day the only live input
-is our own writing - so this moves when summaries get longer, when the
-summariser's register drifts, or when more items reach the encoder's reading cap.
-Read a shift as a question about the summaries first and the encoder second.
-
-**A stale vectors file is the one way this can be wrong, so it is the one way it
-is allowed to fail.** The file's header carries the digest of exactly the label
-sentences that were encoded and the reference of the weights that encoded them.
-A run whose committed file names a different vocabulary, or different weights,
-stops and names the file. Comparing today's items against last month's lenses
-would produce a number that looks exactly like a real one, and a quiet wrong
-number is worse than a loud failure. A file that is simply **absent** is not
-stale: the day records no reading and publishes as it always did.
-
-**It costs a run nothing.** No encoder pass, no byte on an item, no vector added
-to a day payload. The label vectors are 4,224 bytes committed once, and the item
-vectors were going to be written anyway. Rebuild the file with
-`python backend/utilities/build_taxonomy_vectors.py` after any edit to an active
-vertical or lens, and after the encoder weights move.
-
-**Nothing rebuilds it for you, and the day a fit moves a word that becomes a
-bug.** The tie between the vocabulary and the file is a refusal, not a build
-step: the run stops and names the file, and a person goes and types the command.
-That works while a person is the only thing that edits the vocabulary. An
-autotuned desk or lens has nobody to tell.
-[../architecture/publishing/autotune-desk-assignment.md](../architecture/publishing/autotune-desk-assignment.md)
-owns what a rebuild would have to become, and it is open there.
-
-**There is no knob, and that is deliberate rather than an omission.** The
-vocabulary is already config, so editing `config/taxonomy.json` and rebuilding
-changes what is measured. The width, the quantisation and the text template are
-contract rather than tuning: a run comparing today's items against vectors built
-under a different template is silently meaningless, which is the same failure the
-stale-file refusal exists to stop. The knobs that will be needed - how many days
-a change has to hold and how far it has to move before anybody is told - belong
-to whatever surface draws the series, because both are properties of a
-comparison and this record carries no comparison.
+The configured similarity floors and ambiguity margins are provisional estimates
+from a small local comparison, not measured accuracy. Keep them independent per
+group and treat them as tunable policy, not as claims about classifier quality.
+The consumer stores no target vectors, article vectors, scores or comparison
+matrices. Vectors exist only in the consuming process. New day-metrics records
+omit the retired `label_similarity` diagnostic; the optional field remains in
+the read contract for existing historical records. Historical state is not
+rewritten or deleted.
 
 ## Design rationale
 
-**Why a register page at all.** The words are defined once in
-[taxonomy.md](taxonomy.md) and drawn once in
-[../architecture/publishing/what-a-story-shows-and-where-each-fact-sits.md](../architecture/publishing/what-a-story-shows-and-where-each-fact-sits.md),
-and neither answers the question somebody actually arrives with: *this word is
-on this item - who put it there, and can I trust it?* That question crosses a
-config file, a matcher, a payload and a component, so it has no home in any of
-them.
+**Why keep classification settings separate from search.** The same model bytes
+can serve both jobs, but changing a search limit or model must not silently
+change article assignment. Separate declarations make each behavior reviewable
+and independently evolvable.
 
-**Why the five rules sit here rather than beside each label.** Four of the five
-were argued once and then re-argued per label, because nothing wrote them down
-where a person adding a label would meet them. A rule restated in five places
-drifts in five directions.
+**Why compare targets once per work run.** Configured taxonomy text changes only
+when its source changes. Holding the corresponding vectors in the work process
+avoids repeating encoder work for every article without creating a persistent
+cache, a generated artifact or a stale-vector rebuild step.
 
-**Why the label vectors are committed rather than encoded each run.** Eleven
-sentences change only when somebody edits the vocabulary, so encoding them on
-every runner on every run is repeated work for an identical answer. 4,224 bytes
-of vectors plus an 83-byte header is the whole cost, it is derived from
-`config/taxonomy.json` exactly as that file is written by hand, and it sits in
-`config/` rather than `state/` because `state/` is what a run appends and this is
-what a person commits.
+**Why named entities need literal evidence.** Similarity to an organisation
+profile says that a story is about a related industry, not that it names that
+organisation. A configured name or alias supplies the identity evidence; the
+similarity and ambiguity rules only help choose among evidenced candidates.
 
-**Why the reading is the closest label rather than the disagreement with the
-desk.** Counting items whose nearest vertical is not the feed's desk would
-compute a label for every item and then throw it away - a classifier with only
-the write suppressed, and the machinery is what needs a classifier's gates.
-It also reads as an error rate, and a change detector with a good end becomes a
-target. The closest-label reading has no good end and no pick to suppress
-(Andre, 2026-09-13).
+**Why the score thresholds are estimates.** The initial floors and margins are
+conservative starting values from a bounded local comparison. No labelled
+reference set establishes their accuracy, so they are not reported as measured
+quality. A future change to them should follow the evidence gathered for the
+specific assignment decision.
 
-**Why the display name is encoded in front of the definition.** Seven of the
-eleven display words do not appear in their own definition - `ai` spells out
-"artificial intelligence" and never says AI, `cyber` says "an attack on a
-computer system", `chips` says "semiconductors" - so the definition alone drops
-the most distinguishing word the vocabulary has. It also gives both sides of the
-comparison one composition rule: the item side is "headline. summary" and the
-label side is "name. definition", so a change to either is a change to both.
+**Why new day records omit comparison diagnostics.** Comparison scores are used
+to decide configured article fields during the consuming run. Persisting a
+separate daily aggregate adds no input to that decision and would retain a
+second, non-reader-facing measure with no demonstrated use.
+
+**Test scope for this change.** The maintainer directed that these two changes
+add no tests or tooling. Existing affected expectations may be updated; this
+ruling is limited to this work and does not change the general test policy.
 
 ## See also
 

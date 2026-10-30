@@ -5,7 +5,7 @@ import {
 import type { CompactIndex, FeedHealthStateRow } from "../../../packages/common-contracts/src/index";
 import type { LedgerDayInput } from "../src/config/service-settings";
 import { createHistoryDayInputs, resolveHistoryInventory } from "./feed-ingest-plan-outputs";
-import { closedRequestDays } from "../src/read-ledger-history/health-summary";
+import { closedRequestDays } from "../src/read-ledger-history/request-summary";
 import { classifyPlannerHistoryGap } from "../src/read-ledger-history/planner-history-gap";
 import { LedgerHistoryReadError } from "../src/read-ledger-history/ledger-history-error";
 

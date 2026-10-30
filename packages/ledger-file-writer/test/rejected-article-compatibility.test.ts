@@ -10,7 +10,7 @@ import {
   PlannerMaintenanceRequestSchema, RejectedArticleRowContract, RejectedArticleRowSchema,
   REJECTED_ARTICLE_VERSION, deriveCandidateId, deriveUrlKey,
 } from "@idhazh/common-contracts";
-import { describeObjectSchema, digestRows, maintainPlannerPeriod, persistLedger, readPlannerParquet } from "../src";
+import { describeObjectSchema, digestRows, maintainPlannerPeriod, persistLedger, readPlannerParquet, readStoredPlannerParquet } from "../src";
 import type { LedgerPeriod, LedgerRowContract } from "../src";
 import { buildArrowTable } from "../src/parquet/arrow-builder";
 import { buildPlannerEnvelopeMetadata } from "../src/parquet/envelope-footer";
@@ -92,6 +92,9 @@ test("exact old physical schemas gain null evidence after verification, beside c
         ordinal === 0 ? { tier: "compact", period: "daily", covers: day, builtFrom: 1 }
           : { tier: "raw", covers: day });
       const before = await readFile(path);
+      const stored = await readStoredPlannerParquet(path, "rejected-articles");
+      expect(stored.rows).toEqual([row]);
+      expect(stored.rows[0]).not.toHaveProperty("fetch_failure");
       const readback = await readPlannerParquet(path, "rejected-articles", RejectedArticleRowContract);
       const migrated = RejectedArticleRowSchema.parse(row);
       expect(readback.rows).toEqual([migrated]);

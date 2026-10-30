@@ -21,5 +21,5 @@ export type { UnitIdentity } from "./uuid/unit-id";
 export { digestRows } from "./parquet/row-digest";
 export type { LogicalField, LogicalType } from "./parquet/row-digest";
 export { describeObjectSchema, appendIdentityColumns } from "./row-schema";
-export { PlannerLedgerFileError, readPlannerParquet } from "./read-planner-file";
+export { PlannerLedgerFileError, readPlannerParquet, readStoredPlannerParquet } from "./read-planner-file";
 export { maintainPlannerPeriod } from "./planner-maintenance";
