@@ -1,5 +1,9 @@
 {
-  "entries": [],
+  "entries": [
+    {"bytes": 450784,"covers": "2026-10-26","file_sha256": "63bd0da0cc5e946b59a699c2af422ac483c7f0c6153a4b2177f8d693e4b83276","lost_days": [],"rows": 12632,"set_aside": 0,"state": "packed"},
+    {"bytes": 45168,"covers": "2026-10-27","file_sha256": "5c8c6d7298a8ae70fcd8a1059ea8dc879f8d3d2dd74b8fe02e24df52d916c6db","lost_days": [],"rows": 1212,"set_aside": 0,"state": "packed"},
+    {"bytes": 130230,"covers": "2026-10-28","file_sha256": "2720c08c5ee48420ebeb50676a29e9da78c040c10d26050040bc7459b6208b3b","lost_days": [],"rows": 3527,"set_aside": 0,"state": "packed"}
+  ],
   "ledger": "discovered-articles",
   "period": "daily",
   "version": "2026-10-25"
