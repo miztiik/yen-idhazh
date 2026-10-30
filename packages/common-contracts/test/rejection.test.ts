@@ -10,7 +10,8 @@ import {
   SourceSnapshotSchema, WriterIdentitySchema, deriveCandidateId, deriveUrlKey, validateEnvelopeContainer,
   readFeedIngestEvent, HarvestDiagnosticsSchema, FetchAttemptSchema, OPERATION_VERSION,
   PLANNER_OPERATION_VERSION, RecordedInstantSchema, TimestampSchema,
-  FEED_INGEST_CANDIDATE_VERSION, PARSED_FEED_BATCH_VERSION, PLANNER_LEDGER_VERSION, PLAN_RUN_VERSION,
+  FEED_INGEST_CANDIDATE_VERSION, LEGACY_PARSED_FEED_BATCH_VERSION, PARSED_FEED_BATCH_VERSION,
+  PLANNER_LEDGER_VERSION, PLAN_RUN_VERSION,
   SELECTED_ARTICLE_VERSION, FEED_HEALTH_STATE_VERSION, ParsedFeedBatchSchema, SelectedFeedBatchSchema, PartitionedFeedBatchSchema,
   PlannerHarvestObservationSchema, PlannerDiscoveredEvidenceSchema, PlannerDiscoveredRowSchema,
   PlannerStageContextSchema, PlannerStageRequestSchema, StageReferenceRequestSchema,
@@ -554,6 +555,21 @@ describe("current planner contracts", () => {
     expect(offered.offers[0]!.source.feed_id).toBe(source.feed_id);
     expect(offered.input_complete).toBe(false);
     expect(ParsedFeedBatchSchema.safeParse({ ...parsed, input_complete: "true" }).success).toBe(false);
+    const batchCandidate = FeedIngestCandidateSchema.parse({
+      ...candidate(), correlation_id: context.correlation_id,
+    });
+    const oldBatch = ParsedFeedBatchSchema.parse({
+      ...parsed, version: LEGACY_PARSED_FEED_BATCH_VERSION, candidates: [batchCandidate],
+      observations: {
+        [batchCandidate.candidate_id]: {
+          candidate_id: batchCandidate.candidate_id, http_status: null, robots: "allowed",
+          fetch_failure: "network", paywall: null, paywall_evidence: "not-observed",
+          extraction: "not-attempted", observed_at: context.now, diagnostics: { fetch_failure: "network" },
+        },
+      },
+    });
+    expect(oldBatch.version).toBe(LEGACY_PARSED_FEED_BATCH_VERSION);
+    expect(oldBatch.observations[batchCandidate.candidate_id]!.diagnostics?.body_limit).toBeNull();
     expect(ParsedFeedBatchSchema.safeParse({ ...parsed, version: "2026-10-24" }).success).toBe(false);
     expect(ParsedFeedBatchSchema.safeParse({ ...parsed, observations: { [digest]: { candidate_id: digest } } }).success).toBe(false);
     const selected = SelectedFeedBatchSchema.parse({
