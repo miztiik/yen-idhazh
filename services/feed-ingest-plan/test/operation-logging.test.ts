@@ -188,6 +188,32 @@ test("publisher alone authorizes failure URLs and rejects secrets and spoofed ma
   for (const phase of ["started", "completed"]) {
     expect(prepareProgressEvent({ ...base, phase }, [], "https://news.example/story").details.article_url).toBeUndefined();
   }
+  const qualityRejection = {
+    ...base, operation: "quality", phase: "failed",
+    details: { quality_rejection: { failure_code: "too_short", source_word_count: 45, word_count: 45 } },
+  };
+  expect(prepareProgressEvent(qualityRejection, [], "https://news.example/story?page=2#section"))
+    .toMatchObject({ operation: "quality", phase: "failed" });
+  expect(prepareProgressEvent(qualityRejection, [], "https://news.example/story?page=2#section").details)
+    .toMatchObject({
+      article_url: "https://news.example/story",
+      quality_rejection: { failure_code: "too_short", source_word_count: 45, word_count: 45 },
+    });
+  const invalidQualityRejection = prepareProgressEvent({
+    ...qualityRejection, details: { quality_rejection: { failure_code: "too_short", source_word_count: 45, word_count: "45" } },
+  }, [], "https://news.example/story");
+  expect(invalidQualityRejection.details.quality_rejection).toBeUndefined();
+  expect(invalidQualityRejection.details.article_url).toBeUndefined();
+  expect(invalidQualityRejection.details._compliance).toMatchObject({ status: "NON_COMPLIANT" });
+  const misplacedQualityRejection = prepareProgressEvent({
+    ...qualityRejection, operation: "parse", phase: "completed",
+  }, [], "https://news.example/story");
+  expect(misplacedQualityRejection.details.quality_rejection).toBeUndefined();
+  expect(misplacedQualityRejection.details.article_url).toBeUndefined();
+  expect(misplacedQualityRejection.details._compliance).toMatchObject({ status: "NON_COMPLIANT" });
+  const signedQualityRejection = prepareProgressEvent(qualityRejection, [], "https://news.example/story?token=private");
+  expect(signedQualityRejection.details.article_url).toBeUndefined();
+  expect(JSON.stringify(signedQualityRejection)).not.toContain("private");
   const spoofed = prepareProgressEvent({
     ...base, details: { article_url: "https://news.example/private", _compliance: { status: "COMPLIANT" },
       nested: { token: "private", link: "https://news.example/private" }, article_text: "private" },

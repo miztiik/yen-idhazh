@@ -23,10 +23,13 @@ export function resolveArticleSourceOutcome(
     || (rejection.drop_reason === "MISSING_REQUIRED_FIELDS" && article.observation.extraction !== "not-attempted")) {
     return refusal(rejection.drop_reason);
   }
+  const qualityFailure = rejection.details.diagnostics?.quality?.rejected
+    ? rejection.details.diagnostics.quality.failure_code : null;
   const failure = rejection.details.diagnostics?.fetch_failure ?? rejection.details.diagnostics?.extraction_failure
-    ?? article.observation.fetch_failure;
+    ?? qualityFailure ?? article.observation.fetch_failure;
   const attribution = attributeIngestOutcome({
-    document_kind: "article", operation: article.observation.extraction === "not-attempted" ? "fetch" : "parse",
+    document_kind: "article", operation: qualityFailure === null
+      ? article.observation.extraction === "not-attempted" ? "fetch" : "parse" : "quality",
     outcome: "failed", failure_code: failure, http_status: article.observation.http_status, request_phase: null,
   });
   return attribution === "source" ? refusal(rejection.drop_reason) : null;

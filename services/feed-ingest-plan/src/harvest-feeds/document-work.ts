@@ -1,6 +1,6 @@
 /** Project the existing fetch and parse facts as each bounded operation completes. */
 import { DocumentWorkFactSchema } from "@idhazh/common-contracts";
-import type { DocumentWorkFact } from "@idhazh/common-contracts";
+import type { DocumentWorkFact, ExtractionQuality } from "@idhazh/common-contracts";
 import { observeDocument } from "./document-observation";
 import type { DocumentIdentity } from "./document-observation";
 import type { HarvestContext } from "./harvest-types";
@@ -12,6 +12,8 @@ import { FeedParseError } from "./parse-feed";
 import { attributeIngestOutcome } from "../attribute-ingest-outcomes";
 
 type Result = Pick<DocumentWorkFact, "outcome" | "failure_code">;
+type QualityRejection = Pick<ExtractionQuality, "failure_code" | "source_word_count" | "word_count">;
+type ParseResult = Result & { quality_rejection?: QualityRejection };
 type Scope = {
   document_kind: "feed" | "article"; publisher_id: string | null; candidate_id: string | null;
   observed_run_id: string; observed_attempt: number; feed_id: string;
@@ -21,14 +23,16 @@ type Context = Pick<HarvestContext, "progress" | "observations" | "observation_c
 };
 
 export function documentWork(context: Context, identity: DocumentIdentity, key: string, scope: Scope) {
-  const publish = (operation: "fetch" | "parse", phase: "started" | "completed" | "failed",
+  const publish = (operation: "fetch" | "parse" | "quality", phase: "started" | "completed" | "failed",
     duration_ms: number | null, url?: string, failure_code?: string | null,
+    quality_rejection?: QualityRejection,
     fetched?: Pick<FetchResult, "body_limit" | "final_attempted_url" | "robots_failure">) => context.document_activity?.(
     operation, phase, {
       scope: "document",
       request_id: key, article_id: identity.article_id, document_kind: scope.document_kind,
       feed_id: scope.feed_id, publisher_id: scope.publisher_id, duration_ms,
       ...(failure_code == null ? {} : { failure_code }),
+      ...(quality_rejection === undefined ? {} : { quality_rejection }),
       ...(phase === "failed" && fetched?.body_limit != null ? {
         body_limit: fetched.body_limit,
         body_limit_source: fetched.robots_failure === "body-too-large" ? "robots" : "document",
@@ -90,7 +94,7 @@ export function documentWork(context: Context, identity: DocumentIdentity, key: 
         finalAttemptedUrl = fetched.final_attempted_url ?? null;
         const observation = event("fetch", cause);
         publish("fetch", fetched.failure !== null || fetched.body === null ? "failed" : "completed",
-          Math.round(performance.now() - started), url, fetched.failure, fetched);
+          Math.round(performance.now() - started), url, fetched.failure, undefined, fetched);
         await save(observation, {
           outcome: fetched.failure !== null ? "failed" : fetched.body === null ? "unavailable" : "success",
           failure_code: fetched.failure,
@@ -98,19 +102,19 @@ export function documentWork(context: Context, identity: DocumentIdentity, key: 
         return { fetched, observation };
       }
     },
-    async parse<T>(execute: () => Promise<T>, cause: string, describe: (parsed: T) => Result, url = fetchedUrl) {
+    async parse<T>(execute: () => Promise<T>, cause: string, describe: (parsed: T) => ParseResult, url = fetchedUrl) {
       const started = performance.now();
       publish("parse", "started", null);
       let parsed: T | null = null;
       let failure: "malformed-feed" | ArticleExtractionError["reason"] | null = null;
-      let result: Result;
+      let result: ParseResult;
       try {
         parsed = await execute();
         result = describe(parsed);
       } catch (error) {
         const observation = event("parse", cause);
         failure = error instanceof ArticleExtractionError ? error.reason : error instanceof FeedParseError ? "malformed-feed" : null;
-        publish("parse", "failed", Math.round(performance.now() - started), url, failure ?? "PARSE_FAILED", {
+        publish("parse", "failed", Math.round(performance.now() - started), url, failure ?? "PARSE_FAILED", undefined, {
           final_attempted_url: finalAttemptedUrl,
         });
         await save(observation, { outcome: "failed", failure_code: failure }, Math.round(performance.now() - started), null);
@@ -118,11 +122,13 @@ export function documentWork(context: Context, identity: DocumentIdentity, key: 
         return { parsed, failure, observation };
       }
       const observation = event("parse", cause);
-      publish("parse", result.outcome === "failed" ? "failed" : "completed",
-        Math.round(performance.now() - started), url, result.failure_code, {
+      const { quality_rejection, ...workResult } = result;
+      publish("parse", workResult.outcome === "failed" ? "failed" : "completed",
+        Math.round(performance.now() - started), url, workResult.failure_code, undefined, {
           final_attempted_url: finalAttemptedUrl,
         });
-      await save(observation, result, Math.round(performance.now() - started), null);
+      await save(observation, workResult, Math.round(performance.now() - started), null);
+      if (quality_rejection !== undefined) publish("quality", "failed", null, url, null, quality_rejection);
       return { parsed, failure, observation };
     },
     async skip() {
@@ -136,9 +142,14 @@ export function documentWork(context: Context, identity: DocumentIdentity, key: 
   };
 }
 
-export function describeArticleParse(parsed: { article_text: string }): Result {
-  return parsed.article_text ? { outcome: "success", failure_code: null }
-    : { outcome: "failed", failure_code: "empty-content" };
+export function describeArticleParse(parsed: { article_text: string; quality?: ExtractionQuality | null }): ParseResult {
+  const quality = parsed.quality;
+  const quality_rejection = quality?.rejected && quality.failure_code !== null ? {
+    failure_code: quality.failure_code, source_word_count: quality.source_word_count, word_count: quality.word_count,
+  } : undefined;
+  return parsed.article_text
+    ? { outcome: "success", failure_code: null, ...(quality_rejection === undefined ? {} : { quality_rejection }) }
+    : { outcome: "failed", failure_code: "empty-content", ...(quality_rejection === undefined ? {} : { quality_rejection }) };
 }
 export function describeFeedParse(parsed: readonly unknown[]): Result {
   return { outcome: parsed.length ? "success" : "empty", failure_code: null };

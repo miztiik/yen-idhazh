@@ -31,7 +31,7 @@ Table A
 | A4 | `robots_failure`, `robots_http_status` | The cached robots lookup's cause and last HTTP status. These distinguish a denied rule from an unreachable or unsafe robots document without inventing a target response. |
 | A5 | `error_code` | An available OS, TLS or Undici error token. The wire format admits only uppercase letters, digits and underscores, up to 64 characters. No exception message, URL, header or local path is copied. |
 | A6 | `extraction_failure` | Missing document root, DOM depth overflow, empty extracted content or missing title. Successful body extraction with no title remains distinguishable from empty text. |
-| A7 | `failure_code` | The existing Python item-health vocabulary where meanings match, including the selected measured extraction signal. A signal on a successful extraction is not itself a terminal refusal. Unmatched conditions use `unknown`, with their exact typed `detail`, rather than pretending to be a network failure. |
+| A7 | `failure_code` | The existing Python item-health vocabulary where meanings match, including the selected measured extraction signal. A signal alone is not a refusal. A configured quality rejection stays separate from successful parsing and is unresolved for source attribution. Unmatched conditions use `unknown`, with their exact typed `detail`, rather than pretending to be a network failure. |
 | A8 | `stopped_stage`, `detail` | The failed operation (`fetch`, `extract` or feed `parse`) and its fixed cause token. Feed parsing distinguishes malformed input from a successfully parsed empty feed. No fetched prose reaches this field. |
 | A9 | `fetch_ms` | Measured milliseconds around that item's complete permitted fetch, including DNS, robots lookup or cache wait, retries, backoff, redirects and body reading. |
 | A10 | `extract_ms` | Measured milliseconds around the synchronous article extractor, including typed failures. Null if extraction was not attempted. |
@@ -65,6 +65,16 @@ The `network_error` production category covers DNS and deadline failures;
 `fetch_failure` and `error_code` retain the narrower cause. Exact HTTP codes
 remain intact: HTTP 404 means not found, 429 means rate limited, and 503 means
 service unavailable.
+
+A configured quality rejection follows a successful parse. Its parse work fact
+remains successful and the completed parse event stays separate from a failed
+`quality` event. That diagnostic-only event carries the typed
+`quality_rejection` reason and measured source/body word counts; it creates no
+second work fact or accounting charge. Its article address uses the safe
+diagnostic projection: credentials and query or fragment values are removed,
+and signed addresses are omitted. The same measured reason reaches attribution
+as a quality decision and remains unresolved; it does not create a source
+refusal.
 
 ## Clocks and warnings
 
@@ -112,8 +122,10 @@ The native Parquet reader validates old files against their original column
 shape and physical digest before migrating them. Logical record commitments
 also use the original shape and stamp. A current row with actual new
 diagnostics cannot be encoded as an old proof that would discard them.
-Historical event reads validate the old envelope and nested payload before
-upgrading the stamps and applying null defaults.
+Historical event reads validate the original envelope and operation vocabulary
+before upgrading the stamp in memory. They accept only the recorded
+`2026-10-29T08:00` and `2026-10-30T22:25` event stamps; neither may contain the
+later `quality` operation. Historical files are not rewritten.
 
 ## Remaining production differences
 

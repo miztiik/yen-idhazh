@@ -600,6 +600,56 @@ test("rootless extraction, empty content and article request failures do not kil
   expect(result.feed_outcomes[0]).toMatchObject({ parsed_count: 9, harvested_count: 4 });
 });
 
+test("configured quality rejection keeps parsing complete and reports measured rejection evidence", async () => {
+  const recordings = await readRecordings();
+  const firstParagraph = recordings.bodies.article.match(/<p>([^<]+)<\/p>/u)?.[1];
+  if (!firstParagraph) throw new Error("Recorded page must carry its first article paragraph");
+  const witnessWords = firstParagraph.split(/\s+/u).length;
+  recordings.bodies.article = recordings.bodies.article.replace("</head>",
+    `<script type="application/ld+json">${JSON.stringify({
+      "@graph": [{ "@type": ["Article", "NewsArticle"], articleBody: firstParagraph }],
+    })}</script></head>`);
+  const loaded = await inputs([source()], {
+    extraction: { corroboration_min_words: witnessWords, reject_contaminated: true },
+  });
+  const transport = new RecordedTransport(recordings);
+  const runContext = context();
+  const activities: {
+    operation: string; phase: string; details: Record<string, unknown>; url?: string;
+  }[] = [];
+  runContext.document_activity = (operation, phase, details, url) => {
+    activities.push({ operation, phase, details, ...(url === undefined ? {} : { url }) });
+  };
+  const facts = recordHarvestObservations(runContext);
+  const result = await harvestFeeds(loaded, runContext, { transport, resolve: transport.resolve });
+  const rejected = result.articles.find(article => article.rejection?.drop_reason === "EXTRACT_FAILED"
+    && article.observation.diagnostics?.quality?.rejected);
+  expect(rejected?.observation.diagnostics).toMatchObject({
+    extraction_failure: null, failure_code: "contaminated", stopped_stage: "extract", detail: "contaminated",
+    quality: { failure_code: "contaminated", rejected: true, source_word_count: expect.any(Number), word_count: expect.any(Number) },
+  });
+  expect(rejected?.rejection?.details.diagnostics).toEqual(rejected?.observation.diagnostics);
+  const articleParseFacts = facts.filter(fact => fact.document_kind === "article" && fact.operation === "parse");
+  expect(articleParseFacts.length).toBeGreaterThan(0);
+  const successfulArticleParseFacts = articleParseFacts.filter(fact => fact.outcome === "success");
+  expect(successfulArticleParseFacts.length).toBeGreaterThan(0);
+  expect(successfulArticleParseFacts.every(fact => fact.failure_code === null && fact.attribution === null)).toBe(true);
+  const parseActivity = activities.find(item => item.operation === "parse" && item.phase === "completed"
+    && item.details.request_id === rejected?.rejection?.candidate_id);
+  expect(parseActivity?.details.quality_rejection).toBeUndefined();
+  const qualityActivities = activities.filter(item => item.operation === "quality" && item.phase === "failed"
+    && item.details.request_id === rejected?.rejection?.candidate_id && item.details.quality_rejection !== undefined);
+  expect(qualityActivities).toHaveLength(1);
+  expect(qualityActivities[0]).toMatchObject({
+    details: { quality_rejection: {
+      failure_code: "contaminated",
+      source_word_count: rejected?.observation.diagnostics?.quality?.source_word_count,
+      word_count: rejected?.observation.diagnostics?.quality?.word_count,
+    } },
+  });
+  expect(qualityActivities[0]?.url).toBe("https://news.example/story/?utm_source=feed&b=2&a=1#section");
+});
+
 test("report settings remain available without changing the planning fingerprint", async () => {
   const baseline = await inputs();
   const load = (config: typeof baseline.config) => loadHarvestInputs({
