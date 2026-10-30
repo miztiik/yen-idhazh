@@ -100,6 +100,10 @@ New timing entries name these purposes `feed-health-before-fetch` and
 `feed-health-for-selection`. Their names, not their positions, identify them.
 Selected publication fallback uses the same saved selection-start instant,
 after admission; the older saved age clock and first sight are unchanged.
+Current endpoint eligibility is separate from that compactable history. The
+[durable availability state](feed-availability.md) is reserved before each
+feed request, published with exact-baseline Git CAS and restored from current
+`origin/main` on later invocations.
 
 ## Concurrency and ownership
 

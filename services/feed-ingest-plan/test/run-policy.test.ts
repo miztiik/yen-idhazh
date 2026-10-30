@@ -72,9 +72,11 @@ test("policy reporting records effective ages and names their actual origin", as
     config: original, request: { institutional_age_hours: [6, 12], community_age_hours: [3] },
     history: settings.collect, parser_concurrency: 4,
   }, true);
-  const ages = report.rows.find(([name]) => name === "Age windows")![2]!;
-  expect(ages).toContain("institutional (source tier 1): 6 / 12 hours (workflow override)");
-  expect(ages).toContain("trade-press (source tier 2): 24 / 30 hours (configuration)");
-  expect(ages).toContain("community (source tier 3): 3 hours (workflow override)");
+  expect(report.rows.find(([name]) => name === "institutional age steps (hours)"))
+    .toEqual(["institutional age steps (hours)", "6 / 12", "workflow override"]);
+  expect(report.rows.find(([name]) => name === "trade-press age steps (hours)"))
+    .toEqual(["trade-press age steps (hours)", "24 / 30", "configuration"]);
+  expect(report.rows.find(([name]) => name === "community age steps (hours)"))
+    .toEqual(["community age steps (hours)", "3", "workflow override"]);
   expect(original.curate_articles.source_based_quality_buckets[0]!.ladder_hours).toEqual([24, 36, 48]);
 });

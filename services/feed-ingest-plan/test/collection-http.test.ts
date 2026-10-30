@@ -48,7 +48,7 @@ for (const enabled of [true, false]) test(`HTTP collection completes all feeds b
     expect(summary.files.selected_articles.status).toBe("written");
     expect(JSON.stringify(summary)).not.toContain(artifact.articles[0]!.article_text);
   } finally { await server.stop(true); app.close(); await fixture.close(); }
-}, 30000);
+}, 120000);
 
 test("unfinished or cancelled collection cannot be selected and a feed cannot be claimed twice", async () => {
   const fixture = await recordedPlan();

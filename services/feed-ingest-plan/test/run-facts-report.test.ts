@@ -86,14 +86,24 @@ test("keeps failed and unstarted selection facts distinct from configuration swi
   expect(facts(report.markdown)).not.toHaveProperty("Selection began at (UTC)");
 });
 
-test("shows recorded rest counters without turning unknown history into a retry date", async () => {
+test("shows durable UTC recovery deadlines without inventing schedules from historical counters", async () => {
   const { feed } = await fixture();
-  const html = Bun.markdown.html(renderFeedRest([
-    { ...feed, feed_id: "resting-feed", availability: "resting", strikes: 5, rested_runs: 2 },
-    { ...feed, feed_id: "unknown-feed", availability: "unknown", strikes: null, rested_runs: null },
-  ]));
+  const html = Bun.markdown.html(renderFeedRest({
+    revision: "recorded-revision", eligible_feed_ids: [], feeds: [{
+      feed_id: "resting-feed", endpoint_key: feed.endpoint_key, status: "resting",
+      consecutive_failed_checks: 5, failed_recovery_checks: 2,
+      first_confirmed_failure_at: "2026-10-25T00:00:00Z",
+      rest_until: "2026-10-30T12:00:00Z", retired_at: null,
+    }, {
+      feed_id: "unknown-feed", endpoint_key: feed.endpoint_key, status: "unknown",
+      consecutive_failed_checks: 0, failed_recovery_checks: 0,
+      first_confirmed_failure_at: null, rest_until: null, retired_at: null,
+    }],
+  }));
   expect(html).toContain("<td>resting</td><td>5</td><td>2</td>");
-  expect(html).toContain("<td>unknown</td><td>Not recorded</td><td>Not recorded</td>");
-  expect(html).toContain("not elapsed time");
-  expect(html).toContain("No rest-entry or next-retry UTC timestamp is recorded");
+  expect(html).toContain("2026-10-30T12:00:00Z");
+  expect(html).toContain("2026-10-25T00:00:00Z");
+  expect(html).toContain("Unknown availability preserves interrupted work");
+  expect(html).not.toContain("skipped logical runs");
+  expect(renderFeedRest()).toContain("Current feed availability was not recorded");
 });

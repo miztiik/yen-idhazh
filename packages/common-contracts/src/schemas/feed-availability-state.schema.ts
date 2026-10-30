@@ -2,14 +2,14 @@
 import { z } from "zod";
 import { FEED_AVAILABILITY_STATE_VERSION } from "../version";
 import {
-  CountSchema, NonEmptySchema, PositiveCountSchema, RunIdSchema, Sha256Schema, SlugSchema, reject,
+  CountSchema, DateStampSchema, NonEmptySchema, PositiveCountSchema, RunIdSchema, Sha256Schema, SlugSchema, reject,
 } from "./primitives";
 import { RecordedInstantSchema } from "./recorded-instant.schema";
 
 const RequestIdSchema = z.uuid({ version: "v4" });
 
 const AvailabilityChangelogSchema = z.array(z.strictObject({
-  version: z.literal(FEED_AVAILABILITY_STATE_VERSION),
+  version: DateStampSchema,
   change: NonEmptySchema,
 })).min(1).max(5);
 

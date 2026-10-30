@@ -1,3 +1,4 @@
+/** Which named Git files can be read or replaced from one exact revision? */
 import { z } from "zod";
 import {
   DeliveryPathSchema,

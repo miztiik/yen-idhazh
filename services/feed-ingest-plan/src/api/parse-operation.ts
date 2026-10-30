@@ -59,7 +59,8 @@ export async function parseFetchedDocument(
   let offer: PlannerFeedOffer | undefined;
   if (artifact.parent_batch_id !== null) {
     const batch = stageStore(inputs).read("parsed", artifact.parent_batch_id, ParsedFeedBatchSchema);
-    offer = batch.offers.find(offer => offer.entry.entry_ordinal === artifact.entry_ordinal);
+    offer = batch.offers.find(offer => offer.source.feed_id === artifact.feed_id
+      && offer.entry.entry_ordinal === artifact.entry_ordinal);
     if (offer === undefined || offer.fetch_request_id !== fetched.request_id
       || (batch.feed_fetch_request_id ?? collectionFeedRequest(inputs, batch.context.run_id, source.id)) !== parent?.request_id) {
       throw new PlanError("ARTIFACT_INVALID", "Fetched article does not match its current offer", "fetch_request_id");
@@ -122,7 +123,7 @@ export async function parseFetchedDocument(
     });
     return { artifact: null, response_json: JSON.stringify({
       batch_id: batch.batch_id, fetch_request_id: fetched.request_id, run_id: fetched.run_id, fetch_item_type: "feed",
-      parsed_count: entries.length, failure: parsed.failure, offers: publicFeedOffers(batch, inputs.harvest.config.harvest),
+      parsed_count: entries.length, failure: parsed.failure, offers: publicFeedOffers(batch, inputs.harvest.config.harvest, source.id),
     }) };
   }
   const pool = runtime.parser_pool ?? new ArticleParserPool(inputs.settings.listener.parser_concurrency);

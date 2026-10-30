@@ -144,9 +144,9 @@ export async function completeCollection(inputs: PlanInputs, id: string) {
       work_rows: collection.state.work.rows(), exclusions: collection.state.work.exclusions(),
     });
     stageStore(inputs).ownership(batch.batch_id).scope = "plan";
+    const rejected = await finalizeCollectionRejections(inputs, collection);
     collection.status = "complete";
     collection.completed_batch_id = batch.batch_id;
-    const rejected = await finalizeCollectionRejections(inputs, collection);
     return { collection_id: id, batch_id: batch.batch_id, discovered_articles: saved.result, rejected_articles: rejected };
   })();
   try { return await collection.complete; }

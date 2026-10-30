@@ -197,10 +197,15 @@ The authority coefficient is not a source-tier weight; the
 define the separate feed and tier factors.
 Fetch concurrency, parser workers, downstream article assignments and the raw
 assignment strategy have separate rows. Assignment does not execute downstream
-workers. The report shows both the failing-check threshold for rest and the
-skipped-run threshold for retry from the existing policy. A collapsed feed
-rest table shows availability, failing checks and rested runs; unknown history
-stays unknown. It never invents a timed retry or a rest-entry timestamp.
+workers. The report shows the effective failed-check, rest-duration,
+recovery-count and elapsed-age controls from `config/feed-availability.json`.
+A collapsed feed rest table reads current durable state. It shows consecutive
+failed checks, qualifying recovery failures, first confirmed failure,
+next eligible check and retirement instants in UTC. Interrupted work remains
+unknown; historical skipped-run counts cannot establish a retry deadline.
+Seven failed recovery checks at a 24-hour cadence still take at least seven
+days after entering rest; the 36-hour age minimum does not promise retirement
+after 36 hours.
 
 Per-feed article results are collapsed and sort
 by admitted articles, chosen articles, then feed name. Unknown counts sort

@@ -1,4 +1,4 @@
-/** Read the named represented days needed for rest, reliability and article admission. */
+/** Read the named represented days needed for feed reliability and article admission. */
 import { z } from "zod";
 import type { FeedHealthStateRow, SourceSnapshot } from "@idhazh/common-contracts";
 import { inputEndpointKey, summarizePlanningHealth } from "./health-summary";
@@ -6,7 +6,6 @@ import { readHealthCapture } from "./read-health-capture";
 import type { HealthCaptureCache, HealthCaptureInput } from "./read-health-capture";
 
 export const FeedHistoryPolicySchema = z.object({
-  availability_strikes_before_rest: z.int().positive(),
   reliability_window_days: z.int().positive(), reliability_floor: z.number().finite().min(0).max(1),
 });
 export type FeedHistoryPolicy = z.infer<typeof FeedHistoryPolicySchema>;

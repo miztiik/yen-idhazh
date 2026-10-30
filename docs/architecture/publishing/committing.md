@@ -141,6 +141,19 @@ delivery copies only named files and refuses symlink parents or replacement
 with different bytes. Neither destination supports deletion or mutable
 replacement.
 
+Mutable state uses the separate TypeScript `read_git_data` and
+`compare_and_swap_data` APIs, not `safe_persist_data`. The bounded reader
+returns named file bytes, hashes, prior-publication evidence and one Git
+revision. The writer requires that exact revision, validates the completed
+source hashes and independent path permissions, then publishes all named
+replacements in one commit. A newer target refuses the write as a conflict;
+the caller must refresh its state and apply its transition again.
+Successful publication identifies its own commit even if another valid update
+lands before verification. Fetches use private temporary references, not the
+shared `FETCH_HEAD`, and do not change the caller's checkout or index.
+The [feed availability contract](../sources/feed-availability.md) is the
+first consumer; immutable planner ledgers retain their existing delivery API.
+
 The manual planner test workflow is a consumer, not an application publishing
 stage. Its adapter validates the exact completed planner and host metadata
 against registered raw ledger prefixes, then calls the shared API. It does not

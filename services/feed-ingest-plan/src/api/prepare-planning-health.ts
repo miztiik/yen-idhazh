@@ -7,6 +7,7 @@ import { readFeedHistory } from "../read-ledger-history/read-feed-history";
 import { sourceSnapshot } from "../harvest-feeds/load-harvest-inputs";
 import { plannerMemory } from "../planner-memory";
 import { createStageLogger } from "../logging/structured-logger";
+import { readFeedAvailability } from "../availability/feed-availability";
 
 export type CurrentHealthWork = { context: RunContext; rows: readonly FeedHealthStateRow[] };
 export function healthHistoryInput(inputs: PlanInputs, now: string, current?: CurrentHealthWork) {
@@ -26,11 +27,23 @@ export async function preparePlanningHealth(
   inputs: PlanInputs, now: string, current?: CurrentHealthWork, cache?: HealthCaptureCache,
 ) {
   const result = await readFeedHistory(healthHistoryInput(inputs, now, current), cache);
+  const availability = await readFeedAvailability(inputs);
+  for (const feed of availability.feeds) {
+    const observed = result.sources.get(feed.feed_id);
+    if (observed === undefined) continue;
+    if (observed.endpoint_key !== feed.endpoint_key) {
+      throw new Error("Current availability does not match the configured feed endpoint");
+    }
+    result.sources.set(feed.feed_id, {
+      ...observed, lifecycle: observed.lifecycle === "retired" ? "retired" : feed.status,
+      strikes: feed.consecutive_failed_checks, rested_runs: null,
+    });
+  }
   if (inputs.settings.inputs.feed_health_input_gap) {
     for (const [id, source] of result.sources) result.sources.set(id, {
       ...source, article_pass_rate: null,
       reliability: source.reliability === null ? null : { ...source.reliability, complete: false },
     });
   }
-  return result;
+  return { ...result, availability };
 }

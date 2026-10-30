@@ -140,12 +140,11 @@ test("policy cells preserve effective JSON values and override sources without i
     "Article assignments": { value: "3", source: "workflow override" },
     "Assignment strategy": { value: "round-robin", source: "workflow override" },
     "Fetch concurrency": { value: "7", source: "configuration" },
-    "Fetch timeout (ms)": { value: "4321" },
+    "Fetch timeout per HTTP attempt (ms)": { value: "4321" },
     "Parser workers": { value: "2" },
-    "Authority coefficient": { value: "1.25" },
+    "Estimated source authority coefficient": { value: "1.25" },
     "Article-pass adjustment enabled": { value: "false" },
-    "Failing checks before rest": { value: "4" },
-    "Rested runs before retry": { value: "4" },
+    "Availability controls": { value: "Not recorded" },
     "Reliability floor (fraction)": { value: "0.3" },
   });
   expect(cells).not.toHaveProperty("Selection");

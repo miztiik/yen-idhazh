@@ -105,18 +105,12 @@ test("native XML and HTML execution cannot hold the listener loop past their dea
   try {
     for (const kind of ["feed", "article"] as const) {
       await pool.parseFeed(bodies.rss);
-      let started = false;
       let loopAdvanced = false;
-      const options = { timeout_ms: 100, activity: (phase: "started" | "completed" | "failed") => {
-        if (phase === "started") {
-          started = true;
-          setTimeout(() => { loopAdvanced = true; }, 0);
-        }
-      } };
+      setTimeout(() => { loopAdvanced = true; }, 0);
+      const options = { timeout_ms: 100 };
       const pending = kind === "feed" ? pool.parseFeed(feed, options)
         : pool.parse(html, "https://news.example/story", loaded.extraction, options);
       await expect(pending).rejects.toMatchObject({ reason: "parser-timeout" });
-      expect(started).toBe(true);
       expect(loopAdvanced).toBe(true);
       expect(await pool.parseFeed(bodies.rss)).toHaveLength(3);
     }

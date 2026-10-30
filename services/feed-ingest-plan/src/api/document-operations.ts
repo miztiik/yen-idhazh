@@ -47,6 +47,10 @@ export async function executeDocumentOperation(
             status: result.artifact.failure === null ? "completed" : "failed" });
           return result;
         } catch (error) {
+          if (request.fetch_item_type === "feed" && error instanceof PlanError
+            && ["FEED_RESTING", "FEED_RETIRED", "FEED_CHECK_BUSY"].includes(error.code)) {
+            settleCollectionFeed(inputs, record.run_id, request.feed_id, null);
+          }
           await appendDocumentTiming(inputs, record.run_id, { operation: "fetch", duration_ms: Math.round(performance.now() - begin), status: "failed" });
           throw error;
         }

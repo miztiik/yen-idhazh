@@ -118,8 +118,8 @@ export function updateFeedOffer(
     };
   });
 }
-export function publicFeedOffers(batch: ParsedFeedBatch, policy: ArticleUrlPolicy) {
-  return batch.offers.map(offer => ({
+export function publicFeedOffers(batch: ParsedFeedBatch, policy: ArticleUrlPolicy, feedId: string) {
+  return batch.offers.filter(offer => offer.source.feed_id === feedId).map(offer => ({
     offer_id: offer.offer_id, feed_id: offer.source.feed_id, canonical_url: deriveArticleIdentity(offer.entry.link!, policy).canonical_url,
     title: offer.entry.title, categories: offer.entry.categories, published_at: offer.entry.published_at,
   }));

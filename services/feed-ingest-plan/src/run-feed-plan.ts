@@ -83,10 +83,18 @@ export async function runFeedPlan(raw: unknown, inputs: PlanInputs, runtime: Pla
     const processFeed = async (feedId: string) => {
       runtime.signal?.throwIfAborted();
       runtime.progress?.({ eventType: "FEED_FETCH_STARTED", feed_id: feedId, output_count: null });
-      const fetched = await call("fetch", {
-        request_id: randomUUID(), correlation_id: context.correlation_id,
-        feed_id: feedId, fetch_item_type: "feed", collection_id: collectionId,
-      }, FetchResponseSchema);
+      let fetched;
+      try {
+        fetched = await call("fetch", {
+          request_id: randomUUID(), correlation_id: context.correlation_id,
+          feed_id: feedId, fetch_item_type: "feed", collection_id: collectionId,
+        }, FetchResponseSchema);
+      } catch (error) {
+        if (!(error instanceof PlanError) || !["FEED_RESTING", "FEED_RETIRED", "FEED_CHECK_BUSY"].includes(error.code)) throw error;
+        emit("fetch", "completed", { feed_id: feedId, availability: error.code, output_count: 0 });
+        runtime.progress?.({ eventType: "FEED_FETCH_COMPLETED", feed_id: feedId, output_count: 0 });
+        return;
+      }
       if (fetched.failure !== null) {
         runtime.progress?.({ eventType: "FEED_FETCH_COMPLETED", feed_id: feedId, output_count: 0 });
         return;
@@ -168,17 +176,25 @@ export async function runFeedPlan(raw: unknown, inputs: PlanInputs, runtime: Pla
     emit("plan", "failed", { failure_code: failureCode });
     const collection = getCollection(inputs, collectionId);
     // A failed collection is not eligible for selection, but completed work remains inspectable.
+    let partialBatchId: string | undefined;
     try {
       const cancelled = await call("collections/cancel", { collection_id: collectionId }, CancelledCollectionSchema, true);
       files.rejected_articles ??= cancelled.rejected_articles;
-      if (files.feed_health_state === undefined && collection.state.work.rows().some(row => row.checked_at !== null)) {
-        const health = await call("feed-health-state", { batch_id: cancelled.batch_id, action: "record" },
-          FeedHealthStateUpdateResponseSchema, true);
-        if (health.files !== undefined) files.feed_health_state = health.files;
-      }
+      partialBatchId = cancelled.batch_id;
     } catch {
       failureCode = "COLLECTION_CANCEL_FAILED";
       emit("plan", "failed", { failure_code: failureCode });
+    }
+    if (partialBatchId !== undefined && files.feed_health_state === undefined
+      && collection.state.work.rows().some(row => row.checked_at !== null)) {
+      try {
+        const health = await call("feed-health-state", { batch_id: partialBatchId, action: "record" },
+          FeedHealthStateUpdateResponseSchema, true);
+        if (health.files !== undefined) files.feed_health_state = health.files;
+      } catch {
+        failureCode = "FEED_HEALTH_WRITE_FAILED";
+        emit("persist", "failed", { failure_code: failureCode });
+      }
     }
   }
   const state = await currentExecutionState(inputs, context.run_id);

@@ -112,11 +112,11 @@ Table A
 | --- | --- | --- |
 | A1 | `select-articles` | Accepts the complete parsed `batch_id`; returns a fresh selected ID, metadata-only articles, grouped exclusions and request report. No fetch, model call or automatic health write. |
 | A2 | `partition-articles` | Accepts a selected ID and optional configured strategy/count; returns assignments and estimated work without reranking. |
-| A3 | `feed-health-state` | Accepts a batch ID and explicit `summarize` or `record` action, defaulting to record; returns current health, request spend, `reliability.window_days` and actual receipts when saved. |
+| A3 | `feed-health-state` | Accepts a batch ID and explicit `summarize` or `record` action, defaulting to record; returns health, current durable availability and revision, request spend, `reliability.window_days` and actual receipts when saved. |
 | A4 | `persist-selected-articles` | Accepts a partitioned ID, or a selected ID when partitioning is disabled; writes selected and rejected metadata plus the selected text artifact, returning exact relative paths, `rejected_files` receipts even for zero-selected results, and a standalone run outcome where applicable. |
 | A5 | `collections` | Starts one run-owned collection with a UUIDv4 `collection_id` and validated planning controls. Returns the captured UTC context and configured feed IDs, not article text. |
-| A6 | `collections/complete` | Accepts `collection_id`; refuses until every required feed and offered article has a terminal outcome. Saves discovery evidence and exposes the complete global batch for selection. |
-| A7 | `collections/cancel` | Accepts `collection_id`; cancels owned work and prevents selection of the incomplete collection. |
+| A6 | `collections/complete` | Accepts `collection_id`; refuses until every required feed and offered article has a terminal outcome. Saves discovery and harvested-rejection evidence and exposes the complete global batch for selection. |
+| A7 | `collections/cancel` | Accepts `collection_id`; cancels owned work and prevents selection. Returns harvested-rejection receipts and a batch reference for explicit partial-health recording. |
 
 Each finalized execution is immutable. A fresh result must not overwrite a
 prior artifact or double-count its HTTP work. Replaying the same finalized
@@ -177,19 +177,24 @@ flowchart TD
   FETCH_ARTICLE -->|"Fetch failure or exclusion"| BATCH
   BATCH --> COMPLETE["POST /collections/complete<br/>all required work terminal"]
   COMPLETE --> DISCOVERY[("discovered-articles<br/>earliest known sighting")]
+  COMPLETE --> REJECTIONS[("Body-free harvested rejections")]
   COMPLETE --> SELECT["POST /select-articles<br/>global screening and selection"]
   SELECT --> ENABLED{"partition.enabled?"}
   ENABLED -->|"true"| PARTITION["POST /partition-articles"]
-  ENABLED -->|"false: no partition HTTP call"| PERSIST["POST /persist-selected-articles"]
-  PARTITION --> PERSIST
+  ENABLED -->|"false: no partition call; null assignments"| READY["Ready selected or partitioned batch"]
+  PARTITION --> READY
+  READY --> PERSIST["POST /persist-selected-articles"]
   PERSIST --> METADATA[("Body-free selected and rejected ledgers")]
   PERSIST --> TEXT["Separate selected full-text JSON artifact<br/>summarization is a later consumer"]
-  SELECT --> HEALTH["POST /feed-health-state<br/>record actual work"]
+  READY --> HEALTH["POST /feed-health-state<br/>record actual work and current availability"]
   HEALTH --> HEALTH_LEDGER[("feed-health-state")]
   PERSIST --> FINAL["Record completed, partial or failed run"]
   HEALTH --> FINAL
   FINAL --> RUNS[("plan-runs")]
   PLAN -->|"Cancellation or incomplete work"| CANCEL["POST /collections/cancel<br/>no selection of partial input"]
+  CANCEL --> REJECTIONS
+  CANCEL -->|"Completed feed work"| HEALTH
+  CANCEL --> FINAL
 ```
 
 Article fetch and parse requests can overlap and update the same batch.

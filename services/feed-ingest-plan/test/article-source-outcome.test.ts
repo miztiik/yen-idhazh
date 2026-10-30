@@ -171,7 +171,7 @@ test("the source rate stays eight out of ten when only three articles are select
   const summarize = (facts = rows, complete = true) => summarizePlanningHealth({
     uses: projectFeedHealthFields(context.date, facts),
     days: [{ day: context.date, complete }], sources: [source], now: at,
-    policy: { availability_strikes_before_rest: 3, reliability_window_days: 1, reliability_floor: 0 },
+    policy: { reliability_window_days: 1, reliability_floor: 0 },
     lifecycle_window_days: 1,
   }).sources.get(source.feed_id)!;
   expect(rows[0]!.article_candidates).toBe(8);

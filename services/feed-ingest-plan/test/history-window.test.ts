@@ -139,7 +139,7 @@ test("missing work, nullable counters and partial days never become measured zer
   expect(partial.request_report.feeds[0]!.coverage.article_requests.status).toBe("partial");
 });
 
-test("precise, legacy and tied timestamps preserve the recorded lifecycle uncertainty", async () => {
+test("historical timestamps cannot decide current endpoint availability", async () => {
   const setup = await input();
   const recorded = await Bun.file(new URL(
     "../../../tests/fixtures/feed-ingest-plan/health-order-cases.json", import.meta.url,
@@ -159,21 +159,22 @@ test("precise, legacy and tied timestamps preserve the recorded lifecycle uncert
   })));
   const forward = summarize(setup, rows, {
     sources, lifecycle_window_days: 1,
-    policy: { ...setup.policy, availability_strikes_before_rest: recorded.threshold },
+    policy: setup.policy,
   });
   const reverse = summarize(setup, [...rows].reverse(), {
     sources, lifecycle_window_days: 1,
-    policy: { ...setup.policy, availability_strikes_before_rest: recorded.threshold },
+    policy: setup.policy,
   });
   for (const testCase of recorded.cases) {
-    expect(forward.sources.get(testCase.id)!.lifecycle, testCase.id).toBe(testCase.expected);
+    expect(forward.sources.get(testCase.id)!.lifecycle, testCase.id)
+      .toBe(testCase.id === "known-retired" ? "retired" : "unknown");
     expect(reverse.sources.get(testCase.id), testCase.id).toEqual(forward.sources.get(testCase.id)!);
   }
 });
 
-test("incomplete lifecycle history cannot establish a resting feed", async () => {
+test("neither complete nor incomplete history replaces durable availability state", async () => {
   const setup = await input();
-  const rows = Array.from({ length: setup.policy.availability_strikes_before_rest }, (_, index) =>
+  const rows = Array.from({ length: setup.loaded.availability.consecutive_failed_checks_before_rest }, (_, index) =>
     work(undefined, {
       run_id: `2026-10-20-${index + 1}`,
       checked_at: `2026-10-20T06:00:0${index}Z`,
@@ -182,7 +183,7 @@ test("incomplete lifecycle history cannot establish a resting feed", async () =>
     }));
   const days = closedRequestDays(now, setup.lifecycle_window_days).map(day => ({ day, complete: true }));
   const complete = summarize(setup, rows, { days });
-  expect(complete.sources.get("recorded-news")!.lifecycle).toBe("resting");
+  expect(complete.sources.get("recorded-news")!.lifecycle).toBe("unknown");
   const partial = summarize(setup, rows, {
     days: days.map(day => day.day === "2026-10-19" ? { ...day, complete: false } : day),
   });
@@ -277,12 +278,12 @@ test("native history reads only named current-family days and rejects unbounded 
           ...defaultDayInput(registration("feed-health-state").prefix, day),
           raw_revision: dailyRevision, raw_files: [],
         }))], lifecycle_window_days: 2,
-      policy: { ...setup.policy, reliability_window_days: 2, availability_strikes_before_rest: 2 },
+      policy: { ...setup.policy, reliability_window_days: 2 },
     });
     expect(daily.represented_days).toEqual([earlier.date, recent.date]);
     expect(daily.days.map(day => day.day)).toEqual(daily.represented_days);
     expect(daily.sources.get("recorded-news")).toMatchObject({
-      lifecycle: "resting", strikes: 2,
+      lifecycle: "unknown", strikes: null,
       reliability: { attempted: 2, productive: 0, from_day: earlier.date, through_day: recent.date, complete: true },
     });
     expect(daily.request_report).toMatchObject({
@@ -319,14 +320,14 @@ test("native history reads only named current-family days and rejects unbounded 
         })),
       ];
       const periodRequest = { ...request, root: periodRoot, now: "2026-10-31T12:00:00Z", health_days: healthDays,
-        policy: { ...setup.policy, availability_strikes_before_rest: 2 } };
+        policy: setup.policy };
       const packed = await readFeedHistory(periodRequest);
       expect(packed.represented_days).toEqual([old.date, ...monthDays]);
       expect(packed.days.every(day => day.complete)).toBe(true);
       expect(packed.uses.feed_rest.rows).toHaveLength(6);
       expect(packed.uses.feed_rest.rows.filter(row => row.date === original.date).map(row => row.attempt).sort()).toEqual([1, 2]);
       expect(packed.sources.get("recorded-news")).toMatchObject({
-        lifecycle: "resting", strikes: 2,
+        lifecycle: "unknown", strikes: null,
         reliability: {
           attempted: 1, productive: 0, from_day: "2026-10-02", through_day: "2026-10-31",
           success_fraction: 0, production_factor: 0.5, complete: true,
@@ -341,7 +342,7 @@ test("native history reads only named current-family days and rejects unbounded 
       });
       expect(beforeMidnight.represented_days).not.toContain("2026-10-31");
       expect(beforeMidnight.sources.get("recorded-news")).toMatchObject({
-        strikes: 3, reliability: { attempted: 2, from_day: "2026-10-01", through_day: "2026-10-30", complete: true },
+        strikes: null, reliability: { attempted: 2, from_day: "2026-10-01", through_day: "2026-10-30", complete: true },
       });
       const compactBytes = await readFile(compact.path!);
       const failureRequest = {

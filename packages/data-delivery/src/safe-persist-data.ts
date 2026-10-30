@@ -86,7 +86,7 @@ function absoluteRoot(value: string, name: string): void {
   }
 }
 
-async function checkedSource(root: string, file: CheckedFile): Promise<Uint8Array> {
+async function checkedSource(root: string, file: CheckedFile, maxBytes?: number): Promise<Uint8Array> {
   let current = root;
   const parts = file.sourcePath.split("/");
   for (const [index, part] of parts.entries()) {
@@ -97,6 +97,9 @@ async function checkedSource(root: string, file: CheckedFile): Promise<Uint8Arra
     }
     if (index === parts.length - 1 && process.platform !== "win32" && (info.mode & 0o111) !== 0) {
       throw new SafePersistDataError("Completed output is executable", "integrity-refused", [file.sourcePath]);
+    }
+    if (index === parts.length - 1 && maxBytes !== undefined && info.size > maxBytes) {
+      throw new SafePersistDataError("Completed output exceeds its configured byte bound", "integrity-refused", [file.sourcePath]);
     }
   }
   const actual = await realpath(current);
@@ -179,8 +182,14 @@ async function requiredGitOutput(
 }
 
 async function fetchMain(repository: string, timeout: number): Promise<string> {
-  await requiredGit(repository, ["fetch", "--quiet", "--no-tags", "origin", MAIN_REF], { timeout });
-  return requiredGit(repository, ["rev-parse", "--verify", "FETCH_HEAD"], { timeout });
+  const reference = `refs/data-delivery-fetch/${randomUUID()}`;
+  try {
+    await requiredGit(repository, ["fetch", "--quiet", "--no-tags", "--no-write-fetch-head",
+      "origin", `${MAIN_REF}:${reference}`], { timeout });
+    return await requiredGit(repository, ["rev-parse", "--verify", reference], { timeout });
+  } finally {
+    await requiredGit(repository, ["update-ref", "--no-deref", "-d", reference], { timeout });
+  }
 }
 
 async function gitBlob(repository: string, oid: string, timeout: number): Promise<Uint8Array> {
@@ -253,16 +262,22 @@ export async function read_git_data(input: ReadGitDataInput): Promise<ReadGitDat
   const entries = await treeEntries(repository, revision, paths, VERIFICATION_MILLISECONDS);
   const files = await Promise.all(paths.map(async path => {
     const entry = entries.get(path);
-    const ever_published = await gitPathEverPublished(repository, revision, path, VERIFICATION_MILLISECONDS);
-    if (entry === undefined) return { path, sha256: null, content: null, ever_published };
+    if (entry === undefined) {
+      const ever_published = await gitPathEverPublished(repository, revision, path, VERIFICATION_MILLISECONDS);
+      return { path, sha256: null, content: null, ever_published };
+    }
     if (entry.type !== "blob" || entry.mode !== PLAIN_FILE_MODE) {
       throw new SafePersistDataError("Named Git data is not a plain file", "integrity-refused", [path]);
+    }
+    const size = Number(await requiredGit(repository, ["cat-file", "-s", entry.oid], { timeout: VERIFICATION_MILLISECONDS }));
+    if (!Number.isSafeInteger(size) || size < 0 || size > parsed.max_bytes) {
+      throw new SafePersistDataError("Named Git data exceeds its configured byte bound", "integrity-refused", [path]);
     }
     const bytes = await gitBlob(repository, entry.oid, VERIFICATION_MILLISECONDS);
     if (bytes.byteLength > parsed.max_bytes) {
       throw new SafePersistDataError("Named Git data exceeds its configured byte bound", "integrity-refused", [path]);
     }
-    return { path, sha256: sha256(bytes), content: Buffer.from(bytes).toString("base64"), ever_published };
+    return { path, sha256: sha256(bytes), content: Buffer.from(bytes).toString("base64"), ever_published: true };
   }));
   return ReadGitDataResultSchema.parse({ revision, files });
 }
@@ -283,7 +298,7 @@ export async function compare_and_swap_data(input: CompareAndSwapDataInput): Pro
     });
   }
   for (const file of files) {
-    file.bytes = await checkedSource(sourceRoot, file);
+    file.bytes = await checkedSource(sourceRoot, file, parsed.max_bytes);
     if (file.bytes.byteLength > parsed.max_bytes) {
       throw new SafePersistDataError("CAS output exceeds its configured byte bound", "integrity-refused", [file.targetPath]);
     }
@@ -298,9 +313,9 @@ export async function compare_and_swap_data(input: CompareAndSwapDataInput): Pro
     timeout: VERIFICATION_MILLISECONDS,
   });
   if (landed.code === 0) {
-    const remaining = await validateMutableTargets(repository, revision, files, VERIFICATION_MILLISECONDS);
+    const remaining = await validateMutableTargets(repository, candidate, files, VERIFICATION_MILLISECONDS);
     if (remaining.length === 0) {
-      const actual = await treeEntries(repository, revision, files.map(file => file.targetPath), VERIFICATION_MILLISECONDS);
+      const actual = await treeEntries(repository, candidate, files.map(file => file.targetPath), VERIFICATION_MILLISECONDS);
       for (const file of files) {
         const entry = actual.get(file.targetPath);
         const blob = blobs.get(file.targetPath);
@@ -310,7 +325,7 @@ export async function compare_and_swap_data(input: CompareAndSwapDataInput): Pro
       }
       return CompareAndSwapDataResultSchema.parse({
         destination: "git", status: "published", expected_revision: parsed.expected_revision,
-        revision, commit: candidate, paths: files.map(file => file.targetPath),
+        revision: candidate, commit: candidate, paths: files.map(file => file.targetPath),
       });
     }
   } else if (landed.code !== 1) {

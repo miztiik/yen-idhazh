@@ -23,6 +23,7 @@ import { PlanError } from "./plan-request";
 import { rememberDocumentHealth } from "./document-state";
 import { restoreSourceHealth } from "./restore-source-health";
 import { plannerMemory } from "../planner-memory";
+import { readFeedAvailability } from "../availability/feed-availability";
 
 export async function prepareRequestReport(inputs: PlanInputs, now: string, current?: CurrentHealthWork,
   cache = createPlannerHistoryCache<Record<string, unknown>>()) {
@@ -78,7 +79,7 @@ export async function executeFeedHealthState(raw: unknown, inputs: PlanInputs, r
     const rows = captureHealthRows(document.work.rows(), summary.sources);
     const files = request.action === "record" ? await recordFeedHealthState(rows, document.context, inputs) : null;
     return { batch_id: request.batch_id, status: request.action === "record" ? "recorded" as const : "summarized" as const,
-      rows, request_report: summary.request_report, reliability, ...(files === null ? {} : { files }) };
+      rows, request_report: summary.request_report, reliability, availability: summary.availability, ...(files === null ? {} : { files }) };
   }
   const held = stageStore(inputs).inspect(request.batch_id);
   if (held.stage === "parsed") {
@@ -92,13 +93,14 @@ export async function executeFeedHealthState(raw: unknown, inputs: PlanInputs, r
     const rows = captureHealthRows(parsed.work_rows, summary.sources);
     const files = request.action === "record" ? await recordFeedHealthState(rows, parsed.context, inputs) : null;
     return { batch_id: request.batch_id, status: request.action === "record" ? "recorded" as const : "summarized" as const,
-      rows, request_report: summary.request_report, reliability, ...(files === null ? {} : { files }) };
+      rows, request_report: summary.request_report, reliability, availability: summary.availability, ...(files === null ? {} : { files }) };
   }
   const selected = held.stage === "selected" ? SelectedFeedBatchSchema.parse(held.value) : PartitionedFeedBatchSchema.parse(held.value);
   requireStageConfiguration(selected, inputs, runtime);
+  const availability = await readFeedAvailability(inputs, utcTimestamp(runtime.observation_clock));
   const files = request.action === "record" ? await recordFeedHealthState(selected.health_rows, selected.context, inputs) : null;
   return { batch_id: request.batch_id, status: request.action === "record" ? "recorded" as const : "summarized" as const,
-    rows: selected.health_rows, request_report: selected.request_report, reliability, ...(files === null ? {} : { files }) };
+    rows: selected.health_rows, request_report: selected.request_report, reliability, availability, ...(files === null ? {} : { files }) };
 }
 
 const healthWrites = new WeakMap<PlanInputs, Map<string, { fingerprint: string; result: Promise<PersistLedgerResult> }>>();

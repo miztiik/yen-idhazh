@@ -482,6 +482,9 @@ no permanent compatibility API.
 | K12 | Host probes | `POST /api/2026-10-24/start-task-profile` | Implemented optional explicitly pinned process profiling |
 | K13 | Host probes | `POST /api/2026-10-24/stop-task-profile` | Implemented stop/readback for that profile |
 | K14 | Host probes | `POST /api/2026-10-24/cache/latency` | Implemented optional owned cache benchmark; not planner article timing |
+| K15 | Feed planner | `POST /api/2026-10-20/collections` | Starts one run-owned collection and captures eligible feeds, run identity and policy |
+| K16 | Feed planner | `POST /api/2026-10-20/collections/complete` | Requires terminal feed/article work, saves discovery and harvested rejections, and returns the complete global batch |
+| K17 | Feed planner | `POST /api/2026-10-20/collections/cancel` | Cancels owned work, blocks partial-input selection, and returns rejection receipts and a partial-health batch reference |
 
 The two health paths belong to different service listeners. The standalone RAM
 HTTP proof uses K11; it is not another RAM API. The ledger writer is a library
@@ -551,7 +554,9 @@ The shared operation:
 
 `/plan` calls the shared TypeScript reader before selection, then the shared
 recording/update operation after selection while partitioning can proceed.
-These are direct stage calls, not HTTP self-calls. Standalone
+These are real HTTP requests to stage APIs on the same trusted local listener,
+not direct calls into stage execution modules. They do not imply process isolation
+or an external message broker. Standalone
 `/select-articles` does not acquire an implicit update side effect; K8 remains
 an explicit operator operation.
 

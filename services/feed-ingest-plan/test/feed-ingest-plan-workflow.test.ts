@@ -66,7 +66,7 @@ test("manual controls exercise the planner API and keep only required outputs", 
     ["trade_press_age_hours", "Trade press - article age windows (hours)"],
     ["community_age_hours", "Community sources - article age windows (hours)"],
   ] as const) {
-    expect(controls[field]!.description).toBe(description);
+    expect(controls[field]!.description).toBe(`${description}; increasing comma-separated steps; blank uses configuration`);
     expect(controls[field]!.default).toBe("");
     expect(controls[field]!.required).toBe(false);
   }

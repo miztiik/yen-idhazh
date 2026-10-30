@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { copyFile, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
+import { chmod, copyFile, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { expect, test } from "bun:test";
@@ -204,6 +204,9 @@ test("Git CAS publishes a complete state snapshot only from its exact baseline",
     expect(published.files.map(file => file.ever_published)).toEqual([true, true]);
     expect(Buffer.from(published.files[0]!.content!, "base64").toString()).toBe(new TextDecoder().decode(stateBytes));
     expect(Buffer.from(published.files[1]!.content!, "base64").toString()).toBe(new TextDecoder().decode(markerBytes));
+    await expect(read_git_data({
+      repository: fixture.repository, max_bytes: 1, paths: [{ path: statePath }],
+    })).rejects.toMatchObject({ code: "integrity-refused" });
 
     await writeFile(join(fixture.sourceRoot, "completed", "item.bin"), changedBytes);
     const stale = await compare_and_swap_data({
@@ -214,6 +217,7 @@ test("Git CAS publishes a complete state snapshot only from its exact baseline",
       files: [{ sourcePath: "completed/item.bin", targetPath: statePath, sha256: digest(changedBytes) }],
       permittedPaths: permissions, committer, message: "Stale availability update",
     });
+
     expect(stale).toMatchObject({ status: "conflict", expected_revision: fixture.base, revision: published.revision });
     const after = await read_git_data({
       repository: fixture.repository, max_bytes: 4096, paths: [{ path: statePath }, { path: markerPath }],
@@ -239,6 +243,47 @@ test("Git CAS publishes a complete state snapshot only from its exact baseline",
     await fixture.close();
   }
 }, 30000);
+
+test("Git CAS confirms its own publication when a later state update has already landed", async () => {
+  const fixture = await repositoryFixture();
+  const statePath = "state/raw/planner/availability/state.json";
+  const bytes = new TextEncoder().encode('{"sequence":1}\n');
+  try {
+    await createSource(fixture.sourceRoot, bytes);
+    const hook = join(fixture.origin, "hooks", "post-receive");
+    await writeFile(hook, [
+      "#!/bin/sh", "set -eu",
+      "read before after reference",
+      'test "$reference" = refs/heads/main || exit 0',
+      'index=$(mktemp)', 'rm "$index"', 'export GIT_INDEX_FILE="$index"',
+      'trap \'rm -f "$GIT_INDEX_FILE"\' EXIT',
+      'git read-tree "$after"',
+      'blob=$(printf \'{"sequence":2}\\n\' | git hash-object -w --stdin)',
+      `git update-index --add --cacheinfo 100644 "$blob" "${statePath}"`,
+      'tree=$(git write-tree)',
+      'next=$(printf "Record subsequent state\\n" | git -c user.name=Fixture -c user.email=fixture@example.test commit-tree "$tree" -p "$after")',
+      'git update-ref "$reference" "$next" "$after"', "",
+    ].join("\n"));
+    await chmod(hook, 0o755);
+    const result = await compare_and_swap_data({
+      sourceRoot: fixture.sourceRoot, destination: { kind: "git", repository: fixture.repository },
+      expected_revision: fixture.base, max_bytes: 4096,
+      files: [{ sourcePath: "completed/item.bin", targetPath: statePath, sha256: digest(bytes) }],
+      permittedPaths: ["state/raw/planner/availability"],
+      committer: { name: "Fixture", email: "fixture@example.test" }, message: "Record first state",
+    });
+    expect(result.status).toBe("published");
+    if (result.status !== "published") throw new Error("The generated origin must accept the first state");
+    expect(result.revision).toBe(result.commit);
+    const latest = await read_git_data({
+      repository: fixture.repository, max_bytes: 4096, paths: [{ path: statePath }],
+    });
+    expect(latest.revision).not.toBe(result.commit);
+    expect(Buffer.from(latest.files[0]!.content!, "base64").toString()).toBe('{"sequence":2}\n');
+    expect(await git(fixture.repository, ["show", `${result.commit}:${statePath}`])).toBe('{"sequence":1}');
+    expect(await git(fixture.repository, ["for-each-ref", "--format=%(refname)", "refs/data-delivery-fetch/"])).toBe("");
+  } finally { await fixture.close(); }
+}, 120000);
 
 test("artifact delivery copies only named files, verifies hashes and refuses replacement", async () => {
   const root = await mkdtemp(join(tmpdir(), "data-artifacts-"));

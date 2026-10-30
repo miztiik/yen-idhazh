@@ -269,6 +269,11 @@ number that decided it, and the manifest is the only committed record of a plan.
 
 ## Six knobs name the questions the one knob used to answer
 
+This section describes the shared Python pipeline. The TypeScript feed planner
+does not use either shared run-count rest setting. Its current availability
+state and controls are independent of historical health rows; see
+[the planner runner](feed-plan-runner.md).
+
 | Knob | Default | The question |
 | --- | --- | --- |
 | `collect.availability_strikes_before_rest` | 5 | How much evidence before a run stops asking - and how long is the rest? |
