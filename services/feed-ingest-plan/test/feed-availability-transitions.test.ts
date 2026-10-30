@@ -112,9 +112,24 @@ test("a long episode with fewer than seven failed recovery checks is not retired
   expect(state.retired_at).toBeNull();
 });
 
-test("recovery rest configuration cannot be less than 24 hours", () => {
-  expect(() => FeedAvailabilityConfigSchema.parse({
-    ...config,
-    recovery_rest_hours: 23,
-  })).toThrow();
+test("configured rest intervals preserve the elapsed gate anchored before rest entry", () => {
+  const hourly = FeedAvailabilityConfigSchema.parse({ ...config, rest_hours: 1, recovery_rest_hours: 1 });
+  const state = record();
+  for (let count = 0; count < 4; count++) {
+    applyAvailabilityCompletion(state, complete("confirmed-http-failure", start), hourly);
+  }
+  applyAvailabilityCompletion(state, complete("confirmed-http-failure", atHours(10)), hourly);
+  expect(state.rest_until).toBe(atHours(11));
+  for (let hour = 11; hour <= 17; hour++) {
+    applyAvailabilityCompletion(state, complete("confirmed-http-failure", atHours(hour)), hourly);
+  }
+  expect(state.episode?.failed_recovery_checks).toBe(7);
+  expect(state.episode?.first_confirmed_failure_at).toBe(start);
+  expect(state.retired_at).toBeNull();
+  applyAvailabilityCompletion(state, complete("confirmed-http-failure", atHours(35)), hourly);
+  expect(state.retired_at).toBeNull();
+  expect(state.rest_until).toBe(atHours(36));
+  applyAvailabilityCompletion(state, complete("confirmed-http-failure", atHours(36)), hourly);
+  expect(state.retired_at).toBe(atHours(36));
+  expect(() => FeedAvailabilityConfigSchema.parse({ ...config, recovery_rest_hours: 0 })).toThrow();
 });

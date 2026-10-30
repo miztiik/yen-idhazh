@@ -9,7 +9,8 @@ import type { PreparedOperation } from "./operation-store";
 
 function operationConfiguration(inputs: PlanInputs, runtime: PlanRuntime) {
   return {
-    harvest: inputs.harvest.config_sha256, settings: inputs.settings, clock: inputs.clock_config,
+    harvest: inputs.harvest.config_sha256, policy: inputs.harvest.config, availability: inputs.availability,
+    settings: inputs.settings, clock: inputs.clock_config,
     ledger: inputs.ledgerSettings, registrations: inputs.registrations,
     attempt: runtime.attempt ?? FIRST_RUN_ATTEMPT,
     producer: runtime.producer ?? DEFAULT_PLANNER_PRODUCER, git_sha: runtime.git_sha,

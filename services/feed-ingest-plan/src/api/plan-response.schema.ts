@@ -23,7 +23,7 @@ export const PlanResponseSchema = PlanRunRowSchema.safeExtend({
   if ((value.status === "completed") !== (value.failure_code === null)) ctx.addIssue({ code: "custom", message: "Only an unsuccessful run has a failure cause" });
   if (value.assignments.some((article, index) => article.url_key !== value.selected_url_keys[index]
     || article.editorial_rank !== index + 1 || (article.worker_assignment === null
-      ? value.planning_complete : article.worker_assignment >= value.dispatch_count))) {
+      ? value.planning_complete && value.dispatch_count !== 0 : article.worker_assignment >= value.dispatch_count))) {
     ctx.addIssue({ code: "custom", message: "Selected order, ranks and worker assignments must match the run" });
   }
 });

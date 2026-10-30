@@ -26,6 +26,8 @@ a unique `feed_id` and UUID `enrollment_id` under
 reservation, rest and retirement state. Remove the event from configuration
 after it has been applied; the saved enrollment ID prevents replaying the same
 event from resetting later checks.
+An interrupted check remains unavailable until its matching completion arrives
+or an operator reenrolls the endpoint. A new run cannot assume it failed.
 
 The configured read set is two named files and each file is bounded by
 `max_state_bytes`. The complete enrollment is bounded by `max_enrolled_feeds`.
@@ -55,7 +57,7 @@ Table A
 A recovery check is allowed at or after the recorded UTC deadline. Only a
 confirmed target HTTP 404, 410 or 5xx advances the failed-recovery count.
 Retirement needs a new such failure after both configured limits are met.
-Because recovery rests are at least 24 hours, the count can take longer than
+With the default recovery rest of 24 hours, the count can take longer than
 the minimum episode age. These are independent controls.
 With these defaults, the seventh recovery check is no earlier than 168 hours
 after entering rest. The 36-hour age gate starts at the first confirmed source
@@ -97,8 +99,7 @@ does not move the caller's checkout, HEAD or index.
 ## Configuration and operation
 
 The effective thresholds appear in the workflow policy report. `rest_hours`
-and `recovery_rest_hours` are separate knobs; recovery rest cannot be
-configured below 24 hours. Retirement requires both
+and `recovery_rest_hours` are separate positive-duration knobs. Retirement requires both
 `failed_recovery_checks_before_retirement` and
 `retirement_minimum_age_hours`.
 

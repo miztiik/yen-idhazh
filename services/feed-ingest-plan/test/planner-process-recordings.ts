@@ -6,8 +6,8 @@ import { recordedPlan } from "./plan-recordings";
 import { loadPlanInputs } from "../src/load-plan-inputs";
 import { createPlannerStartup } from "../scripts/feed-ingest-plan-supervisor";
 
-export async function recordedPlannerProcess() {
-  const fixture = await recordedPlan();
+export async function recordedPlannerProcess(sources?: Parameters<typeof recordedPlan>[0]) {
+  const fixture = await recordedPlan(sources);
   try {
     const configRoot = new URL("../../../config/", import.meta.url);
     await mkdir(join(fixture.directory, "config"));

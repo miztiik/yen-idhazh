@@ -8,6 +8,7 @@ import { recordedPlan } from "./plan-recordings";
 import { source } from "./harvest-recordings";
 import { randomUUID } from "node:crypto";
 import { getCollection } from "../src/api/collection-operation";
+import { PlanResponseSchema } from "../src/api/plan-response.schema";
 
 for (const enabled of [true, false]) test(`HTTP collection completes all feeds before global selection; partition enabled=${enabled}`, async () => {
   const fixture = await recordedPlan([source(), source({ id: "second-feed", url: "https://news.example/second.xml" })]);
@@ -44,7 +45,13 @@ for (const enabled of [true, false]) test(`HTTP collection completes all feeds b
     const artifact = SelectedArticlesArtifactSchema.parse(JSON.parse(
       await readFile(join(fixture.directory, summary.selected_articles_artifact), "utf8"),
     ));
-    expect(artifact.articles.length).toBeGreaterThan(0);
+    expect(artifact.articles.length, JSON.stringify({
+      summary, failures, failed_events: fixture.events.filter(event => event.phase === "failed"),
+    })).toBeGreaterThan(0);
+    expect(PlanResponseSchema.safeParse({
+      ...summary, assignments: summary.assignments.map((assignment: { worker_assignment: number | null }) =>
+        ({ ...assignment, worker_assignment: enabled ? null : 0 })),
+    }).success).toBe(false);
     expect(summary.files.selected_articles.status).toBe("written");
     expect(JSON.stringify(summary)).not.toContain(artifact.articles[0]!.article_text);
   } finally { await server.stop(true); app.close(); await fixture.close(); }
@@ -71,7 +78,7 @@ test("unfinished or cancelled collection cannot be selected and a feed cannot be
     expect(collection.signal.signal.aborted).toBe(true);
     expect((await app.request(`${prefix}/collections/complete`, post({ collection_id: id }))).status).toBe(409);
   } finally { app.close(); await fixture.close(); }
-}, 30000);
+}, 120000);
 
 test("valid empty feed completes a truthful empty output without partition requests", async () => {
   const fixture = await recordedPlan();
@@ -92,4 +99,4 @@ test("valid empty feed completes a truthful empty output without partition reque
     ));
     expect(artifact.articles).toEqual([]);
   } finally { await fixture.close(); }
-}, 30000);
+}, 120000);

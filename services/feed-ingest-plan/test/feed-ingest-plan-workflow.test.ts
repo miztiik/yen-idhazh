@@ -43,13 +43,13 @@ async function workflow() {
 }
 
 test("workflow preparation validates dispatch data and requires execution controls before loading files", async () => {
-  expect(readWorkflowRequest({ ARTICLE_LIMIT: "", SHARDS: "  " })).toEqual({});
+  expect(readWorkflowRequest({ ARTICLE_LIMIT: "", SHARDS: "  " })).toEqual({ request: {}, policy_overrides: {} });
   expect(readWorkflowRequest({
     ARTICLE_LIMIT: "5", SHARDS: "2", PARTITION_STRATEGY: "round-robin",
-  })).toEqual({ article_limit: 5, shards: 2, partition_strategy: "round-robin" });
+  })).toEqual({ request: { article_limit: 5, shards: 2, partition_strategy: "round-robin" }, policy_overrides: {} });
   expect(() => readWorkflowRequest({ ARTICLE_LIMIT: "0" })).toThrow();
   expect(() => readWorkflowRequest({ PARTITION_STRATEGY: "unknown" })).toThrow();
-  expect(readWorkflowRequest({ FRESHNESS_HOURS: "12" })).toEqual({});
+  expect(readWorkflowRequest({ FRESHNESS_HOURS: "12" })).toEqual({ request: {}, policy_overrides: {} });
   await expect(preparePlannerWorkflow(root, {})).rejects.toThrow("Workflow execution controls are missing");
 });
 

@@ -38,9 +38,10 @@ revision, then checks that the HTTP health response matches. An occupied port,
 wrong identity, early child exit or expired readiness fails the step explicitly.
 The same child handles planning and the health summary before shutdown.
 
-The private startup pipe carries validated effective settings, a relative
-temporary output root and scalar execution identity. The child reloads named
-authored inputs, then reconstructs its fixed run-start clock and live selection
+The private startup pipe carries validated effective settings and planning
+policy, a relative temporary output root and scalar execution identity.
+The child reloads named authored inputs, applies that invocation's effective
+policy, then reconstructs its fixed run-start clock and live selection
 clock. No function, map, credential or article body crosses this pipe. Startup
 data is not a saved artifact and is never accepted by an HTTP route. Plain
 `--serve` does not stage history or supply workflow controls.

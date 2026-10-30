@@ -12,7 +12,7 @@ import { requestPlannerHttp } from "./feed-ingest-plan-http-client";
 
 export function createPlannerStartup(inputs: PlanInputs, runtime: PlannerStartup["runtime"]) {
   return PlannerStartupSchema.parse({
-    nonce: randomUUID(), settings: inputs.settings,
+    nonce: randomUUID(), settings: inputs.settings, planning: inputs.harvest.config,
     output_root: relative(inputs.root, inputs.outputRoot).replaceAll("\\", "/"), runtime,
   });
 }

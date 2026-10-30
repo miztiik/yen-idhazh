@@ -1,11 +1,12 @@
 /** Which private, transient controls can cross into a workflow's planner child? */
 import { z } from "zod";
-import { CommitShaSchema, PositiveCountSchema } from "@idhazh/common-contracts";
+import { CommitShaSchema, PositiveCountSchema, FeedIngestConfigSchema } from "@idhazh/common-contracts";
 import { ServiceSettingsSchema } from "./service-settings";
 
 // This pipe protocol is not a saved artifact or an HTTP input.
 export const PlannerStartupSchema = z.strictObject({
   nonce: z.uuid(),
+  planning: FeedIngestConfigSchema,
   settings: ServiceSettingsSchema.refine(value =>
     ["127.0.0.1", "::1"].includes(value.listener.hostname), "Workflow listener must bind loopback"),
   output_root: z.string().min(1).refine(value =>

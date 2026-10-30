@@ -17,7 +17,7 @@ export const FeedAvailabilityConfigSchema = z.strictObject({
   max_state_bytes: z.number().int().positive(),
   consecutive_failed_checks_before_rest: z.number().int().positive(),
   rest_hours: z.number().finite().positive(),
-  recovery_rest_hours: z.number().finite().min(24),
+  recovery_rest_hours: z.number().finite().positive(),
   failed_recovery_checks_before_retirement: z.number().int().positive(),
   retirement_minimum_age_hours: z.number().finite().positive(),
   max_cas_refresh_attempts: z.number().int().positive(),

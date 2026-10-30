@@ -1,5 +1,11 @@
 /** Do per-request age controls remain separate from source authority and concurrent runs? */
 import { expect, test } from "bun:test";
+import { createPlannerStartup } from "../scripts/feed-ingest-plan-supervisor";
+import { restorePlannerStartup } from "../scripts/feed-ingest-plan-server";
+import { PlannerStartupSchema } from "../src/config/planner-startup";
+import { operationConfigFingerprint } from "../src/api/operation-context";
+import { PlanRequestSchema } from "../src/api/plan-request";
+import { recordedPlannerProcess } from "./planner-process-recordings";
 import { FeedIngestConfigSchema, SourceBasedQualityBucketsSchema } from "@idhazh/common-contracts";
 import { parseAgeWindows, resolveRunPolicy } from "../src/config/resolve-run-policy";
 import { allocateSourceBasedQualityBucketBudgets, rejectArticleAge } from "../src/article-freshness-policy";
@@ -24,9 +30,12 @@ test("blank age controls retain config and populated controls require strictly i
   for (const value of ["0", "-1", "24,24", "36,24", "24,", ",24", "24,,48", "NaN", "Infinity", "0x18", "1e2", "one"]) {
     expect(() => parseAgeWindows(value)).toThrow();
   }
-  expect(readWorkflowRequest({
+  const workflow = readWorkflowRequest({
+    ARTICLE_LIMIT: "2",
     INSTITUTIONAL_AGE_HOURS: "12, 24", TRADE_PRESS_AGE_HOURS: "  ", COMMUNITY_AGE_HOURS: "6",
-  })).toEqual({ institutional_age_hours: [12, 24], community_age_hours: [6] });
+  });
+  expect(workflow.policy_overrides).toEqual({ institutional_age_hours: [12, 24], community_age_hours: [6] });
+  expect(PlanRequestSchema.parse(workflow.request)).toEqual({ article_limit: 2 });
 });
 
 test("source-based budgets use list order and source tier mapping, not matching identifiers", async () => {
@@ -80,3 +89,25 @@ test("policy reporting records effective ages and names their actual origin", as
     .toEqual(["community age steps (hours)", "3", "workflow override"]);
   expect(original.curate_articles.source_based_quality_buckets[0]!.ladder_hours).toEqual([24, 36, 48]);
 });
+
+test("the private child boundary preserves isolated age policies and fences different effective controls", async () => {
+  const fixture = await recordedPlannerProcess();
+  try {
+    const original = fixture.inputs.harvest.config;
+    const baseline = await config();
+    const narrowed = resolveRunPolicy(baseline, { trade_press_age_hours: [1, 2] });
+    const startup = createPlannerStartup({
+      ...fixture.inputs, harvest: { ...fixture.inputs.harvest, config: narrowed },
+    }, fixture.startup.runtime);
+    const first = await restorePlannerStartup(PlannerStartupSchema.parse(JSON.parse(JSON.stringify(startup))), fixture.directory);
+    const second = await restorePlannerStartup(createPlannerStartup({
+      ...fixture.inputs, harvest: { ...fixture.inputs.harvest, config: baseline },
+    }, fixture.startup.runtime), fixture.directory);
+    expect(first.inputs.harvest.config.curate_articles.source_based_quality_buckets
+      .find(bucket => bucket.id === "trade-press")!.ladder_hours).toEqual([1, 2]);
+    expect(second.inputs.harvest.config).toEqual(baseline);
+    expect(operationConfigFingerprint(first.inputs, first.runtime))
+      .not.toBe(operationConfigFingerprint(second.inputs, second.runtime));
+    expect(fixture.inputs.harvest.config).toEqual(original);
+  } finally { await fixture.close(); }
+}, 120000);
