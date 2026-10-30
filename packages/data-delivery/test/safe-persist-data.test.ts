@@ -4,6 +4,9 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { expect, test } from "bun:test";
 import {
+  compare_and_swap_data,
+  read_git_data,
+  CompareAndSwapDataInputSchema,
   SafePersistDataError,
   SafePersistDataInputSchema,
   SafePersistDataResultSchema,
@@ -150,7 +153,92 @@ test("the input contract refuses unsafe paths, broad permission and repeated tar
     files: 1,
     paths: [],
   }).success).toBe(false);
+  expect(CompareAndSwapDataInputSchema.safeParse({
+    sourceRoot: "C:\\run", destination: { kind: "git", repository: "C:\\repo" },
+    expected_revision: "not-a-revision", max_bytes: 4096, files: [],
+    permittedPaths: ["state/raw/planner/availability"],
+    committer: { name: "Test", email: "test@example.test" }, message: "CAS",
+  }).success).toBe(false);
 });
+
+test("Git CAS publishes a complete state snapshot only from its exact baseline", async () => {
+  const fixture = await repositoryFixture();
+  const statePath = "state/raw/planner/availability/state.json";
+  const markerPath = "state/raw/planner/availability/enrollment.json";
+  const stateBytes = new TextEncoder().encode('{"version":"2026-10-30","sequence":1}\n');
+  const markerBytes = new TextEncoder().encode('{"initialized":true}\n');
+  const changedBytes = new TextEncoder().encode('{"version":"2026-10-30","sequence":2}\n');
+  await createSource(fixture.sourceRoot, stateBytes);
+  await writeFile(join(fixture.sourceRoot, "completed", "marker.json"), markerBytes);
+  const committer = { name: "Test Data Delivery", email: "delivery@example.test" };
+  const permissions = ["state/raw/planner/availability"];
+  try {
+    const snapshot = await read_git_data({
+      repository: fixture.repository,
+      max_bytes: 4096,
+      paths: [{ path: statePath }, { path: markerPath }],
+    });
+    expect(snapshot.revision).toBe(fixture.base);
+    expect(snapshot.files).toEqual([
+      { path: statePath, sha256: null, content: null, ever_published: false },
+      { path: markerPath, sha256: null, content: null, ever_published: false },
+    ]);
+    const result = await compare_and_swap_data({
+      sourceRoot: fixture.sourceRoot,
+      destination: { kind: "git", repository: fixture.repository },
+      expected_revision: snapshot.revision,
+      max_bytes: 4096,
+      files: [
+        { sourcePath: "completed/item.bin", targetPath: statePath, sha256: digest(stateBytes) },
+        { sourcePath: "completed/marker.json", targetPath: markerPath, sha256: digest(markerBytes) },
+      ],
+      permittedPaths: permissions,
+      committer,
+      message: "Initialize availability state",
+    });
+    expect(result).toMatchObject({ status: "published", expected_revision: fixture.base, paths: [statePath, markerPath] });
+    const published = await read_git_data({
+      repository: fixture.repository, max_bytes: 4096, paths: [{ path: statePath }, { path: markerPath }],
+    });
+    expect(published.revision).toMatch(/^[a-f0-9]{40,64}$/);
+    expect(published.files.map(file => file.ever_published)).toEqual([true, true]);
+    expect(Buffer.from(published.files[0]!.content!, "base64").toString()).toBe(new TextDecoder().decode(stateBytes));
+    expect(Buffer.from(published.files[1]!.content!, "base64").toString()).toBe(new TextDecoder().decode(markerBytes));
+
+    await writeFile(join(fixture.sourceRoot, "completed", "item.bin"), changedBytes);
+    const stale = await compare_and_swap_data({
+      sourceRoot: fixture.sourceRoot,
+      destination: { kind: "git", repository: fixture.repository },
+      expected_revision: fixture.base,
+      max_bytes: 4096,
+      files: [{ sourcePath: "completed/item.bin", targetPath: statePath, sha256: digest(changedBytes) }],
+      permittedPaths: permissions, committer, message: "Stale availability update",
+    });
+    expect(stale).toMatchObject({ status: "conflict", expected_revision: fixture.base, revision: published.revision });
+    const after = await read_git_data({
+      repository: fixture.repository, max_bytes: 4096, paths: [{ path: statePath }, { path: markerPath }],
+    });
+    expect(after.revision).toBe(published.revision);
+    expect(after.files.map(file => file.ever_published)).toEqual([true, true]);
+    expect(Buffer.from(after.files[0]!.content!, "base64").toString()).toBe(new TextDecoder().decode(stateBytes));
+    expect(Buffer.from(after.files[1]!.content!, "base64").toString()).toBe(new TextDecoder().decode(markerBytes));
+
+    await git(fixture.repository, ["fetch", "--quiet", "origin", "refs/heads/main"]);
+    await git(fixture.repository, ["reset", "--hard", "FETCH_HEAD"]);
+    await git(fixture.repository, ["rm", "--", statePath, markerPath]);
+    await git(fixture.repository, ["commit", "-m", "Remove established availability files"]);
+    await git(fixture.repository, ["push", "origin", "HEAD:refs/heads/main"]);
+    const removed = await read_git_data({
+      repository: fixture.repository, max_bytes: 4096, paths: [{ path: statePath }, { path: markerPath }],
+    });
+    expect(removed.files).toEqual([
+      { path: statePath, sha256: null, content: null, ever_published: true },
+      { path: markerPath, sha256: null, content: null, ever_published: true },
+    ]);
+  } finally {
+    await fixture.close();
+  }
+}, 30000);
 
 test("artifact delivery copies only named files, verifies hashes and refuses replacement", async () => {
   const root = await mkdtemp(join(tmpdir(), "data-artifacts-"));

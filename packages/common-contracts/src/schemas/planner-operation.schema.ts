@@ -125,6 +125,7 @@ export const FetchRequestSchema = z.strictObject({
   request_id: RequestIdSchema, correlation_id: RequestIdSchema,
   feed_id: SlugSchema, fetch_item_type: z.enum(["feed", "article"]), url: UrlSchema.optional(),
   batch_id: RequestIdSchema.optional(), offer_id: Sha256Schema.optional(),
+  collection_id: RequestIdSchema.optional(),
   caused_by_event_id: z.uuid({ version: "v5" }).optional(),
 }).refine(value => value.fetch_item_type === "article" || (value.url === undefined && value.batch_id === undefined && value.offer_id === undefined), {
   message: "feed URLs come only from the configured source", path: ["url"],

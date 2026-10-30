@@ -22,6 +22,7 @@ import { readDocumentHealthBatch } from "./document-operations";
 import { PlanError } from "./plan-request";
 import { rememberDocumentHealth } from "./document-state";
 import { restoreSourceHealth } from "./restore-source-health";
+import { plannerMemory } from "../planner-memory";
 
 export async function prepareRequestReport(inputs: PlanInputs, now: string, current?: CurrentHealthWork,
   cache = createPlannerHistoryCache<Record<string, unknown>>()) {
@@ -58,6 +59,7 @@ export async function recordFeedHealthState(
     });
     if (saved.status === "skipped") throw new Error("Planner health write was refused");
     await rememberDocumentHealth(inputs, context.run_id, fingerprint);
+    plannerMemory(inputs).rememberHealth(rows);
     return saved;
   })();
   while (finished.size >= inputs.settings.listener.max_stage_batches) finished.delete(finished.keys().next().value!);

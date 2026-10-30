@@ -59,8 +59,8 @@ async function inputs() {
       harvest: { ...authored.harvest, blocked_categories: ["links", "video"] },
       triage: { ...authored.triage, min_words: 180, blocked_http_statuses: [401, 403, 429],
         recency_half_life_hours: 18, recency_weight: 0.6 },
-      curate_articles: { ...authored.curate_articles, article_quality_buckets: [
-        { tier: candidate.source.tier, share_pct: 100, buffer_pct: 0, ladder_hours: [24] },
+      curate_articles: { ...authored.curate_articles, source_based_quality_buckets: [
+        { id: "institutional", source_tier_id: candidate.source.tier, share_pct: 100, buffer_pct: 0, ladder_hours: [24] },
       ] },
     }),
     clock_config: { collect: { max_future_hours: 6 } },
@@ -206,8 +206,8 @@ test("global policies change only their declared gates for every feed", async ()
   input.planning = loadPlanningConfig({
     ...input.planning.config,
     triage: { ...input.planning.config.triage, min_words: 190 },
-    curate_articles: { ...input.planning.config.curate_articles, article_quality_buckets: [
-      { tier: candidate.source.tier, share_pct: 100, buffer_pct: 0, ladder_hours: [12] },
+    curate_articles: { ...input.planning.config.curate_articles, source_based_quality_buckets: [
+      { id: "institutional", source_tier_id: candidate.source.tier, share_pct: 100, buffer_pct: 0, ladder_hours: [12] },
     ] },
   });
   for (const feed of [candidate.feed_id, "another-configured-feed"]) {
@@ -218,7 +218,7 @@ test("global policies change only their declared gates for every feed", async ()
   const admitted = await change(200, "2026-10-21T00:00:00Z");
   expect(admitted.admitted[0]?.freshness.recency_bonus).toBeCloseTo(0.6 * 0.5 ** (12 / 18));
   expect(admitted.admitted[0]?.policy.triage.recency_half_life_hours).toBe(18);
-  expect(input.planning.config.curate_articles.article_quality_buckets[0]!.ladder_hours).toEqual([12]);
+  expect(input.planning.config.curate_articles.source_based_quality_buckets[0]!.ladder_hours).toEqual([12]);
   input.planning.config.triage.min_words = 200;
   expect((await change(199, "2026-10-21T11:00:00Z")).rejections[0]?.details.words_required).toBe(200);
   input.planning.config.triage.recency_weight = 0;

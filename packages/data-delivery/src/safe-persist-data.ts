@@ -2,6 +2,18 @@ import { createHash, randomUUID } from "node:crypto";
 import { chmod, lstat, link, mkdir, mkdtemp, readFile, realpath, rm, unlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { isAbsolute, join, relative, sep } from "node:path";
+import {
+  CompareAndSwapDataInputSchema,
+  CompareAndSwapDataResultSchema,
+  ReadGitDataInputSchema,
+  ReadGitDataResultSchema,
+} from "./compare-and-swap-data-contract";
+import type {
+  CompareAndSwapDataInput,
+  CompareAndSwapDataResult,
+  ReadGitDataInput,
+  ReadGitDataResult,
+} from "./compare-and-swap-data-contract";
 import { SafePersistDataInputSchema, SafePersistDataResultSchema } from "./safe-persist-data-contract";
 import type { SafePersistDataCommitter, SafePersistDataInput, SafePersistDataResult } from "./safe-persist-data-contract";
 
@@ -169,6 +181,151 @@ async function requiredGitOutput(
 async function fetchMain(repository: string, timeout: number): Promise<string> {
   await requiredGit(repository, ["fetch", "--quiet", "--no-tags", "origin", MAIN_REF], { timeout });
   return requiredGit(repository, ["rev-parse", "--verify", "FETCH_HEAD"], { timeout });
+}
+
+async function gitBlob(repository: string, oid: string, timeout: number): Promise<Uint8Array> {
+  const result = await runGit(repository, ["cat-file", "blob", oid], { timeout });
+  if (result.code !== 0) {
+    throw new SafePersistDataError("Git could not read a named data file", "delivery-failed");
+  }
+  return result.stdout;
+}
+
+async function gitPathEverPublished(repository: string, revision: string, path: string, timeout: number): Promise<boolean> {
+  const result = await runGit(repository, ["log", "-1", "--format=%H", revision, "--", path], { timeout });
+  if (result.code !== 0) {
+    throw new SafePersistDataError("Git could not check whether a named data file was previously published", "delivery-failed", [path]);
+  }
+  return result.stdout.byteLength > 0;
+}
+
+async function requireWorktreeRoot(repository: string): Promise<string> {
+  absoluteRoot(repository, "repository");
+  const resolved = await realpath(repository);
+  const worktree = await requiredGit(resolved, ["rev-parse", "--show-toplevel"]);
+  if (await realpath(worktree) !== resolved) {
+    throw new SafePersistDataError("Git destination must name the worktree root", "integrity-refused");
+  }
+  return resolved;
+}
+
+function namedTreePaths(paths: readonly string[]): string[] {
+  return [...new Set(paths.flatMap(path => {
+    const parts = path.split("/");
+    return [...parts.slice(0, -1).map((_part, index) => parts.slice(0, index + 1).join("/")), path];
+  }))];
+}
+
+async function validateMutableTargets(
+  repository: string,
+  baseline: string,
+  files: readonly CheckedFile[],
+  timeout: number,
+): Promise<CheckedFile[]> {
+  const entries = await treeEntries(repository, baseline, namedTreePaths(files.map(file => file.targetPath)), timeout);
+  const absent: CheckedFile[] = [];
+  for (const file of files) {
+    const parts = file.targetPath.split("/");
+    for (let count = 1; count < parts.length; count++) {
+      const parent = parts.slice(0, count).join("/");
+      const entry = entries.get(parent);
+      if (entry !== undefined && (entry.type !== "tree" || entry.mode !== "040000")) {
+        throw new SafePersistDataError("Mutable output parent is not a directory", "integrity-refused", [file.targetPath]);
+      }
+    }
+    const entry = entries.get(file.targetPath);
+    if (entry === undefined) {
+      absent.push(file);
+      continue;
+    }
+    if (entry.type !== "blob" || entry.mode !== PLAIN_FILE_MODE) {
+      throw new SafePersistDataError("Mutable output target is not a plain data file", "integrity-refused", [file.targetPath]);
+    }
+  }
+  return absent;
+}
+
+export async function read_git_data(input: ReadGitDataInput): Promise<ReadGitDataResult> {
+  const parsed = ReadGitDataInputSchema.parse(input);
+  const repository = await requireWorktreeRoot(parsed.repository);
+  const revision = await fetchMain(repository, VERIFICATION_MILLISECONDS);
+  const paths = parsed.paths.map(file => file.path);
+  const entries = await treeEntries(repository, revision, paths, VERIFICATION_MILLISECONDS);
+  const files = await Promise.all(paths.map(async path => {
+    const entry = entries.get(path);
+    const ever_published = await gitPathEverPublished(repository, revision, path, VERIFICATION_MILLISECONDS);
+    if (entry === undefined) return { path, sha256: null, content: null, ever_published };
+    if (entry.type !== "blob" || entry.mode !== PLAIN_FILE_MODE) {
+      throw new SafePersistDataError("Named Git data is not a plain file", "integrity-refused", [path]);
+    }
+    const bytes = await gitBlob(repository, entry.oid, VERIFICATION_MILLISECONDS);
+    if (bytes.byteLength > parsed.max_bytes) {
+      throw new SafePersistDataError("Named Git data exceeds its configured byte bound", "integrity-refused", [path]);
+    }
+    return { path, sha256: sha256(bytes), content: Buffer.from(bytes).toString("base64"), ever_published };
+  }));
+  return ReadGitDataResultSchema.parse({ revision, files });
+}
+
+export async function compare_and_swap_data(input: CompareAndSwapDataInput): Promise<CompareAndSwapDataResult> {
+  const parsed = CompareAndSwapDataInputSchema.parse(input);
+  absoluteRoot(parsed.sourceRoot, "sourceRoot");
+  const sourceRoot = await realpath(parsed.sourceRoot);
+  const repository = await requireWorktreeRoot(parsed.destination.repository);
+  const files: CheckedFile[] = parsed.files.map(file => ({ ...file, bytes: new Uint8Array() }));
+  const deadline = performance.now() + VERIFICATION_MILLISECONDS;
+  const timeout = Math.max(1, Math.ceil(deadline - performance.now()));
+  const baseline = await fetchMain(repository, timeout);
+  if (baseline !== parsed.expected_revision) {
+    return CompareAndSwapDataResultSchema.parse({
+      destination: "git", status: "conflict", expected_revision: parsed.expected_revision,
+      revision: baseline, paths: files.map(file => file.targetPath),
+    });
+  }
+  for (const file of files) {
+    file.bytes = await checkedSource(sourceRoot, file);
+    if (file.bytes.byteLength > parsed.max_bytes) {
+      throw new SafePersistDataError("CAS output exceeds its configured byte bound", "integrity-refused", [file.targetPath]);
+    }
+  }
+  const absent = await validateMutableTargets(repository, baseline, files, timeout);
+  await refuseNewIgnoredFiles(repository, absent, timeout);
+  const blobs = await buildGitBlobs(repository, files, sourceRoot, timeout);
+  const candidate = await createCandidate(repository, baseline, files, blobs, parsed.message, parsed.committer, timeout);
+  const pushed = await runGit(repository, ["push", "--no-thin", "origin", `${candidate}:${MAIN_REF}`], { timeout });
+  const revision = await fetchMain(repository, VERIFICATION_MILLISECONDS);
+  const landed = await runGit(repository, ["merge-base", "--is-ancestor", candidate, revision], {
+    timeout: VERIFICATION_MILLISECONDS,
+  });
+  if (landed.code === 0) {
+    const remaining = await validateMutableTargets(repository, revision, files, VERIFICATION_MILLISECONDS);
+    if (remaining.length === 0) {
+      const actual = await treeEntries(repository, revision, files.map(file => file.targetPath), VERIFICATION_MILLISECONDS);
+      for (const file of files) {
+        const entry = actual.get(file.targetPath);
+        const blob = blobs.get(file.targetPath);
+        if (entry?.type !== "blob" || entry.mode !== PLAIN_FILE_MODE || entry.oid !== blob) {
+          throw new SafePersistDataError("CAS candidate landed but completed bytes differ", "delivery-failed", [file.targetPath]);
+        }
+      }
+      return CompareAndSwapDataResultSchema.parse({
+        destination: "git", status: "published", expected_revision: parsed.expected_revision,
+        revision, commit: candidate, paths: files.map(file => file.targetPath),
+      });
+    }
+  } else if (landed.code !== 1) {
+    throw new SafePersistDataError("Git could not verify the CAS candidate ancestry", "delivery-failed");
+  }
+  if (revision !== parsed.expected_revision) {
+    return CompareAndSwapDataResultSchema.parse({
+      destination: "git", status: "conflict", expected_revision: parsed.expected_revision,
+      revision, paths: files.map(file => file.targetPath),
+    });
+  }
+  throw new SafePersistDataError(
+    pushed.code === 0 ? "Git accepted the CAS candidate but it is not visible on main" : "Git refused the CAS candidate",
+    "delivery-failed",
+  );
 }
 
 async function treeEntries(

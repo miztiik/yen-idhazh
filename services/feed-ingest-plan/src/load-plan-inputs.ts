@@ -5,6 +5,8 @@ import { ItemHealthFailureCodeSchema, NonNegativeSchema } from "@idhazh/common-c
 import { readHarvestInputs } from "./harvest-feeds/load-harvest-inputs";
 import { ServiceSettingsSchema } from "./config/service-settings";
 import { FeedHistoryPolicySchema } from "./read-ledger-history/read-feed-history";
+import { FeedAvailabilityConfigSchema } from "./availability/availability-config";
+import { SafePersistDataCommitterSchema } from "@idhazh/data-delivery";
 
 const LedgerSettingsSchema = z.object({
   format: z.literal("parquet"),
@@ -32,13 +34,15 @@ const ExtractionSettingsSchema = z.object({
 export async function loadPlanInputs(root: string, settingsPath = "config/feed-ingest-plan-service.json", preparedSettings?: unknown) {
   const settings = ServiceSettingsSchema.parse(preparedSettings ?? await Bun.file(resolve(root, settingsPath)).json());
   const paths = settings.inputs;
-  const [harvest, extraction, registry] = await Promise.all([
+  const [harvest, extraction, registry, availability, availabilityCommitter] = await Promise.all([
     readHarvestInputs({
       config: resolve(root, paths.planning), taxonomy: resolve(root, paths.taxonomy),
       sources: resolve(root, paths.sources), extraction: resolve(root, paths.extraction),
     }),
     Bun.file(resolve(root, paths.extraction)).json().then(value => ExtractionSettingsSchema.parse(value)),
     Bun.file(resolve(root, paths.registrations)).json().then(value => RegistrySchema.parse(value)),
+    Bun.file(resolve(root, "config/feed-availability.json")).json().then(value => FeedAvailabilityConfigSchema.parse(value)),
+    Bun.file(resolve(root, "config/data-delivery.json")).json().then(value => SafePersistDataCommitterSchema.parse(value)),
   ]);
   const registrations = Object.fromEntries(registry.families.flatMap(family => family.ledgers.map(ledger => [
     ledger.name, { ...ledger, family: family.name, lifecycle_status: family.lifecycle_status },
@@ -69,7 +73,7 @@ export async function loadPlanInputs(root: string, settingsPath = "config/feed-i
   const publishedWindowDays = settings.inputs.published_url_lookback_days
     ?? extraction.collect.published_window_days;
   return {
-    root, settings, harvest,
+    root, settings, harvest, availability, availabilityCommitter,
     clock_config: { collect: { ...extraction.collect, published_window_days: publishedWindowDays } },
     ledgerSettings: extraction.ledger, registrations: selected,
     outputRoot: resolve(root, paths.output_root),

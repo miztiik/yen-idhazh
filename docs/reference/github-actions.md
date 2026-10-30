@@ -66,6 +66,13 @@ There is no host index, remote host service or direct collector call. The
 workflow records a host fingerprint but does not profile live planner CPU or
 RAM.
 
+Three optional age-window controls cover institutional sources, trade press
+and community sources separately. Blank follows configuration; otherwise the
+input must be a strictly increasing comma-separated list of positive hours.
+The workflow resolves an isolated effective config before article collection
+and records the same settings in its policy report. These source-based
+budgets do not claim article-quality verdicts.
+
 Three tasks close the collection: commit all verified ledgers and write the
 report, upload one prepared run artifact, then check completion and clean up.
 Publication may retain completed diagnostics after planner failure; it never

@@ -1,6 +1,6 @@
 # Run the isolated feed planner checks
 
-**Last Updated**: 2026-10-28
+**Last Updated**: 2026-10-30
 
 How do you check the TypeScript planner without changing daily publication?
 Use offline cases for validation. The manual workflow performs real feed work
@@ -29,10 +29,27 @@ Completed planning is not proof of summarization or publication.
 
 ## Manual controls
 
-The dispatch form takes freshness, article limit, worker count and partition
-strategy through the real CLI request validator. Values are environment data,
-never interpolated shell code. Blank optional values use configuration.
+The dispatch form takes article limit, worker count, partition strategy and
+three independent article-age overrides. Their labels are:
+
+- `Institutional sources - article age windows (hours)`
+- `Trade press - article age windows (hours)`
+- `Community sources - article age windows (hours)`
+
+Each age input accepts a strictly increasing comma-separated list of positive
+hours, such as `24,36,48`. Blank optional values use configuration. Duplicate,
+decreasing, zero, negative and malformed age lists fail before collection.
+Values are environment data, never interpolated shell code. The run resolves
+its own config before article fetch, screening, selection and reporting;
+concurrent requests cannot replace each other's age windows. The applied
+policy report shows each effective age list and its origin.
 For `none`, clear the worker count or set it to one.
+
+`partition.enabled` in `config/feed-ingest-plan.json` defaults to true. Worker
+counts default to four, with configured bounds of one through twenty. When
+partitioning is disabled, selection still runs but worker assignment is
+bypassed. Source-based bucket shares and buffers remain 60/10, 30/5 and 10/5
+percent; age controls do not turn source authority into an article verdict.
 
 The workflow does not profile live planner CPU or RAM. It still records the
 configured host fingerprint and commits it with the planner ledgers.

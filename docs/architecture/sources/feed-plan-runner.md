@@ -1,6 +1,6 @@
 # Running the isolated feed planner
 
-**Last Updated**: 2026-10-29
+**Last Updated**: 2026-10-30
 
 How do the API and CLI execute one real feed plan?
 Both compose the same units. The production Python news pipeline, digest
@@ -52,23 +52,33 @@ killing only its owned child. Defaults allow 30 seconds for readiness, 10 second
 for drain and 5 seconds to confirm forced exit. The child also applies its own
 drain bound if its supervisor disappears. No process is detached, no process
 name is used for cleanup, and runner process tracking remains enabled.
-`POST /api/2026-10-20/plan` accepts optional numeric `article_limit`, `shards`
-and a configured partition strategy. Unknown fields, strings in numeric API
+`POST /api/2026-10-20/plan` accepts optional numeric `article_limit`, `shards`,
+a configured partition strategy, and `institutional_age_hours`,
+`trade_press_age_hours`, `community_age_hours` arrays. Each age array is a
+strictly increasing nonempty list of positive hours. Unknown fields, strings in numeric API
 fields, invalid counts and null controls fail before work. CLI blanks mean
 omission. There is no date control.
 
 An article limit bounds the chosen result, not the offered input. Age eligibility
-uses the configured article-quality ladder. Strategy `none` requires one worker;
-other counts obey the configured partition bounds.
+uses the run's effective source-based age windows, resolved before article
+fetching and reused by screening, selection and reporting. An omitted age
+array retains that bucket's configured windows. Strategy `none` requires one
+worker; other counts obey configured partition bounds, currently one through
+twenty with four by default. `partition.enabled=false` bypasses worker
+assignment without bypassing article selection.
 
 ## Real composition and identity
 
-The router dispatches to execution modules. Internal stages exchange
-validated serializable payloads. `/plan` does not call itself over HTTP.
-Permitted fetching supplies parsed candidates and actual work facts;
-selection waits for the complete eligible input and current health;
-partitioning waits for that selection. Health recording may overlap
-partitioning, and independent selected output survives a health-save refusal.
+The router dispatches to execution modules. `/plan` calls the stage APIs over
+the trusted local listener using validated JSON requests and outcomes. HTTP
+is transport, not process isolation or an external message broker.
+One collection owns one parsed batch for every configured feed, its offers,
+terminal outcomes, identity, effective policy and cancellation.
+Selection waits for all required feed and article work. It cannot select a
+single feed's partial input. When partitioning is enabled, its HTTP request
+follows selection. When disabled, there is no partition request: selected
+metadata keeps null worker assignments. Health recording and selected output
+are independent writes; useful selected output survives a health-save refusal.
 
 One execution has isolated run identity, attempt, clocks, counters, timings
 and batches. Run start supplies the accounting date. The saved parsed age
@@ -172,8 +182,10 @@ One supervised step gives the child the same lifetime as the HTTP client
 without losing in-memory batch references between planning and health reporting.
 Startup is a transient native payload, not a ledger, because no later run reads
 it. Pipe closure gives the child a cleanup signal even when the supervisor
-cannot deliver termination. Planning stages still compose inside the server,
-not through HTTP calls back to itself.
+cannot deliver termination. Planning stages use actual HTTP calls to that listener. The CLI and direct
+library entry start an owned ephemeral loopback listener for their stage calls
+and stop it after finalization. Completed stages proceed immediately; neither
+HTTP nor parser deadlines impose a minimum duration.
 
 Native workers provide real extraction overlap rather than promises around
 synchronous DOM work. Separate execution state prevents concurrent plans

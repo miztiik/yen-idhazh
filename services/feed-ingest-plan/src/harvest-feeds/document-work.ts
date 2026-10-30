@@ -9,6 +9,7 @@ import type { FetchResult, PermittedFetcher } from "./robots-policy";
 import type { FetchAttemptMeasurement } from "./robots-policy";
 import { ArticleExtractionError } from "./dom-extractor";
 import { FeedParseError } from "./parse-feed";
+import { ParserError } from "./parser-error";
 import { attributeIngestOutcome } from "../attribute-ingest-outcomes";
 
 type Result = Pick<DocumentWorkFact, "outcome" | "failure_code">;
@@ -57,7 +58,7 @@ export function documentWork(context: Context, identity: DocumentIdentity, key: 
       publish("fetch", "started", null);
       publish("fetch", "failed", 0, url, failure_code);
     },
-    async fetch(fetcher: Pick<PermittedFetcher, "fetch">, url: string, cause: string | null = null) {
+    async fetch(fetcher: Pick<PermittedFetcher, "fetch">, url: string, cause: string | null = null, signal?: AbortSignal) {
       const started = performance.now();
       fetchedUrl = url;
       publish("fetch", "started", null);
@@ -72,7 +73,7 @@ export function documentWork(context: Context, identity: DocumentIdentity, key: 
               outcome: measurement.outcome,
               failure_code: measurement.attempt.failure,
             }, measurement.attempt.duration_ms, measurement.attempt.http_status, measurement);
-          }, scope.document_kind);
+          }, scope.document_kind, signal);
         } catch (error) {
           publish("fetch", "failed", Math.round(performance.now() - started), url, "FETCH_FAILED");
           await save(event("fetch", cause), { outcome: "failed", failure_code: null },
@@ -93,14 +94,15 @@ export function documentWork(context: Context, identity: DocumentIdentity, key: 
       const started = performance.now();
       publish("parse", "started", null);
       let parsed: T | null = null;
-      let failure: "malformed-feed" | ArticleExtractionError["reason"] | null = null;
+      let failure: "malformed-feed" | ArticleExtractionError["reason"] | ParserError["reason"] | null = null;
       let result: Result;
       try {
         parsed = await execute();
         result = describe(parsed);
       } catch (error) {
         const observation = event("parse", cause);
-        failure = error instanceof ArticleExtractionError ? error.reason : error instanceof FeedParseError ? "malformed-feed" : null;
+        failure = error instanceof ArticleExtractionError || error instanceof ParserError ? error.reason
+          : error instanceof FeedParseError ? "malformed-feed" : null;
         publish("parse", "failed", Math.round(performance.now() - started), url, failure ?? "PARSE_FAILED");
         await save(observation, { outcome: "failed", failure_code: failure }, Math.round(performance.now() - started), null);
         if (failure === null) throw error;

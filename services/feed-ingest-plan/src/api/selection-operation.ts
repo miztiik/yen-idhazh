@@ -14,6 +14,7 @@ import { appendDocumentTiming, currentExecutionState, executionHasArtifact, regi
 import { resolveRunContext } from "../resolve-run-context";
 import { recordFinalizedDocumentWork } from "./record-standalone-run";
 import { restoreSourceHealth } from "./restore-source-health";
+import { collectionForRun } from "./collection-operation";
 
 export function requireStageConfiguration(batch: { config_sha256: string }, inputs: PlanInputs, runtime: PlanRuntime) {
   if (!inputs.settings.enabled) throw new PlanError("PLANNER_DISABLED", "Planner is disabled", "enabled");
@@ -28,6 +29,10 @@ export async function executeSelection(raw: unknown, inputs: PlanInputs, runtime
   const store = stageStore(inputs);
   let parsed = store.read("parsed", request.batch_id, ParsedFeedBatchSchema);
   requireStageConfiguration(parsed, inputs, runtime);
+  const collection = collectionForRun(inputs, parsed.context.run_id);
+  if (collection !== undefined && (collection.status !== "complete" || collection.completed_batch_id !== parsed.batch_id)) {
+    throw new PlanError("BATCH_INCOMPLETE", "Selection requires the completed global collection, not one feed's batch", "batch_id");
+  }
   if (store.ownership(parsed.batch_id).health_fingerprint === null) {
     parsed = store.replace("parsed", ParsedFeedBatchSchema, await restoreSourceHealth(parsed, inputs));
   }
@@ -38,7 +43,7 @@ export async function executeSelection(raw: unknown, inputs: PlanInputs, runtime
   const pending = currentExecutionState(inputs, parsed.context.run_id);
   const original = pending === undefined ? undefined : await pending;
   const claim = store.ownership(parsed.batch_id);
-  claim.scope = original?.kind === "plan" ? "plan" : claim.scope;
+  claim.scope = original?.kind === "plan" || (original?.kind === "document" && original.plan_owned) ? "plan" : claim.scope;
   if (original?.health_fingerprint !== null && original?.health_fingerprint !== undefined) {
     claim.health_fingerprint = original.health_fingerprint;
   }

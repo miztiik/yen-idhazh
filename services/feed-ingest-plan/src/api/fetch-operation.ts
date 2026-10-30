@@ -27,7 +27,11 @@ import { HarvestArticleResultSchema, utcTimestamp } from "../harvest-feeds/harve
 import { resolveArticleSourceOutcome } from "../article-source-outcome";
 import type { SourceArticleOutcome } from "@idhazh/common-contracts";
 import { createStageLogger } from "../logging/structured-logger";
-import { recordHarvestFailures } from "../record-harvest-failures";
+import { recordDocumentRejections } from "./record-document-rejections";
+import {
+  completeFeedCheck, feedFetchFailureResult, markFeedCheckUnknown, reserveFeedCheck,
+} from "../availability/feed-availability";
+import { collectionFeedRequest } from "./collection-operation";
 
 type FetchRequest = z.infer<typeof FetchRequestSchema>;
 const requestPools = new WeakMap<PlanInputs, ReturnType<typeof workPool>>();
@@ -37,8 +41,10 @@ export function resolveFetchParent(request: FetchRequest, inputs: PlanInputs, ru
   requireStageConfiguration(batch, inputs, runtime);
   const offer = batch.offers.find(offer => offer.offer_id === request.offer_id);
   if (offer === undefined || offer.source.feed_id !== request.feed_id || request.correlation_id !== batch.context.correlation_id
-    || batch.feed_fetch_request_id === null) throw new PlanError("INVALID_REQUEST", "Article reference does not belong to this feed batch", "offer_id");
-  const root = store.get(batch.feed_fetch_request_id);
+    ) throw new PlanError("INVALID_REQUEST", "Article reference does not belong to this feed batch", "offer_id");
+  const rootId = batch.feed_fetch_request_id ?? collectionFeedRequest(inputs, batch.context.run_id, request.feed_id);
+  if (rootId === undefined) throw new PlanError("ARTIFACT_NOT_FOUND", "Feed batch has no captured feed reference", "batch_id");
+  const root = store.get(rootId);
   if (root === null || checkFetchedDocument(root, inputs).fetch_item_type !== "feed") throw new PlanError("ARTIFACT_NOT_FOUND", "Feed batch has no completed fetched input", "batch_id");
   return { batch, offer, root };
 }
@@ -78,6 +84,11 @@ export async function fetchDocument(
     document_kind: request.fetch_item_type, feed_id: source.id, publisher_id: source.publisher_id,
     observed_run_id: record.run_id, observed_attempt: state.context.writer.attempt, candidate_id: parent?.offer.offer_id ?? null,
   });
+  if (request.fetch_item_type === "feed") {
+    await reserveFeedCheck(inputs, source, {
+      request_id: record.request_id, run_id: record.run_id, attempt: state.context.writer.attempt,
+    }, utcTimestamp(runtime.observation_clock));
+  }
   if (request.fetch_item_type === "article") {
     const exclusions = await documentExclusions(state, inputs);
     const offered = parent?.offer ?? { source: sourceSnapshot(inputs.harvest, source), entry: {
@@ -94,6 +105,7 @@ export async function fetchDocument(
       await work.skip();
       work.rejectFetch(url, "ARTICLE_EXCLUDED");
       state.work.article(prepared.result);
+      if (prepared.result.rejection !== null) await recordDocumentRejections([prepared.result.rejection], state, inputs);
       if (parent !== null) updateFeedOffer(inputs, state, parent.batch.batch_id, parent.offer.offer_id, "rejected");
       throw new PlanError("ARTICLE_EXCLUDED", prepared.result.rejection!.drop_reason, parent === null ? "url" : "offer_id");
     }
@@ -102,10 +114,32 @@ export async function fetchDocument(
   let permit = requestPools.get(inputs);
   if (permit === undefined) { permit = workPool(inputs.harvest.config.harvest.concurrency); requestPools.set(inputs, permit); }
   const bounded = permit;
-  const result = await bounded(() => work.fetch(state.fetcher, url, request.caused_by_event_id ?? null));
+  let result: Awaited<ReturnType<typeof work.fetch>>;
+  try {
+    result = await bounded(() => {
+      runtime.signal?.throwIfAborted();
+      return work.fetch(state.fetcher, url, request.caused_by_event_id ?? null, runtime.signal);
+    });
+  } catch (error) {
+    if (request.fetch_item_type === "feed") {
+      await markFeedCheckUnknown(inputs, source, {
+        request_id: record.request_id, run_id: record.run_id,
+      }, utcTimestamp(runtime.observation_clock));
+    }
+    throw error;
+  }
   const { fetched, observation } = result;
   state.recovered.add(record.request_id);
-  if (request.fetch_item_type === "feed") state.work.pendingFeed(source.id, fetched, observation.occurred_at);
+  if (request.fetch_item_type === "feed") {
+    state.work.pendingFeed(source.id, fetched, observation.occurred_at);
+    if (fetched.failure !== null || fetched.body === null) {
+      await completeFeedCheck(inputs, source, {
+        request_id: record.request_id, run_id: record.run_id, attempt: state.context.writer.attempt,
+        completed_at: observation.occurred_at, result: feedFetchFailureResult(fetched),
+        http_status: fetched.http_status,
+      });
+    }
+  }
   let sourceOutcome: SourceArticleOutcome | null = null;
   if (request.fetch_item_type === "article" && fetched.body === null) {
     const refusal = fetchRejection(fetched, inputs.harvest.config.harvest.fetch_timeout_ms, null);
@@ -128,7 +162,7 @@ export async function fetchDocument(
     sourceOutcome = resolveArticleSourceOutcome(result, inputs.harvest.config.triage.min_words,
       inputs.harvest.config.triage.blocked_http_statuses, utcTimestamp(runtime.observation_clock));
     state.work.article(result, record.request_id, sourceOutcome);
-    await recordHarvestFailures([rejection], state.context, inputs);
+    await recordDocumentRejections([rejection], state, inputs);
   }
   if (request.fetch_item_type === "article") {
     state.work.captureArticle(record.request_id, source.id, observation.occurred_at, sourceOutcome);

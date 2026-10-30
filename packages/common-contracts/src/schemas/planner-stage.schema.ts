@@ -118,10 +118,11 @@ export const ParsedFeedBatchSchema = z.strictObject({
 }).meta({
   version: PARSED_FEED_BATCH_VERSION,
   changelog: [
-    { version: PARSED_FEED_BATCH_VERSION, change: "Identify parsed candidates produced with shared query-free article cleanup." },
+    { version: PARSED_FEED_BATCH_VERSION, change: "Retain bounded parser failures and complete run-owned collections before selection." },
+    { version: "2026-10-29", change: "Identify parsed candidates produced with shared query-free article cleanup." },
     { version: "2026-10-27T18:30", change: "Link standalone article batches to their original source-outcome receipt." },
     { version: "2026-10-27", change: "Name planner discovery evidence and derive website groups from canonical URLs." },
-    { version: "2026-10-25", change: "Declare complete parsed feed batches and their source evidence." },
+    { version: "2026-10-25", change: "Earlier changes are in git." },
   ],
 });
 export type ParsedFeedBatch = z.infer<typeof ParsedFeedBatchSchema>;

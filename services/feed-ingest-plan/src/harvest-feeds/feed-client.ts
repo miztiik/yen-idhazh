@@ -53,12 +53,13 @@ export async function readFeed(
   outcome.fetch_status = "success";
   const parseStarted = performance.now();
   const body = response.body;
-  const parsed = await work.parse(() => parseDocument("feed", body, source.feed_url), fetched.event_id, describeFeedParse);
+  const parsed = await work.parse(() => parseDocument("feed", body, source.feed_url, undefined,
+    context.parser_pool, context.parser_options), fetched.event_id, describeFeedParse);
   if (parsed.parsed === null) {
     outcome.parse_duration_ms = Math.round(performance.now() - parseStarted);
     outcome.parse_status = "failure";
     outcome.rejection_reason = "FEED_PARSE_FAILED";
-    outcome.diagnostics = { ...outcome.diagnostics, stopped_stage: "parse", failure_code: "unknown", detail: "malformed-feed" };
+    outcome.diagnostics = { ...outcome.diagnostics, stopped_stage: "parse", failure_code: "unknown", detail: parsed.failure };
     return {
       entries: [], rejection: recordRejection(source, context, "FEED_PARSE_FAILED", {
         http_status: response.http_status, diagnostics: outcome.diagnostics,

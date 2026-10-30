@@ -56,7 +56,7 @@ async function inputs(patch: Partial<Knobs> = {}) {
     triage: { ...loaded.harvest.config.triage, recency_half_life_hours: 18, recency_weight: 1 },
     curate_articles: {
       ...loaded.harvest.config.curate_articles, article_limit: 2,
-      article_quality_buckets: [{ tier: 1, share_pct: 100, buffer_pct: 0, ladder_hours: [72] }],
+      source_based_quality_buckets: [{ id: "institutional", source_tier_id: 1, share_pct: 100, buffer_pct: 0, ladder_hours: [72] }],
       source_authority_weight: 0, exploration_slot_share: 0,
       soft_caps: {
         ...loaded.harvest.config.curate_articles.soft_caps, max_source_share: 1, max_website_group_share: 1, min_distinct_sources: 1,
@@ -138,10 +138,10 @@ function tierArticles(setup: Setup, tier: number, count: number, ageHours: numbe
 }
 
 test("fresh target and buffer phases produce six, two and two before older backfill", async () => {
-  const setup = await inputs({ article_limit: 10, article_quality_buckets: [
-    { tier: 1, share_pct: 60, buffer_pct: 10, ladder_hours: [24, 36, 48] },
-    { tier: 2, share_pct: 30, buffer_pct: 5, ladder_hours: [24, 30] },
-    { tier: 3, share_pct: 10, buffer_pct: 5, ladder_hours: [24] },
+  const setup = await inputs({ article_limit: 10, source_based_quality_buckets: [
+    { id: "institutional", source_tier_id: 1, share_pct: 60, buffer_pct: 10, ladder_hours: [24, 36, 48] },
+    { id: "trade-press", source_tier_id: 2, share_pct: 30, buffer_pct: 5, ladder_hours: [24, 30] },
+    { id: "community", source_tier_id: 3, share_pct: 10, buffer_pct: 5, ladder_hours: [24] },
   ] });
   const candidates = [
     ...tierArticles(setup, 1, 5, 1), ...tierArticles(setup, 2, 2, 1), ...tierArticles(setup, 3, 2, 1),
@@ -159,10 +159,10 @@ test("fresh target and buffer phases produce six, two and two before older backf
 });
 
 test("older windows fill a tier target but never its fresh buffer", async () => {
-  const setup = await inputs({ article_limit: 10, article_quality_buckets: [
-    { tier: 1, share_pct: 60, buffer_pct: 10, ladder_hours: [24, 36, 48] },
-    { tier: 2, share_pct: 30, buffer_pct: 5, ladder_hours: [24, 30] },
-    { tier: 3, share_pct: 10, buffer_pct: 5, ladder_hours: [24] },
+  const setup = await inputs({ article_limit: 10, source_based_quality_buckets: [
+    { id: "institutional", source_tier_id: 1, share_pct: 60, buffer_pct: 10, ladder_hours: [24, 36, 48] },
+    { id: "trade-press", source_tier_id: 2, share_pct: 30, buffer_pct: 5, ladder_hours: [24, 30] },
+    { id: "community", source_tier_id: 3, share_pct: 10, buffer_pct: 5, ladder_hours: [24] },
   ] });
   const result = curateArticles(selectionInput(setup, [
     ...tierArticles(setup, 1, 10, 36), ...tierArticles(setup, 2, 1, 1),

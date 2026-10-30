@@ -30,6 +30,7 @@ export const FetchFailureSchema = z.enum([
 ]);
 export const ExtractionFailureSchema = z.enum([
   "missing-document-root", "dom-depth-exceeded", "empty-content", "missing-title",
+  "parser-timeout", "parser-cancelled", "parser-failed",
 ]);
 export const HarvestDiagnosticsSchema = z.strictObject({
   http_status: z.int().min(100).max(599).nullable().default(null),
@@ -53,6 +54,11 @@ export const HarvestDiagnosticsSchema = z.strictObject({
   extract_ms: CountSchema.nullable().default(null),
   warnings: z.array(z.enum(["malformed-json-ld", "semantic-dom-fallback"])).max(2).default([]),
   quality: ExtractionQualitySchema.nullable().default(null),
+}).meta({
+  version: "2026-10-30",
+  changelog: [
+    { version: "2026-10-30", change: "Distinguish parser deadline, cancellation and worker failures from source failures." },
+  ],
 });
 export type HarvestDiagnostics = z.infer<typeof HarvestDiagnosticsSchema>;
 export const ArticleFetchEvidenceSchema = HarvestDiagnosticsSchema.pick({

@@ -1,6 +1,6 @@
 # Feed planning operator APIs
 
-**Last Updated**: 2026-10-29
+**Last Updated**: 2026-10-30
 
 How do local requests fetch, parse, select, partition and persist content?
 These are build-time operator APIs, not a server for the static site.
@@ -31,6 +31,9 @@ Malformed controls and damaged receipts fail explicitly.
 Feed parsing returns sanitized, body-free offers, discovery evidence and one
 parsed `batch_id`. Article parsing completes that same batch without depending
 on feed classification labels.
+Article parse responses include a body-free `warnings` array. The saved
+observation retains actual extraction warnings, quality measurements, fetch
+evidence and typed parse failures; successful parsing does not erase them.
 Fetch each offer by its server-owned reference, then parse each fetched
 article. Concurrent article parses atomically update the same complete feed
 batch. Selection refuses while any offer is still pending. A separate
@@ -110,7 +113,10 @@ Table A
 | A1 | `select-articles` | Accepts the complete parsed `batch_id`; returns a fresh selected ID, metadata-only articles, grouped exclusions and request report. No fetch, model call or automatic health write. |
 | A2 | `partition-articles` | Accepts a selected ID and optional configured strategy/count; returns assignments and estimated work without reranking. |
 | A3 | `feed-health-state` | Accepts a batch ID and explicit `summarize` or `record` action, defaulting to record; returns current health, request spend, `reliability.window_days` and actual receipts when saved. |
-| A4 | `persist-selected-articles` | Accepts a partitioned ID; writes selected and rejected metadata plus the selected text artifact, returning exact relative paths, `rejected_files` receipts even for zero-selected results, and a standalone run outcome where applicable. |
+| A4 | `persist-selected-articles` | Accepts a partitioned ID, or a selected ID when partitioning is disabled; writes selected and rejected metadata plus the selected text artifact, returning exact relative paths, `rejected_files` receipts even for zero-selected results, and a standalone run outcome where applicable. |
+| A5 | `collections` | Starts one run-owned collection with a UUIDv4 `collection_id` and validated planning controls. Returns the captured UTC context and configured feed IDs, not article text. |
+| A6 | `collections/complete` | Accepts `collection_id`; refuses until every required feed and offered article has a terminal outcome. Saves discovery evidence and exposes the complete global batch for selection. |
+| A7 | `collections/cancel` | Accepts `collection_id`; cancels owned work and prevents selection of the incomplete collection. |
 
 Each finalized execution is immutable. A fresh result must not overwrite a
 prior artifact or double-count its HTTP work. Replaying the same finalized
@@ -134,11 +140,15 @@ renderer does not commit or upload files. This workflow presentation is not
 the production digest renderer; production can choose a reader-facing format
 without changing the planner API.
 
+User-approved exception, 2026-10-30 UTC: planner transport tests may open an
+ephemeral loopback-only listener and call its HTTP APIs. This proves actual
+transport without allowing external network access; source responses remain
+recorded fixtures. The exception does not permit live source fetching in tests.
+
 ## Request flow
 
-The diagram shows the separate stage requests. `POST /api/2026-10-20/plan`
-is the one-request alternative: it runs the planning stages in process and
-records their results; it does not call the other HTTP routes. Selection
+The diagram shows every stage HTTP call made by
+`POST /api/2026-10-20/plan` on its trusted local listener. Selection
 captures health for its own decision but does not write it. The separate
 `feed-health-state` request can summarize or record a batch.
 The workflow HTTP client calls `/health`, `/plan`, then
@@ -152,36 +162,34 @@ ordinary `--serve` health remains an availability and enablement check.
 Startup controls pass only through the private process pipe, never HTTP paths.
 
 ```mermaid
-%%{init: {"theme": "base", "themeVariables": {"fontFamily": "sans-serif", "primaryColor": "#f8fafc", "primaryTextColor": "#1f2937", "primaryBorderColor": "#64748b", "lineColor": "#64748b", "textColor": "#1f2937", "clusterBkg": "#f8fafc", "clusterBorder": "#94a3b8", "edgeLabelBackground": "#ffffff"}}}%%
 flowchart TD
-  OP["Operator"] --> PLAN["POST /api/2026-10-20/plan<br/>one composed request"]
-  PLAN --> COMPOSED["Runs stages in process<br/>not HTTP self-calls"]
-  COMPOSED --> PLAN_RESULT["Run summary and file receipts"]
-
-  OP --> FETCH_FEED["POST /api/2026-10-20/fetch<br/>fetch_item_type = feed"]
-  FETCH_FEED --> PARSE_FEED["POST /api/2026-10-20/parse<br/>feed: offers and batch_id"]
-  DISCOVERY[("discovered-articles<br/>earliest known sighting")] --> PARSE_FEED
-  PARSE_FEED --> DISCOVERY
-  PARSE_FEED --> BATCH["Parsed batch<br/>server-owned offers"]
-  BATCH --> FETCH_ARTICLE["POST /api/2026-10-20/fetch<br/>for each offer"]
-  FETCH_ARTICLE --> PARSE_ARTICLE["POST /api/2026-10-20/parse<br/>add result to the same batch"]
+  OP["Operator"] --> PLAN["POST /plan"]
+  PLAN --> BEGIN["POST /collections<br/>one run identity, effective policy and cancellation"]
+  BEGIN --> FETCH_FEED["POST /fetch for each eligible feed"]
+  CURRENT[("Durable endpoint availability<br/>revision-checked reservation before external work")] <--> FETCH_FEED
+  FETCH_FEED --> PARSE_FEED["POST /parse<br/>bounded XML worker"]
+  PARSE_FEED --> CURRENT
+  PARSE_FEED --> BATCH["One run-owned collection batch<br/>feed provenance and terminal outcomes"]
+  BATCH --> FETCH_ARTICLE["POST /fetch for each admitted offer<br/>age checked before download"]
+  FETCH_ARTICLE --> PARSE_ARTICLE["POST /parse<br/>bounded HTML worker"]
   PARSE_ARTICLE --> BATCH
-  BATCH -->|"After every offer is parsed or refused"| SELECT["POST /api/2026-10-20/select-articles<br/>screen and select"]
-  READ_HISTORY[("Read bounded evidence<br/>feed-health-state, published, item-health")] --> SELECT
-  SELECT --> PARTITION["POST /api/2026-10-20/partition-articles<br/>assign work without reranking"]
-  PARTITION --> PERSIST["POST /api/2026-10-20/persist-selected-articles"]
-  PERSIST --> SELECTED[("selected-articles<br/>chosen metadata and scores")]
-  PERSIST --> REJECTED[("rejected-articles<br/>one final reason per losing parsed candidate")]
-  PERSIST --> TEXT["Selected text artifact<br/>not a committed ledger"]
-  PERSIST --> RUNS[("plan-runs<br/>execution result")]
-  BATCH --> HEALTH_API["POST /api/2026-10-20/feed-health-state<br/>action = summarize or record"]
-  HEALTH_API --> HEALTH_RESULT["Health summary<br/>record action returns a write receipt"]
-  HEALTH_RESULT -->|"Record action only"| HEALTH_LEDGER[("feed-health-state<br/>actual run and source outcomes")]
-
-  classDef stage fill:#f8fafc,stroke:#64748b,stroke-width:1.5px,color:#1f2937;
-  classDef ledger fill:#eff6ff,stroke:#1d4ed8,stroke-width:1.5px,color:#1e3a8a;
-  class OP,PLAN,COMPOSED,PLAN_RESULT,FETCH_FEED,PARSE_FEED,BATCH,FETCH_ARTICLE,PARSE_ARTICLE,SELECT,PARTITION,PERSIST,TEXT,HEALTH_API,HEALTH_RESULT stage;
-  class DISCOVERY,READ_HISTORY,SELECTED,REJECTED,RUNS,HEALTH_LEDGER ledger;
+  FETCH_FEED -->|"Failure or eligibility skip"| BATCH
+  FETCH_ARTICLE -->|"Fetch failure or exclusion"| BATCH
+  BATCH --> COMPLETE["POST /collections/complete<br/>all required work terminal"]
+  COMPLETE --> DISCOVERY[("discovered-articles<br/>earliest known sighting")]
+  COMPLETE --> SELECT["POST /select-articles<br/>global screening and selection"]
+  SELECT --> ENABLED{"partition.enabled?"}
+  ENABLED -->|"true"| PARTITION["POST /partition-articles"]
+  ENABLED -->|"false: no partition HTTP call"| PERSIST["POST /persist-selected-articles"]
+  PARTITION --> PERSIST
+  PERSIST --> METADATA[("Body-free selected and rejected ledgers")]
+  PERSIST --> TEXT["Separate selected full-text JSON artifact<br/>summarization is a later consumer"]
+  SELECT --> HEALTH["POST /feed-health-state<br/>record actual work"]
+  HEALTH --> HEALTH_LEDGER[("feed-health-state")]
+  PERSIST --> FINAL["Record completed, partial or failed run"]
+  HEALTH --> FINAL
+  FINAL --> RUNS[("plan-runs")]
+  PLAN -->|"Cancellation or incomplete work"| CANCEL["POST /collections/cancel<br/>no selection of partial input"]
 ```
 
 Article fetch and parse requests can overlap and update the same batch.

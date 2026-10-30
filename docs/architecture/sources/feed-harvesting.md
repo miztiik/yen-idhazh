@@ -20,7 +20,7 @@ validated addresses. Each request dispatcher closes after success or refusal.
 
 Independent feeds overlap within configured bounds. Article work can start
 after its supplying feed is parsed. Native workers perform the production
-DOM extraction and sanitization without blocking the listener's event loop.
+feed XML parsing, DOM extraction and sanitization without blocking the listener's event loop.
 Parsing saved bytes makes no network request.
 
 ## Inputs and identity
@@ -82,6 +82,22 @@ and never adds a second identity policy. Unsafe cleaned targets remain
 typed fetch refusals, not media exclusions.
 
 ## Request and extraction controls
+
+`harvest.fetch_timeout_ms` remains 6000 ms per HTTP attempt in the committed
+configuration. It is not a deadline for the whole download or parse operation.
+`harvest.parse_timeout_ms` is the separate parse-request deadline, including
+time waiting for a worker. Its 10000 ms default is unmeasured, not a measured
+parser speed target. Finished work returns immediately and clears its timer.
+Expiry removes a queued request or terminates its assigned native worker;
+later work receives a replacement worker. Cancellation applies to the one
+request, not the shared pool. The caller that created a pool retains ownership
+of its lifetime.
+
+Feed XML and article HTML use this same worker boundary. A parse deadline
+records `parser-timeout`; cancellation records `parser-cancelled`; a worker
+failure records `parser-failed`. These are local parser failures, never
+evidence that a source should retire. Malformed feed data retains its distinct
+`malformed-feed` result.
 
 The permitted fetcher retains public-address validation, socket pinning,
 robots evidence, safe redirects, retries, bounded deadlines and decoded

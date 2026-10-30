@@ -1,6 +1,6 @@
 /** Keep one document chain's actual work and original clock isolated across concurrent requests. */
 import { FetchedDocumentSchema } from "@idhazh/common-contracts";
-import type { PlannerOperation, PlanApiTiming } from "@idhazh/common-contracts";
+import type { PlannerOperation, PlanApiTiming, CandidateRejectionRecord } from "@idhazh/common-contracts";
 import type { PlanInputs } from "../load-plan-inputs";
 import type { PlanRuntime } from "../run-feed-plan";
 import { resolveRunContext } from "../resolve-run-context";
@@ -24,6 +24,7 @@ import type { RunContext } from "../resolve-run-context";
 import type { recordPlanRun } from "../record-plan-run";
 import { selectedArtifactPath } from "../selected-artifact-path";
 import type { OperationStore } from "./operation-store";
+import type { PersistLedgerResult } from "@idhazh/ledger-file-writer";
 
 type ExecutionStateBase = {
   context: RunContext; started: number | null; api_timings: PlanApiTiming[];
@@ -31,6 +32,9 @@ type ExecutionStateBase = {
   run_result?: Promise<Awaited<ReturnType<typeof recordPlanRun>>>;
 };
 export type DocumentState = ExecutionStateBase & {
+  plan_owned?: boolean;
+  harvest_rejections?: CandidateRejectionRecord[];
+  completed_files?: Partial<Record<"discovered_articles" | "rejected_articles", PersistLedgerResult[]>>;
   kind: "document"; history: Awaited<ReturnType<typeof preparePlanningHealth>>;
   work: ReturnType<typeof createRunHealth>; fetcher: ReturnType<typeof createPermittedFetcher>;
   recovered: Set<string>;

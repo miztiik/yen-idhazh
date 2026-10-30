@@ -48,7 +48,7 @@ export async function fixtureInput(root: string, options: { count?: number; word
       ...loaded.harvest.config.curate_articles,
       article_limit: Math.max(1, options.words?.length ?? options.count ?? fixture.word_work.length), exploration_slot_share: 0,
       source_authority_weight: 0,
-      article_quality_buckets: [{ tier: 1, share_pct: 100, buffer_pct: 0, ladder_hours: [72] }],
+      source_based_quality_buckets: [{ id: "institutional", source_tier_id: 1, share_pct: 100, buffer_pct: 0, ladder_hours: [72] }],
       soft_caps: {
         ...loaded.harvest.config.curate_articles.soft_caps, max_source_share: 1,
         max_website_group_share: 1, min_distinct_sources: 1,

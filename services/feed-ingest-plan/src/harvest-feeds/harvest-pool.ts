@@ -63,6 +63,7 @@ export async function harvestFeeds(
   };
   const ownedPool = context.parser_pool ?? new ArticleParserPool(inputs.config.harvest.concurrency);
   const runContext = { ...context, parser_pool: ownedPool,
+    parser_options: { ...context.parser_options, timeout_ms: inputs.config.harvest.parse_timeout_ms },
     identities: context.identities ?? new ArticleIdentityEvidence(inputs.config.harvest) };
   try {
     const feeds = await mapPool(inputs.sources, inputs.config.harvest.concurrency, async configured => {

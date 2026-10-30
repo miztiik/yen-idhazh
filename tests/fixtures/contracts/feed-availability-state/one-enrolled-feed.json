@@ -1,0 +1,28 @@
+{
+  "version": "2026-10-30",
+  "changelog": [
+    { "version": "2026-10-30", "change": "Add durable per-feed reservations, rest deadlines and recovery retirement." }
+  ],
+  "sequence": 1,
+  "updated_at": "2026-10-30T12:00:00.000Z",
+  "feeds": [
+    {
+      "feed_id": "abc-feed",
+      "endpoint_key": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "consecutive_failed_checks": 0,
+      "rest_until": null,
+      "retired_at": null,
+      "episode": null,
+      "reservation": {
+        "request_id": "7251dc83-a947-4333-a885-7b6fc84fcb49",
+        "run_id": "2026-10-30-1",
+        "attempt": 1,
+        "reserved_at": "2026-10-30T12:00:00.000Z",
+        "phase": "parse",
+        "status": "unknown"
+      },
+      "last_completion": null,
+      "operator_enrollment_id": null
+    }
+  ]
+}

@@ -61,7 +61,11 @@ export function createRunHealth(context: RunContext, sources: readonly SourceSna
     else held.count += reason.count;
   }
   function reject(rejection: CandidateRejectionRecord, override?: PlannerRejectionCount["attribution"]) {
+    const parserDetail = rejection.details.diagnostics?.detail;
+    const typedParserFailure = parserDetail === "parser-timeout" || parserDetail === "parser-cancelled"
+      || parserDetail === "parser-failed" ? parserDetail : null;
     const failureCode = rejection.details.diagnostics?.fetch_failure ?? rejection.details.diagnostics?.extraction_failure
+      ?? typedParserFailure
       ?? (rejection.drop_reason === "FETCH_FAILED_HTTP" ? "http" : rejection.drop_reason === "FETCH_TIMEOUT" ? "timeout"
         : rejection.drop_reason === "FEED_PARSE_FAILED" ? "malformed-feed" : rejection.drop_reason === "EXTRACT_EMPTY" ? "empty-content" : null);
     const failure = failureCode !== null || ["FETCH_FAILED", "EXTRACT_FAILED", "FETCH_TIMEOUT"].includes(rejection.drop_reason);
@@ -219,7 +223,10 @@ export function createRunHealth(context: RunContext, sources: readonly SourceSna
       target.counts_complete = target.feed_requests !== null && target.article_requests !== null && target.robots_requests !== null;
       target.last_failure_code = outcome.rejection_reason;
       if (outcome.rejection_reason !== null) {
-        const failureCode = outcome.parse_status === "failure" ? "malformed-feed" : failure;
+        const parserDetail = outcome.diagnostics?.detail;
+        const typedParserFailure = parserDetail === "parser-timeout" || parserDetail === "parser-cancelled"
+          || parserDetail === "parser-failed" ? parserDetail : null;
+        const failureCode = typedParserFailure ?? (outcome.parse_status === "failure" ? "malformed-feed" : failure);
         const attribution = failureCode === null ? null : attributeIngestOutcome({
           document_kind: "feed", operation: outcome.parse_status === "failure" ? "parse" : "fetch",
           outcome: "failed", failure_code: failureCode, http_status: status, request_phase: null,

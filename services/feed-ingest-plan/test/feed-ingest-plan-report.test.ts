@@ -8,6 +8,7 @@ import { prepareProgressEvent } from "../src/logging/structured-logger";
 import { writePlannerReport } from "../scripts/feed-ingest-plan-report";
 import { formatHostFingerprintSummary } from "../scripts/feed-ingest-plan-host-summary";
 import { formatWorkflowPolicy } from "../scripts/feed-ingest-plan-policy-report";
+import { FeedAvailabilityConfigSchema } from "../src/availability/availability-config";
 import { formatWorkflowAnnotation } from "../scripts/feed-ingest-plan-report-format";
 import { renderPlannerProgressMarkdown } from "../src/reporting";
 import { fixture as hostFixture } from "../../host-fingerprints/test/fixture";
@@ -79,19 +80,24 @@ test("absent progress stays unavailable and zero counts do not certify publicati
   const settings = await Bun.file(new URL("../../../config/idhazh.json", import.meta.url)).json();
   const policy = formatWorkflowPolicy({ config: {
     ...config, curate_articles: {
-      ...config.curate_articles, article_quality_buckets: config.curate_articles.article_quality_buckets.map(rule =>
+      ...config.curate_articles, source_based_quality_buckets: config.curate_articles.source_based_quality_buckets.map(rule =>
         ({ ...rule, ladder_hours: [6, 12] })),
     },
   },
     request: { article_limit: 10, shards: 4, partition_strategy: "bin-pack" },
-    history: settings.collect, parser_concurrency: 4 }, true);
+    history: settings.collect, parser_concurrency: 4, availability: FeedAvailabilityConfigSchema.parse(
+      await Bun.file(new URL("../../../config/feed-availability.json", import.meta.url)).json(),
+    ) }, true);
   expect(policy.notice).toContain("max 10 articles (workflow override); 4 workers (bin-pack)");
   expect(policy.rows.find(([name]) => name === "Age windows")?.[2]).toBe(
-    `${config.curate_articles.article_quality_buckets.map(rule => `Tier ${rule.tier}: 6 / 12 hours`).join("; ")} (configuration)`,
+    config.curate_articles.source_based_quality_buckets.map(rule =>
+      `${rule.id} (source tier ${rule.source_tier_id}): 6 / 12 hours (configuration)`).join("; "),
   );
   expect(policy.rows.find(([name]) => name === "Article cap")?.[2]).toBe("10 articles (workflow override)");
   expect(policy.rows.find(([name]) => name === "Feed-status lookback")?.[2])
     .toContain(`${config.feedback.lifecycle_window_days} UTC days`);
+  expect(policy.rows.find(([name]) => name === "Durable feed availability")?.[2])
+    .toBe("5 / 24 hours / 24 hours / 7 / 36 hours");
   expect(policy.rows.find(([name]) => name === "Reliability adjustment")?.[2])
     .toContain(`${settings.collect.reliability_window_days} UTC days`);
   expect(policy.rows.find(([name]) => name === "Request history")?.[2])
