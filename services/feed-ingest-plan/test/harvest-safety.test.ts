@@ -33,7 +33,7 @@ test("literal, encoded and named unsafe addresses fail before transport", async 
   for (const url of safety.unsafe_targets) expect(() => validateTargetName(url), url).toThrow();
   expect(isPublicAddress("93.184.216.34")).toBe(true);
   expect(isPublicAddress("2606:4700:4700::1111")).toBe(true);
-  const loaded = await inputs();
+  const loaded = await inputs([source()], { harvest: { article_robots_policy: "enforce" } });
   const unsafeTransport = new RecordedTransport(await readRecordings());
   const fetcher = createPermittedFetcher(loaded.config.harvest, loaded.extraction,
     { transport: unsafeTransport, resolve: unsafeTransport.resolve });
@@ -140,7 +140,7 @@ test("recorded robots rules and structured URL exclusions bind configured policy
 });
 
 test("denied or unknown permission never requests the target; robots cache is per normalized origin and run", async () => {
-  const loaded = await inputs();
+  const loaded = await inputs([], { harvest: { article_robots_policy: "enforce" } });
   const transport = new RecordedTransport(await readRecordings());
   const boundary = { transport, resolve: transport.resolve };
   const fetcher = createPermittedFetcher(loaded.config.harvest, loaded.extraction, boundary);
@@ -166,7 +166,7 @@ test("denied or unknown permission never requests the target; robots cache is pe
 });
 
 test("redirects establish safe destination and robots permission before requesting the next hop", async () => {
-  const loaded = await inputs();
+  const loaded = await inputs([], { harvest: { article_robots_policy: "enforce" } });
   const transport = new RecordedTransport(await readRecordings());
   const fetcher = createPermittedFetcher(loaded.config.harvest, loaded.extraction, { transport, resolve: transport.resolve });
   expect(await fetcher.fetch("https://news.example/unsafe-redirect")).toMatchObject({ failure: "unsafe-target", http_status: 302 });
@@ -178,7 +178,10 @@ test("redirects establish safe destination and robots permission before requesti
 });
 
 test("permanent statuses do not retry; transient statuses use existing retry controls", async () => {
-  const loaded = await inputs([source()], { extraction: { max_retries: 1, backoff_initial_seconds: 0.01 } });
+  const loaded = await inputs([source()], {
+    harvest: { article_robots_policy: "enforce" },
+    extraction: { max_retries: 1, backoff_initial_seconds: 0.01 },
+  });
   const transport = new RecordedTransport(await readRecordings());
   const fetcher = createPermittedFetcher(loaded.config.harvest, loaded.extraction, { transport, resolve: transport.resolve });
   expect(fetchDiagnostics(await fetcher.fetch("https://news.example/not-found"), 0)).toMatchObject({
@@ -279,7 +282,7 @@ test("permanent statuses do not retry; transient statuses use existing retry con
     http_status: 429, failure_code: "http_rate_limited",
   });
   const fixture = await readHeaderRecovery();
-  const profileInputs = await inputs();
+  const profileInputs = await inputs([], { harvest: { article_robots_policy: "enforce" } });
   const target = "https://news.example/second";
   const timeoutRecordings = await readRecordings();
   timeoutRecordings.responses[target] = fixture.primary_timeouts;
@@ -419,7 +422,7 @@ test("pool concurrency changes with configuration and results retain offered ord
 
 test("recorded robots HTTP and transport outcomes apply the absence-versus-unknown rule", async () => {
   const safety = await readSafety();
-  const loaded = await inputs([], { harvest: { fetch_timeout_ms: 50 } });
+  const loaded = await inputs([], { harvest: { fetch_timeout_ms: 50, article_robots_policy: "enforce" } });
   for (const recording of safety.robots_responses) {
     const recordings = await readRecordings();
     recordings.responses["https://news.example/robots.txt"] = [recording];
@@ -437,7 +440,7 @@ test("recorded robots HTTP and transport outcomes apply the absence-versus-unkno
 });
 
 test("DNS rebinding or a pending DNS request cannot bypass safe target checks or deadline", async () => {
-  const loaded = await inputs([], { harvest: { fetch_timeout_ms: 50 } });
+  const loaded = await inputs([], { harvest: { fetch_timeout_ms: 50, article_robots_policy: "enforce" } });
   const transport = new RecordedTransport(await readRecordings());
   const addresses = transport.recordings.addresses["mixed.example"];
   if (!addresses?.[0] || !addresses[1]) throw new Error("recorded mixed addresses missing");

@@ -79,6 +79,9 @@ export const FeedSemanticFallbackConfigSchema = z.strictObject({
 export const FeedHarvestConfigSchema = z.strictObject({
   concurrency: PositiveCountSchema,
   fetch_timeout_ms: PositiveCountSchema,
+  article_robots_policy: z.enum(["enforce", "observe"]).default("enforce").describe(
+    "Enforce article robots permission or retain it as evidence without blocking article requests. Feeds always enforce.",
+  ),
   tidy_urls: z.boolean().describe(
     "Apply additional article cleanup before removing all queries and fragments. Remove this switch and the disabled path when additional cleanup becomes mandatory.",
   ),

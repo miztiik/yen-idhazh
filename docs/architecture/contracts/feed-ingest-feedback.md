@@ -27,10 +27,12 @@ remain the only input to feed-health aggregation. The field meanings and old
 file compatibility are defined in
 [rejected articles](../../reference/feed-planner-ledgers.md#m-rejected-articles).
 
-Request counters increment at actual transport dispatch, after permission and
-address validation. Retries and redirects add real requests. A cache hit adds
-zero requests; validation and parsing do not become HTTP requests. Unknown
-accounting remains null with incomplete coverage.
+Request counters increment at actual transport dispatch, after address
+validation and [the document's robots check](../sources/feed-harvesting.md#request-and-extraction-controls).
+An observed article robots warning does not become a failed article operation
+or a rejection after successful download and admission. Retries and redirects
+add real requests. A cache hit adds zero requests; validation and parsing do
+not become HTTP requests. Unknown accounting remains null with incomplete coverage.
 
 A restarted standalone parse restores validated request facts from its saved
 fetch receipt. Those requests remain on their original UTC day. If a saved
