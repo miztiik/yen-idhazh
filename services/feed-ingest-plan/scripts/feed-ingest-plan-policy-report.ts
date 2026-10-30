@@ -35,6 +35,8 @@ export function formatWorkflowPolicy(input: unknown, selectionRan: boolean) {
   const request = resolvePlanRequest(selectionRequest, config);
   const policy = resolvePolicy({ config });
   const source = (key: keyof typeof supplied) => supplied[key] === undefined ? "configuration" : "workflow override";
+  const assignmentSource = (key: "shards" | "partition_strategy") => config.partition.enabled
+    ? source(key) : supplied[key] === undefined ? "partition disabled" : "ignored workflow override";
   const configured = (label: string, value: string | number | boolean): [string, string, string] =>
     [label, String(value), "configuration"];
   const ageSources: Record<string, keyof typeof supplied> = {
@@ -44,8 +46,8 @@ export function formatWorkflowPolicy(input: unknown, selectionRan: boolean) {
     configured("Policy config version", config.version),
     ["Article limit", String(request.article_limit), source("article_limit")],
     configured("Worker assignment enabled", config.partition.enabled),
-    ["Article assignments", String(config.partition.enabled ? request.shards : 0), source("shards")],
-    ["Assignment strategy", config.partition.enabled ? request.partition_strategy : "bypassed", source("partition_strategy")],
+    ["Article assignments", String(config.partition.enabled ? request.shards : 0), assignmentSource("shards")],
+    ["Assignment strategy", config.partition.enabled ? request.partition_strategy : "bypassed", assignmentSource("partition_strategy")],
     configured("Fetch concurrency", config.harvest.concurrency),
     configured("Fetch timeout per HTTP attempt (ms)", config.harvest.fetch_timeout_ms),
     configured("Parse deadline including queue (ms)", config.harvest.parse_timeout_ms),
@@ -99,6 +101,7 @@ export function formatWorkflowPolicy(input: unknown, selectionRan: boolean) {
 export function formatPolicyTable(input: unknown, selectionRan: boolean) {
   const policy = formatWorkflowPolicy(input, selectionRan);
   const overrides = policy.rows.filter(([, , source]) => source === "workflow override").map(([setting]) => setting);
+  const ignored = policy.rows.filter(([, , source]) => source === "ignored workflow override").map(([setting]) => setting);
   return {
     notice: policy.notice,
     summary: [
@@ -110,6 +113,7 @@ export function formatPolicyTable(input: unknown, selectionRan: boolean) {
         "", `Workflow overrides: ${overrides.length ? overrides.map(value => escapeMarkdown(value!)).join(", ") : "none"}. `
           + "Other controls use configuration; tier targets and ceilings use the effective article limit.",
       ]),
+      ...(ignored.length ? ["", `Ignored workflow inputs because worker assignment is disabled: ${ignored.map(value => escapeMarkdown(value!)).join(", ")}.`] : []),
       "", "The article limit is a maximum. Selection started is a run fact, not an enabled setting.",
       "Shares and the reliability floor use the JSON fractions: 0 means none; 1 means the whole.",
       "Authority multiplies the coefficient by each feed's configured weight and source-tier weight; it is not the tier weight alone.",

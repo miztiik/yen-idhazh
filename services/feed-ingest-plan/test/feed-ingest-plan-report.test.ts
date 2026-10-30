@@ -159,6 +159,17 @@ test("policy cells preserve effective JSON values and override sources without i
   expect(html).not.toContain("<th>Source</th>");
   expect(html).not.toContain("<td>workflow override</td>");
   expect(html).toContain("Workflow overrides: Article limit, Article assignments, Assignment strategy.");
+  const bypass = { ...input, config: { ...input.config, partition: { ...input.config.partition, enabled: false } } };
+  const bypassPolicy = formatWorkflowPolicy(bypass, false);
+  expect(bypassPolicy.rows.find(([name]) => name === "Article assignments"))
+    .toEqual(["Article assignments", "0", "ignored workflow override"]);
+  expect(bypassPolicy.rows.find(([name]) => name === "Assignment strategy"))
+    .toEqual(["Assignment strategy", "bypassed", "ignored workflow override"]);
+  const bypassReport = formatPolicyTable(bypass, false).summary;
+  expect(bypassReport).toContain("Workflow overrides: Article limit.");
+  expect(bypassReport).toContain("Ignored workflow inputs because worker assignment is disabled: Article assignments, Assignment strategy.");
+  expect(formatWorkflowPolicy({ ...bypass, request: {} }, false).rows.find(([name]) => name === "Article assignments"))
+    .toEqual(["Article assignments", "0", "partition disabled"]);
   expect(input).toEqual(before);
 });
 

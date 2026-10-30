@@ -112,4 +112,7 @@ test("shows durable UTC recovery deadlines without inventing schedules from hist
   expect(html).toContain("Confirmed HTTP recovery failures met both limits");
   expect(html).not.toContain("skipped logical runs");
   expect(renderFeedRest()).toContain("Current feed availability was not recorded");
+  const empty = renderFeedRest({ revision: "recorded-revision", eligible_feed_ids: [], feeds: [] });
+  expect(empty).toContain("Current feed availability was recorded with no feed rows");
+  expect(empty).not.toContain("was not recorded");
 });
