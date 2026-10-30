@@ -11,7 +11,6 @@ import type { ProgressDetails, ProgressEventType } from "../logging/progress-log
 import type { SourceHistoryEvidence } from "../read-ledger-history/read-feed-history";
 import type { IngestObservations } from "../ingest-observations";
 import type { ArticleParserPool } from "./article-parser-pool";
-import type { ArticleIdentityEvidence } from "../read-ledger-history/article-identity-evidence";
 
 export { FetchFailureSchema } from "@idhazh/common-contracts";
 export type FetchFailure = z.infer<typeof FetchFailureSchema>;
@@ -49,7 +48,6 @@ export type HarvestContext = {
   correlation_id: string;
   max_future_hours: number;
   feed_history?: ReadonlyMap<string, SourceHistoryEvidence>;
-  identities?: ArticleIdentityEvidence;
   exclusions?: {
     published_window_days: number;
     published_on: ReadonlyMap<string, string>;

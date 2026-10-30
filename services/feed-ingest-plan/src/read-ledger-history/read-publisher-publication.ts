@@ -11,11 +11,13 @@ import { writeJsonLine } from "../logging/structured-logger";
 import { classifyPublicationHistoryError } from "./classify-publication-history-error";
 import { LedgerHistoryReadError } from "./ledger-history-error";
 import { readPlannerDay } from "./read-planner-history";
+import type { StageLogger } from "../logging/structured-logger";
 
 type PublisherPublicationInput = Readonly<{
   root: string; day: string;
   published: LedgerRegistration; item_health: LedgerRegistration; selections: LedgerRegistration;
   published_days: readonly LedgerDayInput[]; health_days: readonly LedgerDayInput[];
+  log?: StageLogger;
 }>;
 
 async function readConfirmedPublication(input: PublisherPublicationInput) {
@@ -45,7 +47,7 @@ async function readConfirmedPublication(input: PublisherPublicationInput) {
         projectedFields: ["date", "run_id", "item_id", "url_key", "source_id", "stage", "outcome"],
       }),
       Promise.all([readPlannerDay(input.root, input.selections,
-        defaultDayInput(input.selections.prefix, input.day), SelectedArticleRowContract)]),
+        defaultDayInput(input.selections.prefix, input.day), SelectedArticleRowContract, undefined, input.log)]),
     ]);
     identityHistory = {
       availability: selections.every(day => day.complete) ? "available" : "unavailable",

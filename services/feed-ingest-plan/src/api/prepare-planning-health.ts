@@ -6,6 +6,7 @@ import type { HealthCaptureCache } from "../read-ledger-history/read-health-capt
 import { readFeedHistory } from "../read-ledger-history/read-feed-history";
 import { sourceSnapshot } from "../harvest-feeds/load-harvest-inputs";
 import { plannerMemory } from "../planner-memory";
+import { createStageLogger } from "../logging/structured-logger";
 
 export type CurrentHealthWork = { context: RunContext; rows: readonly FeedHealthStateRow[] };
 export function healthHistoryInput(inputs: PlanInputs, now: string, current?: CurrentHealthWork) {
@@ -17,6 +18,7 @@ export function healthHistoryInput(inputs: PlanInputs, now: string, current?: Cu
     own_rows: plannerMemory(inputs).health(),
     ...(current === undefined ? {} : {
       current_rows: current.rows, exclude_execution: { run_id: current.context.run_id, attempt: current.context.writer.attempt },
+      log: createStageLogger(current.context),
     }),
   };
 }

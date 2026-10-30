@@ -147,3 +147,4 @@ export function createStageLogger(
     }, requiredDetails, failureArticleUrl));
   };
 }
+export type StageLogger = ReturnType<typeof createStageLogger>;

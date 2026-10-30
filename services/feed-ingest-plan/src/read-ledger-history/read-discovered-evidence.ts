@@ -8,6 +8,7 @@ import { LedgerDayInputSchema, RelativePathSchema } from "../config/service-sett
 import type { LedgerDayInput } from "../config/service-settings";
 import { requiredUtcDays } from "../utc-instant";
 import type { RunContext } from "../resolve-run-context";
+import type { StageLogger } from "../logging/structured-logger";
 import { readPlannerDay, createPlannerHistoryCache } from "./read-planner-history";
 import { readPlannerParquet } from "./read-planner-parquet";
 import { mapPool } from "../harvest-feeds/harvest-pool";
@@ -33,6 +34,7 @@ export async function readDiscoveredEvidence(input: {
   root: string; discovered_files: readonly string[]; discovered_days: readonly LedgerDayInput[];
   registration: LedgerRegistration; now: string; lookback_days: number; concurrency: number;
   own_rows?: readonly DiscoveredArticleRow[];
+  log?: StageLogger;
 }) {
   const required = requiredUtcDays(input.now, input.lookback_days);
   const named = parseDiscoveredDays(input.discovered_days);
@@ -43,7 +45,9 @@ export async function readDiscoveredEvidence(input: {
   const [files, days] = await Promise.all([
     mapPool(input.discovered_files, input.concurrency, path =>
       readPlannerParquet(resolve(input.root, RelativePathSchema.parse(path)), "discovered-articles", DiscoveredArticleRowContract)),
-    mapPool(inventory, input.concurrency, day => readPlannerDay(input.root, input.registration, day, DiscoveredArticleRowContract, cache)),
+    mapPool(inventory, input.concurrency, day => readPlannerDay(
+      input.root, input.registration, day, DiscoveredArticleRowContract, cache, input.log,
+    )),
   ]);
   const rows = foldDiscoveryHistory([...files.flatMap(file => file.rows), ...days.flatMap(day => day.rows), ...(input.own_rows ?? [])]);
   const complete = required.every(day => days.find(value => value.day === day)?.complete === true);

@@ -30,8 +30,7 @@ import { plannerMemory } from "./planner-memory";
 import { recordPlanRun } from "./record-plan-run";
 import { registerStageExecution } from "./api/document-state";
 import { recordHarvestFailures } from "./record-harvest-failures";
-import { readArticleIdentityHistory } from "./read-ledger-history/read-article-identity-history";
-import { InvalidArticleUrlError } from "./harvest-feeds/article-identity";
+import { deriveArticleIdentity, InvalidArticleUrlError } from "./harvest-feeds/article-identity";
 import { UnsafeTargetError } from "./harvest-feeds/safe-target";
 import type { OfferedArticle } from "./harvest-feeds/harvest-types";
 
@@ -106,7 +105,7 @@ export async function runFeedPlan(raw: unknown, inputs: PlanInputs, runtime: Pla
         root: inputs.root, discovered_files: inputs.settings.inputs.discovered_files, discovered_days: inputs.settings.inputs.discovered_days,
         registration: inputs.registrations.discovered_articles, now: context.now,
         lookback_days: inputs.harvest.config.discovered_articles.lookback_days, concurrency: inputs.harvest.config.harvest.concurrency,
-        own_rows: memory.discoveries(),
+        own_rows: memory.discoveries(), log: emit,
       }),
       readExclusionEvidence({
         root: inputs.root, now: context.now, publishedWindowDays: inputs.clock_config.collect.published_window_days,
@@ -118,7 +117,6 @@ export async function runFeedPlan(raw: unknown, inputs: PlanInputs, runtime: Pla
     ]);
     const initialHistory = loaded[0];
     discovery = loaded[1];
-    const identities = await readArticleIdentityHistory(inputs, context.now, discovery.rows, loaded[2].published_rows);
     // The measured initial capture already includes bounded in-memory evidence and its summary.
     // Selection performs a separate fresh capture; no membership/index cache crosses that boundary.
     work = createRunHealth(context, sources, initialHistory.sources,
@@ -130,7 +128,6 @@ export async function runFeedPlan(raw: unknown, inputs: PlanInputs, runtime: Pla
       writer: context.writer, correlation_id: context.correlation_id,
       max_future_hours: inputs.clock_config.collect.max_future_hours,
       exclusions: { ...loaded[2], published_window_days: inputs.clock_config.collect.published_window_days },
-      identities,
       feed_history: initialHistory.sources, observations, parser_pool: parserPool,
       document_activity: (operation, phase, details, url) => {
         if (operation === "parse") recordParseActivity(phase);
@@ -144,7 +141,7 @@ export async function runFeedPlan(raw: unknown, inputs: PlanInputs, runtime: Pla
         for (const entry of entries) {
           if (entry.link === null) continue;
           let identity;
-          try { identity = identities.remember(entry.link); }
+          try { identity = deriveArticleIdentity(entry.link, inputs.harvest.config.harvest); }
           catch (error) {
             if (error instanceof InvalidArticleUrlError || error instanceof UnsafeTargetError) continue;
             throw error;
@@ -164,7 +161,7 @@ export async function runFeedPlan(raw: unknown, inputs: PlanInputs, runtime: Pla
         eventType, feed_id: details?.feed_id ?? null, output_count: details?.output_count ?? null,
       }),
     }, runtime.boundary));
-    const discoveredRows = memory.rememberDiscoveries(identities.discoveries([...discovery.rows, ...sightings]),
+    const discoveredRows = memory.rememberDiscoveries(foldDiscoveryHistory([...discovery.rows, ...sightings]),
       requiredUtcDays(context.now, inputs.harvest.config.discovered_articles.lookback_days)[0]!);
     const saved = await rememberDiscoveries(discovery.rows, discoveredRows, context, {
       outputRoot: inputs.outputRoot, registryEntry: inputs.registrations.discovered_articles, ledgerSettings: inputs.ledgerSettings,

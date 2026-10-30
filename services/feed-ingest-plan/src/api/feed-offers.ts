@@ -6,19 +6,19 @@ import type { FeedEntry, HarvestArticleResult } from "../harvest-feeds/harvest-t
 import type { PlanInputs } from "../load-plan-inputs";
 import type { PlanRuntime } from "../run-feed-plan";
 import type { DocumentState } from "./document-state";
-import { documentIdentities } from "./document-state";
 import { sourceSnapshot } from "../harvest-feeds/load-harvest-inputs";
 import { deriveArticleIdentity, InvalidArticleUrlError } from "../harvest-feeds/article-identity";
 import { UnsafeTargetError } from "../harvest-feeds/safe-target";
 import type { ArticleUrlPolicy } from "../harvest-feeds/article-url";
 import { matchUrlExclusion } from "../harvest-feeds/url-exclusions";
 import { prepareArticle } from "../harvest-feeds/prepare-article";
-import { readDiscoveredEvidence, rememberDiscoveries } from "../read-ledger-history/read-discovered-evidence";
+import { foldDiscoveryHistory, readDiscoveredEvidence, rememberDiscoveries } from "../read-ledger-history/read-discovered-evidence";
 import { requiredUtcDays } from "../utc-instant";
 import { resolveArticleEvidence } from "../website-group";
 import { plannerMemory } from "../planner-memory";
 import { stageStore } from "./stage-store";
 import { operationConfigFingerprint } from "./operation-context";
+import { createStageLogger } from "../logging/structured-logger";
 
 export async function createParsedFeedBatch(input: {
   state: DocumentState; inputs: PlanInputs; runtime: PlanRuntime;
@@ -53,17 +53,16 @@ export async function createParsedFeedBatch(input: {
     root: inputs.root, discovered_files: inputs.settings.inputs.discovered_files, discovered_days: inputs.settings.inputs.discovered_days,
     registration: inputs.registrations.discovered_articles, now: state.context.now,
     lookback_days: inputs.harvest.config.discovered_articles.lookback_days, concurrency: inputs.harvest.config.harvest.concurrency,
-    own_rows: plannerMemory(inputs).discoveries(),
+    own_rows: plannerMemory(inputs).discoveries(), log: createStageLogger(state.context, runtime.log),
   });
-  const identities = await documentIdentities(state, inputs);
   const sightings = offers.flatMap(offer => {
-    const identity = identities.remember(offer.entry.link!);
+    const identity = deriveArticleIdentity(offer.entry.link!, inputs.harvest.config.harvest);
     if (matchUrlExclusion(identity.canonical_url, inputs.harvest.config.harvest.url_exclusions) !== undefined) return [];
     return [DiscoveredArticleRowSchema.parse({
       url_key: identity.url_key, first_seen_at: input.observed_at, date: input.observed_at.slice(0, 10),
     })];
   });
-  const saved = await rememberDiscoveries(discovered.rows, identities.discoveries([...discovered.rows, ...sightings]), state.context, {
+  const saved = await rememberDiscoveries(discovered.rows, foldDiscoveryHistory([...discovered.rows, ...sightings]), state.context, {
     outputRoot: inputs.outputRoot, registryEntry: inputs.registrations.discovered_articles, ledgerSettings: inputs.ledgerSettings,
   });
   plannerMemory(inputs).rememberDiscoveries(saved.rows, requiredUtcDays(

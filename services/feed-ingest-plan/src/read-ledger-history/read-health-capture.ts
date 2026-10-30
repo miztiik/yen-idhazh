@@ -2,6 +2,7 @@
 import type { FeedHealthStateRow } from "@idhazh/common-contracts";
 import type { LedgerRegistration } from "@idhazh/ledger-file-writer";
 import type { LedgerDayInput } from "../config/service-settings";
+import type { StageLogger } from "../logging/structured-logger";
 import { mapPool } from "../harvest-feeds/harvest-pool";
 import { projectFeedHealthFields, readFeedHealthFieldsDay } from "./read-feed-health-fields";
 import { createPlannerHistoryCache } from "./read-planner-history";
@@ -14,6 +15,7 @@ export type HealthCaptureInput = {
   own_rows?: readonly FeedHealthStateRow[];
   current_rows?: readonly FeedHealthStateRow[];
   exclude_execution?: { run_id: string; attempt: number };
+  log?: StageLogger;
 };
 export type HealthCaptureCache = PlannerHistoryCache<Record<string, unknown>>;
 export async function readHealthCapture(
@@ -21,7 +23,7 @@ export async function readHealthCapture(
   cache: HealthCaptureCache = createPlannerHistoryCache(),
 ) {
   const loaded = await mapPool([...named, ...input.own_days ?? []], input.concurrency,
-    day => readFeedHealthFieldsDay(input.root, input.health, day, cache, input.exclude_execution));
+    day => readFeedHealthFieldsDay(input.root, input.health, day, cache, input.exclude_execution, input.log));
   const inventory = new Set([...input.health_days, ...input.own_days ?? []].map(day => day.day));
   const days = [...new Map(loaded.filter(day => day.represented === true
     || (day.represented === null && inventory.has(day.day)))

@@ -12,8 +12,6 @@ import { deriveArticleIdentity } from "../harvest-feeds/article-identity";
 import { deriveFeedIdentity } from "../harvest-feeds/feed-identity";
 import { deriveLegacyArticleIdentity } from "../harvest-feeds/legacy-article-identity";
 import { LEGACY_OPERATION_VERSION } from "@idhazh/common-contracts";
-import { readArticleIdentityHistory } from "../read-ledger-history/read-article-identity-history";
-import { readDiscoveredEvidence } from "../read-ledger-history/read-discovered-evidence";
 import { PlanError } from "./plan-request";
 import { sha256 } from "./operation-store";
 import { readExclusionEvidence } from "../read-ledger-history/read-exclusion-evidence";
@@ -35,7 +33,6 @@ export type DocumentState = ExecutionStateBase & {
   work: ReturnType<typeof createRunHealth>; fetcher: ReturnType<typeof createPermittedFetcher>;
   recovered: Set<string>;
   exclusions: Promise<Awaited<ReturnType<typeof readExclusionEvidence>>> | null;
-  identities: Promise<Awaited<ReturnType<typeof readArticleIdentityHistory>>> | null;
 };
 export type ExecutionState = DocumentState | (ExecutionStateBase & { kind: "plan" | "selection" | "partition" });
 const documents = new WeakMap<PlanInputs, Map<string, Promise<ExecutionState>>>();
@@ -98,7 +95,7 @@ export async function documentState(record: PlannerOperation, inputs: PlanInputs
           { ...inputs.harvest.config.triage, tidy_urls: inputs.harvest.config.harvest.tidy_urls,
             clock: runtime.observation_clock ?? (() => new Date()) }),
         fetcher: createPermittedFetcher(inputs.harvest.config.harvest, inputs.harvest.extraction, runtime.boundary, runtime.observation_clock),
-        recovered: new Set<string>(), exclusions: null, identities: null, started,
+        recovered: new Set<string>(), exclusions: null, started,
         api_timings: [{ operation: "feed-health-before-fetch", duration_ms: Math.round(performance.now() - historyStarted), status: "completed" }],
         health_written: false, health_fingerprint: null, owns_choice: false,
       };
@@ -138,21 +135,6 @@ export function documentExclusions(state: DocumentState, inputs: PlanInputs) {
     settledFailureDays: inputs.settings.inputs.settled_failure_days, concurrency: inputs.harvest.config.harvest.concurrency,
   });
   return state.exclusions;
-}
-export function documentIdentities(state: DocumentState, inputs: PlanInputs) {
-  state.identities ??= (async () => {
-    const [exclusions, discoveries] = await Promise.all([
-      documentExclusions(state, inputs),
-      readDiscoveredEvidence({
-        root: inputs.root, discovered_files: inputs.settings.inputs.discovered_files,
-        discovered_days: inputs.settings.inputs.discovered_days, registration: inputs.registrations.discovered_articles,
-        now: state.context.now, lookback_days: inputs.harvest.config.discovered_articles.lookback_days,
-        concurrency: inputs.harvest.config.harvest.concurrency,
-      }),
-    ]);
-    return readArticleIdentityHistory(inputs, state.context.now, discoveries.rows, exclusions.published_rows);
-  })();
-  return state.identities;
 }
 export async function appendDocumentTiming(inputs: PlanInputs, runId: string, timing: PlanApiTiming) {
   const pending = documents.get(inputs)?.get(runId);
