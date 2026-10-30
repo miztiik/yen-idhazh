@@ -6,11 +6,13 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
   FeedIngestCandidateSchema, FetchedDocumentSchema, PlannerOperationSchema, PlannerStageContextSchema,
-  SourceArticleOutcomeSchema, SourceSnapshotSchema, deriveCandidateId, deriveUrlKey,
+  HarvestDiagnosticsSchema, SourceArticleOutcomeSchema, SourceSnapshotSchema, deriveCandidateId, deriveUrlKey,
   LEGACY_OPERATION_VERSION, LEGACY_PLANNER_OPERATION_VERSION, PLANNER_OPERATION_VERSION,
 } from "@idhazh/common-contracts";
 import { HarvestArticleResultSchema } from "../src/harvest-feeds/harvest-types";
 import { resolveArticleSourceOutcome } from "../src/article-source-outcome";
+import { recordRejection } from "../src/harvest-feeds/record-rejection";
+import { attributeIngestOutcome } from "../src/attribute-ingest-outcomes";
 import { createRunHealth } from "../src/run-health";
 import { summarizePlanningHealth } from "../src/read-ledger-history/health-summary";
 import { projectFeedHealthFields } from "../src/read-ledger-history/read-feed-health-fields";
@@ -152,6 +154,54 @@ test("technical admission uses access and words, not publication age or selectio
   expect(resolveArticleSourceOutcome(paywall, 10, [401, 403], at)?.reason_code).toBe("PAYWALL_OR_BLOCKED");
   expect(SourceArticleOutcomeSchema.safeParse({ disposition: "admitted", reason_code: "EXTRACT_EMPTY", settled_at: at }).success).toBe(false);
   expect(SourceArticleOutcomeSchema.safeParse({ disposition: "source_refused", reason_code: null, settled_at: at }).success).toBe(false);
+});
+
+test("measured quality rejection stays unresolved and is counted once without a source refusal", () => {
+  const { at, context: plannerContext, source, article } = recording();
+  const candidate = article(10).candidate!;
+  const diagnostics = HarvestDiagnosticsSchema.parse({
+    http_status: 200, robots: "allowed", failure_code: "too_short", stopped_stage: "extract",
+    detail: "too_short",
+    quality: {
+      source_word_count: 10, word_count: 10, corroborated_word_count: null,
+      token_count: null, truncated: null, truncated_at_tokens: null, truncation_cap_tokens: 256,
+      too_short: true, not_prose: false, boilerplate: null, contaminated: null,
+      failure_code: "too_short", rejected: true, extractor_version: "recorded", sanitizer_version: "recorded",
+    },
+  });
+  const harvestContext = {
+    writer: plannerContext.writer, correlation_id: plannerContext.correlation_id, max_future_hours: 6,
+    clock: () => new Date(at), observation_clock: () => new Date(at),
+  };
+  const rejection = recordRejection(source, harvestContext, "EXTRACT_FAILED", {
+    http_status: 200, diagnostics,
+  }, {
+    candidate_id: candidate.candidate_id, canonical_url: candidate.canonical_url,
+    url_key: candidate.url_key, title: candidate.title, categories: candidate.categories,
+  });
+  const rejected = HarvestArticleResultSchema.parse({
+    candidate: null, rejection,
+    observation: {
+      candidate_id: candidate.candidate_id, http_status: 200, robots: "allowed", fetch_failure: null,
+      paywall: false, paywall_evidence: "none", extraction: "success", observed_at: at, diagnostics,
+    },
+  });
+  expect(attributeIngestOutcome({
+    document_kind: "article", operation: "quality", outcome: "failed",
+    failure_code: "too_short", http_status: 200, request_phase: null,
+  })).toBe("unresolved");
+  expect(resolveArticleSourceOutcome(rejected, 10, [], at)).toBeNull();
+  const work = createRunHealth(plannerContext, [source], new Map(), {
+    min_words: 10, blocked_http_statuses: [], tidy_urls: true,
+  });
+  work.article(rejected);
+  const row = work.rows()[0]!;
+  expect(row.article_candidates).toBeNull();
+  expect(row.rejection_counts).toContainEqual({
+    subject: "article", stage: "harvest-feeds", reason_code: "EXTRACT_FAILED",
+    attribution: "unknown", count: 1,
+  });
+  expect(row.rejection_counts.some(value => value.subject === "article" && value.attribution === "feed")).toBe(false);
 });
 
 test("the source rate stays eight out of ten when only three articles are selected", () => {

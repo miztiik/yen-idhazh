@@ -1,6 +1,6 @@
 # Measured extraction quality
 
-**Last Updated**: 2026-10-23
+**Last Updated**: 2026-10-30
 
 Which article-shape signals did the TypeScript parser measure, and what do
 they change? The shared `parseDocument` stage serves both `/parse` and `/plan`.
@@ -63,8 +63,12 @@ three rejection flags are false. Model-default false values are not a reason
 to override authored configuration.
 
 A configured rejection uses existing `EXTRACT_FAILED` with the selected typed
-signal in diagnostics. Extraction itself still succeeded; assessments keep its
-actual word count and successful extraction outcome beside the rejection.
+signal and full measurements in diagnostics. Parsing remains successful. Its
+completion event carries a separate `quality_rejection` reason and measured
+source/body word counts, plus the safe article address when available.
+Attribution reads that typed reason as a quality decision, not a source failure.
+The capture is not counted as admitted or source-refused, so its admission total
+and source pass rate remain unavailable rather than assigning source blame.
 Other refusals, rankings, source quotas and screening thresholds are unchanged.
 An acceptable body with no source title is measured, but the planner's existing
 required-title rejection remains; this increment does not change that contract.

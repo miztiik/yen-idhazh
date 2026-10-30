@@ -1,8 +1,12 @@
 /** Which observed ingestion failures have enough evidence for source or pipeline attribution? */
-import type { DocumentWorkFact } from "@idhazh/common-contracts";
+import type { DocumentWorkFact, ExtractionQuality } from "@idhazh/common-contracts";
 
-type IngestFailureEvidence = Pick<DocumentWorkFact,
-  "document_kind" | "operation" | "outcome" | "failure_code" | "http_status" | "request_phase">;
+type IngestFailureEvidence = Omit<Pick<DocumentWorkFact,
+  "document_kind" | "operation" | "outcome" | "failure_code" | "http_status" | "request_phase">,
+  "operation" | "failure_code"> & {
+    operation: DocumentWorkFact["operation"] | "quality";
+    failure_code: DocumentWorkFact["failure_code"] | NonNullable<ExtractionQuality["failure_code"]>;
+  };
 
 function isHttpRefusal(status: number | null): boolean {
   // Protocol access/absence responses, not transient or rate-limit outcomes.
@@ -13,6 +17,7 @@ export function attributeIngestOutcome(
   evidence: IngestFailureEvidence,
 ): DocumentWorkFact["attribution"] {
   if (evidence.outcome !== "failed") return null;
+  if (evidence.operation === "quality") return "unresolved";
 
   if (evidence.failure_code === "unsafe-target"
     || evidence.failure_code === "body-too-large"
