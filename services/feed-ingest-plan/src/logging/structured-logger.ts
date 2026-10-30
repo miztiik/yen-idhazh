@@ -1,5 +1,6 @@
 /** Publish bounded planner progress events without work batches or article bodies. */
-import { FeedIngestEventSchema } from "@idhazh/common-contracts";
+import { ExtractionQualitySchema, ExtractionSignalSchema, FeedIngestEventSchema } from "@idhazh/common-contracts";
+import { z } from "zod";
 import type { FeedIngestEvent } from "@idhazh/common-contracts";
 import type { RunContext } from "../resolve-run-context";
 // RFC 4122 DNS namespace identifies deterministic local work events.
@@ -8,6 +9,11 @@ export const EVENT_NAMESPACE = "6ba7b810-9dad-11d1-80b4-00c04fd430c8";
 export function writeJsonLine(record: unknown): void { console.error(JSON.stringify(record)); }
 const DETAIL_LIMITS = { depth: 6, entries: 128, stringLength: 512, bytes: 4096 } as const;
 const SENSITIVE_DETAIL_KEY = /^(?:article_text|body|policy|headers?|authorization|cookie|secret|token|url|.*_(?:body|text|policy|headers?|authorization|cookie|secret|token|url))$/i;
+const QualityRejectionSchema = z.strictObject({
+  failure_code: ExtractionSignalSchema,
+  source_word_count: ExtractionQualitySchema.shape.source_word_count,
+  word_count: ExtractionQualitySchema.shape.word_count,
+});
 type ComplianceViolation = Readonly<{ code: string; path: string }>;
 
 /** A diagnostic address never retains credentials, query values or fragments. */
@@ -32,6 +38,11 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return prototype === Object.prototype || prototype === null;
 }
 
+function hasQualityRejection(value: unknown): boolean {
+  if (!isRecord(value) || !isRecord(value.quality_rejection)) return false;
+  return QualityRejectionSchema.safeParse(value.quality_rejection).success;
+}
+
 export function prepareProgressEvent(
   raw: unknown, requiredDetails: readonly string[] = [], failureArticleUrl?: string,
   failureFeedUrls?: Readonly<{ requested: string; final_attempted: string | null }>,
@@ -43,6 +54,20 @@ export function prepareProgressEvent(
   const addViolation = (code: string, path: string) => violations.set(`${code}:${path}`, { code, path });
   const ancestors = new WeakSet<object>();
   let entries = 0;
+  const qualityEvent = base.operation === "quality" && base.phase === "failed";
+  const hasQualityPayload = isRecord(rawDetails) && Object.hasOwn(rawDetails, "quality_rejection");
+  const qualityPayload = isRecord(rawDetails) && hasQualityPayload
+    ? QualityRejectionSchema.safeParse(rawDetails.quality_rejection) : null;
+  let detailsInput = rawDetails;
+  if ((qualityEvent && qualityPayload?.success !== true)
+    || (!qualityEvent && hasQualityPayload)) {
+    addViolation("invalid_quality_rejection", "details.quality_rejection");
+    if (isRecord(rawDetails)) {
+      const cleanable = { ...rawDetails };
+      delete cleanable.quality_rejection;
+      detailsInput = cleanable;
+    }
+  }
 
   function clean(value: unknown, depth: number): unknown {
     if (value === null || typeof value === "boolean") return value;
@@ -106,9 +131,9 @@ export function prepareProgressEvent(
   }
 
   let details: Record<string, unknown> = {};
-  if (!isRecord(rawDetails)) addViolation("details_must_be_object", "details");
+  if (!isRecord(detailsInput)) addViolation("details_must_be_object", "details");
   else {
-    const cleaned = clean(rawDetails, 0);
+    const cleaned = clean(detailsInput, 0);
     if (isRecord(cleaned)) details = cleaned;
   }
   for (const key of requiredDetails) {
@@ -116,7 +141,9 @@ export function prepareProgressEvent(
   }
   if (failureArticleUrl !== undefined) {
     const url = diagnosticUrl(failureArticleUrl);
-    if (base.phase === "failed" && (base.operation === "fetch" || base.operation === "parse") && url !== undefined) {
+    const qualityRejection = qualityEvent && hasQualityRejection(rawDetails);
+    if (((base.phase === "failed" && (base.operation === "fetch" || base.operation === "parse")) || qualityRejection)
+      && url !== undefined) {
       details.article_url = url;
     } else addViolation("unsafe_article_url", "details.article_url");
   }

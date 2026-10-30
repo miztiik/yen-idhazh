@@ -34,4 +34,6 @@ export const PARSED_FEED_BATCH_ACCEPTED_SCHEMA_VERSIONS = [
 ] as const;
 export const FEED_OUTCOME_PAYLOAD_VERSION = "2026-10-30" as const;
 export const FEED_PROBE_VERSION = "2026-10-28" as const;
-export const FEED_INGEST_EVENT_VERSION = "2026-10-30T22:25" as const;
+export const LEGACY_FEED_INGEST_EVENT_VERSION = "2026-10-29T08:00" as const;
+export const INTERMEDIATE_FEED_INGEST_EVENT_VERSION = "2026-10-30T22:25" as const;
+export const FEED_INGEST_EVENT_VERSION = "2026-10-30T22:48" as const;

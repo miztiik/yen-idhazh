@@ -21,6 +21,7 @@ import {
   selectedArticleMetadata, readSelectedArticlesArtifact, FeedHealthStateRowSchema, PlanRunRowSchema,
   RetainedRejectionReasonSchema, RejectedArticleRowSchema, ArticleFetchEvidenceSchema,
   CANDIDATE_REJECTION_VERSION, REJECTED_ARTICLE_VERSION,
+  FEED_INGEST_EVENT_VERSION, INTERMEDIATE_FEED_INGEST_EVENT_VERSION, LEGACY_FEED_INGEST_EVENT_VERSION,
 } from "../src/index";
 import { plannerStageSchemas, runtimeSchemas, schemas } from "./schema-binding";
 
@@ -452,9 +453,10 @@ describe("current planner contracts", () => {
 
   test("binds event discriminators, candidate identities and stages", () => {
     const row = event();
-    expect(row.version).toBe("2026-10-30T22:25");
+    expect(row.version).toBe(FEED_INGEST_EVENT_VERSION);
     expect(FeedIngestEventSchema.safeParse({ ...row, payload: { article_text: "must not escape" } }).success).toBe(false);
     expect(FeedIngestEventSchema.safeParse({ ...row, operation: "article-assessment" }).success).toBe(false);
+    expect(FeedIngestEventSchema.safeParse({ ...row, operation: "quality" }).success).toBe(true);
     expect(FeedIngestEventSchema.safeParse({ ...row, details: { duration_ms: 0.5 } }).success).toBe(true);
     expect(FeedIngestEventSchema.safeParse({ ...row, details: { publisher_id: "recorded-publication" } }).success).toBe(true);
     expect(FeedIngestEventSchema.safeParse({ ...row, details: { publisher_id: "Recorded_Publisher" } }).success).toBe(true);
@@ -477,13 +479,19 @@ describe("current planner contracts", () => {
     expect(readFeedIngestEvent(JSON.parse(JSON.stringify(row)))).toEqual(row);
     expect(() => readFeedIngestEvent({ ...row, version: "2026-10-28" })).toThrow();
     expect(() => readFeedIngestEvent({ ...row, feed_id: null })).toThrow();
+    for (const version of [LEGACY_FEED_INGEST_EVENT_VERSION, INTERMEDIATE_FEED_INGEST_EVENT_VERSION]) {
+      const historical = { ...row, version };
+      expect(FeedIngestEventSchema.safeParse(historical).success).toBe(false);
+      expect(readFeedIngestEvent(historical)).toMatchObject({ version: FEED_INGEST_EVENT_VERSION, operation: row.operation });
+      expect(() => readFeedIngestEvent({ ...historical, operation: "quality" })).toThrow();
+    }
     const schema = z.toJSONSchema(FeedIngestEventSchema);
-    expect(schema.version).toBe("2026-10-30T22:25");
+    expect(schema.version).toBe(FEED_INGEST_EVENT_VERSION);
     expect(schema.changelog).toEqual([
-      { version: "2026-10-30T22:25", change: "Record safe feed failure targets and response byte-limit evidence." },
-      { version: "2026-10-29T08:00", change: "Add artifact-upload inventory and publisher-controlled failure article addresses." },
+      { version: FEED_INGEST_EVENT_VERSION, change: "Add separate typed quality-rejection events." },
+      { version: INTERMEDIATE_FEED_INGEST_EVENT_VERSION, change: "Record safe feed failure targets and response byte-limit evidence." },
+      { version: LEGACY_FEED_INGEST_EVENT_VERSION, change: "Add artifact-upload inventory and safe article addresses." },
       { version: "2026-10-29", change: "Move operation-specific fields into flexible details." },
-      { version: "2026-10-28", change: "Name the publisher on sparse article progress events." },
       { version: "2026-10-26", change: "Earlier changes are in git." },
     ]);
     expect(schema.additionalProperties).toBe(false);

@@ -64,14 +64,17 @@ export function createRunHealth(context: RunContext, sources: readonly SourceSna
     const parserDetail = rejection.details.diagnostics?.detail;
     const typedParserFailure = parserDetail === "parser-timeout" || parserDetail === "parser-cancelled"
       || parserDetail === "parser-failed" ? parserDetail : null;
+    const qualityFailure = rejection.details.diagnostics?.quality?.rejected
+      ? rejection.details.diagnostics.quality.failure_code : null;
     const failureCode = rejection.details.diagnostics?.fetch_failure ?? rejection.details.diagnostics?.extraction_failure
-      ?? typedParserFailure
+      ?? qualityFailure ?? typedParserFailure
       ?? (rejection.drop_reason === "FETCH_FAILED_HTTP" ? "http" : rejection.drop_reason === "FETCH_TIMEOUT" ? "timeout"
         : rejection.drop_reason === "FEED_PARSE_FAILED" ? "malformed-feed" : rejection.drop_reason === "EXTRACT_EMPTY" ? "empty-content" : null);
     const failure = failureCode !== null || ["FETCH_FAILED", "EXTRACT_FAILED", "FETCH_TIMEOUT"].includes(rejection.drop_reason);
     const attribution = failure
       ? attributeIngestOutcome({
-        document_kind: rejection.subject, operation: rejection.drop_reason.startsWith("EXTRACT") || rejection.drop_reason === "FEED_PARSE_FAILED" ? "parse" : "fetch",
+        document_kind: rejection.subject, operation: qualityFailure !== null ? "quality"
+          : rejection.drop_reason.startsWith("EXTRACT") || rejection.drop_reason === "FEED_PARSE_FAILED" ? "parse" : "fetch",
         outcome: "failed", failure_code: failureCode,
         http_status: rejection.details.http_status ?? null, request_phase: null,
       }) : null;

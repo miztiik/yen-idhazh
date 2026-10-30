@@ -4,6 +4,7 @@ import { mkdtemp, readFile, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { FeedIngestConfigSchema, readFeedIngestEvent } from "../../../packages/common-contracts/src/index";
+import { FEED_INGEST_EVENT_VERSION } from "../../../packages/common-contracts/src/version";
 import { prepareProgressEvent } from "../src/logging/structured-logger";
 import { writePlannerReport } from "../scripts/feed-ingest-plan-report";
 import { formatHostFingerprintSummary } from "../scripts/feed-ingest-plan-host-summary";
@@ -24,7 +25,7 @@ test("reads current sparse progress and refuses hidden article or audit payloads
   const events = await fixture();
   const before = structuredClone(events);
   expect(renderPlannerProgressMarkdown(events)).toEqual(renderPlannerProgressMarkdown(before));
-  expect(events.every(event => event.version === "2026-10-30T22:25")).toBe(true);
+  expect(events.every(event => event.version === FEED_INGEST_EVENT_VERSION)).toBe(true);
   for (const changed of [
     { ...events[0], headers: { authorization: "private" } },
     { ...events[0], article_text: "Private article body" },

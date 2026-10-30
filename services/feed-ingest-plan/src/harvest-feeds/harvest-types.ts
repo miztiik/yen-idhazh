@@ -57,7 +57,7 @@ export type HarvestContext = {
   observation_clock?: () => Date;
   observations?: IngestObservations;
   document_activity?: (
-    operation: "fetch" | "parse", phase: "started" | "completed" | "failed",
+    operation: "fetch" | "parse" | "quality", phase: "started" | "completed" | "failed",
     details: Record<string, unknown>, failureArticleUrl?: string,
     failureFeedUrls?: Readonly<{ requested: string; final_attempted: string | null }>,
   ) => void;
