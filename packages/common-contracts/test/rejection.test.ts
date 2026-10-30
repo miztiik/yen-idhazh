@@ -570,6 +570,22 @@ describe("current planner contracts", () => {
     });
     expect(oldBatch.version).toBe(LEGACY_PARSED_FEED_BATCH_VERSION);
     expect(oldBatch.observations[batchCandidate.candidate_id]!.diagnostics?.body_limit).toBeNull();
+    const currentBatch = ParsedFeedBatchSchema.parse({
+      ...oldBatch, version: undefined,
+      observations: {
+        [batchCandidate.candidate_id]: {
+          ...oldBatch.observations[batchCandidate.candidate_id]!, fetch_failure: "body-too-large",
+          diagnostics: {
+            fetch_failure: "body-too-large",
+            body_limit: { configured_limit_bytes: 1024, observed_at_least_bytes: 1056 },
+          },
+        },
+      },
+    });
+    expect(currentBatch.version).toBe(PARSED_FEED_BATCH_VERSION);
+    expect(currentBatch.observations[batchCandidate.candidate_id]!.diagnostics?.body_limit).toEqual({
+      configured_limit_bytes: 1024, observed_at_least_bytes: 1056,
+    });
     expect(ParsedFeedBatchSchema.safeParse({ ...parsed, version: "2026-10-24" }).success).toBe(false);
     expect(ParsedFeedBatchSchema.safeParse({ ...parsed, observations: { [digest]: { candidate_id: digest } } }).success).toBe(false);
     const selected = SelectedFeedBatchSchema.parse({
