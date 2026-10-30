@@ -1,13 +1,16 @@
 /** Which native request journal and document shapes may operator APIs read? */
 import { z } from "zod";
 import { CountSchema, NonEmptySchema, RunIdSchema, Sha256Schema, SlugSchema, TimestampSchema, UrlSchema } from "./primitives";
-import { FetchFailureSchema } from "./harvest-diagnostics.schema";
+import { BodyLimitEvidenceSchema, FetchFailureSchema } from "./harvest-diagnostics.schema";
 import { RecordedInstantSchema } from "./recorded-instant.schema";
 import { SourceArticleRefusalReasonSchema } from "./rejection.schema";
 
 export const LEGACY_OPERATION_VERSION = "2026-10-28" as const;
-export const OPERATION_VERSION = "2026-10-29" as const;
-export const OPERATION_ACCEPTED_SCHEMA_VERSIONS = [LEGACY_OPERATION_VERSION, OPERATION_VERSION] as const;
+export const PREVIOUS_OPERATION_VERSION = "2026-10-29" as const;
+export const OPERATION_VERSION = "2026-10-30" as const;
+export const OPERATION_ACCEPTED_SCHEMA_VERSIONS = [
+  LEGACY_OPERATION_VERSION, PREVIOUS_OPERATION_VERSION, OPERATION_VERSION,
+] as const;
 const OperationVersionSchema = z.enum(OPERATION_ACCEPTED_SCHEMA_VERSIONS).default(OPERATION_VERSION);
 export const LEGACY_PLANNER_OPERATION_VERSION = "2026-10-28" as const;
 export const PLANNER_OPERATION_VERSION = "2026-10-29" as const;
@@ -46,6 +49,7 @@ export const FetchedDocumentSchema = z.strictObject({
   failure: FetchFailureSchema.nullable(), robots: z.enum(["allowed", "denied", "unknown"]).nullable(),
   error_code: FetchAttemptSchema.shape.error_code, robots_failure: FetchFailureSchema.nullable(),
   robots_http_status: z.int().min(100).max(599).nullable(),
+  body_limit: BodyLimitEvidenceSchema.nullable().default(null),
   attempts: z.array(FetchAttemptSchema), observation: PlannerObservationSchema,
   attempt_observations: z.array(PlannerObservationSchema), body_sha256: Sha256Schema.nullable(),
   parent_fetch_request_id: RequestIdSchema.nullable().default(null),
@@ -57,6 +61,11 @@ export const FetchedDocumentSchema = z.strictObject({
   }
   if (value.body === null ? value.body_sha256 !== null : value.body_sha256 === null) {
     ctx.addIssue({ code: "custom", message: "body and body digest must be available together" });
+  }
+  const bodyLimitFailure = value.failure === "body-too-large" || value.robots_failure === "body-too-large";
+  if ((value.body_limit !== null && !bodyLimitFailure)
+    || (value.version === OPERATION_VERSION && bodyLimitFailure && value.body_limit === null)) {
+    ctx.addIssue({ code: "custom", message: "current body-limit failures require their measured cutoff evidence" });
   }
   if (value.observation.operation !== "fetch" || value.observation.article_id !== value.article_id
     || value.observation.feed_id !== value.feed_id) {
@@ -73,11 +82,11 @@ export const FetchedDocumentSchema = z.strictObject({
 }).meta({
   version: OPERATION_VERSION,
   changelog: [
-    { version: OPERATION_VERSION, change: "Identify shared query-free article captures while preserving legacy receipts unchanged." },
+    { version: OPERATION_VERSION, change: "Retain configured response limits and observed cutoff bytes." },
+    { version: PREVIOUS_OPERATION_VERSION, change: "Identify shared query-free article captures while preserving legacy receipts unchanged." },
     { version: LEGACY_OPERATION_VERSION, change: "Rename fetched document and observation feed identity from source_id to feed_id." },
     { version: "2026-10-27", change: "Name the fetched item type and refuse older fetch artifacts." },
-    { version: "2026-10-26", change: "Link fetched articles to bounded server-owned feed offers." },
-    { version: "2026-10-23", change: "Earlier changes are in git." },
+    { version: "2026-10-26", change: "Earlier changes are in git." },
   ],
 });
 export const PlannerOperationSchema = z.strictObject({

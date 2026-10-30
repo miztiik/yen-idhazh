@@ -1,6 +1,6 @@
 # Feed and article failure diagnostics
 
-**Last Updated**: 2026-10-25
+**Last Updated**: 2026-10-30
 
 Which operation failed, what evidence survives it, and which durations were
 actually measured? This is the isolated TypeScript planner's diagnostic
@@ -9,12 +9,9 @@ contract, not a claim of complete parity with production Python extraction.
 
 ## One observation through every boundary
 
-`HarvestDiagnostics` is declared in
-`backend/idhazh/contracts/feed_ingest_diagnostics.py`; its strict TypeScript
-copy lives in `packages/common-contracts/src/schemas/harvest-diagnostics.schema.ts`.
-The existing recursive contract binding compares the nested shape,
-nullability, defaults and vocabularies. There is no Python process in the
-planner or its native tests.
+`HarvestDiagnostics` is owned by the TypeScript planner contract in
+`packages/common-contracts/src/schemas/harvest-diagnostics.schema.ts`. Python
+does not read planner diagnostics; there is no second model to keep in step.
 
 One diagnostic object travels through the article observation, rejection
 `details.diagnostics`, article assessment and typed decision event. Feed
@@ -40,12 +37,24 @@ Table A
 | A10 | `extract_ms` | Measured milliseconds around the synchronous article extractor, including typed failures. Null if extraction was not attempted. |
 | A11 | `warnings` | A bounded set of warning kinds. Currently `malformed-json-ld` identifies invalid publisher metadata without declaring the article failed. |
 | A12 | `quality` | Measured source/body words, independent publisher length, native shape signals, configured consequence and actual implementation fingerprints. Null before extraction or on historical rows. [Extraction quality](extraction-quality.md) owns each meaning and its unavailable readings. |
+| A13 | `body_limit` | The configured decoded-byte limit and bytes observed at cutoff as a lower bound. It is present only when a feed, article or robots response hit the limit; the remaining response is not read to obtain a full size. |
 
 Null means unavailable or unperformed; zero milliseconds means a real
 measurement rounded below one millisecond. Inactive feeds, invalid entry
 identity and pre-download age refusals have null diagnostics, not zero fetch
 and extraction times. Feed parsing retains its separately measured
 `parse_duration_ms` on the feed outcome.
+
+Failed feed progress events may include `requested_feed_url` and
+`final_attempted_feed_url`. Each address uses the same diagnostic policy as an
+article address: credentials and signed query addresses are refused, and other
+query values and fragments are removed. The requested address is not presented
+as the final address after a redirect. The final field names the last feed
+target sent in an HTTP request, or is null when no such request was sent.
+Neither address comes from feed contents.
+When a robots response hits the byte limit, the progress event marks
+`body_limit_source` as `robots`; otherwise the source is the feed or article
+response. A failed robots check does not claim that the feed target was sent.
 
 Existing rejection `details.http_status` and article observation status cells
 are projections of the same fetch result, not independent requests.
@@ -93,7 +102,8 @@ Rejections, article assessments and planner events advance to `2026-10-23`;
 source-run vocabulary and its stamp are unchanged. Python ledger declarations carry their
 changelog entries; TypeScript owns the event changelog.
 Earlier rejection and assessment rows without diagnostics migrate with null
-diagnostics; existing historical diagnostics gain null quality. Nothing
+diagnostics; existing historical diagnostics gain null quality and null
+`body_limit`. Nothing
 reconstructs a missing HTTP status, error token or duration from a broad old
 rejection reason. The existing publication-time migration is unchanged.
 Source-run predecessors retain their counts and recorded completion proof.

@@ -10,7 +10,8 @@ import {
   SourceSnapshotSchema, WriterIdentitySchema, deriveCandidateId, deriveUrlKey, validateEnvelopeContainer,
   readFeedIngestEvent, HarvestDiagnosticsSchema, FetchAttemptSchema, OPERATION_VERSION,
   PLANNER_OPERATION_VERSION, RecordedInstantSchema, TimestampSchema,
-  FEED_INGEST_CANDIDATE_VERSION, PARSED_FEED_BATCH_VERSION, PLANNER_LEDGER_VERSION, PLAN_RUN_VERSION,
+  FEED_INGEST_CANDIDATE_VERSION, LEGACY_PARSED_FEED_BATCH_VERSION, PARSED_FEED_BATCH_VERSION,
+  PLANNER_LEDGER_VERSION, PLAN_RUN_VERSION,
   SELECTED_ARTICLE_VERSION, FEED_HEALTH_STATE_VERSION, ParsedFeedBatchSchema, SelectedFeedBatchSchema, PartitionedFeedBatchSchema,
   PlannerHarvestObservationSchema, PlannerDiscoveredEvidenceSchema, PlannerDiscoveredRowSchema,
   PlannerStageContextSchema, PlannerStageRequestSchema, StageReferenceRequestSchema,
@@ -136,6 +137,29 @@ describe("rejection evidence", () => {
     }).error_code).toBe("ECONNRESET");
     expect(RejectedArticleRowSchema.meta()?.version).toBe(REJECTED_ARTICLE_VERSION);
     expect(CandidateRejectionRecordSchema.meta()?.version).toBe(CANDIDATE_REJECTION_VERSION);
+  });
+
+  test("records the configured body limit and only the observed lower bound", () => {
+    expect(HarvestDiagnosticsSchema.parse({
+      fetch_failure: "body-too-large",
+      body_limit: { configured_limit_bytes: 1024, observed_at_least_bytes: 1056 },
+    }).body_limit).toEqual({ configured_limit_bytes: 1024, observed_at_least_bytes: 1056 });
+    expect(HarvestDiagnosticsSchema.parse({
+      fetch_failure: "robots-unknown", robots_failure: "body-too-large",
+      body_limit: { configured_limit_bytes: 30, observed_at_least_bytes: 59 },
+    }).body_limit).toEqual({ configured_limit_bytes: 30, observed_at_least_bytes: 59 });
+    for (const body_limit of [
+      { configured_limit_bytes: 1024, observed_at_least_bytes: 1024 },
+      { configured_limit_bytes: -1, observed_at_least_bytes: 1056 },
+      { configured_limit_bytes: 1024, observed_at_least_bytes: 1056, response_bytes: 2048 },
+    ]) {
+      expect(HarvestDiagnosticsSchema.safeParse({
+        fetch_failure: "body-too-large", body_limit,
+      }).success).toBe(false);
+    }
+    expect(HarvestDiagnosticsSchema.safeParse({
+      fetch_failure: "network", body_limit: { configured_limit_bytes: 1024, observed_at_least_bytes: 1056 },
+    }).success).toBe(false);
   });
 
   test("refuses malformed fetch evidence and missing non-harvest candidate identities", () => {
@@ -428,7 +452,7 @@ describe("current planner contracts", () => {
 
   test("binds event discriminators, candidate identities and stages", () => {
     const row = event();
-    expect(row.version).toBe("2026-10-29T08:00");
+    expect(row.version).toBe("2026-10-30T22:25");
     expect(FeedIngestEventSchema.safeParse({ ...row, payload: { article_text: "must not escape" } }).success).toBe(false);
     expect(FeedIngestEventSchema.safeParse({ ...row, operation: "article-assessment" }).success).toBe(false);
     expect(FeedIngestEventSchema.safeParse({ ...row, details: { duration_ms: 0.5 } }).success).toBe(true);
@@ -454,12 +478,13 @@ describe("current planner contracts", () => {
     expect(() => readFeedIngestEvent({ ...row, version: "2026-10-28" })).toThrow();
     expect(() => readFeedIngestEvent({ ...row, feed_id: null })).toThrow();
     const schema = z.toJSONSchema(FeedIngestEventSchema);
-    expect(schema.version).toBe("2026-10-29T08:00");
+    expect(schema.version).toBe("2026-10-30T22:25");
     expect(schema.changelog).toEqual([
+      { version: "2026-10-30T22:25", change: "Record safe feed failure targets and response byte-limit evidence." },
       { version: "2026-10-29T08:00", change: "Add artifact-upload inventory and publisher-controlled failure article addresses." },
       { version: "2026-10-29", change: "Move operation-specific fields into flexible details." },
       { version: "2026-10-28", change: "Name the publisher on sparse article progress events." },
-      { version: "2026-10-26", change: "Name pre-fetch and selection health captures separately." },
+      { version: "2026-10-26", change: "Earlier changes are in git." },
     ]);
     expect(schema.additionalProperties).toBe(false);
   });
@@ -530,6 +555,37 @@ describe("current planner contracts", () => {
     expect(offered.offers[0]!.source.feed_id).toBe(source.feed_id);
     expect(offered.input_complete).toBe(false);
     expect(ParsedFeedBatchSchema.safeParse({ ...parsed, input_complete: "true" }).success).toBe(false);
+    const batchCandidate = FeedIngestCandidateSchema.parse({
+      ...candidate(), correlation_id: context.correlation_id,
+    });
+    const oldBatch = ParsedFeedBatchSchema.parse({
+      ...parsed, version: LEGACY_PARSED_FEED_BATCH_VERSION, candidates: [batchCandidate],
+      observations: {
+        [batchCandidate.candidate_id]: {
+          candidate_id: batchCandidate.candidate_id, http_status: null, robots: "allowed",
+          fetch_failure: "network", paywall: null, paywall_evidence: "not-observed",
+          extraction: "not-attempted", observed_at: context.now, diagnostics: { fetch_failure: "network" },
+        },
+      },
+    });
+    expect(oldBatch.version).toBe(LEGACY_PARSED_FEED_BATCH_VERSION);
+    expect(oldBatch.observations[batchCandidate.candidate_id]!.diagnostics?.body_limit).toBeNull();
+    const currentBatch = ParsedFeedBatchSchema.parse({
+      ...oldBatch, version: undefined,
+      observations: {
+        [batchCandidate.candidate_id]: {
+          ...oldBatch.observations[batchCandidate.candidate_id]!, fetch_failure: "body-too-large",
+          diagnostics: {
+            fetch_failure: "body-too-large",
+            body_limit: { configured_limit_bytes: 1024, observed_at_least_bytes: 1056 },
+          },
+        },
+      },
+    });
+    expect(currentBatch.version).toBe(PARSED_FEED_BATCH_VERSION);
+    expect(currentBatch.observations[batchCandidate.candidate_id]!.diagnostics?.body_limit).toEqual({
+      configured_limit_bytes: 1024, observed_at_least_bytes: 1056,
+    });
     expect(ParsedFeedBatchSchema.safeParse({ ...parsed, version: "2026-10-24" }).success).toBe(false);
     expect(ParsedFeedBatchSchema.safeParse({ ...parsed, observations: { [digest]: { candidate_id: digest } } }).success).toBe(false);
     const selected = SelectedFeedBatchSchema.parse({

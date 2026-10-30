@@ -110,9 +110,23 @@ test("completed legacy feed and article receipts retain their version, body and 
       ...journal, version: LEGACY_PLANNER_OPERATION_VERSION, state: "complete",
       artifact: document, response_json,
     };
-    expect(FetchedDocumentSchema.parse(document)).toEqual(document);
-    expect(PlannerOperationSchema.parse(receipt)).toEqual(receipt);
+    expect(FetchedDocumentSchema.parse(document)).toEqual({ ...document, body_limit: null });
+    expect(PlannerOperationSchema.parse(receipt)).toEqual({
+      ...receipt, artifact: { ...document, body_limit: null },
+    });
     const currentUrl = fetch_item_type === "article" ? url.split("?")[0]! : url;
+    const robotsCutoff = FetchedDocumentSchema.parse({
+      ...document, version: OPERATION_VERSION, canonical_url: currentUrl,
+      article_id: deriveUrlKey(currentUrl), body: null, body_sha256: null,
+      failure: "robots-unknown", robots: "unknown", robots_failure: "body-too-large",
+      robots_http_status: 200,
+      body_limit: { configured_limit_bytes: 30, observed_at_least_bytes: 55 },
+      observation: { ...document.observation, article_id: deriveUrlKey(currentUrl) },
+    });
+    expect(robotsCutoff.body_limit).toEqual({
+      configured_limit_bytes: 30, observed_at_least_bytes: 55,
+    });
+    expect(FetchedDocumentSchema.safeParse({ ...robotsCutoff, body_limit: null }).success).toBe(false);
     expect(FetchedDocumentSchema.parse({
       ...document, version: undefined, canonical_url: currentUrl, article_id: deriveUrlKey(currentUrl),
       observation: { ...document.observation, article_id: deriveUrlKey(currentUrl) },

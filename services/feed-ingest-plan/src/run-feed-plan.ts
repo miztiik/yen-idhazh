@@ -129,9 +129,9 @@ export async function runFeedPlan(raw: unknown, inputs: PlanInputs, runtime: Pla
       max_future_hours: inputs.clock_config.collect.max_future_hours,
       exclusions: { ...loaded[2], published_window_days: inputs.clock_config.collect.published_window_days },
       feed_history: initialHistory.sources, observations, parser_pool: parserPool,
-      document_activity: (operation, phase, details, url) => {
+      document_activity: (operation, phase, details, url, feedUrls) => {
         if (operation === "parse") recordParseActivity(phase);
-        emit(operation, phase, details, ["feed_id", "publisher_id"], url);
+        emit(operation, phase, details, ["feed_id", "publisher_id"], url, feedUrls);
       },
       parser_options: { ...(runtime.signal === undefined ? {} : { signal: runtime.signal })       },
       clock: () => new Date(context.now), observation_clock: runtime.observation_clock ?? (() => new Date()),
