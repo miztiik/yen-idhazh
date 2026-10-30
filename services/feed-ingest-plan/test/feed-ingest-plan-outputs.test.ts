@@ -126,7 +126,7 @@ test("one real result and every native file stay unchanged through both report m
     expect(annotations).toEqual(workflowReport.notices.map(formatWorkflowAnnotation));
     expect(annotations.map(line => line.slice(0, line.indexOf("::", 2)))).toEqual([
       "::notice title=Host fingerprint", "::notice title=Feed work", "::notice title=Request counts",
-      "::notice title=Grouped exclusions", "::notice title=Effective policy",
+      "::notice title=Grouped exclusions", "::notice title=Failure evidence", "::notice title=Effective policy",
     ]);
     const rendered = Bun.markdown.html(await readFile(summary, "utf8"));
     expect(rendered).toContain("<td>Status</td><td>completed</td>");
@@ -143,7 +143,7 @@ test("one real result and every native file stay unchanged through both report m
     expect(legacyTiming).toContain("Legacy feed-health capture (purpose not recorded)");
     expect(legacyTiming).not.toContain("| Feed health before requests |");
     expect(legacyTiming).not.toContain("| Fresh feed health for selection |");
-    expect((rendered.match(/<table>/g) ?? [])).toHaveLength(9);
+    expect((rendered.match(/<table>/g) ?? [])).toHaveLength(11);
     expect(rendered).toContain("<th>Feed read result</th>");
     expect(rendered).not.toContain("<th>Outcome</th>");
     expect(rendered).toContain("<details>");
