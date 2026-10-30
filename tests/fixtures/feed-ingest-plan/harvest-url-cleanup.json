@@ -1,5 +1,5 @@
 {
-  "description": "Bounded article cleanup vectors; identity and initial dispatch use one query-free address.",
+  "description": "Which article URL checks run before a request is dispatched?",
   "allowed": [
     {
       "offered": "https://news.example/second?utm_source=feed&oly_enc_id=tracking",
@@ -16,6 +16,21 @@
     {
       "offered": "https://www.google.com/url?url=https%3A%2F%2Fwww.youtube.com%2Fwatch%3Fv%3Drecorded",
       "canonical_url": "https://www.youtube.com/watch",
+      "excluded": true
+    },
+    {
+      "offered": "https://www.businesstoday.in/bt-tv/market-today/short-video/bhutan-glacial-lake-burst-triggers-flood-alerts-in-assam-bengal-thousands-evacuated-as-water-564789-2026-10-30",
+      "canonical_url": "https://www.businesstoday.in/bt-tv/market-today/short-video/bhutan-glacial-lake-burst-triggers-flood-alerts-in-assam-bengal-thousands-evacuated-as-water-564789-2026-10-30",
+      "excluded": true
+    },
+    {
+      "offered": "https://www.businesstoday.in/bt-tv/whats-hot/short-video/uttarakhand-chopper-crash-helicopter-with-six-onboard-reportedly-crashes-near-joshimath-564788-2026-10-30",
+      "canonical_url": "https://www.businesstoday.in/bt-tv/whats-hot/short-video/uttarakhand-chopper-crash-helicopter-with-six-onboard-reportedly-crashes-near-joshimath-564788-2026-10-30",
+      "excluded": true
+    },
+    {
+      "offered": "https://www.businesstoday.in/bt-tv/short-video/indian-passports-global-rise-germany-wants-far-more-than-90000-indian-workers-says-piyush-goyal-564702-2026-10-30",
+      "canonical_url": "https://www.businesstoday.in/bt-tv/short-video/indian-passports-global-rise-germany-wants-far-more-than-90000-indian-workers-says-piyush-goyal-564702-2026-10-30",
       "excluded": true
     },
     {

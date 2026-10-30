@@ -229,6 +229,10 @@ Older recorded keys remain unchanged and do not link to the current address;
 this avoids extra history reads and alternate-policy checks, but can repeat
 processing for an address whose older key differs.
 
+2026-10-30 UTC: Ten recorded empty-content failures from Business Today used
+three short-video route prefixes. Exclude those configured host/path routes
+before article requests; ordinary story paths remain eligible.
+
 ## See also
 
 - [Operator APIs](feed-operator-api.md)
