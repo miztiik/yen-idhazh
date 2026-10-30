@@ -4,6 +4,7 @@ import {
   FEED_PROBE_SAMPLE_MAX,
   FeedProbeRequestSchema,
   FeedProbeResultSchema,
+  FeedIngestConfigSchema,
 } from "@idhazh/common-contracts";
 import type {
   HarvestTransport,
@@ -122,7 +123,6 @@ test("HTTP feed failure does not pass", async () => {
     ...robotsRoute(),
     "https://fixture.test/feed.xml": { status: 404, body: "" },
   });
-
   const result = await probeFeed(
     { feed_url: "https://fixture.test/feed.xml" },
     { boundary: transport },
@@ -131,6 +131,51 @@ test("HTTP feed failure does not pass", async () => {
   expect(result.verdict).toBe("feed_failure");
   expect(result.passed).toBe(false);
   expect(result.failure_code).toBe("http_client_error");
+});
+
+test("article robots warnings do not hide readable content but feed robots still refuses", async () => {
+  const feed = await fixture("one-paywall-feed.xml");
+  const article = await fixture("readable-article.html");
+  const config = FeedIngestConfigSchema.parse(await Bun.file(new URL(
+    "../../../config/feed-ingest-plan.json", import.meta.url,
+  )).json());
+  const harvest = { ...config.harvest, article_robots_policy: "observe" as const };
+  for (const allowedFeed of [true, false]) {
+    const transport = await boundary({
+      "https://fixture.test/robots.txt": {
+        status: 200, body: `User-agent: *\nDisallow: /\n${allowedFeed ? "Allow: /feed.xml\n" : ""}`,
+      },
+      "https://fixture.test/feed.xml": { status: 200, body: feed },
+      "https://fixture.test/paywall-one": { status: 200, body: article },
+    });
+    const result = await probeFeed(
+      { feed_url: "https://fixture.test/feed.xml", sample_count: 1 }, { harvest, boundary: transport },
+    );
+    if (allowedFeed) {
+      expect(result.passed).toBe(true);
+      expect(result.samples[0]?.diagnostics).toMatchObject({
+        robots: "denied", robots_http_status: 200, fetch_failure: null, http_status: 200,
+      });
+    } else {
+      expect(result.verdict).toBe("feed_failure");
+      expect(result.diagnostics).toMatchObject({ robots: "denied", fetch_failure: "robots-denied", http_status: null });
+    }
+  }
+  const unavailable = await boundary({
+    ...robotsRoute(),
+    "https://fixture.test/feed.xml": {
+      status: 200, body: feed.replace("https://fixture.test/paywall-one", "https://article-fixture.test/paywall-one"),
+    },
+    "https://article-fixture.test/robots.txt": { status: 503, body: "" },
+    "https://article-fixture.test/paywall-one": { status: 200, body: article },
+  });
+  const result = await probeFeed(
+    { feed_url: "https://fixture.test/feed.xml", sample_count: 1 }, { harvest, boundary: unavailable },
+  );
+  expect(result.passed).toBe(true);
+  expect(result.samples[0]?.diagnostics).toMatchObject({
+    robots: "unknown", robots_http_status: 503, robots_failure: "http", fetch_failure: null, http_status: 200,
+  });
 });
 
 test("HTTP article failure does not pass", async () => {

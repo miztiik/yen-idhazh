@@ -1,0 +1,12 @@
+{
+  "description": "Bounded offline article transport outcomes after a robots observation; no live-source availability claim.",
+  "target_errors": [
+    { "error": "ENOTFOUND", "failure": "dns", "error_code": "ENOTFOUND" },
+    { "error": "EAI_AGAIN", "failure": "dns", "error_code": "EAI_AGAIN" },
+    { "error": "CERT_HAS_EXPIRED", "failure": "network", "error_code": "CERT_HAS_EXPIRED" },
+    { "error": "ERR_TLS_CERT_ALTNAME_INVALID", "failure": "network", "error_code": "ERR_TLS_CERT_ALTNAME_INVALID" },
+    { "error": "ECONNRESET", "failure": "network", "error_code": "ECONNRESET" },
+    { "error": "EUNKNOWN", "failure": "network", "error_code": null },
+    { "error": "ECONNRESET: private detail", "failure": "network", "error_code": null }
+  ]
+}

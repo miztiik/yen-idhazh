@@ -55,8 +55,8 @@ the HTTP scheme spelling before storage, retaining their original query and
 fragment as historical evidence. The final serialized article address must
 pass the same URL format and length contract as downstream payloads before
 hashing or dispatch; percent-encoding cannot bypass that bound. Each transformed address
-passes public-address validation, DNS checks, robots permission and pinned
-dispatch before use. An unsafe transformed address is never dispatched.
+passes public-address validation, DNS checks, the applicable robots policy
+and pinned dispatch before use. An unsafe transformed address is never dispatched.
 The [bounded saved-key lookup](article-identity-history.md)
 avoids unnecessary repeat processing where earlier addresses can be recovered.
 It does not rewrite existing publication or history records.
@@ -84,9 +84,13 @@ typed fetch refusals, not media exclusions.
 ## Request and extraction controls
 
 The permitted fetcher retains public-address validation, socket pinning,
-robots permission, safe redirects, retries, bounded deadlines and decoded
-body limits. Validation occurs before dispatch. A refused or unknown
-permission cannot request the target. Actual retry and redirect dispatches
+robots evidence, safe redirects, retries, bounded deadlines and decoded
+body limits. Validation occurs before dispatch. Feeds and feed redirect hops
+always require allowed robots permission. `harvest.article_robots_policy`
+selects `enforce` or `observe` for articles and their redirect hops. Missing
+settings default to `enforce`; committed planner configuration uses `observe`.
+In `observe`, denied or unknown robots permission does not block a safe article
+request. Actual retry and redirect dispatches
 each count; cache reuse adds no request.
 
 `harvest.request_headers` supplies primary and nullable secondary navigation
@@ -95,9 +99,10 @@ Each wire user agent keeps the configured crawler identity and adds its
 profile's distinct browser signature. Robots matching uses that same crawler
 product, checked against the actual wire value. Profiles cannot replace it.
 These headers do not provide browser execution or bot signing.
-A denied or unknown robots result stops before any target profile is sent.
+A denied or unknown robots result stops feed requests and articles in `enforce`
+mode before any target profile is sent.
 
-Within one bounded operation deadline, exhausted network/status retries or
+Within the bounded target allowance, exhausted network/status retries or
 a successful article body below `recovery_min_body_bytes` can try the secondary
 profile once per redirect hop. Only `recoverable_http_statuses` permit HTTP
 profile recovery; missing, gone and rate-limited responses do not use it by
@@ -106,10 +111,17 @@ sequence remains unique; the retry index restarts for a new profile.
 Every actual dispatch is counted. A failed recovery preserves an earlier
 real short response for normal parsing rather than inventing article text.
 This also holds when a secondary redirect ends in a download failure.
-An unsafe, denied or unknown redirect still refuses the operation.
+An unsafe article redirect always refuses the operation. Denied or unknown
+permission on a safe redirect follows the document's robots policy.
 Each enabled profile contributes one configured attempt-and-backoff allowance
-to the deadline shared by DNS, robots and all redirect hops. Disabling the
-secondary profile keeps the original single-profile bound.
+to the deadline shared by target DNS and all article redirect hops. Robots
+work has a separate allowance: one configured retry sequence, including its
+attempt timeouts and backoff. Waiting for robots does not consume target time
+or abort its signal. Each new origin has that same bounded robots allowance;
+success and settled failures are cached by origin for this fetcher. A failed
+check becomes unknown and is not started again for each article. External
+cancellation cancels both target work and robots waiting.
+Disabling the secondary profile leaves one target allowance.
 The body-size recovery rule never applies to feeds. Short, empty and malformed
 feed downloads keep their real HTTP result and separate parse outcome.
 
@@ -154,6 +166,12 @@ The offered candidate and URL identities stay unchanged; missing addresses
 never gain invented identities. Article HTTP status and low-level failure
 codes remain separate from observed robots permission, status and failure,
 with null for unobserved values.
+Observed-mode success is not a rejection solely because robots denied access
+or could not be read. The terminal article status, failure and low-level code
+describe the actual article operation, never its robots check. Earlier robots
+warnings remain visible across article redirects; attempt facts retain each
+actual robots and target dispatch. HTTP success still requires extraction and
+content admission.
 Validated work facts feed the run's
 [batched health counters](../contracts/feed-ingest-feedback.md#completed-unit-persistence).
 Actual work-day clocks are separate from the saved age clock.
@@ -182,6 +200,14 @@ runtime bytes to this dependency tree. Its type declarations are build-only.
 Neither parser nor converter executes page scripts or fetches resources.
 
 ## Design rationale
+
+User-directed policy change, 2026-10-29 UTC: article robots permission is
+advisory in the committed planner settings. Retain the robots verdict, HTTP
+status and underlying failure, then attempt the safe article address and let
+the actual response determine download success or rejection. Feeds remain
+enforced. Separate configured allowances prevent an unavailable robots file
+from consuming the article's chance to respond. This changes neither address
+safety nor extraction, sanitization and content admission.
 
 Early factual refusals avoid downloading work the same admission rule would
 reject later. Shared production parsing and bounded native workers preserve
