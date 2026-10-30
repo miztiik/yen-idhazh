@@ -111,6 +111,10 @@ test("recorded robots rules and structured URL exclusions bind configured policy
     if (matched !== undefined) expect(vector.rules ?? fixture.url_exclusions).toContainEqual(matched);
   }
   const media = loaded.config.content_filters.media;
+  expect(matchMediaOffer(
+    "https://businesstoday.in/technology/news/story/iphone-air-2-apple-may-finally-address-one-of-the-biggest-concerns-with-its-slim-iphone-564691-2026-10-30",
+    [], media,
+  )).toBeNull();
   for (const rule of media.url_rules) {
     for (const url of [
       `https://${rule.host}${rule.path_prefix}`,

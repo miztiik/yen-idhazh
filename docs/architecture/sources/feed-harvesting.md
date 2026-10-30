@@ -229,6 +229,10 @@ Older recorded keys remain unchanged and do not link to the current address;
 this avoids extra history reads and alternate-policy checks, but can repeat
 processing for an address whose older key differs.
 
+Configured `/short-video` route prefixes identify media offers and reject them
+before article requests. Host/path boundaries keep other story routes eligible
+without relying on titles or extraction outcomes.
+
 ## See also
 
 - [Operator APIs](feed-operator-api.md)

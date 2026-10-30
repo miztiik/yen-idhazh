@@ -161,7 +161,7 @@ export const FeedFeedbackConfigSchema = z.strictObject({
   request_report_closed_days: PositiveCountSchema.default(7),
 });
 export const FeedIngestConfigSchema = z.strictObject({
-  version: z.literal("2026-10-27"),
+  version: z.literal("2026-10-30"),
   harvest: FeedHarvestConfigSchema,
   content_filters: FeedContentFiltersConfigSchema,
   triage: FeedTriageConfigSchema,
