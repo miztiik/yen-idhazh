@@ -36,10 +36,10 @@ export function formatHostFingerprintSummary(input: unknown) {
   return {
     notice,
     summary: [
-      "## Table G - Host fingerprint", "",
+      "## Table H - Host fingerprint", "",
       "| Id | Measurement | Recorded value |", "| --- | --- | --- |",
       ...rows.map((entry, index) =>
-        `| G${index + 1} | ${escapeMarkdown(entry.measurement)} | ${escapeMarkdown(entry.value)} |`),
+        `| H${index + 1} | ${escapeMarkdown(entry.measurement)} | ${escapeMarkdown(entry.value)} |`),
       "",
     ].join("\n"),
   };
