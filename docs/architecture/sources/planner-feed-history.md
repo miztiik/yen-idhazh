@@ -1,6 +1,6 @@
 # Feed history used by the TypeScript planner
 
-**Last Updated**: 2026-10-29
+**Last Updated**: 2026-10-30
 
 Which saved observations can change feed rest and measured reliability?
 The isolated planner reads compatible required `feed-health-state` fields and its
@@ -67,6 +67,17 @@ compact-first precedence or generic writer identities.
 Logical feed-read settlement still prefers a productive outcome and then a
 definitely later recorded check. Rest and robots skips do not enter the
 reliability denominator. Captured rolling fractions are never summed.
+Current producers save only `reliability.success_fraction` and
+`reliability.production_factor` downward to three decimal places:
+21 productive reads out of 22 save `0.954`. The factor applies the configured
+floor to the original fraction before truncation, so a floor of `0.5005`
+can save numeric `0.5`. JSON numbers do not retain trailing zeros.
+Both values come from the original integer counts; article-pass rates,
+selection scores and semantic similarity retain their own precision.
+No general precision setting is introduced. Existing `2026-10-27` health
+files remain readable unchanged, including their longer fractions; current
+files use `2026-10-30`. Compaction preserves saved values rather than rounding
+history again.
 Uncertain time order remains uncertain under
 [the recorded-instant contract](../contracts/recorded-instants.md).
 

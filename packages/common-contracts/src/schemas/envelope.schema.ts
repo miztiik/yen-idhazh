@@ -5,7 +5,7 @@ import {
   DISCOVERED_ARTICLE_ACCEPTED_SCHEMA_VERSIONS, DISCOVERED_ARTICLE_VERSION,
   LEGACY_PLANNER_ENVELOPE_VERSION, PLANNER_ENVELOPE_ACCEPTED_SCHEMA_VERSIONS,
   PLANNER_LEDGER_VERSION, PLANNER_ENVELOPE_VERSION, PLAN_RUN_VERSION,
-  SELECTED_ARTICLE_ACCEPTED_SCHEMA_VERSIONS, SELECTED_ARTICLE_VERSION, FEED_HEALTH_STATE_VERSION,
+  SELECTED_ARTICLE_ACCEPTED_SCHEMA_VERSIONS, SELECTED_ARTICLE_VERSION, FEED_HEALTH_STATE_ACCEPTED_SCHEMA_VERSIONS,
 } from "../version";
 import { RecordedInstantSchema } from "./recorded-instant.schema";
 import { CommitShaSchema, CountSchema, DateStampSchema, JobNameSchema, MonthStampSchema, NonEmptySchema, PositiveCountSchema, RunIdSchema, SchemaVersionSchema, ServerJobSchema, Sha256Schema, YearStampSchema, reject } from "./primitives";
@@ -125,13 +125,13 @@ export type PlannerStoredFileEnvelope = z.infer<typeof PlannerStoredFileEnvelope
 export const PlannerFileEnvelopeSchema = PlannerStoredFileEnvelopeSchema.safeExtend({
   row_schema_version: z.enum([
     ...DISCOVERED_ARTICLE_ACCEPTED_SCHEMA_VERSIONS, ...SELECTED_ARTICLE_ACCEPTED_SCHEMA_VERSIONS,
-    PLAN_RUN_VERSION, ...REJECTED_ARTICLE_ACCEPTED_SCHEMA_VERSIONS, FEED_HEALTH_STATE_VERSION,
+    PLAN_RUN_VERSION, ...REJECTED_ARTICLE_ACCEPTED_SCHEMA_VERSIONS, ...FEED_HEALTH_STATE_ACCEPTED_SCHEMA_VERSIONS,
   ]),
 }).superRefine((value, ctx) => {
   const rowVersions = {
     "discovered-articles": DISCOVERED_ARTICLE_ACCEPTED_SCHEMA_VERSIONS,
     "selected-articles": SELECTED_ARTICLE_ACCEPTED_SCHEMA_VERSIONS,
-    "rejected-articles": REJECTED_ARTICLE_ACCEPTED_SCHEMA_VERSIONS, "feed-health-state": FEED_HEALTH_STATE_VERSION, "plan-runs": PLAN_RUN_VERSION,
+    "rejected-articles": REJECTED_ARTICLE_ACCEPTED_SCHEMA_VERSIONS, "feed-health-state": FEED_HEALTH_STATE_ACCEPTED_SCHEMA_VERSIONS, "plan-runs": PLAN_RUN_VERSION,
   } as const;
   if ((value.version === PLANNER_LEDGER_VERSION && value.row_schema_version !== PLANNER_LEDGER_VERSION)
     || (value.row_schema_version === LEGACY_PLANNER_ENVELOPE_VERSION
