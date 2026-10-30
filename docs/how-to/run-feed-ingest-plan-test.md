@@ -153,11 +153,11 @@ The Markdown report reads the body-free response, health result, effective
 settings and host fingerprint. It places the host fingerprint before the
 run facts, writes the report before upload and writes the same Markdown to
 the job summary. The report stays separate from the delivery receipt.
-It emits five grouped notices: Host fingerprint, Feed work, Request counts,
-Grouped exclusions and Effective policy. Full per-feed details stay in the
-summary rather than one notice per feed or article. Effective settings include
-workflow overrides, not just committed defaults. Missing policy evidence is
-reported as not recorded; defaults are not substituted.
+It emits grouped notices for the host, feed work, request counts, grouped
+exclusions, failure evidence and effective policy. Full per-feed details stay
+in the summary rather than one notice per feed or article. Effective settings
+include workflow overrides, not just committed defaults. Missing policy
+evidence is reported as not recorded; defaults are not substituted.
 Reporting is controlled by `workflow_reporting.enabled`; it cannot change
 ledger bytes or establish completion.
 The exported Markdown renderer and its separation from production digest
@@ -220,6 +220,18 @@ reports zero. The request notice adds only known totals and marks partial
 totals too; it never calls them complete. Grouped exclusions are collapsed and
 sort by count descending, then reason code. Exact coverage fields are defined in the
 [ledger reference](../reference/feed-planner-ledgers.md#design-rationale).
+
+The failure evidence tables separate article fetch or extraction failures
+from feed read failures. They group saved health counts by reason, HTTP status
+and attribution, and list the affected feed IDs. They do not count policy
+exclusions as software failures or count progress events as additional
+failures. Only saved feed status is shown; article HTTP status and feed or
+article URLs are not part of this report input. A confirmed status is an
+observed response, not its underlying cause. Attribution can suggest whether
+the feed or pipeline is involved, but it does not establish a deeper cause.
+Missing detail stays unavailable. Admission totals are unavailable only for
+feed rows whose saved article count is null; a failure alone does not make an
+admission total unavailable.
 
 `MISSING_REQUIRED_FIELDS` is an article rejection: its offered URL or identity
 was missing or invalid, or extraction produced no usable title. A grouped
