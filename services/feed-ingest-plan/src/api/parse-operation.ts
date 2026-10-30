@@ -18,7 +18,7 @@ import { documentWork, describeArticleParse, describeFeedParse } from "../harves
 import { createIngestObservations } from "../ingest-observations";
 import { ArticleParserPool } from "../harvest-feeds/article-parser-pool";
 import { parseDocument } from "../harvest-feeds/parse-document";
-import { recordRejection } from "../harvest-feeds/record-rejection";
+import { fetchEvidence, recordRejection } from "../harvest-feeds/record-rejection";
 import { resolveArticleTitle } from "../harvest-feeds/prepare-article";
 import { stageStore } from "./stage-store";
 import { createParsedFeedBatch, publicFeedOffers, updateFeedOffer } from "./feed-offers";
@@ -30,6 +30,7 @@ import { DiscoveredArticleRowSchema } from "@idhazh/common-contracts";
 import { plannerMemory } from "../planner-memory";
 import { createStageLogger } from "../logging/structured-logger";
 import { resolveArticleSourceOutcome } from "../article-source-outcome";
+import { recordHarvestFailures } from "../record-harvest-failures";
 
 export async function parseFetchedDocument(
   request: z.infer<typeof ParseRequestSchema>, record: PlannerOperation, fetched: PlannerOperation,
@@ -110,7 +111,7 @@ export async function parseFetchedDocument(
   const rejection = rejected === null ? null : recordRejection({ feed_id: source.id, feed_url: source.url }, {
     writer: state.context.writer, correlation_id: state.context.correlation_id, max_future_hours: inputs.clock_config.collect.max_future_hours,
     observation_clock: runtime.observation_clock ?? (() => new Date()),
-  }, rejected, {}, {
+  }, rejected, fetchEvidence(artifact), {
     candidate_id: candidateId, canonical_url: artifact.canonical_url, url_key: artifact.article_id,
     title, categories: offer?.entry.categories ?? [],
   });
@@ -128,6 +129,7 @@ export async function parseFetchedDocument(
   const sourceOutcome = fetched.source_outcome ?? (measuredOutcome === null ? null
     : store.settleSourceOutcome(fetched.request_id, measuredOutcome));
   state.work.article(result, fetched.request_id, sourceOutcome);
+  if (rejection !== null) await recordHarvestFailures([rejection], state.context, inputs);
   let batch;
   if (offer !== undefined && artifact.parent_batch_id !== null) {
     batch = updateFeedOffer(inputs, state, artifact.parent_batch_id, offer.offer_id, candidate === null ? "rejected" : "parsed", fetched.request_id, result);

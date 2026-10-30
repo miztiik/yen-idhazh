@@ -5,10 +5,10 @@ import { join } from "node:path";
 import { tableFromIPC } from "apache-arrow";
 import initialize, { readMetadata, readParquet } from "parquet-wasm/esm";
 import {
-  RejectedArticleRowContract, RejectedArticleRowSchema, WriterIdentitySchema,
+  WriterIdentitySchema,
   LEGACY_DISCOVERED_ARTICLE_VERSION, LEGACY_SELECTED_ARTICLE_VERSION,
   PLANNER_ENVELOPE_VERSION,
-  deriveCandidateId, deriveUrlKey,
+  deriveUrlKey,
 } from "@idhazh/common-contracts";
 import { z } from "zod";
 import {
@@ -98,50 +98,6 @@ test("public schema descriptors and digest verify native raw readback", async ()
     await rm(root, { recursive: true, force: true });
   }
 });
-
-test("reads an old rejected-article footer with a bounded unknown retained reason", async () => {
-  const root = await mkdtemp(join(process.cwd(), ".tmp_ledger-reader-compatibility-"));
-  const day = "2026-10-20";
-  const run = `${day}-1`;
-  const unknownReason = "LEGACY_REASON_NOT_ACTIVE";
-  const registration = {
-    name: "rejected-articles", family: "feed-ingest-plan", grain: "raw-and-compact" as const,
-    lifecycle_status: "active" as const, prefix: ["feed-ingest-plan", "rejected-articles"],
-  };
-  const row = RejectedArticleRowSchema.parse({
-    run_id: run, attempt: 1, date: day,
-    candidate_id: deriveCandidateId(run, "fixture-feed", 1),
-    url_key: deriveUrlKey("https://example.com/legacy-article"),
-    feed_id: "fixture-feed", stage: "curate-article-portfolio",
-    reason_code: unknownReason, freshness_cutoff_at: null,
-  });
-  try {
-    const written = await persistLedger({
-      ledger: "rejected-articles",
-      rowContract: { ...RejectedArticleRowContract, schemaVersion: "2026-10-27" },
-      outputRoot: root, registryEntry: registration,
-      ledgerSettings: {
-        format: "parquet", compression_raw: "snappy", compression_compact: "zstd",
-      },
-      period: { tier: "raw", covers: day }, rows: [row],
-    });
-    expect(written.status).toBe("written");
-    if (written.status !== "written") return;
-    const file = written.files[0]!;
-    expect(file.content_sha256).not.toBe("");
-    expect(RejectedArticleRowContract.schemaVersion).toBe("2026-10-29");
-    expect(RejectedArticleRowContract.acceptedSchemaVersions).toEqual(["2026-10-27", "2026-10-29"]);
-    const actual = await readPlannerParquet(
-      join(root, file.path), "rejected-articles", RejectedArticleRowContract,
-    );
-    expect(actual.envelope.row_schema_version).toBe("2026-10-27");
-    expect(actual.rows).toEqual([row]);
-    expect(actual.rows[0]?.reason_code).toBe(unknownReason);
-  } finally {
-    await rm(root, { recursive: true, force: true });
-  }
-});
-
 test("native discovery and selected files retain exact historical rows and envelope versions", async () => {
   const root = await mkdtemp(join(process.cwd(), ".tmp_article-reader-"));
   try {

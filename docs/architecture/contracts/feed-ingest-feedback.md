@@ -1,6 +1,6 @@
 # Feed-ingest feedback
 
-**Last Updated**: 2026-10-27
+**Last Updated**: 2026-10-29
 
 Which actual feed work informs a later selection?
 The planner records per-run, per-feed facts for each actual UTC work day in
@@ -14,6 +14,18 @@ them into health rows, rather than writing a ledger file for each article,
 attempt or operation. One health file contains all finalized feed rows for
 one run, attempt and UTC work day. Work crossing midnight produces separate
 day files. Completed feed work is retained when a later stage fails.
+
+Terminal article-fetch and extraction failures also have individual rows in
+`rejected-articles`, written through the registered ledger writer at run or
+standalone-stage finalization. Each row keeps the actual article status,
+download failure and low-level code separately from robots permission, status
+and failure. Unobserved facts remain null. Retries do not create extra rows,
+and successful recovery creates no stale rejection. Completed failures survive
+a later stage failure, including when no article is selected.
+These detail rows are not new health contributions: existing grouped work facts
+remain the only input to feed-health aggregation. The field meanings and old
+file compatibility are defined in
+[rejected articles](../../reference/feed-planner-ledgers.md#m-rejected-articles).
 
 Request counters increment at actual transport dispatch, after permission and
 address validation. Retries and redirects add real requests. A cache hit adds

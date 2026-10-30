@@ -5,7 +5,7 @@ import { buildEnvelopeMetadata, buildPlannerEnvelopeMetadata } from "./parquet/e
 import { digestRows } from "./parquet/row-digest";
 import { readParquetEngineVersion, serializeParquet } from "./parquet/wasm-serializer";
 import type { LedgerPeriod, PersistedLedgerFile, ValidatedLedgerWrite } from "./ledger-types";
-import { createFileId, createPlannerFileId } from "./uuid/file-id";
+import { createFileId, createPlannerFileId, createRejectedRawFileId } from "./uuid/file-id";
 import { createUnitId } from "./uuid/unit-id";
 
 export async function renderLedgerFile<T extends object>(
@@ -27,9 +27,11 @@ export async function renderLedgerFile<T extends object>(
     producer: writerContext.producer,
   });
   const writtenAtMs = Date.now();
-  const id = context.planner ? createPlannerFileId(writtenAtMs)
-    : createFileId({ unit: unit!, attempt: writerContext!.attempt, writtenAtMs });
   const digest = digestRows(rows, columns);
+  const id = context.ledger === "rejected-articles" && tier === "raw"
+    ? createRejectedRawFileId(context.input.rowContract.schemaVersion, covers, digest)
+    : context.planner ? createPlannerFileId(writtenAtMs)
+      : createFileId({ unit: unit!, attempt: writerContext!.attempt, writtenAtMs });
   const compactPeriod: Extract<LedgerPeriod, { tier: "compact" }> | null =
     context.input.period.tier === "compact" ? context.input.period : null;
   const compression = tier === "raw"

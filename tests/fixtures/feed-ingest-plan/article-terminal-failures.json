@@ -1,0 +1,13 @@
+{
+  "description": "Bounded offline protocol cases using the existing recorded transport, not live-source availability claims.",
+  "cases": [
+    {"name": "forbidden", "url": "https://news.example/forbidden", "responses": [{"status": 403, "body": ""}], "expected": {"http_status": 403, "fetch_failure": "http", "error_code": null, "robots": "allowed", "robots_http_status": 200, "robots_failure": null}},
+    {"name": "rate-limited", "url": "https://news.example/rate-limited", "responses": [{"status": 429, "body": ""}], "expected": {"http_status": 429, "fetch_failure": "http", "error_code": null, "robots": "allowed", "robots_http_status": 200, "robots_failure": null}},
+    {"name": "dns", "url": "https://unresolved.example/article", "expected": {"http_status": null, "fetch_failure": "dns", "error_code": "ENOTFOUND", "robots": null, "robots_http_status": null, "robots_failure": null}},
+    {"name": "tls", "url": "https://news.example/tls", "responses": [{"error": "CERT_HAS_EXPIRED"}], "expected": {"http_status": null, "fetch_failure": "network", "error_code": "CERT_HAS_EXPIRED", "robots": "allowed", "robots_http_status": 200, "robots_failure": null}},
+    {"name": "timeout", "url": "https://news.example/deadline", "responses": [{"error": "ETIMEDOUT"}], "expected": {"http_status": null, "fetch_failure": "timeout", "error_code": "ETIMEDOUT", "robots": "allowed", "robots_http_status": 200, "robots_failure": null}},
+    {"name": "robots-denied", "url": "https://denied.example/article", "expected": {"http_status": null, "fetch_failure": "robots-denied", "error_code": null, "robots": "denied", "robots_http_status": 200, "robots_failure": null}},
+    {"name": "robots-unavailable", "url": "https://unknown.example/article", "expected": {"http_status": null, "fetch_failure": "robots-unknown", "error_code": null, "robots": "unknown", "robots_http_status": 503, "robots_failure": "http"}},
+    {"name": "empty-extraction", "url": "https://news.example/empty-body", "responses": [{"status": 200, "body": ""}], "expected": {"http_status": 200, "fetch_failure": null, "error_code": null, "robots": "allowed", "robots_http_status": 200, "robots_failure": null}}
+  ]
+}

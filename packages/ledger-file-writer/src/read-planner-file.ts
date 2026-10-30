@@ -165,6 +165,7 @@ export async function readPlannerParquet<T extends object>(
     );
   }
   const envelope = PlannerFileEnvelopeSchema.parse(stored.envelope);
-  checkFields(fields, describeObjectSchema(contract.schema).fields);
-  return { ...stored, envelope, rows: stored.rows.map(row => contract.schema.parse(row)) };
+  const physicalSchema = contract.historicalSchemas?.[envelope.row_schema_version] ?? contract.schema;
+  checkFields(fields, describeObjectSchema(physicalSchema).fields);
+  return { ...stored, envelope, rows: stored.rows.map(row => contract.schema.parse(physicalSchema.parse(row))) };
 }

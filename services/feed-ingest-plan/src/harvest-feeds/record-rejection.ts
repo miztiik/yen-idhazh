@@ -10,13 +10,21 @@ import type { FetchResult } from "./robots-policy";
 export function fetchRejection(result: FetchResult, timeout_ms: number, diagnostics: HarvestDiagnostics | null): {
   reason: DropReason; details: Partial<RejectionDetails>;
 } {
-  const details = { http_status: result.http_status, diagnostics };
+  const details = { ...fetchEvidence(result), diagnostics };
   if (result.failure === "timeout") return { reason: "FETCH_TIMEOUT", details: { ...details, timeout_ms } };
   if (result.failure === "http") {
     if (result.http_status === null) throw new Error("HTTP rejection requires an observed status");
     return { reason: "FETCH_FAILED_HTTP", details };
   }
   return { reason: "FETCH_FAILED", details };
+}
+
+export function fetchEvidence(result: FetchResult) {
+  return {
+    http_status: result.http_status, fetch_failure: result.failure,
+    error_code: result.error_code ?? null, robots: result.robots,
+    robots_http_status: result.robots_http_status ?? null, robots_failure: result.robots_failure ?? null,
+  };
 }
 
 export function recordRejection(

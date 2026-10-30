@@ -4,7 +4,7 @@ import {
   CountSchema, DateStampSchema, NonEmptySchema, NonNegativeSchema, PositiveCountSchema, PositiveSchema,
   RejectionStageSchema, Sha256Schema, SlugSchema, TimestampSchema, UrlSchema, checkUrlIdentity, reject,
 } from "./primitives";
-import { HarvestDiagnosticsSchema } from "./harvest-diagnostics.schema";
+import { ArticleFetchEvidenceSchema, HarvestDiagnosticsSchema } from "./harvest-diagnostics.schema";
 import { ItemHealthFailureCodeSchema } from "./item-health-failure.schema";
 import { ArticleContentEvidenceSchema } from "./content-filter-evidence.schema";
 
@@ -29,8 +29,11 @@ export const SourceArticleRefusalReasonSchema = DropReasonSchema.extract([
   "PAYWALL_OR_BLOCKED", "REJECTED_SCREENING_MIN_WORDS",
 ]);
 export type RejectionStage = z.infer<typeof RejectionStageSchema>;
+export const HarvestArticleFailureReasonSchema = DropReasonSchema.extract([
+  "FETCH_FAILED", "FETCH_FAILED_HTTP", "FETCH_TIMEOUT", "EXTRACT_FAILED", "EXTRACT_EMPTY",
+]);
 export const RejectionDetailsSchema = z.strictObject({
-  http_status: z.int().min(100).max(599).nullable().default(null), timeout_ms: PositiveSchema.nullable().default(null),
+  ...ArticleFetchEvidenceSchema.shape, timeout_ms: PositiveSchema.nullable().default(null),
   words_found: CountSchema.nullable().default(null), words_required: PositiveCountSchema.nullable().default(null),
   age_hours: NonNegativeSchema.nullable().default(null), max_age_hours: PositiveSchema.nullable().default(null),
   matched_url_key: Sha256Schema.nullable().default(null), published_on: DateStampSchema.nullable().default(null),
@@ -74,7 +77,7 @@ export const REQUIRED_DETAILS: Readonly<Partial<Record<DropReason, readonly (key
   PRESS_RELEASE: ["content_evidence", "sample_chars_limit"],
   LINK_HEAVY: ["content_evidence", "max_link_density", "max_list_items", "words_found", "list_word_limit"],
 };
-export const CANDIDATE_REJECTION_VERSION = "2026-10-28";
+export const CANDIDATE_REJECTION_VERSION = "2026-10-29";
 export const CandidateRejectionRecordSchema = z.strictObject({
   version: z.literal(CANDIDATE_REJECTION_VERSION).default(CANDIDATE_REJECTION_VERSION), date: DateStampSchema, correlation_id: NonEmptySchema,
   feed_id: SlugSchema, feed_url: UrlSchema, subject: z.enum(["feed", "article"]),
@@ -83,7 +86,11 @@ export const CandidateRejectionRecordSchema = z.strictObject({
   drop_reason: DropReasonSchema, details: RejectionDetailsSchema, rejected_at: TimestampSchema,
 }).superRefine((value, ctx) => {
   const article = value.subject === "article";
-  if (article !== (value.candidate_id !== null)) reject(ctx, "Only an article exclusion has a candidate identity");
+  const harvestFailure = article && value.stage === "harvest-feeds"
+    && HarvestArticleFailureReasonSchema.safeParse(value.drop_reason).success;
+  if ((!article && value.candidate_id !== null) || (article && value.candidate_id === null && !harvestFailure)) {
+    reject(ctx, "Only a harvest article failure can omit its candidate identity");
+  }
   for (const field of ["url_key", "canonical_url", "title"] as const) {
     if (!article && value[field] !== null) reject(ctx, `Feed exclusions have no ${field}`, [field]);
     const missingTitle = field === "title" && [
@@ -116,7 +123,8 @@ export const CandidateRejectionRecordSchema = z.strictObject({
 }).meta({
   version: CANDIDATE_REJECTION_VERSION,
   changelog: [
-    { version: CANDIDATE_REJECTION_VERSION, change: "Rename the feed identity from source_id to feed_id." },
+    { version: CANDIDATE_REJECTION_VERSION, change: "Retain fetch evidence and allow harvest failures without parsed candidate identities." },
+    { version: "2026-10-28", change: "Rename the feed identity from source_id to feed_id." },
   ],
 });
 export type CandidateRejectionRecord = z.infer<typeof CandidateRejectionRecordSchema>;

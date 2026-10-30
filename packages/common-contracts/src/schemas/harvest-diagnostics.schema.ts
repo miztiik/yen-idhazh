@@ -55,5 +55,10 @@ export const HarvestDiagnosticsSchema = z.strictObject({
   quality: ExtractionQualitySchema.nullable().default(null),
 });
 export type HarvestDiagnostics = z.infer<typeof HarvestDiagnosticsSchema>;
+export const ArticleFetchEvidenceSchema = HarvestDiagnosticsSchema.pick({
+  http_status: true, fetch_failure: true, error_code: true,
+  robots: true, robots_http_status: true, robots_failure: true,
+});
+export type ArticleFetchEvidence = z.infer<typeof ArticleFetchEvidenceSchema>;
 export type FetchFailure = z.infer<typeof FetchFailureSchema>;
 export type ExtractionFailure = z.infer<typeof ExtractionFailureSchema>;
