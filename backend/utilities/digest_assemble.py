@@ -20,6 +20,7 @@ from idhazh.contracts.ledger_index import CompactIndex, EntryState
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.ledgers import Grain
 from idhazh.contracts.publication_inventory import PublicationInventory
+from idhazh.contracts.run_plan import RunPlan
 from idhazh.ledger import paths, staging
 from idhazh.path_classes import DERIVED
 from utilities import publication_evidence
@@ -209,13 +210,21 @@ def count_scope(date: str) -> str:
 
 
 def preparation(
-    repo: Path, original: PublicationRequest, *, date: str, settings: config.Settings
+    repo: Path,
+    original: PublicationRequest,
+    *,
+    date: str,
+    settings: config.Settings,
+    source_plan: RunPlan | None = None,
+    source_commit: str | None = None,
 ) -> Callable[[str, PublicationRequest], PublicationRequest]:
     """Keep incoming raw bytes; regenerate derived files without calling any judge/model."""
     from idhazh.stages import common
 
     git = Repository(repo)
-    plan = common._load_plan(date, original.identity.run_id)
+    plan = source_plan
+    if plan is None:
+        plan = common._load_plan(date, original.identity.run_id)
     if plan is None:
         raise IntegrityError("completed assemble has no own run plan")
     incoming = (
@@ -301,9 +310,10 @@ def preparation(
                     producer.stage_assemble(
                         plan,
                         settings=settings,
-                        commit_sha=original.identity.git_sha,
+                        commit_sha=source_commit or original.identity.git_sha,
                         runner="ubuntu-latest",
                         regenerate_only=True,
+                        writer_identity=original.identity if source_plan is not None else None,
                     )
             finally:
                 common.STATE_ROOT, common.PUBLIC_ROOT = previous

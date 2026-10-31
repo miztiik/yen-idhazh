@@ -35,6 +35,11 @@ PUBLICATION_RUNTIME_ACTION: Final = "./.github/actions/publication-runtime"
         ("ci.yml", "browser", "Build the canary day"),
         ("ci.yml", "gates", "TypeScript ledger writer"),
         ("digest.yml", "assemble", "Assemble and publish"),
+        (
+            "digest-recovery.yml",
+            "assemble",
+            "Recover assembly through the normal publication checks",
+        ),
         ("backfill.yml", "backfill", "Re-encode named days and say what changed"),
     ),
 )
@@ -453,7 +458,7 @@ def test_ci_keeps_its_push_boundary_and_pages_publishes_only_a_verdict() -> None
         "publishing on one publishes before anything has judged the commit"
     )
     assert pages["workflow_run"] == {
-        "workflows": ["CI", "Content refresh"],
+        "workflows": ["CI", "Content refresh", "Digest assembly recovery"],
         "types": ["completed"],
         "branches": ["main"],
     }, "a pull request's run is kept out before the decision runs"

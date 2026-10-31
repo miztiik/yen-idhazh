@@ -13,10 +13,11 @@ All schedules and run dates are UTC. Every workflow supports manual dispatch.
 | `ci.yml` | `CI` | Pull request; push to `main` | Code and site checks |
 | `digest.yml` | `Content refresh` | `20 2 * * *`, `20 6 * * *`, `20 10 * * *`, `20 14 * * *`, `20 18 * * *` | Digest and production state |
 | `llm-council.yml` | `LLM-COUNCIL` | `0 22 * * *` | Model judges' verdicts |
-| `pages.yml` | `Pages publication` | Passing `CI` run on a push to `main`; completed `Content refresh` run | Static site |
+| `pages.yml` | `Pages publication` | Passing push CI; completed Content refresh or assembly recovery | Static site |
 | `drift.yml` | `Drift review` | `0 8 * * 0` | Quality drift review |
 | `idhazh-gardener.yml` | `Idhazh Gardener` | `40 0 * * *` | Retention and history maintenance |
 | `backfill.yml` | `Vector backfill` | none | Repair closed days' vectors |
+| `digest-recovery.yml` | `Digest assembly recovery` | none | Complete assembly from retained worker artifacts |
 | `idhazh-pipeline-tests.yaml` | `Pipeline tests` | none | Check a model with real articles |
 | `feed-ingest-plan-test.yml` | `Feed ingest plan test` | none | Run the real planner HTTP API and publish its completed planner and host metadata |
 | `yen-ai-pipeline.yml` | `Yen-AI-Pipeline` | none | Run the independent summarizer API |
@@ -59,6 +60,49 @@ the shared `publication-runtime` action. It installs Bun and the locked native
 packages, then checks validator startup outside the checkout before assembly,
 re-encoding or site work. This startup check reads no ledger files; the later
 published-column check still validates the built site's actual files.
+
+## Assembly recovery
+
+`digest-recovery.yml` runs current default-branch code against a completed
+Content refresh run's latest attempt. Supply its `source_run` ID.
+`check_only` defaults to true: assembly and all precommit checks run, but no day
+is committed. Set it to false only when the recovered day should be published.
+
+The utility validates the saved plan's native ledger envelope and rows, the
+platform artifact checksums, source run/attempt/code identity and each worker
+payload. It refuses missing successful-worker artifacts, expired or corrupt
+inputs, mixed attempts, unplanned files and foreign local bytes. Failed workers
+may have missing outputs; completed sibling outputs remain, and the normal
+census records unfinished items honestly. A source run whose artifacts expired
+cannot be completed this way.
+
+From a clean checkout with the publication runtime and site dependencies
+installed, the same entry is:
+
+```powershell
+python backend/utilities/digest_recover.py <source-run-id> --execution <new-execution-id> --check-only
+```
+
+Omit `--check-only` to deliver through the normal publisher. `--restore-only`
+validates and restores the retained inputs without assembly or publication.
+The recovery execution must differ from the source execution. The source plan,
+worker payloads and content record retain the source run and code revision.
+New raw file envelopes and publication receipts name the recovery execution,
+attempt and current code. Source attempt identity stays in the saved plan's
+envelope; it is not inferred from the recovery attempt.
+The original plan is committed unchanged if absent, under a separate exact-file
+recovery declaration. It never receives a recovery writer envelope.
+
+Recovery does not plan, fetch source articles, start the summary model or
+rerun summaries or judges. Normal assembly's local search encoder still creates
+search vectors. A retained source fragment is reused only when it matches the
+saved completed items; conflicting source bytes refuse recovery.
+Corpus harvest retains its normal optional-failure policy.
+Day contracts, site build, Pages size and published-column checks precede the
+commit. Fresh-main regeneration, immutable collisions, published-input import,
+the final site rebuild and bundle gate use the normal publication path.
+Recovery completion also wakes Pages, which deploys only when the run committed
+published files. A check-only run with no published changes does not deploy.
 
 ## Manual feed planner
 

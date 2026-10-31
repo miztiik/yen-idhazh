@@ -9,15 +9,15 @@ on:
   # commit is sound - and since `scope` answers from each push's own paths, the
   # run that would have caught it may not even be the next one.
   #
-  # Two workflows can produce that verdict. CI verifies a push to main. The daily
-  # run validates the day it built before committing it, and its own pushes
+  # CI verifies a push to main. Content refresh and its assembly recovery
+  # validate the day before committing it, and their own pushes
   # start no CI at all - GitHub deliberately does not let one workflow's push
   # trigger another - so it reports here directly, which is what stops the
   # digest landing every morning and never reaching a reader. `branches` keeps a
   # pull request's run out; the decision below still checks the event, because
   # a fork's branch can be called main.
   workflow_run:
-    workflows: [CI, Content refresh]
+    workflows: [CI, Content refresh, Digest assembly recovery]
     types: [completed]
     branches: [main]
   workflow_dispatch:

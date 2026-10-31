@@ -20,6 +20,7 @@ from idhazh import completed_writes, config, run_context, telemetry
 from idhazh.contracts.base import ServerJob
 from idhazh.contracts.file_envelope import WriterIdentity
 from idhazh.contracts.publication_inventory import PublicationInventory
+from idhazh.contracts.run_plan import RunPlan
 from idhazh.ledger import staging
 from utilities import publication_evidence
 from utilities.publication_conflict import capture_publication_delta, replay_publication_delta
@@ -166,12 +167,14 @@ def inventory_preparation(
     return prepare
 
 
-def land(
+def request_for(
     *,
     repo: Path,
     identity: WriterIdentity,
     date: str,
-) -> PublicationResult:
+    source_plan: RunPlan | None = None,
+    source_commit: str | None = None,
+) -> PublicationRequest:
     git = Repository(repo)
     head = git.git("rev-parse", "HEAD").strip()
     imported = git.run("rev-parse", "--verify", "--quiet", "refs/worktree/publication-input-state")
@@ -224,12 +227,19 @@ def land(
             request,
             date=date,
             settings=config.load(),
+            source_plan=source_plan,
+            source_commit=source_commit,
         )
 
         request = dataclasses.replace(
             request,
             prepare=rebuild,
         )
+    return request
+
+
+def deliver(repo: Path, request: PublicationRequest) -> PublicationResult:
+    """Deliver an independently declared request and report its observed publication tip."""
     result = publish(request, repo=repo, retry=load_retry(repo / DEFAULT_CONFIG))
     print(json.dumps(dataclasses.asdict(result), default=str))
     output = os.environ.get("GITHUB_OUTPUT")
@@ -240,12 +250,33 @@ def land(
     return result
 
 
+def land(
+    *,
+    repo: Path,
+    identity: WriterIdentity,
+    date: str,
+    source_plan: RunPlan | None = None,
+    source_commit: str | None = None,
+) -> PublicationResult:
+    return deliver(
+        repo,
+        request_for(
+            repo=repo,
+            identity=identity,
+            date=date,
+            source_plan=source_plan,
+            source_commit=source_commit,
+        ),
+    )
+
+
 def published_inputs(
     repo: Path,
     tip: str,
     *,
     date: str | None = None,
     settings: config.Settings | None = None,
+    identity: WriterIdentity | None = None,
 ) -> None:
     """Validate every named local input before importing the actual published bytes."""
     from idhazh.contracts.publication_receipt import PublicationReceipt
@@ -269,7 +300,7 @@ def published_inputs(
     )
     inputs = (*public_inputs, *state_inputs)
     known: dict[str, str] = {}
-    job = os.environ.get("GITHUB_JOB", "")
+    job = identity.task_key if identity is not None else os.environ.get("GITHUB_JOB", "")
     if job in VERBS:
         receipts = tuple(
             repo / publication_evidence.ROOT / job / f"{verb}-0.json" for verb in VERBS[job]
@@ -281,10 +312,13 @@ def published_inputs(
     for receipt_path in receipts:
         if receipt_path.is_file():
             receipt = PublicationReceipt.read(receipt_path)
-            if (
-                receipt.identity.run_id.split("-", 3)[-1] != os.environ.get("GITHUB_RUN_ID", "")
-                or receipt.identity.attempt != run_context.run_attempt()
-                or receipt.identity.git_sha != os.environ.get("GITHUB_SHA", "")
+            if (identity is not None and receipt.identity != identity) or (
+                identity is None
+                and (
+                    receipt.identity.run_id.split("-", 3)[-1] != os.environ.get("GITHUB_RUN_ID", "")
+                    or receipt.identity.attempt != run_context.run_attempt()
+                    or receipt.identity.git_sha != os.environ.get("GITHUB_SHA", "")
+                )
             ):
                 raise IntegrityError(
                     "build input receipt belongs to another invocation", (str(receipt_path),)
