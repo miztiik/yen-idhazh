@@ -17,8 +17,8 @@ published-URL exclusion window; the global value remains unchanged for other
 consumers. The local seven-day window is not the article-age limit.
 `listener.max_body_bytes` limits incoming API request bodies.
 `extract.max_body_bytes` limits fetched article response bytes.
-`listener.parser_concurrency` controls concurrent article HTML parser workers,
-not the number of feeds fetched.
+`listener.parser_concurrency` controls the shared feed XML and article HTML
+parser workers, not the number of feeds fetched.
 
 The standalone health route reports listener availability and enablement.
 The workflow child also reports its startup nonce, process ID and run identity.
@@ -127,14 +127,22 @@ commits before final delivery.
 There is no all-runs readiness chain. Independent plans and document
 requests can progress together. Configured pools bound permitted requests
 and history reads. One listener shares `listener.parser_concurrency`
-native HTML workers; concurrent requests do not each create another full
+native XML and HTML workers; concurrent requests do not each create another full
 pool. CLI work can own a pool for its own lifetime.
 The feed pool bounds active feed chains by `harvest.concurrency`. The article
 pool allows that many fetches plus `listener.parser_concurrency` parses to be
 in flight; waiting for a parser does not occupy every fetch slot. The listener
-still enforces its separate request and parser limits. Rejected offers do not
+still enforces its separate request and parser limits.
+Within one plan, feed and article parse HTTP calls share one
+`listener.parser_concurrency` limit before those calls start. Other offers wait
+in orchestration, rather than starting a worker deadline before a parser can
+serve them. The worker deadline
+still includes its own queue, and the elapsed collection timing includes the
+orchestration wait. Rejected offers do not
 enter either pool. The final article limit does not stop required collection
 work or reduce its input.
+Preflight rejections remain in discovery and health totals, but do not emit
+article-work progress events for requests that never started.
 
 Workers use the actual extractor and sanitizer. Fetch precedes its parse.
 One request's cancellation or failed worker must not close another request's
@@ -205,6 +213,14 @@ work independent of collection size; boundary validation still checks the
 complete payload before another stage consumes it. Early preflight removes
 requests that cannot download content without changing the chosen population,
 the rejection ledger or the full-collection requirement.
+Parser admission before HTTP also prevents avoidable deadline failures and
+repeated cold worker starts. It uses the configured parser limit rather than
+raising the deadline or reducing the collected population.
+
+Recorded test runs use their fixture fetch concurrency as the parser-worker
+budget. The same real pool still fills and leaves work queued, without creating
+production-sized pools for tiny feeds. The scale fixture keeps the rejected
+tail but admits only enough articles to fill its configured work pools.
 
 The maintainer-directed change on 2026-10-29 permits diagnostic article
 addresses only on fetch/parse failures, replacing the former blanket refusal.

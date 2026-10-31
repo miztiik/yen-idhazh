@@ -127,7 +127,8 @@ test("real planning records early losses once in native health counters without 
     if (!("planning_complete" in summary)) throw new Error("Expected completed recorded planning");
     expect(summary.planning_complete).toBe(true);
     expect(fixture.transport.requests.some(request => request.url.pathname.startsWith("/stale-"))).toBe(false);
-    expect(progress.filter(event => event.eventType === "ARTICLE_HARVEST_COMPLETED" && event.output_count === 0)).toHaveLength(2);
+    expect(progress.filter(event => event.feed_id === "recorded-news"
+      && ["ARTICLE_HARVEST_STARTED", "ARTICLE_HARVEST_COMPLETED"].includes(event.eventType))).toHaveLength(0);
     const rows = (await Promise.all(summary.files.feed_health_state!.files.map(file =>
       readPlannerParquet(join(fixture.inputs.outputRoot, file.path), "feed-health-state", FeedHealthStateRowContract)))).flatMap(file => file.rows);
     const stale = rows.find(row => row.feed_id === "recorded-news")!;

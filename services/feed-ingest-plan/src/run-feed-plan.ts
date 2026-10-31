@@ -95,7 +95,8 @@ export async function runFeedPlan(raw: unknown, inputs: PlanInputs, runtime: Pla
   emit("fetch", "started", { scope: "plan" });
   try {
     const feedPool = workPool(inputs.harvest.config.harvest.concurrency);
-    const pool = workPool(inputs.harvest.config.harvest.concurrency + inputs.settings.listener.parser_concurrency);
+    const articlePool = workPool(inputs.harvest.config.harvest.concurrency + inputs.settings.listener.parser_concurrency);
+    const parsePool = workPool(inputs.settings.listener.parser_concurrency);
     const processFeed = async (feedId: string) => {
       runtime.signal?.throwIfAborted();
       runtime.progress?.({ eventType: "FEED_FETCH_STARTED", feed_id: feedId, output_count: null });
@@ -115,13 +116,13 @@ export async function runFeedPlan(raw: unknown, inputs: PlanInputs, runtime: Pla
         runtime.progress?.({ eventType: "FEED_FETCH_COMPLETED", feed_id: feedId, output_count: 0 });
         return;
       }
-      const parsed = await call("parse", {
+      const parsed = await parsePool(() => call("parse", {
         request_id: randomUUID(), fetch_request_id: fetched.fetch_request_id,
         article_id: fetched.article_id, correlation_id: context.correlation_id,
-      }, ParseResponseSchema);
+      }, ParseResponseSchema));
       if (parsed.fetch_item_type !== "feed") throw new PlanError("ARTIFACT_INVALID", "Feed parsing returned an article result");
       runtime.progress?.({ eventType: "FEED_FETCH_COMPLETED", feed_id: feedId, output_count: parsed.parsed_count });
-      const articleOutcomes = await Promise.allSettled(parsed.offers.map(offer => pool(async () => {
+      const articleOutcomes = await Promise.allSettled(parsed.offers.map(offer => articlePool(async () => {
         runtime.signal?.throwIfAborted();
         runtime.progress?.({ eventType: "ARTICLE_HARVEST_STARTED", feed_id: feedId, output_count: null });
         let article;
@@ -141,10 +142,10 @@ export async function runFeedPlan(raw: unknown, inputs: PlanInputs, runtime: Pla
           runtime.progress?.({ eventType: "ARTICLE_HARVEST_COMPLETED", feed_id: feedId, output_count: 0 });
           return;
         }
-        const parsedArticle = await call("parse", {
+        const parsedArticle = await parsePool(() => call("parse", {
           request_id: randomUUID(), fetch_request_id: article.fetch_request_id,
           article_id: article.article_id, correlation_id: context.correlation_id,
-        }, ParseResponseSchema);
+        }, ParseResponseSchema));
         runtime.progress?.({ eventType: "ARTICLE_HARVEST_COMPLETED", feed_id: feedId, output_count: parsedArticle.parsed_count });
         if (parsedArticle.fetch_item_type === "article" && parsedArticle.warnings.length) {
           runtime.progress?.({ eventType: "ARTICLE_EXTRACTION_WARNING", feed_id: feedId, output_count: null });

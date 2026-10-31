@@ -14,8 +14,8 @@ import { runFeedPlan } from "../src/run-feed-plan";
 test("large feeds retain every rejection without per-offer collection snapshots or rejected HTTP requests", async () => {
   const sources = [source(), source({ id: "second-feed", url: "https://news.example/second.xml" })];
   const fixture = await recordedPlan(sources);
-  fixture.inputs.settings.listener.parser_concurrency = fixture.inputs.harvest.config.harvest.concurrency;
-  const admittedPerFeed = 32;
+  const admittedPerFeed = fixture.inputs.harvest.config.harvest.concurrency
+    + fixture.inputs.settings.listener.parser_concurrency;
   const rejectedPerFeed = 512;
   for (const feed of sources) {
     const entries = Array.from({ length: admittedPerFeed + rejectedPerFeed }, (_, index) => {
@@ -30,10 +30,17 @@ test("large feeds retain every rejection without per-offer collection snapshots 
   }
   let articleFetches = 0;
   let snapshotsDuringWork = 0;
+  let activeParses = 0;
+  let peakParses = 0;
   const app = createPlanApp(fixture.inputs, fixture.runtime);
   let server: ReturnType<typeof Bun.serve>;
   server = Bun.serve({ hostname: "127.0.0.1", port: 0, idleTimeout: 0, async fetch(request) {
     const path = new URL(request.url).pathname;
+    const parsing = path.endsWith("/parse");
+    if (parsing) {
+      activeParses++;
+      peakParses = Math.max(peakParses, activeParses);
+    }
     if (path.endsWith("/fetch")) {
       const body = await request.clone().json();
       if (body.fetch_item_type === "article") {
@@ -43,7 +50,8 @@ test("large feeds retain every rejection without per-offer collection snapshots 
         if (held.candidates.length || held.offers.length || held.work_rows.some(row => row.article_requests)) snapshotsDuringWork++;
       }
     }
-    return app.fetch(request, { stage_origin: `http://127.0.0.1:${server.port}` });
+    try { return await app.fetch(request, { stage_origin: `http://127.0.0.1:${server.port}` }); }
+    finally { if (parsing) activeParses--; }
   } });
   try {
     const response = await fetch(`http://127.0.0.1:${server.port}/api/2026-10-31/plan`, {
@@ -55,6 +63,7 @@ test("large feeds retain every rejection without per-offer collection snapshots 
     expect(result.api_timings.filter((timing: { operation: string }) => timing.operation === "fetch")).toHaveLength(1);
     expect(result.api_timings.some((timing: { operation: string }) => timing.operation === "parse")).toBe(false);
     expect(articleFetches).toBe(admittedPerFeed * sources.length);
+    expect(peakParses).toBeLessThanOrEqual(fixture.inputs.settings.listener.parser_concurrency);
     expect(snapshotsDuringWork).toBe(0);
     const parsed = stageStore(fixture.inputs).read("parsed", result.batches.parsed_batch_id, ParsedFeedBatchSchema);
     expect(parsed.candidates).toHaveLength(admittedPerFeed * sources.length);
