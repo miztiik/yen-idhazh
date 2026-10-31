@@ -6,13 +6,14 @@ import { join } from "node:path";
 import { FeedIngestConfigSchema, readFeedIngestEvent } from "../../../packages/common-contracts/src/index";
 import { FEED_INGEST_EVENT_VERSION } from "../../../packages/common-contracts/src/version";
 import { prepareProgressEvent } from "../src/logging/structured-logger";
-import { writePlannerReport } from "../scripts/feed-ingest-plan-report";
+import { resolveWorkflowGuideUrl, writePlannerReport } from "../scripts/feed-ingest-plan-report";
 import { formatHostFingerprintSummary } from "../scripts/feed-ingest-plan-host-summary";
 import { formatPolicyTable, formatWorkflowPolicy } from "../scripts/feed-ingest-plan-policy-report";
 import { formatWorkflowAnnotation } from "../scripts/feed-ingest-plan-report-format";
 import { renderPlannerProgressMarkdown } from "../src/reporting";
 import { fixture as hostFixture } from "../../host-fingerprints/test/fixture";
 import { captureLocalFingerprint } from "../../host-fingerprints/src/api/local-fingerprint";
+import { parseHTML } from "linkedom";
 
 async function fixture() {
   const rows: unknown[] = await Bun.file(
@@ -20,6 +21,14 @@ async function fixture() {
   ).json();
   return rows.map(readFeedIngestEvent);
 }
+
+test("links the workflow guide at the recorded GitHub commit without assuming a repository", () => {
+  expect(resolveWorkflowGuideUrl({})).toBeUndefined();
+  expect(() => resolveWorkflowGuideUrl({ GITHUB_REPOSITORY: "project/repository" })).toThrow("server URL and commit SHA");
+  expect(resolveWorkflowGuideUrl({
+    GITHUB_REPOSITORY: "project/repository", GITHUB_SERVER_URL: "https://github.example", GITHUB_SHA: "a".repeat(40),
+  })).toBe(`https://github.example/project/repository/blob/${"a".repeat(40)}/docs/how-to/run-feed-ingest-plan-test.md`);
+});
 
 test("reads current sparse progress and refuses hidden article or audit payloads", async () => {
   const events = await fixture();
@@ -152,14 +161,31 @@ test("policy cells preserve effective JSON values and override sources without i
   expect(policy.notice).toContain("selection started: false");
   expect(formatWorkflowPolicy({ ...input, request: {} }, false).rows.find(([name]) => name === "Article limit"))
     .toEqual(["Article limit", String(config.curate_articles.article_limit), "configuration"]);
-  const html = Bun.markdown.html(formatPolicyTable(input, false).summary);
+  const documentationUrl = "https://github.example/project/repository/blob/current/docs/how-to/run-feed-ingest-plan-test.md";
+  const summary = formatPolicyTable(input, false, documentationUrl).summary;
+  const html = Bun.markdown.html(summary);
+  const { document } = parseHTML(html);
+  const fold = document.querySelector("details")!;
+  expect(fold.hasAttribute("open")).toBe(false);
+  expect(fold.querySelector("summary")?.textContent).toBe("Effective policy");
+  expect(fold.querySelectorAll("table")).toHaveLength(1);
+  expect(fold.querySelector("a")?.getAttribute("href")).toBe(documentationUrl);
   expect(html).toContain("<td>0.3</td>");
   expect(html).toContain("<td>false</td>");
   expect(html).toContain("<td>round-robin</td>");
   expect(html).toContain("<td>1.25</td>");
   expect(html).not.toContain("<th>Source</th>");
   expect(html).not.toContain("<td>workflow override</td>");
-  expect(html).toContain("Workflow overrides: Article limit, Article assignments, Assignment strategy.");
+  for (const request of [{}, input.request]) {
+    const report = formatPolicyTable({ ...input, request }, false).summary;
+    for (const removed of [
+      "Workflow overrides:", "Other controls use configuration;",
+      "The article limit is a maximum.", "Shares and the reliability floor use the JSON fractions:",
+      "Authority multiplies the coefficient", "A valid parsed feed, even empty,",
+      "Retirement needs both configured gates", "Source authority estimates expected quality;",
+      "bin-pack balances estimated article work;",
+    ]) expect(report).not.toContain(removed);
+  }
   const bypass = { ...input, config: { ...input.config, partition: { ...input.config.partition, enabled: false } } };
   const bypassPolicy = formatWorkflowPolicy(bypass, false);
   expect(bypassPolicy.rows.find(([name]) => name === "Article assignments"))
@@ -167,8 +193,13 @@ test("policy cells preserve effective JSON values and override sources without i
   expect(bypassPolicy.rows.find(([name]) => name === "Assignment strategy"))
     .toEqual(["Assignment strategy", "bypassed", "ignored workflow override"]);
   const bypassReport = formatPolicyTable(bypass, false).summary;
-  expect(bypassReport).toContain("Workflow overrides: Article limit.");
+  expect(bypassReport).not.toContain("Workflow overrides:");
   expect(bypassReport).toContain("Ignored workflow inputs because worker assignment is disabled: Article assignments, Assignment strategy.");
+  expect(parseHTML(Bun.markdown.html(bypassReport)).document.querySelector("details")?.textContent)
+    .toContain("Ignored workflow inputs because worker assignment is disabled:");
+  const missing = parseHTML(Bun.markdown.html(formatPolicyTable(undefined, false).summary)).document;
+  expect(missing.querySelector("details")?.textContent).toContain("Policy evidence was not supplied");
+  expect(missing.querySelector("td")?.textContent).toBe("B1");
   expect(formatWorkflowPolicy({ ...bypass, request: {} }, false).rows.find(([name]) => name === "Article assignments"))
     .toEqual(["Article assignments", "0", "partition disabled"]);
   expect(input).toEqual(before);

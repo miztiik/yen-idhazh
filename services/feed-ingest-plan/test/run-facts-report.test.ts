@@ -40,6 +40,7 @@ test("keeps status, identity, attempt and literal assignment values in distinct 
     "Elapsed planning time (ms)": "1234", "Selection started": "true",
   });
   expect(facts(report.markdown).Run).toBe("2026-10-25-1234");
+  expect(report.markdown).not.toContain("Article assignments group selected articles");
   expect(rows).toEqual(before);
 });
 

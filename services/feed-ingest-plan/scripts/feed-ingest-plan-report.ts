@@ -15,9 +15,11 @@ export type WorkflowReportEvidence = {
   response: unknown; health?: unknown; policy?: unknown; host?: unknown;
 };
 
-export function renderWorkflowPlanMarkdown(input: WorkflowReportEvidence): PlannerMarkdown {
+export function renderWorkflowPlanMarkdown(
+  input: WorkflowReportEvidence, documentationUrl = resolveWorkflowGuideUrl(process.env),
+): PlannerMarkdown {
   const response = PlanResponseSchema.parse(input.response);
-  const policy = formatPolicyTable(input.policy, response.selection_started_at_utc !== null);
+  const policy = formatPolicyTable(input.policy, response.selection_started_at_utc !== null, documentationUrl);
   const host = formatHostFingerprintSummary(input.host);
   const report = renderPlanMarkdown({
     response, health: input.health, policy: { markdown: policy.summary, notice: policy.notice },
@@ -26,6 +28,16 @@ export function renderWorkflowPlanMarkdown(input: WorkflowReportEvidence): Plann
     markdown: placeHostFingerprintFirst(report.markdown, host.summary),
     notices: [{ level: "notice", title: "Host fingerprint", message: host.notice }, ...report.notices],
   };
+}
+
+export function resolveWorkflowGuideUrl(context: NodeJS.ProcessEnv): string | undefined {
+  const { GITHUB_REPOSITORY, GITHUB_SERVER_URL, GITHUB_SHA } = context;
+  if (GITHUB_REPOSITORY === undefined) return undefined;
+  if (!GITHUB_SERVER_URL || !GITHUB_SHA) throw new Error("Workflow documentation link requires server URL and commit SHA");
+  return new URL(
+    `${GITHUB_REPOSITORY}/blob/${GITHUB_SHA}/docs/how-to/run-feed-ingest-plan-test.md`,
+    `${GITHUB_SERVER_URL}/`,
+  ).href;
 }
 
 function placeHostFingerprintFirst(markdown: string, hostSummary: string): string {

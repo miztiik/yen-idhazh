@@ -46,7 +46,6 @@ export function renderRunFacts(row: PlanRunRow, feeds: readonly FeedHealthStateR
         `| A${index + 1} | ${label} | ${escapeMarkdown(value)} |`),
       ...(admissionNote ? ["", admissionNote] : []),
       ...(unknownChecks ? ["", "\\* Feeds checked counts only feeds with recorded checks; some check counts are unavailable."] : []),
-      "", "Article assignments group selected articles for downstream work; they are not fetch or parser workers.",
     ].join("\n"),
     notice: feeds === undefined ? "No feed-health result was saved for this run."
       : feeds.length === 0 ? "Zero feed rows were recorded for this run."
