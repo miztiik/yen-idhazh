@@ -1,6 +1,6 @@
 /** What did one planner execution finish, including empty and failed runs? */
 import { z } from "zod";
-import { PLANNER_LEDGER_VERSION, PLAN_RUN_VERSION } from "../version";
+import { PLAN_RUN_VERSION } from "../version";
 import { CountSchema, DateStampSchema, FiniteSchema, NonEmptySchema, PositiveCountSchema, RelPathSchema, RunIdSchema, reject } from "./primitives";
 import { RecordedInstantSchema } from "./recorded-instant.schema";
 
@@ -27,7 +27,7 @@ export const PlanRunRowSchema = z.strictObject({
   version: PLAN_RUN_VERSION,
   changelog: [
     { version: PLAN_RUN_VERSION, change: "Name pre-fetch and fresh selection health captures separately." },
-    { version: PLANNER_LEDGER_VERSION, change: "Declare the metadata-only planner ledgers without generic writer identity." },
+    { version: "2026-10-25", change: "Declare the metadata-only planner ledgers without generic writer identity." },
   ],
 });
 export type PlanRunRow = z.infer<typeof PlanRunRowSchema>;

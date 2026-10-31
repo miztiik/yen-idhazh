@@ -158,14 +158,12 @@ export async function readPlannerParquet<T extends object>(
   path: string, ledger: PlannerStoredFileEnvelope["ledger"], contract: LedgerRowContract<T>,
 ) {
   const { fields, ...stored } = await loadStoredPlannerParquet(path, ledger);
-  const accepted = contract.acceptedSchemaVersions ?? [contract.schemaVersion];
-  if (!accepted.includes(stored.envelope.row_schema_version)) {
+  if (stored.envelope.row_schema_version !== contract.schemaVersion) {
     throw new PlannerLedgerFileError(
-      `Planner ${ledger} uses an unsupported row schema; accepted ledger contract versions are ${accepted.join(", ")}`,
+      `Planner ${ledger} requires its current row schema ${contract.schemaVersion}`,
     );
   }
   const envelope = PlannerFileEnvelopeSchema.parse(stored.envelope);
-  const physicalSchema = contract.historicalSchemas?.[envelope.row_schema_version] ?? contract.schema;
-  checkFields(fields, describeObjectSchema(physicalSchema).fields);
-  return { ...stored, envelope, rows: stored.rows.map(row => contract.schema.parse(physicalSchema.parse(row))) };
+  checkFields(fields, describeObjectSchema(contract.schema).fields);
+  return { ...stored, envelope, rows: stored.rows.map(row => contract.schema.parse(row)) };
 }

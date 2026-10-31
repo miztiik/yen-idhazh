@@ -82,6 +82,8 @@ saves its validated result. No SQLite write lock spans network or worker
 parsing work, and independent requests can overlap.
 
 Completed keys replay their saved response without repeating work.
+Only current receipt and fetched-document formats can replay. Older or missing
+stored stamps refuse without rewriting the journal.
 A started or interrupted key returns `REQUEST_INCOMPLETE`; it is not
 silently retried. An expired in-memory parsed batch cannot replay a dead
 successful stage reference. Inspection or a new execution is required.

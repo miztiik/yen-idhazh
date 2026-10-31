@@ -98,9 +98,7 @@ export function validateLedgerInput<T extends object>(
       || input.registryEntry.prefix.join("/") !== `feed-ingest-plan/${ledger}`) {
       throw new Error(`${ledger} requires its registered planner family prefix`);
     }
-    const writableVersions = (declared.acceptedSchemaVersions ?? [declared.schemaVersion])
-      .filter(version => declared.historicalSchemas?.[version] === undefined);
-    if (!writableVersions.includes(input.rowContract.schemaVersion)
+    if (input.rowContract.schemaVersion !== declared.schemaVersion
       || JSON.stringify(z.toJSONSchema(input.rowContract.schema)) !== JSON.stringify(z.toJSONSchema(declared.schema))) {
       throw new Error(`${ledger} requires its declared current planner row contract`);
     }

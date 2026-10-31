@@ -249,7 +249,7 @@ The commands behind these gates are in [`docs/how-to/run-the-gates.md`](docs/how
 - Commit model weights, downloaded binaries or reproducible run intermediates.
 - Add runtime telemetry, analytics or error-tracking SDKs.
 - Add frameworks, libraries or build tools without naming their cost and beneficiary feature.
-- Add persisted fields without a schema `version` date, `changelog` entry and read-side migration in the same commit.
+- Add persisted fields without a schema `version` date, `changelog` entry and the family's read-side compatibility rule in the same commit.
 - Raise platform limits to fit a feature: GitHub kills a 6 h job, and Pages refuses a site over 1 GB. Name a viable design and its trade-offs; scope changes require user approval.
 - Use runner figures as a refusal without stating their consequences. Cache eviction costs a re-download, not a failed run (Guardrail #2).
 - Treat `TODO/`, chat logs or private memory as authority. They are caches of `docs/`.
@@ -261,20 +261,19 @@ The commands behind these gates are in [`docs/how-to/run-the-gates.md`](docs/how
 
 **This section is scoped to a persisted payload a later run reads.** A configuration file this project authors is out: nothing but this repository writes one, and a file a person edits in place has no older copy for a later build to read. (Maintainer ruling 2026-09-21.)
 
-**TypeScript planner exception (2026-10-27 UTC):** The maintainer-approved
+**TypeScript planner exception (2026-10-31 UTC, user-approved):** The
 [planner contract cutover](docs/reference/feed-planner-ledgers.md#typescript-contract-ownership)
-places planner requests, artifacts and four ledgers under TypeScript
-validation. Full-row validation refuses incompatible old planner formats without Python
-mirrors, comparison copies or read-side migrations. The article cleanup exception
-below accepts only its named compatible stamps. The user-directed field-read ruling
-of 2026-10-31 UTC requires the current health row stamp and independent
-validation of required fields; current-format field gaps are partial evidence,
-not an old-format migration. Stored-file integrity and strict writer
-validation remain required. Python retains the gardener scheduler and
-delegates planner file validation and compaction to TypeScript. Other families
-retain their existing compatibility rules.
+places planner requests, artifacts, receipts, stage payloads, events and five
+ledgers under TypeScript validation. Only current native formats are accepted.
+There are no migrations, old-format readers, older-key recovery or old-prefix
+aliases. Historical ledger files remain unchanged. Current-format health field
+gaps are partial evidence and affect only their required calculations.
+Stored-file integrity, strict current writers, dated stamps and changelogs
+remain required. Current request idempotency is retained; it is not legacy
+compatibility. Python keeps the gardener scheduler and delegates planner
+validation and compaction to TypeScript. Other families keep their own rules.
 
-Every such payload is declared before logic is written, under the native contract ownership in Guardrail #3 and section 1a. Its JSON Schema is computed from that declaration on demand. The planner TypeScript exception does not change the four versioning rules below.
+Every such payload is declared before logic is written, under the native contract ownership in Guardrail #3 and section 1a. Its JSON Schema is computed from that declaration on demand. The current-only planner exception replaces the read-side migration requirement only for that family; its stamps and changelogs remain required.
 
 - `version` is a `YYYY-MM-DD` date-stamp - never an integer, never an epoch. It answers the question a reader of an old payload actually has: how old is this shape?
 - Every change appends a `changelog` entry, newest first, `{ version, change }`, and sets `version` if necessary.
@@ -289,17 +288,10 @@ corpus is deleted. Schema stamps and changelogs still apply.
 
 What the base model enforces, how a same-day revision extends the stamp, which surfaces this covers, and the one model that pins a published key while its Python name moves: [`docs/architecture/contracts/schemas.md`](docs/architecture/contracts/schemas.md).
 
-**Article cleanup exception (2026-10-29 UTC, user-approved):** Unified article
-cleanup preserves exact compatible discovery `2026-10-25`, selected
-rows/artifacts `2026-10-27`, and fetched documents/operation journals
-`2026-10-28`. Old row and receipt stamps and published keys remain unchanged.
-User approval, 2026-10-30 UTC: the planner uses only the current cleaned
-address to match discovery, publication and settled-failure keys. It does not
-recover older keys through saved-address associations or alternate policies;
-earlier incompatible formats still refuse. The current native contracts and
-[compatibility rules](docs/reference/feed-planner-ledgers.md#article-cleanup-compatibility)
-declare the complete accepted sets. This narrows the planner refusal exception
-in Guardrail #3 and section 11; it does not change other payload families.
+Article identity uses only the current cleaned address to match discovery,
+publication and settled-failure keys. Its current-format rule is
+[declared with the planner formats](docs/reference/feed-planner-ledgers.md#article-cleanup-compatibility).
+This does not change other payload families or historical published keys.
 
 ## 12. Published-Site Verification (Browser Smoke)
 

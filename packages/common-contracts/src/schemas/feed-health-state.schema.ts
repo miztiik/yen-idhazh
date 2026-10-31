@@ -1,6 +1,6 @@
 /** What feed work did one run attempt perform on one actual UTC day? */
 import { z } from "zod";
-import { FEED_HEALTH_STATE_ACCEPTED_SCHEMA_VERSIONS, FEED_HEALTH_STATE_VERSION, LEGACY_FEED_HEALTH_STATE_VERSION } from "../version";
+import { FEED_HEALTH_STATE_VERSION } from "../version";
 import { CountSchema, DateStampSchema, FiniteSchema, NonEmptySchema, PositiveCountSchema, RunIdSchema, Sha256Schema, SlugSchema, reject } from "./primitives";
 import { RecordedInstantSchema } from "./recorded-instant.schema";
 
@@ -69,7 +69,7 @@ export const FeedHealthStateRowSchema = z.strictObject({
   changelog: [
     { version: FEED_HEALTH_STATE_VERSION, change: "Save logical checks and supported timed lifecycle calculations without availability sidecars." },
     { version: "2026-10-30", change: "Save feed-read fractions and floor-applied factors downward to three decimal places." },
-    { version: LEGACY_FEED_HEALTH_STATE_VERSION, change: "Count admitted original article captures before selection instead of screening admissions." },
+    { version: "2026-10-27", change: "Count admitted original article captures before selection instead of screening admissions." },
   ],
 });
 export type FeedHealthStateRow = z.infer<typeof FeedHealthStateRowSchema>;
@@ -83,5 +83,4 @@ export const FeedLifecycleFieldsSchema = z.object(FeedHealthStateRowSchema.shape
 export type FeedLifecycleFields = z.infer<typeof FeedLifecycleFieldsSchema>;
 export const FeedHealthStateRowContract = {
   schema: FeedHealthStateRowSchema, schemaVersion: FEED_HEALTH_STATE_VERSION,
-  acceptedSchemaVersions: FEED_HEALTH_STATE_ACCEPTED_SCHEMA_VERSIONS,
 } as const;

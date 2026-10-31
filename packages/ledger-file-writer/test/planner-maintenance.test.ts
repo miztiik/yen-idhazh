@@ -7,7 +7,7 @@ import { delimiter, dirname, join, resolve } from "node:path";
 import {
   PLANNER_FILE_VALIDATION_VERSION,
   PLANNER_MAINTENANCE_VERSION, PlannerMaintenanceRequestSchema,
-  LEGACY_DISCOVERED_ARTICLE_VERSION, LEGACY_SELECTED_ARTICLE_VERSION, deriveUrlKey,
+  deriveUrlKey,
 } from "@idhazh/common-contracts";
 import { maintainPlannerPeriod, persistLedger, readPlannerParquet } from "../src";
 import { validatePlannerFiles } from "../src/validate-planner-files";
@@ -56,7 +56,7 @@ async function addRawDay(root: string, day: string): Promise<string> {
   return path;
 }
 
-  test("daily, monthly and yearly maintenance retain mixed article generations verbatim", async () => {
+  test("daily, monthly and yearly maintenance retain current article rows verbatim", async () => {
     const root = await fixtureRoot();
     const day = "2026-10-20";
     try {
@@ -65,20 +65,16 @@ async function addRawDay(root: string, day: string): Promise<string> {
         const registry_entry = { ...registration, name: ledger, prefix: ["feed-ingest-plan", ledger] };
         const expected = [];
         const inputs = [];
-        for (const historical of [true, false]) {
-          const canonical_url = historical
-            ? "https://example.org/article/legacy?edition=morning&utm_source=feed"
-            : "https://example.org/article/current";
+        for (const ordinal of [0, 1]) {
+          const canonical_url = `https://example.org/article/current-${ordinal}`;
           const row = {
             ...recording.row, url_key: deriveUrlKey(canonical_url),
             ...(ledger === "selected-articles" ? { canonical_url } : {}),
           };
-          const historicalVersion = ledger === "discovered-articles"
-            ? LEGACY_DISCOVERED_ARTICLE_VERSION : LEGACY_SELECTED_ARTICLE_VERSION;
           const written = await persistLedger({
             ledger, rowContract: {
               ...recording.contract,
-              schemaVersion: historical ? historicalVersion : recording.contract.schemaVersion,
+              schemaVersion: recording.contract.schemaVersion,
             },
             outputRoot: join(root, "state"), registryEntry: registry_entry, ledgerSettings,
             period: { tier: "raw", covers: day }, rows: [row],

@@ -6,11 +6,10 @@ import { createHash } from "node:crypto";
 import { PlanError } from "./plan-request";
 import { PlannerOperationSchema, RequestIdSchema } from "./operation-contracts";
 import type { PlannerOperation } from "./operation-contracts";
-import { SourceArticleOutcomeSchema, LEGACY_PLANNER_OPERATION_VERSION, LEGACY_OPERATION_VERSION } from "@idhazh/common-contracts";
+import { SourceArticleOutcomeSchema, PLANNER_OPERATION_VERSION, OPERATION_VERSION } from "@idhazh/common-contracts";
 import type { SourceArticleOutcome } from "@idhazh/common-contracts";
 
-type RequestIdentity = Pick<PlannerOperation, "request_id" | "operation" | "input_sha256" | "config_sha256">
-  & { legacy_config_sha256?: string };
+type RequestIdentity = Pick<PlannerOperation, "request_id" | "operation" | "input_sha256" | "config_sha256">;
 export type PreparedOperation = Readonly<RequestIdentity & { capture: () => PlannerOperation }>;
 
 export function sha256(value: string): string {
@@ -38,7 +37,16 @@ export async function openOperationStore(outputRoot: string) {
   const write = database.query("INSERT OR REPLACE INTO operations (request_id, record) VALUES (?, ?)");
   function get(id: string): PlannerOperation | null {
     const row = read.get(RequestIdSchema.parse(id));
-    return row === null ? null : PlannerOperationSchema.parse(JSON.parse(row.record));
+    if (row === null) return null;
+    const raw: unknown = JSON.parse(row.record);
+    if (typeof raw !== "object" || raw === null || !("version" in raw) || raw.version !== PLANNER_OPERATION_VERSION) {
+      throw new PlanError("ARTIFACT_INVALID", "Stored operation requires the current receipt format", "request_id");
+    }
+    if ("artifact" in raw && raw.artifact != null
+      && (typeof raw.artifact !== "object" || !("version" in raw.artifact) || raw.artifact.version !== OPERATION_VERSION)) {
+      throw new PlanError("ARTIFACT_INVALID", "Stored fetch requires the current document format", "request_id");
+    }
+    return PlannerOperationSchema.parse(raw);
   }
   function put(value: PlannerOperation) {
     const checked = PlannerOperationSchema.parse(value);
@@ -46,12 +54,9 @@ export async function openOperationStore(outputRoot: string) {
   }
   function readRequest(proposed: RequestIdentity) {
     const previous = get(proposed.request_id);
-    const legacyReplay = previous?.version === LEGACY_PLANNER_OPERATION_VERSION && previous.state === "complete"
-      && previous.config_sha256 === proposed.legacy_config_sha256
-      && (previous.artifact === null || previous.artifact.version === LEGACY_OPERATION_VERSION);
     if (previous && (previous.operation !== proposed.operation
       || previous.input_sha256 !== proposed.input_sha256
-      || (previous.config_sha256 !== proposed.config_sha256 && !legacyReplay))) {
+      || previous.config_sha256 !== proposed.config_sha256)) {
       throw new PlanError("REQUEST_CONFLICT", "Request key was already used with different input or configuration", "request_id");
     }
     return previous;

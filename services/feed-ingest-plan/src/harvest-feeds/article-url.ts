@@ -3,7 +3,7 @@ import type { FeedIngestConfig } from "@idhazh/common-contracts";
 import { UrlSchema } from "@idhazh/common-contracts";
 import { cleanHttpRequestTarget } from "./http-request-target";
 import { validateTargetName } from "./safe-target";
-import { InvalidArticleUrlError } from "./legacy-article-identity";
+export class InvalidArticleUrlError extends Error {}
 
 export type ArticleUrlPolicy = Pick<FeedIngestConfig["harvest"], "tidy_urls">;
 

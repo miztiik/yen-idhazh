@@ -29,7 +29,7 @@ test("field readers and full readers refuse old stamps while current-format fiel
         day: row.date, raw_files: [written.files[0]!.path],
       };
       const read = await readFeedHealthFieldsDay(root, registration("feed-health-state"), input, cache);
-      if (!FeedHealthStateRowContract.acceptedSchemaVersions.some(accepted => accepted === stamp)) {
+      if (stamp !== FeedHealthStateRowContract.schemaVersion) {
         expect(read.complete).toBe(false);
         for (const use of Object.values(read.uses)) expect(use.rows).toEqual([]);
         expect((await readPlannerDay<Record<string, unknown>>(root, registration("feed-health-state"),

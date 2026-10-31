@@ -12,7 +12,7 @@ import type { ResolveAddresses } from "./safe-target";
 import type { FetchAttempt } from "../api/operation-contracts";
 import { utcTimestamp } from "./harvest-types";
 import { cleanArticleUrl } from "./article-url";
-import { InvalidArticleUrlError } from "./legacy-article-identity";
+import { InvalidArticleUrlError } from "./article-url";
 
 export type FetchAttemptMeasurement = {
   attempt: FetchAttempt; occurred_at: string; outcome: "success" | "failed";

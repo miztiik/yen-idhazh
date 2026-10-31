@@ -5,18 +5,9 @@ import { BodyLimitEvidenceSchema, FetchFailureSchema } from "./harvest-diagnosti
 import { RecordedInstantSchema } from "./recorded-instant.schema";
 import { SourceArticleRefusalReasonSchema } from "./rejection.schema";
 
-export const LEGACY_OPERATION_VERSION = "2026-10-28" as const;
-export const PREVIOUS_OPERATION_VERSION = "2026-10-29" as const;
-export const OPERATION_VERSION = "2026-10-30" as const;
-export const OPERATION_ACCEPTED_SCHEMA_VERSIONS = [
-  LEGACY_OPERATION_VERSION, PREVIOUS_OPERATION_VERSION, OPERATION_VERSION,
-] as const;
-const OperationVersionSchema = z.enum(OPERATION_ACCEPTED_SCHEMA_VERSIONS).default(OPERATION_VERSION);
-export const LEGACY_PLANNER_OPERATION_VERSION = "2026-10-28" as const;
-export const PLANNER_OPERATION_VERSION = "2026-10-29" as const;
-export const PLANNER_OPERATION_ACCEPTED_SCHEMA_VERSIONS = [
-  LEGACY_PLANNER_OPERATION_VERSION, PLANNER_OPERATION_VERSION,
-] as const;
+export const OPERATION_VERSION = "2026-10-31" as const;
+const OperationVersionSchema = z.literal(OPERATION_VERSION).default(OPERATION_VERSION);
+export const PLANNER_OPERATION_VERSION = "2026-10-31" as const;
 export const SourceArticleOutcomeSchema = z.strictObject({
   disposition: z.enum(["admitted", "source_refused"]),
   reason_code: SourceArticleRefusalReasonSchema.nullable(), settled_at: RecordedInstantSchema,
@@ -56,7 +47,7 @@ export const FetchedDocumentSchema = z.strictObject({
   parent_batch_id: RequestIdSchema.nullable().default(null),
   entry_ordinal: CountSchema.nullable().default(null),
 }).superRefine((value, ctx) => {
-  if (value.version === OPERATION_VERSION && value.fetch_item_type === "article" && /[?#]/.test(value.canonical_url)) {
+  if (value.fetch_item_type === "article" && /[?#]/.test(value.canonical_url)) {
     ctx.addIssue({ code: "custom", message: "current article address must not contain a query or fragment" });
   }
   if (value.body === null ? value.body_sha256 !== null : value.body_sha256 === null) {
@@ -64,7 +55,7 @@ export const FetchedDocumentSchema = z.strictObject({
   }
   const bodyLimitFailure = value.failure === "body-too-large" || value.robots_failure === "body-too-large";
   if ((value.body_limit !== null && !bodyLimitFailure)
-    || (value.version === OPERATION_VERSION && bodyLimitFailure && value.body_limit === null)) {
+    || (bodyLimitFailure && value.body_limit === null)) {
     ctx.addIssue({ code: "custom", message: "current body-limit failures require their measured cutoff evidence" });
   }
   if (value.observation.operation !== "fetch" || value.observation.article_id !== value.article_id
@@ -82,15 +73,15 @@ export const FetchedDocumentSchema = z.strictObject({
 }).meta({
   version: OPERATION_VERSION,
   changelog: [
-    { version: OPERATION_VERSION, change: "Retain configured response limits and observed cutoff bytes." },
-    { version: PREVIOUS_OPERATION_VERSION, change: "Identify shared query-free article captures while preserving legacy receipts unchanged." },
-    { version: LEGACY_OPERATION_VERSION, change: "Rename fetched document and observation feed identity from source_id to feed_id." },
+    { version: OPERATION_VERSION, change: "Require current fetched documents without older-format readers." },
+    { version: "2026-10-30", change: "Retain configured response limits and observed cutoff bytes." },
+    { version: "2026-10-29", change: "Identify shared query-free article captures." },
+    { version: "2026-10-28", change: "Rename fetched document and observation feed identity from source_id to feed_id." },
     { version: "2026-10-27", change: "Name the fetched item type and refuse older fetch artifacts." },
-    { version: "2026-10-26", change: "Earlier changes are in git." },
   ],
 });
 export const PlannerOperationSchema = z.strictObject({
-  version: z.enum(PLANNER_OPERATION_ACCEPTED_SCHEMA_VERSIONS).default(PLANNER_OPERATION_VERSION),
+  version: z.literal(PLANNER_OPERATION_VERSION).default(PLANNER_OPERATION_VERSION),
   request_id: RequestIdSchema, operation: z.enum(["fetch", "parse", "plan"]),
   input_sha256: Sha256Schema, config_sha256: Sha256Schema, run_id: RunIdSchema,
   correlation_id: RequestIdSchema, created_at: RecordedInstantSchema, state: z.enum(["started", "complete"]),
@@ -120,8 +111,9 @@ export const PlannerOperationSchema = z.strictObject({
 }).meta({
   version: PLANNER_OPERATION_VERSION,
   changelog: [
-    { version: PLANNER_OPERATION_VERSION, change: "Retain legacy operation responses and identify shared article-cleanup captures." },
-    { version: LEGACY_PLANNER_OPERATION_VERSION, change: "Rename nested fetched feed identity from source_id to feed_id." },
+    { version: PLANNER_OPERATION_VERSION, change: "Require current operation receipts and retain exact current-request replay." },
+    { version: "2026-10-29", change: "Identify shared article-cleanup captures." },
+    { version: "2026-10-28", change: "Rename nested fetched feed identity from source_id to feed_id." },
     { version: "2026-10-27T18:30", change: "Settle original article outcomes and retain their bounded receipt membership on the feed capture." },
     { version: "2026-10-27", change: "Refuse prior operation formats after renaming fetch routing." },
     { version: "2026-10-23", change: "Earlier changes are in git." },

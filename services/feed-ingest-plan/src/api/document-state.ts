@@ -10,8 +10,6 @@ import { createPermittedFetcher } from "../harvest-feeds/robots-policy";
 import { preparePlanningHealth } from "./prepare-planning-health";
 import { deriveArticleIdentity } from "../harvest-feeds/article-identity";
 import { deriveFeedIdentity } from "../harvest-feeds/feed-identity";
-import { deriveLegacyArticleIdentity } from "../harvest-feeds/legacy-article-identity";
-import { LEGACY_OPERATION_VERSION } from "@idhazh/common-contracts";
 import { PlanError } from "./plan-request";
 import { sha256 } from "./operation-store";
 import { readExclusionEvidence } from "../read-ledger-history/read-exclusion-evidence";
@@ -70,8 +68,7 @@ export function checkFetchedDocument(record: PlannerOperation, inputs: PlanInput
   if (record.operation !== "fetch" || record.state !== "complete") throw new PlanError("ARTIFACT_NOT_FOUND", "No completed fetched document exists", "fetch_request_id");
   const artifact = FetchedDocumentSchema.parse(record.artifact);
   const identity = artifact.fetch_item_type === "feed" ? deriveFeedIdentity(artifact.canonical_url)
-    : artifact.version === LEGACY_OPERATION_VERSION ? deriveLegacyArticleIdentity(artifact.canonical_url)
-      : deriveArticleIdentity(artifact.canonical_url, inputs.harvest.config.harvest);
+    : deriveArticleIdentity(artifact.canonical_url, inputs.harvest.config.harvest);
   if (artifact.article_id !== identity.url_key || artifact.observation.run_id !== record.run_id
     || artifact.observation.correlation_id !== record.correlation_id
     || artifact.body_sha256 !== (artifact.body === null ? null : sha256(artifact.body))

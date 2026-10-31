@@ -2,7 +2,7 @@
 
 **Last Updated**: 2026-10-31
 **Level**: 5 - persisted health contract and planner execution design; execution authorized by the user on 2026-10-31 UTC.
-**Status**: Cutover merged after green merge-candidate CI. Cleanup is in progress; live production verification remains.
+**Status**: Cutover merged after green merge-candidate CI. Cleanup is implemented and locally verified; cleanup CI and live production verification remain.
 
 ## 0 - Operating contract
 
@@ -37,7 +37,7 @@ Table C
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | C1 | 1 | Record and consume ledger lifecycle snapshots | - | A | DONE | feed-ledger-delivery | #1842 | - |
 | C2 | 2 | Switch concurrent HTTP planning and remove availability publication | 1 | B | DONE | feed-ledger-delivery | #1842 | - |
-| C3 | 3 | Remove planner legacy branches and obsolete delivery machinery | 2 | C | IN-FLIGHT | feed-ledger-delivery | - | - |
+| C3 | 3 | Remove planner legacy branches and obsolete delivery machinery | 2 | C | READY FOR MERGE | feed-ledger-delivery | - | - |
 
 ## 2 - Approved health contract
 
@@ -246,6 +246,20 @@ Table K
   - `docs/architecture/publishing/committing.md`
   - `CLAUDE.md`
   - `.github/agents/fowler.agent.md`
+  - `packages/ledger-file-writer/src/read-planner-file.ts`
+  - `packages/ledger-file-writer/src/ledger-types.ts`
+  - `packages/ledger-file-writer/src/registration.ts`
+  - `packages/ledger-file-writer/test/planner-maintenance.test.ts`
+  - `packages/ledger-file-writer/test/reader-integrity.test.ts`
+  - `packages/ledger-file-writer/test/rejected-article-compatibility.test.ts`
+  - `services/feed-ingest-plan/src/harvest-feeds/article-url.ts`
+  - `services/feed-ingest-plan/src/harvest-feeds/article-identity.ts`
+  - `services/feed-ingest-plan/src/harvest-feeds/feed-identity.ts`
+  - `services/feed-ingest-plan/src/harvest-feeds/legacy-article-identity.ts` (delete after preserving current feed identity)
+  - `services/feed-ingest-plan/src/harvest-feeds/robots-policy.ts`
+  - `services/feed-ingest-plan/test/operation-format.test.ts`
+  - `tests/fixtures/feed-ingest-plan/report-events.json`
+- **Verified dependency boundary:** Generic non-planner file envelopes, host contracts, Python compatibility and published corpus formats remain unchanged. Removed availability/CAS APIs had no other consumers. Current feed identity still uses its existing normalization; it is not an old article reader.
 - **Acceptance gates:** Same local selector and CI division as Row 1. Current-schema round trips succeed; old planner schemas and old operation receipts refuse with explicit diagnostics; current idempotent replay still avoids repeating completed work. Search the named planner/common-contract/delivery/doc inventory for removed sidecar, enrollment, CAS and legacy-format symbols; classify surviving current helpers by their actual consumer.
 - **Oracle:** All current planner API journeys use one current format and ledger-only lifecycle, with no reachable sidecar publisher or old-format recovery path. This does not certify unrelated APIs outside the named scope.
 
