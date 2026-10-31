@@ -8,7 +8,7 @@ import {
   COMPACT_INDEX_VERSION, PlanRunRowContract, SelectedArticleRowContract,
   SelectedArticleRowSchema,
 } from "@idhazh/common-contracts";
-import { persistLedger } from "@idhazh/ledger-file-writer";
+import { persistLedger, PlannerUnsupportedFormatError } from "@idhazh/ledger-file-writer";
 import type { PersistLedgerResult } from "@idhazh/ledger-file-writer";
 import { tableFromIPC, tableToIPC } from "apache-arrow";
 import initializeParquet, {
@@ -332,7 +332,7 @@ test("native digest tampering, wrong ledger, schema and undeclared planner ident
         new WriterPropertiesBuilder().setKeyValueMetadata(values).build()));
     await rewrite(new Map([...pairs, ["schema_version", "2026-10-25"]]));
     await expect(readPlannerParquet(path, "selected-articles", SelectedArticleRowContract))
-      .rejects.toThrow("current row schema");
+      .rejects.toBeInstanceOf(PlannerUnsupportedFormatError);
     await rewrite(pairs);
     await rewrite(new Map([...pairs, ["content_sha256", "0".repeat(64)]]));
     await expect(readPlannerParquet(path, "selected-articles", SelectedArticleRowContract)).rejects.toThrow("digest");
