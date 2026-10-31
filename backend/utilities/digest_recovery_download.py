@@ -6,6 +6,7 @@ import hashlib
 import json
 import re
 import subprocess
+from collections.abc import Sequence
 from typing import Literal
 
 from pydantic import ConfigDict, PositiveInt, TypeAdapter
@@ -75,7 +76,7 @@ def pages(repository: str, path: str, key: str) -> list[object]:
         page += 1
 
 
-def select_artifacts(source: SourceRun, values: list[object]) -> dict[str, Artifact]:
+def select_artifacts(source: SourceRun, values: Sequence[object]) -> dict[str, Artifact]:
     """Refuse expired, ambiguous, foreign or earlier-attempt recovery inputs."""
     selected: dict[str, Artifact] = {}
     for artifact in TypeAdapter(list[Artifact]).validate_python(values):

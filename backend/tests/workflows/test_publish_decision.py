@@ -149,7 +149,11 @@ def test_recovery_completion_deploys_only_committed_public_output(
     assert result["ref"] == tip
     workflow = _load_workflows()["pages.yml"]
     on = _mapping(workflow["on"], "Pages triggers")
-    assert "Digest assembly recovery" in _mapping(on["workflow_run"], "run trigger")["workflows"]
+    assert _mapping(on["workflow_run"], "run trigger")["workflows"] == [
+        "CI",
+        "Content refresh",
+        "Digest assembly recovery",
+    ]
 
 
 def test_a_pull_request_never_publishes_even_when_it_changed_the_site(tmp_path: Path) -> None:
