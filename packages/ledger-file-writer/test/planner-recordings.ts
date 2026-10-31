@@ -53,11 +53,10 @@ export function plannerRecordings(day = "2026-10-20", attempt = 1, execution = 1
       row: FeedHealthStateRowSchema.parse({
         feed_id: "fixture-feed", endpoint_key: deriveUrlKey("https://example.org/feed"),
         checked_at: at, permission: "allowed", availability: "eligible", strikes: 0,
-        rested_runs: 0, last_failure_code: null, status: 200,
-        reliability: {
-          productive: 0, attempted: 0, success_fraction: null, from_day: null,
-          through_day: null, production_factor: null, complete: false,
-        },
+        check_request_id: null, check_result: null, rest_until: null,
+        first_confirmed_failure_at: null, failed_recovery_checks: 0,
+        retired_at: null, retirement_reason: null, availability_updated_at: at,
+        availability_complete: true, last_failure_code: null, status: 200, reliability: null,
         date: day, feed_reads: 1, productive_reads: 1, failed_reads: 0,
         article_candidates: 1, articles_selected: 1, feed_requests: 2,
         article_requests: 1, robots_requests: 0, counts_complete: true,

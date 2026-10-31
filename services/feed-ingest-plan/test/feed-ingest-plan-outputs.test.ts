@@ -46,7 +46,7 @@ test("actual HTTP output retains selected text separately from its strict metada
     const server = servePlan(fixture.inputs, fixture.runtime);
     let result: Awaited<ReturnType<typeof requestPlannerHttp>>;
     try {
-      result = await requestPlannerHttp(`http://127.0.0.1:${server.port}/api/2026-10-20`,
+      result = await requestPlannerHttp(`http://127.0.0.1:${server.port}/api/2026-10-31`,
         fixture.inputs, { article_limit: 1 }, directory);
     } finally { await server.stop(true); }
     expect(result.http_status).toBe(200);

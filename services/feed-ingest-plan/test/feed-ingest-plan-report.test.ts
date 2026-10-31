@@ -135,7 +135,8 @@ test("policy cells preserve effective JSON values and override sources without i
   ).json());
   const settings = await Bun.file(new URL("../../../config/idhazh.json", import.meta.url)).json();
   const input = {
-    config: { ...config, harvest: { ...config.harvest, concurrency: 7, fetch_timeout_ms: 4321 },
+    config: { ...config, availability: { ...config.availability, consecutive_failed_checks_before_rest: 4 },
+      harvest: { ...config.harvest, concurrency: 7, fetch_timeout_ms: 4321 },
       curate_articles: { ...config.curate_articles, source_authority_weight: 1.25, source_reliability_penalty_enabled: false } },
     request: { article_limit: 17, shards: 3, partition_strategy: "round-robin" },
     history: { ...settings.collect, availability_strikes_before_rest: 4, reliability_floor: 0.3 },
@@ -154,7 +155,8 @@ test("policy cells preserve effective JSON values and override sources without i
     "Parser workers": { value: "2" },
     "Estimated source authority coefficient": { value: "1.25" },
     "Article-pass adjustment enabled": { value: "false" },
-    "Availability controls": { value: "Not recorded" },
+    "Availability controls": { value: "Recorded" },
+    "Consecutive failed logical checks before rest": { value: "4", source: "configuration" },
     "Reliability floor (fraction)": { value: "0.3" },
   });
   expect(cells).not.toHaveProperty("Selection");

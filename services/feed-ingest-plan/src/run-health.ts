@@ -10,7 +10,8 @@ import type { FeedEntry, HarvestArticleResult } from "./harvest-feeds/harvest-ty
 import { deriveArticleIdentity, InvalidArticleUrlError } from "./harvest-feeds/article-identity";
 import { UnsafeTargetError } from "./harvest-feeds/safe-target";
 import { retryableStatus } from "./harvest-feeds/robots-policy";
-import { inputEndpointKey } from "./read-ledger-history/health-summary";
+import { createFeedHealthRow } from "./health-row";
+import { classifyFeedFetchFailure, classifyParserResult } from "./availability/feed-lifecycle";
 import { attributeIngestOutcome } from "./attribute-ingest-outcomes";
 import type { FetchResult } from "./harvest-feeds/robots-policy";
 import { hasArticleCapture, resolveArticleSourceOutcome } from "./article-source-outcome";
@@ -35,15 +36,7 @@ export function createRunHealth(context: RunContext, sources: readonly SourceSna
     let value = rows.get(key);
     if (value === undefined) {
       const prior = history.get(feed);
-      value = FeedHealthStateRowSchema.parse({
-        date, run_id: context.run_id, attempt: context.writer.attempt, feed_id: feed,
-        endpoint_key: inputEndpointKey(source.feed_url), checked_at: null, permission: "unknown",
-        availability: prior?.lifecycle ?? "unknown", strikes: prior?.strikes ?? null,
-        rested_runs: prior?.rested_runs ?? null, last_failure_code: null, status: null,
-        reliability: prior?.reliability ?? null, feed_reads: 0, productive_reads: 0, failed_reads: 0,
-        article_candidates: 0, articles_selected: 0, feed_requests: 0, article_requests: 0,
-        robots_requests: 0, counts_complete: true, rejection_counts: [], items: null, outcome: null,
-      });
+      value = createFeedHealthRow(context, source, prior, instant);
       rows.set(key, value);
     }
     return value;
@@ -127,14 +120,33 @@ export function createRunHealth(context: RunContext, sources: readonly SourceSna
         else held.count++;
       }
     }
-    return [...result.values()].map(value => FeedHealthStateRowSchema.parse({
+    return [...result.values()].map(original => {
+      const value = original.check_request_id !== null && original.check_result === null ? {
+        ...original, check_result: "interrupted" as const,
+        feed_reads: null, productive_reads: null, failed_reads: null,
+      } : original;
+      return FeedHealthStateRowSchema.parse({
       ...value, counts_complete: [
         value.feed_reads, value.productive_reads, value.failed_reads, value.article_candidates,
         value.articles_selected, value.feed_requests, value.article_requests, value.robots_requests,
       ].every(count => count !== null),
-    }));
+      });
+    });
   }
   return {
+    carryFeed(feedId: string, at: string) { row(feedId, at); },
+    interruptFeed(feedId: string, requestId: string, at: string) {
+      const target = row(feedId, at);
+      target.check_request_id = requestId;
+      target.check_result = "interrupted";
+      target.checked_at = at;
+      target.items = null;
+      target.outcome = null;
+      target.feed_reads = null;
+      target.productive_reads = null;
+      target.failed_reads = null;
+      target.counts_complete = false;
+    },
     observe(fact: DocumentWorkFact) {
       if (fact.run_id !== context.run_id || fact.attempt !== context.writer.attempt) throw new Error("Work fact belongs to another run attempt");
       if (fact.feed_id === null || fact.operation !== "attempt") return;
@@ -146,10 +158,16 @@ export function createRunHealth(context: RunContext, sources: readonly SourceSna
         target[field] = null;
       } else if (target[field] !== null) target[field] += fact.dispatched_request_count;
     },
-    pendingFeed(feedId: string, fetched: FetchResult, checkedAt: string) {
+    pendingFeed(feedId: string, fetched: FetchResult, checkedAt: string, requestId: string) {
       const target = row(feedId, checkedAt);
       pendingReads.set(feedId, target);
       target.checked_at = checkedAt;
+      target.check_request_id = requestId;
+      target.check_result = fetched.failure === null ? null : classifyFeedFetchFailure(fetched);
+      target.last_failure_code = fetched.failure === null ? null
+        : fetched.failure === "timeout" ? "FETCH_TIMEOUT"
+          : fetched.failure === "http" ? "FETCH_FAILED_HTTP"
+            : fetched.failure === "robots-denied" ? "ROBOTS_DENIED" : "FETCH_FAILED";
       target.permission = fetched.robots ?? "unknown";
       target.status = fetched.http_status;
       target.feed_reads = fetched.failure === null ? null : fetched.failure === "robots-denied" || fetched.failure === "robots-unknown" ? 0 : 1;
@@ -188,11 +206,13 @@ export function createRunHealth(context: RunContext, sources: readonly SourceSna
         } else if (target[field] !== null) target[field]++;
       }
     },
-    feed(outcome: FeedOutcomePayload, entries: readonly FeedEntry[], checkedAt: string, fetched?: FetchResult) {
+    feed(outcome: FeedOutcomePayload, entries: readonly FeedEntry[], checkedAt: string, fetched?: FetchResult, requestId?: string) {
       const target = row(outcome.source.feed_id, checkedAt);
       const pending = pendingReads.get(outcome.source.feed_id);
       if (pending !== undefined && pending !== target) {
         pending.checked_at = null;
+        pending.check_request_id = null;
+        pending.check_result = null;
         pending.items = null;
         pending.outcome = null;
         pending.feed_reads = 0;
@@ -206,6 +226,10 @@ export function createRunHealth(context: RunContext, sources: readonly SourceSna
       const skipped = outcome.fetch_status === "not_requested";
       const robots = failure === "robots-denied" || failure === "robots-unknown";
       target.checked_at = checkedAt;
+      target.check_request_id = requestId ?? target.check_request_id;
+      target.check_result = target.check_request_id === null ? null
+        : outcome.parse_status === "success" || outcome.parse_status === "empty" ? "valid-feed"
+          : classifyParserResult(outcome.diagnostics?.detail ?? "parser-failed");
       target.permission = fetched?.robots ?? outcome.diagnostics?.robots ?? "unknown";
       target.status = status;
       target.items = new Set(entries.flatMap(entry => {
@@ -223,7 +247,15 @@ export function createRunHealth(context: RunContext, sources: readonly SourceSna
       const productive = target.outcome === "ok" && target.items > 0;
       target.productive_reads = productive ? 1 : 0;
       target.failed_reads = !skipped && !robots && !productive ? 1 : 0;
+      if (target.check_result === "interrupted") {
+        target.items = null;
+        target.outcome = null;
+        target.feed_reads = null;
+        target.productive_reads = null;
+        target.failed_reads = null;
+      }
       target.counts_complete = target.feed_requests !== null && target.article_requests !== null && target.robots_requests !== null;
+      if (target.check_result === "interrupted") target.counts_complete = false;
       target.last_failure_code = outcome.rejection_reason;
       if (outcome.rejection_reason !== null) {
         const parserDetail = outcome.diagnostics?.detail;

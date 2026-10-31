@@ -1,121 +1,97 @@
-# Durable feed availability
+# Feed rest and retirement
 
-**Last Updated**: 2026-10-30
+**Last Updated**: 2026-10-31
 
-How does the feed planner pause failed sources without forgetting their state?
+How does a planner run reuse a supported feed decision without a separate state store?
 
-`config/feed-availability.json` owns the bounded endpoint-state paths and
-thresholds. `packages/common-contracts` owns the persisted state and enrollment
-shapes. The planner does not reconstruct eligibility from compactable
-feed-health history: the state file under
-`state/raw/planner/feed-availability/` is the current durable source of truth.
+The planner reads saved rest and retirement calculations from its existing
+health Parquet files. Unknown availability alone does not block an active
+catalog feed. A supported future rest deadline or proven retirement does.
+Draft and retired catalog feeds retain their existing handling.
 
-## Enrollment and endpoint identity
+The TypeScript planner writes the calculations into
+`state/raw/feed-ingest-plan/feed-health-state/YYYY/MM/DD/<uuid>.parquet`.
+The final workflow publisher commits completed metadata files together.
+There is no availability state file, enrollment marker, reservation or
+intermediate availability commit.
 
-The first planner invocation may initialize state only when both the state file
-and its enrollment marker have never been published and
-`initial_enrollment` explicitly allows the active configured feeds. State and
-marker are written together. Once established, either missing file, corrupt
-contents, an un-enrolled active feed, or an endpoint URL change fails closed.
-The Git reader also checks path history so removing both files does not look
-like first startup.
+## Configured decisions
 
-An operator reenrolls a retired feed, or accepts a changed endpoint, by adding
-a unique `feed_id` and UUID `enrollment_id` under
-`operator_enrollments`. That event creates a fresh episode and clears the old
-reservation, rest and retirement state. Remove the event from configuration
-after it has been applied; the saved enrollment ID prevents replaying the same
-event from resetting later checks.
-An interrupted check remains unavailable until its matching completion arrives
-or an operator reenrolls the endpoint. A new run cannot assume it failed.
-
-The configured read set is two named files and each file is bounded by
-`max_state_bytes`. The complete enrollment is bounded by `max_enrolled_feeds`.
-No raw ledger history walk or history-pruning dependency is involved.
-
-## Checks, rests and retirement
-
-One logical feed request reserves durable state before external fetch. Fetch
-retries remain part of that one reservation. Successful fetches acquire a
-separate parse phase before parsing. A completion must match the request, run,
-attempt and current reservation; a duplicate identical completion is
-idempotent, while a stale or conflicting completion is refused. Cancellation
-or a crash leaves an unknown reservation, not an invented success or failure.
-
-The committed defaults are:
+`config/feed-ingest-plan.json` declares `availability`. Its native TypeScript
+schema validates the retained policy controls.
 
 Table A
 
-| Id | Control | Default |
-| --- | --- | ---: |
-| A1 | Consecutive failed logical checks before rest | 5 |
-| A2 | Initial rest | 24 hours |
-| A3 | Recovery rest after any failed recovery check | 24 hours |
-| A4 | Confirmed failed recovery checks before retirement | 7 |
-| A5 | Minimum age since first confirmed source failure before retirement | 36 hours |
+| Id | Control | Default and effect |
+| --- | --- | --- |
+| A1 | Consecutive failed logical checks before rest | 5 failures start a rest when the saved streak is known. |
+| A2 | Initial rest | 24 hours before another eligible check. |
+| A3 | Recovery rest | 24 hours after a failed recovery check. |
+| A4 | Confirmed failed recovery checks before retirement | 7 qualifying failures are required. |
+| A5 | Minimum confirmed failure episode age | 36 hours must also have elapsed. |
 
-A recovery check is allowed at or after the recorded UTC deadline. Only a
-confirmed target HTTP 404, 410 or 5xx advances the failed-recovery count.
-Retirement needs a new such failure after both configured limits are met.
-With the default recovery rest of 24 hours, the count can take longer than
-the minimum episode age. These are independent controls.
-With these defaults, the seventh recovery check is no earlier than 168 hours
-after entering rest. The 36-hour age gate starts at the first confirmed source
-failure, not at rest entry, and does not promise retirement after 36 hours.
-Retirement stores the reason `confirmed-recovery-failures` beside its UTC
-instant. The last completed check retains the target HTTP status; the current
-health response and workflow report expose the reason.
+Both retirement gates must hold on a new confirmed failing recovery check.
+Only target HTTP 404, 410 or 5xx advances that count. Timeouts, robots results,
+local parse failures, uncertain transport and interruption cannot prove
+retirement. A valid parsed feed, including an empty feed, resets the episode.
 
-Timeouts, robots decisions, parser failures, cancellation, local errors and
-ambiguous transport outcomes do not advance retirement. A timeout still counts
-as a failed logical check and, once the failure threshold is reached, schedules
-another rest at least 24 hours after completion. Any valid parsed feed,
-including an empty feed, clears the failure episode and rest.
+A recovery check is eligible at the recorded UTC deadline, not before it.
+With the default recovery spacing, seven recovery checks take at least
+168 hours after rest starts. The separate episode-age gate starts at the
+first proven confirmed failure. Missing history cannot establish that start,
+a streak or a recovery count.
 
-Collection preflight omits resting, retired, busy and otherwise ineligible
-feeds. The durable reservation at fetch remains authoritative: a competing run
-can change eligibility after preflight. Race-time `FEED_RESTING`,
-`FEED_RETIRED` and `FEED_CHECK_BUSY` outcomes are per-feed skips, not permission
-to bypass reservation.
+## Saved calculations and partial evidence
 
-## Publication and restart
+The [health contract](../../reference/feed-planner-ledgers.md#c-feed-health-state)
+declares actual logical check identity and result, rest deadline, episode start,
+recovery count, retirement reason and the calculation's actual UTC update time.
+`availability_complete` means that the calculation is fully supported, not
+that the source is reachable.
 
-The planner uses `packages/data-delivery`'s bounded Git reader and
-exact-baseline compare-and-swap writer. A state mutation publishes its complete
-snapshot from the revision it read; if `main` moved, the planner refreshes and
-reapplies the transition instead of overwriting newer state. State and initial
-enrollment marker publish in the same commit.
+Saved calculations are read first. Only missing or unusable calculations are
+recovered from the already captured, bounded evidence. A valid zero or supported
+null is not a missing field. Unrelated missing columns cannot erase a supported
+deadline or retirement decision. An unknown count stays null.
 
-The workflow checkout persists its write credential and grants `contents:
-write`. Availability reads fetch the current `origin/main`, even when the
-workflow checkout was created from an older revision. A successful CAS pushes
-the availability commit before normal workflow finalization. The later
-immutable ledger publisher fetches current `main` again, so it preserves that
-state commit. A later workflow or process restores state by reading the same
-named files from current `main`; no temporary workflow artifact or compacted
-ledger is the recovery source.
+Copying a calculation into a later run does not advance its update time.
+Skipped active feeds receive ordinary health rows with no new check identity
+or check time. Known unperformed work has zero counters; incomplete actual
+request accounting stays null. Interrupted checks do not manufacture success,
+source failure or retirement.
 
-CAS uses no shared mutable index or worktree staging. Its private candidate
-contains only the named availability paths. It refuses a stale baseline and
-does not move the caller's checkout, HEAD or index.
+Reliability retains its own saved counts, fractions, coverage dates and
+completeness. Known entering and leaving contributions adjust a rolling window.
+Missing contributions produce a diagnostic and partial values; an unchanged
+saved measurement is never relabelled as covering newer dates.
 
-## Configuration and operation
+## Independent runs and final delivery
 
-The effective thresholds appear in the workflow policy report. `rest_hours`
-and `recovery_rest_hours` are separate positive-duration knobs. Retirement requires both
-`failed_recovery_checks_before_retirement` and
-`retirement_minimum_age_hours`.
+The workflow captures current remote input once. Raw and compact health bytes
+come from that same revision. Reads use existing publication inventory, compact
+indexes and exact named UTC-day Git membership within the configured windows
+and period limit. No growing-tree scan or additional discovery index is used.
 
-The initial enrollment setting is a one-time bootstrap rule, not permission to
-reinitialize missing state. Reenrollment is an explicit configuration event.
-Availability errors are surfaced with `FEED_AVAILABILITY_STATE_INVALID`,
-`FEED_AVAILABILITY_UNENROLLED` or
-`FEED_AVAILABILITY_ENDPOINT_CHANGED`; the fetch race skips are
-`FEED_RESTING`, `FEED_RETIRED` and `FEED_CHECK_BUSY`.
+Each run owns its captured calculation across real HTTP stage requests.
+Another run can publish later without changing that captured input. Independent
+runs may check the same feed and save separate immutable results. Their saved
+cumulative streaks are not added together. Actual check order selects a coherent
+newest calculation; ambiguous order remains incomplete.
+
+Health recording writes local Parquet. Only `safe_persist_data`, through ordinary
+final workflow delivery, commits planner output. Failure finalization retains
+known partial work when the process can still finish it.
+
+## Design rationale
+
+One ledger keeps work evidence and the calculation that later runs need together.
+Separate shared reservations would require writes before source work and would
+change the permitted independent-run semantics. Immutable snapshots retain both
+results without claiming cross-process exclusive ownership or atomic counters.
 
 ## See also
 
+- [Planning history](planner-feed-history.md)
 - [Planner execution](feed-plan-runner.md)
-- [Health history](planner-feed-history.md)
+- [Operator APIs](feed-operator-api.md)
 - [Workflow publication](../publishing/committing.md)
-- [Feed planner ledger reference](../../reference/feed-planner-ledgers.md)

@@ -2,7 +2,7 @@
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import type { FeedIngestEvent, PlannerArticleEvidence, SelectedFeedBatch } from "@idhazh/common-contracts";
-import { SelectedFeedBatchSchema, PartitionedFeedBatchSchema } from "@idhazh/common-contracts";
+import { SelectedFeedBatchSchema, PartitionedFeedBatchSchema, PLANNER_API_PREFIX } from "@idhazh/common-contracts";
 import type { PersistLedgerResult } from "@idhazh/ledger-file-writer";
 import type { harvestFeeds } from "./harvest-feeds/harvest-pool";
 import { workPool } from "./harvest-feeds/harvest-pool";
@@ -30,7 +30,7 @@ export type PlanRuntime = {
   log?: (event: FeedIngestEvent) => void; progress?: (record: ProgressRecord) => void;
   parser_pool?: ArticleParserPool; signal?: AbortSignal;
   evidence?: ReadonlyMap<string, PlannerArticleEvidence>;
-  stage_fetch?: (request: Request) => Promise<Response>; stage_origin?: string;
+  stage_origin?: string;
 };
 export type FeedPlanResult = {
   context: import("./resolve-run-context").RunContext;
@@ -43,18 +43,17 @@ export async function runFeedPlan(raw: unknown, inputs: PlanInputs, runtime: Pla
   const request = resolvePlanRequest(raw, inputs.harvest.config);
   if (!inputs.settings.enabled) throw new PlanError("PLANNER_DISABLED", "Planner is disabled", "enabled");
   // Port zero asks the operating system for an unused loopback port for this invocation.
-  if (runtime.stage_fetch === undefined) {
-    const app = createPlanApp(inputs, { ...runtime, stage_fetch: request => fetch(request) });
+  if (runtime.stage_origin === undefined) {
+    const app = createPlanApp(inputs, runtime);
     const server = Bun.serve({ hostname: inputs.settings.listener.hostname, port: 0, idleTimeout: 0, fetch: app.fetch });
-    try { return await runFeedPlan(raw, inputs, { ...runtime, stage_fetch: request => fetch(request),
+    try { return await runFeedPlan(raw, inputs, { ...runtime,
       stage_origin: `http://${server.hostname}:${server.port}` }); }
     finally { await server.stop(true); app.close(); }
   }
-  const transport = runtime.stage_fetch;
   const collectionId = randomUUID();
   const started = performance.now();
   async function call<T>(path: string, body: unknown, schema: z.ZodType<T>, allowAborted = false): Promise<T> {
-    const response = await transport(new Request(new URL(`/api/2026-10-20/${path}`, runtime.stage_origin ?? "http://localhost"), {
+    const response = await fetch(new Request(new URL(`${PLANNER_API_PREFIX}/${path}`, runtime.stage_origin), {
       method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body),
       ...(runtime.signal === undefined || allowAborted ? {} : { signal: runtime.signal }),
     }));
@@ -103,7 +102,7 @@ export async function runFeedPlan(raw: unknown, inputs: PlanInputs, runtime: Pla
           feed_id: feedId, fetch_item_type: "feed", collection_id: collectionId,
         }, FetchResponseSchema);
       } catch (error) {
-        if (!(error instanceof PlanError) || !["FEED_RESTING", "FEED_RETIRED", "FEED_CHECK_BUSY"].includes(error.code)) throw error;
+        if (!(error instanceof PlanError) || !["FEED_RESTING", "FEED_RETIRED"].includes(error.code)) throw error;
         emit("fetch", "completed", { feed_id: feedId, availability: error.code, output_count: 0 });
         runtime.progress?.({ eventType: "FEED_FETCH_COMPLETED", feed_id: feedId, output_count: 0 });
         return;
@@ -198,7 +197,7 @@ export async function runFeedPlan(raw: unknown, inputs: PlanInputs, runtime: Pla
       emit("plan", "failed", { failure_code: "COLLECTION_CANCEL_FAILED" });
     }
     if (partialBatchId !== undefined && files.feed_health_state === undefined
-      && collection.state.work.rows().some(row => row.checked_at !== null)) {
+      && collection.state.work.rows().length > 0) {
       try {
         const health = await call("feed-health-state", { batch_id: partialBatchId, action: "record" },
           FeedHealthStateUpdateResponseSchema, true);

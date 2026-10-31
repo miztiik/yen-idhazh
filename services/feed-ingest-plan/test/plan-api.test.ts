@@ -7,6 +7,7 @@ import { existsSync } from "node:fs";
 import { loadPlanInputs } from "../src/load-plan-inputs";
 import { fileURLToPath } from "node:url";
 import { createPlanApp, servePlan } from "../src/api/server";
+import { createPlanTestServer } from "./plan-test-server";
 import { main } from "../src/index";
 import { recordedContentFilterPlan, recordedPlan } from "./plan-recordings";
 import { source } from "./harvest-recordings";
@@ -16,12 +17,12 @@ import { currentExecutionState } from "../src/api/document-state";
 import { stageStore } from "../src/api/stage-store";
 import { ArticleParserPool } from "../src/harvest-feeds/article-parser-pool";
 
-const prefix = "/api/2026-10-20";
+const prefix = "/api/2026-10-31";
 const json = (body: unknown) => ({ method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
 
 test("health is explicit; disabled, malformed, oversized and unknown controls cannot fetch", async () => {
   const recorded = await recordedPlan();
-  const app = createPlanApp(recorded.inputs, recorded.runtime);
+  const app = createPlanTestServer(recorded.inputs, recorded.runtime);
   try {
     recorded.inputs.settings.enabled = false;
     expect(await (await app.request(`${prefix}/health`)).json()).toEqual({ status: "available", planner_enabled: false });
@@ -31,6 +32,7 @@ test("health is explicit; disabled, malformed, oversized and unknown controls ca
     expect((await app.request(`${prefix}/plan`, { ...json({}), body: "{" })).status).toBe(400);
     expect((await app.request(`${prefix}/persist-dispatches`, json({ batch_id: randomUUID() }))).status).toBe(404);
     expect((await app.request(`${prefix}/feeds`)).status).toBe(404);
+    expect((await app.request("/api/2026-10-20/health")).status).toBe(404);
     for (const action of ["summarize", "record"]) {
       expect((await app.request(`${prefix}/feed-health-state`, json({ batch_id: randomUUID(), action }))).status).toBe(503);
     }
@@ -45,7 +47,7 @@ test("health is explicit; disabled, malformed, oversized and unknown controls ca
     expect((await app.request(`${prefix}/plan`, json({}))).status).toBe(400);
     expect(recorded.transport.requests).toHaveLength(0);
     expect(existsSync(join(recorded.inputs.outputRoot, "raw"))).toBe(false);
-  } finally { app.close(); await recorded.close(); }
+  } finally { await app.close(); await recorded.close(); }
 });
 
 test("actual API and awaited CLI compose the same recorded plan and disclose the same audit limit", async () => {
@@ -353,13 +355,13 @@ test("actual API and awaited CLI compose the same recorded plan and disclose the
         items: 6, outcome: "ok", failed_reads: 0, productive_reads: 1, article_requests: 4, article_candidates: 4,
       });
       expect(stageHealth.rows[0].rejection_counts).toEqual(health[0]!.rejection_counts);
-    } finally { await filteredServer.stop(true); filteredApp.close(); await filtered.close(); }
-  } finally { await server.stop(true); app.close(); await api.close(); await cli.close(); }
+    } finally { await filteredServer.stop(true); await filteredApp.close(); await filtered.close(); }
+  } finally { await server.stop(true); await app.close(); await api.close(); await cli.close(); }
 });
 
 test("a required source write failure returns an API error, not proven planning completion", async () => {
   const recorded = await recordedPlan();
-  const app = createPlanApp(recorded.inputs, recorded.runtime);
+  const app = createPlanTestServer(recorded.inputs, recorded.runtime);
   try {
     await mkdir(join(recorded.inputs.outputRoot, "raw", "feed-ingest-plan"), { recursive: true });
     await writeFile(join(recorded.inputs.outputRoot, "raw", "feed-ingest-plan", "feed-health-state"), "obstruction");
@@ -375,7 +377,7 @@ test("a required source write failure returns an API error, not proven planning 
     expect(artifact.articles.length).toBeGreaterThan(0);
     expect(artifact.articles.every(article => article.article_text.length > 0)).toBe(true);
     const failedCapture = await recordedPlan();
-    const failedApp = createPlanApp(failedCapture.inputs, failedCapture.runtime);
+    const failedApp = createPlanTestServer(failedCapture.inputs, failedCapture.runtime);
     try {
       failedCapture.runtime.progress = () => {
         failedCapture.inputs.settings.inputs.feed_health_days = [
@@ -398,8 +400,8 @@ test("a required source write failure returns an API error, not proven planning 
       expect(failedBeforeWork.api_timings.filter((timing: { operation: string }) => timing.operation.startsWith("feed-health-")))
         .toMatchObject([{ operation: "feed-health-before-fetch", status: "failed" }]);
       expect(failedCapture.transport.requests.length).toBe(requestCount);
-    } finally { failedApp.close(); await failedCapture.close(); }
-  } finally { app.close(); await recorded.close(); }
+    } finally { await failedApp.close(); await failedCapture.close(); }
+  } finally { await app.close(); await recorded.close(); }
 });
 
 test("one listener retains durable seen receipts from an output root outside the checkout", async () => {
@@ -460,7 +462,7 @@ test("one listener retains durable seen receipts from an output root outside the
 
 test("a later dispatch failure does not lose discovery already persisted by this listener", async () => {
   const recorded = await recordedPlan();
-  const app = createPlanApp(recorded.inputs, recorded.runtime);
+  const app = createPlanTestServer(recorded.inputs, recorded.runtime);
   try {
     const obstruction = join(recorded.inputs.outputRoot, "raw", "feed-ingest-plan", "selected-articles");
     await mkdir(join(recorded.inputs.outputRoot, "raw", "feed-ingest-plan"), { recursive: true });
@@ -477,11 +479,11 @@ test("a later dispatch failure does not lose discovery already persisted by this
     const fetched = await (await app.request(`${prefix}/fetch`, json({
       request_id: fetchKey, correlation_id: correlationId, feed_id: "recorded-news", fetch_item_type: "article", url: "https://news.example/second",
     }))).json();
-    app.close();
+    await app.close();
     const loaded = await loadPlanInputs(fileURLToPath(new URL("../../../", import.meta.url)));
     const restartedInputs = { ...loaded, root: recorded.inputs.root, outputRoot: recorded.inputs.outputRoot,
       settings: recorded.inputs.settings, harvest: recorded.inputs.harvest };
-    const restarted = createPlanApp(restartedInputs, { ...recorded.runtime, clock: () => new Date("2026-10-23T00:00:00Z") });
+    const restarted = createPlanTestServer(restartedInputs, { ...recorded.runtime, clock: () => new Date("2026-10-23T00:00:00Z") });
     try {
       const parsed = await (await restarted.request(`${prefix}/parse`, json({
         request_id: randomUUID(), fetch_request_id: fetchKey, article_id: fetched.article_id, correlation_id: correlationId,
@@ -503,8 +505,8 @@ test("a later dispatch failure does not lose discovery already persisted by this
       expect(run.date).toBe("2026-10-22");
       expect(run.evaluated_at).toBe("2026-10-22T00:10:00Z");
       expect(run.selection_started_at_utc).toBe("2026-10-23T00:00:00Z");
-    } finally { restarted.close(); }
-  } finally { app.close(); await recorded.close(); }
+    } finally { await restarted.close(); }
+  } finally { await app.close(); await recorded.close(); }
 });
 
 test("a listener keeps first-seen evidence stable across UTC midnight", async () => {
@@ -515,7 +517,7 @@ test("a listener keeps first-seen evidence stable across UTC midnight", async ()
   recorded.transport.on_request = request => {
     if (request.url.pathname !== "/feed.xml" && request.url.pathname !== "/robots.txt") workClock = "2026-10-22T00:00:01Z";
   };
-  const app = createPlanApp(recorded.inputs, recorded.runtime);
+  const app = createPlanTestServer(recorded.inputs, recorded.runtime);
   try {
     const response = await app.request(`${prefix}/plan`, json({ article_limit: 2 }));
     expect(response.status).toBe(200);
@@ -533,5 +535,5 @@ test("a listener keeps first-seen evidence stable across UTC midnight", async ()
       checked_at: null, outcome: null, feed_reads: 0, feed_requests: 0, article_requests: 2,
       article_candidates: 2, articles_selected: 2,
     });
-  } finally { app.close(); await recorded.close(); }
+  } finally { await app.close(); await recorded.close(); }
 });

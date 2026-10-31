@@ -59,7 +59,6 @@ export async function preparePlannerWorkflow(root: string, environment: Record<s
   await writeFile(join(directory, "workflow-policy.json"), JSON.stringify(WorkflowPolicySchema.parse({
     config: inputs.harvest.config, request: { ...request, ...policyOverrides }, history: inputs.clock_config.collect,
     parser_concurrency: inputs.settings.listener.parser_concurrency,
-    availability: inputs.availability,
   })));
   console.error(JSON.stringify({ event: "planner_history_staged", notices: staged.notices }));
   const identity = { run_id: `${captured.toISOString().slice(0, 10)}-${GITHUB_RUN_ID}`,

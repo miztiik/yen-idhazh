@@ -4,6 +4,7 @@ import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { SelectedArticlesArtifactSchema } from "@idhazh/common-contracts";
 import { createPlanApp } from "../src/api/server";
+import { createPlanTestServer } from "./plan-test-server";
 import { recordedPlan } from "./plan-recordings";
 import { source } from "./harvest-recordings";
 import { randomUUID } from "node:crypto";
@@ -17,17 +18,17 @@ for (const enabled of [true, false]) test(`HTTP collection completes all feeds b
     fixture.transport.recordings.responses["https://news.example/feed.xml"]!;
   const calls: string[] = [];
   const failures: unknown[] = [];
-  const app = createPlanApp(fixture.inputs, { ...fixture.runtime, stage_fetch: async request => {
-    calls.push(new URL(request.url).pathname.split("/").at(-1)!);
-    const response = await fetch(request);
+  const app = createPlanApp(fixture.inputs, fixture.runtime);
+  let server: ReturnType<typeof Bun.serve>;
+  server = Bun.serve({ hostname: "127.0.0.1", port: 0, idleTimeout: 0, async fetch(request) {
+    const route = new URL(request.url).pathname.split("/").at(-1)!;
+    if (route !== "plan") calls.push(route);
+    const response = await app.fetch(request, { stage_origin: `http://127.0.0.1:${server.port}` });
     if (!response.ok) failures.push(await response.clone().json());
     return response;
   } });
-  let server: ReturnType<typeof Bun.serve>;
-  server = Bun.serve({ hostname: "127.0.0.1", port: 0, idleTimeout: 0, fetch: request =>
-    app.fetch(request, { stage_origin: `http://127.0.0.1:${server.port}` }) });
   try {
-    const response = await fetch(`http://127.0.0.1:${server.port}/api/2026-10-20/plan`, {
+    const response = await fetch(`http://127.0.0.1:${server.port}/api/2026-10-31/plan`, {
       method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ article_limit: 2 }),
     });
     const summary = await response.json();
@@ -54,14 +55,14 @@ for (const enabled of [true, false]) test(`HTTP collection completes all feeds b
     }).success).toBe(false);
     expect(summary.files.selected_articles.status).toBe("written");
     expect(JSON.stringify(summary)).not.toContain(artifact.articles[0]!.article_text);
-  } finally { await server.stop(true); app.close(); await fixture.close(); }
+  } finally { await server.stop(true); await app.close(); await fixture.close(); }
 }, 120000);
 
 test("unfinished or cancelled collection cannot be selected and a feed cannot be claimed twice", async () => {
   const fixture = await recordedPlan();
-  const app = createPlanApp(fixture.inputs, fixture.runtime);
+  const app = createPlanTestServer(fixture.inputs, fixture.runtime);
   const post = (body: unknown) => ({ method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
-  const prefix = "/api/2026-10-20";
+  const prefix = "/api/2026-10-31";
   const id = randomUUID();
   try {
     const begun = await app.request(`${prefix}/collections`, post({ collection_id: id, request: {} }));
@@ -77,7 +78,7 @@ test("unfinished or cancelled collection cannot be selected and a feed cannot be
     expect((await app.request(`${prefix}/collections/cancel`, post({ collection_id: id }))).status).toBe(200);
     expect(collection.signal.signal.aborted).toBe(true);
     expect((await app.request(`${prefix}/collections/complete`, post({ collection_id: id }))).status).toBe(409);
-  } finally { app.close(); await fixture.close(); }
+  } finally { await app.close(); await fixture.close(); }
 }, 120000);
 
 test("valid empty feed completes a truthful empty output without partition requests", async () => {

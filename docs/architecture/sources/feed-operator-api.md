@@ -1,6 +1,6 @@
 # Feed planning operator APIs
 
-**Last Updated**: 2026-10-30
+**Last Updated**: 2026-10-31
 
 How do local requests fetch, parse, select, partition and persist content?
 These are build-time operator APIs, not a server for the static site.
@@ -9,7 +9,7 @@ is the complete versioned route inventory.
 
 ## Independent fetch and parse endpoints
 
-`POST /api/2026-10-20/fetch` requires UUIDv4 `request_id` and
+`POST /api/2026-10-31/fetch` requires UUIDv4 `request_id` and
 `correlation_id`, an active configured `feed_id`, and `fetch_item_type`
 (`feed` or `article`).
 There is no public `source_id` alias. A feed request uses the configured
@@ -22,7 +22,7 @@ redirect, retry, deadline and decoded-byte controls. Its strict response
 contains a reference and body-free outcome, not fetched bytes. A failed
 fetch remains a typed failure.
 
-`POST /api/2026-10-20/parse` accepts `request_id`, `fetch_request_id`,
+`POST /api/2026-10-31/parse` accepts `request_id`, `fetch_request_id`,
 `article_id` and `correlation_id`. It checks the saved receipt, configuration,
 URL hash, byte limit and identities, then parses without any network call.
 Missing receipts return HTTP 404; unavailable fetch content returns HTTP 409.
@@ -112,7 +112,7 @@ Table A
 | --- | --- | --- |
 | A1 | `select-articles` | Accepts the complete parsed `batch_id`; returns a fresh selected ID, metadata-only articles, grouped exclusions and request report. No fetch, model call or automatic health write. |
 | A2 | `partition-articles` | Accepts a selected ID and optional configured strategy/count; returns assignments and estimated work without reranking. |
-| A3 | `feed-health-state` | Accepts a batch ID and explicit `summarize` or `record` action, defaulting to record; returns health, current durable availability and revision, request spend, `reliability.window_days` and actual receipts when saved. |
+| A3 | `feed-health-state` | Accepts a batch ID and explicit `summarize` or `record` action, defaulting to record; returns saved and updated health calculations, partial evidence, request spend, `reliability.window_days` and actual receipts when saved. No availability state file or state revision. |
 | A4 | `persist-selected-articles` | Accepts a partitioned ID, or a selected ID when partitioning is disabled; writes selected and rejected metadata plus the selected text artifact, returning exact relative paths, `rejected_files` receipts even for zero-selected results, and a standalone run outcome where applicable. |
 | A5 | `collections` | Starts one run-owned collection with a UUIDv4 `collection_id` and validated planning controls. Returns the captured UTC context and configured feed IDs, not article text. |
 | A6 | `collections/complete` | Accepts `collection_id`; refuses until every required feed and offered article has a terminal outcome. Saves discovery and harvested-rejection evidence and exposes the complete global batch for selection. |
@@ -148,8 +148,10 @@ recorded fixtures. The exception does not permit live source fetching in tests.
 ## Request flow
 
 The diagram shows every stage HTTP call made by
-`POST /api/2026-10-20/plan` on its trusted local listener. Selection
-captures health for its own decision but does not write it. The separate
+`POST /api/2026-10-31/plan` on its trusted local listener. Every stage call
+uses actual loopback HTTP; no in-process transport substitutes for it. Selection
+uses the run's captured calculations and actual completed work but does not
+write health. The separate
 `feed-health-state` request can summarize or record a batch.
 The workflow HTTP client calls `/health`, `/plan`, then
 `/feed-health-state` with `action: summarize` when a batch exists. The

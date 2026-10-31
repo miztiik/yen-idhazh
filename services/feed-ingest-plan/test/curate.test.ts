@@ -196,10 +196,14 @@ test("article-pass evidence controls the adjustment without using opposite RSS r
   const setup = await inputs({ article_limit: 1, source_authority_weight: 1, source_reliability_penalty_enabled: true });
   setup.inputs.clock_config.collect.reliability_floor = 0;
   const health = new Map<string, SourceHistoryEvidence>([
-    ["alpha", { lifecycle: "eligible", endpoint_key: "a".repeat(64), strikes: 0, rested_runs: 0,
+    ["alpha", { lifecycle: "eligible", endpoint_key: "a".repeat(64), strikes: 0,
+      rest_until: null, first_confirmed_failure_at: null, failed_recovery_checks: 0,
+      retired_at: null, retirement_reason: null, availability_updated_at: null, availability_complete: true,
       article_pass_rate: 0.25, reliability: { productive: 10, attempted: 10, success_fraction: 1,
         from_day: "2026-10-15", through_day: "2026-10-21", production_factor: 1, complete: true } }],
-    ["gamma", { lifecycle: "eligible", endpoint_key: "b".repeat(64), strikes: 0, rested_runs: 0,
+    ["gamma", { lifecycle: "eligible", endpoint_key: "b".repeat(64), strikes: 0,
+      rest_until: null, first_confirmed_failure_at: null, failed_recovery_checks: 0,
+      retired_at: null, retirement_reason: null, availability_updated_at: null, availability_complete: true,
       article_pass_rate: 0.75, reliability: { productive: 0, attempted: 10, success_fraction: 0,
         from_day: "2026-10-15", through_day: "2026-10-21", production_factor: 0, complete: true } }],
   ]);
@@ -371,7 +375,9 @@ test("operational history, length and byline never become model verdicts or a qu
     const health = new Map<string, SourceHistoryEvidence>();
     for (const [feed, evidence] of [["alpha", recorded.alpha], ["gamma", recorded.gamma]] as const) {
       health.set(feed, {
-        lifecycle: "unknown", endpoint_key: "a".repeat(64), strikes: null, rested_runs: null,
+        lifecycle: "unknown", endpoint_key: "a".repeat(64), strikes: null,
+        rest_until: null, first_confirmed_failure_at: null, failed_recovery_checks: null,
+        retired_at: null, retirement_reason: null, availability_updated_at: null, availability_complete: false,
         article_pass_rate: evidence?.success_fraction ?? null,
         reliability: evidence === null ? null : {
           productive: evidence.attempted * evidence.success_fraction, attempted: evidence.attempted,

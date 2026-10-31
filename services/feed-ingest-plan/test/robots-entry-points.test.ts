@@ -1,7 +1,7 @@
 /** Do bulk and standalone entry points apply the same document policy without rewriting receipts? */
 import { expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
-import { createPlanApp } from "../src/api/server";
+import { createPlanTestServer } from "./plan-test-server";
 import { openOperationStore } from "../src/api/operation-store";
 import { harvestFeeds } from "../src/harvest-feeds/harvest-pool";
 import { context } from "./harvest-recordings";
@@ -10,7 +10,7 @@ import { recordedPlan } from "./plan-recordings";
 test("bulk and standalone feed reads enforce denial even when article robots is observed", async () => {
   for (const entry of ["bulk", "standalone"] as const) {
     const recorded = await recordedPlan();
-    const app = createPlanApp(recorded.inputs, recorded.runtime);
+    const app = createPlanTestServer(recorded.inputs, recorded.runtime);
     try {
       recorded.transport.recordings.responses["https://news.example/robots.txt"] = [{
         status: 200, body: "User-agent: *\nDisallow: /\n",
@@ -20,7 +20,7 @@ test("bulk and standalone feed reads enforce denial even when article robots is 
         expect(result.feed_outcomes[0]?.fetch_status).toBe("network_failure");
         expect(result.candidates).toEqual([]);
       } else {
-        const response = await app.request("/api/2026-10-20/fetch", {
+        const response = await app.request("/api/2026-10-31/fetch", {
           method: "POST", headers: { "content-type": "application/json" },
           body: JSON.stringify({
             request_id: randomUUID(), correlation_id: randomUUID(), feed_id: "recorded-news", fetch_item_type: "feed",
@@ -30,13 +30,13 @@ test("bulk and standalone feed reads enforce denial even when article robots is 
         expect(await response.json()).toMatchObject({ failure: "robots-denied", http_status: null });
       }
       expect(recorded.transport.requests.map(request => request.url.href)).toEqual(["https://news.example/robots.txt"]);
-    } finally { app.close(); await recorded.close(); }
+    } finally { await app.close(); await recorded.close(); }
   }
 });
 
 test("standalone observed success extracts real text, retains the warning and replays without a request", async () => {
   const recorded = await recordedPlan();
-  const app = createPlanApp(recorded.inputs, recorded.runtime);
+  const app = createPlanTestServer(recorded.inputs, recorded.runtime);
   try {
     recorded.transport.recordings.responses["https://news.example/robots.txt"] = [{
       status: 200, body: "User-agent: *\nDisallow: /\n",
@@ -47,7 +47,7 @@ test("standalone observed success extracts real text, retains the warning and re
       request_id: requestId, correlation_id: correlation, feed_id: "recorded-news",
       fetch_item_type: "article", url: "https://news.example/second",
     });
-    const fetch = () => app.request("/api/2026-10-20/fetch", {
+    const fetch = () => app.request("/api/2026-10-31/fetch", {
       method: "POST", headers: { "content-type": "application/json" }, body,
     });
     const response = await fetch();
@@ -57,7 +57,7 @@ test("standalone observed success extracts real text, retains the warning and re
     const requests = recorded.transport.requests.length;
     expect(await (await fetch()).json()).toEqual(result);
     expect(recorded.transport.requests).toHaveLength(requests);
-    const parsed = await app.request("/api/2026-10-20/parse", {
+    const parsed = await app.request("/api/2026-10-31/parse", {
       method: "POST", headers: { "content-type": "application/json" },
       body: JSON.stringify({
         request_id: randomUUID(), fetch_request_id: requestId,
@@ -73,7 +73,7 @@ test("standalone observed success extracts real text, retains the warning and re
       });
       expect(store.get(requestId)!.artifact!.body!.length).toBeGreaterThan(0);
     } finally { store.close(); }
-  } finally { app.close(); await recorded.close(); }
+  } finally { await app.close(); await recorded.close(); }
 });
 
 test("a saved enforced refusal replays as unrequested and never gains target attempts", async () => {
@@ -82,14 +82,14 @@ test("a saved enforced refusal replays as unrequested and never gains target att
   recorded.transport.recordings.responses["https://news.example/robots.txt"] = [{
     status: 200, body: "User-agent: *\nDisallow: /\n",
   }];
-  const app = createPlanApp(recorded.inputs, recorded.runtime);
+  const app = createPlanTestServer(recorded.inputs, recorded.runtime);
   try {
     const requestId = randomUUID();
     const body = JSON.stringify({
       request_id: requestId, correlation_id: randomUUID(), feed_id: "recorded-news",
       fetch_item_type: "article", url: "https://news.example/second",
     });
-    const fetch = () => app.request("/api/2026-10-20/fetch", {
+    const fetch = () => app.request("/api/2026-10-31/fetch", {
       method: "POST", headers: { "content-type": "application/json" }, body,
     });
     expect(await (await fetch()).json()).toMatchObject({ failure: "robots-denied", http_status: null });
@@ -101,5 +101,5 @@ test("a saved enforced refusal replays as unrequested and never gains target att
       expect(store.get(requestId)).toEqual(saved);
       expect(recorded.transport.requests.map(request => request.url.href)).toEqual(["https://news.example/robots.txt"]);
     } finally { store.close(); }
-  } finally { app.close(); await recorded.close(); }
+  } finally { await app.close(); await recorded.close(); }
 });

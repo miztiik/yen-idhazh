@@ -4,7 +4,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import {
-  FeedHealthStateRowContract, FeedHealthStateRowSchema, LEGACY_FEED_HEALTH_STATE_VERSION,
+  FeedHealthStateRowContract, FeedHealthStateRowSchema,
   SourceSnapshotSchema,
 } from "@idhazh/common-contracts";
 import { readPlannerParquet } from "@idhazh/ledger-file-writer";
@@ -13,6 +13,7 @@ import { feedReliability } from "../src/read-ledger-history/feed-reliability";
 import { captureHealthRows, inputEndpointKey, summarizePlanningHealth } from "../src/read-ledger-history/health-summary";
 import { projectFeedHealthFields } from "../src/read-ledger-history/read-feed-health-fields";
 import { compactRows, writeRows } from "./partition-fixtures";
+import { readLifecyclePolicy } from "./health-field-fixtures";
 
 type Case = {
   productive: number; attempted: number; floor: number;
@@ -56,7 +57,7 @@ test("health capture and raw/compact files retain truncated numbers without chan
       article_admission: projected.article_admission,
     },
     sources: [source], now: `${day}T23:59:59Z`, days: [{ day, complete: true }],
-    lifecycle_window_days: 1,
+    lifecycle_window_days: 1, lifecycle_policy: await readLifecyclePolicy(),
     policy: { availability_strikes_before_rest: 5, reliability_window_days: 1, reliability_floor: 0.5 },
   };
   const summary = summarizePlanningHealth(input);
@@ -69,10 +70,10 @@ test("health capture and raw/compact files retain truncated numbers without chan
     .sources.get(source.feed_id)!.reliability).toMatchObject({ success_fraction: 0.954, complete: false });
   expect(summarizePlanningHealth({
     ...input, uses: {
-      feed_rest: { rows: [], gaps: [] }, feed_reliability: { rows: [], gaps: [] },
+      feed_rest: { rows: [], partial_rows: [], gaps: [] }, feed_reliability: { rows: [], partial_rows: [], gaps: [] },
       article_admission: { rows: [], gaps: [] },
     },
-  }).sources.get(source.feed_id)!.reliability).toBeNull();
+  }).sources.get(source.feed_id)!.reliability).toMatchObject({ productive: null, attempted: null, complete: false });
   const root = await mkdtemp(join(tmpdir(), "feed-reliability-"));
   try {
     const raw = await writeRows(root, "feed-health-state", day, FeedHealthStateRowContract, captured);
@@ -83,9 +84,8 @@ test("health capture and raw/compact files retain truncated numbers without chan
     const historical = FeedHealthStateRowSchema.parse({
       ...captured[0], reliability: { ...captured[0]!.reliability, success_fraction: 21 / 22, production_factor: 21 / 22 },
     });
-    const old = await writeRows(root, "feed-health-state", day,
-      { ...FeedHealthStateRowContract, schemaVersion: LEGACY_FEED_HEALTH_STATE_VERSION }, [historical]);
-    expect((await readPlannerParquet(join(root, old.files[0]!.path), "feed-health-state", FeedHealthStateRowContract)).rows)
+    const precise = await writeRows(root, "feed-health-state", day, FeedHealthStateRowContract, [historical]);
+    expect((await readPlannerParquet(join(root, precise.files[0]!.path), "feed-health-state", FeedHealthStateRowContract)).rows)
       .toEqual([historical]);
   } finally {
     await rm(root, { recursive: true, force: true });

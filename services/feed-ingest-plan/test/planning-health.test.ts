@@ -1,228 +1,162 @@
-/** Do real planning and document operations depend only on their required health evidence? */
+/** Reuse real saved Parquet calculations and recover only the calculation that is absent. */
 import { expect, test } from "bun:test";
-import { randomUUID } from "node:crypto";
 import { join } from "node:path";
+import { readFile, writeFile } from "node:fs/promises";
 import { z } from "zod";
+import { randomUUID } from "node:crypto";
 import { FeedHealthStateRowContract, FeedHealthStateRowSchema } from "@idhazh/common-contracts";
-import { preparePlanningHealth, healthHistoryInput } from "../src/api/prepare-planning-health";
-import { prepareFeedHealthState, prepareRequestReport } from "../src/api/feed-health-state-operation";
-import { currentExecutionState } from "../src/api/document-state";
-import { createPlanApp } from "../src/api/server";
-import { endpointKey, readFeedHistory } from "../src/read-ledger-history/read-feed-history";
-import { readRequestHistory } from "../src/read-ledger-history/read-request-history";
-import { readPlannerParquet } from "../src/read-ledger-history/read-planner-parquet";
-import { runFeedPlan } from "../src/run-feed-plan";
 import { healthFieldFixture, rewriteHealthFields } from "./health-field-fixtures";
 import { recordedPlan } from "./plan-recordings";
-import { commitFixtureFiles, writeRows } from "./partition-fixtures";
-import { fixtureGit } from "./publication-recordings";
+import { preparePlanningHealth } from "../src/api/prepare-planning-health";
+import { recordFeedHealthState } from "../src/api/feed-health-state-operation";
+import { resolveRunContext } from "../src/resolve-run-context";
+import { inputEndpointKey } from "../src/read-ledger-history/health-summary";
+import { sourceSnapshot } from "../src/harvest-feeds/load-harvest-inputs";
+import { createFeedHealthRow } from "../src/health-row";
+import { readPlannerParquet } from "../src/read-ledger-history/read-planner-parquet";
+import { writeRows } from "./partition-fixtures";
 
 const schema = z.object(FeedHealthStateRowSchema.shape);
-const changedColumns = schema.omit({
-  permission: true, reliability: true, articles_selected: true, article_requests: true,
-}).extend({
-  status: z.string(),
-  rejection_counts: z.array(z.object(FeedHealthStateRowSchema.shape.rejection_counts.element.shape).omit({ stage: true })),
-});
 async function recording() {
   const setup = await recordedPlan();
   try {
     const seed = await healthFieldFixture(setup.inputs.outputRoot);
     const row = FeedHealthStateRowSchema.parse({
       ...seed.row, feed_id: setup.inputs.harvest.sources[0]!.id,
-      endpoint_key: endpointKey(setup.inputs.harvest.sources[0]!.url),
+      endpoint_key: inputEndpointKey(setup.inputs.harvest.sources[0]!.url),
+      reliability: { productive: 4, attempted: 5, success_fraction: 0.8, production_factor: 0.8,
+        from_day: seed.row.date, through_day: seed.row.date, complete: true },
     });
-    const file = seed.written.files[0]!.path;
-    const path = join(setup.inputs.outputRoot, file);
+    const path = join(setup.inputs.outputRoot, seed.written.files[0]!.path);
     await rewriteHealthFields(path, [row], schema);
-    setup.inputs.settings.inputs.feed_health_days = [
-      { day: row.date, raw_files: [`state/${file}`] },
-      ...["2026-10-19", "2026-10-20", "2026-10-21", "2026-10-22", "2026-10-23", "2026-10-24"]
-        .map(day => ({ day, raw_files: [] })),
-    ];
+    setup.inputs.settings.inputs.feed_health_days = [{ day: row.date, raw_files: [`state/${seed.written.files[0]!.path}`] }];
     setup.inputs.harvest.config.feedback.lifecycle_window_days = 1;
     setup.inputs.clock_config.collect.reliability_window_days = 1;
-    setup.runtime.clock = () => new Date("2026-10-26T12:00:00Z");
+    setup.runtime.clock = () => new Date("2026-10-26T12:00:00.000Z");
     setup.runtime.observation_clock = setup.runtime.clock;
-    return { ...setup, row, path };
+    return { ...setup, row, path, now: setup.runtime.clock().toISOString() };
   } catch (error) { await setup.close(); throw error; }
 }
 
-test("changed unrelated columns and row dates preserve real planning evidence and isolate missing request fields", async () => {
+test("saved availability and reliability survive missing check and unrelated accounting fields", async () => {
   const setup = await recording();
   try {
-    const now = setup.runtime.clock!().toISOString();
-    const baseline = await preparePlanningHealth(setup.inputs, now);
-    const expected = baseline.sources.get(setup.row.feed_id)!;
-    expect(expected).toMatchObject({
-      lifecycle: "eligible", article_pass_rate: 0.75,
-      reliability: { productive: 1, attempted: 1, complete: true, production_factor: 1 },
-    });
-    for (const stamp of ["2026-10-25", "2027-01-01"]) {
-      await rewriteHealthFields(setup.path, [changedColumns.parse({ ...setup.row, status: "unrelated" })], changedColumns, { stamp });
-      const restored = await preparePlanningHealth(setup.inputs, now);
-      expect(restored.sources.get(setup.row.feed_id)).toEqual(expected);
-      const summary = await prepareFeedHealthState(setup.inputs, now);
-      expect(summary.sources.get(setup.row.feed_id)).toEqual(expected);
-      expect(summary.request_report.feeds[0]).toMatchObject({
-        counts_complete: false, feed_requests: 2, article_requests: null, robots_requests: 0,
-      });
-      const requests = await readRequestHistory(healthHistoryInput(setup.inputs, now));
-      expect(requests.partial_rows[0]).toMatchObject({ feed_requests: 2, robots_requests: 0 });
-      expect(requests.partial_rows[0]).not.toHaveProperty("article_requests");
-    }
+    const expected = (await preparePlanningHealth(setup.inputs, setup.now)).sources.get(setup.row.feed_id)!;
+    expect(expected.reliability).toMatchObject({ productive: 4, attempted: 5, success_fraction: 0.8, complete: true });
+    const variant = schema.omit({ checked_at: true, outcome: true, items: true, article_requests: true });
+    await rewriteHealthFields(setup.path, [variant.parse(setup.row)], variant);
+    const read = await preparePlanningHealth(setup.inputs, setup.now);
+    expect(read.sources.get(setup.row.feed_id)).toEqual(expected);
+    expect(read.uses.request_totals.partial_rows[0]).not.toHaveProperty("article_requests");
+    expect(read.uses.feed_rest.gaps.some(gap => gap.field === "checked_at")).toBe(true);
   } finally { await setup.close(); }
 });
 
-test("unknown or invalid admission and read fields never turn partial evidence into complete scores", async () => {
+test("a missing reliability calculation recovers read facts without recalculating saved lifecycle", async () => {
   const setup = await recording();
   try {
-    const now = setup.runtime.clock!().toISOString();
-    const second = { ...setup.row, run_id: "2026-10-25-5678", article_candidates: 0 };
-    await rewriteHealthFields(setup.path, [setup.row, { ...second, article_candidates: null }], schema);
-    let history = await preparePlanningHealth(setup.inputs, now);
-    expect(history.sources.get(setup.row.feed_id)).toMatchObject({
-      lifecycle: "eligible", article_pass_rate: null,
-      reliability: { productive: 2, attempted: 2, complete: true },
+    const resting = FeedHealthStateRowSchema.parse({
+      ...setup.row, availability: "resting", strikes: 5, check_result: "confirmed-http-failure",
+      rest_until: "2026-10-27T10:00:00.123Z", first_confirmed_failure_at: "2026-10-25T05:00:00.000Z",
+      status: 503, outcome: "transient", items: 0,
     });
-    await rewriteHealthFields(setup.path, [setup.row, { ...second, items: -1 }], schema);
-    history = await preparePlanningHealth(setup.inputs, now);
-    expect(history.sources.get(setup.row.feed_id)).toMatchObject({
-      lifecycle: "eligible", strikes: 0, rested_runs: null,
-      reliability: { productive: 1, attempted: 1, complete: false },
+    const variant = schema.omit({ reliability: true });
+    await rewriteHealthFields(setup.path, [variant.parse(resting)], variant);
+    const result = (await preparePlanningHealth(setup.inputs, setup.now)).sources.get(setup.row.feed_id)!;
+    expect(result).toMatchObject({ lifecycle: "resting", strikes: 5, rest_until: resting.rest_until,
+      availability_updated_at: resting.availability_updated_at, availability_complete: true });
+    expect(result.reliability).toMatchObject({ productive: 0, attempted: 1, success_fraction: 0, complete: true });
+    const missingLifecycle = schema.omit({ availability_updated_at: true });
+    await rewriteHealthFields(setup.path, [missingLifecycle.parse(setup.row)], missingLifecycle);
+    const recovered = (await preparePlanningHealth(setup.inputs, setup.now)).sources.get(setup.row.feed_id)!;
+    expect(recovered).toMatchObject({ lifecycle: "eligible", strikes: 0, availability_updated_at: setup.row.checked_at,
+      availability_complete: true, reliability: { productive: 4, attempted: 5, success_fraction: 0.8 } });
+  } finally { await setup.close(); }
+});
+
+test("one run retains its captured input while a later independent run reads changed evidence", async () => {
+  const setup = await recording();
+  try {
+    const context = resolveRunContext(setup.inputs.settings, setup.runtime.git_sha, new Date(setup.now), "701");
+    const first = await preparePlanningHealth(setup.inputs, setup.now, { context, rows: [] });
+    const changed = { ...setup.row, reliability: { ...setup.row.reliability!, productive: 3, success_fraction: 0.6, production_factor: 0.6 } };
+    await rewriteHealthFields(setup.path, [changed], schema);
+    expect((await preparePlanningHealth(setup.inputs, setup.now, { context, rows: [] })).sources)
+      .toEqual(first.sources);
+    const next = resolveRunContext(setup.inputs.settings, setup.runtime.git_sha, new Date(setup.now), "702");
+    expect((await preparePlanningHealth(setup.inputs, setup.now, { context: next, rows: [] })).sources.get(setup.row.feed_id)?.reliability)
+      .toMatchObject({ productive: 3, attempted: 5, success_fraction: 0.6 });
+  } finally { await setup.close(); }
+});
+
+test("a recovered calculation is reused across API calls after its original facts are no longer needed", async () => {
+  const setup = await recording();
+  try {
+    const variant = schema.omit({ availability_updated_at: true, reliability: true });
+    await rewriteHealthFields(setup.path, [variant.parse(setup.row)], variant);
+    const now = `${setup.row.date}T12:00:00.000Z`;
+    const context = resolveRunContext(setup.inputs.settings, setup.runtime.git_sha, new Date(now), "800");
+    const captured = await preparePlanningHealth(setup.inputs, now, { context, rows: [] });
+    expect(captured.sources.get(setup.row.feed_id)).toMatchObject({ strikes: 0, reliability: { productive: 1, attempted: 1 } });
+    captured.uses.feed_rest.rows.length = 0;
+    captured.uses.feed_rest.partial_rows.length = 0;
+    captured.uses.feed_reliability.rows.length = 0;
+    captured.uses.feed_reliability.partial_rows.length = 0;
+    const current = FeedHealthStateRowSchema.parse({
+      ...setup.row, run_id: context.run_id, check_request_id: randomUUID(), checked_at: now,
+      check_result: "confirmed-http-failure", status: 503, outcome: "transient", items: 0,
     });
-    await rewriteHealthFields(setup.path, [setup.row, {
-      ...second, endpoint_key: "2".repeat(64), article_candidates: -1,
-    }], schema);
-    history = await preparePlanningHealth(setup.inputs, now);
-    expect(history.sources.get(setup.row.feed_id)?.article_pass_rate).toBe(0.75);
-    setup.inputs.settings.inputs.feed_health_input_gap = true;
-    const partialReport = await prepareRequestReport(setup.inputs, now);
-    expect(partialReport).toMatchObject({
-      complete: false, input_complete: false,
-      feeds: [expect.objectContaining({ feed_requests: 2, article_requests: 4, robots_requests: 0,
-        coverage: expect.objectContaining({ feed_requests: expect.objectContaining({ status: "partial", complete_days: [] }) }),
-      })],
-    });
-    history = await preparePlanningHealth(setup.inputs, now);
-    expect(history.sources.get(setup.row.feed_id)).toMatchObject({
-      article_pass_rate: null, reliability: { complete: false },
-    });
-    setup.inputs.settings.inputs.feed_health_input_gap = false;
-    await rewriteHealthFields(setup.path, [schema.omit({ attempt: true }).parse(setup.row)],
-      schema.omit({ attempt: true }));
-    history = await preparePlanningHealth(setup.inputs, now);
-    expect(history.sources.get(setup.row.feed_id)).toMatchObject({
-      lifecycle: "eligible", reliability: null, article_pass_rate: null,
+    const updated = await preparePlanningHealth(setup.inputs, now, { context, rows: [current] });
+    expect(updated.sources.get(setup.row.feed_id)).toMatchObject({
+      strikes: 1, availability_complete: true, first_confirmed_failure_at: now,
+      reliability: { productive: 1, attempted: 2, success_fraction: 0.5 },
     });
   } finally { await setup.close(); }
 });
 
-test("field-based captures retain attempts, exclude current work before replacement and refuse conflicting full facts", async () => {
+test("finalized carry-forward Parquet reloads supported calculations without claiming a new check", async () => {
   const setup = await recording();
   try {
-    const failed = { ...setup.row, attempt: 2, checked_at: "2026-10-25T11:00:00Z",
-      outcome: "permanent", items: 0, article_requests: 6 };
-    await rewriteHealthFields(setup.path, [setup.row, setup.row, failed], schema);
-    const input = {
-      ...healthHistoryInput(setup.inputs, setup.runtime.clock!().toISOString()),
-      own_rows: [setup.row],
-    };
-    const planning = await readFeedHistory(input);
-    expect(planning.uses.feed_reliability.rows).toHaveLength(2);
-    expect(planning.sources.get(setup.row.feed_id)?.reliability).toMatchObject({ productive: 1, attempted: 1 });
-    const requests = await readRequestHistory(input);
-    expect(requests.request_report.feeds[0]).toMatchObject({ article_requests: 10, counts_complete: true });
-    const replaced = await readFeedHistory({
-      ...input, exclude_execution: { run_id: setup.row.run_id, attempt: 2 },
-      current_rows: [{ ...setup.row, attempt: 2, article_requests: 9 }],
+    const context = resolveRunContext(setup.inputs.settings, setup.runtime.git_sha, new Date(setup.now), "703");
+    const history = await preparePlanningHealth(setup.inputs, setup.now, { context, rows: [] });
+    const source = sourceSnapshot(setup.inputs.harvest, setup.inputs.harvest.sources[0]!);
+    const carry = createFeedHealthRow(context, source, history.sources.get(source.feed_id), setup.now);
+    const written = await recordFeedHealthState([carry], context, setup.inputs);
+    const actual = await readPlannerParquet(join(setup.inputs.outputRoot, written.files[0]!.path), "feed-health-state", FeedHealthStateRowContract);
+    expect(actual.rows[0]).toMatchObject({
+      checked_at: null, check_request_id: null, check_result: null, feed_reads: 0, feed_requests: 0,
+      availability_updated_at: setup.row.availability_updated_at, availability_complete: true,
+      reliability: setup.row.reliability,
     });
-    expect(replaced.uses.request_totals.rows.map(row => row.article_requests).sort()).toEqual([4, 9]);
-    const requestReplacement = await readRequestHistory({
-      ...input, exclude_execution: { run_id: setup.row.run_id, attempt: 2 },
-      current_rows: [{ ...setup.row, attempt: 2, article_requests: 9 }],
+    const fresh = { ...setup.inputs, settings: { ...setup.inputs.settings, inputs: {
+      ...setup.inputs.settings.inputs, feed_health_days: [{ day: context.date, raw_files: [`state/${written.files[0]!.path}`] }],
+    } } };
+    const reloaded = await preparePlanningHealth(fresh, setup.now);
+    // The stored measurement still covers its original day, not the carry-forward work day.
+    expect(reloaded.sources.get(source.feed_id)?.availability_updated_at).toBe(setup.row.availability_updated_at);
+    expect(reloaded.sources.get(source.feed_id)?.reliability).toMatchObject({
+      productive: 4, attempted: 5, success_fraction: 0.8, through_day: setup.row.date, complete: false,
     });
-    expect(requestReplacement.request_report.feeds[0]).toMatchObject({
-      article_requests: 13, coverage: { article_requests: { known_records: 2 } },
-    });
-    await expect(readFeedHistory({ ...input, own_rows: [{ ...setup.row, permission: "denied" }] }))
-      .rejects.toThrow("Conflicting copies");
-    await rewriteHealthFields(setup.path, [setup.row, failed, { ...failed, permission: "denied" }], schema);
-    const excluded = await readFeedHistory({
-      ...input, exclude_execution: { run_id: setup.row.run_id, attempt: 2 },
-      current_rows: [{ ...setup.row, attempt: 2, article_requests: 9 }],
-    });
-    expect(excluded.uses.request_totals.rows.map(row => row.article_requests).sort()).toEqual([4, 9]);
+    expect(actual.rows[0]!.reliability!.through_day).toBe(setup.row.date);
   } finally { await setup.close(); }
 });
 
-test("report-only conflicts cannot block combined or standalone fetch and parse or discard actual requests", async () => {
+test("a refused old format or corrupt sibling preserves usable current decisions without restoring JSON", async () => {
   const setup = await recording();
-  const standalone = await recording();
-  const prefix = "/api/2026-10-20";
-  const json = (body: unknown) => ({
-    method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body),
-  });
-  let app: ReturnType<typeof createPlanApp> | undefined;
   try {
-    for (const fixture of [setup, standalone]) {
-      fixture.inputs.settings.inputs.feed_health_days = fixture.inputs.settings.inputs.feed_health_days
-        .filter(day => day.day === fixture.row.date);
-      await rewriteHealthFields(fixture.path, [changedColumns.parse({ ...fixture.row, status: "unrelated" })],
-        changedColumns, { stamp: "2027-01-01" });
-      const reportOnlyDay = "2026-10-20";
-      const poison = FeedHealthStateRowSchema.parse({
-        ...fixture.row, date: reportOnlyDay, run_id: `${reportOnlyDay}-900`,
-        checked_at: `${reportOnlyDay}T10:00:00Z`,
-      });
-      const written = await writeRows(fixture.inputs.outputRoot, "feed-health-state", reportOnlyDay,
-        FeedHealthStateRowContract, [poison]);
-      await rewriteHealthFields(join(fixture.inputs.outputRoot, written.files[0]!.path),
-        [poison, { ...poison, permission: "denied" }], schema);
-      const paths = [fixture.path, ...written.files.map(file => join(fixture.inputs.outputRoot, file.path))];
-      await commitFixtureFiles(fixture.directory, paths);
-      const revision = await fixtureGit(fixture.directory, ["rev-parse", "--verify", "HEAD"]);
-      fixture.inputs.settings.inputs.feed_health_days[0]!.raw_revision = revision;
-      // Planning inventory deliberately does not include this report-only day.
-      await expect(prepareRequestReport(fixture.inputs, fixture.runtime.clock!().toISOString()))
-        .rejects.toMatchObject({ errors: expect.arrayContaining([
-          expect.objectContaining({ message: expect.stringContaining("Conflicting copies") }),
-        ]) });
-    }
-    const combined = await runFeedPlan({}, setup.inputs, setup.runtime);
-    expect(combined.row.api_timings).toEqual(expect.arrayContaining([
-      expect.objectContaining({ operation: "feed-health-before-fetch", status: "completed" }),
-      expect.objectContaining({ operation: "fetch", status: "completed" }),
-      expect.objectContaining({ operation: "parse", status: "completed" }),
-    ]));
-    const healthFiles = combined.files.feed_health_state!.files;
-    const actual = (await readPlannerParquet(join(setup.inputs.outputRoot, healthFiles[0]!.path),
-      "feed-health-state", FeedHealthStateRowContract)).rows[0]!;
-    expect(actual.feed_requests).toBeGreaterThan(0);
-    expect(actual.article_requests).toBeGreaterThan(0);
-    expect(actual.feed_requests! + actual.article_requests! + actual.robots_requests!).toBe(setup.transport.requests.length);
-
-    app = createPlanApp(standalone.inputs, standalone.runtime);
-    const requestId = randomUUID();
-    const correlation = randomUUID();
-    const fetched = await app.request(`${prefix}/fetch`, json({
-      request_id: requestId, correlation_id: correlation, feed_id: standalone.row.feed_id, fetch_item_type: "feed",
-    }));
-    expect(fetched.status).toBe(200);
-    const document = await fetched.json();
-    const parsed = await app.request(`${prefix}/parse`, json({
-      request_id: randomUUID(), fetch_request_id: requestId, article_id: document.article_id, correlation_id: correlation,
-    }));
-    expect(parsed.status).toBe(200);
-    expect((await parsed.json()).parsed_count).toBeGreaterThan(0);
-    const state = await currentExecutionState(standalone.inputs, document.run_id);
-    expect(state?.kind).toBe("document");
-    if (state?.kind !== "document") throw new Error("Expected current document work");
-    expect(state.history.sources.get(standalone.row.feed_id)).toMatchObject({
-      lifecycle: "eligible", article_pass_rate: 0.75, reliability: { complete: true },
-    });
-    const work = state.work.rows()[0]!;
-    expect(work.feed_requests! + work.article_requests! + work.robots_requests!).toBe(standalone.transport.requests.length);
-    expect(work.feed_reads).toBe(1);
-  } finally { app?.close(); await Promise.all([setup.close(), standalone.close()]); }
-}, 120_000);
+    const original = await readFile(setup.path);
+    const sibling = await writeRows(setup.inputs.outputRoot, "feed-health-state", setup.row.date,
+      FeedHealthStateRowContract, [{ ...setup.row, run_id: `${setup.row.date}-9000` }]);
+    const siblingPath = join(setup.inputs.outputRoot, sibling.files[0]!.path);
+    await writeFile(siblingPath, new Uint8Array([1, 2, 3]));
+    setup.inputs.settings.inputs.feed_health_days[0]!.raw_files!.push(`state/${sibling.files[0]!.path}`);
+    let result = await preparePlanningHealth(setup.inputs, setup.now);
+    expect(result.sources.get(setup.row.feed_id)).toMatchObject({ lifecycle: "eligible", availability_complete: true });
+    expect(result.days[0]!.complete).toBe(false);
+    await rewriteHealthFields(setup.path, [setup.row], schema, { stamp: "2026-10-30" });
+    result = await preparePlanningHealth(setup.inputs, setup.now);
+    expect(result.sources.get(setup.row.feed_id)).toMatchObject({ lifecycle: "unknown", strikes: null,
+      availability_complete: false, reliability: { productive: null, attempted: null, complete: false } });
+    await writeFile(setup.path, original);
+  } finally { await setup.close(); }
+});

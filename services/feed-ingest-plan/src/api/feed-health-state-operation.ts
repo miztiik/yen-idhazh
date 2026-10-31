@@ -23,7 +23,8 @@ import { PlanError } from "./plan-request";
 import { rememberDocumentHealth } from "./document-state";
 import { restoreSourceHealth } from "./restore-source-health";
 import { plannerMemory } from "../planner-memory";
-import { readFeedAvailability } from "../availability/feed-availability";
+import { summarizeFeedAvailability } from "../availability/feed-availability-view";
+import { projectLifecycleFields } from "../health-row";
 import { summarizeRequestReport } from "../read-ledger-history/request-summary";
 
 export async function prepareExecutionHealth(inputs: PlanInputs, now: string, current?: CurrentHealthWork) {
@@ -108,7 +109,11 @@ export async function executeFeedHealthState(raw: unknown, inputs: PlanInputs, r
   }
   const selected = held.stage === "selected" ? SelectedFeedBatchSchema.parse(held.value) : PartitionedFeedBatchSchema.parse(held.value);
   requireStageConfiguration(selected, inputs, runtime);
-  const availability = await readFeedAvailability(inputs, utcTimestamp(runtime.observation_clock));
+  const sources = new Map(selected.health_rows.map(row => [row.feed_id, {
+    ...projectLifecycleFields({ ...row, lifecycle: row.availability }),
+    lifecycle: row.availability, endpoint_key: row.endpoint_key, reliability: row.reliability,
+  }]));
+  const availability = summarizeFeedAvailability(sources, utcTimestamp(runtime.observation_clock), inputs.harvest.sources);
   const files = request.action === "record" ? await recordFeedHealthState(selected.health_rows, selected.context, inputs) : null;
   return { batch_id: request.batch_id, status: request.action === "record" ? "recorded" as const : "summarized" as const,
     rows: selected.health_rows, request_report: selected.request_report, reliability, availability, ...(files === null ? {} : { files }) };

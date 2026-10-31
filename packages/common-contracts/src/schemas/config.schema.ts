@@ -168,8 +168,17 @@ export const FeedFeedbackConfigSchema = z.strictObject({
   lifecycle_window_days: PositiveCountSchema.default(31),
   request_report_closed_days: PositiveCountSchema.default(7),
 });
+export const FeedLifecyclePolicySchema = z.strictObject({
+  consecutive_failed_checks_before_rest: PositiveCountSchema,
+  rest_hours: PositiveSchema,
+  recovery_rest_hours: PositiveSchema,
+  failed_recovery_checks_before_retirement: PositiveCountSchema,
+  retirement_minimum_age_hours: PositiveSchema,
+});
+export type FeedLifecyclePolicy = z.infer<typeof FeedLifecyclePolicySchema>;
 export const FeedIngestConfigSchema = z.strictObject({
-  version: z.literal("2026-10-30"),
+  version: z.literal("2026-10-31"),
+  availability: FeedLifecyclePolicySchema,
   harvest: FeedHarvestConfigSchema,
   content_filters: FeedContentFiltersConfigSchema,
   triage: FeedTriageConfigSchema,

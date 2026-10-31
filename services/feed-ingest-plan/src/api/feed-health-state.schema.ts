@@ -2,7 +2,7 @@
 import { z } from "zod";
 import {
   RequestIdSchema, PlannerRequestReportSchema, FeedHealthStateRowSchema, PositiveCountSchema,
-  FeedAvailabilityRecordSchema, CountSchema, RecordedInstantSchema, SlugSchema,
+  FeedLifecycleFieldsSchema, SlugSchema, Sha256Schema,
 } from "@idhazh/common-contracts";
 import { StageWriteResultSchema } from "./stage-response.schema";
 
@@ -10,17 +10,10 @@ export const FeedHealthStateUpdateRequestSchema = z.strictObject({
   batch_id: RequestIdSchema, action: z.enum(["summarize", "record"]).default("record"),
 });
 export const FeedAvailabilityViewSchema = z.strictObject({
-  feed_id: FeedAvailabilityRecordSchema.shape.feed_id,
-  endpoint_key: FeedAvailabilityRecordSchema.shape.endpoint_key,
-  consecutive_failed_checks: FeedAvailabilityRecordSchema.shape.consecutive_failed_checks,
-  rest_until: FeedAvailabilityRecordSchema.shape.rest_until,
-  retired_at: FeedAvailabilityRecordSchema.shape.retired_at,
-  retirement_reason: FeedAvailabilityRecordSchema.shape.retirement_reason,
-  status: z.enum(["eligible", "resting", "retired", "unknown"]),
-  failed_recovery_checks: CountSchema, first_confirmed_failure_at: RecordedInstantSchema.nullable(),
+  feed_id: SlugSchema, endpoint_key: Sha256Schema, ...FeedLifecycleFieldsSchema.shape,
 });
 export const FeedAvailabilitySnapshotSchema = z.strictObject({
-  revision: z.string().min(1), feeds: z.array(FeedAvailabilityViewSchema),
+  feeds: z.array(FeedAvailabilityViewSchema),
   eligible_feed_ids: z.array(SlugSchema),
 });
 export const FeedHealthStateUpdateResponseSchema = z.strictObject({

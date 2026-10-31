@@ -1,7 +1,7 @@
 /** Read one named planner UTC day, merging raw and compact representations of its facts. */
 import { realpath } from "node:fs/promises";
 import { resolve, relative } from "node:path";
-import { DateStampSchema, PlannerLedgerNameSchema } from "@idhazh/common-contracts";
+import { DateStampSchema, PlannerLedgerNameSchema, FEED_HEALTH_STATE_VERSION } from "@idhazh/common-contracts";
 import type { PlannerStoredFileEnvelope } from "@idhazh/common-contracts";
 import { readStoredPlannerParquet } from "@idhazh/ledger-file-writer";
 import type { LedgerRegistration, LedgerRowContract } from "@idhazh/ledger-file-writer";
@@ -40,7 +40,13 @@ export async function readStoredPlannerDay(
   cache: PlannerHistoryCache<Record<string, unknown>> = createPlannerHistoryCache(),
   log?: StageLogger,
 ) {
-  return readPlannerDayUsing(root, registration, day, cache, "stored", log, readStoredPlannerParquet,
+  return readPlannerDayUsing(root, registration, day, cache, "stored", log, async (path, ledger) => {
+    const stored = await readStoredPlannerParquet(path, ledger);
+    if (ledger === "feed-health-state" && stored.envelope.row_schema_version !== FEED_HEALTH_STATE_VERSION) {
+      throw new LedgerHistoryReadError("Feed health history requires the current row schema");
+    }
+    return stored;
+  },
     (row, envelope) => envelope.tier === "raw"
       || row.date === day.day || !DateStampSchema.safeParse(row.date).success);
 }

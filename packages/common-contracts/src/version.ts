@@ -22,10 +22,12 @@ export const PLANNER_ENVELOPE_ACCEPTED_SCHEMA_VERSIONS = [
 ] as const;
 export const FEED_AVAILABILITY_STATE_VERSION = "2026-10-30" as const;
 export const LEGACY_FEED_HEALTH_STATE_VERSION = "2026-10-27" as const;
-export const FEED_HEALTH_STATE_VERSION = "2026-10-30" as const;
+export const FEED_HEALTH_STATE_VERSION = "2026-10-31" as const;
 export const FEED_HEALTH_STATE_ACCEPTED_SCHEMA_VERSIONS = [
-  LEGACY_FEED_HEALTH_STATE_VERSION, FEED_HEALTH_STATE_VERSION,
+  FEED_HEALTH_STATE_VERSION,
 ] as const;
+// The dated route identifies the current planner request and response protocol.
+export const PLANNER_API_PREFIX = "/api/2026-10-31" as const;
 export const FEED_INGEST_CANDIDATE_VERSION = "2026-10-29" as const;
 export const LEGACY_PARSED_FEED_BATCH_VERSION = "2026-10-29" as const;
 export const PARSED_FEED_BATCH_VERSION = "2026-10-30" as const;

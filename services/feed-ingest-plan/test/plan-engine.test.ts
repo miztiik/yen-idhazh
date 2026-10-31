@@ -19,7 +19,10 @@ async function writeHistoricalHealth(recorded: Awaited<ReturnType<typeof recorde
   const row = FeedHealthStateRowContract.schema.parse({
     date: day, run_id: `${day}-900`, attempt: 1, feed_id: "recorded-news",
     endpoint_key: endpointKey("https://news.example/feed.xml"), checked_at: `${day}T10:00:00Z`,
-    permission: "allowed", availability: "unknown", strikes: null, rested_runs: null,
+    permission: "allowed", availability: "unknown", strikes: null,
+    check_request_id: null, check_result: null, rest_until: null,
+    first_confirmed_failure_at: null, failed_recovery_checks: null,
+    retired_at: null, retirement_reason: null, availability_updated_at: null, availability_complete: false,
     last_failure_code: "FETCH_FAILED_HTTP", status: 503, reliability: null,
     feed_reads: 1, productive_reads: 0, failed_reads: 1, article_candidates: 0, articles_selected: 0,
     feed_requests: 2, article_requests: 3, robots_requests: 1, counts_complete: true, rejection_counts: [],
@@ -46,7 +49,9 @@ test("real composition separates run and selection clocks and reads native dispa
     expect(result.row.date).toBe("2026-10-21");
     expect(result.row.evaluated_at).toBe("2026-10-21T23:59:59Z");
     expect(result.row.selection_started_at_utc).toBe("2026-10-22T00:00:02Z");
-    expect(result.selected.map(article => article.url_key)).toEqual([
+    expect(result.selected.map(article => article.url_key), JSON.stringify({
+      outcome: result.row, failures: recorded.events.filter(event => event.phase === "failed"),
+    })).toEqual([
       deriveUrlKey("https://news.example/second"), deriveUrlKey("https://news.example/story/"),
     ]);
     expect(result.selected.map(article => article.worker_assignment)).toEqual([0, 1]);
@@ -146,7 +151,7 @@ test("persisted discovery wins for undated articles; empty history does not prov
       timing_at: chosenUndated.timing_at, timing_basis: chosenUndated.timing_basis, age_hours: chosenUndated.age_hours,
     });
     expect(fresh.batch.request_report.through_day).toBe("2026-10-21");
-    expect(fresh.batch.health_rows[0]!.reliability).toMatchObject({ productive: 1, attempted: 2, production_factor: 0.5, complete: false });
+    expect(fresh.batch.health_rows[0]!.reliability).toMatchObject({ productive: 1, attempted: 1, production_factor: 1, complete: false });
     expect(fresh.batch.articles.every(article => article.ratings.adjustments.find(adjustment => adjustment.term === "article_pass_rate")!.value === null)).toBe(true);
     recorded.runtime.run_number = "701";
     recorded.runtime.clock = () => new Date("2026-10-22T00:10:00Z");

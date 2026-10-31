@@ -32,9 +32,6 @@ import { plannerMemory } from "../planner-memory";
 import { createStageLogger } from "../logging/structured-logger";
 import { resolveArticleSourceOutcome } from "../article-source-outcome";
 import { recordDocumentRejections } from "./record-document-rejections";
-import {
-  claimFeedParse, completeFeedCheck, markFeedCheckUnknown, parserFailureResult,
-} from "../availability/feed-availability";
 import { collectionFeedRequest } from "./collection-operation";
 
 export async function parseFetchedDocument(
@@ -79,9 +76,6 @@ export async function parseFetchedDocument(
     observed_run_id: fetched.run_id, observed_attempt: state.context.writer.attempt, candidate_id: offer?.offer_id ?? null,
   });
   if (artifact.fetch_item_type === "feed") {
-    await claimFeedParse(inputs, source, {
-      request_id: fetched.request_id, run_id: fetched.run_id, attempt: state.context.writer.attempt,
-    }, utcTimestamp(runtime.observation_clock));
     const parseSignal = signal ?? runtime.signal;
     const parseFeedDocument = () => work.parse(() => parseDocument("feed", artifact.body!, artifact.canonical_url, undefined,
       runtime.parser_pool, {
@@ -91,21 +85,8 @@ export async function parseFetchedDocument(
     let parsed: Awaited<ReturnType<typeof parseFeedDocument>>;
     try {
       parsed = await parseFeedDocument();
-      const result = parserFailureResult(parsed.failure);
-      if (result === null) {
-        await markFeedCheckUnknown(inputs, source, {
-          request_id: fetched.request_id, run_id: fetched.run_id,
-        }, parsed.observation.occurred_at);
-      } else {
-        await completeFeedCheck(inputs, source, {
-          request_id: fetched.request_id, run_id: fetched.run_id, attempt: state.context.writer.attempt,
-          completed_at: parsed.observation.occurred_at, result, http_status: artifact.http_status,
-        });
-      }
     } catch (error) {
-      await markFeedCheckUnknown(inputs, source, {
-        request_id: fetched.request_id, run_id: fetched.run_id,
-      }, utcTimestamp(runtime.observation_clock));
+      state.work.interruptFeed(source.id, fetched.request_id, utcTimestamp(runtime.observation_clock));
       throw error;
     }
     const entries = parsed.parsed ?? [];
@@ -118,7 +99,7 @@ export async function parseFetchedDocument(
       diagnostics: parsed.failure === null ? null : HarvestDiagnosticsSchema.parse({
         ...fetchEvidence(artifact), stopped_stage: "parse", detail: parsed.failure, failure_code: "unknown",
       }), history: null,
-    }, entries, parsed.observation.occurred_at, artifact);
+    }, entries, parsed.observation.occurred_at, artifact, fetched.request_id);
     const batch = await createParsedFeedBatch({
       state, inputs, runtime, feed_id: source.id, entries, fetched_request_id: fetched.request_id, observed_at: parsed.observation.occurred_at,
     });

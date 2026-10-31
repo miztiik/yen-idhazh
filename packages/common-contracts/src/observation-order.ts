@@ -25,13 +25,14 @@ export function definitelyAfter(later: string, earlier: string): boolean {
   return instantBounds(later).lower >= instantBounds(earlier).upper;
 }
 
-function observationBounds(row: HealthObservation): TimeBounds {
+type ObservationClock = Pick<HealthObservation, "date" | "run_id" | "checked_at">;
+function observationBounds(row: ObservationClock): TimeBounds {
   if (row.checked_at) return instantBounds(row.checked_at);
   const lower = instantBounds(`${row.date}T00:00:00Z`).lower;
   return { lower, upper: lower + millisecondsPerDay };
 }
 
-export function observationGroups<T extends HealthObservation>(rows: readonly T[]): T[][] {
+export function observationGroups<T extends ObservationClock>(rows: readonly T[]): T[][] {
   const ordered = rows.map(row => ({ row, ...observationBounds(row) })).sort((a, b) =>
     a.lower - b.lower || a.upper - b.upper || a.row.run_id.localeCompare(b.row.run_id));
   const groups: T[][] = [];

@@ -1,6 +1,6 @@
 # Feed planner ledgers
 
-**Last Updated**: 2026-10-30
+**Last Updated**: 2026-10-31
 
 Which planner data is retained, and where is it stored?
 
@@ -154,8 +154,8 @@ projection use the same chosen values.
 
 The TypeScript planner reader accepts the current native ledger stamps:
 `2026-10-29` for discovered and selected articles, `2026-10-26` for plan runs
-and `2026-10-30` for feed health. Health retains compatible `2026-10-27`
-files without rewriting their saved fractions. Discovery and selected history also retain
+and `2026-10-31` for feed health. Earlier health stamps refuse without
+rewriting historical files. Discovery and selected history also retain
 the exact earlier stamps listed in [article cleanup compatibility](#article-cleanup-compatibility).
 Rejected articles use `2026-10-29T20:15`;
 their exact `2026-10-27` and `2026-10-29` predecessors remain readable with null fetch-evidence
@@ -183,8 +183,10 @@ selected counts. No publication-result columns are added to these ledgers.
 ## C. feed-health-state
 
 **Committed ledger.** One finalized raw Parquet file per
-run and UTC work day, batching all feed rows for that run/day. Rows describe
-that run's work, not cumulative daily totals or a copied rolling snapshot.
+run and UTC work day, batching all feed rows for that run/day. Actual work
+counters describe that run/day, not cumulative daily totals. Lifecycle and
+reliability columns retain the supported saved calculation, updated with this
+run's actual work. Carry-forward rows do not claim a new check.
 
 Daily totals and an API/public `recent_days` view are derived from the bounded
 run rows. Compaction packs the rows; it does not turn run counters into daily
@@ -200,9 +202,9 @@ totals or add together saved rolling reliability results.
 | C6 | `endpoint_key` | Feed/run/day | Prevent a changed feed URL inheriting the old endpoint's state |
 | C7 | `checked_at` | Feed/run/day | Actual feed-check time; nullable when this work day had no feed check |
 | C8 | `permission` | Feed/run/day | Allowed, denied or unknown as observed for this work |
-| C9 | `availability` | Feed/run/day | Availability/rest result observed for this run |
-| C10 | `strikes` | Feed/run/day | Failure-streak result; nullable when unverified |
-| C11 | `rested_runs` | Feed/run/day | Rest-progress result |
+| C9 | `availability` | Feed/run/day | Supported computed eligibility, rest, retirement or unknown state |
+| C10 | `strikes` | Feed/run/day | Saved logical failure streak; null when unverified |
+| C11 | Removed | - | UTC rest deadlines replace skipped-run counting |
 | C12 | `last_failure_code` | Feed/run/day | Explain the run's latest feed failure without free-text payloads |
 | C13 | `status` | Feed/run/day | Actual feed HTTP status; nullable; not catalog membership |
 | C14 | `reliability.productive` | Captured lookback | Productive reads in the measured lookback used for this run |
@@ -230,7 +232,16 @@ totals or add together saved rolling reliability results.
 | C37 | `rejection_counts[].attribution` | Run counters | Feed, pipeline or unknown for failures; null for ordinary exclusions |
 | C38 | `attempt` | Feed/run/day | Retain the run attempt when compacted rows from different executions coexist |
 | C39 | `items` | Feed/run/day | Existing distinct-offered-URL count used to decide whether the feed read was productive |
-| C40 | `outcome` | Feed/run/day | Native download/permission result, not parse success; combined with C39 for reliability/rest settlement |
+| C40 | `outcome` | Feed/run/day | Native download/permission result, not parsed validity; combined with C39 for read productivity |
+| C41 | `check_request_id` | Feed/run/day | Actual logical check identity; null for carried-only rows |
+| C42 | `check_result` | Feed/run/day | Parsed validity or typed HTTP, timeout, robots, transport, local or interrupted result |
+| C43 | `rest_until` | Saved calculation | Supported UTC recovery deadline |
+| C44 | `first_confirmed_failure_at` | Saved calculation | Proven UTC start of the confirmed failure episode; null when unknown |
+| C45 | `failed_recovery_checks` | Saved calculation | Qualifying confirmed recovery failures; null when unknown |
+| C46 | `retired_at` | Saved calculation | UTC instant of a proven retirement decision |
+| C47 | `retirement_reason` | Saved calculation | Typed reason recorded with C46 |
+| C48 | `availability_updated_at` | Saved calculation | Actual check instant that last changed the calculation; carry-forward does not advance it |
+| C49 | `availability_complete` | Saved calculation | Whether the complete lifecycle calculation is supported; not source reachability |
 
 Retired field IDs: C3 moved to D16; C4 moved to D17; C17 moved to D21. These
 settings belong once to the run, rather than repeated on every feed row or
@@ -469,23 +480,23 @@ no permanent compatibility API.
 
 | ID | Service | Method and full path | Current role |
 | --- | --- | --- | --- |
-| K1 | Feed planner | `GET /api/2026-10-20/health` | Implemented: listener/enablement check only, not a feed-reliability query |
-| K2 | Feed planner | `POST /api/2026-10-20/plan` | Runs the shared stages and finalizes the five ledgers and selected text artifact |
-| K3 | Feed planner | `POST /api/2026-10-20/fetch` | Implemented fetch for either a configured feed or an explicitly permitted article |
-| K4 | Feed planner | `POST /api/2026-10-20/parse` | Parses one saved feed or article without network calls; feed parsing returns body-free offers and a server-owned batch |
-| K5 | Feed planner | `POST /api/2026-10-20/select-articles` | Implemented combined admission/ranking; no selection-idempotency requirement or input-count cap |
-| K6 | Feed planner | `POST /api/2026-10-20/partition-articles` | Implemented worker assignment/bin packing; does not reselect |
-| K7 | Feed planner | `POST /api/2026-10-20/persist-selected-articles` | Writes B without text and produces its text-bearing artifact; the removed persistence route returns ordinary HTTP 404 |
-| K8 | Feed planner | `POST /api/2026-10-20/feed-health-state` | Explicit `summarize` or `record` for a server-owned batch; returns C, request spend, the reliability window and actual write receipts when recorded |
+| K1 | Feed planner | `GET /api/2026-10-31/health` | Implemented: listener/enablement check only, not a feed-reliability query |
+| K2 | Feed planner | `POST /api/2026-10-31/plan` | Runs the shared stages and finalizes the five ledgers and selected text artifact |
+| K3 | Feed planner | `POST /api/2026-10-31/fetch` | Implemented fetch for either a configured feed or an explicitly permitted article |
+| K4 | Feed planner | `POST /api/2026-10-31/parse` | Parses one saved feed or article without network calls; feed parsing returns body-free offers and a server-owned batch |
+| K5 | Feed planner | `POST /api/2026-10-31/select-articles` | Implemented combined admission/ranking; no selection-idempotency requirement or input-count cap |
+| K6 | Feed planner | `POST /api/2026-10-31/partition-articles` | Implemented worker assignment/bin packing; does not reselect |
+| K7 | Feed planner | `POST /api/2026-10-31/persist-selected-articles` | Writes B without text and produces its text-bearing artifact; the removed persistence route returns ordinary HTTP 404 |
+| K8 | Feed planner | `POST /api/2026-10-31/feed-health-state` | Explicit `summarize` or `record` for a server-owned batch; returns C, request spend, the reliability window and actual write receipts when recorded |
 | K9 | Host fingerprints | `GET /api/2026-10-20/health` | Implemented separate service health check |
 | K10 | Host fingerprints | `POST /api/2026-10-20/fingerprint` | Implemented optional machine collection/persistence; not mandatory planner evidence |
 | K11 | Host probes | `GET /api/2026-10-20/sample` | Implemented standalone machine CPU/RAM sample |
 | K12 | Host probes | `POST /api/2026-10-24/start-task-profile` | Implemented optional explicitly pinned process profiling |
 | K13 | Host probes | `POST /api/2026-10-24/stop-task-profile` | Implemented stop/readback for that profile |
 | K14 | Host probes | `POST /api/2026-10-24/cache/latency` | Implemented optional owned cache benchmark; not planner article timing |
-| K15 | Feed planner | `POST /api/2026-10-20/collections` | Starts one run-owned collection and captures eligible feeds, run identity and policy |
-| K16 | Feed planner | `POST /api/2026-10-20/collections/complete` | Requires terminal feed/article work, saves discovery and harvested rejections, and returns the complete global batch |
-| K17 | Feed planner | `POST /api/2026-10-20/collections/cancel` | Cancels owned work, blocks partial-input selection, and returns rejection receipts and a partial-health batch reference |
+| K15 | Feed planner | `POST /api/2026-10-31/collections` | Starts one run-owned collection and captures eligible feeds, run identity and policy |
+| K16 | Feed planner | `POST /api/2026-10-31/collections/complete` | Requires terminal feed/article work, saves discovery and harvested rejections, and returns the complete global batch |
+| K17 | Feed planner | `POST /api/2026-10-31/collections/cancel` | Cancels owned work, blocks partial-input selection, and returns rejection receipts and a partial-health batch reference |
 
 The two health paths belong to different service listeners. The standalone RAM
 HTTP proof uses K11; it is not another RAM API. The ledger writer is a library
@@ -769,16 +780,16 @@ contracts.
 
 The shared TypeScript ledger reader has no migration table. Strict full-row
 validation accepts only the contract's declared row stamps. The separate health
-field reader accepts the columns it needs without using their row schema date
-as an acceptance gate. Article cleanup has its own named compatible stamps below.
+health field reader requires the current health row stamp, then validates
+required columns independently. Article cleanup has its own named stamps below.
 
 ### Field-based health history
 
-**User-directed ruling, 2026-10-29 UTC:** A row schema date identifies a format;
-it does not prove that a consumer's required fields are missing or invalid.
-Health history reads accept compatible required fields from older and newer
-row stamps. Writers, compaction and full-file publication validation still
-require their full declared row schema. No stored history is rewritten.
+**User-approved ruling, 2026-10-31 UTC:** Health history reads accept only the
+current native health format. Earlier stamps refuse with diagnostics and are
+unchanged on disk. Missing or invalid fields in the current format affect only
+the calculation that requires them. Writers, compaction and publication still
+require the complete current row schema.
 
 The shared writer package exports `readStoredPlannerParquet` for stored-file
 validation and retains `readPlannerParquet` for strict full-row validation.
@@ -797,8 +808,11 @@ It returns independent `uses`: `request_totals`, `feed_rest`,
 
 - Every use requires `date`, `run_id`, `attempt`, `feed_id` and `endpoint_key`.
 - Request totals require `feed_requests`, `article_requests` and `robots_requests`.
-- Rest and feed-read reliability each require `checked_at`, `outcome` and `items`.
-  Their observation time must agree with the UTC work day.
+- Lifecycle reads expose the saved C9-C10 and C43-C49 calculation plus actual
+  C7, C13, C39-C42 check facts for independent recovery.
+- Reliability reads expose its saved C14-C21 calculation and the actual read
+  identity, time, outcome and items needed only when that calculation is missing.
+  Actual check times must agree with the UTC work day.
 - Article admission requires `article_candidates`, `counts_complete` and the
   rejection reason, count, subject and attribution fields.
 
@@ -811,12 +825,13 @@ zero. This lets a later request report account for each counter independently.
 File coverage (`complete`, `represented`, file `gaps`) is separate from field
 coverage: `complete` alone never proves every required counter is known.
 
-Identical copies of a fact count once. Conflicting copies fail before any
-projection, including conflicts in fields a use does not read. The identity
+Identical copies of a fact count once. Conflicting copies refuse the affected
+fact before projection and produce identity-bearing gaps. Unrelated valid
+sibling evidence remains usable. The identity
 includes the endpoint and run attempt, so neither changed endpoints nor real
 repeated work collapse into another fact. Missing request columns do not remove
-valid feed-check evidence. No rest, reliability or article selection policy is
-changed by this read contract. Production planning, standalone document work,
+valid feed-check evidence. Saved cumulative snapshots from independent runs are selected by actual check
+order, never added together. Ambiguous order remains incomplete. Production planning, standalone document work,
 selection and health summaries use these field projections. Strict full-row
 validation remains on the write and maintenance paths.
 
@@ -862,7 +877,9 @@ Before projection, stored and finalized in-memory facts from the current run
 and attempt are excluded. Supplied current work then replaces that execution.
 Endpoint matching and productive logical-read settlement remain unchanged.
 A required-field gap affects only its use and matching endpoint, or all feeds
-when identity is invalid. Rest requires complete evidence; article admission
+when identity is invalid. Supported individual rest and retirement decisions
+survive unrelated gaps; unknown availability alone permits an active feed.
+Article admission
 is unknown if any required evidence is missing. Incomplete feed-read ratios
 remain labelled incomplete and are not substituted for the article-admission
 rate used by selection.

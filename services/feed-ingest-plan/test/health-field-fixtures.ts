@@ -2,13 +2,18 @@
 import { readFile, writeFile } from "node:fs/promises";
 import { z } from "zod";
 import {
-  FeedHealthStateRowContract, FeedHealthStateRowSchema,
+  FeedHealthStateRowContract, FeedHealthStateRowSchema, FeedLifecyclePolicySchema,
 } from "@idhazh/common-contracts";
 import { describeObjectSchema, digestRows } from "@idhazh/ledger-file-writer";
 import initializeParquet, { readMetadata } from "parquet-wasm/esm";
 import { buildArrowTable } from "../../../packages/ledger-file-writer/src/parquet/arrow-builder";
 import { serializeParquet } from "../../../packages/ledger-file-writer/src/parquet/wasm-serializer";
 import { writeRows } from "./partition-fixtures";
+
+export async function readLifecyclePolicy() {
+  const config = await Bun.file(new URL("../../../config/feed-ingest-plan.json", import.meta.url)).json();
+  return FeedLifecyclePolicySchema.parse(config.availability);
+}
 
 export async function healthFieldFixture(root: string) {
   const row = FeedHealthStateRowSchema.parse(await Bun.file(

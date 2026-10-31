@@ -4,7 +4,6 @@ import { FeedIngestConfigSchema } from "../../../packages/common-contracts/src/i
 import { PlanRequestSchema, resolvePlanRequest } from "../src/api/plan-request";
 import { resolvePolicy } from "../src/config/resolve-policy";
 import { resolveRunPolicy, RunPolicyOverridesSchema } from "../src/config/resolve-run-policy";
-import { FeedAvailabilityConfigSchema } from "../src/availability/availability-config";
 import { FeedHistoryPolicySchema } from "../src/read-ledger-history/read-feed-history";
 import { escapeMarkdown } from "../src/reporting/markdown-format";
 import {
@@ -20,7 +19,6 @@ export const WorkflowPolicySchema = z.strictObject({
     settled_failure_codes: z.array(z.string()),
   }),
   parser_concurrency: z.int().positive(),
-  availability: FeedAvailabilityConfigSchema.optional(),
 });
 
 export function formatWorkflowPolicy(input: unknown, selectionRan: boolean) {
@@ -28,8 +26,9 @@ export function formatWorkflowPolicy(input: unknown, selectionRan: boolean) {
     notice: "Effective settings were not recorded; committed defaults do not prove what this run used.",
     rows: [["Effective settings", "Not recorded", "Policy evidence unavailable"]],
   };
-  const { config: recordedConfig, request: supplied, history, parser_concurrency, availability } = WorkflowPolicySchema.parse(input);
+  const { config: recordedConfig, request: supplied, history, parser_concurrency } = WorkflowPolicySchema.parse(input);
   const config = resolveRunPolicy(recordedConfig, supplied);
+  const availability = config.availability;
   const { institutional_age_hours: _institutional, trade_press_age_hours: _trade,
     community_age_hours: _community, ...selectionRequest } = supplied;
   const request = resolvePlanRequest(selectionRequest, config);

@@ -15,13 +15,13 @@ import { feedHealthStateRoute } from "./routes/feed-health-state.route";
 import { ArticleParserPool } from "../harvest-feeds/article-parser-pool";
 import type { PlannerReady } from "../config/planner-startup";
 import { collectionRoute } from "./routes/collection.route";
+import { PLANNER_API_PREFIX } from "@idhazh/common-contracts";
 
-const apiPrefix = "/api/2026-10-20";
+const apiPrefix = PLANNER_API_PREFIX;
 export function createPlanApp(inputs: PlanInputs, runtime: PlanRuntime, identity?: PlannerReady) {
   const app = new Hono<{ Bindings: PlanningBindings }>();
   const parserPool = runtime.parser_pool ?? new ArticleParserPool(inputs.settings.listener.parser_concurrency);
-  const requestRuntime = () => ({ ...runtime, parser_pool: parserPool,
-    stage_fetch: runtime.stage_fetch ?? (async (request: Request) => app.fetch(request)) });
+  const requestRuntime = () => ({ ...runtime, parser_pool: parserPool });
   app.use(`${apiPrefix}/*`, bodyLimit({
     maxSize: inputs.settings.listener.max_body_bytes,
     onError: c => c.json({ code: "BODY_TOO_LARGE", issues: [{ field: "body", message: "Body exceeds configured max_body_bytes" }] }, 413),
@@ -48,7 +48,7 @@ export function createPlanApp(inputs: PlanInputs, runtime: PlanRuntime, identity
   return Object.assign(app, { close() { if (runtime.parser_pool === undefined) parserPool.close(); } });
 }
 export function servePlan(inputs: PlanInputs, runtime: PlanRuntime, identity?: PlannerReady) {
-  const app = createPlanApp(inputs, { ...runtime, stage_fetch: runtime.stage_fetch ?? (request => fetch(request)) }, identity);
+  const app = createPlanApp(inputs, runtime, identity);
   let server: ReturnType<typeof Bun.serve>;
   try { server = Bun.serve({
     hostname: inputs.settings.listener.hostname, port: inputs.settings.listener.port,

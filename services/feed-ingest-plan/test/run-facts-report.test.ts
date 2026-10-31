@@ -90,18 +90,18 @@ test("keeps failed and unstarted selection facts distinct from configuration swi
 test("shows durable UTC recovery deadlines without inventing schedules from historical counters", async () => {
   const { feed } = await fixture();
   const html = Bun.markdown.html(renderFeedRest({
-    revision: "recorded-revision", eligible_feed_ids: [], feeds: [{
-      feed_id: "resting-feed", endpoint_key: feed.endpoint_key, status: "resting",
-      consecutive_failed_checks: 5, failed_recovery_checks: 2,
+    eligible_feed_ids: [], feeds: [{
+      feed_id: "resting-feed", endpoint_key: feed.endpoint_key, availability: "resting",
+      strikes: 5, failed_recovery_checks: 2, availability_complete: true, availability_updated_at: "2026-10-29T12:00:00Z",
       first_confirmed_failure_at: "2026-10-25T00:00:00Z",
       rest_until: "2026-10-30T12:00:00Z", retired_at: null, retirement_reason: null,
     }, {
-      feed_id: "unknown-feed", endpoint_key: feed.endpoint_key, status: "unknown",
-      consecutive_failed_checks: 0, failed_recovery_checks: 0,
+      feed_id: "unknown-feed", endpoint_key: feed.endpoint_key, availability: "unknown",
+      strikes: null, failed_recovery_checks: null, availability_complete: false, availability_updated_at: null,
       first_confirmed_failure_at: null, rest_until: null, retired_at: null, retirement_reason: null,
     }, {
-      feed_id: "retired-feed", endpoint_key: feed.endpoint_key, status: "retired",
-      consecutive_failed_checks: 12, failed_recovery_checks: 7,
+      feed_id: "retired-feed", endpoint_key: feed.endpoint_key, availability: "retired",
+      strikes: 12, failed_recovery_checks: 7, availability_complete: true, availability_updated_at: "2026-10-30T00:00:00Z",
       first_confirmed_failure_at: "2026-10-20T00:00:00Z", rest_until: null,
       retired_at: "2026-10-30T00:00:00Z", retirement_reason: "confirmed-recovery-failures",
     }],
@@ -109,11 +109,11 @@ test("shows durable UTC recovery deadlines without inventing schedules from hist
   expect(html).toContain("<td>resting</td><td>5</td><td>2</td>");
   expect(html).toContain("2026-10-30T12:00:00Z");
   expect(html).toContain("2026-10-25T00:00:00Z");
-  expect(html).toContain("Unknown availability preserves interrupted work");
+  expect(html).toContain("Unknown availability alone does not block an active catalog feed");
   expect(html).toContain("Confirmed HTTP recovery failures met both limits");
   expect(html).not.toContain("skipped logical runs");
-  expect(renderFeedRest()).toContain("Current feed availability was not recorded");
-  const empty = renderFeedRest({ revision: "recorded-revision", eligible_feed_ids: [], feeds: [] });
+  expect(renderFeedRest()).toContain("Feed availability calculations were not recorded");
+  const empty = renderFeedRest({ eligible_feed_ids: [], feeds: [] });
   expect(empty).toContain("Current feed availability was recorded with no feed rows");
   expect(empty).not.toContain("was not recorded");
 });
