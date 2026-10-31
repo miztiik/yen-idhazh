@@ -1,6 +1,6 @@
 # Isolated feed harvesting
 
-**Last Updated**: 2026-10-30
+**Last Updated**: 2026-10-31
 
 How do configured feeds become sanitized article candidates?
 This build-time path leaves production Python discovery and extraction
@@ -55,8 +55,10 @@ the HTTP scheme spelling before storage, retaining their original query and
 fragment as historical evidence. The final serialized article address must
 pass the same URL format and length contract as downstream payloads before
 hashing or dispatch; percent-encoding cannot bypass that bound. Each transformed address
-passes public-address validation, DNS checks, the applicable robots policy
-and pinned dispatch before use. An unsafe transformed address is never dispatched.
+passes public-address validation and DNS checks before pinned dispatch.
+Robots results are retained as evidence; article `enforce` policy may stop an
+article before target dispatch. An unsafe transformed address is never
+dispatched.
 
 Feedsmith normalizes RSS, Atom, RDF and JSON Feed entries. They retain
 categories, authors, offered ordinals and entry-level UTC dates. A feed's
@@ -98,12 +100,12 @@ evidence that a source should retire. Malformed feed data retains its distinct
 
 The permitted fetcher retains public-address validation, socket pinning,
 robots evidence, safe redirects, retries, bounded deadlines and decoded
-body limits. Validation occurs before dispatch. Feeds and feed redirect hops
-always require allowed robots permission. `harvest.article_robots_policy`
-selects `enforce` or `observe` for articles and their redirect hops. Missing
-settings default to `enforce`; committed planner configuration uses `observe`.
-In `observe`, denied or unknown robots permission does not block a safe article
-request. Actual retry and redirect dispatches
+body limits. Validation occurs before dispatch. Safe feed targets and feed
+redirect hops are attempted even when robots permission is denied or unknown.
+`harvest.article_robots_policy` selects `enforce` or `observe` for articles
+and their redirect hops. Missing settings default to `enforce`; committed
+planner configuration uses `observe`. In `observe`, denied or unknown robots
+permission does not block a safe article request. Actual retry and redirect dispatches
 each count; cache reuse adds no request.
 The fetch stops at the first decoded stream chunk that takes the running byte
 count over `extract.max_body_bytes`. Its diagnostic records that configured
@@ -116,8 +118,9 @@ Each wire user agent keeps the configured crawler identity and adds its
 profile's distinct browser signature. Robots matching uses that same crawler
 product, checked against the actual wire value. Profiles cannot replace it.
 These headers do not provide browser execution or bot signing.
-A denied or unknown robots result stops feed requests and articles in `enforce`
-mode before any target profile is sent.
+A denied or unknown robots result is retained across redirects. It blocks an
+article only when that article uses `enforce`; it does not block a safe feed
+request or an article in `observe`.
 
 Within the bounded target allowance, exhausted network/status retries or
 a successful article body below `recovery_min_body_bytes` can try the secondary
@@ -205,6 +208,14 @@ them. This path does not provide crash recovery. No normal
 response, event export or artifact archives the full parsed/rejected population.
 Only selected article text enters the summarizer artifact.
 
+## Design rationale
+
+The robots checker can be wrong or unavailable. Attempting a safe feed target
+keeps that evidence separate from the publisher's actual response. Keep the
+robots verdict, status and retrieval failure, but let the target response
+decide whether the feed fetch succeeded. Article `enforce` remains an explicit
+option; this change does not weaken address checks or request limits.
+
 ## Dependencies and cost
 
 Feedsmith 3.0.1 replaces rss-parser and adds JSON Feed and RDF support. Its
@@ -230,21 +241,21 @@ Passing those rows through parsed, selected and partitioned batches would not
 add restart recovery: `StageStore` holds those batches in a bounded in-memory
 `Map`, not on disk.
 
-User-directed policy change, 2026-10-29 UTC: article robots permission is
-advisory in the committed planner settings. Retain the robots verdict, HTTP
-status and underlying failure, then attempt the safe article address and let
-the actual response determine download success or rejection. Feeds remain
-enforced. Separate configured allowances prevent an unavailable robots file
-from consuming the article's chance to respond. This changes neither address
-safety nor extraction, sanitization and content admission.
+Robots results are evidence, not a veto for a safe feed target. The committed
+article setting also observes them; explicit article `enforce` remains
+available. Retain the verdict, HTTP status and retrieval failure, then use
+the actual target response to determine fetch success or rejection. Separate
+configured allowances prevent a failed robots read from consuming the target's
+request allowance. Address safety, extraction, sanitization and admission do
+not change.
 
 Early factual refusals avoid downloading work the same admission rule would
 reject later. Shared production parsing and bounded native workers preserve
 the trust checks while allowing independent requests to make real progress.
 Article limits constrain output only; they are not an input truncation policy.
 
-User-directed policy change, 2026-10-30 UTC: only the current cleaned article
-address is used to match discovery, publication and settled-failure keys.
+Only the current cleaned article address is used to match discovery,
+publication and settled-failure keys.
 Older recorded keys remain unchanged and do not link to the current address;
 this avoids extra history reads and alternate-policy checks, but can repeat
 processing for an address whose older key differs.

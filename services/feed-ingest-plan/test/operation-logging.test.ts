@@ -135,18 +135,24 @@ test("feed byte cutoffs include the limit and observed lower bound in failure ev
   } finally { await f.close(); }
 });
 
-test("robots byte cutoffs identify the feed but never claim its target request was dispatched", async () => {
+test("robots byte cutoffs retain their evidence after the feed target is dispatched", async () => {
   const f = await recordedPlan([source({ url: "https://news.example/article-failures.xml" })]);
   try {
     f.inputs.harvest.extraction.max_body_bytes = 30;
+    f.inputs.harvest.config.harvest.request_headers.secondary = null;
+    f.transport.recordings.responses["https://news.example/article-failures.xml"] = [{ status: 403, body: "" }];
     await runFeedPlan({ partition_strategy: "none" }, f.inputs, f.runtime);
     const event = f.events.find(item => item.operation === "fetch" && item.phase === "failed"
       && item.details.document_kind === "feed");
-    expect(event?.details.body_limit).toMatchObject({ configured_limit_bytes: 30 });
+    expect(event?.details).toMatchObject({
+      body_limit: { configured_limit_bytes: 30 },
+      failure_code: "http",
+      body_limit_source: "robots",
+      requested_feed_url: "https://news.example/article-failures.xml",
+      final_attempted_feed_url: "https://news.example/article-failures.xml",
+    });
     expect((event?.details.body_limit as { observed_at_least_bytes: number }).observed_at_least_bytes).toBeGreaterThan(30);
-    expect(event?.details.body_limit_source).toBe("robots");
-    expect(event?.details.final_attempted_feed_url).toBeNull();
-    expect(f.transport.requests.some(request => request.url.pathname === "/article-failures.xml")).toBe(false);
+    expect(f.transport.requests.some(request => request.url.pathname === "/article-failures.xml")).toBe(true);
   } finally { await f.close(); }
 });
 

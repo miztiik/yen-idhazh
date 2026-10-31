@@ -1,6 +1,6 @@
 # Feed and article failure diagnostics
 
-**Last Updated**: 2026-10-30
+**Last Updated**: 2026-10-31
 
 Which operation failed, what evidence survives it, and which durations were
 actually measured? This is the isolated TypeScript planner's diagnostic
@@ -21,7 +21,7 @@ measurement rather than measuring harvesting again.
 Screening and curation rejections retain the same original diagnostic object,
 including successful fetch and extraction measurements before a later refusal.
 
-Table A
+Table A - diagnostic fields
 
 | Id | Field | Meaning |
 | --- | --- | --- |
@@ -54,7 +54,8 @@ target sent in an HTTP request, or is null when no such request was sent.
 Neither address comes from feed contents.
 When a robots response hits the byte limit, the progress event marks
 `body_limit_source` as `robots`; otherwise the source is the feed or article
-response. A failed robots check does not claim that the feed target was sent.
+response. A target address appears in the event only when its target request
+was actually dispatched.
 
 Existing rejection `details.http_status` and article observation status cells
 are projections of the same fetch result, not independent requests.
@@ -148,14 +149,14 @@ Each failed fetch, parse or request-attempt observation keeps its existing
 pipeline or remains unresolved. This describes the observed operation; it
 does not diagnose intent, prove a paywall or blame a publisher-wide problem.
 
-**Table A**
+**Table B - operation failure attribution**
 
 | Id | Evidence | Attribution |
 | --- | --- | --- |
-| A1 | A fetch or dispatched target attempt reports typed `http` failure with HTTP 401, 403, 404 or 410; or its robots rule denies the request | `source` |
-| A2 | Article extraction reports typed `empty-content`; a feed parser reports its typed `malformed-feed` failure | `source` |
-| A3 | Local target validation rejects an unsafe address, the configured body limit stops a response, or the extractor reports its depth limit | `pipeline` |
-| A4 | Other HTTP failures (including 408 and 429), DNS, network, timeout, redirect-loop, missing document root/title or any untyped exception | `unresolved` |
+| B1 | A target request reports typed `http` failure with HTTP 401, 403, 404 or 410; or an article request is stopped by explicit `enforce` policy | `source` |
+| B2 | Article extraction reports typed `empty-content`; a feed parser reports its typed `malformed-feed` failure | `source` |
+| B3 | Local target validation rejects an unsafe address, the configured body limit stops a response, or the extractor reports its depth limit | `pipeline` |
+| B4 | Other HTTP failures (including 408 and 429), DNS, network, timeout, redirect-loop, missing document root/title or any untyped exception | `unresolved` |
 
 HTTP 403 is an observed refusal for that article request only. It is not proof
 that the article is paywalled or that the publisher has failed generally.
