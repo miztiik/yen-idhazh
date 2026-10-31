@@ -84,8 +84,8 @@
     {"bytes": 691674,"items": 0,"path": "assist/index/2026-08.json","root": "public"},
     {"bytes": 3747840,"items": 0,"path": "assist/index/2026-09.bin","root": "public"},
     {"bytes": 1663315,"items": 0,"path": "assist/index/2026-09.json","root": "public"},
-    {"bytes": 3945600,"items": 0,"path": "assist/index/2026-10.bin","root": "public"},
-    {"bytes": 1744911,"items": 0,"path": "assist/index/2026-10.json","root": "public"},
+    {"bytes": 3961344,"items": 0,"path": "assist/index/2026-10.bin","root": "public"},
+    {"bytes": 1751779,"items": 0,"path": "assist/index/2026-10.json","root": "public"},
     {"bytes": 4905,"items": 0,"path": "console/band.json","root": "public"},
     {"bytes": 11547,"items": 4,"path": "digest/2026/08/21/digest.json","root": "public"},
     {"bytes": 4583,"items": 0,"path": "digest/2026/08/21/run.json","root": "public"},
@@ -225,8 +225,8 @@
     {"bytes": 39347,"items": 0,"path": "digest/2026/10/28/run.json","root": "public"},
     {"bytes": 687111,"items": 353,"path": "digest/2026/10/29/digest.json","root": "public"},
     {"bytes": 45900,"items": 0,"path": "digest/2026/10/29/run.json","root": "public"},
-    {"bytes": 436652,"items": 226,"path": "digest/2026/10/30/digest.json","root": "public"},
-    {"bytes": 26275,"items": 0,"path": "digest/2026/10/30/run.json","root": "public"},
+    {"bytes": 519765,"items": 267,"path": "digest/2026/10/30/digest.json","root": "public"},
+    {"bytes": 32826,"items": 0,"path": "digest/2026/10/30/run.json","root": "public"},
     {"bytes": 129457,"items": 64,"path": "digest/2026/10/31/digest.json","root": "public"},
     {"bytes": 6623,"items": 0,"path": "digest/2026/10/31/run.json","root": "public"},
     {"bytes": 300679,"items": 0,"path": "source-health.json","root": "public"},
@@ -463,7 +463,7 @@
     {"bytes": 5626,"items": 0,"path": "raw/run-shards/2026/10/11/01a12c0c-ffa5-8f85-9fd8-de8fc15684f8.parquet","root": "state"},
     {"bytes": 5682,"items": 0,"path": "raw/run-shards/2026/10/11/01a12d2f-f6c6-8e13-968b-e5d8f66aa6c4.parquet","root": "state"}
   ],
-  "total_bytes": 70417266,
-  "total_items": 24026,
+  "total_bytes": 70529542,
+  "total_items": 24067,
   "version": "2026-10-03T13:33"
 }
