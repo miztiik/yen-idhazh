@@ -98,30 +98,21 @@ export function formatWorkflowPolicy(input: unknown, selectionRan: boolean) {
   };
 }
 
-export function formatPolicyTable(input: unknown, selectionRan: boolean) {
+export function formatPolicyTable(input: unknown, selectionRan: boolean, documentationUrl?: string) {
   const policy = formatWorkflowPolicy(input, selectionRan);
-  const overrides = policy.rows.filter(([, , source]) => source === "workflow override").map(([setting]) => setting);
   const ignored = policy.rows.filter(([, , source]) => source === "ignored workflow override").map(([setting]) => setting);
   return {
     notice: policy.notice,
     summary: [
+      "<details>", "<summary>Effective policy</summary>", "",
       "## Table B - Effective policy", "",
+      ...(documentationUrl === undefined ? [] : [`[Workflow guide and policy rules](${documentationUrl})`, ""]),
       "| Id | Setting | Effective value |", "| --- | --- | --- |",
       ...policy.rows.map(([setting, value], index) =>
         `| B${index + 1} | ${escapeMarkdown(setting!)} | ${escapeMarkdown(value!)} |`),
-      ...(input === undefined ? ["", "Policy evidence was not supplied; committed defaults are not evidence."] : [
-        "", `Workflow overrides: ${overrides.length ? overrides.map(value => escapeMarkdown(value!)).join(", ") : "none"}. `
-          + "Other controls use configuration; tier targets and ceilings use the effective article limit.",
-      ]),
+      ...(input === undefined ? ["", "Policy evidence was not supplied; committed defaults are not evidence."] : []),
       ...(ignored.length ? ["", `Ignored workflow inputs because worker assignment is disabled: ${ignored.map(value => escapeMarkdown(value!)).join(", ")}.`] : []),
-      "", "The article limit is a maximum. Selection started is a run fact, not an enabled setting.",
-      "Shares and the reliability floor use the JSON fractions: 0 means none; 1 means the whole.",
-      "Authority multiplies the coefficient by each feed's configured weight and source-tier weight; it is not the tier weight alone.",
-      "A valid parsed feed, even empty, clears its availability episode. A recovery check is eligible at its UTC deadline.",
-      "Retirement needs both configured gates and a new confirmed failing recovery; elapsed time starts at the first confirmed source failure.",
-      "Source authority estimates expected quality; it is not an article-quality verdict.",
-      "bin-pack balances estimated article work; round-robin assigns in selected order; none assigns worker 0. Disabling partition bypasses assignment.",
-      "",
+      "", "</details>",
     ].join("\n"),
   };
 }

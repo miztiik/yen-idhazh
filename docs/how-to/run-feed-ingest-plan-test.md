@@ -1,6 +1,6 @@
 # Run the isolated feed planner checks
 
-**Last Updated**: 2026-10-30
+**Last Updated**: 2026-10-31
 
 How do you check the TypeScript planner without changing daily publication?
 Use offline cases for validation. The manual workflow performs real feed work
@@ -186,9 +186,14 @@ of checks across work days. Selection started is an observed boolean, not
 an invented enablement setting. The report has no planning-not-publication
 disclaimer; its title, status and operation names state the scope.
 
-The effective-policy table follows run facts. It separates one control per
-row from its effective JSON value; workflow override sources are named once
-below the table instead of repeated beside each value.
+The effective-policy table follows run facts inside a closed-by-default
+"Effective policy" fold. It separates one control per row from its effective
+JSON value. The fold links to this guide at the workflow's commit; this guide
+links to the detailed policy rules. Local renderers without GitHub workflow
+context omit that link. General rule explanations stay in documentation, not
+below the report tables. Missing-policy evidence and ignored workflow inputs
+remain inside the fold because they explain the recorded run. The existing
+effective-policy annotation is unchanged.
 The policy config version comes from the saved configuration's
 `version`, not a new whole-policy revision. Shares remain fractions and switches
 remain booleans. The article limit is a maximum, not a promised count.
