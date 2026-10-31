@@ -44,7 +44,7 @@ Execute per docs/how-to/execute-a-plan.md: one maintainer carries the plan and d
 | # | Row title | Depends-on | Parallel-group | Status | Worktree | PR | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | 1 | A place to look at a visual, that never ships with the site | - | A | DONE | p21-1 | #655 | worker |
-| 2 | Existing measurements in a machine-written report | - | B | IN-FLIGHT | existing-measurements-report | - | - |
+| 2 | Existing measurements in a machine-written report | - | B | DONE | existing-measurements-report | - | - |
 | 3 | Two ways to ask, and the question locked before the verdict | 2 | C | ABANDONED | - | - | - |
 | 4 | Weights that cannot quietly get worse | TBD - machine-only design | D | PENDING | - | - | - |
 | 5 | Did the reader actually understand it faster | 4 | E | ABANDONED | - | - | - |
