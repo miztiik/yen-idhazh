@@ -6,7 +6,7 @@ import {
   SafePersistDataCommitterSchema,
   SafePersistDataInputSchema,
 } from "@idhazh/data-delivery";
-import type { SafePersistDataCommitter } from "@idhazh/data-delivery";
+import type { SafePersistDataCommitter, SafePersistDataInput } from "@idhazh/data-delivery";
 import { verifyMetadataFile } from "./feed-ingest-plan-metadata";
 import type { ExecutionIdentity, MetadataRegistrations } from "./feed-ingest-plan-metadata";
 import { collectWorkflowFiles, readWorkflowDeliveryContext } from "./feed-ingest-plan-current-files";
@@ -32,18 +32,17 @@ export async function deliverPlannerFiles(input: Readonly<{
   if (new Set(input.paths).size !== input.paths.length) {
     throw new Error("delivery: duplicate output paths");
   }
-  const completed: { sourcePath: string; targetPath: string; sha256: string }[] = [];
+  const completed: SafePersistDataInput["files"] = [];
   for (const path of input.paths) {
-    const metadata = await verifyMetadataFile(input.stateRoot, path, input.registrations, input.identity);
+    await verifyMetadataFile(input.stateRoot, path, input.registrations, input.identity);
     completed.push({
       sourcePath: path,
       targetPath: `state/${path}`,
-      sha256: metadata.file_sha256,
     });
   }
   const request = SafePersistDataInputSchema.parse({
     sourceRoot: input.stateRoot,
-    files: completed.map(({ sourcePath, targetPath, sha256 }) => ({ sourcePath, targetPath, sha256 })),
+    files: completed,
     permittedPaths: metadataWritePermissions(input.registrations),
     destination: { kind: "git", repository: input.repository },
     committer: input.committer,
