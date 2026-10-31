@@ -141,15 +141,17 @@ that main rejected a push. Gardener preserves its logged crash/exit-1 path.
 For a TypeScript caller, validate the producer's output and ownership before
 calling `safe_persist_data`. Its input schema validates the in-process request;
 it is not a persisted contract because no later run reads the request. The API
-accepts explicitly named files with expected SHA256 values and independently
+accepts explicitly named completed files and independently
 declared whole-segment permissions, plus a caller-supplied Git committer
-identity. The manual planner test workflow reads that identity from
+identity. The caller finishes each file before handoff and must not change it
+during delivery. The manual planner test workflow reads that identity from
 [`config/data-delivery.json`](../../../config/data-delivery.json). Git delivery refuses immutable collisions,
-verifies each source hash before writing its bytes as an unfiltered Git blob,
+checks source paths and modes before writing bytes as an unfiltered Git blob,
 uses a private candidate on fetched `main`, and
 retries with the named `config/push-retry.json` settings. Artifact-directory
 delivery copies only named files and refuses symlink parents or replacement
-with different bytes. Neither destination supports deletion or mutable
+with different bytes, compared directly. Neither destination asks for an
+expected file checksum or supports deletion or mutable
 replacement.
 
 The planner's [availability calculations](../sources/feed-availability.md) are ordinary
