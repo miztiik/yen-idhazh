@@ -35,7 +35,7 @@ Table C
 
 | Id | # | Row title | Depends-on | Parallel-group | Status | Worktree | PR | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| C1 | 1 | Keep minimum entry-point coverage | - | A | IN-FLIGHT | planner-entry-point-checks | - | d9c381fb-b315-4256-a5de-14a0d91b5020 |
+| C1 | 1 | Keep minimum entry-point coverage | - | A | DONE | curly-adventure | - | d9c381fb-b315-4256-a5de-14a0d91b5020 |
 | C2 | 2 | Move remaining checks to their own boundaries | 1 | B | PENDING | - | - | - |
 
 ## 2 - Test change inventory

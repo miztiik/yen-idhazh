@@ -1,4 +1,4 @@
-/** Do CLI controls share strict API semantics and await the actual one-shot entry? */
+/** Do CLI controls share strict API semantics and disclose failures safely? */
 import { expect, test } from "bun:test";
 import { fileURLToPath } from "node:url";
 import { PlanError, PlanRequestSchema, describePlanError, parseCliRequest, resolvePlanRequest } from "../src/api/plan-request";
