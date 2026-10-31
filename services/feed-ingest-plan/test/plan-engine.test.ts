@@ -63,7 +63,9 @@ test("one recorded saved run agrees with its public summary and selected identit
   expect(result.row.selected_count).toBe(artifact.articles.length);
   const summary = PlanResponseSchema.parse(summarizePlan(result));
   expect(summary).toEqual(response);
-  expect(health.batch_id).toBe(response.batches.selection_batch_id);
+  const selectedBatch = response.batches.selection_batch_id;
+  if (selectedBatch === undefined) throw new Error("The API recording omitted its selected batch");
+  expect(health.batch_id).toBe(selectedBatch);
   expect(nativeRows.selected_articles).toEqual(result.selected.map(article => ({
     ...selectedArticleMetadata(article), run_id: article.run_id, attempt: article.attempt, date: article.date,
   })));
