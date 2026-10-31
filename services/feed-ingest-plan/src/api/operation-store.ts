@@ -2,7 +2,6 @@
 import { Database } from "bun:sqlite";
 import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
-import { createHash } from "node:crypto";
 import { PlanError } from "./plan-request";
 import { PlannerOperationSchema, RequestIdSchema } from "./operation-contracts";
 import type { PlannerOperation } from "./operation-contracts";
@@ -11,10 +10,6 @@ import type { SourceArticleOutcome } from "@idhazh/common-contracts";
 
 type RequestIdentity = Pick<PlannerOperation, "request_id" | "operation" | "input_sha256" | "config_sha256">;
 export type PreparedOperation = Readonly<RequestIdentity & { capture: () => PlannerOperation }>;
-
-export function sha256(value: string): string {
-  return createHash("sha256").update(value).digest("hex");
-}
 
 export async function openOperationStore(outputRoot: string) {
   // The fixed filename and SQL schema are storage protocol constants, not tunables.

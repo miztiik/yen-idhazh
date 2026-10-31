@@ -11,7 +11,7 @@ import { preparePlanningHealth } from "./prepare-planning-health";
 import { deriveArticleIdentity } from "../harvest-feeds/article-identity";
 import { deriveFeedIdentity } from "../harvest-feeds/feed-identity";
 import { PlanError } from "./plan-request";
-import { sha256 } from "./operation-store";
+import { hashText } from "../hash-text";
 import { readExclusionEvidence } from "../read-ledger-history/read-exclusion-evidence";
 import { existsSync } from "node:fs";
 import { resolve } from "node:path";
@@ -71,7 +71,7 @@ export function checkFetchedDocument(record: PlannerOperation, inputs: PlanInput
     : deriveArticleIdentity(artifact.canonical_url, inputs.harvest.config.harvest);
   if (artifact.article_id !== identity.url_key || artifact.observation.run_id !== record.run_id
     || artifact.observation.correlation_id !== record.correlation_id
-    || artifact.body_sha256 !== (artifact.body === null ? null : sha256(artifact.body))
+    || artifact.body_sha256 !== (artifact.body === null ? null : hashText(artifact.body))
     || (artifact.body !== null && Buffer.byteLength(artifact.body) > inputs.harvest.extraction.max_body_bytes)) {
     throw new PlanError("ARTIFACT_INVALID", "Fetched document identity, digest or byte bound differs", "fetch_request_id");
   }

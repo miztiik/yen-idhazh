@@ -4,7 +4,7 @@ import type { PlannerOperation } from "@idhazh/common-contracts";
 import type { z } from "zod";
 import { FetchRequestSchema } from "./operation-contracts";
 import type { OperationStore } from "./operation-store";
-import { sha256 } from "./operation-store";
+import { hashText } from "../hash-text";
 import type { PlanInputs } from "../load-plan-inputs";
 import type { PlanRuntime } from "../run-feed-plan";
 import { PlanError } from "./plan-request";
@@ -162,7 +162,7 @@ export async function fetchDocument(
   const artifact = FetchedDocumentSchema.parse({
     ...fetchedDocument, fetch_item_type: request.fetch_item_type, canonical_url: identity.canonical_url, article_id: identity.url_key, feed_id: source.id,
     error_code: fetched.error_code ?? null, robots_failure: fetched.robots_failure ?? null, robots_http_status: fetched.robots_http_status ?? null,
-    body_sha256: fetched.body === null ? null : sha256(fetched.body), attempts: fetched.attempts ?? [],
+    body_sha256: fetched.body === null ? null : hashText(fetched.body), attempts: fetched.attempts ?? [],
     observation, attempt_observations: attemptObservations,
     parent_fetch_request_id: parent?.root.request_id ?? null, parent_batch_id: parent?.batch.batch_id ?? null,
     entry_ordinal: parent?.offer.entry.entry_ordinal ?? null,

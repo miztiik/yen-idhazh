@@ -11,7 +11,8 @@ import { resolveRunContext } from "../resolve-run-context";
 import { resolvePlanRequest, PlanError } from "./plan-request";
 import { BeginCollectionSchema } from "./collection-contracts";
 import { operationConfigFingerprint } from "./operation-context";
-import { sha256, openOperationStore } from "./operation-store";
+import { openOperationStore } from "./operation-store";
+import { hashText } from "../hash-text";
 import { documentState } from "./document-state";
 import type { DocumentState } from "./document-state";
 import { stageStore } from "./stage-store";
@@ -79,7 +80,7 @@ export async function beginCollection(raw: unknown, inputs: PlanInputs, runtime:
   const record = PlannerOperationSchema.parse({
     request_id: request.collection_id, operation: "fetch", run_id: context.run_id,
     correlation_id: context.correlation_id, created_at: context.captured_at,
-    input_sha256: sha256(JSON.stringify(request)), config_sha256: operationConfigFingerprint(inputs, runtime),
+    input_sha256: hashText(JSON.stringify(request)), config_sha256: operationConfigFingerprint(inputs, runtime),
     state: "started", response_json: null, artifact: null,
   });
   const store = await openOperationStore(inputs.outputRoot);

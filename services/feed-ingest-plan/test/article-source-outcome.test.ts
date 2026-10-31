@@ -15,7 +15,8 @@ import { attributeIngestOutcome } from "../src/attribute-ingest-outcomes";
 import { createRunHealth } from "../src/run-health";
 import { summarizePlanningHealth } from "../src/read-ledger-history/health-summary";
 import { projectFeedHealthFields } from "../src/read-ledger-history/read-feed-health-fields";
-import { openOperationStore, sha256 } from "../src/api/operation-store";
+import { openOperationStore } from "../src/api/operation-store";
+import { hashText } from "../src/hash-text";
 
 function recording() {
   const at = "2026-10-27T12:00:00Z";
@@ -157,7 +158,7 @@ test("the existing operation journal preserves the first outcome and bounded fee
       return FetchedDocumentSchema.parse({
         fetch_item_type: kind, canonical_url: url, article_id: deriveUrlKey(url), feed_id: source.feed_id,
         body, http_status: 200, failure: null, robots: "allowed", error_code: null, robots_failure: null,
-        robots_http_status: null, attempts: [], attempt_observations: [], body_sha256: sha256(body),
+        robots_http_status: null, attempts: [], attempt_observations: [], body_sha256: hashText(body),
         observation: { event_id: "5ee218d4-8bf2-5d1b-bc69-c23fb7261a60", caused_by_event_id: null,
           run_id: context.run_id, correlation_id: context.correlation_id, feed_id: source.feed_id,
           article_id: deriveUrlKey(url), occurred_at: at, operation: "fetch" },

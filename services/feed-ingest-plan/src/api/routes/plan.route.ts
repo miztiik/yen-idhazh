@@ -7,10 +7,10 @@ import type { PlanRequest } from "../plan-request";
 import type { PlanInputs } from "../../load-plan-inputs";
 import type { PlanRuntime } from "../../run-feed-plan";
 import { executeKeyedPlan } from "../plan-operation";
-import type { CapturedPlanIdentity } from "../plan-operation";
 import { PlanResponseSchema } from "../plan-response.schema";
 
 export type PlanningBindings = { beginPlanning?: () => void; stage_origin?: string };
+export type CapturedPlanIdentity = Pick<PlanRuntime, "clock" | "run_number" | "correlation_id" | "captured_at" | "signal" | "stage_origin">;
 
 export function planRoute(
   execute: (request: PlanRequest, captured?: CapturedPlanIdentity) => Promise<FeedPlanResult>,

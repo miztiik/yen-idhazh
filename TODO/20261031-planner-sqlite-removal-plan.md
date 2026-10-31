@@ -37,7 +37,7 @@ Table C
 | Id | Row | Title | Depends-on | Parallel-group | Status | Worktree | PR | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | C1 | 1 | Remove delivery-file checksum requirements | - | A | DONE | planner-removal-delivery | - | - |
-| C2 | 2 | Remove planner SQLite and add failure-only raw-document output | 1 | B | PENDING | - | - | - |
+| C2 | 2 | Remove planner SQLite and add failure-only raw-document output | 1 | B | IN-FLIGHT | planner-removal-delivery | - | - |
 
 ## 2 - Tasks by API
 

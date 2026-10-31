@@ -4,7 +4,7 @@ import type { PlannerOperation } from "@idhazh/common-contracts";
 import type { PlanInputs } from "../load-plan-inputs";
 import type { PlanRuntime } from "../run-feed-plan";
 import { DEFAULT_PLANNER_PRODUCER, FIRST_RUN_ATTEMPT, resolveRunContext } from "../resolve-run-context";
-import { sha256 } from "./operation-store";
+import { hashText } from "../hash-text";
 import type { PreparedOperation } from "./operation-store";
 
 function operationConfiguration(inputs: PlanInputs, runtime: PlanRuntime) {
@@ -17,7 +17,7 @@ function operationConfiguration(inputs: PlanInputs, runtime: PlanRuntime) {
   };
 }
 export function operationConfigFingerprint(inputs: PlanInputs, runtime: PlanRuntime) {
-  return sha256(JSON.stringify(operationConfiguration(inputs, runtime)));
+  return hashText(JSON.stringify(operationConfiguration(inputs, runtime)));
 }
 export function proposedOperation(
   operation: PlannerOperation["operation"], request_id: string, request: unknown, correlation_id: string,
@@ -30,7 +30,7 @@ export function proposedOperation(
     runtime.attempt, runtime.producer,
   );
   return PlannerOperationSchema.parse({
-    request_id, operation, input_sha256: sha256(JSON.stringify(request)), config_sha256: operationConfigFingerprint(inputs, runtime),
+    request_id, operation, input_sha256: hashText(JSON.stringify(request)), config_sha256: operationConfigFingerprint(inputs, runtime),
     run_id: context.run_id, correlation_id, created_at: context.captured_at, state: "started", response_json: null, artifact: null,
   });
 }
@@ -39,7 +39,7 @@ export function prepareOperation(
   inputs: PlanInputs, runtime: PlanRuntime, runId?: string,
 ): PreparedOperation {
   return {
-    request_id, operation, input_sha256: sha256(JSON.stringify(request)), config_sha256: operationConfigFingerprint(inputs, runtime),
+    request_id, operation, input_sha256: hashText(JSON.stringify(request)), config_sha256: operationConfigFingerprint(inputs, runtime),
     capture: () => {
       const record = proposedOperation(operation, request_id, request, correlation_id, inputs, runtime);
       return runId === undefined ? record : { ...record, run_id: runId };
