@@ -69,6 +69,17 @@ shard count. The final site build imports both public files and its raw state,
 indexes and index-named compact heads from one observed published tip. An import
 validates all named local files first and refuses foreign changes.
 
+Assembly recovery uses the same adapter and fresh-main preparation with an
+explicit saved source plan. The content run retains its source code revision;
+the new raw writes and receipts carry the recovery execution's identity.
+The utility never presents the source worker as the writer of new bytes.
+Recovery alone adds independent authority to import the one validated original
+plan file unchanged, including when PLAN's push never landed. Matching committed
+bytes are retained; a different immutable file at that name refuses delivery.
+Normal assembly gains no run-plan permission.
+The [manual recovery entry](../../reference/github-actions.md#assembly-recovery)
+defines artifact validation and the checks that must precede its delivery.
+
 Input windows include the planning readers' configured seen and published
 boundaries, not only the console's shorter window. With unbounded published
 history, raw days start at the existing configured `first_ledger_year`; all

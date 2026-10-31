@@ -125,6 +125,37 @@ def after_daily_run(repo: Path, *, checked: str, tip: str, conclusion: str) -> d
     )
 
 
+@pytest.mark.parametrize("landed", [False, True])
+def test_recovery_completion_deploys_only_committed_public_output(
+    tmp_path: Path,
+    landed: bool,
+) -> None:
+    repo, first = a_repository(tmp_path)
+    tip = (
+        a_commit(repo, {"frontend/public/digest/2026/10/03/digest.json": '{"recovered":true}\n'})
+        if landed
+        else first
+    )
+    result = decision(
+        repo,
+        EVENT_NAME="workflow_run",
+        TRIGGER="Digest assembly recovery",
+        TRIGGER_EVENT="workflow_dispatch",
+        CONCLUSION="failure",
+        CHECKED=first,
+        TIP=tip,
+    )
+    assert result["publish"] == ("true" if landed else "false")
+    assert result["ref"] == tip
+    workflow = _load_workflows()["pages.yml"]
+    on = _mapping(workflow["on"], "Pages triggers")
+    assert _mapping(on["workflow_run"], "run trigger")["workflows"] == [
+        "CI",
+        "Content refresh",
+        "Digest assembly recovery",
+    ]
+
+
 def test_a_pull_request_never_publishes_even_when_it_changed_the_site(tmp_path: Path) -> None:
     repo, first = a_repository(tmp_path)
     head = a_commit(repo, {"frontend/src/page.ts": "export const page = 2;\n"})

@@ -87,7 +87,7 @@ def decide(
         return Decision(False, tip, f"a {event_name} event does not publish")
     if trigger == "CI":
         return _decide_after_ci(trigger_event, conclusion, checked, before, tip, changes)
-    if trigger == "Content refresh":
+    if trigger in {"Content refresh", "Digest assembly recovery"}:
         landed = changes(checked, tip)
         if landed is None:
             return Decision(True, tip, "what the daily run landed could not be read")

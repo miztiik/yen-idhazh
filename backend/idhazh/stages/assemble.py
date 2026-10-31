@@ -12,7 +12,17 @@ from datetime import timedelta
 from pathlib import Path
 from typing import Final
 
-from idhazh import assemble, atomic_write, config, ledger, publication, rank, run_context, telemetry
+from idhazh import (
+    assemble,
+    atomic_write,
+    completed_writes,
+    config,
+    ledger,
+    publication,
+    rank,
+    run_context,
+    telemetry,
+)
 from idhazh.contracts.base import ServerJob
 from idhazh.contracts.digest_day import DigestDay
 from idhazh.contracts.digest_run_fragment import DigestRunFragment
@@ -176,6 +186,8 @@ def stage_assemble(
     commit_sha: str,
     runner: str = "local",
     regenerate_only: bool = False,
+    writer_identity: WriterIdentity | None = None,
+    reuse_fragment: bool = False,
 ) -> DigestDay:
     """Collect whatever finished, publish it, and append the ledger.
 
@@ -296,8 +308,25 @@ def stage_assemble(
         if fragment_file.exists()
         else generated_at
     )
-    if not regenerate_only and ledger.accepts_new_rows(
-        LedgerName.DIGEST_FRAGMENTS, len(digest_items)
+    failed_item_ids = [row.item_id for row in item_health_rows if row.outcome is ItemOutcome.FAILED]
+    retained_fragment = (
+        DigestRunFragment.read(fragment_file) if reuse_fragment and fragment_file.exists() else None
+    )
+    if retained_fragment is not None and (
+        retained_fragment.date != plan.date
+        or retained_fragment.run_id != run_id
+        or retained_fragment.items != digest_items
+        or retained_fragment.items_planned != len(plan.items)
+        or retained_fragment.failed_item_ids != failed_item_ids
+        or retained_fragment.verticals != list(plan.verticals)
+    ):
+        raise ValueError("retained source fragment does not match the saved completed items")
+    if retained_fragment is not None:
+        completed_writes.record(fragment_file, fragment_file.read_bytes())
+    if (
+        not regenerate_only
+        and retained_fragment is None
+        and ledger.accepts_new_rows(LedgerName.DIGEST_FRAGMENTS, len(digest_items))
     ):
         atomic_write.write_atomic(
             fragment_file,
@@ -309,9 +338,7 @@ def stage_assemble(
                 items=digest_items,
                 verticals=list(plan.verticals),
                 items_planned=len(plan.items),
-                failed_item_ids=[
-                    row.item_id for row in item_health_rows if row.outcome is ItemOutcome.FAILED
-                ],
+                failed_item_ids=failed_item_ids,
                 embeddings=assemble.build_embeddings(
                     digest_items, Embedder(config.REPO_ROOT, settings.app.assist)
                 ),
@@ -411,7 +438,7 @@ def stage_assemble(
     # same items hours ago on another runner, and each files its own file through
     # the ledger door; the settlement keeps one row an item. `assemble` runs once
     # for the whole day, so it is shard 0 of one.
-    identity = WriterIdentity(
+    identity = writer_identity or WriterIdentity(
         run_id=run_id,
         attempt=run_context.run_attempt(),
         job=ServerJob.ASSEMBLE,
@@ -487,7 +514,12 @@ def stage_assemble(
         LOG.warning("%s", yield_alarm)
     if not regenerate_only:
         _retire_low_yield_sources(
-            instrument.sources, plan=plan, run_id=run_id, settings=settings, commit_sha=commit_sha
+            instrument.sources,
+            plan=plan,
+            run_id=run_id,
+            settings=settings,
+            commit_sha=commit_sha,
+            writer_identity=identity,
         )
     _report_nothing_published(day, plan)
     LOG.info(
@@ -514,6 +546,7 @@ def _retire_low_yield_sources(
     run_id: str,
     settings: config.Settings,
     commit_sha: str,
+    writer_identity: WriterIdentity | None = None,
 ) -> int:
     """File a retirement for every source that has held under the mark long enough.
 
@@ -548,7 +581,8 @@ def _retire_low_yield_sources(
     landed = source_health.file_retirements(
         common.STATE_ROOT,
         filed,
-        WriterIdentity(
+        writer_identity
+        or WriterIdentity(
             run_id=run_id,
             attempt=run_context.run_attempt(),
             job=ServerJob.ASSEMBLE,
