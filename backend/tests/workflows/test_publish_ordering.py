@@ -8,6 +8,7 @@ from typing import Final, cast
 import pytest
 
 from ._harness import (
+    ACTIONS_DIR,
     CHECK_PUBLICATION_CALL,
     CHECK_PUBLICATION_JOBS,
     COMMIT_PROGRAM_CALL,
@@ -23,6 +24,69 @@ from ._harness import (
 )
 
 pytestmark = pytest.mark.workflow
+
+PUBLICATION_RUNTIME_ACTION: Final = "./.github/actions/publication-runtime"
+
+
+@pytest.mark.parametrize(
+    ("filename", "job_name", "work_step"),
+    (
+        ("ci.yml", "site", "Build the site"),
+        ("ci.yml", "browser", "Build the canary day"),
+        ("ci.yml", "gates", "TypeScript ledger writer"),
+        ("digest.yml", "assemble", "Assemble and publish"),
+        ("backfill.yml", "backfill", "Re-encode named days and say what changed"),
+    ),
+)
+def test_native_publication_runtime_is_ready_before_work(
+    filename: str, job_name: str, work_step: str,
+) -> None:
+    steps = _steps(_load_workflows()[filename], job_name)
+    setup = _step(_load_workflows()[filename], job_name, "uses", PUBLICATION_RUNTIME_ACTION)
+    readiness = _step(
+        _load_workflows()[filename], job_name, "name",
+        "Prove the validator starts outside the checkout",
+    )
+    work = _step(_load_workflows()[filename], job_name, "name", work_step)
+    assert steps.index(setup) < steps.index(readiness) < steps.index(work)
+    assert setup.get("if") == work.get("if")
+    assert not setup.get("continue-on-error")
+    assert sum(step.get("uses") == "oven-sh/setup-bun@v2" for step in steps) == 1
+
+
+def test_shared_publication_setup_installs_locked_packages_then_proves_startup() -> None:
+    import yaml  # type: ignore[import-untyped]
+
+    action = _mapping(
+        yaml.safe_load((ACTIONS_DIR / "publication-runtime" / "action.yml").read_text()),
+        "publication runtime action",
+    )
+    runs = _mapping(action["runs"], "publication runtime steps")
+    assert runs["using"] == "composite"
+    steps = runs["steps"]
+    assert isinstance(steps, list)
+    setup, install, readiness = (
+        _mapping(step, "publication runtime step") for step in steps
+    )
+    assert setup["uses"] == "oven-sh/setup-bun@v2"
+    assert setup["with"] == {"bun-version": "1.3.13"}
+    assert install["working-directory"] == "${{ github.workspace }}"
+    install_script = install["run"]
+    assert isinstance(install_script, str)
+    assert install_script.splitlines() == [
+        f"bun install --frozen-lockfile --cwd packages/{package}"
+        for package in ("common-contracts", "data-delivery", "ledger-file-writer")
+    ]
+    assert readiness["working-directory"] == "${{ runner.temp }}"
+    assert readiness["run"] == (
+        'bun run "$GITHUB_WORKSPACE/packages/ledger-file-writer/src/'
+        'planner-file-validation-cli.ts" --check-runtime'
+    )
+    assert install["shell"] == readiness["shell"] == "bash"
+    assert not any(
+        _mapping(step, "publication runtime step").get(key)
+        for step in steps for key in ("continue-on-error", "if")
+    )
 
 
 def _checks_publication(step: dict[str, object]) -> bool:

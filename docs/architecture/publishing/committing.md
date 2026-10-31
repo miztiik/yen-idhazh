@@ -166,6 +166,12 @@ confirmed delivery and preserves an earlier producer failure.
 
 For a Python publisher adapter, use this sequence:
 
+Prepare `.github/actions/publication-runtime` before assembly or repair work
+if the caller checks published ledger columns. This supplies Bun and locked
+native packages and proves validator startup outside the checkout. Keep the
+actual built-site column check before the publication commit; startup alone
+does not validate output.
+
 1. Reuse an adapter when its policy fits. See
    [`gardener_publish.py`](../../../backend/utilities/gardener_publish.py),
    [`council_publish.py`](../../../backend/utilities/council_publish.py),

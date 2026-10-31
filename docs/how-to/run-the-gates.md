@@ -247,6 +247,25 @@ Python-to-TypeScript binding remains for Python-owned native shapes in
 `backend/tests/contracts/test_native_typescript_bindings.py`.
 Hosted duration is measured by the CI step, not estimated as a passing gate.
 
+The published-column check also needs Bun and the native writer packages,
+even when Python starts it from `frontend/build`. CI and publishing jobs share
+`.github/actions/publication-runtime/action.yml`. For a local check, from the
+repository root:
+
+```powershell
+bun install --frozen-lockfile --cwd packages/common-contracts
+bun install --frozen-lockfile --cwd packages/data-delivery
+bun install --frozen-lockfile --cwd packages/ledger-file-writer
+bun run packages/ledger-file-writer/src/planner-file-validation-cli.ts --check-runtime
+```
+
+The final command proves imports and native request validation only. It does
+not certify published files. The real Python-to-TypeScript cases in
+`planner-maintenance.test.ts` validate a generated built-site tree, refuse
+corrupt Parquet and reject an escaping input path. Run them with
+`bun run --cwd packages/ledger-file-writer test test/planner-maintenance.test.ts`.
+Set `IDHAZH_PYTHON` to this checkout's installed Python environment.
+
 This subsection stays here because it selects the local commands; format and
 compatibility rules remain in the persistence contract.
 

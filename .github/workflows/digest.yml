@@ -576,6 +576,8 @@ jobs:
 
       - uses: actions/checkout@v6
 
+      - uses: ./.github/actions/publication-runtime
+
       - uses: actions/setup-python@v7
         with:
           python-version: '3.12'
