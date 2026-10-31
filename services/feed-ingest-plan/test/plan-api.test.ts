@@ -55,7 +55,7 @@ test("a real source-health write refusal returns an API error and leaves native 
     const response = await app.request(`${prefix}/feed-health-state`, json({ batch_id: batch.batch_id, action: "record" }));
     expect(response.status).toBe(500);
     const error = await response.json();
-    expect(error).toHaveProperty("code");
+    expect(error).toMatchObject({ code: "PLAN_FAILED" });
     expect(error).not.toHaveProperty("planning_complete");
     expect(await readFile(sibling)).toEqual(before);
     expect(recorded.transport.requests).toHaveLength(0);
@@ -126,6 +126,9 @@ test("collection discovery bytes survive a later persistence refusal without reo
     const app = createPlanTestServer(recorded.inputs, recorded.runtime);
     try {
       expect((await app.request(`${prefix}/persist-selected-articles`, json({ batch_id: batch.batch_id }))).status).toBe(500);
+      expect(recorded.events.at(-1)).toMatchObject({
+        operation: "persist", phase: "failed", details: { failure_code: "PERSIST_FAILED" },
+      });
     } finally { await app.close(); }
     for (const [index, file] of receipt.files.entries()) expect(await readFile(join(recorded.inputs.outputRoot, file.path))).toEqual(bytes[index]!);
   } finally { await recorded.close(); }

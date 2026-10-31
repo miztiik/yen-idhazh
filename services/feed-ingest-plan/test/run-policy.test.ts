@@ -3,7 +3,7 @@ import { expect, test } from "bun:test";
 import { createPlannerStartup } from "../scripts/feed-ingest-plan-supervisor";
 import { restorePlannerStartup } from "../scripts/feed-ingest-plan-server";
 import { PlannerStartupSchema } from "../src/config/planner-startup";
-import { operationConfigFingerprint } from "../src/api/operation-context";
+import { stageConfigFingerprint } from "../src/api/operation-context";
 import { PlanRequestSchema } from "../src/api/plan-request";
 import { readPlannerStartupRecording } from "./planner-process-recordings";
 import { FeedIngestConfigSchema, SourceBasedQualityBucketsSchema } from "@idhazh/common-contracts";
@@ -105,7 +105,7 @@ test("the private child boundary preserves isolated age policies and fences diff
     expect(first.inputs.harvest.config.curate_articles.source_based_quality_buckets
       .find(bucket => bucket.id === "trade-press")!.ladder_hours).toEqual([1, 2]);
     expect(second.inputs.harvest.config).toEqual(baseline);
-    expect(operationConfigFingerprint(first.inputs, first.runtime))
-      .not.toBe(operationConfigFingerprint(second.inputs, second.runtime));
+    expect(stageConfigFingerprint(first.inputs, first.runtime))
+      .not.toBe(stageConfigFingerprint(second.inputs, second.runtime));
     expect(fixture.inputs.harvest.config).toEqual(original);
 });
