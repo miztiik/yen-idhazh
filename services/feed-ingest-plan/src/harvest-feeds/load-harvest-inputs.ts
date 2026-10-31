@@ -105,10 +105,10 @@ export function loadHarvestInputs(raw: {
       throw new Error(`source.${source.id}.tier: source tier must be active and registered`);
     }
   }
-  const rules = new Set(planning.config.curate_articles.article_quality_buckets.map(rule => rule.tier));
+  const rules = new Set(planning.config.curate_articles.source_based_quality_buckets.map(rule => rule.source_tier_id));
   const active = registry.source_tiers.filter(tier => tier.status === "active");
   if (active.some(tier => !rules.has(tier.id)) || [...rules].some(id => !active.some(tier => tier.id === id))) {
-    throw new Error("curate_articles.article_quality_buckets: rules must name every active source class exactly once");
+    throw new Error("curate_articles.source_based_quality_buckets: rules must name every active source tier exactly once");
   }
   // This digest covers every validated input that can change harvested content or provenance.
   const { workflow_reporting, ...contentConfig } = planning.config;

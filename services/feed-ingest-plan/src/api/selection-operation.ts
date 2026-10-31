@@ -9,11 +9,12 @@ import { PlanError } from "./plan-request";
 import { stageStore } from "./stage-store";
 import { selectArticles } from "../select-articles";
 import { utcTimestamp } from "../harvest-feeds/harvest-types";
-import { prepareFeedHealthState } from "./feed-health-state-operation";
+import { prepareExecutionHealth } from "./feed-health-state-operation";
 import { appendDocumentTiming, currentExecutionState, executionHasArtifact, registerStageExecution } from "./document-state";
 import { resolveRunContext } from "../resolve-run-context";
 import { recordFinalizedDocumentWork } from "./record-standalone-run";
 import { restoreSourceHealth } from "./restore-source-health";
+import { collectionForRun } from "./collection-operation";
 
 export function requireStageConfiguration(batch: { config_sha256: string }, inputs: PlanInputs, runtime: PlanRuntime) {
   if (!inputs.settings.enabled) throw new PlanError("PLANNER_DISABLED", "Planner is disabled", "enabled");
@@ -28,6 +29,10 @@ export async function executeSelection(raw: unknown, inputs: PlanInputs, runtime
   const store = stageStore(inputs);
   let parsed = store.read("parsed", request.batch_id, ParsedFeedBatchSchema);
   requireStageConfiguration(parsed, inputs, runtime);
+  const collection = collectionForRun(inputs, parsed.context.run_id);
+  if (collection !== undefined && (collection.status !== "complete" || collection.completed_batch_id !== parsed.batch_id)) {
+    throw new PlanError("BATCH_INCOMPLETE", "Selection requires the completed global collection, not one feed's batch", "batch_id");
+  }
   if (store.ownership(parsed.batch_id).health_fingerprint === null) {
     parsed = store.replace("parsed", ParsedFeedBatchSchema, await restoreSourceHealth(parsed, inputs));
   }
@@ -38,7 +43,7 @@ export async function executeSelection(raw: unknown, inputs: PlanInputs, runtime
   const pending = currentExecutionState(inputs, parsed.context.run_id);
   const original = pending === undefined ? undefined : await pending;
   const claim = store.ownership(parsed.batch_id);
-  claim.scope = original?.kind === "plan" ? "plan" : claim.scope;
+  claim.scope = original?.kind === "plan" || (original?.kind === "document" && original.plan_owned) ? "plan" : claim.scope;
   if (original?.health_fingerprint !== null && original?.health_fingerprint !== undefined) {
     claim.health_fingerprint = original.health_fingerprint;
   }
@@ -58,7 +63,7 @@ export async function executeSelection(raw: unknown, inputs: PlanInputs, runtime
   let healthDuration: number;
   let healthStatus: PlanApiTiming["status"] = "failed";
   try {
-    health = await prepareFeedHealthState(inputs, selectionStartedAt, { context: parsed.context, rows: parsed.work_rows });
+    health = await prepareExecutionHealth(inputs, selectionStartedAt, { context: parsed.context, rows: parsed.work_rows });
     healthStatus = "completed";
   } finally {
     healthDuration = Math.round(performance.now() - healthStarted);

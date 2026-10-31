@@ -3,7 +3,7 @@ import { randomUUID, createHash } from "node:crypto";
 import { mkdir, rename, rm, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import {
-  PartitionedFeedBatchSchema, StageReferenceRequestSchema, SelectedArticleRowContract,
+  PartitionedFeedBatchSchema, SelectedFeedBatchSchema, StageReferenceRequestSchema, SelectedArticleRowContract,
   SelectedArticlesArtifactSchema, selectedArticleMetadata, RejectedArticleRowContract,
 } from "@idhazh/common-contracts";
 import { persistLedger } from "@idhazh/ledger-file-writer";
@@ -28,7 +28,10 @@ const finalized = new WeakMap<object, { fingerprint: string; result: Promise<Res
 export async function executePersistence(raw: unknown, inputs: PlanInputs, runtime: PlanRuntime): Promise<Result> {
   const request = StageReferenceRequestSchema.parse(raw);
   const store = stageStore(inputs);
-  const batch = store.read("partitioned", request.batch_id, PartitionedFeedBatchSchema);
+  const held = store.inspect(request.batch_id);
+  const batch = held.stage === "selected" && !inputs.harvest.config.partition.enabled
+    ? { ...store.read("selected", request.batch_id, SelectedFeedBatchSchema), strategy: "none" as const, dispatch_count: 0 }
+    : store.read("partitioned", request.batch_id, PartitionedFeedBatchSchema);
   const claim = store.ownership(batch.batch_id);
   requireStageConfiguration(batch, inputs, runtime);
   const path = selectedArtifactPath(inputs.settings.inputs.artifact_root, batch.context);

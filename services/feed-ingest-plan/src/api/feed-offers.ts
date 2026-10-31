@@ -18,6 +18,8 @@ import { resolveArticleEvidence } from "../website-group";
 import { plannerMemory } from "../planner-memory";
 import { stageStore } from "./stage-store";
 import { operationConfigFingerprint } from "./operation-context";
+import { collectionForRun } from "./collection-operation";
+import { recordDocumentRejections } from "./record-document-rejections";
 import { createStageLogger } from "../logging/structured-logger";
 
 export async function createParsedFeedBatch(input: {
@@ -44,6 +46,7 @@ export async function createParsedFeedBatch(input: {
       });
       if (prepared.status !== "rejected") throw new Error("Invalid feed offer passed article preparation");
       state.work.article(prepared.result);
+      if (prepared.result.rejection !== null) await recordDocumentRejections([prepared.result.rejection], state, inputs);
       continue;
     }
     offers.push({ offer_id: deriveCandidateId(state.context.run_id, source.feed_id, entry.entry_ordinal),
@@ -62,9 +65,24 @@ export async function createParsedFeedBatch(input: {
       url_key: identity.url_key, first_seen_at: input.observed_at, date: input.observed_at.slice(0, 10),
     })];
   });
+  const collection = collectionForRun(inputs, state.context.run_id);
+  if (collection !== undefined) {
+    collection.discovery_baseline ??= discovered.rows;
+    collection.feed_requests.set(input.feed_id, input.fetched_request_id);
+    const rows = plannerMemory(inputs).rememberDiscoveries(foldDiscoveryHistory([...discovered.rows, ...sightings]),
+      requiredUtcDays(state.context.now, inputs.harvest.config.discovered_articles.lookback_days)[0]!);
+    return stageStore(inputs).update("parsed", collection.parsed_batch_id, ParsedFeedBatchSchema, current => ({
+      ...current, offers: [...current.offers, ...offers], discovered: { availability: "available" as const, rows },
+      work_rows: state.work.rows(), exclusions: state.work.exclusions(), input_complete: false,
+    }));
+  }
   const saved = await rememberDiscoveries(discovered.rows, foldDiscoveryHistory([...discovered.rows, ...sightings]), state.context, {
     outputRoot: inputs.outputRoot, registryEntry: inputs.registrations.discovered_articles, ledgerSettings: inputs.ledgerSettings,
   });
+  if (state.plan_owned) {
+    state.completed_files ??= {};
+    (state.completed_files.discovered_articles ??= []).push(saved.result);
+  }
   plannerMemory(inputs).rememberDiscoveries(saved.rows, requiredUtcDays(
     state.context.now, inputs.harvest.config.discovered_articles.lookback_days,
   )[0]!);
@@ -94,13 +112,14 @@ export function updateFeedOffer(
     if (result?.candidate) observations[offerId] = result.observation;
     return {
       ...current, offers, candidates: candidates.sort((a, b) => a.entry_ordinal - b.entry_ordinal), observations, evidence,
-      input_complete: offers.every(offer => offer.state === "parsed" || offer.state === "rejected"),
+      input_complete: collectionForRun(inputs, state.context.run_id) === undefined
+        && offers.every(offer => offer.state === "parsed" || offer.state === "rejected"),
       work_rows: state.work.rows(), exclusions: state.work.exclusions(),
     };
   });
 }
-export function publicFeedOffers(batch: ParsedFeedBatch, policy: ArticleUrlPolicy) {
-  return batch.offers.map(offer => ({
+export function publicFeedOffers(batch: ParsedFeedBatch, policy: ArticleUrlPolicy, feedId: string) {
+  return batch.offers.filter(offer => offer.source.feed_id === feedId).map(offer => ({
     offer_id: offer.offer_id, feed_id: offer.source.feed_id, canonical_url: deriveArticleIdentity(offer.entry.link!, policy).canonical_url,
     title: offer.entry.title, categories: offer.entry.categories, published_at: offer.entry.published_at,
   }));

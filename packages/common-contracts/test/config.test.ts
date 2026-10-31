@@ -46,6 +46,32 @@ if (Bun.argv.includes("--emit-schemas")) {
     expect(configs.FeedWebsiteGroupingConfigSchema.parse({}).include_private_suffixes).toBe(true);
   });
 
+  test("source-based budgets use distinct bucket IDs and source-tier mappings", () => {
+    const rules = [
+      { id: "community-first", source_tier_id: 3, share_pct: 60, buffer_pct: 10, ladder_hours: [12, 24] },
+      { id: "institutional-second", source_tier_id: 1, share_pct: 40, buffer_pct: 5, ladder_hours: [6] },
+    ];
+    expect(configs.SourceBasedQualityBucketsSchema.parse(rules)).toEqual(rules);
+    for (const invalid of [
+      [{ ...rules[0], ladder_hours: [24, 12] }, rules[1]],
+      [{ ...rules[0], ladder_hours: [12, 12] }, rules[1]],
+      [{ ...rules[0], ladder_hours: [0] }, rules[1]],
+      [{ ...rules[0], share_pct: 61 }, rules[1]],
+      [{ ...rules[0], buffer_pct: 41 }, rules[1]],
+      [rules[0], { ...rules[1], id: rules[0]!.id }],
+      [rules[0], { ...rules[1], source_tier_id: rules[0]!.source_tier_id }],
+      [{ ...rules[0], tier: 3 }, rules[1]],
+    ]) expect(configs.SourceBasedQualityBucketsSchema.safeParse(invalid).success).toBe(false);
+  });
+
+  test("partition enablement defaults on and its configured bounds stay enforced", () => {
+    const bounds = { default_strategy: "bin-pack", default_shards: 4, min_shards: 1, max_shards: 20 };
+    expect(configs.FeedPartitionConfigSchema.parse(bounds).enabled).toBe(true);
+    expect(configs.FeedPartitionConfigSchema.parse({ ...bounds, enabled: false }).enabled).toBe(false);
+    expect(configs.FeedPartitionConfigSchema.parse({ ...bounds, default_shards: 20 }).default_shards).toBe(20);
+    expect(configs.FeedPartitionConfigSchema.safeParse({ ...bounds, default_shards: 21 }).success).toBe(false);
+  });
+
   test.each([
     [["triage", "min_words"], 0],
     [["triage", "max_age_hours"], null],
@@ -66,7 +92,7 @@ if (Bun.argv.includes("--emit-schemas")) {
     [["content_filters", "link_heavy", "max_link_density"], 1.1],
     [["content_filters", "link_heavy", "max_list_items"], -1],
     [["content_filters", "link_heavy", "list_word_limit"], 0],
-    [["partition", "default_shards"], 9],
+    [["partition", "enabled"], "true"],
     [["workflow_reporting", "enabled"], "true"],
     [["metrics"], {}],
     [["seal", "compression"], "gzip"],
@@ -115,8 +141,8 @@ if (Bun.argv.includes("--emit-schemas")) {
       ...profiles, recovery_min_body_bytes: -1,
     }).success).toBe(false);
     for (const patch of [
-      { partition: { ...config.partition, min_shards: 9 } },
-      { partition: { ...config.partition, default_shards: 9 } },
+      { partition: { ...config.partition, min_shards: config.partition.max_shards + 1 } },
+      { partition: { ...config.partition, default_shards: config.partition.max_shards + 1 } },
       { harvest: { ...config.harvest, concurrency: "24" } },
       { harvest: { ...config.harvest, tidy_urls: "true" } },
       { harvest: { ...config.harvest, semantic_fallback: {

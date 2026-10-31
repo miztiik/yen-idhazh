@@ -61,7 +61,8 @@ export async function harvestFeeds(
     fetch: (url, emit, kind, signal) => permit(() => fetcher.fetch(url, emit, kind, signal)),
   };
   const ownedPool = context.parser_pool ?? new ArticleParserPool(inputs.config.harvest.concurrency);
-  const runContext = { ...context, parser_pool: ownedPool };
+  const runContext = { ...context, parser_pool: ownedPool,
+    parser_options: { ...context.parser_options, timeout_ms: inputs.config.harvest.parse_timeout_ms } };
   try {
     const feeds = await mapPool(inputs.sources, inputs.config.harvest.concurrency, async configured => {
       const source = sourceSnapshot(inputs, configured);

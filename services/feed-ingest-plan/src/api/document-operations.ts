@@ -11,6 +11,7 @@ import { documentState, checkFetchedDocument, appendDocumentTiming } from "./doc
 import { PlanError } from "./plan-request";
 import { FetchResponseSchema, ParseResponseSchema } from "./document-response.schema";
 import { stageStore } from "./stage-store";
+import { claimCollectionFeed, collectionForRun, settleCollectionFeed } from "./collection-operation";
 
 export { proposedOperation, prepareOperation, operationConfigFingerprint } from "./operation-context";
 export async function executeDocumentOperation(
@@ -24,18 +25,32 @@ export async function executeDocumentOperation(
       let parent: ReturnType<typeof resolveFetchParent> = null;
       const prepared = prepareOperation("fetch", request.request_id, request, request.correlation_id, inputs, runtime);
       const proposed = { ...prepared, capture: () => {
+        const collection = request.collection_id === undefined ? undefined
+          : claimCollectionFeed(inputs, request.collection_id, request.feed_id, request.correlation_id);
         parent = resolveFetchParent(request, inputs, runtime, store);
         const record = prepared.capture();
+        if (collection !== undefined) return { ...record, run_id: collection.context.run_id,
+          created_at: collection.context.captured_at };
         return parent === null ? record : { ...record, run_id: parent.root.run_id };
       } };
       const record = await store.execute(proposed, async record => {
         const begin = performance.now();
         try {
-          const result = await fetchDocument(request, record, inputs, runtime, parent, store);
+          const collection = collectionForRun(inputs, record.run_id);
+          const signals = [runtime.signal, signal, collection?.signal.signal].filter((value): value is AbortSignal => value !== undefined);
+          const result = await fetchDocument(request, record, inputs,
+            { ...runtime, signal: AbortSignal.any(signals) }, parent, store);
+          if (request.fetch_item_type === "feed" && result.artifact.failure !== null) {
+            settleCollectionFeed(inputs, record.run_id, request.feed_id, null);
+          }
           await appendDocumentTiming(inputs, record.run_id, { operation: "fetch", duration_ms: Math.round(performance.now() - begin),
             status: result.artifact.failure === null ? "completed" : "failed" });
           return result;
         } catch (error) {
+          if (request.fetch_item_type === "feed" && error instanceof PlanError
+            && ["FEED_RESTING", "FEED_RETIRED", "FEED_CHECK_BUSY"].includes(error.code)) {
+            settleCollectionFeed(inputs, record.run_id, request.feed_id, null);
+          }
           await appendDocumentTiming(inputs, record.run_id, { operation: "fetch", duration_ms: Math.round(performance.now() - begin), status: "failed" });
           throw error;
         }
@@ -49,7 +64,13 @@ export async function executeDocumentOperation(
     const record = await store.execute(proposed, async record => {
       const begin = performance.now();
       try {
-        const result = await parseFetchedDocument(request, record, fetched, inputs, runtime, store, signal);
+        const collection = collectionForRun(inputs, record.run_id);
+        const signals = [runtime.signal, signal, collection?.signal.signal].filter((value): value is AbortSignal => value !== undefined);
+        const result = await parseFetchedDocument(request, record, fetched, inputs, runtime, store, AbortSignal.any(signals));
+        const response = ParseResponseSchema.parse(JSON.parse(result.response_json));
+        if (response.fetch_item_type === "feed") {
+          settleCollectionFeed(inputs, record.run_id, fetched.artifact!.feed_id, response.batch_id);
+        }
         await appendDocumentTiming(inputs, record.run_id, { operation: "parse", duration_ms: Math.round(performance.now() - begin),
           status: ParseResponseSchema.parse(JSON.parse(result.response_json)).failure === null ? "completed" : "failed" });
         return result;

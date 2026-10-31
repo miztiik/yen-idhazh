@@ -1,0 +1,14 @@
+{
+  "state_path": "state/raw/planner/feed-availability/state.json",
+  "enrollment_path": "state/raw/planner/feed-availability/enrollment.json",
+  "initial_enrollment": "all-active-configured-sources-once",
+  "max_enrolled_feeds": 256,
+  "max_state_bytes": 1048576,
+  "consecutive_failed_checks_before_rest": 5,
+  "rest_hours": 24,
+  "recovery_rest_hours": 24,
+  "failed_recovery_checks_before_retirement": 7,
+  "retirement_minimum_age_hours": 36,
+  "max_cas_refresh_attempts": 8,
+  "operator_enrollments": []
+}

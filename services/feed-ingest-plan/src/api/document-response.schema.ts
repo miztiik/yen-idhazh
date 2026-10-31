@@ -2,6 +2,7 @@
 import { z } from "zod";
 import {
   CountSchema, NonEmptySchema, RequestIdSchema, RunIdSchema, Sha256Schema, SlugSchema, TimestampSchema, UrlSchema, FetchFailureSchema,
+  HarvestDiagnosticsSchema,
 } from "@idhazh/common-contracts";
 
 export const FetchResponseSchema = z.strictObject({
@@ -20,5 +21,8 @@ export const ParseResponseSchema = z.discriminatedUnion("fetch_item_type", [
       categories: z.array(z.string()), published_at: TimestampSchema.nullable(),
     })),
   }),
-  z.strictObject({ ...parsedIdentity, fetch_item_type: z.literal("article"), pending_offers: CountSchema }),
+  z.strictObject({
+    ...parsedIdentity, fetch_item_type: z.literal("article"), pending_offers: CountSchema,
+    warnings: HarvestDiagnosticsSchema.shape.warnings,
+  }),
 ]);

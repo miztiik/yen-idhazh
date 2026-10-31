@@ -1,9 +1,11 @@
-/** Bound real HTML worker ownership and keep the listener free while extraction runs. */
+/** Bound native feed and article parsing, including time waiting for a worker. */
 import { randomUUID } from "node:crypto";
-import { PositiveCountSchema } from "@idhazh/common-contracts";
+import { FeedHarvestConfigSchema, PositiveCountSchema } from "@idhazh/common-contracts";
 import { ArticleExtractionError } from "./dom-extractor";
+import { FeedParseError } from "./parse-feed";
+import { ParserError } from "./parser-error";
 import type {
-  ArticleParserRequest, ArticleParserResponse, ArticleParserResult,
+  ArticleParserRequest, ArticleParserResponse, ArticleParserResult, FeedParserResult,
 } from "./article-parser-worker";
 import type { ExtractionControls } from "./extraction-controls";
 import { ArticleParserResponseSchema } from "./article-parser-worker";
@@ -15,13 +17,18 @@ type ArticleParserActivity = (
   publisher_id?: string | null,
 ) => void;
 
+export type ParserOptions = {
+  activity?: ArticleParserActivity; signal?: AbortSignal; timeout_ms?: number;
+};
+type ParserResult = ArticleParserResult | FeedParserResult;
 type Job = {
   request: ArticleParserRequest;
-  resolve: (result: ArticleParserResult) => void;
+  resolve: (result: ParserResult) => void;
   reject: (error: Error) => void;
   activity: ArticleParserActivity | undefined;
   signal: AbortSignal | undefined; cancel: (() => void) | undefined; started: boolean;
   startedAt: number | null;
+  deadline: number; timer: ReturnType<typeof setTimeout>; settled: boolean;
 };
 type Slot = { worker: Worker; job: Job | null };
 
@@ -35,30 +42,48 @@ export class ArticleParserPool {
     PositiveCountSchema.parse(concurrency);
   }
 
-  parse(body: string, url: string, config: ExtractionControls, options: {
-    activity?: ArticleParserActivity; signal?: AbortSignal;
-  } = {}) {
-    if (this.closed) return Promise.reject(new Error("Article parser pool is closed"));
-    options.signal?.throwIfAborted();
-    return new Promise<ArticleParserResult>((resolve, reject) => {
+  parse(body: string, url: string, config: ExtractionControls, options: ParserOptions = {}): Promise<ArticleParserResult> {
+    return this.enqueue({ id: randomUUID(), kind: "article", body, url, config }, options) as Promise<ArticleParserResult>;
+  }
+
+  parseFeed(body: string, options: ParserOptions = {}): Promise<FeedParserResult> {
+    return this.enqueue({ id: randomUUID(), kind: "feed", body }, options) as Promise<FeedParserResult>;
+  }
+
+  private enqueue(request: ArticleParserRequest, options: ParserOptions) {
+    if (this.closed) return Promise.reject(new ParserError("parser-cancelled"));
+    if (options.signal?.aborted) return Promise.reject(new ParserError("parser-cancelled"));
+    const timeout = FeedHarvestConfigSchema.shape.parse_timeout_ms.parse(options.timeout_ms);
+    const deadline = performance.now() + timeout;
+    return new Promise<ParserResult>((resolve, reject) => {
       const job: Job = {
-        request: { id: randomUUID(), body, url, config }, resolve, reject,
+        request, resolve, reject,
         activity: options.activity ?? this.activity, signal: options.signal, cancel: undefined, started: false, startedAt: null,
+        deadline, timer: setTimeout(() => this.cancel(job, new ParserError("parser-timeout")), timeout), settled: false,
       };
-      job.cancel = () => {
-        const slot = this.slots.find(slot => slot.job === job);
-        if (slot !== undefined) this.failSlot(slot, new Error("Article parsing was cancelled"));
-        else {
-          const position = this.waiting.indexOf(job);
-          if (position >= 0) this.waiting.splice(position, 1);
-          job.signal?.removeEventListener("abort", job.cancel!);
-          job.reject(new Error("Article parsing was cancelled"));
-        }
-      };
+      job.cancel = () => this.cancel(job, new ParserError("parser-cancelled"));
       job.signal?.addEventListener("abort", job.cancel, { once: true });
       this.waiting.push(job);
       this.dispatch();
     });
+  }
+
+  private cleanup(job: Job) {
+    job.settled = true;
+    clearTimeout(job.timer);
+    job.signal?.removeEventListener("abort", job.cancel!);
+  }
+
+  private cancel(job: Job, error: Error) {
+    if (job.settled) return;
+    const slot = this.slots.find(slot => slot.job === job);
+    if (slot !== undefined) this.failSlot(slot, error);
+    else {
+      const position = this.waiting.indexOf(job);
+      if (position >= 0) this.waiting.splice(position, 1);
+      this.cleanup(job);
+      job.reject(error);
+    }
   }
 
   private dispatch() {
@@ -67,19 +92,30 @@ export class ArticleParserPool {
       let slot = this.slots.find(slot => slot.job === null);
       if (slot === undefined) {
         if (this.slots.length >= this.concurrency) return;
-        const worker = new Worker(new URL("./article-parser-worker.ts", import.meta.url).href);
+        let worker: Worker;
+        try { worker = new Worker(new URL("./article-parser-worker.ts", import.meta.url).href); }
+        catch {
+          const job = this.waiting.shift()!;
+          this.cleanup(job);
+          job.reject(new ParserError("parser-failed"));
+          continue;
+        }
         slot = { worker, job: null };
         const held = slot;
         worker.onmessage = (event: MessageEvent<unknown>) => {
           const checked = ArticleParserResponseSchema.safeParse(event.data);
           if (!checked.success) {
-            this.failSlot(held, new Error("Article parser response failed its declared contract"));
+            this.failSlot(held, new ParserError("parser-failed"));
             return;
           }
           const response: ArticleParserResponse = checked.data;
           const job = held.job;
           if (job === null || response.id !== job.request.id) {
-            this.failSlot(held, new Error("Article parser response identity differs from its assigned job"));
+            this.failSlot(held, new ParserError("parser-failed"));
+            return;
+          }
+          if (performance.now() >= job.deadline) {
+            this.failSlot(held, new ParserError("parser-timeout"));
             return;
           }
           if (response.phase === "started") {
@@ -88,22 +124,32 @@ export class ArticleParserPool {
             job.activity?.("started", null);
             return;
           }
+          if (response.ok && response.kind !== job.request.kind) {
+            this.failSlot(held, new ParserError("parser-failed"));
+            return;
+          }
           held.job = null;
-          job.signal?.removeEventListener("abort", job.cancel!);
+          this.cleanup(job);
           job.activity?.(response.ok ? "completed" : "failed", this.elapsed(job));
           if (response.ok) job.resolve(response.result);
           else job.reject(response.reason === "parser-failed"
-            ? new Error("Article parser worker failed")
-            : new ArticleExtractionError(response.reason));
+            ? new ParserError("parser-failed")
+            : response.reason === "malformed-feed" ? new FeedParseError(null) : new ArticleExtractionError(response.reason));
           this.dispatch();
         };
-        worker.onerror = event => { event.preventDefault(); this.failSlot(held, new Error("Article parser worker failed")); };
+        worker.onerror = event => { event.preventDefault(); this.failSlot(held, new ParserError("parser-failed")); };
         this.slots.push(slot);
       }
 
       const job = this.waiting.shift()!;
+      if (performance.now() >= job.deadline) {
+        this.cleanup(job);
+        job.reject(new ParserError("parser-timeout"));
+        continue;
+      }
       slot.job = job;
-      slot.worker.postMessage(job.request);
+      try { slot.worker.postMessage(job.request); }
+      catch { this.failSlot(slot, new ParserError("parser-failed")); }
     }
   }
 
@@ -120,23 +166,23 @@ export class ArticleParserPool {
     slot.job = null;
     slot.worker.terminate();
     if (job !== null) {
-      job.signal?.removeEventListener("abort", job.cancel!);
+      this.cleanup(job);
       if (job.started) job.activity?.("failed", this.elapsed(job));
       job.reject(error);
     }
     this.dispatch();
   }
 
-  close(error = new Error("Article parser pool closed before work completed")) {
+  close(error: Error = new ParserError("parser-cancelled")) {
     if (this.closed) return;
     this.closed = true;
     const slots = this.slots.splice(0);
     for (const job of this.waiting.splice(0)) {
-      job.signal?.removeEventListener("abort", job.cancel!);
+      this.cleanup(job);
       job.reject(error);
     }
     for (const slot of slots) {
-      slot.job?.signal?.removeEventListener("abort", slot.job.cancel!);
+      if (slot.job !== null) this.cleanup(slot.job);
       if (slot.job?.started) slot.job.activity?.("failed", this.elapsed(slot.job));
       slot.job?.reject(error);
       slot.job = null;

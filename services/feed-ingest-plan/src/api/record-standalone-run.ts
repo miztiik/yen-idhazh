@@ -1,5 +1,5 @@
 /** Finalize a public stage chain after selected persistence without inventing missing timing evidence. */
-import type { PartitionedFeedBatch } from "@idhazh/common-contracts";
+import type { SelectedFeedBatch } from "@idhazh/common-contracts";
 import type { PlanInputs } from "../load-plan-inputs";
 import { currentExecutionState, executionHasArtifact, registerStageExecution } from "./document-state";
 import type { DocumentState, ExecutionState } from "./document-state";
@@ -26,7 +26,8 @@ export async function recordFinalizedDocumentWork(inputs: PlanInputs, state: Doc
   });
 }
 
-export async function recordStandaloneRun(inputs: PlanInputs, batch: PartitionedFeedBatch, artifact: string) {
+export async function recordStandaloneRun(inputs: PlanInputs,
+  batch: SelectedFeedBatch & { strategy: "bin-pack" | "round-robin" | "none"; dispatch_count: number }, artifact: string) {
   const claim = stageStore(inputs).ownership(batch.batch_id);
   if (claim.scope === "plan") return undefined;
   const pending = currentExecutionState(inputs, batch.context.run_id);

@@ -82,16 +82,16 @@ test("absent progress stays unavailable and zero counts do not certify publicati
   const settings = await Bun.file(new URL("../../../config/idhazh.json", import.meta.url)).json();
   const policy = formatWorkflowPolicy({ config: {
     ...config, curate_articles: {
-      ...config.curate_articles, article_quality_buckets: config.curate_articles.article_quality_buckets.map(rule =>
+      ...config.curate_articles, source_based_quality_buckets: config.curate_articles.source_based_quality_buckets.map(rule =>
         ({ ...rule, ladder_hours: [6, 12] })),
     },
   },
     request: { article_limit: 10, shards: 4, partition_strategy: "bin-pack" },
     history: settings.collect, parser_concurrency: 4 }, true);
   expect(policy.notice).toContain("article limit: 10 (workflow override); article assignments: 4; strategy: bin-pack");
-  for (const rule of config.curate_articles.article_quality_buckets) {
-    expect(policy.rows.find(([name]) => name === `Tier ${rule.tier} age steps (hours)`))
-      .toEqual([`Tier ${rule.tier} age steps (hours)`, "6 / 12", "configuration"]);
+  for (const rule of config.curate_articles.source_based_quality_buckets) {
+    expect(policy.rows.find(([name]) => name === `${rule.id} age steps (hours)`))
+      .toEqual([`${rule.id} age steps (hours)`, "6 / 12", "configuration"]);
   }
   expect(policy.rows.find(([name]) => name === "Article limit")).toEqual(["Article limit", "10", "workflow override"]);
   expect(policy.rows.find(([name]) => name === "Policy config version")?.[1]).toBe(config.version);
@@ -141,12 +141,11 @@ test("policy cells preserve effective JSON values and override sources without i
     "Article assignments": { value: "3", source: "workflow override" },
     "Assignment strategy": { value: "round-robin", source: "workflow override" },
     "Fetch concurrency": { value: "7", source: "configuration" },
-    "Fetch timeout (ms)": { value: "4321" },
+    "Fetch timeout per HTTP attempt (ms)": { value: "4321" },
     "Parser workers": { value: "2" },
-    "Authority coefficient": { value: "1.25" },
+    "Estimated source authority coefficient": { value: "1.25" },
     "Article-pass adjustment enabled": { value: "false" },
-    "Failing checks before rest": { value: "4" },
-    "Rested runs before retry": { value: "4" },
+    "Availability controls": { value: "Not recorded" },
     "Reliability floor (fraction)": { value: "0.3" },
   });
   expect(cells).not.toHaveProperty("Selection");
@@ -161,6 +160,17 @@ test("policy cells preserve effective JSON values and override sources without i
   expect(html).not.toContain("<th>Source</th>");
   expect(html).not.toContain("<td>workflow override</td>");
   expect(html).toContain("Workflow overrides: Article limit, Article assignments, Assignment strategy.");
+  const bypass = { ...input, config: { ...input.config, partition: { ...input.config.partition, enabled: false } } };
+  const bypassPolicy = formatWorkflowPolicy(bypass, false);
+  expect(bypassPolicy.rows.find(([name]) => name === "Article assignments"))
+    .toEqual(["Article assignments", "0", "ignored workflow override"]);
+  expect(bypassPolicy.rows.find(([name]) => name === "Assignment strategy"))
+    .toEqual(["Assignment strategy", "bypassed", "ignored workflow override"]);
+  const bypassReport = formatPolicyTable(bypass, false).summary;
+  expect(bypassReport).toContain("Workflow overrides: Article limit.");
+  expect(bypassReport).toContain("Ignored workflow inputs because worker assignment is disabled: Article assignments, Assignment strategy.");
+  expect(formatWorkflowPolicy({ ...bypass, request: {} }, false).rows.find(([name]) => name === "Article assignments"))
+    .toEqual(["Article assignments", "0", "partition disabled"]);
   expect(input).toEqual(before);
 });
 

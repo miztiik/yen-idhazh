@@ -130,7 +130,7 @@ export function renderPlanMarkdown(input: PlanMarkdownEvidence): PlannerMarkdown
       `| G${index + 1} | ${escapeMarkdown(cause.feed_id)} | ${cause.date} | ${escapeMarkdown(`${cause.subject} / ${cause.stage}`)} | ${escapeMarkdown(cause.reason_code)} | ${cause.count} | ${cause.attribution ?? "Not a failure"} |`),
     ...(causes.length ? [] : ["", health === null ? "Exclusion evidence was not recorded." : "No exclusions were recorded."]),
     ...(causes.some(cause => cause.reason_code === "MISSING_REQUIRED_FIELDS") ? ["", missingFields] : []),
-    "", "</details>", "", renderFeedRest(feedRows), "", failureEvidence.markdown,
+    "", "</details>", "", renderFeedRest(health?.availability), "", failureEvidence.markdown,
     ...(input.host === undefined ? [] : ["", input.host.markdown]),
   ].join("\n");
   const grouped = new Map<string, number>();

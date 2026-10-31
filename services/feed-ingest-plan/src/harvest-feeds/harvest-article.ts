@@ -53,11 +53,12 @@ export async function harvestArticle(
   const extractStarted = performance.now();
   const body = fetched.body;
   const link = identity.canonical_url;
-  const parserOptions: HarvestContext["parser_options"] = context.parser_options?.activity === undefined ? context.parser_options : {
+  const parserOptions: HarvestContext["parser_options"] = {
     ...context.parser_options,
-    activity: (phase, duration_ms) => context.parser_options!.activity?.(
+    timeout_ms: inputs.config.harvest.parse_timeout_ms,
+    ...(context.parser_options?.activity === undefined ? {} : { activity: (phase, duration_ms) => context.parser_options!.activity?.(
       phase, duration_ms, source.feed_id, source.publisher_id,
-    ),
+    ) }),
   };
   const parsed = await work.parse(
     () => parseDocument("article", body, link, inputs.extraction, context.parser_pool, parserOptions), fetchedEvent.event_id, describeArticleParse,

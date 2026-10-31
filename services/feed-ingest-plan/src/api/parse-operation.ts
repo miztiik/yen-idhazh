@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import {
   FEED_OUTCOME_PAYLOAD_VERSION, FeedIngestCandidateSchema, ParsedFeedBatchSchema, PlannerHarvestObservationSchema,
   deriveCandidateId, LEGACY_OPERATION_VERSION,
+  HarvestDiagnosticsSchema,
 } from "@idhazh/common-contracts";
 import type { FeedIngestCandidate, PlannerOperation, PlannerHarvestObservation, PlannerFeedOffer } from "@idhazh/common-contracts";
 import type { z } from "zod";
@@ -30,7 +31,11 @@ import { DiscoveredArticleRowSchema } from "@idhazh/common-contracts";
 import { plannerMemory } from "../planner-memory";
 import { createStageLogger } from "../logging/structured-logger";
 import { resolveArticleSourceOutcome } from "../article-source-outcome";
-import { recordHarvestFailures } from "../record-harvest-failures";
+import { recordDocumentRejections } from "./record-document-rejections";
+import {
+  claimFeedParse, completeFeedCheck, markFeedCheckUnknown, parserFailureResult,
+} from "../availability/feed-availability";
+import { collectionFeedRequest } from "./collection-operation";
 
 export async function parseFetchedDocument(
   request: z.infer<typeof ParseRequestSchema>, record: PlannerOperation, fetched: PlannerOperation,
@@ -54,9 +59,12 @@ export async function parseFetchedDocument(
   let offer: PlannerFeedOffer | undefined;
   if (artifact.parent_batch_id !== null) {
     const batch = stageStore(inputs).read("parsed", artifact.parent_batch_id, ParsedFeedBatchSchema);
-    offer = batch.offers.find(offer => offer.entry.entry_ordinal === artifact.entry_ordinal);
+    offer = batch.offers.find(offer => offer.source.feed_id === artifact.feed_id
+      && offer.entry.entry_ordinal === artifact.entry_ordinal);
     if (offer === undefined || offer.fetch_request_id !== fetched.request_id
-      || batch.feed_fetch_request_id !== parent?.request_id) throw new PlanError("ARTIFACT_INVALID", "Fetched article does not match its current offer", "fetch_request_id");
+      || (batch.feed_fetch_request_id ?? collectionFeedRequest(inputs, batch.context.run_id, source.id)) !== parent?.request_id) {
+      throw new PlanError("ARTIFACT_INVALID", "Fetched article does not match its current offer", "fetch_request_id");
+    }
   }
   const state = await documentState(fetched, inputs, runtime, store, parent);
   if (state.health_written) throw new PlanError("REQUEST_CONFLICT", "This execution finalized its health; parse in a new execution", "request_id");
@@ -71,8 +79,35 @@ export async function parseFetchedDocument(
     observed_run_id: fetched.run_id, observed_attempt: state.context.writer.attempt, candidate_id: offer?.offer_id ?? null,
   });
   if (artifact.fetch_item_type === "feed") {
-    const parsed = await work.parse(() => parseDocument("feed", artifact.body!, artifact.canonical_url),
-      artifact.observation.event_id, describeFeedParse, artifact.canonical_url);
+    await claimFeedParse(inputs, source, {
+      request_id: fetched.request_id, run_id: fetched.run_id, attempt: state.context.writer.attempt,
+    }, utcTimestamp(runtime.observation_clock));
+    const parseSignal = signal ?? runtime.signal;
+    const parseFeedDocument = () => work.parse(() => parseDocument("feed", artifact.body!, artifact.canonical_url, undefined,
+      runtime.parser_pool, {
+        timeout_ms: inputs.harvest.config.harvest.parse_timeout_ms,
+        ...(parseSignal === undefined ? {} : { signal: parseSignal }),
+      }), artifact.observation.event_id, describeFeedParse, artifact.canonical_url);
+    let parsed: Awaited<ReturnType<typeof parseFeedDocument>>;
+    try {
+      parsed = await parseFeedDocument();
+      const result = parserFailureResult(parsed.failure);
+      if (result === null) {
+        await markFeedCheckUnknown(inputs, source, {
+          request_id: fetched.request_id, run_id: fetched.run_id,
+        }, parsed.observation.occurred_at);
+      } else {
+        await completeFeedCheck(inputs, source, {
+          request_id: fetched.request_id, run_id: fetched.run_id, attempt: state.context.writer.attempt,
+          completed_at: parsed.observation.occurred_at, result, http_status: artifact.http_status,
+        });
+      }
+    } catch (error) {
+      await markFeedCheckUnknown(inputs, source, {
+        request_id: fetched.request_id, run_id: fetched.run_id,
+      }, utcTimestamp(runtime.observation_clock));
+      throw error;
+    }
     const entries = parsed.parsed ?? [];
     state.work.feed({
       version: FEED_OUTCOME_PAYLOAD_VERSION, kind: "feed_outcome",
@@ -80,39 +115,55 @@ export async function parseFetchedDocument(
       parse_status: parsed.failure === null ? entries.length ? "success" : "empty" : "failure",
       parsed_count: entries.length, harvested_count: 0, fetch_duration_ms: null, parse_duration_ms: null,
       rejection_reason: parsed.failure === null ? entries.length ? null : "FEED_EMPTY" : "FEED_PARSE_FAILED",
-      diagnostics: null, history: null,
+      diagnostics: parsed.failure === null ? null : HarvestDiagnosticsSchema.parse({
+        ...fetchEvidence(artifact), stopped_stage: "parse", detail: parsed.failure, failure_code: "unknown",
+      }), history: null,
     }, entries, parsed.observation.occurred_at, artifact);
     const batch = await createParsedFeedBatch({
       state, inputs, runtime, feed_id: source.id, entries, fetched_request_id: fetched.request_id, observed_at: parsed.observation.occurred_at,
     });
     return { artifact: null, response_json: JSON.stringify({
       batch_id: batch.batch_id, fetch_request_id: fetched.request_id, run_id: fetched.run_id, fetch_item_type: "feed",
-      parsed_count: entries.length, failure: parsed.failure, offers: publicFeedOffers(batch, inputs.harvest.config.harvest),
+      parsed_count: entries.length, failure: parsed.failure, offers: publicFeedOffers(batch, inputs.harvest.config.harvest, source.id),
     }) };
   }
   const pool = runtime.parser_pool ?? new ArticleParserPool(inputs.settings.listener.parser_concurrency);
   let parsed;
+  const parseStarted = performance.now();
   try {
     parsed = await work.parse(() => parseDocument("article", artifact.body!, artifact.canonical_url, inputs.harvest.extraction, pool, {
+      timeout_ms: inputs.harvest.config.harvest.parse_timeout_ms,
       ...(signal === undefined ? {} : { signal }),
     }), artifact.observation.event_id, describeArticleParse, artifact.canonical_url);
   } finally { if (runtime.parser_pool === undefined) pool.close(); }
   const candidateId = offer?.offer_id ?? deriveCandidateId(state.context.run_id, source.id, 0);
+  const title = resolveArticleTitle(offer?.entry.title ?? null, parsed.parsed?.page_title ?? null);
+  const extractionFailure = parsed.failure === "malformed-feed" ? null : parsed.failure
+    ?? (parsed.parsed?.article_text ? title ? null : "missing-title" : "empty-content");
+  const qualityFailure = parsed.parsed?.quality?.failure_code ?? null;
+  const diagnostics = HarvestDiagnosticsSchema.parse({
+    ...fetchEvidence(artifact), extract_ms: Math.round(performance.now() - parseStarted),
+    extraction_failure: extractionFailure,
+    stopped_stage: extractionFailure !== null || parsed.parsed?.quality?.rejected ? "extract" : null,
+    detail: parsed.failure ?? extractionFailure ?? (parsed.parsed?.quality?.rejected ? qualityFailure : null),
+    failure_code: parsed.failure !== null ? "unknown" : extractionFailure === "empty-content" ? "no_text"
+      : extractionFailure === "missing-title" ? "no_title" : qualityFailure,
+    warnings: parsed.parsed?.warnings ?? [], quality: parsed.parsed?.quality ?? null,
+  });
   const observation = PlannerHarvestObservationSchema.parse({
     candidate_id: candidateId, http_status: artifact.http_status, robots: artifact.robots, fetch_failure: null,
     paywall: parsed.parsed?.paywall ?? null, paywall_evidence: parsed.parsed?.paywall_evidence ?? "not-observed",
     extraction: parsed.parsed === null ? "failed" : parsed.parsed.article_text ? "success" : "empty",
-    observed_at: artifact.observation.occurred_at, diagnostics: null,
+    observed_at: artifact.observation.occurred_at, diagnostics,
     ...(parsed.parsed?.content_evidence == null ? {} : { content_evidence: parsed.parsed.content_evidence }),
   });
-  const title = resolveArticleTitle(offer?.entry.title ?? null, parsed.parsed?.page_title ?? null);
   let candidate: FeedIngestCandidate | null = null;
   const rejected = parsed.failure !== null || parsed.parsed?.quality?.rejected ? "EXTRACT_FAILED"
     : !parsed.parsed?.article_text ? "EXTRACT_EMPTY" : !title ? "MISSING_REQUIRED_FIELDS" : null;
   const rejection = rejected === null ? null : recordRejection({ feed_id: source.id, feed_url: source.url }, {
     writer: state.context.writer, correlation_id: state.context.correlation_id, max_future_hours: inputs.clock_config.collect.max_future_hours,
     observation_clock: runtime.observation_clock ?? (() => new Date()),
-  }, rejected, fetchEvidence(artifact), {
+  }, rejected, { ...fetchEvidence(artifact), diagnostics }, {
     candidate_id: candidateId, canonical_url: artifact.canonical_url, url_key: artifact.article_id,
     title, categories: offer?.entry.categories ?? [],
   });
@@ -130,7 +181,9 @@ export async function parseFetchedDocument(
   const sourceOutcome = fetched.source_outcome ?? (measuredOutcome === null ? null
     : store.settleSourceOutcome(fetched.request_id, measuredOutcome));
   state.work.article(result, fetched.request_id, sourceOutcome);
-  if (rejection !== null) await recordHarvestFailures([rejection], state.context, inputs);
+  if (rejection !== null) {
+    await recordDocumentRejections([rejection], state, inputs);
+  }
   let batch;
   if (offer !== undefined && artifact.parent_batch_id !== null) {
     batch = updateFeedOffer(inputs, state, artifact.parent_batch_id, offer.offer_id, candidate === null ? "rejected" : "parsed", fetched.request_id, result);
@@ -165,6 +218,7 @@ export async function parseFetchedDocument(
   return { artifact: null, response_json: JSON.stringify({
     batch_id: batch.batch_id, fetch_request_id: fetched.request_id, fetch_item_type: "article", run_id: fetched.run_id,
     parsed_count: candidate === null ? 0 : 1, failure: rejected,
+    warnings: diagnostics.warnings,
     pending_offers: batch.offers.filter(offer => offer.state !== "parsed" && offer.state !== "rejected").length,
   }) };
 }

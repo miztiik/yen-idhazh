@@ -8,7 +8,7 @@ import { resolvePlanRequest } from "./api/plan-request";
 import { resolvePlanningInputs } from "./resolve-planning-inputs";
 import { readPublisherPublication } from "./read-ledger-history/read-publisher-publication";
 import { captureHealthRows } from "./read-ledger-history/health-summary";
-import { prepareFeedHealthState } from "./api/feed-health-state-operation";
+import { prepareExecutionHealth } from "./api/feed-health-state-operation";
 import type { RunContext } from "./resolve-run-context";
 import { inputEndpointKey } from "./read-ledger-history/health-summary";
 import { readExclusionEvidence } from "./read-ledger-history/read-exclusion-evidence";
@@ -17,10 +17,10 @@ import { foldDiscoveryHistory } from "./read-ledger-history/read-discovered-evid
 import { createStageLogger } from "./logging/structured-logger";
 
 export async function selectArticles(batch: ParsedFeedBatch, inputs: PlanInputs, selectionStartedAt: string,
-  currentHealth?: Pick<Awaited<ReturnType<typeof prepareFeedHealthState>>, "sources" | "request_report">, context: RunContext = batch.context) {
+  currentHealth?: Pick<Awaited<ReturnType<typeof prepareExecutionHealth>>, "sources" | "request_report">, context: RunContext = batch.context) {
   const request = resolvePlanRequest(batch.request, inputs.harvest.config);
   const planning = resolvePlanningInputs(inputs, request);
-  const health = currentHealth ?? await prepareFeedHealthState(inputs, selectionStartedAt,
+  const health = currentHealth ?? await prepareExecutionHealth(inputs, selectionStartedAt,
     { context: batch.context, rows: batch.work_rows });
   const exclusions = await readExclusionEvidence({
     root: inputs.root, now: selectionStartedAt, publishedWindowDays: inputs.clock_config.collect.published_window_days,

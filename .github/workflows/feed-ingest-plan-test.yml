@@ -14,8 +14,23 @@ on:
         required: false
         default: '4'
         type: string
+      institutional_age_hours:
+        description: Institutional sources - article age windows (hours); increasing comma-separated steps; blank uses configuration
+        required: false
+        default: ''
+        type: string
+      trade_press_age_hours:
+        description: Trade press - article age windows (hours); increasing comma-separated steps; blank uses configuration
+        required: false
+        default: ''
+        type: string
+      community_age_hours:
+        description: Community sources - article age windows (hours); increasing comma-separated steps; blank uses configuration
+        required: false
+        default: ''
+        type: string
       partition_strategy:
-        description: Article distribution; for none, clear shards or set it to 1
+        description: Article distribution; none assigns worker 0 and requires one shard; only partition.enabled=false bypasses assignment
         required: false
         default: 'bin-pack'
         type: choice
@@ -74,6 +89,9 @@ jobs:
           ARTICLE_LIMIT: ${{ inputs.article_limit }}
           SHARDS: ${{ inputs.shards }}
           PARTITION_STRATEGY: ${{ inputs.partition_strategy }}
+          INSTITUTIONAL_AGE_HOURS: ${{ inputs.institutional_age_hours }}
+          TRADE_PRESS_AGE_HOURS: ${{ inputs.trade_press_age_hours }}
+          COMMUNITY_AGE_HOURS: ${{ inputs.community_age_hours }}
         run: bun run services/feed-ingest-plan/scripts/run-feed-ingest-plan.ts
 
       - name: Record workflow cancellation

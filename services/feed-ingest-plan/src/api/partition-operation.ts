@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import { SelectedFeedBatchSchema, PartitionedFeedBatchSchema, PartitionArticlesRequestSchema } from "@idhazh/common-contracts";
 import type { PlanInputs } from "../load-plan-inputs";
 import type { PlanRuntime } from "../run-feed-plan";
-import { resolvePlanRequest } from "./plan-request";
+import { resolvePlanRequest, PlanError } from "./plan-request";
 import { requireStageConfiguration } from "./selection-operation";
 import { stageStore } from "./stage-store";
 import { partitionArticles } from "../partition-article-shards/shard-packer";
@@ -11,6 +11,7 @@ import { appendDocumentTiming, executionHasArtifact, registerStageExecution } fr
 import { resolveRunContext } from "../resolve-run-context";
 
 export async function executePartition(raw: unknown, inputs: PlanInputs, runtime: PlanRuntime) {
+  if (!inputs.harvest.config.partition.enabled) throw new PlanError("PARTITION_DISABLED", "Partitioning is disabled by the effective policy", "partition.enabled");
   const started = performance.now();
   const request = PartitionArticlesRequestSchema.parse(raw);
   const store = stageStore(inputs);

@@ -1,6 +1,6 @@
 # Selecting an editorial portfolio
 
-**Last Updated**: 2026-10-29
+**Last Updated**: 2026-10-30
 
 How does the isolated planner choose articles from the admitted batch?
 It uses configured numeric rules and explicit factual evidence, not a model
@@ -11,7 +11,7 @@ that proposal is not a separate unfinished selection requirement. The
 production Python ranking path is unchanged, and further numeric priority
 terms still need their own approval.
 
-### Feed IDs, source kinds, source tiers and article-quality buckets
+### Feed IDs, source kinds, source tiers and source-based quality buckets
 
 A **feed ID** is the stable name used in code for one configured feed. It is
 the `sources[].id` value in `config/sources.json`, such as `abc-au-world`, and
@@ -32,20 +32,20 @@ The project uses four distinct concepts with related identifiers:
    Institution, Trade press and Community, with weights 1.0, 0.6 and 0.3.
    A numeric source-tier ID is a stable key, not an authority rank or bucket
    priority.
-3. An **article-quality bucket** assigns a share of the article limit and an
-   age window policy. The documentation name is `article_quality_buckets`.
-   The inner entry field `tier` uses the matching source-tier ID.
+3. A **source-based quality bucket** assigns a share of the article limit and
+   an age window policy based on source authority, not a verdict about an
+   article's quality. `curate_articles.source_based_quality_buckets` is an
+   ordered list. Each entry has its own string `id` and an independent numeric
+   `source_tier_id` that selects the source tier. Neither key sets priority.
 4. A **feed ID** identifies one feed entry. It is separate from the
-   source kind, source tier and article-quality bucket.
+   source kind, source tier and source-based quality bucket.
 
 This is why "Tier 1" is ambiguous. A 60-percent share and the source-tier
-weight 1.0 belong to different calculations. High, Medium and Low are only
-examples of article-quality bucket names; they are not current config labels.
-The current implementation maps each numeric source-tier ID to a same-number
-bucket entry, but that correspondence is an implementation detail. A bucket
-does not change a source's tier or kind.
+weight 1.0 belong to different calculations. The current bucket IDs are
+`institutional`, `trade-press` and `community`. A bucket does not change a
+source's tier or kind, and source authority is not an article-quality verdict.
 
-#### Table A - Current source tiers and matching article-quality buckets
+#### Table A - Current source tiers and matching source-based quality buckets
 
 | Id | Source-tier ID and registry name | Authority weight | Count target | Fresh ceiling | Allowed age steps |
 | --- | --- | ---: | ---: | ---: | --- |
@@ -151,21 +151,21 @@ contributes. `N_p(S)` counts selected articles for `p`, and `N_g(S)` counts
 selected articles in the candidate's website group `g`. An unknown publisher
 or website group keeps its adjustment unavailable. These weights are
 configured as `lambda_source` and `lambda_website_group`. The score chooses among permitted
-candidates in the active article-quality bucket and age window; it does not
-override article-quality bucket order.
+candidates in the active source-based quality bucket and age window; it does not
+override bucket order.
 
-## Article-quality bucket targets, fresh buffers and older deficits
+## Source-based quality bucket targets, fresh buffers and older deficits
 
 The saved request's `article_limit`, or the configured default, is a positive
-finite safe integer. `curate_articles.article_quality_buckets` declares each
-article-quality bucket's share, additional fresh buffer and increasing age
+finite safe integer. `curate_articles.source_based_quality_buckets` declares each
+source-based quality bucket's share, additional fresh buffer and increasing age
 steps. Configured list order sets bucket priority; numeric IDs do not. Shares and
 source-tier weights have different jobs: shares set count targets, while the
 applied source-tier weight multiplies feed authority in the score above. A
 measured article-pass rate can change ranking inside a source tier; it never
 moves a feed into another source tier.
 
-For requested limit `L`, article-quality bucket `t` has an unrounded target and a fresh
+For requested limit `L`, source-based quality bucket `t` has an unrounded target and a fresh
 ceiling:
 
 $$
@@ -178,7 +178,7 @@ L \, \frac{\mathrm{share\_pct}_t + \mathrm{buffer\_pct}_t}{100}
 \right\rceil\right)
 $$
 
-`I_t` is one for each article-quality bucket receiving a remaining place: assign those
+`I_t` is one for each source-based quality bucket receiving a remaining place: assign those
 places to the largest fractional remainders of `q_t`, with configured
 bucket order breaking ties. This makes the integer targets sum to `L`.
 The ceiling adds the buffer as percentage points; it is not a guaranteed lower
@@ -195,15 +195,25 @@ or permitted relaxation, using the same full selected set and exposure counts.
 Shortages do not authorize exceeding ceilings.
 
 `article_limit` is a hard maximum, not a promise to produce that many articles.
-An article-quality bucket deficit is the number of selected articles missing
+A source-based quality bucket deficit is the number of selected articles missing
 from that bucket's target. It is not the difference between the total selected
 count and `article_limit`. Fresh buffer articles can fill the global limit
 while another bucket remains below target. A bucket cannot use older
 articles after it reaches its own target.
 
-The configured `ladder_hours` value for each article-quality bucket is the age
-policy. Unknown-age candidates remain eligible in the base selection phase.
-The workflow uses those configured ladder steps without a run-level age control.
+The configured `ladder_hours` value for each source-based quality bucket is the
+default age policy. Unknown-age candidates remain eligible in the base
+selection phase. A request can override the institutional, trade-press or
+community age windows. Each override is a nonempty, strictly increasing list
+of positive hours. Blank workflow inputs use configuration; populated inputs
+are comma-separated hours. The workflow control names are fixed request keys
+for the matching stable bucket IDs, not inferred source ranks.
+
+The effective policy is resolved into a new config before article fetching,
+screening, selection and policy reporting. It does not mutate listener-wide
+settings or another request. The report names each bucket ID, its source-tier
+mapping, effective hours and whether configuration or a run override supplied
+them. The count shares and fresh buffers do not change with an age override.
 
 The same workflow defaults `article_limit` to `100`, four workers, and
 `bin-pack`. Its worker controls affect only partitioning after article
@@ -216,7 +226,7 @@ five percent. It calculates exact integer targets and fresh ceilings. Actual
 supply, duplicates, source limits and website-group limits can make the final
 counts differ from those targets.
 
-Article-quality bucket shares set article counts. They are separate from
+Source-based quality bucket shares set article counts. They are separate from
 ranking weights. The current TypeScript implementation uses each feed's
 configured weight, its source-tier weight, recency, the technical article-pass
 history and exposure penalties. Feed-read reliability and technical
@@ -267,7 +277,7 @@ batch, not a fixed shortlist.
 ```mermaid
 %%{init: {"theme": "base", "themeVariables": {"fontFamily": "sans-serif", "background": "#ffffff", "primaryColor": "#f8fafc", "primaryTextColor": "#1f2937", "primaryBorderColor": "#64748b", "lineColor": "#64748b", "textColor": "#1f2937", "clusterBkg": "#f8fafc", "clusterBorder": "#94a3b8", "edgeLabelBackground": "#ffffff"}}}%%
 flowchart TD
-  START["Admitted screened articles<br/>and saved request"] --> CALC["Resolve source tier and article-quality<br/>bucket data: targets, ceilings and age ladders"]
+  START["Admitted screened articles<br/>and saved request"] --> CALC["Resolve source tier and source-based quality<br/>bucket data: targets, ceilings and age ladders"]
   CALC --> ROOM{"Has article_limit<br/>been reached?"}
   ROOM -->|"Yes"| STOP["Stop selection<br/>No remaining global capacity"]
   ROOM -->|"No"| PHASE1{"Phase 1<br/>Can a fresh article fill<br/>a source tier target?"}
@@ -301,7 +311,7 @@ flowchart TD
   linkStyle 2,5,7,9,12 stroke:#dc2626,stroke-width:1.5px;
 ```
 
-Selection starts at Phase 1. Phase 1 fills fresh articles to article-quality
+Selection starts at Phase 1. Phase 1 fills fresh articles to source-based quality
 bucket targets keyed by source-tier ID. Phase 2 adds fresh articles up to the
 buckets' fresh ceilings. Phase 3 uses permitted older ladder steps only to
 fill a target, never a bucket's fresh ceiling. Phase order follows configured
@@ -392,6 +402,13 @@ owns the complete field list. Partitioning adds assignments without
 reranking or replacing this selection.
 
 ## Design rationale
+
+Source-based budgets describe an estimate of source authority, not a measured
+article verdict. Separate bucket IDs and source-tier mappings prevent a label
+or numeric key from silently changing selection order. Run-specific age
+windows are resolved by copying validated config so simultaneous requests
+cannot change shared listener settings. This change retains the existing
+count targets, fresh buffers and default age steps.
 
 Compact contributions explain why a chosen article ranked where it did
 without preserving a second classification or audit system. Known zero

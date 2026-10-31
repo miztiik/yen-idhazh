@@ -5,6 +5,9 @@ import { randomUUID } from "node:crypto";
 import { PositiveCountSchema } from "@idhazh/common-contracts";
 import { loadPlanInputs } from "../src/load-plan-inputs";
 import { parseCliRequest } from "../src/api/plan-request";
+import { parseAgeWindows, resolveRunPolicy, RunPolicyOverridesSchema } from "../src/config/resolve-run-policy";
+import type { PlanRequest } from "../src/api/plan-request";
+import type { RunPolicyOverrides } from "../src/config/resolve-run-policy";
 import { ServiceSettingsSchema } from "../src/config/service-settings";
 import { stagePlannerHistory } from "./feed-ingest-plan-history";
 import { WorkflowPolicySchema } from "./feed-ingest-plan-policy-report";
@@ -12,7 +15,9 @@ import { captureWorkflowHostFingerprint } from "./feed-ingest-plan-host-fingerpr
 import { readMetadataRegistrations } from "./feed-ingest-plan-metadata";
 import { createPlannerStartup } from "./feed-ingest-plan-supervisor";
 
-export function readWorkflowRequest(environment: Record<string, string | undefined>) {
+export function readWorkflowRequest(environment: Record<string, string | undefined>): {
+  request: PlanRequest; policy_overrides: RunPolicyOverrides;
+} {
   const args = ["--cli"];
   for (const [name, flag] of [
     ["ARTICLE_LIMIT", "--article-limit"],
@@ -21,15 +26,22 @@ export function readWorkflowRequest(environment: Record<string, string | undefin
     const value = environment[name];
     if (value !== undefined && value.trim() !== "") args.push(`${flag}=${value}`);
   }
-  return parseCliRequest(args).request;
+  const overrides = RunPolicyOverridesSchema.parse({
+    institutional_age_hours: parseAgeWindows(environment.INSTITUTIONAL_AGE_HOURS),
+    trade_press_age_hours: parseAgeWindows(environment.TRADE_PRESS_AGE_HOURS),
+    community_age_hours: parseAgeWindows(environment.COMMUNITY_AGE_HOURS),
+  });
+  return { request: parseCliRequest(args).request,
+    policy_overrides: Object.fromEntries(Object.entries(overrides).filter(([, value]) => value !== undefined)) };
 }
 
 export async function preparePlannerWorkflow(root: string, environment: Record<string, string | undefined>) {
-  const request = readWorkflowRequest(environment);
+  const { request, policy_overrides: policyOverrides } = readWorkflowRequest(environment);
   const { RUNNER_TEMP, GITHUB_OUTPUT, GITHUB_RUN_ID, GITHUB_RUN_ATTEMPT } = environment;
   if (!RUNNER_TEMP || !GITHUB_OUTPUT || !GITHUB_RUN_ID || !GITHUB_RUN_ATTEMPT) throw new Error("Workflow execution controls are missing");
   const directory = join(RUNNER_TEMP, "feed-ingest-plan");
   const inputs = await loadPlanInputs(root);
+  inputs.harvest = { ...inputs.harvest, config: resolveRunPolicy(inputs.harvest.config, policyOverrides) };
   const attempt = PositiveCountSchema.parse(Number(GITHUB_RUN_ATTEMPT));
   const staged = await stagePlannerHistory(root, inputs, new Date().toISOString().replace(/\.\d{3}Z$/, "Z"));
   inputs.settings = ServiceSettingsSchema.parse({
@@ -45,8 +57,9 @@ export async function preparePlannerWorkflow(root: string, environment: Record<s
   const correlationId = randomUUID();
   await mkdir(directory, { recursive: true });
   await writeFile(join(directory, "workflow-policy.json"), JSON.stringify(WorkflowPolicySchema.parse({
-    config: inputs.harvest.config, request, history: inputs.clock_config.collect,
+    config: inputs.harvest.config, request: { ...request, ...policyOverrides }, history: inputs.clock_config.collect,
     parser_concurrency: inputs.settings.listener.parser_concurrency,
+    availability: inputs.availability,
   })));
   console.error(JSON.stringify({ event: "planner_history_staged", notices: staged.notices }));
   const identity = { run_id: `${captured.toISOString().slice(0, 10)}-${GITHUB_RUN_ID}`,

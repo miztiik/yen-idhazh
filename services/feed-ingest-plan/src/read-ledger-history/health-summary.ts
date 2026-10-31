@@ -1,5 +1,5 @@
-/** Derive rest, feed-read reliability and article admission from their own required fields. */
-import { availabilityEvidence, definitelyAfter } from "@idhazh/common-contracts";
+/** Derive feed-read reliability and article admission from their own required fields. */
+import { definitelyAfter } from "@idhazh/common-contracts";
 import { FeedHealthStateRowSchema, SourceArticleRefusalReasonSchema } from "@idhazh/common-contracts";
 import type { FeedHealthStateRow, SourceSnapshot } from "@idhazh/common-contracts";
 import type { SourceHistoryEvidence, FeedHistoryPolicy } from "./read-feed-history";
@@ -28,7 +28,6 @@ export function summarizePlanningHealth(input: {
   const now = Date.parse(input.now);
   if (!Number.isFinite(now)) throw new Error("Health summary needs a valid UTC clock");
   const represented = [...new Set(input.days.filter(day => day.day <= input.now.slice(0, 10)).map(day => day.day))].sort();
-  const lifecycleDays = represented.slice(-input.lifecycle_window_days);
   const reliabilityDays = represented.slice(-input.policy.reliability_window_days);
   const complete = (days: readonly string[], required: number) => days.length >= required
     && days.every(day => input.days.find(value => value.day === day)?.complete === true);
@@ -57,10 +56,6 @@ export function summarizePlanningHealth(input: {
         date: row.date, run_id: row.run_id, checked_at: row.checked_at!, outcome: row.outcome!, items: row.items!,
       }));
     };
-    const lifecycleRows = logical("feed_rest").filter(row => lifecycleDays.includes(row.date));
-    const lifecycleComplete = fieldsComplete("feed_rest", lifecycleDays, input.lifecycle_window_days);
-    const availability = availabilityEvidence(lifecycleRows,
-      input.policy.availability_strikes_before_rest);
     const measured = logical("feed_reliability").filter(row => reliabilityDays.includes(row.date)
       && row.outcome !== "skipped" && row.outcome !== "robots_denied");
     const productive = measured.filter(row => row.outcome === "ok" && row.items > 0).length;
@@ -75,11 +70,8 @@ export function summarizePlanningHealth(input: {
       .reduce((count, reason) => count + reason.count, 0), 0);
     sources.set(source.feed_id, {
       endpoint_key: inputEndpointKey(endpoint),
-      lifecycle: source.status === "retired" ? "retired"
-        : lifecycleRows.length === 0 || !lifecycleComplete ? "unknown"
-        : availability.resting === true ? "resting" : availability.resting === null ? "unknown" : "eligible",
-      strikes: lifecycleRows.length === 0 || !lifecycleComplete ? null : availability.strikes,
-      rested_runs: lifecycleRows.length === 0 || !lifecycleComplete ? null : availability.rested_runs,
+      lifecycle: source.status === "retired" ? "retired" : "unknown",
+      strikes: null, rested_runs: null,
       article_pass_rate: articleKnown && admitted + refused > 0 ? admitted / (admitted + refused) : null,
       reliability: measured.length === 0 ? null : {
         productive, attempted: measured.length,

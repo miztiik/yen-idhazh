@@ -28,6 +28,7 @@ import { selectArticles } from "../src/select-articles";
 import { endpointKey } from "../src/read-ledger-history/read-feed-history";
 import { plannerRecordings } from "../../../packages/ledger-file-writer/test/planner-recordings";
 import { source } from "./harvest-recordings";
+import { recordedPlan } from "./plan-recordings";
 
 type CandidateCase = {
   name: string; source: string; ordinal: number;
@@ -56,7 +57,7 @@ async function inputs(patch: Partial<Knobs> = {}) {
     triage: { ...loaded.harvest.config.triage, recency_half_life_hours: 18, recency_weight: 1 },
     curate_articles: {
       ...loaded.harvest.config.curate_articles, article_limit: 2,
-      article_quality_buckets: [{ tier: 1, share_pct: 100, buffer_pct: 0, ladder_hours: [72] }],
+      source_based_quality_buckets: [{ id: "institutional", source_tier_id: 1, share_pct: 100, buffer_pct: 0, ladder_hours: [72] }],
       source_authority_weight: 0, exploration_slot_share: 0,
       soft_caps: {
         ...loaded.harvest.config.curate_articles.soft_caps, max_source_share: 1, max_website_group_share: 1, min_distinct_sources: 1,
@@ -138,10 +139,10 @@ function tierArticles(setup: Setup, tier: number, count: number, ageHours: numbe
 }
 
 test("fresh target and buffer phases produce six, two and two before older backfill", async () => {
-  const setup = await inputs({ article_limit: 10, article_quality_buckets: [
-    { tier: 1, share_pct: 60, buffer_pct: 10, ladder_hours: [24, 36, 48] },
-    { tier: 2, share_pct: 30, buffer_pct: 5, ladder_hours: [24, 30] },
-    { tier: 3, share_pct: 10, buffer_pct: 5, ladder_hours: [24] },
+  const setup = await inputs({ article_limit: 10, source_based_quality_buckets: [
+    { id: "institutional", source_tier_id: 1, share_pct: 60, buffer_pct: 10, ladder_hours: [24, 36, 48] },
+    { id: "trade-press", source_tier_id: 2, share_pct: 30, buffer_pct: 5, ladder_hours: [24, 30] },
+    { id: "community", source_tier_id: 3, share_pct: 10, buffer_pct: 5, ladder_hours: [24] },
   ] });
   const candidates = [
     ...tierArticles(setup, 1, 5, 1), ...tierArticles(setup, 2, 2, 1), ...tierArticles(setup, 3, 2, 1),
@@ -159,10 +160,10 @@ test("fresh target and buffer phases produce six, two and two before older backf
 });
 
 test("older windows fill a tier target but never its fresh buffer", async () => {
-  const setup = await inputs({ article_limit: 10, article_quality_buckets: [
-    { tier: 1, share_pct: 60, buffer_pct: 10, ladder_hours: [24, 36, 48] },
-    { tier: 2, share_pct: 30, buffer_pct: 5, ladder_hours: [24, 30] },
-    { tier: 3, share_pct: 10, buffer_pct: 5, ladder_hours: [24] },
+  const setup = await inputs({ article_limit: 10, source_based_quality_buckets: [
+    { id: "institutional", source_tier_id: 1, share_pct: 60, buffer_pct: 10, ladder_hours: [24, 36, 48] },
+    { id: "trade-press", source_tier_id: 2, share_pct: 30, buffer_pct: 5, ladder_hours: [24, 30] },
+    { id: "community", source_tier_id: 3, share_pct: 10, buffer_pct: 5, ladder_hours: [24] },
   ] });
   const result = curateArticles(selectionInput(setup, [
     ...tierArticles(setup, 1, 10, 36), ...tierArticles(setup, 2, 1, 1),
@@ -423,20 +424,22 @@ test("real screening results compose into exact curation without losing harveste
   expect(names(result)).toEqual(setup.fixture.expected.baseline);
   expect(result.articles.map(row => row.article_text)).toEqual(candidates.slice(0, 2).map(row => row.article_text));
   expect(result.articles.length + result.losses.length + screened.rejections.length).toBe(4);
-  const root = await mkdtemp(join(tmpdir(), "screened-health-counts-"));
+  const first = article(setup.fixture.candidates[0]!, setup);
+  const configured = source({
+    id: first.candidate.feed_id, url: first.candidate.source.feed_url,
+    title: first.candidate.source.title, tier: first.candidate.source.tier,
+    weight: first.candidate.source.weight, publisher_id: first.candidate.source.publisher_id,
+  });
+  const publishers = first.candidate.source.publisher_id === null ? [] : [{
+    id: first.candidate.source.publisher_id, display_name: "Recorded publisher",
+  }];
+  const recorded = await recordedPlan([configured], publishers);
+  const root = recorded.directory;
   try {
     setup.inputs.root = root;
-    const first = article(setup.fixture.candidates[0]!, setup);
-    setup.inputs.harvest.sources = [source({
-      id: first.candidate.feed_id, url: first.candidate.source.feed_url,
-      title: first.candidate.source.title,
-      tier: first.candidate.source.tier, weight: first.candidate.source.weight,
-      publisher_id: first.candidate.source.publisher_id,
-    })];
+    setup.inputs.harvest.sources = [configured];
     setup.inputs.harvest.retired_sources = [];
-    if (first.candidate.source.publisher_id !== null) setup.inputs.harvest.publishers = [{
-      id: first.candidate.source.publisher_id, display_name: "Recorded publisher",
-    }];
+    setup.inputs.harvest.publishers = publishers;
     const pair = selectionInput(setup, [first, { ...first, candidate: short }]).batch;
     pair.work_rows = [FeedHealthStateRowSchema.parse({
       ...plannerRecordings(setup.context.date).find(record => record.name === "feed-health-state")!.row,
@@ -464,8 +467,8 @@ test("real screening results compose into exact curation without losing harveste
       article_requests: 0, robots_requests: 0, article_candidates: 0, articles_selected: 1,
     });
     expect(pair).toEqual(originalBatch);
-  } finally { await rm(root, { recursive: true, force: true }); }
-});
+  } finally { await recorded.close(); }
+}, 120000);
 
 test("screening and packing retain the owning run day even when evaluation happens on a later UTC day", async () => {
   const setup = await inputs();

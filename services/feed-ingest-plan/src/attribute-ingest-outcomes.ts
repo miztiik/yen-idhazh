@@ -21,7 +21,10 @@ export function attributeIngestOutcome(
 
   if (evidence.failure_code === "unsafe-target"
     || evidence.failure_code === "body-too-large"
-    || evidence.failure_code === "dom-depth-exceeded") {
+    || evidence.failure_code === "dom-depth-exceeded"
+    || evidence.failure_code === "parser-timeout"
+    || evidence.failure_code === "parser-cancelled"
+    || evidence.failure_code === "parser-failed") {
     return "pipeline";
   }
 

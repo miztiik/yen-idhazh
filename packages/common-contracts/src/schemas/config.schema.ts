@@ -79,6 +79,9 @@ export const FeedSemanticFallbackConfigSchema = z.strictObject({
 export const FeedHarvestConfigSchema = z.strictObject({
   concurrency: PositiveCountSchema,
   fetch_timeout_ms: PositiveCountSchema,
+  parse_timeout_ms: PositiveCountSchema.default(10000).describe(
+    "Parse-request deadline in milliseconds, including worker queue time. The default is unmeasured.",
+  ),
   article_robots_policy: z.enum(["enforce", "observe"]).default("enforce").describe(
     "Enforce article robots permission or retain it as evidence without blocking article requests. Feeds always enforce.",
   ),
@@ -107,8 +110,9 @@ export const FeedSoftCapsSchema = z.strictObject({
 export const FeedWebsiteGroupingConfigSchema = z.strictObject({
   include_private_suffixes: z.boolean().default(true),
 });
-export const ArticleQualityBucketSchema = z.strictObject({
-  tier: PositiveCountSchema,
+export const SourceBasedQualityBucketSchema = z.strictObject({
+  id: NonEmptySchema.regex(/^[a-z][a-z0-9-]*$/),
+  source_tier_id: PositiveCountSchema,
   share_pct: z.number().finite().min(0).max(100),
   buffer_pct: z.number().finite().min(0).max(100),
   ladder_hours: z.array(PositiveSchema).min(1),
@@ -120,15 +124,16 @@ export const ArticleQualityBucketSchema = z.strictObject({
     reject(ctx, "ladder_hours must be strictly increasing", ["ladder_hours"]);
   }
 });
-export const ArticleQualityBucketsSchema = z.array(ArticleQualityBucketSchema).min(1).superRefine((buckets, ctx) => {
-  if (new Set(buckets.map(rule => rule.tier)).size !== buckets.length) reject(ctx, "article_quality_buckets must not repeat a source class");
+export const SourceBasedQualityBucketsSchema = z.array(SourceBasedQualityBucketSchema).min(1).superRefine((buckets, ctx) => {
+  if (new Set(buckets.map(rule => rule.id)).size !== buckets.length) reject(ctx, "source_based_quality_buckets must not repeat a bucket id");
+  if (new Set(buckets.map(rule => rule.source_tier_id)).size !== buckets.length) reject(ctx, "source_based_quality_buckets must not repeat a source tier");
   if (Math.abs(buckets.reduce((sum, rule) => sum + rule.share_pct, 0) - 100) > Number.EPSILON * 100) {
-    reject(ctx, "article_quality_buckets share_pct must sum to 100");
+    reject(ctx, "source_based_quality_buckets share_pct must sum to 100");
   }
 });
 export const FeedCurateArticlesConfigSchema = FeedCurationPolicySchema.extend({
   article_limit: PositiveCountSchema,
-  article_quality_buckets: ArticleQualityBucketsSchema,
+  source_based_quality_buckets: SourceBasedQualityBucketsSchema,
   source_reliability_penalty_enabled: z.boolean().default(true).describe(
     "Apply measured source reliability separately from article quality. Remove this switch and its disabled path when isolated selection becomes the sole planner.",
   ),
@@ -137,6 +142,9 @@ export const FeedCurateArticlesConfigSchema = FeedCurationPolicySchema.extend({
   website_grouping: FeedWebsiteGroupingConfigSchema.default({ include_private_suffixes: true }),
 });
 export const FeedPartitionConfigSchema = z.strictObject({
+  enabled: z.boolean().default(true).describe(
+    "Assign selected articles to workers. Remove this switch and the bypass path when worker assignment becomes mandatory.",
+  ),
   default_strategy: z.enum(["bin-pack", "round-robin", "none"]),
   default_shards: PositiveCountSchema,
   min_shards: PositiveCountSchema,

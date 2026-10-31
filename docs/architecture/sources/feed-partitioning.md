@@ -1,6 +1,6 @@
 # Feed article partitioning
 
-**Last Updated**: 2026-10-26
+**Last Updated**: 2026-10-30
 
 How are chosen articles assigned to workers without changing the selection?
 Partitioning consumes one validated selected batch and returns the same
@@ -19,6 +19,11 @@ Unknown timing, publisher and numeric adjustments stay unchanged.
 ## Allocation and persistence
 
 `config/feed-ingest-plan.json` supplies strategy and worker bounds.
+Its `partition.enabled` boolean defaults to true. When false, the planner
+keeps article selection and persistence but bypasses worker assignment.
+The report labels supplied worker counts and strategies as ignored in this mode,
+not as effective overrides.
+The current bounds allow one through twenty workers, with four by default.
 `bin-pack` greedily places larger work on the least-loaded worker;
 `round-robin` distributes in selected order; `none` uses one worker.
 Assignments retain the original selected order and rank.

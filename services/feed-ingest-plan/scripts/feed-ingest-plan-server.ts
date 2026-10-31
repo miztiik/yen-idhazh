@@ -11,6 +11,7 @@ import { PlanError } from "../src/api/plan-request";
 
 export async function restorePlannerStartup(startup: PlannerStartup, root = process.cwd()) {
   const inputs = await loadPlanInputs(root, undefined, startup.settings);
+  inputs.harvest = { ...inputs.harvest, config: startup.planning };
   inputs.outputRoot = resolve(root, startup.output_root);
   const runtime: PlanRuntime = {
     ...startup.runtime, clock: () => new Date(startup.runtime.captured_at),

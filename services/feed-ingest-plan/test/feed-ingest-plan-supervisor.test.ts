@@ -9,6 +9,7 @@ import { invokePlannerHttp } from "../scripts/feed-ingest-plan-supervisor";
 import { recordedPlannerProcess } from "./planner-process-recordings";
 import { collectWorkflowFiles } from "../scripts/feed-ingest-plan-current-files";
 import { metadataRegistrations } from "./host-recordings";
+import { source } from "./harvest-recordings";
 
 function assertReleased(port: number) {
   const probe = Bun.serve({ hostname: "127.0.0.1", port, fetch: () => new Response() });
@@ -118,15 +119,12 @@ test("identity mismatch refuses HTTP work and closes the owned child", async () 
 });
 
 test("cancellation during real recorded feed work reaps the child and releases its port", async () => {
-  const fixture = await recordedPlannerProcess();
+  const fixture = await recordedPlannerProcess([source({ url: "https://news.example/timeout" })]);
   const cancellation = new AbortController();
   let pending: ReturnType<typeof invokePlannerHttp> | undefined;
   try {
     fixture.inputs.settings.supervision.shutdown_timeout_ms = 200;
     fixture.startup.settings.supervision.shutdown_timeout_ms = 200;
-    const sources = await Bun.file(join(fixture.directory, "config", "sources.json")).json();
-    sources.feeds[0].url = "https://news.example/timeout";
-    await writeFile(join(fixture.directory, "config", "sources.json"), JSON.stringify(sources));
     pending = invokePlannerHttp(fixture.inputs, fixture.startup, {}, fixture.evidence, {
       serverEntry: fixture.serverEntry, signal: cancellation.signal,
     });
@@ -153,11 +151,8 @@ test("cancellation during real recorded feed work reaps the child and releases i
 }, 60000);
 
 test("parent disappearance closes the child pipe and the child bounds its own drain", async () => {
-  const fixture = await recordedPlannerProcess();
+  const fixture = await recordedPlannerProcess([source({ url: "https://news.example/timeout" })]);
   fixture.startup.settings.supervision.shutdown_timeout_ms = 200;
-  const sources = await Bun.file(join(fixture.directory, "config", "sources.json")).json();
-  sources.feeds[0].url = "https://news.example/timeout";
-  await writeFile(join(fixture.directory, "config", "sources.json"), JSON.stringify(sources));
   const parent = Bun.spawn([process.execPath, fileURLToPath(new URL("./planner-supervisor-recording.ts", import.meta.url))], {
     cwd: fixture.directory, stdin: new Blob([JSON.stringify(fixture.startup)]), stdout: "ignore", stderr: "inherit",
   });

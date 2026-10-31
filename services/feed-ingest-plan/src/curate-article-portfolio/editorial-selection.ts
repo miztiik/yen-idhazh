@@ -8,7 +8,7 @@ import type { SourceHistoryEvidence } from "../read-ledger-history/read-feed-his
 import type { PublisherPublicationHistory } from "./publisher-exposure";
 import type { RunContext } from "../resolve-run-context";
 import {
-  allocateArticleQualityBucketBudgets, freshnessCutoff, resolveArticleQualityBucketWindows,
+  allocateSourceBasedQualityBucketBudgets, freshnessCutoff, resolveSourceBasedQualityBucketWindows,
 } from "../article-freshness-policy";
 
 export function curateArticles(input: {
@@ -20,13 +20,13 @@ export function curateArticles(input: {
   const config = input.inputs.harvest.config;
   const policy = config.curate_articles;
   const limit = input.batch.request.article_limit ?? policy.article_limit;
-  const budgets = allocateArticleQualityBucketBudgets(config, limit).map(budget => ({
-    ...budget, windows: resolveArticleQualityBucketWindows(budget.rule),
+  const budgets = allocateSourceBasedQualityBucketBudgets(config, limit).map(budget => ({
+    ...budget, windows: resolveSourceBasedQualityBucketWindows(budget.rule),
     opened: new Set<number>(),
   }));
   for (const article of input.articles) {
-    if (!budgets.some(budget => budget.rule.tier === article.candidate.source.tier)) {
-      throw new Error(`curate_articles.article_quality_buckets: missing source class ${article.candidate.source.tier}`);
+    if (!budgets.some(budget => budget.rule.source_tier_id === article.candidate.source.tier)) {
+      throw new Error(`curate_articles.source_based_quality_buckets: missing source tier ${article.candidate.source.tier}`);
     }
   }
   const remaining = [...input.articles];
@@ -76,11 +76,11 @@ export function curateArticles(input: {
   function phase(older: boolean, buffer: boolean): { winner: Evaluation; hours: number; exploring: boolean } | "relaxed" | undefined {
     const blocked: Evaluation[] = [];
     for (const budget of budgets) {
-      const count = tierCount(budget.rule.tier);
+      const count = tierCount(budget.rule.source_tier_id);
       if (count >= (buffer ? budget.ceiling : budget.target)) continue;
       const steps = older ? budget.windows.steps.slice(1) : budget.windows.steps.slice(0, 1);
       for (const hours of steps) {
-        const pool = remaining.filter(article => article.candidate.source.tier === budget.rule.tier
+        const pool = remaining.filter(article => article.candidate.source.tier === budget.rule.source_tier_id
           && !urls.has(article.candidate.url_key)
           && (article.freshness.age_hours === null ? !older : article.freshness.age_hours <= hours
             && (!older || article.freshness.age_hours > budget.windows.steps[0]!)));
@@ -133,7 +133,7 @@ export function curateArticles(input: {
     remaining.splice(remaining.indexOf(winner.article), 1);
   }
   const losses = remaining.map(article => {
-    const budget = budgets.find(budget => budget.rule.tier === article.candidate.source.tier)!;
+    const budget = budgets.find(budget => budget.rule.source_tier_id === article.candidate.source.tier)!;
     const age = article.freshness.age_hours;
     const step = age === null ? budget.windows.steps[0] : budget.windows.steps.find(hours => age <= hours);
     if (step === undefined) throw new Error("Article selection requires candidates inside their screened tier age envelope");
@@ -141,8 +141,8 @@ export function curateArticles(input: {
     let reason: DropReason;
     let cutoff: string | null = null;
     if (urls.has(article.candidate.url_key)) reason = "REJECTED_DUPLICATE_CANONICAL_CARRIER";
-    else if (older && !budget.opened.has(step) && tierCount(budget.rule.tier) >= budget.target) reason = "REJECTED_LADDER_WINDOW_NOT_ACTIVATED";
-    else if (older && tierCount(budget.rule.tier) >= budget.target) reason = "REJECTED_SLACK_DEFICIT_FULFILLED";
+    else if (older && !budget.opened.has(step) && tierCount(budget.rule.source_tier_id) >= budget.target) reason = "REJECTED_LADDER_WINDOW_NOT_ACTIVATED";
+    else if (older && tierCount(budget.rule.source_tier_id) >= budget.target) reason = "REJECTED_SLACK_DEFICIT_FULFILLED";
     else if (chosen.length >= limit) reason = "REJECTED_GLOBAL_CAPACITY_REACHED";
     else {
       const blocked = evaluate(article).blocked;

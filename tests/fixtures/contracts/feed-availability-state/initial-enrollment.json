@@ -1,0 +1,9 @@
+{
+  "version": "2026-10-30",
+  "changelog": [
+    { "version": "2026-10-30", "change": "Add durable per-feed reservations, rest deadlines and recovery retirement." }
+  ],
+  "initialized_at": "2026-10-30T12:00:00.000Z",
+  "initial_feed_ids": ["abc-feed"],
+  "catalog_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+}

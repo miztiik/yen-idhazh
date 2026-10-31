@@ -50,11 +50,12 @@ export async function publicationRecording(failPlanning = false) {
       await writeFile(join(repository, "blocked-artifacts"), "Artifact persistence must fail");
     }
     const summary = summarizePlan(await runFeedPlan({}, plan.inputs, plan.runtime));
+    const availabilityHead = await fixtureGit(origin, ["--git-dir", origin, "rev-parse", "main"]);
     await writeFile(join(directory, "response.json"), JSON.stringify(summary));
     const plannerPaths: string[] = JSON.parse(createExecutionOutputs(summary, plan.inputs.registrations).current_run_files!);
     const paths = [...host.response.files.map(file => file.path), ...plannerPaths];
     const commit = { repository, stateRoot: plan.inputs.outputRoot, paths, identity,
       registrations: host.registrations, message: "Record generated planner and host metadata", retry };
-    return { ...plan, repository, origin, directory, head, host, summary, plannerPaths, paths, commit };
+    return { ...plan, repository, origin, directory, head, availabilityHead, host, summary, plannerPaths, paths, commit };
   } catch (error) { await plan.close(); throw error; }
 }
