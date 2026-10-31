@@ -25,14 +25,14 @@ Table B - excluded work
 | B1 | Raising response-size limits or reading beyond the existing cutoff | Some responses remain incomplete; bounded downloads remain predictable. | Separate policy decision with measured response-size and resource-cost evidence. |
 | B2 | Blanket URL-substring media filtering, new target retries, or endpoint changes | Some false exclusions or recoverable failures may remain. | Source evidence and a separately settled policy change. |
 | B3 | New persisted fields, diagnostic vocabularies or migrations | Missing historical detail remains unavailable. | A separately approved contract and read-side migration. |
-| B4 | Reconstructing absent historical bodies, URLs or parser exceptions | Exact causes for old outcomes may remain unknown. | Exact bounded evidence for the original request. |
+| B4 | Reconstructing absent historical bodies, redirect targets or parser exceptions | Exact causes for old outcomes may remain unknown. | Exact bounded evidence for the original request. |
 
 Table C - escalation triggers
 
 | Id | Trigger | Required action |
 | --- | --- | --- |
 | C1 | A fix requires a new persisted shape, diagnostic vocabulary or migration. | Stop before implementation and surface the contract change. |
-| C2 | An exact historical body, parser cause or request target is absent. | Record the cause as unknown; do not infer it from status, URL wording or current policy. |
+| C2 | An exact historical body, parser cause or final attempted target is absent. | Record the cause as unknown; do not infer it from status, URL wording or current policy. |
 | C3 | A fix changes target retry behavior, response limits, media policy or source membership. | Stop before implementation and surface the policy change. |
 | C4 | A test needs a live source request. | Replace it with a recorded response or bounded generated input. |
 
@@ -42,8 +42,8 @@ Table D - phase status
 
 | Id | Phase | Depends-on | Status | Pull request |
 | --- | --- | --- | --- | --- |
-| D1 | Attempt safe targets despite robots results | - | IN-FLIGHT | - |
-| D2 | Resolve historical feed-ingest evidence gaps | D1 | PENDING | - |
+| D1 | Attempt safe targets despite robots results | - | MERGED | #1846 |
+| D2 | Resolve historical feed-ingest evidence gaps | D1 | IN-FLIGHT | - |
 
 ## 2. Attempt safe targets despite robots results
 
@@ -89,6 +89,9 @@ Table F - robots alternatives
 ### Phase 2 - Resolve historical feed-ingest evidence gaps
 
 - **Scope:** Trace the malformed-feed result, eleven empty article extractions and feed/article HTTP failures from saved run `41101711878`; fix only a demonstrated defect within current policy and contracts.
+- **Files touched:**
+  - `TODO/20261031-feed-ingest-evidence-plan.md`
+  - `docs/architecture/sources/feed-failure-diagnostics.md`
 
 **Investigation checklist:**
 
@@ -98,7 +101,7 @@ Table G - required findings
 | --- | --- | --- |
 | G1 | Feed response with HTTP 202 | Determine whether the exact body, response type and parser evidence survive; otherwise report the parser cause as unknown. |
 | G2 | Eleven empty article outcomes | Compare retained article offers, configured host/path rules and metadata filters; distinguish preflight exclusion from completed target fetch and extraction. |
-| G3 | Article and feed HTTP 403/404 | Separate safe requested and attempted targets, robots evidence and target status; status alone does not establish a paywall, endpoint defect or publisher-wide cause. |
+| G3 | Article and feed HTTP 403/404 | Separate available starting-address evidence from final attempted targets, robots evidence and target status; status alone does not establish a paywall, endpoint defect or publisher-wide cause. |
 | G4 | Earlier fixes | Verify the existing scoped media rules, quality attribution and safe-URL diagnostics; do not duplicate them. |
 
 - **Inspection targets; change only for a proven defect:**
@@ -121,11 +124,11 @@ Table G - required findings
   - `services/feed-ingest-plan/test/saved-reliability.test.ts`
   - `tests/fixtures/feed-ingest-plan/article-terminal-failures.json`
 - **Acceptance gates:**
-  - Local: `bun run --cwd services/feed-ingest-plan check` and focused tests for any code change.
-  - Local: `git diff --check`; confirm changed files contain no temporary debug logging.
-  - CI: planner service checks and tests on the exact merge candidate if files change.
+  - Local: `npm run test:changed -- --list` from `frontend/`; `git diff --check`; scan changed files for temporary debug logging.
+  - Service checks and focused tests apply only if code changes; this phase changes documentation only.
+  - CI: required checks on the exact merge candidate.
   - Report: derive B5-B7 counts from retained records; cite what each record proves and what is unavailable.
-- **Oracle:** Each retained outcome agrees with its typed target, response or parse result; a missing request target, body or parser cause remains explicitly unknown.
+- **Oracle:** Each retained outcome agrees with its typed target, response or parse result; a missing final target, body or parser cause remains explicitly unknown.
 
 **Decisions**
 
@@ -158,4 +161,17 @@ Table J - recorded inputs and results
 | J2 | Real loopback `/plan` with robots denial and feed target HTTP 200 or 403. | The saved row retained permission, target status and both request counts; the successful feed check remained valid and the target 403 remained a failure. |
 | J3 | Five focused planner test files. | 31 tests passed; the set covered article policy, replay, cancellation, unsafe targets, request logging, failure retention and feed lifecycle. |
 | J4 | Planner and shared-contract type checks; shared-contract tests and schema binding. | All passed. |
-| J5 | `npm run test:changed -- --list` from `frontend/`; `git diff --check`; changed-path scan for temporary debug logging. | The selector listed shared/full coverage; whitespace checks passed; no debug markers were found. Full CI remains pending on the pull request candidate. |
+| J5 | `npm run test:changed -- --list` from `frontend/`; `git diff --check`; changed-path scan for temporary debug logging. | The selector listed shared/full coverage; whitespace checks passed; no debug markers were found. |
+| J6 | Required PR checks on the exact phase 1 candidate. | `scope`, `site`, `browser`, `robots` and `gates` passed; PR #1846 merged as `e4fac3c6a972e7cb0e9ab8e6b1a5d6ba18d77242`. |
+
+## 5. Phase 2 execution record
+
+Table K - historical findings and checks
+
+| Id | Input or check | Result |
+| --- | --- | --- |
+| K1 | B5: retained feed response and parser evidence. | One HTTP 202 response preceded `FEED_PARSE_FAILED`; only the safe `malformed-feed` token remains. The original body, content type and exact parser cause are unavailable. |
+| K2 | B6: retained article fetch and extraction records compared with run and current media settings. | Eleven empty extractions followed target requests: ten HTTP 200 and one HTTP 202; robots permission was allowed. Ten paths match current scoped media rules that were absent from the saved run settings; one does not. Bodies and content types are unavailable. |
+| K3 | B7: retained article and feed failure events and health rows. | Re-derived 20 article HTTP 403, 46 feed HTTP 403 and two feed HTTP 404 responses. Article events retain requested addresses but not final redirected targets or status; feed events retain no addresses. Robots permission was allowed. |
+| K4 | Current code and prior scoped media, attribution and safe-address fixes. | No code defect was demonstrated; no policy or persisted contract changed. Full evidence limits are recorded in `docs/architecture/sources/feed-failure-diagnostics.md`. |
+| K5 | Documentation-only local checks. | The selector listed whitespace only for both documentation files; `git diff --check` passed; the changed-file scan found no temporary debug markers. |
