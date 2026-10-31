@@ -152,6 +152,8 @@ test("cancelled finalization preserves recovery and a report without creating a 
     });
     expect(finished.code).toBe(2);
     expect(finished.errors).not.toMatch(/[A-Za-z]:[\\/]/);
+    expect(finished.errors).not.toContain('"event":"workflow_cleanup_refused"');
+    expect(finished.errors).not.toContain('"code":"ENOENT"');
     expect((await stat(f.directory)).isDirectory()).toBe(true);
   } finally { await f.close(); }
 });

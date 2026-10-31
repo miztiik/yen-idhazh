@@ -40,7 +40,7 @@ export async function finishRunOutput(input: {
   const uploaded = upload === "success" && z.string().regex(/^\d+$/).safeParse(input.artifactId).success;
   if (!uploaded) failures.push(new Error("The run artifact upload was not confirmed"));
   let cleaned = false;
-  if (finalization === "success" && uploaded) {
+  if (finalization === "success" && uploaded && collection !== "cancelled") {
     let operation = "check-directory";
     try {
       const directory = await ownedRunDirectory(input.root, input.temporaryRoot);

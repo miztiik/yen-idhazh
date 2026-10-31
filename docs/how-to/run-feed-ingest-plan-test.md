@@ -149,6 +149,10 @@ Four tasks follow `Collect and select articles with a supervised server`:
    diagnostics have landed. Failed finalization, missing confirmation or a
    failed upload leaves temporary files untouched. A recovery artifact does
    not turn a failed commit into success.
+   Cancellation deliberately skips delivery confirmation and retains output:
+   no Git delivery receipt is expected when that delivery was skipped. The job
+   remains cancelled or failed because collection did not finish, without a
+   second missing-file cleanup error.
 
 When the metadata commit is not confirmed, the same artifact also contains
 `uncommitted-metadata-<run>-<attempt>/`: only the exact validated current-run
