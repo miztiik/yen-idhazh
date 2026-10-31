@@ -1,0 +1,10 @@
+[
+  {"date":"2030-06-13","decision":"visual","none_reason":"","rejection_reason":"","potential_primary":"chartable","downgrade_depth":"0","state":"rendered","planned_type":"bar","rendered_type":"bar"},
+  {"date":"2030-06-13","decision":"visual","none_reason":"","rejection_reason":"units_convertible","potential_primary":"chartable","downgrade_depth":"1","state":"rendered","planned_type":"dot","rendered_type":"bar"},
+  {"date":"2030-06-13","decision":"visual","none_reason":"validation_failed","rejection_reason":"units_convertible","potential_primary":"chartable","downgrade_depth":"0","state":"absent","planned_type":"bar","rendered_type":""},
+  {"date":"2030-06-14","decision":"visual","none_reason":"","rejection_reason":"","potential_primary":"chartable","downgrade_depth":"0","state":"rendered","planned_type":"bar","rendered_type":"bar"},
+  {"date":"2030-06-14","decision":"visual","none_reason":"validation_failed","rejection_reason":"pie_exhaustive","potential_primary":"chartable","downgrade_depth":"0","state":"absent","planned_type":"pie","rendered_type":""},
+  {"date":"2030-06-14","decision":"visual","none_reason":"","rejection_reason":"","potential_primary":"narrative","downgrade_depth":"0","state":"render_failed","planned_type":"whowhat","rendered_type":""},
+  {"date":"2030-06-14","decision":"visual","none_reason":"","rejection_reason":"","potential_primary":"narrative","downgrade_depth":"0","state":"rendered","planned_type":null,"rendered_type":null},
+  {"date":"2030-06-15","decision":"none","none_reason":"not_reachable","rejection_reason":null,"potential_primary":"unclassified","downgrade_depth":null,"state":"absent","planned_type":null,"rendered_type":null}
+]

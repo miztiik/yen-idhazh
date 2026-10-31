@@ -2,6 +2,7 @@
 import { expect, test } from './support/door-page';
 import { hydrated, setWindow } from './support/console-window/controls';
 import { FIRST, THROUGH, dayBefore, nativeRow, timedRow, packedPipelines, servePipelines, settled } from './support/pipelines-ledgers';
+import { routeConsoles } from '../src/lib/server/config';
 let root: string;
 test.beforeAll(async () => {
 	const days = Math.round((Date.parse(`${THROUGH}T00:00:00Z`) - Date.parse(`${FIRST}T00:00:00Z`)) / 86_400_000);
@@ -108,7 +109,8 @@ test('integrated actual canary smoke: narrow viewport, with cross-page navigatio
 	await page.goto('/console/');
 	await hydrated(page);
 	await settled(page);
-	await expect(page.locator('[data-console-panel]')).toHaveCount(14);
+	const panelCount = routeConsoles().pipelines.panel_groups.reduce((total, group) => total + group.panels.length, 0);
+	await expect(page.locator('[data-console-panel]')).toHaveCount(panelCount);
 	await expect(page.locator('[data-console-panels="pipelines"]')).toHaveAttribute('data-route-state', 'ok');
 	await expect(page.locator('[data-console-panels="pipelines"]')).not.toContainText('NaN');
 	await expect(page.locator('[data-contract-blocked]')).toHaveCount(0);

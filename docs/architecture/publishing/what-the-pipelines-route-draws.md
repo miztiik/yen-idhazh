@@ -425,14 +425,14 @@ extraction's published-day facts remain build-time inputs. Their own window and
 snapshot rules do not become ItemCost's rules; the prerendered private marks
 remain available without scripts.
 
-## The two funnels read the unpublished attempt record at build time
+## Visual-attempt views read the unpublished record at build time
 
 pipeline-funnel and downgrade-funnel count the rows in
 `visual-design-attempts` (one row per settled visual attempt). That record is
 not published to the Data explorer, so the browser cannot ask for it. The route
 load reads it through `visualAttemptRows` over the widest window, groups the
 rows into small per-day counts, and the page filters those counts to the
-selected window. Only the columns the funnels use are read, and a backend test
+selected window. Only the columns the views use are read, and a backend test
 holds that list to `VisualAttemptRow`. No ledger, column or producer is added.
 
 Every share is of its own potential class (`chartable`, `narrative`,
@@ -455,6 +455,26 @@ Stage counts need not fall. A stage larger than the one before is drawn at its
 true size and marked "more than the stage before", as the chart-drawing flow
 does, rather than clamped. A record that is not packed, did not load, or lost
 days says so in a note; those days are never drawn as zero.
+
+`visual-refusals` shows each recorded first validator refusal
+(`rejection_reason`) by UTC date, including requests that were later written.
+It does not count all reasons for omitting a visual or treat a recorded refusal
+as a final failure. Days with recorded attempts but no validator refusal say
+so; missing days are not inserted as zero counts.
+
+`visual-written-types` compares `planned_type` with successfully written
+`rendered_type` over the selected window. Each pair shows its attempt count.
+A written file is not proof of publication or a human decision to keep it.
+Older written attempts with no typed outcome are counted separately and make
+the comparison explicitly incomplete; their type is never inferred from the
+request. Both views keep the attempt reader's missing-day and set-aside-file
+notes beside the counts. A packed record that starts late or stops before the
+selected UTC window states its coverage and marks the views incomplete. Notes
+follow the selected window in all four attempt views. No new measurement, ledger field, producer, keep
+rate, repetition measure or single-type-day alarm is added.
+
+These views extend the existing private record section because they use the
+same bounded reader and its evidence rules, not another delivery path.
 ## Extraction answers both questions, and labels which half is which
 
 `Extraction` is a Pipelines panel in two halves, and it is the console's worked
