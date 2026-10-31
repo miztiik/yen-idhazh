@@ -17,7 +17,7 @@ Table A
 | A6 | Runtime prerequisite | Apply this cleanup to the integrated collection, parser-admission, cancellation-output and named-history-reader repairs and the current delivered handoff contract. Do not restore an obsolete snapshot, availability sidecar, intermediate Git publication, delivery checksum, durable replay or reopening capability. Preserve added repair regressions for behavior that the current contract retains. |
 | A7 | Contract boundary | Change no production payload, schema, configuration default, public API or CLI behavior. New recordings use existing native models, not a new aggregate fixture format. |
 | A8 | Escalation | Stop if a proposed removal loses a distinct safety or data-preservation check, needs a mocked stage, or requires changing runtime behavior or a persisted contract. Name the missing check and the smallest real boundary that can prove it. |
-| A9 | Current status | Execution is active. A dependent session may start from the preceding phase's completed, reviewed handoff. Publication to main remains sequential and requires successful checks. Production dispatch remains outside this plan. |
+| A9 | Current status | Both phases are complete and delivered to main after successful checks. Production dispatch remains outside this plan. |
 | A10 | Execution | Execute per docs/how-to/execute-a-plan.md. Parallel N = 1 because both phases change shared test inputs and coverage. One maintainer coordinates a separate nested implementation session for each phase, verifies its changes and checks, and delivers the phases sequentially. |
 
 Table B
@@ -35,8 +35,8 @@ Table C
 
 | Id | # | Row title | Depends-on | Parallel-group | Status | Worktree | PR | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| C1 | 1 | Keep minimum entry-point coverage | - | A | DONE | curly-adventure | - | d9c381fb-b315-4256-a5de-14a0d91b5020 |
-| C2 | 2 | Move remaining checks to their own boundaries | 1 | B | DONE | planner-test-boundaries | - | e5914d1c-cf62-4317-a6ea-fa71704557da |
+| C1 | 1 | Keep minimum entry-point coverage | - | A | DONE | curly-adventure | #1854 | d9c381fb-b315-4256-a5de-14a0d91b5020 |
+| C2 | 2 | Move remaining checks to their own boundaries | 1 | B | DONE | planner-test-boundaries | #1858 | e5914d1c-cf62-4317-a6ea-fa71704557da |
 
 ## 2 - Test change inventory
 
@@ -104,7 +104,7 @@ Table F - Simplify these tests, retaining the stated rule
 | F25 | `operation-logging.test.ts` | `standalone document work logs failure addresses only and persistence logs one real write` | Keep one representative real document failure and one real persistence failure boundary, using the delivered handoff. Remove obsolete journal replay checks and successful content/selection/partition permutations already covered elsewhere. |
 | F26 | `operation-logging.test.ts` | `failed redirected feeds identify the requested URL and final dispatched target` | Drive the real recorded fetch operation only and inspect its published event. |
 | F27 | `operation-logging.test.ts` | `feed byte cutoffs include the limit and observed lower bound in failure events` | Exercise one bounded response stream at the fetch/logging boundary, not a full run. |
-| F28 | `operation-logging.test.ts` | `robots byte cutoffs identify the feed but never claim its target request was dispatched` | Exercise the real robots/fetch boundary and keep the no-target-dispatch and observed-limit checks. |
+| F28 | `operation-logging.test.ts` | `robots byte cutoffs identify the feed but never claim its target request was dispatched` | Exercise the current robots/fetch boundary and retain observed cutoff evidence plus the actual feed-target failure. Article enforce-mode and invalid-address no-dispatch checks remain. |
 | F29 | `feed-ingest-plan-supervisor.test.ts` | `partial planning retains completed-file diagnostics and the original failure` | Supply real completed native files, then cause a short real child/request failure. Verify diagnostics, original error and listener release without harvesting another selected result. Do not substitute a fake server response. |
 | F30 | `collection-work.test.ts` | `large feeds retain every rejection without per-offer collection snapshots or rejected HTTP requests` | Keep multiple feeds, a bounded rejected tail, exact terminal accounting and no hot-path snapshot/dispatch for rejected offers. Use direct collection operations and only enough admitted work to expose the state/concurrency rule; remove the full plan and surplus article parsing. |
 | F31 | `collection-work.test.ts` | `explicit health reads capture current collection work without allowing premature selection` | Keep the existing short stage sequence with minimal recorded inputs. Do not add selection, partition or a completed plan. |
