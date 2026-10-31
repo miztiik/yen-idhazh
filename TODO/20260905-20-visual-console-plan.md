@@ -1,7 +1,7 @@
 # 20 - The operator can see whether it worked
 
-**Last Updated**: 2026-09-05
-**Level**: 3 (operator surface, plus the rules that decide what may be alarmed and what may be killed)
+**Last Updated**: 2026-10-31
+**Level**: 3 (operator console over committed telemetry)
 
 **Chain**: previous [`20260905-19-visual-telemetry-plan.md`](20260905-19-visual-telemetry-plan.md) | next [`20260905-21-human-judgement-plan.md`](20260905-21-human-judgement-plan.md).
 **Reference**: [`20260902-visual-planner-pseudo-plan.md`](20260902-visual-planner-pseudo-plan.md) - O11, O34, rows 49, 56, 70, sections 12.6 G3, 12.7 G9, 12.9 G14, G15, 12.12 G23, 12.13 G30, G39, 12.14 G43, 14.5.
@@ -14,14 +14,12 @@ Execute per docs/how-to/execute-a-plan.md: one maintainer carries the plan and d
 
 | Field | Value |
 | --- | --- |
-| Why this plan exists | Plan 19 records every attempt. This is what makes the record answerable: **the ability to tell whether the visual work worked at all.** Without it the group ends with a large committed ledger and no way to say whether the digest got better |
-| Hard scope - in | The required panels; the rule that no measure is alarmed alone; the rule that the three families are never pooled; the guard against quoting an invented industry benchmark; and the pre-committed criteria for killing a feature |
-| Hard scope - out | Any human review surface (plan 21). Any new metric - every number here is written by plan 19 or earlier. Any alarm threshold set from a guess |
-| ESCALATE triggers | 1. A composite quality index is proposed as a **gate** rather than a diagnostic. 2. A panel pools chart, diagram and infographic types into one distribution. 3. A target is set from a figure quoted from outside this repository |
-| Chosen strategy | Panels first so the numbers are visible, then the rules that constrain how they may be read, then the criteria that let a feature be retired without a fresh argument |
+| Why this plan exists | Plan 19 records every visual attempt. This plan gives operators console views of pipeline progress, refusals, and requested versus written visual types without adding measurements |
+| Hard scope - in | The two funnels in row 1 and the two views in row 2, using existing committed records |
+| Hard scope - out | Human review (plan 21), new telemetry collection or ledger fields, alarms, retirement criteria, and publication gates |
+| ESCALATE triggers | 1. A human-review surface or verdict is added. 2. New telemetry collection or a ledger field is proposed. 3. A metric is proposed as a publication gate |
+| Chosen strategy | Build the four console views from existing records; add no telemetry collection, human judgments, or publication decisions |
 | Execution | `autonomous orchestrator per docs/how-to/execute-a-plan.md. Parallel N = 4.` |
-
-**The ban that has to be stated rather than assumed.** The quality index is a **diagnostic and never a gate** - not until the correlation between the machine components and human keep rate has been measured. A composite of unvalidated components is a number that looks like a judgement. This was stated twice in the source document and carried into the plan-doc set only as the word "accepted", which reads as an oversight to fix rather than a rule to keep.
 
 ---
 
@@ -30,9 +28,9 @@ Execute per docs/how-to/execute-a-plan.md: one maintainer carries the plan and d
 | # | Row title | Depends-on | Parallel-group | Status | Worktree | PR | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | 1 | The two funnels | - | A | PENDING | - | - | - |
-| 2 | Why it was refused, and what happened when it stepped down | 1 | B | PENDING | - | - | - |
-| 3 | The rules for reading any of it | 2 | C | PENDING | - | - | - |
-| 4 | How each feature gets retired without a fresh argument | 3 | D | PENDING | - | - | - |
+| 2 | Refusal reasons and written visual type | 1 | B | PENDING | - | - | - |
+| 3 | The rules for reading any of it | 2 | C | COLLAPSED (maintainer, 2026-10-31: row 1 owns its denominator rules; revised row 2 adds no human keep rate, family distribution, alarm, or composite score) | - | - | - |
+| 4 | How each feature gets retired without a fresh argument | 3 | D | COLLAPSED (maintainer, 2026-10-31: `keyfacts` is no longer generated; the downgrade ladder is disabled and its keep-rate evidence is unavailable) | - | - | - |
 
 ---
 
@@ -59,76 +57,33 @@ Execute per docs/how-to/execute-a-plan.md: one maintainer carries the plan and d
 
 ---
 
-## 3. Row #2 - Why it was refused, and what happened when it stepped down
+## 3. Row #2 - Refusal reasons and written visual type
 
-- **Scope:** Rejection reason over time; keep rate by downgrade depth; `planned_type` against `rendered_type`; and the cross-day repetition instrument.
-- **Files touched:** as row 1, plus `backend/idhazh/contracts/visual_telemetry.py` if the repetition fingerprint needs a column
-- **Acceptance gates:** as row 1, plus `ruff`, `mypy --strict`, export + drift.
-- **Oracle:** `visual_repetition_rate` is computed from a `(element set, type)` fingerprint over a rolling window and re-derived in the test. **The rule it enforces - a running story's visual repeats only when its numbers moved - is unenforceable without it, because nothing else computes whether they moved.**
+- **Scope:** Show recorded refusal reasons over time and compare the planned visual type with the type successfully written. Read the existing Plan 19 attempt records; add no human keep-rate measure, cross-day repetition measure, or single-type-day defect.
+- **Files touched:** as row 1. No backend contract or ledger changes.
+- **Acceptance gates:** as row 1.
+- **Oracle:** Against named fixtures, refusal counts by UTC date and `planned_type` to `rendered_type` counts match calculations from the existing `visual-design-attempts` rows. `rendered_type` means successfully written, not necessarily published. Missing or truncated records remain visibly incomplete under row 1's reader rules.
 
 ### Decisions
 
 | # | Decision | Authority |
 | --- | --- | --- |
-| 1 | Cross-day repetition and within-day sameness are **different axes** and both are real. The source document closed the cross-day risk against the within-day rule, which is a closure against the wrong thing | 12.14 G43 |
-| 2 | A day publishing a single rendered type is a recorded **defect**, read jointly with keep rate. It is not a diversity target | Row 49 |
-| 3 | `planned_type` against `rendered_type` is what makes the vocabulary build order evidence rather than a guess | Row 48 |
-
-### Rejected alternatives
-
-| # | Option | Why rejected | Authority |
-| --- | --- | --- | --- |
-| 1 | Rely on the within-day diversity rule | Orthogonal axis. It cannot see the same visual five days running | 12.14 G43 |
+| 1 | Reuse the existing `visual-design-attempts` records. `rejection_reason`, `planned_type`, and `rendered_type` provide this row's evidence; add no ledger, column, or producer logic | Plan 19; maintainer ruling, 2026-10-31 |
+| 2 | Keep rate by downgrade depth is not part of this plan. It needs linked human verdicts and a depth actually selected; this row creates no human review surface | Maintainer ruling, 2026-10-31 |
+| 3 | Do not add a cross-day repetition fingerprint or metric | Maintainer ruling, 2026-10-31 |
+| 4 | A day with one successfully written visual type is not a defect and is not alarmed | Maintainer ruling, 2026-10-31 |
 
 ---
 
 ## 4. Row #3 - The rules for reading any of it
 
-- **Scope:** Three rules stated once, beside the panels they constrain.
-- **Files touched:** `docs/concepts/evaluation.md`, `docs/architecture/publishing/frontend.md`, `frontend/src/lib/console/**` (where a rule is mechanical), `frontend/tests/**`
-- **Acceptance gates:** `npm run check`; build; the browser suite; the full suite.
-- **Oracle:** A test asserts that **no panel pools the three families into one distribution** - enumerated over the panel map, so a panel added later fails rather than being noticed by eye.
-
-### Decisions
-
-| # | Decision | Authority |
-| --- | --- | --- |
-| 1 | **Never alarm on a measure that can be improved by giving up.** Every such measure is paired with a diversity or coverage counter. Stated as a **rule**, because a rule generates the next pair and three example panels do not | 12.9 G15 |
-| 2 | **The three families are never blended.** A panel titled "type distribution" pooling a bar, a flow and a quote card is a reasonable thing to write, is uninterpretable, and nothing else would stop it | 12.12 G23 |
-| 3 | **There is no published industry average for chart keep rate or any composite visual-quality score**, so any figure quoted from outside as a benchmark for them is quoting nothing. One sentence, and it stops a future target being set from a blog post | 12.13 G39 |
-| 4 | The human loop is kept pointed at the output, never at the metrics - already honoured by the rule that a reviewer is never shown the machine's reasoning | 12.9 G15 |
-| 5 | Every alarm ships **record-only**. An alarm set on a guess is worse than no alarm | M5 |
-
-### Rejected alternatives
-
-| # | Option | Why rejected | Authority |
-| --- | --- | --- | --- |
-| 1 | Carry the rules as three example panels | A rule generates the next pair. The next metric added would get no counterweight and nobody would notice | 12.9 G15 |
+**Status: COLLAPSED.** Row 1 defines the funnel populations. Revised row 2 adds no human keep rate, family distribution, alarm, or composite score that needs a separate reading rule. Human review remains in plan 21. Existing project rules remain in force; this plan adds no documentation, console code, or tests for this row.
 
 ---
 
 ## 5. Row #4 - How each feature gets retired without a fresh argument
 
-- **Scope:** Pre-committed kill criteria, written as numbers, for the downgrade ladder and for `keyfacts`.
-- **Files touched:** `docs/concepts/evaluation.md`, `config/idhazh.json` (the flags), `frontend/src/routes/console/**`, `backend/tests/**`
-- **Acceptance gates:** `npm run check`; build; the browser suite; the full suite.
-- **Oracle:** Each criterion is computable from the committed ledger today, asserted by computing it over fixtures and returning a verdict. **A kill criterion that cannot be computed is a promise, not a criterion.**
-
-### Decisions
-
-| # | Decision | Authority |
-| --- | --- | --- |
-| 1 | The ladder's criterion: if downgraded visuals are kept materially less often than depth-0 ones, **the flag goes off and the ladder is deleted, not tuned.** A ladder carrying four invariance rules, two percentiles and an edge table is a substantial mechanism to maintain on faith | 12.13 G30 |
-| 2 | `keyfacts` already has its per-item gate from plan 17; this row writes its type-level retirement number | Row 42 |
-| 3 | Pre-committing now is cheaper than defending later, which is the source document's own reasoning and the reason `keyfacts` survived four vetoes | 12.13 G30 |
-| 4 | The quality index stays a **diagnostic**. Weight fitting produces weights **for a diagnostic**, and it does not become a gate until `information_delta` is shown to predict keep rate | 12.7 G9 |
-
-### Rejected alternatives
-
-| # | Option | Why rejected | Authority |
-| --- | --- | --- | --- |
-| 1 | Decide when the data arrives | Then the decision is made by whoever is most attached to the feature | Andre |
-| 2 | Let the composite score gate publication | A composite of unvalidated components is a number that looks like a judgement | 12.7 G9 |
+**Status: COLLAPSED.** `keyfacts` is no longer generated. The downgrade ladder is disabled, and its proposed retirement test needs human keep verdicts by selected depth that are not available in this plan. There is no active feature or evidence for a retirement threshold. If either feature is reintroduced, define a measurable criterion in a new plan row.
 
 ---
 
