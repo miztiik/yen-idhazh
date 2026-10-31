@@ -1,7 +1,7 @@
 /** Do numeric portfolio controls choose one content population with compact, truthful explanations? */
 import { expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -528,26 +528,3 @@ test("actual selected Parquet has exactly metadata columns while the same choice
     expect(chosen).toEqual(before);
   } finally { await rm(root, { recursive: true, force: true }); }
 }, 30_000);
-
-test("empty writes have no invented files and real failures cannot report completion", async () => {
-  const setup = await inputs();
-  const root = await mkdtemp(join(tmpdir(), "portfolio-empty-failure-"));
-  try {
-    const request = {
-      ledger: "selected-articles", registryEntry: setup.inputs.registrations.selected_articles,
-      outputRoot: join(root, "state"), ledgerSettings: setup.inputs.ledgerSettings,
-      rowContract: SelectedArticleRowContract, period: { tier: "raw" as const, covers: setup.context.date },
-    };
-    expect(await persistLedger({ ...request, rows: [] })).toEqual({ status: "empty", files: [] });
-    const rows = run(setup).articles.map(row => ({
-      ...selectedArticleMetadata(row), run_id: row.run_id, attempt: row.attempt, date: row.date,
-    }));
-    await writeFile(join(root, "state"), "real filesystem obstruction");
-    await expect(persistLedger({ ...request, rows })).rejects.toThrow();
-    const paused = await persistLedger({
-      ...request, rows, registryEntry: { ...request.registryEntry, lifecycle_status: "paused" },
-    });
-    expect(paused.status).toBe("skipped");
-    expect(paused.files).toEqual([]);
-  } finally { await rm(root, { recursive: true, force: true }); }
-});

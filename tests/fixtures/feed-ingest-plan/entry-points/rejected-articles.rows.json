@@ -1,0 +1,19 @@
+[
+  {
+    "run_id": "2026-10-21-700",
+    "attempt": 3,
+    "date": "2026-10-21",
+    "candidate_id": "cca4795354df47724357d59b918d8e192edd716eed54eee8efd1c3477f09a5b3",
+    "url_key": "363c9c4fb8a8ddf89e0f6199404d6b085c1fc6c48192bd08b9d79dd2b265b16e",
+    "feed_id": "recorded-news",
+    "stage": "curate-article-portfolio",
+    "reason_code": "REJECTED_GLOBAL_CAPACITY_REACHED",
+    "freshness_cutoff_at": "2026-10-19T23:59:59.000Z",
+    "http_status": null,
+    "fetch_failure": null,
+    "error_code": null,
+    "robots": null,
+    "robots_http_status": null,
+    "robots_failure": null
+  }
+]

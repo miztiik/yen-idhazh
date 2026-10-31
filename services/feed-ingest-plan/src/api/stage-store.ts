@@ -66,6 +66,7 @@ export class StageStore {
     if (!retain || document?.body == null || document.failure !== null) this.documents.delete(id);
   }
   claimDocument(fetchId: string, requestId: string, articleId: string, correlationId: string, fingerprint: string): FetchedDocumentReference {
+    const id = RequestIdSchema.parse(requestId);
     const held = this.documents.get(RequestIdSchema.parse(fetchId));
     if (held?.document === undefined) {
       throw new PlanError("ARTIFACT_NOT_FOUND", "No current completed fetched document exists", "fetch_request_id");
@@ -76,11 +77,11 @@ export class StageStore {
     if (held.config_sha256 !== fingerprint) {
       throw new PlanError("REQUEST_CONFLICT", "Fetched configuration differs", "fetch_request_id");
     }
-    if (held.claimed || this.documentRequests.has(fetchId) || this.documentRequests.has(requestId) || this.documents.has(requestId)) {
+    if (held.claimed || this.documentRequests.has(fetchId) || this.documentRequests.has(id) || this.documents.has(id)) {
       throw new PlanError("REQUEST_CONFLICT", "Document request is already owned by live work", "request_id");
     }
     held.claimed = true;
-    this.documentRequests.add(RequestIdSchema.parse(requestId));
+    this.documentRequests.add(id);
     return { request_id: held.request_id, context: held.context, config_sha256: held.config_sha256, document: held.document };
   }
   consumeDocument(fetchId: string, requestId: string) {

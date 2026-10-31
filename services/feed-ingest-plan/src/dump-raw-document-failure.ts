@@ -17,13 +17,9 @@ async function openFailureFile(inputs: PlanInputs, context: RunContext): Promise
   let parent = await realpath(inputs.root);
   for (const part of parts.slice(0, -1)) {
     parent = join(parent, part);
-    try {
-      const info = await lstat(parent);
-      if (!info.isDirectory() || info.isSymbolicLink()) throw new Error("Raw document artifact parent is not a plain directory");
-    } catch (error) {
-      if (!(error instanceof Error) || !("code" in error) || error.code !== "ENOENT") throw error;
-      await mkdir(parent);
-    }
+    await mkdir(parent, { recursive: true });
+    const info = await lstat(parent);
+    if (!info.isDirectory() || info.isSymbolicLink()) throw new Error("Raw document artifact parent is not a plain directory");
   }
   return open(join(parent, parts.at(-1)!), "ax", 0o600);
 }

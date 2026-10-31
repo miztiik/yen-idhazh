@@ -217,14 +217,15 @@ export async function feedHealthRows(window: TimeWindow, root: string = STATE_RO
 	);
 }
 
-/** The columns of `VisualAttemptRow` the funnels read, in the contract's own order.
+/** The columns of `VisualAttemptRow` the visual-attempt views read, in the contract's own order.
  *
- * Only these: the funnels count attempts by class, decision, refusal, depth and
- * state, and read no identity. A backend contract test fails when the contract
+ * The views count attempts by class, decision, refusal, depth, state and type,
+ * and read no identity. A backend contract test fails when the contract
  * renames or drops one of these, or when this order is not the contract's.
  */
 export const VISUAL_ATTEMPT_COLUMNS = [
-	'date', 'decision', 'none_reason', 'rejection_reason', 'potential_primary', 'downgrade_depth', 'state'
+	'date', 'decision', 'none_reason', 'rejection_reason', 'potential_primary', 'downgrade_depth', 'state',
+	'planned_type', 'rendered_type'
 ] as const;
 
 /** One row per settled visual attempt in `window`, from the attempt record.

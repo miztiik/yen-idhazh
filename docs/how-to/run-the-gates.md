@@ -226,6 +226,34 @@ schema, footer, identifier and canonical-digest checks. These results do not
 claim that a Python reader was executed. Persisted-contract changes still
 require the approval and compatibility rules in `CLAUDE.md`.
 
+For planner entry-point changes, use the named native selection from the
+repository root:
+
+```powershell
+npm --prefix .\frontend run test:changed -- --list
+bun run --cwd .\services\feed-ingest-plan check
+bun run --cwd .\services\feed-ingest-plan test .\test\plan-entry-points.test.ts .\test\plan-api.test.ts .\test\plan-cli.test.ts .\test\plan-engine.test.ts .\test\collection-http.test.ts .\test\feed-ingest-plan-http-client.test.ts .\test\feed-ingest-plan-supervisor.test.ts .\test\operation-logging.test.ts .\test\curate.test.ts
+```
+
+The shared selection lists affected surfaces; it does not execute Bun.
+The native package command supplies its declared timeout. Keep shorter
+process deadlines and existing independent failure checks; do not raise
+timeouts to retain repeated planning work.
+`plan-entry-points.test.ts` makes one successful request through the real
+supervised API child and one through the actual awaited CLI in a Bun child.
+Partitioning is enabled for the API and disabled for the CLI.
+Remaining repeated setup is retired separately without deleting its checks
+before their smaller replacements exist.
+
+The committed inputs under
+`tests/fixtures/feed-ingest-plan/entry-points/` contain the API response,
+health response, selected text artifact and five native ledger row transcripts
+from the same verified API test. To replace them, set
+`IDHAZH_CAPTURE_PLANNER_RECORDINGS=1` for that test, then unset it before
+ordinary checks. The test reads actual Parquet output and validates each
+transcript with its native row model before cleanup; it does not generate
+another planner result. Ordinary runs only read these committed recordings.
+
 For the manual planner's metadata integration, select its five named native
 cases: `feed-ingest-plan-report.test.ts`, `feed-ingest-plan-outputs.test.ts`,
 `feed-ingest-plan-workflow.test.ts`, `feed-ingest-plan-host.test.ts` and

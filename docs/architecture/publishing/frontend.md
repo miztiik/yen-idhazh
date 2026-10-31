@@ -25,7 +25,9 @@ Six pages, one question each. Arrive at the one holding your question and stop.
 | [the-on-device-encoder-and-its-vectors.md](the-on-device-encoder-and-its-vectors.md) | Which encoder wrote these vectors, where does a browser get it, and what makes two vectors comparable |
 
 The operator's surface is a different reader with a different budget, and it is
-[console.md](console.md).
+[console.md](console.md). Pipelines also compares recorded visual refusals and
+planned versus written types; [the attempt views](what-the-pipelines-route-draws.md#visual-attempt-views-read-the-unpublished-record-at-build-time)
+define their private input and incomplete-data rules.
 
 Planner table files have a separate [current-format publication admission
 rule](planner-publication.md). It changes only the generated planner copies and

@@ -1,0 +1,54 @@
+[
+  {
+    "run_id": "2026-10-21-700",
+    "started_at": "2026-10-21T23:59:59.999Z",
+    "duration_ms": 3829,
+    "status": "completed",
+    "failure_code": null,
+    "selected_count": 1,
+    "strategy": "bin-pack",
+    "dispatch_count": 4,
+    "selected_articles_artifact": "backend/var/feed-ingest-plan/2026-10-21-700/3/selected-articles.json",
+    "api_timings": [
+      {
+        "operation": "feed-health-before-fetch",
+        "duration_ms": 19,
+        "status": "completed"
+      },
+      {
+        "operation": "fetch",
+        "duration_ms": 3256,
+        "status": "completed"
+      },
+      {
+        "operation": "feed-health-for-selection",
+        "duration_ms": 27,
+        "status": "completed"
+      },
+      {
+        "operation": "select",
+        "duration_ms": 89,
+        "status": "completed"
+      },
+      {
+        "operation": "partition",
+        "duration_ms": 5,
+        "status": "completed"
+      },
+      {
+        "operation": "persist",
+        "duration_ms": 195,
+        "status": "completed"
+      }
+    ],
+    "date": "2026-10-21",
+    "attempt": 3,
+    "lifecycle_window_days": 31,
+    "reliability_floor": 0.5,
+    "reliability_penalty_enabled": true,
+    "evaluated_at": "2026-10-21T23:59:59Z",
+    "request_report_closed_days": 7,
+    "reliability_window_days": 30,
+    "selection_started_at_utc": "2026-10-22T00:00:00Z"
+  }
+]
