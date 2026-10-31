@@ -16,6 +16,7 @@ that item and `classify_item` rebuilds what the payloads can say.
 from __future__ import annotations
 
 import re
+from http.client import IncompleteRead
 from typing import Any, Final
 
 from idhazh.contracts.article import Article, ArticleStatus
@@ -466,7 +467,7 @@ def classify_article(article: Article) -> tuple[FailureCode, ItemStage, int | No
         if 500 <= status < 600:
             return FailureCode.HTTP_SERVER_ERROR, ItemStage.FETCH, status, None
 
-    if detail in {"URLError", "TimeoutError", "OSError"}:
+    if detail in {"URLError", "TimeoutError", "OSError", IncompleteRead.__name__}:
         return FailureCode.NETWORK_ERROR, ItemStage.FETCH, None, None
 
     return (

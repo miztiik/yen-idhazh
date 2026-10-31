@@ -93,6 +93,22 @@ Treating every failure as a refusal was measured on `ubuntu-latest` on 2026-08-2
 
 **A permanent status is recorded and skipped, never retried.** Retrying a 404 burns the budget the transient failures need, and on a shared runner that budget is wall-clock the rest of the matrix is waiting on.
 
+Opening a response, reading its bounded body and closing it share one transport
+retry policy. A timeout, connection failure or incomplete chunked body uses
+`extract.max_retries`, the configured backoff and
+`extract.request_timeout_seconds`. Every response closes before the next
+attempt. Partial bytes from a failed attempt are discarded, never extracted.
+When the budget ends, the item records a transient fetch failure, with the
+existing `network_error` item-health code, and the shard continues with its
+siblings. An HTTP error response closes without reading its
+body; a permanent status still stops after one attempt.
+
+The final attempt retains the received HTTP status and its header timing even
+when its body fails. A response with HTTP 200 can therefore carry a transport
+failure: the headers arrived, but the article did not. First-byte time excludes
+the body wait. Retry time includes prior failed reads and their backoff. A
+failure before headers arrived has no status or first-byte reading.
+
 ### One reading of a robots file, on every interpreter we support
 
 A control that answers differently on two runners is not a control. Until 2026-09-02 this one did: `urllib.robotparser` disagrees with itself across the range `pyproject.toml` declares. Python 3.12 takes the first group whose agent matches and the first rule inside it that matches; Python 3.14 merges every group for one agent and applies longest-match with `*` and `$`. One committed file can therefore be read as permitted on one runner and refused on another, and which pages this crawler may read is not allowed to depend on which machine picked up the job.

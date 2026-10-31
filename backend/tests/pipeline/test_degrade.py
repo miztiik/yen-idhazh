@@ -16,17 +16,24 @@ from __future__ import annotations
 import re
 from dataclasses import replace
 from pathlib import Path
-from typing import Final
+from typing import Final, Literal
 
+import pytest
 from pytest import MonkeyPatch
-from support.paths import FIXTURES_DIR, read_text
+from support.fetch_transport import InterruptedBodyEndpoint
+from support.paths import CONFIG_DIR, FIXTURES_DIR, read_text
 
-from idhazh import assemble
+from idhazh import assemble, config
 from idhazh.contracts.article import Article, ArticleStatus, TitleSource
+from idhazh.contracts.base import derive_url_key
 from idhazh.contracts.eval_row import ConfidenceBand
+from idhazh.contracts.item_health import FailureCode, ItemHealthRow, ItemOutcome, ItemStage
+from idhazh.contracts.knobs.extract import ExtractConfig
 from idhazh.contracts.run_plan import RunPlan
 from idhazh.contracts.summary import Summary, SummaryStatus
 from idhazh.fetch import FetchResult
+from idhazh.stages import common
+from idhazh.telemetry.record import HEALTH_SUFFIX
 
 from ._builders import _work_stage, captured_article_fetch, plan
 
@@ -161,3 +168,64 @@ def test_a_sibling_in_the_same_batch_still_reaches_a_summary(
         assert article.title_source is TitleSource.FEED, planned.item_id
 
     assert list(items.glob("*.summary.json"))
+
+
+@pytest.mark.parametrize("failure", ["timeout", "incomplete"])
+def test_an_interrupted_article_records_failure_and_finishes_its_shard_siblings(
+    failure: Literal["timeout", "incomplete"], tmp_path: Path, monkeypatch: MonkeyPatch
+) -> None:
+    captured = captured_article_fetch("")
+    budget = ExtractConfig(
+        max_retries=1, request_timeout_seconds=0.15, backoff_initial_seconds=0.01
+    )
+    settings = config.load(CONFIG_DIR)
+    settings = replace(settings, app=settings.app.model_copy(update={"extract": budget}))
+    with InterruptedBodyEndpoint(
+        captured.body, failure=failure, failures=2, failed_path="/article"
+    ) as site:
+        site.allow_and_observe(monkeypatch)
+        day = plan(item_count=3)
+        urls = [site.url + "/before", site.url, site.url + "/after"]
+        day = day.model_copy(
+            update={
+                "items": [
+                    item.model_copy(
+                        update={
+                            "canonical_url": url,
+                            "source_url": url,
+                            "url_key": derive_url_key(url),
+                        }
+                    )
+                    for item, url in zip(day.items, urls, strict=True)
+                ]
+            }
+        )
+        run_plan, items, _ = _work_stage(
+            tmp_path,
+            monkeypatch,
+            replies=(LABEL_REPLY.read_bytes(), SUMMARIZE_AND_PLAN_REPLY.read_bytes()),
+            run_plan=day,
+            fetcher=common.live_fetcher(settings),
+        )
+
+    before, failed, after = run_plan.items
+    failure_article = Article.from_json(read_text(items / f"{failed.item_id}.article.json"))
+    assert failure_article.status is ArticleStatus.FETCH_FAILED
+    assert failure_article.text is None
+    failed_row = ItemHealthRow.from_json(read_text(items / f"{failed.item_id}{HEALTH_SUFFIX}"))
+    assert failed_row.outcome is ItemOutcome.FAILED
+    assert failed_row.stage is ItemStage.FETCH
+    assert failed_row.code is FailureCode.NETWORK_ERROR
+    assert failed_row.detail == ("TimeoutError" if failure == "timeout" else "IncompleteRead")
+    assert failed_row.retry_count == 1
+    assert failed_row.fetch_ttfb_ms is not None
+    assert not (items / f"{failed.item_id}.summary.json").exists()
+    for sibling in (before, after):
+        article = Article.from_json(read_text(items / f"{sibling.item_id}.article.json"))
+        summary = Summary.from_json(read_text(items / f"{sibling.item_id}.summary.json"))
+        row = ItemHealthRow.from_json(read_text(items / f"{sibling.item_id}{HEALTH_SUFFIX}"))
+        assert article.status is ArticleStatus.OK
+        assert summary.status is SummaryStatus.OK
+        assert row.outcome is ItemOutcome.OK
+    assert site.served == 4, "two sibling reads and two failed body attempts"
+    assert all(response.isclosed() and response.fp is None for response in site.responses)
