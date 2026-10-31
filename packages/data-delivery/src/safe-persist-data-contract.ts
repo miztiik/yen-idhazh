@@ -12,7 +12,6 @@ function isRelativePath(value: string): boolean {
 }
 
 export const DeliveryPathSchema = z.string().min(1).refine(isRelativePath, "Expected a canonical relative path");
-export const DeliverySha256Schema = z.string().regex(/^[a-f0-9]{64}$/, "Expected a lowercase SHA256 digest");
 
 const PositiveSecondsSchema = z.number().finite().positive();
 const PushRetrySchema = z.strictObject({
@@ -30,7 +29,6 @@ const PushRetrySchema = z.strictObject({
 const FileSchema = z.strictObject({
   sourcePath: DeliveryPathSchema,
   targetPath: DeliveryPathSchema,
-  sha256: DeliverySha256Schema,
 });
 
 const CommonInput = {

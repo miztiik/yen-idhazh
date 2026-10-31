@@ -1,5 +1,5 @@
 /** Which five registered raw ledgers may this workflow deliver? */
-import { lstat, readFile, realpath } from "node:fs/promises";
+import { lstat, realpath } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { z } from "zod";
 import {
@@ -72,7 +72,7 @@ export function identifyMetadataPath(path: string, registrations: MetadataRegist
   return { ledger: name, covers, file_id: file.slice(0, -8) };
 }
 
-export async function readMetadataBytes(root: string, path: string) {
+async function resolveMetadataFile(root: string, path: string) {
   if (path.startsWith("/") || /[:\\\u0000-\u001f\u007f]/.test(path)
     || path.split("/").some(part => part === "" || part === "." || part === "..")) throw new Error("delivery: output escapes state root");
   let file = await realpath(root);
@@ -85,37 +85,36 @@ export async function readMetadataBytes(root: string, path: string) {
     }
   }
   if (resolve(await realpath(file)) !== resolve(file)) throw new Error("delivery: output escapes state root");
-  return { file, bytes: await readFile(file) };
+  return file;
 }
 
 export async function verifyMetadataFile(root: string, path: string, registrations: MetadataRegistrations, identity: ExecutionIdentity) {
   const expected = ExecutionIdentitySchema.parse(identity);
   const named = identifyMetadataPath(path, registrations);
-  const { file, bytes } = await readMetadataBytes(root, path);
-  const digest = Bun.CryptoHasher.hash("sha256", bytes, "hex");
+  const file = await resolveMetadataFile(root, path);
   if (named.ledger === "host-fingerprint") {
     const actual = await readLedgerParquet(file, named.ledger, {
       schema: HostFingerprintRowSchema, schemaVersion: HOST_FINGERPRINT_VERSION,
     });
     const writer = hostWriter(expected);
-    if (actual.file_sha256 !== digest || actual.envelope.tier !== "raw" || actual.envelope.covers !== expected.run_id.slice(0, 10)
+    if (actual.envelope.tier !== "raw" || actual.envelope.covers !== expected.run_id.slice(0, 10)
       || actual.envelope.covers !== named.covers || actual.envelope.file_id !== named.file_id
       || actual.rows.length !== 1 || actual.rows[0]!.row.date !== named.covers
       || Object.entries(writer).some(([key, value]) => actual.envelope.identity[key as keyof typeof writer] !== value)) {
       throw new Error("delivery: host output differs from its current execution identity");
     }
-    return { ...named, bytes, file_sha256: digest, envelope: actual.envelope, rows: actual.rows.map(stored => stored.row),
+    return { ...named, envelope: actual.envelope, rows: actual.rows.map(stored => stored.row),
       content_sha256: actual.envelope.content_sha256, row_count: actual.rows.length };
   }
   const contract: LedgerRowContract<object> = plannerContracts[named.ledger];
   const actual = await readPlannerParquet(file, named.ledger, contract);
-  if (actual.file_sha256 !== digest || actual.envelope.tier !== "raw" || actual.envelope.covers !== named.covers
+  if (actual.envelope.tier !== "raw" || actual.envelope.covers !== named.covers
     || actual.envelope.file_id !== named.file_id || actual.envelope.row_schema_version !== contract.schemaVersion
     || actual.rows.length === 0 || (named.ledger !== "discovered-articles"
       && actual.rows.some(row => !("run_id" in row) || row.run_id !== expected.run_id
         || !("attempt" in row) || row.attempt !== expected.attempt))) {
     throw new Error("delivery: planner output differs from its current execution identity");
   }
-  return { ...named, bytes, file_sha256: digest, envelope: actual.envelope, rows: actual.rows,
+  return { ...named, envelope: actual.envelope, rows: actual.rows,
     content_sha256: actual.envelope.content_sha256, row_count: actual.rows.length };
 }

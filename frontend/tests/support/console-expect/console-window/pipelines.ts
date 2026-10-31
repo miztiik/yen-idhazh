@@ -10,6 +10,8 @@ export const EXPECT: RouteExpect | null = {
 		'article-age',
 		'pipeline-funnel',
 		'downgrade-funnel',
+		'visual-refusals',
+		'visual-written-types',
 		'item-cost',
 		'run-health',
 		'site-cost-per-item',

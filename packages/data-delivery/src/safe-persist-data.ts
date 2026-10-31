@@ -1,5 +1,5 @@
-/** Publish verified immutable files without modifying the caller's Git worktree. */
-import { createHash, randomUUID } from "node:crypto";
+/** Publish completed immutable files without modifying the caller's Git worktree. */
+import { randomUUID } from "node:crypto";
 import { chmod, lstat, link, mkdir, mkdtemp, readFile, realpath, rm, unlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { isAbsolute, join, relative, sep } from "node:path";
@@ -22,7 +22,6 @@ export class SafePersistDataError extends Error {
 type CheckedFile = {
   sourcePath: string;
   targetPath: string;
-  sha256: string;
   bytes: Uint8Array;
 };
 
@@ -60,10 +59,6 @@ const GIT_ENVIRONMENT_KEYS = [
   "GIT_PREFIX",
 ] as const;
 
-function sha256(bytes: Uint8Array): string {
-  return createHash("sha256").update(bytes).digest("hex");
-}
-
 function isWithin(root: string, target: string): boolean {
   const path = relative(root, target);
   return path === "" || (path !== ".." && !path.startsWith(`..${sep}`) && !isAbsolute(path));
@@ -92,11 +87,7 @@ async function checkedSource(root: string, file: CheckedFile): Promise<Uint8Arra
   if (!isWithin(root, actual)) {
     throw new SafePersistDataError("Completed output escapes its source root", "integrity-refused", [file.sourcePath]);
   }
-  const bytes = await readFile(current);
-  if (sha256(bytes) !== file.sha256) {
-    throw new SafePersistDataError("Completed output bytes do not match the declared SHA256", "integrity-refused", [file.sourcePath]);
-  }
-  return bytes;
+  return readFile(current);
 }
 
 function gitEnvironment(index?: string, literalPaths = true, identity?: SafePersistDataCommitter): Record<string, string | undefined> {
@@ -463,7 +454,7 @@ async function artifactTargetStatus(root: string, file: CheckedFile): Promise<"m
       throw new SafePersistDataError("Artifact target is not a plain data file", "integrity-refused", [file.targetPath]);
     }
     const existing = await readFile(target);
-    if (sha256(existing) !== file.sha256) {
+    if (!existing.equals(file.bytes)) {
       throw new SafePersistDataError("Immutable artifact collision", "integrity-refused", [file.targetPath]);
     }
     return "present";

@@ -16,9 +16,9 @@ Table A
 | A5 | Diagnostic boundary | Append failed raw-document JSON only when `dump_raw_document_contents` is true. Never dump successful documents, substitute extracted text, retain successful downloads for later debugging, or use the dump as execution state. |
 | A6 | Work limits | No new tests, fixtures, dependencies, brokers, storage framework, benchmark or local test run. Remove obsolete cases and adjust existing support code affected by the contract changes. Existing CI configuration remains unchanged. |
 | A7 | Escalation | Stop before changing unrelated hashes, ledger formats, public response fields, source permissions, independent API support or the content-retention requirement. Stop if another consumer requires an old journal or checksum input. Do not modify `CLAUDE.md`. |
-| A8 | Execution | Author-and-stop. Both rows are design-level work; implementation starts only after execution is requested. Parallel N = 1 because PR 2 depends on PR 1. |
+| A8 | Execution | Two sequential PRs in one worktree. Parallel N = 1 because PR 2 depends on PR 1. |
 
-Execute per docs/how-to/execute-a-plan.md: one maintainer carries the plan and delegates only where useful; keep parallel N = 1 because the PRs are sequential; honor the escalation triggers in Table A. AUTHOR-AND-STOP until execution is requested.
+Execute per docs/how-to/execute-a-plan.md: one maintainer carries both rows in one worktree; keep parallel N = 1 because the PRs are sequential; honor the escalation triggers in Table A.
 
 Table B
 
@@ -36,7 +36,7 @@ Table C
 
 | Id | Row | Title | Depends-on | Parallel-group | Status | Worktree | PR | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| C1 | 1 | Remove delivery-file checksum requirements | - | A | PENDING | - | - | - |
+| C1 | 1 | Remove delivery-file checksum requirements | - | A | DONE | planner-removal-delivery | - | - |
 | C2 | 2 | Remove planner SQLite and add failure-only raw-document output | 1 | B | PENDING | - | - | - |
 
 ## 2 - Tasks by API

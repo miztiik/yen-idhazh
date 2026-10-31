@@ -13,6 +13,7 @@ const DAY = { date: '2030-06-01', reached: 0, asked: 0, drafted: 0, published: 0
 const PANELS = [
 	['at-a-glance', 'AtAGlance'], ['run-health', 'RunHealth'], ['site-cost-per-item', 'SiteCostPerItem'],
 	['chart-drawing', 'ChartDrawing'], ['pipeline-funnel', 'VisualFunnels'], ['downgrade-funnel', 'VisualFunnels'],
+	['visual-refusals', 'VisualAttempts'], ['visual-written-types', 'VisualAttempts'],
 	['extraction', 'Extraction']
 ] as const;
 
@@ -69,6 +70,10 @@ for (const [id, name] of PANELS) {
 			quiet: { counts: [], read: 'read', notes: [], kind },
 			absent: { counts: [], read: 'not-packed', notes: ['The visual-attempt record is unavailable.'], kind }
 		});
+		const attempts = (kind: 'refusals' | 'written') => ({
+			quiet: { days: [], read: 'read', notes: [], kind },
+			absent: { days: [], read: 'not-packed', notes: ['The visual-attempt record is unavailable.'], kind }
+		});
 		const inputs: Record<string, { quiet: Record<string, unknown>; absent: Record<string, unknown> }> = {
 			'at-a-glance': { quiet: { days: [DAY] }, absent: { days: [] } },
 			'run-health': {
@@ -82,6 +87,8 @@ for (const [id, name] of PANELS) {
 			'chart-drawing': { quiet: { days: [DAY] }, absent: { days: [] } },
 			'pipeline-funnel': funnel('pipeline'),
 			'downgrade-funnel': funnel('downgrade'),
+			'visual-refusals': attempts('refusals'),
+			'visual-written-types': attempts('written'),
 			extraction: {
 				quiet: { rows: [], evaluations: [], nativeState: 'quiet', evaluationsState: 'quiet', yieldDays: [{ date: DAY.date, chartable: 0, charted: 0 }],
 					publishedShare: { measuredDays: 1, unused: 0, chartablePublished: 0, unusedPct: null } },
@@ -93,7 +100,16 @@ for (const [id, name] of PANELS) {
 		const absent = render(component, { props: { ...common, ...inputs[id].absent } }).body;
 		expect(words(quiet)).not.toBe(words(absent));
 		expect(words(absent)).toContain('unavailable');
-		expect(absent).toContain('data-comparison=');
+		if (name === 'VisualAttempts') {
+			expect(quiet).toContain('data-empty="quiet"');
+			expect(quiet).not.toContain('data-record-incomplete');
+			expect(absent).toContain('data-record-incomplete');
+			expect(absent).toContain('data-record-note');
+			expect(absent).not.toContain('data-empty=');
+			expect(absent).not.toContain('data-count=');
+		} else {
+			expect(absent).toContain('data-comparison=');
+		}
 		expect(quiet).not.toContain('NaN');
 		expect(absent).not.toContain('NaN');
 	});
