@@ -548,11 +548,13 @@ The shared operation:
 3. Validate and settle run/feed/endpoint records using their declared identities.
    Raw/compact overlap is one representation of the same fact; distinct actual
    work remains visible. Missing/corrupt input is a gap, not a zero.
-4. Calculate feed reliability from the actual per-run outcome/items evidence.
-   Exclude rest/robots skips, retain productive and attempted denominators, and
-   return the window bounds, completeness and production factor. Saved
-   per-run reliability results are captured results, never inputs to another
-   summation.
+4. Reuse the saved feed-read calculation for the requested covered dates.
+   Without that exact window, prefer the latest covered window ending no later
+   than the request and the nearest start when end dates match. Existing
+   partial-evidence handling remains when no such window is known.
+   Adjust only known entering/leaving reads; recover from actual outcome/items
+   evidence only when a calculation is missing or unusable. Exclude rest/robots
+   skips, retain counts, bounds and completeness, and never add saved fractions.
 5. Calculate the L3 report over the seven closed UTC days ending yesterday,
    relative to D22. Sum C28-C30 and return report bounds and completeness.
    Unknown request coverage is exposed; do not infer waste, blame or zero cost.
@@ -821,8 +823,12 @@ fact before projection and produce identity-bearing gaps. Unrelated valid
 sibling evidence remains usable. The identity
 includes the endpoint and run attempt, so neither changed endpoints nor real
 repeated work collapse into another fact. Missing request columns do not remove
-valid feed-check evidence. Saved cumulative snapshots from independent runs are selected by actual check
-order, never added together. Ambiguous order remains incomplete. Production planning, standalone document work,
+valid feed-check evidence. Saved lifecycle snapshots from independent runs are
+selected by actual check order, never added together. Reliability snapshots
+answer different questions when their covered dates differ. Select the requested
+window before comparing check clocks; a carried zero-read result remains usable
+even when its availability clock did not advance. True same-window clock
+ambiguity remains incomplete. Production planning, standalone document work,
 selection and health summaries use these field projections. Strict full-row
 validation remains on the write and maintenance paths.
 

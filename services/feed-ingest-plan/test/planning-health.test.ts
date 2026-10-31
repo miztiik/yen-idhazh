@@ -5,6 +5,7 @@ import { readFile, writeFile } from "node:fs/promises";
 import { z } from "zod";
 import { randomUUID } from "node:crypto";
 import { FeedHealthStateRowContract, FeedHealthStateRowSchema } from "@idhazh/common-contracts";
+import type { FeedHealthReliability } from "@idhazh/common-contracts";
 import { healthFieldFixture, rewriteHealthFields } from "./health-field-fixtures";
 import { recordedPlan } from "./plan-recordings";
 import { preparePlanningHealth } from "../src/api/prepare-planning-health";
@@ -37,6 +38,85 @@ async function recording() {
     return { ...setup, row, path, now: setup.runtime.clock().toISOString() };
   } catch (error) { await setup.close(); throw error; }
 }
+
+async function writeCarriedSummary(
+  setup: Awaited<ReturnType<typeof recording>>, day: string, run: string,
+  reliability: FeedHealthReliability, updatedAt = "2026-10-29T10:00:00.000Z",
+) {
+  const row = FeedHealthStateRowSchema.parse({
+    ...setup.row, date: day, run_id: `${day}-${run}`, checked_at: null,
+    check_request_id: null, check_result: null, outcome: null, status: null, items: null,
+    availability: "resting", strikes: 5, rest_until: "2026-11-01T10:00:00.000Z",
+    first_confirmed_failure_at: "2026-10-29T10:00:00.000Z", availability_updated_at: updatedAt,
+    feed_reads: null, productive_reads: null, failed_reads: null, article_candidates: null,
+    articles_selected: null, feed_requests: null, article_requests: null, robots_requests: null,
+    counts_complete: false, rejection_counts: [], reliability,
+  });
+  const written = await writeRows(setup.inputs.outputRoot, "feed-health-state", day, FeedHealthStateRowContract, [row]);
+  return { day, raw_files: written.files.map(file => `state/${file.path}`) };
+}
+
+test("carried reliability reuses the requested saved window even when the availability clock did not change", async () => {
+  const setup = await recording();
+  try {
+    const older = await writeCarriedSummary(setup, "2026-10-30", "9100", {
+      productive: 1, attempted: 1, success_fraction: 1, production_factor: 1,
+      from_day: "2026-10-29", through_day: "2026-10-30", complete: true,
+    });
+    const current = await writeCarriedSummary(setup, "2026-10-31", "9101", {
+      productive: 0, attempted: 0, success_fraction: null, production_factor: null,
+      from_day: "2026-10-30", through_day: "2026-10-31", complete: true,
+    });
+    setup.inputs.settings.inputs.feed_health_days = [older, current];
+    setup.inputs.clock_config.collect.reliability_window_days = 2;
+    const read = await preparePlanningHealth(setup.inputs, "2026-10-31T12:00:00.000Z");
+    expect(read.sources.get(setup.row.feed_id)).toMatchObject({
+      lifecycle: "resting", availability_updated_at: "2026-10-29T10:00:00.000Z",
+      reliability: { productive: 0, attempted: 0, success_fraction: null, production_factor: null,
+        from_day: "2026-10-30", through_day: "2026-10-31", complete: true },
+    });
+    const snapshots = [...read.uses.feed_reliability.rows, ...read.uses.feed_reliability.partial_rows];
+    expect(snapshots).toHaveLength(2);
+    expect(snapshots.every(row => row.checked_at === null && row.check_request_id === null)).toBe(true);
+    const carried = await writeCarriedSummary(setup, "2026-11-01", "9102", {
+      productive: 0, attempted: 0, success_fraction: null, production_factor: null,
+      from_day: "2026-10-30", through_day: "2026-10-31", complete: true,
+    });
+    setup.inputs.settings.inputs.feed_health_days.push(carried);
+    const advanced = await preparePlanningHealth(setup.inputs, "2026-11-01T12:00:00.000Z");
+    expect(advanced.sources.get(setup.row.feed_id)?.reliability).toEqual({
+      productive: 0, attempted: 0, success_fraction: null, production_factor: null,
+      from_day: "2026-10-31", through_day: "2026-11-01", complete: true,
+    });
+  } finally { await setup.close(); }
+});
+
+test("carried reliability keeps same-window clock ambiguity instead of borrowing another question's totals", async () => {
+  const setup = await recording();
+  try {
+    const older = await writeCarriedSummary(setup, "2026-10-30", "9200", {
+      productive: 1, attempted: 1, success_fraction: 1, production_factor: 1,
+      from_day: "2026-10-29", through_day: "2026-10-30", complete: true,
+    });
+    const first = await writeCarriedSummary(setup, "2026-10-31", "9201", {
+      productive: 0, attempted: 0, success_fraction: null, production_factor: null,
+      from_day: "2026-10-30", through_day: "2026-10-31", complete: true,
+    }, "2026-10-29T10:00:00Z");
+    const overlapping = await writeCarriedSummary(setup, "2026-10-31", "9202", {
+      productive: 1, attempted: 1, success_fraction: 1, production_factor: 1,
+      from_day: "2026-10-30", through_day: "2026-10-31", complete: true,
+    }, "2026-10-29T10:00:00.005Z");
+    setup.inputs.settings.inputs.feed_health_days = [older, {
+      day: first.day, raw_files: [...first.raw_files, ...overlapping.raw_files],
+    }];
+    setup.inputs.clock_config.collect.reliability_window_days = 2;
+    const read = await preparePlanningHealth(setup.inputs, "2026-10-31T12:00:00.000Z");
+    expect(read.sources.get(setup.row.feed_id)?.reliability).toEqual({
+      productive: null, attempted: null, success_fraction: null, production_factor: null,
+      from_day: "2026-10-30", through_day: "2026-10-31", complete: false,
+    });
+  } finally { await setup.close(); }
+});
 
 test("saved availability and reliability survive missing check and unrelated accounting fields", async () => {
   const setup = await recording();

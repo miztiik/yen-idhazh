@@ -2,7 +2,7 @@
 
 **Last Updated**: 2026-10-31
 **Level**: 5 - persisted health contract and planner execution design; execution authorized by the user on 2026-10-31 UTC.
-**Status**: Cutover merged after green merge-candidate CI. Cleanup and lifecycle corrections await the corrected publication candidate's CI and merge. Live production verification remains.
+**Status**: Cutover and cleanup are merged after green final-head CI. A confirmed carried-window reuse correction is in progress. Production verification must use that final delivered code.
 
 ## 0 - Operating contract
 
@@ -37,7 +37,8 @@ Table C
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | C1 | 1 | Record and consume ledger lifecycle snapshots | - | A | DONE | feed-ledger-delivery | #1842 | - |
 | C2 | 2 | Switch concurrent HTTP planning and remove availability publication | 1 | B | DONE | feed-ledger-delivery | #1842 | - |
-| C3 | 3 | Remove planner legacy branches and obsolete delivery machinery | 2 | C | IN PROGRESS - publication correction | feed-ledger-delivery | #1843 | - |
+| C3 | 3 | Remove planner legacy branches and obsolete delivery machinery | 2 | C | DONE | feed-ledger-delivery | #1843 | - |
+| C4 | 4 | Correct carried-window reuse and verify final production output | 3 | D | IN PROGRESS | feed-ledger-delivery | - | - |
 
 ## 2 - Approved health contract
 
