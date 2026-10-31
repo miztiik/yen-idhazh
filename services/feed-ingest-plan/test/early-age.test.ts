@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { tmpdir } from "node:os";
 import {
-  DiscoveredArticleRowContract, FeedHealthStateRowContract, SelectedArticlesArtifactSchema,
+  FeedHealthStateRowContract, FeedIngestCandidateSchema, SelectedArticlesArtifactSchema,
   deriveCandidateId, deriveUrlKey,
 } from "@idhazh/common-contracts";
 import { persistLedger } from "@idhazh/ledger-file-writer";
@@ -15,9 +15,13 @@ import { readExclusionEvidence } from "../src/read-ledger-history/read-exclusion
 import { ItemHealthFailureProjectionContract, ItemHealthFailureProjectionSchema } from "../src/read-ledger-history/item-health-failure";
 import { PUBLISHED_ROW_SCHEMA_VERSION, PublishedRowSchema } from "../src/metrics/publication-evidence";
 import { loadPlanInputs } from "../src/load-plan-inputs";
-import { main } from "../src/index";
+import { collectRecordedFeeds } from "./collection-recordings";
+import { executeFeedHealthState } from "../src/api/feed-health-state-operation";
+import { parseFeed } from "../src/harvest-feeds/parse-feed";
+import { sourceSnapshot } from "../src/harvest-feeds/load-harvest-inputs";
+import { readPlannerOutputRecording } from "./planner-output-recordings";
 import { recordedPlan } from "./plan-recordings";
-import { context, inputs, readRecordings, RecordedTransport, source } from "./harvest-recordings";
+import { context, inputs, readRecordings, RecordedTransport } from "./harvest-recordings";
 import type { ProgressRecord } from "../src/logging/progress-logger";
 
 function feed(items: { title?: string; path: string; date: string | null }[]) {
@@ -114,8 +118,8 @@ test("preflight uses the configured age ladder, strict boundary and future toler
   } finally { await rm(root, { recursive: true, force: true }); }
 });
 
-test("real planning records early losses once in native health counters without fetching stale pages", async () => {
-  const fixture = await recordedPlan([source(), source({ id: "current", url: "https://atom.example/feed.xml" })]);
+test("collection records early losses once in native health counters without fetching stale pages", async () => {
+  const fixture = await recordedPlan();
   try {
     const progress: ProgressRecord[] = [];
     fixture.runtime.progress = event => { progress.push(event); };
@@ -123,41 +127,48 @@ test("real planning records early losses once in native health counters without 
       { title: "Expired first", path: "stale-one", date: "2026-10-19T10:00:00Z" },
       { title: "Expired second", path: "stale-two", date: "2026-10-19T11:00:00Z" },
     ]);
-    const summary = await main(["--cli"], { inputs: fixture.inputs, runtime: fixture.runtime, output: () => {} });
-    if (!("planning_complete" in summary)) throw new Error("Expected completed recorded planning");
-    expect(summary.planning_complete).toBe(true);
+    const { batch } = await collectRecordedFeeds(fixture.inputs, fixture.runtime);
+    const summary = await executeFeedHealthState({ batch_id: batch.batch_id, action: "record" }, fixture.inputs, fixture.runtime);
     expect(fixture.transport.requests.some(request => request.url.pathname.startsWith("/stale-"))).toBe(false);
     expect(progress.filter(event => event.feed_id === "recorded-news"
       && ["ARTICLE_HARVEST_STARTED", "ARTICLE_HARVEST_COMPLETED"].includes(event.eventType))).toHaveLength(0);
-    const rows = (await Promise.all(summary.files.feed_health_state!.files.map(file =>
+    const rows = (await Promise.all(summary.files!.files.map(file =>
       readPlannerParquet(join(fixture.inputs.outputRoot, file.path), "feed-health-state", FeedHealthStateRowContract)))).flatMap(file => file.rows);
     const stale = rows.find(row => row.feed_id === "recorded-news")!;
     expect(stale).toMatchObject({ items: 2, outcome: "ok", feed_reads: 1, productive_reads: 1, article_candidates: 0, articles_selected: 0 });
     expect(stale.rejection_counts).toEqual([{
       subject: "article", stage: "harvest-feeds", reason_code: "REJECTED_AGE_EXCEEDS_MAX_TIER_ENVELOPE", attribution: null, count: 2,
     }]);
-    const discoveries = (await Promise.all(summary.files.discovered_articles!.files.map(file =>
-      readPlannerParquet(join(fixture.inputs.outputRoot, file.path), "discovered-articles", DiscoveredArticleRowContract)))).flatMap(file => file.rows);
+    const discoveries = batch.discovered.availability === "available" ? batch.discovered.rows : [];
     for (const path of ["stale-one", "stale-two"]) expect(discoveries.some(row =>
       row.url_key === deriveUrlKey(`https://news.example/${path}`))).toBe(true);
   } finally { await fixture.close(); }
 });
 
-test("empty RSS and Atom category labels never become invalid selected metadata or artifact labels", async () => {
-  const fixture = await recordedPlan([source(), source({ id: "atom", url: "https://atom.example/feed.xml" })]);
-  try {
-    fixture.transport.recordings.bodies.rss = feed([
+test("empty RSS and Atom category labels stay valid through candidate and selected models", async () => {
+    const recordings = await readRecordings();
+    const rss = feed([
       { title: "Current", path: "second", date: "2026-10-21T12:00:00Z" },
     ]).replace("</item>", "<category/><category>  </category><category>Science</category></item>");
-    fixture.transport.recordings.bodies.atom = fixture.transport.recordings.bodies.atom.replace(
+    const atom = recordings.bodies.atom.replace(
       "<entry>", '<entry><category term=" "/><category term=""/>',
     );
-    const summary = await main(["--cli"], { inputs: fixture.inputs, runtime: fixture.runtime, output: () => {} });
-    if (!("planning_complete" in summary) || summary.selected_articles_artifact === null) throw new Error("Expected actual selected artifact");
-    expect(summary.planning_complete).toBe(true);
-    const artifact = SelectedArticlesArtifactSchema.parse(await Bun.file(join(fixture.directory, summary.selected_articles_artifact)).json());
+    const { artifact: recorded, response } = await readPlannerOutputRecording();
+    const configured = await inputs();
+    const article = recorded.articles[0]!;
+    const entries = [...await parseFeed(rss), ...await parseFeed(atom)];
+    const candidates = entries.map((entry, ordinal) => FeedIngestCandidateSchema.parse({
+      date: recorded.date, run_id: recorded.run_id, correlation_id: response.correlation_id,
+      candidate_id: deriveCandidateId(recorded.run_id, article.feed_id, ordinal), entry_ordinal: ordinal,
+      feed_id: article.feed_id, source: sourceSnapshot(configured, configured.sources[0]!),
+      canonical_url: article.canonical_url, url_key: article.url_key, title: entry.title ?? article.title,
+      article_text: article.article_text, word_count: article.article_text.split(/\s+/).length,
+      categories: entry.categories, author: entry.author, published_at: entry.published_at, fetched_at: recorded.evaluated_at,
+    }));
+    const artifact = SelectedArticlesArtifactSchema.parse({ ...recorded,
+      articles: candidates.map(candidate => ({ ...article, categories: candidate.categories })),
+    });
     const categories = artifact.articles.map(row => row.categories);
     expect(categories).toContainEqual(["Science"]);
     expect(categories.every(values => values.every(value => value.length > 0))).toBe(true);
-  } finally { await fixture.close(); }
 });

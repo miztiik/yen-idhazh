@@ -18,7 +18,7 @@ import { recordedPlannerProcess } from "./planner-process-recordings";
 const recordings = new URL("../../../tests/fixtures/feed-ingest-plan/entry-points/", import.meta.url);
 
 test("one recorded API request writes a valid selected artifact", async () => {
-  const fixture = await recordedPlannerProcess();
+  const fixture = await recordedPlannerProcess(undefined, { history: true });
   fixture.startup.planning.partition.enabled = true;
   try {
     const result = await invokePlannerHttp(fixture.inputs, fixture.startup, { article_limit: 1 }, fixture.evidence, {
@@ -86,7 +86,7 @@ test("one recorded API request writes a valid selected artifact", async () => {
 });
 
 test("one awaited CLI invocation writes one valid result", async () => {
-  const fixture = await recordedPlannerProcess(undefined, { reserveListener: false });
+  const fixture = await recordedPlannerProcess(undefined, { reserveListener: false, history: true });
   fixture.startup.planning.partition.enabled = false;
   const child = Bun.spawn([process.execPath, fileURLToPath(new URL("./planner-cli-recording.ts", import.meta.url)),
     "--cli", "--article-limit=1"], {

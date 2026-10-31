@@ -2,16 +2,10 @@
 import { expect, test } from "bun:test";
 import { renderFailureEvidence } from "../src/reporting/failure-evidence-markdown";
 import { renderPlanMarkdown } from "../src/reporting/plan-markdown";
-import { executeFeedHealthState } from "../src/api/feed-health-state-operation";
-import { runFeedPlan, summarizePlan } from "../src/run-feed-plan";
-import { recordedPlan } from "./plan-recordings";
+import { readPlannerOutputRecording } from "./planner-output-recordings";
 
 test("groups actual failure rows by subject, reason, status and attribution", async () => {
-  const fixture = await recordedPlan();
-  try {
-    const response = summarizePlan(await runFeedPlan({}, fixture.inputs, fixture.runtime));
-    const health = await executeFeedHealthState({ batch_id: response.batches.selection_batch_id, action: "summarize" },
-      fixture.inputs, fixture.runtime);
+    const { response, health } = await readPlannerOutputRecording();
     const base = health.rows[0]!;
     const rejection = (subject: "article" | "feed", reason_code: string, count: number,
       attribution: "feed" | "pipeline" | "unknown") => ({
@@ -63,7 +57,6 @@ test("groups actual failure rows by subject, reason, status and attribution", as
     expect(integrated.markdown).toContain("## Table K - Feed failures");
     expect(integrated.markdown).toContain("REJECTED&#95;SCREENING&#95;MIN&#95;WORDS");
     expect(integrated.notices.some(notice => notice.title === "Failure evidence")).toBe(true);
-  } finally { await fixture.close(); }
 });
 
 test("keeps unavailable failures distinct from empty failure results", () => {

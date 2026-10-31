@@ -14,7 +14,7 @@ import { readPlannerParquet } from "../src/read-ledger-history/read-planner-parq
 import { settleHealthRows } from "../src/read-ledger-history/health-summary";
 import { foldDiscoveryHistory } from "../src/read-ledger-history/read-discovered-evidence";
 import { commitFixtureFiles, compactRows, registration, writeRows } from "./partition-fixtures";
-import { fixtureGit } from "./publication-recordings";
+import { fixtureGit } from "./fixture-git";
 
 const day = "2026-10-20";
 const contracts = {

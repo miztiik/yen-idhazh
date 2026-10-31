@@ -12,7 +12,7 @@ import { reuseFeedLifecycle, recoverFeedLifecycle } from "../src/read-ledger-his
 import { reuseFeedReliability } from "../src/read-ledger-history/feed-reliability-history";
 import { readFeedHealthFieldsDay } from "../src/read-ledger-history/read-feed-health-fields";
 import { commitFixtureFiles, compactRows, registration, writeRows } from "./partition-fixtures";
-import { fixtureGit } from "./publication-recordings";
+import { fixtureGit } from "./fixture-git";
 
 function row(day: string, run: number, productive = true) {
   const seed = plannerRecordings(day).find(record => record.name === "feed-health-state")!.row;

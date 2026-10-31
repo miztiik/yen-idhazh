@@ -6,7 +6,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { DiscoveredArticleRowContract, FeedHealthStateRowContract, FeedIngestEventSchema, PlanRunRowContract } from "@idhazh/common-contracts";
 import { plannerRecordings } from "../../../packages/ledger-file-writer/test/planner-recordings";
-import { fixtureGit } from "./publication-recordings";
+import { fixtureGit } from "./fixture-git";
 import { registration, writeRows } from "./partition-fixtures";
 import { fixedHistoryRevision, listExactRawDayMembers, readNamedGitFile, readNamedGitMember } from "../src/read-ledger-history/raw-day-members";
 import { createPlannerHistoryCache, readPlannerDay } from "../src/read-ledger-history/read-planner-history";
