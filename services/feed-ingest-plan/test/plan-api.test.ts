@@ -32,6 +32,9 @@ test("HTTP health and refusals cannot start source work", async () => {
     expect((await app.request(`${prefix}/feeds`)).status).toBe(404);
     expect((await app.request("/api/2026-10-20/health")).status).toBe(404);
     expect((await app.request(`${prefix}/feed-health-state`, json({ batch_id: randomUUID(), action: "record" }))).status).toBe(503);
+    recorded.inputs.settings.enabled = true;
+    recorded.runtime.run_number = "9".repeat(512);
+    expect((await app.request(`${prefix}/plan`, json({}))).status).toBe(400);
     expect(recorded.transport.requests).toHaveLength(0);
     expect(existsSync(join(recorded.inputs.outputRoot, "raw"))).toBe(false);
   } finally { await app.close(); await recorded.close(); }

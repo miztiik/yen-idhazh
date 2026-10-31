@@ -2,9 +2,9 @@
 import { expect, test } from "bun:test";
 import {
   DISCOVERED_ARTICLE_VERSION, SELECTED_ARTICLE_VERSION, PLANNER_ENVELOPE_VERSION,
-  OPERATION_VERSION, PLANNER_OPERATION_VERSION, PARSED_FEED_BATCH_VERSION,
+  OPERATION_VERSION, PARSED_FEED_BATCH_VERSION,
   DiscoveredArticleRowSchema, SelectedArticleRowSchema, SelectedArticleMetadataSchema, PlannerFileEnvelopeSchema,
-  FetchedDocumentSchema, PlannerOperationSchema, ParsedFeedBatchSchema,
+  FetchedDocumentSchema, ParsedFeedBatchSchema,
   readSelectedArticlesArtifact, readFeedIngestEvent, FEED_INGEST_EVENT_VERSION, deriveUrlKey,
 } from "../src";
 
@@ -50,15 +50,12 @@ test("current discovery, selection, artifacts and envelopes keep their exact ide
   }
 });
 
-test("current receipt construction succeeds and old documents and operations refuse", async () => {
+test("current document construction succeeds and old documents and batches refuse", async () => {
   const document = await Bun.file(new URL("../../../tests/fixtures/contracts/fetched-document/refused.json", import.meta.url)).json();
-  const operation = await Bun.file(new URL("../../../tests/fixtures/contracts/planner-operation/started.json", import.meta.url)).json();
   const currentDocument = FetchedDocumentSchema.parse({ ...document, version: OPERATION_VERSION });
   expect(currentDocument.version).toBe(OPERATION_VERSION);
-  expect(PlannerOperationSchema.parse({ ...operation, version: PLANNER_OPERATION_VERSION }).version).toBe(PLANNER_OPERATION_VERSION);
   for (const version of ["2026-10-28", "2026-10-29", "2026-10-30"]) {
     expect(FetchedDocumentSchema.safeParse({ ...currentDocument, version }).success).toBe(false);
-    expect(PlannerOperationSchema.safeParse({ ...operation, version }).success).toBe(false);
   }
   const recordedBatch = await Bun.file(new URL("../../../tests/fixtures/contracts/parsed-feed-batch/empty.json", import.meta.url)).json();
   const current = ParsedFeedBatchSchema.parse({

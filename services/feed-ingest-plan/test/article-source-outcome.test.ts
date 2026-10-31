@@ -1,11 +1,8 @@
-/** Do original source captures retain one technical outcome through replay and recovery? */
+/** Do live source captures retain one technical outcome independently of selection? */
 import { expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
-import { mkdtemp, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 import {
-  FeedIngestCandidateSchema, FetchedDocumentSchema, PlannerOperationSchema, PlannerStageContextSchema,
+  FeedIngestCandidateSchema, PlannerStageContextSchema,
   HarvestDiagnosticsSchema, SourceArticleOutcomeSchema, SourceSnapshotSchema, deriveCandidateId, deriveUrlKey,
 } from "@idhazh/common-contracts";
 import { HarvestArticleResultSchema } from "../src/harvest-feeds/harvest-types";
@@ -15,7 +12,6 @@ import { attributeIngestOutcome } from "../src/attribute-ingest-outcomes";
 import { createRunHealth } from "../src/run-health";
 import { summarizePlanningHealth } from "../src/read-ledger-history/health-summary";
 import { projectFeedHealthFields } from "../src/read-ledger-history/read-feed-health-fields";
-import { openOperationStore, sha256 } from "../src/api/operation-store";
 
 function recording() {
   const at = "2026-10-27T12:00:00Z";
@@ -132,59 +128,4 @@ test("the source rate stays eight out of ten when only three articles are select
   expect(summarize().article_pass_rate).toBe(0.8);
   expect(summarize([], true).article_pass_rate).toBeNull();
   expect(summarize(rows, false).article_pass_rate).toBeNull();
-  const recovered = createRunHealth(context, [source], new Map(), { min_words: 10, blocked_http_statuses: [], tidy_urls: true }, rows);
-  for (const capture of captures) recovered.captureArticle(capture.id, source.feed_id, at, capture.outcome);
-  expect(recovered.rows()).toEqual(rows);
-  recovered.captureArticle(randomUUID(), source.feed_id, at, null);
-  expect(summarize(recovered.rows()).article_pass_rate).toBeNull();
-});
-
-test("the existing operation journal preserves the first outcome and bounded feed membership after reopening", async () => {
-  const directory = await mkdtemp(join(tmpdir(), "article-source-outcome-"));
-  const { at, context, source } = recording();
-  let store: Awaited<ReturnType<typeof openOperationStore>> | undefined;
-  try {
-    store = await openOperationStore(directory);
-    const operation = () => PlannerOperationSchema.parse({
-      request_id: randomUUID(), operation: "fetch", input_sha256: "b".repeat(64), config_sha256: "c".repeat(64),
-      run_id: context.run_id, correlation_id: context.correlation_id, created_at: at,
-      state: "started", response_json: null, artifact: null,
-    });
-    const artifact = (kind: "feed" | "article", parent: string | null = null) => {
-      const url = kind === "feed" ? source.feed_url : "https://example.org/article";
-      const body = kind === "feed" ? '<rss version="2.0"><channel><title>Recorded feed</title></channel></rss>'
-        : "<article><h1>Recorded report</h1><p>Recorded article evidence.</p></article>";
-      return FetchedDocumentSchema.parse({
-        fetch_item_type: kind, canonical_url: url, article_id: deriveUrlKey(url), feed_id: source.feed_id,
-        body, http_status: 200, failure: null, robots: "allowed", error_code: null, robots_failure: null,
-        robots_http_status: null, attempts: [], attempt_observations: [], body_sha256: sha256(body),
-        observation: { event_id: "5ee218d4-8bf2-5d1b-bc69-c23fb7261a60", caused_by_event_id: null,
-          run_id: context.run_id, correlation_id: context.correlation_id, feed_id: source.feed_id,
-          article_id: deriveUrlKey(url), occurred_at: at, operation: "fetch" },
-        parent_fetch_request_id: parent,
-      });
-    };
-    const parent = await store.execute(operation(), async () => ({ artifact: artifact("feed"), response_json: "{}" }));
-    const proposed = operation();
-    const original = artifact("article", parent.request_id);
-    const capture = await store.execute(proposed, async () => ({ artifact: original, response_json: "{}" }));
-    let replayed = false;
-    await store.execute(proposed, async () => {
-      replayed = true;
-      return { artifact: original, response_json: "{}" };
-    });
-    expect(replayed).toBe(false);
-    expect(store.get(parent.request_id)!.article_capture_request_ids).toEqual([capture.request_id]);
-    const admitted = SourceArticleOutcomeSchema.parse({ disposition: "admitted", reason_code: null, settled_at: at });
-    expect(store.settleSourceOutcome(capture.request_id, admitted)).toEqual(admitted);
-    expect(store.settleSourceOutcome(capture.request_id, {
-      disposition: "source_refused", reason_code: "EXTRACT_EMPTY", settled_at: "2026-10-28T00:00:00Z",
-    })).toEqual(admitted);
-    store.close();
-    store = await openOperationStore(directory);
-    expect(store.get(capture.request_id)!.source_outcome).toEqual(admitted);
-    expect(store.get(capture.request_id)!.artifact).toEqual(original);
-    await store.execute(operation(), async () => ({ artifact: artifact("article", parent.request_id), response_json: "{}" }));
-    expect(store.get(parent.request_id)!.article_capture_request_ids).toHaveLength(2);
-  } finally { store?.close(); await rm(directory, { recursive: true, force: true }); }
 });

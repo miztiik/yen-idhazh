@@ -29,7 +29,7 @@ commit and run the two binding tests.
 The planner TypeScript contracts are the named exception in `CLAUDE.md`
 Guardrail #3. Zod schemas under `packages/common-contracts/src/schemas/` own
 planner configuration, events, requests, private receipts, stage payloads and
-the four planner ledgers. They produce JSON Schema, versions and changelogs on
+the five planner ledgers. They produce JSON Schema, versions and changelogs on
 demand. Python does not read planner rows or stage payloads, and has no planner
 model or comparison copy. The Python gardener keeps its scheduler and delegates
 planner file validation and compaction to the TypeScript writer; generic
@@ -136,9 +136,9 @@ the package; the backend gate installs its locked dependencies before pytest.
 The remaining native copies are bound by
 `backend/tests/contracts/test_native_typescript_bindings.py`.
 
-The current planner family has four strict native payloads:
+The current planner family has five strict native payloads:
 `DiscoveredArticleRow`, `SelectedArticleRow`, `FeedHealthStateRow` and
-`PlanRunRow`. Their `PlannerRow` declaration uses the current schema stamp
+`PlanRunRow`, plus `RejectedArticleRow`. Their `PlannerRow` declaration uses the current schema stamp
 once in file metadata, not a repeated row version or generic identity.
 `SelectedArticlesArtifact` carries the same declared selected content plus
 text, with one stamped header. The exact fields and review IDs are
@@ -169,8 +169,11 @@ time remains separate from source provenance. There is no dual writer or
 restored audit shape. Finite historical generic-envelope vectors for unrelated
 families remain readable. Python has no planner row reader or schema binding;
 the shared gardener keeps its generic compact-index records for scheduling.
-The private fetch journal retains its separately declared finite receipt
-stamps; it does not preserve an obsolete planner ledger.
+There is no private fetch journal or saved-request compatibility reader.
+Current fetched documents are validated during live handoff.
+`RawDocumentFailure` declares the optional failure-only JSONL artifact, not an
+execution receipt or ledger. Its [lifetime and delivery boundary](../sources/feed-operator-api.md#failure-only-raw-document-artifact)
+keep raw content out of normal responses, logs and selected metadata.
 
 Candidates retain sanitized content and only configured feed facts.
 They contain no vertical, desk, lens, entity, carrier or quality payload

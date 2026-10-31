@@ -105,8 +105,8 @@ the first attempt. The caller supplies the producer identity at runtime when
 it has one; the standalone runner uses its named default. Neither value is a
 service setting.
 Elapsed duration comes from the monotonic process clock, not wall-clock
-subtraction. A restarted standalone chain records unavailable total duration
-as null.
+subtraction. If the original execution clock is unavailable, total duration
+is null. A restart does not resume a standalone chain.
 
 The [shared health operation](planner-feed-history.md) captures saved calculations
 before fetching and applies this run's actual work before selection and finish. Its complete
@@ -141,6 +141,10 @@ still includes its own queue, and the elapsed collection timing includes the
 orchestration wait. Rejected offers do not
 enter either pool. The final article limit does not stop required collection
 work or reduce its input.
+Fetch/parse pairs also share the configured live-document capacity. Waiting
+for a slot does not remove an offered article. A parser claims its fetched
+input exclusively and releases the original body when processing ends; active
+run and stage references remain pinned until the work ends.
 Preflight rejections remain in discovery and health totals, but do not emit
 article-work progress events for requests that never started.
 
@@ -189,7 +193,7 @@ Per-document timings stay in those progress events. A plan's saved API timings
 contain one elapsed collection entry, not one entry per article or a sum of
 overlapping durations. Standalone document chains retain their own API timings.
 Persistence emits its lifecycle around the actual write, including standalone
-requests; replay does not repeat completed work.
+requests.
 
 Article fetch and parse failure events alone may include `details.article_url`.
 The execution unit supplies this address separately from flexible details.
@@ -204,6 +208,13 @@ reads archived JSONL, so the event shape can move without a history migration.
 The report displays flexible details and warns when the publisher marks an
 event non-compliant.
 Completed earlier files are retained after a later failure.
+
+The optional [failure-only raw document artifact](feed-operator-api.md#failure-only-raw-document-artifact)
+has a separate writer and upload. Run completion drains and closes its writer.
+An append or close failure keeps completed metadata and selected text available
+while marking the run incomplete; it does not replace an earlier failure.
+The supervised child finishes remaining writers during shutdown before
+artifact preparation. With the flag off, no diagnostic file is created.
 
 ## Design rationale
 
