@@ -43,7 +43,7 @@ Table D - phase status
 | Id | Phase | Depends-on | Status | Pull request |
 | --- | --- | --- | --- | --- |
 | D1 | Attempt safe targets despite robots results | - | MERGED | #1846 |
-| D2 | Resolve historical feed-ingest evidence gaps | D1 | IN-FLIGHT | - |
+| D2 | Resolve historical feed-ingest evidence gaps | D1 | DONE | - |
 
 ## 2. Attempt safe targets despite robots results
 
