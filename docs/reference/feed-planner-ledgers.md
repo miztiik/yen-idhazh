@@ -468,8 +468,8 @@ in the main tables; other generic identity columns are not added.
 ## K. API inventory
 
 These are local operator services, not a backend for the published site.
-The route registrations implement 14 HTTP operations across three local
-services. The selected persistence operation replaces the old route; there is
+Each row names one implemented operation. The safe-persist listener runs only
+during workflow finalization. The selected persistence operation replaces the old route; there is
 no permanent compatibility API.
 
 ### Table K - HTTP operations
@@ -493,10 +493,14 @@ no permanent compatibility API.
 | K15 | Feed planner | `POST /api/2026-10-31/collections` | Starts one run-owned collection and captures eligible feeds, run identity and policy |
 | K16 | Feed planner | `POST /api/2026-10-31/collections/complete` | Requires terminal feed/article work, saves discovery and harvested rejections, and returns the complete global batch |
 | K17 | Feed planner | `POST /api/2026-10-31/collections/cancel` | Cancels owned work, blocks partial-input selection, and returns rejection receipts and a partial-health batch reference |
+| K18 | Safe persist | `GET /api/2026-10-31/health` | Confirms the separately supervised delivery child, not planner enablement or feed health |
+| K19 | Safe persist | `POST /api/2026-10-31/safe-persist-data` | Reuses verified current metadata delivery through `safe_persist_data`; accepts only run number, attempt and exact completed paths |
 
-The two health paths belong to different service listeners. The standalone RAM
+The health responses belong to separate listeners; planner and safe persist use
+the same versioned path at different workflow steps. The standalone RAM
 HTTP proof uses K11; it is not another RAM API. The ledger writer is a library
-and CLI, not an additional HTTP service. No `GET /feeds` or read-only
+and CLI, not an additional HTTP service. The safe-persist endpoint reuses the
+existing delivery package and adapter. No `GET /feeds` or read-only
 `GET /feed-health-state` route currently exists.
 
 K3 uses `feed_id`, not an old `source_id` alias. Article work can reference a

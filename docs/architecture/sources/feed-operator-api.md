@@ -155,6 +155,39 @@ prior artifact or double-count its HTTP work. Repeating the same finalized
 result returns its existing receipt. The removed `persist-dispatches`
 endpoint has no alias and returns ordinary HTTP 404.
 
+## Safe-persist HTTP delivery
+
+`POST /api/2026-10-31/safe-persist-data` calls the existing verified metadata
+adapter and `safe_persist_data`, not another Git implementation. Its strict
+request contains `runNumber`, `attempt` and `paths`, the exact completed paths
+relative to the run's state directory. The response retains the existing
+`status`, `commit`, `files` and `paths` receipt without changing its saved shape.
+No article body, credential or delivery setting enters the request.
+
+The runner checkout and private startup pipe supply the repository and temporary
+output directory. The existing adapter still checks execution identity and
+completed files, reads registered paths, and loads the committer and retry
+settings from committed configuration. HTTP adds no permission or identity
+system.
+
+Always-run finalization owns a separate delivery child because collection has
+already closed its planner child. The delivery child needs no live planner batch
+or collection inputs; completed partial metadata remains deliverable after
+planner failure. It reuses the configured listener and supervision limits,
+checks owned-child readiness through `/health`, and closes and reaps that child
+after success, failure or cancellation. Cancellation known before finalization
+skips new Git delivery.
+
+`safe_persist_http_completed` records the run number, attempt, confirmed status,
+commit and file count in the workflow log. The API and client use the existing
+`writeJsonLine` helper to write one JSON object per stderr line.
+`safe_persist_http_failed` and
+`safe_persist_http_client_failed` identify server and transport failures without
+article bodies. An unconfirmed response or failed child shutdown records a failed
+receipt, not a successful one. Report generation and artifact preparation still
+run independently; [the workflow guide](../../how-to/run-feed-ingest-plan-test.md#saved-output-and-failures)
+defines recovery and upload behavior.
+
 ## Markdown rendering API
 
 TypeScript callers can render a validated planner result without starting an
@@ -166,7 +199,7 @@ package API, not an HTTP route.
 
 The manual workflow uses an adapter to write that Markdown to its job summary
 and turn notices into workflow annotations. Its finalization task first calls
-the separate safe Git delivery API, then renders the report before the artifact
+the safe-persist HTTP endpoint, then renders the report before the artifact
 upload. The delivery receipt stays separate from the rendered report; the pure
 renderer does not commit or upload files. This workflow presentation is not
 the production digest renderer; production can choose a reader-facing format
@@ -252,6 +285,9 @@ remain separate ledger records.
 The Markdown renderer is a pure package function, not another HTTP route:
 formatting needs no service call, workflow annotations stay in the workflow
 adapter, and production can choose a separate reader-facing presentation.
+Final delivery gets its own short-lived child so a stopped or failed planner
+cannot prevent completed metadata from reaching the unchanged Git engine.
+Both children use the same private-pipe shutdown and exact-process reaping code.
 
 ## See also
 

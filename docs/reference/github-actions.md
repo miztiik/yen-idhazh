@@ -1,6 +1,6 @@
 # GitHub Actions Workflows
 
-**Last Updated**: 2026-10-28
+**Last Updated**: 2026-10-31
 
 Which workflows run, when they run, and what they may publish.
 The [workflow declarations](../../.github/workflows/) are authoritative.
@@ -125,6 +125,9 @@ budgets do not claim article-quality verdicts.
 
 Three tasks close the collection: commit all verified ledgers and write the
 report, upload one prepared run artifact, then check completion and clean up.
+Finalization owns a separate supervised safe-persist HTTP child and sends its
+completed metadata to the existing adapter and Git engine. It does not depend
+on the stopped collection listener.
 Publication may retain completed diagnostics after planner failure; it never
 changes the failed result. The artifact contains selected full text for the
 next summarizer, the report and delivery receipt, plus exact uncommitted

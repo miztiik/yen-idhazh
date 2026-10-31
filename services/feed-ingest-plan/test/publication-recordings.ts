@@ -7,6 +7,7 @@ import { writeRecordedHostOutput } from "./host-output-recordings";
 import { createExecutionOutputs } from "../scripts/feed-ingest-plan-outputs";
 import { fixtureGit } from "./fixture-git";
 import { writePlannerOutputRecording } from "./planner-output-recordings";
+import { ServiceSettingsSchema } from "../src/config/service-settings";
 
 export async function publicationGitRecording() {
   const plan = await recordedPlan();
@@ -17,13 +18,20 @@ export async function publicationGitRecording() {
     await mkdir(join(repository, "config"), { recursive: true });
     await fixtureGit(plan.directory, ["init", "--bare", "--initial-branch=main", origin]);
     await fixtureGit(repository, ["init", "--initial-branch=main"]);
-    for (const name of ["ledgers.json", "feed-ingest-plan-service.json"]) {
+    for (const name of ["ledgers.json", "feed-ingest-plan-service.json", "data-delivery.json"]) {
       await copyFile(new URL(`../../../config/${name}`, import.meta.url), join(repository, "config", name));
     }
+    const settingsPath = join(repository, "config", "feed-ingest-plan-service.json");
+    const settings = ServiceSettingsSchema.parse(await Bun.file(settingsPath).json());
+    const reservation = Bun.serve({ hostname: "127.0.0.1", port: 0, fetch: () => new Response() });
+    settings.listener.port = reservation.port!;
+    await reservation.stop(true);
+    plan.inputs.settings.listener.port = settings.listener.port;
+    await writeFile(settingsPath, JSON.stringify(settings));
     const retry = await Bun.file(new URL("../../../config/push-retry.json", import.meta.url)).json();
     await writeFile(join(repository, "config", "push-retry.json"), JSON.stringify(retry));
     await fixtureGit(repository, ["add", "--", "config/ledgers.json",
-      "config/feed-ingest-plan-service.json", "config/push-retry.json"]);
+      "config/feed-ingest-plan-service.json", "config/push-retry.json", "config/data-delivery.json"]);
     await fixtureGit(repository, ["commit", "-m", "Create generated publication inputs"]);
     await fixtureGit(repository, ["remote", "add", "origin", origin]);
     await fixtureGit(repository, ["push", "origin", "HEAD:refs/heads/main"]);

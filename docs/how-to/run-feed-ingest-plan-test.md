@@ -105,6 +105,10 @@ an external feed, starts a live workflow or requires local Python.
 The generated bare-origin case executes the actual commit CLI, checks the
 new remote metadata without raw-day indexes, replays it safely and verifies that
 the checkout did not change. Helper-only coverage cannot certify this entry.
+`safe-persist-http.test.ts` checks real loopback delivery and exact remote bytes.
+The finalization cases also run the actual finalizer CLI through its separate
+delivery child and require the `safe_persist_http_completed` log event.
+They retain report and metadata recovery checks after delivery failure.
 Independent writer and contract tests own native digest, identifier and
 historical ledger coverage. The workflow does not add a synthetic receipt.
 
@@ -133,10 +137,13 @@ Named Git days, not saved raw-day JSON lists, identify all Parquet siblings.
 
 Five tasks follow `Collect and select articles with a supervised server`:
 
-1. `Commit ledgers and write report` calls the safe-delivery API once for all
-   verified completed ledgers, then calls the Markdown API and prepares the
-   upload directory. A commit or report failure does not stop the remaining
-   preparation; the task still fails after preserving its useful output.
+1. `Commit ledgers and write report` starts its own supervised
+   [safe-persist HTTP child](../architecture/sources/feed-operator-api.md#safe-persist-http-delivery)
+   and sends one request for all verified completed ledgers. The existing
+   adapter and Git engine perform delivery. The task closes and reaps that
+   child, then calls the Markdown API and prepares the upload directory.
+   A delivery or report failure does not stop the remaining preparation;
+   the task still fails after preserving its useful output.
 2. `List actual upload files as JSONL` uses the existing structured publisher
    to name each actual file relative to the ZIP root, then its total count.
    It reads only this run's prepared `artifacts` directory, follows the

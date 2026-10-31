@@ -4,15 +4,16 @@ import { join } from "node:path";
 import { z } from "zod";
 import { WriterIdentitySchema } from "../../../packages/common-contracts/src/index";
 import { describePlanError, PlanError } from "../src/api/plan-request";
-import { deliverWorkflowMetadata } from "./feed-ingest-plan-deliver";
+import { deliverWorkflowMetadataHttp } from "./safe-persist-http-client";
 import { writeWorkflowReport } from "./feed-ingest-plan-report";
 import { prepareWorkflowArtifacts } from "./feed-ingest-plan-artifacts";
 import { parseRawDocumentDumpControl } from "../src/config/service-settings";
+import { writeJsonLine } from "../src/logging/structured-logger";
 
 export async function finalizeRunOutput(input: {
   root: string; directory: string; currentRunFiles?: string; runNumber: string; attempt: number;
   cancelled: boolean; summaryPath?: string; outputPath?: string;
-  dumpRawDocumentContents?: boolean; runId?: string;
+  dumpRawDocumentContents?: boolean; runId?: string; signal?: AbortSignal;
 }) {
   const runNumber = z.string().regex(/^\d+$/).parse(input.runNumber);
   const attempt = WriterIdentitySchema.shape.attempt.parse(input.attempt);
@@ -21,13 +22,14 @@ export async function finalizeRunOutput(input: {
   const operations: readonly (readonly [string, () => Promise<unknown>])[] = [
     ["commit-ledgers", async () => {
       if (input.cancelled) {
-        console.error(JSON.stringify({ event: "workflow_ledger_commit_skipped", reason: "cancelled" }));
+        writeJsonLine({ event: "workflow_ledger_commit_skipped", reason: "cancelled" });
         return;
       }
       if (!input.currentRunFiles) {
         throw new PlanError("COMPLETED_PATHS_MISSING", "Collection did not supply its exact completed ledger paths");
       }
-      return deliverWorkflowMetadata({ ...input, runNumber, attempt, currentRunFiles: input.currentRunFiles });
+      return deliverWorkflowMetadataHttp({ ...input, runNumber, attempt, currentRunFiles: input.currentRunFiles },
+        input.signal === undefined ? {} : { signal: input.signal });
     }],
     ["write-report", () => writeWorkflowReport(input)],
     ["prepare-artifacts", () => prepareWorkflowArtifacts({ ...input, runNumber, attempt })],
@@ -36,18 +38,22 @@ export async function finalizeRunOutput(input: {
     try { await execute(); }
     catch (error) {
       failures.push(error);
-      console.error(JSON.stringify({
+      writeJsonLine({
         event: "workflow_finalization_failed", operation,
         code: error instanceof Error && "code" in error && typeof error.code === "string"
           ? error.code : describePlanError(error, input.root).code,
         reason: error instanceof PlanError ? error.message : error instanceof Error ? error.name : "UnknownError",
-      }));
+      });
     }
   }
   if (failures.length) throw new AggregateError(failures, "Run finalization failed; completed output remains available");
 }
 
 if (import.meta.main) {
+  const cancellation = new AbortController();
+  const cancel = () => cancellation.abort(new Error("Workflow finalization cancelled"));
+  process.on("SIGINT", cancel);
+  process.on("SIGTERM", cancel);
   try {
     const { RUNNER_TEMP, GITHUB_RUN_ID, GITHUB_RUN_ATTEMPT, GITHUB_STEP_SUMMARY, GITHUB_OUTPUT,
       CURRENT_RUN_FILES, RUN_CANCELLED, DUMP_RAW_DOCUMENT_CONTENTS, RUN_ID } = process.env;
@@ -63,10 +69,14 @@ if (import.meta.main) {
       outputPath: GITHUB_OUTPUT,
       dumpRawDocumentContents: DUMP_RAW_DOCUMENT_CONTENTS === undefined ? false : parseRawDocumentDumpControl(DUMP_RAW_DOCUMENT_CONTENTS),
       ...(RUN_ID === undefined || RUN_ID === "" ? {} : { runId: RUN_ID }),
+      signal: cancellation.signal,
     });
   } catch (error) {
-    console.error(JSON.stringify({ event: "workflow_finalization_incomplete",
-      code: describePlanError(error, process.cwd()).code }));
+    writeJsonLine({ event: "workflow_finalization_incomplete",
+      code: describePlanError(error, process.cwd()).code });
     process.exitCode = 2;
+  } finally {
+    process.off("SIGINT", cancel);
+    process.off("SIGTERM", cancel);
   }
 }
