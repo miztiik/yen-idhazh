@@ -15,6 +15,7 @@ import { resolveRunContext } from "../resolve-run-context";
 import { recordFinalizedDocumentWork } from "./record-standalone-run";
 import { restoreSourceHealth } from "./restore-source-health";
 import { collectionForRun } from "./collection-operation";
+import { snapshotCollectionBatch } from "./collection-batch";
 
 export function requireStageConfiguration(batch: { config_sha256: string }, inputs: PlanInputs, runtime: PlanRuntime) {
   if (!inputs.settings.enabled) throw new PlanError("PLANNER_DISABLED", "Planner is disabled", "enabled");
@@ -33,6 +34,7 @@ export async function executeSelection(raw: unknown, inputs: PlanInputs, runtime
   if (collection !== undefined && (collection.status !== "complete" || collection.completed_batch_id !== parsed.batch_id)) {
     throw new PlanError("BATCH_INCOMPLETE", "Selection requires the completed global collection, not one feed's batch", "batch_id");
   }
+  if (collection !== undefined) parsed = snapshotCollectionBatch(inputs, collection, collection.pending_offers === 0);
   if (store.ownership(parsed.batch_id).health_fingerprint === null) {
     parsed = store.replace("parsed", ParsedFeedBatchSchema, await restoreSourceHealth(parsed, inputs));
   }

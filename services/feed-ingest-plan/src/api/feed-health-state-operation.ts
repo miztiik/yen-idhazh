@@ -26,6 +26,8 @@ import { plannerMemory } from "../planner-memory";
 import { summarizeFeedAvailability } from "../availability/feed-availability-view";
 import { projectLifecycleFields } from "../health-row";
 import { summarizeRequestReport } from "../read-ledger-history/request-summary";
+import { collectionForBatch } from "./collection-operation";
+import { snapshotCollectionBatch } from "./collection-batch";
 
 export async function prepareExecutionHealth(inputs: PlanInputs, now: string, current?: CurrentHealthWork) {
   const planning = await preparePlanningHealth(inputs, now, current);
@@ -96,6 +98,10 @@ export async function executeFeedHealthState(raw: unknown, inputs: PlanInputs, r
   if (held.stage === "parsed") {
     let parsed = ParsedFeedBatchSchema.parse(held.value);
     requireStageConfiguration(parsed, inputs, runtime);
+    const collection = collectionForBatch(inputs, request.batch_id);
+    if (collection !== undefined && collection.status === "collecting") {
+      parsed = snapshotCollectionBatch(inputs, collection, false);
+    }
     if (stageStore(inputs).ownership(parsed.batch_id).health_fingerprint === null) {
       parsed = stageStore(inputs).replace("parsed", ParsedFeedBatchSchema, await restoreSourceHealth(parsed, inputs));
     }

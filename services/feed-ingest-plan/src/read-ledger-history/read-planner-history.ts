@@ -85,11 +85,10 @@ async function readPlannerDayUsing<T extends object>(
   let revision: string | undefined;
   if (day.raw_files === undefined || day.raw_revision !== undefined) {
     revision = await attempt(root, async () => {
-      const requested = day.raw_revision === undefined
-        ? await (cache.revision ??= fixedHistoryRevision(root))
-        : await verifiedHistoryRevision(root, day.raw_revision);
-      const captured = await (cache.revision ??= Promise.resolve(requested));
-      if (requested !== captured) {
+      const captured = await (cache.revision ??= day.raw_revision === undefined
+        ? fixedHistoryRevision(root)
+        : verifiedHistoryRevision(root, day.raw_revision));
+      if (day.raw_revision !== undefined && day.raw_revision !== captured) {
         throw new LedgerHistoryReadError("Raw and compact history revisions differ within one capture");
       }
       return captured;

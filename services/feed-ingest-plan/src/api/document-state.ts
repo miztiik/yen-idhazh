@@ -137,9 +137,13 @@ export function documentExclusions(state: DocumentState, inputs: PlanInputs) {
   });
   return state.exclusions;
 }
-export async function appendDocumentTiming(inputs: PlanInputs, runId: string, timing: PlanApiTiming) {
+export async function appendDocumentTiming(inputs: PlanInputs, runId: string, timing: PlanApiTiming, scope: "document" | "plan" = "document") {
   const pending = documents.get(inputs)?.get(runId);
-  if (pending !== undefined) (await pending).api_timings.push(timing);
+  if (pending === undefined) return;
+  const state = await pending;
+  if (scope === "document" && state.kind === "document" && state.plan_owned
+    && (timing.operation === "fetch" || timing.operation === "parse")) return;
+  state.api_timings.push(timing);
 }
 export async function rememberDocumentHealth(inputs: PlanInputs, runId: string, fingerprint: string) {
   stageStore(inputs).rememberHealth(runId, fingerprint);

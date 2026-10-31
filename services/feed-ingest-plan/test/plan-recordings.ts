@@ -1,6 +1,6 @@
 /** Build a bounded real planner run from the named offline RSS, HTML and transport recordings. */
 import { existsSync } from "node:fs";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -15,36 +15,29 @@ async function git(directory: string, args: string[]) {
   delete environment.GIT_INDEX_FILE;
   delete environment.GIT_DIR;
   delete environment.GIT_WORK_TREE;
-  environment.GIT_AUTHOR_NAME = "Availability fixture";
-  environment.GIT_AUTHOR_EMAIL = "availability@example.test";
-  environment.GIT_COMMITTER_NAME = "Availability fixture";
-  environment.GIT_COMMITTER_EMAIL = "availability@example.test";
+  environment.GIT_AUTHOR_NAME = "Planner fixture";
+  environment.GIT_AUTHOR_EMAIL = "planner@example.test";
+  environment.GIT_COMMITTER_NAME = "Planner fixture";
+  environment.GIT_COMMITTER_EMAIL = "planner@example.test";
   const child = Bun.spawn(["git", ...args], {
     cwd: directory, env: environment, stdout: "pipe", stderr: "pipe",
   });
-  const [output, errors, code] = await Promise.all([
+  const [, errors, code] = await Promise.all([
     new Response(child.stdout).text(), new Response(child.stderr).text(), child.exited,
   ]);
-  if (code !== 0) throw new Error(`Generated availability repository refused ${args[0]}: ${errors}`);
-  return output.trim();
+  if (code !== 0) throw new Error(`Generated planner history refused ${args[0]}: ${errors}`);
 }
 
-async function initializeAvailabilityRepository(directory: string) {
-  const origin = join(directory, "availability-origin.git");
+async function initializePlannerHistory(directory: string) {
   await git(directory, ["init", "--quiet", "--initial-branch=main"]);
-  await writeFile(join(directory, "README.md"), "Generated local availability fixture.\n");
-  await git(directory, ["add", "--", "README.md"]);
-  await git(directory, ["commit", "--quiet", "-m", "Create availability fixture"]);
-  await git(directory, ["init", "--quiet", "--bare", "--initial-branch=main", origin]);
-  await git(directory, ["remote", "add", "origin", origin]);
-  await git(directory, ["push", "--quiet", "origin", "HEAD:refs/heads/main"]);
+  await git(directory, ["commit", "--quiet", "--allow-empty", "-m", "Create empty planner history"]);
 }
 
 export async function recordedPlan(sources: ConfiguredSource[] = [source()], publishers: unknown = []) {
   const root = fileURLToPath(new URL("../../../", import.meta.url));
   const directory = await mkdtemp(join(tmpdir(), "feed-plan-"));
   try {
-    await initializeAvailabilityRepository(directory);
+    await initializePlannerHistory(directory);
     const [loaded, harvest, recordings] = await Promise.all([
       loadPlanInputs(root), inputs(sources, { publishers }), readRecordings(),
     ]);
@@ -61,7 +54,10 @@ export async function recordedPlan(sources: ConfiguredSource[] = [source()], pub
     const events: FeedIngestEvent[] = [];
     const context = {
       ...loaded, root: directory, outputRoot: join(directory, "state"),
-      settings: { ...loaded.settings, enabled: true }, harvest,
+      settings: {
+        ...loaded.settings, enabled: true,
+        listener: { ...loaded.settings.listener, parser_concurrency: harvest.config.harvest.concurrency },
+      }, harvest,
     };
     const runtime: PlanRuntime = {
       git_sha: "a".repeat(40), run_number: "700", correlation_id: "7cef34e3-dd9f-40ce-9a56-4d01ff5115cc",

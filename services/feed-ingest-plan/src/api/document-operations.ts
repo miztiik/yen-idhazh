@@ -71,7 +71,7 @@ export async function executeDocumentOperation(
           settleCollectionFeed(inputs, record.run_id, fetched.artifact!.feed_id, response.batch_id);
         }
         await appendDocumentTiming(inputs, record.run_id, { operation: "parse", duration_ms: Math.round(performance.now() - begin),
-          status: ParseResponseSchema.parse(JSON.parse(result.response_json)).failure === null ? "completed" : "failed" });
+          status: response.failure === null ? "completed" : "failed" });
         return result;
       } catch (error) {
         await appendDocumentTiming(inputs, record.run_id, { operation: "parse", duration_ms: Math.round(performance.now() - begin), status: "failed" });

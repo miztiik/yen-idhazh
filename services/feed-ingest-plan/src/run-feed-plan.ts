@@ -18,7 +18,7 @@ import { FetchResponseSchema, ParseResponseSchema } from "./api/document-respons
 import { SelectionResponseSchema, PartitionResponseSchema, PersistenceResponseSchema, StageErrorResponseSchema } from "./api/stage-response.schema";
 import { FeedHealthStateUpdateResponseSchema } from "./api/feed-health-state.schema";
 import { stageStore } from "./api/stage-store";
-import { currentExecutionState } from "./api/document-state";
+import { appendDocumentTiming, currentExecutionState } from "./api/document-state";
 import { getCollection, collectionForRun, prepareCollectionContext, discardCollectionContext } from "./api/collection-operation";
 import { resolveRunContext } from "./resolve-run-context";
 
@@ -89,9 +89,14 @@ export async function runFeedPlan(raw: unknown, inputs: PlanInputs, runtime: Pla
   let partitioned: z.infer<typeof PartitionedFeedBatchSchema> | undefined;
   let artifact: string | null = null;
   let failureCode: string | null = null;
+  const collectionStarted = performance.now();
+  let collectionFinished = false;
   emit("plan", "started");
+  emit("fetch", "started", { scope: "plan" });
   try {
-    const pool = workPool(inputs.harvest.config.harvest.concurrency);
+    const feedPool = workPool(inputs.harvest.config.harvest.concurrency);
+    const articlePool = workPool(inputs.harvest.config.harvest.concurrency + inputs.settings.listener.parser_concurrency);
+    const parsePool = workPool(inputs.settings.listener.parser_concurrency);
     const processFeed = async (feedId: string) => {
       runtime.signal?.throwIfAborted();
       runtime.progress?.({ eventType: "FEED_FETCH_STARTED", feed_id: feedId, output_count: null });
@@ -111,13 +116,13 @@ export async function runFeedPlan(raw: unknown, inputs: PlanInputs, runtime: Pla
         runtime.progress?.({ eventType: "FEED_FETCH_COMPLETED", feed_id: feedId, output_count: 0 });
         return;
       }
-      const parsed = await call("parse", {
+      const parsed = await parsePool(() => call("parse", {
         request_id: randomUUID(), fetch_request_id: fetched.fetch_request_id,
         article_id: fetched.article_id, correlation_id: context.correlation_id,
-      }, ParseResponseSchema);
+      }, ParseResponseSchema));
       if (parsed.fetch_item_type !== "feed") throw new PlanError("ARTIFACT_INVALID", "Feed parsing returned an article result");
       runtime.progress?.({ eventType: "FEED_FETCH_COMPLETED", feed_id: feedId, output_count: parsed.parsed_count });
-      const articleOutcomes = await Promise.allSettled(parsed.offers.map(offer => pool(async () => {
+      const articleOutcomes = await Promise.allSettled(parsed.offers.map(offer => articlePool(async () => {
         runtime.signal?.throwIfAborted();
         runtime.progress?.({ eventType: "ARTICLE_HARVEST_STARTED", feed_id: feedId, output_count: null });
         let article;
@@ -137,10 +142,10 @@ export async function runFeedPlan(raw: unknown, inputs: PlanInputs, runtime: Pla
           runtime.progress?.({ eventType: "ARTICLE_HARVEST_COMPLETED", feed_id: feedId, output_count: 0 });
           return;
         }
-        const parsedArticle = await call("parse", {
+        const parsedArticle = await parsePool(() => call("parse", {
           request_id: randomUUID(), fetch_request_id: article.fetch_request_id,
           article_id: article.article_id, correlation_id: context.correlation_id,
-        }, ParseResponseSchema);
+        }, ParseResponseSchema));
         runtime.progress?.({ eventType: "ARTICLE_HARVEST_COMPLETED", feed_id: feedId, output_count: parsedArticle.parsed_count });
         if (parsedArticle.fetch_item_type === "article" && parsedArticle.warnings.length) {
           runtime.progress?.({ eventType: "ARTICLE_EXTRACTION_WARNING", feed_id: feedId, output_count: null });
@@ -150,10 +155,16 @@ export async function runFeedPlan(raw: unknown, inputs: PlanInputs, runtime: Pla
       if (articleFailure?.status === "rejected") throw articleFailure.reason;
     };
     // Settle all required work before selection or failure finalization.
-    const outcomes = await Promise.allSettled(begin.feeds.map(feed => processFeed(feed)));
+    const outcomes = await Promise.allSettled(begin.feeds.map(feed => feedPool(() => processFeed(feed))));
     const failed = outcomes.find(outcome => outcome.status === "rejected");
     if (failed?.status === "rejected") throw failed.reason;
     const collected = await call("collections/complete", { collection_id: collectionId }, CompletedCollectionSchema);
+    collectionFinished = true;
+    const collectionDuration = Math.round(performance.now() - collectionStarted);
+    await appendDocumentTiming(inputs, context.run_id, {
+      operation: "fetch", duration_ms: collectionDuration, status: "completed",
+    }, "plan");
+    emit("fetch", "completed", { scope: "plan", duration_ms: collectionDuration });
     files.discovered_articles = collected.discovered_articles;
     files.rejected_articles = collected.rejected_articles;
     batches.parsed_batch_id = collected.batch_id;
@@ -185,6 +196,13 @@ export async function runFeedPlan(raw: unknown, inputs: PlanInputs, runtime: Pla
     if (outputFailure?.status === "rejected") throw outputFailure.reason;
   } catch (error) {
     failureCode = error instanceof PlanError ? error.code : "PLANNER_EXECUTION_FAILED";
+    if (!collectionFinished) {
+      const collectionDuration = Math.round(performance.now() - collectionStarted);
+      await appendDocumentTiming(inputs, context.run_id, {
+        operation: "fetch", duration_ms: collectionDuration, status: "failed",
+      }, "plan");
+      emit("fetch", "failed", { scope: "plan", duration_ms: collectionDuration, failure_code: failureCode });
+    }
     emit("plan", "failed", { failure_code: failureCode });
     const collection = getCollection(inputs, collectionId);
     // A failed collection is not eligible for selection, but completed work remains inspectable.

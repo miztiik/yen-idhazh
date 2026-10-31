@@ -1,5 +1,5 @@
 /** Fetch one configured feed or authorized server-owned article offer without parsing it. */
-import { FetchedDocumentSchema, ParsedFeedBatchSchema } from "@idhazh/common-contracts";
+import { FetchedDocumentSchema } from "@idhazh/common-contracts";
 import type { PlannerOperation } from "@idhazh/common-contracts";
 import type { z } from "zod";
 import { FetchRequestSchema } from "./operation-contracts";
@@ -8,7 +8,6 @@ import { sha256 } from "./operation-store";
 import type { PlanInputs } from "../load-plan-inputs";
 import type { PlanRuntime } from "../run-feed-plan";
 import { PlanError } from "./plan-request";
-import { stageStore } from "./stage-store";
 import { requireStageConfiguration } from "./selection-operation";
 import { checkFetchedDocument, documentExclusions, documentState } from "./document-state";
 import { deriveArticleIdentity, InvalidArticleUrlError } from "../harvest-feeds/article-identity";
@@ -18,7 +17,7 @@ import { documentWork } from "../harvest-feeds/document-work";
 import type { observeDocument } from "../harvest-feeds/document-observation";
 import { createIngestObservations } from "../ingest-observations";
 import { prepareArticle } from "../harvest-feeds/prepare-article";
-import { updateFeedOffer } from "./feed-offers";
+import { readFeedOffer, updateFeedOffer } from "./feed-offer-state";
 import { workPool } from "../harvest-feeds/harvest-pool";
 import { fetchRejection, recordRejection } from "../harvest-feeds/record-rejection";
 import { fetchDiagnostics } from "../harvest-feeds/fetch-diagnostics";
@@ -37,9 +36,8 @@ type FetchRequest = z.infer<typeof FetchRequestSchema>;
 const requestPools = new WeakMap<PlanInputs, ReturnType<typeof workPool>>();
 export function resolveFetchParent(request: FetchRequest, inputs: PlanInputs, runtime: PlanRuntime, store: OperationStore) {
   if (request.batch_id === undefined || request.offer_id === undefined) return null;
-  const batch = stageStore(inputs).read("parsed", request.batch_id, ParsedFeedBatchSchema);
+  const { batch, offer } = readFeedOffer(inputs, request.batch_id, request.offer_id);
   requireStageConfiguration(batch, inputs, runtime);
-  const offer = batch.offers.find(offer => offer.offer_id === request.offer_id);
   if (offer === undefined || offer.source.feed_id !== request.feed_id || request.correlation_id !== batch.context.correlation_id
     ) throw new PlanError("INVALID_REQUEST", "Article reference does not belong to this feed batch", "offer_id");
   const rootId = batch.feed_fetch_request_id ?? collectionFeedRequest(inputs, batch.context.run_id, request.feed_id);
