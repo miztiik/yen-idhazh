@@ -483,39 +483,47 @@ def fetch(url: str, *, config: ExtractConfig, permission: RobotsOutcome) -> Fetc
             retries=retries, started=time.monotonic(), loop_started=loop_started
         )
         token = _HANDSHAKES.set(attempt.handshakes)
+        status: int | None = None
+        timings: FetchTimings | None = None
         try:
-            response = opener.open(outbound, timeout=config.request_timeout_seconds)
-        except HTTPError as error:
-            outcome = classify_status(error.code)
-            last = FetchResult(
-                outcome,
-                status=error.code,
-                detail=f"HTTP {error.code}",
-                robots=permission,
-                timings=attempt.answered(),
-            )
-            if outcome is FetchOutcome.PERMANENT:
+            try:
+                response = opener.open(outbound, timeout=config.request_timeout_seconds)
+            except HTTPError as error:
+                response = error
+                outcome = classify_status(error.code)
+            else:
+                outcome = FetchOutcome.OK
+            with response:
+                status = response.status
+                # Header timing must not include the body read, even when it fails.
+                timings = attempt.answered()
+                if outcome is FetchOutcome.OK:
+                    body, truncated = read_capped(response, config.max_body_bytes)
+                    last = FetchResult(
+                        outcome,
+                        status=status,
+                        body=body,
+                        body_truncated=truncated,
+                        robots=permission,
+                        timings=timings,
+                    )
+                else:
+                    last = FetchResult(
+                        outcome,
+                        status=status,
+                        detail=f"HTTP {status}",
+                        robots=permission,
+                        timings=timings,
+                    )
+            if outcome is not FetchOutcome.TRANSIENT:
                 return last
-        except (URLError, TimeoutError, OSError) as error:
+        except (URLError, TimeoutError, OSError, http.client.IncompleteRead) as error:
             last = FetchResult(
                 FetchOutcome.TRANSIENT,
+                status=status,
                 detail=type(error).__name__,
                 robots=permission,
-                timings=attempt.unanswered(),
-            )
-        else:
-            # Read the clock before the body, or the whole download lands in
-            # the cell that is supposed to hold the host's thinking time.
-            timings = attempt.answered()
-            with response:
-                body, truncated = read_capped(response, config.max_body_bytes)
-            return FetchResult(
-                FetchOutcome.OK,
-                status=response.status,
-                body=body,
-                body_truncated=truncated,
-                robots=permission,
-                timings=timings,
+                timings=timings if timings is not None else attempt.unanswered(),
             )
         finally:
             _HANDSHAKES.reset(token)

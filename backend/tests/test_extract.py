@@ -20,9 +20,10 @@ import threading
 import time
 from dataclasses import replace
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from typing import Any, NamedTuple
+from typing import Any, Literal, NamedTuple
 
 import pytest
+from support.fetch_transport import InterruptedBodyEndpoint
 from support.paths import CONFIG_DIR, FIXTURES_DIR, read_text
 
 from idhazh import config
@@ -593,6 +594,81 @@ def test_a_host_that_fails_twice_says_what_the_retries_cost(
     retry_total_ms = result.timings.retry_total_ms
     assert retry_total_ms is not None
     assert retry_total_ms >= 200, "the two failed attempts are inside it"
+
+
+@pytest.mark.parametrize("failure", ["timeout", "incomplete"])
+def test_an_interrupted_body_retries_and_closes_each_response(
+    failure: Literal["timeout", "incomplete"], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    body = (PAGES / "article.html").read_bytes()
+    budget = ExtractConfig(
+        max_retries=1, request_timeout_seconds=0.15, backoff_initial_seconds=0.01
+    )
+    with InterruptedBodyEndpoint(body, failure=failure, failures=1) as site:
+        site.allow_and_observe(monkeypatch)
+        result = fetch(site.url, config=budget, permission=RobotsOutcome.ALLOWED)
+
+    assert site.served == 2
+    assert result.ok and result.status == 200
+    assert result.body == body and not result.body_truncated
+    assert result.timings.retry_count == 1
+    assert len(site.responses) == 2
+    assert all(response.isclosed() and response.fp is None for response in site.responses)
+    assert fetch_module._HANDSHAKES.get() is None
+
+
+@pytest.mark.parametrize("retries", [0, 1])
+@pytest.mark.parametrize("failure", ["timeout", "incomplete"])
+def test_an_exhausted_body_read_is_transient_with_the_received_status_and_timing(
+    failure: Literal["timeout", "incomplete"],
+    retries: int,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    budget = ExtractConfig(
+        max_retries=retries, request_timeout_seconds=0.15, backoff_initial_seconds=0.01
+    )
+    with InterruptedBodyEndpoint(
+        (PAGES / "article.html").read_bytes(), failure=failure, failures=retries + 1
+    ) as site:
+        site.allow_and_observe(monkeypatch)
+        started = time.monotonic()
+        result = fetch(site.url, config=budget, permission=RobotsOutcome.ALLOWED)
+        elapsed_ms = int((time.monotonic() - started) * 1000)
+
+    assert site.served == retries + 1
+    assert result.outcome is FetchOutcome.TRANSIENT
+    assert result.status == 200 and result.robots is RobotsOutcome.ALLOWED
+    assert result.detail == ("TimeoutError" if failure == "timeout" else "IncompleteRead")
+    assert result.body == b"" and not result.body_truncated
+    assert result.timings.retry_count == retries
+    assert result.timings.fetch_connect_ms is not None
+    assert result.timings.fetch_ttfb_ms is not None
+    assert result.timings.retry_total_ms is not None
+    if failure == "timeout":
+        assert elapsed_ms >= (retries + 1) * 100
+        assert result.timings.fetch_ttfb_ms < 100, "body wait is not header wait"
+        assert result.timings.retry_total_ms >= retries * 100
+    assert len(site.responses) == retries + 1
+    assert all(response.isclosed() and response.fp is None for response in site.responses)
+
+
+@pytest.mark.parametrize("status,retries", [(404, 0), (503, 1)])
+def test_error_responses_close_and_keep_the_existing_http_retry_policy(
+    status: int, retries: int, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    budget = ExtractConfig(max_retries=1, backoff_initial_seconds=0.01)
+    with InterruptedBodyEndpoint(
+        (PAGES / "article.html").read_bytes(), failure="incomplete", failures=0, status=status
+    ) as site:
+        site.allow_and_observe(monkeypatch)
+        result = fetch(site.url, config=budget, permission=RobotsOutcome.ALLOWED)
+
+    assert result.outcome is classify_status(status)
+    assert result.status == status and result.detail == f"HTTP {status}"
+    assert result.body == b""
+    assert result.timings.retry_count == retries
+    assert site.served == retries + 1
+    assert all(response.isclosed() and response.fp is None for response in site.responses)
 
 
 def test_a_read_that_reached_no_socket_records_nothing_rather_than_zero() -> None:
