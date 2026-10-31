@@ -26,7 +26,7 @@
   },
   "compaction_lag_days": 0,
   "covers_through": "2026-10-30",
-  "generated_at": "2026-10-31T10:38:10Z",
+  "generated_at": "2026-10-31T10:41:55Z",
   "routes": [
     {"carries": "The model spent 34 h 18 m of this.","description": "Did the runs work, and what each stage cost.","href": "/console/","id": "pipelines","label": "Pipelines","severity": 2,"worst": "1 run worth a look"},
     {"carries": "This day ran in 3 runs, 1.06x apart on read speed.","description": "What the model wrote, how long it took, and what it got wrong.","href": "/console/model/","id": "model","label": "Summaries","severity": 3,"worst": "39 items failed"},
