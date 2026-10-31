@@ -108,7 +108,7 @@ test('integrated actual canary smoke: narrow viewport, with cross-page navigatio
 	await page.goto('/console/');
 	await hydrated(page);
 	await settled(page);
-	await expect(page.locator('[data-console-panel]')).toHaveCount(12);
+	await expect(page.locator('[data-console-panel]')).toHaveCount(14);
 	await expect(page.locator('[data-console-panels="pipelines"]')).toHaveAttribute('data-route-state', 'ok');
 	await expect(page.locator('[data-console-panels="pipelines"]')).not.toContainText('NaN');
 	await expect(page.locator('[data-contract-blocked]')).toHaveCount(0);

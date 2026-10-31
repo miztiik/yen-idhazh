@@ -61,10 +61,10 @@ export const SOURCE_INPUTS: Readonly<Record<string, readonly string[]>> = {
 	'src/lib/console/pipelines': [
 		'ArticleAge.svelte', 'AtAGlance.svelte', 'ChartDrawing.svelte', 'Extraction.svelte',
 		'FailureMix.svelte', 'ItemCost.svelte', 'ItemTimeSplit.svelte', 'RunHealth.svelte',
-		'RunTimeline.svelte', 'SiteCostPerItem.svelte', 'SlowerOnSameWork.svelte', 'StageTimings.svelte',
+		'RunTimeline.svelte', 'SiteCostPerItem.svelte', 'SlowerOnSameWork.svelte', 'StageTimings.svelte', 'VisualFunnels.svelte',
 		'article-age.ts', 'at-a-glance.ts', 'chart-drawing.ts', 'drawing-flow.ts', 'extraction.ts', 'failure-mix.ts',
 		'item-cost.ts', 'item-time-split.ts', 'record-window.ts', 'run-health.ts',
-		'run-timeline.ts', 'site-cost-per-item.ts', 'slower-on-same-work.ts', 'stage-timings.ts'
+		'run-timeline.ts', 'site-cost-per-item.ts', 'slower-on-same-work.ts', 'stage-timings.ts', 'visual-funnels.ts'
 	],
 	'src/lib/console/model': [
 		'rows.ts', 'call-ending.ts', 'faithfulness.ts', 'source-doubts.ts', 'summary-length.ts',

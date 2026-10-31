@@ -1,7 +1,13 @@
 # 21 - Human judgement
 
-**Last Updated**: 2026-09-05
-**Level**: 4 (a new review surface, a persisted label contract, and the fitting machinery whose guardrails are its whole defence)
+**Last Updated**: 2026-10-31
+**Level**: 2 for row 2 (a bounded report over an existing ledger). Row 4 is not execution-ready.
+
+**Current scope**: No human input. Rows 3, 5 and 6 are abandoned; their original
+descriptions below are retained for context, not execution. Row 2 produces
+reports from existing measurements, with no new quality judge or ledger.
+Row 4 still needs a machine-only design; its original score-weight fitting
+depends on human comparisons that will not be collected.
 
 **Chain**: previous [`20260905-20-visual-console-plan.md`](20260905-20-visual-console-plan.md) | next [`20260905-22-distil-and-close-plan.md`](20260905-22-distil-and-close-plan.md).
 **Reference**: [`20260902-visual-planner-pseudo-plan.md`](20260902-visual-planner-pseudo-plan.md) - O12, O16, O41, rows 64, 65, 66, 67, 68, sections 12.10, 12.13 G34, G38, 12.14 G41, G42, G44, E1, M6.
@@ -14,14 +20,22 @@ Execute per docs/how-to/execute-a-plan.md: one maintainer carries the plan and d
 
 | Field | Value |
 | --- | --- |
-| Why this plan exists | Every gate in the group is machine judgement, and nothing has checked the machine against a person. This is the ground truth: whether a visual a human would keep is the visual the machine kept. It **gates nothing** - no publish decision reads a label - and that is deliberate |
-| Hard scope - in | The review harness as a build artifact; `label_source` and `model_id` on the label contract; absolute and pairwise review modes; weight fitting with its four guardrails and its release rule; the timed comprehension setup with its validity conditions; the four-phase operating manual |
-| Hard scope - out | Any label feeding a publish decision. Pooling machine verdicts with human ones. Summary faithfulness labelling by a model - that stays human-only. Shipping `review/` with the site |
-| ESCALATE triggers | 1. A label reaches a publish gate. 2. Machine and human verdicts land in one ledger. 3. Weight fitting is proposed without all four guardrails - **a fitter without them is a number that moves every month with no way to separate improvement from noise.** 4. `components_version` and `weight_version` would move in the same release |
-| Chosen strategy | Build the surface, then the contract that keeps machine and human apart, then the modes, then the fitting - each with the guardrail that makes it honest rather than merely present |
+| Why this plan exists | Make existing visual-attempt measurements available as noninteractive reports, without human labels or new judgments |
+| Hard scope - in | Row 2's read-only CSV report. Row 1 is already delivered; row 4 requires a separate design |
+| Hard scope - out | See Table A below |
+| ESCALATE triggers | 1. A persisted contract, ledger column or producer changes. 2. A report becomes input to a later pipeline run. 3. A model judgment, human label, publication decision or setting adjustment is added. 4. Row 4 is proposed for execution before its design is settled |
+| Chosen strategy | Reuse the registered ledger reader and standard-library CSV writer; add no storage or evaluation machinery |
 | Execution | `autonomous orchestrator per docs/how-to/execute-a-plan.md. Parallel N = 4.` |
 
-**The risk this plan carries and does not hide.** As of the source document's own measurement, **0 of 60 drawn rows carried a human label.** Two advisors proposed deferring the fitter, the pairwise page and the timed setup on exactly that ground and were overruled on scope. The labelling capacity is therefore the standing risk, and the four-phase manual in row 6 is what makes it visible rather than discovered late.
+**Table A - Scope exclusions**
+
+| ID | What is out | Cost of leaving it out | What would bring it in |
+| --- | --- | --- | --- |
+| A1 | Human labels and review modes | No measurement of human preference or comprehension | A separate human-review intent |
+| A2 | New model judgments | Reports describe recorded outcomes, not visual usefulness | A defined quality question and a separate evaluation design |
+| A3 | New ledgers, columns or committed summaries | Counts are computed when the report runs | A later consumer with a declared persisted contract |
+| A4 | Automatic setting changes and publication gates | This report does not correct or tune the system | Row 4's settled measurement target and adjustment design |
+| A5 | Console panels | This row produces CSV, not a page | Plan 20's "Refusal reasons and written visual type" outcome |
 
 ---
 
@@ -30,11 +44,11 @@ Execute per docs/how-to/execute-a-plan.md: one maintainer carries the plan and d
 | # | Row title | Depends-on | Parallel-group | Status | Worktree | PR | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | 1 | A place to look at a visual, that never ships with the site | - | A | DONE | p21-1 | #655 | worker |
-| 2 | A machine verdict and a human one, never in the same column | 1 | B | PENDING | - | - | - |
-| 3 | Two ways to ask, and the question locked before the verdict | 2 | C | PENDING | - | - | - |
-| 4 | Weights that cannot quietly get worse | 3 | D | PENDING | - | - | - |
-| 5 | Did the reader actually understand it faster | 4 | E | PENDING | - | - | - |
-| 6 | How this loop knows when it is done | 5 | F | PENDING | - | - | - |
+| 2 | Existing measurements in a machine-written report | - | B | PENDING | - | - | - |
+| 3 | Two ways to ask, and the question locked before the verdict | 2 | C | ABANDONED | - | - | - |
+| 4 | Weights that cannot quietly get worse | TBD - machine-only design | D | PENDING | - | - | - |
+| 5 | Did the reader actually understand it faster | 4 | E | ABANDONED | - | - | - |
+| 6 | How this loop knows when it is done | 5 | F | ABANDONED | - | - | - |
 
 ---
 
@@ -63,34 +77,43 @@ Execute per docs/how-to/execute-a-plan.md: one maintainer carries the plan and d
 
 ---
 
-## 3. Row #2 - A machine verdict and a human one, never in the same column
+## 3. Row #2 - Existing measurements in a machine-written report
 
-- **Scope:** `label_source` and `model_id` on the label contract, plus a separate ledger for machine verdicts.
-- **Files touched:** `backend/idhazh/contracts/label_row.py`, `schemas/label-row.schema.json`, `state/labels.csv` (header committed), a machine-verdict ledger and its schema, `tests/fixtures/contracts/label-row/*.json`, `backend/idhazh/evals/labels.py`, `backend/tests/**`, `CLAUDE.md` (section 0a amendment), `docs/concepts/evaluation.md`
-- **Acceptance gates:** `ruff`; `mypy --strict`; export + drift; the full suite.
-- **Oracle:** **All four guardrails asserted separately.** A machine row without `label_source` fails; a machine row in the human ledger fails; a keep rate computed over pooled rows fails; and no publish gate reads either ledger, asserted by a call-graph check. **Implementing three of the four silently creates the deviation the compliance audit says does not exist.**
+- **Scope:** Read named UTC days from the existing visual-attempt ledger and produce a noninteractive CSV report of recorded outcomes, first validator rejections and requested versus written types.
+- **Files touched:**
+  - `backend/idhazh/evals/visual_attempt_report.py` (new): read and group the validated records.
+  - `backend/utilities/visual_attempt_report.py` (new): parse arguments and emit CSV to stdout.
+  - `backend/tests/test_visual_attempt_report.py` (new): bounded generated raw and compact fixtures and the real command.
+  - `docs/how-to/report-visual-attempts.md` (new): command, columns and missing-data meaning.
+  - `docs/concepts/telemetry.md`: link to the report guide without duplicating its column definitions.
+  - `TODO/20260905-21-human-judgement-plan.md`: this row's delivery status.
+- **Acceptance gates:** Local: changed-file Ruff and strict mypy, the focused test module and shared selection from `docs/how-to/run-the-gates.md`. CI: full suite on the merge candidate. Record the selected inputs and results; do not repeat unchanged checks.
+- **Oracle:** The real command produces identical, correctly counted CSV from equivalent generated raw and compact fixtures, preserving unrecorded types and surfacing incomplete reads without changing source files. This proves recorded-outcome reporting, not visual quality, publication or improvement.
 
-### Decisions
+### Table B - Decisions
 
-| # | Decision | Authority |
+| ID | Decision | Basis |
 | --- | --- | --- |
-| 1 | **A model may grade a finished visual, and that is not a deviation** - a quality verdict reaches no reader and selects nothing to publish. The four guardrails are the ruling, not a recommendation: this plan merges with all four or it does not merge | O41, E1 |
-| 2 | This is **not** the same act as a model assigning what a number means. That is Deviation A, accepted as permanent. The two share the word "label" and nothing else | O41 |
-| 3 | Summary faithfulness labelling stays **human-only** | O41, E1 |
-| 4 | `LabelRow` lives in `backend/idhazh/contracts/label_row.py` and carries **neither** field today, so both are new fields on a persisted contract - a schema stamp, a changelog entry and a fixture round trip each | C22, verified 2026-09-05 |
-| 5 | `state/labels.csv` is **never deleted** by any retention policy. It is the only ground truth | Section 9.3 |
-| 6 | `CLAUDE.md` section 0a is amended in the same commit, narrowly | O12, E1 |
+| B1 | Reuse `visual-design-attempts` and `VisualAttemptRow` unchanged, through `ledger.ledger_files.load_days` with `LedgerReadStatus`. Read only the requested UTC days and retain native settlement rules | `docs/architecture/contracts/ledger-registry.md`; existing contract and reader |
+| B2 | Group by the existing dimensions and emit this header: `date,potential_primary,state,rejection_reason,planned_type,rendered_type,attempts`. The last column counts recorded attempts in each group. Sort deterministically; empty cells retain unrecorded values | Native attempt fields; no new measurement |
+| B3 | A first validator rejection may accompany a later successful delivery. A written visual file does not prove publication. Do not rename these counts as human keep rates or final rejection rates | `VisualAttemptRow` field descriptions |
+| B4 | Require repeatable `--date YYYY-MM-DD` arguments; allow `--state-dir` for an explicitly named local state root, defaulting to the repository's existing state location. Emit CSV to stdout with the standard-library writer; never prompt or fetch | Bounded local inputs; no new dependency |
+| B5 | If read status is incomplete, report the problem and refuse CSV output. Dates with no recorded rows are named on stderr, not filled with invented zero counts. If the selection has no rows, refuse with a clear no-records result | Existing reader status; missing evidence is not zero |
+| B6 | No persisted contract moves: the CSV is an on-demand report, not committed pipeline state and not input to a later run. Leave human label files, model configuration, ledger registration and producers unchanged | Current report-only scope; section 11 |
+| B7 | Ship this complete command, report logic, tests and guide in one behavioral PR. Leave console presentation to Plan 20's "Refusal reasons and written visual type" outcome | One report capability; no duplicate collection or console work |
 
-### Rejected alternatives
+### Table C - Rejected alternatives
 
-| # | Option | Why rejected | Authority |
-| --- | --- | --- | --- |
-| 1 | One ledger with a flag | A flag is dropped by the first join somebody writes in a hurry, and then the ground truth is contaminated with no way to separate it again | Fowler |
-| 2 | No machine verdicts at all | Then the queue is bounded by human hours from day one, which is the risk M6 already names | Maintainer, O12 |
+| ID | Option | Why rejected | What it would cost to take | Basis |
+| --- | --- | --- | --- | --- |
+| C1 | Add source or model columns and a machine-verdict ledger | No new judgment is requested; metadata alone would not create one | A new evaluation implementation, persisted shape, writer and compatibility checks | Report-only scope |
+| C2 | Convert native storage to CSV or persist a second summary ledger | The report can read the current records; another store would duplicate them | Storage and lifecycle changes, reader compatibility and additional tests | Existing native persistence |
 
 ---
 
 ## 4. Row #3 - Two ways to ask, and the question locked before the verdict
+
+**Status**: ABANDONED. No human review modes will be built under this plan.
 
 - **Scope:** Absolute and pairwise review modes behind a mode flag, with answer locking.
 - **Files touched:** `review/**`, `backend/utilities/review_queue.py`, `backend/idhazh/contracts/label_row.py`, `schemas/label-row.schema.json`, `backend/tests/**`, `docs/concepts/evaluation.md`
@@ -145,6 +168,8 @@ Execute per docs/how-to/execute-a-plan.md: one maintainer carries the plan and d
 
 ## 6. Row #5 - Did the reader actually understand it faster
 
+**Status**: ABANDONED. No human comprehension study will be built under this plan.
+
 - **Scope:** The timed comprehension setup and its validity conditions.
 - **Files touched:** `review/**`, `backend/utilities/review_queue.py`, `backend/idhazh/contracts/label_row.py`, `backend/tests/**`, `docs/concepts/evaluation.md`
 - **Acceptance gates:** `ruff`; `mypy --strict`; export + drift; the full suite.
@@ -170,6 +195,9 @@ Execute per docs/how-to/execute-a-plan.md: one maintainer carries the plan and d
 ---
 
 ## 7. Row #6 - How this loop knows when it is done
+
+**Status**: ABANDONED. No human-label collection or reviewer phases will be built
+under this plan.
 
 - **Scope:** The four-phase operating manual, with an exit criterion per phase.
 - **Files touched:** `docs/concepts/evaluation.md`, `backend/utilities/review_queue.py`, `docs/how-to/**`

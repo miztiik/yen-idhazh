@@ -39,7 +39,7 @@ surfaces follow the window control is
 
 ## Plan52: native readings and private published-day facts
 
-The route now has twelve addressed panels, in this order: `at-a-glance`,
+The route now has fourteen addressed panels, in this order: `at-a-glance`,
 `run-health`, `site-cost-per-item`, `failure-mix`, `item-time-split`,
 `slower-on-same-work`, `stage-timings`, `item-cost`, `run-timeline`,
 `chart-drawing`, `extraction`, `article-age`. Configuration comes from
@@ -425,6 +425,36 @@ extraction's published-day facts remain build-time inputs. Their own window and
 snapshot rules do not become ItemCost's rules; the prerendered private marks
 remain available without scripts.
 
+## The two funnels read the unpublished attempt record at build time
+
+pipeline-funnel and downgrade-funnel count the rows in
+`visual-design-attempts` (one row per settled visual attempt). That record is
+not published to the Data explorer, so the browser cannot ask for it. The route
+load reads it through `visualAttemptRows` over the widest window, groups the
+rows into small per-day counts, and the page filters those counts to the
+selected window. Only the columns the funnels use are read, and a backend test
+holds that list to `VisualAttemptRow`. No ledger, column or producer is added.
+
+Every share is of its own potential class (`chartable`, `narrative`,
+`unclassified`). An attempt with no recorded class sits in an `unmeasured`
+group and is never pooled into another class. A class with no attempts is not
+drawn.
+
+- **Where visual attempts stopped:** Attempted, Plan drafted, Passed the checks,
+  Written. Share is of that class's attempts. Attempts not written are listed by
+  the reason recorded (`none_reason`, else `render_failed`, else "no reason
+  recorded").
+- **How drafted visual plans ended:** Planned, Refused as drafted, then one
+  `Searched depth N` step for each depth seen in the data, so a changed ladder
+  needs no edit. Share is of that class's drafted plans. The ends are Rendered,
+  None and Render failed; plans they do not account for are printed as
+  unaccounted, never hidden. With the ladder off only Planned and Refused
+  appear. `downgrade_depth` is the deepest rung searched, not the one chosen.
+
+Stage counts need not fall. A stage larger than the one before is drawn at its
+true size and marked "more than the stage before", as the chart-drawing flow
+does, rather than clamped. A record that is not packed, did not load, or lost
+days says so in a note; those days are never drawn as zero.
 ## Extraction answers both questions, and labels which half is which
 
 `Extraction` is a Pipelines panel in two halves, and it is the console's worked
