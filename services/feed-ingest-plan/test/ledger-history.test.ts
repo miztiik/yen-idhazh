@@ -302,7 +302,7 @@ test("native digest tampering, wrong ledger, schema and undeclared planner ident
     await expect(readPlannerParquet(path, "selected-articles", {
       ...SelectedArticleRowContract, schemaVersion: "2026-10-24", acceptedSchemaVersions: ["2026-10-24"],
     }))
-      .rejects.toThrow("unsupported row schema");
+      .rejects.toThrow("current row schema");
     const compact = await compactRows(join(root, "state"), "selected-articles", day,
       SelectedArticleRowContract, [selection()], "daily", root);
     const compactPath = compact.path!;
@@ -332,7 +332,7 @@ test("native digest tampering, wrong ledger, schema and undeclared planner ident
         new WriterPropertiesBuilder().setKeyValueMetadata(values).build()));
     await rewrite(new Map([...pairs, ["schema_version", "2026-10-25"]]));
     await expect(readPlannerParquet(path, "selected-articles", SelectedArticleRowContract))
-      .rejects.toThrow("unsupported row schema");
+      .rejects.toThrow("current row schema");
     await rewrite(pairs);
     await rewrite(new Map([...pairs, ["content_sha256", "0".repeat(64)]]));
     await expect(readPlannerParquet(path, "selected-articles", SelectedArticleRowContract)).rejects.toThrow("digest");
