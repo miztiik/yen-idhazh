@@ -1,4 +1,4 @@
-/** Build a bounded real planner run from the named offline RSS, HTML and transport recordings. */
+/** Load bounded offline source inputs without starting stages or creating unused Git history. */
 import { existsSync } from "node:fs";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -9,35 +9,18 @@ import { RecordedTransport, inputs, readRecordings, source } from "./harvest-rec
 import type { ConfiguredSource } from "../src/harvest-feeds/load-harvest-inputs";
 import type { FeedIngestEvent } from "@idhazh/common-contracts";
 import type { PlanRuntime } from "../src/run-feed-plan";
+import { fixtureGit } from "./fixture-git";
 
-async function git(directory: string, args: string[]) {
-  const environment: Record<string, string | undefined> = { ...process.env };
-  delete environment.GIT_INDEX_FILE;
-  delete environment.GIT_DIR;
-  delete environment.GIT_WORK_TREE;
-  environment.GIT_AUTHOR_NAME = "Planner fixture";
-  environment.GIT_AUTHOR_EMAIL = "planner@example.test";
-  environment.GIT_COMMITTER_NAME = "Planner fixture";
-  environment.GIT_COMMITTER_EMAIL = "planner@example.test";
-  const child = Bun.spawn(["git", ...args], {
-    cwd: directory, env: environment, stdout: "pipe", stderr: "pipe",
-  });
-  const [, errors, code] = await Promise.all([
-    new Response(child.stdout).text(), new Response(child.stderr).text(), child.exited,
-  ]);
-  if (code !== 0) throw new Error(`Generated planner history refused ${args[0]}: ${errors}`);
-}
-
-async function initializePlannerHistory(directory: string) {
-  await git(directory, ["init", "--quiet", "--initial-branch=main"]);
-  await git(directory, ["commit", "--quiet", "--allow-empty", "-m", "Create empty planner history"]);
-}
-
-export async function recordedPlan(sources: ConfiguredSource[] = [source()], publishers: unknown = []) {
+export async function recordedPlan(
+  sources: ConfiguredSource[] = [source()], publishers: unknown = [], options: { history?: boolean } = {},
+) {
   const root = fileURLToPath(new URL("../../../", import.meta.url));
   const directory = await mkdtemp(join(tmpdir(), "feed-plan-"));
   try {
-    await initializePlannerHistory(directory);
+    if (options.history) {
+      await fixtureGit(directory, ["init", "--quiet", "--initial-branch=main"]);
+      await fixtureGit(directory, ["commit", "--quiet", "--allow-empty", "-m", "Create empty planner history"]);
+    }
     const [loaded, harvest, recordings] = await Promise.all([
       loadPlanInputs(root), inputs(sources, { publishers }), readRecordings(),
     ]);

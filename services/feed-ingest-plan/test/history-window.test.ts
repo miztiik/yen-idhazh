@@ -14,7 +14,7 @@ import { projectFeedHealthFields } from "../src/read-ledger-history/read-feed-he
 import { endpointKey, readFeedHistory as readPlanningHistory } from "../src/read-ledger-history/read-feed-history";
 import { readRequestHistory } from "../src/read-ledger-history/read-request-history";
 import { commitFixtureFiles, compactRows, registration, writeRows } from "./partition-fixtures";
-import { fixtureGit } from "./publication-recordings";
+import { fixtureGit } from "./fixture-git";
 import { defaultDayInput } from "../src/read-ledger-history/named-days";
 
 const now = "2026-10-21T12:00:00Z";

@@ -27,7 +27,7 @@ import { ITEM_HEALTH_ROW_SCHEMA_VERSION } from "../src/read-ledger-history/item-
 import {
   commitFixtureFiles, compactRows, registration, settings, writer, writeRows,
 } from "./partition-fixtures";
-import { fixtureGit } from "./publication-recordings";
+import { fixtureGit } from "./fixture-git";
 
 const day = "2026-10-20";
 const publishedContract = { schema: PublishedRowSchema, schemaVersion: PUBLISHED_ROW_SCHEMA_VERSION };

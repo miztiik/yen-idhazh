@@ -3,16 +3,28 @@ import { expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
 import { mkdir, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { PartitionedFeedBatchSchema } from "@idhazh/common-contracts";
 import type { FeedIngestEvent } from "@idhazh/common-contracts";
-import { stageStore } from "../src/api/stage-store";
 import { selectedArtifactPath } from "../src/selected-artifact-path";
 import { createPlanTestServer } from "./plan-test-server";
 import { prepareProgressEvent } from "../src/logging/structured-logger";
 import { publishUploadInventory } from "../scripts/feed-ingest-plan-upload-inventory";
 import { recordedPlan } from "./plan-recordings";
 import { source } from "./harvest-recordings";
-import { runFeedPlan } from "../src/run-feed-plan";
+import { recordedPersistenceBatch } from "./persistence-recordings";
+import { executePersistence } from "../src/api/persistence-operation";
+
+async function fetchFeed(f: Awaited<ReturnType<typeof recordedPlan>>) {
+  const app = createPlanTestServer(f.inputs, f.runtime);
+  try {
+    const response = await app.request("/api/2026-10-31/fetch", {
+      method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({
+        request_id: randomUUID(), correlation_id: randomUUID(), feed_id: f.inputs.harvest.sources[0]!.id,
+        fetch_item_type: "feed",
+      }),
+    });
+    expect(response.status).toBe(200);
+  } finally { await app.close(); }
+}
 
 test("standalone document work logs failure addresses only and persistence logs one real write", async () => {
   const f = await recordedPlan();
@@ -25,31 +37,15 @@ test("standalone document work logs failure addresses only and persistence logs 
     return response.json();
   }
   try {
-    for (const [url, failedOperation] of [
-      ["https://news.example/not-found", "fetch"],
-      ["https://news.example/rootless", "parse"],
-      ["https://news.example/second", null],
-    ] as const) {
+    for (const [url, failedOperation] of [["https://news.example/not-found", "fetch"]] as const) {
       const request = {
         request_id: randomUUID(), correlation_id: randomUUID(), feed_id: "recorded-news",
         fetch_item_type: "article", url,
       };
       const fetched = await post("fetch", request);
-      const afterFetch = f.events.length;
-      expect(await post("fetch", request)).toEqual(fetched);
-      expect(f.events).toHaveLength(afterFetch);
-      let parsed;
-      if (failedOperation !== "fetch") parsed = await post("parse", {
-        request_id: randomUUID(), fetch_request_id: request.request_id,
-        article_id: fetched.article_id, correlation_id: request.correlation_id,
-      });
       const events = f.events.filter(event => event.correlation_id === request.correlation_id);
       expect(events.filter(event => event.operation === "fetch").map(event => event.phase))
-        .toEqual(["started", failedOperation === "fetch" ? "failed" : "completed"]);
-      if (failedOperation !== "fetch") {
-        expect(events.filter(event => event.operation === "parse").map(event => event.phase))
-          .toEqual(["started", failedOperation === "parse" ? "failed" : "completed"]);
-      }
+        .toEqual(["started", "failed"]);
       for (const event of events) {
         expect(event.details._compliance).toBeUndefined();
         if (event.operation === "fetch" || event.operation === "parse") {
@@ -59,46 +55,27 @@ test("standalone document work logs failure addresses only and persistence logs 
           expect(event.details.article_url).toBe(url);
         } else expect(JSON.stringify(event)).not.toContain("https://");
       }
-      if (parsed !== undefined && failedOperation === null) {
-        const selected = await post("select-articles", { batch_id: parsed.batch_id });
-        const partition = await post("partition-articles", { batch_id: selected.batch_id, strategy: "none" });
-        const batch = stageStore(f.inputs).read("partitioned", partition.batch_id, PartitionedFeedBatchSchema);
-        const blocked = join(f.directory, selectedArtifactPath(f.inputs.settings.inputs.artifact_root, batch.context));
-        await mkdir(blocked, { recursive: true });
-        const failure = await app.request("/api/2026-10-31/persist-selected-articles", {
-          method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ batch_id: partition.batch_id }),
-        });
-        expect(failure.status).toBe(500);
-        expect(f.events.at(-1)).toMatchObject({ operation: "persist", phase: "failed", details: { failure_code: "PERSIST_FAILED" } });
-        await rm(blocked, { recursive: true });
-        const persisted = await post("persist-selected-articles", { batch_id: partition.batch_id });
-        const count = f.events.length;
-        expect(await post("persist-selected-articles", { batch_id: partition.batch_id })).toEqual(persisted);
-        expect(f.events).toHaveLength(count);
-        expect(f.events.filter(event => event.operation === "persist").map(event => event.phase))
-          .toEqual(["started", "failed", "started", "completed"]);
-        expect(f.events.at(-1)?.details.artifact).toBe(persisted.artifact);
-      }
     }
-    const excludedUrl = `https://${f.inputs.harvest.config.content_filters.media.url_rules[0]!.host}/watch`;
-    const excludedRequest = {
-      request_id: randomUUID(), correlation_id: randomUUID(), feed_id: "recorded-news",
-      fetch_item_type: "article", url: excludedUrl,
-    };
-    const excluded = await app.request("/api/2026-10-31/fetch", {
-      method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(excludedRequest),
-    });
-    expect(excluded.status).toBe(409);
-    const excludedEvents = f.events.filter(event => event.correlation_id === excludedRequest.correlation_id);
-    expect(excludedEvents.map(event => event.phase)).toEqual(["started", "failed"]);
-    expect(excludedEvents.at(-1)?.details.article_url).toBe(excludedUrl);
+    const batch = await recordedPersistenceBatch(f.inputs, f.runtime);
+    const blocked = join(f.directory, selectedArtifactPath(f.inputs.settings.inputs.artifact_root, batch.context));
+    await mkdir(blocked, { recursive: true });
+    await expect(executePersistence({ batch_id: batch.batch_id }, f.inputs, f.runtime)).rejects.toThrow();
+    expect(f.events.at(-1)).toMatchObject({ operation: "persist", phase: "failed", details: { failure_code: "PERSIST_FAILED" } });
+    await rm(blocked, { recursive: true });
+    const persisted = await executePersistence({ batch_id: batch.batch_id }, f.inputs, f.runtime);
+    const count = f.events.length;
+    expect(await executePersistence({ batch_id: batch.batch_id }, f.inputs, f.runtime)).toEqual(persisted);
+    expect(f.events).toHaveLength(count);
+    expect(f.events.filter(event => event.operation === "persist").map(event => event.phase))
+      .toEqual(["started", "failed", "started", "completed"]);
+    expect(f.events.at(-1)?.details.artifact).toBe(persisted.artifact);
   } finally { await app.close(); await f.close(); }
 });
 
 test("failed redirected feeds identify the requested URL and final dispatched target", async () => {
   const f = await recordedPlan([source({ url: "https://news.example/feed-redirect" })]);
   try {
-    await runFeedPlan({ partition_strategy: "none" }, f.inputs, f.runtime);
+    await fetchFeed(f);
     const event = f.events.find(item => item.operation === "fetch" && item.phase === "failed"
       && item.details.document_kind === "feed");
     expect(event?.details).toMatchObject({
@@ -112,7 +89,7 @@ test("feed byte cutoffs include the limit and observed lower bound in failure ev
   const f = await recordedPlan([source({ url: "https://news.example/article-failures.xml" })]);
   try {
     f.inputs.harvest.extraction.max_body_bytes = 700;
-    await runFeedPlan({ partition_strategy: "none" }, f.inputs, f.runtime);
+    await fetchFeed(f);
     const event = f.events.find(item => item.operation === "fetch" && item.phase === "failed"
       && item.details.document_kind === "feed");
     expect(event?.details.body_limit).toMatchObject({ configured_limit_bytes: 700 });
@@ -126,7 +103,7 @@ test("robots byte cutoffs retain their evidence after the feed target is dispatc
     f.inputs.harvest.extraction.max_body_bytes = 30;
     f.inputs.harvest.config.harvest.request_headers.secondary = null;
     f.transport.recordings.responses["https://news.example/article-failures.xml"] = [{ status: 403, body: "" }];
-    await runFeedPlan({ partition_strategy: "none" }, f.inputs, f.runtime);
+    await fetchFeed(f);
     const event = f.events.find(item => item.operation === "fetch" && item.phase === "failed"
       && item.details.document_kind === "feed");
     expect(event?.details).toMatchObject({

@@ -1,0 +1,72 @@
+{
+  "host_request": {
+    "date": "2026-10-21",
+    "writer": {
+      "run_id": "2026-10-21-700",
+      "attempt": 3,
+      "job": null,
+      "pipeline_name": "feed-ingest-plan",
+      "task_name": "isolated-plan",
+      "shard": 0,
+      "producer": "telemetry.silicon",
+      "git_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    }
+  },
+  "host": {
+    "row": {
+      "version": "2026-10-26",
+      "date": "2026-10-21",
+      "run_id": "2026-10-21-700",
+      "job": null,
+      "pipeline_name": "feed-ingest-plan",
+      "task_name": "isolated-plan",
+      "shard": 0,
+      "fingerprint": "27f9cc4dc522f48d",
+      "fingerprint_version": 2,
+      "cpu_model": "Intel(R) Xeon(R) Platinum 8370C CPU @ 2.80GHz",
+      "cpu_vendor": "GenuineIntel",
+      "cpu_family": 6,
+      "cpu_model_number": 106,
+      "cpu_stepping": 6,
+      "microcode": "0xd000375",
+      "cpu_physical_cores": 2,
+      "cpu_logical_processors": 4,
+      "cpu_allowed_processors": 2,
+      "cpu_quota_cores": 1,
+      "cpu_quota_state": "finite",
+      "cpu_target_measured_at": "2026-10-31T21:40:10Z",
+      "l3_cache_bytes": 50331648,
+      "machine_memory_total_mib": 16383.75,
+      "cpu_observed_mhz": 2600,
+      "cpu_reported_max_mhz": 3600,
+      "flags": "avx2 avx512f f16c fma sse4_2",
+      "boot_seconds": 1234.5,
+      "memcpy_gib_s": null,
+      "memcpy_probe_mib": 0,
+      "vm_size": "Standard_D4ds_v5",
+      "vm_location": "eastus",
+      "vm_zone": "1",
+      "vm_fault_domain": "0",
+      "runner_name": "fixture-linux",
+      "measured_at": "2026-10-31T21:40:09Z",
+      "model_load_ms": null,
+      "job_seconds": null,
+      "server_prompt_tokens": null,
+      "server_prompt_seconds": null
+    },
+    "unavailable": {
+      "memcpy_gib_s": "configured_off"
+    },
+    "files": [
+      {
+        "path": "raw/host-fingerprint/2026/10/21/01a193e7-e3a4-8f1a-85e1-655b56eb7086.parquet",
+        "file_id": "01a193e7-e3a4-8f1a-85e1-655b56eb7086",
+        "unit_id": "a1b1f9f6-0550-55d0-8721-86629fa25818",
+        "covers": "2026-10-21",
+        "content_sha256": "32652c7525b0e2d9aacfca8a0d2404db15d19d707d96be1ff574b404e5f225f4",
+        "row_count": 1
+      }
+    ],
+    "status": "recorded"
+  }
+}
