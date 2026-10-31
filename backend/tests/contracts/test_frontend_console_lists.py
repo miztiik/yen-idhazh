@@ -38,6 +38,7 @@ from idhazh.contracts.knobs.console import ConsoleChrome
 from idhazh.contracts.knobs.observability import ObservabilityConfig
 from idhazh.contracts.merge_line_holdout_score import MergeLineHoldoutScore
 from idhazh.contracts.similarity_holdout_pair import SimilarityHoldoutPair
+from idhazh.contracts.visual_telemetry import VisualAttemptRow
 from idhazh.telemetry.publish.console_band import ROUTES
 
 pytestmark = pytest.mark.contract
@@ -139,6 +140,24 @@ def test_the_feed_record_asks_only_for_columns_the_contract_declares_in_its_orde
     assert asked, "FEED_HEALTH_COLUMNS in ledger-rows.ts names no column"
     assert [name for name in declared if name in asked] == asked, (
         "FEED_HEALTH_COLUMNS in ledger-rows.ts is not part of FeedHealthRow's columns in "
+        f"order. Not declared: {[name for name in asked if name not in declared]}. "
+        "If that is empty, only the order differs: write them in the contract's order."
+    )
+
+
+def test_the_attempt_record_asks_only_for_columns_the_contract_declares_in_its_order() -> None:
+    """The Pipelines funnels read part of the attempt record, so its list is a part, in order.
+
+    `ledger-rows.ts` spells the `VisualAttemptRow` columns the funnels read. A
+    column the contract renames or drops would reach a funnel as an empty
+    reading rather than as an error.
+    """
+    asked = quoted_strings(read_text(SERVER / "ledger-rows.ts"), "VISUAL_ATTEMPT_COLUMNS")
+    declared = list(VisualAttemptRow.csv_columns())
+
+    assert asked, "VISUAL_ATTEMPT_COLUMNS in ledger-rows.ts names no column"
+    assert [name for name in declared if name in asked] == asked, (
+        "VISUAL_ATTEMPT_COLUMNS in ledger-rows.ts is not part of VisualAttemptRow's columns in "
         f"order. Not declared: {[name for name in asked if name not in declared]}. "
         "If that is empty, only the order differs: write them in the contract's order."
     )
