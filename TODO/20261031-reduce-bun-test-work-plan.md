@@ -17,7 +17,7 @@ Table A
 | A6 | Runtime prerequisite | Apply this cleanup to the integrated collection, parser-admission, cancellation-output and named-history-reader repairs and the current delivered handoff contract. Do not restore an obsolete snapshot, availability sidecar, intermediate Git publication, delivery checksum, durable replay or reopening capability. Preserve added repair regressions for behavior that the current contract retains. |
 | A7 | Contract boundary | Change no production payload, schema, configuration default, public API or CLI behavior. New recordings use existing native models, not a new aggregate fixture format. |
 | A8 | Escalation | Stop if a proposed removal loses a distinct safety or data-preservation check, needs a mocked stage, or requires changing runtime behavior or a persisted contract. Name the missing check and the smallest real boundary that can prove it. |
-| A9 | Current status | Execution is active. The status reckoner records each phase; the second phase starts after the first phase is delivered. Production dispatch remains outside this plan. |
+| A9 | Current status | Execution is active. A dependent session may start from the preceding phase's completed, reviewed handoff. Publication to main remains sequential and requires successful checks. Production dispatch remains outside this plan. |
 | A10 | Execution | Execute per docs/how-to/execute-a-plan.md. Parallel N = 1 because both phases change shared test inputs and coverage. One maintainer coordinates a separate nested implementation session for each phase, verifies its changes and checks, and delivers the phases sequentially. |
 
 Table B
