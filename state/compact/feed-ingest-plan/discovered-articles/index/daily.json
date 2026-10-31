@@ -1,8 +1,9 @@
 {
   "entries": [
-    {"bytes": 450784,"covers": "2026-10-26","file_sha256": "63bd0da0cc5e946b59a699c2af422ac483c7f0c6153a4b2177f8d693e4b83276","lost_days": [],"rows": 12632,"set_aside": 0,"state": "packed"},
-    {"bytes": 45168,"covers": "2026-10-27","file_sha256": "5c8c6d7298a8ae70fcd8a1059ea8dc879f8d3d2dd74b8fe02e24df52d916c6db","lost_days": [],"rows": 1212,"set_aside": 0,"state": "packed"},
-    {"bytes": 130230,"covers": "2026-10-28","file_sha256": "2720c08c5ee48420ebeb50676a29e9da78c040c10d26050040bc7459b6208b3b","lost_days": [],"rows": 3527,"set_aside": 0,"state": "packed"}
+    {"bytes": 521342,"covers": "2026-10-26","file_sha256": "5171fe4638dfb93e4132d3f1d3abe3bfbaa8e93fb6878fe0f06d58f7a7d033e5","lost_days": [],"rows": 14601,"set_aside": 0,"state": "packed"},
+    {"bytes": 48337,"covers": "2026-10-27","file_sha256": "4e6fc5f5c8b236a02a2d17f05d136f411def7babf480de8434fec7a30c4751c2","lost_days": [],"rows": 1301,"set_aside": 0,"state": "packed"},
+    {"bytes": 141926,"covers": "2026-10-28","file_sha256": "dd42b700fc8fa166c108bcb042c77d8c569949599c080ab979c686ddbd7ecc9e","lost_days": [],"rows": 3850,"set_aside": 0,"state": "packed"},
+    {"bytes": 161848,"covers": "2026-10-29","file_sha256": "9ebf555bba7292112b1b039af7d6b085728d58902bf7fd63e4286ba7bf7ac1a0","lost_days": [],"rows": 4418,"set_aside": 0,"state": "packed"}
   ],
   "ledger": "discovered-articles",
   "period": "daily",
