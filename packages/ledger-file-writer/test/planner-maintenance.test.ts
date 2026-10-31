@@ -337,3 +337,56 @@ test("published planner files use the TypeScript contract and reject malformed r
     await rm(root, { recursive: true, force: true });
   }
 });
+
+test("publication validation runs from the built site and refuses corrupt planner files", async () => {
+  const root = await fixtureRoot();
+  const site = join(root, "frontend", "build");
+  const projectRoot = resolve(import.meta.dir, "../../..");
+  const python = process.env.IDHAZH_PYTHON ?? "python";
+  try {
+    await mkdir(site, { recursive: true });
+    const raw = await addRawDay(site, "2026-10-20");
+    const cli = join(projectRoot, "packages", "ledger-file-writer", "src", "planner-file-validation-cli.ts");
+    expect(JSON.parse(execFileSync(process.execPath, ["run", cli, "--check-runtime"], {
+      cwd: site, encoding: "utf8",
+    }))).toEqual({ version: PLANNER_FILE_VALIDATION_VERSION, files: [] });
+    const script = [
+      "import sys",
+      "from pathlib import Path",
+      "from idhazh.contracts.ledger_name import LedgerName",
+      "from idhazh.ledger.published_columns import check",
+      "sys.exit(check(Path.cwd(), [LedgerName('discovered-articles')]))",
+    ].join("\n");
+    const runCheck = () => Bun.spawnSync([python, "-c", script], {
+      cwd: site,
+      env: {
+        ...process.env,
+        PYTHONPATH: [join(projectRoot, "backend"), process.env.PYTHONPATH].filter(Boolean).join(delimiter),
+      },
+    });
+    const valid = runCheck();
+    expect(valid.exitCode).toBe(0);
+    expect(valid.stdout.toString()).toContain("checked 1 file(s), current 1");
+    await writeFile(join(site, ...raw.split("/")), "not a Parquet file");
+    const invalid = runCheck();
+    expect(invalid.exitCode).toBe(1);
+    expect(invalid.stdout.toString()).toContain(`published-columns FAIL F5 ledger=discovered-articles file=${raw}`);
+    expect(invalid.stdout.toString()).toContain("column=invalid");
+    const invalidRequest = Bun.spawnSync([process.execPath, "run", cli], {
+      cwd: site, stdin: new TextEncoder().encode(JSON.stringify({ version: PLANNER_FILE_VALIDATION_VERSION, files: [
+        { ledger: "discovered-articles", path: "../outside.parquet" },
+      ] })),
+    });
+    expect(invalidRequest.exitCode).not.toBe(0);
+    expect(invalidRequest.stdout.toString()).toBe("");
+    expect(invalidRequest.stderr.toString()).toContain("ZodError");
+    const invalidStartup = Bun.spawnSync([process.execPath, "run", cli, "--check-runtime", "extra"], {
+      cwd: site,
+    });
+    expect(invalidStartup.exitCode).not.toBe(0);
+    expect(invalidStartup.stdout.toString()).toBe("");
+    expect(invalidStartup.stderr.toString()).toContain("Expected no arguments or --check-runtime");
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});

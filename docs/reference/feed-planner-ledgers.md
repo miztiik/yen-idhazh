@@ -628,6 +628,13 @@ stage or configuration model and no cross-language comparison copy. Native
 Python ledger readers refuse planner rows; the published-file check delegates
 their validation to TypeScript.
 
+This delegation starts the native Bun CLI by its absolute local path while
+using the built site as its working directory. Requests name files relative
+to that site. The publication runtime action installs locked packages and
+proves startup before expensive work; it does not substitute an empty request
+for the actual published-file check. Local preparation is in
+[Run the gates](../how-to/run-the-gates.md#independent-typescript-packages-and-services).
+
 The Python gardener remains the scheduler for every ledger family. Its shared
 compact-index records are maintenance marks, not planner row contracts. For
 planner data, the gardener hands one named bounded period to the TypeScript

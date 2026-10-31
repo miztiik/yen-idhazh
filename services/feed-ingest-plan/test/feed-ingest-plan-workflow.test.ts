@@ -143,11 +143,7 @@ test("manual controls exercise the planner API and keep only required outputs", 
   expect(plannerTest.run).toContain("bun run test");
   for (const name of ["site", "browser"]) {
     const steps = ci.jobs[name]!.steps ?? [];
-    expect(steps.some(step => step.uses === "oven-sh/setup-bun@v2")).toBe(true);
-    const install = steps.find(step => step.name === "Install the native planner fixture writer")!;
-    expect(install.run).toContain("bun install --frozen-lockfile --cwd packages/common-contracts");
-    expect(install.run).toContain("bun install --frozen-lockfile --cwd packages/data-delivery");
-    expect(install.run).toContain("bun install --frozen-lockfile --cwd packages/ledger-file-writer");
+    expect(steps.some(step => step.uses === "./.github/actions/publication-runtime")).toBe(true);
   }
 });
 

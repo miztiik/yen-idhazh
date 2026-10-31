@@ -1,0 +1,21 @@
+name: Publication validation runtime
+description: Install and prove the native planner validator before publication work.
+runs:
+  using: composite
+  steps:
+    - uses: oven-sh/setup-bun@v2
+      with:
+        bun-version: '1.3.13'
+
+    - name: Install locked publication packages
+      shell: bash
+      working-directory: ${{ github.workspace }}
+      run: |
+        bun install --frozen-lockfile --cwd packages/common-contracts
+        bun install --frozen-lockfile --cwd packages/data-delivery
+        bun install --frozen-lockfile --cwd packages/ledger-file-writer
+
+    - name: Prove the validator starts outside the checkout
+      shell: bash
+      working-directory: ${{ runner.temp }}
+      run: bun run "$GITHUB_WORKSPACE/packages/ledger-file-writer/src/planner-file-validation-cli.ts" --check-runtime
