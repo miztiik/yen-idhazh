@@ -11,7 +11,7 @@ Table A
 | --- | --- | --- |
 | A1 | Why this plan exists | Prove the API and CLI work without repeating whole planner runs for validation, formatting, storage and policy checks. |
 | A2 | In scope | Planner Bun tests, their recorded inputs, dead test helpers, unnecessary Git setup, duplicate file writes/readbacks, and directly related gate documentation. |
-| A3 | Required entry-point coverage | Keep exactly one successful recorded API execution and one successful recorded CLI execution per suite run, as defined in Table D. Short tests of independent failure boundaries remain at their own stage. |
+| A3 | Required entry-point coverage | At completion of both phases, keep exactly one successful recorded API execution and one successful recorded CLI execution per suite run, as defined in Table D. Short tests of independent failure boundaries remain at their own stage. |
 | A4 | Chosen strategy | Delete the oversized comparison and redundant full-run cases; give deterministic rules recorded inputs and exercise their real native implementations at the smallest useful boundary. The existing test tiers in [section 13](../CLAUDE.md#13-test-coverage-policy) define those boundaries. |
 | A5 | Inspection scope | Tables E and F name the complete removal and simplification list. Test filenames in those tables are relative to `services/feed-ingest-plan/test/`. Helper-only callers retain their behavior checks. |
 | A6 | Runtime prerequisite | Apply this cleanup to the integrated collection, parser-admission, cancellation-output and named-history-reader repairs. Do not restore an obsolete snapshot, availability sidecar or intermediate Git publication path. Preserve any added repair regression at its own boundary. |
@@ -35,7 +35,7 @@ Table C
 
 | Id | # | Row title | Depends-on | Parallel-group | Status | Worktree | PR | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| C1 | 1 | Keep minimum entry-point coverage | - | A | PENDING | - | - | - |
+| C1 | 1 | Keep minimum entry-point coverage | - | A | IN-FLIGHT | planner-entry-point-checks | - | d9c381fb-b315-4256-a5de-14a0d91b5020 |
 | C2 | 2 | Move remaining checks to their own boundaries | 1 | B | PENDING | - | - | - |
 
 ## 2 - Test change inventory

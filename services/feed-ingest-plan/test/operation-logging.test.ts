@@ -95,21 +95,6 @@ test("standalone document work logs failure addresses only and persistence logs 
   } finally { await app.close(); await f.close(); }
 });
 
-test("composed document failures include addresses without success leaks or duplicate persistence", async () => {
-  const f = await recordedPlan([source({ url: "https://news.example/article-failures.xml" })]);
-  try {
-    await runFeedPlan({ partition_strategy: "none" }, f.inputs, f.runtime);
-    expect(f.events.some(event => event.operation === "fetch" && event.phase === "failed"
-      && event.details.article_url === "https://news.example/not-found")).toBe(true);
-    expect(f.events.some(event => event.operation === "parse" && event.phase === "failed"
-      && event.details.article_url === "https://news.example/rootless")).toBe(true);
-    for (const event of f.events.filter(event => event.phase !== "failed")) {
-      expect(JSON.stringify(event)).not.toContain("https://");
-    }
-    expect(f.events.filter(event => event.operation === "persist").map(event => event.phase)).toEqual(["started", "completed"]);
-  } finally { await f.close(); }
-});
-
 test("failed redirected feeds identify the requested URL and final dispatched target", async () => {
   const f = await recordedPlan([source({ url: "https://news.example/feed-redirect" })]);
   try {
