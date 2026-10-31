@@ -134,5 +134,11 @@ test("cancellation drains owned requests and retains partial accounting without 
     expect(captured.work_rows.some(row => (row.feed_requests ?? 0) > 0)).toBe(true);
     expect(fixture.transport.peak).toBeLessThanOrEqual(fixture.inputs.harvest.config.harvest.concurrency);
     expect((await post("select-articles", { batch_id: captured.batch_id })).status).toBe(409);
-  } finally { await pending; await app.close(); await fixture.close(); }
+  } finally {
+    try { await pending; }
+    finally {
+      try { await app.close(); }
+      finally { await fixture.close(); }
+    }
+  }
 }, 120000);

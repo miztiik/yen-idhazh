@@ -96,7 +96,7 @@ test("overlapping standalone documents keep independent identities and bounded l
     await parsing;
     expect((await app.request(`${prefix}/health`)).status).toBe(200);
     const parsed = await Promise.all(pending);
-    expect(peak).toBeGreaterThan(0);
+    expect(peak).toBeGreaterThan(1);
     expect(peak).toBeLessThanOrEqual(recorded.inputs.settings.listener.parser_concurrency);
     expect(new Set(fetched.map(document => document.run_id)).size).toBe(2);
     expect(new Set(parsed.map(document => document.batch_id)).size).toBe(2);
