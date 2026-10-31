@@ -1,6 +1,7 @@
 {
   "entries": [
-    {"bytes": 421412,"covers": "2026-10-28","file_sha256": "087d22e913e9f12be9c2d02e22058212ba3f336de296d846fc9d5ee59825967c","lost_days": [],"rows": 8208,"set_aside": 0,"state": "packed"}
+    {"bytes": 421412,"covers": "2026-10-28","file_sha256": "087d22e913e9f12be9c2d02e22058212ba3f336de296d846fc9d5ee59825967c","lost_days": [],"rows": 8208,"set_aside": 0,"state": "packed"},
+    {"bytes": 508015,"covers": "2026-10-29","file_sha256": "f72fa205e6fc7cff1176fd53bb79a41b4b87f82c85156e54e517a398ebbd8680","lost_days": [],"rows": 10271,"set_aside": 0,"state": "packed"}
   ],
   "ledger": "rejected-articles",
   "period": "daily",
