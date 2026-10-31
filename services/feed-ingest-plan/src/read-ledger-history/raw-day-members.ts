@@ -20,6 +20,65 @@ async function git(repository: string, args: string[]) {
   return output.trim();
 }
 
+function parseTreeEntry(output: string) {
+  const match = /^([0-7]{6}) (tree|blob|commit) ([0-9a-f]{40})\s+(-|\d+)\t(.+)$/.exec(output);
+  if (match === null) throw new LedgerHistoryReadError("Invalid named history tree entry");
+  const bytes = match[4] === "-" ? null : Number(match[4]);
+  if (bytes !== null && !Number.isSafeInteger(bytes)) throw new LedgerHistoryReadError("Invalid named history byte count");
+  return { mode: match[1]!, type: match[2]!, object: match[3]!, bytes, path: match[5]! };
+}
+
+async function namedTreeEntry(
+  repository: string, path: string, revision: string, cache: Map<string, Promise<string>>,
+) {
+  const pieces = path.split("/");
+  if (pieces.some(piece => piece === "" || piece === "." || piece === ".." || piece.includes("\\"))) {
+    throw new LedgerHistoryReadError("Named history path is not canonical");
+  }
+  const getEntryKey = (index: number) => `${revision}:entry:${pieces.slice(0, index + 1).join("/")}`;
+  for (const [index, piece] of pieces.entries()) {
+    const cached = cache.get(getEntryKey(index));
+    if (cached === undefined) continue;
+    const output = await cached;
+    if (output === "") return undefined;
+    const entry = parseTreeEntry(output);
+    if (entry.path !== piece) throw new LedgerHistoryReadError("Invalid named history tree entry");
+    if (index === pieces.length - 1) return entry;
+    if (entry.mode !== "040000" || entry.type !== "tree") {
+      throw new LedgerHistoryReadError("Named history parent is not a directory");
+    }
+  }
+  const direct = await git(repository, ["ls-tree", "-l", revision, "--", path]);
+  if (direct !== "") {
+    const entry = parseTreeEntry(direct);
+    if (entry.path === path) {
+      cache.set(`${revision}:entry:${path}`, Promise.resolve(
+        `${direct.slice(0, direct.indexOf("\t") + 1)}${path.slice(path.lastIndexOf("/") + 1)}`,
+      ));
+      return entry;
+    }
+  }
+  let tree = revision;
+  for (const [index, piece] of pieces.entries()) {
+    const key = getEntryKey(index);
+    let pending = cache.get(key);
+    if (pending === undefined) {
+      pending = git(repository, ["ls-tree", "-l", tree, "--", piece]);
+      cache.set(key, pending);
+    }
+    const output = await pending;
+    if (output === "") return undefined;
+    const entry = parseTreeEntry(output);
+    if (entry.path !== piece) throw new LedgerHistoryReadError("Invalid named history tree entry");
+    if (index === pieces.length - 1) return entry;
+    if (entry.mode !== "040000" || entry.type !== "tree") {
+      throw new LedgerHistoryReadError("Named history parent is not a directory");
+    }
+    tree = entry.object;
+  }
+  throw new LedgerHistoryReadError("Named history path is empty");
+}
+
 export async function fixedHistoryRevision(repository: string) {
   const revision = await git(repository, ["rev-parse", "--verify", "HEAD^{commit}"]);
   if (!/^[0-9a-f]{40}$/.test(revision)) throw new LedgerHistoryReadError("Invalid history revision");
@@ -77,27 +136,7 @@ export async function listExactRawDayMembers(
 ) {
   if (!/^[0-9a-f]{40}$/.test(revision)) throw new LedgerHistoryReadError("Invalid history revision");
   const directory = rawDayDirectory(registration, day);
-  const pieces = directory.split("/");
-  const parents = pieces.slice(0, -1).map((_, index) => pieces.slice(0, index + 1).join("/"));
-  const key = `${revision}:raw-day-tree:${directory}`;
-  let pending = treeCache.get(key);
-  if (pending === undefined) {
-    pending = git(repository, ["ls-tree", revision, "--", ...parents, directory]);
-    treeCache.set(key, pending);
-  }
-  const entries = new Map<string, { mode: string; type: string }>();
-  for (const line of (await pending).split("\n").filter(Boolean)) {
-    const match = /^([0-7]{6}) (tree|blob) [0-9a-f]{40}\t(.+)$/.exec(line);
-    if (match === null) throw new LedgerHistoryReadError("Invalid raw day tree entry");
-    entries.set(match[3]!, { mode: match[1]!, type: match[2]! });
-  }
-  for (const parent of parents) {
-    const entry = entries.get(parent);
-    if (entry !== undefined && (entry.mode !== "040000" || entry.type !== "tree")) {
-      throw new LedgerHistoryReadError("Raw day parent is not a directory");
-    }
-  }
-  const entry = entries.get(directory);
+  const entry = await namedTreeEntry(repository, directory, revision, treeCache);
   async function absent() {
     try { await lstat(resolve(repository, directory)); }
     catch (error) {
@@ -112,7 +151,13 @@ export async function listExactRawDayMembers(
   if (entry.mode !== "040000" || entry.type !== "tree") {
     throw new LedgerHistoryReadError("Named raw day is not a directory");
   }
-  const listing = await git(repository, ["ls-tree", "-l", `${revision}:${directory}`]);
+  const key = `${revision}:members:${directory}`;
+  let pending = treeCache.get(key);
+  if (pending === undefined) {
+    pending = git(repository, ["ls-tree", "-l", entry.object]);
+    treeCache.set(key, pending);
+  }
+  const listing = await pending;
   const members: { path: string; blob: string; bytes: number }[] = [];
   for (const line of listing.split("\n").filter(Boolean)) {
     const match = /^100644 blob ([0-9a-f]{40})\s+(\d+)\t(.+)$/.exec(line);
@@ -149,16 +194,6 @@ export async function readNamedGitMember(
   treeCache = new Map<string, Promise<string>>(),
 ) {
   if (!/^[0-9a-f]{40}$/.test(revision)) throw new LedgerHistoryReadError("Invalid history revision");
-  const pieces = path.split("/");
-  if (pieces.some(piece => piece === "" || piece === "." || piece === ".." || piece.includes("\\"))) {
-    throw new LedgerHistoryReadError("Named history path is not canonical");
-  }
-  function tree(named: string) {
-    const key = `${revision}:${named}`;
-    let pending = treeCache.get(key);
-    if (pending === undefined) { pending = git(root, ["ls-tree", "-l", revision, "--", named]); treeCache.set(key, pending); }
-    return pending;
-  }
   async function absent() {
     try { await lstat(resolve(root, path)); }
     catch (error) {
@@ -167,14 +202,12 @@ export async function readNamedGitMember(
     }
     throw new LedgerHistoryReadError("Uncommitted history member differs from the selected Git revision");
   }
-  const entry = await tree(path);
-  if (entry === "") return absent();
-  const entryPath = entry.slice(entry.indexOf("\t") + 1);
-  if (entryPath !== path && /^040000 tree [0-9a-f]{40}\s+-\t/.test(entry)
-    && path.startsWith(`${entryPath}/`)) return absent();
-  const match = /^100644 blob ([0-9a-f]{40})\s+(\d+)\t(.+)$/.exec(entry);
-  if (match === null || match[3] !== path) throw new LedgerHistoryReadError("Named history member is not a regular file");
-  return verifyRawDayMember(root, { path, blob: match[1]!, bytes: Number(match[2]) });
+  const entry = await namedTreeEntry(root, path, revision, treeCache);
+  if (entry === undefined) return absent();
+  if (entry.mode !== "100644" || entry.type !== "blob" || entry.bytes === null) {
+    throw new LedgerHistoryReadError("Named history member is not a regular file");
+  }
+  return verifyRawDayMember(root, { path, blob: entry.object, bytes: entry.bytes });
 }
 
 export async function readNamedGitFile(root: string, path: string, revision: string) {

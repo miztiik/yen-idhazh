@@ -1,6 +1,6 @@
 /** Prove exact-day Git membership, complete staging and native integrity on real Parquet bytes. */
 import { expect, test } from "bun:test";
-import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -8,7 +8,7 @@ import { DiscoveredArticleRowContract, FeedHealthStateRowContract, FeedIngestEve
 import { plannerRecordings } from "../../../packages/ledger-file-writer/test/planner-recordings";
 import { fixtureGit } from "./publication-recordings";
 import { registration, writeRows } from "./partition-fixtures";
-import { fixedHistoryRevision, listExactRawDayMembers, readNamedGitFile } from "../src/read-ledger-history/raw-day-members";
+import { fixedHistoryRevision, listExactRawDayMembers, readNamedGitFile, readNamedGitMember } from "../src/read-ledger-history/raw-day-members";
 import { createPlannerHistoryCache, readPlannerDay } from "../src/read-ledger-history/read-planner-history";
 import { stageNamedFiles, stagePlannerHistory } from "../scripts/feed-ingest-plan-history";
 import { PlannerDayInputSchema } from "../src/config/service-settings";
@@ -60,6 +60,11 @@ test("one revision proves absent days, every sibling and sparse staging without 
     expect(complete.rows.map(row => row.attempt).sort()).toEqual([1, 2]);
     const capture = createPlannerHistoryCache<ReturnType<typeof PlanRunRowContract.schema.parse>>();
     await readPlannerDay(root, entry, { day, raw_revision: revision }, PlanRunRowContract, capture);
+    await rename(join(root, ".git"), join(root, ".git-held"));
+    try {
+      expect(await readPlannerDay(root, entry, { day, raw_revision: revision }, PlanRunRowContract, capture))
+        .toMatchObject({ complete: true, represented: true, rows: complete.rows });
+    } finally { await rename(join(root, ".git-held"), join(root, ".git")); }
     await writeFile(join(root, "README.md"), "Another revision, the same native files.\n");
     await fixtureGit(root, ["add", "--", "README.md"]);
     await fixtureGit(root, ["commit", "-m", "Advance generated history revision"]);
@@ -118,6 +123,30 @@ test("one revision proves absent days, every sibling and sparse staging without 
     expect((await readPlannerDay(root, entry, { day, raw_revision: revision, raw_files: paths }, PlanRunRowContract)).complete).toBe(false);
   } finally { await rm(root, { recursive: true, force: true }); }
 }, 120_000);
+
+test("cached parent absence still rejects uncommitted files and cannot hide a later revision", async () => {
+  const root = await mkdtemp(join(tmpdir(), "planner-cached-git-entry-"));
+  const path = "config/second.json";
+  const cache = new Map<string, Promise<string>>();
+  try {
+    await fixtureGit(root, ["init", "--initial-branch=main"]);
+    await fixtureGit(root, ["commit", "--allow-empty", "-m", "Create generated history"]);
+    const revision = await fixedHistoryRevision(root);
+    expect(await readNamedGitMember(root, "config/first.json", revision, cache)).toBeUndefined();
+    await rename(join(root, ".git"), join(root, ".git-held"));
+    try {
+      expect(await readNamedGitMember(root, path, revision, cache)).toBeUndefined();
+      await mkdir(join(root, "config"));
+      await writeFile(join(root, path), "{}\n");
+      await expect(readNamedGitMember(root, path, revision, cache)).rejects.toThrow("Uncommitted");
+    } finally { await rename(join(root, ".git-held"), join(root, ".git")); }
+    await fixtureGit(root, ["add", "--", path]);
+    await fixtureGit(root, ["commit", "-m", "Record generated named file"]);
+    const latest = await fixedHistoryRevision(root);
+    expect(latest).not.toBe(revision);
+    expect((await readNamedGitMember(root, path, latest, cache))?.bytes.toString("utf8")).toBe("{}\n");
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
 
 test("an invalid mode or day path is not a verified empty day", async () => {
   const root = await mkdtemp(join(tmpdir(), "planner-invalid-git-day-"));

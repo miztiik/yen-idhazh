@@ -49,8 +49,10 @@ when January's only saved read was on January 1. This does not invent a
 logical feed check or pad days outside named evidence. Known-empty daily
 entries remain outside lifecycle/reliability membership.
 
-Within a capture, index and Parquet caches prevent reopening one compact file
-for each day it represents.
+Within one capture, the commit is verified once and saved directory entries
+and Parquet reads are reused across named days. A saved directory's absence
+can be reused for another path below it, but each requested local path is
+still checked for uncommitted content.
 Discovery history is also read once per collection. Later feed parses add
 only their new sightings to current-process discovery memory; they do not
 reopen the named discovery days or append the entire baseline again.
@@ -153,6 +155,12 @@ runs can publish later without changing that run's decisions. Actual completed
 work updates its own calculations once. Rolling-window changes use only known
 entering and leaving contributions; unsupported changes stay incomplete and
 do not relabel an old measurement's dates.
+
+Git gives each saved directory a fixed identifier. An exact named entry proves
+its parent chain in one query. Missing entries use those directory identifiers
+to find a missing or invalid parent, rather than querying all parent directories
+together. This avoids unrelated sibling listings and permits reuse of
+known-missing parents.
 
 Request reporting is independent of planning evidence. A damaged report-only
 day must not prevent a feed fetch, a document parse or current-run request
