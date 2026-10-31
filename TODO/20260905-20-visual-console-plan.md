@@ -28,7 +28,7 @@ Execute per docs/how-to/execute-a-plan.md: one maintainer carries the plan and d
 | # | Row title | Depends-on | Parallel-group | Status | Worktree | PR | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | 1 | The two funnels | - | A | IN-FLIGHT | two-funnels-view | - | worker |
-| 2 | Refusal reasons and written visual type | 1 | B | PENDING | - | - | - |
+| 2 | Refusal reasons and written visual type | 1 | B | DONE | visual-refusal-views | - | worker |
 | 3 | The rules for reading any of it | 2 | C | COLLAPSED (maintainer, 2026-10-31: row 1 owns its denominator rules; revised row 2 adds no human keep rate, family distribution, alarm, or composite score) | - | - | - |
 | 4 | How each feature gets retired without a fresh argument | 3 | D | COLLAPSED (maintainer, 2026-10-31: `keyfacts` is no longer generated; the downgrade ladder is disabled and its keep-rate evidence is unavailable) | - | - | - |
 

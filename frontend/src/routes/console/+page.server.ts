@@ -9,13 +9,13 @@ import { dayMetrics, loadManifests, publishedCharts } from '$lib/server/payload'
 import { windowDay } from '$lib/server/window-day';
 import { visualAttemptRows } from '$lib/server/ledger-rows';
 import { attemptCounts } from '$lib/console/pipelines/visual-funnels';
-import { attemptNotes } from '$lib/console/pipelines/attempt-notes';
+import { visualAttemptDays } from '$lib/console/pipelines/visual-attempts';
 
 export const prerender = true;
 
 /** Only the explicitly private BUILD_TIME panels read files here. Native item
  * clocks and evaluator readings arrive through the query door in the browser.
- * The attempt record is unpublished, so the funnels read it here as counts. */
+ * The attempt record is unpublished, so its views read it here as counts. */
 export async function load() {
 	const knobs = consoleConfig();
 	const widest = Math.max(...knobs.window_presets);
@@ -49,6 +49,6 @@ export async function load() {
 		manifests, charts, publishedItems: Object.fromEntries([...visuals].map(([date, counts]) => [date, counts.items])),
 		grid: runHealthGrid(manifests, floorPct), floorPct, extractionPublishedByWindow, extractionDays, runYieldDays,
 		chart: chartConfig(), windowDay: day,
-		visualAttempts: { counts: attemptCounts(attempts.rows), ...attemptNotes(attempts.read) }
+		visualAttempts: { counts: attemptCounts(attempts.rows), days: visualAttemptDays(attempts.rows), read: attempts.read }
 	};
 }
