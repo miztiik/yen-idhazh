@@ -4,7 +4,7 @@ import {
 } from "@idhazh/common-contracts";
 import { z } from "zod";
 import type { FeedHealthReliability, FeedHealthStateRow } from "@idhazh/common-contracts";
-import { selectNewestCalculation } from "./saved-calculation";
+import { selectSavedReliability } from "./saved-reliability";
 import { feedReliability } from "./feed-reliability";
 
 const partialReliability = z.object(FeedHealthReliabilityFieldsSchema.shape).partial();
@@ -42,13 +42,13 @@ export function reuseFeedReliability(input: {
   saved?: FeedHealthReliability;
   now: string; floor: number; window: number; onGap: (reason: string) => void;
 }): FeedHealthReliability {
-  const saved = input.saved === undefined ? selectNewestCalculation(input.rows.flatMap(row => {
+  const bounds = { from_day: input.days[0] ?? null, through_day: input.days.at(-1) ?? null };
+  const saved = input.saved === undefined ? selectSavedReliability(input.rows.flatMap(row => {
     const parsed = FeedHealthReliabilitySchema.safeParse(row.reliability);
     return parsed.success ? [{
       at: row.checked_at ?? row.availability_updated_at ?? null, value: parsed.data,
     }] : [];
-  }), input.now) : { value: structuredClone(input.saved), conflicting: [] };
-  const bounds = { from_day: input.days[0] ?? null, through_day: input.days.at(-1) ?? null };
+  }), bounds, input.now) : { value: structuredClone(input.saved), conflicting: [] };
   const coverage = input.days.length >= input.window && input.days.every(input.knownDay);
   let value = saved.value;
   let reads: Read[] | undefined;

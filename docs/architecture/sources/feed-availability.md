@@ -69,7 +69,11 @@ request accounting stays null. Interrupted checks do not manufacture success,
 source failure or retirement.
 
 Reliability retains its own saved counts, fractions, coverage dates and
-completeness. Known entering and leaving contributions adjust a rolling window.
+completeness. Covered dates identify the question a saved result answers.
+The requested saved window is selected before check-clock ordering; different
+windows sharing an unchanged availability clock do not conflict. Contradictory
+results for the same window retain the existing clock-ambiguity refusal.
+Known entering and leaving contributions adjust a rolling window.
 Missing contributions produce a diagnostic and partial values; an unchanged
 saved measurement is never relabelled as covering newer dates.
 
