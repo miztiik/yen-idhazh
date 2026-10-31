@@ -1,7 +1,7 @@
 /** Stage only named native indexes and their bounded planner history files. */
 import { resolve } from "node:path";
 import {
-  CompactIndexSchema, LedgerNameSchema, FeedHealthStateRowContract, RawDayIndexSchema, PlannerLedgerNameSchema,
+  CompactIndexSchema, LedgerNameSchema, FEED_HEALTH_STATE_VERSION, RawDayIndexSchema, PlannerLedgerNameSchema,
 } from "../../../packages/common-contracts/src/index";
 import type { CompactIndex } from "../../../packages/common-contracts/src/index";
 import type { PlanInputs } from "../src/load-plan-inputs";
@@ -9,16 +9,36 @@ import { mapPool } from "../src/harvest-feeds/harvest-pool";
 import { requiredUtcDays } from "../src/utc-instant";
 import { PlannerDayInputSchema } from "../src/config/service-settings";
 import type { LedgerDayInput } from "../src/config/service-settings";
-import { readPlannerParquet } from "../src/read-ledger-history/read-planner-parquet";
+import { readStoredPlannerParquet } from "@idhazh/ledger-file-writer";
 import { closedRequestDays } from "../src/read-ledger-history/request-summary";
 import { completeHistoryDayInputs, createHistoryDayInputs, resolveHistoryIndexes, resolveHistoryInventory, sparseCheckoutPath } from "./feed-ingest-plan-outputs";
 import { stageFeedHistory } from "./feed-ingest-plan-feed-history";
 import { LedgerHistoryReadError } from "../src/read-ledger-history/ledger-history-error";
-import { compactPeriodFile, fixedHistoryRevision, listExactRawDayMembers, readNamedGitFile, verifyRawDayMember } from "../src/read-ledger-history/raw-day-members";
+import { compactPeriodFile, captureRemoteHistoryRevision, listExactRawDayMembers, readNamedGitFile, verifyRawDayMember } from "../src/read-ledger-history/raw-day-members";
 
-export async function stageNamedFiles(repository: string, paths: readonly string[]) {
+type HistoryStaging = { revision: string; staged: Set<string> };
+async function git(repository: string, args: string[], paths: readonly string[] = []) {
+  const child = Bun.spawn(["git", "--literal-pathspecs", ...args], {
+    cwd: repository, stdin: paths.length ? "pipe" : "ignore", stdout: "pipe", stderr: "pipe",
+  });
+  if (paths.length && child.stdin != null) {
+    child.stdin.write(`${paths.join("\n")}\n`);
+    child.stdin.end();
+  }
+  const [output, error, code] = await Promise.all([
+    new Response(child.stdout).text(), new Response(child.stderr).text(), child.exited,
+  ]);
+  if (code !== 0) throw new LedgerHistoryReadError(`Named history Git ${args[0]} failed`, { cause: new Error(error) });
+  return output.trim();
+}
+export async function stageNamedFiles(repository: string, paths: readonly string[], capture?: HistoryStaging) {
   const names = [...new Set(paths)].map(sparseCheckoutPath);
   if (names.length === 0) return;
+  const fresh = [...new Set(paths)].filter(path => !capture?.staged.has(path));
+  if (capture !== undefined && fresh.length) {
+    const changes = await git(repository, ["status", "--porcelain=v1", "--untracked-files=all", "--", ...fresh]);
+    if (changes !== "") throw new LedgerHistoryReadError("Named history import refuses existing local changes");
+  }
   const child = Bun.spawn(["git", "sparse-checkout", "add", "--skip-checks", "--stdin"], {
     cwd: repository, stdin: "pipe", stdout: "pipe", stderr: "pipe",
   });
@@ -26,6 +46,23 @@ export async function stageNamedFiles(repository: string, paths: readonly string
   child.stdin.end();
   await Promise.all([new Response(child.stdout).text(), new Response(child.stderr).text()]);
   if (await child.exited !== 0) throw new Error("Named history checkout failed");
+  if (capture !== undefined && fresh.length) {
+    const members = new Set<string>();
+    for (const revision of ["HEAD", capture.revision]) {
+      const listed = await git(repository, ["ls-tree", revision, "--", ...fresh]);
+      for (const line of listed.split("\n").filter(Boolean)) {
+        const directory = /^040000 tree [0-9a-f]{40}\t(.+)$/.exec(line);
+        if (directory !== null && fresh.some(path => path.startsWith(`${directory[1]!}/`))) continue;
+        const parsed = /^100644 blob [0-9a-f]{40}\t(.+)$/.exec(line);
+        if (parsed === null || !fresh.includes(parsed[1]!)) throw new LedgerHistoryReadError("Named history import requires regular files");
+        members.add(parsed[1]!);
+      }
+    }
+    if (members.size) await git(repository, [
+      "restore", `--source=${capture.revision}`, "--worktree", "--pathspec-from-file=-",
+    ], [...members]);
+    for (const path of fresh) capture.staged.add(path);
+  }
 }
 
 export function createPlannerHistoryInputs(history: readonly LedgerDayInput[], revision: string) {
@@ -38,8 +75,9 @@ export async function stagePlannerHistory(root: string, inputs: PlanInputs, now:
   const today = new Date(now);
   const nextDay = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate() + 1)).toISOString().slice(0, 10);
   const withBoundary = (days: string[]) => [...new Set([...days, nextDay])].sort();
-  const revision = await fixedHistoryRevision(root);
-  await stageNamedFiles(root, inputs.settings.inputs.discovered_files);
+  const revision = await captureRemoteHistoryRevision(root);
+  const capture: HistoryStaging = { revision, staged: new Set() };
+  await stageNamedFiles(root, inputs.settings.inputs.discovered_files, capture);
   const plans = [
     { entry: inputs.registrations.discovered_articles,
       days: withBoundary(requiredUtcDays(now, inputs.harvest.config.discovered_articles.lookback_days)),
@@ -66,14 +104,14 @@ export async function stagePlannerHistory(root: string, inputs: PlanInputs, now:
     for (const path of Object.values(day.indexes ?? {})) if (path !== undefined) metadata.add(path);
     if (day.raw_index !== undefined) metadata.add(day.raw_index);
   }
-  await stageNamedFiles(root, [...metadata]);
+  await stageNamedFiles(root, [...metadata], capture);
   const cache = new Map<string, Promise<unknown | undefined>>();
   function read(path: string) {
     let pending = cache.get(path);
     if (pending === undefined) {
       pending = (async () => {
         if (!metadata.has(path)) {
-          await stageNamedFiles(root, [path]);
+          await stageNamedFiles(root, [path], capture);
           metadata.add(path);
         }
         const content = await readNamedGitFile(root, path, revision);
@@ -131,19 +169,23 @@ export async function stagePlannerHistory(root: string, inputs: PlanInputs, now:
   }
   const health = await stageFeedHistory({
     ledger: "feed-health-state", prefix: inputs.registrations.feed_health_state.prefix, now,
-    health_window_days: Math.max(inputs.harvest.config.feedback.lifecycle_window_days, inputs.clock_config.collect.reliability_window_days),
+    health_window_days: Math.max(inputs.harvest.config.feedback.lifecycle_window_days, inputs.clock_config.collect.reliability_window_days) + 1,
     request_report_closed_days: inputs.harvest.config.feedback.request_report_closed_days,
     period_limit: inputs.settings.inputs.health_period_limit, authored: inputs.settings.inputs.feed_health_days, read,
     raw_files: async day => (await listExactRawDayMembers(root, inputs.registrations.feed_health_state, day, revision, trees))
       .members.map(member => member.path),
     read_period: async path => {
-      await stageNamedFiles(root, [path]);
+      await stageNamedFiles(root, [path], capture);
       await readNamedGitFile(root, path, revision);
-      return (await readPlannerParquet(resolve(root, path), "feed-health-state", FeedHealthStateRowContract)).rows;
+      const stored = await readStoredPlannerParquet(resolve(root, path), "feed-health-state");
+      if (stored.envelope.row_schema_version !== FEED_HEALTH_STATE_VERSION) {
+        throw new LedgerHistoryReadError("Health period requires the current row schema");
+      }
+      return stored.rows;
     },
   });
   for (const path of health.files) inventory.add(path);
-  await stageNamedFiles(root, [...inventory]);
+  await stageNamedFiles(root, [...inventory], capture);
   for (const plan of plans.filter(plan => PlannerLedgerNameSchema.safeParse(plan.entry.name).success)) {
     for (const day of completeHistoryDayInputs(plan.entry.prefix, plan.days, plan.authored, plan.entry.name)) {
       for (const member of (await listExactRawDayMembers(root, plan.entry, day.day, revision, trees)).members) {

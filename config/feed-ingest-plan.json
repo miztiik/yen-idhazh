@@ -1,5 +1,12 @@
 {
-  "version": "2026-10-30",
+  "version": "2026-10-31",
+  "availability": {
+    "consecutive_failed_checks_before_rest": 5,
+    "rest_hours": 24,
+    "recovery_rest_hours": 24,
+    "failed_recovery_checks_before_retirement": 7,
+    "retirement_minimum_age_hours": 36
+  },
   "harvest": {
     "concurrency": 24,
     "fetch_timeout_ms": 6000,

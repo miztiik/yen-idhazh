@@ -2,7 +2,7 @@
 import {
   CompactIndexSchema, DateStampSchema, PublicationInventoryInputSchema,
 } from "../../../packages/common-contracts/src/index";
-import type { CompactIndex, FeedHealthStateRow } from "../../../packages/common-contracts/src/index";
+import type { CompactIndex } from "../../../packages/common-contracts/src/index";
 import type { LedgerDayInput } from "../src/config/service-settings";
 import { createHistoryDayInputs, resolveHistoryInventory } from "./feed-ingest-plan-outputs";
 import { closedRequestDays } from "../src/read-ledger-history/request-summary";
@@ -33,7 +33,7 @@ export async function stageFeedHistory(input: {
   health_window_days: number; request_report_closed_days: number; period_limit: number;
   authored: readonly LedgerDayInput[];
   read: (path: string) => Promise<unknown | undefined>;
-  read_period: (path: string) => Promise<readonly FeedHealthStateRow[]>;
+  read_period: (path: string) => Promise<unknown>;
   raw_files: (day: string) => Promise<readonly string[]>;
 }) {
   if (!Number.isSafeInteger(input.period_limit) || input.period_limit < 1) throw new Error("Health period limit must be positive");

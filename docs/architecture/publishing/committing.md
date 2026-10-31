@@ -1,6 +1,6 @@
 # How completed output reaches the repository
 
-**Last Updated**: 2026-10-28
+**Last Updated**: 2026-10-31
 
 Start here when a workflow delivers generated files. Python jobs use
 [`backend/utilities/publish_to_repo.py`](../../../backend/utilities/publish_to_repo.py)
@@ -162,8 +162,11 @@ the caller must refresh its state and apply its transition again.
 Successful publication identifies its own commit even if another valid update
 lands before verification. Fetches use private temporary references, not the
 shared `FETCH_HEAD`, and do not change the caller's checkout or index.
-The [feed availability contract](../sources/feed-availability.md) is the
-first consumer; immutable planner ledgers retain their existing delivery API.
+The planner does not use these mutable-state APIs. Its
+[availability calculations](../sources/feed-availability.md) are ordinary
+immutable health-ledger output. Fetch, parse, collection, selection and health
+recording make no Git commits; only final `safe_persist_data` delivery publishes
+their completed metadata files.
 
 The manual planner test workflow is a consumer, not an application publishing
 stage. Its adapter validates the exact completed planner and host metadata

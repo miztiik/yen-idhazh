@@ -3,7 +3,7 @@ import { isDeepStrictEqual } from "node:util";
 import { z } from "zod";
 import {
   FeedHealthAdmissionFieldsSchema, FeedHealthIdentitySchema, FeedHealthReliabilityFieldsSchema,
-  FeedHealthRequestFieldsSchema, FeedHealthRestFieldsSchema,
+  FeedHealthRequestFieldsSchema, FeedHealthRestFieldsSchema, FeedHealthFieldUseSchema,
 } from "@idhazh/common-contracts";
 import type { FeedHealthFieldUse, FeedHealthIdentity } from "@idhazh/common-contracts";
 import type { LedgerRegistration } from "@idhazh/ledger-file-writer";
@@ -15,7 +15,7 @@ import type { StageLogger } from "../logging/structured-logger";
 
 export type FeedHealthFieldGap = {
   use: FeedHealthFieldUse; field: string; day: string;
-  code: "missing" | "invalid"; identity: FeedHealthIdentity | null;
+  code: "missing" | "invalid" | "conflict"; identity: FeedHealthIdentity | null;
 };
 
 function projectFields<S extends z.ZodRawShape>(
@@ -55,23 +55,42 @@ function projectFields<S extends z.ZodRawShape>(
 export function projectFeedHealthFields(day: string, records: readonly Record<string, unknown>[]) {
   const distinct = new Map<string, Record<string, unknown>>();
   const invalidIdentity: Record<string, unknown>[] = [];
+  const conflicts = new Map<string, FeedHealthIdentity>();
+  const checks = new Map<string, { key: string; fact: readonly unknown[]; identity: FeedHealthIdentity }>();
   for (const record of records) {
     const identity = FeedHealthIdentitySchema.safeParse(record);
     if (!identity.success) { invalidIdentity.push(record); continue; }
     const key = JSON.stringify(identity.data);
     const previous = distinct.get(key);
     if (previous !== undefined && !isDeepStrictEqual(previous, record)) {
-      throw new LedgerHistoryReadError("Conflicting copies of one finalized planner health fact");
+      conflicts.set(key, identity.data);
+    }
+    if (typeof record.check_request_id === "string" && record.check_result != null) {
+      const fact = [identity.data, record.checked_at, record.check_result, record.status, record.outcome, record.items];
+      const check = checks.get(record.check_request_id);
+      if (check !== undefined && !isDeepStrictEqual(check.fact, fact)) {
+        conflicts.set(key, identity.data);
+        conflicts.set(check.key, check.identity);
+      } else checks.set(record.check_request_id, { key, fact, identity: identity.data });
     }
     distinct.set(key, record);
   }
-  const settled = [...distinct.values(), ...invalidIdentity];
-  return {
+  const settled = [...distinct].filter(([key]) => !conflicts.has(key)).map(([, row]) => row);
+  settled.push(...invalidIdentity);
+  const uses = {
     request_totals: projectFields(day, settled, FeedHealthRequestFieldsSchema, "request_totals"),
     feed_rest: projectFields(day, settled, FeedHealthRestFieldsSchema, "feed_rest"),
     feed_reliability: projectFields(day, settled, FeedHealthReliabilityFieldsSchema, "feed_reliability"),
     article_admission: projectFields(day, settled, FeedHealthAdmissionFieldsSchema, "article_admission"),
   };
+  for (const use of FeedHealthFieldUseSchema.options) {
+    const view = uses[use];
+    for (const identity of conflicts.values()) {
+      view.gaps.push({ use, field: "$row", day, code: "conflict", identity });
+      view.partial_rows.push(identity);
+    }
+  }
+  return uses;
 }
 
 export async function readFeedHealthFieldsDay(

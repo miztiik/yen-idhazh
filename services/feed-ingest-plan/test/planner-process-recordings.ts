@@ -11,7 +11,7 @@ export async function recordedPlannerProcess(sources?: Parameters<typeof recorde
   try {
     const configRoot = new URL("../../../config/", import.meta.url);
     await mkdir(join(fixture.directory, "config"));
-    for (const name of ["taxonomy.json", "idhazh.json", "ledgers.json", "feed-availability.json", "data-delivery.json"]) {
+    for (const name of ["taxonomy.json", "idhazh.json", "ledgers.json", "data-delivery.json"]) {
       await writeFile(join(fixture.directory, "config", name), await Bun.file(new URL(name, configRoot)).text());
     }
     const settings = { ...fixture.inputs.settings, enabled: false };

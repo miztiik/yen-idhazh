@@ -1,10 +1,14 @@
 /** Derive feed-read reliability and article admission from their own required fields. */
-import { definitelyAfter } from "@idhazh/common-contracts";
 import { FeedHealthStateRowSchema, SourceArticleRefusalReasonSchema } from "@idhazh/common-contracts";
-import type { FeedHealthStateRow, SourceSnapshot } from "@idhazh/common-contracts";
+import type { FeedHealthStateRow, SourceSnapshot, FeedLifecyclePolicy } from "@idhazh/common-contracts";
 import type { SourceHistoryEvidence, FeedHistoryPolicy } from "./read-feed-history";
 import type { HealthCapture } from "./read-health-capture";
-import { feedReliability } from "./feed-reliability";
+import { reuseFeedLifecycle, updateFeedLifecycle } from "./feed-lifecycle-history";
+import { reuseFeedReliability } from "./feed-reliability-history";
+import { projectLifecycleFields } from "../health-row";
+import type { StageLogger } from "../logging/structured-logger";
+import { projectFeedHealthFields } from "./read-feed-health-fields";
+import { resolveFeedEligibility } from "../availability/feed-lifecycle";
 
 export function settleHealthRows(rows: readonly FeedHealthStateRow[]): FeedHealthStateRow[] {
   const facts = new Map<string, FeedHealthStateRow>();
@@ -23,11 +27,18 @@ export function summarizePlanningHealth(input: {
   uses: Pick<HealthCapture["uses"], "feed_rest" | "feed_reliability" | "article_admission">;
   days: readonly { day: string; complete: boolean }[];
   sources: readonly SourceSnapshot[]; now: string; policy: FeedHistoryPolicy;
-  lifecycle_window_days: number;
+  lifecycle_window_days: number; lifecycle_policy: FeedLifecyclePolicy;
+  current_rows?: readonly FeedHealthStateRow[]; log?: StageLogger;
+  saved_sources?: ReadonlyMap<string, SourceHistoryEvidence>;
 }) {
   const now = Date.parse(input.now);
   if (!Number.isFinite(now)) throw new Error("Health summary needs a valid UTC clock");
-  const represented = [...new Set(input.days.filter(day => day.day <= input.now.slice(0, 10)).map(day => day.day))].sort();
+  const current = input.current_rows ?? [];
+  const currentAdmission = current.flatMap(row => projectFeedHealthFields(row.date, [row]).article_admission.rows);
+  const represented = [...new Set([
+    ...input.days.filter(day => day.day <= input.now.slice(0, 10)).map(day => day.day),
+    ...current.filter(row => row.checked_at !== null).map(row => row.date),
+  ])].sort();
   const reliabilityDays = represented.slice(-input.policy.reliability_window_days);
   const complete = (days: readonly string[], required: number) => days.length >= required
     && days.every(day => input.days.find(value => value.day === day)?.complete === true);
@@ -39,27 +50,44 @@ export function summarizePlanningHealth(input: {
     const fieldsComplete = (use: keyof typeof input.uses, days: readonly string[], required: number) =>
       complete(days, required) && !input.uses[use].gaps.some(gap => days.includes(gap.day)
         && (gap.identity === null || matches(gap.identity)));
-    const logical = (use: "feed_rest" | "feed_reliability") => {
-      const matching = input.uses[use].rows.filter(row => matches(row)
-        && row.date <= input.now.slice(0, 10) && row.checked_at !== null && Date.parse(row.checked_at) <= now
-        && row.outcome !== null && row.items !== null);
-      const reads = new Map<string, typeof matching[number]>();
-      for (const row of matching) {
-        const key = `${row.run_id}:${row.feed_id}`;
-        const previous = reads.get(key);
-        const productive = row.outcome === "ok" && row.items! > 0;
-        const priorProductive = previous?.outcome === "ok" && previous.items! > 0;
-        if (previous === undefined || (productive && !priorProductive)
-          || (productive === priorProductive && definitelyAfter(row.checked_at!, previous.checked_at!))) reads.set(key, row);
-      }
-      return [...reads.values()].map(row => ({
-        date: row.date, run_id: row.run_id, checked_at: row.checked_at!, outcome: row.outcome!, items: row.items!,
+    const onGap = (reason: string) => input.log?.("history", "failed", {
+      source: "feed-health-calculation", failed_check: reason, reason, feed_id: source.feed_id,
+    });
+    const lifecycleDays = represented.slice(-input.lifecycle_window_days);
+    const lifecycleRows = [...input.uses.feed_rest.rows, ...input.uses.feed_rest.partial_rows]
+      .filter(row => row.feed_id !== undefined && row.endpoint_key !== undefined && matches({
+        feed_id: row.feed_id, endpoint_key: row.endpoint_key,
+      }) && row.date !== undefined && lifecycleDays.includes(row.date));
+    const reliabilityRows = [...input.uses.feed_reliability.rows, ...input.uses.feed_reliability.partial_rows]
+      .filter(row => row.feed_id !== undefined && row.endpoint_key !== undefined && matches({
+        feed_id: row.feed_id, endpoint_key: row.endpoint_key,
       }));
-    };
-    const measured = logical("feed_reliability").filter(row => reliabilityDays.includes(row.date)
-      && row.outcome !== "skipped" && row.outcome !== "robots_denied");
-    const productive = measured.filter(row => row.outcome === "ok" && row.items > 0).length;
-    const articleRows = input.uses.article_admission.rows.filter(row => row.feed_id === source.feed_id
+    const work = current.filter(matches);
+    const saved = input.saved_sources?.get(source.feed_id);
+    if (saved !== undefined && !matches({ feed_id: source.feed_id, endpoint_key: saved.endpoint_key })) {
+      throw new Error("Saved planning calculation belongs to a different endpoint");
+    }
+    const supported = updateFeedLifecycle(
+      saved === undefined ? reuseFeedLifecycle(lifecycleRows, input.now, input.lifecycle_policy, onGap)
+        : projectLifecycleFields(saved), work, input.lifecycle_policy,
+    );
+    supported.availability = resolveFeedEligibility(supported, input.now);
+    const { availability, ...lifecycle } = supported;
+    const conflicting = (use: keyof typeof input.uses) => input.uses[use].gaps.some(gap =>
+      gap.code === "conflict" && (gap.identity === null || matches(gap.identity)));
+    if (conflicting("feed_rest")) lifecycle.availability_complete = false;
+    const reliability = reuseFeedReliability({
+      rows: reliabilityRows, current: work, days: reliabilityDays, history_days: represented, now: input.now,
+      ...(saved?.reliability == null ? {} : { saved: saved.reliability }),
+      floor: input.policy.reliability_floor, window: input.policy.reliability_window_days, onGap,
+      knownDay: day => input.days.find(value => value.day === day)?.complete === true
+        && !input.uses.feed_reliability.gaps.some(gap => gap.day === day
+          && (gap.identity === null || matches(gap.identity))
+          && (gap.identity === null || gap.code === "conflict"
+            || ["checked_at", "outcome", "items", "check_request_id"].includes(gap.field))),
+    });
+    if (conflicting("feed_reliability")) reliability.complete = false;
+    const articleRows = [...input.uses.article_admission.rows, ...currentAdmission].filter(row => row.feed_id === source.feed_id
       && row.endpoint_key === inputEndpointKey(endpoint) && reliabilityDays.includes(row.date));
     const articleKnown = fieldsComplete("article_admission", reliabilityDays, input.policy.reliability_window_days)
       && articleRows.every(row => row.counts_complete && row.article_candidates !== null);
@@ -70,15 +98,9 @@ export function summarizePlanningHealth(input: {
       .reduce((count, reason) => count + reason.count, 0), 0);
     sources.set(source.feed_id, {
       endpoint_key: inputEndpointKey(endpoint),
-      lifecycle: source.status === "retired" ? "retired" : "unknown",
-      strikes: null, rested_runs: null,
+      ...lifecycle, lifecycle: source.status === "retired" ? "retired" : availability,
       article_pass_rate: articleKnown && admitted + refused > 0 ? admitted / (admitted + refused) : null,
-      reliability: measured.length === 0 ? null : {
-        productive, attempted: measured.length,
-        ...feedReliability(productive, measured.length, input.policy.reliability_floor),
-        from_day: reliabilityDays[0] ?? null, through_day: reliabilityDays.at(-1) ?? null,
-        complete: fieldsComplete("feed_reliability", reliabilityDays, input.policy.reliability_window_days),
-      },
+      reliability,
     });
   }
   return { sources, represented_days: represented };
@@ -89,7 +111,7 @@ export function captureHealthRows(rows: readonly FeedHealthStateRow[], sources: 
     const observed = sources.get(row.feed_id);
     if (observed === undefined || observed.endpoint_key !== row.endpoint_key) throw new Error("Health capture does not match its configured feed endpoint");
     return FeedHealthStateRowSchema.parse({
-      ...row, availability: observed.lifecycle, strikes: observed.strikes, rested_runs: observed.rested_runs,
+      ...row, ...projectLifecycleFields(observed),
       reliability: observed.reliability,
     });
   });

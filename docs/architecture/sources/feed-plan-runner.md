@@ -1,6 +1,6 @@
 # Running the isolated feed planner
 
-**Last Updated**: 2026-10-30
+**Last Updated**: 2026-10-31
 
 How do the API and CLI execute one real feed plan?
 Both compose the same units. The production Python news pipeline, digest
@@ -60,7 +60,7 @@ killing only its owned child. Defaults allow 30 seconds for readiness, 10 second
 for drain and 5 seconds to confirm forced exit. The child also applies its own
 drain bound if its supervisor disappears. No process is detached, no process
 name is used for cleanup, and runner process tracking remains enabled.
-`POST /api/2026-10-20/plan` accepts optional numeric `article_limit`, `shards`,
+`POST /api/2026-10-31/plan` accepts optional numeric `article_limit`, `shards`,
 a configured partition strategy, and `institutional_age_hours`,
 `trade_press_age_hours`, `community_age_hours` arrays. Each age array is a
 strictly increasing nonempty list of positive hours. Unknown fields, strings in numeric API
@@ -100,18 +100,19 @@ Elapsed duration comes from the monotonic process clock, not wall-clock
 subtraction. A restarted standalone chain records unavailable total duration
 as null.
 
-The [shared health operation](planner-feed-history.md) captures pre-fetch
-rest evidence and refreshes current feedback before selection. Its complete
+The [shared health operation](planner-feed-history.md) captures saved calculations
+before fetching and applies this run's actual work before selection and finish. Its complete
 measured cost belongs in `plan-runs`, without per-candidate history reads
-or a persistent summary cache.
+or a separate persisted summary cache. The captured calculations are reused
+across the run's HTTP calls.
 New timing entries name these purposes `feed-health-before-fetch` and
 `feed-health-for-selection`. Their names, not their positions, identify them.
 Selected publication fallback uses the same saved selection-start instant,
 after admission; the older saved age clock and first sight are unchanged.
-Current endpoint eligibility is separate from that compactable history. The
-[durable availability state](feed-availability.md) is reserved before each
-feed request, published with exact-baseline Git CAS and restored from current
-`origin/main` on later invocations.
+Current endpoint eligibility uses supported
+[health-ledger calculations](feed-availability.md). Unknown availability alone
+does not block an active feed. There are no shared reservations or availability
+commits before final delivery.
 
 ## Concurrency and ownership
 

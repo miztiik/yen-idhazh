@@ -16,7 +16,8 @@ import type { DocumentState } from "./document-state";
 import { stageStore } from "./stage-store";
 import { plannerMemory } from "../planner-memory";
 import { rememberDiscoveries } from "../read-ledger-history/read-discovered-evidence";
-import { readFeedAvailability } from "../availability/feed-availability";
+import { summarizeFeedAvailability } from "../availability/feed-availability-view";
+import { utcTimestamp } from "../harvest-feeds/harvest-types";
 import { recordHarvestFailures } from "../record-harvest-failures";
 import { CompletedCollectionSchema } from "./collection-contracts";
 import type { z } from "zod";
@@ -81,7 +82,11 @@ export async function beginCollection(raw: unknown, inputs: PlanInputs, runtime:
   try { state = await documentState(record, inputs, runtime, store); }
   finally { store.close(); }
   state.plan_owned = true;
-  const availability = await readFeedAvailability(inputs, new Date().toISOString());
+  const preflightAt = utcTimestamp(runtime.observation_clock);
+  const availability = summarizeFeedAvailability(state.history.sources, preflightAt, inputs.harvest.sources);
+  for (const source of inputs.harvest.sources.filter(source => source.status === "active")) {
+    state.work.carryFeed(source.id, preflightAt);
+  }
   const eligible = new Set(availability.eligible_feed_ids);
   const feeds = new Map(inputs.harvest.sources.filter(source => source.status === "active" && eligible.has(source.id))
     .map(source => [source.id, { state: "pending" as const, batch_id: null }]));

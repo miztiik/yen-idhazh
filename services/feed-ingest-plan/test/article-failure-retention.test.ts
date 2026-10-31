@@ -8,7 +8,7 @@ import { FeedHealthStateRowContract, RejectedArticleRowContract, RejectedArticle
 import { readPlannerParquet } from "../src/read-ledger-history/read-planner-parquet";
 import { runFeedPlan } from "../src/run-feed-plan";
 import { recordedPlan } from "./plan-recordings";
-import { createPlanApp } from "../src/api/server";
+import { createPlanTestServer } from "./plan-test-server";
 import { deriveArticleIdentity } from "../src/harvest-feeds/article-identity";
 
 async function failureCases() {
@@ -162,13 +162,13 @@ test("standalone fetch retains a terminal row outside its private receipt and re
   recorded.transport.recordings.responses["https://news.example/robots.txt"] = [{
     status: 200, body: "User-agent: *\nDisallow: /\n",
   }];
-  const app = createPlanApp(recorded.inputs, recorded.runtime);
+  const app = createPlanTestServer(recorded.inputs, recorded.runtime);
   try {
     const body = JSON.stringify({
       request_id: randomUUID(), correlation_id: randomUUID(), feed_id: "recorded-news",
       fetch_item_type: "article", url: "https://news.example/not-found",
     });
-    const request = () => app.request("/api/2026-10-20/fetch", {
+    const request = () => app.request("/api/2026-10-31/fetch", {
       method: "POST", headers: { "content-type": "application/json" }, body,
     });
     expect((await request()).status).toBe(200);
@@ -182,16 +182,16 @@ test("standalone fetch retains a terminal row outside its private receipt and re
     expect(rows).toHaveLength(1);
     expect(rows[0]).toMatchObject({ http_status: 404, fetch_failure: "http", robots: "denied",
       robots_http_status: 200, robots_failure: null });
-  } finally { app.close(); await recorded.close(); }
+  } finally { await app.close(); await recorded.close(); }
 });
 
 test("standalone extraction retains its observed response and repeated parsing adds no extra row", async () => {
   const recorded = await recordedPlan();
-  const app = createPlanApp(recorded.inputs, recorded.runtime);
+  const app = createPlanTestServer(recorded.inputs, recorded.runtime);
   try {
     const fetchId = randomUUID();
     const correlation = randomUUID();
-    const post = (operation: string, value: unknown) => app.request(`/api/2026-10-20/${operation}`, {
+    const post = (operation: string, value: unknown) => app.request(`/api/2026-10-31/${operation}`, {
       method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(value),
     });
     const response = await post("fetch", {
@@ -215,5 +215,5 @@ test("standalone extraction retains its observed response and repeated parsing a
       stage: "harvest-feeds", reason_code: "EXTRACT_EMPTY", http_status: 200,
       fetch_failure: null, robots: "allowed", robots_http_status: 200,
     });
-  } finally { app.close(); await recorded.close(); }
+  } finally { await app.close(); await recorded.close(); }
 });

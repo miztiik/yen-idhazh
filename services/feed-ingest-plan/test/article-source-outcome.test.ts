@@ -204,7 +204,9 @@ test("measured quality rejection stays unresolved and is counted once without a 
   expect(row.rejection_counts.some(value => value.subject === "article" && value.attribution === "feed")).toBe(false);
 });
 
-test("the source rate stays eight out of ten when only three articles are selected", () => {
+test("the source rate stays eight out of ten when only three articles are selected", async () => {
+  const { readLifecyclePolicy } = await import("./health-field-fixtures");
+  const lifecycle_policy = await readLifecyclePolicy();
   const { context, source, at } = recording();
   const captures = Array.from({ length: 10 }, (_, index) => ({
     id: randomUUID(), outcome: SourceArticleOutcomeSchema.parse(index < 8
@@ -222,7 +224,7 @@ test("the source rate stays eight out of ten when only three articles are select
     uses: projectFeedHealthFields(context.date, facts),
     days: [{ day: context.date, complete }], sources: [source], now: at,
     policy: { reliability_window_days: 1, reliability_floor: 0 },
-    lifecycle_window_days: 1,
+    lifecycle_window_days: 1, lifecycle_policy,
   }).sources.get(source.feed_id)!;
   expect(rows[0]!.article_candidates).toBe(8);
   expect(rows[0]!.rejection_counts.reduce((total, reason) => total + reason.count, 0)).toBe(2);

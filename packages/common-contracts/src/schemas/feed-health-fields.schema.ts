@@ -1,6 +1,6 @@
 /** Which stored health fields does each independent history use require? */
 import { z } from "zod";
-import { FeedHealthStateRowSchema } from "./feed-health-state.schema";
+import { FeedHealthStateRowSchema, FeedLifecycleFieldsSchema } from "./feed-health-state.schema";
 import { reject } from "./primitives";
 
 export const FeedHealthIdentitySchema = z.object(FeedHealthStateRowSchema.shape).pick({
@@ -23,8 +23,17 @@ function checkWorkDay(value: { date: string; checked_at: string | null }, ctx: z
 const readFields = {
   ...identity, checked_at: health.checked_at, outcome: health.outcome, items: health.items,
 };
-export const FeedHealthRestFieldsSchema = z.object(readFields).superRefine(checkWorkDay);
-export const FeedHealthReliabilityFieldsSchema = z.object(readFields).superRefine(checkWorkDay);
+export const FeedHealthReadFieldsSchema = z.object({
+  ...readFields, check_request_id: health.check_request_id,
+}).superRefine(checkWorkDay);
+export const FeedHealthRestFieldsSchema = z.object({
+  ...readFields, ...FeedLifecycleFieldsSchema.shape,
+  check_request_id: health.check_request_id, check_result: health.check_result, status: health.status,
+}).superRefine(checkWorkDay);
+export const FeedHealthReliabilityFieldsSchema = z.object({
+  ...readFields, check_request_id: health.check_request_id,
+  availability_updated_at: health.availability_updated_at, reliability: health.reliability,
+}).superRefine(checkWorkDay);
 export const FeedHealthAdmissionFieldsSchema = z.object({
   ...identity, article_candidates: health.article_candidates,
   counts_complete: health.counts_complete,

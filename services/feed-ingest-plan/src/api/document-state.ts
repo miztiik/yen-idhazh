@@ -126,7 +126,7 @@ export async function documentState(record: PlannerOperation, inputs: PlanInputs
     }
     if (state.recovered.has(saved.request_id)) continue;
     state.work.restoreRequests(artifact);
-    if (artifact.fetch_item_type === "feed") state.work.pendingFeed(artifact.feed_id, artifact, artifact.observation.occurred_at);
+    if (artifact.fetch_item_type === "feed") state.work.pendingFeed(artifact.feed_id, artifact, artifact.observation.occurred_at, saved.request_id);
     state.recovered.add(saved.request_id);
   }
   return state;

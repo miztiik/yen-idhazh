@@ -26,7 +26,8 @@ async function readFeedHistory(input: Parameters<typeof readPlanningHistory>[0])
 function work(day = "2026-10-20", patch: Partial<FeedHealthStateRow> = {}) {
   const seed = plannerRecordings(day).find(record => record.name === "feed-health-state")!;
   return FeedHealthStateRowSchema.parse({
-    ...seed.row, feed_id: "recorded-news", endpoint_key: endpointKey("https://news.example/feed.xml"), ...patch,
+    ...seed.row, feed_id: "recorded-news", endpoint_key: endpointKey("https://news.example/feed.xml"),
+    availability: "unknown", strikes: null, availability_updated_at: null, availability_complete: false, ...patch,
   });
 }
 async function input() {
@@ -38,6 +39,7 @@ async function input() {
   });
   return {
     loaded, sources: [source], now, policy: loaded.clock_config.collect, ...loaded.harvest.config.feedback,
+    lifecycle_policy: loaded.harvest.config.availability,
   };
 }
 function summarize(setup: Awaited<ReturnType<typeof input>>, rows: FeedHealthStateRow[],
@@ -54,8 +56,10 @@ function summarize(setup: Awaited<ReturnType<typeof input>>, rows: FeedHealthSta
     projectFeedHealthFields(day, settled.filter(row => row.date === day)));
   return {
     ...summarizePlanningHealth({ ...request, uses: {
-      feed_rest: { rows: projections.flatMap(use => use.feed_rest.rows), gaps: projections.flatMap(use => use.feed_rest.gaps) },
-      feed_reliability: { rows: projections.flatMap(use => use.feed_reliability.rows), gaps: projections.flatMap(use => use.feed_reliability.gaps) },
+      feed_rest: { rows: projections.flatMap(use => use.feed_rest.rows),
+        partial_rows: projections.flatMap(use => use.feed_rest.partial_rows), gaps: projections.flatMap(use => use.feed_rest.gaps) },
+      feed_reliability: { rows: projections.flatMap(use => use.feed_reliability.rows),
+        partial_rows: projections.flatMap(use => use.feed_reliability.partial_rows), gaps: projections.flatMap(use => use.feed_reliability.gaps) },
       article_admission: { rows: projections.flatMap(use => use.article_admission.rows), gaps: projections.flatMap(use => use.article_admission.gaps) },
     } }),
     request_report: summarizeRequestReport({ ...request, rows: settled, days: request.request_days }),
@@ -92,7 +96,7 @@ test("closed request spend sums distinct attempts once without adding captured r
     feed_id: "recorded-news", feed_requests: 6, article_requests: 12, robots_requests: 0, counts_complete: true,
   });
   expect(result.sources.get("recorded-news")!.reliability).toMatchObject({
-    productive: 1, attempted: 2, success_fraction: 0.5, production_factor: 0.5, complete: false,
+    productive: 99, attempted: 100, success_fraction: 0.99, production_factor: 0.99, complete: false,
   });
 });
 
@@ -114,13 +118,13 @@ test("represented-day reliability excludes skips and honors its floor rather tha
     attempted: 2, productive: 0, from_day: "2026-01-01", production_factor: 0.8, complete: true,
   });
   const denied = summarize(setup, [work(undefined, { outcome: "robots_denied", items: 0, permission: "denied" })]);
-  expect(denied.sources.get("recorded-news")!.reliability).toBeNull();
+  expect(denied.sources.get("recorded-news")!.reliability).toMatchObject({ productive: null, attempted: null });
 });
 
 test("missing work, nullable counters and partial days never become measured zero or perfect reliability", async () => {
   const setup = await input();
   const unavailable = summarize(setup, [], { days: [], request_days: [] });
-  expect(unavailable.sources.get("recorded-news")!.reliability).toBeNull();
+  expect(unavailable.sources.get("recorded-news")!.reliability).toMatchObject({ productive: null, attempted: null, complete: false });
   expect(unavailable.sources.get("recorded-news")!.lifecycle).toBe("unknown");
   expect(unavailable.request_report).toMatchObject({ complete: false, feeds: [{
     counts_complete: false, article_requests: null, feed_requests: null, robots_requests: null,
@@ -129,7 +133,7 @@ test("missing work, nullable counters and partial days never become measured zer
     counts_complete: false, article_requests: null, feed_requests: 0, robots_requests: 0,
     checked_at: null, outcome: null, items: null,
   })]);
-  expect(unknown.sources.get("recorded-news")!.reliability).toBeNull();
+  expect(unknown.sources.get("recorded-news")!.reliability).toMatchObject({ productive: null, attempted: null });
   expect(unknown.request_report.feeds[0]).toMatchObject({ counts_complete: false, article_requests: null, feed_requests: 0 });
   const partial = summarize(setup, [work()], {
     request_days: closedRequestDays(now, 7).map(day => ({ day, complete: day !== "2026-10-18" })),
@@ -172,9 +176,9 @@ test("historical timestamps cannot decide current endpoint availability", async 
   }
 });
 
-test("neither complete nor incomplete history replaces durable availability state", async () => {
+test("complete coverage alone does not invent a lifecycle decision without supported logical checks", async () => {
   const setup = await input();
-  const rows = Array.from({ length: setup.loaded.availability.consecutive_failed_checks_before_rest }, (_, index) =>
+  const rows = Array.from({ length: setup.loaded.harvest.config.availability.consecutive_failed_checks_before_rest }, (_, index) =>
     work(undefined, {
       run_id: `2026-10-20-${index + 1}`,
       checked_at: `2026-10-20T06:00:0${index}Z`,
@@ -188,7 +192,7 @@ test("neither complete nor incomplete history replaces durable availability stat
     days: days.map(day => day.day === "2026-10-19" ? { ...day, complete: false } : day),
   });
   expect(partial.sources.get("recorded-news")).toMatchObject({
-    lifecycle: "unknown", strikes: null, rested_runs: null,
+    lifecycle: "unknown", strikes: null, availability_complete: false,
   });
 });
 
@@ -197,7 +201,8 @@ test("a changed feed URL inherits neither the old endpoint reliability nor its r
   const source = { ...setup.sources[0]!, feed_url: "https://news.example/changed.xml" };
   const result = summarize(setup, [work()], { sources: [source] });
   expect(result.sources.get(source.feed_id)).toMatchObject({
-    endpoint_key: endpointKey(source.feed_url), lifecycle: "unknown", strikes: null, rested_runs: null, reliability: null,
+    endpoint_key: endpointKey(source.feed_url), lifecycle: "unknown", strikes: null, availability_complete: false,
+    reliability: { productive: null, attempted: null, complete: false },
   });
   expect(result.request_report.feeds[0]).toMatchObject({
     feed_requests: 0, article_requests: 0, robots_requests: 0, counts_complete: true,

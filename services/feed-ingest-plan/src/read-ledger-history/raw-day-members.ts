@@ -25,6 +25,11 @@ export async function fixedHistoryRevision(repository: string) {
   if (!/^[0-9a-f]{40}$/.test(revision)) throw new LedgerHistoryReadError("Invalid history revision");
   return revision;
 }
+export async function captureRemoteHistoryRevision(repository: string) {
+  await git(repository, ["fetch", "--quiet", "--no-tags", "origin", "main"]);
+  const revision = await git(repository, ["rev-parse", "--verify", "FETCH_HEAD^{commit}"]);
+  return verifiedHistoryRevision(repository, revision);
+}
 
 export async function verifiedHistoryRevision(repository: string, revision: string) {
   if (!/^[0-9a-f]{40}$/.test(revision) || await git(repository, ["cat-file", "-t", revision]) !== "commit") {

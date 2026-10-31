@@ -17,7 +17,7 @@ import { fixtureGit } from "./publication-recordings";
 const shape = FeedHealthStateRowSchema.shape;
 const schema = z.object(shape);
 
-test("field readers accept compatible columns while full readers and writers require an accepted stamp", async () => {
+test("field readers and full readers refuse old stamps while current-format fields remain independent", async () => {
   const root = await mkdtemp(join(tmpdir(), "health-field-stamps-"));
   try {
     const { row, written } = await healthFieldFixture(root);
@@ -29,13 +29,9 @@ test("field readers accept compatible columns while full readers and writers req
         day: row.date, raw_files: [written.files[0]!.path],
       };
       const read = await readFeedHealthFieldsDay(root, registration("feed-health-state"), input, cache);
-      expect(read.complete).toBe(true);
-      for (const use of Object.values(read.uses)) {
-        expect(use.rows).toHaveLength(1);
-        expect(use.gaps).toEqual([]);
-        expect(use.partial_rows).toEqual([]);
-      }
       if (!FeedHealthStateRowContract.acceptedSchemaVersions.some(accepted => accepted === stamp)) {
+        expect(read.complete).toBe(false);
+        for (const use of Object.values(read.uses)) expect(use.rows).toEqual([]);
         expect((await readPlannerDay<Record<string, unknown>>(root, registration("feed-health-state"),
           input, FeedHealthStateRowContract, cache)).complete).toBe(false);
         await expect(readPlannerParquet(path, "feed-health-state", FeedHealthStateRowContract)).rejects.toThrow();
@@ -45,6 +41,12 @@ test("field readers accept compatible columns while full readers and writers req
           period: { tier: "raw", covers: row.date }, rows: [row], updatedAt: row.checked_at!,
         })).rejects.toThrow();
       } else {
+        expect(read.complete).toBe(true);
+        for (const use of Object.values(read.uses)) {
+          expect(use.rows).toHaveLength(1);
+          expect(use.gaps).toEqual([]);
+          expect(use.partial_rows).toEqual([]);
+        }
         expect((await readPlannerDay<Record<string, unknown>>(root, registration("feed-health-state"),
           input, FeedHealthStateRowContract, cache)).complete).toBe(true);
         expect((await readPlannerParquet(path, "feed-health-state", FeedHealthStateRowContract)).rows).toEqual([row]);
@@ -58,7 +60,7 @@ test("field readers accept compatible columns while full readers and writers req
   } finally { await rm(root, { recursive: true, force: true }); }
 });
 
-test("unrelated missing, added and retyped columns do not change any health use", async () => {
+test("missing, added and retyped columns affect only the uses that require them", async () => {
   const root = await mkdtemp(join(tmpdir(), "health-field-columns-"));
   try {
     const { row, written } = await healthFieldFixture(root);
@@ -78,9 +80,11 @@ test("unrelated missing, added and retyped columns do not change any health use"
       day: row.date, raw_files: [written.files[0]!.path],
     });
     expect(read.complete).toBe(true);
-    for (const use of Object.values(read.uses)) expect(use.gaps).toEqual([]);
+    for (const use of [read.uses.request_totals, read.uses.article_admission]) expect(use.gaps).toEqual([]);
+    expect(read.uses.feed_rest.gaps).toEqual([expect.objectContaining({ field: "status", code: "invalid" })]);
+    expect(read.uses.feed_reliability.gaps).toEqual([expect.objectContaining({ field: "reliability", code: "missing" })]);
     expect(read.uses.request_totals.rows[0]).toMatchObject({ feed_requests: 2, article_requests: 4, robots_requests: 0 });
-    expect(read.uses.feed_reliability.rows[0]).toMatchObject({ outcome: "ok", items: 4 });
+    expect(read.uses.feed_reliability.partial_rows[0]).toMatchObject({ outcome: "ok", items: 4 });
     await expect(readPlannerParquet(path, "feed-health-state", FeedHealthStateRowContract)).rejects.toThrow();
     await rewriteHealthFields(path, [{ ...stored, detail: { label: "tampered", readings: [0.25, 0.5] } }], variant,
       { preserve_digest: true });
@@ -186,7 +190,7 @@ test("captured raw and compact members share field-based reading and duplicate p
     const compact = await compactRows(join(root, "state"), "feed-health-state", row.date,
       FeedHealthStateRowContract, [row], "monthly", root);
     const path = compact.path!;
-    await rewriteHealthFields(path, [row], schema, { stamp: "2027-01-01" });
+    await rewriteHealthFields(path, [row], schema);
     const paths = [relative(root, path).replaceAll("\\", "/"), ...written.files.map(file => `state/${file.path}`)];
     await commitFixtureFiles(root, paths);
     const read = async () => readFeedHealthFieldsDay(root, registration("feed-health-state"), {
@@ -200,7 +204,9 @@ test("captured raw and compact members share field-based reading and duplicate p
     }
     await rewriteHealthFields(path, [{ ...row, feed_requests: 9 }], schema);
     await commitFixtureFiles(root, [paths[0]!]);
-    await expect(read()).rejects.toThrow("Conflicting copies");
+    const conflicting = await read();
+    expect(conflicting.uses.feed_rest.rows).toEqual([]);
+    expect(conflicting.uses.feed_rest.gaps).toContainEqual(expect.objectContaining({ code: "conflict" }));
   } finally { await rm(root, { recursive: true, force: true }); }
 }, 30_000);
 
@@ -212,10 +218,11 @@ test("duplicates compare actual stored fields before projection and retain endpo
     const read = () => readFeedHealthFieldsDay(root, registration("feed-health-state"), {
       day: row.date, raw_files: [written.files[0]!.path],
     });
-    await rewriteHealthFields(path, [row, row, { ...row, attempt: 2 }, { ...row, endpoint_key: "2".repeat(64) }], schema);
+    await rewriteHealthFields(path, [row, row, { ...row, attempt: 2, check_request_id: randomUUID() },
+      { ...row, endpoint_key: "2".repeat(64), check_request_id: randomUUID() }], schema);
     expect((await read()).uses.request_totals.rows).toHaveLength(3);
     await rewriteHealthFields(path, [row, { ...row, permission: "denied" }], schema);
-    await expect(read()).rejects.toThrow("Conflicting copies");
+    expect((await read()).uses.feed_rest.gaps).toContainEqual(expect.objectContaining({ code: "conflict" }));
     const invalid = schema.omit({ attempt: true }).parse(row);
     await rewriteHealthFields(path, [invalid], schema.omit({ attempt: true }));
     const gap = await read();

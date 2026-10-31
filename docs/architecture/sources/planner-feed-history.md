@@ -1,9 +1,9 @@
 # Feed history used by the TypeScript planner
 
-**Last Updated**: 2026-10-30
+**Last Updated**: 2026-10-31
 
 Which saved observations can change feed rest and measured reliability?
-The isolated planner reads compatible required `feed-health-state` fields and its
+The isolated planner reads current-format required `feed-health-state` fields and its
 planner-owned `discovered-articles` ledger. The native Python `seen` ledger
 remains separate and is not the planner's discovery source.
 The global Python `feed-health` ledger and public health JSON remain separate
@@ -50,9 +50,12 @@ logical feed check or pad days outside named evidence. Known-empty daily
 entries remain outside lifecycle/reliability membership.
 
 Within a capture, index and Parquet caches prevent reopening one compact file
-for each day it represents. A new selection capture reads current named
-evidence and finalized in-memory facts, rather than reusing a saved parsed
-batch's old health. The age clock remains separate from this feedback clock.
+for each day it represents. The workflow fetches current remote main once and
+stages raw and compact input from that same revision without changing source
+code or committing data. One boundary day is retained for known rolling-window
+adjustments. A run reuses its captured calculations across HTTP stages and
+applies actual current work at selection and finish. The age clock remains
+separate from this feedback clock.
 New parsed batches retain the existing `history_rows` field as an empty list;
 historical rows need not satisfy the current full-row format to cross a stage.
 Selection reads current field-based evidence instead of that saved list.
@@ -74,10 +77,9 @@ floor to the original fraction before truncation, so a floor of `0.5005`
 can save numeric `0.5`. JSON numbers do not retain trailing zeros.
 Both values come from the original integer counts; article-pass rates,
 selection scores and semantic similarity retain their own precision.
-No general precision setting is introduced. Existing `2026-10-27` health
-files remain readable unchanged, including their longer fractions; current
-files use `2026-10-30`. Compaction preserves saved values rather than rounding
-history again.
+No general precision setting is introduced. Current health files use `2026-10-31`. Earlier health formats remain on disk
+but refuse with a diagnostic. Current-format field gaps are partial evidence,
+not a migration. Compaction preserves saved values rather than rounding them again.
 Uncertain time order remains uncertain under
 [the recorded-instant contract](../contracts/recorded-instants.md).
 
@@ -96,11 +98,13 @@ article-admission count. Required-field gaps remain specific to their
 calculation and endpoint. Invalid identity cannot be attributed and makes
 that calculation incomplete for all configured feeds on the affected day.
 
-Lifecycle is known only when the full configured represented-day window is
-complete. A failure streak in a partial window cannot prove that no later
-success or rest cycle is missing, so the lifecycle stays unknown until the
-bounded window is complete. Complete histories retain the existing rest and
-retry rules.
+Supported saved lifecycle and reliability calculations are read directly.
+Only a missing or unusable calculation invokes bounded recovery of its own
+required facts. Supported nulls and zeroes are retained. A missing unrelated
+column or sibling file cannot erase a supported individual deadline.
+Unknown availability alone does not block an active feed.
+The [lifecycle contract](feed-availability.md) owns timed rest, recovery,
+empty-feed reset and proven retirement.
 
 ## Curated retirement and external outcomes
 
@@ -128,9 +132,10 @@ Only active configured feeds may fetch. The separate retired-source list
 does not add live reads. A changed endpoint key cannot inherit the former
 URL's reliability, rest or request spend.
 
-Permanent retirement remains a curated source setting. HTTP 410 can
-contribute to temporary rest but creates no second permanent-retirement
-store. The planner does not modify the global Python retirement machinery.
+Catalog retirement remains a curated source setting. The planner can also
+save a proven retirement decision in its existing health ledger when both
+configured recovery gates hold. It does not create another retirement store
+or modify the separate Python retirement machinery.
 
 Publication exclusions and publisher exposure use genuine external published
 and item-health evidence. Selected articles are not publication evidence.
@@ -138,11 +143,11 @@ Unknown publisher identities and missing linkage stay explicit.
 
 ## Design rationale
 
-File caches are bounded to one capture. Reusing them across selection instants
-would hide a late old-date file or a UTC window change. The pre-fetch capture
-governs rest; a later selection capture includes finished work and newly
-finalized evidence. Both costs belong in the run's measured health-summary
-time, without a persistent cache or benchmark gate.
+File caches and saved calculations belong to one captured run input. Other
+runs can publish later without changing that run's decisions. Actual completed
+work updates its own calculations once. Rolling-window changes use only known
+entering and leaving contributions; unsupported changes stay incomplete and
+do not relabel an old measurement's dates.
 
 Request reporting is independent of planning evidence. A damaged report-only
 day must not prevent a feed fetch, a document parse or current-run request

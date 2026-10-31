@@ -47,8 +47,10 @@ export async function readHealthCapture(
   return {
     days: days.sort((a, b) => a.day.localeCompare(b.day)), request_days,
     uses: {
-      feed_rest: { rows: uses.flatMap(use => use.feed_rest.rows), gaps: uses.flatMap(use => use.feed_rest.gaps) },
-      feed_reliability: { rows: uses.flatMap(use => use.feed_reliability.rows), gaps: uses.flatMap(use => use.feed_reliability.gaps) },
+      feed_rest: { rows: uses.flatMap(use => use.feed_rest.rows),
+        partial_rows: uses.flatMap(use => use.feed_rest.partial_rows), gaps: uses.flatMap(use => use.feed_rest.gaps) },
+      feed_reliability: { rows: uses.flatMap(use => use.feed_reliability.rows),
+        partial_rows: uses.flatMap(use => use.feed_reliability.partial_rows), gaps: uses.flatMap(use => use.feed_reliability.gaps) },
       article_admission: { rows: uses.flatMap(use => use.article_admission.rows), gaps: uses.flatMap(use => use.article_admission.gaps) },
       request_totals: {
         rows: uses.flatMap(use => use.request_totals.rows),

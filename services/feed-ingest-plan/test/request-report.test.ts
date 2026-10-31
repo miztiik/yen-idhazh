@@ -10,6 +10,7 @@ import { runFeedPlan, summarizePlan } from "../src/run-feed-plan";
 import { recordedPlan } from "./plan-recordings";
 import { executeFeedHealthState } from "../src/api/feed-health-state-operation";
 import { escapeMarkdown } from "../src/reporting/markdown-format";
+import { randomUUID } from "node:crypto";
 
 async function fixture() {
   const source = SourceSnapshotSchema.parse({
@@ -39,9 +40,10 @@ test("sums each usable counter across full and partial records without double co
   const { row, report } = await fixture();
   const { article_requests: _missing, ...partial } = row;
   const result = report([
-    row, row, { ...row, attempt: 2, article_requests: null },
-    { ...partial, attempt: 3 }, { ...row, attempt: 4, article_requests: -1 },
-    { ...row, attempt: 5, endpoint_key: "2".repeat(64), article_requests: 100 },
+    row, row, { ...row, attempt: 2, check_request_id: randomUUID(), article_requests: null },
+    { ...partial, attempt: 3, check_request_id: randomUUID() },
+    { ...row, attempt: 4, check_request_id: randomUUID(), article_requests: -1 },
+    { ...row, attempt: 5, check_request_id: randomUUID(), endpoint_key: "2".repeat(64), article_requests: 100 },
     { ...row, date: "2026-10-26", run_id: "2026-10-26-1", article_requests: 200 },
     { ...row, date: "2026-10-23", run_id: "2026-10-23-1", article_requests: 400 },
   ]);
@@ -55,7 +57,9 @@ test("sums each usable counter across full and partial records without double co
       robots_requests: { status: "complete", known_records: 4 },
     },
   });
-  expect(() => report([row, { ...row, permission: "denied" }])).toThrow("Conflicting copies");
+  expect(report([row, { ...row, permission: "denied" }])).toMatchObject({
+    complete: false, feeds: [{ counts_complete: false, feed_requests: null, article_requests: null }],
+  });
   const rendered = renderRequestReport(result);
   expect(rendered.markdown).toContain("| 4* | 8 | 0 | Partial |");
   expect(Bun.markdown.html(rendered.markdown)).toContain("<td>4*</td>");
@@ -119,7 +123,7 @@ test("sorts request rows by article requests, feed requests, then name with unkn
     { feed_id: "most-articles", feed_requests: 2, article_requests: 5 },
     { feed_id: "most-feeds", feed_requests: 3, article_requests: 0 },
   ];
-  const request_report = report(cases.map(value => ({ ...row, ...value })), {
+  const request_report = report(cases.map(value => ({ ...row, ...value, check_request_id: randomUUID() })), {
     sources: cases.map(value => ({ ...source, feed_id: value.feed_id })),
   });
   const before = structuredClone(request_report);

@@ -83,7 +83,7 @@ export async function invokePlannerHttp(
         throw new PlanError("PLANNER_READY_IDENTITY", "Readiness does not match the owned child and invocation");
       }
       const hostname = inputs.settings.listener.hostname;
-      const base = `http://${hostname === "::1" ? "[::1]" : hostname}:${ready.port}/api/2026-10-20`;
+      const base = `http://${hostname === "::1" ? "[::1]" : hostname}:${ready.port}/api/2026-10-31`;
       await fetch(`${base}/health`, { signal }).then(async response => {
         const body = z.object({ identity: PlannerReadySchema, planner_enabled: z.boolean() }).parse(await response.json());
         if (response.status !== 200 || body.planner_enabled !== true

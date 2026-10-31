@@ -29,9 +29,8 @@ import { resolveArticleSourceOutcome } from "../article-source-outcome";
 import type { SourceArticleOutcome } from "@idhazh/common-contracts";
 import { createStageLogger } from "../logging/structured-logger";
 import { recordDocumentRejections } from "./record-document-rejections";
-import {
-  completeFeedCheck, feedFetchFailureResult, markFeedCheckUnknown, reserveFeedCheck,
-} from "../availability/feed-availability";
+import { resolveFeedEligibility } from "../availability/feed-lifecycle";
+import { projectLifecycleFields } from "../health-row";
 import { collectionFeedRequest } from "./collection-operation";
 
 type FetchRequest = z.infer<typeof FetchRequestSchema>;
@@ -87,9 +86,9 @@ export async function fetchDocument(
     observed_run_id: record.run_id, observed_attempt: state.context.writer.attempt, candidate_id: parent?.offer.offer_id ?? null,
   });
   if (request.fetch_item_type === "feed") {
-    await reserveFeedCheck(inputs, source, {
-      request_id: record.request_id, run_id: record.run_id, attempt: state.context.writer.attempt,
-    }, utcTimestamp(runtime.observation_clock));
+    const status = resolveFeedEligibility(projectLifecycleFields(state.history.sources.get(source.id)), utcTimestamp(runtime.observation_clock));
+    if (status === "retired") throw new PlanError("FEED_RETIRED", "Supported evidence retires this feed", "feed_id");
+    if (status === "resting") throw new PlanError("FEED_RESTING", "Feed is resting until its supported UTC recovery deadline", "feed_id");
   }
   if (request.fetch_item_type === "article") {
     const exclusions = await documentExclusions(state, inputs);
@@ -123,23 +122,14 @@ export async function fetchDocument(
     });
   } catch (error) {
     if (request.fetch_item_type === "feed") {
-      await markFeedCheckUnknown(inputs, source, {
-        request_id: record.request_id, run_id: record.run_id,
-      }, utcTimestamp(runtime.observation_clock));
+      state.work.interruptFeed(source.id, record.request_id, utcTimestamp(runtime.observation_clock));
     }
     throw error;
   }
   const { fetched, observation } = result;
   state.recovered.add(record.request_id);
   if (request.fetch_item_type === "feed") {
-    state.work.pendingFeed(source.id, fetched, observation.occurred_at);
-    if (fetched.failure !== null || fetched.body === null) {
-      await completeFeedCheck(inputs, source, {
-        request_id: record.request_id, run_id: record.run_id, attempt: state.context.writer.attempt,
-        completed_at: observation.occurred_at, result: feedFetchFailureResult(fetched),
-        http_status: fetched.http_status,
-      });
-    }
+    state.work.pendingFeed(source.id, fetched, observation.occurred_at, record.request_id);
   }
   let sourceOutcome: SourceArticleOutcome | null = null;
   if (request.fetch_item_type === "article" && fetched.body === null) {

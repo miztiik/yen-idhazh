@@ -9,7 +9,6 @@ import { RecordedTransport, contentFilterPage, inputs, readContentFilters, readR
 import type { ConfiguredSource } from "../src/harvest-feeds/load-harvest-inputs";
 import type { FeedIngestEvent } from "@idhazh/common-contracts";
 import type { PlanRuntime } from "../src/run-feed-plan";
-import { readFeedAvailability } from "../src/availability/feed-availability";
 
 async function git(directory: string, args: string[]) {
   const environment: Record<string, string | undefined> = { ...process.env };
@@ -70,7 +69,6 @@ export async function recordedPlan(sources: ConfiguredSource[] = [source()], pub
       observation_clock: () => new Date("2026-10-21T23:59:59.000Z"),
       boundary: { transport, resolve: transport.resolve }, log: event => { events.push(event); },
     };
-    await readFeedAvailability(context, runtime.observation_clock!().toISOString());
     return {
       inputs: context, runtime, transport, events, directory,
       close: () => removeRecordedDirectory(directory),

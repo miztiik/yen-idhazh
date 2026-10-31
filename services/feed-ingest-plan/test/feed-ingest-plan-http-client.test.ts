@@ -13,11 +13,13 @@ test("the client retains verified output and batch health while its caller keeps
   try {
     const directory = join(fixture.directory, "evidence");
     await mkdir(directory);
-    const base = `http://${fixture.inputs.settings.listener.hostname}:${server.port}/api/2026-10-20`;
+    const base = `http://${fixture.inputs.settings.listener.hostname}:${server.port}/api/2026-10-31`;
     const result = await requestPlannerHttp(base, fixture.inputs, { article_limit: 1 }, directory);
     expect(result.http_status).toBe(200);
     expect(result.summary.planning_complete).toBe(true);
-    expect(result.summary.selected_count).toBe(1);
+    expect(result.summary.selected_count, JSON.stringify({
+      summary: result.summary, failures: fixture.events.filter(event => event.phase === "failed"),
+    })).toBe(1);
     expect(result.outputs.planning_complete).toBe("true");
     expect(result.health?.rows).toHaveLength(1);
     expect(await Bun.file(join(directory, "response.json")).json()).toEqual(result.summary);
@@ -34,7 +36,7 @@ test("a disabled listener fails before planning and remains under its caller's c
   try {
     const directory = join(fixture.directory, "evidence");
     await mkdir(directory);
-    const base = `http://${fixture.inputs.settings.listener.hostname}:${server.port}/api/2026-10-20`;
+    const base = `http://${fixture.inputs.settings.listener.hostname}:${server.port}/api/2026-10-31`;
     await expect(requestPlannerHttp(base, fixture.inputs, {}, directory))
       .rejects.toThrow("Planner listener is not enabled and responsive");
     expect(fixture.transport.requests).toHaveLength(0);

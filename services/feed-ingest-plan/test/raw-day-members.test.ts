@@ -4,7 +4,7 @@ import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { DiscoveredArticleRowContract, FeedIngestEventSchema, PlanRunRowContract } from "@idhazh/common-contracts";
+import { DiscoveredArticleRowContract, FeedHealthStateRowContract, FeedIngestEventSchema, PlanRunRowContract } from "@idhazh/common-contracts";
 import { plannerRecordings } from "../../../packages/ledger-file-writer/test/planner-recordings";
 import { fixtureGit } from "./publication-recordings";
 import { registration, writeRows } from "./partition-fixtures";
@@ -15,6 +15,8 @@ import { PlannerDayInputSchema } from "../src/config/service-settings";
 import { loadPlanInputs } from "../src/load-plan-inputs";
 import { createStageLogger } from "../src/logging/structured-logger";
 import { randomUUID } from "node:crypto";
+import { inputEndpointKey } from "../src/read-ledger-history/health-summary";
+import { preparePlanningHealth } from "../src/api/prepare-planning-health";
 
 test("one revision proves absent days, every sibling and sparse staging without raw indexes", async () => {
   const root = await mkdtemp(join(tmpdir(), "planner-named-git-day-"));
@@ -93,6 +95,10 @@ test("one revision proves absent days, every sibling and sparse staging without 
     await writeFile(join(root, paths[0]!), "different bytes at the same UUID");
     expect((await readPlannerDay(root, entry, { day, raw_revision: revision }, PlanRunRowContract)).complete).toBe(false);
     await writeFile(join(root, paths[0]!), original);
+    const origin = join(root, "origin.git");
+    await fixtureGit(root, ["init", "--bare", "--initial-branch=main", origin]);
+    await fixtureGit(root, ["remote", "add", "origin", origin]);
+    await fixtureGit(root, ["push", "origin", "HEAD:refs/heads/main"]);
     await fixtureGit(root, ["sparse-checkout", "set", "--no-cone", "/README.md"]);
     await stageNamedFiles(root, paths);
     expect((await readPlannerDay(root, entry, { day, raw_revision: revision, raw_files: paths }, PlanRunRowContract)).rows).toHaveLength(2);
@@ -133,3 +139,54 @@ test("an invalid mode or day path is not a verified empty day", async () => {
       .rejects.toThrow("parent is not a directory");
   } finally { await rm(root, { recursive: true, force: true }); }
 });
+
+test("a stale sparse checkout captures latest remote health bytes once without a runtime commit", async () => {
+  const root = await mkdtemp(join(tmpdir(), "planner-remote-capture-"));
+  try {
+    const producer = join(root, "producer");
+    const consumer = join(root, "consumer");
+    const origin = join(root, "origin.git");
+    await mkdir(producer);
+    await fixtureGit(producer, ["init", "--initial-branch=main"]);
+    await writeFile(join(producer, "README.md"), "Generated captured input.\n");
+    await fixtureGit(producer, ["add", "--", "README.md"]);
+    await fixtureGit(producer, ["commit", "-m", "Create generated capture baseline"]);
+    await fixtureGit(root, ["init", "--bare", "--initial-branch=main", origin]);
+    await fixtureGit(producer, ["remote", "add", "origin", origin]);
+    await fixtureGit(producer, ["push", "origin", "HEAD:refs/heads/main"]);
+    await fixtureGit(root, ["clone", "--quiet", origin, consumer]);
+    const original = await fixedHistoryRevision(consumer);
+    await fixtureGit(consumer, ["sparse-checkout", "set", "--no-cone", "/README.md"]);
+    const inputs = await loadPlanInputs(fileURLToPath(new URL("../../../", import.meta.url)));
+    const day = "2026-10-20";
+    const source = inputs.harvest.sources.find(source => source.status === "active")!;
+    const seed = plannerRecordings(day).find(record => record.name === "feed-health-state")!.row;
+    const row = FeedHealthStateRowContract.schema.parse({
+      ...seed, feed_id: source.id, endpoint_key: inputEndpointKey(source.url),
+      availability: "resting", strikes: 5, rest_until: "2026-10-21T10:00:00.123Z",
+      first_confirmed_failure_at: "2026-10-20T06:00:00Z",
+      reliability: { productive: 3, attempted: 5, success_fraction: 0.6, production_factor: 0.6,
+        from_day: day, through_day: day, complete: true },
+    });
+    const saved = await writeRows(join(producer, "state"), "feed-health-state", day, FeedHealthStateRowContract, [row]);
+    const paths = saved.files.map(file => `state/${file.path}`);
+    await fixtureGit(producer, ["add", "--", ...paths]);
+    await fixtureGit(producer, ["commit", "-m", "Record generated current health"]);
+    await fixtureGit(producer, ["push", "origin", "HEAD:refs/heads/main"]);
+    const latest = await fixedHistoryRevision(producer);
+    inputs.harvest.config.discovered_articles.lookback_days = 0;
+    inputs.clock_config.collect.published_window_days = 0;
+    inputs.clock_config.collect.reliability_window_days = 1;
+    inputs.harvest.config.feedback.lifecycle_window_days = 1;
+    const staged = await stagePlannerHistory(consumer, inputs, `${day}T12:00:00Z`);
+    expect(staged.feed_health_days[0]).toMatchObject({ day, raw_revision: latest, raw_files: paths });
+    expect(await readFile(join(consumer, paths[0]!))).toEqual(await readFile(join(producer, paths[0]!)));
+    expect(await fixedHistoryRevision(consumer)).toBe(original);
+    expect(await fixtureGit(origin, ["--git-dir", origin, "rev-parse", "main"])).toBe(latest);
+    const capturedInputs = { ...inputs, root: consumer, settings: { ...inputs.settings, inputs: {
+      ...inputs.settings.inputs, ...staged,
+    } } };
+    expect((await preparePlanningHealth(capturedInputs, `${day}T12:00:00Z`)).sources.get(source.id))
+      .toMatchObject({ lifecycle: "resting", strikes: 5, reliability: { productive: 3, attempted: 5, complete: true } });
+  } finally { await rm(root, { recursive: true, force: true }); }
+}, 120_000);

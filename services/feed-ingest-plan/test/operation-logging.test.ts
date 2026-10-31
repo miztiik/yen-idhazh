@@ -7,7 +7,7 @@ import { PartitionedFeedBatchSchema } from "@idhazh/common-contracts";
 import type { FeedIngestEvent } from "@idhazh/common-contracts";
 import { stageStore } from "../src/api/stage-store";
 import { selectedArtifactPath } from "../src/selected-artifact-path";
-import { createPlanApp } from "../src/api/server";
+import { createPlanTestServer } from "./plan-test-server";
 import { prepareProgressEvent } from "../src/logging/structured-logger";
 import { publishUploadInventory } from "../scripts/feed-ingest-plan-upload-inventory";
 import { recordedPlan } from "./plan-recordings";
@@ -16,9 +16,9 @@ import { runFeedPlan } from "../src/run-feed-plan";
 
 test("standalone document work logs failure addresses only and persistence logs one real write", async () => {
   const f = await recordedPlan();
-  const app = createPlanApp(f.inputs, f.runtime);
+  const app = createPlanTestServer(f.inputs, f.runtime);
   async function post(operation: string, body: unknown) {
-    const response = await app.request(`/api/2026-10-20/${operation}`, {
+    const response = await app.request(`/api/2026-10-31/${operation}`, {
       method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body),
     });
     expect(response.status).toBe(200);
@@ -65,7 +65,7 @@ test("standalone document work logs failure addresses only and persistence logs 
         const batch = stageStore(f.inputs).read("partitioned", partition.batch_id, PartitionedFeedBatchSchema);
         const blocked = join(f.directory, selectedArtifactPath(f.inputs.settings.inputs.artifact_root, batch.context));
         await mkdir(blocked, { recursive: true });
-        const failure = await app.request("/api/2026-10-20/persist-selected-articles", {
+        const failure = await app.request("/api/2026-10-31/persist-selected-articles", {
           method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ batch_id: partition.batch_id }),
         });
         expect(failure.status).toBe(500);
@@ -85,14 +85,14 @@ test("standalone document work logs failure addresses only and persistence logs 
       request_id: randomUUID(), correlation_id: randomUUID(), feed_id: "recorded-news",
       fetch_item_type: "article", url: excludedUrl,
     };
-    const excluded = await app.request("/api/2026-10-20/fetch", {
+    const excluded = await app.request("/api/2026-10-31/fetch", {
       method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(excludedRequest),
     });
     expect(excluded.status).toBe(409);
     const excludedEvents = f.events.filter(event => event.correlation_id === excludedRequest.correlation_id);
     expect(excludedEvents.map(event => event.phase)).toEqual(["started", "failed"]);
     expect(excludedEvents.at(-1)?.details.article_url).toBe(excludedUrl);
-  } finally { app.close(); await f.close(); }
+  } finally { await app.close(); await f.close(); }
 });
 
 test("composed document failures include addresses without success leaks or duplicate persistence", async () => {
