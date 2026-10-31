@@ -50,7 +50,12 @@ logical feed check or pad days outside named evidence. Known-empty daily
 entries remain outside lifecycle/reliability membership.
 
 Within a capture, index and Parquet caches prevent reopening one compact file
-for each day it represents. The workflow fetches current remote main once and
+for each day it represents.
+Discovery history is also read once per collection. Later feed parses add
+only their new sightings to current-process discovery memory; they do not
+reopen the named discovery days or append the entire baseline again.
+
+The workflow fetches current remote main once and
 stages raw and compact input from that same revision without changing source
 code or committing data. One boundary day is retained for known rolling-window
 adjustments. A run reuses its captured calculations across HTTP stages and

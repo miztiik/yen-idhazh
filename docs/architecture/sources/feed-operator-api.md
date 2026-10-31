@@ -40,6 +40,11 @@ batch. Selection refuses while any offer is still pending. A separate
 operator article URL can produce its own batch; unrelated documents are
 not silently combined.
 
+Collection-owned feed parses return only pending admitted offers to the
+planner. Preflight rejections remain in the completed collection and its
+rejection ledger; no article HTTP call is needed to settle them. Standalone
+feed parses retain their existing public offer flow.
+
 Combined planning and standalone document work prepare the same required
 health fields before fetching. They do not read extra request-report days or
 calculate historical spend during fetch/parse setup. Report-only evidence
@@ -170,11 +175,10 @@ flowchart TD
   OP["Operator"] --> PLAN["POST /plan"]
   PLAN --> BEGIN["POST /collections<br/>one run identity, effective policy and cancellation"]
   BEGIN --> FETCH_FEED["POST /fetch for each eligible feed"]
-  CURRENT[("Durable endpoint availability<br/>revision-checked reservation before external work")] <--> FETCH_FEED
+  CURRENT[("Captured health calculations<br/>supported endpoint eligibility")] --> FETCH_FEED
   FETCH_FEED --> PARSE_FEED["POST /parse<br/>bounded XML worker"]
-  PARSE_FEED --> CURRENT
   PARSE_FEED --> BATCH["One run-owned collection batch<br/>feed provenance and terminal outcomes"]
-  BATCH --> FETCH_ARTICLE["POST /fetch for each admitted offer<br/>age checked before download"]
+  BATCH --> FETCH_ARTICLE["POST /fetch for each admitted offer<br/>preflight rejections already settled"]
   FETCH_ARTICLE --> PARSE_ARTICLE["POST /parse<br/>bounded HTML worker"]
   PARSE_ARTICLE --> BATCH
   FETCH_FEED -->|"Failure or eligibility skip"| BATCH

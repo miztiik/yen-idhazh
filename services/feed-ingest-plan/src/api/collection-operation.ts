@@ -3,7 +3,8 @@ import { randomUUID } from "node:crypto";
 import {
   ParsedFeedBatchSchema, PlannerOperationSchema,
 } from "@idhazh/common-contracts";
-import type { PlannerStageContext, DiscoveredArticleRow } from "@idhazh/common-contracts";
+import type { PlannerStageContext, DiscoveredArticleRow, PlannerFeedOffer } from "@idhazh/common-contracts";
+import type { HarvestArticleResult } from "../harvest-feeds/harvest-types";
 import type { PlanInputs } from "../load-plan-inputs";
 import type { PlanRuntime } from "../run-feed-plan";
 import { resolveRunContext } from "../resolve-run-context";
@@ -21,8 +22,9 @@ import { utcTimestamp } from "../harvest-feeds/harvest-types";
 import { recordHarvestFailures } from "../record-harvest-failures";
 import { CompletedCollectionSchema } from "./collection-contracts";
 import type { z } from "zod";
+import { snapshotCollectionBatch } from "./collection-batch";
 
-type Collection = {
+export type Collection = {
   config_sha256: string;
   parsed_batch_id: string; feed_requests: Map<string, string>;
   context: PlannerStageContext; request: ReturnType<typeof resolvePlanRequest>;
@@ -31,7 +33,10 @@ type Collection = {
   complete?: Promise<z.infer<typeof CompletedCollectionSchema>>;
   rejections?: ReturnType<typeof recordHarvestFailures>;
   completed_batch_id?: string;
-  discovery_baseline?: DiscoveredArticleRow[];
+  discovery_baseline?: Promise<DiscoveredArticleRow[]>;
+  offers: Map<string, PlannerFeedOffer>;
+  results: Map<string, HarvestArticleResult>;
+  pending_offers: number;
 };
 const collections = new WeakMap<PlanInputs, Map<string, Collection>>();
 const pendingContexts = new WeakMap<PlanInputs, Map<string, PlannerStageContext>>();
@@ -98,6 +103,7 @@ export async function beginCollection(raw: unknown, inputs: PlanInputs, runtime:
   });
   owned.set(request.collection_id, { context, request: controls, state, feeds,
     parsed_batch_id: parsed.batch_id, feed_requests: new Map(),
+    offers: new Map(), results: new Map(), pending_offers: 0,
     config_sha256: operationConfigFingerprint(inputs, runtime), signal: new AbortController(), status: "collecting" });
   return { collection_id: request.collection_id, context, feeds: [...feeds.keys()] };
 }
@@ -122,6 +128,9 @@ export function settleCollectionFeed(inputs: PlanInputs, runId: string, feedId: 
 export function collectionForRun(inputs: PlanInputs, runId: string) {
   return [...held(inputs).values()].find(value => value.context.run_id === runId);
 }
+export function collectionForBatch(inputs: PlanInputs, batchId: string) {
+  return [...held(inputs).values()].find(value => value.parsed_batch_id === batchId);
+}
 export function collectionFeedRequest(inputs: PlanInputs, runId: string, feedId: string) {
   return collectionForRun(inputs, runId)?.feed_requests.get(feedId);
 }
@@ -134,20 +143,14 @@ export async function completeCollection(inputs: PlanInputs, id: string) {
     throw new PlanError("BATCH_INCOMPLETE", "Every configured feed needs a terminal result", "collection_id");
   }
   collection.complete ??= (async () => {
-    const current = stageStore(inputs).read("parsed", collection.parsed_batch_id, ParsedFeedBatchSchema);
-    if (current.offers.some(offer => offer.state !== "parsed" && offer.state !== "rejected")) {
+    if (collection.pending_offers !== 0) {
       throw new PlanError("BATCH_INCOMPLETE", "Every offered article needs a terminal result", "collection_id");
     }
     const discoveries = plannerMemory(inputs).discoveries();
-    const saved = await rememberDiscoveries(collection.discovery_baseline ?? [], discoveries, collection.context, {
+    const saved = await rememberDiscoveries(await collection.discovery_baseline ?? [], discoveries, collection.context, {
       outputRoot: inputs.outputRoot, registryEntry: inputs.registrations.discovered_articles, ledgerSettings: inputs.ledgerSettings,
     });
-    const batch = stageStore(inputs).replace("parsed", ParsedFeedBatchSchema, {
-      ...current, input_complete: true,
-      discovered: { availability: "available", rows: discoveries },
-      history_rows: [], history_days: collection.state.history.days,
-      work_rows: collection.state.work.rows(), exclusions: collection.state.work.exclusions(),
-    });
+    const batch = snapshotCollectionBatch(inputs, collection, true);
     stageStore(inputs).ownership(batch.batch_id).scope = "plan";
     const rejected = await finalizeCollectionRejections(inputs, collection);
     collection.status = "complete";
@@ -166,10 +169,7 @@ export async function cancelCollection(inputs: PlanInputs, id: string) {
   const collection = getCollection(inputs, id);
   collection.status = "failed";
   collection.signal.abort();
-  const parsed = stageStore(inputs).read("parsed", collection.parsed_batch_id, ParsedFeedBatchSchema);
-  stageStore(inputs).replace("parsed", ParsedFeedBatchSchema, {
-    ...parsed, work_rows: collection.state.work.rows(), exclusions: collection.state.work.exclusions(),
-  });
+  const parsed = snapshotCollectionBatch(inputs, collection, false);
   return { collection_id: id, status: "cancelled" as const, batch_id: parsed.batch_id,
     rejected_articles: await finalizeCollectionRejections(inputs, collection) };
 }
