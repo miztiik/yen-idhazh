@@ -107,7 +107,7 @@ export async function documentState(record: DocumentOperationContext, inputs: Pl
   }
   const state = await pending;
   if (state.kind !== "document") throw new PlanError("ARTIFACT_INVALID", "Document work belongs to a different execution", "fetch_request_id");
-  if (state.context.correlation_id !== record.context.correlation_id || state.config_sha256 !== record.config_sha256) {
+  if (state.context.correlation_id !== record.context.correlation_id) {
     throw new PlanError("REQUEST_CONFLICT", "Document chain differs from its live execution", "fetch_request_id");
   }
   return state;

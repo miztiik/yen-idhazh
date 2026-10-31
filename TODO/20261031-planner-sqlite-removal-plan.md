@@ -169,6 +169,7 @@ Table H
   - `services/feed-ingest-plan/test/feed-ingest-plan-outputs.test.ts`
   - `services/feed-ingest-plan/test/feed-ingest-plan-delivery.test.ts`
   - `services/feed-ingest-plan/test/run-policy.test.ts`
+  - `services/feed-ingest-plan/test/operation-logging.test.ts`
   - `tests/fixtures/contracts/planner-operation/started.json` (delete)
   - `config/feed-ingest-plan-service.json`
   - `.github/workflows/feed-ingest-plan-test.yml`
