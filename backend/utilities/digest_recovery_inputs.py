@@ -152,7 +152,9 @@ def worker_files(
                 if payload.item_id != item.item_id:
                     raise IntegrityError("worker payload identifies another planned item", (name,))
                 if payload.url_key != item.url_key:
-                    raise IntegrityError("worker payload does not match its planned address", (name,))
+                    raise IntegrityError(
+                        "worker payload does not match its planned address", (name,)
+                    )
                 if isinstance(payload, (EvalRow, ItemHealthRow)) and (
                     payload.run_id != plan.run_id or payload.date != plan.date
                 ):
