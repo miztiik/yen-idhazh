@@ -145,11 +145,13 @@ Table H
   - `services/feed-ingest-plan/src/api/selection-operation.ts`
   - `services/feed-ingest-plan/src/api/feed-health-state-operation.ts`
   - `services/feed-ingest-plan/src/api/stage-store.ts`
+  - `services/feed-ingest-plan/src/api/feed-offers.ts`
   - `services/feed-ingest-plan/src/api/server.ts`
   - `services/feed-ingest-plan/src/api/routes/plan.route.ts`
   - `services/feed-ingest-plan/src/api/routes/document.route.ts`
   - `services/feed-ingest-plan/src/run-feed-plan.ts`
   - `services/feed-ingest-plan/src/run-health.ts`
+  - `services/feed-ingest-plan/src/hash-text.ts`
   - `services/feed-ingest-plan/src/config/service-settings.ts`
   - `services/feed-ingest-plan/src/selected-artifact-path.ts`
   - `services/feed-ingest-plan/src/dump-raw-document-failure.ts` (new)
@@ -166,6 +168,7 @@ Table H
   - `services/feed-ingest-plan/test/feed-ingest-plan-workflow.test.ts`
   - `services/feed-ingest-plan/test/feed-ingest-plan-outputs.test.ts`
   - `services/feed-ingest-plan/test/feed-ingest-plan-delivery.test.ts`
+  - `services/feed-ingest-plan/test/run-policy.test.ts`
   - `tests/fixtures/contracts/planner-operation/started.json` (delete)
   - `config/feed-ingest-plan-service.json`
   - `.github/workflows/feed-ingest-plan-test.yml`
@@ -174,6 +177,8 @@ Table H
   - `docs/architecture/sources/feed-plan-runner.md`
   - `docs/reference/feed-planner-ledgers.md`
   - `docs/architecture/contracts/recorded-instants.md`
+  - `docs/architecture/contracts/schemas.md`
+  - `docs/how-to/run-feed-ingest-plan-test.md`
   - `TODO/20261031-planner-sqlite-removal-plan.md`
 - **Commit order:** Move any still-used utility or type out of a module being deleted in a structural commit. Follow with one complete behavior cutover: native contracts, live callers, diagnostics, workflow wiring, obsolete support-code removal and living docs. Do not land a stub or dual storage implementation.
 - **Live handoff:** Reuse the current bounded stage/run memory rather than introducing another persistence layer. Claim a fetched reference before work, preserve its run/feed/offer/correlation context, and release its downloaded body after parsing succeeds or fails. Schedule fetch/parse work within existing configured capacity; never cap the number of input articles or evict a reference still needed by active work.

@@ -9,7 +9,7 @@ import {
   REASON_STAGES, REQUIRED_DETAILS, RejectionDetailsSchema,
   SourceSnapshotSchema, WriterIdentitySchema, deriveCandidateId, deriveUrlKey, validateEnvelopeContainer,
   readFeedIngestEvent, HarvestDiagnosticsSchema, FetchAttemptSchema, OPERATION_VERSION,
-  PLANNER_OPERATION_VERSION, RecordedInstantSchema, TimestampSchema,
+  RecordedInstantSchema, TimestampSchema,
   FEED_INGEST_CANDIDATE_VERSION, PARSED_FEED_BATCH_VERSION,
   PLAN_RUN_VERSION,
   SELECTED_ARTICLE_VERSION, FEED_HEALTH_STATE_VERSION, ParsedFeedBatchSchema, SelectedFeedBatchSchema, PartitionedFeedBatchSchema,
@@ -506,26 +506,22 @@ describe("current planner contracts", () => {
       const: FEED_INGEST_CANDIDATE_VERSION, default: FEED_INGEST_CANDIDATE_VERSION,
     });
     expect(schemas.FeedIngestCandidate?.required).not.toContain("version");
-    for (const [name, path] of [["FetchedDocument", "fetched-document/refused.json"], ["PlannerOperation", "planner-operation/started.json"]] as const) {
-      const original = await Bun.file(new URL(`../../../tests/fixtures/contracts/${path}`, import.meta.url)).json();
-      expect(runtimeSchemas[name].safeParse(original).success).toBe(false);
-      expect(runtimeSchemas[name].parse({ ...original, version: undefined }).version).toBe(name === "PlannerOperation" ? PLANNER_OPERATION_VERSION : OPERATION_VERSION);
-      if (name === "PlannerOperation") {
-        expect(runtimeSchemas[name].parse({ ...original, version: PLANNER_OPERATION_VERSION, created_at: `${at.slice(0, -1)}.123Z` }).created_at).toBe(`${at.slice(0, -1)}.123Z`);
-        expect(runtimeSchemas[name].safeParse({ ...original, version: "2026-10-23T18:50", created_at: `${at.slice(0, -1)}.123Z` }).success).toBe(false);
-      } else {
-        const saved = runtimeSchemas[name].parse({ ...original, version: OPERATION_VERSION });
-        expect(saved.parent_fetch_request_id).toBeNull();
-        expect(saved.parent_batch_id).toBeNull();
-        expect(saved.entry_ordinal).toBeNull();
-        const linked = runtimeSchemas[name].parse({
-          ...original, version: OPERATION_VERSION,
-          parent_fetch_request_id: "00000000-0000-4000-8000-000000000010",
-          parent_batch_id: "00000000-0000-4000-8000-000000000012", entry_ordinal: 1,
-        });
-        expect(linked.entry_ordinal).toBe(1);
-        expect(runtimeSchemas[name].safeParse({ ...original, version: "2026-10-25" }).success).toBe(false);
-      }
+    {
+      const original = await Bun.file(new URL("../../../tests/fixtures/contracts/fetched-document/refused.json", import.meta.url)).json();
+      const schema = runtimeSchemas.FetchedDocument;
+      expect(schema.safeParse(original).success).toBe(false);
+      expect(schema.parse({ ...original, version: undefined }).version).toBe(OPERATION_VERSION);
+      const saved = schema.parse({ ...original, version: OPERATION_VERSION });
+      expect(saved.parent_fetch_request_id).toBeNull();
+      expect(saved.parent_batch_id).toBeNull();
+      expect(saved.entry_ordinal).toBeNull();
+      const linked = schema.parse({
+        ...original, version: OPERATION_VERSION,
+        parent_fetch_request_id: "00000000-0000-4000-8000-000000000010",
+        parent_batch_id: "00000000-0000-4000-8000-000000000012", entry_ordinal: 1,
+      });
+      expect(linked.entry_ordinal).toBe(1);
+      expect(schema.safeParse({ ...original, version: "2026-10-25" }).success).toBe(false);
     }
     expect(FetchAttemptSchema.parse({ phase: "target", sequence: 0, retry: 0, duration_ms: 0, http_status: 404, failure: "http", error_code: null }).backoff_ms).toBeNull();
     for (const value of [at, `${at.slice(0, -1)}.000Z`, `${at.slice(0, -1)}.123Z`]) expect(RecordedInstantSchema.parse(value)).toBe(value);

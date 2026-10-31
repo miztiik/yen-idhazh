@@ -1,9 +1,8 @@
 /** Keep one document chain's actual work and original clock isolated across concurrent requests. */
 import { FetchedDocumentSchema } from "@idhazh/common-contracts";
-import type { PlannerOperation, PlanApiTiming, CandidateRejectionRecord } from "@idhazh/common-contracts";
+import type { PlanApiTiming, CandidateRejectionRecord } from "@idhazh/common-contracts";
 import type { PlanInputs } from "../load-plan-inputs";
 import type { PlanRuntime } from "../run-feed-plan";
-import { resolveRunContext } from "../resolve-run-context";
 import { createRunHealth } from "../run-health";
 import { sourceSnapshot } from "../harvest-feeds/load-harvest-inputs";
 import { createPermittedFetcher } from "../harvest-feeds/robots-policy";
@@ -19,7 +18,8 @@ import { stageStore } from "./stage-store";
 import type { RunContext } from "../resolve-run-context";
 import type { recordPlanRun } from "../record-plan-run";
 import { selectedArtifactPath } from "../selected-artifact-path";
-import type { OperationStore } from "./operation-store";
+import type { DocumentOperationContext } from "./operation-context";
+import type { FetchedDocumentReference } from "./stage-store";
 import type { PersistLedgerResult } from "@idhazh/ledger-file-writer";
 
 type ExecutionStateBase = {
@@ -33,7 +33,8 @@ export type DocumentState = ExecutionStateBase & {
   completed_files?: Partial<Record<"discovered_articles" | "rejected_articles", PersistLedgerResult[]>>;
   kind: "document"; history: Awaited<ReturnType<typeof preparePlanningHealth>>;
   work: ReturnType<typeof createRunHealth>; fetcher: ReturnType<typeof createPermittedFetcher>;
-  recovered: Set<string>;
+  config_sha256: string;
+  fetch_request_ids: Set<string>;
   exclusions: Promise<Awaited<ReturnType<typeof readExclusionEvidence>>> | null;
 };
 export type ExecutionState = DocumentState | (ExecutionStateBase & { kind: "plan" | "selection" | "partition" });
@@ -43,12 +44,18 @@ function statesFor(inputs: PlanInputs) {
   if (states === undefined) { states = new Map(); documents.set(inputs, states); }
   return states;
 }
-function rememberExecution(inputs: PlanInputs, runId: string, state: Promise<ExecutionState>) {
+function statesForExecution(inputs: PlanInputs, runId: string) {
   const states = statesFor(inputs);
   while (states.size >= inputs.settings.listener.max_stage_batches && !states.has(runId)) {
-    states.delete(states.keys().next().value!);
+    const expired = [...states.keys()].find(id => !stageStore(inputs).isRunActive(id));
+    if (expired === undefined) throw new PlanError("REQUEST_BUSY", "Run capacity is occupied by active work");
+    states.delete(expired);
+    stageStore(inputs).forgetDocumentWork(expired);
   }
-  states.set(runId, state);
+  return states;
+}
+function rememberExecution(inputs: PlanInputs, runId: string, state: Promise<ExecutionState>) {
+  statesForExecution(inputs, runId).set(runId, state);
 }
 export function registerStageExecution(
   inputs: PlanInputs, context: RunContext, kind: "plan" | "selection" | "partition", started: number | null,
@@ -64,30 +71,25 @@ export function executionHasArtifact(inputs: PlanInputs, context: RunContext) {
   // One trusted, deterministic artifact path is evidence of a prior result, not a history scan.
   return existsSync(resolve(inputs.root, ...selectedArtifactPath(inputs.settings.inputs.artifact_root, context).split("/")));
 }
-export function checkFetchedDocument(record: PlannerOperation, inputs: PlanInputs) {
-  if (record.operation !== "fetch" || record.state !== "complete") throw new PlanError("ARTIFACT_NOT_FOUND", "No completed fetched document exists", "fetch_request_id");
-  const artifact = FetchedDocumentSchema.parse(record.artifact);
+export function checkFetchedDocument(record: FetchedDocumentReference, inputs: PlanInputs) {
+  const artifact = FetchedDocumentSchema.parse(record.document);
   const identity = artifact.fetch_item_type === "feed" ? deriveFeedIdentity(artifact.canonical_url)
     : deriveArticleIdentity(artifact.canonical_url, inputs.harvest.config.harvest);
-  if (artifact.article_id !== identity.url_key || artifact.observation.run_id !== record.run_id
-    || artifact.observation.correlation_id !== record.correlation_id
+  if (artifact.article_id !== identity.url_key || artifact.observation.run_id !== record.context.run_id
+    || artifact.observation.correlation_id !== record.context.correlation_id
     || artifact.body_sha256 !== (artifact.body === null ? null : hashText(artifact.body))
     || (artifact.body !== null && Buffer.byteLength(artifact.body) > inputs.harvest.extraction.max_body_bytes)) {
     throw new PlanError("ARTIFACT_INVALID", "Fetched document identity, digest or byte bound differs", "fetch_request_id");
   }
   return artifact;
 }
-export async function documentState(record: PlannerOperation, inputs: PlanInputs, runtime: PlanRuntime, store: OperationStore, parent?: PlannerOperation) {
-  const root = parent ?? record;
-  if (root.run_id !== record.run_id || root.correlation_id !== record.correlation_id) throw new PlanError("ARTIFACT_INVALID", "Document chain belongs to another run", "fetch_request_id");
-  const states = statesFor(inputs);
-  let pending = states.get(root.run_id);
-  const recovering = pending === undefined;
+export async function documentState(record: DocumentOperationContext, inputs: PlanInputs, runtime: PlanRuntime) {
+  const states = statesForExecution(inputs, record.context.run_id);
+  let pending = states.get(record.context.run_id);
   if (pending === undefined) {
     pending = (async (): Promise<DocumentState> => {
-      const started = root.state === "started" ? performance.now() : null;
-      const context = resolveRunContext(inputs.settings, runtime.git_sha, new Date(root.created_at),
-        root.run_id.slice(11), root.correlation_id, root.created_at, runtime.attempt, runtime.producer);
+      const started = performance.now();
+      const context = record.context;
       const historyStarted = performance.now();
       const history = await preparePlanningHealth(inputs, context.now, { context, rows: [] });
       return {
@@ -96,36 +98,26 @@ export async function documentState(record: PlannerOperation, inputs: PlanInputs
           { ...inputs.harvest.config.triage, tidy_urls: inputs.harvest.config.harvest.tidy_urls,
             clock: runtime.observation_clock ?? (() => new Date()) }),
         fetcher: createPermittedFetcher(inputs.harvest.config.harvest, inputs.harvest.extraction, runtime.boundary, runtime.observation_clock),
-        recovered: new Set<string>(), exclusions: null, started,
+        config_sha256: record.config_sha256, fetch_request_ids: new Set<string>(), exclusions: null, started,
         api_timings: [{ operation: "feed-health-before-fetch", duration_ms: Math.round(performance.now() - historyStarted), status: "completed" }],
         health_written: false, health_fingerprint: null, owns_choice: false,
       };
     })();
-    rememberExecution(inputs, root.run_id, pending);
+    rememberExecution(inputs, record.context.run_id, pending);
   }
   const state = await pending;
   if (state.kind !== "document") throw new PlanError("ARTIFACT_INVALID", "Document work belongs to a different execution", "fetch_request_id");
-  const latestRoot = recovering ? store.get(root.request_id) ?? root : root;
-  const members = recovering ? latestRoot.article_capture_request_ids.map(id => {
-    const saved = store.get(id);
-    if (saved?.artifact?.parent_fetch_request_id !== root.request_id || saved.run_id !== root.run_id
-      || saved.correlation_id !== root.correlation_id || saved.state !== "complete") {
-      throw new PlanError("ARTIFACT_INVALID", "Feed capture membership has a missing or unrelated article receipt", "fetch_request_id");
-    }
-    return saved;
-  }) : [];
-  for (const saved of [latestRoot, ...members, record]) {
-    if (saved.state !== "complete" || saved.operation !== "fetch") continue;
-    if (state.recovered.has(saved.request_id) && saved.source_outcome === null) continue;
-    const artifact = checkFetchedDocument(saved, inputs);
-    if (artifact.fetch_item_type === "article") {
-      state.work.captureArticle(saved.request_id, artifact.feed_id, artifact.observation.occurred_at, saved.source_outcome);
-    }
-    if (state.recovered.has(saved.request_id)) continue;
-    state.work.restoreRequests(artifact);
-    if (artifact.fetch_item_type === "feed") state.work.pendingFeed(artifact.feed_id, artifact, artifact.observation.occurred_at, saved.request_id);
-    state.recovered.add(saved.request_id);
+  if (state.context.correlation_id !== record.context.correlation_id || state.config_sha256 !== record.config_sha256) {
+    throw new PlanError("REQUEST_CONFLICT", "Document chain differs from its live execution", "fetch_request_id");
   }
+  return state;
+}
+export async function readDocumentHealthBatch(batchId: string, inputs: PlanInputs) {
+  const runId = stageStore(inputs).documentRun(batchId);
+  const pending = runId === undefined ? undefined : statesFor(inputs).get(runId);
+  if (pending === undefined) throw new PlanError("ARTIFACT_NOT_FOUND", "No current document work batch exists", "batch_id");
+  const state = await pending;
+  if (state.kind !== "document") throw new PlanError("ARTIFACT_INVALID", "Document work belongs to a different execution", "batch_id");
   return state;
 }
 export function documentExclusions(state: DocumentState, inputs: PlanInputs) {

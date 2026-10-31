@@ -1,48 +1,34 @@
-/** Capture one operator request's run identity and effective configuration before work starts. */
-import { PlannerOperationSchema } from "@idhazh/common-contracts";
-import type { PlannerOperation } from "@idhazh/common-contracts";
+/** Capture one live document's run identity and effective stage configuration. */
 import type { PlanInputs } from "../load-plan-inputs";
 import type { PlanRuntime } from "../run-feed-plan";
 import { DEFAULT_PLANNER_PRODUCER, FIRST_RUN_ATTEMPT, resolveRunContext } from "../resolve-run-context";
+import type { RunContext } from "../resolve-run-context";
 import { hashText } from "../hash-text";
-import type { PreparedOperation } from "./operation-store";
 
-function operationConfiguration(inputs: PlanInputs, runtime: PlanRuntime) {
-  return {
+export type DocumentOperationContext = {
+  request_id: string;
+  context: RunContext;
+  config_sha256: string;
+};
+
+export function stageConfigFingerprint(inputs: PlanInputs, runtime: PlanRuntime) {
+  return hashText(JSON.stringify({
     harvest: inputs.harvest.config_sha256, policy: inputs.harvest.config,
     settings: inputs.settings, clock: inputs.clock_config,
     ledger: inputs.ledgerSettings, registrations: inputs.registrations,
     attempt: runtime.attempt ?? FIRST_RUN_ATTEMPT,
     producer: runtime.producer ?? DEFAULT_PLANNER_PRODUCER, git_sha: runtime.git_sha,
-  };
+  }));
 }
-export function operationConfigFingerprint(inputs: PlanInputs, runtime: PlanRuntime) {
-  return hashText(JSON.stringify(operationConfiguration(inputs, runtime)));
-}
-export function proposedOperation(
-  operation: PlannerOperation["operation"], request_id: string, request: unknown, correlation_id: string,
-  inputs: PlanInputs, runtime: PlanRuntime,
-) {
-  const now = runtime.clock?.() ?? new Date();
-  const runNumber = operation === "plan" ? runtime.run_number : BigInt(`0x${request_id.replaceAll("-", "")}`).toString();
-  const context = resolveRunContext(
-    inputs.settings, runtime.git_sha, now, runNumber, correlation_id, runtime.captured_at,
-    runtime.attempt, runtime.producer,
-  );
-  return PlannerOperationSchema.parse({
-    request_id, operation, input_sha256: hashText(JSON.stringify(request)), config_sha256: operationConfigFingerprint(inputs, runtime),
-    run_id: context.run_id, correlation_id, created_at: context.captured_at, state: "started", response_json: null, artifact: null,
-  });
-}
-export function prepareOperation(
-  operation: PlannerOperation["operation"], request_id: string, request: unknown, correlation_id: string,
-  inputs: PlanInputs, runtime: PlanRuntime, runId?: string,
-): PreparedOperation {
+
+export function captureDocumentContext(
+  requestId: string, correlationId: string, inputs: PlanInputs, runtime: PlanRuntime, context?: RunContext,
+): DocumentOperationContext {
   return {
-    request_id, operation, input_sha256: hashText(JSON.stringify(request)), config_sha256: operationConfigFingerprint(inputs, runtime),
-    capture: () => {
-      const record = proposedOperation(operation, request_id, request, correlation_id, inputs, runtime);
-      return runId === undefined ? record : { ...record, run_id: runId };
-    },
+    request_id: requestId,
+    context: context ?? resolveRunContext(inputs.settings, runtime.git_sha, runtime.clock?.() ?? new Date(),
+      BigInt(`0x${requestId.replaceAll("-", "")}`).toString(), correlationId, runtime.captured_at,
+      runtime.attempt, runtime.producer),
+    config_sha256: stageConfigFingerprint(inputs, runtime),
   };
 }

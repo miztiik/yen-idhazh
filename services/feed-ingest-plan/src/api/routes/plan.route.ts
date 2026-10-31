@@ -4,19 +4,19 @@ import { PlanError, PlanRequestSchema } from "../plan-request";
 import { summarizePlan } from "../../run-feed-plan";
 import type { FeedPlanResult } from "../../run-feed-plan";
 import type { PlanRequest } from "../plan-request";
-import type { PlanInputs } from "../../load-plan-inputs";
 import type { PlanRuntime } from "../../run-feed-plan";
-import { executeKeyedPlan } from "../plan-operation";
 import { PlanResponseSchema } from "../plan-response.schema";
 
 export type PlanningBindings = { beginPlanning?: () => void; stage_origin?: string };
-export type CapturedPlanIdentity = Pick<PlanRuntime, "clock" | "run_number" | "correlation_id" | "captured_at" | "signal" | "stage_origin">;
+type PlanningRuntime = Pick<PlanRuntime, "signal" | "stage_origin">;
 
 export function planRoute(
-  execute: (request: PlanRequest, captured?: CapturedPlanIdentity) => Promise<FeedPlanResult>,
-  inputs: PlanInputs, runtime: () => PlanRuntime,
+  execute: (request: PlanRequest, runtime?: PlanningRuntime) => Promise<FeedPlanResult>,
 ) {
   return new Hono<{ Bindings: PlanningBindings }>().post("/plan", async c => {
+    if (c.req.header("Idempotency-Key") !== undefined) {
+      throw new PlanError("INVALID_REQUEST", "Idempotency-Key is unsupported; send a new live request", "Idempotency-Key");
+    }
     let raw: unknown;
     try { raw = await c.req.json(); }
     catch (error) {
@@ -25,13 +25,6 @@ export function planRoute(
     }
     const request = PlanRequestSchema.parse(raw);
     c.env?.beginPlanning?.();
-    const key = c.req.header("Idempotency-Key");
-    if (key !== undefined) {
-      const body = await executeKeyedPlan(key, request, inputs, runtime(), (request, captured) =>
-        execute(request, { ...captured, signal: c.req.raw.signal,
-          ...(c.env?.stage_origin === undefined ? {} : { stage_origin: c.env.stage_origin }) }));
-      return c.body(body, JSON.parse(body).planning_complete === true ? 200 : 500, { "Content-Type": "application/json" });
-    }
     const result = await execute(request, { signal: c.req.raw.signal,
       ...(c.env?.stage_origin === undefined ? {} : { stage_origin: c.env.stage_origin }) });
     const summary = PlanResponseSchema.parse(summarizePlan(result));
