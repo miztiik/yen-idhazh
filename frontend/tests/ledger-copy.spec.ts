@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { copyFileSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
+import { copyFileSync, mkdirSync, readFileSync, readdirSync, unlinkSync, writeFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -178,13 +178,11 @@ test('nested compact paths retain the requested copy window', () => {
 	expect(copy.missing).toEqual([]);
 });
 
-test('the real staging script names the nested ledger, not its family, when a data file is missing', () => {
+test('the real staging script names the nested ledger, not its family, when a data file is missing', async () => {
 	const folder = 'feed-ingest-plan/selected-articles';
-	const tree = Object.fromEntries(Object.entries(aWholeLedger('selected-articles')).map(
-		([name, text]) => [name.replace('compact/selected-articles/', `compact/${folder}/`), text]
-	));
-	delete tree[`compact/${folder}/daily/2026/09/01.parquet`];
-	const source = aStateTree(tree);
+	const source = test.info().outputPath('state');
+	await buildFeedLedgers(source);
+	unlinkSync(join(source, 'compact', 'feed-ingest-plan', 'selected-articles', 'daily', '2026', '10', '20.parquet'));
 	const frontend = test.info().outputPath('frontend');
 	mkdirSync(frontend, { recursive: true });
 	const output = execFileSync(process.execPath, [
@@ -192,9 +190,10 @@ test('the real staging script names the nested ledger, not its family, when a da
 	], { cwd: frontend, encoding: 'utf8', env: {
 		...process.env, STATE_ROOT: source, DIGEST_ROOT: join(frontend, 'public', 'digest')
 	} });
-	expect(output).toContain(`file-missing selected-articles state/compact/${folder}/daily/2026/09/01.parquet:`);
+	expect(output).toContain(`file-missing selected-articles state/compact/${folder}/daily/2026/10/20.parquet:`);
 	expect(output).not.toContain('file-missing feed-ingest-plan ');
-	expect(readFileSync(join(frontend, 'static', 'state', 'compact', folder, 'daily/2026/09/02.parquet'), 'utf8')).toBe('PAR1');
+	const retained = ['compact', 'feed-ingest-plan', 'selected-articles', 'daily', '2026', '10', '19.parquet'];
+	expect(readFileSync(join(frontend, 'static', 'state', ...retained))).toEqual(readFileSync(join(source, ...retained)));
 });
 
 test('THE ORACLE: committed publication copies real council records and the query door reads their outcomes', async () => {

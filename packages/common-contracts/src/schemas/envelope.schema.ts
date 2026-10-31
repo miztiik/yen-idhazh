@@ -100,7 +100,7 @@ export const PLANNER_FOOTER_METADATA_KEYS = [
   "file_id", "content_sha256", "writer", "writer_version", "compression", "updated_at",
 ] as const;
 export const PLANNER_OPTIONAL_FOOTER_METADATA_KEYS = ["period", "updated_at"] as const;
-const plannerRowVersions = {
+export const PLANNER_ROW_SCHEMA_VERSIONS = {
   "discovered-articles": DISCOVERED_ARTICLE_VERSION, "selected-articles": SELECTED_ARTICLE_VERSION,
   "rejected-articles": REJECTED_ARTICLE_VERSION, "feed-health-state": FEED_HEALTH_STATE_VERSION,
   "plan-runs": PLAN_RUN_VERSION,
@@ -122,7 +122,7 @@ export const PlannerStoredFileEnvelopeSchema = z.strictObject({
   if (!stamp.safeParse(value.covers).success) reject(ctx, "planner covers must match its tier and period");
   if (value.file_id[14] !== "8") reject(ctx, "planner file_id must be UUID version 8");
   if ((value.ledger === "feed-health-state") !== (value.updated_at !== null)) reject(ctx, "only feed-health-state files require updated_at");
-  if (value.row_schema_version !== plannerRowVersions[value.ledger]) {
+  if (value.row_schema_version !== PLANNER_ROW_SCHEMA_VERSIONS[value.ledger]) {
     reject(ctx, `${value.ledger} requires its current row schema`);
   }
 });

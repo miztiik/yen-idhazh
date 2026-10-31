@@ -7,6 +7,7 @@ import type { Field } from "apache-arrow";
 import initializeParquet, { readMetadata, readParquet } from "parquet-wasm/esm";
 import {
   PlannerFileEnvelopeSchema, PlannerStoredFileEnvelopeSchema, PLANNER_FOOTER_METADATA_KEYS, PLANNER_OPTIONAL_FOOTER_METADATA_KEYS,
+  PLANNER_ENVELOPE_VERSION, PLANNER_ROW_SCHEMA_VERSIONS, SchemaVersionSchema,
 } from "@idhazh/common-contracts";
 import type { PlannerStoredFileEnvelope } from "@idhazh/common-contracts";
 import { describeObjectSchema } from "./row-schema";
@@ -17,7 +18,13 @@ import type { LogicalField, LogicalType } from "./parquet/row-digest";
 let initialization: ReturnType<typeof initializeParquet> | undefined;
 
 export class PlannerLedgerFileError extends Error {
-  override readonly name = "PlannerLedgerFileError";
+  override readonly name: string = "PlannerLedgerFileError";
+}
+export class PlannerUnsupportedFormatError extends PlannerLedgerFileError {
+  override readonly name = "PlannerUnsupportedFormatError";
+  constructor(ledger: PlannerStoredFileEnvelope["ledger"], readonly envelopeVersion: string, readonly rowSchemaVersion: string) {
+    super(`${ledger} requires envelope ${PLANNER_ENVELOPE_VERSION} and row ${PLANNER_ROW_SCHEMA_VERSIONS[ledger]}; found envelope ${envelopeVersion} and row ${rowSchemaVersion}`);
+  }
 }
 
 function normalize(value: unknown): unknown {
@@ -112,6 +119,12 @@ async function loadStoredPlannerParquet(path: string, ledger: PlannerStoredFileE
     }
     const footerLedger = values.get("ledger");
     const rowSchemaVersion = values.get("schema_version");
+    const envelopeVersion = values.get("envelope_version");
+    if (footerLedger === ledger && SchemaVersionSchema.safeParse(envelopeVersion).success
+      && SchemaVersionSchema.safeParse(rowSchemaVersion).success
+      && (envelopeVersion !== PLANNER_ENVELOPE_VERSION || rowSchemaVersion !== PLANNER_ROW_SCHEMA_VERSIONS[ledger])) {
+      throw new PlannerUnsupportedFormatError(ledger, envelopeVersion!, rowSchemaVersion!);
+    }
     envelope = PlannerStoredFileEnvelopeSchema.parse({
       version: values.get("envelope_version"), row_schema_version: rowSchemaVersion,
       tier: values.get("tier"), ledger: footerLedger, covers: values.get("covers"),

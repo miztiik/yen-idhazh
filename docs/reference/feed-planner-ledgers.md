@@ -158,6 +158,8 @@ receipts and progress events. Plan runs retain their unchanged current
 `2026-10-26` shape. Readers verify physical fields, file identity and canonical
 digest against the current format. Older formats refuse with diagnostics.
 Historical files remain unchanged; no migration or null-fill is applied.
+The [site publication stage](../architecture/publishing/planner-publication.md)
+omits refused planner bytes and marks their copied index coverage unavailable.
 
 Empty categories stay arrays. The native Parquet and JSON comparison found
 that null increased both representations, so no nullable category shape is

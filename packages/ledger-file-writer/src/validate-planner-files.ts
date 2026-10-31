@@ -47,6 +47,10 @@ async function assertRegularFile(root: string, path: string): Promise<string> {
   return current;
 }
 
+export async function readNamedPlannerFile(root: string, path: string, ledger: PlannerFileValidationRequest["files"][number]["ledger"]) {
+  return readPlannerFile(await assertRegularFile(root, path), ledger);
+}
+
 export async function validatePlannerFiles(
   root: string,
   rawRequest: unknown,
@@ -55,8 +59,7 @@ export async function validatePlannerFiles(
   const files: PlannerFileValidationResult["files"] = [];
   for (const input of request.files) {
     try {
-      const path = await assertRegularFile(root, input.path);
-      const file = await readPlannerFile(path, input.ledger);
+      const file = await readNamedPlannerFile(root, input.path, input.ledger);
       files.push({
         ledger: input.ledger,
         path: input.path,
