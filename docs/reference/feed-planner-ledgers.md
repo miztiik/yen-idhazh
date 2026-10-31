@@ -197,7 +197,7 @@ totals or add together saved rolling reliability results.
 | C7 | `checked_at` | Feed/run/day | Actual feed-check time; nullable when this work day had no feed check |
 | C8 | `permission` | Feed/run/day | Allowed, denied or unknown as observed for this work |
 | C9 | `availability` | Feed/run/day | Supported computed eligibility, rest, retirement or unknown state |
-| C10 | `strikes` | Feed/run/day | Saved logical failure streak; null when unverified |
+| C10 | `strikes` | Feed/run/day | Observed logical failure streak; a supported lower bound when earlier history is partial, null before known checks |
 | C11 | Removed | - | UTC rest deadlines replace skipped-run counting |
 | C12 | `last_failure_code` | Feed/run/day | Explain the run's latest feed failure without free-text payloads |
 | C13 | `status` | Feed/run/day | Actual feed HTTP status; nullable; not catalog membership |
@@ -230,8 +230,8 @@ totals or add together saved rolling reliability results.
 | C41 | `check_request_id` | Feed/run/day | Actual logical check identity; null for carried-only rows |
 | C42 | `check_result` | Feed/run/day | Parsed validity or typed HTTP, timeout, robots, transport, local or interrupted result |
 | C43 | `rest_until` | Saved calculation | Supported UTC recovery deadline |
-| C44 | `first_confirmed_failure_at` | Saved calculation | Proven UTC start of the confirmed failure episode; null when unknown |
-| C45 | `failed_recovery_checks` | Saved calculation | Qualifying confirmed recovery failures; null when unknown |
+| C44 | `first_confirmed_failure_at` | Saved calculation | UTC first observed confirmed failure in the known episode; partial history does not claim an earlier unseen start |
+| C45 | `failed_recovery_checks` | Saved calculation | Observed qualifying confirmed recovery failures; partial history does not claim an exact earlier total |
 | C46 | `retired_at` | Saved calculation | UTC instant of a proven retirement decision |
 | C47 | `retirement_reason` | Saved calculation | Typed reason recorded with C46 |
 | C48 | `availability_updated_at` | Saved calculation | Actual check instant that last changed the calculation; carry-forward does not advance it |
@@ -920,6 +920,11 @@ Health C is the existing saved-calculation store. Known partial values and
 supported skipped-feed decisions are written there at finish. Request reporting
 remains a separate bounded calendar-day calculation. No availability sidecar,
 extra ledger, reservation, migration reader or intermediate data commit is used.
+
+Missing earlier history does not erase actual observed failures. Partial
+snapshots retain observed streak and recovery counts as supported lower bounds.
+Uncertain transport counts for logical rest, never for confirmed retirement.
+A known window with zero measured reads retains zero counts and null fractions.
 
 ## See also
 

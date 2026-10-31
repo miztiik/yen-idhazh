@@ -41,7 +41,7 @@ test("independent cumulative snapshots are selected by actual check order, not s
     rest_until: "2026-10-03T00:00:00Z", availability: "resting" }]).feed_rest;
   expect(reuseFeedLifecycle(partial.partial_rows, "2026-10-02T00:00:00Z", settings, reason => gaps.push(reason)))
     .toMatchObject({ availability: "resting", rest_until: "2026-10-03T00:00:00Z",
-      failed_recovery_checks: null, retired_at: null, availability_complete: false });
+      failed_recovery_checks: 0, retired_at: null, availability_complete: false });
 });
 
 test("a check present in monthly Parquet and a late raw file is one fact across a month boundary", async () => {
@@ -110,9 +110,20 @@ test("ambiguous check order cannot prove a failure episode and a later real rese
   expect(read([first, failure, reset])).toMatchObject({
     availability: "unknown", strikes: null, first_confirmed_failure_at: null, retired_at: null, availability_complete: false,
   });
+
   expect(read([reset, failure, first])).toMatchObject({ strikes: null, availability_complete: false });
   expect(read([first, failure, reset, row("2026-10-03", 4)])).toMatchObject({
     strikes: 0, rest_until: null, retired_at: null, availability_complete: true,
   });
   expect(gaps).toContain("availability-order-ambiguous");
+});
+
+test("a fully shaped partial snapshot cannot hide its own known failed check behind null counters", async () => {
+  const failed = { ...row("2026-10-01", 1, false), availability: "unknown" as const,
+    strikes: null, first_confirmed_failure_at: null, failed_recovery_checks: null, availability_complete: false };
+  const gaps: string[] = [];
+  const partial = reuseFeedLifecycle([failed], "2026-10-02T00:00:00Z", await readLifecyclePolicy(), reason => gaps.push(reason));
+  expect(partial).toMatchObject({ strikes: 1, failed_recovery_checks: 0,
+    first_confirmed_failure_at: failed.checked_at, availability_complete: false, retired_at: null });
+  expect(gaps).toContain("observed-failure-count-missing");
 });

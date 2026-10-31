@@ -30,12 +30,12 @@ export const FeedHealthStateRowSchema = z.strictObject({
   feed_id: SlugSchema, endpoint_key: Sha256Schema, checked_at: RecordedInstantSchema.nullable(),
   permission: z.enum(["allowed", "denied", "unknown"]),
   availability: z.enum(["eligible", "resting", "retired", "unknown"]),
-  strikes: CountSchema.nullable(),
+  strikes: CountSchema.nullable().describe("Observed consecutive logical failures; partial history keeps this a supported lower bound, not an exact historical total."),
   check_request_id: z.uuid({ version: "v4" }).nullable(),
   check_result: FeedCheckResultSchema.nullable(),
   rest_until: RecordedInstantSchema.nullable().describe("Supported UTC recovery deadline; a carried value is not a new check."),
-  first_confirmed_failure_at: RecordedInstantSchema.nullable(),
-  failed_recovery_checks: CountSchema.nullable(),
+  first_confirmed_failure_at: RecordedInstantSchema.nullable().describe("UTC first confirmed failure in the known episode; partial history does not claim an earlier unseen start."),
+  failed_recovery_checks: CountSchema.nullable().describe("Observed qualifying confirmed recovery failures; missing earlier evidence stays partial."),
   retired_at: RecordedInstantSchema.nullable(),
   retirement_reason: z.literal("confirmed-recovery-failures").nullable(),
   availability_updated_at: RecordedInstantSchema.nullable(),
@@ -67,6 +67,7 @@ export const FeedHealthStateRowSchema = z.strictObject({
 }).meta({
   version: FEED_HEALTH_STATE_VERSION,
   changelog: [
+    { version: FEED_HEALTH_STATE_VERSION, change: "Keep observed failure and recovery counts usable when earlier history is partial." },
     { version: FEED_HEALTH_STATE_VERSION, change: "Save logical checks and supported timed lifecycle calculations without availability sidecars." },
     { version: "2026-10-30", change: "Save feed-read fractions and floor-applied factors downward to three decimal places." },
     { version: "2026-10-27", change: "Count admitted original article captures before selection instead of screening admissions." },

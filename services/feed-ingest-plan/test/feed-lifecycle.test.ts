@@ -60,7 +60,26 @@ test("supported rest survives missing counts and interruption never invents sour
   const interrupted = applyFeedCheck(prior, check(1, "interrupted"), settings);
   expect(interrupted).toEqual(prior);
   const failed = applyFeedCheck(prior, check(24), settings);
-  expect(failed).toMatchObject({ strikes: null, failed_recovery_checks: null, retired_at: null, availability_complete: false });
+  expect(failed).toMatchObject({ strikes: 1, failed_recovery_checks: 1, retired_at: null, availability_complete: false });
   expect(resolveFeedEligibility(createUnknownFeedLifecycle(), at(0))).toBe("unknown");
   expect(() => applyFeedCheck(prior, { ...check(24), status: 403 }, settings)).toThrow("confirmed target HTTP");
+});
+
+test("uncertain transport failures advance observed logical rest counts but never confirmed retirement", async () => {
+  const settings = await policy();
+  let value = createUnknownFeedLifecycle();
+  for (let hour = 0; hour < settings.consecutive_failed_checks_before_rest; hour++) {
+    value = applyFeedCheck(value, { ...check(hour), check_result: "transport-unknown", status: null }, settings);
+    expect(value.strikes).toBe(hour + 1);
+    expect(value.availability_complete).toBe(false);
+    expect(value.first_confirmed_failure_at).toBeNull();
+    expect(value.failed_recovery_checks).toBeNull();
+    expect(value.retired_at).toBeNull();
+  }
+  expect(value.availability).toBe("resting");
+  expect(value.rest_until).toBe(at(4 + settings.rest_hours));
+  const recovery = applyFeedCheck(value, {
+    ...check(4 + settings.rest_hours), check_result: "transport-unknown", status: null,
+  }, settings);
+  expect(recovery).toMatchObject({ strikes: 6, failed_recovery_checks: null, retired_at: null });
 });

@@ -38,8 +38,16 @@ retirement. A valid parsed feed, including an empty feed, resets the episode.
 A recovery check is eligible at the recorded UTC deadline, not before it.
 With the default recovery spacing, seven recovery checks take at least
 168 hours after rest starts. The separate episode-age gate starts at the
-first proven confirmed failure. Missing history cannot establish that start,
-a streak or a recovery count.
+first observed confirmed failure in the known episode. Missing history cannot
+establish an earlier unseen start or an exact historical total.
+
+First-use failures still count: one actual failed check establishes one observed
+failure, and subsequent known failures increase that count. The calculation
+stays partial when earlier evidence is missing. Five observed consecutive
+failures can therefore establish a supported rest deadline without inventing
+an initial success or complete history. Failed logical checks, including
+uncertain transport, count for rest; only confirmed target HTTP failures count
+for retirement.
 
 ## Saved calculations and partial evidence
 

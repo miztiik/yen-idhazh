@@ -37,7 +37,26 @@ export function reuseFeedLifecycle(
     return supportedLifecycle({ ...createUnknownFeedLifecycle(), ...common, availability_complete: false }, now);
   }
   if (selected.value !== null && FeedLifecycleFieldsSchema.safeParse(selected.value).success) {
-    return supportedLifecycle(FeedLifecycleFieldsSchema.parse(selected.value), now);
+    const saved = FeedLifecycleFieldsSchema.parse(selected.value);
+    const knownFailure = rows.some(row => row.check_request_id != null && row.checked_at != null
+      && row.check_result != null && row.check_result !== "valid-feed" && row.check_result !== "interrupted"
+      && Date.parse(row.checked_at) <= Date.parse(now));
+    if (saved.strikes === null && knownFailure) {
+      onGap("observed-failure-count-missing");
+      const recovered = recoverFeedLifecycle(rows, now, policy, onGap);
+      return supportedLifecycle({
+        ...saved, strikes: recovered.strikes,
+        availability: saved.availability === "unknown" ? recovered.availability : saved.availability,
+        rest_until: saved.rest_until ?? recovered.rest_until,
+        retired_at: saved.retired_at ?? recovered.retired_at,
+        retirement_reason: saved.retirement_reason ?? recovered.retirement_reason,
+        first_confirmed_failure_at: saved.first_confirmed_failure_at ?? recovered.first_confirmed_failure_at,
+        failed_recovery_checks: saved.failed_recovery_checks ?? recovered.failed_recovery_checks,
+        availability_updated_at: saved.availability_updated_at ?? recovered.availability_updated_at,
+        availability_complete: false,
+      }, now);
+    }
+    return supportedLifecycle(saved, now);
   }
   onGap("availability-calculation-missing");
   const recovered = recoverFeedLifecycle(rows, now, policy, onGap);
