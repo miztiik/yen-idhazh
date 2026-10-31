@@ -1,0 +1,49 @@
+[
+  {
+    "url_key": "34e91ac0637aa19d63c0802b5d6ed9a038c2c3f068a40c393c8c7749badf0b76",
+    "feed_id": "recorded-news",
+    "publisher_id": null,
+    "canonical_url": "https://news.example/second",
+    "title": "A second usable entry",
+    "categories": [],
+    "author": "Page Reporter",
+    "published_at": "2026-10-22T00:00:00Z",
+    "published_at_source": "selection",
+    "tier": 2,
+    "weight": 0.8,
+    "applied_tier_weight": 0.6,
+    "editorial_rank": 1,
+    "estimated_work": 118,
+    "worker_assignment": 0,
+    "ratings": {
+      "base_article_score": 1.08,
+      "marginal_score": 1.08,
+      "adjustments": [
+        {
+          "term": "article_pass_rate",
+          "value": null
+        },
+        {
+          "term": "publisher_exposure_current_run",
+          "value": null
+        },
+        {
+          "term": "website_group",
+          "value": 0
+        }
+      ],
+      "recency_score": 0.6,
+      "feed_authority_score": 0.48
+    },
+    "feed_limit": 1,
+    "exploration_slot": false,
+    "cap_relaxations": [],
+    "timing_at": "2026-10-21T23:59:59Z",
+    "timing_basis": "first_seen",
+    "age_hours": 0,
+    "freshness_cutoff_at": "2026-10-19T23:59:59.000Z",
+    "run_id": "2026-10-21-700",
+    "attempt": 3,
+    "date": "2026-10-21"
+  }
+]

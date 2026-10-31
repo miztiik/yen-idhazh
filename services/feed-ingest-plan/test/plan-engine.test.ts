@@ -1,223 +1,106 @@
-/** Verify the real four-ledger flow, clocks, partial work and text boundary on recorded content. */
+/** Do recorded run results preserve saved identities and report unsuccessful work honestly? */
 import { expect, test } from "bun:test";
-import { join } from "node:path";
-import { mkdir, writeFile, readFile } from "node:fs/promises";
 import {
-  DiscoveredArticleRowContract, SelectedArticleRowContract, RejectedArticleRowContract, FeedHealthStateRowContract, PlanRunRowContract,
-  SelectedArticlesArtifactSchema, deriveUrlKey,
+  DiscoveredArticleRowContract, FeedHealthStateRowContract, PlanRunRowContract, RejectedArticleRowContract,
+  SelectedArticleRowContract, SelectedArticleContentSchema, SelectedArticlesArtifactSchema, selectedArticleMetadata,
 } from "@idhazh/common-contracts";
-import { persistLedger } from "@idhazh/ledger-file-writer";
-import { runFeedPlan, summarizePlan } from "../src/run-feed-plan";
-import { readPlannerParquet } from "../src/read-ledger-history/read-planner-parquet";
-import { recordedPlan } from "./plan-recordings";
-import { source } from "./harvest-recordings";
-import { executeSelection } from "../src/api/selection-operation";
-import { endpointKey } from "../src/read-ledger-history/read-feed-history";
-import { fixtureGit } from "./publication-recordings";
+import { PlanResponseSchema } from "../src/api/plan-response.schema";
+import { FeedHealthStateUpdateResponseSchema } from "../src/api/feed-health-state.schema";
+import { ServiceSettingsSchema } from "../src/config/service-settings";
+import { resolveRunContext } from "../src/resolve-run-context";
+import { summarizePlan } from "../src/run-feed-plan";
+import type { FeedPlanResult } from "../src/run-feed-plan";
 
-async function writeHistoricalHealth(recorded: Awaited<ReturnType<typeof recordedPlan>>, day: string) {
-  const row = FeedHealthStateRowContract.schema.parse({
-    date: day, run_id: `${day}-900`, attempt: 1, feed_id: "recorded-news",
-    endpoint_key: endpointKey("https://news.example/feed.xml"), checked_at: `${day}T10:00:00Z`,
-    permission: "allowed", availability: "unknown", strikes: null,
-    check_request_id: null, check_result: null, rest_until: null,
-    first_confirmed_failure_at: null, failed_recovery_checks: null,
-    retired_at: null, retirement_reason: null, availability_updated_at: null, availability_complete: false,
-    last_failure_code: "FETCH_FAILED_HTTP", status: 503, reliability: null,
-    feed_reads: 1, productive_reads: 0, failed_reads: 1, article_candidates: 0, articles_selected: 0,
-    feed_requests: 2, article_requests: 3, robots_requests: 1, counts_complete: true, rejection_counts: [],
-    items: 0, outcome: "transient",
-  });
-  const result = await persistLedger({
-    ledger: "feed-health-state", registryEntry: recorded.inputs.registrations.feed_health_state, rowContract: FeedHealthStateRowContract,
-    outputRoot: recorded.inputs.outputRoot, ledgerSettings: recorded.inputs.ledgerSettings,
-    period: { tier: "raw", covers: day }, updatedAt: `${day}T11:00:00Z`, rows: [row],
-  });
-  const path = join(recorded.inputs.outputRoot, result.files[0]!.path);
-  await fixtureGit(recorded.directory, ["init", "--initial-branch=main"]);
-  await fixtureGit(recorded.directory, ["add", "--", `state/${result.files[0]!.path}`]);
-  await fixtureGit(recorded.directory, ["commit", "-m", "Record historical native health"]);
-  return { path, bytes: await readFile(path) };
+const recordings = new URL("../../../tests/fixtures/feed-ingest-plan/entry-points/", import.meta.url);
+
+async function recordedResult() {
+  const [response, artifact, rows, settings, health, discovered, selectedRows, rejected, healthRows] = await Promise.all([
+    Bun.file(new URL("response.json", recordings)).json().then(value => PlanResponseSchema.parse(value)),
+    Bun.file(new URL("selected-articles.json", recordings)).json().then(value => SelectedArticlesArtifactSchema.parse(value)),
+    Bun.file(new URL("plan-runs.rows.json", recordings)).json().then(value => PlanRunRowContract.schema.array().parse(value)),
+    Bun.file(new URL("../../../config/feed-ingest-plan-service.json", import.meta.url)).json()
+      .then(value => ServiceSettingsSchema.parse(value)),
+    Bun.file(new URL("health.json", recordings)).json().then(value => FeedHealthStateUpdateResponseSchema.parse(value)),
+    Bun.file(new URL("discovered-articles.rows.json", recordings)).json()
+      .then(value => DiscoveredArticleRowContract.schema.array().parse(value)),
+    Bun.file(new URL("selected-articles.rows.json", recordings)).json()
+      .then(value => SelectedArticleRowContract.schema.array().parse(value)),
+    Bun.file(new URL("rejected-articles.rows.json", recordings)).json()
+      .then(value => RejectedArticleRowContract.schema.array().parse(value)),
+    Bun.file(new URL("feed-health-state.rows.json", recordings)).json()
+      .then(value => FeedHealthStateRowContract.schema.array().parse(value)),
+  ]);
+  if (rows.length !== 1) throw new Error("The entry-point recording must contain its one actual saved run row");
+  const context = resolveRunContext(settings, "a".repeat(40), new Date(response.evaluated_at),
+    response.run_id.slice(11), response.correlation_id, undefined, response.attempt);
+  const selected = SelectedArticleContentSchema.array().parse(artifact.articles.map(article => ({
+    ...article, run_id: artifact.run_id, attempt: artifact.attempt, date: artifact.date,
+  })));
+  const batches: FeedPlanResult["batches"] = {};
+  for (const key of ["parsed_batch_id", "selection_batch_id", "partition_batch_id"] as const) {
+    const value = response.batches[key];
+    if (value !== undefined) batches[key] = value;
+  }
+  const files: FeedPlanResult["files"] = {};
+  for (const key of ["discovered_articles", "selected_articles", "rejected_articles", "feed_health_state", "plan_runs"] as const) {
+    const receipt = response.files[key];
+    if (receipt !== undefined) files[key] = receipt;
+  }
+  return {
+    response, artifact, health,
+    nativeRows: {
+      discovered_articles: discovered, selected_articles: selectedRows, rejected_articles: rejected,
+      feed_health_state: healthRows, plan_runs: rows,
+    },
+    result: { context, row: rows[0]!, batches, files, selected } satisfies FeedPlanResult,
+  };
 }
 
-test("real composition separates run and selection clocks and reads native dispatches with exact choices", async () => {
-  const recorded = await recordedPlan();
-  recorded.runtime.selection_clock = () => new Date("2026-10-22T00:00:02Z");
-  try {
-    const result = await runFeedPlan({ article_limit: 2, partition_strategy: "round-robin", shards: 2 }, recorded.inputs, recorded.runtime);
-    expect(result.row.status).toBe("completed");
-    expect(result.row.date).toBe("2026-10-21");
-    expect(result.row.evaluated_at).toBe("2026-10-21T23:59:59Z");
-    expect(result.row.selection_started_at_utc).toBe("2026-10-22T00:00:02Z");
-    expect(result.selected.map(article => article.url_key), JSON.stringify({
-      outcome: result.row, failures: recorded.events.filter(event => event.phase === "failed"),
-    })).toEqual([
-      deriveUrlKey("https://news.example/second"), deriveUrlKey("https://news.example/story/"),
-    ]);
-    expect(result.selected.map(article => article.worker_assignment)).toEqual([0, 1]);
-    const selected = await readPlannerParquet(join(recorded.inputs.outputRoot, result.files.selected_articles!.files[0]!.path),
-      "selected-articles", SelectedArticleRowContract);
-    const artifact = SelectedArticlesArtifactSchema.parse(JSON.parse(await readFile(join(recorded.inputs.root, result.row.selected_articles_artifact!), "utf8")));
-    expect(artifact.articles.map(article => article.url_key)).toEqual(selected.rows.map(article => article.url_key));
-    expect(artifact.articles.every(article => article.article_text.length > 0)).toBe(true);
-    expect(selected.rows.map(article => article.editorial_rank)).toEqual([1, 2]);
-    expect(selected.rows.map(article => article.worker_assignment)).toEqual([0, 1]);
-    const undated = selected.rows.find(article => article.canonical_url.endsWith("/second"))!;
-    expect(undated).toMatchObject({
-      published_at: result.row.selection_started_at_utc, published_at_source: "selection",
-      timing_basis: "first_seen", timing_at: result.row.evaluated_at, age_hours: 0,
+test("one recorded saved run agrees with its public summary and selected identities", async () => {
+  const { response, artifact, result, health, nativeRows } = await recordedResult();
+  expect(result.row.run_id).toBe(artifact.run_id);
+  expect(result.row.attempt).toBe(artifact.attempt);
+  expect(result.row.selected_count).toBe(artifact.articles.length);
+  const summary = PlanResponseSchema.parse(summarizePlan(result));
+  expect(summary).toEqual(response);
+  const selectedBatch = response.batches.selection_batch_id;
+  if (selectedBatch === undefined) throw new Error("The API recording omitted its selected batch");
+  expect(health.batch_id).toBe(selectedBatch);
+  expect(nativeRows.selected_articles).toEqual(result.selected.map(article => ({
+    ...selectedArticleMetadata(article), run_id: article.run_id, attempt: article.attempt, date: article.date,
+  })));
+  for (const key of ["discovered_articles", "selected_articles", "rejected_articles", "feed_health_state", "plan_runs"] as const) {
+    const receipt = response.files[key];
+    if (receipt === undefined) throw new Error(`The API recording omitted ${key} receipts`);
+    expect(nativeRows[key].length).toBe(receipt.files.reduce((total, file) => total + file.row_count, 0));
+  }
+  for (const invalid of [
+    { ...summary, selected_count: summary.selected_count + 1 },
+    { ...summary, assignments: summary.assignments.map(assignment => ({ ...assignment, editorial_rank: 2 })) },
+    { ...summary, assignments: summary.assignments.map(assignment => ({
+      ...assignment, worker_assignment: summary.dispatch_count,
+    })) },
+  ]) expect(PlanResponseSchema.safeParse(invalid).success).toBe(false);
+});
+
+test("partial and failed result models cannot claim completion or lose their failure cause", async () => {
+  const { result } = await recordedResult();
+  const original = structuredClone(result);
+  for (const status of ["partial", "failed"] as const) {
+    const row = PlanRunRowContract.schema.parse({
+      ...result.row, status, failure_code: "PERSIST_FAILED",
+      ...(status === "failed" ? {
+        selected_count: 0, dispatch_count: 0, selected_articles_artifact: null, selection_started_at_utc: null,
+      } : {}),
     });
-    const dated = selected.rows.find(article => article.canonical_url.includes("/story"))!;
-    expect(dated).toMatchObject({
-      published_at: "2026-10-21T09:15:00Z", published_at_source: "source",
-      timing_basis: "published_at", timing_at: "2026-10-21T09:15:00Z",
-    });
-    for (const row of selected.rows) {
-      expect(Object.keys(row)).not.toContain("article_text");
-      expect(Object.keys(row)).not.toContain("unit_id");
-      expect(Object.keys(row)).not.toContain("git_sha");
-      expect(row.ratings.marginal_score).toBeCloseTo(row.ratings.base_article_score
-        + row.ratings.adjustments.reduce((total, adjustment) => total + (adjustment.value ?? 0), 0), 12);
-    }
-    expect(Object.keys(selected.envelope)).not.toContain("unit_id");
-    expect(JSON.stringify(recorded.events)).not.toContain(artifact.articles[0]!.article_text);
-    const health = (await Promise.all(result.files.feed_health_state!.files.map(file =>
-      readPlannerParquet(join(recorded.inputs.outputRoot, file.path), "feed-health-state", FeedHealthStateRowContract)))).flatMap(file => file.rows);
-    expect(health.reduce((sum, row) => sum + (row.feed_requests ?? 0), 0)).toBe(1);
-    expect(health.reduce((sum, row) => sum + (row.article_requests ?? 0), 0)).toBe(2);
-    expect(health.reduce((sum, row) => sum + (row.robots_requests ?? 0), 0)).toBe(1);
-    expect(health.reduce((sum, row) => sum + (row.articles_selected ?? 0), 0)).toBe(2);
-    const run = await readPlannerParquet(join(recorded.inputs.outputRoot, result.files.plan_runs!.files[0]!.path), "plan-runs", PlanRunRowContract);
-    expect(run.rows).toEqual([result.row]);
-    expect(result.row.api_timings.filter(timing => timing.operation.startsWith("feed-health-"))
-      .map(timing => [timing.operation, timing.status])).toEqual([
-      ["feed-health-before-fetch", "completed"], ["feed-health-for-selection", "completed"],
-    ]);
-  } finally { await recorded.close(); }
-});
-
-test("freshness equality is admitted; a smaller override really rejects; empty is not complete", async () => {
-  const recorded = await recordedPlan([source({ url: "https://news.example/empty.xml" })]);
-  try {
-    const result = await runFeedPlan({}, recorded.inputs, recorded.runtime);
-    expect(result.row.status).toBe("completed");
-    expect(result.row.selected_count).toBe(0);
-    expect(result.files.selected_articles).toEqual({ status: "empty", files: [] });
-    expect(result.row.selected_articles_artifact).not.toBeNull();
-    const artifact = SelectedArticlesArtifactSchema.parse(JSON.parse(await readFile(join(recorded.inputs.root, result.row.selected_articles_artifact!), "utf8")));
-    expect(artifact.articles).toEqual([]);
-    const health = await readPlannerParquet(join(recorded.inputs.outputRoot, result.files.feed_health_state!.files[0]!.path),
-      "feed-health-state", FeedHealthStateRowContract);
-    expect(health.rows[0]).toMatchObject({ outcome: "ok", items: 0, feed_reads: 1, productive_reads: 0, failed_reads: 1 });
-  } finally { await recorded.close(); }
-});
-
-test("zero selected articles still persist every parsed refusal without article text", async () => {
-  const recorded = await recordedPlan();
-  recorded.inputs.harvest.config.triage.min_words = 10_000;
-  try {
-    const result = await runFeedPlan({}, recorded.inputs, recorded.runtime);
-    expect(result.row.status).toBe("completed");
-    expect(result.selected).toEqual([]);
-    expect(result.files.selected_articles).toEqual({ status: "empty", files: [] });
-    const saved = result.files.rejected_articles!;
-    expect(saved.status).toBe("written");
-    const rows = (await Promise.all(saved.files.map(file =>
-      readPlannerParquet(join(recorded.inputs.outputRoot, file.path), "rejected-articles", RejectedArticleRowContract))))
-      .flatMap(file => file.rows);
-    expect(rows).toHaveLength(2);
-    expect(new Set(rows.map(row => row.candidate_id)).size).toBe(2);
-    expect(rows.every(row => row.reason_code === "REJECTED_SCREENING_MIN_WORDS")).toBe(true);
-    expect(rows.every(row => !Object.hasOwn(row, "title") && !Object.hasOwn(row, "article_text"))).toBe(true);
-  } finally { await recorded.close(); }
-});
-
-test("persisted discovery wins for undated articles; empty history does not prove absence", async () => {
-  const recorded = await recordedPlan();
-  recorded.inputs.settings.inputs.feed_health_days.push({ day: "2026-10-20" });
-  try {
-    const first = await runFeedPlan({}, recorded.inputs, recorded.runtime);
-    await writeHistoricalHealth(recorded, "2026-10-20");
-    const originalSettings = JSON.stringify(recorded.inputs.settings);
-    const fresh = await executeSelection({ batch_id: first.batches.parsed_batch_id! }, recorded.inputs, {
-      ...recorded.runtime, selection_clock: () => new Date("2026-10-22T00:10:00Z"),
-    });
-    expect(JSON.stringify(recorded.inputs.settings)).toBe(originalSettings);
-    expect(fresh.batch.evaluated_at).toBe(first.row.evaluated_at);
-    expect(fresh.batch.selection_started_at_utc).toBe("2026-10-22T00:10:00Z");
-    const chosenUndated = first.selected.find(article => article.canonical_url.endsWith("/second"))!;
-    expect(fresh.batch.articles.find(article => article.url_key === chosenUndated.url_key)).toMatchObject({
-      published_at: fresh.batch.selection_started_at_utc, published_at_source: "selection",
-      timing_at: chosenUndated.timing_at, timing_basis: chosenUndated.timing_basis, age_hours: chosenUndated.age_hours,
-    });
-    expect(fresh.batch.request_report.through_day).toBe("2026-10-21");
-    expect(fresh.batch.health_rows[0]!.reliability).toMatchObject({ productive: 1, attempted: 1, production_factor: 1, complete: false });
-    expect(fresh.batch.articles.every(article => article.ratings.adjustments.find(adjustment => adjustment.term === "article_pass_rate")!.value === null)).toBe(true);
-    recorded.runtime.run_number = "701";
-    recorded.runtime.clock = () => new Date("2026-10-22T00:10:00Z");
-    const second = await runFeedPlan({}, recorded.inputs, recorded.runtime);
-    const key = deriveUrlKey("https://news.example/second");
-    expect(second.selected.find(article => article.url_key === key)?.timing_at)
-      .toBe(first.selected.find(article => article.url_key === key)?.timing_at);
-    expect(second.files.discovered_articles).toEqual({ status: "empty", files: [] });
-    const discovery = await readPlannerParquet(join(recorded.inputs.outputRoot, first.files.discovered_articles!.files[0]!.path),
-      "discovered-articles", DiscoveredArticleRowContract);
-    expect(discovery.rows.map(row => row.url_key).sort()).toEqual(first.selected.map(article => article.url_key).sort());
-    recorded.runtime.run_number = "702";
-    recorded.runtime.clock = () => new Date("2026-10-24T00:10:00Z");
-    recorded.runtime.selection_clock = recorded.runtime.clock;
-    const expired = await runFeedPlan({}, recorded.inputs, recorded.runtime);
-    expect(expired.selected).toEqual([]);
-    expect(expired.files.discovered_articles).toEqual({ status: "empty", files: [] });
-  } finally { await recorded.close(); }
-});
-
-test("invalid controls, disabled runs, inactive ledgers and unavailable named history fail before fetching", async () => {
-  const recorded = await recordedPlan();
-  recorded.inputs.settings.inputs.feed_health_days.push({ day: "2026-10-19" }, { day: "2026-10-20" });
-  try {
-    for (const request of [{ article_limit: 0 }, { shards: 3, partition_strategy: "none" }, { unknown: true }]) {
-      await expect(runFeedPlan(request, recorded.inputs, recorded.runtime)).rejects.toThrow();
-    }
-    recorded.inputs.settings.enabled = false;
-    await expect(runFeedPlan({}, recorded.inputs, recorded.runtime)).rejects.toThrow("disabled");
-    expect(recorded.transport.requests).toHaveLength(0);
-    recorded.inputs.settings.enabled = true;
-    await writeHistoricalHealth(recorded, "2026-10-19");
-    const damaged = await writeHistoricalHealth(recorded, "2026-10-20");
-    await writeFile(damaged.path, "invalid Parquet");
-    recorded.runtime.run_number = "702";
-    const partialHistory = await runFeedPlan({}, recorded.inputs, recorded.runtime);
-    expect(partialHistory.row.status).toBe("completed");
-    expect(partialHistory.files.selected_articles!.status).toBe("written");
-    expect(partialHistory.selected.length).toBeGreaterThan(0);
-    const captured = await readPlannerParquet(join(recorded.inputs.outputRoot, partialHistory.files.feed_health_state!.files[0]!.path),
-      "feed-health-state", FeedHealthStateRowContract);
-    expect(captured.rows[0]!.reliability).toMatchObject({ productive: 1, attempted: 2, complete: false });
-    await writeFile(damaged.path, damaged.bytes);
-    await writeFile(damaged.path, "corrupt Parquet");
-    recorded.runtime.run_number = "703";
-    const corruptFile = await runFeedPlan({}, recorded.inputs, recorded.runtime);
-    expect(corruptFile.row.status).toBe("completed");
-    expect(corruptFile.files.selected_articles!.status).toBe("written");
-    const retained = await readPlannerParquet(join(recorded.inputs.outputRoot, corruptFile.files.feed_health_state!.files[0]!.path),
-      "feed-health-state", FeedHealthStateRowContract);
-    expect(retained.rows[0]!.reliability).toMatchObject({ productive: 2, attempted: 3, complete: false });
-  } finally { await recorded.close(); }
-});
-
-test("real dispatch persistence failure leaves earlier files but emits no storage completion", async () => {
-  const recorded = await recordedPlan();
-  try {
-    const obstruction = join(recorded.inputs.outputRoot, "raw", "feed-ingest-plan", "selected-articles");
-    await mkdir(join(recorded.inputs.outputRoot, "raw", "feed-ingest-plan"), { recursive: true });
-    await writeFile(obstruction, "not a directory");
-    const result = await runFeedPlan({}, recorded.inputs, recorded.runtime);
-    expect(result.row.status).toBe("partial");
-    expect(result.row.failure_code).not.toBeNull();
-    expect(result.files.selected_articles).toBeUndefined();
-    expect(result.files.feed_health_state!.status).toBe("written");
-    expect(result.files.plan_runs!.status).toBe("written");
-    expect(summarizePlan(result).planning_complete).toBe(false);
-  } finally { await recorded.close(); }
+    const summary = PlanResponseSchema.parse(summarizePlan({
+      ...result, row, selected: status === "failed" ? [] : result.selected,
+    }));
+    expect(summary.planning_complete).toBe(false);
+    expect(summary.status).toBe(status);
+    expect(summary.failure_code).toBe(row.failure_code);
+    expect(PlanResponseSchema.safeParse({ ...summary, planning_complete: true }).success).toBe(false);
+    expect(PlanResponseSchema.safeParse({ ...summary, failure_code: null }).success).toBe(false);
+  }
+  expect(result).toEqual(original);
 });

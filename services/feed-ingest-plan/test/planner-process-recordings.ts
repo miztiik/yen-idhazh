@@ -6,7 +6,9 @@ import { recordedPlan } from "./plan-recordings";
 import { loadPlanInputs } from "../src/load-plan-inputs";
 import { createPlannerStartup } from "../scripts/feed-ingest-plan-supervisor";
 
-export async function recordedPlannerProcess(sources?: Parameters<typeof recordedPlan>[0]) {
+export async function recordedPlannerProcess(
+  sources?: Parameters<typeof recordedPlan>[0], options: { reserveListener?: boolean } = {},
+) {
   const fixture = await recordedPlan(sources);
   try {
     const configRoot = new URL("../../../config/", import.meta.url);
@@ -16,9 +18,11 @@ export async function recordedPlannerProcess(sources?: Parameters<typeof recorde
     }
     const settings = { ...fixture.inputs.settings, enabled: false };
     settings.listener.parser_concurrency = 2;
-    const reservation = Bun.serve({ hostname: "127.0.0.1", port: 0, fetch: () => new Response() });
-    settings.listener.port = reservation.port!;
-    await reservation.stop(true);
+    if (options.reserveListener !== false) {
+      const reservation = Bun.serve({ hostname: "127.0.0.1", port: 0, fetch: () => new Response() });
+      settings.listener.port = reservation.port!;
+      await reservation.stop(true);
+    }
     await writeFile(join(fixture.directory, "config", "feed-ingest-plan-service.json"), JSON.stringify(settings));
     await writeFile(join(fixture.directory, "config", "feed-ingest-plan.json"), JSON.stringify(fixture.inputs.harvest.config));
     await writeFile(join(fixture.directory, "config", "sources.json"), JSON.stringify({
