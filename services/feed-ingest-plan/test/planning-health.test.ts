@@ -160,3 +160,31 @@ test("a refused old format or corrupt sibling preserves usable current decisions
     await writeFile(setup.path, original);
   } finally { await setup.close(); }
 });
+
+test("a real known skipped day expires the last measured read without carrying its old perfect fraction", async () => {
+  const setup = await recording();
+  try {
+    const measured = { ...setup.row, reliability: {
+      productive: 1, attempted: 1, success_fraction: 1, production_factor: 1,
+      from_day: setup.row.date, through_day: setup.row.date, complete: true,
+    } };
+    await rewriteHealthFields(setup.path, [measured], schema);
+    const nextDay = setup.now.slice(0, 10);
+    const skipped = FeedHealthStateRowSchema.parse({
+      ...measured, run_id: `${nextDay}-901`, date: nextDay,
+      check_request_id: null, check_result: null, checked_at: null, outcome: null, items: null,
+      feed_reads: 0, productive_reads: 0, failed_reads: 0, article_candidates: 0, articles_selected: 0,
+      feed_requests: 0, article_requests: 0, robots_requests: 0, rejection_counts: [],
+    });
+    const saved = await writeRows(setup.inputs.outputRoot, "feed-health-state", nextDay, FeedHealthStateRowContract, [skipped]);
+    setup.inputs.settings.inputs.feed_health_days.push({
+      day: nextDay, raw_files: saved.files.map(file => `state/${file.path}`),
+    });
+    const refreshed = await preparePlanningHealth(setup.inputs, setup.now);
+    const calculation = refreshed.sources.get(setup.row.feed_id)!.reliability!;
+    expect(calculation).toEqual({
+      productive: 0, attempted: 0, success_fraction: null, production_factor: null,
+      from_day: nextDay, through_day: nextDay, complete: true,
+    });
+  } finally { await setup.close(); }
+});

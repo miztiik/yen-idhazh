@@ -6,7 +6,6 @@ import { tableFromIPC } from "apache-arrow";
 import initialize, { readMetadata, readParquet } from "parquet-wasm/esm";
 import {
   WriterIdentitySchema,
-  LEGACY_DISCOVERED_ARTICLE_VERSION, LEGACY_SELECTED_ARTICLE_VERSION,
   PLANNER_ENVELOPE_VERSION,
   deriveUrlKey,
 } from "@idhazh/common-contracts";
@@ -98,24 +97,20 @@ test("public schema descriptors and digest verify native raw readback", async ()
     await rm(root, { recursive: true, force: true });
   }
 });
-test("native discovery and selected files retain exact historical rows and envelope versions", async () => {
+test("current native article files round-trip and older envelopes refuse without rewriting bytes", async () => {
   const root = await mkdtemp(join(process.cwd(), ".tmp_article-reader-"));
   try {
     await initialize();
     for (const recording of plannerRecordings().slice(0, 2)) {
-      const historicalVersion = recording.name === "discovered-articles"
-        ? LEGACY_DISCOVERED_ARTICLE_VERSION : LEGACY_SELECTED_ARTICLE_VERSION;
-      for (const historical of [true, false]) {
-        const canonical_url = historical
-          ? "https://example.org/article/1?edition=morning&utm_source=feed"
-          : "https://example.org/article/2";
+      {
+        const canonical_url = "https://example.org/article/2";
         const row = {
           ...recording.row, url_key: deriveUrlKey(canonical_url),
           ...(recording.name === "selected-articles" ? { canonical_url } : {}),
         };
         const contract = {
           ...recording.contract,
-          schemaVersion: historical ? historicalVersion : recording.contract.schemaVersion,
+          schemaVersion: recording.contract.schemaVersion,
         };
         const result = await persistLedger({
           ledger: recording.name, outputRoot: root, rowContract: contract,
@@ -128,13 +123,15 @@ test("native discovery and selected files retain exact historical rows and envel
         });
         expect(result.status).toBe("written");
         const path = join(root, result.files[0]!.path);
-        if (historical) {
-          const bytes = await readFile(path);
+        const original = await readFile(path);
+        expect((await readPlannerParquet(path, recording.name, recording.contract)).rows).toEqual([row]);
+        for (const version of ["2026-10-25", "2026-10-27", "2026-10-29"]) {
+          const bytes = original;
           const metadata = readMetadata(bytes);
           const footer = metadata.fileMetadata();
           try {
             const values = new Map(footer.keyValueMetadata());
-            values.set("envelope_version", historicalVersion);
+            values.set("envelope_version", version);
             const table = tableFromIPC(readParquet(bytes).intoIPCStream());
             const rewritten = await serializeParquet(table, values, "snappy");
             await writeFile(path, rewritten.data);
@@ -142,13 +139,12 @@ test("native discovery and selected files retain exact historical rows and envel
             footer.free();
             metadata.free();
           }
+          const before = await readFile(path);
+          await expect(readPlannerParquet(path, recording.name, recording.contract)).rejects.toThrow();
+          expect(await readFile(path)).toEqual(before);
         }
-        const before = await readFile(path);
-        const actual = await readPlannerParquet(path, recording.name, recording.contract);
-        expect(actual.envelope.version).toBe(historical ? historicalVersion : PLANNER_ENVELOPE_VERSION);
-        expect<string>(actual.envelope.row_schema_version).toBe(contract.schemaVersion);
-        expect(actual.rows).toEqual([row]);
-        expect(await readFile(path)).toEqual(before);
+        await writeFile(path, original);
+        expect((await readPlannerParquet(path, recording.name, recording.contract)).envelope.version).toBe(PLANNER_ENVELOPE_VERSION);
       }
     }
   } finally {

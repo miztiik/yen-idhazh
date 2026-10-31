@@ -7,7 +7,6 @@ export type LedgerRowContract<T extends object> = {
   schema: z.ZodType<T>;
   schemaVersion: string;
   acceptedSchemaVersions?: readonly string[];
-  historicalSchemas?: Readonly<Record<string, z.ZodType<object>>>;
 };
 
 export type LedgerRegistration = {

@@ -19,11 +19,6 @@ function operationConfiguration(inputs: PlanInputs, runtime: PlanRuntime) {
 export function operationConfigFingerprint(inputs: PlanInputs, runtime: PlanRuntime) {
   return sha256(JSON.stringify(operationConfiguration(inputs, runtime)));
 }
-function legacyOperationConfigFingerprint(inputs: PlanInputs, runtime: PlanRuntime) {
-  const { policy: _policy, ...config } = operationConfiguration(inputs, runtime);
-  const { digest_root, ...originalInputs } = config.settings.inputs;
-  return sha256(JSON.stringify({ ...config, settings: { ...config.settings, inputs: originalInputs } }));
-}
 export function proposedOperation(
   operation: PlannerOperation["operation"], request_id: string, request: unknown, correlation_id: string,
   inputs: PlanInputs, runtime: PlanRuntime,
@@ -45,7 +40,6 @@ export function prepareOperation(
 ): PreparedOperation {
   return {
     request_id, operation, input_sha256: sha256(JSON.stringify(request)), config_sha256: operationConfigFingerprint(inputs, runtime),
-    legacy_config_sha256: legacyOperationConfigFingerprint(inputs, runtime),
     capture: () => {
       const record = proposedOperation(operation, request_id, request, correlation_id, inputs, runtime);
       return runId === undefined ? record : { ...record, run_id: runId };

@@ -38,18 +38,18 @@ export function applyFeedCheck(
     first_confirmed_failure_at: null, failed_recovery_checks: 0,
     retired_at: null, retirement_reason: null, availability_updated_at: at, availability_complete: true,
   };
-  if (check.check_result === "interrupted" || check.check_result === "transport-unknown") {
+  if (check.check_result === "interrupted") {
     return { ...prior, availability_complete: false };
   }
   const next = { ...prior, availability_updated_at: at };
   const recovery = prior.rest_until !== null && Date.parse(at) >= Date.parse(prior.rest_until);
-  next.strikes = prior.strikes === null ? null : prior.strikes + 1;
+  next.strikes = prior.strikes === null ? 1 : prior.strikes + 1;
   if (check.check_result === "confirmed-http-failure") {
     if (prior.first_confirmed_failure_at === null) {
-      next.first_confirmed_failure_at = prior.availability_complete ? at : null;
-      next.failed_recovery_checks = prior.availability_complete ? 0 : null;
-    } else if (recovery && prior.failed_recovery_checks !== null) {
-      next.failed_recovery_checks = prior.failed_recovery_checks + 1;
+      next.first_confirmed_failure_at = at;
+      next.failed_recovery_checks = recovery ? 1 : 0;
+    } else if (recovery) {
+      next.failed_recovery_checks = prior.failed_recovery_checks === null ? 1 : prior.failed_recovery_checks + 1;
     }
   }
   if (recovery || (next.strikes !== null && next.strikes >= policy.consecutive_failed_checks_before_rest)) {

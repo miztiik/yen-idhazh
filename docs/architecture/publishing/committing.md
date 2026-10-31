@@ -152,18 +152,7 @@ delivery copies only named files and refuses symlink parents or replacement
 with different bytes. Neither destination supports deletion or mutable
 replacement.
 
-Mutable state uses the separate TypeScript `read_git_data` and
-`compare_and_swap_data` APIs, not `safe_persist_data`. The bounded reader
-returns named file bytes, hashes, prior-publication evidence and one Git
-revision. The writer requires that exact revision, validates the completed
-source hashes and independent path permissions, then publishes all named
-replacements in one commit. A newer target refuses the write as a conflict;
-the caller must refresh its state and apply its transition again.
-Successful publication identifies its own commit even if another valid update
-lands before verification. Fetches use private temporary references, not the
-shared `FETCH_HEAD`, and do not change the caller's checkout or index.
-The planner does not use these mutable-state APIs. Its
-[availability calculations](../sources/feed-availability.md) are ordinary
+The planner's [availability calculations](../sources/feed-availability.md) are ordinary
 immutable health-ledger output. Fetch, parse, collection, selection and health
 recording make no Git commits; only final `safe_persist_data` delivery publishes
 their completed metadata files.

@@ -152,18 +152,14 @@ and `age_hours = null`. It does not create a fabricated historical publication
 source or rewrite the selection-start fallback. The artifact and metadata
 projection use the same chosen values.
 
-The TypeScript planner reader accepts the current native ledger stamps:
-`2026-10-29` for discovered and selected articles, `2026-10-26` for plan runs
-and `2026-10-31` for feed health. Earlier health stamps refuse without
-rewriting historical files. Discovery and selected history also retain
-the exact earlier stamps listed in [article cleanup compatibility](#article-cleanup-compatibility).
-Rejected articles use `2026-10-29T20:15`;
-their exact `2026-10-27` and `2026-10-29` predecessors remain readable with null fetch-evidence
-fields. It verifies the physical fields, file identity
-and canonical digest, then parses every row with the matching current schema.
-The selected and plan-run `2026-10-25` rows and the selected `2026-10-25`
-artifact are obsolete and refuse explicitly; they are unchanged on disk and
-receive no migration, null-fill or invented provenance.
+The current native stamps are `2026-10-31` for discovery, selected articles,
+rejected articles, health, file envelopes, parsed/selected batches, private
+receipts and progress events. Plan runs retain their unchanged current
+`2026-10-26` shape. Readers verify physical fields, file identity and canonical
+digest against the current format. Older formats refuse with diagnostics.
+Historical files remain unchanged; no migration or null-fill is applied.
+The [site publication stage](../architecture/publishing/planner-publication.md)
+omits refused planner bytes and marks their copied index coverage unavailable.
 
 Empty categories stay arrays. The native Parquet and JSON comparison found
 that null increased both representations, so no nullable category shape is
@@ -203,7 +199,7 @@ totals or add together saved rolling reliability results.
 | C7 | `checked_at` | Feed/run/day | Actual feed-check time; nullable when this work day had no feed check |
 | C8 | `permission` | Feed/run/day | Allowed, denied or unknown as observed for this work |
 | C9 | `availability` | Feed/run/day | Supported computed eligibility, rest, retirement or unknown state |
-| C10 | `strikes` | Feed/run/day | Saved logical failure streak; null when unverified |
+| C10 | `strikes` | Feed/run/day | Observed logical failure streak; a supported lower bound when earlier history is partial, null before known checks |
 | C11 | Removed | - | UTC rest deadlines replace skipped-run counting |
 | C12 | `last_failure_code` | Feed/run/day | Explain the run's latest feed failure without free-text payloads |
 | C13 | `status` | Feed/run/day | Actual feed HTTP status; nullable; not catalog membership |
@@ -236,8 +232,8 @@ totals or add together saved rolling reliability results.
 | C41 | `check_request_id` | Feed/run/day | Actual logical check identity; null for carried-only rows |
 | C42 | `check_result` | Feed/run/day | Parsed validity or typed HTTP, timeout, robots, transport, local or interrupted result |
 | C43 | `rest_until` | Saved calculation | Supported UTC recovery deadline |
-| C44 | `first_confirmed_failure_at` | Saved calculation | Proven UTC start of the confirmed failure episode; null when unknown |
-| C45 | `failed_recovery_checks` | Saved calculation | Qualifying confirmed recovery failures; null when unknown |
+| C44 | `first_confirmed_failure_at` | Saved calculation | UTC first observed confirmed failure in the known episode; partial history does not claim an earlier unseen start |
+| C45 | `failed_recovery_checks` | Saved calculation | Observed qualifying confirmed recovery failures; partial history does not claim an exact earlier total |
 | C46 | `retired_at` | Saved calculation | UTC instant of a proven retirement decision |
 | C47 | `retirement_reason` | Saved calculation | Typed reason recorded with C46 |
 | C48 | `availability_updated_at` | Saved calculation | Actual check instant that last changed the calculation; carry-forward does not advance it |
@@ -763,14 +759,10 @@ tables above explain field disposition; they are not migration instructions.
 
 ### TypeScript current-format refusal
 
-**Breaking cutover approval, 2026-10-26 UTC:** The TypeScript planner native
-reader and selected-artifact reader accept only their current ledger stamps.
-The selected and plan-run row stamps and selected artifact stamp are
-`2026-10-26`; the discovered and feed-health stamps remain `2026-10-25`.
-Obsolete selected and plan-run `2026-10-25` rows refuse with a contract
-diagnostic. Obsolete selected artifacts refuse instead of adding a historical
-provenance default. Missing age evidence remains null; a real current-run
-selection instant remains selection provenance.
+**User-approved ruling, 2026-10-31 UTC:** The planner accepts only current
+native formats, including private receipts and events. Older formats refuse
+instead of being converted. Missing current health fields affect their own
+calculation; they do not permit an old format or invented provenance.
 
 This is the maintainer-approved TypeScript exception to the read-side migration
 rule in `CLAUDE.md` section 11. Python's historical planner row readers and
@@ -778,10 +770,9 @@ contract copies are retired. The gardener registry and scheduler remain; the
 published-file validator and compact writer use the current TypeScript
 contracts.
 
-The shared TypeScript ledger reader has no migration table. Strict full-row
-validation accepts only the contract's declared row stamps. The separate health
-health field reader requires the current health row stamp, then validates
-required columns independently. Article cleanup has its own named stamps below.
+The native planner reader has no migration table or historical physical schema.
+Strict full-row validation accepts only the current contract stamp. The health
+field reader checks that stamp, then validates required columns independently.
 
 ### Field-based health history
 
@@ -867,8 +858,8 @@ reported separately, never presented as a count of lost records. Each
 counter is complete only when all configured closed days are complete.
 Feed and report completeness require every counter to be complete.
 
-The report schema and selected/partitioned stage payloads are stamped
-`2026-10-29`. Current stage readers refuse earlier formats under the
+The request report retains its unchanged current `2026-10-29` shape; selected
+and partitioned payloads use `2026-10-31`. Stage readers refuse earlier formats under the
 TypeScript planner compatibility rule; no historical ledger is rewritten.
 The [operator report guide](../how-to/run-feed-ingest-plan-test.md) defines
 the partial-total marker and report-only ordering.
@@ -886,27 +877,15 @@ rate used by selection.
 
 ### Article cleanup compatibility
 
-**User approval, 2026-10-29 UTC:** Article identity and initial request cleanup
-now share a policy that removes every article query string and fragment.
-Discovery rows, selected rows/artifacts, candidate and stage payloads, and private
-fetch receipts written with this policy use `2026-10-29` stamps. Feed identity
-and Python discovery do not change.
+Article identity and initial request cleanup remove every article query string
+and fragment. Only the current cleaned key is used for discovery, publication
+and settled failures. Feed capture identity and separate Python discovery are
+unchanged.
 
-The native reader accepts exact compatible discovery `2026-10-25` and selected
-`2026-10-27` rows/artifacts. Private fetched documents and operation journals also
-accept `2026-10-28`. Old row and receipt stamps remain unchanged on read; a
-compacted container can use its current stamp without relabeling historical rows.
-Earlier incompatible stamps still refuse. Existing published records and joins
-retain their original keys.
-
-Parsed feed batches written with `2026-10-29` remain readable because the new
-`body_limit` diagnostic is nullable and defaults to `null`. New batches use
-`2026-10-30`; reading an older batch preserves its original stamp.
-
-Saved fetch responses remain replayable with their original identity. An old
-article fetch receipt cannot be parsed into a current-policy candidate; fetch
-the article again. There is no migration table, dual writer or permanent alias
-ledger.
+Older planner rows, artifacts, receipts, batches and events refuse. Current
+receipt replay retains the exact completed response without repeating work.
+Missing or old stored receipt stamps refuse instead of adopting current
+defaults. Current constructor defaults are not stored-file migrations.
 
 Targeted deletion of the same eight obsolete ledger prefixes named in Table F
 under both `state/raw/feed-ingest-plan/` and
@@ -933,23 +912,21 @@ safety checks and the artifact-only article-text boundary remain unchanged.
 
 ### Share each bounded health capture
 
-The pre-fetch decision and fresh selection feedback answer different questions
-at different instants. A run needs both when work or external evidence changes
-between them. Pre-fetch captures derive planning evidence only; selection and
-explicit summaries also derive the request report. Each capture shares bounded
-file reads among its consumers. The run records
-the full measured health-summary cost through D11-D13, not only its last
-refresh. This is a measured operation cost, not a claim of a speed improvement.
+A run captures available input once and reuses its saved or recovered
+calculations. Selection and finish apply known actual work to that captured
+calculation; they do not reconstruct unchanged history. Rest deadlines still
+use the current UTC clock. A different run can capture later published input
+without changing this run's decisions.
 
-Captured reliability in C records what selection used. It is not a result cache
-proved fresh for another request. No fifth summary ledger, separate summary
-service, new API or profiler gate is needed.
+Health C is the existing saved-calculation store. Known partial values and
+supported skipped-feed decisions are written there at finish. Request reporting
+remains a separate bounded calendar-day calculation. No availability sidecar,
+extra ledger, reservation, migration reader or intermediate data commit is used.
 
-Consider an incremental persisted cache only if representative runner evidence
-changes that recommendation. First consider keeping any justified cache in
-the existing health data family rather than adding a ledger or API. Do not
-build cursor, fingerprint, revision or head machinery before that evidence
-shows a need.
+Missing earlier history does not erase actual observed failures. Partial
+snapshots retain observed streak and recovery counts as supported lower bounds.
+Uncertain transport counts for logical rest, never for confirmed retirement.
+A known window with zero measured reads retains zero counts and null fractions.
 
 ## See also
 

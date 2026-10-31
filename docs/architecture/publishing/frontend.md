@@ -1,6 +1,6 @@
 # Published Frontend
 
-**Last Updated**: 2026-10-12
+**Last Updated**: 2026-10-31
 
 What a build writes, what a reader's browser fetches, and where each part of the
 reader's surface is written up. This page holds the shell: the documents a build
@@ -26,6 +26,10 @@ Six pages, one question each. Arrive at the one holding your question and stop.
 
 The operator's surface is a different reader with a different budget, and it is
 [console.md](console.md).
+
+Planner table files have a separate [current-format publication admission
+rule](planner-publication.md). It changes only the generated planner copies and
+their unavailable coverage, not historical repository files or other families.
 
 ## Seven documents, and an eighth that answers every dated address
 

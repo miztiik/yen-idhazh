@@ -8,16 +8,13 @@ import {
   Sha256Schema, SlugSchema, reject,
 } from "./primitives";
 
-export const REJECTED_ARTICLE_VERSION = "2026-10-29T20:15";
-export const REJECTED_ARTICLE_ACCEPTED_SCHEMA_VERSIONS = ["2026-10-27", "2026-10-29", REJECTED_ARTICLE_VERSION] as const;
-export const LegacyRejectedArticleRowSchema = z.strictObject({
+export const REJECTED_ARTICLE_VERSION = "2026-10-31";
+export const RejectedArticleRowSchema = z.strictObject({
   run_id: RunIdSchema, attempt: PositiveCountSchema, date: DateStampSchema,
-  candidate_id: Sha256Schema, url_key: Sha256Schema, feed_id: SlugSchema,
+  candidate_id: Sha256Schema.nullable(), url_key: Sha256Schema, feed_id: SlugSchema,
   stage: RejectionStageSchema, reason_code: RetainedRejectionReasonSchema,
   freshness_cutoff_at: RecordedInstantSchema.nullable(),
-});
-export const RejectedArticleRowSchema = LegacyRejectedArticleRowSchema.extend({
-  candidate_id: Sha256Schema.nullable(), ...ArticleFetchEvidenceSchema.shape,
+  ...ArticleFetchEvidenceSchema.shape,
 }).superRefine((row, ctx) => {
   if (!row.run_id.startsWith(`${row.date}-`)) reject(ctx, "rejected date must match its selection run");
   const harvestFailure = row.stage === "harvest-feeds"
@@ -31,7 +28,8 @@ export const RejectedArticleRowSchema = LegacyRejectedArticleRowSchema.extend({
 }).meta({
   version: REJECTED_ARTICLE_VERSION,
   changelog: [
-    { version: REJECTED_ARTICLE_VERSION, change: "Retain terminal article fetch evidence and harvest failures without parsed candidate identities." },
+    { version: REJECTED_ARTICLE_VERSION, change: "Require current rejection rows without historical physical schemas or null-fill migration." },
+    { version: "2026-10-29T20:15", change: "Retain terminal article fetch evidence and harvest failures without parsed candidate identities." },
     { version: "2026-10-29", change: "Accept bounded retained reason strings without rewriting ledger rows." },
     { version: "2026-10-27", change: "Declare terminal selection rejections without article text or titles." },
   ],
@@ -39,9 +37,4 @@ export const RejectedArticleRowSchema = LegacyRejectedArticleRowSchema.extend({
 export type RejectedArticleRow = z.infer<typeof RejectedArticleRowSchema>;
 export const RejectedArticleRowContract = {
   schema: RejectedArticleRowSchema, schemaVersion: REJECTED_ARTICLE_VERSION,
-  acceptedSchemaVersions: REJECTED_ARTICLE_ACCEPTED_SCHEMA_VERSIONS,
-  historicalSchemas: {
-    "2026-10-27": LegacyRejectedArticleRowSchema,
-    "2026-10-29": LegacyRejectedArticleRowSchema,
-  },
 } as const;

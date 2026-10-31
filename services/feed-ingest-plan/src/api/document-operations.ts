@@ -1,6 +1,5 @@
 /** Dispatch a validated document request to its shared fetch or parse execution unit. */
 import { FetchRequestSchema, ParseRequestSchema } from "./operation-contracts";
-import { LEGACY_PLANNER_OPERATION_VERSION } from "@idhazh/common-contracts";
 import type { PlanInputs } from "../load-plan-inputs";
 import type { PlanRuntime } from "../run-feed-plan";
 import { openOperationStore } from "./operation-store";
@@ -80,7 +79,7 @@ export async function executeDocumentOperation(
       }
     });
     const response = ParseResponseSchema.parse(JSON.parse(record.response_json!));
-    if (record.version !== LEGACY_PLANNER_OPERATION_VERSION && !stageStore(inputs).has(response.batch_id)) {
+    if (!stageStore(inputs).has(response.batch_id)) {
       throw new PlanError("REQUEST_INCOMPLETE", "Parsed batch has expired; parse its saved response with a new request key", "request_id");
     }
     return record.response_json!;

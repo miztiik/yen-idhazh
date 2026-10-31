@@ -1,6 +1,6 @@
 /** What feed work did one run attempt perform on one actual UTC day? */
 import { z } from "zod";
-import { FEED_HEALTH_STATE_ACCEPTED_SCHEMA_VERSIONS, FEED_HEALTH_STATE_VERSION, LEGACY_FEED_HEALTH_STATE_VERSION } from "../version";
+import { FEED_HEALTH_STATE_VERSION } from "../version";
 import { CountSchema, DateStampSchema, FiniteSchema, NonEmptySchema, PositiveCountSchema, RunIdSchema, Sha256Schema, SlugSchema, reject } from "./primitives";
 import { RecordedInstantSchema } from "./recorded-instant.schema";
 
@@ -30,12 +30,12 @@ export const FeedHealthStateRowSchema = z.strictObject({
   feed_id: SlugSchema, endpoint_key: Sha256Schema, checked_at: RecordedInstantSchema.nullable(),
   permission: z.enum(["allowed", "denied", "unknown"]),
   availability: z.enum(["eligible", "resting", "retired", "unknown"]),
-  strikes: CountSchema.nullable(),
+  strikes: CountSchema.nullable().describe("Observed consecutive logical failures; partial history keeps this a supported lower bound, not an exact historical total."),
   check_request_id: z.uuid({ version: "v4" }).nullable(),
   check_result: FeedCheckResultSchema.nullable(),
   rest_until: RecordedInstantSchema.nullable().describe("Supported UTC recovery deadline; a carried value is not a new check."),
-  first_confirmed_failure_at: RecordedInstantSchema.nullable(),
-  failed_recovery_checks: CountSchema.nullable(),
+  first_confirmed_failure_at: RecordedInstantSchema.nullable().describe("UTC first confirmed failure in the known episode; partial history does not claim an earlier unseen start."),
+  failed_recovery_checks: CountSchema.nullable().describe("Observed qualifying confirmed recovery failures; missing earlier evidence stays partial."),
   retired_at: RecordedInstantSchema.nullable(),
   retirement_reason: z.literal("confirmed-recovery-failures").nullable(),
   availability_updated_at: RecordedInstantSchema.nullable(),
@@ -67,9 +67,10 @@ export const FeedHealthStateRowSchema = z.strictObject({
 }).meta({
   version: FEED_HEALTH_STATE_VERSION,
   changelog: [
+    { version: FEED_HEALTH_STATE_VERSION, change: "Keep observed failure and recovery counts usable when earlier history is partial." },
     { version: FEED_HEALTH_STATE_VERSION, change: "Save logical checks and supported timed lifecycle calculations without availability sidecars." },
     { version: "2026-10-30", change: "Save feed-read fractions and floor-applied factors downward to three decimal places." },
-    { version: LEGACY_FEED_HEALTH_STATE_VERSION, change: "Count admitted original article captures before selection instead of screening admissions." },
+    { version: "2026-10-27", change: "Count admitted original article captures before selection instead of screening admissions." },
   ],
 });
 export type FeedHealthStateRow = z.infer<typeof FeedHealthStateRowSchema>;
@@ -83,5 +84,4 @@ export const FeedLifecycleFieldsSchema = z.object(FeedHealthStateRowSchema.shape
 export type FeedLifecycleFields = z.infer<typeof FeedLifecycleFieldsSchema>;
 export const FeedHealthStateRowContract = {
   schema: FeedHealthStateRowSchema, schemaVersion: FEED_HEALTH_STATE_VERSION,
-  acceptedSchemaVersions: FEED_HEALTH_STATE_ACCEPTED_SCHEMA_VERSIONS,
 } as const;

@@ -2,7 +2,7 @@
 import { randomUUID } from "node:crypto";
 import {
   FEED_OUTCOME_PAYLOAD_VERSION, FeedIngestCandidateSchema, ParsedFeedBatchSchema, PlannerHarvestObservationSchema,
-  deriveCandidateId, LEGACY_OPERATION_VERSION,
+  deriveCandidateId,
   HarvestDiagnosticsSchema,
 } from "@idhazh/common-contracts";
 import type { FeedIngestCandidate, PlannerOperation, PlannerHarvestObservation, PlannerFeedOffer } from "@idhazh/common-contracts";
@@ -39,9 +39,6 @@ export async function parseFetchedDocument(
   inputs: PlanInputs, runtime: PlanRuntime, store: OperationStore, signal?: AbortSignal,
 ) {
   const artifact = checkFetchedDocument(fetched, inputs);
-  if (artifact.version === LEGACY_OPERATION_VERSION && artifact.fetch_item_type === "article") {
-    throw new PlanError("REQUEST_CONFLICT", "Saved article uses the earlier identity policy; fetch it again", "fetch_request_id");
-  }
   if (fetched.config_sha256 !== record.config_sha256 || record.config_sha256 !== operationConfigFingerprint(inputs, runtime)) {
     throw new PlanError("REQUEST_CONFLICT", "Fetched configuration differs", "fetch_request_id");
   }

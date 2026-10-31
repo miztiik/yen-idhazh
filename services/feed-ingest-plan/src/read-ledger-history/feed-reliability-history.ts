@@ -120,6 +120,9 @@ export function reuseFeedReliability(input: {
   }
   if (value.productive !== null && value.attempted !== null && value.attempted > 0) {
     Object.assign(value, feedReliability(value.productive, value.attempted, input.floor));
+  } else if (value.attempted === 0) {
+    value.success_fraction = null;
+    value.production_factor = null;
   }
   return FeedHealthReliabilitySchema.parse(value);
 }
