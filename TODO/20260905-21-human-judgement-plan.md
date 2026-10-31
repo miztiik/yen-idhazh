@@ -9,7 +9,7 @@ reports from existing measurements, with no new quality judge or ledger.
 Row 4 still needs a machine-only design; its original score-weight fitting
 depends on human comparisons that will not be collected.
 
-**Chain**: previous [`20260905-20-visual-console-plan.md`](20260905-20-visual-console-plan.md) | next [`20260905-22-distil-and-close-plan.md`](20260905-22-distil-and-close-plan.md).
+**Chain**: delivered [visual-attempt console views](../docs/architecture/publishing/what-the-pipelines-route-draws.md#visual-attempt-views-read-the-unpublished-record-at-build-time) | next [`20260905-22-distil-and-close-plan.md`](20260905-22-distil-and-close-plan.md).
 **Reference**: [`20260902-visual-planner-pseudo-plan.md`](20260902-visual-planner-pseudo-plan.md) - O12, O16, O41, rows 64, 65, 66, 67, 68, sections 12.10, 12.13 G34, G38, 12.14 G41, G42, G44, E1, M6.
 
 Execute per docs/how-to/execute-a-plan.md: one maintainer carries the plan and delegates a row where delegation pays; keep parallel N = 4 rows in flight, refilling a slot as soon as a worker returns and never waiting on a merge; consult a persona only where two answers would lead to different code; AUTO-merge on green gates; honor the ESCALATE triggers in section 0. AUTHOR-AND-STOP until the user authorizes.
@@ -100,7 +100,7 @@ Execute per docs/how-to/execute-a-plan.md: one maintainer carries the plan and d
 | B4 | Require repeatable `--date YYYY-MM-DD` arguments; allow `--state-dir` for an explicitly named local state root, defaulting to the repository's existing state location. Emit CSV to stdout with the standard-library writer; never prompt or fetch | Bounded local inputs; no new dependency |
 | B5 | If read status is incomplete, report the problem and refuse CSV output. Dates with no recorded rows are named on stderr, not filled with invented zero counts. If the selection has no rows, refuse with a clear no-records result | Existing reader status; missing evidence is not zero |
 | B6 | No persisted contract moves: the CSV is an on-demand report, not committed pipeline state and not input to a later run. Leave human label files, model configuration, ledger registration and producers unchanged | Current report-only scope; section 11 |
-| B7 | Ship this complete command, report logic, tests and guide in one behavioral PR. Leave console presentation to Plan 20's "Refusal reasons and written visual type" outcome | One report capability; no duplicate collection or console work |
+| B7 | Ship this complete command, report logic, tests and guide in one behavioral PR. Leave console presentation to the delivered [visual-attempt views](../docs/architecture/publishing/what-the-pipelines-route-draws.md#visual-attempt-views-read-the-unpublished-record-at-build-time) | One report capability; no duplicate collection or console work |
 
 ### Table C - Rejected alternatives
 
@@ -223,5 +223,5 @@ under this plan.
 ## See also
 
 - [`20260902-visual-planner-pseudo-plan.md`](20260902-visual-planner-pseudo-plan.md) - the decision record this group executes.
-- [`20260905-20-visual-console-plan.md`](20260905-20-visual-console-plan.md) - the previous plan.
+- [Visual-attempt console views](../docs/architecture/publishing/what-the-pipelines-route-draws.md#visual-attempt-views-read-the-unpublished-record-at-build-time) - the delivered console reader.
 - [`20260905-22-distil-and-close-plan.md`](20260905-22-distil-and-close-plan.md) - the next plan.

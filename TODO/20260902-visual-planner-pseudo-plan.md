@@ -1827,7 +1827,7 @@ index, not the plan.
 | 17 | [Source text fitting and the who/what grid](../docs/architecture/publishing/where-a-drawing-becomes-pixels.md#the-whowhat-grid-is-a-separate-format-and-reader) | Delivered: source-prefix chart labels and a separate source-backed grid; callout and keyfacts collapsed |
 | 18 | [Diagrams deferred](../docs/architecture/publishing/visuals.md#diagrams-deferred) | Whole plan deferred; not delivered or a prerequisite for other visual work |
 | 19 | [Every attempt is recorded](20260905-19-visual-telemetry-plan.md) | The visual telemetry event and the ledger under `state/` |
-| 20 | [The operator can see whether it worked](20260905-20-visual-console-plan.md) | The console panels that read that ledger |
+| 20 | [Visual-attempt console views](../docs/architecture/publishing/what-the-pipelines-route-draws.md#visual-attempt-views-read-the-unpublished-record-at-build-time) | Delivered: two funnels, refusal reasons by UTC date and planned versus written types; missing evidence is not zero |
 | 21 | [Human judgement](20260905-21-human-judgement-plan.md) | Ground truth: the review harness, paired evaluation, weight fitting |
 | 22 | [Close it out](20260905-22-distil-and-close-plan.md) | Every finding distilled into `docs/`, and this document deleted |
 
