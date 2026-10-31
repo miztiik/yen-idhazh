@@ -128,34 +128,29 @@ before upgrading the stamp in memory. They accept only the recorded
 `2026-10-29T08:00` and `2026-10-30T22:25` event stamps; neither may contain the
 later `quality` operation. Historical files are not rewritten.
 
-## Evidence from run 41101711878
+## Historical evidence limits
 
-The retained run records one HTTP 202 feed response followed by
-`FEED_PARSE_FAILED` and the safe `malformed-feed` token. Its health row's `ok`
-means the download succeeded; it does not mean parsing succeeded. The response
-body, content type and parser cause are not retained, so the exact malformed
-input cannot be identified.
+An HTTP success records a download result, not valid feed content. A health
+row can have `outcome = ok` and `FEED_PARSE_FAILED`. The safe `malformed-feed`
+token identifies parsing failure, but cannot recover its exact cause without
+the original response body, content type and parser evidence.
 
-Eleven article extractions returned empty text after a target request: ten
-received HTTP 200 and one received HTTP 202. Robots permission was allowed.
-Ten requested paths match the current scoped media rules, but those rules were
-absent from the run's saved configuration; the remaining path does not match
-them. The response bodies and content types are unavailable, so these records
-do not establish why extraction returned no text or what their word counts
-were.
+An empty extraction is not a media exclusion before download. Check the
+captured run's media configuration and offered metadata. A URL matching a
+current rule need not have been excluded by an earlier run. Missing bodies,
+response types and measured word counts stay unknown; today's minimum word count
+cannot reconstruct a historical reading.
 
-The run records 20 article HTTP 403 responses, 46 feed HTTP 403 responses and
-two feed HTTP 404 responses. The article failure events retain each requested
-address passed to the fetcher, but not its final redirected target or HTTP
-status; the separate health and rejection records provide the status counts.
-Feed failure events retain neither requested nor final addresses. Their health
-rows retain feed identity, status and robots permission, but no redirected
-target. These statuses establish target responses only; they do not prove a
-paywall, an endpoint defect or a publisher-wide fault.
+Requested addresses and dispatched targets are distinct evidence. A logged
+requested article address names the input to the fetcher, not the last redirect
+hop. Historical feed failure events may retain no addresses. A catalog address
+cannot replace an unrecorded final target. Status can come from a separate
+health or rejection record, but a robots status cannot supply target status.
 
-No code defect was demonstrated. The absent body, content type, parser cause
-and final target are evidence gaps, not grounds to infer a cause or change
-request, media or response-limit policy.
+Missing historical records do not demonstrate a code defect. An observed
+target refusal does not establish its underlying cause. Absent bodies, parser
+causes and final targets are evidence gaps, not grounds to infer a cause or
+change request, media or response-limit policy.
 
 ## Remaining production differences
 
@@ -219,3 +214,9 @@ writer can derive its column type without broadening the accepted vocabulary.
 
 The page is separate because harvesting owns request behavior while this page
 owns the evidence that crosses its boundaries.
+
+## See also
+
+- [Harvesting](feed-harvesting.md) - target requests and extraction controls.
+- [Health ledger fields](../../reference/feed-planner-ledgers.md#c-feed-health-state) - saved status and check results.
+- [Planner checks](../../how-to/run-feed-ingest-plan-test.md) - offline validation and saved output.
