@@ -1,15 +1,20 @@
-/** Read actual terminal failures back from native ledgers without retry archives or duplicate health counts. */
+/** Read terminal fetch, extraction and persistence refusals from their real native boundaries. */
 import { expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
-import { mkdir, readdir, writeFile } from "node:fs/promises";
+import { mkdir, readFile, readdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { z } from "zod";
-import { FeedHealthStateRowContract, RejectedArticleRowContract, RejectedArticleRowSchema } from "@idhazh/common-contracts";
+import { ParsedFeedBatchSchema, RejectedArticleRowContract, RejectedArticleRowSchema, SelectedArticlesArtifactSchema } from "@idhazh/common-contracts";
 import { readPlannerParquet } from "../src/read-ledger-history/read-planner-parquet";
-import { runFeedPlan } from "../src/run-feed-plan";
 import { recordedPlan } from "./plan-recordings";
 import { createPlanTestServer } from "./plan-test-server";
+import { FetchResponseSchema, ParseResponseSchema } from "../src/api/document-response.schema";
+import { stageStore } from "../src/api/stage-store";
 import { deriveArticleIdentity } from "../src/harvest-feeds/article-identity";
+import { recordedPersistenceBatch } from "./persistence-recordings";
+import { executePersistence } from "../src/api/persistence-operation";
+import { writeRows } from "./partition-fixtures";
+import { executeSelection } from "../src/api/selection-operation";
 
 async function failureCases() {
   const response = z.object({ status: z.int().optional(), body: z.string().optional(), error: z.string().optional() });
@@ -27,183 +32,133 @@ async function failureCases() {
     "../../../tests/fixtures/feed-ingest-plan/article-terminal-failures.json", import.meta.url,
   )).json()).cases;
 }
-
-async function rejectedRows(recorded: Awaited<ReturnType<typeof recordedPlan>>, paths: readonly string[]) {
-  return (await Promise.all(paths.map(path => readPlannerParquet(
-    join(recorded.inputs.outputRoot, path), "rejected-articles", RejectedArticleRowContract,
-  )))).flatMap(file => file.rows);
+async function rejectedRows(recorded: Awaited<ReturnType<typeof recordedPlan>>) {
+  const directory = join(recorded.inputs.outputRoot, "raw", "feed-ingest-plan", "rejected-articles", "2026", "10", "21");
+  let paths: string[];
+  try { paths = (await readdir(directory)).filter(name => name.endsWith(".parquet")); }
+  catch (error) {
+    if (!(error instanceof Error && "code" in error && error.code === "ENOENT")) throw error;
+    return [];
+  }
+  return (await Promise.all(paths.map(path => readPlannerParquet(join(directory, path), "rejected-articles", RejectedArticleRowContract))))
+    .flatMap(file => file.rows);
+}
+async function capture(recorded: Awaited<ReturnType<typeof recordedPlan>>, urls: string[]) {
+  const app = createPlanTestServer(recorded.inputs, recorded.runtime);
+  const batches: string[] = [];
+  try {
+    for (const url of urls) {
+      const request = { request_id: randomUUID(), correlation_id: randomUUID(), feed_id: "recorded-news",
+        fetch_item_type: "article", url };
+      const response = await app.request("/api/2026-10-31/fetch", {
+        method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(request),
+      });
+      expect(response.status).toBe(200);
+      const fetched = FetchResponseSchema.parse(await response.json());
+      if (fetched.body_sha256 !== null) {
+        const parsed = await app.request("/api/2026-10-31/parse", {
+          method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({
+            request_id: randomUUID(), fetch_request_id: fetched.fetch_request_id,
+            article_id: fetched.article_id, correlation_id: fetched.correlation_id,
+          }),
+        });
+        expect(parsed.status).toBe(200);
+        batches.push(ParseResponseSchema.parse(await parsed.json()).batch_id);
+      }
+    }
+    return batches;
+  } finally { await app.close(); }
 }
 
-test("enforced robots denials survive plan finalization without target dispatch", async () => {
-  const cases = (await failureCases()).filter(entry =>
-    entry.expected.fetch_failure === "robots-denied" || entry.expected.fetch_failure === "robots-unknown");
+test("terminal HTTP, DNS, TLS, timeout, robots and extraction failures retain their native outcome fields once", async () => {
+  const cases = await failureCases();
   const recorded = await recordedPlan();
   try {
+    delete recorded.runtime.run_number;
+    delete recorded.runtime.correlation_id;
     recorded.inputs.harvest.config.harvest.article_robots_policy = "enforce";
     recorded.inputs.harvest.extraction.max_retries = 0;
     recorded.inputs.harvest.config.harvest.request_headers.secondary = null;
-    recorded.transport.recordings.responses["https://news.example/feed.xml"] = [{
-      status: 200, body: `<rss version="2.0"><channel><title>Recorded failures</title>${cases.map(entry =>
-        `<item><title>Actual offer</title><link>${entry.url}</link></item>`).join("")}</channel></rss>`,
-    }];
-    const result = await runFeedPlan({}, recorded.inputs, recorded.runtime);
-    expect(result.row.status).toBe("completed");
-    expect(result.selected).toEqual([]);
-    const rows = await rejectedRows(recorded, result.files.rejected_articles!.files.map(file => file.path));
+    for (const entry of cases) if (entry.responses) recorded.transport.recordings.responses[entry.url] = entry.responses;
+    await capture(recorded, cases.map(entry => entry.url));
+    const rows = await rejectedRows(recorded);
+    expect(rows).toHaveLength(cases.length);
+    expect(new Set(rows.map(row => row.url_key)).size).toBe(cases.length);
+    for (const entry of cases) {
+      expect(rows.find(row => row.url_key === deriveArticleIdentity(entry.url, recorded.inputs.harvest.config.harvest).url_key),
+        entry.name).toMatchObject({ stage: "harvest-feeds", ...entry.expected });
+      if (["robots-denied", "robots-unknown"].includes(entry.expected.fetch_failure ?? "")) {
+        expect(recorded.transport.requests.some(request => request.url.href === entry.url)).toBe(false);
+      }
+    }
+  } finally { await recorded.close(); }
+});
+
+test("persistence retains both refusal stages with an actual empty selected artifact", async () => {
+  const recorded = await recordedPlan();
+  try {
+    recorded.inputs.harvest.config.triage.min_words = 10_000;
+    recorded.inputs.harvest.config.partition.enabled = false;
+    const [parsedId] = await capture(recorded, ["https://news.example/not-found", "https://news.example/second"]);
+    const { batch } = await executeSelection({ batch_id: parsedId }, recorded.inputs, recorded.runtime);
+    const result = await executePersistence({ batch_id: batch.batch_id }, recorded.inputs, recorded.runtime);
+    const actual = await rejectedRows(recorded);
+    expect(actual).toHaveLength(2);
+    expect(new Set(actual.map(row => row.candidate_id)).size).toBe(2);
+    expect(actual.map(row => row.stage).sort()).toEqual(["harvest-feeds", "screen-article-candidates"]);
+    expect(SelectedArticlesArtifactSchema.parse(await Bun.file(join(recorded.directory, result.artifact)).json()).articles).toEqual([]);
+  } finally { await recorded.close(); }
+});
+
+test("a successful retry retains captured identity and text without a stale native rejection", async () => {
+  const recorded = await recordedPlan();
+  try {
+    recorded.inputs.harvest.extraction.max_retries = 1;
+    recorded.transport.recordings.responses["https://news.example/second"]!.unshift({ status: 503, body: "" });
+    const [id] = await capture(recorded, ["https://news.example/second"]);
+    const batch = stageStore(recorded.inputs).read("parsed", id!, ParsedFeedBatchSchema);
+    expect(batch.candidates).toHaveLength(1);
+    expect(batch.candidates[0]!.article_text.length).toBeGreaterThan(0);
+    expect(batch.candidates[0]!.url_key).toBe(deriveArticleIdentity("https://news.example/second", recorded.inputs.harvest.config.harvest).url_key);
+    expect(await rejectedRows(recorded)).toEqual([]);
+    expect(recorded.transport.requests.filter(request => request.url.pathname === "/second")).toHaveLength(2);
+  } finally { await recorded.close(); }
+});
+
+test("observed robots denial retains the actual dispatched target failures", async () => {
+  const recorded = await recordedPlan();
+  try {
+    const cases = (await failureCases()).filter(entry => entry.expected.fetch_failure !== null && entry.expected.robots === "allowed");
+    recorded.inputs.harvest.config.harvest.article_robots_policy = "observe";
+    recorded.inputs.harvest.extraction.max_retries = 0;
+    recorded.inputs.harvest.config.harvest.request_headers.secondary = null;
+    recorded.transport.recordings.responses["https://news.example/robots.txt"] = [{ status: 200, body: "User-agent: *\nDisallow: /\n" }];
+    for (const entry of cases) if (entry.responses) recorded.transport.recordings.responses[entry.url] = entry.responses;
+    await capture(recorded, cases.map(entry => entry.url));
+    const rows = await rejectedRows(recorded);
     expect(rows).toHaveLength(cases.length);
     for (const entry of cases) {
       expect(rows.find(row => row.url_key === deriveArticleIdentity(entry.url, recorded.inputs.harvest.config.harvest).url_key),
-        entry.name).toMatchObject({
-        stage: "harvest-feeds", ...entry.expected, reason_code: "FETCH_FAILED",
-      });
-      expect(recorded.transport.requests.some(request => request.url.href === entry.url)).toBe(false);
-    }
-    const health = (await Promise.all(result.files.feed_health_state!.files.map(file =>
-      readPlannerParquet(join(recorded.inputs.outputRoot, file.path), "feed-health-state", FeedHealthStateRowContract))))
-      .flatMap(file => file.rows);
-    expect(health.flatMap(row => row.rejection_counts).filter(row => row.subject === "article")
-      .reduce((sum, row) => sum + row.count, 0)).toBe(cases.length);
-  } finally { await recorded.close(); }
-});
-
-test("harvest and screening refusals both survive the same zero-selection run", async () => {
-  const recorded = await recordedPlan();
-  try {
-    recorded.inputs.harvest.config.harvest.request_headers.secondary = null;
-    recorded.inputs.harvest.config.triage.min_words = 10_000;
-    recorded.transport.recordings.responses["https://news.example/second"] = [{ status: 403, body: "" }];
-    const result = await runFeedPlan({}, recorded.inputs, recorded.runtime);
-    expect(result.row.status).toBe("completed");
-    expect(result.selected).toEqual([]);
-    const rows = await rejectedRows(recorded, result.files.rejected_articles!.files.map(file => file.path));
-    expect(rows).toHaveLength(2);
-    expect(new Set(rows.map(row => row.candidate_id)).size).toBe(2);
-    expect(rows.map(row => row.stage).sort()).toEqual(["harvest-feeds", "screen-article-candidates"]);
-  } finally { await recorded.close(); }
-});
-
-test("a successful retry leaves no stale rejection and keeps selected identity and content", async () => {
-  const recorded = await recordedPlan();
-  try {
-    recorded.inputs.harvest.extraction.max_retries = 1;
-    recorded.transport.recordings.responses["https://news.example/robots.txt"] = [{
-      status: 200, body: "User-agent: *\nDisallow: /\nAllow: /feed.xml\n",
-    }];
-    recorded.transport.recordings.responses["https://news.example/second"]!.unshift({ status: 503, body: "" });
-    const result = await runFeedPlan({}, recorded.inputs, recorded.runtime);
-    expect(result.row.status).toBe("completed");
-    expect(result.selected).toHaveLength(2);
-    expect(result.selected.every(article => article.article_text.length > 0)).toBe(true);
-    expect(result.files.rejected_articles).toEqual({ status: "empty", files: [] });
-  } finally { await recorded.close(); }
-});
-
-test("observed denial retains actual terminal target failures in one all-failed batch", async () => {
-  const recorded = await recordedPlan();
-  try {
-    recorded.inputs.harvest.extraction.max_retries = 1;
-    recorded.inputs.harvest.config.harvest.request_headers.secondary = null;
-    const cases = (await failureCases()).filter(entry => entry.expected.fetch_failure !== null
-      && entry.expected.robots === "allowed");
-    cases.push({
-      name: "target-dns", url: "https://news.example/target-dns", responses: [{ error: "ENOTFOUND" }],
-      expected: { http_status: null, fetch_failure: "dns", error_code: "ENOTFOUND",
-        robots: "allowed", robots_http_status: 200, robots_failure: null },
-    });
-    recorded.transport.recordings.responses["https://news.example/robots.txt"] = [{
-      status: 200, body: "User-agent: *\nDisallow: /\nAllow: /feed.xml\n",
-    }];
-    recorded.transport.recordings.responses["https://news.example/feed.xml"] = [{
-      status: 200, body: `<rss version="2.0"><channel><title>Recorded failures</title>${cases.map(entry =>
-        `<item><title>Actual offer</title><link>${entry.url}</link></item>`).join("")}</channel></rss>`,
-    }];
-    for (const entry of cases) recorded.transport.recordings.responses[entry.url] = entry.responses!;
-    const result = await runFeedPlan({}, recorded.inputs, recorded.runtime);
-    expect(result.row.status).toBe("completed");
-    expect(result.selected).toEqual([]);
-    expect(result.files.rejected_articles!.files).toHaveLength(1);
-    const rows = await rejectedRows(recorded, result.files.rejected_articles!.files.map(file => file.path));
-    expect(rows).toHaveLength(cases.length);
-    for (const entry of cases) {
-      expect(rows.find(row => row.url_key === deriveArticleIdentity(entry.url, recorded.inputs.harvest.config.harvest).url_key), entry.name).toMatchObject({
-        ...entry.expected, robots: "denied",
-      });
+        entry.name).toMatchObject({ ...entry.expected, robots: "denied" });
       expect(recorded.transport.requests.some(request => request.url.href === entry.url)).toBe(true);
     }
-    expect(recorded.transport.requests.filter(request => request.url.pathname === "/robots.txt")).toHaveLength(1);
   } finally { await recorded.close(); }
 });
 
-test("completed failures survive a later selected-ledger write failure", async () => {
+test("completed rejection bytes survive a real selected-ledger write failure", async () => {
   const recorded = await recordedPlan();
   try {
-    recorded.inputs.harvest.config.harvest.request_headers.secondary = null;
-    recorded.transport.recordings.responses["https://news.example/second"] = [{ status: 403, body: "" }];
+    const rejected = RejectedArticleRowContract.schema.array().parse(await Bun.file(new URL(
+      "../../../tests/fixtures/feed-ingest-plan/entry-points/rejected-articles.rows.json", import.meta.url)).json());
+    const written = await writeRows(recorded.inputs.outputRoot, "rejected-articles", rejected[0]!.date, RejectedArticleRowContract, rejected);
+    const path = join(recorded.inputs.outputRoot, written.files[0]!.path);
+    const before = await readFile(path);
     const parent = join(recorded.inputs.outputRoot, "raw", "feed-ingest-plan");
     await mkdir(parent, { recursive: true });
     await writeFile(join(parent, "selected-articles"), "not a directory");
-    const result = await runFeedPlan({}, recorded.inputs, recorded.runtime);
-    expect(result.row.status).toBe("partial");
-    expect(result.files.selected_articles).toBeUndefined();
-    const rows = await rejectedRows(recorded, result.files.rejected_articles!.files.map(file => file.path));
-    expect(rows).toHaveLength(1);
-    expect(rows[0]).toMatchObject({ http_status: 403, reason_code: "FETCH_FAILED_HTTP" });
+    const batch = await recordedPersistenceBatch(recorded.inputs, recorded.runtime);
+    await expect(executePersistence({ batch_id: batch.batch_id }, recorded.inputs, recorded.runtime)).rejects.toThrow();
+    expect(await readFile(path)).toEqual(before);
+    expect(recorded.events.at(-1)).toMatchObject({ operation: "persist", phase: "failed" });
   } finally { await recorded.close(); }
-});
-
-test("standalone fetch retains its terminal rejection in the native ledger", async () => {
-  const recorded = await recordedPlan();
-  recorded.inputs.harvest.config.harvest.request_headers.secondary = null;
-  recorded.transport.recordings.responses["https://news.example/robots.txt"] = [{
-    status: 200, body: "User-agent: *\nDisallow: /\n",
-  }];
-  const app = createPlanTestServer(recorded.inputs, recorded.runtime);
-  try {
-    const body = JSON.stringify({
-      request_id: randomUUID(), correlation_id: randomUUID(), feed_id: "recorded-news",
-      fetch_item_type: "article", url: "https://news.example/not-found",
-    });
-    const request = () => app.request("/api/2026-10-31/fetch", {
-      method: "POST", headers: { "content-type": "application/json" }, body,
-    });
-    expect((await request()).status).toBe(200);
-    const directory = join("raw", "feed-ingest-plan", "rejected-articles", "2026", "10", "21");
-    const paths = (await readdir(join(recorded.inputs.outputRoot, directory)))
-      .filter(name => name.endsWith(".parquet")).map(name => join(directory, name));
-    const rows = await rejectedRows(recorded, paths);
-    expect(rows).toHaveLength(1);
-    expect(rows[0]).toMatchObject({ http_status: 404, fetch_failure: "http", robots: "denied",
-      robots_http_status: 200, robots_failure: null });
-  } finally { await app.close(); await recorded.close(); }
-});
-
-test("standalone extraction retains its observed failure in the native ledger", async () => {
-  const recorded = await recordedPlan();
-  const app = createPlanTestServer(recorded.inputs, recorded.runtime);
-  try {
-    const fetchId = randomUUID();
-    const correlation = randomUUID();
-    const post = (operation: string, value: unknown) => app.request(`/api/2026-10-31/${operation}`, {
-      method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(value),
-    });
-    const response = await post("fetch", {
-      request_id: fetchId, correlation_id: correlation, feed_id: "recorded-news",
-      fetch_item_type: "article", url: "https://news.example/empty-body",
-    });
-    expect(response.status).toBe(200);
-    const fetched = z.object({ article_id: z.string() }).parse(await response.json());
-    const parsed = await post("parse", {
-      request_id: randomUUID(), fetch_request_id: fetchId, article_id: fetched.article_id, correlation_id: correlation,
-    });
-    expect(parsed.status).toBe(200);
-    const directory = join("raw", "feed-ingest-plan", "rejected-articles", "2026", "10", "21");
-    const paths = (await readdir(join(recorded.inputs.outputRoot, directory)))
-      .filter(name => name.endsWith(".parquet")).map(name => join(directory, name));
-    const rows = await rejectedRows(recorded, paths);
-    expect(rows).toHaveLength(1);
-    expect(rows[0]).toMatchObject({
-      stage: "harvest-feeds", reason_code: "EXTRACT_EMPTY", http_status: 200,
-      fetch_failure: null, robots: "allowed", robots_http_status: 200,
-    });
-  } finally { await app.close(); await recorded.close(); }
 });

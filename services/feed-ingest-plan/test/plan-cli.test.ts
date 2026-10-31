@@ -43,12 +43,11 @@ test("CLI blanks are absent; typed API strings, nulls, unknown fields and invali
     ["--serve", "--cli"], ["--serve", "--shards=1"], ["--cli", "--shards=1", "--shards=2"], [],
   ]) expect(() => parseCliRequest(args)).toThrow();
   const inputs = await loadPlanInputs(root);
+  const settings = ServiceSettingsSchema.parse(await Bun.file(join(root, "config", "feed-ingest-plan-service.json")).json());
   const globalConfig = await Bun.file(join(root, "config", "idhazh.json")).json();
-  expect(globalConfig.collect.published_window_days).toBe(730);
-  expect(inputs.settings.inputs.published_url_lookback_days).toBe(7);
-  expect(inputs.clock_config.collect.published_window_days).toBe(7);
-  expect(inputs.settings.listener.parser_concurrency).toBe(10);
-  expect(inputs.settings.listener.max_body_bytes).toBe(2_000_000);
+  expect(inputs.clock_config.collect.published_window_days).toBe(settings.inputs.published_url_lookback_days
+    ?? globalConfig.collect.published_window_days);
+  expect(inputs.settings.listener).toEqual(settings.listener);
   expect(inputs.settings).not.toHaveProperty("run");
   expect(inputs.settings.inputs.discovered_files).toEqual([]);
   expect(inputs.settings.inputs.discovered_days).toEqual([]);

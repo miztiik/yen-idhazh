@@ -12,7 +12,7 @@ import { readFeedHealthFieldsDay } from "../src/read-ledger-history/read-feed-he
 import { createPlannerHistoryCache, readPlannerDay } from "../src/read-ledger-history/read-planner-history";
 import { healthFieldFixture, rewriteHealthFields } from "./health-field-fixtures";
 import { commitFixtureFiles, compactRows, registration, settings } from "./partition-fixtures";
-import { fixtureGit } from "./publication-recordings";
+import { fixtureGit } from "./fixture-git";
 
 const shape = FeedHealthStateRowSchema.shape;
 const schema = z.object(shape);
