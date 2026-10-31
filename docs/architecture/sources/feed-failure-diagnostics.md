@@ -128,6 +128,35 @@ before upgrading the stamp in memory. They accept only the recorded
 `2026-10-29T08:00` and `2026-10-30T22:25` event stamps; neither may contain the
 later `quality` operation. Historical files are not rewritten.
 
+## Evidence from run 41101711878
+
+The retained run records one HTTP 202 feed response followed by
+`FEED_PARSE_FAILED` and the safe `malformed-feed` token. Its health row's `ok`
+means the download succeeded; it does not mean parsing succeeded. The response
+body, content type and parser cause are not retained, so the exact malformed
+input cannot be identified.
+
+Eleven article extractions returned empty text after a target request: ten
+received HTTP 200 and one received HTTP 202. Robots permission was allowed.
+Ten requested paths match the current scoped media rules, but those rules were
+absent from the run's saved configuration; the remaining path does not match
+them. The response bodies and content types are unavailable, so these records
+do not establish why extraction returned no text or what their word counts
+were.
+
+The run records 20 article HTTP 403 responses, 46 feed HTTP 403 responses and
+two feed HTTP 404 responses. The article failure events retain each requested
+address passed to the fetcher, but not its final redirected target or HTTP
+status; the separate health and rejection records provide the status counts.
+Feed failure events retain neither requested nor final addresses. Their health
+rows retain feed identity, status and robots permission, but no redirected
+target. These statuses establish target responses only; they do not prove a
+paywall, an endpoint defect or a publisher-wide fault.
+
+No code defect was demonstrated. The absent body, content type, parser cause
+and final target are evidence gaps, not grounds to infer a cause or change
+request, media or response-limit policy.
+
 ## Remaining production differences
 
 No granular DNS, connect, TLS, first-byte, body, robots or retry timing is
