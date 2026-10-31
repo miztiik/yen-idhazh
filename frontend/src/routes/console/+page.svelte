@@ -28,6 +28,7 @@
 	import ChartDrawing from '$lib/console/pipelines/ChartDrawing.svelte';
 	import Extraction from '$lib/console/pipelines/Extraction.svelte';
 	import ArticleAge from '$lib/console/pipelines/ArticleAge.svelte';
+	import VisualFunnels from '$lib/console/pipelines/VisualFunnels.svelte';
 
 	let { data } = $props();
 	const knobs = consoleKnobs();
@@ -64,6 +65,7 @@
 	const viewport = $derived(windowOfDays(anchor, windowDays, knobs.today_anchor));
 	const settings = $derived(settingsRules(data, { from: viewport.start, to: viewport.end }, 'none'));
 	const charts = $derived(data.charts.filter((day) => day.date >= viewport.start && day.date <= viewport.end));
+	const attempts = $derived(data.visualAttempts.counts.filter((count) => count.date >= viewport.start && count.date <= viewport.end));
 	const yieldDays = $derived(data.extractionDays.filter((day) => day.date >= viewport.start && day.date <= viewport.end));
 	const publishedShare = $derived(publishedShareFor(data.extractionPublishedByWindow, anchor, windowDays)
 		?? { measuredDays: 0, unused: 0, chartablePublished: 0, unusedPct: null });
@@ -158,7 +160,9 @@
 		'failure-mix': 'What is failing, by stage', 'item-time-split': "Where an item's time went",
 		'slower-on-same-work': 'Whether a run is getting slower on the same work', 'stage-timings': 'Time per item by stage',
 		'item-cost': 'What one item cost the model', 'run-timeline': "Where the run's time went, on the run's own clock",
-		'chart-drawing': 'Visuals drawn for articles', 'extraction': 'What the extractor found',
+		'chart-drawing': 'Visuals drawn for articles',
+		'pipeline-funnel': 'Where visual attempts stopped, by potential class',
+		'downgrade-funnel': 'How drafted visual plans ended, by potential class', 'extraction': 'What the extractor found',
 		'article-age': 'How old an article was when we published it'
 	};
 	const panelQueries: Record<string, PanelQuery> = {
@@ -194,6 +198,8 @@
 							<SiteCostPerItem manifests={data.manifests} publishedItems={data.publishedItems} window={viewport} {knobs} chart={data.chart} rule={settings} />
 						{:else if id === 'chart-drawing'}
 							<ChartDrawing days={charts} {windowDays} {knobs} />
+						{:else if id === 'pipeline-funnel' || id === 'downgrade-funnel'}
+							<VisualFunnels counts={attempts} read={data.visualAttempts.state} notes={data.visualAttempts.notes} kind={id === 'pipeline-funnel' ? 'pipeline' : 'downgrade'} />
 						{:else if id === 'run-timeline'}
 							<RunTimeline {knobs} chart={data.chart} answer={answers[queries.runTimelineQuery.name]} />
 						{:else if id === 'extraction'}

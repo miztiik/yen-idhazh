@@ -216,3 +216,28 @@ export async function feedHealthRows(window: TimeWindow, root: string = STATE_RO
 		})
 	);
 }
+
+/** The columns of `VisualAttemptRow` the funnels read, in the contract's own order.
+ *
+ * Only these: the funnels count attempts by class, decision, refusal, depth and
+ * state, and read no identity. A backend contract test fails when the contract
+ * renames or drops one of these, or when this order is not the contract's.
+ */
+export const VISUAL_ATTEMPT_COLUMNS = [
+	'date', 'decision', 'none_reason', 'rejection_reason', 'potential_primary', 'downgrade_depth', 'state'
+] as const;
+
+/** One row per settled visual attempt in `window`, from the attempt record.
+ *
+ * Read from `state/compact/visual-design-attempts/`, packed, so it stops at the
+ * newest packed day as the article record does.
+ */
+export async function visualAttemptRows(window: TimeWindow, root: string = STATE_ROOT): Promise<LedgerTable> {
+	return windowRows(root, 'visual-design-attempts', window, VISUAL_ATTEMPT_COLUMNS, (start, end) =>
+		sliceFromDisk(root, 'visual-design-attempts', {
+			columns: [...datedFirst(VISUAL_ATTEMPT_COLUMNS)],
+			from: start,
+			to: end
+		})
+	);
+}
