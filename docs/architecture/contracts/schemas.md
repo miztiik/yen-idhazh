@@ -1,6 +1,6 @@
 # Contracts and Schemas
 
-**Last Updated**: 2026-10-27
+**Last Updated**: 2026-10-31
 
 The persisted-shape subsystem: where the models live, how a schema is obtained from one, the small hand copy the frontend carries, and the tests that stop the two drifting apart. This is the operational home of Guardrail #3 (contracts before logic) and `CLAUDE.md` sections 1a and 11.
 
@@ -301,6 +301,11 @@ is needed. `PublicationReceipt`, version `2026-10-09`, is the simple invocation
 evidence contract: existing `WriterIdentity` and `writes: relative-path -> SHA256`.
 Its fixture roundtrips canonically with LF. It grants no permissions and is not
 a committed publication/audit ledger.
+
+TypeScript `safe_persist_data` requests are in-process inputs, not saved
+receipts. They name completed source and target paths with separate permissions
+and no expected file checksum. Native ledger digests and Git object identities
+remain unchanged; [delivery](../publishing/committing.md) owns the handoff.
 
 That is not "pre-creating an empty module for later" (`CLAUDE.md` section 10). The file is the ledger, and its header is the contract's own column list; what is being avoided is a failure mode in the step that commits it.
 

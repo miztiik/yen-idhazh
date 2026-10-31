@@ -1,7 +1,6 @@
 export { safe_persist_data, SafePersistDataError } from "./safe-persist-data";
 export {
   DeliveryPathSchema,
-  DeliverySha256Schema,
   SafePersistDataCommitterSchema,
   SafePersistDataInputSchema,
   SafePersistDataResultSchema,

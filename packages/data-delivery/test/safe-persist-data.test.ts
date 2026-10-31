@@ -1,4 +1,3 @@
-import { createHash } from "node:crypto";
 import { copyFile, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
@@ -10,10 +9,6 @@ import {
   safe_persist_data,
 } from "../src/index";
 
-function digest(bytes: Uint8Array): string {
-  return createHash("sha256").update(bytes).digest("hex");
-}
-
 function retry(deadline = 4) {
   return {
     deadline_seconds: { default: deadline },
@@ -23,10 +18,10 @@ function retry(deadline = 4) {
   };
 }
 
-function artifactInput(sourceRoot: string, directory: string, bytes: Uint8Array) {
+function artifactInput(sourceRoot: string, directory: string) {
   return {
     sourceRoot,
-    files: [{ sourcePath: "completed/item.bin", targetPath: "items/item.bin", sha256: digest(bytes) }],
+    files: [{ sourcePath: "completed/item.bin", targetPath: "items/item.bin" }],
     permittedPaths: ["items"],
     destination: { kind: "artifact-directory" as const, directory },
   };
@@ -91,13 +86,12 @@ async function repositoryFixture() {
   };
 }
 
-function gitInput(input: Awaited<ReturnType<typeof repositoryFixture>>, bytes: Uint8Array) {
+function gitInput(input: Awaited<ReturnType<typeof repositoryFixture>>) {
   return {
     sourceRoot: input.sourceRoot,
     files: [{
       sourcePath: "completed/item.bin",
       targetPath: "state/raw/planner/2026/10/27/item.bin",
-      sha256: digest(bytes),
     }],
     permittedPaths: ["state/raw/planner"],
     destination: { kind: "git" as const, repository: input.repository },
@@ -115,7 +109,7 @@ async function createSource(root: string, bytes: Uint8Array): Promise<void> {
 test("the input contract refuses unsafe paths, broad permission and repeated targets", () => {
   const base = {
     sourceRoot: "C:\\run",
-    files: [{ sourcePath: "completed/item.bin", targetPath: "items/item.bin", sha256: "a".repeat(64) }],
+    files: [{ sourcePath: "completed/item.bin", targetPath: "items/item.bin" }],
     permittedPaths: ["items"],
     destination: { kind: "artifact-directory", directory: "C:\\artifacts" },
   };
@@ -152,7 +146,7 @@ test("the input contract refuses unsafe paths, broad permission and repeated tar
   }).success).toBe(false);
 });
 
-test("artifact delivery copies only named files, verifies hashes and refuses replacement", async () => {
+test("artifact delivery copies only named files and refuses replacement", async () => {
   const root = await mkdtemp(join(tmpdir(), "data-artifacts-"));
   const sourceRoot = join(root, "source");
   const directory = join(root, "output");
@@ -160,7 +154,7 @@ test("artifact delivery copies only named files, verifies hashes and refuses rep
   await createSource(sourceRoot, bytes);
   await writeFile(join(sourceRoot, "completed", "sibling.bin"), "not named");
   try {
-    const request = artifactInput(sourceRoot, directory, bytes);
+    const request = artifactInput(sourceRoot, directory);
     const first = await safe_persist_data(request);
     expect(first).toMatchObject({
       destination: "artifact-directory",
@@ -192,7 +186,7 @@ test("artifact delivery refuses a symlink parent", async () => {
   await mkdir(outside);
   await symlink(outside, join(directory, "items"), "junction");
   try {
-    await expect(safe_persist_data(artifactInput(sourceRoot, directory, bytes))).rejects.toMatchObject({
+    await expect(safe_persist_data(artifactInput(sourceRoot, directory))).rejects.toMatchObject({
       code: "integrity-refused",
       paths: ["items/item.bin"],
     } satisfies Partial<SafePersistDataError>);
@@ -213,7 +207,7 @@ test("Git delivery checks exact paths in a state tree with unrelated siblings", 
     await git(fixture.repository, ["add", "--", "state/unrelated/keep.txt"]);
     await git(fixture.repository, ["commit", "-m", "Add unrelated state"]);
     await git(fixture.repository, ["push", "origin", "HEAD:refs/heads/main"]);
-    const request = gitInput(fixture, bytes);
+    const request = gitInput(fixture);
     const result = await safe_persist_data(request);
     expect(result).toMatchObject({
       destination: "git", status: "landed", files: 1, paths: [request.files[0]!.targetPath],
@@ -227,7 +221,6 @@ test("Git delivery checks exact paths in a state tree with unrelated siblings", 
     expect((await safe_persist_data(request)).status).toBe("already-on-main");
     const conflictingBytes = new Uint8Array([1, 2, 3]);
     await writeFile(join(fixture.sourceRoot, "completed", "item.bin"), conflictingBytes);
-    request.files[0]!.sha256 = digest(conflictingBytes);
     await expect(safe_persist_data(request)).rejects.toMatchObject({
       code: "integrity-refused",
       paths: [request.files[0]!.targetPath],
@@ -277,7 +270,7 @@ test("a rejected push retries on fresh main without losing a concurrent file or 
       "fi",
       "",
     ].join("\n"), { mode: 0o755 });
-    const request = gitInput(fixture, bytes);
+    const request = gitInput(fixture);
     request.retry = retry(30);
     const originalBytes = await readFile(join(fixture.sourceRoot, "completed", "item.bin"));
     const previousEnvironment = {
@@ -341,7 +334,6 @@ test("a rejected push retries on fresh main without losing a concurrent file or 
     expect(await readFile(join(fixture.sourceRoot, "completed", "item.bin"))).toEqual(originalBytes);
     const conflictingBytes = new TextEncoder().encode("different completed bytes");
     await writeFile(join(fixture.sourceRoot, "completed", "item.bin"), conflictingBytes);
-    request.files[0]!.sha256 = digest(conflictingBytes);
     await expect(safe_persist_data(request)).rejects.toMatchObject({
       code: "integrity-refused",
       paths: [request.files[0]!.targetPath],
