@@ -1,8 +1,8 @@
 # Which order a saved observation clock proves
 
-**Last Updated**: 2026-10-23
+**Last Updated**: 2026-10-31
 
-Native feed-health `checked_at` and keyed-request `PlannerOperation.created_at`
+Native feed-health `checked_at` and live run `captured_at`
 retain the precision their producer actually captured. The field-specific
 `RecordedInstant` type accepts UTC whole seconds and UTC milliseconds.
 The project's global `Timestamp` type remains whole-second UTC text.
@@ -18,25 +18,25 @@ an older declaration.
 
 The models keep strings, not a datetime object that reformats an old payload
 on read. Legacy strings are never padded to `.000Z`, restamped or rebuilt from
-today's clock. Compatible old raw files and old request records remain readable.
-Native schema versions and changelogs name the field evolution.
+today's clock. Retained health files follow their family's read-side version
+rule. There are no saved planner request records to reopen.
+Native schema versions and changelogs name field evolution.
 
-## One captured instant through keyed execution
+## One captured instant through live execution
 
 The producer captures one UTC instant. Ordinary existing event and pipeline
 fields can still use their established whole-second spelling. Health checks
 retain the supplied captured precision.
 
-The keyed request stores that same captured instant in its existing
-`created_at`. Execution restores it from that exact string, retaining whether
-it was coarse or precise. A completed replay returns the stored response; it
-does not capture a new request clock. An interrupted keyed plan remains
-incomplete rather than being silently executed under a new time.
+The live run carries that same captured string through its stage context,
+retaining whether it was coarse or precise. Fetch and parse observations keep
+their own actual UTC work instants, including work after midnight. Releasing a
+raw body does not change those facts. A new process starts new work; it does
+not reopen a saved request or reuse an old response.
 
-The existing SQLite journal stores the native request as JSON in its existing
-`record` text column. This field evolution adds no SQL column, table, history
-snapshot or alternate authority. Retry attempts and genuine new fetch/parse
-observations retain their existing measurement behavior.
+Retry attempts and genuine new fetch/parse observations retain their existing
+measurement behavior. The optional raw-document diagnostic records the actual
+UTC failure instant and is never read to recover execution.
 
 ## Intervals, not invented tie order
 
@@ -87,12 +87,10 @@ files; no mock or network fixture supplies a verdict.
 
 ## Design rationale
 
-Maintainer approval, 2026-10-23, "Bug 1 - A1": use the
-existing `checked_at` and keyed-request `created_at` fields with field-specific
-precision, compatible original-string reads and narrow Python/TypeScript
-capture/reader changes. No global timestamp relaxation, new column, state file
-or identifier scheme is authorized. Local Python execution and packages are
-not part of validation; existing CI remains authoritative for native Python.
+Field-specific precision preserves actual health observations without relaxing
+the global timestamp type or inventing ordering within an old recorded second.
+The live run context preserves its captured string without a request journal.
+Existing CI remains authoritative for native Python.
 
 The frontend and TypeScript planner share the framework-free observation-order
 source module in the existing common-contracts package to keep one TypeScript

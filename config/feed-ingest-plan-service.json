@@ -1,6 +1,7 @@
 {
   "enabled": false,
   "removal_condition": "Remove the enablement flag when the planner is approved for production use.",
+  "dump_raw_document_contents": false,
   "listener": {
     "hostname": "127.0.0.1",
     "port": 8787,

@@ -15,7 +15,7 @@ import { foldDiscoveryHistory, readDiscoveredEvidence, rememberDiscoveries } fro
 import { requiredUtcDays } from "../utc-instant";
 import { plannerMemory } from "../planner-memory";
 import { stageStore } from "./stage-store";
-import { operationConfigFingerprint } from "./operation-context";
+import { stageConfigFingerprint } from "./operation-context";
 import { collectionForRun } from "./collection-operation";
 import { recordDocumentRejections } from "./record-document-rejections";
 import { createStageLogger } from "../logging/structured-logger";
@@ -92,7 +92,7 @@ export async function createParsedFeedBatch(input: {
     state.context.now, inputs.harvest.config.discovered_articles.lookback_days,
   )[0]!);
   return stageStore(inputs).write("parsed", ParsedFeedBatchSchema, {
-    batch_id: randomUUID(), context: state.context, config_sha256: operationConfigFingerprint(inputs, runtime), request: {},
+    batch_id: randomUUID(), context: state.context, config_sha256: stageConfigFingerprint(inputs, runtime), request: {},
     candidates: [], observations: {}, evidence: {}, discovered: { availability: "available", rows: saved.rows },
     history_rows: [], history_days: state.history.days, work_rows: state.work.rows(), exclusions: state.work.exclusions(),
     offers, feed_fetch_request_id: input.fetched_request_id, input_complete: offers.length === 0,

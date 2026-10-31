@@ -1,4 +1,4 @@
-/** Which native request journal and document shapes may operator APIs read? */
+/** Which native request, document and attempt shapes can live operator APIs use? */
 import { z } from "zod";
 import { CountSchema, NonEmptySchema, RunIdSchema, Sha256Schema, SlugSchema, TimestampSchema, UrlSchema } from "./primitives";
 import { BodyLimitEvidenceSchema, FetchFailureSchema } from "./harvest-diagnostics.schema";
@@ -7,7 +7,6 @@ import { SourceArticleRefusalReasonSchema } from "./rejection.schema";
 
 export const OPERATION_VERSION = "2026-10-31" as const;
 const OperationVersionSchema = z.literal(OPERATION_VERSION).default(OPERATION_VERSION);
-export const PLANNER_OPERATION_VERSION = "2026-10-31" as const;
 export const SourceArticleOutcomeSchema = z.strictObject({
   disposition: z.enum(["admitted", "source_refused"]),
   reason_code: SourceArticleRefusalReasonSchema.nullable(), settled_at: RecordedInstantSchema,
@@ -80,46 +79,6 @@ export const FetchedDocumentSchema = z.strictObject({
     { version: "2026-10-27", change: "Name the fetched item type and refuse older fetch artifacts." },
   ],
 });
-export const PlannerOperationSchema = z.strictObject({
-  version: z.literal(PLANNER_OPERATION_VERSION).default(PLANNER_OPERATION_VERSION),
-  request_id: RequestIdSchema, operation: z.enum(["fetch", "parse", "plan"]),
-  input_sha256: Sha256Schema, config_sha256: Sha256Schema, run_id: RunIdSchema,
-  correlation_id: RequestIdSchema, created_at: RecordedInstantSchema, state: z.enum(["started", "complete"]),
-  response_json: z.string().nullable(), artifact: FetchedDocumentSchema.nullable(),
-  source_outcome: SourceArticleOutcomeSchema.nullable().default(null),
-  article_capture_request_ids: z.array(RequestIdSchema).default([]),
-}).superRefine((value, ctx) => {
-  if (new Set(value.article_capture_request_ids).size !== value.article_capture_request_ids.length
-    || (value.article_capture_request_ids.length > 0
-      && (value.state !== "complete" || value.operation !== "fetch" || value.artifact?.fetch_item_type !== "feed"))) {
-    ctx.addIssue({ code: "custom", message: "Only a completed feed capture has distinct bounded article receipt references" });
-  }
-  if (value.source_outcome !== null && (value.state !== "complete" || value.operation !== "fetch" || value.artifact?.fetch_item_type !== "article")) {
-    ctx.addIssue({ code: "custom", message: "A source outcome belongs only to a completed article capture" });
-  }
-  if (value.state === "started" && (value.response_json !== null || value.artifact !== null)) {
-    ctx.addIssue({ code: "custom", message: "started requests cannot carry completed output" });
-  }
-  if (value.state === "complete") {
-    if (value.response_json === null || ((value.operation === "fetch") !== (value.artifact !== null))) {
-      ctx.addIssue({ code: "custom", message: "completed requests need a response and only fetch carries an artifact" });
-    } else {
-      try { JSON.parse(value.response_json); }
-      catch { ctx.addIssue({ code: "custom", message: "completed response must be valid JSON" }); }
-    }
-  }
-}).meta({
-  version: PLANNER_OPERATION_VERSION,
-  changelog: [
-    { version: PLANNER_OPERATION_VERSION, change: "Require current operation receipts and retain exact current-request replay." },
-    { version: "2026-10-29", change: "Identify shared article-cleanup captures." },
-    { version: "2026-10-28", change: "Rename nested fetched feed identity from source_id to feed_id." },
-    { version: "2026-10-27T18:30", change: "Settle original article outcomes and retain their bounded receipt membership on the feed capture." },
-    { version: "2026-10-27", change: "Refuse prior operation formats after renaming fetch routing." },
-    { version: "2026-10-23", change: "Earlier changes are in git." },
-  ],
-});
-export type PlannerOperation = z.infer<typeof PlannerOperationSchema>;
 export type FetchedDocument = z.infer<typeof FetchedDocumentSchema>;
 
 export const FetchRequestSchema = z.strictObject({

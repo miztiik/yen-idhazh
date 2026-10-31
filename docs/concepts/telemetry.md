@@ -1,6 +1,6 @@
 # Telemetry
 
-**Last Updated**: 2026-10-29
+**Last Updated**: 2026-10-31
 
 How the pipeline records progress, timings and outcomes. Logs explain a running process; committed, validated rows supply later runs and operator views.
 
@@ -127,6 +127,10 @@ owns identities and staging. The
 [retention reference](config/retention-ages.md#every-tree-names-its-own-cleanup-age)
 owns expiry. No aggregate ledger, permanent summary, retry feature or new
 publication rule is part of this record.
+
+Use the [visual-attempt report](../how-to/report-visual-attempts.md) to group
+these existing measurements for named UTC dates in an on-demand Parquet file.
+It adds no quality judgment and changes no setting.
 
 ## What the machine was doing
 

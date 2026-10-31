@@ -60,6 +60,7 @@ test("manual controls exercise the planner API and keep only required outputs", 
   const controls = parsed.on.workflow_dispatch.inputs;
   expect(Object.keys(controls)).toEqual([
     "article_limit", "shards", "institutional_age_hours", "trade_press_age_hours", "community_age_hours", "partition_strategy",
+    "dump_raw_document_contents",
   ]);
   for (const [field, description] of [
     ["institutional_age_hours", "Institutional sources - article age windows (hours)"],
@@ -86,11 +87,12 @@ test("manual controls exercise the planner API and keep only required outputs", 
     INSTITUTIONAL_AGE_HOURS: "${{ inputs.institutional_age_hours }}",
     TRADE_PRESS_AGE_HOURS: "${{ inputs.trade_press_age_hours }}",
     COMMUNITY_AGE_HOURS: "${{ inputs.community_age_hours }}",
+    DUMP_RAW_DOCUMENT_CONTENTS: "${{ inputs.dump_raw_document_contents }}",
   });
   expect(plan.run).not.toContain("${{");
   const closing = steps.slice(steps.indexOf(plan) + 1);
-  expect(closing).toHaveLength(5);
-  const [cancellation, finalize, inventory, upload, finish] = closing;
+  expect(closing).toHaveLength(6);
+  const [cancellation, finalize, inventory, upload, , finish] = closing;
   expect(inventory?.run).toBe("bun run services/feed-ingest-plan/scripts/feed-ingest-plan-upload-inventory.ts");
   expect(inventory?.if).toBe(upload?.if);
   expect(inventory?.env?.ARTIFACT_DIRECTORY).toBe("${{ steps.finalize.outputs.artifact_directory }}");
@@ -103,12 +105,14 @@ test("manual controls exercise the planner API and keep only required outputs", 
   expect(finalize?.env).toEqual({
     CURRENT_RUN_FILES: "${{ steps.plan.outputs.current_run_files }}",
     RUN_CANCELLED: "${{ steps.cancellation.outputs.cancelled == 'true' }}",
+    DUMP_RAW_DOCUMENT_CONTENTS: "${{ inputs.dump_raw_document_contents }}",
+    RUN_ID: "${{ steps.plan.outputs.run_id }}",
   });
   expect(finalize?.run).toBe("bun run services/feed-ingest-plan/scripts/finalize-run-output.ts");
   expect(finalize?.run).not.toContain("git push");
   expect(upload?.id).toBe("upload");
   expect(upload?.uses).toBe("actions/upload-artifact@v7");
-  expect(steps.filter(step => step.uses === upload?.uses)).toHaveLength(1);
+  expect(steps.filter(step => step.uses === upload?.uses)).toHaveLength(2);
   expect(upload?.with?.archive).not.toBe(false);
   expect(upload?.with?.name).toBe("collect-and-select-articles-${{ github.run_id }}-${{ github.run_attempt }}");
   expect(upload?.with?.path).toBe("${{ runner.temp }}/feed-ingest-plan/${{ steps.finalize.outputs.artifact_directory }}");
@@ -122,6 +126,10 @@ test("manual controls exercise the planner API and keep only required outputs", 
     COLLECTION_OUTCOME: "${{ steps.plan.outcome }}", PLANNING_COMPLETE: "${{ steps.plan.outputs.planning_complete }}",
     FINALIZATION_OUTCOME: "${{ steps.finalize.outcome }}", UPLOAD_OUTCOME: "${{ steps.upload.outcome }}",
     UPLOAD_ARTIFACT_ID: "${{ steps.upload.outputs.artifact-id }}",
+    DUMP_RAW_DOCUMENT_CONTENTS: "${{ inputs.dump_raw_document_contents }}",
+    RAW_DOCUMENT_CONTENTS: "${{ steps.finalize.outputs.raw_document_contents }}",
+    RAW_UPLOAD_OUTCOME: "${{ steps.upload-raw-documents.outcome }}",
+    RAW_UPLOAD_ARTIFACT_ID: "${{ steps.upload-raw-documents.outputs.artifact-id }}",
   });
   expect(text).not.toContain("/state/raw/feed-ingest-plan/");
   expect(steps.some(step => step.name === "Check isolated adapters")).toBe(false);

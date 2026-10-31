@@ -4,7 +4,7 @@ import { ParsedFeedBatchSchema, SelectedFeedBatchSchema, StageReferenceRequestSc
 import type { PlanApiTiming } from "@idhazh/common-contracts";
 import type { PlanInputs } from "../load-plan-inputs";
 import type { PlanRuntime } from "../run-feed-plan";
-import { operationConfigFingerprint } from "./document-operations";
+import { stageConfigFingerprint } from "./operation-context";
 import { PlanError } from "./plan-request";
 import { stageStore } from "./stage-store";
 import { selectArticles } from "../select-articles";
@@ -13,13 +13,12 @@ import { prepareExecutionHealth } from "./feed-health-state-operation";
 import { appendDocumentTiming, currentExecutionState, executionHasArtifact, registerStageExecution } from "./document-state";
 import { resolveRunContext } from "../resolve-run-context";
 import { recordFinalizedDocumentWork } from "./record-standalone-run";
-import { restoreSourceHealth } from "./restore-source-health";
 import { collectionForRun } from "./collection-operation";
 import { snapshotCollectionBatch } from "./collection-batch";
 
 export function requireStageConfiguration(batch: { config_sha256: string }, inputs: PlanInputs, runtime: PlanRuntime) {
   if (!inputs.settings.enabled) throw new PlanError("PLANNER_DISABLED", "Planner is disabled", "enabled");
-  if (batch.config_sha256 !== operationConfigFingerprint(inputs, runtime)) {
+  if (batch.config_sha256 !== stageConfigFingerprint(inputs, runtime)) {
     throw new PlanError("REQUEST_CONFLICT", "Batch configuration differs from the current planner", "batch_id");
   }
 }
@@ -35,15 +34,16 @@ export async function executeSelection(raw: unknown, inputs: PlanInputs, runtime
     throw new PlanError("BATCH_INCOMPLETE", "Selection requires the completed global collection, not one feed's batch", "batch_id");
   }
   if (collection !== undefined) parsed = snapshotCollectionBatch(inputs, collection, collection.pending_offers === 0);
-  if (store.ownership(parsed.batch_id).health_fingerprint === null) {
-    parsed = store.replace("parsed", ParsedFeedBatchSchema, await restoreSourceHealth(parsed, inputs));
+  const original = await currentExecutionState(inputs, parsed.context.run_id);
+  if (original?.kind === "document" && store.ownership(parsed.batch_id).health_fingerprint === null) {
+    parsed = store.replace("parsed", ParsedFeedBatchSchema, {
+      ...parsed, work_rows: original.work.rows(), exclusions: original.work.exclusions(),
+    });
   }
   if (!parsed.input_complete) throw new PlanError("BATCH_INCOMPLETE", "Every offered article needs a terminal fetch/parse result before selection", "batch_id");
   const originalClaim = store.claimSelection(parsed.batch_id);
   const captured = (runtime.selection_clock ?? runtime.clock)?.() ?? new Date();
   const selectionStartedAt = utcTimestamp(() => captured);
-  const pending = currentExecutionState(inputs, parsed.context.run_id);
-  const original = pending === undefined ? undefined : await pending;
   const claim = store.ownership(parsed.batch_id);
   claim.scope = original?.kind === "plan" || (original?.kind === "document" && original.plan_owned) ? "plan" : claim.scope;
   if (original?.health_fingerprint !== null && original?.health_fingerprint !== undefined) {

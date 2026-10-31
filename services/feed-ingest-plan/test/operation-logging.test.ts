@@ -35,9 +35,6 @@ test("standalone document work logs failure addresses only and persistence logs 
         fetch_item_type: "article", url,
       };
       const fetched = await post("fetch", request);
-      const afterFetch = f.events.length;
-      expect(await post("fetch", request)).toEqual(fetched);
-      expect(f.events).toHaveLength(afterFetch);
       let parsed;
       if (failedOperation !== "fetch") parsed = await post("parse", {
         request_id: randomUUID(), fetch_request_id: request.request_id,
