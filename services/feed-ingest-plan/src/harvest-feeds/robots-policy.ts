@@ -1,4 +1,4 @@
-/** Fetch safe targets with enforced feed robots permission and configured article policy. */
+/** Fetch safe targets while retaining robots evidence and honoring article enforcement. */
 import robotsParser from "robots-parser";
 import { constants as osConstants } from "node:os";
 import { HarvestDiagnosticsSchema } from "@idhazh/common-contracts";
@@ -359,7 +359,7 @@ export function createPermittedFetcher(
       if (evidence.robots === null || evidence.robots === "allowed") {
         evidence = { robots: permission, ...robotEvidence };
       }
-      if (permission !== "allowed" && (kind === "feed" || config.article_robots_policy !== "observe")) {
+      if (permission !== "allowed" && kind === "article" && config.article_robots_policy === "enforce") {
         return withAttemptedUrl({
           body: null, http_status: observedStatus, failure: permission === "denied" ? "robots-denied" : "robots-unknown",
           robots: permission, ...robotEvidence, error_code: robotResult.error_code ?? null,

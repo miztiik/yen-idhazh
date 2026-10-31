@@ -1,35 +1,107 @@
 /** Do bulk and standalone entry points apply the same document policy without rewriting receipts? */
 import { expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
+import { join } from "node:path";
+import { FeedHealthStateRowContract, PLANNER_API_PREFIX } from "@idhazh/common-contracts";
 import { createPlanTestServer } from "./plan-test-server";
 import { openOperationStore } from "../src/api/operation-store";
 import { harvestFeeds } from "../src/harvest-feeds/harvest-pool";
+import { readPlannerParquet } from "../src/read-ledger-history/read-planner-parquet";
 import { context } from "./harvest-recordings";
 import { recordedPlan } from "./plan-recordings";
 
-test("bulk and standalone feed reads enforce denial even when article robots is observed", async () => {
+test("bulk and standalone feed reads dispatch targets after denied or failed robots checks", async () => {
+  const cases = [
+    { permission: "denied", response: { status: 200, body: "User-agent: *\nDisallow: /\n" },
+      robots_http_status: 200, robots_failure: null },
+    { permission: "unknown", response: { status: 503, body: "" },
+      robots_http_status: 503, robots_failure: "http" },
+  ] as const;
   for (const entry of ["bulk", "standalone"] as const) {
+    for (const scenario of cases) {
+      const recorded = await recordedPlan();
+      const app = entry === "standalone" ? createPlanTestServer(recorded.inputs, recorded.runtime) : null;
+      try {
+        recorded.inputs.harvest.config.harvest.request_headers.secondary = null;
+        recorded.transport.recordings.responses["https://news.example/robots.txt"] = [scenario.response];
+        recorded.transport.recordings.responses["https://news.example/feed.xml"] = [{
+          status: 200, body: "<rss version=\"2.0\"><channel><title>Recorded empty feed</title></channel></rss>",
+        }];
+        if (entry === "bulk") {
+          const result = await harvestFeeds(recorded.inputs.harvest, context(), recorded.runtime.boundary);
+          expect(result.feed_outcomes[0]).toMatchObject({
+            fetch_status: "success", parse_status: "empty",
+            diagnostics: { robots: scenario.permission, robots_http_status: scenario.robots_http_status },
+          });
+          expect(result.candidates).toEqual([]);
+        } else {
+          const requestId = randomUUID();
+          const response = await app!.request(`${PLANNER_API_PREFIX}/fetch`, {
+            method: "POST", headers: { "content-type": "application/json" },
+            body: JSON.stringify({
+              request_id: requestId, correlation_id: randomUUID(),
+              feed_id: "recorded-news", fetch_item_type: "feed",
+            }),
+          });
+          expect(response.status).toBe(200);
+          expect(await response.json()).toMatchObject({ failure: null, http_status: 200 });
+          const store = await openOperationStore(recorded.inputs.outputRoot);
+          try {
+            expect(store.get(requestId)?.artifact).toMatchObject({
+              failure: null, http_status: 200, robots: scenario.permission,
+              robots_http_status: scenario.robots_http_status, robots_failure: scenario.robots_failure,
+            });
+          } finally { store.close(); }
+        }
+        expect(recorded.transport.requests.map(request => request.url.href))
+          .toEqual(["https://news.example/robots.txt", "https://news.example/feed.xml"]);
+      } finally {
+        if (app !== null) await app.close();
+        await recorded.close();
+      }
+    }
+  }
+});
+
+test("the plan records target work after robots denial without inventing a failed feed check", async () => {
+  for (const targetStatus of [200, 403] as const) {
     const recorded = await recordedPlan();
+    recorded.inputs.harvest.config.harvest.request_headers.secondary = null;
+    recorded.transport.recordings.responses["https://news.example/robots.txt"] = [{
+      status: 200, body: "User-agent: *\nDisallow: /\n",
+    }];
+    recorded.transport.recordings.responses["https://news.example/feed.xml"] = [{
+      status: targetStatus,
+      body: targetStatus === 200
+        ? "<rss version=\"2.0\"><channel><title>Recorded feed</title><item><title>Recorded story</title><link>https://news.example/second</link></item></channel></rss>"
+        : "",
+    }];
     const app = createPlanTestServer(recorded.inputs, recorded.runtime);
     try {
-      recorded.transport.recordings.responses["https://news.example/robots.txt"] = [{
-        status: 200, body: "User-agent: *\nDisallow: /\n",
-      }];
-      if (entry === "bulk") {
-        const result = await harvestFeeds(recorded.inputs.harvest, context(), recorded.runtime.boundary);
-        expect(result.feed_outcomes[0]?.fetch_status).toBe("network_failure");
-        expect(result.candidates).toEqual([]);
-      } else {
-        const response = await app.request("/api/2026-10-31/fetch", {
-          method: "POST", headers: { "content-type": "application/json" },
-          body: JSON.stringify({
-            request_id: randomUUID(), correlation_id: randomUUID(), feed_id: "recorded-news", fetch_item_type: "feed",
-          }),
-        });
-        expect(response.status).toBe(200);
-        expect(await response.json()).toMatchObject({ failure: "robots-denied", http_status: null });
-      }
-      expect(recorded.transport.requests.map(request => request.url.href)).toEqual(["https://news.example/robots.txt"]);
+      const response = await app.request(`${PLANNER_API_PREFIX}/plan`, {
+        method: "POST", headers: { "content-type": "application/json" }, body: "{}",
+      });
+      expect(response.status).toBe(200);
+      const result = await response.json();
+      const saved = await readPlannerParquet(
+        join(recorded.inputs.outputRoot, result.files.feed_health_state.files[0].path),
+        "feed-health-state", FeedHealthStateRowContract,
+      );
+      const row = saved.rows.find(item => item.feed_id === "recorded-news");
+      expect(row).toMatchObject({
+        permission: "denied", status: targetStatus, feed_reads: 1, feed_requests: 1,
+        robots_requests: 1, counts_complete: true,
+        outcome: targetStatus === 200 ? "ok" : "permanent",
+        check_result: targetStatus === 200 ? "valid-feed" : "other-http-failure",
+        productive_reads: targetStatus === 200 ? 1 : 0,
+        failed_reads: targetStatus === 200 ? 0 : 1,
+        last_failure_code: targetStatus === 200 ? null : "FETCH_FAILED_HTTP",
+      });
+      expect(recorded.transport.requests.map(request => request.url.href)).toEqual(
+        targetStatus === 200
+          ? ["https://news.example/robots.txt", "https://news.example/feed.xml", "https://news.example/second"]
+          : ["https://news.example/robots.txt", "https://news.example/feed.xml"],
+      );
     } finally { await app.close(); await recorded.close(); }
   }
 });

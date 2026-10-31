@@ -83,7 +83,7 @@ export const FeedHarvestConfigSchema = z.strictObject({
     "Parse-request deadline in milliseconds, including worker queue time. The default is unmeasured.",
   ),
   article_robots_policy: z.enum(["enforce", "observe"]).default("enforce").describe(
-    "Enforce article robots permission or retain it as evidence without blocking article requests. Feeds always enforce.",
+    "Block article requests when robots permission is denied or unknown, or retain it as evidence without blocking. Feeds retain robots results as evidence and do not block safe feed requests.",
   ),
   tidy_urls: z.boolean().describe(
     "Apply additional article cleanup before removing all queries and fragments. Remove this switch and the disabled path when additional cleanup becomes mandatory.",
