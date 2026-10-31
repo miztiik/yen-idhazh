@@ -86,7 +86,7 @@ Routine progress updates do not need this structure.
 5. **Structural fixes only.** No band-aids, no monkey patches, no "temporary" hacks. This one does not bend: a temporary fix is a permanent fix with a note attached, and the note is what gets lost. When the structural fix is out of scope, escalate the correction level and say so - that is the adapt path, and it is the only one. Escalation is a person's decision under section 6, not a label an agent applies to itself to keep going.
 6. **No hard coding, anywhere in the codebase**. Every layer - frontend included - reads tunable behavior from schema-validated `config\` with sane defaults; a theme token is a knob, not a literal. The substitution test: change the config and behavior changes, no source edit required - anything else is hard coded. A feature in development ships behind a config flag: default agreed and documented at build time; removal condition on the declaring line, or the flag is a permanent second implementation. A value that truly belongs in source - a protocol constant, a format literal - is named as one by someone who states why it can never vary.
 7. **No mocks unless asked, because a mock is how a thing looks finished without being built.** The failure is an agent failure: asked for a capability, an agent writes a stub returning a plausible value, writes a test asserting the stub, and reports success - everything passes, nothing works, which is worse than a red test because a red test tells the truth. So real implementations and real fixtures under `tests\fixtures\`, no test touches the network, and where the model is not itself under test the boundary is driven by a recorded response. A mock ships only on explicit request, named as one where it sits; that named exception is the whole of the adapt path, and it is a person's to open.
-   **Planner HTTP test exception (2026-10-30, user-approved):** Planner tests may open an ephemeral loopback-only listener and call its HTTP APIs. Source responses remain recorded fixtures; no external network access is permitted. The exception proves the actual stage transport, not live source availability.
+   **Planner HTTP test exception:** Planner tests may open an ephemeral loopback-only listener and call its HTTP APIs. Source responses remain recorded fixtures.
 8. **Open source first**. Prefer a mature library over a custom build, and name each dependency's beneficiary feature and its cost - install time, shipped bytes etc. A library has already paid for edge cases we haven't met yet; a hand-rolled HTTP client, retry policy, or parser buys them back one outage at a time. Naming the beneficiary matters as much as the cost: an unattributed dependency is one nobody can later argue to remove. Writing it ourselves is a person's call: which library was considered, and what didn't fit.
 9. **Tests ship with the feature**. A behavior-changing commit lands with its tests at the tier matching the surface (section 13), and the full suite is green at merge. A late test is written against code as built rather than behavior as intended, so it documents the bug as readily as the feature and then defends it. A feature that lands without one carries a person's name and the row that will add it.
 10. **Measure to decide, not to stall**. If a change has low downside and is easily reversible, ship it immediately without gating on metrics - indecision is not safe, merely slow. Only measure when the number directly alters what you build next. Never invent precision: make fast, provisional calls on labeled estimates, and only measure if it's cheap to confirm. When you do test, blunt tools are not a veto: "the gain is smaller than the noise" indicts your benchmark, not your idea - use paired A/B runs to isolate signal. Finally, keep metrics clean: store only the single current reading, let Git hold history, and when data contradicts your design, pivot instantly and dump the old numbers.
@@ -98,7 +98,8 @@ Routine progress updates do not need this structure.
 These operationalize the guardrails and shape every subsystem.
 
 - **Event-driven.** Stages communicate through structured-payload events, never direct calls into each other's internals. A stage consumes one validated payload and emits another; the contract between stages, and between `backend/` and `frontend/`, is a typed payload - not a function signature.
-- **One native contract is the source of truth.** Pydantic models under `backend/idhazh/contracts/` own persisted payloads except the TypeScript-owned planner contracts named in Guardrail #3. Repository-authored config follows Guardrail #3: declare only what its own readers compute on, not values passed unchanged to another program (maintainer ruling, 2026-09-21). A Pydantic contract produces JSON Schema on demand through `json_schema()`; planner schemas use Zod's `toJSONSchema()`. The frontend carries a small hand-written copy of the few shapes it needs. Two tests hold the hand copy in step: one over the field set, one over the vocabularies.
+- **One native contract is the source of truth.** Pydantic models under `backend/idhazh/contracts/` own persisted payloads except the TypeScript-owned planner contracts named in Guardrail #3.
+- A Pydantic contract produces JSON Schema on demand through `json_schema()`; planner schemas use Zod's `toJSONSchema()`. The frontend carries a small hand-written copy of the few shapes it needs. Two tests hold the hand copy in step: one over the field set, one over the vocabularies.
 - **Payloads, not calls.** Data crossing any boundary is a serializable structured payload (JSON-shaped), so it can be logged, validated, replayed, and tested with real fixtures.
 - **Atomic, resumable units.** One work item is one content-addressed file written with a temp-file-plus-rename. A failed item never damages a sibling, and a re-run costs only the unfinished items.
 - **A source file answers one narrow question, and its first sentence states which one.** Read that sentence before you add to the file. If what you add requires widening it, the file now holds two answers - put yours in a new file beside it. A sentence that names a tier, layer, or subsystem names no question, turning the file into a dumping ground. Keep files short and focused: an answer should not sprawl. If answering the question requires a long file, the question is too broad - decompose it into smaller, composable units. A file must never hold two answers, nor should it grow long when it can be split. A router is the sharpest case: a file that dispatches work contains only the routing logic, while the execution lives strictly in the unit's own module. A file every change touches is a file no change owns; its bloat remains hidden from the author and penalizes the next reader.
@@ -106,17 +107,15 @@ These operationalize the guardrails and shape every subsystem.
 - **Schema-first.** Every config file and every persisted payload conforms to the contract that declares it; a config or payload that fails validation fails the build (Guardrail #3).
 - **Degrade, do not fail.** A missing visual, a failed extraction, or an unreachable source degrades that item and records why. It never takes down the run.
 - **LLM-as-judge evaluation** LLM-as-judge is primary evaluation where applicable. Model verdicts are no longer restricted to offline write-critique loops, non-reader-facing environments, or human triage queues; they may operate directly in production workflows, score live content, and determine publication without constituting a section 0a deviation (`docs/concepts/evaluation.md`).
-- **Naming Conventions:** All files, modules, configs, and variables must be self-descriptive nouns; all functions and actions must be self-descriptive verbs.
+- **Naming Conventions:** All files, modules, configs, variables, functions and actions must be self-descriptive verb-nouns.
 
 ## 1b. Logging
-
-Logging is local by construction. There is no log sink, no log service, and no runtime call home (Guardrail #1).
 
 - **Backend.** Structured records to stderr through the standard library `logging` module, configured once at the entry point. Level from `config/`; default `INFO`..
 - **Frontend.** The browser console, and only the browser console. A published page logs what a reader would need to hand back when something looks wrong. No SDK, no beacon, no `fetch` to a collector.
 - **Every log record is the event payload.** A stage logs the same structured envelope it emits (section 1a), so a log line and a persisted payload never disagree about what happened.
 - **Secrets never reach a log record.** Not a token, not a signed URL, not a request header.
-- **Observability telemetry** Backend telemetry collated and persisted through commits under `/state`, sharded by time granularity - preferably daily, or falling back to month or year. A single central module manages all telemetry operations through explicit verbs, including a prune verb to clean up records for a target time period.
+- **Observability telemetry** Backend telemetry collated and persisted through commits under `/state`, sharded by time granularity - preferably daily, or falling back to month or year.
 
 ## 2. Path and Time Conventions
 
@@ -127,8 +126,7 @@ Paths leaving the process, including JSON, logs, manifests, agent memory, errors
 - Relative, with no drive letters.
 - POSIX-separated (`/`, never `\`).
 - In the minimal reconstructable form.
-
-In-memory `Path` objects for local I/O may remain platform-native.
+- In-memory `Path` objects for local I/O may remain platform-native.
 
 ### Time
 
@@ -150,7 +148,7 @@ Which directory holds what, who writes it, whether it is committed and whether a
 
 ## 4. Layer and Dependency Boundaries
 
-- `frontend/src/` MUST NOT depend on a runtime backend service - there is none in production. Ordinary panels read staged committed files. The Data explorer may also read the current registry and registered, consented compact payloads from the committed `ledger.archive_base_url`; an explicitly empty value selects site fixtures. This does not permit raw discovery, another destination or a server. The [written-question contract](docs/architecture/publishing/how-the-query-door-answers-a-written-question.md#design-rationale) records the maintainer ruling.
+- `frontend/src/` MUST NOT depend on a runtime backend service - there is none in production. Ordinary panels read staged committed files. The Data explorer may also read the current registry and registered, consented compact payloads from the committed `ledger.archive_base_url`; an explicitly empty value selects site fixtures.
 - `backend/` is the only writer of pipeline output under `frontend/public/` and of the compact repository output the explorer reads. Static publication, sanitization and operator-controlled destination boundaries remain unchanged.
 - `backend/` MUST NOT import frontend code, and frontend code MUST NOT import backend code. They meet only through committed data and the contracts declared in `backend/idhazh/contracts/` (Guardrail #1, section 1a).
 - `backend/idhazh/contracts/` MUST NOT import any other subpackage of `backend/idhazh/`. Contracts are the bottom of the dependency graph; everything else depends on them.
@@ -200,7 +198,7 @@ When in doubt, choose the higher level. Counting files is not the test: four fil
 - **Commit only intended changes.** Stage explicit paths and verify them with `git diff --cached --name-only`. Keep commits small and reversible. Branch names and commit messages describe the change.
 - **Preserve published history.** Update pushed branches by merging, not rebasing or amending. Merge only after required checks pass.
 - **Verify before cleanup.** Confirm the PR is merged and no local work will be lost. Delete its remote branch, remove only your clean worktree, and prune its obsolete local branch. A `: gone` marker alone does not prove a merge.
-- **Use one commit identity:** `miztiik <miztiik@users.noreply.github.com>`. No attribution tags, except the archive delivery's user ruling of 2026-10-10: local archive commits include `Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>`. [.mailmap](.mailmap) normalizes GitHub's squash-merge identity.
+- **Use one commit identity:** `miztiik <miztiik@users.noreply.github.com>`. No attribution tags. [.mailmap](.mailmap) normalizes GitHub's squash-merge identity.
 
 Avoid `git stash`, `git reset --hard`, `git clean -fd`, broad checkout/restore, `git add .`, `git add -A`, force pushes and amendments to pushed commits.
 
@@ -226,7 +224,7 @@ The commands behind these gates are in [`docs/how-to/run-the-gates.md`](docs/how
 - [ ] For published-site changes: smoke-tested via integrated browser tools per section 12.
 - [ ] Review the changed reader-facing or operator-facing surface against the design requirements in [`docs/concepts/design-system.md`](docs/concepts/design-system.md). Use a representative view and only check another view or state when the change alters its behaviour. This is a design review, not a per-panel test matrix.
 - [ ] Canonical docs updated in `docs/` (right tier). A page you added a section to paid the split test first, or the PR says in one line why it stays whole ([`docs/reference/documentation-structure.md`](docs/reference/documentation-structure.md)).
-- [ ] Schemas version-stamped + changelogged (and migrated if breaking) when any persisted contract changed (section 11).
+- [ ] Schemas version-stamped + change logged when any persisted contract changed (section 11).
 - [ ] No `[DEBUG]` markers left.
 - [ ] No new hardcoded values.
 - [ ] No new mocks unless explicitly requested.
@@ -259,39 +257,10 @@ The commands behind these gates are in [`docs/how-to/run-the-gates.md`](docs/how
 
 ## 11. Schema Versioning
 
-**This section is scoped to a persisted payload a later run reads.** A configuration file this project authors is out: nothing but this repository writes one, and a file a person edits in place has no older copy for a later build to read. (Maintainer ruling 2026-09-21.)
-
-**TypeScript planner exception (2026-10-31 UTC, user-approved):** The
-[planner contract cutover](docs/reference/feed-planner-ledgers.md#typescript-contract-ownership)
-places planner requests, artifacts, receipts, stage payloads, events and five
-ledgers under TypeScript validation. Only current native formats are accepted.
-There are no migrations, old-format readers, older-key recovery or old-prefix
-aliases. Historical ledger files remain unchanged. Current-format health field
-gaps are partial evidence and affect only their required calculations.
-Stored-file integrity, strict current writers, dated stamps and changelogs
-remain required. Current request idempotency is retained; it is not legacy
-compatibility. Python keeps the gardener scheduler and delegates planner
-validation and compaction to TypeScript. Other families keep their own rules.
-
-Every such payload is declared before logic is written, under the native contract ownership in Guardrail #3 and section 1a. Its JSON Schema is computed from that declaration on demand. The current-only planner exception replaces the read-side migration requirement only for that family; its stamps and changelogs remain required.
-
 - `version` is a `YYYY-MM-DD` date-stamp - never an integer, never an epoch. It answers the question a reader of an old payload actually has: how old is this shape?
 - Every change appends a `changelog` entry, newest first, `{ version, change }`, and sets `version` if necessary.
 - **A changelog entry is one line. Five entries at most: the four newest changes, then one pointer saying the rest is in git.** `change` says what moved. Neither carries a measurement, a date, an incident, a plan row or a person's name - a reading belongs in the instrument log (Guardrail #10) and a rationale belongs in the living doc it impacts (Guardrail #4). **An entry that will not fit one line is the test:** either the reason is worth a `## Design rationale` section in `docs/`, and goes there with one line left here pointing at it, or it was never worth keeping. Older entries are deleted, not archived - git is the archive, and a pointer to the file's history beats a hash that rots.
 - A breaking change - a removed field, a retype, a shifted meaning - ships its read-side migration in the same commit. **A payload written by yesterday's run that today's build cannot read is a contract break and a release blocker.**
-
-**Chart exception (2026-10-24 UTC):** The chart payload and browser
-renderer move forward together without migration or compatibility readers.
-Only the current renderer is accepted. Older incompatible chart data is
-refused; those stories retain their text and have no chart. No historical
-corpus is deleted. Schema stamps and changelogs still apply.
-
-What the base model enforces, how a same-day revision extends the stamp, which surfaces this covers, and the one model that pins a published key while its Python name moves: [`docs/architecture/contracts/schemas.md`](docs/architecture/contracts/schemas.md).
-
-Article identity uses only the current cleaned address to match discovery,
-publication and settled-failure keys. Its current-format rule is
-[declared with the planner formats](docs/reference/feed-planner-ledgers.md#article-cleanup-compatibility).
-This does not change other payload families or historical published keys.
 
 ## 12. Published-Site Verification (Browser Smoke)
 
