@@ -1,4 +1,4 @@
-/** Does article observation retain robots evidence without replacing the actual target outcome? */
+/** Do article policy and feed handling retain robots evidence without replacing target outcomes? */
 import { expect, test } from "bun:test";
 import { z } from "zod";
 import { FeedIngestConfigSchema } from "@idhazh/common-contracts";
@@ -186,16 +186,61 @@ test("article DNS and TLS failures retain only recognized low-level target codes
   }
 });
 
-test("feed requests and feed redirects still enforce denied or unknown robots in observe mode", async () => {
-  for (const destination of ["denied.example", "unknown.example"]) {
-    const direct = await setup();
-    expect((await direct.fetcher.fetch(`https://${destination}/story`, undefined, "feed")).failure)
-      .toBe(destination === "denied.example" ? "robots-denied" : "robots-unknown");
-    expect(requested(direct.transport)).toEqual([`https://${destination}/robots.txt`]);
-    const redirected = await setup({ target: [{ status: 302, body: "", location: `https://${destination}/story` }] });
-    expect((await redirected.fetcher.fetch(target, undefined, "feed")).failure)
-      .toBe(destination === "denied.example" ? "robots-denied" : "robots-unknown");
-    expect(requested(redirected.transport)).toEqual([robots, target, `https://${destination}/robots.txt`]);
+test("feed requests retain denied and failed robots evidence but use actual target responses", async () => {
+  const recordings = await readRecordings();
+  const cases: {
+    permission: "denied" | "unknown"; responses: RecordedResponse[];
+    robots_http_status: number | null; robots_failure: string | null;
+  }[] = [
+    { permission: "denied", responses: await deniedRobots(), robots_http_status: 200, robots_failure: null },
+    { permission: "unknown", responses: recordings.responses["https://unknown.example/robots.txt"]!,
+      robots_http_status: 503, robots_failure: "http" },
+    { permission: "unknown", responses: [{ error: "timeout" }], robots_http_status: null, robots_failure: "timeout" },
+  ];
+  for (const scenario of cases) {
+    const { fetcher, transport } = await setup({
+      robots: scenario.responses, target: [{ status: 403, body: "" }],
+    });
+    const fetched = await fetcher.fetch(target, undefined, "feed");
+    expect(fetched).toMatchObject({
+      failure: "http", http_status: 403, robots: scenario.permission,
+      robots_http_status: scenario.robots_http_status, robots_failure: scenario.robots_failure,
+    });
+    expect(requested(transport)).toEqual([robots, target]);
+  }
+});
+
+test("feed redirects dispatch safe hops and keep the first denied or unknown robots result", async () => {
+  const destination = "https://atom.example/entry";
+  const scenarios: {
+    initial: RecordedResponse[]; initialPermission: "denied" | "unknown";
+    initialStatus: number; initialFailure: string | null; destinationRobots: RecordedResponse[];
+  }[] = [
+    {
+      initial: await deniedRobots(), initialPermission: "denied", initialStatus: 200, initialFailure: null,
+      destinationRobots: [{ error: "timeout" }],
+    },
+    {
+      initial: [{ status: 503, body: "" }], initialPermission: "unknown", initialStatus: 503, initialFailure: "http",
+      destinationRobots: [{ status: 200, body: "User-agent: *\nDisallow: /\n" }],
+    },
+  ];
+  for (const scenario of scenarios) {
+    const { fetcher, transport } = await setup({
+      robots: scenario.initial, target: [{ status: 302, body: "", location: destination }],
+    });
+    transport.recordings.responses["https://atom.example/robots.txt"] = scenario.destinationRobots;
+    transport.recordings.responses[destination] = [{ status: 200, fixture: "article" }];
+    const fetched = await fetcher.fetch(target, undefined, "feed");
+    expect(fetched).toMatchObject({
+      failure: null, http_status: 200, robots: scenario.initialPermission,
+      robots_http_status: scenario.initialStatus, robots_failure: scenario.initialFailure,
+    });
+    expect(requested(transport)).toEqual([
+      robots, target, "https://atom.example/robots.txt", destination,
+    ]);
+    expect(fetched.attempts!.filter(attempt => attempt.phase === "target").map(attempt => attempt.http_status))
+      .toEqual([302, 200]);
   }
 });
 

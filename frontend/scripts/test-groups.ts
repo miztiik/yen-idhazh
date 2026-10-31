@@ -30,7 +30,7 @@ const FILES: Record<FrontendGroup, readonly string[]> = {
 		'console-published', 'console-ranked', 'console-readout-data',
 		'console-run-health', 'console-shard-board', 'console-shell', 'console-site-size',
 		'console-stage-timing-days', 'console-timings', 'console-voices', 'console-voices-cuts',
-		'console-voices-fetch-time',
+		'console-visual-funnels', 'console-voices-fetch-time',
 		'console-voices-feeds', 'console-voices-retiring', 'console-voices-sources',
 		'console-waiting', 'console-window', 'day-list',
 		'day-metrics', 'day-seam', 'day-search', 'day-states', 'duration-cohort', 'empty-day',

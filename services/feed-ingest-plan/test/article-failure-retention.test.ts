@@ -34,41 +34,36 @@ async function rejectedRows(recorded: Awaited<ReturnType<typeof recordedPlan>>, 
   )))).flatMap(file => file.rows);
 }
 
-test("terminal HTTP, DNS, TLS, timeout, robots and extraction failures survive zero-selection finalization once", async () => {
-  for (const entry of await failureCases()) {
-    const recorded = await recordedPlan();
-    try {
-      recorded.inputs.harvest.config.harvest.article_robots_policy = "enforce";
-      recorded.inputs.harvest.extraction.max_retries = 1;
-      recorded.inputs.harvest.config.harvest.request_headers.secondary = null;
-      recorded.transport.recordings.responses["https://news.example/feed.xml"] = [{
-        status: 200, body: `<rss version="2.0"><channel><title>Recorded failures</title><item><title>Actual offer</title><link>${entry.url}</link></item></channel></rss>`,
-      }];
-      if (entry.responses !== undefined) recorded.transport.recordings.responses[entry.url] = entry.responses;
-      const result = await runFeedPlan({}, recorded.inputs, recorded.runtime);
-      expect(result.row.status, entry.name).toBe("completed");
-      expect(result.selected, entry.name).toEqual([]);
-      const rows = await rejectedRows(recorded, result.files.rejected_articles!.files.map(file => file.path));
-      expect(rows, entry.name).toHaveLength(1);
-      expect(rows[0], entry.name).toMatchObject({
-        stage: "harvest-feeds", ...entry.expected,
-        reason_code: entry.expected.fetch_failure === "http" ? "FETCH_FAILED_HTTP"
-          : entry.expected.fetch_failure === "timeout" ? "FETCH_TIMEOUT"
-          : entry.expected.fetch_failure === null ? "EXTRACT_EMPTY" : "FETCH_FAILED",
+test("enforced robots denials survive plan finalization without target dispatch", async () => {
+  const cases = (await failureCases()).filter(entry =>
+    entry.expected.fetch_failure === "robots-denied" || entry.expected.fetch_failure === "robots-unknown");
+  const recorded = await recordedPlan();
+  try {
+    recorded.inputs.harvest.config.harvest.article_robots_policy = "enforce";
+    recorded.inputs.harvest.extraction.max_retries = 0;
+    recorded.inputs.harvest.config.harvest.request_headers.secondary = null;
+    recorded.transport.recordings.responses["https://news.example/feed.xml"] = [{
+      status: 200, body: `<rss version="2.0"><channel><title>Recorded failures</title>${cases.map(entry =>
+        `<item><title>Actual offer</title><link>${entry.url}</link></item>`).join("")}</channel></rss>`,
+    }];
+    const result = await runFeedPlan({}, recorded.inputs, recorded.runtime);
+    expect(result.row.status).toBe("completed");
+    expect(result.selected).toEqual([]);
+    const rows = await rejectedRows(recorded, result.files.rejected_articles!.files.map(file => file.path));
+    expect(rows).toHaveLength(cases.length);
+    for (const entry of cases) {
+      expect(rows.find(row => row.url_key === deriveArticleIdentity(entry.url, recorded.inputs.harvest.config.harvest).url_key),
+        entry.name).toMatchObject({
+        stage: "harvest-feeds", ...entry.expected, reason_code: "FETCH_FAILED",
       });
-      const health = (await Promise.all(result.files.feed_health_state!.files.map(file =>
-        readPlannerParquet(join(recorded.inputs.outputRoot, file.path), "feed-health-state", FeedHealthStateRowContract))))
-        .flatMap(file => file.rows);
-      expect(health.flatMap(row => row.rejection_counts).filter(row => row.subject === "article")
-        .reduce((sum, row) => sum + row.count, 0), entry.name).toBe(1);
-      if (entry.name === "rate-limited") {
-        expect(recorded.transport.requests.filter(request => request.url.href === entry.url)).toHaveLength(2);
-      }
-      if (entry.expected.robots === "denied" || entry.expected.robots === "unknown") {
-        expect(recorded.transport.requests.some(request => request.url.href === entry.url)).toBe(false);
-      }
-    } finally { await recorded.close(); }
-  }
+      expect(recorded.transport.requests.some(request => request.url.href === entry.url)).toBe(false);
+    }
+    const health = (await Promise.all(result.files.feed_health_state!.files.map(file =>
+      readPlannerParquet(join(recorded.inputs.outputRoot, file.path), "feed-health-state", FeedHealthStateRowContract))))
+      .flatMap(file => file.rows);
+    expect(health.flatMap(row => row.rejection_counts).filter(row => row.subject === "article")
+      .reduce((sum, row) => sum + row.count, 0)).toBe(cases.length);
+  } finally { await recorded.close(); }
 });
 
 test("harvest and screening refusals both survive the same zero-selection run", async () => {

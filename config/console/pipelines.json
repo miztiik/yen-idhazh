@@ -13,6 +13,8 @@
         "item-cost",
         "run-timeline",
         "chart-drawing",
+        "pipeline-funnel",
+        "downgrade-funnel",
         "extraction",
         "article-age"
       ],
@@ -21,7 +23,7 @@
   ],
   "judged": [
     "at-a-glance", "run-health", "site-cost-per-item", "failure-mix", "item-time-split",
-    "slower-on-same-work", "stage-timings", "item-cost", "run-timeline", "chart-drawing", "extraction", "article-age"
+    "slower-on-same-work", "stage-timings", "item-cost", "run-timeline", "chart-drawing", "pipeline-funnel", "downgrade-funnel", "extraction", "article-age"
   ],
   "knobs": {}
 }

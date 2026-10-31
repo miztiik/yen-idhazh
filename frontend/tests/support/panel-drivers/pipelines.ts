@@ -54,5 +54,5 @@ export const DRIVERS: Readonly<Record<string, Readonly<Record<BasicNothing, Driv
 	'stage-timings': states, 'item-cost': states, 'run-timeline': states, 'article-age': states
 };
 export const BUILD_TIME: readonly string[] = [
-	'at-a-glance', 'run-health', 'site-cost-per-item', 'chart-drawing', 'extraction'
+	'at-a-glance', 'run-health', 'site-cost-per-item', 'chart-drawing', 'pipeline-funnel', 'downgrade-funnel', 'extraction'
 ];

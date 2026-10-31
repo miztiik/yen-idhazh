@@ -1,6 +1,6 @@
 # Feed and article failure diagnostics
 
-**Last Updated**: 2026-10-30
+**Last Updated**: 2026-10-31
 
 Which operation failed, what evidence survives it, and which durations were
 actually measured? This is the isolated TypeScript planner's diagnostic
@@ -21,7 +21,7 @@ measurement rather than measuring harvesting again.
 Screening and curation rejections retain the same original diagnostic object,
 including successful fetch and extraction measurements before a later refusal.
 
-Table A
+Table A - diagnostic fields
 
 | Id | Field | Meaning |
 | --- | --- | --- |
@@ -54,7 +54,8 @@ target sent in an HTTP request, or is null when no such request was sent.
 Neither address comes from feed contents.
 When a robots response hits the byte limit, the progress event marks
 `body_limit_source` as `robots`; otherwise the source is the feed or article
-response. A failed robots check does not claim that the feed target was sent.
+response. A target address appears in the event only when its target request
+was actually dispatched.
 
 Existing rejection `details.http_status` and article observation status cells
 are projections of the same fetch result, not independent requests.
@@ -127,6 +128,30 @@ before upgrading the stamp in memory. They accept only the recorded
 `2026-10-29T08:00` and `2026-10-30T22:25` event stamps; neither may contain the
 later `quality` operation. Historical files are not rewritten.
 
+## Historical evidence limits
+
+An HTTP success records a download result, not valid feed content. A health
+row can have `outcome = ok` and `FEED_PARSE_FAILED`. The safe `malformed-feed`
+token identifies parsing failure, but cannot recover its exact cause without
+the original response body, content type and parser evidence.
+
+An empty extraction is not a media exclusion before download. Check the
+captured run's media configuration and offered metadata. A URL matching a
+current rule need not have been excluded by an earlier run. Missing bodies,
+response types and measured word counts stay unknown; today's minimum word count
+cannot reconstruct a historical reading.
+
+Requested addresses and dispatched targets are distinct evidence. A logged
+requested article address names the input to the fetcher, not the last redirect
+hop. Historical feed failure events may retain no addresses. A catalog address
+cannot replace an unrecorded final target. Status can come from a separate
+health or rejection record, but a robots status cannot supply target status.
+
+Missing historical records do not demonstrate a code defect. An observed
+target refusal does not establish its underlying cause. Absent bodies, parser
+causes and final targets are evidence gaps, not grounds to infer a cause or
+change request, media or response-limit policy.
+
 ## Remaining production differences
 
 No granular DNS, connect, TLS, first-byte, body, robots or retry timing is
@@ -148,14 +173,14 @@ Each failed fetch, parse or request-attempt observation keeps its existing
 pipeline or remains unresolved. This describes the observed operation; it
 does not diagnose intent, prove a paywall or blame a publisher-wide problem.
 
-**Table A**
+**Table B - operation failure attribution**
 
 | Id | Evidence | Attribution |
 | --- | --- | --- |
-| A1 | A fetch or dispatched target attempt reports typed `http` failure with HTTP 401, 403, 404 or 410; or its robots rule denies the request | `source` |
-| A2 | Article extraction reports typed `empty-content`; a feed parser reports its typed `malformed-feed` failure | `source` |
-| A3 | Local target validation rejects an unsafe address, the configured body limit stops a response, or the extractor reports its depth limit | `pipeline` |
-| A4 | Other HTTP failures (including 408 and 429), DNS, network, timeout, redirect-loop, missing document root/title or any untyped exception | `unresolved` |
+| B1 | A target request reports typed `http` failure with HTTP 401, 403, 404 or 410; or an article request is stopped by explicit `enforce` policy | `source` |
+| B2 | Article extraction reports typed `empty-content`; a feed parser reports its typed `malformed-feed` failure | `source` |
+| B3 | Local target validation rejects an unsafe address, the configured body limit stops a response, or the extractor reports its depth limit | `pipeline` |
+| B4 | Other HTTP failures (including 408 and 429), DNS, network, timeout, redirect-loop, missing document root/title or any untyped exception | `unresolved` |
 
 HTTP 403 is an observed refusal for that article request only. It is not proof
 that the article is paywalled or that the publisher has failed generally.
@@ -189,3 +214,9 @@ writer can derive its column type without broadening the accepted vocabulary.
 
 The page is separate because harvesting owns request behavior while this page
 owns the evidence that crosses its boundaries.
+
+## See also
+
+- [Harvesting](feed-harvesting.md) - target requests and extraction controls.
+- [Health ledger fields](../../reference/feed-planner-ledgers.md#c-feed-health-state) - saved status and check results.
+- [Planner checks](../../how-to/run-feed-ingest-plan-test.md) - offline validation and saved output.
