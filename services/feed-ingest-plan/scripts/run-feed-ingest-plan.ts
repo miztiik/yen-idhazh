@@ -12,6 +12,7 @@ async function runWorkflow(signal: AbortSignal) {
   try {
     await writeGitHubOutputs(outputPath, {
       run_id: identity.run_id, date, planning_complete: "false",
+      dump_raw_document_contents: String(inputs.settings.dump_raw_document_contents),
       current_run_files: JSON.stringify(host.host.status === "recorded"
         ? host.host.files.map(file => file.path) : []),
     });

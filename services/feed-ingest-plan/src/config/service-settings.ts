@@ -33,6 +33,9 @@ export const ServiceSettingsSchema = z.strictObject({
     "Remove when the planner is approved for production use.",
   ),
   removal_condition: NonEmptySchema,
+  dump_raw_document_contents: z.boolean().default(false).describe(
+    "Append failed raw documents only to the optional private diagnostic artifact.",
+  ),
   listener: z.strictObject({
     hostname: NonEmptySchema, port: PositiveCountSchema.max(65535),
     idle_timeout_seconds: PositiveCountSchema.max(255),
@@ -61,3 +64,7 @@ export const ServiceSettingsSchema = z.strictObject({
   }),
 });
 export type ServiceSettings = z.infer<typeof ServiceSettingsSchema>;
+
+export function parseRawDocumentDumpControl(value: string): boolean {
+  return z.enum(["false", "true"]).parse(value) === "true";
+}

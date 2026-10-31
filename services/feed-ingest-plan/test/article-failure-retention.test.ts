@@ -151,7 +151,7 @@ test("completed failures survive a later selected-ledger write failure", async (
   } finally { await recorded.close(); }
 });
 
-test("standalone fetch retains a terminal row outside its private receipt and replay adds no duplicate", async () => {
+test("standalone fetch retains its terminal rejection in the native ledger", async () => {
   const recorded = await recordedPlan();
   recorded.inputs.harvest.config.harvest.request_headers.secondary = null;
   recorded.transport.recordings.responses["https://news.example/robots.txt"] = [{
@@ -167,9 +167,6 @@ test("standalone fetch retains a terminal row outside its private receipt and re
       method: "POST", headers: { "content-type": "application/json" }, body,
     });
     expect((await request()).status).toBe(200);
-    const before = recorded.transport.requests.length;
-    expect((await request()).status).toBe(200);
-    expect(recorded.transport.requests).toHaveLength(before);
     const directory = join("raw", "feed-ingest-plan", "rejected-articles", "2026", "10", "21");
     const paths = (await readdir(join(recorded.inputs.outputRoot, directory)))
       .filter(name => name.endsWith(".parquet")).map(name => join(directory, name));
@@ -180,7 +177,7 @@ test("standalone fetch retains a terminal row outside its private receipt and re
   } finally { await app.close(); await recorded.close(); }
 });
 
-test("standalone extraction retains its observed response and repeated parsing adds no extra row", async () => {
+test("standalone extraction retains its observed failure in the native ledger", async () => {
   const recorded = await recordedPlan();
   const app = createPlanTestServer(recorded.inputs, recorded.runtime);
   try {
@@ -195,12 +192,10 @@ test("standalone extraction retains its observed response and repeated parsing a
     });
     expect(response.status).toBe(200);
     const fetched = z.object({ article_id: z.string() }).parse(await response.json());
-    for (let index = 0; index < 2; index++) {
-      const parsed = await post("parse", {
-        request_id: randomUUID(), fetch_request_id: fetchId, article_id: fetched.article_id, correlation_id: correlation,
-      });
-      expect(parsed.status).toBe(200);
-    }
+    const parsed = await post("parse", {
+      request_id: randomUUID(), fetch_request_id: fetchId, article_id: fetched.article_id, correlation_id: correlation,
+    });
+    expect(parsed.status).toBe(200);
     const directory = join("raw", "feed-ingest-plan", "rejected-articles", "2026", "10", "21");
     const paths = (await readdir(join(recorded.inputs.outputRoot, directory)))
       .filter(name => name.endsWith(".parquet")).map(name => join(directory, name));

@@ -18,10 +18,8 @@ import { FeedHealthStateUpdateRequestSchema } from "./feed-health-state.schema";
 import { stageStore } from "./stage-store";
 import { requireStageConfiguration } from "./selection-operation";
 import { utcTimestamp } from "../harvest-feeds/harvest-types";
-import { readDocumentHealthBatch } from "./document-operations";
 import { PlanError } from "./plan-request";
-import { rememberDocumentHealth } from "./document-state";
-import { restoreSourceHealth } from "./restore-source-health";
+import { currentExecutionState, readDocumentHealthBatch, rememberDocumentHealth } from "./document-state";
 import { plannerMemory } from "../planner-memory";
 import { summarizeFeedAvailability } from "../availability/feed-availability-view";
 import { projectLifecycleFields } from "../health-row";
@@ -85,7 +83,8 @@ export async function executeFeedHealthState(raw: unknown, inputs: PlanInputs, r
   const request = FeedHealthStateUpdateRequestSchema.parse(raw);
   const reliability = { window_days: inputs.clock_config.collect.reliability_window_days };
   if (!stageStore(inputs).has(request.batch_id)) {
-    const document = await readDocumentHealthBatch(request.batch_id, inputs, runtime);
+    const document = await readDocumentHealthBatch(request.batch_id, inputs);
+    requireStageConfiguration(document, inputs, runtime);
     const prepare = request.action === "record" ? prepareExecutionHealth : prepareFeedHealthState;
     const summary = await prepare(inputs, utcTimestamp(runtime.selection_clock ?? runtime.clock),
       { context: document.context, rows: document.work.rows() });
@@ -102,8 +101,11 @@ export async function executeFeedHealthState(raw: unknown, inputs: PlanInputs, r
     if (collection !== undefined && collection.status === "collecting") {
       parsed = snapshotCollectionBatch(inputs, collection, false);
     }
-    if (stageStore(inputs).ownership(parsed.batch_id).health_fingerprint === null) {
-      parsed = stageStore(inputs).replace("parsed", ParsedFeedBatchSchema, await restoreSourceHealth(parsed, inputs));
+    const live = await currentExecutionState(inputs, parsed.context.run_id);
+    if (live?.kind === "document" && stageStore(inputs).ownership(parsed.batch_id).health_fingerprint === null) {
+      parsed = stageStore(inputs).replace("parsed", ParsedFeedBatchSchema, {
+        ...parsed, work_rows: live.work.rows(), exclusions: live.work.exclusions(),
+      });
     }
     const prepare = request.action === "record" ? prepareExecutionHealth : prepareFeedHealthState;
     const summary = await prepare(inputs, utcTimestamp(runtime.selection_clock ?? runtime.clock),

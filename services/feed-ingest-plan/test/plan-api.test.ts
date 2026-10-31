@@ -4,8 +4,6 @@ import { randomUUID } from "node:crypto";
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { existsSync } from "node:fs";
-import { loadPlanInputs } from "../src/load-plan-inputs";
-import { fileURLToPath } from "node:url";
 import { servePlan } from "../src/api/server";
 import { createPlanTestServer } from "./plan-test-server";
 import { recordedPlan } from "./plan-recordings";
@@ -32,7 +30,6 @@ test("health is explicit; disabled, malformed, oversized and unknown controls ca
     for (const action of ["summarize", "record"]) {
       expect((await app.request(`${prefix}/feed-health-state`, json({ batch_id: randomUUID(), action }))).status).toBe(503);
     }
-    expect(existsSync(join(recorded.inputs.outputRoot, "planner-operations.sqlite"))).toBe(false);
     expect((await app.request(`${prefix}/plan`, json({ padding: "x".repeat(recorded.inputs.settings.listener.max_body_bytes) }))).status).toBe(413);
     expect((await app.request(`${prefix}/fetch`, json({
       request_id: randomUUID(), correlation_id: randomUUID(), feed_id: "recorded-news", kind: "feed",
@@ -91,7 +88,7 @@ test("a required source write failure returns an API error, not proven planning 
   } finally { await app.close(); await recorded.close(); }
 });
 
-test("one listener retains durable seen receipts from an output root outside the checkout", async () => {
+test("one listener isolates concurrent live work with output outside the checkout", async () => {
   const recorded = await recordedPlan();
   delete recorded.runtime.run_number;
   delete recorded.runtime.correlation_id;
@@ -161,37 +158,5 @@ test("a later dispatch failure does not lose discovery already persisted by this
     const second = await (await app.request(`${prefix}/plan`, json({}))).json();
     expect(second.status).toBe("completed");
     expect(second.files.discovered_articles).toEqual({ status: "empty", files: [] });
-    const fetchKey = randomUUID();
-    const correlationId = randomUUID();
-    const fetched = await (await app.request(`${prefix}/fetch`, json({
-      request_id: fetchKey, correlation_id: correlationId, feed_id: "recorded-news", fetch_item_type: "article", url: "https://news.example/second",
-    }))).json();
-    await app.close();
-    const loaded = await loadPlanInputs(fileURLToPath(new URL("../../../", import.meta.url)));
-    const restartedInputs = { ...loaded, root: recorded.inputs.root, outputRoot: recorded.inputs.outputRoot,
-      settings: recorded.inputs.settings, harvest: recorded.inputs.harvest };
-    const restarted = createPlanTestServer(restartedInputs, { ...recorded.runtime, clock: () => new Date("2026-10-23T00:00:00Z") });
-    try {
-      const parsed = await (await restarted.request(`${prefix}/parse`, json({
-        request_id: randomUUID(), fetch_request_id: fetchKey, article_id: fetched.article_id, correlation_id: correlationId,
-      }))).json();
-      const selected = await (await restarted.request(`${prefix}/select-articles`, json({ batch_id: parsed.batch_id }))).json();
-      expect(selected.run_id).toBe(parsed.run_id);
-      const partition = await (await restarted.request(`${prefix}/partition-articles`, json({ batch_id: selected.batch_id, strategy: "none" }))).json();
-      const saved = await (await restarted.request(`${prefix}/feed-health-state`, json({ batch_id: selected.batch_id }))).json();
-      const originalDay = saved.rows.find((row: { date: string }) => row.date === "2026-10-21");
-      expect(originalDay.article_requests).toBe(1);
-      expect(originalDay.robots_requests).toBe(1);
-      expect(saved.rows.some((row: { date: string; article_requests: number }) => row.date === "2026-10-23" && row.article_requests > 0)).toBe(false);
-      const persistedResponse = await restarted.request(`${prefix}/persist-selected-articles`, json({ batch_id: partition.batch_id }));
-      expect(persistedResponse.status, await persistedResponse.clone().text()).toBe(200);
-      const persisted = await persistedResponse.json();
-      const run = (await readPlannerParquet(join(restartedInputs.outputRoot, persisted.run_files.files[0].path),
-        "plan-runs", PlanRunRowContract)).rows[0]!;
-      expect(run.duration_ms).toBeNull();
-      expect(run.date).toBe("2026-10-22");
-      expect(run.evaluated_at).toBe("2026-10-22T00:10:00Z");
-      expect(run.selection_started_at_utc).toBe("2026-10-23T00:00:00Z");
-    } finally { await restarted.close(); }
   } finally { await app.close(); await recorded.close(); }
 });

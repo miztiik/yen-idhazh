@@ -8,7 +8,7 @@ import { parseCliRequest } from "../src/api/plan-request";
 import { parseAgeWindows, resolveRunPolicy, RunPolicyOverridesSchema } from "../src/config/resolve-run-policy";
 import type { PlanRequest } from "../src/api/plan-request";
 import type { RunPolicyOverrides } from "../src/config/resolve-run-policy";
-import { ServiceSettingsSchema } from "../src/config/service-settings";
+import { parseRawDocumentDumpControl, ServiceSettingsSchema } from "../src/config/service-settings";
 import { stagePlannerHistory } from "./feed-ingest-plan-history";
 import { WorkflowPolicySchema } from "./feed-ingest-plan-policy-report";
 import { captureWorkflowHostFingerprint } from "./feed-ingest-plan-host-fingerprint";
@@ -37,6 +37,8 @@ export function readWorkflowRequest(environment: Record<string, string | undefin
 
 export async function preparePlannerWorkflow(root: string, environment: Record<string, string | undefined>) {
   const { request, policy_overrides: policyOverrides } = readWorkflowRequest(environment);
+  const dumpRawDocuments = environment.DUMP_RAW_DOCUMENT_CONTENTS === undefined ? undefined
+    : parseRawDocumentDumpControl(environment.DUMP_RAW_DOCUMENT_CONTENTS);
   const { RUNNER_TEMP, GITHUB_OUTPUT, GITHUB_RUN_ID, GITHUB_RUN_ATTEMPT } = environment;
   if (!RUNNER_TEMP || !GITHUB_OUTPUT || !GITHUB_RUN_ID || !GITHUB_RUN_ATTEMPT) throw new Error("Workflow execution controls are missing");
   const directory = join(RUNNER_TEMP, "feed-ingest-plan");
@@ -46,6 +48,7 @@ export async function preparePlannerWorkflow(root: string, environment: Record<s
   const staged = await stagePlannerHistory(root, inputs, new Date().toISOString().replace(/\.\d{3}Z$/, "Z"));
   inputs.settings = ServiceSettingsSchema.parse({
     ...inputs.settings, enabled: true,
+    ...(dumpRawDocuments === undefined ? {} : { dump_raw_document_contents: dumpRawDocuments }),
     inputs: { ...inputs.settings.inputs, feed_health_days: staged.feed_health_days,
       feed_health_input_gap: staged.feed_health_input_gap },
   });

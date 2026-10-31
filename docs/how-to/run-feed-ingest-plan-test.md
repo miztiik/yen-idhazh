@@ -45,6 +45,14 @@ concurrent requests cannot replace each other's age windows. The applied
 policy report shows each effective age list and its origin.
 For `none`, clear the worker count or set it to one.
 
+`dump_raw_document_contents` is a dropdown with the strings `false` and `true`;
+its default is `false`, not a checked or unchecked boolean input. The adapter
+accepts exactly those strings, converts the choice to a native boolean, and
+passes it through the invocation's validated settings in the private startup
+pipe. It is not an HTTP control. The authored service setting also defaults
+to false. When enabled, only failed downloaded inputs may enter the
+[separate raw-document artifact](../architecture/sources/feed-operator-api.md#failure-only-raw-document-artifact).
+
 `partition.enabled` in `config/feed-ingest-plan.json` defaults to true. Worker
 counts default to four, with configured bounds of one through twenty. When
 partitioning is disabled, selection still runs but worker assignment is
@@ -123,7 +131,7 @@ files at their registered paths, never an archive.
 History staging uses the [bounded day membership contract](../reference/feed-planner-ledgers.md#raw-day-membership).
 Named Git days, not saved raw-day JSON lists, identify all Parquet siblings.
 
-Four tasks follow `Collect and select articles with a supervised server`:
+Five tasks follow `Collect and select articles with a supervised server`:
 
 1. `Commit ledgers and write report` calls the safe-delivery API once for all
    verified completed ledgers, then calls the Markdown API and prepares the
@@ -142,8 +150,17 @@ Four tasks follow `Collect and select articles with a supervised server`:
    summarizer, plus the delivery result and Markdown report when available.
    The summarizer downloads this named artifact and reads its selected JSON
    file, not a ledger. Article bodies never enter the Git request.
-4. `Finish and clean up` checks collection, finalization and the upload's
-   returned artifact identity. It rechecks the saved result and exact Git
+4. `Upload failed raw documents` runs only when the dropdown is `true` and a
+   diagnostic file exists. Preparation first hands the closed
+   `raw-document-contents.jsonl` to the hash-free artifact-directory destination,
+   with only that exact target permitted. The separate archive is named
+   `raw-document-contents-<run>-<attempt>`. Zero failed documents means no file
+   and no debug upload. Failed collection still prepares and uploads available
+   diagnostics; no successful raw input, extracted-text substitute or new
+   retention policy is added.
+5. `Finish and clean up` checks collection, finalization and the normal upload's
+   returned artifact identity, plus the diagnostic upload when applicable.
+   It rechecks the saved result and exact Git
    delivery receipt before removing only the temporary run directory.
    An earlier collection failure still fails the job after completed
    diagnostics have landed. Failed finalization, missing confirmation or a
@@ -157,8 +174,9 @@ Four tasks follow `Collect and select articles with a supervised server`:
 When the metadata commit is not confirmed, the same artifact also contains
 `uncommitted-metadata-<run>-<attempt>/`: only the exact validated current-run
 metadata files and `current-run-files.json`. It can contain multiple UTC-day
-files. No whole temporary root, private SQLite store or parsed/rejected
-population is uploaded. Invalid evidence fails preparation while independently
+files. No whole temporary root or private parsed/rejected
+population is uploaded. Raw diagnostics never enter this normal archive or
+the metadata Git request. Invalid evidence fails preparation while independently
 verified files remain recoverable. Cancellation skips new Git delivery while
 still attempting the report and recovery upload.
 

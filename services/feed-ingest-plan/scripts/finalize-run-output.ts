@@ -7,10 +7,12 @@ import { describePlanError, PlanError } from "../src/api/plan-request";
 import { deliverWorkflowMetadata } from "./feed-ingest-plan-deliver";
 import { writeWorkflowReport } from "./feed-ingest-plan-report";
 import { prepareWorkflowArtifacts } from "./feed-ingest-plan-artifacts";
+import { parseRawDocumentDumpControl } from "../src/config/service-settings";
 
 export async function finalizeRunOutput(input: {
   root: string; directory: string; currentRunFiles?: string; runNumber: string; attempt: number;
   cancelled: boolean; summaryPath?: string; outputPath?: string;
+  dumpRawDocumentContents?: boolean; runId?: string;
 }) {
   const runNumber = z.string().regex(/^\d+$/).parse(input.runNumber);
   const attempt = WriterIdentitySchema.shape.attempt.parse(input.attempt);
@@ -48,7 +50,7 @@ export async function finalizeRunOutput(input: {
 if (import.meta.main) {
   try {
     const { RUNNER_TEMP, GITHUB_RUN_ID, GITHUB_RUN_ATTEMPT, GITHUB_STEP_SUMMARY, GITHUB_OUTPUT,
-      CURRENT_RUN_FILES, RUN_CANCELLED } = process.env;
+      CURRENT_RUN_FILES, RUN_CANCELLED, DUMP_RAW_DOCUMENT_CONTENTS, RUN_ID } = process.env;
     if (!RUNNER_TEMP || !GITHUB_RUN_ID || !GITHUB_RUN_ATTEMPT || !GITHUB_OUTPUT) {
       throw new Error("Workflow finalization controls are missing");
     }
@@ -59,6 +61,8 @@ if (import.meta.main) {
       cancelled: z.enum(["true", "false"]).parse(RUN_CANCELLED) === "true",
       ...(GITHUB_STEP_SUMMARY === undefined ? {} : { summaryPath: GITHUB_STEP_SUMMARY }),
       outputPath: GITHUB_OUTPUT,
+      dumpRawDocumentContents: DUMP_RAW_DOCUMENT_CONTENTS === undefined ? false : parseRawDocumentDumpControl(DUMP_RAW_DOCUMENT_CONTENTS),
+      ...(RUN_ID === undefined || RUN_ID === "" ? {} : { runId: RUN_ID }),
     });
   } catch (error) {
     console.error(JSON.stringify({ event: "workflow_finalization_incomplete",

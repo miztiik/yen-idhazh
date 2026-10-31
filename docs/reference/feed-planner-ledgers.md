@@ -479,7 +479,7 @@ no permanent compatibility API.
 | K1 | Feed planner | `GET /api/2026-10-31/health` | Implemented: listener/enablement check only, not a feed-reliability query |
 | K2 | Feed planner | `POST /api/2026-10-31/plan` | Runs the shared stages and finalizes the five ledgers and selected text artifact |
 | K3 | Feed planner | `POST /api/2026-10-31/fetch` | Implemented fetch for either a configured feed or an explicitly permitted article |
-| K4 | Feed planner | `POST /api/2026-10-31/parse` | Parses one saved feed or article without network calls; feed parsing returns body-free offers and a server-owned batch |
+| K4 | Feed planner | `POST /api/2026-10-31/parse` | Consumes one live fetched feed or article without network calls; feed parsing returns body-free offers and a server-owned batch |
 | K5 | Feed planner | `POST /api/2026-10-31/select-articles` | Implemented combined admission/ranking; no selection-idempotency requirement or input-count cap |
 | K6 | Feed planner | `POST /api/2026-10-31/partition-articles` | Implemented worker assignment/bin packing; does not reselect |
 | K7 | Feed planner | `POST /api/2026-10-31/persist-selected-articles` | Writes B without text and produces its text-bearing artifact; the removed persistence route returns ordinary HTTP 404 |
@@ -502,7 +502,11 @@ and CLI, not an additional HTTP service. No `GET /feeds` or read-only
 K3 uses `feed_id`, not an old `source_id` alias. Article work can reference a
 server-owned `batch_id` and `offer_id`; an explicit operator URL remains a
 separate permitted control. K5 waits until every offer is terminal. K8 checks
-the default-off service flag before reading a batch or private SQLite store.
+the default-off service flag before reading a batch or body-free live run state.
+Fetch, parse and plan have no request journal or replay/reopening support.
+`Idempotency-Key` is refused before work. The optional
+[raw-document failure artifact](../architecture/sources/feed-operator-api.md#failure-only-raw-document-artifact)
+is not a ledger and never enters selected metadata or Git delivery.
 
 ## L. Lookback summaries
 
@@ -581,8 +585,8 @@ captures. There is no per-candidate history read or persistent result cache.
 Explicit selection persistence writes one row for each parsed candidate not
 selected, including runs with zero selected articles. Run finalization also
 retains completed terminal article-fetch and extraction failures. Standalone
-fetch and parse operations save those failures when their stage completes;
-the private fetch receipt is not their sole store.
+fetch and parse operations save those failures when their stage completes.
+Raw downloaded bodies are not required to read these retained facts.
 This ledger has no title, body, policy or score
 tree and no explorer consent.
 Without explorer consent, its files are not staged in the site and it has no
@@ -888,10 +892,9 @@ and fragment. Only the current cleaned key is used for discovery, publication
 and settled failures. Feed capture identity and separate Python discovery are
 unchanged.
 
-Older planner rows, artifacts, receipts, batches and events refuse. Current
-receipt replay retains the exact completed response without repeating work.
-Missing or old stored receipt stamps refuse instead of adopting current
-defaults. Current constructor defaults are not stored-file migrations.
+Older planner rows, artifacts, batches and events refuse. Current constructor
+defaults are not stored-file migrations. Fetched documents use their current
+native declaration in live memory; no stored request receipt is read or replayed.
 
 Targeted deletion of the same eight obsolete ledger prefixes named in Table F
 under both `state/raw/feed-ingest-plan/` and
