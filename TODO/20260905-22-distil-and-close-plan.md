@@ -1,6 +1,6 @@
 # 22 - Close it out
 
-**Last Updated**: 2026-10-10
+**Last Updated**: 2026-11-01
 **Level**: 2 (documentation, and the deletion of two working documents)
 
 **Chain**: previous [`20260905-21-human-judgement-plan.md`](20260905-21-human-judgement-plan.md). **Last plan of the group.**
@@ -14,11 +14,11 @@ Execute per docs/how-to/execute-a-plan.md: one maintainer carries the plan and d
 
 | Field | Value |
 | --- | --- |
-| Why this plan exists | `TODO/` is non-authoritative and dies at distill. Two working documents carry decisions, corrections, gap findings and measured numbers that nothing in `docs/` holds, and when they are deleted those facts go with them unless this plan moves them first. **A durable fact left only in a working document is a fact this project has decided to forget** |
-| Hard scope - in | Moving every durable finding into the living doc that owns it; re-measuring the numbers the group changed; deleting the pseudo-plan and the proposal and repointing every inbound link |
-| Hard scope - out | Any code change. Any new decision - if a decision is still open at this point it is a new plan, not a closure row. Deleting anything under `docs/` |
+| Why this plan exists | The pseudo-plan and proposal are decision records, not lasting documentation. Before removing them, verify which findings already live in `docs/`, add only what is missing, and preserve the source-to-page mapping in the closing pull request |
+| Hard scope - in | Auditing both working documents; adding only missing durable rules to existing canonical pages; deleting both working documents and this plan at closure; repointing every inbound link |
+| Hard scope - out | Remeasurement (abandoned). Any code change. Any new decision - if a decision is still open, it is separate unfinished work, not a closure row. Deleting anything under `docs/` |
 | ESCALATE triggers | 1. A durable finding has no living doc that owns it and creating one is not obviously right - that is a documentation-structure question. 2. A decision recorded in the pseudo-plan turns out never to have been implemented, which means the group is not finished. 3. An inbound link points at a section that no longer exists anywhere |
-| Chosen strategy | Verify before writing. The closure of the last comparable programme found that most of what it was told to record was **already** in the living docs, and the useful output was the re-measured numbers and the corrections |
+| Chosen strategy | Verify before writing. There is no separate findings document: use existing canonical pages and put the three-outcome audit table in the closing pull request |
 | Execution | `autonomous orchestrator per docs/how-to/execute-a-plan.md. Parallel N = 4.` |
 
 ---
@@ -28,19 +28,27 @@ Execute per docs/how-to/execute-a-plan.md: one maintainer carries the plan and d
 | # | Row title | Depends-on | Parallel-group | Status | Worktree | PR | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | 1 | What is durable, and where it already lives | - | A | PENDING | - | - | - |
-| 2 | The numbers, taken again on the tree that shipped | 1 | B | PENDING | - | - | - |
-| 3 | The two documents go, and nothing links to a ghost | 2 | C | PENDING | - | - | - |
+| 2 | The numbers, taken again on the tree that shipped | 1 | B | ABANDONED | - | - | - |
+| 3 | The two documents go, and nothing links to a ghost | 1 | C | PENDING | - | - | - |
 
 ---
 
 ## 2. Row #1 - What is durable, and where it already lives
 
-- **Unapproved documentation-check proposal:** The handover proposed a check that a decision in a working document names its owning `docs/` page and that the page links back. No such check has been implemented. The current documentation contract requires the decision to live on its owning page; it does not require a link back to a temporary document. Before this row closes, ask the maintainer whether a further automated check is wanted and what it must prove. This proposal does not authorize a code or `CLAUDE.md` change.
+- **Open documentation-check decision:** The handover proposed a check that a decision in a working document names its owning `docs/` page and that the page links back. The current documentation contract requires the decision to live on its owning page, not a link back to a temporary document. Before this row closes, ask whether the check is wanted and what it must prove. This row does not include that check or a `CLAUDE.md` change.
 
-- **Scope:** Walk both working documents; for every durable finding, check whether the living doc already holds it, and write the ones that do not.
+- **Scope:** Audit both working documents; verify each durable finding against current code and the existing page that covers it; add only missing current rules.
+- **Tasks:**
+  1. Read `TODO/20260902-visual-planner-pseudo-plan.md` and `TODO/20260902-yen-idhazh-visual-planning-architecture.md` as source records. Inventory durable decisions, corrections, gaps, contradictions and execution lessons; leave speculation and per-pull-request history out.
+  2. Check each item against current code and `docs/`. Do not repeat a rule that already has a current canonical page.
+  3. Put the complete inventory in a three-column table in the closing pull request: `Source item`, `Outcome`, `Evidence`. Use exactly one outcome per item: **implemented** (plan and pull request), **recorded** (existing doc and section), or **superseded** (what replaced it). Do not create a separate findings document or a fourth outcome.
+  4. For **recorded**, edit only the existing page that defines the rule and only when its current wording is missing. Verify O40 in the digest visual rule; O47 formatting in the design system and unit conversion in the Derived Value contract; O1 in the digest's visual rule; and new execution lessons in the agent-notes reference.
+  5. Record O42 as **superseded** by O46's query and two lexicons, naming those replacements in the audit table.
+  6. If a decision was never implemented, stop the closure and surface the unfinished work. Do not classify it as a new outcome or delete its only source.
+  7. If a durable finding has no clear canonical page, stop and resolve the documentation-structure question; do not create an archive by default.
 - **Files touched:** `docs/concepts/digest.md`, `docs/concepts/design-system.md`, `docs/concepts/evaluation.md`, `docs/concepts/telemetry.md`, `docs/concepts/adaptive-pruning.md`, `docs/architecture/**`, `docs/reference/agent-notes.md`, `docs/reference/pipeline-cost.md`
 - **Acceptance gates:** the full suite; the docs cross-link check; `backend/tests/contracts/`'s ASCII and LF check.
-- **Oracle:** Every maintainer decision, correction, gap and contradiction in the pseudo-plan is accounted for by exactly one of: **implemented** (name the plan and the PR), **recorded** (name the living doc and the section), or **superseded** (name what replaced it). A table with no fourth column - because a fourth column is where a lost decision hides.
+- **Oracle:** Every durable decision, correction, gap, contradiction and execution lesson in either source document appears exactly once in the pull request's three-column audit table, with one of the three outcomes above and its evidence. Any unimplemented decision stops closure. There is no fourth outcome and no separate findings document.
 
 ### Decisions
 
@@ -65,6 +73,7 @@ Execute per docs/how-to/execute-a-plan.md: one maintainer carries the plan and d
 
 ## 3. Row #2 - The numbers, taken again on the tree that shipped
 
+- **Status:** ABANDONED. Remeasurement is not possible; no new measurements will be taken. The original scope, gates and decisions below are context only, not execution requirements. Do not present an old reading as current.
 - **Scope:** Re-measure everything the group moved, on the tree that actually shipped, and record it with hardware, date and spread.
 - **Files touched:** `docs/reference/pipeline-cost.md`, `config/idhazh.json` (any ceiling whose runway has expired)
 - **Acceptance gates:** `bundle-gate`; `idhazh site-weight`; the full suite; the browser suite.
@@ -89,8 +98,8 @@ Execute per docs/how-to/execute-a-plan.md: one maintainer carries the plan and d
 
 ## 4. Row #3 - The two documents go, and nothing links to a ghost
 
-- **Scope:** Delete the pseudo-plan and the proposal; repoint every inbound link; leave the numbered plan-docs to be deleted by their own closures.
-- **Files touched:** `TODO/20260902-visual-planner-pseudo-plan.md` (deleted), `TODO/20260902-yen-idhazh-visual-planning-architecture.md` (deleted), every file `git grep` finds naming either, `AGENTS.md`
+- **Scope:** After Row #1 accounts for every durable item, delete the pseudo-plan and proposal; repoint every inbound link to its canonical destination; delete this plan through the distillation procedure when the final row closes.
+- **Files touched:** `TODO/20260902-visual-planner-pseudo-plan.md` (deleted), `TODO/20260902-yen-idhazh-visual-planning-architecture.md` (deleted), `TODO/20260905-19-visual-telemetry-plan.md`, `TODO/20260905-21-human-judgement-plan.md`, `TODO/20260905-22-distil-and-close-plan.md` (deleted), `TODO/20260910-23-article-classification-plan.md`, `TODO/20260911-classification-research-record.md`, `TODO/20260915-30-decoder-stalls-handover.md`, `docs/architecture/publishing/visuals.md`, `docs/concepts/adaptive-pruning.md`
 - **Acceptance gates:** the full suite; the docs cross-link check.
 - **Oracle:** `git grep` for both filenames and for the group's own slug returns **zero** hits outside git history, and every page that previously linked to them now links to the living doc that received the content. Each hit is enumerated in the PR body with where it was repointed.
 
