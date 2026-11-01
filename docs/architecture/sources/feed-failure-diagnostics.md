@@ -39,12 +39,20 @@ Table A - diagnostic fields
 | A12 | `quality` | Measured source/body words, independent publisher length, native shape signals, configured consequence and actual implementation fingerprints. Null before extraction or on historical rows. [Extraction quality](extraction-quality.md) owns each meaning and its unavailable readings. |
 | A13 | `body_limit` | The configured decoded-byte limit and bytes observed at cutoff as a lower bound. It is present only when a feed, article or robots response hit the limit; the remaining response is not read to obtain a full size. |
 | A14 | `response_evidence`, `robots_response_evidence` | Independent target and robots facts: content type, measured decoded bytes, declared content length if available, selected headers, truncation names and native browser profile. An absent response stays null. |
+| A15 | `pacing_time_ms`, `pacing_settings` | The terminal record's summed measured queue wait and the effective domain delay, publisher delay, jitter and enable setting. Each actual attempt keeps its own `pacing_wait_ms`. |
 
 Null means unavailable or unperformed; zero milliseconds means a real
 measurement rounded below one millisecond. Inactive feeds, invalid entry
 identity and pre-download age refusals have null diagnostics, not zero fetch
 and extraction times. Feed parsing retains its separately measured
 `parse_duration_ms` on the feed outcome.
+
+Pacing wait is separate from network-attempt time and retry backoff. An attempt's
+`duration_ms` excludes both its queue wait and backoff; the enclosing fetch
+elapsed time includes them. A robots cache hit adds no request or wait;
+validation-only refusals record zero wait. Null pacing measurements mean they
+were not recorded. The slot covers application response or failure settlement
+plus cooldown, not any native response work that continues after a timeout.
 
 Failed feed progress events may include `requested_feed_url` and
 `final_attempted_feed_url`. Each address uses the same diagnostic policy as an
@@ -127,9 +135,9 @@ cleanup cannot replace that status with an unclassified cancellation error.
 
 ## Historical records
 
-Rejections, article assessments and planner events advance to `2026-10-23`;
-source-run vocabulary and its stamp are unchanged. Python ledger declarations carry their
-changelog entries; TypeScript owns the event changelog.
+Current rejection rows and planner events use their declared current schema
+versions; source-run vocabulary and its stamp are unchanged. Python ledger
+declarations carry their changelog entries; TypeScript owns the event changelog.
 Earlier rejection and assessment rows without diagnostics migrate with null
 diagnostics; existing historical diagnostics gain null quality and null
 `body_limit`. Nothing
@@ -137,15 +145,17 @@ reconstructs a missing HTTP status, error token or duration from a broad old
 rejection reason. The existing publication-time migration is unchanged.
 Source-run predecessors retain their counts and recorded completion proof.
 New native response evidence defaults to null on older transient diagnostics.
-The five retained planner ledger shapes and their read-side commitments are
-unchanged; response header maps do not enter the rejected-article Parquet row.
-Current live stages and optional failure artifacts use the new native shape,
-without reopening old transport captures.
+The rejected-articles row now retains measured pacing time and the effective
+pacing settings. Its current schema requires the exact new row version and
+physical columns; older row versions are not migrated. Response header maps
+remain outside the rejected-article Parquet row. Current live stages and
+optional failure artifacts use the new native shape, without reopening old
+transport captures.
 
-The native Parquet reader validates old files against their original column
-shape and physical digest before migrating them. Logical record commitments
-also use the original shape and stamp. A current row with actual new
-diagnostics cannot be encoded as an old proof that would discard them.
+The native Parquet reader requires the current envelope version, row version
+and physical column set. It refuses older files rather than filling missing
+columns or rewriting their bytes. A current row with actual new diagnostics
+cannot be encoded as an older proof that would discard them.
 Historical event reads validate the original envelope and operation vocabulary
 before upgrading the stamp in memory. They accept only the recorded
 `2026-10-29T08:00` and `2026-10-30T22:25` event stamps; neither may contain the

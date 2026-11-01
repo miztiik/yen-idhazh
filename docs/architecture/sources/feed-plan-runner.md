@@ -158,6 +158,9 @@ pool. CLI work can own a pool for its own lifetime.
 Live work pins its loaded evidence and retained references. Capacity expiry
 removes both together; an expired stage cannot reload old input. No listener-wide
 run queue is added.
+One process-local source pacing scheduler is shared by the listener's collection
+and standalone document fetches. Its domain and non-null publisher queues cover
+each dispatched source request without reserving sources across runs.
 Final accounting does not unpin the collection. The workflow reads its health
 summary while the same child still owns the batch, then explicitly releases the
 collection. A long-lived listener keeps it pinned until release or child

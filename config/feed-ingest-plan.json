@@ -29,6 +29,12 @@
       "header_names": ["content-type", "content-length", "retry-after"],
       "max_header_value_chars": 256
     },
+    "request_pacing": {
+      "enabled": true,
+      "domain_delay_ms": 1000,
+      "publisher_delay_ms": 1000,
+      "jitter_ms": 500
+    },
     "semantic_fallback": {
       "content_roots": [
         "article", "main", "[role='main']", ".post-content", ".article-content",

@@ -26,6 +26,7 @@ export async function recordHarvestFailures(
       http_status: details.http_status, fetch_failure: details.fetch_failure,
       error_code: details.error_code, robots: details.robots,
       robots_http_status: details.robots_http_status, robots_failure: details.robots_failure,
+      pacing_time_ms: details.pacing_time_ms, pacing_settings: details.pacing_settings,
     }));
   }
   const result = await persistLedger({

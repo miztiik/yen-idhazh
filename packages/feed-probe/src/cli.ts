@@ -4,7 +4,7 @@ import {
   FeedProbeResultSchema,
   type FeedProbeResult,
 } from "@idhazh/common-contracts";
-import { probeFeed } from "./feed-probe";
+import { createFeedProbePacing, probeFeed } from "./feed-probe";
 import type { FeedProbeOptions } from "./feed-probe";
 import {
   feedProbeCliUsage,
@@ -34,7 +34,7 @@ export type FeedProbeCliDependencies = {
   now?: () => Date;
   probe?: (
     request: unknown,
-    signalOrOptions?: AbortSignal | FeedProbeOptions,
+    options?: FeedProbeOptions,
   ) => Promise<FeedProbeResult>;
   loadSourceCatalog?: () => Promise<unknown>;
   stdout?: (line: string) => void;
@@ -98,6 +98,16 @@ export async function runFeedProbeCli(
     return 2;
   }
 
+  let requestPacing: Awaited<ReturnType<typeof createFeedProbePacing>> | undefined;
+  if (dependencies.probe === undefined) {
+    try {
+      requestPacing = await createFeedProbePacing();
+    } catch (error) {
+      stderr(`error: ${error instanceof Error ? error.message : String(error)}`);
+      return 1;
+    }
+  }
+
   if (options.logLevel === "DEBUG") {
     stderr(`debug: ${targets.length} target(s) selected`);
     for (const target of targets) {
@@ -109,24 +119,37 @@ export async function runFeedProbeCli(
   let exceptionFailures = 0;
   const probe = dependencies.probe ?? probeFeed;
 
-  for (const target of targets) {
-    const started = performance.now();
-    try {
-      const result = await probe({
-        feed_url: target.url,
-        sample_count: options.articles,
-      });
-      FeedProbeResultSchema.parse(result);
-      const totalMs = Math.max(0, Math.round(performance.now() - started));
-      const report = buildFeedProbeReport(target.feed_id, target.url, result, totalMs);
-      reports.push(report);
-      if (options.logLevel === "DEBUG") {
-        stderr(`debug: ${target.feed_id} verdict=${report.verdict}`);
+  let pacingCloseError: unknown = null;
+  try {
+    for (const target of targets) {
+      const started = performance.now();
+      try {
+        const result = await probe({
+          feed_url: target.url,
+          sample_count: options.articles,
+        }, {
+          publisher_id: target.publisher_id,
+          ...(requestPacing === undefined ? {} : { request_pacing: requestPacing }),
+        });
+        FeedProbeResultSchema.parse(result);
+        const totalMs = Math.max(0, Math.round(performance.now() - started));
+        const report = buildFeedProbeReport(target.feed_id, target.url, result, totalMs);
+        reports.push(report);
+        if (options.logLevel === "DEBUG") {
+          stderr(`debug: ${target.feed_id} verdict=${report.verdict}`);
+        }
+      } catch (error) {
+        exceptionFailures += 1;
+        stderr(`error: ${target.feed_id} ${error instanceof Error ? error.message : String(error)}`);
       }
-    } catch (error) {
-      exceptionFailures += 1;
-      stderr(`error: ${target.feed_id} ${error instanceof Error ? error.message : String(error)}`);
     }
+  } finally {
+    try { await requestPacing?.close(); }
+    catch (error) { pacingCloseError = error; }
+  }
+  if (pacingCloseError !== null) {
+    stderr(`error: request pacing cleanup failed: ${pacingCloseError instanceof Error ? pacingCloseError.message : String(pacingCloseError)}`);
+    return 1;
   }
 
   try {

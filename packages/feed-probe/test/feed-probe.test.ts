@@ -12,7 +12,8 @@ import type {
   TransportRequest,
 } from "@idhazh/feed-ingest-plan/transport";
 import { HttpResponseEvidenceSchema } from "@idhazh/common-contracts";
-import { probeFeed } from "../src/feed-probe";
+import { probeFeed as runProbeFeed } from "../src/feed-probe";
+import type { FeedProbeOptions } from "../src/feed-probe";
 
 type RecordedRoute = {
   status: number;
@@ -45,6 +46,17 @@ async function boundary(routes: Record<string, RecordedRoute>) {
   return {
     transport: new RecordedFeedTransport(new Map(Object.entries(routes))),
   };
+}
+
+async function probeFeed(request: unknown, options: FeedProbeOptions = {}) {
+  const config = FeedIngestConfigSchema.parse(await Bun.file(new URL(
+    "../../../config/feed-ingest-plan.json", import.meta.url,
+  )).json());
+  const harvest = options.harvest ?? config.harvest;
+  return runProbeFeed(request, {
+    ...options,
+    harvest: { ...harvest, request_pacing: { ...harvest.request_pacing, enabled: false } },
+  });
 }
 
 function robotsRoute(): Record<string, RecordedRoute> {

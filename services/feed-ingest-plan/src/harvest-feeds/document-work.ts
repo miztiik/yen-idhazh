@@ -55,6 +55,8 @@ export function documentWork(context: Context, identity: DocumentIdentity, key: 
       http_status: attempt === null ? fetched.http_status : attempt.http_status,
       request_profile: attempt?.request_profile ?? fetched.response_evidence?.request_profile ?? last?.request_profile ?? null,
       response_evidence: attempt?.response_evidence ?? fetched.response_evidence ?? null,
+      pacing_time_ms: attempt === null ? fetched.pacing_time_ms ?? null : attempt.pacing_wait_ms ?? 0,
+      pacing_settings: fetched.pacing_settings ?? null,
       robots_response_evidence: fetched.robots_response_evidence ?? null,
       robots_http_status: fetched.robots_http_status ?? null, robots_failure: fetched.robots_failure ?? null, attempt,
     });
@@ -104,6 +106,8 @@ export function documentWork(context: Context, identity: DocumentIdentity, key: 
               }, undefined, undefined, failureDetails({
                 body: null, http_status: measurement.attempt.http_status, failure: measurement.attempt.failure,
                 robots: null, final_attempted_url: measurement.final_attempted_url,
+                pacing_time_ms: measurement.attempt.pacing_wait_ms ?? 0,
+                pacing_settings: measurement.pacing_settings,
                 ...(measurement.attempt.phase !== "robots" ? {} : {
                   robots_http_status: measurement.attempt.http_status, robots_failure: measurement.attempt.failure,
                   robots_response_evidence: measurement.attempt.response_evidence,
@@ -114,7 +118,7 @@ export function documentWork(context: Context, identity: DocumentIdentity, key: 
               outcome: measurement.outcome,
               failure_code: measurement.attempt.failure,
             }, measurement.attempt.duration_ms, measurement.attempt.http_status, measurement);
-          }, scope.document_kind, signal);
+          }, scope.document_kind, signal, scope.publisher_id);
         } catch (error) {
           publish("fetch", "failed", Math.round(performance.now() - started), url, "FETCH_FAILED");
           await save(event("fetch", cause), { outcome: "failed", failure_code: null },

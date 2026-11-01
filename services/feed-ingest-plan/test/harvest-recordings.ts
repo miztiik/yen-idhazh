@@ -154,8 +154,10 @@ export async function inputs(sources: unknown[] = [source()], overrides: {
     if (tier !== undefined && (retired || tier.status === "active")) return value;
     return { ...value, tier: activeTier.id };
   });
+  const pacing = config.harvest.request_pacing;
   return loadHarvestInputs({
-    config: { ...config, harvest: { ...config.harvest, concurrency: 2, fetch_timeout_ms: 200, ...overrides.harvest } },
+    config: { ...config, harvest: { ...config.harvest, concurrency: 2, fetch_timeout_ms: 200,
+      request_pacing: { ...pacing, enabled: false }, ...overrides.harvest } },
     taxonomy: { ...taxonomy, ...(overrides.lenses === undefined ? {} : { lenses: overrides.lenses }) },
     sources: {
       feeds: configuredSources,

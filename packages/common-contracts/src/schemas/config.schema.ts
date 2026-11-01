@@ -58,6 +58,15 @@ export const FeedRequestHeadersSchema = z.strictObject({
     reject(ctx, "recoverable_http_statuses must not repeat a status", ["recoverable_http_statuses"]);
   }
 });
+export const RequestPacingSettingsSchema = z.strictObject({
+  enabled: z.boolean().describe(
+    "Apply shared process-local domain and publisher pacing. Remove this switch and its bypass path when source request pacing is no longer needed.",
+  ),
+  domain_delay_ms: z.int().nonnegative(),
+  publisher_delay_ms: z.int().nonnegative(),
+  jitter_ms: z.int().nonnegative(),
+});
+export type RequestPacingSettings = z.infer<typeof RequestPacingSettingsSchema>;
 export const FeedMetadataSelectorSchema = z.strictObject({
   selector: NonEmptySchema, attribute: NonEmptySchema.nullable(),
 });
@@ -84,6 +93,7 @@ export const FeedHarvestConfigSchema = z.strictObject({
   ),
   request_headers: FeedRequestHeadersSchema,
   response_diagnostics: ResponseDiagnosticsConfigSchema,
+  request_pacing: RequestPacingSettingsSchema,
   semantic_fallback: FeedSemanticFallbackConfigSchema,
   blocked_categories: z.array(NonEmptySchema),
   url_exclusions: z.array(FeedUrlExclusionSchema),
@@ -188,7 +198,10 @@ export const FeedIngestConfigSchema = z.strictObject({
   }),
 }).meta({
   version: "2026-11-01",
-  changelog: [{ version: "2026-11-01", change: "Use native browser profiles and configured safe response headers." }],
+  changelog: [
+    { version: "2026-11-01", change: "Configure shared domain and publisher request pacing." },
+    { version: "2026-11-01", change: "Use native browser profiles and configured safe response headers." },
+  ],
 });
 
 export type FeedIngestConfig = z.infer<typeof FeedIngestConfigSchema>;

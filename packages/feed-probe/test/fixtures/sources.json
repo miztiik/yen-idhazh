@@ -2,6 +2,7 @@
   "feeds": [
     {
       "id": "alpha-ai",
+      "publisher_id": "alpha-publisher",
       "url": "https://fixture.test/feed.xml",
       "title": "Alpha AI",
       "tier": 1,

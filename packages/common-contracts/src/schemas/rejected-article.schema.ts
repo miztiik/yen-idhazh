@@ -8,7 +8,7 @@ import {
   Sha256Schema, SlugSchema, reject,
 } from "./primitives";
 
-export const REJECTED_ARTICLE_VERSION = "2026-10-31";
+export const REJECTED_ARTICLE_VERSION = "2026-11-01";
 export const RejectedArticleRowSchema = z.strictObject({
   run_id: RunIdSchema, attempt: PositiveCountSchema, date: DateStampSchema,
   candidate_id: Sha256Schema.nullable(), url_key: Sha256Schema, feed_id: SlugSchema,
@@ -28,7 +28,8 @@ export const RejectedArticleRowSchema = z.strictObject({
 }).meta({
   version: REJECTED_ARTICLE_VERSION,
   changelog: [
-    { version: REJECTED_ARTICLE_VERSION, change: "Require current rejection rows without historical physical schemas or null-fill migration." },
+    { version: REJECTED_ARTICLE_VERSION, change: "Retain request pacing evidence in terminal fetch failures." },
+    { version: "2026-10-31", change: "Require current rejection rows without historical physical schemas or null-fill migration." },
     { version: "2026-10-29T20:15", change: "Retain terminal article fetch evidence and harvest failures without parsed candidate identities." },
     { version: "2026-10-29", change: "Accept bounded retained reason strings without rewriting ledger rows." },
     { version: "2026-10-27", change: "Declare terminal selection rejections without article text or titles." },

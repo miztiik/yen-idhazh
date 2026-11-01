@@ -24,6 +24,7 @@ export function fetchEvidence(result: FetchResult) {
     http_status: result.http_status, fetch_failure: result.failure,
     error_code: result.error_code ?? null, robots: result.robots,
     robots_http_status: result.robots_http_status ?? null, robots_failure: result.robots_failure ?? null,
+    pacing_time_ms: result.pacing_time_ms ?? null, pacing_settings: result.pacing_settings ?? null,
   };
 }
 

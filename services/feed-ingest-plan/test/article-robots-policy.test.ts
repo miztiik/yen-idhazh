@@ -13,6 +13,7 @@ const robots = "https://news.example/robots.txt";
 async function setup(options: {
   policy?: "enforce" | "observe"; retries?: number; timeout?: number;
   robots?: RecordedResponse[]; target?: RecordedResponse[];
+  pacing?: boolean;
 } = {}) {
   const loaded = await inputs([], { extraction: {
     max_retries: options.retries ?? 0, backoff_initial_seconds: 0,
@@ -23,6 +24,13 @@ async function setup(options: {
       ...loaded.config.harvest, article_robots_policy: options.policy ?? "observe",
       fetch_timeout_ms: options.timeout ?? 1000,
       request_headers: { ...loaded.config.harvest.request_headers, secondary: null },
+      request_pacing: {
+        ...loaded.config.harvest.request_pacing,
+        enabled: options.pacing ?? false,
+        domain_delay_ms: 0,
+        publisher_delay_ms: 0,
+        jitter_ms: 0,
+      },
     },
   });
   const recordings = await readRecordings();
@@ -158,6 +166,34 @@ test("denied robots cannot suppress recovered or exhausted target retries", asyn
     ]);
     expect(requested(transport)).toEqual([robots, target, target]);
   }
+});
+
+test("pacing covers robots and retries, records terminal timing, and skips cached robots", async () => {
+  const { config, fetcher, transport } = await setup({
+    pacing: true,
+    retries: 1,
+    target: [{ status: 503, body: "" }, { status: 200, fixture: "article" }],
+  });
+  try {
+    const fetched = await fetcher.fetch(target, undefined, "article", undefined, "publisher-a");
+    const dispatched = fetched.attempts!.filter(attempt => attempt.phase !== "validation");
+    expect(requested(transport)).toEqual([robots, target, target]);
+    expect(dispatched).toHaveLength(3);
+    expect(dispatched.every(attempt => attempt.pacing_wait_ms !== null)).toBe(true);
+    expect(fetched.pacing_time_ms).toBe(
+      fetched.attempts!.reduce((total, attempt) => total + (attempt.pacing_wait_ms ?? 0), 0),
+    );
+    expect(fetched.pacing_settings).toEqual(config.harvest.request_pacing);
+    expect(fetchDiagnostics(fetched, 0)).toMatchObject({
+      pacing_time_ms: fetched.pacing_time_ms,
+      pacing_settings: config.harvest.request_pacing,
+    });
+
+    const cached = await fetcher.fetch(target, undefined, "article", undefined, "publisher-a");
+    expect(cached.failure).toBeNull();
+    expect(cached.attempts?.some(attempt => attempt.phase === "robots")).toBe(false);
+    expect(requested(transport)).toEqual([robots, target, target, target]);
+  } finally { await fetcher.close(); }
 });
 
 test("article DNS and TLS failures retain only recognized low-level target codes", async () => {

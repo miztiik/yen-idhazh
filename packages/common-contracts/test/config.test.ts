@@ -46,6 +46,21 @@ if (Bun.argv.includes("--emit-schemas")) {
     expect(configs.FeedWebsiteGroupingConfigSchema.parse({}).include_private_suffixes).toBe(true);
   });
 
+  test("request pacing accepts zero delays and rejects invalid settings", async () => {
+    const config = await readConfig();
+    const settings = { enabled: true, domain_delay_ms: 0, publisher_delay_ms: 0, jitter_ms: 0 };
+    expect(configs.RequestPacingSettingsSchema.parse(settings)).toEqual(settings);
+    expect(configs.RequestPacingSettingsSchema.parse({ ...settings, enabled: false }).enabled).toBe(false);
+    for (const patch of [
+      { enabled: "true" }, { domain_delay_ms: -1 }, { domain_delay_ms: 1.5 },
+      { publisher_delay_ms: -1 }, { jitter_ms: -1 }, { extra: true },
+    ]) {
+      expect(configs.RequestPacingSettingsSchema.safeParse({ ...settings, ...patch }).success).toBe(false);
+    }
+    expect(configs.FeedIngestConfigSchema.parse(config).harvest.request_pacing)
+      .toEqual(config.harvest.request_pacing);
+  });
+
   test("source-based budgets use distinct bucket IDs and source-tier mappings", () => {
     const rules = [
       { id: "community-first", source_tier_id: 3, share_pct: 60, buffer_pct: 10, ladder_hours: [12, 24] },

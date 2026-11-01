@@ -44,6 +44,7 @@ export type CatalogSource = z.infer<typeof CatalogSourceSchema>;
 
 export type FeedProbeTarget = {
   feed_id: string;
+  publisher_id: string | null;
   url: string;
   status: z.infer<typeof LifecycleStatusSchema>;
   vertical: string | null;
@@ -228,7 +229,7 @@ export async function resolveFeedProbeTargets(
       const feedId = deriveSourceId(normalized);
       if (ids.has(feedId)) throw new FeedProbeInputError(`Duplicate derived source ID target: ${feedId}`);
       ids.add(feedId);
-      targets.push({ feed_id: feedId, url: rawUrl, status: "draft", vertical: null });
+      targets.push({ feed_id: feedId, publisher_id: null, url: rawUrl, status: "draft", vertical: null });
     }
     return targets;
   }
@@ -269,6 +270,7 @@ export async function resolveFeedProbeTargets(
     urls.add(normalized);
     targets.push({
       feed_id: source.id,
+      publisher_id: source.publisher_id,
       url: source.url,
       status: source.status,
       vertical: source.vertical ?? null,

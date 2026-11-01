@@ -1,6 +1,6 @@
 /** Fetch safe targets while retaining robots evidence and honoring article enforcement. */
 import robotsParser from "robots-parser";
-import { FetchAttemptSchema } from "@idhazh/common-contracts";
+import { FeedWebsiteGroupingConfigSchema, FetchAttemptSchema } from "@idhazh/common-contracts";
 import type { FeedIngestConfig, HttpResponseEvidence } from "@idhazh/common-contracts";
 import type { FetchFailure } from "./harvest-types";
 import type { ExtractionControls } from "./load-harvest-inputs";
@@ -13,14 +13,20 @@ import { diagnosticUrl } from "../logging/diagnostic-url";
 import type { FetchAttempt } from "../api/operation-contracts";
 import { utcTimestamp } from "./harvest-types";
 import { cleanArticleUrl } from "./article-url";
+import { createRequestPacing } from "./request-pacing";
+import type { RequestPacing } from "./request-pacing";
+
+export { createRequestPacing };
+export type { RequestPacing };
 
 export type FetchAttemptMeasurement = {
   attempt: FetchAttempt; occurred_at: string; outcome: "success" | "failed";
   dispatched_request_count: number; request_coverage: "complete";
   final_attempted_url: string | null;
+  pacing_settings: FeedIngestConfig["harvest"]["request_pacing"];
 };
 type AttemptCapture = {
-  rows: FetchAttempt[]; final_attempted_url: string | null;
+  rows: FetchAttempt[]; final_attempted_url: string | null; publisher_id: string | null;
   emit?: (measurement: FetchAttemptMeasurement) => Promise<void>;
 };
 
@@ -40,6 +46,8 @@ export type FetchResult = {
   response_evidence?: HttpResponseEvidence | null;
   robots_response_evidence?: HttpResponseEvidence | null;
   redirects?: { request_url: string | null; destination_url: string | null; http_status: number }[];
+  pacing_time_ms?: number;
+  pacing_settings?: FeedIngestConfig["harvest"]["request_pacing"];
 };
 type RawResult = {
   response: TransportResponse | null; failure: FetchFailure | null; http_status: number | null;
@@ -85,27 +93,47 @@ async function pause(milliseconds: number, signal: AbortSignal): Promise<void> {
 
 export function createPermittedFetcher(
   config: FeedIngestConfig["harvest"], controls: ExtractionControls,
-  boundary: { transport?: HarvestTransport } = {},
+  boundary: {
+    transport?: HarvestTransport;
+    request_pacing?: RequestPacing;
+    include_private_suffixes?: boolean;
+  } = {},
   clock: () => Date = () => new Date(),
 ) {
   const transport = boundary.transport ?? createImpitTransport();
+  const ownsPacing = boundary.request_pacing === undefined;
+  const pacing = boundary.request_pacing ?? createRequestPacing(
+    config.request_pacing,
+    boundary.include_private_suffixes
+      ?? FeedWebsiteGroupingConfigSchema.parse({}).include_private_suffixes,
+  );
   const documents = new Map<string, Promise<RobotResult>>();
 
   async function requestOnce(
-    raw: string, profile: FeedIngestConfig["harvest"]["request_headers"]["primary"], signal: AbortSignal, dispatched: () => void,
+    raw: string, profile: FeedIngestConfig["harvest"]["request_headers"]["primary"], signal: AbortSignal,
+    publisherId: string | null, dispatched: () => void, beginAttempt: (signal: AbortSignal) => AbortSignal,
+    recordPacingWait: (milliseconds: number) => void,
   ): Promise<TransportResponse> {
     const url = validateTargetName(raw);
     signal.throwIfAborted();
-    dispatched();
-    return transport.request({
-      url, profile, diagnostics: config.response_diagnostics, signal,
-      max_body_bytes: controls.max_body_bytes, timeout_ms: config.fetch_timeout_ms,
-    });
+    return pacing.run(url, publisherId, signal, async requestSignal => {
+      const attemptSignal = beginAttempt(requestSignal);
+      dispatched();
+      return transport.request({
+        url, profile, diagnostics: config.response_diagnostics, signal: attemptSignal,
+        max_body_bytes: controls.max_body_bytes, timeout_ms: config.fetch_timeout_ms,
+      });
+    }, recordPacingWait);
   }
 
   async function retry<T>(
     signal: AbortSignal, phase: FetchAttempt["phase"], attempts: AttemptCapture,
-    execute: (signal: AbortSignal, dispatched: () => void) => Promise<T>, status: (value: T) => number | null,
+    execute: (
+      signal: AbortSignal, dispatched: () => void,
+      beginAttempt: (signal: AbortSignal) => AbortSignal,
+      recordPacingWait: (milliseconds: number) => void,
+    ) => Promise<T>,
+    status: (value: T) => number | null,
     request?: { url: string; profile: FeedIngestConfig["harvest"]["request_headers"]["primary"];
       evidence: (value: T) => HttpResponseEvidence },
   ): Promise<{
@@ -122,15 +150,24 @@ export function createPermittedFetcher(
     for (let attempt = 0; attempt <= controls.max_retries; attempt++) {
       if (signal.aborted) return { ...result, value: null, failure: "timeout" };
       const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(new DOMException("attempt deadline exceeded", "TimeoutError")), config.fetch_timeout_ms);
-      const attemptSignal = AbortSignal.any([signal, controller.signal]);
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      let attemptSignal = signal;
+      const beginAttempt = (current: AbortSignal) => {
+        current.throwIfAborted();
+        timer = setTimeout(() => controller.abort(new DOMException("attempt deadline exceeded", "TimeoutError")), config.fetch_timeout_ms);
+        attemptSignal = AbortSignal.any([current, controller.signal]);
+        return attemptSignal;
+      };
+      if (request === undefined) beginAttempt(signal);
       const started = performance.now();
+      let pacing_wait_ms = 0;
       let dispatched_request_count = 0;
       let failed = true;
       let classified = false;
       let evidence: FetchAttempt;
       try {
-        const value = await execute(attemptSignal, () => { dispatched_request_count++; });
+        const value = await execute(signal, () => { dispatched_request_count++; }, beginAttempt,
+          milliseconds => { pacing_wait_ms = milliseconds; });
         const http_status = status(value);
         result = { value, failure: http_status !== null && http_status >= 400 ? "http" : null, http_status, error_code: null,
           response_evidence: request?.evidence(value) ?? null };
@@ -147,21 +184,24 @@ export function createPermittedFetcher(
         };
         classified = true;
       } finally {
-        clearTimeout(timer);
+        if (timer !== undefined) clearTimeout(timer);
         evidence = FetchAttemptSchema.parse({
-          phase, sequence: attempts.rows.length, retry: attempt, duration_ms: Math.round(performance.now() - started),
+          phase, sequence: attempts.rows.length, retry: attempt,
+          duration_ms: Math.max(0, Math.round(performance.now() - started - pacing_wait_ms)),
           backoff_ms: 0, retry_total_ms: attempt === 0 ? 0 : Math.round(started - loopStarted),
           http_status: classified ? result.http_status : null, failure: classified ? result.failure : null,
           error_code: classified ? result.error_code : null,
           request_url: dispatched_request_count > 0 && request ? diagnosticUrl(request.url) ?? null : null,
           request_profile: dispatched_request_count > 0 && request ? request.profile.browser : null,
           response_evidence: classified ? result.response_evidence ?? null : null,
+          pacing_wait_ms,
         });
         attempts.rows.push(evidence);
         await attempts.emit?.({
           attempt: evidence, occurred_at: utcTimestamp(clock), outcome: failed ? "failed" : "success",
           dispatched_request_count, request_coverage: "complete",
           final_attempted_url: attempts.final_attempted_url,
+          pacing_settings: config.request_pacing,
         });
       }
       if (result.value !== null && (result.http_status === null || !retryableStatus.has(result.http_status))) return result;
@@ -184,10 +224,12 @@ export function createPermittedFetcher(
     onDispatched?: () => void,
   ): Promise<RawResult> {
     const result = await retry(signal, phase, attempts,
-      (current, dispatched) => requestOnce(raw, profile, current, () => {
+      (current, dispatched, beginAttempt, recordPacingWait) => requestOnce(raw, profile, current,
+        attempts.publisher_id, () => {
         dispatched();
         onDispatched?.();
-      }), value => value.status, { url: raw, profile, evidence: value => value.evidence });
+      }, beginAttempt, recordPacingWait),
+      value => value.status, { url: raw, profile, evidence: value => value.evidence });
     return {
       response: result.value, failure: result.failure, http_status: result.http_status,
       error_code: result.error_code,
@@ -285,13 +327,14 @@ export function createPermittedFetcher(
         const attempt = FetchAttemptSchema.parse({
           phase: "validation", sequence: attempts.rows.length, retry: 0,
           duration_ms: Math.round(performance.now() - started), backoff_ms: 0, retry_total_ms: 0,
-          http_status: null, failure, error_code: readTransportErrorCode(error),
+          http_status: null, failure, error_code: readTransportErrorCode(error), pacing_wait_ms: 0,
         });
         attempts.rows.push(attempt);
         await attempts.emit?.({
           attempt, occurred_at: utcTimestamp(clock), outcome: "failed",
           dispatched_request_count: 0, request_coverage: "complete",
           final_attempted_url: attempts.final_attempted_url,
+          pacing_settings: config.request_pacing,
         });
         return withAttemptedUrl({ body: null, http_status: observedStatus, failure, ...evidence, error_code: attempt.error_code });
       }
@@ -378,13 +421,16 @@ export function createPermittedFetcher(
   }
   async function fetch(
     raw: string, emit?: AttemptCapture["emit"], kind: "feed" | "article" = "article",
-    externalSignal?: AbortSignal,
+    externalSignal?: AbortSignal, publisherId: string | null = null,
   ): Promise<FetchResult> {
     const controller = new AbortController();
     const operationSignal = externalSignal === undefined
-      ? controller.signal
-      : AbortSignal.any([controller.signal, externalSignal]);
-    const attempts: AttemptCapture = { rows: [], final_attempted_url: null, ...(emit === undefined ? {} : { emit }) };
+      ? AbortSignal.any([controller.signal, pacing.signal])
+      : AbortSignal.any([controller.signal, externalSignal, pacing.signal]);
+    const attempts: AttemptCapture = {
+      rows: [], final_attempted_url: null, publisher_id: publisherId,
+      ...(emit === undefined ? {} : { emit }),
+    };
     // Robots uses one retry allowance; target profiles share their own allowance across hops.
     const backoff = Array.from({ length: controls.max_retries }, (_, retry) =>
       controls.backoff_initial_seconds * 1000 * controls.backoff_multiplier ** retry).reduce((sum, value) => sum + value, 0);
@@ -399,8 +445,15 @@ export function createPermittedFetcher(
     };
     const suspendDeadline = () => { clearTimeout(timer); remaining -= performance.now() - started; };
     resumeDeadline();
-    try { return { ...await fetchTarget(raw, operationSignal, attempts, kind,
-      externalSignal ?? new AbortController().signal, suspendDeadline, resumeDeadline, robotsAllowance), attempts: attempts.rows }; }
+    try {
+      const result = await fetchTarget(raw, operationSignal, attempts, kind,
+        externalSignal ?? new AbortController().signal, suspendDeadline, resumeDeadline, robotsAllowance);
+      return {
+        ...result, attempts: attempts.rows,
+        pacing_time_ms: attempts.rows.reduce((total, attempt) => total + (attempt.pacing_wait_ms ?? 0), 0),
+        pacing_settings: config.request_pacing,
+      };
+    }
     finally { clearTimeout(timer); }
   }
 
@@ -414,5 +467,8 @@ export function createPermittedFetcher(
     try { return await Promise.race([document, cancelled]); }
     finally { signal.removeEventListener("abort", abort); }
   }
-  return { fetch };
+  return {
+    fetch,
+    close: () => ownsPacing ? pacing.close() : Promise.resolve(),
+  };
 }
