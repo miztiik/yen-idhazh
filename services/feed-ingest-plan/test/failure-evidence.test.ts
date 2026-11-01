@@ -33,7 +33,8 @@ test("groups current failure counts without counting policy decisions as failure
 test("paused feeds do not establish new requests or historical causes", async () => {
   const { health } = await readPlannerOutputRecording();
   const base = health.rows[0]!;
-  const markdown = renderFailureEvidence([{ ...base, rejection_counts: [], feed_reads: 0 }], {
+  const markdown = renderFailureEvidence([{ ...base, rejection_counts: [], feed_reads: 0,
+    checked_at: null, check_request_id: null, check_result: null }], {
     eligible_feed_ids: [], feeds: [{
       feed_id: base.feed_id, endpoint_key: base.endpoint_key, availability: "resting",
       strikes: 5, failed_recovery_checks: 2, availability_complete: true,

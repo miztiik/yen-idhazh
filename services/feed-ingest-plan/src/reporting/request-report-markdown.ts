@@ -92,9 +92,11 @@ export function renderRequestReport(requests: PlannerRequestReport | undefined, 
       "", "Complete known-empty days need not contain observed records. Missing files do not establish how many records are missing.",
       "Shared coverage rows apply to each named feed and request category, not a sum across them.",
       ...(requests === undefined ? [] : [
-        `Missing or incomplete day files: ${requests.missing_days.join(", ") || "none"}.`,
-        `Days with records that cannot be attributed: ${requests.unattributed_days.join(", ") || "none"}.`,
-        `Staged history inputs: ${requests.input_complete ? "complete" : "incomplete; missing records may affect any day"}.`,
+        `Historical window - missing or incomplete day files: ${requests.missing_days.join(", ") || "none"}.`,
+        `Historical window - days with records that cannot be attributed: ${requests.unattributed_days.join(", ") || "none"}.`,
+        `Staged history inputs: ${requests.input_complete
+          ? "complete transfer; historical day coverage may still be incomplete"
+          : "incomplete transfer; missing records may affect any historical day"}.`,
       ]),
       "", "</details>",
     ].join("\n"),

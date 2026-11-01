@@ -1,6 +1,6 @@
 /** How does one validated plan result become reusable Markdown and notices? */
 import {
-  PlanRunRowSchema, readFeedIngestEvent,
+  PlanRunRowSchema, RejectedArticleRowSchema, FeedHealthRestFieldsSchema, readFeedIngestEvent,
 } from "../../../../packages/common-contracts/src/index";
 import { PlanResponseSchema } from "../api/plan-response.schema";
 import { FeedHealthStateUpdateResponseSchema } from "../api/feed-health-state.schema";
@@ -8,6 +8,7 @@ import { escapeMarkdown } from "./markdown-format";
 import { renderRequestReport } from "./request-report-markdown";
 import { renderRunFacts } from "./run-facts-markdown";
 import { renderFailureEvidence } from "./failure-evidence-markdown";
+import type { ReportFailureEvidence } from "./failure-evidence-markdown";
 import { aggregateFeedResults, compareKnownDescending, formatDuration } from "./aggregate-feed-results";
 import { renderSelectionExclusions } from "./selection-exclusions-markdown";
 
@@ -21,6 +22,7 @@ export type PlannerMarkdown = Readonly<{
 export type PlanMarkdownEvidence = Readonly<{
   response: unknown; health?: unknown; policy?: MarkdownSection; host?: MarkdownSection;
   maximum?: string;
+  failures?: ReportFailureEvidence;
 }>;
 
 export function renderPlannerProgressMarkdown(input: unknown): PlannerMarkdown {
@@ -66,6 +68,16 @@ export function renderPlanMarkdown(input: PlanMarkdownEvidence): PlannerMarkdown
   if (health !== null && health.rows.some(feed => feed.run_id !== row.run_id || feed.attempt !== row.attempt)) {
     throw new Error("Health report belongs to another execution");
   }
+  const failures = input.failures === undefined ? undefined : {
+    ...input.failures,
+    ...(input.failures.articles === undefined ? {}
+      : { articles: RejectedArticleRowSchema.array().parse(input.failures.articles) }),
+    ...(input.failures.earlier_checks === undefined ? {}
+      : { earlier_checks: FeedHealthRestFieldsSchema.array().parse(input.failures.earlier_checks) }),
+  };
+  if (failures?.articles?.some(article => article.run_id !== row.run_id || article.attempt !== row.attempt)) {
+    throw new Error("Article failure report belongs to another execution");
+  }
   const feedRows = health?.rows ?? [];
   const tableFeedRows = aggregateFeedResults(feedRows).sort((left, right) =>
     compareKnownDescending(left.articles_selected, right.articles_selected)
@@ -81,7 +93,7 @@ export function renderPlanMarkdown(input: PlanMarkdownEvidence): PlannerMarkdown
   if (input.policy === undefined || input.maximum === "Not recorded") gaps.push([
     "Run", "Effective settings evidence unavailable", "Configured maximum and applied controls cannot be established",
   ]);
-  const failureEvidence = renderFailureEvidence(health?.rows, health?.availability, row, gaps);
+  const failureEvidence = renderFailureEvidence(health?.rows, health?.availability, row, gaps, failures);
   const operationName = (operation: typeof row.api_timings[number]["operation"]) => ({
     "feed-health-before-fetch": "Feed health before requests",
     "feed-health-for-selection": "Fresh feed health for selection",

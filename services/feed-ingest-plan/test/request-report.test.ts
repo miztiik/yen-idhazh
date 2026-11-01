@@ -83,6 +83,8 @@ test("reports missing files, unidentifiable records and staged input gaps withou
   expect(staged.feeds[0]!.coverage.article_requests).toMatchObject({ status: "partial", complete_days: [] });
   const rendered = renderRequestReport(staged);
   expect(rendered.markdown).toContain("Staged history inputs: incomplete");
+  expect(renderRequestReport(missing).markdown).toContain("complete transfer; historical day coverage may still be incomplete");
+  expect(renderRequestReport(missing).markdown).toContain("Historical window - missing or incomplete day files: 2026-10-24");
   expect(rendered.markdown).toContain("| 4 | 2 | 0 |");
 });
 
