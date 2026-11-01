@@ -16,6 +16,6 @@ export function createPlanTestServer(inputs: PlanInputs, runtime: PlanRuntime) {
     request(path: string, init?: RequestInit) {
       return fetch(new URL(path, `http://127.0.0.1:${server.port}`), init);
     },
-    async close() { try { await server.stop(true); } finally { app.close(); } },
+    async close() { try { await server.stop(true); } finally { await app.close(); } },
   };
 }

@@ -23,5 +23,12 @@
   "robots_failure": null,
   "robots_http_status": 200,
   "feed_id": "recorded-news",
+  "pacing_time_ms": 0,
+  "pacing_settings": {
+    "enabled": true,
+    "domain_delay_ms": 1000,
+    "publisher_delay_ms": 1000,
+    "jitter_ms": 500
+  },
   "version": "2026-10-28"
 }

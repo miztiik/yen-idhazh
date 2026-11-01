@@ -5,6 +5,7 @@ import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import { createPlanTestServer } from "./plan-test-server";
 import { recordedPlan } from "./plan-recordings";
+import { source } from "./harvest-recordings";
 import { getCollection } from "../src/api/collection-operation";
 import {
   CancelledCollectionSchema, CollectionExistsResponseSchema, FinalizedCollectionSchema,
@@ -33,6 +34,61 @@ test("unfinished or cancelled collection cannot be selected and a feed cannot be
     expect(collection.signal.signal.aborted).toBe(true);
     expect((await app.request(`${prefix}/collections/complete`, post({ collection_id: id }))).status).toBe(409);
   } finally { await app.close(); await fixture.close(); }
+}, 120000);
+
+test("standalone and collection fetches share their domain queue", async () => {
+  const fixture = await recordedPlan([
+    source({ id: "recorded-news", url: "https://news.example/feed.xml" }),
+    source({ id: "recorded-second", url: "https://news.example/second-feed.xml" }),
+  ]);
+  fixture.inputs.harvest.config.harvest.request_pacing = {
+    enabled: true, domain_delay_ms: 50, publisher_delay_ms: 0, jitter_ms: 0,
+  };
+  fixture.transport.recordings.responses["https://news.example/robots.txt"] = [{
+    status: 200, body: "User-agent: *\nAllow: /\n",
+  }];
+  fixture.transport.recordings.responses["https://news.example/second-feed.xml"] = [{
+    status: 200, fixture: "rss",
+  }];
+  const app = createPlanTestServer(fixture.inputs, fixture.runtime);
+  const post = (body: unknown) => ({ method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+  const prefix = "/api/2026-10-31";
+  const collectionId = randomUUID();
+  const collection = await app.request(`${prefix}/collections`, post({ collection_id: collectionId, request: {} }));
+  expect(collection.status).toBe(200);
+  const collectionContext = getCollection(fixture.inputs, collectionId).context;
+  const starts: number[] = [];
+  let resolveFirstDispatch!: () => void;
+  const firstDispatch = new Promise<void>(resolve => { resolveFirstDispatch = resolve; });
+  fixture.transport.on_request = () => {
+    starts.push(performance.now());
+    if (starts.length === 1) resolveFirstDispatch();
+  };
+  const pending: Promise<Response>[] = [];
+  try {
+    const standalone = app.request(`${prefix}/fetch`, post({
+      request_id: randomUUID(), correlation_id: randomUUID(), feed_id: "recorded-news", fetch_item_type: "feed",
+    }));
+    pending.push(standalone);
+    await Promise.race([firstDispatch, standalone.then(() => { throw new Error("Standalone fetch ended before dispatch"); })]);
+    pending.push(app.request(`${prefix}/fetch`, post({
+      request_id: randomUUID(), collection_id: collectionId, correlation_id: collectionContext.correlation_id,
+      feed_id: "recorded-second", fetch_item_type: "feed",
+    })));
+    const responses = await Promise.all(pending);
+    expect(responses.map(response => response.status)).toEqual([200, 200]);
+    expect(fixture.transport.requests).toHaveLength(4);
+    expect(fixture.transport.peak).toBe(1);
+    expect(starts).toHaveLength(4);
+    for (let index = 1; index < starts.length; index++) {
+      expect(starts[index]! - starts[index - 1]!).toBeGreaterThanOrEqual(40);
+    }
+  } finally {
+    await Promise.allSettled(pending);
+    await app.request(`${prefix}/collections/cancel`, post({ collection_id: collectionId }));
+    await app.close();
+    await fixture.close();
+  }
 }, 120000);
 
 test("active execution input remains pinned and an expired batch cannot reopen historical files", async () => {

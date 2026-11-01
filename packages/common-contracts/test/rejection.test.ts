@@ -120,6 +120,7 @@ describe("rejection evidence", () => {
     const evidence = {
       http_status: 200, fetch_failure: null, error_code: null,
       robots: "allowed" as const, robots_http_status: 404, robots_failure: "http" as const,
+      pacing_time_ms: 0, pacing_settings: null,
     };
     const transient = CandidateRejectionRecordSchema.parse({
       ...rejection(), version: CANDIDATE_REJECTION_VERSION, candidate_id: null, title: null,
@@ -133,11 +134,12 @@ describe("rejection evidence", () => {
     };
     expect(RejectedArticleRowSchema.parse(row)).toEqual(row);
     const unobserved = ArticleFetchEvidenceSchema.parse({});
-    expect(Object.values(unobserved)).toEqual([null, null, null, null, null, null]);
+    expect(Object.values(unobserved)).toEqual([null, null, null, null, null, null, null, null]);
     expect(RejectedArticleRowSchema.parse({ ...row, ...unobserved })).toMatchObject(unobserved);
     expect(ArticleFetchEvidenceSchema.parse({
       http_status: null, fetch_failure: "robots-unknown", error_code: "ECONNRESET",
       robots: "unknown", robots_http_status: null, robots_failure: "network",
+      pacing_time_ms: null, pacing_settings: null,
     }).error_code).toBe("ECONNRESET");
     expect(RejectedArticleRowSchema.meta()?.version).toBe(REJECTED_ARTICLE_VERSION);
     expect(CandidateRejectionRecordSchema.meta()?.version).toBe(CANDIDATE_REJECTION_VERSION);

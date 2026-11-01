@@ -20,6 +20,7 @@ const settings = { format: "parquet" as const, compression_raw: "snappy" as cons
 const priorPhysical = z.object(RejectedArticleRowSchema.shape).omit({
   http_status: true, fetch_failure: true, error_code: true,
   robots: true, robots_http_status: true, robots_failure: true,
+  pacing_time_ms: true, pacing_settings: true,
 });
 
 function row() {
@@ -57,7 +58,7 @@ test("current rejected metadata round-trips and older stamps refuse without null
       registryEntry: registration, ledgerSettings: settings, period: { tier: "raw", covers: day },
     });
     expect((await readPlannerParquet(join(root, result.files[0]!.path), "rejected-articles", RejectedArticleRowContract)).rows).toEqual([current]);
-    for (const stamp of ["2026-10-27", "2026-10-29", "2026-10-29T20:15"]) {
+    for (const stamp of ["2026-10-27", "2026-10-29", "2026-10-29T20:15", "2026-10-31"]) {
       const path = await writePriorPhysical(root, stamp);
       const before = await readFile(path);
       await expect(readStoredPlannerParquet(path, "rejected-articles")).rejects.toThrow();

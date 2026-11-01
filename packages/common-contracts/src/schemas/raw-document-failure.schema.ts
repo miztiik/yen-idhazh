@@ -13,7 +13,10 @@ export const FailedDocumentMetadataSchema = z.strictObject(FetchedDocumentSchema
   attempt_observations: z.array(FetchedDocumentSchema.shape.observation.omit({ run_id: true })),
 }).meta({
   version: RAW_DOCUMENT_FAILURE_VERSION,
-  changelog: [{ version: RAW_DOCUMENT_FAILURE_VERSION, change: "Project failed input to body-free diagnostic metadata." }],
+  changelog: [
+    { version: RAW_DOCUMENT_FAILURE_VERSION, change: "Retain request pacing measurements and effective settings." },
+    { version: RAW_DOCUMENT_FAILURE_VERSION, change: "Project failed input to body-free diagnostic metadata." },
+  ],
 });
 export const RawDocumentFailureSchema = z.strictObject({
   schema_version: z.literal(RAW_DOCUMENT_FAILURE_VERSION).default(RAW_DOCUMENT_FAILURE_VERSION),
@@ -29,6 +32,7 @@ export const RawDocumentFailureSchema = z.strictObject({
 }).meta({
   version: RAW_DOCUMENT_FAILURE_VERSION,
   changelog: [
+    { version: RAW_DOCUMENT_FAILURE_VERSION, change: "Preserve request pacing evidence in body-free failures." },
     { version: RAW_DOCUMENT_FAILURE_VERSION, change: "Remove bodies and repeated run identity from failure diagnostics." },
   ],
 });

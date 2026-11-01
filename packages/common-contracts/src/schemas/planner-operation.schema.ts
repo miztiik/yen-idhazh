@@ -5,6 +5,7 @@ import { BodyLimitEvidenceSchema, FetchFailureSchema } from "./harvest-diagnosti
 import { RecordedInstantSchema } from "./recorded-instant.schema";
 import { SourceArticleRefusalReasonSchema } from "./rejection.schema";
 import { HttpResponseEvidenceSchema, RequestProfileSchema } from "./http-response-evidence.schema";
+import { RequestPacingSettingsSchema } from "./config.schema";
 
 export const OPERATION_VERSION = "2026-11-01" as const;
 const OperationVersionSchema = z.literal(OPERATION_VERSION).default(OPERATION_VERSION);
@@ -28,6 +29,7 @@ export const FetchAttemptSchema = z.strictObject({
   request_profile: RequestProfileSchema.nullable().default(null),
   request_url: UrlSchema.nullable().default(null),
   response_evidence: HttpResponseEvidenceSchema.nullable().default(null),
+  pacing_wait_ms: CountSchema.nullable().default(null),
 });
 export type FetchAttempt = z.infer<typeof FetchAttemptSchema>;
 export const NetworkFailureDetailsSchema = z.strictObject({
@@ -35,13 +37,18 @@ export const NetworkFailureDetailsSchema = z.strictObject({
   http_status: FetchAttemptSchema.shape.http_status,
   request_profile: RequestProfileSchema.nullable(),
   response_evidence: HttpResponseEvidenceSchema.nullable(),
+  pacing_time_ms: CountSchema.nullable().default(null),
+  pacing_settings: RequestPacingSettingsSchema.nullable().default(null),
   robots_response_evidence: HttpResponseEvidenceSchema.nullable(),
   robots_http_status: FetchAttemptSchema.shape.http_status,
   robots_failure: FetchFailureSchema.nullable(),
   attempt: FetchAttemptSchema.nullable(),
 }).meta({
   version: OPERATION_VERSION,
-  changelog: [{ version: OPERATION_VERSION, change: "Validate body-free failure details separately from flexible log fields." }],
+  changelog: [
+    { version: OPERATION_VERSION, change: "Retain request pacing waits and effective settings in failure details." },
+    { version: OPERATION_VERSION, change: "Validate body-free failure details separately from flexible log fields." },
+  ],
 });
 export type NetworkFailureDetails = z.infer<typeof NetworkFailureDetailsSchema>;
 export const PlannerObservationSchema = z.strictObject({
@@ -67,6 +74,8 @@ export const FetchedDocumentSchema = z.strictObject({
     request_url: UrlSchema.nullable(), destination_url: UrlSchema.nullable(),
     http_status: z.int().min(300).max(399),
   })).default([]),
+  pacing_time_ms: CountSchema,
+  pacing_settings: RequestPacingSettingsSchema,
   attempts: z.array(FetchAttemptSchema), observation: PlannerObservationSchema,
   attempt_observations: z.array(PlannerObservationSchema), body_sha256: Sha256Schema.nullable(),
   parent_fetch_request_id: RequestIdSchema.nullable().default(null),
@@ -99,10 +108,10 @@ export const FetchedDocumentSchema = z.strictObject({
 }).meta({
   version: OPERATION_VERSION,
   changelog: [
+    { version: OPERATION_VERSION, change: "Preserve request pacing waits and effective settings." },
     { version: OPERATION_VERSION, change: "Add native response, profile and safe request-address evidence." },
     { version: OPERATION_VERSION, change: "Require current fetched documents without older-format readers." },
     { version: "2026-10-30", change: "Retain configured response limits and observed cutoff bytes." },
-    { version: "2026-10-29", change: "Identify shared query-free article captures." },
     { version: "2026-10-28", change: "Earlier changes are in this file's Git history." },
   ],
 });

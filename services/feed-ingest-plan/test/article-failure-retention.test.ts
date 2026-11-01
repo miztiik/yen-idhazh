@@ -85,8 +85,13 @@ test("terminal HTTP, DNS, TLS, timeout, robots and extraction failures retain th
     expect(rows).toHaveLength(cases.length);
     expect(new Set(rows.map(row => row.url_key)).size).toBe(cases.length);
     for (const entry of cases) {
-      expect(rows.find(row => row.url_key === deriveArticleIdentity(entry.url, recorded.inputs.harvest.config.harvest).url_key),
-        entry.name).toMatchObject({ stage: "harvest-feeds", ...entry.expected });
+      const row = rows.find(row =>
+        row.url_key === deriveArticleIdentity(entry.url, recorded.inputs.harvest.config.harvest).url_key);
+      expect(row, entry.name).toMatchObject({
+        stage: "harvest-feeds", ...entry.expected,
+        pacing_settings: recorded.inputs.harvest.config.harvest.request_pacing,
+      });
+      expect(row?.pacing_time_ms).not.toBeNull();
       if (["robots-denied", "robots-unknown"].includes(entry.expected.fetch_failure ?? "")) {
         expect(recorded.transport.requests.some(request => request.url.href === entry.url)).toBe(false);
       }

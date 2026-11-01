@@ -20,7 +20,11 @@ import { ExtractionControlsSchema } from "@idhazh/feed-ingest-plan/extraction-co
 import type { ExtractionControls } from "@idhazh/feed-ingest-plan/extraction-controls";
 import { parseDocument } from "@idhazh/feed-ingest-plan/parse-document";
 import { FeedParseError, parseFeed } from "@idhazh/feed-ingest-plan/parse-feed";
-import { createPermittedFetcher } from "@idhazh/feed-ingest-plan/robots-policy";
+import {
+  createPermittedFetcher,
+  createRequestPacing,
+} from "@idhazh/feed-ingest-plan/robots-policy";
+import type { RequestPacing } from "@idhazh/feed-ingest-plan/robots-policy";
 import type { FetchResult } from "@idhazh/feed-ingest-plan/robots-policy";
 import type { HarvestTransport } from "@idhazh/feed-ingest-plan/transport";
 
@@ -28,6 +32,8 @@ export type FeedProbeOptions = {
   signal?: AbortSignal;
   harvest?: FeedIngestConfig["harvest"];
   extraction?: ExtractionControls;
+  publisher_id?: string | null;
+  request_pacing?: RequestPacing;
   transport?: HarvestTransport;
   boundary?: {
     transport?: HarvestTransport;
@@ -37,16 +43,14 @@ export type FeedProbeOptions = {
 type FeedProbeSettings = {
   harvest: FeedIngestConfig["harvest"];
   extraction: ExtractionControls;
+  include_private_suffixes: boolean;
 };
 
 async function loadSettings(options: FeedProbeOptions): Promise<FeedProbeSettings> {
-  let planning: FeedIngestConfig | null = null;
-  if (options.harvest === undefined || options.extraction === undefined) {
-    const planningRaw = await Bun.file(new URL("../../../config/feed-ingest-plan.json", import.meta.url)).json();
-    planning = FeedIngestConfigSchema.parse(planningRaw);
-  }
+  const planningRaw = await Bun.file(new URL("../../../config/feed-ingest-plan.json", import.meta.url)).json();
+  const planning = FeedIngestConfigSchema.parse(planningRaw);
   const harvest = options.harvest === undefined
-    ? planning!.harvest
+    ? planning.harvest
     : FeedIngestConfigSchema.shape.harvest.parse(options.harvest);
   let extraction: ExtractionControls;
   if (options.extraction !== undefined) {
@@ -60,11 +64,19 @@ async function loadSettings(options: FeedProbeOptions): Promise<FeedProbeSetting
     }
     extraction = ExtractionControlsSchema.parse({
       ...(extractionRaw.extract as Record<string, unknown>),
-      semantic_fallback: planning!.harvest.semantic_fallback,
-      press_release_filter: planning!.content_filters.press_release,
+      semantic_fallback: planning.harvest.semantic_fallback,
+      press_release_filter: planning.content_filters.press_release,
     });
   }
-  return { harvest, extraction };
+  return {
+    harvest, extraction,
+    include_private_suffixes: planning.curate_articles.website_grouping.include_private_suffixes,
+  };
+}
+
+export async function createFeedProbePacing(options: FeedProbeOptions = {}): Promise<RequestPacing> {
+  const settings = await loadSettings(options);
+  return createRequestPacing(settings.harvest.request_pacing, settings.include_private_suffixes);
 }
 
 function timeoutDiagnostics(): HarvestDiagnostics {
@@ -178,175 +190,180 @@ export async function probeFeed(
   const boundary = {
     ...(options.boundary ?? {}),
     ...(options.transport === undefined ? {} : { transport: options.transport }),
+    ...(options.request_pacing === undefined ? {} : { request_pacing: options.request_pacing }),
+    include_private_suffixes: settings.include_private_suffixes,
   };
   const fetcher = createPermittedFetcher(
     settings.harvest,
     settings.extraction,
     boundary,
   );
-  const feedStarted = performance.now();
-  const feedFetched = await fetcher.fetch(parsed.feed_url, undefined, "feed", operationSignal);
-  const feedFetchMs = Math.round(performance.now() - feedStarted);
-  if (feedFetched.body === null) {
-    const diagnostics = fetchDiagnostics(feedFetched, feedFetchMs);
-    return bodyFreeResult("feed_failure", [], diagnostics, [], {
-      paywall_confirmed: false,
-      paywall_evidence: "not-observed",
-    });
-  }
-
-  let entries: Awaited<ReturnType<typeof parseFeed>>;
   try {
-    entries = await parseFeed(feedFetched.body);
-  } catch (error) {
-    if (error instanceof FeedParseError) {
-      const diagnostics = parserFailureDiagnostics(feedFetched, feedFetchMs);
+    const feedStarted = performance.now();
+    const publisherId = options.publisher_id ?? null;
+    const feedFetched = await fetcher.fetch(parsed.feed_url, undefined, "feed", operationSignal, publisherId);
+    const feedFetchMs = Math.round(performance.now() - feedStarted);
+    if (feedFetched.body === null) {
+      const diagnostics = fetchDiagnostics(feedFetched, feedFetchMs);
       return bodyFreeResult("feed_failure", [], diagnostics, [], {
         paywall_confirmed: false,
         paywall_evidence: "not-observed",
       });
     }
-    throw error;
-  }
-  const candidates = entries.filter(entry => entry.link !== null).slice(0, parsed.sample_count);
-  if (!candidates.length) {
-    const diagnostics = emptyFeedDiagnostics(feedFetched, feedFetchMs);
-    return bodyFreeResult("feed_failure", [], diagnostics, [], {
-      paywall_confirmed: false,
-      paywall_evidence: "not-observed",
-    });
-  }
 
-  const samples: FeedProbeArticleSample[] = [];
-  const warnings = new Set<FeedProbeWarning>();
-  let operationAborted = false;
-  for (const entry of candidates) {
-    if (operationSignal?.aborted) {
-      operationAborted = true;
-      break;
-    }
-    const dated = entry.published_at !== null;
-    const link = entry.link!;
-    const articleStarted = performance.now();
-    const fetched = await fetcher.fetch(link, undefined, "article", operationSignal);
-    const fetchMs = Math.round(performance.now() - articleStarted);
-    if (fetched.body === null) {
-      samples.push(sampleWithFetchFailure(dated, fetched, fetchMs));
-      if (operationSignal?.aborted) {
-        operationAborted = true;
-        break;
-      }
-      continue;
-    }
-
-    const extractionStarted = performance.now();
+    let entries: Awaited<ReturnType<typeof parseFeed>>;
     try {
-      const extracted = await parseDocument(
-        "article",
-        fetched.body,
-        link,
-        settings.extraction,
-        undefined,
-        operationSignal === undefined ? {} : { signal: operationSignal },
-      );
-      const extractMs = Math.round(performance.now() - extractionStarted);
-      let extractionFailure: HarvestDiagnostics["extraction_failure"] = null;
-      let stoppedStage: HarvestDiagnostics["stopped_stage"] = null;
-      let detail: HarvestDiagnostics["detail"] = null;
-      let failureCode: HarvestDiagnostics["failure_code"] = null;
-      if (!extracted.article_text.trim()) {
-        extractionFailure = "empty-content";
-        stoppedStage = "extract";
-        detail = "empty-content";
-        failureCode = "no_text";
-      } else if (extracted.quality?.rejected && extracted.quality.failure_code !== null) {
-        stoppedStage = "extract";
-        detail = extracted.quality.failure_code;
-        failureCode = extracted.quality.failure_code;
-      }
-      const diagnostics = HarvestDiagnosticsSchema.parse({
-        ...fetchDiagnostics(fetched, fetchMs),
-        extract_ms: extractMs,
-        extraction_failure: extractionFailure,
-        failure_code: failureCode,
-        stopped_stage: stoppedStage,
-        detail,
-        warnings: extracted.warnings,
-        quality: extracted.quality,
-      });
-      const readable = extracted.paywall !== true
-        && extracted.article_text.trim().length > 0
-        && extracted.quality?.rejected !== true;
-      samples.push({
-        readable,
-        dated,
-        paywall: extracted.paywall,
-        paywall_evidence: extracted.paywall_evidence,
-        diagnostics,
-      });
-      for (const warning of extracted.warnings) warnings.add(warning);
+      entries = await parseFeed(feedFetched.body);
     } catch (error) {
+      if (error instanceof FeedParseError) {
+        const diagnostics = parserFailureDiagnostics(feedFetched, feedFetchMs);
+        return bodyFreeResult("feed_failure", [], diagnostics, [], {
+          paywall_confirmed: false,
+          paywall_evidence: "not-observed",
+        });
+      }
+      throw error;
+    }
+    const candidates = entries.filter(entry => entry.link !== null).slice(0, parsed.sample_count);
+    if (!candidates.length) {
+      const diagnostics = emptyFeedDiagnostics(feedFetched, feedFetchMs);
+      return bodyFreeResult("feed_failure", [], diagnostics, [], {
+        paywall_confirmed: false,
+        paywall_evidence: "not-observed",
+      });
+    }
+
+    const samples: FeedProbeArticleSample[] = [];
+    const warnings = new Set<FeedProbeWarning>();
+    let operationAborted = false;
+    for (const entry of candidates) {
       if (operationSignal?.aborted) {
         operationAborted = true;
         break;
       }
-      const extractMs = Math.round(performance.now() - extractionStarted);
-      const extractionFailure = error instanceof ArticleExtractionError ? error.reason : null;
-      const diagnostics = HarvestDiagnosticsSchema.parse({
-        ...fetchDiagnostics(fetched, fetchMs),
-        extract_ms: extractMs,
-        extraction_failure: extractionFailure,
-        failure_code: "unknown",
-        stopped_stage: "extract",
-        detail: extractionFailure,
-        warnings: [],
-        quality: null,
-      });
-      samples.push({
-        readable: false,
-        dated,
-        paywall: null,
+      const dated = entry.published_at !== null;
+      const link = entry.link!;
+      const articleStarted = performance.now();
+      const fetched = await fetcher.fetch(link, undefined, "article", operationSignal, publisherId);
+      const fetchMs = Math.round(performance.now() - articleStarted);
+      if (fetched.body === null) {
+        samples.push(sampleWithFetchFailure(dated, fetched, fetchMs));
+        if (operationSignal?.aborted) {
+          operationAborted = true;
+          break;
+        }
+        continue;
+      }
+
+      const extractionStarted = performance.now();
+      try {
+        const extracted = await parseDocument(
+          "article",
+          fetched.body,
+          link,
+          settings.extraction,
+          undefined,
+          operationSignal === undefined ? {} : { signal: operationSignal },
+        );
+        const extractMs = Math.round(performance.now() - extractionStarted);
+        let extractionFailure: HarvestDiagnostics["extraction_failure"] = null;
+        let stoppedStage: HarvestDiagnostics["stopped_stage"] = null;
+        let detail: HarvestDiagnostics["detail"] = null;
+        let failureCode: HarvestDiagnostics["failure_code"] = null;
+        if (!extracted.article_text.trim()) {
+          extractionFailure = "empty-content";
+          stoppedStage = "extract";
+          detail = "empty-content";
+          failureCode = "no_text";
+        } else if (extracted.quality?.rejected && extracted.quality.failure_code !== null) {
+          stoppedStage = "extract";
+          detail = extracted.quality.failure_code;
+          failureCode = extracted.quality.failure_code;
+        }
+        const diagnostics = HarvestDiagnosticsSchema.parse({
+          ...fetchDiagnostics(fetched, fetchMs),
+          extract_ms: extractMs,
+          extraction_failure: extractionFailure,
+          failure_code: failureCode,
+          stopped_stage: stoppedStage,
+          detail,
+          warnings: extracted.warnings,
+          quality: extracted.quality,
+        });
+        const readable = extracted.paywall !== true
+          && extracted.article_text.trim().length > 0
+          && extracted.quality?.rejected !== true;
+        samples.push({
+          readable,
+          dated,
+          paywall: extracted.paywall,
+          paywall_evidence: extracted.paywall_evidence,
+          diagnostics,
+        });
+        for (const warning of extracted.warnings) warnings.add(warning);
+      } catch (error) {
+        if (operationSignal?.aborted) {
+          operationAborted = true;
+          break;
+        }
+        const extractMs = Math.round(performance.now() - extractionStarted);
+        const extractionFailure = error instanceof ArticleExtractionError ? error.reason : null;
+        const diagnostics = HarvestDiagnosticsSchema.parse({
+          ...fetchDiagnostics(fetched, fetchMs),
+          extract_ms: extractMs,
+          extraction_failure: extractionFailure,
+          failure_code: "unknown",
+          stopped_stage: "extract",
+          detail: extractionFailure,
+          warnings: [],
+          quality: null,
+        });
+        samples.push({
+          readable: false,
+          dated,
+          paywall: null,
+          paywall_evidence: "not-observed",
+          diagnostics,
+        });
+      }
+    }
+
+    if (operationAborted) {
+      return bodyFreeResult("article_fetch_failure", samples, timeoutDiagnostics(), [...warnings], {
+        paywall_confirmed: false,
         paywall_evidence: "not-observed",
-        diagnostics,
       });
     }
-  }
 
-  if (operationAborted) {
-    return bodyFreeResult("article_fetch_failure", samples, timeoutDiagnostics(), [...warnings], {
-      paywall_confirmed: false,
-      paywall_evidence: "not-observed",
+    const evidenceCounts = new Map<"json-ld" | "configured-marker", number>();
+    for (const sample of samples) {
+      if (sample.paywall !== true) continue;
+      if (sample.paywall_evidence !== "json-ld" && sample.paywall_evidence !== "configured-marker") continue;
+      evidenceCounts.set(sample.paywall_evidence, (evidenceCounts.get(sample.paywall_evidence) ?? 0) + 1);
+    }
+    const confirmedEvidence = [...evidenceCounts.entries()].find(([, count]) => count >= 2)?.[0] ?? null;
+    const paywallConfirmed = confirmedEvidence !== null;
+    const evidence = confirmedEvidence
+      ?? samples.find(sample => sample.paywall === true)?.paywall_evidence
+      ?? "not-observed";
+    const readableCount = samples.filter(sample => sample.readable).length;
+    let verdict: FeedProbeResult["verdict"];
+    if (readableCount > 0) verdict = "pass";
+    else if (paywallConfirmed) verdict = "paywall_confirmed";
+    else if (samples.some(sample => sample.paywall === true)) verdict = "paywall_not_confirmed";
+    else verdict = "article_fetch_failure";
+
+    if (readableCount > 0 && samples.length > 0 && samples.every(sample => sample.dated === false)) {
+      warnings.add("no_dated_entries");
+    }
+    const aggregateDiagnostics = verdict === "article_fetch_failure"
+      ? samples.find(sample => sample.diagnostics !== null)?.diagnostics ?? null
+      : null;
+    return bodyFreeResult(verdict, samples, aggregateDiagnostics, [...warnings], {
+      paywall_confirmed: paywallConfirmed,
+      paywall_evidence: evidence,
     });
-  }
-
-  const evidenceCounts = new Map<"json-ld" | "configured-marker", number>();
-  for (const sample of samples) {
-    if (sample.paywall !== true) continue;
-    if (sample.paywall_evidence !== "json-ld" && sample.paywall_evidence !== "configured-marker") continue;
-    evidenceCounts.set(sample.paywall_evidence, (evidenceCounts.get(sample.paywall_evidence) ?? 0) + 1);
-  }
-  const confirmedEvidence = [...evidenceCounts.entries()].find(([, count]) => count >= 2)?.[0] ?? null;
-  const paywallConfirmed = confirmedEvidence !== null;
-  const evidence = confirmedEvidence
-    ?? samples.find(sample => sample.paywall === true)?.paywall_evidence
-    ?? "not-observed";
-  const readableCount = samples.filter(sample => sample.readable).length;
-  let verdict: FeedProbeResult["verdict"];
-  if (readableCount > 0) verdict = "pass";
-  else if (paywallConfirmed) verdict = "paywall_confirmed";
-  else if (samples.some(sample => sample.paywall === true)) verdict = "paywall_not_confirmed";
-  else verdict = "article_fetch_failure";
-
-  if (readableCount > 0 && samples.length > 0 && samples.every(sample => sample.dated === false)) {
-    warnings.add("no_dated_entries");
-  }
-  const aggregateDiagnostics = verdict === "article_fetch_failure"
-    ? samples.find(sample => sample.diagnostics !== null)?.diagnostics ?? null
-    : null;
-  return bodyFreeResult(verdict, samples, aggregateDiagnostics, [...warnings], {
-    paywall_confirmed: paywallConfirmed,
-    paywall_evidence: evidence,
-  });
+  } finally { await fetcher.close(); }
 }
 
 export const feedProbe = probeFeed;

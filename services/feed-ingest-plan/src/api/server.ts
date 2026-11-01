@@ -18,13 +18,36 @@ import { collectionRoute } from "./routes/collection.route";
 import { PLANNER_API_PREFIX } from "@idhazh/common-contracts";
 import { finishRawDocumentFailures } from "../dump-raw-document-failure";
 import { stageStore } from "./stage-store";
+import { createRequestPacing } from "../harvest-feeds/request-pacing";
+import type { RequestPacing } from "../harvest-feeds/request-pacing";
 
 const apiPrefix = PLANNER_API_PREFIX;
 const activeApps = new WeakMap<PlanInputs, number>();
+const requestPacingByInputs = new WeakMap<PlanInputs, RequestPacing>();
+function requestPacingFor(inputs: PlanInputs) {
+  let pacing = requestPacingByInputs.get(inputs);
+  if (pacing === undefined) {
+    pacing = createRequestPacing(
+      inputs.harvest.config.harvest.request_pacing,
+      inputs.harvest.config.curate_articles.website_grouping.include_private_suffixes,
+    );
+    requestPacingByInputs.set(inputs, pacing);
+  }
+  return pacing;
+}
+
 export function createPlanApp(inputs: PlanInputs, runtime: PlanRuntime, identity?: PlannerReady) {
   const app = new Hono<{ Bindings: PlanningBindings }>();
+  const requestPacing = requestPacingFor(inputs);
   const parserPool = runtime.parser_pool ?? new ArticleParserPool(inputs.settings.listener.parser_concurrency);
-  const requestRuntime = () => ({ ...runtime, parser_pool: parserPool });
+  const requestRuntime = () => ({
+    ...runtime,
+    boundary: {
+      ...runtime.boundary, request_pacing: requestPacing,
+      include_private_suffixes: inputs.harvest.config.curate_articles.website_grouping.include_private_suffixes,
+    },
+    parser_pool: parserPool,
+  });
   app.use(`${apiPrefix}/*`, bodyLimit({
     maxSize: inputs.settings.listener.max_body_bytes,
     onError: c => c.json({ code: "BODY_TOO_LARGE", issues: [{ field: "body", message: "Body exceeds configured max_body_bytes" }] }, 413),
@@ -55,11 +78,17 @@ export function createPlanApp(inputs: PlanInputs, runtime: PlanRuntime, identity
     if (runtime.parser_pool === undefined) parserPool.close();
     const remaining = (activeApps.get(inputs) ?? 1) - 1;
     activeApps.set(inputs, remaining);
+    if (remaining === 0) requestPacingByInputs.delete(inputs);
     closing = remaining > 0 ? Promise.resolve() : (async () => {
+      const failures: unknown[] = [];
       try { await finishRawDocumentFailures(inputs); }
+      catch (error) { failures.push(error); }
       finally {
         if (activeApps.get(inputs) === 0) { stageStore(inputs).releaseDocuments(); activeApps.delete(inputs); }
       }
+      try { await requestPacing.close(); }
+      catch (error) { failures.push(error); }
+      if (failures.length) throw new AggregateError(failures, "Planner listener cleanup failed");
     })();
     return closing;
   } });

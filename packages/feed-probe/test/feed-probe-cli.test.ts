@@ -5,6 +5,7 @@ import { expect, test } from "bun:test";
 import {
   FEED_PROBE_SAMPLE_DEFAULT,
   FEED_PROBE_VERSION,
+  FeedIngestConfigSchema,
   FeedProbeResultSchema,
 } from "@idhazh/common-contracts";
 import type {
@@ -20,6 +21,7 @@ import {
   FeedProbeReportSchema,
   buildFeedProbeReport,
 } from "../src/feed-probe-report";
+import type { FeedProbeOptions } from "../src/feed-probe";
 import {
   normalizeFeedUrl,
   resolveFeedProbeTargets,
@@ -70,6 +72,29 @@ async function recordedBoundary(routes: Record<string, RecordedRoute>) {
   return {
     transport: new RecordedFeedTransport(new Map(Object.entries(routes))),
   };
+}
+
+async function probeWithRecordedTransport(
+  request: unknown,
+  options: FeedProbeOptions,
+  boundary: Awaited<ReturnType<typeof recordedBoundary>>,
+) {
+  const config = FeedIngestConfigSchema.parse(await Bun.file(new URL(
+    "../../../config/feed-ingest-plan.json", import.meta.url,
+  )).json());
+  return probeFeed(request, {
+    ...options,
+    harvest: {
+      ...config.harvest,
+      request_pacing: {
+        ...config.harvest.request_pacing,
+        domain_delay_ms: 0,
+        publisher_delay_ms: 0,
+        jitter_ms: 0,
+      },
+    },
+    boundary,
+  });
 }
 
 async function removeNamedFile(relativePath: string): Promise<void> {
@@ -171,6 +196,7 @@ test("source selection filters feeds by vertical and ID", async () => {
   const targets = await resolveFeedProbeTargets(parsed.options, sourceCatalog);
   expect(targets).toEqual([{
     feed_id: "alpha-ai",
+    publisher_id: "alpha-publisher",
     url: "https://fixture.test/feed.xml",
     status: "active",
     vertical: "ai",
@@ -217,9 +243,8 @@ test("real core pass and report exit zero with recorded transport", async () => 
   const feed = await existingFeedFixture("feed.xml");
   const article = await existingFeedFixture("readable-article.html");
   const boundary = await recordedBoundary({
-    "https://pass-fixture.test/robots.txt": { status: 404, body: "" },
-    "https://pass-fixture.test/feed.xml": { status: 200, body: feed },
     "https://fixture.test/robots.txt": { status: 404, body: "" },
+    "https://fixture.test/feed.xml": { status: 200, body: feed },
     "https://fixture.test/article-one": { status: 200, body: article },
     "https://fixture.test/article-two": { status: 200, body: article },
     "https://fixture.test/article-three": { status: 200, body: article },
@@ -233,15 +258,16 @@ test("real core pass and report exit zero with recorded transport", async () => 
     const exit = await runFeedProbeCli(
       [
         "--articles", "3",
+        "--from-config", "feeds",
+        "--id", "alpha-ai",
         "--trace", traceRelative,
         "--report", reportRelative,
         "--json",
-        "https://pass-fixture.test/feed.xml",
       ],
       {
         repoRoot: repositoryRoot,
         loadSourceCatalog: sourceCatalog,
-        probe: async request => probeFeed(request, { boundary }),
+        probe: async (request, options) => probeWithRecordedTransport(request, options ?? {}, boundary),
         stdout: line => stdout.push(line),
         stderr: line => stderr.push(line),
       },

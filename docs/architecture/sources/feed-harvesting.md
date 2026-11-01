@@ -153,6 +153,35 @@ Disabling the secondary profile leaves one target allowance.
 The body-size recovery rule never applies to feeds. Short, empty and malformed
 feed downloads keep their real HTTP result and separate parse outcome.
 
+`harvest.request_pacing` applies a process-local scheduler to every dispatched
+robots, feed and article request, including retries, secondary-profile recovery
+and redirect hops. Each request uses its destination domain and, when present,
+the curated publisher ID. The domain key groups hostnames by registrable domain
+(the domain beneath the public suffix), using the configured private-suffix
+policy; a missing publisher ID adds no publisher key. Both keys are acquired
+domain first, then publisher. Cache hits and validation-only refusals do not
+dispatch and use no slot.
+
+The first request for a key has no initial delay. After the application request
+settles with content or failure, the next request waits for that key's configured
+base delay plus independently sampled jitter. A slot covers application request
+settlement and cooldown, not the physical lifetime of native work that may
+continue after timeout. Cancellation settles the caller's queued wait or ends
+cooldown without dispatching a cancelled request. Queue waits do not consume an
+HTTP attempt timer; measured queue wait is kept on the attempt, and the total
+fetch elapsed time includes it. `duration_ms` excludes both queue wait and
+retry backoff.
+
+The listener shares one scheduler across collection and standalone document
+requests. A direct harvester or probe call owns one for its invocation; the
+standalone probe CLI shares one across the targets it processes. The open-source
+`bottleneck` package supplies the keyed single-request queues. It benefits
+shared domain and publisher pacing and adds one JavaScript dependency plus
+in-memory queue state; it adds no browser bundle or native binary. Idle keyed
+queues expire, and listener shutdown cancels only its own application work.
+The configured 1000 ms base delays and 0..500 ms jitter are initial estimates,
+not measured optimum values. Zero delays are supported.
+
 Structured configured URL exclusions, real publication history and settled
 item failures can refuse a page before download. A dated entry strictly
 older than the effective global freshness cutoff also stops before page

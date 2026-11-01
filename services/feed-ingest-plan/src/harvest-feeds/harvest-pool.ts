@@ -8,6 +8,7 @@ import { feedDocumentWork, readFeed } from "./feed-client";
 import { harvestArticle } from "./harvest-article";
 import { createPermittedFetcher } from "./robots-policy";
 import type { HarvestTransport } from "./transport";
+import type { RequestPacing } from "./request-pacing";
 import { ArticleParserPool } from "./article-parser-pool";
 
 export { loadHarvestInputs, readHarvestInputs } from "./load-harvest-inputs";
@@ -51,13 +52,22 @@ export function workPool(concurrency: number) {
 
 export async function harvestFeeds(
   inputs: HarvestInputs, context: HarvestContext,
-  boundary: { transport?: HarvestTransport } = {},
+  boundary: {
+    transport?: HarvestTransport;
+    request_pacing?: RequestPacing;
+    include_private_suffixes?: boolean;
+  } = {},
 ): Promise<HarvestResult> {
   WriterIdentitySchema.parse(context.writer);
-  const fetcher = createPermittedFetcher(inputs.config.harvest, inputs.extraction, boundary, context.observation_clock);
+  const fetcher = createPermittedFetcher(inputs.config.harvest, inputs.extraction, {
+    ...boundary,
+    include_private_suffixes: boundary.include_private_suffixes
+      ?? inputs.config.curate_articles.website_grouping.include_private_suffixes,
+  }, context.observation_clock);
   const permit = workPool(inputs.config.harvest.concurrency);
   const boundedFetcher: Pick<typeof fetcher, "fetch"> = {
-    fetch: (url, emit, kind, signal) => permit(() => fetcher.fetch(url, emit, kind, signal)),
+    fetch: (url, emit, kind, signal, publisherId) =>
+      permit(() => fetcher.fetch(url, emit, kind, signal, publisherId)),
   };
   const ownedPool = context.parser_pool ?? new ArticleParserPool(inputs.config.harvest.concurrency);
   const runContext = { ...context, parser_pool: ownedPool,
@@ -110,5 +120,8 @@ export async function harvestFeeds(
       }),
       candidates: articles.flatMap(article => article.candidate ? [article.candidate] : []),
     };
-  } finally { if (context.parser_pool === undefined) ownedPool.close(); }
+  } finally {
+    if (context.parser_pool === undefined) ownedPool.close();
+    await fetcher.close();
+  }
 }

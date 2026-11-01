@@ -153,8 +153,9 @@ source or rewrite the selection-start fallback. The artifact and metadata
 projection use the same chosen values.
 
 The current native stamps are `2026-10-31` for discovery, selected articles,
-rejected articles, health, file envelopes, parsed/selected batches, private
-receipts and progress events. Plan runs retain their unchanged current
+health, file envelopes, parsed/selected batches, private receipts and progress
+events. Candidate rejections and rejected-article rows use `2026-11-01` to
+retain request pacing evidence. Plan runs retain their unchanged current
 `2026-10-26` shape. Readers verify physical fields, file identity and canonical
 digest against the current format. Older formats refuse with diagnostics.
 Historical files remain unchanged; no migration or null-fill is applied.
@@ -614,6 +615,8 @@ published-payload ceiling in `config/idhazh.json`.
 | M10 | `robots` | Observed `allowed`, `denied` or `unknown` permission, or null before observation |
 | M11 | `robots_http_status` | Actual robots response status, or null if not observed |
 | M12 | `robots_failure` | Typed robots download failure, or null if not observed |
+| M13 | `pacing_time_ms` | Measured total queue wait for the fetch, or null when unmeasured |
+| M14 | `pacing_settings` | Effective domain delay, publisher delay, jitter and enable setting |
 
 Row identity is run, attempt and candidate. Selected cutoffs use their admitted
 window. Age refusals use the failed threshold. An unopened older step is not
@@ -637,11 +640,10 @@ Repeated writes of an identical raw rejection batch use the same physical
 file identity and verify that existing file before reusing it. Other planner
 ledgers keep their existing file identities.
 
-The reader checks the physical Arrow schema and original digest against the
-file's exact accepted version before filling the six absent evidence fields
-with null. Old files are not rewritten. Compaction accepts old and current
-members together and writes the current format. Unknown versions still refuse.
-Known current reasons keep their stage checks; unknown or
+The reader requires the exact current row version and physical Arrow columns.
+Older row versions and shapes are refused; they are not migrated or rewritten.
+Compaction reads only files accepted by the current contract and writes the
+current format. Known current reasons keep their stage checks; unknown or
 retired reason strings remain readable evidence when they follow the bounded
 uppercase reason-code pattern.
 
