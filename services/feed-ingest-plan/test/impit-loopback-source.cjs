@@ -34,7 +34,7 @@ const server = createServer((request, response) => {
     response.end("followed");
     return;
   }
-  if (path === "stalled" || path === "cutoff" || path === "reference") {
+  if (path === "stalled" || path === "native-control" || path === "cutoff" || path === "reference") {
     response.once("close", () => {
       if (!stopping) process.send({ closed: path });
     });
