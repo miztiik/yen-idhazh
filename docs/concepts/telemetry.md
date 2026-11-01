@@ -1,6 +1,6 @@
 # Telemetry
 
-**Last Updated**: 2026-10-31
+**Last Updated**: 2026-11-01
 
 How the pipeline records progress, timings and outcomes. Logs explain a running process; committed, validated rows supply later runs and operator views.
 
@@ -131,6 +131,11 @@ publication rule is part of this record.
 Use the [visual-attempt report](../how-to/report-visual-attempts.md) to group
 these existing measurements for named UTC dates in an on-demand Parquet file.
 It adds no quality judgment and changes no setting.
+
+The visual measurement scope is closed. Additional human review modes,
+weight/prior fitting, automatic worked-example selection, comprehension
+studies and reviewer phases are abandoned. The delivered local review
+artifact and Parquet report remain available and unchanged.
 
 ## What the machine was doing
 

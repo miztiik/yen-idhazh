@@ -25,7 +25,7 @@ Execute per docs/how-to/execute-a-plan.md: one maintainer carries the plan and d
 | --- | --- |
 | Why this plan exists | Everything from plan 11 onward gates publication on machine judgement, and none of it is recorded. Today "no visual was possible" and "the visual stage broke" are the same row. **`none` is the majority outcome by design**, so a majority outcome with no cause breakdown means the largest number an operator sees explains nothing |
 | Hard scope - in | Row 3: a registered ledger with one row per actual visual-design attempt, typed refusal causes, exact visual identity, full-grain retention and standard lossless packing |
-| Hard scope - out | The console panels (plan 20). Any human review surface (plan 21). Any change to what publishes |
+| Hard scope - out | The delivered console panels. Existing [local visual review](../docs/concepts/evaluation.md#the-review-tree-where-a-person-looks-at-a-days-visuals) and the abandoned [review/tuning extensions](../docs/concepts/telemetry.md#visual-design-attempts). Any change to what publishes |
 | ESCALATE triggers | Attempts are replaced by publications; a current refusal loses its typed cause; an aggregate, permanent summary or custom retry feature is proposed |
 | Chosen strategy | Producer evidence first, then registered persistence, publication ownership and bounded retention. Whole-day re-rendering and rejected-plan bodies remain row 4 |
 | Execution | `autonomous orchestrator per docs/how-to/execute-a-plan.md. Parallel N = 4.` |
