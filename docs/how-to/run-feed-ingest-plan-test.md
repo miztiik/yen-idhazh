@@ -3,8 +3,8 @@
 **Last Updated**: 2026-11-01
 
 How do you check the TypeScript planner without changing daily publication?
-Use offline cases for validation. The manual workflow performs real feed work
-and data commits, so it is not a repeatable test gate.
+Use offline cases for validation. The manual workflow performs real feed work,
+so it is not a repeatable test gate.
 This page is project-specific because it names this planner's native formats
 and isolated workflow.
 
@@ -28,6 +28,20 @@ five-format native output and selected artifact before exposing commit paths.
 Completed planning is not proof of summarization or publication.
 
 ## Manual controls
+
+`deliver_metadata` is a boolean, default true. True retains normal Git delivery
+and recovery checks. False validates the actual local files and packages them
+without starting a delivery child or committing metadata. The report and finish
+log state that delivery was not requested; no delivery receipt is fabricated.
+Validation still runs even when delivery is disabled. A skipped validation step
+is not success, and collection or upload failure still fails the workflow.
+
+For branch verification, dispatch `feed-ingest-plan-test.yml` with `--ref`
+naming the completed candidate, `deliver_metadata=false` and
+`dump_raw_document_contents=true`. Leave the configured feeds and limits intact.
+First run the native fixture checks on Linux. A successful completed branch run
+certifies integration, not access to every publisher. Typed source refusals
+remain in health and body-free failure metadata.
 
 The dispatch form takes article limit, worker count, partition strategy and
 three independent article-age overrides. Their labels are:
@@ -59,8 +73,9 @@ partitioning is disabled, selection still runs but worker assignment is
 bypassed. Source-based bucket shares and buffers remain 60/10, 30/5 and 10/5
 percent; age controls do not turn source authority into an article verdict.
 
-The workflow does not profile live planner CPU or RAM. It still records the
-configured host fingerprint and commits it with the planner ledgers.
+The workflow does not profile live planner CPU or RAM. It records the
+configured host fingerprint and delivers it with the planner ledgers only when
+metadata delivery is requested.
 
 ## Local offline checks
 
@@ -192,6 +207,15 @@ population is uploaded. Raw diagnostics never enter this normal archive or
 the metadata Git request. Invalid evidence fails preparation while independently
 verified files remain recoverable. Cancellation skips new Git delivery while
 still attempting the report and recovery upload.
+
+No-delivery runs use that same exact metadata package. Their normal archive also
+retains the body-free response, health summary, effective policy and host JSON
+when recorded, each named with the numeric run and attempt. These receipts show
+the immutable code revision, profiles, settings and host used by the invocation.
+They do not include private stage batches or additional article body samples.
+Finish revalidates local metadata and upload confirmation before cleanup, but
+does not require a Git delivery receipt in this mode. Invalid local output or a
+failed upload retains temporary files.
 
 Readiness, graceful drain and forced-exit waits are finite settings under
 `supervision` in `config/feed-ingest-plan-service.json`; the

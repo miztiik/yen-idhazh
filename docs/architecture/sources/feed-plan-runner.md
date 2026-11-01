@@ -53,6 +53,10 @@ Always-run finalization then owns a separate
 It reuses the existing metadata adapter and the same process-lifetime code,
 without loading collection inputs or reopening in-memory planner batches.
 This keeps completed partial metadata available after the planner exits.
+The workflow's `deliver_metadata=false` mode instead validates those same
+completed local files without starting the delivery child. It retains verified
+metadata and execution receipts in the upload, reports delivery as not requested,
+and keeps collection, validation, upload and shutdown failures visible.
 
 The private startup pipe carries validated effective settings and planning
 policy, a relative temporary output root and scalar execution identity.

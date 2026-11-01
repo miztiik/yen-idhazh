@@ -14,7 +14,7 @@ Table A - scope and execution
 | A2 | Hard scope - in | Three dependent PRs: replace Undici completely with Impit and remove DNS-rebinding machinery; add shared domain/publisher pacing; verify the completed Impit-only pipeline from this branch. Firefox becomes primary. TypeScript contracts and JSONL/stage APIs follow the new design rather than retaining obsolete transport assumptions. |
 | A3 | Removal scope | Remove all address-pinning implementation from the TypeScript source-download path: project-controlled hostname DNS resolution, repeated DNS checks, validated-address transport arguments, socket pinning, injected resolver plumbing, dedicated tests and current documentation claims. Retain URL syntax, scheme, credential, explicit local/literal-address, redirect, identity and sanitizer checks. These retained checks do not provide DNS-rebinding protection. |
 | A4 | Delivery order | PR 1 -> PR 2 -> PR 3. PR 1 replaces and removes Undici in the same change. No migration switch, dual implementation, compatibility facade, fallback, strangler pattern or deferred removal. One completed successful Impit pipeline run from this branch satisfies live verification; no baseline comparison or mandatory second run. |
-| A5 | Plan status | AUTHOR-AND-STOP. This file does not install project dependencies, change application code, dispatch a workflow or open PRs. |
+| A5 | Plan status | Implementation and verification complete. The three dependent PRs await coordinated stack landing. |
 | A6 | ESCALATE triggers | 1. Before implementing Level-5 changes, complete design consultation and plan authorization. 2. If any repository rule, header policy, schema, API, test or transport abstraction restricts useful Impit capability, bring the exact conflict, proposed change, benefit and cost to the decision surface; do not disable the capability or preserve an obsolete limitation silently. 3. Stop before editing `CLAUDE.md` or `AGENTS.md`; neither is included. 4. Surface unresolved TLS verification, cancellation, byte-limit or redirect behavior. 5. Surface browser execution, robots-policy, proxy or feed-population changes. 6. If pacing would exceed the runner's six-hour job limit, report a viable schedule and its trade-off. |
 | A7 | Chosen strategy | Build the actual APIs around Impit's supported capabilities. Reuse useful boundaries, but replace obsolete signatures and assumptions instead of forcing native behavior through an Undici-shaped adapter. Keep feed parsing and extraction unchanged unless evidence requires a separately surfaced change. |
 | A8 | Execution | Execute per `docs/how-to/execute-a-plan.md`: one maintainer carries the plan; parallel N = 1 because the PRs share transport, configuration and tests; consult a persona where two implementation choices differ materially; honor the ESCALATE triggers. AUTHOR-AND-STOP until execution is authorized. |
@@ -41,7 +41,7 @@ Table C - PR-shaped tasks
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | C1 | 1 | Replace Undici completely with Impit and failure evidence | - | A | DONE | impit-transport-and-evidence | #1874 | - |
 | C2 | 2 | Space requests across domains and publishers | 1 | B | IN REVIEW | shared-source-pacing-c2 | #1879 | - |
-| C3 | 3 | Verify the completed Impit-only branch pipeline | 2 | C | PENDING | - | - | - |
+| C3 | 3 | Verify the completed Impit-only branch pipeline | 2 | C | DONE | branch-pipeline-verification | #1880 | - |
 
 ## 2 - Shared implementation contracts
 
@@ -205,8 +205,10 @@ Table H - rejected alternatives
 - **Scope:** Add safe branch-validation delivery controls, complete one successful actual Impit-only pipeline run from this branch, and close the plan only when no Undici or pinning implementation debris remains.
 - **Files touched:**
   - `.github/workflows/feed-ingest-plan-test.yml`
+  - `.github/workflows/source-transport-test.yml`
   - `services/feed-ingest-plan/scripts/feed-ingest-plan-workflow-inputs.ts`
   - `services/feed-ingest-plan/scripts/finalize-run-output.ts`
+  - `services/feed-ingest-plan/scripts/feed-ingest-plan-report.ts`
   - `services/feed-ingest-plan/scripts/feed-ingest-plan-artifacts.ts`
   - `services/feed-ingest-plan/scripts/feed-ingest-plan-delivery-result.ts`
   - `services/feed-ingest-plan/scripts/finish-run-output.ts`
@@ -229,6 +231,7 @@ Table H - rejected alternatives
   - `docs/architecture/sources/feed-plan-runner.md`
   - `docs/architecture/sources/feed-operator-api.md`
   - `docs/how-to/run-the-gates.md`
+  - `docs/how-to/run-feed-ingest-plan-test.md`
   - `TODO/20261101-browser-transport-request-pacing-plan.md`
 - **Acceptance gates:** Local before dispatch: native checks, workflow/finalization tests and actual supervised API/CLI fixture composition. CI: full candidate suite. Live: push the Impit-only candidate containing PRs 1 and 2 and no-delivery controls; dispatch `feed-ingest-plan-test.yml` with `--ref` naming this branch, diagnostic artifact enabled and metadata delivery disabled. Read its SHA/configuration, response/report, selected artifact, health, metadata-only failures, pacing/attempt evidence and shutdown. One completed successful run suffices; no baseline or mandatory second run. Failed runs require correction and another candidate run. Audit final source/probe dependencies, callers, tests and docs for debris; CI verifies the final merge candidate.
 - **Oracle:** This branch completes collection, parsing, selection, configured partitioning, local persistence, artifact verification and shutdown using Impit and pacing, with D16 identity and no metadata commit. Undici, migration switches, pinned dispatchers and resolver injection are already absent. Functional boundary tests remain green. This proves completed integration and clean removal, not universal publisher access.
