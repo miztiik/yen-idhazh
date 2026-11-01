@@ -233,6 +233,9 @@ No proxy, persistent cookie jar or weaker TLS fallback is enabled.
 Application deadlines own abort signals instead of a second native timeout.
 Aborting the request stops a decoded-byte cutoff or failed body read without
 letting cleanup replace its observed status and byte count.
+A proven decoded cutoff remains the primary failure if later cancellation or
+stream cleanup also fails. Combined errors retain the cleanup cause and any
+available safe code without exposing exception messages.
 The native stream must also release an unfinished response after abort,
 not only reject its JavaScript promise. The transport test keeps Impit under
 Bun and uses a genuine Node source to check response closure; a raw TCP

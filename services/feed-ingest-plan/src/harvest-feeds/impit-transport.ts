@@ -55,8 +55,10 @@ export function createImpitTransport(): HarvestTransport {
             bytes += chunk.value.byteLength;
             evidence = { ...evidence, decoded_bytes: bytes };
             if (bytes > input.max_body_bytes) {
-              await reader.cancel();
-              throw new BodyLimitError(response.status, input.max_body_bytes, bytes, evidence);
+              const limit = new BodyLimitError(response.status, input.max_body_bytes, bytes, evidence);
+              try { await reader.cancel(); }
+              catch (cleanup) { throw new AggregateError([limit, cleanup], "Body limit cleanup failed", { cause: limit }); }
+              throw limit;
             }
             chunks.push(chunk.value);
           }

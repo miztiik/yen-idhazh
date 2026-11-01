@@ -1,20 +1,18 @@
 /** Fetch safe targets while retaining robots evidence and honoring article enforcement. */
 import robotsParser from "robots-parser";
-import { constants as osConstants } from "node:os";
-import { HarvestDiagnosticsSchema, FetchAttemptSchema } from "@idhazh/common-contracts";
+import { FetchAttemptSchema } from "@idhazh/common-contracts";
 import type { FeedIngestConfig, HttpResponseEvidence } from "@idhazh/common-contracts";
-import { NetworkError, TimeoutError, DecodingError, ProtocolError, StreamError } from "impit";
 import type { FetchFailure } from "./harvest-types";
 import type { ExtractionControls } from "./load-harvest-inputs";
-import { BodyLimitError, ResponseReadError } from "./transport";
+import { BodyLimitError, ResponseReadError, readBodyLimitEvidence } from "./transport";
+import { classifyTransportFailure, readTransportErrorCode } from "./classify-transport-failure";
 import { createImpitTransport } from "./impit-transport";
 import type { BodyLimitEvidence, HarvestTransport, TransportResponse } from "./transport";
-import { UnsafeTargetError, validateTargetName } from "./safe-target";
+import { validateTargetName } from "./safe-target";
 import { diagnosticUrl } from "../logging/diagnostic-url";
 import type { FetchAttempt } from "../api/operation-contracts";
 import { utcTimestamp } from "./harvest-types";
 import { cleanArticleUrl } from "./article-url";
-import { InvalidArticleUrlError } from "./article-url";
 
 export type FetchAttemptMeasurement = {
   attempt: FetchAttempt; occurred_at: string; outcome: "success" | "failed";
@@ -74,50 +72,6 @@ export function parseRobots(body: string, origin: string) {
 
 export function robotsPermits(document: ReturnType<typeof parseRobots>, url: string): boolean {
   return document.isAllowed(decodeUnreserved(url), "*") === true;
-}
-
-function transportFailure(error: unknown, signal: AbortSignal): FetchFailure {
-  if (error instanceof ResponseReadError) {
-    if (signal.aborted || error.cause instanceof TimeoutError) return "timeout";
-    return error.cause instanceof BodyLimitError ? "body-too-large" : "network";
-  }
-  if (error instanceof UnsafeTargetError || error instanceof InvalidArticleUrlError) return "unsafe-target";
-  if (signal.aborted) return "timeout";
-  if (error instanceof BodyLimitError) return "body-too-large";
-  if (error instanceof TimeoutError) return "timeout";
-  if (error instanceof NetworkError || error instanceof ProtocolError || error instanceof DecodingError
-    || error instanceof StreamError) return "network";
-  const cause = error instanceof Error && error.cause instanceof Error ? error.cause : error;
-  if (cause && typeof cause === "object" && "code" in cause && typeof cause.code === "string") {
-    if (["ENOTFOUND", "EAI_AGAIN", "ENODATA"].includes(cause.code)) return "dns";
-    if (cause.code === "ETIMEDOUT") return "timeout";
-    return "network";
-  }
-  throw error;
-}
-
-function transportErrorCode(error: unknown): string | null {
-  const cause = error instanceof Error && error.cause instanceof Error ? error.cause : error;
-  // Available OS/TLS codes only; native exception messages may contain secrets.
-  if (cause && typeof cause === "object" && "code" in cause && typeof cause.code === "string") {
-    if (!(cause.code in osConstants.errno)
-      && !["ENOTFOUND", "EAI_AGAIN", "ENODATA"].includes(cause.code)
-      && !/^(ERR_TLS_|ERR_SSL_|CERT_|DEPTH_|SELF_SIGNED_|UNABLE_TO_)/.test(cause.code)) return null;
-    const parsed = HarvestDiagnosticsSchema.shape.error_code.safeParse(cause.code);
-    if (parsed.success) return parsed.data;
-  }
-  return null;
-}
-
-function bodyLimitEvidence(error: unknown): BodyLimitEvidence | undefined {
-  if (error instanceof ResponseReadError) return bodyLimitEvidence(error.cause);
-  if (error instanceof BodyLimitError) {
-    return {
-      configured_limit_bytes: error.configured_limit_bytes,
-      observed_at_least_bytes: error.observed_at_least_bytes,
-    };
-  }
-  return undefined;
 }
 
 async function pause(milliseconds: number, signal: AbortSignal): Promise<void> {
@@ -183,11 +137,11 @@ export function createPermittedFetcher(
         failed = result.failure !== null;
         classified = true;
       } catch (error) {
-        const bodyLimit = bodyLimitEvidence(error);
+        const bodyLimit = readBodyLimitEvidence(error);
         result = {
-          value: null, failure: transportFailure(error, attemptSignal),
+          value: null, failure: classifyTransportFailure(error, attemptSignal),
           http_status: error instanceof BodyLimitError || error instanceof ResponseReadError ? error.http_status : null,
-          error_code: transportErrorCode(error),
+          error_code: readTransportErrorCode(error),
           response_evidence: error instanceof ResponseReadError || error instanceof BodyLimitError ? error.response_evidence : null,
           ...(bodyLimit === undefined ? {} : { body_limit: bodyLimit }),
         };
@@ -217,7 +171,7 @@ export function createPermittedFetcher(
         const waiting = performance.now();
         try {
           await pause(controls.backoff_initial_seconds * 1000 * controls.backoff_multiplier ** attempt, signal);
-        } catch (error) { return { ...result, value: null, failure: transportFailure(error, signal) }; }
+        } catch (error) { return { ...result, value: null, failure: classifyTransportFailure(error, signal) }; }
         finally { evidence.backoff_ms = Math.round(performance.now() - waiting); }
       }
     }
@@ -327,11 +281,11 @@ export function createPermittedFetcher(
         target = url.href;
       }
       catch (error) {
-        const failure = transportFailure(error, signal);
+        const failure = classifyTransportFailure(error, signal);
         const attempt = FetchAttemptSchema.parse({
           phase: "validation", sequence: attempts.rows.length, retry: 0,
           duration_ms: Math.round(performance.now() - started), backoff_ms: 0, retry_total_ms: 0,
-          http_status: null, failure, error_code: transportErrorCode(error),
+          http_status: null, failure, error_code: readTransportErrorCode(error),
         });
         attempts.rows.push(attempt);
         await attempts.emit?.({
