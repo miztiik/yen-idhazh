@@ -424,7 +424,7 @@ Three consequences, stated plainly:
 - [`20260910-24-day-sharded-ledgers-plan.md`](20260910-24-day-sharded-ledgers-plan.md) - the ledger work the same conversation split out.
 - [`20260910-25-placement-plan.md`](20260910-25-placement-plan.md) - the placement work the same conversation split out; section 4's synthesis is the finding it should be read against.
 - [`20260911-26-retire-prerender-plan.md`](20260911-26-retire-prerender-plan.md) - the plan that took the prerender finding in section 8 and, having read the tree, ruled the opposite way on half of it.
-- [`20260902-visual-planner-pseudo-plan.md`](20260902-visual-planner-pseudo-plan.md) - decision O43, which section 2 amends.
+- [Summary and plan call](../docs/architecture/summarize/prompt.md#the-second-call-writes-this-summary-and-the-article-is-read-once) - the current two-call behavior.
 - [`../docs/reference/pipeline-cost.md`](../docs/reference/pipeline-cost.md) - the instrument log section 3 cites rather than restates.
 - [`../docs/architecture/contracts/determinism.md`](../docs/architecture/contracts/determinism.md) - the page the determinism decision rewrites.
 - [`../CLAUDE.md`](../CLAUDE.md) - section 0 (maintainer approval), section 0a (the judge ban), Guardrail #10 (a number carries its hardware, date and spread).

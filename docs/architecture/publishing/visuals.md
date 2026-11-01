@@ -1,6 +1,6 @@
 # Visual planning and rendering
 
-**Last Updated**: 2026-10-29
+**Last Updated**: 2026-11-01
 
 How an item gets a chart, a whowhat grid or - most of the time - nothing at
 all: which pass decides, which gate refuses, and what every refusal is called.
@@ -95,11 +95,14 @@ This is the whole safety design, and it is structural rather than instructed.
 1. The extractor pulls every quantity out of the article text with a regex, and gives each one an
  index and a unit.
 2. The model is shown that indexed menu and asked to choose bars **by index**.
-3. The spec is built here in Python from the chosen indices.
+3. The spec is built here in Python from the chosen indices. Any derived value
+   is arithmetic over source-backed elements through the closed, provenance-
+   carrying rules in [where every drawn figure came from](where-every-drawn-figure-came-from.md).
 
-A chart value that is not in the article is therefore unreachable, not merely unlikely. The Row #8
-oracle - "every value in a rendered chart is present in the source article" - is a property of the
-shape rather than a hope about the prompt, and the test asserts it directly.
+A model-authored value is therefore unreachable, not merely unlikely. A chart
+may show a derived value that is not literal source text only when code computes
+it from those elements and preserves its provenance. The source-or-derived
+boundary is a property of the shape, not a hope about the prompt.
 
 What the extractor refuses to put on that menu in the first place, and what the four functions are
 that may reach a number the article did not write, are in
@@ -309,14 +312,12 @@ described a chart that no longer exists.
 
 ## The whole flow, drawn, so nobody has to infer it again
 
-**This is the target state and it is drawn because inferring it is what went wrong.** The two
-drawings it extends are in
-[`../../../TODO/20260902-visual-planner-pseudo-plan.md`](../../../TODO/20260902-visual-planner-pseudo-plan.md):
-section 1a draws the pipeline end to end, and section 10.1b-m zooms into stage 1, where code and the
-model divide the work. Neither drawing reached the reader's browser, because when they were made the
-pipeline still drew the picture. This one carries the chain all the way to the screen. Same
-conventions: **a box carries a name and the one assertion an arrow cannot carry**, and every field
-list lives in the table below, keyed by node id.
+**This is the current path from article text through extraction and visual
+planning to the reader.** The
+[extraction page](../extraction/elements.md) defines how source-backed elements
+are found, labelled and anchored. **A box carries a name and the one assertion
+an arrow cannot carry**, and every field list lives in the table below, keyed by
+node id.
 
 ```mermaid
 %%{init: {"theme":"base","themeVariables":{"fontSize":"15px","fontFamily":"ui-monospace, SFMono-Regular, Menlo, Consolas, monospace","background":"#ffffff","mainBkg":"#ffffff","edgeLabelBackground":"#ffffff","labelBackground":"#ffffff","textColor":"#0b1020","titleColor":"#0b1020","nodeTextColor":"#0b1020","secondaryTextColor":"#0b1020","tertiaryTextColor":"#0b1020","lineColor":"#6e7781","primaryColor":"#eef2ff","primaryBorderColor":"#4c6ef5","primaryTextColor":"#0b1020","clusterBkg":"#f8f9fb","clusterBorder":"#c3c8d0"}}}%%

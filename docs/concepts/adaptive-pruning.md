@@ -1,6 +1,6 @@
 # Adaptive Pruning
 
-**Last Updated**: 2026-10-29
+**Last Updated**: 2026-11-01
 
 One question, asked of every file this project writes:
 
@@ -274,9 +274,8 @@ using them; the measurement rules are in
 percent of the cap. One spread on the daily rate carried across the same window
 is 47.6 MiB, which is 5.1 months of window - the instrument is five times too
 blunt to resolve a two-month difference, so no number here can separate them.
-That leaves the maintainer's 13 (O8 and C20 of
-[../../TODO/20260902-visual-planner-pseudo-plan.md](../../TODO/20260902-visual-planner-pseudo-plan.md)),
-now derived rather than asserted. Carmack, 2026-09-13.
+The current 13-month window is policy, not a measured optimum. Its committed
+setting is in [`config/gardener/visual-prune.json`](../../config/gardener/visual-prune.json).
 
 **14 was available and was refused, because its reason does not travel.**
 Fourteen is the count of month shards a console read can open
