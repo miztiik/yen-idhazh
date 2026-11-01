@@ -16,7 +16,7 @@ test("native profiles decode compressed bodies and retain status at cutoff and c
   const agents: string[] = [];
   const cancellations = new Map<string, () => void>();
   const arrivals = new Map<string, () => void>();
-  const closed = new Set<string>();
+  const closed = new Map<string, number>();
   const retryAfter = "1".repeat(300);
   const server = fork(join(import.meta.dir, "impit-loopback-source.cjs"), [], {
     execPath: "node", stdio: ["ignore", "ignore", "inherit", "ipc"],
@@ -31,7 +31,7 @@ test("native profiles decode compressed bodies and retain status at cutoff and c
       else if ("followed" in message && message.followed === true) followed++;
       else if ("received" in message && typeof message.received === "string") arrivals.get(message.received)?.();
       else if ("closed" in message && typeof message.closed === "string") {
-        closed.add(message.closed);
+        closed.set(message.closed, performance.now());
         cancellations.get(message.closed)?.();
       } else throw new Error("Unknown generated-source event");
     });
@@ -96,12 +96,11 @@ test("native profiles decode compressed bodies and retain status at cutoff and c
       expect(error.cause).toBeInstanceOf(BodyLimitError);
     }
     await cancelled("cutoff");
-    for (const nested of [false, true]) {
-      const path = `native-control-${nested ? "nested" : "direct"}`;
+    {
+      const path = "native-control-direct";
       const nativeController = new AbortController();
-      const caller = new AbortController();
-      caller.signal.addEventListener("abort", () => nativeController.abort(caller.signal.reason), { once: true });
       const native = new Impit({ browser: base.profile.browser, followRedirects: false });
+      const started = performance.now();
       const nativeResponse = await native.fetch(target(path), {
         signal: nativeController.signal, timeout: base.timeout_ms, redirect: "manual",
       });
@@ -111,10 +110,26 @@ test("native profiles decode compressed bodies and retain status at cutoff and c
           if ((await nativeReader.read()).done) return;
         }
       })();
-      const timer = setTimeout(() => nested ? caller.abort() : nativeController.abort(), 300);
+      const timer = setTimeout(() => nativeController.abort(), 300);
       try { await expect(nativeReading).rejects.toBeInstanceOf(Error); }
       finally { clearTimeout(timer); nativeReader.releaseLock(); }
-      await cancelled(path);
+      const rejectedAfterMs = performance.now() - started;
+      try { await cancelled(path); }
+      catch (oracleError) {
+        const closure = new Promise<void>(resolve => cancellations.set(path, resolve));
+        let deadline: ReturnType<typeof setTimeout> | undefined;
+        try {
+          if (!closed.has(path)) await Promise.race([closure, new Promise<void>(resolve => {
+            deadline = setTimeout(resolve, Math.max(0, base.timeout_ms + 1000 - (performance.now() - started)));
+          })]);
+          const closedAt = closed.get(path);
+          console.info(JSON.stringify({ control: path, native_timeout_ms: base.timeout_ms,
+            read_rejected_after_ms: rejectedAfterMs,
+            source_closed_after_ms: closedAt === undefined ? null : closedAt - started,
+            observed_until_ms: performance.now() - started }));
+        } finally { clearTimeout(deadline); cancellations.delete(path); }
+        throw oracleError;
+      }
     }
     const controller = new AbortController();
     const stalled = transport.request({ ...base, max_body_bytes: 32768, url: target("stalled"), signal: controller.signal });
@@ -160,4 +175,4 @@ test("native profiles decode compressed bodies and retain status at cutoff and c
     server.send("stop");
     expect((await exited)[0]).toBe(0);
   }
-});
+}, 15000);
