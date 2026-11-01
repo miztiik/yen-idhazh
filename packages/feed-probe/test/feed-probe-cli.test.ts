@@ -245,7 +245,6 @@ test("real core pass and report exit zero with recorded transport", async () => 
   const boundary = await recordedBoundary({
     "https://fixture.test/robots.txt": { status: 404, body: "" },
     "https://fixture.test/feed.xml": { status: 200, body: feed },
-    "https://fixture.test/robots.txt": { status: 404, body: "" },
     "https://fixture.test/article-one": { status: 200, body: article },
     "https://fixture.test/article-two": { status: 200, body: article },
     "https://fixture.test/article-three": { status: 200, body: article },
