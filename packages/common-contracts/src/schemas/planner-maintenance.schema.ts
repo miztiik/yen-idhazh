@@ -111,3 +111,27 @@ export const PlannerMaintenanceResultSchema = z.discriminatedUnion("status", [
   ],
 });
 export type PlannerMaintenanceResult = z.infer<typeof PlannerMaintenanceResultSchema>;
+
+// Failure vocabulary is a wire protocol, not operator-tunable behavior.
+export const PlannerMaintenanceFailureStageSchema = z.enum([
+  "decode-request", "validate-request", "capture-members", "read-sources",
+  "verify-sources", "settle-rows", "validate-staging", "write-compact",
+  "verify-output", "verify-sources-after-write", "validate-result",
+]);
+export const PlannerMaintenanceFailureCodeSchema = z.enum([
+  "invalid-json", "invalid-contract", "missing-local-member", "malformed-member",
+  "permission-denied", "no-space", "io-error", "unexpected-error",
+]);
+export const PLANNER_MAINTENANCE_FAILURE_VERSION = "2026-11-01" as const;
+export const PlannerMaintenanceFailureSchema = z.strictObject({
+  version: z.literal(PLANNER_MAINTENANCE_FAILURE_VERSION),
+  status: z.literal("failed"),
+  stage: PlannerMaintenanceFailureStageSchema,
+  code: PlannerMaintenanceFailureCodeSchema,
+}).meta({
+  version: PLANNER_MAINTENANCE_FAILURE_VERSION,
+  changelog: [
+    { version: PLANNER_MAINTENANCE_FAILURE_VERSION, change: "Declare content-free CLI failure stages and codes on stderr." },
+  ],
+});
+export type PlannerMaintenanceFailure = z.infer<typeof PlannerMaintenanceFailureSchema>;
