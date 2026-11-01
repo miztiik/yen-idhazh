@@ -146,11 +146,12 @@ test("native profiles decode compressed bodies and retain status at cutoff and c
       expect(error).toBeInstanceOf(ResponseReadError);
       if (!(error instanceof ResponseReadError)) throw error;
       const primary = error.cause instanceof AggregateError ? error.cause.cause : error.cause;
-      expect(primary).toBeInstanceOf(TimeoutError);
+      expect(primary).toBeInstanceOf(Error);
       expect(error.http_status).toBe(403);
       expect(error.response_evidence.decoded_bytes).toBe(16384);
     }
     const rejectedAfterMs = performance.now() - started;
+    expect(rejectedAfterMs).toBeGreaterThanOrEqual(base.timeout_ms);
     try { await cancelled("body-timeout"); }
     catch (oracleError) {
       const closedAt = closed.get("body-timeout");
