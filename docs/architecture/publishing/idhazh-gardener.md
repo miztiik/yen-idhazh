@@ -456,6 +456,15 @@ hold text fetched from the open web (Guardrail #11), so no event field holds
 it. A line that another module logged with an exception keeps its message and
 names the exception the same way.
 
+The planner compaction adapter also logs a validated writer stage and failure
+code before raising its fixed Python error. These values come from the
+TypeScript CLI's content-free failure record, not from exception text.
+Invalid records, including runtime startup traces, are discarded and logged
+as `invalid-failure-detail`. The protocol and fixed values are defined in
+[ledger-compaction.md](ledger-compaction.md). Task outcome and fault handling
+remain unchanged; the extra line explains which writer step failed without
+putting source data or paths in a log.
+
 **The shard says how it ended once, in `shard-published`.** The publisher logs
 it whatever ended the shard: how its commit came to rest on main, as a landing
 word, or why it never did, as one of `listing-failed`, `check-refused` and

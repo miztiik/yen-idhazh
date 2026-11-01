@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
 import re
 import shutil
 import stat
@@ -31,6 +32,65 @@ _REFUSALS: Final = frozenset({
 })
 _WRITER_DIRECTORY: Final = Path(__file__).resolve().parents[3] / "packages" / "ledger-file-writer"
 _WRITER_CLI: Final = _WRITER_DIRECTORY / "src" / "planner-maintenance-cli.ts"
+# Transient wire vocabulary, bound to the TypeScript schema by the diagnostic tests.
+_FAILURE_STAGES: Final = frozenset({
+    "decode-request", "validate-request", "capture-members", "read-sources",
+    "verify-sources", "settle-rows", "validate-staging", "write-compact",
+    "verify-output", "verify-sources-after-write", "validate-result",
+})
+_FAILURE_CODES: Final = frozenset({
+    "invalid-json", "invalid-contract", "missing-local-member", "malformed-member",
+    "permission-denied", "no-space", "io-error", "unexpected-error",
+})
+_FAILURE_VERSION: Final = "2026-11-01"
+_FAILURE_DETAIL_LIMIT: Final = len(json.dumps({
+    "version": _FAILURE_VERSION, "status": "failed",
+    "stage": max(_FAILURE_STAGES, key=len), "code": max(_FAILURE_CODES, key=len),
+})) + 1
+logger = logging.getLogger(__name__)
+
+
+class PlannerMaintenanceFailureError(RuntimeError):
+    """A failed writer exit with only validated, content-free diagnostic values."""
+
+    def __init__(self, detail: tuple[str, str] | None) -> None:
+        super().__init__("planner maintenance adapter failed")
+        self.stage = None if detail is None else detail[0]
+        self.code = "invalid-failure-detail" if detail is None else detail[1]
+
+
+def _failure_detail(text: str) -> tuple[str, str] | None:
+    """Discard all subprocess text unless it is exactly the safe failure protocol."""
+    # The fixed vocabulary cannot produce a longer record.
+    if len(text) > _FAILURE_DETAIL_LIMIT:
+        return None
+    try:
+        value = json.loads(text)
+    except json.JSONDecodeError:
+        return None
+    if not isinstance(value, dict) or set(value) != {"version", "status", "stage", "code"}:
+        return None
+    stage, code = value["stage"], value["code"]
+    if (
+        value["version"] != _FAILURE_VERSION
+        or value["status"] != "failed"
+        or not isinstance(stage, str) or stage not in _FAILURE_STAGES
+        or not isinstance(code, str) or code not in _FAILURE_CODES
+    ):
+        return None
+    return stage, code
+
+
+def _check_writer_exit(completed: subprocess.CompletedProcess[str]) -> None:
+    """Report only validated diagnostics when the real writer exits unsuccessfully."""
+    if completed.returncode == 0:
+        return
+    failure = PlannerMaintenanceFailureError(_failure_detail(completed.stderr))
+    logger.error(
+        "planner maintenance adapter failed: stage=%s code=%s",
+        failure.stage, failure.code,
+    )
+    raise failure
 
 
 class PlannerMaintenanceRefusalError(ValueError):
@@ -318,12 +378,7 @@ def maintain_period(
             text=True,
             check=False,
         )
-        if completed.returncode != 0:
-            detail = completed.stderr.strip()
-            raise RuntimeError(
-                f"planner maintenance adapter exited with status {completed.returncode}"
-                + (f": {detail}" if detail else "")
-            )
+        _check_writer_exit(completed)
         try:
             raw_result = json.loads(completed.stdout)
         except json.JSONDecodeError as refusal:

@@ -230,6 +230,31 @@ revision control. Native validation, source sizes/digests, target guards and
 exact deletion checks remain. Each path retains its first loaded byte size
 and SHA256 for the whole period. A compact reused by several days must match
 both on every read; a rewrite cannot replace that proof or mix file versions.
+On an unexpected writer failure, the CLI exits 1, leaves stdout empty, and
+writes one JSON record to stderr: `version`, `status: "failed"`, `stage` and
+`code`. The separate transient failure schema in
+`packages/common-contracts/src/schemas/planner-maintenance.schema.ts` owns
+this wire vocabulary. Successful and refused receipts stay unchanged; this
+diagnostic record is not saved as planner state.
+
+Stages identify request decoding/validation, member capture, source reading,
+source verification, row settlement, staging validation, compact writing,
+output verification, source verification after writing, or result validation.
+Their exact values are `decode-request`, `validate-request`, `capture-members`,
+`read-sources`, `verify-sources`, `settle-rows`, `validate-staging`,
+`write-compact`, `verify-output`, `verify-sources-after-write` and
+`validate-result`. Codes are `invalid-json`, `invalid-contract`,
+`missing-local-member`, `malformed-member`, `permission-denied`, `no-space`,
+`io-error` and `unexpected-error`. Recognized filesystem error codes and typed
+validation errors select a code; unknown errors remain `unexpected-error`.
+No exception message, stack, article value or path is copied into the record.
+Python checks the exact field set, version, fixed vocabulary and bounded
+record length before reporting the stage and code in a gardener log line.
+An absent, invalid or startup-error record is discarded and reported as
+`invalid-failure-detail`, with no stage. The test
+`planner-maintenance-diagnostics.test.ts` binds this small Python vocabulary
+copy to the TypeScript schema and exercises real CLI failures.
+
 Only the final shard publisher uses Git and
 checks planner replacements/deletions against the supplied initial identity.
 The row identities and missing-data rules are

@@ -7,13 +7,14 @@ import {
   PlannerMaintenanceRequestSchema, PlannerMaintenanceResultSchema,
 } from "@idhazh/common-contracts";
 import type {
-  PlannerMaintenanceRequest, PlannerMaintenanceResult,
+  PlannerMaintenanceRequest, PlannerMaintenanceResult, PlannerMaintenanceFailure,
 } from "@idhazh/common-contracts";
 import { PLANNER_CONTRACTS } from "./registration";
 import { readPlannerParquet } from "./read-planner-file";
 import { persistLedger } from "./persist-ledger";
 import { compactPeriodFile, readPlannerDayFiles, regularPlannerPath } from "./read-planner-day-files";
 import type { LedgerPeriod, LedgerRowContract } from "./ledger-types";
+import { PlannerMaintenanceFailureError } from "./planner-maintenance-failure";
 
 type SourceFile = Extract<PlannerMaintenanceResult, { status: "written" }>["input_files"][number];
 type RefusalReason = Extract<PlannerMaintenanceResult, { status: "refused" }>["reason"];
@@ -175,18 +176,27 @@ function result(
 }
 
 export async function maintainPlannerPeriod(root: string, rawRequest: unknown): Promise<PlannerMaintenanceResult> {
-  const request = PlannerMaintenanceRequestSchema.parse(rawRequest);
-  switch (request.ledger) {
-    case "discovered-articles": return maintainPeriod(root, request, PLANNER_CONTRACTS["discovered-articles"]);
-    case "selected-articles": return maintainPeriod(root, request, PLANNER_CONTRACTS["selected-articles"]);
-    case "rejected-articles": return maintainPeriod(root, request, PLANNER_CONTRACTS["rejected-articles"]);
-    case "feed-health-state": return maintainPeriod(root, request, PLANNER_CONTRACTS["feed-health-state"]);
-    case "plan-runs": return maintainPeriod(root, request, PLANNER_CONTRACTS["plan-runs"]);
+  let stage: PlannerMaintenanceFailure["stage"] = "validate-request";
+  const setStage = (value: PlannerMaintenanceFailure["stage"]) => { stage = value; };
+  try {
+    const request = PlannerMaintenanceRequestSchema.parse(rawRequest);
+    switch (request.ledger) {
+      case "discovered-articles": return await maintainPeriod(root, request, PLANNER_CONTRACTS["discovered-articles"], setStage);
+      case "selected-articles": return await maintainPeriod(root, request, PLANNER_CONTRACTS["selected-articles"], setStage);
+      case "rejected-articles": return await maintainPeriod(root, request, PLANNER_CONTRACTS["rejected-articles"], setStage);
+      case "feed-health-state": return await maintainPeriod(root, request, PLANNER_CONTRACTS["feed-health-state"], setStage);
+      case "plan-runs": return await maintainPeriod(root, request, PLANNER_CONTRACTS["plan-runs"], setStage);
+    }
+  } catch (error) {
+    throw new PlannerMaintenanceFailureError(stage, error,
+      error instanceof MaintenanceRefusal && (error.reason === "missing-local-member"
+        || error.reason === "malformed-member") ? error.reason : undefined);
   }
 }
 
 async function maintainPeriod<T extends object>(
   root: string, request: PlannerMaintenanceRequest, rowContract: LedgerRowContract<T>,
+  setStage: (stage: PlannerMaintenanceFailure["stage"]) => void,
 ): Promise<PlannerMaintenanceResult> {
   const registration = request.registry_entry;
   const settings = request.ledger_settings;
@@ -198,7 +208,12 @@ async function maintainPeriod<T extends object>(
   const sources = new Map<string, SourceFile>();
   const rows: T[] = [];
   let carriedOver = false;
+  const receipt = (value: Record<string, unknown>) => {
+    setStage("validate-result");
+    return result(request, value);
+  };
   try {
+    setStage("capture-members");
     const captured = await captureMembers(root, request, days);
     const rawPathsByDay = new Map(
       days.map(day => [day, [...(captured.raw.get(day) ?? [])].sort()] as const),
@@ -213,6 +228,7 @@ async function maintainPeriod<T extends object>(
     carriedOver = [...rawPathsByDay.values()].reduce(
       (count, paths) => count + paths.length, 0,
     ) > selectedRawPaths.size;
+    setStage("read-sources");
     for (const day of days) {
       for (const candidate of ["yearly", "monthly", "daily"] as const) {
         const covers = candidate === "yearly" ? day.slice(0, 4)
@@ -230,7 +246,7 @@ async function maintainPeriod<T extends object>(
           throw new MaintenanceRefusal("malformed-member", path);
         }
         if (compactRank(candidate) > compactRank(request.period)) {
-          return result(request, { status: "unchanged", reason: "higher-precedence-compact" });
+          return receipt({ status: "unchanged", reason: "higher-precedence-compact" });
         }
         rows.push(...file.rows.filter(row => rowIsWithin(row, "daily", day)));
         break;
@@ -245,32 +261,35 @@ async function maintainPeriod<T extends object>(
         rows.push(...file.rows);
       }
     }
+    setStage("verify-sources");
     await verifySources(root, sources, targetPath);
   } catch (error) {
     if (error instanceof MaintenanceRefusal) {
-      return result(request, { status: "refused", reason: error.reason, path: error.path });
+      return receipt({ status: "refused", reason: error.reason, path: error.path });
     }
     if (error instanceof z.ZodError || error instanceof Error && error.name === "PlannerLedgerFileError") {
-      return result(request, { status: "refused", reason: "malformed-member", path: null });
+      return receipt({ status: "refused", reason: "malformed-member", path: null });
     }
-    if (isMissing(error)) return result(request, { status: "refused", reason: "missing-local-member", path: null });
+    if (isMissing(error)) return receipt({ status: "refused", reason: "missing-local-member", path: null });
     throw error;
   }
   const targetSha = sources.get(targetPath)?.file_sha256 ?? null;
-  if (rows.length === 0) return result(request, { status: "empty" });
+  if (rows.length === 0) return receipt({ status: "empty" });
   let settled: T[];
   try {
+    setStage("settle-rows");
     const records = (await import("./row-identity")).settlePlannerRows(rows.map(rowRecord), request.ledger);
     settled = records.map(record => rowContract.schema.parse(record));
   } catch (error) {
     if (error instanceof Error && error.message.startsWith("conflicting duplicate")) {
-      return result(request, { status: "refused", reason: "malformed-member", path: null });
+      return receipt({ status: "refused", reason: "malformed-member", path: null });
     }
     throw error;
   }
   if (targetSha !== null && [...sources.keys()].every(path => path === targetPath)) {
-    return result(request, { status: "unchanged", reason: "already-current" });
+    return receipt({ status: "unchanged", reason: "already-current" });
   }
+  setStage("validate-staging");
   const stagingRoot = resolve(root, request.staging_root);
   const stage = await lstat(stagingRoot).catch(error => {
     if (isMissing(error)) throw new MaintenanceRefusal("missing-local-member", request.staging_root);
@@ -284,6 +303,7 @@ async function maintainPeriod<T extends object>(
     throw new MaintenanceRefusal("malformed-member", request.staging_root);
   }
   const outputRoot = resolve(stagingRoot, "state");
+  setStage("write-compact");
   const persisted = await persistLedger({
     ledger: request.ledger,
     rowContract,
@@ -294,9 +314,10 @@ async function maintainPeriod<T extends object>(
     rows: settled,
   });
   if (persisted.status !== "written" || persisted.files.length !== 1) {
-    if (persisted.status === "empty") return result(request, { status: "empty" });
+    if (persisted.status === "empty") return receipt({ status: "empty" });
     throw new Error("Planner compact writer returned no file for a nonempty period");
   }
+  setStage("verify-output");
   const output = persisted.files[0]!;
   const relativeTarget = output.path;
   if (relativeTarget !== targetPath.replace(/^state\//, "")) {
@@ -305,15 +326,16 @@ async function maintainPeriod<T extends object>(
   const targetBytes = await readFile(resolve(outputRoot, ...relativeTarget.split("/")));
   const targetFileSha = createHash("sha256").update(targetBytes).digest("hex");
   try {
+    setStage("verify-sources-after-write");
     await verifySources(root, sources, targetPath);
   } catch (error) {
     if (error instanceof MaintenanceRefusal) {
-      return result(request, { status: "refused", reason: error.reason, path: error.path });
+      return receipt({ status: "refused", reason: error.reason, path: error.path });
     }
     throw error;
   }
   const deletePaths = [...sources.keys()].filter(path => path !== targetPath);
-  return result(request, {
+  return receipt({
     status: "written",
     target_path: targetPath,
     output_path: `${request.staging_root}/state/${relativeTarget}`,
