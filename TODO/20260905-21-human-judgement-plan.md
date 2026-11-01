@@ -1,13 +1,13 @@
 # 21 - Human judgement
 
-**Last Updated**: 2026-10-31
-**Level**: 2 for row 2 (a bounded report over an existing ledger). Row 4 is not execution-ready.
+**Last Updated**: 2026-11-01
+**Status**: CLOSED. Rows 1 and 2 are delivered. Rows 3, 4, 5 and 6 are abandoned.
+**Level**: 2 for the delivered report over an existing ledger.
 
-**Current scope**: No human input. Rows 3, 5 and 6 are abandoned; their original
-descriptions below are retained for context, not execution. Row 2 produces
-reports from existing measurements, with no new quality judge or ledger.
-Row 4 still needs a machine-only design; its original score-weight fitting
-depends on human comparisons that will not be collected.
+**Current scope**: No work remains. The delivered review artifact and
+noninteractive Parquet report are unchanged. Human review modes,
+weight/prior fitting, automatic worked-example selection, comprehension
+studies and reviewer phases are abandoned.
 
 **Chain**: delivered [visual-attempt console views](../docs/architecture/publishing/what-the-pipelines-route-draws.md#visual-attempt-views-read-the-unpublished-record-at-build-time) | next [`20260905-22-distil-and-close-plan.md`](20260905-22-distil-and-close-plan.md).
 **Reference**: [`20260902-visual-planner-pseudo-plan.md`](20260902-visual-planner-pseudo-plan.md) - O12, O16, O41, rows 64, 65, 66, 67, 68, sections 12.10, 12.13 G34, G38, 12.14 G41, G42, G44, E1, M6.
@@ -46,7 +46,7 @@ Execute per docs/how-to/execute-a-plan.md: one maintainer carries the plan and d
 | 1 | A place to look at a visual, that never ships with the site | - | A | DONE | p21-1 | #655 | worker |
 | 2 | Existing measurements in a machine-written report | - | B | DONE | existing-measurements-report | - | - |
 | 3 | Two ways to ask, and the question locked before the verdict | 2 | C | ABANDONED | - | - | - |
-| 4 | Weights that cannot quietly get worse | TBD - machine-only design | D | PENDING | - | - | - |
+| 4 | Weights that cannot quietly get worse | - | D | ABANDONED | - | - | - |
 | 5 | Did the reader actually understand it faster | 4 | E | ABANDONED | - | - | - |
 | 6 | How this loop knows when it is done | 5 | F | ABANDONED | - | - | - |
 
@@ -140,6 +140,9 @@ Execute per docs/how-to/execute-a-plan.md: one maintainer carries the plan and d
 ---
 
 ## 5. Row #4 - Weights that cannot quietly get worse
+
+**Status**: ABANDONED. No weight/prior fitting or automatic worked-example
+selection will be built under this plan.
 
 - **Scope:** The fitter, its four guardrails and its release rule.
 - **Files touched:** `backend/utilities/fit_weights.py` (new), `backend/utilities/fit_priors.py` (new), `backend/utilities/select_exemplars.py` (new), `weights.json` / `priors.json` / `exemplars.json`, `backend/idhazh/evals/**`, `config/idhazh.json`, `backend/tests/**`, `docs/concepts/evaluation.md`
