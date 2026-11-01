@@ -48,14 +48,7 @@ export function createImpitTransport(): HarvestTransport {
         const reader = response.body.getReader();
         const chunks: Uint8Array[] = [];
         let bytes = 0;
-        let cancellation: Promise<void> | undefined;
-        const abort = () => {
-          cancellation ??= reader.cancel();
-          void cancellation.then(
-            () => controller.abort(input.signal.reason),
-            () => controller.abort(input.signal.reason),
-          );
-        };
+        const abort = () => controller.abort(input.signal.reason);
         try {
           if (input.signal.aborted) {
             try { await reader.cancel(); }
@@ -67,9 +60,7 @@ export function createImpitTransport(): HarvestTransport {
           input.signal.addEventListener("abort", abort, { once: true });
           if (input.signal.aborted) abort();
           for (;;) {
-            input.signal.throwIfAborted();
             const chunk = await reader.read();
-            input.signal.throwIfAborted();
             if (chunk.done) break;
             bytes += chunk.value.byteLength;
             evidence = { ...evidence, decoded_bytes: bytes };
@@ -81,11 +72,12 @@ export function createImpitTransport(): HarvestTransport {
             }
             chunks.push(chunk.value);
           }
+          input.signal.throwIfAborted();
           evidence = { ...evidence, decoded_bytes: bytes };
           return { status: response.status, body: Buffer.concat(chunks, bytes).toString("utf8"),
             location: response.headers.get("location"), evidence };
         } catch (error) {
-          const cleanup = cancellation ?? (readBodyLimitEvidence(error) === undefined ? reader.cancel() : undefined);
+          const cleanup = readBodyLimitEvidence(error) === undefined ? reader.cancel() : undefined;
           if (cleanup !== undefined) {
             try { await cleanup; }
             catch (cleanup) {

@@ -106,8 +106,11 @@ test("native profiles decode compressed bodies and retain status at cutoff and c
         signal: nativeController.signal, timeout: base.timeout_ms, redirect: "manual",
       });
       const nativeReader = nativeResponse.body.getReader();
-      await nativeReader.read();
-      const nativeReading = nativeReader.read();
+      const nativeReading = (async () => {
+        for (;;) {
+          if ((await nativeReader.read()).done) return;
+        }
+      })();
       const timer = setTimeout(() => nested ? caller.abort() : nativeController.abort(), 300);
       try { await expect(nativeReading).rejects.toBeInstanceOf(Error); }
       finally { clearTimeout(timer); nativeReader.releaseLock(); }
