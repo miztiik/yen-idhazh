@@ -30,6 +30,9 @@ test("one recorded API request writes a valid selected artifact", async () => {
     expect(summary.selected_count).toBe(1);
     expect(summary.dispatch_count).toBe(fixture.startup.planning.partition.default_shards);
     expect(summary.assignments[0]!.worker_assignment).not.toBeNull();
+    expect(summary.selection_started_at_utc).toBe("2026-10-22T00:00:00Z");
+    expect(summary.evaluated_at).toBe(fixture.startup.runtime.captured_at.replace(/\.\d{3}Z$/, "Z"));
+    expect(JSON.stringify(summary)).not.toContain("article_text");
     const artifact = SelectedArticlesArtifactSchema.parse(await Bun.file(
       join(fixture.directory, summary.selected_articles_artifact!)).json());
     expect(artifact.run_id).toBe(summary.run_id);
@@ -103,6 +106,11 @@ test("one awaited CLI invocation writes one valid result", async () => {
     expect(summary.planning_complete).toBe(true);
     expect(summary.selected_count).toBe(1);
     expect(summary.dispatch_count).toBe(0);
+    expect(summary.strategy).toBe("none");
+    expect(summary.batches.partition_batch_id).toBeUndefined();
+    expect(summary.selection_started_at_utc).toBe("2026-10-22T00:00:00Z");
+    expect(summary.evaluated_at).toBe(fixture.startup.runtime.captured_at.replace(/\.\d{3}Z$/, "Z"));
+    expect(JSON.stringify(summary)).not.toContain("article_text");
     expect(summary.assignments).toEqual([{
       url_key: summary.selected_url_keys[0]!, editorial_rank: 1, worker_assignment: null,
     }]);
