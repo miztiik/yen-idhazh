@@ -82,8 +82,8 @@ export async function finishRawDocumentFailures(inputs: PlanInputs, context?: Ru
   const results = await Promise.allSettled(selected.map(([, writer]) => writer.finish()));
   const failures: unknown[] = [];
   for (const [index, result] of results.entries()) {
-    if (result.status === "fulfilled") current.delete(selected[index]![0]);
-    else {
+    current.delete(selected[index]![0]);
+    if (result.status === "rejected") {
       failures.push(result.reason);
       writeJsonLine({ event: "planner_raw_document_finish_failed", code: describePlanError(result.reason, inputs.root).code });
     }

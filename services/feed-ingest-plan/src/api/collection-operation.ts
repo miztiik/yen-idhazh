@@ -1,13 +1,16 @@
 /** Own one complete collection and refuse selection before all its work settles. */
 import { randomUUID } from "node:crypto";
-import { ParsedFeedBatchSchema } from "@idhazh/common-contracts";
+import { ParsedFeedBatchSchema, PlanApiTimingSchema } from "@idhazh/common-contracts";
 import type { PlannerStageContext, PlannerFeedOffer } from "@idhazh/common-contracts";
 import type { HarvestArticleResult } from "../harvest-feeds/harvest-types";
 import type { PlanInputs } from "../load-plan-inputs";
 import type { PlanRuntime } from "../run-feed-plan";
 import { resolveRunContext } from "../resolve-run-context";
 import { resolvePlanRequest, PlanError } from "./plan-request";
-import { BeginCollectionSchema } from "./collection-contracts";
+import {
+  BeginCollectionSchema, CollectionReferenceSchema, FinalizeCollectionRequestSchema, FinalizedCollectionSchema,
+  ReleaseCollectionRequestSchema,
+} from "./collection-contracts";
 import { captureDocumentContext } from "./operation-context";
 import { documentState } from "./document-state";
 import type { DocumentState } from "./document-state";
@@ -19,14 +22,19 @@ import { recordHarvestFailures } from "../record-harvest-failures";
 import { CompletedCollectionSchema } from "./collection-contracts";
 import type { z } from "zod";
 import { snapshotCollectionBatch } from "./collection-batch";
+import { finishRawDocumentFailures } from "../dump-raw-document-failure";
 
 export type Collection = {
+  collection_id: string;
   config_sha256: string;
   parsed_batch_id: string; feed_requests: Map<string, string>;
   context: PlannerStageContext; request: ReturnType<typeof resolvePlanRequest>;
   state: DocumentState; signal: AbortController; status: "collecting" | "complete" | "failed";
+  closing: boolean; finalizing: boolean;
   feeds: Map<string, { state: "pending" | "fetching" | "parsing" | "terminal"; batch_id: string | null }>;
   complete?: Promise<z.infer<typeof CompletedCollectionSchema>>;
+  operations: Set<Promise<unknown>>;
+  finalization?: { request: string; result: z.infer<typeof FinalizedCollectionSchema> };
   rejections?: ReturnType<typeof recordHarvestFailures>;
   completed_batch_id?: string;
   offers: Map<string, PlannerFeedOffer>;
@@ -49,10 +57,17 @@ function held(inputs: PlanInputs) {
   if (value === undefined) { value = new Map(); collections.set(inputs, value); }
   return value;
 }
+function collectionCancelled(collection: Collection) {
+  return collection.status === "failed" || collection.signal.signal.aborted;
+}
 export function getCollection(inputs: PlanInputs, id: string) {
   const collection = held(inputs).get(id);
   if (collection === undefined) throw new PlanError("ARTIFACT_NOT_FOUND", "Collection is missing or expired", "collection_id");
   return collection;
+}
+export function collectionExists(raw: unknown, inputs: PlanInputs) {
+  const request = CollectionReferenceSchema.parse(raw);
+  return { collection_id: request.collection_id, exists: collections.get(inputs)?.has(request.collection_id) ?? false };
 }
 export async function beginCollection(raw: unknown, inputs: PlanInputs, runtime: PlanRuntime) {
   const request = BeginCollectionSchema.parse(raw);
@@ -92,17 +107,18 @@ export async function beginCollection(raw: unknown, inputs: PlanInputs, runtime:
       discovered: { availability: "available", rows: [] }, history_rows: [], history_days: state.history.days,
       work_rows: state.work.rows(), exclusions: state.work.exclusions(),
     });
-    owned.set(request.collection_id, { context, request: controls, state, feeds,
+    owned.set(request.collection_id, { collection_id: request.collection_id, context, request: controls, state, feeds,
       parsed_batch_id: parsed.batch_id, feed_requests: new Map(),
       offers: new Map(), results: new Map(), pending_offers: 0,
-      config_sha256: record.config_sha256, signal: new AbortController(), status: "collecting" });
+      config_sha256: record.config_sha256, signal: new AbortController(), status: "collecting",
+      closing: false, finalizing: false, operations: new Set() });
     return { collection_id: request.collection_id, context, feeds: [...feeds.keys()] };
   } catch (error) { stages.releaseRun(context.run_id); throw error; }
 }
 export function claimCollectionFeed(inputs: PlanInputs, id: string, feedId: string, correlationId: string) {
   const collection = getCollection(inputs, id);
   const feed = collection.feeds.get(feedId);
-  if (collection.status !== "collecting" || collection.signal.signal.aborted
+  if (collection.status !== "collecting" || collection.closing || collection.signal.signal.aborted
     || collection.context.correlation_id !== correlationId || feed?.state !== "pending") {
     throw new PlanError("REQUEST_CONFLICT", "Feed is not pending in this collection", "collection_id");
   }
@@ -128,13 +144,19 @@ export function collectionFeedRequest(inputs: PlanInputs, runId: string, feedId:
 }
 export async function completeCollection(inputs: PlanInputs, id: string) {
   const collection = getCollection(inputs, id);
-  if (collection.status === "failed" || collection.signal.signal.aborted) {
+  if (collection.complete !== undefined) return collection.complete;
+  if (collectionCancelled(collection) || collection.finalizing) {
     throw new PlanError("REQUEST_INCOMPLETE", "Cancelled collection cannot be selected", "collection_id");
   }
-  if ([...collection.feeds.values()].some(feed => feed.state !== "terminal")) {
-    throw new PlanError("BATCH_INCOMPLETE", "Every configured feed needs a terminal result", "collection_id");
-  }
-  collection.complete ??= (async () => {
+  collection.closing = true;
+  collection.complete = (async () => {
+    await drainCollectionOperations(collection);
+    if (collectionCancelled(collection)) {
+      throw new PlanError("REQUEST_INCOMPLETE", "Cancelled collection cannot be selected", "collection_id");
+    }
+    if ([...collection.feeds.values()].some(feed => feed.state !== "terminal")) {
+      throw new PlanError("BATCH_INCOMPLETE", "Every configured feed needs a terminal result", "collection_id");
+    }
     if (collection.pending_offers !== 0) {
       throw new PlanError("BATCH_INCOMPLETE", "Every offered article needs a terminal result", "collection_id");
     }
@@ -145,12 +167,19 @@ export async function completeCollection(inputs: PlanInputs, id: string) {
     const batch = snapshotCollectionBatch(inputs, collection, true);
     stageStore(inputs).ownership(batch.batch_id).scope = "plan";
     const rejected = await finalizeCollectionRejections(inputs, collection);
+    if (collectionCancelled(collection)) {
+      throw new PlanError("REQUEST_INCOMPLETE", "Cancelled collection cannot be selected", "collection_id");
+    }
     collection.status = "complete";
     collection.completed_batch_id = batch.batch_id;
     return { collection_id: id, batch_id: batch.batch_id, discovered_articles: saved.result, rejected_articles: rejected };
   })();
   try { return await collection.complete; }
-  catch (error) { delete collection.complete; throw error; }
+  catch (error) {
+    delete collection.complete;
+    if (collection.status === "collecting") collection.closing = false;
+    throw error;
+  }
 }
 async function finalizeCollectionRejections(inputs: PlanInputs, collection: Collection) {
   collection.rejections ??= recordHarvestFailures(collection.state.harvest_rejections ?? [], collection.context, inputs);
@@ -159,10 +188,79 @@ async function finalizeCollectionRejections(inputs: PlanInputs, collection: Coll
 }
 export async function cancelCollection(inputs: PlanInputs, id: string) {
   const collection = getCollection(inputs, id);
+  if (collection.finalizing || collection.finalization !== undefined) {
+    throw new PlanError("REQUEST_CONFLICT", "Finalized collection cannot be cancelled", "collection_id");
+  }
   collection.status = "failed";
+  collection.closing = true;
   collection.signal.abort();
-  stageStore(inputs).releaseRun(collection.context.run_id);
+  await drainCollectionOperations(collection);
+  await collection.complete?.catch(() => undefined);
+  await drainCollectionOperations(collection);
   const parsed = snapshotCollectionBatch(inputs, collection, false);
   return { collection_id: id, status: "cancelled" as const, batch_id: parsed.batch_id,
-    rejected_articles: await finalizeCollectionRejections(inputs, collection) };
+    rejected_articles: await finalizeCollectionRejections(inputs, collection),
+    has_work: collection.state.work.rows().length > 0 };
+}
+export async function trackCollectionOperation<T>(collection: Collection, operation: () => Promise<T>) {
+  if (collection.status !== "collecting" || collection.closing || collection.signal.signal.aborted) {
+    throw new PlanError("REQUEST_INCOMPLETE", "Collection no longer accepts document work", "collection_id");
+  }
+  const pending = Promise.resolve().then(operation);
+  collection.operations.add(pending);
+  try { return await pending; }
+  finally { collection.operations.delete(pending); }
+}
+async function drainCollectionOperations(collection: Collection) {
+  while (collection.operations.size) await Promise.allSettled([...collection.operations]);
+}
+export async function finalizeCollection(raw: unknown, inputs: PlanInputs) {
+  const request = FinalizeCollectionRequestSchema.parse(raw);
+  const collection = getCollection(inputs, request.collection_id);
+  const requestKey = JSON.stringify(request);
+  if (collection.finalization !== undefined) {
+    if (collection.finalization.request !== requestKey) {
+      throw new PlanError("REQUEST_CONFLICT", "Collection already has a different final outcome", "collection_id");
+    }
+    return collection.finalization.result;
+  }
+  if (collection.status === "collecting" || collection.finalizing) {
+    throw new PlanError("REQUEST_INCOMPLETE", "Collection work must settle before final accounting", "collection_id");
+  }
+  if (collection.status === "failed" && request.failure_code === null) {
+    throw new PlanError("INVALID_REQUEST", "Cancelled collection requires a failure cause", "failure_code");
+  }
+  collection.closing = true;
+  collection.finalizing = true;
+  await drainCollectionOperations(collection);
+  const timing = PlanApiTimingSchema.parse({
+    operation: "fetch", duration_ms: request.collection_timing.duration_ms, status: request.collection_timing.status,
+  });
+  const insertion = collection.state.api_timings.findIndex(item =>
+    item.operation !== "feed-health-before-fetch");
+  collection.state.api_timings.splice(insertion < 0 ? collection.state.api_timings.length : insertion, 0, timing);
+  let failureCode = request.failure_code;
+  try { await finishRawDocumentFailures(inputs, collection.state.context); }
+  catch { failureCode ??= "RAW_DOCUMENT_OUTPUT_FAILED"; }
+  const status = failureCode === null ? "completed"
+    : collection.state.work.rows().some(row => row.checked_at !== null) ? "partial" : "failed";
+  const result = FinalizedCollectionSchema.parse({
+    collection_id: request.collection_id, status, failure_code: failureCode,
+    api_timings: [...collection.state.api_timings],
+  });
+  collection.finalization = { request: requestKey, result };
+  collection.finalizing = false;
+  return result;
+}
+export function releaseCollection(raw: unknown, inputs: PlanInputs) {
+  const request = ReleaseCollectionRequestSchema.parse(raw);
+  const collection = [...held(inputs).values()].find(value =>
+    value.context.run_id === request.run_id && value.context.writer.attempt === request.attempt);
+  if (collection === undefined) return { ...request, released: false };
+  if (collection.finalization === undefined || collection.finalizing || collection.operations.size) {
+    throw new PlanError("REQUEST_INCOMPLETE", "Collection cannot be released before final accounting", "run_id");
+  }
+  held(inputs).delete(collection.collection_id);
+  stageStore(inputs).releaseRun(collection.context.run_id);
+  return { ...request, released: true };
 }

@@ -74,10 +74,6 @@ export async function createParsedFeedBatch(input: {
   const saved = await rememberDiscoveries(discoveredRows, state.discovered_rows, state.context, {
     outputRoot: inputs.outputRoot, registryEntry: inputs.registrations.discovered_articles, ledgerSettings: inputs.ledgerSettings,
   });
-  if (state.plan_owned) {
-    state.completed_files ??= {};
-    (state.completed_files.discovered_articles ??= []).push(saved.result);
-  }
   plannerMemory(inputs).rememberDiscoveries(saved.rows, requiredUtcDays(
     state.context.now, inputs.harvest.config.discovered_articles.lookback_days,
   )[0]!);

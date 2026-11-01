@@ -21,7 +21,6 @@ import type { recordPlanRun } from "../record-plan-run";
 import { selectedArtifactPath } from "../selected-artifact-path";
 import type { DocumentOperationContext } from "./operation-context";
 import type { FetchedDocumentReference } from "./stage-store";
-import type { PersistLedgerResult } from "@idhazh/ledger-file-writer";
 
 type ExecutionStateBase = {
   context: RunContext; started: number | null; api_timings: PlanApiTiming[];
@@ -31,7 +30,6 @@ type ExecutionStateBase = {
 export type DocumentState = ExecutionStateBase & {
   plan_owned?: boolean;
   harvest_rejections?: CandidateRejectionRecord[];
-  completed_files?: Partial<Record<"discovered_articles" | "rejected_articles", PersistLedgerResult[]>>;
   kind: "document"; history: Awaited<ReturnType<typeof preparePlanningHealth>>;
   work: ReturnType<typeof createRunHealth>; fetcher: ReturnType<typeof createPermittedFetcher>;
   config_sha256: string;

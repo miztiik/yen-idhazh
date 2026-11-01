@@ -109,7 +109,7 @@ export async function executeFeedHealthState(raw: unknown, inputs: PlanInputs, r
   const reliability = { window_days: inputs.clock_config.collect.reliability_window_days };
   if (!stageStore(inputs).has(request.batch_id)) {
     const document = await readDocumentHealthBatch(request.batch_id, inputs);
-    requireStageConfiguration(document, inputs, runtime);
+    requireStageConfiguration(document, inputs, runtime, request.action === "summarize");
     const prepare = request.action === "record" ? prepareExecutionHealth : prepareFeedHealthState;
     const summary = await prepare(inputs, utcTimestamp(runtime.selection_clock ?? runtime.clock),
       { context: document.context, rows: document.work.rows() });
@@ -121,7 +121,7 @@ export async function executeFeedHealthState(raw: unknown, inputs: PlanInputs, r
   const held = stageStore(inputs).inspect(request.batch_id);
   if (held.stage === "parsed") {
     let parsed = ParsedFeedBatchSchema.parse(held.value);
-    requireStageConfiguration(parsed, inputs, runtime);
+    requireStageConfiguration(parsed, inputs, runtime, request.action === "summarize");
     const collection = collectionForBatch(inputs, request.batch_id);
     if (collection !== undefined && collection.status === "collecting") {
       parsed = snapshotCollectionBatch(inputs, collection, false);
@@ -141,7 +141,7 @@ export async function executeFeedHealthState(raw: unknown, inputs: PlanInputs, r
       rows, request_report: summary.request_report, reliability, availability: summary.availability, ...(files === null ? {} : { files }) };
   }
   const selected = held.stage === "selected" ? SelectedFeedBatchSchema.parse(held.value) : PartitionedFeedBatchSchema.parse(held.value);
-  requireStageConfiguration(selected, inputs, runtime);
+  requireStageConfiguration(selected, inputs, runtime, request.action === "summarize");
   const sources = new Map(selected.health_rows.map(row => [row.feed_id, {
     ...projectLifecycleFields({ ...row, lifecycle: row.availability }),
     lifecycle: row.availability, endpoint_key: row.endpoint_key, reliability: row.reliability,

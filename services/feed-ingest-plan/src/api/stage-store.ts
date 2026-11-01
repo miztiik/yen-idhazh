@@ -33,6 +33,7 @@ export class StageStore {
         this.documents.delete(id);
       }
     }
+    this.forgetDocumentWork(runId);
   }
   isRunActive(runId: string) {
     return this.retainedRuns.has(runId)

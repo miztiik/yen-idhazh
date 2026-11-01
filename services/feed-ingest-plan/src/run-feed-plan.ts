@@ -1,7 +1,7 @@
 /** Execute one run through validated stage requests and retain honest failure output. */
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
-import type { FeedIngestEvent, PlannerArticleEvidence, SelectedArticleRow } from "@idhazh/common-contracts";
+import type { FeedIngestEvent, PlanApiTiming, PlannerArticleEvidence, SelectedArticleRow } from "@idhazh/common-contracts";
 import { PLANNER_API_PREFIX } from "@idhazh/common-contracts";
 import type { PersistLedgerResult } from "@idhazh/ledger-file-writer";
 import type { harvestFeeds } from "./harvest-feeds/harvest-pool";
@@ -13,15 +13,15 @@ import { resolvePlanRequest, PlanError } from "./api/plan-request";
 import { createStageLogger } from "./logging/structured-logger";
 import { recordPlanRun } from "./record-plan-run";
 import { createPlanApp } from "./api/server";
-import { CollectionResponseSchema, CompletedCollectionSchema, CancelledCollectionSchema } from "./api/collection-contracts";
+import {
+  CollectionExistsResponseSchema, CollectionResponseSchema, CompletedCollectionSchema, CancelledCollectionSchema,
+  FinalizeCollectionRequestSchema, FinalizedCollectionSchema,
+} from "./api/collection-contracts";
 import { FetchResponseSchema, ParseResponseSchema } from "./api/document-response.schema";
 import { SelectionResponseSchema, PartitionResponseSchema, PersistenceResponseSchema, StageErrorResponseSchema } from "./api/stage-response.schema";
 import { FeedHealthStateUpdateResponseSchema } from "./api/feed-health-state.schema";
-import { stageStore } from "./api/stage-store";
-import { appendDocumentTiming, currentExecutionState } from "./api/document-state";
-import { getCollection, collectionForRun, prepareCollectionContext, discardCollectionContext } from "./api/collection-operation";
+import { prepareCollectionContext, discardCollectionContext } from "./api/collection-operation";
 import { resolveRunContext } from "./resolve-run-context";
-import { finishRawDocumentFailures } from "./dump-raw-document-failure";
 
 const documentPools = new WeakMap<PlanInputs, ReturnType<typeof workPool>>();
 export type PlanRuntime = {
@@ -72,7 +72,14 @@ export async function runFeedPlan(raw: unknown, inputs: PlanInputs, runtime: Pla
   let begin: z.infer<typeof CollectionResponseSchema>;
   try { begin = await call("collections", { collection_id: collectionId, request: raw }, CollectionResponseSchema); }
   catch (error) {
-    if (collectionForRun(inputs, context.run_id) !== undefined) throw error;
+    let existing: z.infer<typeof CollectionExistsResponseSchema>;
+    try {
+      existing = await call("collections/exists", { collection_id: collectionId }, CollectionExistsResponseSchema, true);
+    } catch (lookupError) {
+      throw new AggregateError([error, lookupError], "Collection startup outcome could not be checked");
+    }
+    if (existing.collection_id !== collectionId) throw new PlanError("ARTIFACT_INVALID", "Collection lookup identity differs");
+    if (existing.exists) throw error;
     const failureCode = error instanceof PlanError ? error.code : "PLANNER_EXECUTION_FAILED";
     createStageLogger(context, runtime.log)("plan", "failed", { failure_code: failureCode });
     const recorded = await recordPlanRun(inputs, context, {
@@ -84,7 +91,7 @@ export async function runFeedPlan(raw: unknown, inputs: PlanInputs, runtime: Pla
     });
     return { context, row: recorded.row, batches: {}, files: { plan_runs: recorded.files }, selected: [] };
   } finally { discardCollectionContext(inputs, collectionId); }
-  try {
+  {
     const emit = createStageLogger(context, runtime.log);
     const files: Partial<Record<"discovered_articles" | "selected_articles" | "rejected_articles" | "feed_health_state" | "plan_runs", PersistLedgerResult>> = {};
     const batches: { parsed_batch_id?: string; selection_batch_id?: string; partition_batch_id?: string } = {};
@@ -94,6 +101,7 @@ export async function runFeedPlan(raw: unknown, inputs: PlanInputs, runtime: Pla
     let failureCode: string | null = null;
     const collectionStarted = performance.now();
     let collectionFinished = false;
+    let collectionTiming: Pick<PlanApiTiming, "duration_ms" | "status"> | undefined;
     emit("plan", "started");
     emit("fetch", "started", { scope: "plan" });
     try {
@@ -174,9 +182,7 @@ export async function runFeedPlan(raw: unknown, inputs: PlanInputs, runtime: Pla
       const collected = await call("collections/complete", { collection_id: collectionId }, CompletedCollectionSchema);
       collectionFinished = true;
       const collectionDuration = Math.round(performance.now() - collectionStarted);
-      await appendDocumentTiming(inputs, context.run_id, {
-        operation: "fetch", duration_ms: collectionDuration, status: "completed",
-      }, "plan");
+      collectionTiming = { duration_ms: collectionDuration, status: "completed" };
       emit("fetch", "completed", { scope: "plan", duration_ms: collectionDuration });
       files.discovered_articles = collected.discovered_articles;
       files.rejected_articles = collected.rejected_articles;
@@ -211,24 +217,22 @@ export async function runFeedPlan(raw: unknown, inputs: PlanInputs, runtime: Pla
       failureCode = error instanceof PlanError ? error.code : "PLANNER_EXECUTION_FAILED";
       if (!collectionFinished) {
         const collectionDuration = Math.round(performance.now() - collectionStarted);
-        await appendDocumentTiming(inputs, context.run_id, {
-          operation: "fetch", duration_ms: collectionDuration, status: "failed",
-        }, "plan");
+        collectionTiming = { duration_ms: collectionDuration, status: "failed" };
         emit("fetch", "failed", { scope: "plan", duration_ms: collectionDuration, failure_code: failureCode });
       }
       emit("plan", "failed", { failure_code: failureCode });
-      const collection = getCollection(inputs, collectionId);
       // A failed collection is not eligible for selection, but completed work remains inspectable.
       let partialBatchId: string | undefined;
+      let hasPartialWork = false;
       try {
         const cancelled = await call("collections/cancel", { collection_id: collectionId }, CancelledCollectionSchema, true);
         files.rejected_articles ??= cancelled.rejected_articles;
         partialBatchId = cancelled.batch_id;
+        hasPartialWork = cancelled.has_work;
       } catch {
         emit("plan", "failed", { failure_code: "COLLECTION_CANCEL_FAILED" });
       }
-      if (partialBatchId !== undefined && files.feed_health_state === undefined
-        && collection.state.work.rows().length > 0) {
+      if (partialBatchId !== undefined && hasPartialWork && files.feed_health_state === undefined) {
         try {
           const health = await call("feed-health-state", { batch_id: partialBatchId, action: "record" },
             FeedHealthStateUpdateResponseSchema, true);
@@ -238,35 +242,29 @@ export async function runFeedPlan(raw: unknown, inputs: PlanInputs, runtime: Pla
         }
       }
     }
-    const state = await currentExecutionState(inputs, context.run_id);
-    if (state?.kind === "document") {
-      for (const family of ["discovered_articles", "rejected_articles"] as const) {
-        const retained = [...(state.completed_files?.[family] ?? []), ...(files[family] === undefined ? [] : [files[family]])];
-        const written = retained.flatMap(result => result.status === "written" ? result.files : []);
-        if (written.length) files[family] = { status: "written", files: [...new Map(written.map(file => [file.path, file])).values()] };
-        else if (retained.length) files[family] = { status: "empty", files: [] };
-      }
+    if (collectionTiming === undefined) throw new Error("Collection execution did not produce its measured timing");
+    const finalization = FinalizeCollectionRequestSchema.parse({
+      collection_id: collectionId, failure_code: failureCode, collection_timing: collectionTiming,
+    });
+    const outcome = await call("collections/finalize", finalization, FinalizedCollectionSchema, true);
+    if (outcome.collection_id !== collectionId) throw new PlanError("ARTIFACT_INVALID", "Final outcome belongs to another collection");
+    if (failureCode === null && outcome.failure_code !== null) {
+      emit("plan", "failed", { failure_code: outcome.failure_code });
     }
-    const timings = state?.api_timings ?? [];
-    try { await finishRawDocumentFailures(inputs, context); }
-    catch {
-      failureCode ??= "RAW_DOCUMENT_OUTPUT_FAILED";
-      emit("plan", "failed", { failure_code: "RAW_DOCUMENT_OUTPUT_FAILED" });
-    }
+    failureCode = outcome.failure_code;
     const recorded = await recordPlanRun(inputs, context, {
-      duration_ms: Math.round(performance.now() - started), status: failureCode === null ? "completed"
-        : getCollection(inputs, collectionId).state.work.rows().some(row => row.checked_at !== null) ? "partial" : "failed",
+      duration_ms: Math.round(performance.now() - started), status: outcome.status,
       failure_code: failureCode, selected_count: selected?.articles.length ?? 0,
       strategy: partitioned?.strategy ?? (inputs.harvest.config.partition.enabled ? request.partition_strategy : "none"),
       dispatch_count: partitioned?.dispatch_count ?? 0,
-      selected_articles_artifact: artifact, api_timings: timings,
+      selected_articles_artifact: artifact, api_timings: outcome.api_timings,
       evaluated_at: selected?.evaluated_at ?? context.now,
       selection_started_at_utc: selected?.selection_started_at_utc ?? null,
     });
     files.plan_runs = recorded.files;
     if (failureCode === null) emit("plan", "completed", { output_count: recorded.row.selected_count, duration_ms: recorded.row.duration_ms });
     return { context, row: recorded.row, batches, files, selected: partitioned?.articles ?? selected?.articles ?? [] };
-  } finally { stageStore(inputs).releaseRun(context.run_id); }
+  }
 }
 export function summarizePlan(result: FeedPlanResult) {
   return {
