@@ -1,8 +1,8 @@
 /** Execute one run through validated stage requests and retain honest failure output. */
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
-import type { FeedIngestEvent, PlannerArticleEvidence, SelectedFeedBatch } from "@idhazh/common-contracts";
-import { SelectedFeedBatchSchema, PartitionedFeedBatchSchema, PLANNER_API_PREFIX } from "@idhazh/common-contracts";
+import type { FeedIngestEvent, PlannerArticleEvidence, SelectedArticleRow } from "@idhazh/common-contracts";
+import { PLANNER_API_PREFIX } from "@idhazh/common-contracts";
 import type { PersistLedgerResult } from "@idhazh/ledger-file-writer";
 import type { harvestFeeds } from "./harvest-feeds/harvest-pool";
 import { workPool } from "./harvest-feeds/harvest-pool";
@@ -39,7 +39,7 @@ export type FeedPlanResult = {
   row: import("@idhazh/common-contracts").PlanRunRow;
   batches: { parsed_batch_id?: string; selection_batch_id?: string; partition_batch_id?: string };
   files: Partial<Record<"discovered_articles" | "selected_articles" | "rejected_articles" | "feed_health_state" | "plan_runs", PersistLedgerResult>>;
-  selected: SelectedFeedBatch["articles"];
+  selected: SelectedArticleRow[];
 };
 export async function runFeedPlan(raw: unknown, inputs: PlanInputs, runtime: PlanRuntime): Promise<FeedPlanResult> {
   const request = resolvePlanRequest(raw, inputs.harvest.config);
@@ -88,8 +88,8 @@ export async function runFeedPlan(raw: unknown, inputs: PlanInputs, runtime: Pla
     const emit = createStageLogger(context, runtime.log);
     const files: Partial<Record<"discovered_articles" | "selected_articles" | "rejected_articles" | "feed_health_state" | "plan_runs", PersistLedgerResult>> = {};
     const batches: { parsed_batch_id?: string; selection_batch_id?: string; partition_batch_id?: string } = {};
-    let selected: SelectedFeedBatch | undefined;
-    let partitioned: z.infer<typeof PartitionedFeedBatchSchema> | undefined;
+    let selected: z.infer<typeof SelectionResponseSchema> | undefined;
+    let partitioned: z.infer<typeof PartitionResponseSchema> | undefined;
     let artifact: string | null = null;
     let failureCode: string | null = null;
     const collectionStarted = performance.now();
@@ -183,14 +183,14 @@ export async function runFeedPlan(raw: unknown, inputs: PlanInputs, runtime: Pla
       batches.parsed_batch_id = collected.batch_id;
       const selection = await call("select-articles", { batch_id: collected.batch_id }, SelectionResponseSchema);
       batches.selection_batch_id = selection.batch_id;
-      selected = stageStore(inputs).read("selected", selection.batch_id, SelectedFeedBatchSchema);
+      selected = selection;
       let outputId = selected.batch_id;
       if (inputs.harvest.config.partition.enabled) {
         const partition = await call("partition-articles", {
           batch_id: selected.batch_id, strategy: request.partition_strategy, shards: request.shards,
         }, PartitionResponseSchema);
         batches.partition_batch_id = partition.batch_id;
-        partitioned = stageStore(inputs).read("partitioned", partition.batch_id, PartitionedFeedBatchSchema);
+        partitioned = partition;
         outputId = partition.batch_id;
       }
       const outputs = await Promise.allSettled([

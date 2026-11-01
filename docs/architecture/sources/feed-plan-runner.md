@@ -94,6 +94,12 @@ assignment without bypassing article selection.
 The router dispatches to execution modules. `/plan` calls the stage APIs over
 the trusted local listener using validated JSON requests and outcomes. HTTP
 is transport, not process isolation or an external message broker.
+Orchestration takes selected metadata and the exact saved selection-start and
+evaluation UTC timestamps from the validated selection response. It takes
+assigned metadata, strategy and dispatch count from the partition response,
+without reading either text-bearing batch back from the local stage store.
+The returned result contains metadata only; persistence still consumes the
+server-owned batch and writes the unchanged selected text artifact.
 One collection owns one parsed batch for every configured feed, its offers,
 terminal outcomes, identity, effective policy and cancellation.
 Offers and article results are indexed by candidate identity within that

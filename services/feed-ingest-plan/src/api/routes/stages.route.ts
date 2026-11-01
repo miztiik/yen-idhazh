@@ -25,6 +25,7 @@ export function stagesRoute(inputs: PlanInputs, runtime: () => PlanRuntime) {
     const { batch } = await executeSelection(request, inputs, runtime());
     return c.json(SelectionResponseSchema.parse({
       batch_id: batch.batch_id, parsed_batch_id: batch.parsed_batch_id, run_id: batch.context.run_id,
+      selection_started_at_utc: batch.selection_started_at_utc, evaluated_at: batch.evaluated_at,
       articles: batch.articles.map(article => ({ ...selectedArticleMetadata(article),
         run_id: batch.context.run_id, attempt: batch.context.writer.attempt, date: batch.context.date })),
       exclusions: batch.exclusions, request_report: batch.request_report,

@@ -2,7 +2,7 @@
 import { z } from "zod";
 import {
   CountSchema, NonEmptySchema, NonNegativeSchema, PositiveCountSchema, RequestIdSchema, RunIdSchema, Sha256Schema,
-  SelectedArticleRowSchema, PlannerRejectionCountSchema, PlannerRequestReportSchema,
+  SelectedArticleRowSchema, PlannerRejectionCountSchema, PlannerRequestReportSchema, TimestampSchema,
 } from "@idhazh/common-contracts";
 import { RelativePathSchema } from "../config/service-settings";
 
@@ -18,6 +18,7 @@ export const StageErrorResponseSchema = z.strictObject({
 });
 export const SelectionResponseSchema = z.strictObject({
   batch_id: RequestIdSchema, parsed_batch_id: RequestIdSchema, run_id: RunIdSchema,
+  selection_started_at_utc: TimestampSchema, evaluated_at: TimestampSchema,
   articles: z.array(SelectedArticleRowSchema), exclusions: z.array(PlannerRejectionCountSchema),
   request_report: PlannerRequestReportSchema,
 });
