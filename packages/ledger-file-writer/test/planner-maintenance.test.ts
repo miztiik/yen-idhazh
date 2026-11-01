@@ -10,14 +10,16 @@ import {
   PLANNER_MAINTENANCE_VERSION, PlannerMaintenanceRequestSchema, PlannerMaintenanceResultSchema,
   deriveUrlKey,
 } from "@idhazh/common-contracts";
+import type { PlannerMaintenanceResult } from "@idhazh/common-contracts";
 import { maintainPlannerPeriod, persistLedger, readPlannerParquet } from "../src";
+import { readMaintenanceSource } from "../src/planner-maintenance";
 import { validatePlannerFiles } from "../src/validate-planner-files";
 import { plannerRecordings } from "./planner-recordings";
 
 setDefaultTimeout(60_000);
 
 const registration = {
-  name: "discovered-articles",
+  name: "discovered-articles" as const,
   family: "feed-ingest-plan",
   grain: "raw-and-compact" as const,
   lifecycle_status: "active" as const,
@@ -207,6 +209,46 @@ test("local compact replacement retains its original target digest and deletes o
     const stored = await readPlannerParquet(join(root, replacement.output_path),
       "discovered-articles", plannerRecordings()[0]!.contract);
     expect(stored.rows).toEqual([plannerRecordings()[0]!.row]);
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test("a compact source reused across UTC days retains its first file identity after a real rewrite", async () => {
+  const root = await fixtureRoot();
+  try {
+    const contract = plannerRecordings()[0]!.contract;
+    const days = ["2026-10-20", "2026-10-21"];
+    const rows = days.map(day => ({
+      ...plannerRecordings(day)[0]!.row,
+      url_key: deriveUrlKey(`https://example.org/reused-compact/${day}`),
+    }));
+    async function writeCompact(directory: string, rows: Record<string, unknown>[]) {
+      const result = await persistLedger({
+        ledger: registration.name, rowContract: contract, rows,
+        outputRoot: join(directory, "state"), registryEntry: registration, ledgerSettings,
+        period: { tier: "compact", period: "monthly", covers: "2026-10", builtFrom: 2 },
+      });
+      if (result.status !== "written") throw new Error("The source identity check requires real compact bytes");
+      return `state/${result.files[0]!.path}`;
+    }
+    const path = await writeCompact(root, rows);
+    const replacementRoot = join(root, "replacement");
+    const replacement = await writeCompact(replacementRoot, rows.map((row, index) => ({
+      ...row, first_seen_at: `${days[index]}T11:00:00.123Z`,
+    })));
+    type Source = Extract<PlannerMaintenanceResult, { status: "written" }>["input_files"][number];
+    const sources = new Map<string, Source>();
+    const target = "state/compact/feed-ingest-plan/discovered-articles/yearly/2026/2026.parquet";
+    const first = await readMaintenanceSource(root, path, registration.name, contract, sources, target);
+    expect(first.rows.filter(row => row.date === days[0])).toEqual([rows[0]!]);
+    const proof = sources.get(path);
+    expect(proof?.file_sha256).toBe(first.file_sha256);
+    const bytes = await readFile(join(replacementRoot, replacement));
+    expect(createHash("sha256").update(bytes).digest("hex")).not.toBe(first.file_sha256);
+    await writeFile(join(root, path), bytes);
+    await expect(readMaintenanceSource(root, path, registration.name, contract, sources, target))
+      .rejects.toMatchObject({ reason: "changed-member", path });
+    expect(sources.get(path)).toBe(proof);
+    expect(sources.get(path)?.file_sha256).toBe(first.file_sha256);
   } finally { await rm(root, { recursive: true, force: true }); }
 });
 

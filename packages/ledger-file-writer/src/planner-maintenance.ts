@@ -147,6 +147,20 @@ function checkedSource(
   };
 }
 
+export async function readMaintenanceSource<T extends object>(
+  root: string, path: string, ledger: PlannerMaintenanceRequest["ledger"], contract: LedgerRowContract<T>,
+  sources: Map<string, SourceFile>, targetPath: string,
+) {
+  const expected = sources.get(path);
+  const verified = await verifyMember(root, path, expected, path === targetPath);
+  const file = await readPlannerParquet(resolve(root, ...path.split("/")), ledger, contract);
+  if (file.bytes !== verified.bytes.byteLength || file.file_sha256 !== verified.file_sha256) {
+    throw new MaintenanceRefusal(path === targetPath ? "target-conflict" : "changed-member", path);
+  }
+  if (expected === undefined) sources.set(path, checkedSource(path, file));
+  return file;
+}
+
 function result(
   request: PlannerMaintenanceRequest,
   value: Record<string, unknown>,
@@ -209,15 +223,12 @@ async function maintainPeriod<T extends object>(
           throw new MaintenanceRefusal("unsupported-member", jsonPath);
         }
         if (!captured.compact.has(path)) continue;
-        const verified = await verifyMember(root, path);
-        const file = await readPlannerParquet(resolve(root, ...path.split("/")), request.ledger, rowContract);
-        if (file.bytes !== verified.bytes.byteLength || file.file_sha256 !== verified.file_sha256
-          || file.envelope.tier !== "compact" || file.envelope.period !== candidate
+        const file = await readMaintenanceSource(root, path, request.ledger, rowContract, sources, targetPath);
+        if (file.envelope.tier !== "compact" || file.envelope.period !== candidate
           || file.envelope.covers !== covers || file.rows.length === 0
           || file.rows.some(row => !rowIsWithin(row, candidate, covers))) {
           throw new MaintenanceRefusal("malformed-member", path);
         }
-        sources.set(path, checkedSource(path, file));
         if (compactRank(candidate) > compactRank(request.period)) {
           return result(request, { status: "unchanged", reason: "higher-precedence-compact" });
         }
@@ -226,14 +237,11 @@ async function maintainPeriod<T extends object>(
       }
       for (const path of rawPathsByDay.get(day) ?? []) {
         if (!selectedRawPaths.has(path)) continue;
-        const verified = await verifyMember(root, path);
-        const file = await readPlannerParquet(resolve(root, ...path.split("/")), request.ledger, rowContract);
-        if (file.bytes !== verified.bytes.byteLength || file.file_sha256 !== verified.file_sha256
-          || file.envelope.tier !== "raw" || file.envelope.covers !== day
+        const file = await readMaintenanceSource(root, path, request.ledger, rowContract, sources, targetPath);
+        if (file.envelope.tier !== "raw" || file.envelope.covers !== day
           || file.rows.some(row => !rowIsWithin(row, "daily", day))) {
           throw new MaintenanceRefusal("malformed-member", path);
         }
-        sources.set(path, checkedSource(path, file));
         rows.push(...file.rows);
       }
     }

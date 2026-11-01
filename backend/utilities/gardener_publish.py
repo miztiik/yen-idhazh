@@ -1,17 +1,18 @@
 """How does one gardener shard land its one commit on main, however many shards race it?
 
-This is the entry point a wake's shard runs. Its checkout holds only the code
-and config it runs. It reads the commit this checkout is at, the exact folders
-its tasks own or read, and the files under each task's named periods. A task
-that names a period as it runs has it listed from the same commit then. It runs the shard through
-`idhazh.gardener.runner`, whose tasks fetch only the folders they read, and
-lands what the runner hands back. It sits here rather than in the task package
-because landing and reading the commit run git; the task package records the
-work, while this utility owns the commit operations.
+This is the entry point a wake's shard runs. Initial checkout supplies code,
+config and required saved planner data at one ref. Planner tasks read exact
+local periods and use the supplied checkout identity; they do not query Git.
+Other families retain their named commit listing and acquire only the periods
+they read. The utility runs tasks through `idhazh.gardener.runner`, then lands
+their exact completed operations. The task package records the work; this
+utility owns input routing and final commit operations.
 
     python backend/utilities/gardener_publish.py NAME | --shard N --run-id R --attempt A
 
-**Only a named fetch downloads a file.** Every git call runs with lazy fetching
+**After initial checkout, other families fetch only named input.** Planner
+paths never enter Git listing, size lookup or widening callbacks. Every git
+call runs with lazy fetching
 off but the one that widens the checkout for a task, so a call that would have
 downloaded a file the clone lacks fails instead of paying for it quietly. A
 file's size is git's where the clone holds the file. For one it never
@@ -31,15 +32,15 @@ deleted as easily as one it holds, and the checkout's own index is never
 expanded. The push sends whole objects rather than deltas against files the
 clone lacks, which it could only compute by downloading them.
 
-**The record decides whether the shard has already landed.** Every shard writes
-one record under the gardener's own ledger, and its bytes are unique to the
-shard. If `origin/main` already holds that path with those bytes, an earlier try
-landed and this one stops with success; the same path with other bytes is two
-runs claiming one identity, and that is exit 2.
+**Every exact operation decides whether the shard already landed.** All write
+bytes and modes and all completed deletions must match `origin/main`. A matching
+record alone is not proof of publication. A different immutable record at the
+same identity is refused.
 
 **A shard whose paths main changed after its commit lands nothing.** After each
-fetch, `git diff-tree` compares the commit this checkout is at - the one the
-shard ran on - with `origin/main`, over every path the shard writes or deletes
+fetch, the publisher compares the supplied original planner source, or the
+other families' existing source lookup, with `origin/main`, over every path
+the shard writes or deletes
 but its record. A path it lists is one main changed after the shard's commit, so
 the shard's version is stale. A re-run is the usual cause: it checks out its
 run's old commit and names its record afresh, so the record check cannot catch
@@ -62,8 +63,10 @@ escapes is said the same way, by its type and place, before it goes on, and the
 trace printed as the program ends names each chained exception's type and
 frames, never its text (`idhazh.crash_trace`). On GitHub the event log also
 writes the warning a `stale` or `lost` shard shows on the run's page
-(`idhazh.gardener.workflow_commands`). Only `main` reads the environment:
-whether the run is a step on GitHub, and where its summary goes.
+(`idhazh.gardener.workflow_commands`). `main` reads workflow and summary
+controls. Planner input preparation also reads `GITHUB_SHA` when its caller
+did not supply code identity. Native Git environment configuration preserves
+the sparse index without a post-checkout setup process.
 
 **Three checks run over what was staged, before every commit.** Nothing outside
 the shard's writes and deletions is staged. Every write is staged, unless its

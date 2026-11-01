@@ -227,7 +227,10 @@ lookup and widening callbacks. Local reads add zero task download bytes; the
 initial checkout's transfer is not measured here. Period, raw-file and retention
 limits remain unchanged. The transient maintenance request/result has no
 revision control. Native validation, source sizes/digests, target guards and
-exact deletion checks remain. Only the final shard publisher uses Git and
+exact deletion checks remain. Each path retains its first loaded byte size
+and SHA256 for the whole period. A compact reused by several days must match
+both on every read; a rewrite cannot replace that proof or mix file versions.
+Only the final shard publisher uses Git and
 checks planner replacements/deletions against the supplied initial identity.
 The row identities and missing-data rules are
 [the planner reference](../../reference/feed-planner-ledgers.md#e-dates-counters-and-compaction).
