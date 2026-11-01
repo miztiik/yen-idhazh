@@ -228,7 +228,7 @@
     "boilerplate_ratio_max": 0.4,
     "corroboration_min_words": 100,
     "corroboration_ratio_max": 2.0,
-    "max_body_bytes": 2000000,
+    "max_body_bytes": 5242880,
     "max_retries": 3,
     "min_source_words": 60,
     "paywall_markers": [
