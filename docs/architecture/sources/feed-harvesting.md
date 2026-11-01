@@ -230,7 +230,14 @@ Native defaults keep TLS verification enabled, use HTTP/2 where supported,
 and decode gzip, Brotli and deflate streams. HTTP/3 is opt-in and is not
 requested; no measured source need justifies adding a control for it.
 No proxy, persistent cookie jar or weaker TLS fallback is enabled.
-Application deadlines own abort signals instead of a second native timeout.
+Each request passes the existing attempt budget to Impit's native timeout.
+Before headers arrive, Impit has no supported immediate native cancellation
+API. The request keeps ownership until headers arrive or that native timeout
+expires; early cancellation can wait up to the attempt budget plus settlement
+overhead. It never returns early while that native request remains active.
+After headers arrive, a cancelled caller first cancels the decoded response
+stream. Otherwise caller cancellation forwards to the owned native signal.
+The existing application deadline still bounds response reading.
 Aborting the request stops a decoded-byte cutoff or failed body read without
 letting cleanup replace its observed status and byte count.
 A proven decoded cutoff remains the primary failure if later cancellation or

@@ -9,6 +9,21 @@ let stopping = false;
 const server = createServer((request, response) => {
   const path = new URL(request.url, "http://127.0.0.1").pathname.slice(1);
   process.send({ agent: request.headers["user-agent"] ?? "" });
+  if (path === "no-headers" || path === "late-headers") {
+    let timer;
+    response.once("close", () => {
+      clearTimeout(timer);
+      if (!stopping) process.send({ closed: path });
+    });
+    process.send({ received: path });
+    if (path === "late-headers") {
+      timer = setTimeout(() => {
+        response.writeHead(403, { "content-type": "text/html" });
+        response.flushHeaders();
+      }, 150);
+    }
+    return;
+  }
   if (path === "redirect") {
     response.writeHead(302, { location: "/followed" });
     response.end();

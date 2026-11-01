@@ -6,6 +6,7 @@ import { once } from "node:events";
 import { createConnection } from "node:net";
 import { createImpitTransport } from "../src/harvest-feeds/impit-transport";
 import { BodyLimitError, ResponseReadError } from "../src/harvest-feeds/transport";
+import { TimeoutError } from "impit";
 import { inputs } from "./harvest-recordings";
 
 test("native profiles decode compressed bodies and retain status at cutoff and cancellation", async () => {
@@ -14,6 +15,7 @@ test("native profiles decode compressed bodies and retain status at cutoff and c
   let followed = 0;
   const agents: string[] = [];
   const cancellations = new Map<string, () => void>();
+  const arrivals = new Map<string, () => void>();
   const closed = new Set<string>();
   const retryAfter = "1".repeat(300);
   const server = fork(join(import.meta.dir, "impit-loopback-source.cjs"), [], {
@@ -27,6 +29,7 @@ test("native profiles decode compressed bodies and retain status at cutoff and c
       if ("port" in message && typeof message.port === "number") resolve(message.port);
       else if ("agent" in message && typeof message.agent === "string") agents.push(message.agent);
       else if ("followed" in message && message.followed === true) followed++;
+      else if ("received" in message && typeof message.received === "string") arrivals.get(message.received)?.();
       else if ("closed" in message && typeof message.closed === "string") {
         closed.add(message.closed);
         cancellations.get(message.closed)?.();
@@ -36,7 +39,8 @@ test("native profiles decode compressed bodies and retain status at cutoff and c
   const transport = createImpitTransport();
   const base = { profile: loaded.config.harvest.request_headers.primary,
     diagnostics: loaded.config.harvest.response_diagnostics,
-    signal: new AbortController().signal, max_body_bytes: payload.byteLength };
+    signal: new AbortController().signal, max_body_bytes: payload.byteLength,
+    timeout_ms: loaded.config.harvest.fetch_timeout_ms };
   const target = (path: string) => new URL(`http://127.0.0.1:${port}/${path}`);
   async function cancelled(path: string) {
     if (closed.has(path)) return;
@@ -105,6 +109,32 @@ test("native profiles decode compressed bodies and retain status at cutoff and c
     expect(agents[1]).toContain("Firefox/");
     expect(agents.at(-1)).toContain("Chrome/");
     expect(agents.every(agent => !agent.includes("compatible;"))).toBe(true);
+    for (const path of ["no-headers", "late-headers"]) {
+      const received = new Promise<void>(resolve => arrivals.set(path, resolve));
+      const early = new AbortController();
+      let settled = false;
+      const started = performance.now();
+      const request = transport.request({ ...base, url: target(path), signal: early.signal, timeout_ms: 500 });
+      void request.then(() => { settled = true; }, () => { settled = true; });
+      await received;
+      early.abort();
+      await Promise.resolve();
+      expect(settled).toBe(false);
+      if (path === "late-headers") {
+        await expect(request).rejects.toMatchObject({
+          http_status: 403, response_evidence: { content_type: "text/html", decoded_bytes: null },
+        });
+      } else {
+        await expect(request).rejects.toBeInstanceOf(TimeoutError);
+        expect(performance.now() - started).toBeGreaterThanOrEqual(250);
+      }
+      await cancelled(path);
+      arrivals.delete(path);
+    }
+    closed.delete("no-headers");
+    await expect(transport.request({ ...base, url: target("no-headers"), timeout_ms: 200 }))
+      .rejects.toBeInstanceOf(TimeoutError);
+    await cancelled("no-headers");
   } finally {
     const exited = once(server, "exit");
     server.send("stop");

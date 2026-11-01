@@ -35,6 +35,7 @@ export type TransportRequest = {
   profile: FeedIngestConfig["harvest"]["request_headers"]["primary"];
   diagnostics: FeedIngestConfig["harvest"]["response_diagnostics"];
   max_body_bytes: number;
+  timeout_ms: number;
   signal: AbortSignal;
 };
 export interface HarvestTransport {

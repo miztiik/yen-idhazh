@@ -99,7 +99,7 @@ export function createPermittedFetcher(
     dispatched();
     return transport.request({
       url, profile, diagnostics: config.response_diagnostics, signal,
-      max_body_bytes: controls.max_body_bytes,
+      max_body_bytes: controls.max_body_bytes, timeout_ms: config.fetch_timeout_ms,
     });
   }
 

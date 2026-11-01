@@ -40,14 +40,25 @@ export function createImpitTransport(): HarvestTransport {
         clients.set(key, client);
       }
       const controller = new AbortController();
-      const signal = AbortSignal.any([input.signal, controller.signal]);
+      const abort = () => controller.abort(input.signal.reason);
       try {
-        const response = await client.fetch(input.url, { signal, redirect: "manual", timeout: null });
+        const response = await client.fetch(input.url, {
+          signal: controller.signal, redirect: "manual", timeout: input.timeout_ms,
+        });
         let evidence = responseEvidence(response.headers, input, null);
         const reader = response.body.getReader();
         const chunks: Uint8Array[] = [];
         let bytes = 0;
         try {
+          if (input.signal.aborted) {
+            try { await reader.cancel(); }
+            catch (cleanup) {
+              throw new AggregateError([input.signal.reason, cleanup], "Cancellation cleanup failed", { cause: input.signal.reason });
+            }
+            input.signal.throwIfAborted();
+          }
+          input.signal.addEventListener("abort", abort, { once: true });
+          if (input.signal.aborted) abort();
           for (;;) {
             input.signal.throwIfAborted();
             const chunk = await reader.read();
@@ -67,7 +78,10 @@ export function createImpitTransport(): HarvestTransport {
             location: response.headers.get("location"), evidence };
         } catch (error) {
           throw new ResponseReadError(response.status, evidence, error);
-        } finally { reader.releaseLock(); }
+        } finally {
+          input.signal.removeEventListener("abort", abort);
+          reader.releaseLock();
+        }
       } finally { controller.abort(); }
     },
   };

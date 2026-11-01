@@ -244,7 +244,9 @@ For native source HTTP changes, add
 `test/impit-transport.test.ts` to the service selection. It uses real Impit
 under Bun against generated loopback responses, not live publishers:
 gzip, Brotli and deflate decoding, decoded-byte cutoff, stalled-read
-cancellation, manual redirects and native Firefox/Chrome wire headers.
+cancellation, pre-header ownership through native timeout or delayed headers,
+manual redirects and native Firefox/Chrome wire headers. The pre-header cases
+also verify source closure, not only rejection of the application promise.
 Run it on Windows locally and on Linux in merge-candidate CI. Ordinary source
 tests keep their recorded HTTP boundary; they do not access the open web.
 The focused `native_source_transport` CI job runs this oracle on both Linux
