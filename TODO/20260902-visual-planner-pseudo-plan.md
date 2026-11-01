@@ -1828,7 +1828,7 @@ index, not the plan.
 | 18 | [Diagrams deferred](../docs/architecture/publishing/visuals.md#diagrams-deferred) | Whole plan deferred; not delivered or a prerequisite for other visual work |
 | 19 | [Every attempt is recorded](20260905-19-visual-telemetry-plan.md) | The visual telemetry event and the ledger under `state/` |
 | 20 | [Visual-attempt console views](../docs/architecture/publishing/what-the-pipelines-route-draws.md#visual-attempt-views-read-the-unpublished-record-at-build-time) | Delivered: two funnels, refusal reasons by UTC date and planned versus written types; missing evidence is not zero |
-| 21 | [Human judgement](20260905-21-human-judgement-plan.md) | Ground truth: the review harness, paired evaluation, weight fitting |
+| 21 | [Recorded visual-attempt reporting](../docs/concepts/telemetry.md#visual-design-attempts) | Closed: review artifact and Parquet report delivered; human-review extensions, fitting, automatic example selection and comprehension studies abandoned |
 | 22 | [Close it out](20260905-22-distil-and-close-plan.md) | Every finding distilled into `docs/`, and this document deleted |
 
 ### 15.2 The worth-alone test, which the numbers inherit

@@ -3,7 +3,7 @@
 **Last Updated**: 2026-11-01
 **Level**: 2 (documentation, and the deletion of two working documents)
 
-**Chain**: previous [`20260905-21-human-judgement-plan.md`](20260905-21-human-judgement-plan.md). **Last plan of the group.**
+**Chain**: delivered [visual-attempt reporting](../docs/how-to/report-visual-attempts.md); the human-review and automatic-tuning work is [closed](../docs/concepts/telemetry.md#visual-design-attempts). **Last plan of the group.**
 **Reference**: [`20260902-visual-planner-pseudo-plan.md`](20260902-visual-planner-pseudo-plan.md) - the document this row deletes, and O40 in particular.
 
 Execute per docs/how-to/execute-a-plan.md: one maintainer carries the plan and delegates a row where delegation pays; keep parallel N = 4 rows in flight, refilling a slot as soon as a worker returns and never waiting on a merge; consult a persona only where two answers would lead to different code; AUTO-merge on green gates; honor the ESCALATE triggers in section 0. AUTHOR-AND-STOP until the user authorizes.
@@ -124,6 +124,6 @@ Execute per docs/how-to/execute-a-plan.md: one maintainer carries the plan and d
 ## See also
 
 - [`20260902-visual-planner-pseudo-plan.md`](20260902-visual-planner-pseudo-plan.md) - the decision record this group executes, and which this plan deletes.
-- [`20260905-21-human-judgement-plan.md`](20260905-21-human-judgement-plan.md) - the previous plan.
+- [Recorded visual attempts](../docs/concepts/telemetry.md#visual-design-attempts) - delivered reporting and closed review/tuning scope.
 - [The published frontend](../docs/architecture/publishing/frontend.md) - the delivered chart carrier and day loading.
 - [`../docs/how-to/distill-a-plan.md`](../docs/how-to/distill-a-plan.md) - the closure ritual this plan follows.
