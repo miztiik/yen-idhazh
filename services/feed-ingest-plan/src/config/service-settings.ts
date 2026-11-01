@@ -49,7 +49,6 @@ export const ServiceSettingsSchema = z.strictObject({
     planning: RelativePathSchema, taxonomy: RelativePathSchema, sources: RelativePathSchema,
     extraction: RelativePathSchema, registrations: RelativePathSchema,
     output_root: RelativePathSchema, discovered_files: z.array(RelativePathSchema).default([]),
-    digest_root: RelativePathSchema.default("frontend/public/digest"),
     published_url_lookback_days: NonNegativeSchema.optional(),
     artifact_root: ArtifactRootSchema.default("backend/var/feed-ingest-plan"),
     health_period_limit: PositiveCountSchema.default(32),

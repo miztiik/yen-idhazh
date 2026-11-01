@@ -19,6 +19,7 @@ export function runSafePersistServer(root = process.cwd()) {
         });
         const app = createSafePersistApp({
           root, directory: resolve(root, startup.output_root), identity, signal,
+          gitSha: startup.git_sha,
           maxBodyBytes: startup.settings.listener.max_body_bytes,
         });
         let server: ReturnType<typeof Bun.serve>;

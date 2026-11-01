@@ -10,7 +10,7 @@ import { SafePersistHttpRequestSchema } from "./feed-ingest-plan-delivery-result
 import type { SafePersistHttpReadySchema } from "./feed-ingest-plan-delivery-result";
 
 export function createSafePersistApp(input: {
-  root: string; directory: string; maxBodyBytes: number;
+  root: string; directory: string; maxBodyBytes: number; gitSha: string;
   identity: z.infer<typeof SafePersistHttpReadySchema>; signal: AbortSignal;
 }) {
   const app = new Hono<{ Bindings: { beginDelivery?: () => void } }>();
@@ -35,6 +35,7 @@ export function createSafePersistApp(input: {
     const result = await deliverWorkflowMetadata({
       root: input.root, directory: input.directory, runNumber: request.runNumber,
       attempt: request.attempt, currentRunFiles: JSON.stringify(request.paths),
+      gitSha: input.gitSha,
     });
     writeJsonLine({
       event: "safe_persist_http_completed", run_number: request.runNumber, attempt: request.attempt,

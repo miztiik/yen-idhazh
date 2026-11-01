@@ -2,7 +2,7 @@
 import { copyFile, mkdir, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { z } from "zod";
-import { WriterIdentitySchema } from "../../../packages/common-contracts/src/index";
+import { CommitShaSchema, WriterIdentitySchema } from "../../../packages/common-contracts/src/index";
 import { collectWorkflowFiles, readWorkflowDeliveryContext } from "./feed-ingest-plan-current-files";
 import type { ExecutionIdentity, MetadataRegistrations } from "./feed-ingest-plan-metadata";
 import { isMetadataDeliveryConfirmed, MetadataDeliveryResultSchema } from "./feed-ingest-plan-delivery-result";
@@ -37,12 +37,14 @@ async function prepareRawDocumentArtifact(input: {
 
 export async function prepareWorkflowArtifacts(input: {
   root: string; directory: string; runNumber: string; attempt: number; outputPath?: string;
+  gitSha?: string;
   identity?: ExecutionIdentity; registrations?: MetadataRegistrations;
   dumpRawDocumentContents?: boolean; runId?: string;
 }) {
   // Actions run numbers and attempt numbers form filenames, never fetched text.
   const run = z.string().regex(/^\d+$/).parse(input.runNumber);
   const attempt = WriterIdentitySchema.shape.attempt.parse(input.attempt);
+  const gitSha = CommitShaSchema.parse(input.identity?.git_sha ?? input.gitSha);
   const outputs: Record<string, string> = {};
   const failures: unknown[] = [];
   try {
@@ -83,7 +85,8 @@ export async function prepareWorkflowArtifacts(input: {
     return outputs;
   }
   const context = input.identity !== undefined && input.registrations !== undefined
-    ? { identity: input.identity, registrations: input.registrations } : await readWorkflowDeliveryContext(input);
+    ? { identity: input.identity, registrations: input.registrations }
+    : await readWorkflowDeliveryContext({ ...input, gitSha });
   const { paths, response, failures: metadataFailures } = await collectWorkflowFiles({ ...input, ...context });
   failures.push(...metadataFailures);
   const deliveryFile = Bun.file(join(input.directory, "delivery-result.json"));
@@ -111,11 +114,12 @@ export async function prepareWorkflowArtifacts(input: {
 }
 
 if (import.meta.main) {
-  const { RUNNER_TEMP, GITHUB_OUTPUT, GITHUB_RUN_ID, GITHUB_RUN_ATTEMPT, DUMP_RAW_DOCUMENT_CONTENTS, RUN_ID } = process.env;
-  if (!RUNNER_TEMP || !GITHUB_OUTPUT || !GITHUB_RUN_ID || !GITHUB_RUN_ATTEMPT) throw new Error("Artifact execution controls are missing");
+  const { RUNNER_TEMP, GITHUB_OUTPUT, GITHUB_RUN_ID, GITHUB_RUN_ATTEMPT, DUMP_RAW_DOCUMENT_CONTENTS, RUN_ID, GITHUB_SHA } = process.env;
+  if (!RUNNER_TEMP || !GITHUB_OUTPUT || !GITHUB_RUN_ID || !GITHUB_RUN_ATTEMPT || !GITHUB_SHA) throw new Error("Artifact execution controls are missing");
   await prepareWorkflowArtifacts({
     root: process.cwd(), directory: join(RUNNER_TEMP, "feed-ingest-plan"),
     runNumber: GITHUB_RUN_ID, attempt: Number(GITHUB_RUN_ATTEMPT), outputPath: GITHUB_OUTPUT,
+    gitSha: GITHUB_SHA,
     dumpRawDocumentContents: DUMP_RAW_DOCUMENT_CONTENTS === undefined ? false : parseRawDocumentDumpControl(DUMP_RAW_DOCUMENT_CONTENTS),
     ...(RUN_ID === undefined || RUN_ID === "" ? {} : { runId: RUN_ID }),
   });

@@ -23,6 +23,7 @@ const serverEntry = fileURLToPath(new URL("../scripts/safe-persist-http-server.t
 const requestFor = (f: Recording, paths = f.commit.paths) => ({ runNumber: "700", attempt: 3, paths });
 const inputFor = (f: Recording) => ({
   root: f.repository, directory: f.directory, currentRunFiles: JSON.stringify(f.commit.paths), runNumber: "700", attempt: 3,
+  gitSha: f.identity.git_sha,
 });
 
 async function hostRecording() {
@@ -41,6 +42,7 @@ async function openApi(f: Recording) {
   });
   const app = createSafePersistApp({
     root: f.repository, directory: f.directory, maxBodyBytes: settings.listener.max_body_bytes,
+    gitSha: f.identity.git_sha,
     identity, signal: new AbortController().signal,
   });
   const server = Bun.serve({
@@ -268,6 +270,7 @@ test("the real delivery server exits on invalid startup and on its supervisor's 
     const settings = ServiceSettingsSchema.parse(await Bun.file(join(f.repository, "config", "feed-ingest-plan-service.json")).json());
     const startup = SafePersistHttpStartupSchema.parse({
       nonce: randomUUID(), settings, output_root: relative(f.repository, f.directory).replaceAll("\\", "/"),
+      git_sha: f.identity.git_sha,
     });
     const invalid = Bun.spawn([process.execPath, serverEntry], {
       cwd: f.repository, stdin: "pipe", stdout: "pipe", stderr: "pipe",

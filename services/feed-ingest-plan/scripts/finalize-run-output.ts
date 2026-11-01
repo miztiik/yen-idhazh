@@ -2,7 +2,7 @@
 import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import { z } from "zod";
-import { WriterIdentitySchema } from "../../../packages/common-contracts/src/index";
+import { CommitShaSchema, WriterIdentitySchema } from "../../../packages/common-contracts/src/index";
 import { describePlanError, PlanError } from "../src/api/plan-request";
 import { deliverWorkflowMetadataHttp } from "./safe-persist-http-client";
 import { writeWorkflowReport } from "./feed-ingest-plan-report";
@@ -12,11 +12,13 @@ import { writeJsonLine } from "../src/logging/structured-logger";
 
 export async function finalizeRunOutput(input: {
   root: string; directory: string; currentRunFiles?: string; runNumber: string; attempt: number;
+  gitSha: string;
   cancelled: boolean; summaryPath?: string; outputPath?: string;
   dumpRawDocumentContents?: boolean; runId?: string; signal?: AbortSignal;
 }) {
   const runNumber = z.string().regex(/^\d+$/).parse(input.runNumber);
   const attempt = WriterIdentitySchema.shape.attempt.parse(input.attempt);
+  const gitSha = CommitShaSchema.parse(input.gitSha);
   await mkdir(input.directory, { recursive: true });
   const failures: unknown[] = [];
   const operations: readonly (readonly [string, () => Promise<unknown>])[] = [
@@ -28,11 +30,11 @@ export async function finalizeRunOutput(input: {
       if (!input.currentRunFiles) {
         throw new PlanError("COMPLETED_PATHS_MISSING", "Collection did not supply its exact completed ledger paths");
       }
-      return deliverWorkflowMetadataHttp({ ...input, runNumber, attempt, currentRunFiles: input.currentRunFiles },
+      return deliverWorkflowMetadataHttp({ ...input, runNumber, attempt, gitSha, currentRunFiles: input.currentRunFiles },
         input.signal === undefined ? {} : { signal: input.signal });
     }],
     ["write-report", () => writeWorkflowReport(input)],
-    ["prepare-artifacts", () => prepareWorkflowArtifacts({ ...input, runNumber, attempt })],
+    ["prepare-artifacts", () => prepareWorkflowArtifacts({ ...input, runNumber, attempt, gitSha })],
   ];
   for (const [operation, execute] of operations) {
     try { await execute(); }
@@ -56,14 +58,15 @@ if (import.meta.main) {
   process.on("SIGTERM", cancel);
   try {
     const { RUNNER_TEMP, GITHUB_RUN_ID, GITHUB_RUN_ATTEMPT, GITHUB_STEP_SUMMARY, GITHUB_OUTPUT,
-      CURRENT_RUN_FILES, RUN_CANCELLED, DUMP_RAW_DOCUMENT_CONTENTS, RUN_ID } = process.env;
-    if (!RUNNER_TEMP || !GITHUB_RUN_ID || !GITHUB_RUN_ATTEMPT || !GITHUB_OUTPUT) {
+      CURRENT_RUN_FILES, RUN_CANCELLED, DUMP_RAW_DOCUMENT_CONTENTS, RUN_ID, GITHUB_SHA } = process.env;
+    if (!RUNNER_TEMP || !GITHUB_RUN_ID || !GITHUB_RUN_ATTEMPT || !GITHUB_OUTPUT || !GITHUB_SHA) {
       throw new Error("Workflow finalization controls are missing");
     }
     await finalizeRunOutput({
       root: process.cwd(), directory: join(RUNNER_TEMP, "feed-ingest-plan"),
       ...(CURRENT_RUN_FILES === undefined ? {} : { currentRunFiles: CURRENT_RUN_FILES }),
       runNumber: GITHUB_RUN_ID, attempt: Number(GITHUB_RUN_ATTEMPT),
+      gitSha: GITHUB_SHA,
       cancelled: z.enum(["true", "false"]).parse(RUN_CANCELLED) === "true",
       ...(GITHUB_STEP_SUMMARY === undefined ? {} : { summaryPath: GITHUB_STEP_SUMMARY }),
       outputPath: GITHUB_OUTPUT,

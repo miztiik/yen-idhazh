@@ -1,6 +1,7 @@
 /** Which completed files remain recoverable even when another producer fails? */
 import { join } from "node:path";
 import { z } from "zod";
+import { CommitShaSchema } from "@idhazh/common-contracts";
 import { ServiceSettingsSchema } from "../src/config/service-settings";
 import { PlanResponseSchema } from "../src/api/plan-response.schema";
 import { WorkflowHostFingerprintSchema } from "./feed-ingest-plan-host-fingerprint";
@@ -10,16 +11,15 @@ import { verifyHostFingerprint } from "./feed-ingest-plan-host-verification";
 import { verifyPlanningCompletion } from "./feed-ingest-plan-verification";
 
 export async function readWorkflowDeliveryContext(input: {
-  root: string; directory: string; runNumber: string; attempt: number;
+  root: string; directory: string; runNumber: string; attempt: number; gitSha: string;
 }) {
+  const expectedSha = CommitShaSchema.parse(input.gitSha);
   const host = z.object({ host_request: WorkflowHostFingerprintSchema.shape.host_request })
     .parse(await Bun.file(join(input.directory, "host-fingerprint.json")).json());
   const { run_id, attempt, git_sha } = host.host_request.writer;
   const identity = ExecutionIdentitySchema.parse({ run_id, attempt, git_sha });
   z.string().regex(/^\d+$/).parse(input.runNumber);
-  const child = Bun.spawn(["git", "rev-parse", "HEAD"], { cwd: input.root, stdout: "pipe", stderr: "pipe" });
-  const [sha] = await Promise.all([new Response(child.stdout).text(), new Response(child.stderr).text()]);
-  if (await child.exited !== 0 || sha.trim() !== identity.git_sha || input.attempt !== identity.attempt
+  if (expectedSha !== identity.git_sha || input.attempt !== identity.attempt
     || identity.run_id !== `${host.host_request.date}-${input.runNumber}`
     || JSON.stringify(host.host_request.writer) !== JSON.stringify(hostWriter(identity))) {
     throw new Error("Workflow metadata differs from the executed revision, run or attempt");

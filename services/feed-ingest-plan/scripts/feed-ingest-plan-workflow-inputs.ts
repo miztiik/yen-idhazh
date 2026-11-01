@@ -9,7 +9,6 @@ import { parseAgeWindows, resolveRunPolicy, RunPolicyOverridesSchema } from "../
 import type { PlanRequest } from "../src/api/plan-request";
 import type { RunPolicyOverrides } from "../src/config/resolve-run-policy";
 import { parseRawDocumentDumpControl, ServiceSettingsSchema } from "../src/config/service-settings";
-import { stagePlannerHistory } from "./feed-ingest-plan-history";
 import { WorkflowPolicySchema } from "./feed-ingest-plan-policy-report";
 import { captureWorkflowHostFingerprint } from "./feed-ingest-plan-host-fingerprint";
 import { readMetadataRegistrations } from "./feed-ingest-plan-metadata";
@@ -46,12 +45,9 @@ export async function preparePlannerWorkflow(root: string, environment: Record<s
   const inputs = await loadPlanInputs(root);
   inputs.harvest = { ...inputs.harvest, config: resolveRunPolicy(inputs.harvest.config, policyOverrides) };
   const attempt = PositiveCountSchema.parse(Number(GITHUB_RUN_ATTEMPT));
-  const staged = await stagePlannerHistory(root, inputs, new Date().toISOString().replace(/\.\d{3}Z$/, "Z"));
   inputs.settings = ServiceSettingsSchema.parse({
     ...inputs.settings, enabled: true,
     ...(dumpRawDocuments === undefined ? {} : { dump_raw_document_contents: dumpRawDocuments }),
-    inputs: { ...inputs.settings.inputs, feed_health_days: staged.feed_health_days,
-      feed_health_input_gap: staged.feed_health_input_gap },
   });
   inputs.outputRoot = join(directory, "state");
   const captured = new Date();
@@ -61,7 +57,6 @@ export async function preparePlannerWorkflow(root: string, environment: Record<s
     config: inputs.harvest.config, request: { ...request, ...policyOverrides }, history: inputs.clock_config.collect,
     parser_concurrency: inputs.settings.listener.parser_concurrency,
   })));
-  console.error(JSON.stringify({ event: "planner_history_staged", notices: staged.notices }));
   const identity = { run_id: `${captured.toISOString().slice(0, 10)}-${GITHUB_RUN_ID}`,
     attempt, git_sha: gitSha };
   const registryPath = join(root, inputs.settings.inputs.registrations);

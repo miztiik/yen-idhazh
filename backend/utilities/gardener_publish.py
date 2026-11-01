@@ -1,17 +1,18 @@
 """How does one gardener shard land its one commit on main, however many shards race it?
 
-This is the entry point a wake's shard runs. Its checkout holds only the code
-and config it runs. It reads the commit this checkout is at, the exact folders
-its tasks own or read, and the files under each task's named periods. A task
-that names a period as it runs has it listed from the same commit then. It runs the shard through
-`idhazh.gardener.runner`, whose tasks fetch only the folders they read, and
-lands what the runner hands back. It sits here rather than in the task package
-because landing and reading the commit run git; the task package records the
-work, while this utility owns the commit operations.
+This is the entry point a wake's shard runs. Initial checkout supplies code,
+config and required saved planner data at one ref. Planner tasks read exact
+local periods and use the supplied checkout identity; they do not query Git.
+Other families retain their named commit listing and acquire only the periods
+they read. The utility runs tasks through `idhazh.gardener.runner`, then lands
+their exact completed operations. The task package records the work; this
+utility owns input routing and final commit operations.
 
     python backend/utilities/gardener_publish.py NAME | --shard N --run-id R --attempt A
 
-**Only a named fetch downloads a file.** Every git call runs with lazy fetching
+**After initial checkout, other families fetch only named input.** Planner
+paths never enter Git listing, size lookup or widening callbacks. Every git
+call runs with lazy fetching
 off but the one that widens the checkout for a task, so a call that would have
 downloaded a file the clone lacks fails instead of paying for it quietly. A
 file's size is git's where the clone holds the file. For one it never
@@ -31,15 +32,15 @@ deleted as easily as one it holds, and the checkout's own index is never
 expanded. The push sends whole objects rather than deltas against files the
 clone lacks, which it could only compute by downloading them.
 
-**The record decides whether the shard has already landed.** Every shard writes
-one record under the gardener's own ledger, and its bytes are unique to the
-shard. If `origin/main` already holds that path with those bytes, an earlier try
-landed and this one stops with success; the same path with other bytes is two
-runs claiming one identity, and that is exit 2.
+**Every exact operation decides whether the shard already landed.** All write
+bytes and modes and all completed deletions must match `origin/main`. A matching
+record alone is not proof of publication. A different immutable record at the
+same identity is refused.
 
 **A shard whose paths main changed after its commit lands nothing.** After each
-fetch, `git diff-tree` compares the commit this checkout is at - the one the
-shard ran on - with `origin/main`, over every path the shard writes or deletes
+fetch, the publisher compares the supplied original planner source, or the
+other families' existing source lookup, with `origin/main`, over every path
+the shard writes or deletes
 but its record. A path it lists is one main changed after the shard's commit, so
 the shard's version is stale. A re-run is the usual cause: it checks out its
 run's old commit and names its record afresh, so the record check cannot catch
@@ -62,8 +63,10 @@ escapes is said the same way, by its type and place, before it goes on, and the
 trace printed as the program ends names each chained exception's type and
 frames, never its text (`idhazh.crash_trace`). On GitHub the event log also
 writes the warning a `stale` or `lost` shard shows on the run's page
-(`idhazh.gardener.workflow_commands`). Only `main` reads the environment:
-whether the run is a step on GitHub, and where its summary goes.
+(`idhazh.gardener.workflow_commands`). `main` reads workflow and summary
+controls. Planner input preparation also reads `GITHUB_SHA` when its caller
+did not supply code identity. Native Git environment configuration preserves
+the sparse index without a post-checkout setup process.
 
 **Three checks run over what was staged, before every commit.** Nothing outside
 the shard's writes and deletions is staged. Every write is staged, unless its
@@ -84,13 +87,14 @@ import logging
 import os
 import subprocess
 import sys
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path, PurePosixPath
 from types import ModuleType
 from typing import Final
 
+from idhazh import ledger
 from idhazh.config import GardenerSettings
 from idhazh.contracts.base import ServerJob
 from idhazh.contracts.file_envelope import WriterIdentity
@@ -124,6 +128,7 @@ from idhazh.gardener.outcome import (
     worst,
 )
 from idhazh.gardener.period_inputs import paths_for_task, scheduled_range
+from idhazh.ledger import paths as ledger_paths
 from idhazh.ledger import staging
 from idhazh.site_weight import BYTES_PER_MB
 from utilities.publication_git import Repository
@@ -321,7 +326,10 @@ def publish(
         refused = _refuse_a_directory(shard, repo)
         if refused is not None:
             raise IntegrityError(refused)
-        source = git.git("rev-parse", "HEAD").strip()
+        source = (
+            identity.git_sha if planner_input_folders(shard.owned_prefixes)
+            else git.git("rev-parse", "HEAD").strip()
+        )
         git.prime(source, set(shard.written_paths) | set(shard.deleted_paths))
         writes = {
             path: Write(
@@ -390,11 +398,14 @@ def read_the_listing(
     trees: TreeReader | None,
     *,
     budget: int | None = None,
+    local_folders: Sequence[str] = (),
 ) -> FileListing:
-    """Every file the commit holds under these named period paths, with its size.
+    """Every file at the named periods, from local planner input or another family's commit.
 
     The listing answers only for these paths, and refuses a path under its
-    folders that none of them names. Git's size where the clone holds the
+    folders that none of them names. Planner folders use already-acquired local
+    files and never enter Git listing, size lookup or widening callbacks.
+    Other folders use Git's size where the clone holds the
     file. For one it never downloaded, GitHub's blob API is asked for that
     named file and its size is matched by blob id. `trees` stands in for that
     API, and None reaches it for this repo. A step that names a period as it
@@ -410,6 +421,24 @@ def read_the_listing(
     """
     chosen = sorted(set(folders))
     named = sorted(set(period_paths))
+    local = sorted(set(local_folders))
+    if any(folder not in chosen for folder in local):
+        raise ValueError("local planner folders must be declared in the listing")
+
+    def local_path(path: str) -> bool:
+        return any(ownership.contains(path, folder) for folder in local)
+
+    def local_listing(wanted: Sequence[str]) -> FileListing:
+        return FileListing.from_disk(
+            repo_root,
+            local,
+            paths=[repo_root / path for path in wanted if local_path(path)],
+            budget=budget,
+        )
+
+    if local == chosen:
+        return local_listing(named)
+
     listed: set[str] = set()
     above: set[str] = set()
 
@@ -430,15 +459,21 @@ def read_the_listing(
             if parent.parts
         )
 
-    entries = checkout.list_files(named)
+    entries = checkout.list_files([path for path in named if not local_path(path)])
     remember(entries)
 
     def lister(wanted: Sequence[str]) -> dict[str, int]:
-        found = checkout.list_files(wanted)
+        found = checkout.list_files([path for path in wanted if not local_path(path)])
         remember(found)
-        return sizes_of(found, asked_of_github(found))
+        return {
+            **sizes_of(found, asked_of_github(found)),
+            **local_listing(wanted).sizes,
+        }
 
     def widen(wanted: Sequence[str]) -> None:
+        wanted = [path for path in wanted if not local_path(path)]
+        if not wanted:
+            return
         stray = [
             entry
             for entry in wanted
@@ -453,7 +488,7 @@ def read_the_listing(
             )
         checkout.widen(wanted)
 
-    return FileListing.from_commit(
+    listing = FileListing.from_commit(
         repo_root,
         chosen,
         entries,
@@ -462,6 +497,9 @@ def read_the_listing(
         widen=widen,
         lister=lister,
         budget=budget,
+    )
+    return dataclasses.replace(
+        listing, sizes=dict(sorted({**listing.sizes, **local_listing(named).sizes}.items()))
     )
 
 
@@ -472,6 +510,23 @@ def declared_folders(
     owned = sorted({folder for name in names for folder in settings.tasks[name].owns})
     read = sorted({folder for name in names for folder in settings.tasks[name].reads})
     return owned, read
+
+
+def planner_input_folders(folders: Iterable[str]) -> tuple[str, ...]:
+    """Which declared ledger folders use the planner's local input authority?"""
+    roots = {
+        (ledger.STATE_DIRNAME, ledger_paths.RAW_DIRNAME),
+        (ledger.STATE_DIRNAME, ledger_paths.COMPACT_DIRNAME),
+    }
+    local: list[str] = []
+    for folder in folders:
+        parts = PurePosixPath(folder).parts
+        if parts[:2] not in roots:
+            continue
+        which = ledger.door_ledger_at(tuple(parts[2:]))
+        if which is not None and ledger_paths.is_planner_ledger(which):
+            local.append(folder)
+    return tuple(sorted(set(local)))
 
 
 #: Python's own exit status when an exception ends it: what a shard that crashed exits with.
@@ -535,6 +590,7 @@ def run_and_land(
     run_id: str,
     attempt: int,
     shard: int,
+    git_sha: str | None = None,
     period_range: tuple[str, str] | None = None,
     package: ModuleType = shipped_tasks,
     trees: TreeReader | None = None,
@@ -561,6 +617,7 @@ def run_and_land(
             period_range=period_range,
             package=package,
             trees=trees,
+            git_sha=git_sha,
             clock=clock,
             say=say,
         )
@@ -580,10 +637,11 @@ def _run_and_land(
     period_range: tuple[str, str] | None,
     package: ModuleType,
     trees: TreeReader | None,
+    git_sha: str | None,
     clock: Callable[[], datetime],
     say: Callable[[str], None],
 ) -> tuple[Outcome, ShardPublished]:
-    """Read the commit's names, run the shard, and land what it hands back; the worst code wins.
+    """Load named inputs, run the shard, and land what it hands back; the worst code wins.
 
     The listing covers only the named periods each task may read, and a period
     a step names as it runs. A listing that cannot be read runs no task and
@@ -594,16 +652,30 @@ def _run_and_land(
     """
     names, shard = run.names, run.shard
     checkout = Checkout(repo_root)
-    sha = checkout.head()
+    owned, read = declared_folders(names, settings)
+    local = planner_input_folders([*owned, *read])
+    sha = git_sha if git_sha is not None else (
+        os.environ.get("GITHUB_SHA") if local else checkout.head()
+    )
     if sha is None:
-        say(f"shard {shard}: {repo_root.name} is not a git checkout, so no record can name it")
+        say(
+            f"shard {shard}: a planner task requires GITHUB_SHA or an explicit runtime "
+            "code identity" if local else
+            f"shard {shard}: {repo_root.name} is not a git checkout, so no record can name it"
+        )
         return _refused(run, EXIT_INTEGRITY)
+    WriterIdentity(
+        run_id=run.run_id, attempt=run.attempt, job=ServerJob.RUN_TASKS,
+        shard=shard, producer="gardener.runner", git_sha=sha,
+    )
     if period_range is not None and len(names) != 1:
         say("a named period range runs one task, not a shard")
         return _refused(run, EXIT_INTEGRITY)
     started_at = clock()
-    owned, read = declared_folders(names, settings)
-    committed = checkout.committed_folders([*owned, *read])
+    remote = [folder for folder in [*owned, *read] if folder not in local]
+    committed = (
+        checkout.committed_folders(remote) if remote else frozenset()
+    ) | frozenset(folder for folder in local if (repo_root / folder).is_dir())
     try:
         paths = sorted(
             {
@@ -627,6 +699,7 @@ def _run_and_land(
             paths,
             trees,
             budget=settings.config.max_downloaded_mb * BYTES_PER_MB,
+            local_folders=local,
         )
     except (OSError, RuntimeError, ValueError) as refusal:
         error, where = event_log.cause_of(refusal)

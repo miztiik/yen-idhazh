@@ -14,12 +14,13 @@ count what the clone downloaded from git's own trace of it.
 from __future__ import annotations
 
 import json
+import shutil
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from typing import Any, Final
 
 import pytest
-from support.paths import CONFIG_DIR, read_text
+from support.paths import CONFIG_DIR, REPO_ROOT, read_text
 
 from idhazh import config, ledger
 from idhazh.config import GardenerSettings
@@ -41,6 +42,7 @@ from ._garden import (
     git,
     lazy_fetches,
     on_origin,
+    planner_raw_fixture,
     quiet_git,
 )
 from ._garden import task_package as a_package
@@ -332,3 +334,92 @@ def test_a_month_the_step_names_as_it_runs_is_closed_and_its_deletions_land(
     monthly = on_origin(origin, f"{compact_root}/index/monthly.json")
     assert monthly is not None
     assert [entry.covers for entry in CompactIndex.from_json(monthly).entries] == ["2026-09"]
+
+
+def planner_indexes(root: Path, which: LedgerName) -> tuple[str, ...]:
+    """The three existing scheduler marks beside this recorded native planner input."""
+    paths = []
+    for period in Period:
+        path = ledger.compact_index_path(root / ledger.STATE_DIRNAME, which, period)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(CompactIndex(
+            version=CompactIndex.schema_version(), ledger=which, period=period, entries=[],
+        ).to_json(), encoding="ascii")
+        paths.append(path.relative_to(root).as_posix())
+    return tuple(paths)
+
+
+def test_planner_only_shard_needs_git_only_when_actual_final_publication_starts(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    which = LedgerName.FEED_INGEST_PLAN_DISCOVERED_ARTICLES
+    name = "compact-feed-ingest-plan-discovered-articles"
+    root = tmp_path / "local"
+    raw = planner_raw_fixture(root, which)
+    planner_indexes(root, which)
+    settings = config.load_gardener(a_config(root, CONFIG_DIR / "gardener" / f"{name}.json"))
+    sha = git(REPO_ROOT, "rev-parse", "HEAD").strip()
+    bun = shutil.which("bun")
+    assert bun is not None
+    monkeypatch.setenv("PATH", str(Path(bun).parent))
+    assert shutil.which("git") is None
+    said: list[str] = []
+    outcome = gardener_publish.run_and_land(
+        (name,), settings=settings, repo_root=root, run_id="2026-10-23-700",
+        attempt=1, shard=0, git_sha=sha, period_range=("2026-10", "2026-10"),
+        clock=lambda: datetime(2026, 10, 23, tzinfo=UTC), say=said.append,
+    )
+    assert outcome.record is not None
+    (row,) = list(ledger.load([outcome.record], model=CollectionPruneRow))
+    assert row.downloaded_bytes == 0
+    assert row.stopped_because is not StopReason.FAILED
+    assert not raw.exists()
+    target = ledger.compact_path(root / "state", which, Period.DAILY, "2026-10-21")
+    assert target.is_file() and target.read_bytes()[:4] == b"PAR1"
+    assert outcome.exit_code == EXIT_INTEGRITY and outcome.landing is not None
+    assert outcome.landing.deleted_paths == {raw.relative_to(root).as_posix()}
+
+
+def test_mixed_shard_reads_planner_input_locally_and_preserves_legacy_acquisition_and_delivery(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    origin, day_files = a_ledger_on_origin(tmp_path, monkeypatch)
+    seed = tmp_path / "checkout"
+    which = LedgerName.FEED_INGEST_PLAN_DISCOVERED_ARTICLES
+    name = "compact-feed-ingest-plan-discovered-articles"
+    raw = planner_raw_fixture(seed, which)
+    indexes = planner_indexes(seed, which)
+    raw_path = raw.relative_to(seed).as_posix()
+    git(seed, "add", "--", raw_path, *indexes)
+    git(seed, "commit", "--quiet", "-m", "record native planner inputs beside legacy ledger data")
+    git(seed, "push", "--quiet", "origin", "HEAD:refs/heads/main")
+    shard = a_partial_clone(
+        tmp_path, origin, "config", "state/raw/feed-ingest-plan", "state/compact/feed-ingest-plan",
+    )
+    sha = git(shard, "rev-parse", "HEAD").strip()
+    settings = config.load_gardener(a_config(
+        shard, CONFIG_DIR / "gardener" / f"{name}.json",
+        CONFIG_DIR / "gardener" / "compact-visual-prunes.json",
+    ))
+    trace = tmp_path / "mixed-git-trace.log"
+    monkeypatch.setenv("GIT_TRACE", str(trace))
+    said: list[str] = []
+    outcome = gardener_publish.run_and_land(
+        (name, "compact-visual-prunes"), settings=settings, repo_root=shard,
+        run_id="2026-11-15-700", attempt=1, shard=0, git_sha=sha,
+        trees=OriginBlobs(origin), clock=lambda: CLOSING_WAKE, say=said.append,
+    )
+    assert outcome.exit_code == EXIT_OK, said
+    assert outcome.record is not None
+    rows = {row.task: row for row in ledger.load([outcome.record], model=CollectionPruneRow)}
+    downloaded = rows[name].downloaded_bytes
+    assert downloaded is not None and downloaded > 0
+    assert rows["compact-visual-prunes"].downloaded_bytes == downloaded
+    assert on_origin(origin, raw_path) is None
+    target = ledger.compact_path(shard / "state", which, Period.DAILY, "2026-10-21")
+    assert on_origin(origin, target.relative_to(shard).as_posix()) is not None
+    assert all(on_origin(origin, path) is None for path in day_files)
+    commands = trace.read_text(encoding="utf-8").splitlines()
+    acquisition = [line for line in commands if "ls-tree -r -l" in line or "sparse-checkout add" in line]
+    assert acquisition and any("visual-prunes" in line for line in acquisition)
+    assert all("feed-ingest-plan" not in line for line in acquisition)

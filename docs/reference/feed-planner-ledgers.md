@@ -1,6 +1,6 @@
 # Feed planner ledgers
 
-**Last Updated**: 2026-10-31
+**Last Updated**: 2026-11-01
 
 Which planner data is retained, and where is it stored?
 
@@ -655,9 +655,13 @@ for the actual published-file check. Local preparation is in
 The Python gardener remains the scheduler for every ledger family. Its shared
 compact-index records are maintenance marks, not planner row contracts. For
 planner data, the gardener hands one named bounded period to the TypeScript
-adapter, which validates exact raw and compact Parquet members at one captured
-Git revision and returns verified bytes and exact source paths. Python applies
-that result through its existing pass and commit flow.
+adapter, which validates exact local raw and compact Parquet members and returns
+verified bytes and exact source paths. Initial checkout supplies those files.
+The transient request and result use `2026-11-01`; neither accepts `revision`
+or `revision-changed`. Source sizes/digests, target guards, native file validation
+and exact deletion sets remain. No planner row or file-envelope format changes.
+Python applies that result through its existing pass and final shard publisher,
+which checks replacements and deletions against the supplied initial code identity.
 
 Planner contracts still carry current schema stamps and changelogs. The
 version checks have no Python copy. Rejected-article compatibility and

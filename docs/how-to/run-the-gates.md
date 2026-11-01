@@ -1,6 +1,6 @@
 # Run the Gates
 
-**Last Updated**: 2026-10-31
+**Last Updated**: 2026-11-01
 Set up a machine, then run every check `CLAUDE.md` section 9 asks for before a
 merge. This page owns the project's actual gate commands; the neutral PR
 lifecycle that calls for them is
@@ -250,7 +250,7 @@ Bun child with Git unavailable, replays recorded source responses over the
 real local APIs, edits and adds historical native files after capture, and
 reads back selected metadata, selected text and health output. It also covers
 standalone capture and the next UTC day. Ordinary planner fixtures do not
-initialize a Git repository; Git fixtures belong to acquisition and delivery
+initialize a Git repository; Git fixtures belong to final delivery
 checks, not execution readers. Full merge-candidate CI remains authoritative.
 `plan-entry-points.test.ts` makes one successful request through the real
 supervised API child and one through the actual awaited CLI in a Bun child.
@@ -316,6 +316,26 @@ the Python-scheduler adapter cases in
 Python-to-TypeScript binding remains for Python-owned native shapes in
 `backend/tests/contracts/test_native_typescript_bindings.py`.
 Hosted duration is measured by the CI step, not estimated as a passing gate.
+
+For planner acquisition and maintenance changes, run the common contracts,
+shared writer and planner `check` commands. In the writer, combine
+`planner-maintenance.test.ts` and `planner-day-files.test.ts`. In the service,
+combine `feed-ingest-plan-workflow.test.ts`, `feed-ingest-plan-supervisor.test.ts`,
+`feed-ingest-plan-outputs.test.ts`, `feed-ingest-plan-finalization.test.ts`,
+`feed-ingest-plan-delivery.test.ts`, `safe-persist-http.test.ts` and
+`file-baseline.test.ts`. The workflow case loads configuration, starts a real
+supervised HTTP child, retains the expected missing-history refusal, and
+writes reports/artifacts with Git unavailable.
+The unchanged file-baseline case retains nonempty recorded collection,
+native Parquet and selected-text readback.
+Existing Python scheduler cases remain applicable: select
+`gardener/tasks/test_compaction_planner_siblings.py`, `gardener/test_period_inputs.py`,
+`gardener/test_sparse_shard.py`, `gardener/test_publish.py` and
+`workflows/test_gardener_workflow.py` under `backend/tests/`.
+They retain planner-only, mixed-family, original-source replacement/deletion
+and workflow-boundary evidence. Local planner task transfer is zero because
+initial checkout already supplied its files; this is not a measurement of
+checkout download size or time. Keep full merge-candidate suites in CI.
 
 The published-column check also needs Bun and the native writer packages,
 even when Python starts it from `frontend/build`. CI and publishing jobs share

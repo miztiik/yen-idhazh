@@ -480,8 +480,6 @@ class CompactTree:
                 max_raw_files_per_period=most,
             )
         except PlannerMaintenanceRefusalError as refusal:
-            if refusal.reason == "revision-changed":
-                return self.refuse(step, covers, failure=refusal)
             fault = (
                 GardenerFault.MANUAL_ACTION
                 if refusal.reason == "target-conflict"

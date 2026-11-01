@@ -25,7 +25,9 @@ import pytest
 from pydantic import ValidationError
 
 from idhazh.contracts.base import ServerJob
-from idhazh.contracts.file_envelope import WriterIdentity
+from idhazh.contracts.file_envelope import Period, WriterIdentity
+from idhazh.contracts.ledger_index import CompactEntry, CompactIndex, EntryState
+from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.shard_landing import ShardLanding
 from idhazh.gardener.outcome import (
     EXIT_INTEGRITY,
@@ -144,6 +146,59 @@ def test_a_shard_lands_its_writes_and_deletions_in_one_commit(
         publication_git.COMMITTER_NAME,
         publication_git.COMMITTER_EMAIL,
     )
+
+
+@pytest.mark.parametrize("deleting", [False, True], ids=("replacement", "deletion"))
+def test_planner_delivery_keeps_the_initial_source_when_head_changes(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, deleting: bool,
+) -> None:
+    quiet_git(tmp_path, monkeypatch)
+    prefix = "state/compact/feed-ingest-plan/discovered-articles"
+    target = f"{prefix}/index/daily.json"
+
+    def index(day: str | None) -> str:
+        return CompactIndex(
+            version=CompactIndex.schema_version(),
+            ledger=LedgerName.FEED_INGEST_PLAN_DISCOVERED_ARTICLES, period=Period.DAILY,
+            entries=[] if day is None else [
+                CompactEntry(covers=day, rows=0, bytes=0, state=EntryState.EMPTY),
+            ],
+        ).to_json()
+
+    origin, checkout = an_origin(tmp_path, {target: index(None)})
+    initial = git(checkout, "rev-parse", "HEAD").strip()
+    newer = index("2026-09-26")
+    write(checkout / target, newer)
+    git(checkout, "add", "--", target)
+    git(checkout, "commit", "--quiet", "-m", "advance a planner target after input capture")
+    git(checkout, "push", "--quiet", "origin", "HEAD:refs/heads/main")
+    advanced = git(checkout, "rev-parse", "HEAD").strip()
+    write(checkout / RECORD, '{"task": "compact-recorded-planner"}\n')
+    if deleting:
+        (checkout / target).unlink()
+    else:
+        write(checkout / target, index("2026-09-25"))
+    shard = Shard(
+        index=0, task_names=("compact-recorded-planner",), record_path=RECORD,
+        written_paths=frozenset({RECORD} if deleting else {RECORD, target}),
+        deleted_paths=frozenset({target} if deleting else ()),
+        owned_prefixes=frozenset({"state/raw/gardener", prefix}),
+        message="Record completed planner maintenance",
+    )
+    result = gardener_publish.publish(
+        shard, attempts=2, repo=checkout,
+        identity=WriterIdentity(
+            run_id="2026-09-27-123", attempt=1, job=ServerJob.RUN_TASKS,
+            shard=0, producer="tests.gardener", git_sha=initial,
+        ),
+        write_permissions=("state/raw/gardener", prefix), delete_permissions=(prefix,),
+        say=lambda message: None,
+    )
+    assert result.landing is ShardLanding.STALE
+    assert result.stale_paths == (target,)
+    assert on_origin(origin, target) == newer
+    assert on_origin(origin, RECORD) is None
+    assert git(checkout, "rev-parse", "HEAD").strip() == advanced
 
 
 @pytest.mark.parametrize("deleting", [False, True])

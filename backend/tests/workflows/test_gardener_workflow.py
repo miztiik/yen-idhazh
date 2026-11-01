@@ -379,11 +379,16 @@ def test_a_shard_checks_out_only_its_code_and_runs_the_landing_program() -> None
         ".github",
         "packages/common-contracts",
         "packages/ledger-file-writer",
+        "state/raw/feed-ingest-plan",
+        "state/compact/feed-ingest-plan",
     ]
     assert (str(checkout["fetch-depth"]), checkout["filter"]) == ("1", "blob:none")
-    assert steps[1].get("run") == "git config index.sparse true", (
-        "the index turns sparse right after the checkout, before any widening can expand it"
-    )
+    assert not any(step.get("run") == "git config index.sparse true" for step in steps)
+    assert _mapping(job.get("env"), "shard Git environment") == {
+        "GIT_CONFIG_COUNT": "1",
+        "GIT_CONFIG_KEY_0": "index.sparse",
+        "GIT_CONFIG_VALUE_0": "true",
+    }
     assert any(step.get("run") == "pip install -e ." for step in steps)
     bun_setup = next(step for step in steps if step.get("uses") == "oven-sh/setup-bun@v2")
     assert bun_setup.get("if") == (

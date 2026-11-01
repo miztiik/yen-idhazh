@@ -1,6 +1,6 @@
 /** Does the manual workflow keep current history bounded and selected text out of delivered metadata? */
 import { expect, test } from "bun:test";
-import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { copyFile, mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
@@ -16,61 +16,69 @@ import { ServiceSettingsSchema } from "../src/config/service-settings";
 import { readPlannerParquet } from "../src/read-ledger-history/read-planner-parquet";
 import { LedgerHistoryReadError } from "../src/read-ledger-history/ledger-history-error";
 import { requiredUtcDays } from "../src/utc-instant";
-import { createPlannerHistoryInputs } from "../scripts/feed-ingest-plan-history";
-import { stagePlannerHistory } from "../scripts/feed-ingest-plan-history";
 import { resolveHealthDays } from "../src/read-ledger-history/resolve-health-days";
 import { preparePlannerWorkflow, readWorkflowRequest } from "../scripts/feed-ingest-plan-workflow-inputs";
-import { completeHistoryDayInputs, historyIndexPaths, resolveHistoryInventory, sparseCheckoutPath } from "../scripts/feed-ingest-plan-outputs";
+import { completeHistoryDayInputs, historyIndexPaths, resolveHistoryInventory } from "../scripts/feed-ingest-plan-outputs";
 import { loadPlanInputs } from "../src/load-plan-inputs";
-import { fixtureGit } from "./fixture-git";
+import { recordedPlannerProcess } from "./planner-process-recordings";
 
 const root = fileURLToPath(new URL("../../../", import.meta.url));
 
-test("existing acquisition stages selected linkage and complete file-only health inputs before startup", async () => {
-  const directory = await mkdtemp(join(tmpdir(), "planner-acquisition-"));
+test("workflow preparation, supervised missing-history refusal, reports and output identity work without Git", async () => {
+  const fixture = await recordedPlannerProcess();
   try {
-    const producer = join(directory, "producer");
-    const consumer = join(directory, "consumer");
-    const origin = join(directory, "origin.git");
-    await mkdir(producer);
-    await fixtureGit(producer, ["init", "--initial-branch=main"]);
-    await writeFile(join(producer, "README.md"), "Generated planner input authority.\n");
-    await fixtureGit(producer, ["add", "--", "README.md"]);
-    await fixtureGit(producer, ["commit", "-m", "Create generated planner checkout"]);
-    await fixtureGit(directory, ["init", "--bare", "--initial-branch=main", origin]);
-    await fixtureGit(producer, ["remote", "add", "origin", origin]);
-    await fixtureGit(producer, ["push", "origin", "HEAD:refs/heads/main"]);
-    await fixtureGit(directory, ["clone", "--quiet", origin, consumer]);
-    const original = await fixtureGit(consumer, ["rev-parse", "HEAD"]);
-    await fixtureGit(consumer, ["sparse-checkout", "set", "--no-cone", "/README.md"]);
-    const inputs = await loadPlanInputs(root);
-    const day = "2026-10-20";
-    const paths: string[] = [];
-    for (const record of plannerRecordings(day).filter(record =>
-      ["discovered-articles", "selected-articles", "feed-health-state"].includes(record.name))) {
-      const entry = Object.values(inputs.registrations).find(entry => entry.name === record.name)!;
-      const written = await persistLedger({
-        ledger: record.name, registryEntry: entry, outputRoot: join(producer, "state"),
-        ledgerSettings: inputs.ledgerSettings, rowContract: record.contract,
-        rows: [record.row], period: { tier: "raw", covers: day },
-        ...(record.name === "feed-health-state" ? { updatedAt: `${day}T23:59:59.123Z` } : {}),
-      });
-      paths.push(...written.files.map(file => `state/${file.path}`));
-    }
-    await fixtureGit(producer, ["add", "--", ...paths]);
-    await fixtureGit(producer, ["commit", "-m", "Record generated planner input files"]);
-    await fixtureGit(producer, ["push", "origin", "HEAD:refs/heads/main"]);
-    inputs.harvest.config.discovered_articles.lookback_days = 0;
-    inputs.clock_config.collect.published_window_days = 0;
-    inputs.clock_config.collect.reliability_window_days = 1;
-    inputs.harvest.config.feedback.lifecycle_window_days = 1;
-    const staged = await stagePlannerHistory(consumer, inputs, `${day}T12:00:00Z`);
-    expect(staged.feed_health_days).toEqual([{
-      day, raw_files: paths.filter(path => path.includes("/feed-health-state/")),
-    }]);
-    for (const path of paths) expect(await readFile(join(consumer, path))).toEqual(await readFile(join(producer, path)));
-    expect(await fixtureGit(consumer, ["rev-parse", "HEAD"])).toBe(original);
-  } finally { await rm(directory, { recursive: true, force: true }); }
+    await copyFile(new URL("../../../config/host-fingerprints.json", import.meta.url),
+      join(fixture.directory, "config", "host-fingerprints.json"));
+    await writeFile(join(fixture.directory, "config", "sources.json"),
+      JSON.stringify({ feeds: [], retired: [], publishers: [] }));
+    const script = [
+      'import assert from "node:assert/strict";',
+      'import { join } from "node:path";',
+      `import { preparePlannerWorkflow } from ${JSON.stringify(new URL("../scripts/feed-ingest-plan-workflow-inputs.ts", import.meta.url).href)};`,
+      `import { invokePlannerHttp } from ${JSON.stringify(new URL("../scripts/feed-ingest-plan-supervisor.ts", import.meta.url).href)};`,
+      `import { readWorkflowDeliveryContext } from ${JSON.stringify(new URL("../scripts/feed-ingest-plan-current-files.ts", import.meta.url).href)};`,
+      `import { writeWorkflowReport } from ${JSON.stringify(new URL("../scripts/feed-ingest-plan-report.ts", import.meta.url).href)};`,
+      `import { prepareWorkflowArtifacts } from ${JSON.stringify(new URL("../scripts/feed-ingest-plan-artifacts.ts", import.meta.url).href)};`,
+      'assert.equal(Bun.which("git"), null);',
+      'const controls = JSON.parse(await Bun.stdin.text());',
+      'const prepared = await preparePlannerWorkflow(process.cwd(), controls.environment);',
+      'const result = await invokePlannerHttp(prepared.inputs, prepared.startup, prepared.request, prepared.directory, { serverEntry: controls.serverEntry });',
+      'assert.equal(result.summary.planning_complete, false);',
+      'assert.equal(result.summary.status, "failed");',
+      'assert.equal(result.summary.failure_code, "HISTORY_WINDOW_UNAVAILABLE");',
+      'const input = { root: prepared.root, directory: prepared.directory, runNumber: controls.environment.GITHUB_RUN_ID, attempt: 3, gitSha: controls.environment.GITHUB_SHA, summaryPath: join(prepared.directory, "job-summary.md") };',
+      'const context = await readWorkflowDeliveryContext(input);',
+      'assert.equal(context.identity.git_sha, input.gitSha);',
+      'await assert.rejects(readWorkflowDeliveryContext({ ...input, gitSha: "b".repeat(40) }));',
+      'await writeWorkflowReport(input);',
+      'const artifacts = await prepareWorkflowArtifacts(input);',
+      'assert.equal(artifacts.artifact_directory, "artifacts");',
+      'assert.equal(Bun.which("git"), null);',
+      'console.log(JSON.stringify({ git_unavailable: true, startup_and_http: true, missing_history_refused: true, supplied_identity: true, report_and_artifacts: true }));',
+    ].join("\n");
+    const child = Bun.spawn([process.execPath, "-e", script], {
+      cwd: fixture.directory, env: { ...process.env, PATH: "", Path: "" },
+      stdin: new Blob([JSON.stringify({
+        environment: {
+          RUNNER_TEMP: join(fixture.directory, "runner"),
+          GITHUB_OUTPUT: join(fixture.directory, "workflow-outputs"),
+          GITHUB_RUN_ID: "700", GITHUB_RUN_ATTEMPT: "3", GITHUB_SHA: fixture.runtime.git_sha,
+        },
+        serverEntry: fixture.serverEntry,
+      })]),
+      stdout: "pipe", stderr: "pipe",
+    });
+    const [output, error, status] = await Promise.all([
+      new Response(child.stdout).text(), new Response(child.stderr).text(), child.exited,
+    ]);
+    expect(status, error).toBe(0);
+    const result = output.trim().split("\n").at(-1);
+    if (result === undefined) throw new Error("The workflow boundary child returned no oracle result");
+    expect(JSON.parse(result)).toEqual({
+      git_unavailable: true, startup_and_http: true, missing_history_refused: true,
+      supplied_identity: true, report_and_artifacts: true,
+    });
+  } finally { await fixture.close(); }
 });
 
 const StepSchema = z.object({
@@ -182,7 +190,8 @@ test("manual controls exercise the planner API and keep only required outputs", 
     RAW_UPLOAD_OUTCOME: "${{ steps.upload-raw-documents.outcome }}",
     RAW_UPLOAD_ARTIFACT_ID: "${{ steps.upload-raw-documents.outputs.artifact-id }}",
   });
-  expect(text).not.toContain("/state/raw/feed-ingest-plan/");
+  expect(text).toContain("/state/raw/feed-ingest-plan/");
+  expect(text).toContain("/state/compact/feed-ingest-plan/");
   expect(steps.some(step => step.name === "Check isolated adapters")).toBe(false);
   expect(steps.some(step => step.name?.includes("native compatibility"))).toBe(false);
   const optional = steps.filter(step => step["continue-on-error"]);
@@ -206,33 +215,17 @@ test("manual controls exercise the planner API and keep only required outputs", 
   }
 });
 
-test("planner history removes staging indexes before strict configuration validation", async () => {
-  const history = createPlannerHistoryInputs([{
-    day: "2026-10-27",
-    indexes: {
-      yearly: "state/compact/feed-ingest-plan/feed-health-state/index/yearly.json",
-      monthly: "state/compact/feed-ingest-plan/feed-health-state/index/monthly.json",
-      daily: "state/compact/feed-ingest-plan/feed-health-state/index/daily.json",
-    },
-    raw_files: ["state/raw/feed-ingest-plan/feed-health-state/2026/10/27/01a17c6e-7acc-834f-a173-7b12dbfa240d.parquet"],
-  }]);
-  expect(history).toEqual([{
-    day: "2026-10-27",
-    raw_files: ["state/raw/feed-ingest-plan/feed-health-state/2026/10/27/01a17c6e-7acc-834f-a173-7b12dbfa240d.parquet"],
-  }]);
+test("planner configuration refuses retired acquisition controls", async () => {
   const settings = ServiceSettingsSchema.parse(await Bun.file(join(root, "config", "feed-ingest-plan-service.json")).json());
-  expect(ServiceSettingsSchema.parse({
-    ...settings, inputs: { ...settings.inputs, feed_health_days: history },
-  }).inputs.feed_health_days).toEqual(history);
+  expect(ServiceSettingsSchema.safeParse({
+    ...settings, inputs: { ...settings.inputs, digest_root: "frontend/public/digest" },
+  }).success).toBe(false);
 });
 
 test("bounded discovery history preserves covered-day membership and planner raw overlap", async () => {
   const discoveredDays = requiredUtcDays("2026-01-01T00:00:00Z", 2);
   expect(discoveredDays).toEqual(["2025-12-30", "2025-12-31", "2026-01-01"]);
   expect(completeHistoryDayInputs(["feed-ingest-plan", "discovered-articles"], discoveredDays, [], "discovered_days")).toHaveLength(3);
-  expect(sparseCheckoutPath("state/raw/discovered-articles/[literal]*?.parquet"))
-    .toBe("/state/raw/discovered-articles/\\[literal\\]\\*\\?.parquet");
-  expect(() => sparseCheckoutPath("state/raw/discovered-articles/a\nstate/")).toThrow("control");
   expect(() => historyIndexPaths([".."], discoveredDays)).toThrow("prefix");
   const rawName = "01a1592e-c600-84d0-96e4-7bb01708ce01.parquet";
   for (const ledger of ["feed-health-state", "published"] as const) {
@@ -319,13 +312,22 @@ test("hostile dispatch strings fail in the actual adapter before loading inputs 
   expect(errors).not.toContain("injected");
 });
 
-test("the workflow checkout names runtime code and only the delivery inputs it needs", async () => {
+test("the initial workflow checkout includes runtime code and every registered saved input", async () => {
   const { steps } = await workflow();
+  expect(steps.filter(step => step.uses?.startsWith("actions/checkout@"))).toHaveLength(1);
   const selection = steps.find(step => step.uses?.startsWith("actions/checkout@"))!.with?.["sparse-checkout"];
   if (typeof selection !== "string") throw new Error("Expected a named sparse selection");
   expect(selection).not.toContain("/services/feed-ingest-plan/test/");
   expect(selection).not.toContain("/services/host-probes/");
   expect(selection).not.toContain("/tests/");
+  const inputs = await loadPlanInputs(root);
+  const entries = selection.trim().split("\n").map(value => value.trim());
+  for (const registration of Object.values(inputs.registrations)) {
+    for (const tier of ["raw", "compact"]) {
+      const path = `/state/${tier}/${registration.prefix.join("/")}/`;
+      expect(entries.some(entry => entry.endsWith("/") && path.startsWith(entry)), path).toBe(true);
+    }
+  }
   const required = new Set([
     "services/feed-ingest-plan/package.json",
     "services/feed-ingest-plan/bun.lock",
@@ -345,7 +347,6 @@ test("the workflow checkout names runtime code and only the delivery inputs it n
     "services/feed-ingest-plan/scripts/feed-ingest-plan-delivery-result.ts",
     "services/feed-ingest-plan/scripts/feed-ingest-plan-current-files.ts",
     "services/feed-ingest-plan/scripts/feed-ingest-plan-host-fingerprint.ts",
-    "services/feed-ingest-plan/scripts/feed-ingest-plan-history.ts",
     "services/feed-ingest-plan/scripts/feed-ingest-plan-metadata.ts",
     "services/feed-ingest-plan/scripts/feed-ingest-plan-host-verification.ts",
     "services/feed-ingest-plan/scripts/feed-ingest-plan-verification.ts",
@@ -378,6 +379,7 @@ test("the workflow checkout names runtime code and only the delivery inputs it n
     "packages/ledger-file-writer/package.json",
     "packages/ledger-file-writer/bun.lock",
     "packages/ledger-file-writer/src/index.ts",
+    "frontend/public/publication.json",
   ]);
   for (const entry of selection.trim().split("\n").map(value => value.trim())) {
     if (!/^\/[\w./-]+$/.test(entry) || entry.split("/").includes("..")) {

@@ -1,6 +1,6 @@
 # How completed output reaches the repository
 
-**Last Updated**: 2026-10-31
+**Last Updated**: 2026-11-01
 
 Start here when a workflow delivers generated files. Python jobs use
 [`backend/utilities/publish_to_repo.py`](../../../backend/utilities/publish_to_repo.py)
@@ -158,6 +158,13 @@ The planner's [availability calculations](../sources/feed-availability.md) are o
 immutable health-ledger output. Fetch, parse, collection, selection and health
 recording make no Git commits; only final `safe_persist_data` delivery publishes
 their completed metadata files.
+Initial checkout acquires the required saved planner input at the code ref.
+No planner acquisition, computation, report or artifact step invokes Git.
+Output verification compares the saved writer metadata with the supplied
+initial checkout identity, not a queried `HEAD`.
+The gardener remains a separate final shard publisher: planner compact
+replacements and deletions retain original-source collision checks, permission
+checks and retries. They do not enter the immutable-append-only TypeScript API.
 
 The manual planner test workflow is a consumer, not an application publishing
 stage. Finalization calls the

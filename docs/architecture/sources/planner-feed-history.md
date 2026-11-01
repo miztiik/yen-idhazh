@@ -1,6 +1,6 @@
 # Feed history used by the TypeScript planner
 
-**Last Updated**: 2026-10-31
+**Last Updated**: 2026-11-01
 
 Which saved observations can change feed rest and measured reliability?
 The isolated planner reads current-format required `feed-health-state` fields and its
@@ -61,9 +61,10 @@ records; edits, additions and removals on disk cannot change their decisions.
 Current sightings and completed work remain separate from the saved baseline.
 Another execution loads its own input, including any newly available files.
 
-Workflow preparation finishes its existing bounded raw/compact acquisition
-before starting the listener. Application startup and history computation invoke
-no Git. The supplied input directory is the file authority; readers do not prove
+The initial checkout obtains code and the required saved raw/compact files at
+one ref. Workflow preparation does not fetch newer history or expand the checkout.
+Application startup and history computation invoke no Git or remote Git data API.
+The supplied input directory is the file authority; readers do not prove
 an arbitrary commit or reject a regular file because it is untracked. The current
 UTC day and the next day are captured for supported boundary adjustments. A run
 applies actual current work at selection and finish without reopening history.

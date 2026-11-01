@@ -1,6 +1,6 @@
 # Running the isolated feed planner
 
-**Last Updated**: 2026-10-31
+**Last Updated**: 2026-11-01
 
 How do the API and CLI execute one real feed plan?
 Both compose the same units. The production Python news pipeline, digest
@@ -27,11 +27,16 @@ calls `services/feed-ingest-plan/scripts/`; no native API depends on
 `.github/scripts/`. The two independent experiment files retained there
 do not supply API execution, history, verification or reporting.
 The workflow entry is `scripts/run-feed-ingest-plan.ts`. Preparation lives in
-`scripts/feed-ingest-plan-workflow-inputs.ts`: it stages bounded history,
-enables only this invocation and captures identity, effective policy and host
+`scripts/feed-ingest-plan-workflow-inputs.ts`: it loads authored settings from
+the initial checkout, enables only this invocation and captures identity, effective policy and host
 evidence. Code identity comes from the checkout's validated `GITHUB_SHA`, or
 an explicitly supplied runtime identity for a standalone caller. Missing or
-invalid identity fails before writes; startup never queries `HEAD`.
+invalid identity fails before writes. Preparation, startup, output verification,
+reports and artifact packaging never query `HEAD` or invoke Git.
+The initial checkout supplies code, registered raw and compact ledger inputs,
+and the existing publication inventory at the same ref. No later history fetch
+or sparse expansion changes that input. Git is used again only for actual
+final data delivery.
 `scripts/feed-ingest-plan-http-client.ts` calls an existing listener
 and verifies retained output; it does not start or stop the listener. The entry
 supervises `scripts/feed-ingest-plan-server.ts` as a separate child process in
@@ -52,7 +57,7 @@ The child reloads named authored inputs, applies that invocation's effective
 policy, then reconstructs its fixed run-start clock and live selection
 clock. No function, map, credential or article body crosses this pipe. Startup
 data is not a saved artifact and is never accepted by an HTTP route. Plain
-`--serve` does not stage history or supply workflow controls. Each standalone
+`--serve` does not acquire history or supply workflow controls. Each standalone
 execution follows the same file-capture rules as a collection.
 Workflow age overrides travel in that private policy, not as extra `/plan`
 request fields. Each child receives its own policy without editing authored

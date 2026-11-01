@@ -34,6 +34,7 @@ from fixture_git import command as fixture_git_command
 from origin_template import copy_origin, template
 from support.paths import CONFIG_DIR, FIXTURES_DIR, REPO_ROOT
 
+from idhazh.contracts.ledger_name import LedgerName
 from idhazh.gardener.registry import TaskModule
 
 GARDENER_FIXTURES: Final = FIXTURES_DIR / "gardener"
@@ -157,6 +158,48 @@ def a_config(root: Path, *declarations: Path) -> Path:
         json.dumps(gardener_settings, indent=2) + "\n", encoding="utf-8"
     )
     return config_dir
+
+
+def planner_raw_fixture(root: Path, which: LedgerName) -> Path:
+    """Write one recorded planner row through its real native contract and Parquet writer."""
+    bun = shutil.which("bun")
+    if bun is None:
+        raise RuntimeError("planner fixtures require the installed Bun runtime")
+    writer = (REPO_ROOT / "packages/ledger-file-writer/src/index.ts").as_uri()
+    recordings = (REPO_ROOT / "packages/ledger-file-writer/test/planner-recordings.ts").as_uri()
+    fixture = (FIXTURES_DIR / "feed-ingest-plan/entry-points" / f"{which.value}.rows.json")
+    script = (
+        f"import {{ persistLedger }} from {json.dumps(writer)};\n"
+        f"import {{ plannerRecordings }} from {json.dumps(recordings)};\n"
+        "if (Bun.which('git') !== null) throw new Error('Fixture generation requires Git unavailable');\n"
+        f"const ledger = {json.dumps(which.value)};\n"
+        "const recording = plannerRecordings().find(record => record.name === ledger);\n"
+        "if (!recording) throw new Error('The fixture needs a current planner contract');\n"
+        f"const row = (await Bun.file({json.dumps(str(fixture))}).json())[0];\n"
+        "const result = await persistLedger({ ledger, rowContract: recording.contract, rows: [row],\n"
+        f"outputRoot: {json.dumps(str(root / 'state'))},\n"
+        "registryEntry: { name: ledger, family: 'feed-ingest-plan', grain: 'raw-and-compact',\n"
+        "lifecycle_status: 'active', prefix: ['feed-ingest-plan', ledger] },\n"
+        "ledgerSettings: { format: 'parquet', compression_raw: 'snappy', compression_compact: 'zstd' },\n"
+        "period: { tier: 'raw', covers: row.date } });\n"
+        "if (result.status !== 'written' || result.files.length !== 1) throw new Error('No native fixture file');\n"
+        "console.log(JSON.stringify({ path: `state/${result.files[0].path}` }));\n"
+    )
+    completed = subprocess.run(
+        [bun, "-e", script],
+        cwd=REPO_ROOT,
+        env=os.environ | {"PATH": str(Path(bun).parent), "Path": str(Path(bun).parent)},
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    result = json.loads(completed.stdout)
+    if not isinstance(result, dict):
+        raise ValueError("the native planner fixture returned no result object")
+    path = result.get("path")
+    if not isinstance(path, str):
+        raise ValueError("the native planner fixture returned no file path")
+    return root / path
 
 
 def task_package(name: str, monkeypatch: pytest.MonkeyPatch) -> ModuleType:

@@ -77,6 +77,13 @@ jobs:
             /services/host-fingerprints/package.json
             /services/host-fingerprints/bun.lock
             /services/host-fingerprints/src/
+            /state/raw/feed-ingest-plan/
+            /state/compact/feed-ingest-plan/
+            /state/raw/published/
+            /state/compact/published/
+            /state/raw/item-health/
+            /state/compact/item-health/
+            /frontend/public/publication.json
 
       - uses: oven-sh/setup-bun@v2
         with:
