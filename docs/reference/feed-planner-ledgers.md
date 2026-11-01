@@ -321,11 +321,11 @@ Record one span per major phase, not one span for every internal article
 operation. Standalone APIs record their request-level spans. There are no
 per-article trace trees.
 
-The two health captures are intentional: one supplies pre-request evidence;
-the other includes current work before selection. New rows store their
+The two health calculations are intentional: one uses pre-request evidence;
+the other adds current work before selection to that same saved input. New rows store their
 distinct purposes, not two position-dependent copies of one name. A reader
 preserves an older `feed-health-summary` value and labels its purpose
-unrecorded; list position cannot prove which capture it was.
+unrecorded; list position cannot prove which calculation it was.
 
 ## E. Dates, counters and compaction
 
@@ -578,11 +578,11 @@ or an external message broker. Standalone
 `/select-articles` does not acquire an implicit update side effect; K8 remains
 an explicit operator operation.
 
-Each capture shares its named-index and Parquet reads in memory. Pre-fetch
-health governs rest before requests start. Selection refreshes health at D22
-after the complete input arrives, so a saved parsed batch does not freeze
-feedback or window membership. D11-D13 include the measured cost of both
-captures. There is no per-candidate history read or persistent result cache.
+One live input set retains its validated native records. Pre-fetch health
+governs rest before requests start. Selection recalculates health at D22 from
+that baseline plus completed work, so the older parsed age clock does not freeze
+feedback or supported window adjustments. D11-D13 include both measured
+calculations. There is no per-candidate history read or persistent result cache.
 
 ## M. rejected-articles
 
@@ -678,35 +678,36 @@ shared compact indexes remain its scheduling marks and are not planner row
 contracts. Other ledger families keep their own history readers.
 
 Configuration names a finite UTC lookback or explicit bounded UTC days.
-The workflow captures one full Git commit id before staging. For each requested
-registered day it checks that exact path with `git ls-tree <revision> -- <day>`
-and lists only that directory with `git ls-tree -l <revision>:<day>`.
-A successful absent-path result proves no committed members at that revision;
-a failed Git read does not prove absence. A directory may contain zero or many
-regular UUID Parquet files. An old regular `index.json` is ignored, not parsed.
-Other filenames, nonregular members and wrong registered roots are refused.
-There is no state-root walk, replacement saved catalog or run discovery.
+The initial checkout or explicitly supplied input directory is the file
+authority. The shared writer's filesystem helper lists only one exact registered
+UTC-day directory at a time. A successful absent-directory check proves no local
+raw members; an omitted day or a failed check does not. A directory may contain
+zero or many regular UUID Parquet files. An old regular `index.json` is ignored,
+not parsed. Other filenames, nonregular members and wrong roots produce explicit
+gaps, while valid siblings remain usable. There is no state-root walk,
+replacement saved catalog or run discovery.
 
-The existing named-day input carries `day`, optional compact `indexes`,
-`raw_files` and `raw_revision`. Repository staging supplies the full member
-set and its captured revision, not a partial hand-picked subset. A supplied
-set must equal the Git listing; missing, additional or repeated members make
-the read incomplete. Authored planner configuration rejects `raw_index` and
-requires `raw_revision` with `raw_files`; an unproved subset is not a valid
-configuration. After sparse checkout, each file must match its Git blob
-and size at that same revision, then pass the existing Parquet footer, schema,
-canonical content digest, filename, ledger and UTC-day checks. Missing files,
-failed listings and refused bytes remain explicit history gaps, never empty
-successful history. A supplied `raw_revision` pins history reads to that
-commit; a shared reader capture refuses a second revision. Repository staging
-captures current `HEAD` and rejects supplied revisions that differ, so staged
-output cannot mix commits.
+Planner day input carries `day` and optional complete `raw_files`. A supplied
+set must equal the local directory membership; omitted or additional members
+make the read incomplete, and repeated members refuse. `raw_revision`,
+`raw_index` and planner compact `indexes` are not accepted. Files retain their
+native footer, current schema, canonical digest, filename, ledger, date and
+regular-path checks. No reader queries a commit or rejects a file solely because
+it is untracked.
 
-Direct current-invocation input still uses `raw_files` without `raw_revision`:
-the caller supplies all exact completed paths from the existing writer result.
-It is a trusted complete result, not a way to discover archived repository
-history or to assert completeness for an arbitrary subset. Native identity
-and content checks still run. No new persisted manifest is introduced.
+An explicitly named missing member remains missing, not empty. Health period
+selection uses the existing compact indexes and publication inventory to choose
+represented dates. When that metadata requires a missing compact file, the
+same live capture retains its path and missing-file gap for affected days;
+valid raw siblings remain usable without becoming complete coverage.
+
+All required health, discovery, exclusion and genuine publisher-linkage
+records are captured before the first fetch and reused across stages.
+Current work stays separate. Later disk edits, additions, removals and remote
+commits do not change that execution. A new execution loads its own input.
+Completed current-output files are read directly from the writer's exact
+results with native validation; that is not an archive membership proof.
+No new persisted manifest or private input-copy directory is introduced.
 
 Yearly, monthly and daily compact precedence is unchanged. Planner raw
 siblings still join the selected compact representation so newly appended
@@ -802,7 +803,7 @@ An unsupported stored physical type fails explicitly rather than skipping
 part of the digest.
 
 `readFeedHealthFieldsDay` in the planner service reads one named UTC day through
-the same raw/compact membership, captured Git revision and file-byte checks.
+the same filesystem membership and current native-file checks.
 It returns independent `uses`: `request_totals`, `feed_rest`,
 `feed_reliability` and `article_admission`. Their schemas are declared once in
 `packages/common-contracts/src/schemas/feed-health-fields.schema.ts`:
@@ -841,17 +842,18 @@ selection and health summaries use these field projections. Strict full-row
 validation remains on the write and maintenance paths.
 
 `readFeedHistory` returns rest, feed-read reliability and article-admission
-inputs from the named represented-day inventory. `preparePlanningHealth`
-supplies those inputs before both combined and standalone fetch work. Neither
-path adds closed request-report days or calculates historical request totals.
-Current-run request recording is unchanged.
+inputs from the named represented-day inventory. The live input load captures
+those records before combined or standalone fetch work. `preparePlanningHealth`
+derives current calculations from that baseline and actual work. It does not
+calculate historical request totals. Current-run request recording is unchanged.
 
 `readRequestHistory` reads only the configured closed calendar days and returns
 validated request rows, partial request rows, field gaps and file coverage.
 `prepareRequestReport` is its request-only reporting entry point.
-Selection and explicit health summaries combine planning evidence with that
-report through `prepareFeedHealthState`; their shared capture cache keeps one
-stored file read and Git revision per capture.
+The live input load also retains closed-day request fields, including the
+entering boundary day. Selection and explicit health summaries calculate their
+report from those records without reopening history. Missing report-only files
+remain explicit gaps and do not prevent collection.
 
 The request report adds each usable feed, article and robots counter
 independently, including individually valid fields from partial rows.

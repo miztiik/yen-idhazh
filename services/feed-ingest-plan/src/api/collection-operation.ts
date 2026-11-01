@@ -1,7 +1,7 @@
 /** Own one complete collection and refuse selection before all its work settles. */
 import { randomUUID } from "node:crypto";
 import { ParsedFeedBatchSchema } from "@idhazh/common-contracts";
-import type { PlannerStageContext, DiscoveredArticleRow, PlannerFeedOffer } from "@idhazh/common-contracts";
+import type { PlannerStageContext, PlannerFeedOffer } from "@idhazh/common-contracts";
 import type { HarvestArticleResult } from "../harvest-feeds/harvest-types";
 import type { PlanInputs } from "../load-plan-inputs";
 import type { PlanRuntime } from "../run-feed-plan";
@@ -12,7 +12,6 @@ import { captureDocumentContext } from "./operation-context";
 import { documentState } from "./document-state";
 import type { DocumentState } from "./document-state";
 import { stageStore } from "./stage-store";
-import { plannerMemory } from "../planner-memory";
 import { rememberDiscoveries } from "../read-ledger-history/read-discovered-evidence";
 import { summarizeFeedAvailability } from "../availability/feed-availability-view";
 import { utcTimestamp } from "../harvest-feeds/harvest-types";
@@ -30,7 +29,6 @@ export type Collection = {
   complete?: Promise<z.infer<typeof CompletedCollectionSchema>>;
   rejections?: ReturnType<typeof recordHarvestFailures>;
   completed_batch_id?: string;
-  discovery_baseline?: Promise<DiscoveredArticleRow[]>;
   offers: Map<string, PlannerFeedOffer>;
   results: Map<string, HarvestArticleResult>;
   pending_offers: number;
@@ -140,8 +138,8 @@ export async function completeCollection(inputs: PlanInputs, id: string) {
     if (collection.pending_offers !== 0) {
       throw new PlanError("BATCH_INCOMPLETE", "Every offered article needs a terminal result", "collection_id");
     }
-    const discoveries = plannerMemory(inputs).discoveries();
-    const saved = await rememberDiscoveries(await collection.discovery_baseline ?? [], discoveries, collection.context, {
+    const saved = await rememberDiscoveries(collection.state.baseline.discovered.rows,
+      collection.state.discovered_rows, collection.context, {
       outputRoot: inputs.outputRoot, registryEntry: inputs.registrations.discovered_articles, ledgerSettings: inputs.ledgerSettings,
     });
     const batch = snapshotCollectionBatch(inputs, collection, true);

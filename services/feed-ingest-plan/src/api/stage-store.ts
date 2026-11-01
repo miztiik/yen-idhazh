@@ -38,6 +38,11 @@ export class StageStore {
     return this.retainedRuns.has(runId)
       || [...this.documents.values()].some(document => document.context.run_id === runId);
   }
+  forgetRun(runId: string) {
+    if (this.isRunActive(runId)) throw new PlanError("REQUEST_BUSY", "Cannot expire an execution with active work", "batch_id");
+    for (const [id, batch] of this.batches) if (batch.run_id === runId) this.batches.delete(id);
+    this.forgetDocumentWork(runId);
+  }
   beginFetch(context: DocumentOperationContext) {
     const id = RequestIdSchema.parse(context.request_id);
     if (this.documents.has(id) || this.documentRequests.has(id)) {

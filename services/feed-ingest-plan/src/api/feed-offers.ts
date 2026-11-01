@@ -11,14 +11,13 @@ import { deriveArticleIdentity } from "../harvest-feeds/article-identity";
 import type { ArticleUrlPolicy } from "../harvest-feeds/article-url";
 import { matchUrlExclusion } from "../harvest-feeds/url-exclusions";
 import { prepareArticle } from "../harvest-feeds/prepare-article";
-import { foldDiscoveryHistory, readDiscoveredEvidence, rememberDiscoveries } from "../read-ledger-history/read-discovered-evidence";
+import { foldDiscoveryHistory, rememberDiscoveries } from "../read-ledger-history/read-discovered-evidence";
 import { requiredUtcDays } from "../utc-instant";
 import { plannerMemory } from "../planner-memory";
 import { stageStore } from "./stage-store";
 import { stageConfigFingerprint } from "./operation-context";
 import { collectionForRun } from "./collection-operation";
 import { recordDocumentRejections } from "./record-document-rejections";
-import { createStageLogger } from "../logging/structured-logger";
 import { documentExclusions } from "./document-state";
 import { PlanError } from "./plan-request";
 
@@ -33,7 +32,7 @@ export async function createParsedFeedBatch(input: {
   const collection = collectionForRun(inputs, state.context.run_id);
   const offers: PlannerFeedOffer[] = [];
   const rejections = [];
-  const exclusions = collection === undefined ? undefined : await documentExclusions(state, inputs);
+  const exclusions = collection === undefined ? undefined : documentExclusions(state);
   for (const entry of input.entries) {
     const prepared = prepareArticle({ source, entry }, inputs.harvest, {
       writer: state.context.writer, correlation_id: state.context.correlation_id, max_future_hours: inputs.clock_config.collect.max_future_hours,
@@ -52,18 +51,8 @@ export async function createParsedFeedBatch(input: {
       fetch_request_id: null }));
   }
   if (rejections.length) await recordDocumentRejections(rejections, state, inputs);
-  const readDiscovery = () => readDiscoveredEvidence({
-    root: inputs.root, discovered_files: inputs.settings.inputs.discovered_files, discovered_days: inputs.settings.inputs.discovered_days,
-    registration: inputs.registrations.discovered_articles, now: state.context.now,
-    lookback_days: inputs.harvest.config.discovered_articles.lookback_days, concurrency: inputs.harvest.config.harvest.concurrency,
-    own_rows: plannerMemory(inputs).discoveries(), log: createStageLogger(state.context, runtime.log),
-  });
   const fromDay = requiredUtcDays(state.context.now, inputs.harvest.config.discovered_articles.lookback_days)[0]!;
-  const discoveredRows = collection === undefined ? (await readDiscovery()).rows
-    : await (collection.discovery_baseline ??= readDiscovery().then(value => {
-      plannerMemory(inputs).rememberDiscoveries(value.rows, fromDay);
-      return value.rows;
-    }));
+  const discoveredRows = state.baseline.discovered.rows;
   const sightings = offers.flatMap(offer => {
     const identity = deriveArticleIdentity(offer.entry.link!, inputs.harvest.config.harvest);
     if (matchUrlExclusion(identity.canonical_url, inputs.harvest.config.harvest.url_exclusions) !== undefined) return [];
@@ -71,9 +60,10 @@ export async function createParsedFeedBatch(input: {
       url_key: identity.url_key, first_seen_at: input.observed_at, date: input.observed_at.slice(0, 10),
     })];
   });
+  state.discovered_rows = foldDiscoveryHistory([...state.discovered_rows, ...sightings]);
+  plannerMemory(inputs).rememberDiscoveries(sightings, fromDay);
   if (collection !== undefined) {
     collection.feed_requests.set(input.feed_id, input.fetched_request_id);
-    plannerMemory(inputs).rememberDiscoveries(sightings, fromDay);
     for (const offer of offers) {
       if (collection.offers.has(offer.offer_id)) throw new PlanError("ARTIFACT_INVALID", "Collection offer identity already exists", "offer_id");
       collection.offers.set(offer.offer_id, offer);
@@ -81,7 +71,7 @@ export async function createParsedFeedBatch(input: {
     }
     return { batch_id: collection.parsed_batch_id, offers };
   }
-  const saved = await rememberDiscoveries(discoveredRows, foldDiscoveryHistory([...discoveredRows, ...sightings]), state.context, {
+  const saved = await rememberDiscoveries(discoveredRows, state.discovered_rows, state.context, {
     outputRoot: inputs.outputRoot, registryEntry: inputs.registrations.discovered_articles, ledgerSettings: inputs.ledgerSettings,
   });
   if (state.plan_owned) {

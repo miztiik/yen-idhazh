@@ -19,9 +19,9 @@ export async function readPlannerStartupRecording() {
 }
 
 export async function recordedPlannerProcess(
-  sources?: Parameters<typeof recordedPlan>[0], options: { reserveListener?: boolean; history?: boolean } = {},
+  sources?: Parameters<typeof recordedPlan>[0], options: { reserveListener?: boolean } = {},
 ) {
-  const fixture = await recordedPlan(sources, [], { history: options.history === true });
+  const fixture = await recordedPlan(sources);
   try {
     const configRoot = new URL("../../../config/", import.meta.url);
     await mkdir(join(fixture.directory, "config"));

@@ -9,12 +9,12 @@ import { mapPool } from "../src/harvest-feeds/harvest-pool";
 import { requiredUtcDays } from "../src/utc-instant";
 import { PlannerDayInputSchema } from "../src/config/service-settings";
 import type { LedgerDayInput } from "../src/config/service-settings";
-import { readStoredPlannerParquet } from "@idhazh/ledger-file-writer";
+import { readStoredPlannerParquet, compactPeriodFile } from "@idhazh/ledger-file-writer";
 import { closedRequestDays } from "../src/read-ledger-history/request-summary";
 import { completeHistoryDayInputs, createHistoryDayInputs, resolveHistoryIndexes, resolveHistoryInventory, sparseCheckoutPath } from "./feed-ingest-plan-outputs";
-import { stageFeedHistory } from "./feed-ingest-plan-feed-history";
+import { resolveHealthDays } from "../src/read-ledger-history/resolve-health-days";
 import { LedgerHistoryReadError } from "../src/read-ledger-history/ledger-history-error";
-import { compactPeriodFile, captureRemoteHistoryRevision, listExactRawDayMembers, readNamedGitFile, verifyRawDayMember } from "../src/read-ledger-history/raw-day-members";
+import { captureRemoteHistoryRevision, listExactRawDayMembers, readNamedGitFile, verifyRawDayMember } from "../src/read-ledger-history/raw-day-members";
 
 type HistoryStaging = { revision: string; staged: Set<string> };
 async function git(repository: string, args: string[], paths: readonly string[] = []) {
@@ -65,9 +65,9 @@ export async function stageNamedFiles(repository: string, paths: readonly string
   }
 }
 
-export function createPlannerHistoryInputs(history: readonly LedgerDayInput[], revision: string) {
+export function createPlannerHistoryInputs(history: readonly LedgerDayInput[]) {
   return history.map(({ day, raw_files }) => PlannerDayInputSchema.parse({
-    day, raw_files: raw_files ?? [], raw_revision: revision,
+    day, raw_files: raw_files ?? [],
   }));
 }
 
@@ -86,6 +86,8 @@ export async function stagePlannerHistory(root: string, inputs: PlanInputs, now:
       authored: inputs.settings.inputs.published_days },
     { entry: inputs.registrations.item_health, days: withBoundary([now.slice(0, 10)]),
       authored: inputs.settings.inputs.settled_failure_days },
+    { entry: inputs.registrations.selected_articles, days: withBoundary([now.slice(0, 10)]),
+      authored: [] },
   ];
   const healthDays = withBoundary([...closedRequestDays(now, inputs.harvest.config.feedback.request_report_closed_days), now.slice(0, 10)]);
   const trees = new Map<string, Promise<string>>();
@@ -137,9 +139,6 @@ export async function stagePlannerHistory(root: string, inputs: PlanInputs, now:
     const days = completeHistoryDayInputs(plan.entry.prefix, plan.days, plan.authored, plan.entry.name);
     await mapPool(days, inputs.harvest.config.harvest.concurrency, async day => {
       const planner = PlannerLedgerNameSchema.safeParse(plan.entry.name).success;
-      if (planner && day.raw_revision !== undefined && day.raw_revision !== revision) {
-        throw new LedgerHistoryReadError("Authored raw history revision differs from the captured staging revision");
-      }
       const listing = planner ? await listExactRawDayMembers(root, plan.entry, day.day, revision, trees) : undefined;
       const rawFiles = listing?.members.map(member => member.path) ?? day.raw_files ?? [];
       if (planner && day.raw_files !== undefined && [...day.raw_files].sort().join("\n") !== [...rawFiles].sort().join("\n")) {
@@ -164,10 +163,7 @@ export async function stagePlannerHistory(root: string, inputs: PlanInputs, now:
       for (const path of day.raw_files ?? []) inventory.add(path);
     });
   }
-  if (inputs.settings.inputs.feed_health_days.some(day => day.raw_revision !== undefined && day.raw_revision !== revision)) {
-    throw new LedgerHistoryReadError("Authored health revision differs from the captured staging revision");
-  }
-  const health = await stageFeedHistory({
+  const health = await resolveHealthDays({
     ledger: "feed-health-state", prefix: inputs.registrations.feed_health_state.prefix, now,
     health_window_days: Math.max(inputs.harvest.config.feedback.lifecycle_window_days, inputs.clock_config.collect.reliability_window_days) + 1,
     request_report_closed_days: inputs.harvest.config.feedback.request_report_closed_days,
@@ -194,7 +190,7 @@ export async function stagePlannerHistory(root: string, inputs: PlanInputs, now:
     }
   }
   return {
-    feed_health_days: createPlannerHistoryInputs(health.inputs, revision),
+    feed_health_days: createPlannerHistoryInputs(health.inputs),
     feed_health_input_gap: health.notices.some(notice => notice.startsWith("health_")),
     notices: health.notices,
   };

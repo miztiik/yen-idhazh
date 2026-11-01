@@ -9,18 +9,11 @@ import { RecordedTransport, inputs, readRecordings, source } from "./harvest-rec
 import type { ConfiguredSource } from "../src/harvest-feeds/load-harvest-inputs";
 import type { FeedIngestEvent } from "@idhazh/common-contracts";
 import type { PlanRuntime } from "../src/run-feed-plan";
-import { fixtureGit } from "./fixture-git";
 
-export async function recordedPlan(
-  sources: ConfiguredSource[] = [source()], publishers: unknown = [], options: { history?: boolean } = {},
-) {
+export async function recordedPlan(sources: ConfiguredSource[] = [source()], publishers: unknown = []) {
   const root = fileURLToPath(new URL("../../../", import.meta.url));
   const directory = await mkdtemp(join(tmpdir(), "feed-plan-"));
   try {
-    if (options.history) {
-      await fixtureGit(directory, ["init", "--quiet", "--initial-branch=main"]);
-      await fixtureGit(directory, ["commit", "--quiet", "--allow-empty", "-m", "Create empty planner history"]);
-    }
     const [loaded, harvest, recordings] = await Promise.all([
       loadPlanInputs(root), inputs(sources, { publishers }), readRecordings(),
     ]);

@@ -1,13 +1,23 @@
-/** Resolve bounded represented planner days from existing native inventory and period files. */
+/** Which bounded represented health days are named by local publication inventory and compact periods? */
 import {
-  CompactIndexSchema, DateStampSchema, PublicationInventoryInputSchema,
-} from "../../../packages/common-contracts/src/index";
-import type { CompactIndex } from "../../../packages/common-contracts/src/index";
-import type { LedgerDayInput } from "../src/config/service-settings";
-import { createHistoryDayInputs, resolveHistoryInventory } from "./feed-ingest-plan-outputs";
-import { closedRequestDays } from "../src/read-ledger-history/request-summary";
-import { classifyPlannerHistoryGap } from "../src/read-ledger-history/planner-history-gap";
-import { LedgerHistoryReadError } from "../src/read-ledger-history/ledger-history-error";
+  COMPACT_INDEX_VERSION, CompactIndexSchema, DateStampSchema, PublicationInventoryInputSchema,
+} from "@idhazh/common-contracts";
+import type { CompactIndex } from "@idhazh/common-contracts";
+import type { LedgerDayInput } from "../config/service-settings";
+import { closedRequestDays } from "./request-summary";
+import { classifyPlannerHistoryGap } from "./planner-history-gap";
+import { LedgerHistoryReadError } from "./ledger-history-error";
+
+function createHealthDay(prefix: readonly string[], day: string) {
+  return {
+    day: DateStampSchema.parse(day),
+    indexes: {
+      yearly: `state/compact/${prefix.join("/")}/index/yearly.json`,
+      monthly: `state/compact/${prefix.join("/")}/index/monthly.json`,
+      daily: `state/compact/${prefix.join("/")}/index/daily.json`,
+    },
+  };
+}
 
 function representedPeriodDays(period: CompactIndex["period"], covers: string, today: string) {
   const first = period === "yearly" ? `${covers}-01-01` : period === "monthly" ? `${covers}-01` : covers;
@@ -28,7 +38,7 @@ function representedPeriodDays(period: CompactIndex["period"], covers: string, t
   return days;
 }
 
-export async function stageFeedHistory(input: {
+export async function resolveHealthDays(input: {
   ledger: "feed-health-state"; prefix: readonly string[]; now: string;
   health_window_days: number; request_report_closed_days: number; period_limit: number;
   authored: readonly LedgerDayInput[];
@@ -39,7 +49,7 @@ export async function stageFeedHistory(input: {
   if (!Number.isSafeInteger(input.period_limit) || input.period_limit < 1) throw new Error("Health period limit must be positive");
   const base = input.prefix.join("/");
   if (base !== "feed-ingest-plan/feed-health-state") throw new Error("Health history requires its current planner registration");
-  const defaults = createHistoryDayInputs(input.prefix, [input.now.slice(0, 10)])[0]!;
+  const defaults = createHealthDay(input.prefix, input.now.slice(0, 10));
   const compact: CompactIndex[] = [];
   const files = new Set<string>(["frontend/public/publication.json", ...Object.values(defaults.indexes)]);
   const notices: string[] = [];
@@ -48,7 +58,9 @@ export async function stageFeedHistory(input: {
       const raw = await input.read(defaults.indexes[period]);
       if (raw === undefined) continue;
       const index = CompactIndexSchema.parse(raw);
-      if (index.ledger !== input.ledger || index.period !== period) throw new LedgerHistoryReadError("Health index belongs to another registered output");
+      if (index.version > COMPACT_INDEX_VERSION || index.ledger !== input.ledger || index.period !== period) {
+        throw new LedgerHistoryReadError("Health index is unsupported or belongs to another registered output");
+      }
       compact.push(index);
     } catch (error) {
       const code = classifyPlannerHistoryGap(error);
@@ -60,7 +72,15 @@ export async function stageFeedHistory(input: {
   const rawDays = new Map<string, readonly string[]>();
   async function rawFiles(day: string) {
     let files = rawDays.get(day);
-    if (files === undefined) { files = await input.raw_files(day); rawDays.set(day, files); }
+    if (files === undefined) {
+      try { files = await input.raw_files(day); }
+      catch (error) {
+        if (classifyPlannerHistoryGap(error) === null) throw error;
+        notices.push(`health_day_refused:${day}`);
+        files = [];
+      }
+      rawDays.set(day, files);
+    }
     return files;
   }
   let entries: ReturnType<typeof PublicationInventoryInputSchema.parse>["entries"] = [];
@@ -79,7 +99,7 @@ export async function stageFeedHistory(input: {
     if (parts.length !== 4 || !/^[0-9a-f-]{36}\.parquet$/.test(parts[3]!)) continue;
     const day = DateStampSchema.parse(parts.slice(0, 3).join("-"));
     if (day > input.now.slice(0, 10)) continue;
-    const held: LedgerDayInput = days.get(day) ?? createHistoryDayInputs(input.prefix, [day])[0]!;
+    const held: LedgerDayInput = days.get(day) ?? createHealthDay(input.prefix, day);
     const rawFiles = [...new Set([...(held.raw_files ?? []), `state/${entry.path}`])];
     days.set(day, { day, indexes: defaults.indexes, raw_files: rawFiles });
   }
@@ -99,7 +119,7 @@ export async function stageFeedHistory(input: {
     files.add(period.path);
     try {
       for (const day of representedPeriodDays(period.period, period.covers, input.now.slice(0, 10))) {
-        if (!days.has(day)) days.set(day, createHistoryDayInputs(input.prefix, [day])[0]!);
+        if (!days.has(day)) days.set(day, createHealthDay(input.prefix, day));
       }
       await input.read_period(period.path);
     } catch (error) {
@@ -109,7 +129,7 @@ export async function stageFeedHistory(input: {
     }
   }
   for (const day of [...closedRequestDays(input.now, input.request_report_closed_days), input.now.slice(0, 10)]) {
-    const named = createHistoryDayInputs(input.prefix, [day])[0]!;
+    const named = createHealthDay(input.prefix, day);
     if (!days.has(day) && (await rawFiles(day)).length > 0) days.set(day, named);
   }
   for (const named of input.authored) {
@@ -129,14 +149,20 @@ export async function stageFeedHistory(input: {
     const members = [...await rawFiles(day.day)];
     const authored = input.authored.find(value => value.day === day.day);
     if (authored?.raw_files !== undefined && [...authored.raw_files].sort().join("\n") !== [...members].sort().join("\n")) {
-      throw new LedgerHistoryReadError("Supplied health members differ from the selected Git day");
+      notices.push(`health_membership_refused:${day.day}`);
     }
-    selected[position] = { ...day, raw_files: members };
+    selected[position] = { ...day, raw_files: authored?.raw_files ?? members };
     try {
-      for (const path of resolveHistoryInventory({
-        ledger: input.ledger, prefix: input.prefix, days: [day.day], compact, rawFiles: members,
-        ...(day.indexes === undefined ? {} : { indexes: day.indexes }),
-      })) files.add(path);
+      for (const member of members) {
+        if (!member.startsWith(`state/raw/${base}/${day.day.replaceAll("-", "/")}/`)
+          || member.split("/").length !== 8) {
+          throw new LedgerHistoryReadError("Raw health member lies outside its named UTC day");
+        }
+        files.add(member);
+      }
+      for (const period of periods) {
+        if (day.day.startsWith(period.covers)) files.add(period.path);
+      }
     } catch (error) {
       if (classifyPlannerHistoryGap(error) === null) throw error;
       notices.push(`health_history_refused:${day.day}`);

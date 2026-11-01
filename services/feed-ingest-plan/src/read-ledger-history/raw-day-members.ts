@@ -1,10 +1,8 @@
-/** Which immutable Parquet members belong to one registered UTC day at one Git revision? */
+/** Acquire exact named workflow history before the file-only planner starts. */
 import { lstat, readFile, realpath } from "node:fs/promises";
 import { createHash } from "node:crypto";
 import { relative, resolve } from "node:path";
-import {
-  DateStampSchema, MonthStampSchema, PlannerLedgerNameSchema, YearStampSchema,
-} from "@idhazh/common-contracts";
+import { rawDayDirectory } from "@idhazh/ledger-file-writer";
 import type { LedgerRegistration } from "@idhazh/ledger-file-writer";
 import { LedgerHistoryReadError } from "./ledger-history-error";
 
@@ -79,11 +77,6 @@ async function namedTreeEntry(
   throw new LedgerHistoryReadError("Named history path is empty");
 }
 
-export async function fixedHistoryRevision(repository: string) {
-  const revision = await git(repository, ["rev-parse", "--verify", "HEAD^{commit}"]);
-  if (!/^[0-9a-f]{40}$/.test(revision)) throw new LedgerHistoryReadError("Invalid history revision");
-  return revision;
-}
 export async function captureRemoteHistoryRevision(repository: string) {
   await git(repository, ["fetch", "--quiet", "--no-tags", "origin", "main"]);
   const revision = await git(repository, ["rev-parse", "--verify", "FETCH_HEAD^{commit}"]);
@@ -95,39 +88,6 @@ export async function verifiedHistoryRevision(repository: string, revision: stri
     throw new LedgerHistoryReadError("Invalid history revision");
   }
   return revision;
-}
-
-export function rawDayDirectory(registration: LedgerRegistration, day: string) {
-  const ledger = PlannerLedgerNameSchema.parse(registration.name);
-  if (registration.family !== "feed-ingest-plan"
-    || registration.prefix.join("/") !== `feed-ingest-plan/${ledger}`) {
-    throw new LedgerHistoryReadError("Planner raw day requires its registered root");
-  }
-  DateStampSchema.parse(day);
-  if (new Date(`${day}T00:00:00Z`).toISOString().slice(0, 10) !== day) {
-    throw new LedgerHistoryReadError("Invalid raw UTC day");
-  }
-  return `state/raw/${registration.prefix.join("/")}/${day.replaceAll("-", "/")}`;
-}
-
-export function compactPeriodFile(
-  registration: LedgerRegistration, period: "daily" | "monthly" | "yearly", covers: string,
-) {
-  const ledger = PlannerLedgerNameSchema.parse(registration.name);
-  if (registration.family !== "feed-ingest-plan"
-    || registration.prefix.join("/") !== `feed-ingest-plan/${ledger}`) {
-    throw new LedgerHistoryReadError("Planner compact period requires its registered root");
-  }
-  const stamp = period === "yearly" ? YearStampSchema : period === "monthly" ? MonthStampSchema : DateStampSchema;
-  stamp.parse(covers);
-  if (period === "daily" && new Date(`${covers}T00:00:00Z`).toISOString().slice(0, 10) !== covers) {
-    throw new LedgerHistoryReadError("Invalid compact UTC day");
-  }
-  const pieces = covers.split("-");
-  const file = period === "yearly" ? `${covers}/${covers}.parquet`
-    : period === "monthly" ? `${pieces[0]}/${pieces[1]}.parquet`
-      : `${pieces[0]}/${pieces[1]}/${pieces[2]}.parquet`;
-  return `state/compact/${registration.prefix.join("/")}/${period}/${file}`;
 }
 
 export async function listExactRawDayMembers(

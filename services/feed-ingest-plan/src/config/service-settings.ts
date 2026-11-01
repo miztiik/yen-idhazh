@@ -16,7 +16,6 @@ export const LedgerDayInputSchema = z.strictObject({
   }).optional(),
   raw_files: z.array(RelativePathSchema).optional(),
   raw_index: RelativePathSchema.optional(),
-  raw_revision: z.string().regex(/^[0-9a-f]{40}$/).optional(),
 }).refine(value => value.raw_files === undefined || value.raw_index === undefined, {
   message: "name raw_files or raw_index, not both",
 });
@@ -24,8 +23,6 @@ export const PlannerDayInputSchema = LedgerDayInputSchema.refine(value => value.
   message: "Planner raw days use Parquet members, not raw_index",
 }).refine(value => value.indexes === undefined, {
   message: "Planner compact membership uses exact files, not indexes",
-}).refine(value => value.raw_files === undefined || value.raw_revision !== undefined, {
-  message: "Configured planner raw_files require their complete raw_revision",
 });
 export type LedgerDayInput = z.infer<typeof LedgerDayInputSchema>;
 export const ServiceSettingsSchema = z.strictObject({

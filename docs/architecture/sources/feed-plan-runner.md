@@ -29,7 +29,10 @@ do not supply API execution, history, verification or reporting.
 The workflow entry is `scripts/run-feed-ingest-plan.ts`. Preparation lives in
 `scripts/feed-ingest-plan-workflow-inputs.ts`: it stages bounded history,
 enables only this invocation and captures identity, effective policy and host
-evidence. `scripts/feed-ingest-plan-http-client.ts` calls an existing listener
+evidence. Code identity comes from the checkout's validated `GITHUB_SHA`, or
+an explicitly supplied runtime identity for a standalone caller. Missing or
+invalid identity fails before writes; startup never queries `HEAD`.
+`scripts/feed-ingest-plan-http-client.ts` calls an existing listener
 and verifies retained output; it does not start or stop the listener. The entry
 supervises `scripts/feed-ingest-plan-server.ts` as a separate child process in
 one workflow step. It verifies private-pipe readiness against the child's
@@ -49,7 +52,8 @@ The child reloads named authored inputs, applies that invocation's effective
 policy, then reconstructs its fixed run-start clock and live selection
 clock. No function, map, credential or article body crosses this pipe. Startup
 data is not a saved artifact and is never accepted by an HTTP route. Plain
-`--serve` does not stage history or supply workflow controls.
+`--serve` does not stage history or supply workflow controls. Each standalone
+execution follows the same file-capture rules as a collection.
 Workflow age overrides travel in that private policy, not as extra `/plan`
 request fields. Each child receives its own policy without editing authored
 configuration.
@@ -113,11 +117,12 @@ Elapsed duration comes from the monotonic process clock, not wall-clock
 subtraction. If the original execution clock is unavailable, total duration
 is null. A restart does not resume a standalone chain.
 
-The [shared health operation](planner-feed-history.md) captures saved calculations
-before fetching and applies this run's actual work before selection and finish. Its complete
-measured cost belongs in `plan-runs`, without per-candidate history reads
-or a separate persisted summary cache. The captured calculations are reused
-across the run's HTTP calls.
+The [shared history load](planner-feed-history.md) captures saved health,
+discovery, exclusions and publisher linkage before fetching. It retains that
+input in the live execution state, then applies actual current work before
+selection and finish. Its complete measured cost belongs in `plan-runs`, without
+per-candidate history reads or a separate persisted summary cache. The same
+captured records supply every HTTP stage, including request reporting.
 New timing entries name these purposes `feed-health-before-fetch` and
 `feed-health-for-selection`. Their names, not their positions, identify them.
 Selected publication fallback uses the same saved selection-start instant,
@@ -134,6 +139,9 @@ requests can progress together. Configured pools bound permitted requests
 and history reads. One listener shares `listener.parser_concurrency`
 native XML and HTML workers; concurrent requests do not each create another full
 pool. CLI work can own a pool for its own lifetime.
+Live work pins its loaded evidence and retained references. Capacity expiry
+removes both together; an expired stage cannot reload old input. No listener-wide
+run queue is added.
 The feed pool bounds active feed chains by `harvest.concurrency`. The article
 pool allows that many fetches plus `listener.parser_concurrency` parses to be
 in flight; waiting for a parser does not occupy every fetch slot. The listener
@@ -169,9 +177,10 @@ artifact and recovery tasks. A planning failure remains a failed workflow.
 ## First sight and retained output
 
 Discovery records global earliest sight by canonical URL key, independent of
-the feed that encountered it. Named files and native indexes bound its
-configured lookback. Missing history does not prove absence. Current real
-sightings can be saved without pretending that missing days were empty.
+the feed that encountered it. Exact named UTC-day directories and compact
+files bound its configured lookback. A failed read or missing referenced file
+does not prove absence; a successful empty local membership check does.
+Each execution keeps its new sightings separate from the saved baseline.
 
 The chosen result produces metadata-only Parquet and one text-bearing
 artifact. Health is batched by execution and actual UTC work day. A small

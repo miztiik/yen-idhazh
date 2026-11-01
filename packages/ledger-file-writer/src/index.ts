@@ -1,4 +1,4 @@
-/** Public entry point for writing ledger files and creating their identities. */
+/** Expose registered ledger readers, writers and file identities. */
 export { persistLedger } from "./persist-ledger";
 export { persistRawLedger } from "./persist-raw";
 export { persistCompactLedger } from "./persist-compact";
@@ -23,3 +23,7 @@ export type { LogicalField, LogicalType } from "./parquet/row-digest";
 export { describeObjectSchema, appendIdentityColumns } from "./row-schema";
 export { PlannerLedgerFileError, PlannerUnsupportedFormatError, readPlannerParquet, readStoredPlannerParquet } from "./read-planner-file";
 export { maintainPlannerPeriod } from "./planner-maintenance";
+export {
+  rawDayDirectory, compactPeriodFile, regularPlannerPath, readPlannerDayFiles, readPlannerCompactFile,
+} from "./read-planner-day-files";
+export type { PlannerRawDayFiles } from "./read-planner-day-files";

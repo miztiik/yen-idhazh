@@ -1,12 +1,9 @@
-/** Write and read bounded native rows with explicitly named generated Git members. */
-import { existsSync } from "node:fs";
-import { relative, join } from "node:path";
-import { WriterIdentitySchema } from "@idhazh/common-contracts";
+/** Write and read bounded native rows without archived Git membership. */
+import { join } from "node:path";
+import { PlannerLedgerNameSchema, WriterIdentitySchema } from "@idhazh/common-contracts";
 import type { WriterIdentity } from "@idhazh/common-contracts";
-import { persistLedger } from "@idhazh/ledger-file-writer";
+import { persistLedger, readPlannerParquet } from "@idhazh/ledger-file-writer";
 import type { LedgerRegistration, LedgerRowContract, LedgerSettings, PersistLedgerResult } from "@idhazh/ledger-file-writer";
-import { readPlannerDay } from "../src/read-ledger-history/read-planner-history";
-import { fixtureGit } from "./fixture-git";
 
 export const settings: LedgerSettings = { format: "parquet", compression_raw: "snappy", compression_compact: "zstd" };
 export function registration(name: string): LedgerRegistration {
@@ -26,9 +23,12 @@ export async function readWritten<T extends object>(
   root: string, ledger: string, day: string, contract: LedgerRowContract<T>, written: PersistLedgerResult,
 ) {
   if (written.status === "skipped") throw new Error("Fixture ledger was skipped");
-  return readPlannerDay(root, registration(ledger), {
-    day, raw_files: written.files.map(file => join(root, file.path)),
-  }, contract);
+  const files = await Promise.all(written.files.map(file => readPlannerParquet(join(root, file.path),
+    PlannerLedgerNameSchema.parse(ledger), contract)));
+  if (files.some(file => file.envelope.ledger !== ledger || file.envelope.covers !== day)) {
+    throw new Error("Completed fixture output differs from its named ledger day");
+  }
+  return { rows: files.flatMap(file => file.rows) };
 }
 export async function writeRows<T extends object>(
   root: string, ledger: string, day: string, contract: LedgerRowContract<T>, rows: readonly T[],
@@ -40,15 +40,9 @@ export async function writeRows<T extends object>(
     ...(ledger === "feed-health-state" ? { updatedAt: `${day}T23:59:59.123Z` } : {}),
   });
 }
-export async function commitFixtureFiles(repositoryRoot: string, paths: readonly string[]) {
-  if (paths.length === 0) return;
-  if (!existsSync(join(repositoryRoot, ".git"))) await fixtureGit(repositoryRoot, ["init", "--initial-branch=main"]);
-  await fixtureGit(repositoryRoot, ["add", "--", ...paths]);
-  await fixtureGit(repositoryRoot, ["commit", "--allow-empty", "-m", "Record planner fixture files"]);
-}
 export async function compactRows<T extends object>(
   root: string, ledger: string, day: string, contract: LedgerRowContract<T>, rows: readonly T[],
-  period: "daily" | "monthly" | "yearly", repositoryRoot = root,
+  period: "daily" | "monthly" | "yearly",
 ) {
   const covers = day.slice(0, period === "daily" ? 10 : period === "monthly" ? 7 : 4);
   const written = await persistLedger({
@@ -57,9 +51,5 @@ export async function compactRows<T extends object>(
     ...(ledger === "feed-health-state" ? { updatedAt: `${day}T23:59:59.123Z` } : {}),
   });
   const file = written.files[0];
-  if (file !== undefined) {
-    const path = relative(repositoryRoot, join(root, file.path)).replaceAll("\\", "/");
-    await commitFixtureFiles(repositoryRoot, [path]);
-  }
   return { written, path: file === undefined ? undefined : join(root, file.path) };
 }

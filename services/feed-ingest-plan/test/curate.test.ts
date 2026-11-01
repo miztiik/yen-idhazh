@@ -18,6 +18,7 @@ import type { SourceHistoryEvidence } from "../src/read-ledger-history/read-feed
 import type { PublisherPublicationHistory } from "../src/curate-article-portfolio/publisher-exposure";
 import { partitionArticles } from "../src/partition-article-shards/shard-packer";
 import { selectArticles } from "../src/select-articles";
+import { readRunHistory } from "../src/read-ledger-history/read-run-history";
 import { endpointKey } from "../src/read-ledger-history/read-feed-history";
 import { plannerRecordings } from "../../../packages/ledger-file-writer/test/planner-recordings";
 import { source } from "./harvest-recordings";
@@ -446,7 +447,8 @@ test("real screening results compose into exact curation without losing harveste
       endpoint_key: endpointKey(first.candidate.source.feed_url), checked_at: setup.context.now,
       items: 2, article_candidates: 1, articles_selected: 0,
     })];
-    const selected = await selectArticles(pair, setup.inputs, setup.context.now);
+    const baseline = await readRunHistory(setup.inputs, pair.context);
+    const selected = await selectArticles(pair, setup.inputs, setup.context.now, undefined, setup.context, baseline);
     expect(selected.health_rows[0]).toMatchObject({ article_candidates: 1, articles_selected: 1 });
     expect(selected.exclusions).toContainEqual({
       feed_id: first.candidate.feed_id, subject: "article", stage: "screen-article-candidates",
@@ -455,7 +457,7 @@ test("real screening results compose into exact curation without losing harveste
     expect(selected.articles).toHaveLength(1);
     const originalBatch = structuredClone(pair);
     const runContext = resolveRunContext(setup.inputs.settings, "a".repeat(40), new Date("2026-10-22T00:01:00Z"));
-    const fresh = await selectArticles(pair, setup.inputs, runContext.now, undefined, runContext);
+    const fresh = await selectArticles(pair, setup.inputs, runContext.now, undefined, runContext, baseline);
     expect(fresh.articles[0]).toMatchObject({
       run_id: runContext.run_id, date: runContext.date, attempt: runContext.writer.attempt,
       age_hours: selected.articles[0]!.age_hours, timing_at: selected.articles[0]!.timing_at,
