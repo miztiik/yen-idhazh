@@ -233,7 +233,7 @@ test("cancellation during a real refused Git push reaps the delivery child and p
       "sleep 2", "exit 1", "",
     ].join("\n"), { mode: 0o755 });
     pending = finalizeRunOutput({
-      ...inputFor(f), cancelled: false, signal: cancellation.signal,
+      ...inputFor(f), cancelled: false, signal: cancellation.signal, runId: f.identity.run_id,
       outputPath: join(f.directory, "outputs"), summaryPath: join(f.directory, "summary.md"),
     });
     void pending.catch(() => {});
@@ -252,7 +252,7 @@ test("cancellation during a real refused Git push reaps the delivery child and p
     await waitForExit(gitPid, AbortSignal.timeout(5000));
     expect(await fixtureGit(f.origin, ["--git-dir", f.origin, "rev-parse", "main"])).toBe(f.head);
     expect(MetadataDeliveryResultSchema.parse(await Bun.file(join(f.directory, "delivery-result.json")).json()).status).toBe("failed");
-    expect(await Bun.file(join(f.directory, "artifacts", "700-3-report.md")).exists()).toBe(true);
+    expect(await Bun.file(join(f.directory, "artifacts", "feed-ingest-report-2026-10-21-700.md")).exists()).toBe(true);
     expect(await Bun.file(join(f.directory, "artifacts", "uncommitted-metadata-700-3", "current-run-files.json")).json())
       .toEqual(f.paths);
     expect(await readFile(join(f.directory, "outputs"), "utf8")).toContain("artifact_directory<<");

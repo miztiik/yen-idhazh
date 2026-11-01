@@ -1,8 +1,25 @@
 /** Name each visible file in the prepared current-run upload directory, relative to the ZIP root. */
 import { randomUUID } from "node:crypto";
 import { join } from "node:path";
+import { stat } from "node:fs/promises";
 import type { FeedIngestEvent } from "@idhazh/common-contracts";
 import { createStageLogger, writeJsonLine } from "../src/logging/structured-logger";
+import { RAW_DOCUMENT_ARTIFACT_DIRECTORY } from "./feed-ingest-plan-artifacts";
+
+export async function publishWorkflowUploadInventories(input: {
+  directory: string; runNumber: string; write?: (event: FeedIngestEvent) => void;
+}) {
+  for (const name of ["artifacts", RAW_DOCUMENT_ARTIFACT_DIRECTORY]) {
+    const directory = join(input.directory, name);
+    try { await stat(directory); }
+    catch (error) {
+      if (error instanceof Error && "code" in error && error.code === "ENOENT") continue;
+      throw error;
+    }
+    writeJsonLine({ event: "workflow_upload_inventory", artifact_directory: name });
+    await publishUploadInventory({ ...input, directory });
+  }
+}
 
 export async function publishUploadInventory(input: {
   directory: string; runNumber: string; now?: Date; write?: (event: FeedIngestEvent) => void;

@@ -1,7 +1,8 @@
 /** Write the reusable planner Markdown into the workflow run summary. */
 import { appendFile, mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { FeedIngestConfigSchema } from "../../../packages/common-contracts/src/index";
+import { FeedIngestConfigSchema, WriterIdentitySchema } from "../../../packages/common-contracts/src/index";
+import { z } from "zod";
 import { PlanResponseSchema } from "../src/api/plan-response.schema";
 import {
   renderPlanMarkdown, renderPlannerProgressMarkdown, renderUnavailablePlanMarkdown,
@@ -79,7 +80,7 @@ export async function readExecutionReport(directory: string) {
 }
 
 export async function writeWorkflowReport(input: {
-  root: string; directory: string; summaryPath?: string;
+  root: string; directory: string; summaryPath?: string; runNumber: string; runId?: string;
 }) {
   const config = FeedIngestConfigSchema.parse(await Bun.file(join(input.root, "config", "feed-ingest-plan.json")).json());
   if (!config.workflow_reporting.enabled) return { status: "disabled" as const };
@@ -98,17 +99,28 @@ export async function writeWorkflowReport(input: {
     };
   }
   const markdown = report.markdown;
-  await writeFile(join(input.directory, "report.md"), markdown, "utf8");
+  const filename = workflowReportFilename(input);
+  await writeFile(join(input.directory, filename), markdown, "utf8");
   await appendFile(input.summaryPath, markdown, "utf8");
   for (const notice of report.notices) console.log(formatWorkflowAnnotation(notice));
-  return { status: "written" as const, markdown };
+  return { status: "written" as const, markdown, filename };
+}
+
+export function workflowReportFilename(input: { runNumber: string; runId?: string }): string {
+  const run = z.string().regex(/^\d+$/).parse(input.runNumber);
+  const runId = input.runId === undefined ? undefined : WriterIdentitySchema.shape.run_id.parse(input.runId);
+  if (runId !== undefined && runId.slice(11) !== run) throw new Error("Report run differs from the executed workflow");
+  const day = runId?.slice(0, 10) ?? new Date().toISOString().slice(0, 10);
+  return `feed-ingest-report-${day}-${run}.md`;
 }
 
 if (import.meta.main) {
-  const { RUNNER_TEMP, GITHUB_STEP_SUMMARY } = process.env;
-  if (!RUNNER_TEMP) throw new Error("Workflow report controls are missing");
+  const { RUNNER_TEMP, GITHUB_STEP_SUMMARY, GITHUB_RUN_ID, RUN_ID } = process.env;
+  if (!RUNNER_TEMP || !GITHUB_RUN_ID) throw new Error("Workflow report controls are missing");
   await writeWorkflowReport({
     root: process.cwd(), directory: join(RUNNER_TEMP, "feed-ingest-plan"),
+    runNumber: GITHUB_RUN_ID,
+    ...(RUN_ID === undefined || RUN_ID === "" ? {} : { runId: RUN_ID }),
     ...(GITHUB_STEP_SUMMARY === undefined ? {} : { summaryPath: GITHUB_STEP_SUMMARY }),
   });
 }

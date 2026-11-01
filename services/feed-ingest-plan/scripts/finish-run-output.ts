@@ -35,16 +35,22 @@ export async function finishRunOutput(input: {
   uploadOutcome: unknown; artifactId?: string;
   dumpRawDocumentContents?: boolean; rawDocumentContents?: string;
   rawUploadOutcome?: unknown; rawArtifactId?: string;
+  commitOutcome?: unknown; reportOutcome?: unknown; writeReport?: boolean;
 }) {
   const gitSha = CommitShaSchema.parse(input.gitSha);
   const collection = OutcomeSchema.parse(input.collectionOutcome);
   const finalization = OutcomeSchema.parse(input.finalizationOutcome);
   const upload = OutcomeSchema.parse(input.uploadOutcome);
+  const commit = input.commitOutcome === undefined ? finalization : OutcomeSchema.parse(input.commitOutcome);
+  const report = input.reportOutcome === undefined ? finalization : OutcomeSchema.parse(input.reportOutcome);
   const failures: unknown[] = [];
   if (collection !== "success" || input.planningComplete !== "true") {
     failures.push(new Error("Article collection did not complete"));
   }
-  if (finalization !== "success") failures.push(new Error("Ledger commit, report or handoff preparation failed"));
+  if (commit !== "success") failures.push(new Error("Ledger commit failed"));
+  const reportComplete = report === "success" || (input.writeReport === false && report === "skipped");
+  if (!reportComplete) failures.push(new Error("Run report failed"));
+  if (finalization !== "success") failures.push(new Error("Artifact preparation failed"));
   const uploaded = upload === "success" && z.string().regex(/^\d+$/).safeParse(input.artifactId).success;
   if (!uploaded) failures.push(new Error("The run artifact upload was not confirmed"));
   const rawPath = input.rawDocumentContents === undefined || input.rawDocumentContents === "" ? undefined
@@ -54,7 +60,8 @@ export async function finishRunOutput(input: {
     && z.string().regex(/^\d+$/).safeParse(input.rawArtifactId).success);
   if (!rawUploaded) failures.push(new Error("The raw document artifact upload was not confirmed"));
   let cleaned = false;
-  if (finalization === "success" && uploaded && rawUploaded && collection !== "cancelled") {
+  if (commit === "success" && reportComplete && finalization === "success"
+    && uploaded && rawUploaded && collection !== "cancelled") {
     let operation = "check-directory";
     try {
       const directory = await ownedRunDirectory(input.root, input.temporaryRoot);
@@ -82,7 +89,7 @@ export async function finishRunOutput(input: {
     }
   }
   console.error(JSON.stringify({
-    event: "workflow_output_finished", collection, finalization, upload,
+    event: "workflow_output_finished", collection, commit, report, finalization, upload,
     cleanup: cleaned ? "removed" : "retained", status: failures.length ? "failed" : "completed",
     failures: failures.map(error => error instanceof Error ? error.message : "Unknown completion failure"),
   }));
@@ -93,13 +100,17 @@ if (import.meta.main) {
   try {
     const { RUNNER_TEMP, GITHUB_RUN_ID, GITHUB_RUN_ATTEMPT, COLLECTION_OUTCOME, PLANNING_COMPLETE,
       FINALIZATION_OUTCOME, UPLOAD_OUTCOME, UPLOAD_ARTIFACT_ID,
-      DUMP_RAW_DOCUMENT_CONTENTS, RAW_DOCUMENT_CONTENTS, RAW_UPLOAD_OUTCOME, RAW_UPLOAD_ARTIFACT_ID, GITHUB_SHA } = process.env;
+      DUMP_RAW_DOCUMENT_CONTENTS, RAW_DOCUMENT_CONTENTS, RAW_UPLOAD_OUTCOME, RAW_UPLOAD_ARTIFACT_ID, GITHUB_SHA,
+      COMMIT_OUTCOME, REPORT_OUTCOME, WRITE_REPORT } = process.env;
     if (!RUNNER_TEMP || !GITHUB_RUN_ID || !GITHUB_RUN_ATTEMPT || !GITHUB_SHA) throw new Error("Workflow completion controls are missing");
     await finishRunOutput({
       root: process.cwd(), temporaryRoot: RUNNER_TEMP, runNumber: GITHUB_RUN_ID, attempt: Number(GITHUB_RUN_ATTEMPT),
       gitSha: GITHUB_SHA,
       collectionOutcome: COLLECTION_OUTCOME, planningComplete: PLANNING_COMPLETE,
       finalizationOutcome: FINALIZATION_OUTCOME, uploadOutcome: UPLOAD_OUTCOME,
+      ...(COMMIT_OUTCOME === undefined ? {} : { commitOutcome: COMMIT_OUTCOME }),
+      ...(REPORT_OUTCOME === undefined ? {} : { reportOutcome: REPORT_OUTCOME }),
+      ...(WRITE_REPORT === undefined ? {} : { writeReport: z.enum(["true", "false"]).parse(WRITE_REPORT) === "true" }),
       ...(UPLOAD_ARTIFACT_ID === undefined ? {} : { artifactId: UPLOAD_ARTIFACT_ID }),
       dumpRawDocumentContents: DUMP_RAW_DOCUMENT_CONTENTS === undefined ? false : parseRawDocumentDumpControl(DUMP_RAW_DOCUMENT_CONTENTS),
       ...(RAW_DOCUMENT_CONTENTS === undefined ? {} : { rawDocumentContents: RAW_DOCUMENT_CONTENTS }),

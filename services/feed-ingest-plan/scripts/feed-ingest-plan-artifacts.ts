@@ -10,6 +10,7 @@ import { writeGitHubOutputs } from "./feed-ingest-plan-outputs";
 import { safe_persist_data } from "@idhazh/data-delivery";
 import { parseRawDocumentDumpControl, ServiceSettingsSchema } from "../src/config/service-settings";
 import { rawDocumentContentsPath, RAW_DOCUMENT_CONTENTS_FILENAME } from "../src/selected-artifact-path";
+import { workflowReportFilename } from "./feed-ingest-plan-report";
 
 // This separate upload directory is an artifact packaging protocol, not a content or retention setting.
 export const RAW_DOCUMENT_ARTIFACT_DIRECTORY = "raw-document-artifacts";
@@ -39,7 +40,7 @@ export async function prepareWorkflowArtifacts(input: {
   root: string; directory: string; runNumber: string; attempt: number; outputPath?: string;
   gitSha?: string;
   identity?: ExecutionIdentity; registrations?: MetadataRegistrations;
-  dumpRawDocumentContents?: boolean; runId?: string;
+  dumpRawDocumentContents?: boolean; runId?: string; reportFilename?: string;
 }) {
   // Actions run numbers and attempt numbers form filenames, never fetched text.
   const run = z.string().regex(/^\d+$/).parse(input.runNumber);
@@ -65,19 +66,22 @@ export async function prepareWorkflowArtifacts(input: {
       [key]: path, artifact_directory: outputs.artifact_directory,
     });
   }
-  async function retain(key: string, source: string, filename: string) {
+  async function retain(key: string, source: string, filename: string, exactFilename = false) {
     if (!await Bun.file(source).exists()) {
       console.error(JSON.stringify({ event: "planner_evidence_unavailable", file: filename }));
       return;
     }
-    const path = `artifacts/${run}-${attempt}-${filename}`;
+    const path = `artifacts/${exactFilename ? filename : `${run}-${attempt}-${filename}`}`;
     await mkdir(dirname(join(input.directory, path)), { recursive: true });
     await copyFile(source, join(input.directory, path));
     await writeOutput(key, path);
   }
-  for (const [key, name] of [
-    ["delivery", "delivery-result.json"], ["report", "report.md"],
-  ] as const) await retain(key, join(input.directory, name), name);
+  await retain("delivery", join(input.directory, "delivery-result.json"), "delivery-result.json");
+  const reportFilename = input.reportFilename === undefined
+    ? workflowReportFilename({ runNumber: run, ...(input.runId === undefined ? {} : { runId: input.runId }) })
+    : z.string().regex(/^feed-ingest-report-\d{4}-\d{2}-\d{2}-\d+\.md$/).parse(input.reportFilename);
+  if (!reportFilename.endsWith(`-${run}.md`)) throw new Error("Report artifact run differs from the executed workflow");
+  await retain("report", join(input.directory, reportFilename), reportFilename, true);
   const responsePath = join(input.directory, "response.json");
   if (!await Bun.file(responsePath).exists()
     && !await Bun.file(join(input.directory, "host-fingerprint.json")).exists()) {

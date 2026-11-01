@@ -119,7 +119,7 @@ test("manual controls exercise the planner API and keep only required outputs", 
   const controls = parsed.on.workflow_dispatch.inputs;
   expect(Object.keys(controls)).toEqual([
     "article_limit", "shards", "institutional_age_hours", "trade_press_age_hours", "community_age_hours", "partition_strategy",
-    "dump_raw_document_contents",
+    "dump_raw_document_contents", "write_report",
   ]);
   for (const [field, description] of [
     ["institutional_age_hours", "Institutional sources - article age windows (hours)"],
@@ -150,11 +150,25 @@ test("manual controls exercise the planner API and keep only required outputs", 
   });
   expect(plan.run).not.toContain("${{");
   const closing = steps.slice(steps.indexOf(plan) + 1);
-  expect(closing).toHaveLength(6);
-  const [cancellation, finalize, inventory, upload, , finish] = closing;
-  expect(inventory?.run).toBe("bun run services/feed-ingest-plan/scripts/feed-ingest-plan-upload-inventory.ts");
-  expect(inventory?.if).toBe(upload?.if);
-  expect(inventory?.env?.ARTIFACT_DIRECTORY).toBe("${{ steps.finalize.outputs.artifact_directory }}");
+  expect(closing).toHaveLength(7);
+  const [cancellation, commit, report, finalize, upload, , finish] = closing;
+  expect(controls.write_report).toMatchObject({ default: true, type: "boolean", required: false });
+  expect(commit?.id).toBe("commit");
+  expect(commit?.if).toBe("${{ always() }}");
+  expect(commit?.run).toBe("bun run services/feed-ingest-plan/scripts/finalize-run-output.ts");
+  expect(commit?.env).toEqual({
+    FINALIZATION_OPERATION: "commit-ledgers",
+    CURRENT_RUN_FILES: "${{ steps.plan.outputs.current_run_files }}",
+    RUN_CANCELLED: "${{ steps.cancellation.outputs.cancelled == 'true' }}",
+  });
+  expect(report?.id).toBe("report");
+  expect(report?.if).toBe("${{ always() && inputs.write_report }}");
+  expect(report?.run).toBe("bun run services/feed-ingest-plan/scripts/finalize-run-output.ts");
+  expect(report?.env).toEqual({
+    FINALIZATION_OPERATION: "write-report",
+    RUN_CANCELLED: "${{ steps.cancellation.outputs.cancelled == 'true' }}",
+    RUN_ID: "${{ steps.plan.outputs.run_id }}",
+  });
   expect(cancellation?.id).toBe("cancellation");
   expect(cancellation?.if).toBe("${{ cancelled() }}");
   expect(cancellation?.run).toBe('echo "cancelled=true" >> "$GITHUB_OUTPUT"');
@@ -162,10 +176,11 @@ test("manual controls exercise the planner API and keep only required outputs", 
   expect(finalize?.id).toBe("finalize");
   expect(finalize?.if).toContain("always()");
   expect(finalize?.env).toEqual({
-    CURRENT_RUN_FILES: "${{ steps.plan.outputs.current_run_files }}",
+    FINALIZATION_OPERATION: "prepare-artifacts",
     RUN_CANCELLED: "${{ steps.cancellation.outputs.cancelled == 'true' }}",
     DUMP_RAW_DOCUMENT_CONTENTS: "${{ inputs.dump_raw_document_contents }}",
     RUN_ID: "${{ steps.plan.outputs.run_id }}",
+    REPORT_FILENAME: "${{ steps.report.outputs.report_filename }}",
   });
   expect(finalize?.run).toBe("bun run services/feed-ingest-plan/scripts/finalize-run-output.ts");
   expect(finalize?.run).not.toContain("git push");
@@ -184,6 +199,8 @@ test("manual controls exercise the planner API and keep only required outputs", 
   expect(finish?.env).toEqual({
     COLLECTION_OUTCOME: "${{ steps.plan.outcome }}", PLANNING_COMPLETE: "${{ steps.plan.outputs.planning_complete }}",
     FINALIZATION_OUTCOME: "${{ steps.finalize.outcome }}", UPLOAD_OUTCOME: "${{ steps.upload.outcome }}",
+    COMMIT_OUTCOME: "${{ steps.commit.outcome }}", REPORT_OUTCOME: "${{ steps.report.outcome }}",
+    WRITE_REPORT: "${{ inputs.write_report }}",
     UPLOAD_ARTIFACT_ID: "${{ steps.upload.outputs.artifact-id }}",
     DUMP_RAW_DOCUMENT_CONTENTS: "${{ inputs.dump_raw_document_contents }}",
     RAW_DOCUMENT_CONTENTS: "${{ steps.finalize.outputs.raw_document_contents }}",
