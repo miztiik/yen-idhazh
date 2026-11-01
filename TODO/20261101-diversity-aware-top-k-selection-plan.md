@@ -123,30 +123,24 @@ Table E
 
 ### A. Static Base Score (Computed Once per Candidate)
 
-![BaseScore(d) = A(d) + R(d) + Delta_pass(d) + Q(d)](assets/20261101-diversity-aware-top-k-selection/score-base.svg)
-
-<!-- math-source:
+```math
 \text{BaseScore}(d) = A(d) + R(d) + \Delta_{\text{pass}}(d) + Q(d)
--->
+```
 
 #### 1. Source Authority Prior
 
-![A(d) = alpha * w_feed](assets/20261101-diversity-aware-top-k-selection/score-source-authority.svg)
-
-<!-- math-source:
+```math
 A(d) = \alpha \cdot w_{\text{feed}}
--->
+```
 
 * `alpha`: Configured authority weight (default: `1.0`).
 * `w_feed`: The configured `source.weight`. No source-tier or taxonomy multiplier.
 
 #### 2. Continuous Recency
 
-![R(d) = w_r * (1/2) raised to max(0, age_hours) / h](assets/20261101-diversity-aware-top-k-selection/score-recency.svg)
-
-<!-- math-source:
+```math
 R(d) = w_r \cdot \left(\frac{1}{2}\right)^{\frac{\max(0, \text{age\_hours})}{h}}
--->
+```
 
 * `w_r`: Recency weight (default: `0.6`).
 * `h`: Recency half-life (default: `18.0` hours).
@@ -154,11 +148,9 @@ R(d) = w_r \cdot \left(\frac{1}{2}\right)^{\frac{\max(0, \text{age\_hours})}{h}}
 
 #### 3. Technical Reliability Adjustment
 
-![Delta_pass(d) = -A(d) * (1 - max(f, p_s))](assets/20261101-diversity-aware-top-k-selection/adjust-technical-reliability.svg)
-
-<!-- math-source:
+```math
 \Delta_{\text{pass}}(d) = -A(d) \cdot \left(1 - \max(f, p_s)\right)
--->
+```
 
 * `f`: Reliability floor (default: `0.5`).
 * `p_s`: 30-day technical pass rate of the feed. Incomplete/null history yields `0.0` for this calculation.
@@ -167,11 +159,9 @@ R(d) = w_r \cdot \left(\frac{1}{2}\right)^{\frac{\max(0, \text{age\_hours})}{h}}
 
 Designed to evaluate article depth without length or title bias:
 
-![Q(d) = Q_bandpass(words) + Q_entity(density) - Q_hype(headline)](assets/20261101-diversity-aware-top-k-selection/score-substance.svg)
-
-<!-- math-source:
+```math
 Q(d) = Q_{\text{bandpass}}(\text{words}) + Q_{\text{entity}}(\text{density}) - Q_{\text{hype}}(\text{headline})
--->
+```
 
 **Length Guardrail (`Q_bandpass`):**
 
@@ -197,19 +187,20 @@ Q(d) = Q_{\text{bandpass}}(\text{words}) + Q_{\text{entity}}(\text{density}) - Q
 
 At step `t`, with already selected set `S_(t-1)`, the marginal score for an unselected candidate is:
 
-![MarginalScore(d) = BaseScore(d) - Penalty_domain(d, S_previous) - Penalty_feed(d, S_previous) + Bonus_novelty(d, S_previous)](assets/20261101-diversity-aware-top-k-selection/score-marginal.svg)
-
-<!-- math-source:
-\text{MarginalScore}(d) = \text{BaseScore}(d) - \text{Penalty}_{\text{domain}}(d, S_{t-1}) - \text{Penalty}_{\text{feed}}(d, S_{t-1}) + \text{Bonus}_{\text{novelty}}(d, S_{t-1})
--->
+```math
+\begin{aligned}
+\text{MarginalScore}(d) &= \text{BaseScore}(d) \\
+&\quad - \text{Penalty}_{\text{domain}}(d, S_{t-1}) \\
+&\quad - \text{Penalty}_{\text{feed}}(d, S_{t-1}) \\
+&\quad + \text{Bonus}_{\text{novelty}}(d, S_{t-1})
+\end{aligned}
+```
 
 #### 1. Quadratic Domain Penalty
 
-![Penalty_domain = lambda_domain * N_domain(d, S_previous) squared](assets/20261101-diversity-aware-top-k-selection/penalize-website-count.svg)
-
-<!-- math-source:
+```math
 \text{Penalty}_{\text{domain}} = \lambda_{\text{domain}} \cdot \left[N_{\text{domain}}(d, S_{t-1})\right]^2
--->
+```
 
 * `lambda_domain = 0.04`.
 * `N_domain`: Number of articles already selected from the candidate's `website_group`.
@@ -217,26 +208,22 @@ At step `t`, with already selected set `S_(t-1)`, the marginal score for an unse
 
 #### 2. Quadratic Feed Penalty
 
-![Penalty_feed = lambda_feed * N_feed(d, S_previous) squared](assets/20261101-diversity-aware-top-k-selection/penalize-feed-count.svg)
-
-<!-- math-source:
+```math
 \text{Penalty}_{\text{feed}} = \lambda_{\text{feed}} \cdot \left[N_{\text{feed}}(d, S_{t-1})\right]^2
--->
+```
 
 * `lambda_feed = 0.02`.
 * `N_feed`: Number of articles already selected from the candidate's specific `feed_id`.
 
 #### 3. Deterministic Novelty Bonus
 
-![Bonus_novelty = beta_novelty when N_feed(d, S_previous) is zero; otherwise zero](assets/20261101-diversity-aware-top-k-selection/reward-first-feed-use.svg)
-
-<!-- math-source:
+```math
 \text{Bonus}_{\text{novelty}} =
 \begin{cases}
 \beta_{\text{novelty}} & \text{if } N_{\text{feed}}(d, S_{t-1}) = 0 \\
 0 & \text{otherwise}
 \end{cases}
--->
+```
 
 * `beta_novelty = 0.15`.
 * Gives unrepresented feeds an initial boost so their best story can overcome the inertia of dominant sources.
