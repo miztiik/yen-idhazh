@@ -11,14 +11,14 @@ Table A - scope and execution
 | ID | Field | Value |
 | --- | --- | --- |
 | A1 | Why this plan exists | Use browser-like TLS connections, reduce request bursts, and retain enough failure evidence to diagnose refused feed and article requests. |
-| A2 | Hard scope - in | Three dependent PRs: replace Undici completely with Impit and remove DNS-rebinding machinery; add shared domain/publisher pacing; verify the completed Impit-only pipeline from this branch. Firefox becomes primary. TypeScript contracts and JSONL/stage APIs follow the new design rather than retaining obsolete transport assumptions. |
+| A2 | Hard scope - in | Two dependent PRs: replace Undici completely with Impit and remove DNS-rebinding machinery; add shared domain/publisher pacing. Verify the committed pipeline through its existing workflow. Firefox becomes primary. TypeScript contracts and JSONL/stage APIs follow the new design rather than retaining obsolete transport assumptions. |
 | A3 | Removal scope | Remove all address-pinning implementation from the TypeScript source-download path: project-controlled hostname DNS resolution, repeated DNS checks, validated-address transport arguments, socket pinning, injected resolver plumbing, dedicated tests and current documentation claims. Retain URL syntax, scheme, credential, explicit local/literal-address, redirect, identity and sanitizer checks. These retained checks do not provide DNS-rebinding protection. |
-| A4 | Delivery order | PR 1 -> PR 2 -> PR 3. PR 1 replaces and removes Undici in the same change. No migration switch, dual implementation, compatibility facade, fallback, strangler pattern or deferred removal. One completed successful Impit pipeline run from this branch satisfies live verification; no baseline comparison or mandatory second run. |
-| A5 | Plan status | Implementation and verification complete. The three dependent PRs await coordinated stack landing. |
+| A4 | Delivery order | PR 1 -> PR 2. PR 1 replaces and removes Undici in the same change. No migration switch, dual implementation, compatibility facade, fallback, strangler pattern or deferred removal. Verify one completed successful pipeline run after committing the final code; no baseline comparison or mandatory second run. |
+| A5 | Plan status | Transport and pacing implemented and merged. Post-commit verification uses the existing workflow with normal Git delivery. |
 | A6 | ESCALATE triggers | 1. Before implementing Level-5 changes, complete design consultation and plan authorization. 2. If any repository rule, header policy, schema, API, test or transport abstraction restricts useful Impit capability, bring the exact conflict, proposed change, benefit and cost to the decision surface; do not disable the capability or preserve an obsolete limitation silently. 3. Stop before editing `CLAUDE.md` or `AGENTS.md`; neither is included. 4. Surface unresolved TLS verification, cancellation, byte-limit or redirect behavior. 5. Surface browser execution, robots-policy, proxy or feed-population changes. 6. If pacing would exceed the runner's six-hour job limit, report a viable schedule and its trade-off. |
 | A7 | Chosen strategy | Build the actual APIs around Impit's supported capabilities. Reuse useful boundaries, but replace obsolete signatures and assumptions instead of forcing native behavior through an Undici-shaped adapter. Keep feed parsing and extraction unchanged unless evidence requires a separately surfaced change. |
-| A8 | Execution | Execute per `docs/how-to/execute-a-plan.md`: one maintainer carries the plan; parallel N = 1 because the PRs share transport, configuration and tests; consult a persona where two implementation choices differ materially; honor the ESCALATE triggers. AUTHOR-AND-STOP until execution is authorized. |
-| A9 | Live-run safety | The current manual workflow delivers metadata to `main`. PR 3 adds an explicit no-delivery mode before branch validation. A validation run retains verified artifacts without committing repository data. This is a delivery control, not a transport migration switch. Normal workflow delivery remains unchanged. |
+| A8 | Execution | Execute per `docs/how-to/execute-a-plan.md`: one maintainer carries the plan; parallel N = 1 because the PRs share transport, configuration and tests; consult a persona where two implementation choices differ materially; honor the ESCALATE triggers. |
+| A9 | Workflow delivery | The manual workflow validates and commits completed planner and host metadata to `main`, uploads artifacts, and confirms delivery before cleanup. Verification uses this existing path. |
 | A10 | Evidence ownership | Current behavior: `docs/architecture/sources/feed-harvesting.md`, `docs/architecture/sources/feed-operator-api.md`, `docs/architecture/sources/feed-failure-diagnostics.md` and `docs/architecture/sources/feed-plan-runner.md`. Test commands: `docs/how-to/run-the-gates.md`. |
 
 Table B - scope exclusions
@@ -40,8 +40,7 @@ Table C - PR-shaped tasks
 | ID | # | Row title | Depends-on | Parallel-group | Status | Worktree | PR | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | C1 | 1 | Replace Undici completely with Impit and failure evidence | - | A | DONE | impit-transport-and-evidence | #1874 | - |
-| C2 | 2 | Space requests across domains and publishers | 1 | B | IN REVIEW | shared-source-pacing-c2 | #1879 | - |
-| C3 | 3 | Verify the completed Impit-only branch pipeline | 2 | C | DONE | branch-pipeline-verification | #1880 | - |
+| C2 | 2 | Space requests across domains and publishers | 1 | B | DONE | shared-source-pacing-c2 | #1879 | - |
 
 ## 2 - Shared implementation contracts
 
@@ -200,50 +199,20 @@ Table H - rejected alternatives
 | H3 | Delay only the first feed request | Articles, retries and redirects can still burst | Another dispatch-boundary implementation later | Requested outcome |
 | H4 | Persist request locks or scheduling timestamps | Adds shared-run reservations and stale recovery work | A new persisted scheduler contract and migration | Process-local design |
 
-## 5 - Row #3 - Verify the completed Impit-only branch pipeline
+## 5 - Post-commit pipeline verification
 
-- **Scope:** Add safe branch-validation delivery controls, complete one successful actual Impit-only pipeline run from this branch, and close the plan only when no Undici or pinning implementation debris remains.
-- **Files touched:**
-  - `.github/workflows/feed-ingest-plan-test.yml`
-  - `.github/workflows/source-transport-test.yml`
-  - `services/feed-ingest-plan/scripts/feed-ingest-plan-workflow-inputs.ts`
-  - `services/feed-ingest-plan/scripts/finalize-run-output.ts`
-  - `services/feed-ingest-plan/scripts/feed-ingest-plan-report.ts`
-  - `services/feed-ingest-plan/scripts/feed-ingest-plan-artifacts.ts`
-  - `services/feed-ingest-plan/scripts/feed-ingest-plan-delivery-result.ts`
-  - `services/feed-ingest-plan/scripts/finish-run-output.ts`
-  - `services/feed-ingest-plan/test/feed-ingest-plan-workflow.test.ts`
-  - `services/feed-ingest-plan/test/feed-ingest-plan-outputs.test.ts`
-  - `services/feed-ingest-plan/test/feed-ingest-plan-finalization.test.ts`
-  - `services/feed-ingest-plan/test/feed-ingest-plan-delivery.test.ts`
-  - `services/feed-ingest-plan/test/plan-entry-points.test.ts`
-  - `services/feed-ingest-plan/package.json`
-  - `services/feed-ingest-plan/bun.lock`
-  - `packages/feed-probe/bun.lock`
-  - `config/feed-ingest-plan.json`
-  - `packages/common-contracts/src/schemas/config.schema.ts`
-  - `packages/common-contracts/test/config.test.ts`
-  - `services/feed-ingest-plan/src/harvest-feeds/transport.ts`
-  - `services/feed-ingest-plan/test/harvest.test.ts`
-  - `services/feed-ingest-plan/test/impit-transport.test.ts` (introduced in PR 1)
-  - `docs/architecture/sources/feed-harvesting.md`
-  - `docs/architecture/sources/feed-failure-diagnostics.md`
-  - `docs/architecture/sources/feed-plan-runner.md`
-  - `docs/architecture/sources/feed-operator-api.md`
-  - `docs/how-to/run-the-gates.md`
-  - `docs/how-to/run-feed-ingest-plan-test.md`
-  - `TODO/20261101-browser-transport-request-pacing-plan.md`
-- **Acceptance gates:** Local before dispatch: native checks, workflow/finalization tests and actual supervised API/CLI fixture composition. CI: full candidate suite. Live: push the Impit-only candidate containing PRs 1 and 2 and no-delivery controls; dispatch `feed-ingest-plan-test.yml` with `--ref` naming this branch, diagnostic artifact enabled and metadata delivery disabled. Read its SHA/configuration, response/report, selected artifact, health, metadata-only failures, pacing/attempt evidence and shutdown. One completed successful run suffices; no baseline or mandatory second run. Failed runs require correction and another candidate run. Audit final source/probe dependencies, callers, tests and docs for debris; CI verifies the final merge candidate.
-- **Oracle:** This branch completes collection, parsing, selection, configured partitioning, local persistence, artifact verification and shutdown using Impit and pacing, with D16 identity and no metadata commit. Undici, migration switches, pinned dispatchers and resolver injection are already absent. Functional boundary tests remain green. This proves completed integration and clean removal, not universal publisher access.
+- **Scope:** Run the existing feed-ingest workflow from the committed transport-and-pacing code. Confirm normal metadata delivery, artifact verification and shutdown, with no Undici or pinning implementation debris.
+- **Acceptance gates:** CI checks the committed candidate, including workflow, finalization and real API/CLI fixtures. Dispatch `feed-ingest-plan-test.yml` with `--ref` naming that candidate and the diagnostic artifact enabled. Keep the configured feed population and limits. Read the executed SHA, effective configuration, response/report, selected artifact, committed metadata, failure and pacing evidence, and shutdown result. One completed successful run suffices. Correct failed runs in the intended implementation before repeating verification.
+- **Oracle:** The committed code completes collection, parsing, selection, configured partitioning, local persistence, confirmed Git metadata delivery, artifact verification and shutdown using Impit and pacing, with D16 identity. Undici, migration switches, pinned dispatchers and resolver injection are absent. This proves completed integration and clean removal, not universal publisher access.
 
 Table I - decisions
 
 | ID | Decision | Authority |
 | --- | --- | --- |
-| I1 | Add a workflow boolean `deliver_metadata`, default true. False means validate and package actual local output without Git delivery; logs and reports explicitly say delivery was not requested. Preserve current failed-run recovery packaging and normal true-mode checks. A skipped commit is not reported as a successful commit. | Live-run safety A9 |
+| I1 | Use the existing final Git delivery step for completed metadata. Verify its real commit receipt and exact paths before cleanup. | Workflow delivery A9 |
 | I2 | Execute one completed successful Impit pipeline run on this branch. Use configured feed population and effective limits; surface any proposed reduction. Record actual refusals, pacing settings/wait, network durations and attempts. No baseline comparison, dual run or mandatory second success. | Branch verification D16 |
 | I3 | If the pipeline fails, fix it in the intended implementation and repeat necessary verification. Do not restore Undici, add a fallback or retain a disabled old path. A completed run with typed source refusals is distinct from a failed pipeline. | Direct replacement |
-| I4 | PR 1 already removes Undici and regenerates affected lockfiles. PR 3 verifies no remaining implementation debt: old imports/helpers, selectors, wrappers, resolver arguments, dedicated assertions, dead fixtures or inaccurate current docs. Retain generic stream, cancellation, status, redirect, robots, recovery and accounting tests. | Clean final state |
+| I4 | PR 1 removes Undici and regenerates affected lockfiles. Final verification checks for old imports/helpers, selectors, wrappers, resolver arguments, dedicated assertions, dead fixtures or inaccurate current docs. Retain generic stream, cancellation, status, redirect, robots, recovery and accounting tests. | Clean final state |
 | I5 | Search source/probe dependency closure and current code/docs for Undici references. A surviving direct or transitive runtime dependency needs a named replacement or a surfaced conflict, not an exemption hidden in the plan. Distinguish unrelated producers and immutable Git history; do not delete unrelated systems. | No transport debris |
 | I6 | If runner 403 evidence remains unresolved, report the selected profile, actual status/type, safe headers and failed request address. These facts alone do not prove a browser challenge. Price a separate Playwright adapter under D15. Do not automatically launch a browser, send text elsewhere, suppress failures or fabricate success. | Browser scope B1 |
 | I7 | Keep live-run receipts outside the repository; place the current transport/runtime findings and dependency costs in the living transport docs. The plan tracks PR completion, not a growing run log. | Evidence and documentation ownership |
@@ -252,7 +221,6 @@ Table J - rejected alternatives
 
 | ID | Option | Why rejected | What it would cost to take | Authority |
 | --- | --- | --- | --- | --- |
-| J1 | Test branch code through the normal metadata-writing workflow | Can change default-branch data during a migration check | Normal data delivery and its recovery responsibilities, requiring a separate dispatch decision | Live-run safety |
 | J2 | Keep both transports, even temporarily | Leaves a migration stage and cleanup debt | Two implementations, parity work and a deferred removal change | Direct replacement A4 |
 | J3 | Add Playwright now as an automatic 403 fallback | Browser execution, subresources and lifecycle have not been designed | Browser binaries, runner install/runtime cost and a separate request-authority/accounting design | Browser scope B1 |
 | J4 | Demand that every source returns 200 | A publisher can refuse valid clients independently of pipeline correctness | A separate source-access investigation, not a stronger migration test | Verification limits |
@@ -382,5 +350,5 @@ Table K - example interpretation
 2. Carry each Status Reckoner row in its own PR; dependent work uses the preceding candidate code. Do not fan out edits to shared configuration, transport or tests.
 3. At each row, refresh the exact deletion-reference inventory and add newly found live callers to that row before editing. New transport modules must each answer one narrow question.
 4. Keep related manifest and lockfile changes together; run checks through the documented native package runners after shared selection.
-5. PR 1 removes Undici completely; PR 3 certifies one successful Impit-only branch run and a debris-free final tree. Keep all failures visible and distinguish publisher refusal, local transport failure and pipeline failure.
-6. Stop after authoring this plan. Implementation and workflow execution are separate actions.
+5. PR 1 removes Undici completely; final verification confirms one successful committed pipeline run with normal Git delivery and a debris-free final tree. Keep all failures visible and distinguish publisher refusal, local transport failure and pipeline failure.
+6. Keep verification receipts outside the repository and current behavior in the living docs.

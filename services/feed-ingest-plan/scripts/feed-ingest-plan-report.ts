@@ -82,7 +82,6 @@ export async function readExecutionReport(directory: string) {
 
 export async function writeWorkflowReport(input: {
   root: string; directory: string; summaryPath?: string; runNumber: string; runId?: string;
-  deliverMetadata?: boolean;
 }) {
   const config = FeedIngestConfigSchema.parse(await Bun.file(join(input.root, "config", "feed-ingest-plan.json")).json());
   if (!config.workflow_reporting.enabled) return { status: "disabled" as const };
@@ -101,9 +100,7 @@ export async function writeWorkflowReport(input: {
     const host = formatHostFingerprintSummary(await hostFile.exists() ? await hostFile.json() : undefined);
     report = renderUnavailablePlanMarkdown({ host: { markdown: host.cells, notice: host.notice } });
   }
-  const markdown = input.deliverMetadata === false
-    ? `${report.markdown}\nMetadata delivery was not requested. Verified local output is packaged without a Git commit.\n`
-    : report.markdown;
+  const markdown = report.markdown;
   const filename = workflowReportFilename(input);
   await writeFile(join(input.directory, filename), markdown + diagnostics, "utf8");
   await appendFile(input.summaryPath, markdown, "utf8");
@@ -120,12 +117,11 @@ export function workflowReportFilename(input: { runNumber: string; runId?: strin
 }
 
 if (import.meta.main) {
-  const { RUNNER_TEMP, GITHUB_STEP_SUMMARY, GITHUB_RUN_ID, RUN_ID, DELIVER_METADATA } = process.env;
+  const { RUNNER_TEMP, GITHUB_STEP_SUMMARY, GITHUB_RUN_ID, RUN_ID } = process.env;
   if (!RUNNER_TEMP || !GITHUB_RUN_ID) throw new Error("Workflow report controls are missing");
   await writeWorkflowReport({
     root: process.cwd(), directory: join(RUNNER_TEMP, "feed-ingest-plan"),
     runNumber: GITHUB_RUN_ID,
-    ...(DELIVER_METADATA === undefined ? {} : { deliverMetadata: z.enum(["true", "false"]).parse(DELIVER_METADATA) === "true" }),
     ...(RUN_ID === undefined || RUN_ID === "" ? {} : { runId: RUN_ID }),
     ...(GITHUB_STEP_SUMMARY === undefined ? {} : { summaryPath: GITHUB_STEP_SUMMARY }),
   });

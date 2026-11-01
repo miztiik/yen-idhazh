@@ -140,67 +140,6 @@ test("a refused Git delivery still writes the report and prepares exact metadata
   } finally { await f.close(); }
 });
 
-test("no-delivery CLI validates and packages real output without Git delivery or a fabricated receipt", async () => {
-  const f = await recording();
-  try {
-    const controls = {
-      RUNNER_TEMP: dirname(f.directory), GITHUB_RUN_ID: "700", GITHUB_RUN_ATTEMPT: "3",
-      GITHUB_SHA: f.identity.git_sha, CURRENT_RUN_FILES: f.finalize.currentRunFiles,
-      RUN_CANCELLED: "false", GITHUB_STEP_SUMMARY: f.finalize.summaryPath,
-      GITHUB_OUTPUT: f.finalize.outputPath, RUN_ID: f.identity.run_id,
-      DELIVER_METADATA: "false",
-    };
-    const finalized = await runScript("finalize-run-output.ts", f.repository, controls);
-    expect(finalized.code, finalized.errors).toBe(0);
-    expect(finalized.errors).toContain('"reason":"delivery_not_requested"');
-    expect(finalized.errors).toContain('"event":"workflow_local_metadata_verified"');
-    expect(finalized.errors).not.toContain("safe_persist_http_completed");
-    expect(await fixtureGit(f.origin, ["--git-dir", f.origin, "rev-parse", "main"])).toBe(f.head);
-    expect(await fixtureGit(f.repository, ["rev-parse", "HEAD"])).toBe(f.head);
-    expect(await Bun.file(join(f.directory, "delivery-result.json")).exists()).toBe(false);
-    const artifacts = join(f.directory, "artifacts");
-    expect(await readFile(join(artifacts, "700-3-response.json")))
-      .toEqual(await readFile(join(f.directory, "response.json")));
-    expect(await readFile(join(artifacts, "700-3-host-fingerprint.json")))
-      .toEqual(await readFile(join(f.directory, "host-fingerprint.json")));
-    expect(await Bun.file(join(artifacts, "uncommitted-metadata-700-3", "current-run-files.json")).json())
-      .toEqual(f.paths);
-    const report = await readFile(join(artifacts, "feed-ingest-report-2026-10-21-700.md"), "utf8");
-    expect(report).toContain("Metadata delivery was not requested");
-    expect(await readFile(join(artifacts, "700-3-selected-articles.json")))
-      .toEqual(await readFile(join(f.repository, f.summary.selected_articles_artifact!)));
-    await expect(finishRunOutput({ ...f.finish, deliverMetadata: false, commitOutcome: "skipped" }))
-      .rejects.toThrow("Run output is incomplete");
-    await expect(finishRunOutput({ ...f.finish, deliverMetadata: false, uploadOutcome: "failure" }))
-      .rejects.toThrow("Run output is incomplete");
-    expect((await stat(f.directory)).isDirectory()).toBe(true);
-    const finished = await runScript("finish-run-output.ts", f.repository, {
-      ...controls, COLLECTION_OUTCOME: "success", PLANNING_COMPLETE: "true",
-      FINALIZATION_OUTCOME: "success", COMMIT_OUTCOME: "success", REPORT_OUTCOME: "success",
-      UPLOAD_OUTCOME: "success", UPLOAD_ARTIFACT_ID: "123",
-    });
-    expect(finished.code, finished.errors).toBe(0);
-    expect(finished.errors).toContain('"commit":"not_requested"');
-    await expect(stat(f.directory)).rejects.toMatchObject({ code: "ENOENT" });
-  } finally { await f.close(); }
-});
-
-test("no-delivery refuses mismatched or damaged local metadata and retains failure recovery", async () => {
-  const f = await recording();
-  try {
-    await expect(finalizeRunOutput({ ...f.finalize, deliverMetadata: false,
-      currentRunFiles: "[]", operation: "commit-ledgers" })).rejects.toThrow("Run finalization failed");
-    await writeFile(join(f.directory, "state", f.paths[0]!), "Invalid Parquet");
-    await expect(finalizeRunOutput({ ...f.finalize, deliverMetadata: false }))
-      .rejects.toThrow("Run finalization failed");
-    expect(await fixtureGit(f.origin, ["--git-dir", f.origin, "rev-parse", "main"])).toBe(f.head);
-    expect(await Bun.file(join(f.directory, "delivery-result.json")).exists()).toBe(false);
-    await expect(finishRunOutput({ ...f.finish, deliverMetadata: false, finalizationOutcome: "failure" }))
-      .rejects.toThrow("Run output is incomplete");
-    expect((await stat(f.directory)).isDirectory()).toBe(true);
-  } finally { await f.close(); }
-});
-
 test("a job-summary write failure cannot prevent an already-rendered report or selected text from being uploaded", async () => {
   const f = await recording();
   try {

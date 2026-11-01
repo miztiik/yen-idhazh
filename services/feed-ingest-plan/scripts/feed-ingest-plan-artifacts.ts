@@ -42,7 +42,6 @@ export async function prepareWorkflowArtifacts(input: {
   gitSha?: string;
   identity?: ExecutionIdentity; registrations?: MetadataRegistrations;
   dumpRawDocumentContents?: boolean; runId?: string; reportFilename?: string;
-  deliverMetadata?: boolean;
 }) {
   // Actions run numbers and attempt numbers form filenames, never fetched text.
   const run = z.string().regex(/^\d+$/).parse(input.runNumber);
@@ -79,14 +78,6 @@ export async function prepareWorkflowArtifacts(input: {
     await writeOutput(key, path);
   }
   await retain("delivery", join(input.directory, "delivery-result.json"), "delivery-result.json");
-  if (input.deliverMetadata === false) {
-    for (const [key, filename] of [
-      ["response", "response.json"], ["health", "health.json"],
-      ["policy", "workflow-policy.json"], ["host", "host-fingerprint.json"],
-    ] as const) {
-      await retain(key, join(input.directory, filename), filename);
-    }
-  }
   const reportFilename = input.reportFilename === undefined
     ? workflowReportFilename({ runNumber: run, ...(input.runId === undefined ? {} : { runId: input.runId }) })
     : z.string().regex(/^feed-ingest-report-\d{4}-\d{2}-\d{2}-\d+\.md$/).parse(input.reportFilename);
@@ -128,14 +119,12 @@ export async function prepareWorkflowArtifacts(input: {
 }
 
 if (import.meta.main) {
-  const { RUNNER_TEMP, GITHUB_OUTPUT, GITHUB_RUN_ID, GITHUB_RUN_ATTEMPT, DUMP_RAW_DOCUMENT_CONTENTS, RUN_ID, GITHUB_SHA,
-    DELIVER_METADATA } = process.env;
+  const { RUNNER_TEMP, GITHUB_OUTPUT, GITHUB_RUN_ID, GITHUB_RUN_ATTEMPT, DUMP_RAW_DOCUMENT_CONTENTS, RUN_ID, GITHUB_SHA } = process.env;
   if (!RUNNER_TEMP || !GITHUB_OUTPUT || !GITHUB_RUN_ID || !GITHUB_RUN_ATTEMPT || !GITHUB_SHA) throw new Error("Artifact execution controls are missing");
   await prepareWorkflowArtifacts({
     root: process.cwd(), directory: join(RUNNER_TEMP, "feed-ingest-plan"),
     runNumber: GITHUB_RUN_ID, attempt: Number(GITHUB_RUN_ATTEMPT), outputPath: GITHUB_OUTPUT,
     gitSha: GITHUB_SHA,
-    ...(DELIVER_METADATA === undefined ? {} : { deliverMetadata: z.enum(["true", "false"]).parse(DELIVER_METADATA) === "true" }),
     dumpRawDocumentContents: DUMP_RAW_DOCUMENT_CONTENTS === undefined ? false : parseRawDocumentDumpControl(DUMP_RAW_DOCUMENT_CONTENTS),
     ...(RUN_ID === undefined || RUN_ID === "" ? {} : { runId: RUN_ID }),
   });

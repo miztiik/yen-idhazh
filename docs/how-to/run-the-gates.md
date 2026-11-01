@@ -253,12 +253,8 @@ merge-candidate CI. Ordinary source tests keep their recorded HTTP boundary;
 they do not access the open web.
 The separate `source-transport-test.yml` workflow runs this oracle on Linux
 with committed, frozen dependencies. Production `ci.yml`
-has no added native-platform job. The separate workflow also runs the
-workflow/finalization, supervisor and real API/CLI
-fixture composition checks before live branch dispatch. This includes default
-Git delivery, explicit no-delivery validation and failed-output recovery.
-It runs for named source changes in a pull request and supports manual dispatch
-on a candidate branch:
+has no added native-platform job. The separate workflow runs for named source
+changes in a pull request and supports manual dispatch on a candidate branch:
 `gh workflow run source-transport-test.yml --ref <candidate-branch>`.
 Its summary records the checked-out code SHA, candidate ref, run and attempt;
 logs retain the effective profiles, attempt timeout and measured host.
