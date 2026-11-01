@@ -59,10 +59,10 @@ test("sums each usable counter across full and partial records without double co
     complete: false, feeds: [{ counts_complete: false, feed_requests: null, article_requests: null }],
   });
   const rendered = renderRequestReport(result);
-  expect(rendered.markdown).toContain("| 4* | 8 | 0 | Partial |");
-  expect(Bun.markdown.html(rendered.markdown)).toContain("<td>4*</td>");
-  expect(rendered.notice).toContain("4* / 8 / 0");
-  expect(rendered.markdown).toContain("3 records with missing or invalid counts");
+  expect(rendered.markdown).toContain("| 4 | 8 | 0 | Article&#58; partial; Feed&#58; complete; Robots&#58; complete |");
+  expect(Bun.markdown.html(rendered.markdown)).toContain("<td>4</td>");
+  expect(rendered.markdown).not.toContain("*");
+  expect(rendered.markdown).toContain("| 1 / 2 | 1 / 2 | 3 |");
 });
 
 test("reports missing files, unidentifiable records and staged input gaps without erasing known values", async () => {
@@ -83,7 +83,7 @@ test("reports missing files, unidentifiable records and staged input gaps withou
   expect(staged.feeds[0]!.coverage.article_requests).toMatchObject({ status: "partial", complete_days: [] });
   const rendered = renderRequestReport(staged);
   expect(rendered.markdown).toContain("Staged history inputs: incomplete");
-  expect(rendered.notice).toContain("4* / 2* / 0*");
+  expect(rendered.markdown).toContain("| 4 | 2 | 0 |");
 });
 
 test("distinguishes known zero from absent counts and leaves unrelated counters complete", async () => {
@@ -106,7 +106,7 @@ test("distinguishes known zero from absent counts and leaves unrelated counters 
   });
   expect(renderRequestReport(articleOnly).markdown).toContain("| 4 | Not recorded | Not recorded |");
   expect(Bun.markdown.html(renderRequestReport(report([{ ...row, feed_requests: 0 }], { days: [] })).markdown))
-    .toContain("<td>0*</td>");
+    .toContain("<td>0</td>");
   expect(renderRequestReport(undefined).notice).toContain("was not recorded");
 });
 
@@ -128,21 +128,20 @@ test("sorts request rows by article requests, feed requests, then name with unkn
     const { response, health } = await readPlannerOutputRecording();
     const original = renderPlanMarkdown({ response, health });
     const rendered = renderPlanMarkdown({ response, health: { ...health, request_report } });
-    const lines = rendered.markdown.split("\n").filter(line => /^\| F\d+ \|/.test(line));
-    expect(lines.map(line => line.split(" | ")[1])).toEqual([
+    const lines = rendered.markdown.split("\n").filter(line => /^\| D\d+ \| Historical window/.test(line));
+    expect(lines.map(line => line.split(" | ")[2])).toEqual([
       "zero", "unknown", "most-articles", "alpha", "beta", "most-feeds", "missing-article",
     ].map(escapeMarkdown));
-    expect(rendered.markdown.split("<details>\n<summary>Request counts and coverage")[0])
-      .toBe(original.markdown.split("<details>\n<summary>Request counts and coverage")[0]);
+    expect(rendered.markdown.split("## Table B")[0]).toBe(original.markdown.split("## Table B")[0]);
     expect(request_report).toEqual(before);
     const html = Bun.markdown.html(rendered.markdown);
-    expect(html).toContain("<td>Partial</td>");
-    expect(html).toContain("Partial totals include recorded counts only");
+    expect(html).toContain("Article: not recorded");
+    expect(html).toContain("Partial totals contain recorded requests only");
     expect(rendered.markdown).toContain("<summary>Request counts and coverage");
     expect(renderRequestReport(report([row])).markdown).not.toContain("Partial*");
 });
 
-test("sorts feed results by admitted and chosen articles, and exclusions by count then reason", async () => {
+test("sorts feed results by selected then technical admission and groups routine decisions", async () => {
     const { response, health } = await readPlannerOutputRecording();
     const base = health.rows[0]!;
     const cause = base.rejection_counts[0]!;
@@ -158,20 +157,14 @@ test("sorts feed results by admitted and chosen articles, and exclusions by coun
     })), { ...base, feed_id: "epsilon", article_candidates: 12, articles_selected: 6, rejection_counts: [] },
     { ...base, feed_id: "unknown", article_candidates: null, counts_complete: false, articles_selected: 99, rejection_counts: [] }] } });
     const lines = rendered.markdown.split("\n");
-    const feedRows = lines.filter(line => /^\| D\d+ \|/.test(line));
-    expect(feedRows.map(line => line.split(" | ")[1])).toEqual(["epsilon", "beta", "delta", "alpha", "charlie", "unknown"]);
-    const exclusionRows = lines.filter(line => /^\| G\d+ \|/.test(line));
-    expect(exclusionRows.map(line => line.split(" | ")[4])).toEqual([
-      "EXTRACT&#95;EMPTY", "EXTRACT&#95;EMPTY", "MISSING&#95;REQUIRED&#95;FIELDS", "REJECTED&#95;SCREENING&#95;MIN&#95;WORDS",
-    ]);
-    expect(rendered.notices[2]!.message).toContain(
-      "EXTRACT_EMPTY: 13 decisions; MISSING_REQUIRED_FIELDS: 5 decisions; REJECTED_SCREENING_MIN_WORDS: 5 decisions",
-    );
+    const feedRows = lines.filter(line => /^\| C\d+ \|/.test(line));
+    expect(feedRows.map(line => line.split(" | ")[1])).toEqual(["unknown", "charlie", "epsilon", "beta", "delta", "alpha"]);
+    expect(rendered.notices).toEqual([]);
     expect(rendered.markdown).toContain("<summary>Per-feed article results</summary>");
-    expect(rendered.markdown).toContain("<summary>Grouped exclusions</summary>");
+    expect(rendered.markdown).toContain("<summary>Why articles were not selected</summary>");
 });
 
-test("joins latest recorded feed reliability without treating missing or incomplete scores as zero", async () => {
+test("shares identical coverage rows and keeps request counts in one fold without reliability duplicates", async () => {
   const { row, source, report } = await fixture();
   const sources = ["recorded-feed", "missing-feed", "unmeasured-feed"].map(feed_id => ({ ...source, feed_id }));
   const requests = report(sources.map(value => ({ ...row, feed_id: value.feed_id })), { sources });
@@ -186,16 +179,11 @@ test("joins latest recorded feed reliability without treating missing or incompl
   ];
   const before = structuredClone({ requests, health });
   const rendered = renderRequestReport(requests, health).markdown;
-  const lines = rendered.split("\n").filter(line => /^\| F\d+ \|/.test(line));
-  expect(lines.find(line => line.includes(escapeMarkdown("recorded-feed"))))
-    .toContain("| 0.5 | false | 2026-10-01 through 2026-10-25 |");
-  for (const id of ["missing-feed", "unmeasured-feed"]) {
-    expect(lines.find(line => line.includes(escapeMarkdown(id))))
-      .toEndWith("| Not recorded | Not recorded | Not recorded |");
-  }
+  expect(rendered).not.toContain("reliability");
+  expect(rendered).toContain("all 3 feeds; article, feed, robots requests");
   expect(rendered).toContain("<summary>Request counts and coverage</summary>");
-  expect(rendered).toContain("| Expected closed UTC days | 2 |");
+  expect(rendered).toContain("| 1 / 2 | 2 / 2 | 0 |");
   expect(rendered).toContain("2026-10-24 through 2026-10-25");
-  expect(rendered).toContain("separate from the closed request window");
+  expect(rendered).toContain("Complete known-empty days");
   expect({ requests, health }).toEqual(before);
 });

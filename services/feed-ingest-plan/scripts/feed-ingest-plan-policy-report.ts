@@ -102,13 +102,14 @@ export function formatPolicyTable(input: unknown, selectionRan: boolean, documen
   const ignored = policy.rows.filter(([, , source]) => source === "ignored workflow override").map(([setting]) => setting);
   return {
     notice: policy.notice,
+    maximum: policy.rows.find(([setting]) => setting === "Article limit")?.[1] ?? "Not recorded",
     summary: [
-      "<details>", "<summary>Effective policy</summary>", "",
-      "## Table B - Effective policy", "",
+      "<details>", "<summary>Effective settings</summary>", "",
+      "## Table G - Effective settings", "",
       ...(documentationUrl === undefined ? [] : [`[Workflow guide and policy rules](${documentationUrl})`, ""]),
-      "| Id | Setting | Effective value |", "| --- | --- | --- |",
-      ...policy.rows.map(([setting, value], index) =>
-        `| B${index + 1} | ${escapeMarkdown(setting!)} | ${escapeMarkdown(value!)} |`),
+      "| Id | Setting | Effective value | Source |", "| --- | --- | --- | --- |",
+      ...policy.rows.map(([setting, value, source], index) =>
+        `| G${index + 1} | ${escapeMarkdown(setting!)} | ${escapeMarkdown(value!)} | ${escapeMarkdown(source!)} |`),
       ...(input === undefined ? ["", "Policy evidence was not supplied; committed defaults are not evidence."] : []),
       ...(ignored.length ? ["", `Ignored workflow inputs because worker assignment is disabled: ${ignored.map(value => escapeMarkdown(value!)).join(", ")}.`] : []),
       "", "</details>",

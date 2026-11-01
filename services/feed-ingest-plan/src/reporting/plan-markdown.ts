@@ -2,14 +2,14 @@
 import {
   PlanRunRowSchema, readFeedIngestEvent,
 } from "../../../../packages/common-contracts/src/index";
-import type { FeedHealthStateRow } from "../../../../packages/common-contracts/src/index";
 import { PlanResponseSchema } from "../api/plan-response.schema";
 import { FeedHealthStateUpdateResponseSchema } from "../api/feed-health-state.schema";
 import { escapeMarkdown } from "./markdown-format";
 import { renderRequestReport } from "./request-report-markdown";
 import { renderRunFacts } from "./run-facts-markdown";
-import { renderFeedRest } from "./feed-rest-markdown";
 import { renderFailureEvidence } from "./failure-evidence-markdown";
+import { aggregateFeedResults, compareKnownDescending, formatDuration } from "./aggregate-feed-results";
+import { renderSelectionExclusions } from "./selection-exclusions-markdown";
 
 export type MarkdownSection = Readonly<{ markdown: string; notice: string }>;
 export type PlannerMarkdownNotice = Readonly<{
@@ -20,22 +20,8 @@ export type PlannerMarkdown = Readonly<{
 }>;
 export type PlanMarkdownEvidence = Readonly<{
   response: unknown; health?: unknown; policy?: MarkdownSection; host?: MarkdownSection;
+  maximum?: string;
 }>;
-
-function describeFeedRead(feed: Pick<FeedHealthStateRow, "outcome" | "items" | "last_failure_code">): string {
-  if (feed.last_failure_code === "FEED_PARSE_FAILED") return "Feed parsing failed";
-  switch (feed.outcome) {
-    case "ok":
-      return feed.items === null ? "Download succeeded; parsing not recorded"
-        : feed.items === 0 ? "No usable feed URLs" : "Feed read succeeded";
-    case "robots_denied": return "Robots permission denied or unknown";
-    case "blocked": return "Request blocked by URL safety checks";
-    case "permanent": return "HTTP request failed (outside retry list)";
-    case "transient": return "Download failed (retryable or network failure)";
-    case "skipped": return "Feed download skipped";
-    case null: return "Not recorded (download result missing)";
-  }
-}
 
 export function renderPlannerProgressMarkdown(input: unknown): PlannerMarkdown {
   if (!Array.isArray(input)) throw new Error("Progress must be an explicit array");
@@ -81,20 +67,21 @@ export function renderPlanMarkdown(input: PlanMarkdownEvidence): PlannerMarkdown
     throw new Error("Health report belongs to another execution");
   }
   const feedRows = health?.rows ?? [];
-  const tableFeedRows = [...feedRows].sort((left, right) => {
-    return compareKnownDescending(left.article_candidates, right.article_candidates)
-      || compareKnownDescending(left.articles_selected, right.articles_selected)
-      || left.feed_id.localeCompare(right.feed_id) || left.date.localeCompare(right.date);
-  });
-  const causes = feedRows.flatMap(feed => feed.rejection_counts.map(cause =>
-    ({ ...cause, feed_id: feed.feed_id, date: feed.date })))
-    .sort((left, right) => right.count - left.count || left.reason_code.localeCompare(right.reason_code)
-      || left.feed_id.localeCompare(right.feed_id) || left.date.localeCompare(right.date));
-  const requestReport = renderRequestReport(health?.request_report, feedRows);
-  const facts = renderRunFacts(row, health?.rows);
-  const failureEvidence = renderFailureEvidence(health?.rows);
-  const known = (value: number | null, unit: string) => value === null ? "Not recorded"
-    : `${value} ${value === 1 && unit.endsWith("s") ? unit.slice(0, -1) : unit}`;
+  const tableFeedRows = aggregateFeedResults(feedRows).sort((left, right) =>
+    compareKnownDescending(left.articles_selected, right.articles_selected)
+      || compareKnownDescending(left.article_candidates, right.article_candidates)
+      || left.feed_id.localeCompare(right.feed_id));
+  const requestReport = renderRequestReport(health?.request_report, health?.rows);
+  const facts = renderRunFacts(row, health?.rows, input.maximum,
+    health?.availability?.feeds.filter(feed => feed.availability === "resting" || feed.availability === "retired").length);
+  const gaps: [string, string, string][] = [];
+  if (health?.request_report.complete !== true) gaps.push([
+    "Historical evidence", "Request history incomplete or unavailable", "Exact historical totals unavailable; see Request counts and coverage",
+  ]);
+  if (input.policy === undefined || input.maximum === "Not recorded") gaps.push([
+    "Run", "Effective settings evidence unavailable", "Configured maximum and applied controls cannot be established",
+  ]);
+  const failureEvidence = renderFailureEvidence(health?.rows, health?.availability, row, gaps);
   const operationName = (operation: typeof row.api_timings[number]["operation"]) => ({
     "feed-health-before-fetch": "Feed health before requests",
     "feed-health-for-selection": "Fresh feed health for selection",
@@ -102,55 +89,34 @@ export function renderPlanMarkdown(input: PlanMarkdownEvidence): PlannerMarkdown
     fetch: "Fetch and article work", parse: "HTML parsing", select: "Article selection",
     partition: "Worker assignment", persist: "Selected output",
   })[operation];
-  const missingFields = "MISSING_REQUIRED_FIELDS rejects an article with a missing or invalid offered URL or identity, or no usable title after extraction. "
-    + "The grouped count cannot identify which field failed. It does not mean a feed configuration field is missing.";
   const summary = [
-    "# Feed planner run", "", facts.markdown,
-    ...(input.policy === undefined
-      ? ["", "## Table B - Effective policy", "", "| Id | Setting | Effective value |", "| --- | --- | --- |",
-        "| B1 | Effective settings | Not recorded |", "", "Policy evidence was not supplied; committed defaults are not evidence."]
-      : ["", input.policy.markdown]),
-    "", "## Table C - Measured operations", "", "| Id | Operation | Duration | State |", "| --- | --- | --- | --- |",
-    ...row.api_timings.map((span, index) =>
-      `| C${index + 1} | ${operationName(span.operation)} | ${span.duration_ms} ms | ${span.status} |`),
-    "", "Concurrent spans can overlap. Do not add them to estimate elapsed run time.",
+    "# Feed planner run", "", facts.markdown, "", failureEvidence.markdown,
     "", "<details>", "<summary>Per-feed article results</summary>", "",
-    "## Table D - Per-feed article results", "",
-    "| Id | Feed | UTC work day | Admitted articles | Chosen articles | Feed checks | Feed / article / robots requests | Feed read result |",
-    "| --- | --- | --- | --- | --- | --- | --- | --- |",
+    "## Table C - Per-feed article results", "",
+    "| Id | Feed | Selected articles | Technically eligible articles | Feed checks |",
+    "| --- | --- | --- | --- | --- |",
     ...tableFeedRows.map((feed, index) =>
-      `| D${index + 1} | ${escapeMarkdown(feed.feed_id)} | ${feed.date} | ${feed.article_candidates ?? "Not recorded"} | ${feed.articles_selected ?? "Not recorded"} | ${feed.feed_reads ?? "Not recorded"} | ${[feed.feed_requests, feed.article_requests, feed.robots_requests].map(value => value ?? "Not recorded").join(" / ")} | ${escapeMarkdown(describeFeedRead(feed))} |`),
+      `| C${index + 1} | ${escapeMarkdown(feed.feed_id)} | ${feed.articles_selected ?? "Not recorded"} | ${feed.article_candidates ?? "Not recorded"} | ${feed.feed_reads ?? "Not recorded"} |`),
     ...(feedRows.length ? [] : ["", health === null ? "Feed work was not recorded." : "Zero feed rows were recorded."]),
-    "", "Feed read results combine the recorded download result, usable URL count and failure code. The saved download outcome is unchanged.",
+    "", "Technically eligible means original captures passing technical admission, not later screening. Each feed combines this run's UTC work days; one unknown constituent makes its exact total unavailable.",
     "", "</details>", "", requestReport.markdown,
-    "", "<details>", "<summary>Grouped exclusions</summary>", "",
-    "## Table G - Grouped exclusions", "", "| Id | Feed | UTC day | Subject / stage | Reason | Count | Attribution |",
-    "| --- | --- | --- | --- | --- | --- | --- |",
-    ...causes.map((cause, index) =>
-      `| G${index + 1} | ${escapeMarkdown(cause.feed_id)} | ${cause.date} | ${escapeMarkdown(`${cause.subject} / ${cause.stage}`)} | ${escapeMarkdown(cause.reason_code)} | ${cause.count} | ${cause.attribution ?? "Not a failure"} |`),
-    ...(causes.length ? [] : ["", health === null ? "Exclusion evidence was not recorded." : "No exclusions were recorded."]),
-    ...(causes.some(cause => cause.reason_code === "MISSING_REQUIRED_FIELDS") ? ["", missingFields] : []),
-    "", "</details>", "", renderFeedRest(health?.availability), "", failureEvidence.markdown,
-    ...(input.host === undefined ? [] : ["", input.host.markdown]),
+    "", renderSelectionExclusions(health?.rows),
+    ...(input.policy === undefined ? [
+      "", "<details>", "<summary>Effective settings</summary>", "",
+      "## Table G - Effective settings", "", "| Id | Setting | Effective value | Source |",
+      "| --- | --- | --- | --- |", "| G1 | Effective settings | Not recorded | Captured policy unavailable |",
+      "", "</details>",
+    ] : ["", input.policy.markdown]),
+    "", "<details>", "<summary>Execution measurements</summary>", "",
+    "## Table H - Execution measurements", "", "| Id | Measure | Recorded value |", "| --- | --- | --- |",
+    ...(input.host === undefined ? ["| H1 | Machine | Not recorded |"] : [input.host.markdown]),
+    `| H${(input.host?.markdown.split("\n").filter(line => /^\| H\d+ \|/.test(line)).length ?? 1) + 1} | Run / attempt | ${escapeMarkdown(row.run_id)} / ${row.attempt} |`,
+    ...row.api_timings.map((span, index) =>
+      `| H${(input.host?.markdown.split("\n").filter(line => /^\| H\d+ \|/.test(line)).length ?? 1) + index + 2} | ${operationName(span.operation)} (${span.status}) | ${formatDuration(span.duration_ms)} |`),
+    "", "Concurrent operation durations can overlap. Do not add them to estimate elapsed run time.",
+    "", "</details>",
   ].join("\n");
-  const grouped = new Map<string, number>();
-  for (const cause of causes) grouped.set(cause.reason_code, (grouped.get(cause.reason_code) ?? 0) + cause.count);
-  const exclusions = health === null ? "Exclusion evidence was not recorded."
-    : grouped.size === 0 ? "No exclusions were recorded."
-    : [...grouped].sort(([leftReason, leftCount], [rightReason, rightCount]) =>
-      rightCount - leftCount || leftReason.localeCompare(rightReason))
-      .map(([reason, count]) => `${reason}: ${known(count, "decisions")}`).join("; ")
-      + (grouped.has("MISSING_REQUIRED_FIELDS") ? `. ${missingFields}` : ".");
-  const notices: PlannerMarkdownNotice[] = [
-    ...(input.host === undefined ? [] : [
-      { level: "notice" as const, title: "Host fingerprint", message: input.host.notice },
-    ]),
-    { level: "notice", title: "Feed work", message: facts.notice },
-    { level: "notice", title: "Request counts", message: requestReport.notice },
-    { level: "notice", title: "Grouped exclusions", message: exclusions },
-    { level: "notice", title: "Failure evidence", message: failureEvidence.notice },
-    ...(input.policy === undefined ? [] : [{ level: "notice" as const, title: "Effective policy", message: input.policy.notice }]),
-  ];
+  const notices: PlannerMarkdownNotice[] = [];
   if (row.failure_code !== null) notices.push({
     level: "warning", title: "Feed planner outcome",
     message: `Planning ${row.status}: ${row.failure_code}. Saved evidence does not certify completion.`,
@@ -161,17 +127,9 @@ export function renderPlanMarkdown(input: PlanMarkdownEvidence): PlannerMarkdown
 export function renderUnavailablePlanMarkdown(input: { host?: MarkdownSection } = {}): PlannerMarkdown {
   const message = "No planner HTTP result was saved, so planning completion, feed work, request counts and exclusions were not recorded.";
   return {
-    markdown: `# Feed planner run\n\n**Planning result unavailable.** ${message}${input.host === undefined ? "" : `\n\n${input.host.markdown}`}`,
+    markdown: `# Feed planner run\n\n## Table A - Run outcome\n\n**Planning result unavailable.**\n\n## Table B - Needs attention\n\n${message}${input.host === undefined ? "" : `\n\n<details>\n<summary>Execution measurements</summary>\n\n## Table H - Execution measurements\n\n| Id | Measure | Recorded value |\n| --- | --- | --- |\n${input.host.markdown}\n\n</details>`}`,
     notices: [
       { level: "warning", title: "Feed planner outcome", message },
-      ...(input.host === undefined ? [] : [
-        { level: "notice" as const, title: "Host fingerprint", message: input.host.notice },
-      ]),
     ],
   };
-}
-
-function compareKnownDescending(left: number | null, right: number | null) {
-  if (left === null) return right === null ? 0 : 1;
-  return right === null ? -1 : right - left;
 }

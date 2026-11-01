@@ -163,15 +163,15 @@ test("policy cells preserve effective JSON values and override sources without i
   const { document } = parseHTML(html);
   const fold = document.querySelector("details")!;
   expect(fold.hasAttribute("open")).toBe(false);
-  expect(fold.querySelector("summary")?.textContent).toBe("Effective policy");
+  expect(fold.querySelector("summary")?.textContent).toBe("Effective settings");
   expect(fold.querySelectorAll("table")).toHaveLength(1);
   expect(fold.querySelector("a")?.getAttribute("href")).toBe(documentationUrl);
   expect(html).toContain("<td>0.3</td>");
   expect(html).toContain("<td>false</td>");
   expect(html).toContain("<td>round-robin</td>");
   expect(html).toContain("<td>1.25</td>");
-  expect(html).not.toContain("<th>Source</th>");
-  expect(html).not.toContain("<td>workflow override</td>");
+  expect(html).toContain("<th>Source</th>");
+  expect(html).toContain("<td>workflow override</td>");
   for (const request of [{}, input.request]) {
     const report = formatPolicyTable({ ...input, request }, false).summary;
     for (const removed of [
@@ -195,7 +195,7 @@ test("policy cells preserve effective JSON values and override sources without i
     .toContain("Ignored workflow inputs because worker assignment is disabled:");
   const missing = parseHTML(Bun.markdown.html(formatPolicyTable(undefined, false).summary)).document;
   expect(missing.querySelector("details")?.textContent).toContain("Policy evidence was not supplied");
-  expect(missing.querySelector("td")?.textContent).toBe("B1");
+  expect(missing.querySelector("td")?.textContent).toBe("G1");
   expect(formatWorkflowPolicy({ ...bypass, request: {} }, false).rows.find(([name]) => name === "Article assignments"))
     .toEqual(["Article assignments", "0", "partition disabled"]);
   expect(input).toEqual(before);

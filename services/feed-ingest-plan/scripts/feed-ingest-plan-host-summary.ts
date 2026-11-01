@@ -37,9 +37,11 @@ export function formatHostFingerprintSummary(input: unknown) {
   }
   return {
     notice,
+    cells: rows.map((entry, index) =>
+      `| H${index + 1} | ${escapeMarkdown(entry.measurement)} | ${escapeMarkdown(entry.value)} |`).join("\n"),
     summary: [
-      "## Table H - Host fingerprint", "",
-      "| Id | Measurement | Recorded value |", "| --- | --- | --- |",
+      "## Table H - Execution measurements", "",
+      "| Id | Measure | Recorded value |", "| --- | --- | --- |",
       ...rows.map((entry, index) =>
         `| H${index + 1} | ${escapeMarkdown(entry.measurement)} | ${escapeMarkdown(entry.value)} |`),
       "",

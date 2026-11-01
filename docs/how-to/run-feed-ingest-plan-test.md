@@ -201,99 +201,69 @@ client, then closes the child pipe. Pipe closure also triggers child cleanup
 when the supervisor disappears. Only the exact spawned child can be forcibly
 killed. The server is never detached or kept alive across workflow steps.
 
-The Markdown report reads the body-free response, health result, effective
-settings and host fingerprint. It places the host fingerprint before the
-run facts, writes the report before upload and writes the same Markdown to
-the job summary. The report stays separate from the delivery receipt.
-It emits grouped notices for the host, feed work, request counts, grouped
-exclusions, failure evidence and effective policy. Full per-feed details stay
-in the summary rather than one notice per feed or article. Effective settings
-include workflow overrides, not just committed defaults. Missing policy
-evidence is reported as not recorded; defaults are not substituted.
+The Markdown report reads the body-free response, health result, captured
+effective settings and host fingerprint. Only Run outcome and Needs attention
+are visible. Per-feed article results, Request counts and coverage, Why
+articles were not selected, Effective settings and Execution measurements
+use closed-by-default folds. Routine notices do not repeat the tables;
+actionable run and progress warnings remain. The report cannot establish
+publication and stays separate from the delivery receipt.
+The workflow writes the summary into the existing downloadable Markdown
+artifact, with per-feed exclusion diagnostics appended only to that artifact.
 Reporting is controlled by `workflow_reporting.enabled`; it cannot change
 ledger bytes or establish completion.
 The exported Markdown renderer and its separation from production digest
 presentation are documented in the [operator API reference](../architecture/sources/feed-operator-api.md#markdown-rendering-api).
-Run facts hold status, run identity and attempt in separate rows. Count cells
-are numeric; labels carry their meaning, while measurements retain useful
-units. Feeds checked counts distinct feeds with recorded checks, not the sum
-of checks across work days. Selection started is an observed boolean, not
-an invented enablement setting. The report has no planning-not-publication
-disclaimer; its title, status and operation names state the scope.
+Run outcome shows status, selected articles against the captured maximum,
+technical admission, distinct feeds checked, paused feeds and elapsed time in
+useful units. Unknown technical totals keep the known subtotal visible, with
+the unavailable feed count stated beside it. All-unknown is unavailable;
+known-empty is zero. This is original technical admission, not a later
+screening population. The [ledger reference](../reference/feed-planner-ledgers.md#c-feed-health-state)
+owns the counter meanings.
+Per-feed results combine this run's UTC day rows. One unknown constituent
+makes that feed's exact total unavailable. Sort by selected articles
+descending, technical admission descending, then feed name; unknown sort
+last within each count. Request counts and repeated failure descriptions do
+not appear in this table.
 
-The effective-policy table follows run facts inside a closed-by-default
-"Effective policy" fold. It separates one control per row from its effective
-JSON value. The fold links to this guide at the workflow's commit; this guide
-links to the detailed policy rules. Local renderers without GitHub workflow
-context omit that link. General rule explanations stay in documentation, not
-below the report tables. Missing-policy evidence and ignored workflow inputs
-remain inside the fold because they explain the recorded run. The existing
-effective-policy annotation is unchanged.
-The policy config version comes from the saved configuration's
-`version`, not a new whole-policy revision. Shares remain fractions and switches
-remain booleans. The article limit is a maximum, not a promised count.
+Needs attention separates current recorded failures, paused coverage and
+missing evidence. A paused feed is not a new request failure. Historical
+causes remain unavailable when report inputs do not contain them. Current
+feed HTTP status may be shown when tied to its saved failure code; terminal
+article HTTP status exists in rejected-articles but is not wired into these
+report inputs. No response code or deeper cause is inferred. An eligible UTC
+deadline is not a scheduled request. Proven empty evidence states no recorded
+problems without an empty failure table.
+
+Effective settings use one control per row with its effective value and
+source, including workflow overrides. Missing captured policy does not
+substitute committed defaults. The fold links to this guide at the workflow
+commit when that context is available. The article limit is a maximum, not a
+promise. Shares remain fractions and switches remain booleans.
 The authority coefficient is not a source-tier weight; the
 [curation rules](../architecture/sources/feed-curation.md#inputs-and-independent-evidence)
 define the separate feed and tier factors.
-Fetch concurrency, parser workers, downstream article assignments and the raw
-assignment strategy have separate rows. Assignment does not execute downstream
-workers. The report shows the effective failed-check, rest-duration,
-recovery-count and elapsed-age controls from `config/feed-availability.json`.
-A collapsed feed rest table reads current durable state. It shows consecutive
-failed checks, qualifying recovery failures, first confirmed failure,
-next eligible check and retirement instants in UTC. Interrupted work remains
-unknown; historical skipped-run counts cannot establish a retry deadline.
-Seven failed recovery checks at a 24-hour cadence still take at least seven
-days after entering rest; the 36-hour age minimum does not promise retirement
-after 36 hours.
+Execution measurements hold the machine fingerprint, run identity, attempt
+and operation durations. Concurrent durations can overlap; their sum is not
+elapsed planning time.
 
-Per-feed article results are collapsed and sort
-by admitted articles, chosen articles, then feed name. Unknown counts sort
-last; UTC work day breaks remaining ties. The collapsed request
-section contains a coverage table and request-count table. Coverage separates
-expected closed UTC days, complete day files, days with recorded counts and
-feeds with complete counters. The request rows sort by article requests,
-feed requests, then feed name; unknown counts sort last. This does not change
-saved source order or other views.
+Request counts have one canonical fold. Its count table separates This run
+from the historical closed-day window, with each request category's
+completeness retained. Partial totals contain only recorded requests; missing
+counts are not estimates and zero is known zero. Coverage rows show UTC
+bounds, recorded days, complete days and records with missing counts.
+Identical descriptions share rows, with exceptional feeds listed separately.
+Known-empty complete days need not contain records. Missing files do not
+establish a missing-record count. Input gaps and unattributable days remain
+explicit. Each period sorts by article requests, feed requests, then name;
+unknown values sort last. The request table does not repeat reliability.
 
-An unavailable admission total does not erase the other feeds' recorded
-admissions. Run facts label their sum as known admitted articles, state how many
-feed totals are unavailable and name those feeds below the table. An exact run
-total remains unavailable. If every admission total is unknown, the subtotal
-is unavailable too; known-empty rows still give zero. Request completeness is
-assessed from its own three counters, not the shared health-row completeness
-flag, which can be false because admission evidence is missing.
-
-Request counts by feed also show feed-read reliability, completeness and its
-own represented-day window from the current run's latest saved health row
-for that feed. This is the productive-read fraction, not the technical
-article-pass adjustment or an overall article score. Its window is separate
-from the closed request window. An incomplete fraction is shown with
-`Reliability complete = false`; an absent value is not replaced with zero.
-No new score, history read or saved field is introduced.
-
-Each request category is added independently. A partial value carries an
-ASCII `*`; only recorded counts are added, never estimates. The coverage table
-and notes show the UTC period, recorded counter days, complete-day counts and
-records with unknown counters. Missing or incomplete day files, unattributable
-records and staged-input gaps are stated separately. "Not recorded" means no
-usable counter is present, not zero requests. A complete known-empty period
-reports zero. The request notice adds only known totals and marks partial
-totals too; it never calls them complete. Grouped exclusions are collapsed and
-sort by count descending, then reason code. Exact coverage fields are defined in the
-[ledger reference](../reference/feed-planner-ledgers.md#design-rationale).
-
-The failure evidence tables separate article fetch or extraction failures
-from feed read failures. They group saved health counts by reason, HTTP status
-and attribution, and list the affected feed IDs. They do not count policy
-exclusions as software failures or count progress events as additional
-failures. Only saved feed status is shown; article HTTP status and feed or
-article URLs are not part of this report input. A confirmed status is an
-observed response, not its underlying cause. Attribution can suggest whether
-the feed or pipeline is involved, but it does not establish a deeper cause.
-Missing detail stays unavailable. Admission totals are unavailable only for
-feed rows whose saved article count is null; a failure alone does not make an
-admission total unavailable.
+Selection exclusions group routine article decisions by stage and
+plain-English reason, with affected feed counts. They are not a subtractable
+funnel. Current fetch and extraction failures appear only in Needs attention;
+retry events are not added as separate excluded articles. Per-feed protocol
+reasons remain in the artifact diagnostics.
 
 `MISSING_REQUIRED_FIELDS` is an article rejection: its offered URL or identity
 was missing or invalid, or extraction produced no usable title. A grouped

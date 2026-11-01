@@ -1,104 +1,104 @@
-/** How are complete, partial and absent request totals shown with their coverage? */
+/** How are current and historical requests shown once with category-specific coverage? */
 import type { FeedHealthStateRow, PlannerRequestReport } from "@idhazh/common-contracts";
 import { escapeMarkdown } from "./markdown-format";
+import { aggregateFeedResults, compareKnownDescending } from "./aggregate-feed-results";
 
-type RequestFeed = PlannerRequestReport["feeds"][number];
-type RequestField = keyof RequestFeed["coverage"];
 const fields = ["article_requests", "feed_requests", "robots_requests"] as const;
-const fieldLabel: Record<RequestField, string> = {
-  article_requests: "Article requests", feed_requests: "Feed requests", robots_requests: "Robots requests",
-};
-function formatCounter(value: number | null, status: string) {
-  return value === null ? "Not recorded" : `${value}${status === "partial" ? "*" : ""}`;
-}
-function compareCount(left: number | null, right: number | null) {
-  if (left === null) return right === null ? 0 : 1;
-  return right === null ? -1 : right - left;
-}
-function describeCoverage(feed: RequestFeed, field: RequestField, periodDays: number) {
-  const cell = feed.coverage[field];
-  return `${fieldLabel[field]}: recorded UTC days: ${cell.recorded_days.join(", ") || "none"}; `
-    + `${cell.complete_days.length} of ${periodDays} days complete; ${cell.known_records} known records; `
-    + `${cell.unknown_records} ${cell.unknown_records === 1 ? "record" : "records"} with missing or invalid counts`;
-}
-export function renderRequestReport(requests: PlannerRequestReport | undefined, health: readonly FeedHealthStateRow[] = []) {
-  if (requests === undefined) return {
-    markdown: "## Table E - Request coverage\n\nRequest history was not recorded.",
-    notice: "Request history was not recorded.",
+const labels = { article_requests: "Article", feed_requests: "Feed", robots_requests: "Robots" };
+type CoverageRow = { applies: string[]; recorded: number; complete: number; missing: number; window: string; expected: number };
+
+export function renderRequestReport(requests: PlannerRequestReport | undefined, health?: readonly FeedHealthStateRow[]) {
+  const countRows: string[][] = [];
+  const coverageGroups = new Map<string, CoverageRow>();
+  const addCoverage = (applies: string, window: string, expected: number, recorded: number, complete: number, missing: number) => {
+    const key = JSON.stringify([window, expected, recorded, complete, missing]);
+    const group = coverageGroups.get(key) ?? { applies: [], window, expected, recorded, complete, missing };
+    group.applies.push(applies);
+    coverageGroups.set(key, group);
   };
-  const periodDays = (Date.parse(requests.through_day) - Date.parse(requests.from_day)) / 86_400_000 + 1;
-  const completeFiles = periodDays - requests.missing_days.length;
-  const coverageText = `Request history: ${periodDays} closed UTC days expected; ${completeFiles}/${periodDays} day files complete; `
-    + `${requests.feeds.length} feeds listed; coverage ${requests.complete ? "complete" : "partial"}.`;
-  const note = requests.complete ? [] : [
-    "", "\\* Partial totals include recorded counts only; missing counts are not estimates.",
-    `Missing or incomplete day files: ${requests.missing_days.join(", ") || "none"}. `
-      + `Days with records that cannot be attributed: ${requests.unattributed_days.join(", ") || "none"}. `
-      + `Staged history inputs: ${requests.input_complete ? "complete" : "incomplete; missing records may affect any day"}.`,
-    ...requests.feeds.filter(feed => !feed.counts_complete).flatMap(feed => ["",
-      `${escapeMarkdown(feed.feed_id)} - ${fields.filter(field => feed.coverage[field].status !== "complete")
-        .map(field => describeCoverage(feed, field, periodDays)).join("; ")}.`]),
-  ];
-  const sorted = [...requests.feeds].sort((left, right) =>
-    compareCount(left.article_requests, right.article_requests) || compareCount(left.feed_requests, right.feed_requests)
-    || left.feed_id.localeCompare(right.feed_id));
-  const totals = fields.map(field => {
-    const known = requests.feeds.flatMap(feed => feed[field] === null ? [] : [feed[field]]);
-    const complete = requests.input_complete && requests.missing_days.length === 0 && requests.unattributed_days.length === 0
-      && requests.feeds.every(feed => feed.coverage[field].status === "complete");
-    const value = known.length === 0 && !complete ? null : known.reduce((sum, count) => sum + count, 0);
-    return formatCounter(value, complete ? "complete" : "partial");
-  });
-  const completeFeeds = (field: RequestField) =>
-    requests.feeds.filter(feed => feed.coverage[field].status === "complete").length;
-  const feedsWithCounts = (field: RequestField) =>
-    requests.feeds.filter(feed => feed.coverage[field].known_records > 0).length;
-  const recordedDays = (field: RequestField) => new Set(requests.feeds.flatMap(feed =>
-    feed.coverage[field].recorded_days)).size;
-  const coverageRows = [
-    ["Window (UTC)", `${requests.from_day} through ${requests.through_day}`],
-    ["Expected closed UTC days", String(periodDays)],
-    ["Complete day files / expected", `${completeFiles} / ${periodDays}`],
-    ["Feeds listed", String(requests.feeds.length)],
-    ...fields.flatMap(field => [
-      [`${fieldLabel[field]}: recorded days / expected`, `${recordedDays(field)} / ${periodDays}`],
-      [`${fieldLabel[field]}: feeds with counts / listed`, `${feedsWithCounts(field)} / ${requests.feeds.length}`],
-      [`${fieldLabel[field]}: complete feeds / listed`, `${completeFeeds(field)} / ${requests.feeds.length}`],
-    ]),
-    ["Unattributed days", String(requests.unattributed_days.length)],
-    ["History inputs complete", String(requests.input_complete)],
-  ];
-  const feedCoverage = (feed: RequestFeed) => feed.counts_complete ? "Complete"
-    : fields.some(field => feed.coverage[field].known_records > 0) ? "Partial" : "No recorded counts";
-  const latestHealth = new Map<string, FeedHealthStateRow>();
-  for (const row of health) {
-    const previous = latestHealth.get(row.feed_id);
-    if (previous === undefined || row.date > previous.date) latestHealth.set(row.feed_id, row);
+  const sorted = <T extends { feed_id: string; article_requests: number | null; feed_requests: number | null }>(rows: T[]) =>
+    rows.sort((a, b) => compareKnownDescending(a.article_requests, b.article_requests)
+      || compareKnownDescending(a.feed_requests, b.feed_requests) || a.feed_id.localeCompare(b.feed_id));
+  const currentDays = [...new Set(health?.map(row => row.date))].sort();
+  const currentWindow = currentDays.length ? `${currentDays[0]} through ${currentDays.at(-1)}` : "Not recorded";
+  for (const feed of sorted(aggregateFeedResults(health ?? []))) {
+    const rows = health!.filter(row => row.feed_id === feed.feed_id);
+    const coverage = fields.map(field => {
+      const known = rows.filter(row => row[field] !== null);
+      const missing = rows.length - known.length;
+      addCoverage(`This run: ${feed.feed_id}, ${labels[field].toLowerCase()} requests`, currentWindow,
+        currentDays.length, new Set(known.map(row => row.date)).size,
+        currentDays.filter(day => !rows.some(row => row.date === day && row[field] === null)).length, missing);
+      return `${labels[field]}: ${missing === 0 ? "complete" : known.length ? "partial" : "not recorded"}`;
+    });
+    // Partial request subtotals differ from exact per-feed article totals.
+    const counters = fields.map(field => {
+      const known = rows.flatMap(row => row[field] === null ? [] : [row[field]]);
+      return known.length ? String(known.reduce((sum, value) => sum + value, 0)) : "Not recorded";
+    });
+    countRows.push(["This run", feed.feed_id, ...counters, coverage.join("; ")]);
   }
-  const reliabilityCells = (feedId: string) => {
-    const value = latestHealth.get(feedId)?.reliability;
-    return value == null ? "Not recorded | Not recorded | Not recorded"
-      : `${value.success_fraction ?? "Not recorded"} | ${value.complete} | `
-        + `${value.from_day === null ? "Not recorded" : `${value.from_day} through ${value.through_day}`}`;
+  if (requests !== undefined) {
+    const expected = (Date.parse(requests.through_day) - Date.parse(requests.from_day)) / 86_400_000 + 1;
+    const window = `${requests.from_day} through ${requests.through_day}`;
+    for (const feed of sorted([...requests.feeds])) {
+      const coverage = fields.map(field => {
+        const value = feed.coverage[field];
+        addCoverage(`Historical window: ${feed.feed_id}, ${labels[field].toLowerCase()} requests`, window,
+          expected, value.recorded_days.length, value.complete_days.length, value.unknown_records);
+        return `${labels[field]}: ${value.status === "none" ? "not recorded" : value.status}`;
+      });
+      countRows.push(["Historical window", feed.feed_id, ...fields.map(field => String(feed[field] ?? "Not recorded")), coverage.join("; ")]);
+    }
+  }
+  const coverageRows = [...coverageGroups.values()];
+  const describeApplies = (applies: string[]) => {
+    const descriptions: string[] = [];
+    for (const [period, feedIds] of [
+      ["This run", aggregateFeedResults(health ?? []).map(feed => feed.feed_id)],
+      ["Historical window", requests?.feeds.map(feed => feed.feed_id) ?? []],
+    ] as const) {
+      const categories = new Map<string, string[]>();
+      for (const field of fields) {
+        const matching = feedIds.filter(id => applies.includes(`${period}: ${id}, ${labels[field].toLowerCase()} requests`));
+        if (matching.length === 0) continue;
+        const excluded = feedIds.filter(id => !matching.includes(id));
+        const scope = excluded.length === 0 ? `all ${feedIds.length} ${feedIds.length === 1 ? "feed" : "feeds"}`
+          : excluded.length < matching.length ? `all feeds except ${excluded.join(", ")}` : matching.join(", ");
+        const held = categories.get(scope) ?? [];
+        held.push(labels[field].toLowerCase());
+        categories.set(scope, held);
+      }
+      for (const [scope, categoriesForScope] of categories) {
+        descriptions.push(`${period}: ${scope}; ${categoriesForScope.join(", ")} requests`);
+      }
+    }
+    return descriptions.join("; ");
   };
   return {
     markdown: [
       "<details>", "<summary>Request counts and coverage</summary>", "",
-      "## Table E - Request coverage", "",
-      "| Id | Measure | Result |", "| --- | --- | --- |",
-      ...coverageRows.map(([label, value], index) => `| E${index + 1} | ${label} | ${value} |`),
-      "", "## Table F - Request counts by feed", "",
-      "| Id | Feed | Article requests | Feed requests | Robots requests | Request coverage | Feed-read reliability (fraction) | Reliability complete | Reliability window (UTC) |",
-      "| --- | --- | --- | --- | --- | --- | --- | --- | --- |",
-      ...sorted.map((feed, index) =>
-        `| F${index + 1} | ${escapeMarkdown(feed.feed_id)} | ${fields.map(field => formatCounter(feed[field], feed.coverage[field].status)).join(" | ")} | ${feedCoverage(feed)} | ${reliabilityCells(feed.feed_id)} |`),
-      "", "Feed-read reliability is productive checks / attempted checks, from 0 to 1. A productive check returns at least one usable URL.",
-      "Reliability comes from the current run's latest saved health row per feed. Its represented-day window is separate from the closed request window.",
-      "Incomplete reliability is an observed fraction, not a complete-history score. Missing reliability is not zero. Feed-read reliability does not score article selection.",
-      ...note,
+      "Partial totals contain recorded requests only. Missing counts are not estimates. Zero is known zero.",
+      "", "## Table D - Request counts by feed", "",
+      "| Id | Period | Feed | Article requests | Feed requests | Robots requests | Coverage |",
+      "| --- | --- | --- | --- | --- | --- | --- |",
+      ...countRows.map((cells, index) => `| D${index + 1} | ${cells.map(escapeMarkdown).join(" | ")} |`),
+      ...(health === undefined ? ["", "This run's request counts were not recorded."] : []),
+      ...(requests === undefined ? ["", "Request history was not recorded."] : []),
+      "", "## Table E - Request coverage", "",
+      "| Id | Applies to | Window (UTC dates) | Recorded days / expected | Complete days / expected | Records with missing counts |",
+      "| --- | --- | --- | --- | --- | --- |",
+      ...coverageRows.map((row, index) => `| E${index + 1} | ${escapeMarkdown(describeApplies(row.applies))} | ${row.window} | ${row.recorded} / ${row.expected} | ${row.complete} / ${row.expected} | ${row.missing} |`),
+      "", "Complete known-empty days need not contain observed records. Missing files do not establish how many records are missing.",
+      "Shared coverage rows apply to each named feed and request category, not a sum across them.",
+      ...(requests === undefined ? [] : [
+        `Missing or incomplete day files: ${requests.missing_days.join(", ") || "none"}.`,
+        `Days with records that cannot be attributed: ${requests.unattributed_days.join(", ") || "none"}.`,
+        `Staged history inputs: ${requests.input_complete ? "complete" : "incomplete; missing records may affect any day"}.`,
+      ]),
       "", "</details>",
     ].join("\n"),
-    notice: `${coverageText} Article / feed / robots requests: ${totals.join(" / ")}.`
-      + (requests.complete ? "" : " Partial totals include recorded counts only; see the summary for missing days and counts."),
+    notice: requests === undefined ? "Request history was not recorded."
+      : `Historical requests: ${requests.complete ? "complete" : "partial"} coverage.`,
   };
 }

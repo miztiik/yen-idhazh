@@ -202,17 +202,21 @@ defines recovery and upload behavior.
 TypeScript callers can render a validated planner result without starting an
 HTTP request. Import `renderPlanMarkdown` from
 `@idhazh/feed-ingest-plan/markdown`; it accepts a Plan response, optional feed
-health data and optional pre-rendered policy and host sections, then returns
-Markdown and semantic notices. It performs no network or file access and is a
+health data, an optional captured article maximum, a pre-rendered policy fold
+and host table rows, then returns Markdown and actionable warning notices.
+Run outcome and Needs attention remain visible; detailed evidence is folded.
+It performs no network or file access and is a
 package API, not an HTTP route.
 
 The manual workflow uses an adapter to write that Markdown to its job summary
-and turn notices into workflow annotations. Its finalization task first calls
+and turn warnings into workflow annotations. Its finalization task first calls
 the safe-persist HTTP endpoint, then renders the report before the artifact
 upload. The delivery receipt stays separate from the rendered report; the pure
 renderer does not commit or upload files. This workflow presentation is not
 the production digest renderer; production can choose a reader-facing format
 without changing the planner API.
+The adapter appends per-feed exclusion diagnostics to the existing Markdown
+artifact only; they do not return to the main summary.
 
 User-approved exception, 2026-10-30 UTC: planner transport tests may open an
 ephemeral loopback-only listener and call its HTTP APIs. This proves actual
