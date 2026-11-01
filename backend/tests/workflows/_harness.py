@@ -65,6 +65,9 @@ RUNS_MAY_OVERLAP: Final = frozenset({"digest.yml"})
 EXPECTED_WORKFLOWS: Final = {
     "backfill.yml": ("Vector backfill", frozenset({"workflow_dispatch"})),
     "ci.yml": ("CI", frozenset({"pull_request", "push", "workflow_dispatch"})),
+    "source-transport-test.yml": (
+        "Source transport tests", frozenset({"pull_request", "workflow_dispatch"}),
+    ),
     "digest.yml": ("Content refresh", frozenset({"schedule", "workflow_dispatch"})),
     "digest-recovery.yml": ("Digest assembly recovery", frozenset({"workflow_dispatch"})),
     "drift.yml": ("Drift review", frozenset({"schedule", "workflow_dispatch"})),

@@ -104,44 +104,6 @@ jobs:
           fi
           echo "playwright=$version" >> "$GITHUB_OUTPUT"
 
-  native_source_transport:
-    needs: scope
-    if: needs.scope.outputs.code == 'true'
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, windows-latest]
-    runs-on: ${{ matrix.os }}
-    timeout-minutes: 10
-    defaults:
-      run:
-        shell: bash
-    steps:
-      - uses: actions/checkout@v6
-
-      - uses: actions/setup-node@v7
-        with:
-          node-version: '22'
-
-      - uses: ./.github/actions/publication-runtime
-
-      - name: Install native source dependencies
-        run: |
-          set -euo pipefail
-          start=$SECONDS
-          bun install --cwd services/feed-ingest-plan --frozen-lockfile
-          bun install --cwd packages/feed-probe --frozen-lockfile
-          bun install --cwd services/host-fingerprints --frozen-lockfile
-          printf 'Native source verification dependency installation took %d seconds.\n' "$((SECONDS - start))"
-          cd services/feed-ingest-plan
-          node -e 'const fs = require("node:fs"), os = require("node:os"); const name = process.platform === "win32" ? "impit-win32-x64-msvc" : "impit-linux-x64-gnu"; console.log(JSON.stringify({native_binary_bytes: fs.statSync(require.resolve(name)).size, host_platform: process.platform, host_architecture: process.arch, host_logical_cpus: os.cpus().length, host_ram_bytes: os.totalmem()}))'
-
-      - name: Verify native source response ownership
-        run: |
-          bun run --cwd services/feed-ingest-plan check
-          bun run --cwd packages/feed-probe check
-          bun run --cwd services/feed-ingest-plan test ./test/impit-transport.test.ts
-
   gates:
     needs: scope
     if: needs.scope.outputs.code == 'true'

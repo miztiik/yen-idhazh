@@ -96,18 +96,23 @@ test("native profiles decode compressed bodies and retain status at cutoff and c
       expect(error.cause).toBeInstanceOf(BodyLimitError);
     }
     await cancelled("cutoff");
-    const nativeController = new AbortController();
-    const native = new Impit({ browser: base.profile.browser, followRedirects: false });
-    const nativeResponse = await native.fetch(target("native-control"), {
-      signal: nativeController.signal, timeout: base.timeout_ms, redirect: "manual",
-    });
-    const nativeReader = nativeResponse.body.getReader();
-    await nativeReader.read();
-    const nativeReading = nativeReader.read();
-    nativeController.abort();
-    try { await expect(nativeReading).rejects.toBeInstanceOf(Error); }
-    finally { nativeReader.releaseLock(); }
-    await cancelled("native-control");
+    for (const nested of [false, true]) {
+      const path = `native-control-${nested ? "nested" : "direct"}`;
+      const nativeController = new AbortController();
+      const caller = new AbortController();
+      caller.signal.addEventListener("abort", () => nativeController.abort(caller.signal.reason), { once: true });
+      const native = new Impit({ browser: base.profile.browser, followRedirects: false });
+      const nativeResponse = await native.fetch(target(path), {
+        signal: nativeController.signal, timeout: base.timeout_ms, redirect: "manual",
+      });
+      const nativeReader = nativeResponse.body.getReader();
+      await nativeReader.read();
+      const nativeReading = nativeReader.read();
+      const timer = setTimeout(() => nested ? caller.abort() : nativeController.abort(), 300);
+      try { await expect(nativeReading).rejects.toBeInstanceOf(Error); }
+      finally { clearTimeout(timer); nativeReader.releaseLock(); }
+      await cancelled(path);
+    }
     const controller = new AbortController();
     const stalled = transport.request({ ...base, max_body_bytes: 32768, url: target("stalled"), signal: controller.signal });
     const timer = setTimeout(() => controller.abort(), 300);

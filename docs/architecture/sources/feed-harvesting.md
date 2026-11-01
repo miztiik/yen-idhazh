@@ -248,6 +248,9 @@ The native stream must also release an unfinished response after abort,
 not only reject its JavaScript promise. The transport test keeps Impit under
 Bun and uses a genuine Node source to check response closure; a raw TCP
 disconnect verifies the source's close observer first.
+The separate `source-transport-test.yml` workflow runs this same native
+ownership test on Linux and Windows and records the actual candidate SHA.
+Production CI keeps its existing full-candidate checks.
 
 ## Dependencies and cost
 

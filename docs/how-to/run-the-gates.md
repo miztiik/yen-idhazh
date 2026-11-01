@@ -249,8 +249,15 @@ manual redirects and native Firefox/Chrome wire headers. The pre-header cases
 also verify source closure, not only rejection of the application promise.
 Run it on Windows locally and on Linux in merge-candidate CI. Ordinary source
 tests keep their recorded HTTP boundary; they do not access the open web.
-The focused `native_source_transport` CI job runs this oracle on both Linux
-and Windows with committed, frozen dependencies. If a local registry cannot
+The separate `source-transport-test.yml` workflow runs this oracle on both
+Linux and Windows with committed, frozen dependencies. Production `ci.yml`
+has no added native-platform job. The separate workflow runs for named source
+changes in a pull request and supports manual dispatch on a candidate branch:
+`gh workflow run source-transport-test.yml --ref <candidate-branch>`.
+Its summary records the checked-out code SHA, candidate ref, run and attempt;
+logs retain the effective profiles, attempt timeout and measured host.
+A new workflow can run from a pull request before it is available for manual
+dispatch on the default branch. If a local registry cannot
 install a native patch, CI can prepare and verify its normal manifest and
 generated locks before they enter the branch. Ordinary candidate CI must
 then verify the committed files; a dependency-preparation run is not its verdict.
