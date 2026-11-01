@@ -10,7 +10,7 @@ import type {
   PlannerMaintenanceRequest, PlannerMaintenanceResult, PlannerMaintenanceFailure,
 } from "@idhazh/common-contracts";
 import { PLANNER_CONTRACTS } from "./registration";
-import { readPlannerParquet } from "./read-planner-file";
+import { PlannerLedgerFileError, PlannerUnsupportedFormatError, readPlannerParquet } from "./read-planner-file";
 import { persistLedger } from "./persist-ledger";
 import { compactPeriodFile, readPlannerDayFiles, regularPlannerPath } from "./read-planner-day-files";
 import type { LedgerPeriod, LedgerRowContract } from "./ledger-types";
@@ -154,7 +154,12 @@ export async function readMaintenanceSource<T extends object>(
 ) {
   const expected = sources.get(path);
   const verified = await verifyMember(root, path, expected, path === targetPath);
-  const file = await readPlannerParquet(resolve(root, ...path.split("/")), ledger, contract);
+  const file = await readPlannerParquet(resolve(root, ...path.split("/")), ledger, contract).catch(error => {
+    if (error instanceof PlannerUnsupportedFormatError) {
+      throw new MaintenanceRefusal("unsupported-member", path);
+    }
+    throw error;
+  });
   if (file.bytes !== verified.bytes.byteLength || file.file_sha256 !== verified.file_sha256) {
     throw new MaintenanceRefusal(path === targetPath ? "target-conflict" : "changed-member", path);
   }
@@ -267,7 +272,7 @@ async function maintainPeriod<T extends object>(
     if (error instanceof MaintenanceRefusal) {
       return receipt({ status: "refused", reason: error.reason, path: error.path });
     }
-    if (error instanceof z.ZodError || error instanceof Error && error.name === "PlannerLedgerFileError") {
+    if (error instanceof z.ZodError || error instanceof PlannerLedgerFileError) {
       return receipt({ status: "refused", reason: "malformed-member", path: null });
     }
     if (isMissing(error)) return receipt({ status: "refused", reason: "missing-local-member", path: null });

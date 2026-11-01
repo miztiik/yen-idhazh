@@ -255,6 +255,12 @@ An absent, invalid or startup-error record is discarded and reported as
 `planner-maintenance-diagnostics.test.ts` binds this small Python vocabulary
 copy to the TypeScript schema and exercises real CLI failures.
 
+An old native envelope or row schema returns `refused` with
+`reason: "unsupported-member"` and the source path, not a failed writer exit.
+The gardener defers that period through its existing unreadable-file handling;
+it does not convert, rewrite or delete the old file. Maintenance recognizes
+the reader's typed format error before handling other malformed-file errors.
+
 Only the final shard publisher uses Git and
 checks planner replacements/deletions against the supplied initial identity.
 The row identities and missing-data rules are
