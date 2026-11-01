@@ -253,8 +253,10 @@ check decoded-byte limits, cancellation, native deadlines and response evidence.
 Native total-body timeout is checked separately from caller cancellation.
 An unfinished response can remain active after its native deadline; an API
 failure does not prove physical response termination. The public API has no
-bounded disposal acknowledgement for that error path. A pacing policy that
-waits for physical termination would need a different lifecycle control.
+bounded disposal acknowledgement for that error path. Pacing slots follow
+application request settlement and configured cooldown, not physical native
+response termination. Network activity may therefore overlap after a timeout,
+even though application requests sharing a pacing key do not overlap.
 Streamed native errors may be untyped; their messages are not used to invent
 a timeout class or safe error code.
 The separate `source-transport-test.yml` workflow runs this same native
