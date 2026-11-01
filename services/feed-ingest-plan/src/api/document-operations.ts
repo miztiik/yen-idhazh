@@ -9,10 +9,29 @@ import { appendDocumentTiming } from "./document-state";
 import { PlanError, describePlanError } from "./plan-request";
 import { FetchResponseSchema, ParseResponseSchema } from "./document-response.schema";
 import { stageStore } from "./stage-store";
-import { claimCollectionFeed, collectionForRun, settleCollectionFeed } from "./collection-operation";
+import {
+  claimCollectionFeed, collectionForBatch, collectionForRun, getCollection, settleCollectionFeed,
+  trackCollectionOperation,
+} from "./collection-operation";
 import { dumpRawDocumentFailure } from "../dump-raw-document-failure";
 import { utcTimestamp } from "../harvest-feeds/harvest-types";
 import type { FetchedDocumentReference } from "./stage-store";
+import type { z } from "zod";
+
+type DocumentRequest = z.infer<typeof FetchRequestSchema> | z.infer<typeof ParseRequestSchema>;
+
+function collectionForRequest(operation: "fetch" | "parse", request: DocumentRequest, inputs: PlanInputs) {
+  if (operation === "fetch") {
+    if ("fetch_item_type" in request && request.fetch_item_type === "feed" && request.collection_id !== undefined) {
+      return getCollection(inputs, request.collection_id);
+    }
+    if ("batch_id" in request && request.batch_id !== undefined) return collectionForBatch(inputs, request.batch_id);
+    return undefined;
+  }
+  if (!("fetch_request_id" in request)) return undefined;
+  const fetched = stageStore(inputs).fetchedDocument(request.fetch_request_id);
+  return fetched === undefined ? undefined : collectionForRun(inputs, fetched.context.run_id);
+}
 
 async function recordFailure(operation: "fetch" | "parse", requestId: string, failure: string,
   fetched: FetchedDocumentReference | undefined, inputs: PlanInputs, runtime: PlanRuntime) {
@@ -28,6 +47,14 @@ export async function executeDocumentOperation(
 ) {
   const request = operation === "fetch" ? FetchRequestSchema.parse(raw) : ParseRequestSchema.parse(raw);
   if (!inputs.settings.enabled) throw new PlanError("PLANNER_DISABLED", "Planner is disabled", "enabled");
+  const collection = collectionForRequest(operation, request, inputs);
+  const execute = () => executeOwnedDocumentOperation(request, inputs, runtime, signal);
+  return collection === undefined ? execute() : trackCollectionOperation(collection, execute);
+}
+
+async function executeOwnedDocumentOperation(
+  request: DocumentRequest, inputs: PlanInputs, runtime: PlanRuntime, signal?: AbortSignal,
+) {
   const store = stageStore(inputs);
   if ("feed_id" in request) {
     const collection = request.collection_id === undefined ? undefined

@@ -44,7 +44,10 @@ one workflow step. It verifies private-pipe readiness against the child's
 process ID, a fresh startup nonce, run, attempt, captured UTC clock and code
 revision, then checks that the HTTP health response matches. An occupied port,
 wrong identity, early child exit or expired readiness fails the step explicitly.
-The same child handles planning and the health summary before shutdown.
+The same child handles planning and the health summary before shutdown. The
+outer HTTP client releases the finalized collection only after its
+health-summary attempt; a failed attempt still runs the release call before the
+child closes.
 Always-run finalization then owns a separate
 [safe-persist HTTP child](feed-operator-api.md#safe-persist-http-delivery).
 It reuses the existing metadata adapter and the same process-lifetime code,
@@ -93,7 +96,9 @@ assignment without bypassing article selection.
 
 The router dispatches to execution modules. `/plan` calls the stage APIs over
 the trusted local listener using validated JSON requests and outcomes. HTTP
-is transport, not process isolation or an external message broker.
+is transport, not process isolation or an external message broker. If the
+collection-start response is ambiguous, the planner checks collection ownership
+over HTTP instead of reading the collection state directly.
 Orchestration takes selected metadata and the exact saved selection-start and
 evaluation UTC timestamps from the validated selection response. It takes
 assigned metadata, strategy and dispatch count from the partition response,
@@ -153,6 +158,10 @@ pool. CLI work can own a pool for its own lifetime.
 Live work pins its loaded evidence and retained references. Capacity expiry
 removes both together; an expired stage cannot reload old input. No listener-wide
 run queue is added.
+Final accounting does not unpin the collection. The workflow reads its health
+summary while the same child still owns the batch, then explicitly releases the
+collection. A long-lived listener keeps it pinned until release or child
+shutdown, preserving the configured capacity bound.
 The feed pool bounds active feed chains by `harvest.concurrency`. The article
 pool allows that many fetches plus `listener.parser_concurrency` parses to be
 in flight; waiting for a parser does not occupy every fetch slot. The listener

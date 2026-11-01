@@ -1,5 +1,7 @@
 /** Do recorded run results preserve saved identities and report unsuccessful work honestly? */
 import { expect, test } from "bun:test";
+import { mkdir, writeFile } from "node:fs/promises";
+import { dirname, join } from "node:path";
 import {
   DiscoveredArticleRowContract, FeedHealthStateRowContract, PlanRunRowContract, RejectedArticleRowContract,
   SelectedArticleRowContract, SelectedFeedBatchSchema, SelectedArticlesArtifactSchema, selectedArticleMetadata,
@@ -166,9 +168,46 @@ test("an empty real selection retains timestamps and its text-artifact receipt",
     expect(result.row.evaluated_at).toBe(result.context.now);
     expect(result.files.selected_articles).toEqual({ status: "empty", files: [] });
     expect(result.row.selected_articles_artifact).not.toBeNull();
+    expect(result.row.api_timings.filter(timing => timing.operation === "fetch")).toHaveLength(1);
+    expect(result.row.api_timings.find(timing => timing.operation === "fetch")).toMatchObject({ status: "completed" });
     expect(PlanResponseSchema.parse(summarizePlan(result)).assignments).toEqual([]);
   } finally { await fixture.close(); }
 });
+
+test("health and selected persistence failures preserve the independent successful output", async () => {
+  for (const blocked of ["feed-health-state", "selected-articles"] as const) {
+    const fixture = await recordedPlan();
+    fixture.inputs.harvest.config.partition.enabled = false;
+    const app = createPlanApp(fixture.inputs, fixture.runtime);
+    const server = Bun.serve({
+      hostname: "127.0.0.1", port: 0, idleTimeout: 0,
+      async fetch(request, server) {
+        const response = await app.fetch(request, { beginPlanning: () => server.timeout(request, 0),
+          stage_origin: `http://127.0.0.1:${server.port}` });
+        if (response.ok && new URL(request.url).pathname === `${PLANNER_API_PREFIX}/select-articles`) {
+          const obstruction = join(fixture.inputs.outputRoot, "raw", "feed-ingest-plan", blocked);
+          await mkdir(dirname(obstruction), { recursive: true });
+          await writeFile(obstruction, "recorded obstruction");
+        }
+        return response;
+      },
+    });
+    try {
+      const result = await runFeedPlan({}, fixture.inputs, {
+        ...fixture.runtime, stage_origin: `http://127.0.0.1:${server.port}`,
+      });
+      expect(result.row.status).toBe("partial");
+      expect(result.row.failure_code).not.toBeNull();
+      if (blocked === "feed-health-state") {
+        expect(result.files.feed_health_state).toBeUndefined();
+        expect(result.files.selected_articles?.status).toBe("written");
+      } else {
+        expect(result.files.feed_health_state?.status).toBe("written");
+        expect(result.files.selected_articles).toBeUndefined();
+      }
+    } finally { await server.stop(true); await app.close(); await fixture.close(); }
+  }
+}, 120000);
 
 test("partial and failed result models cannot claim completion or lose their failure cause", async () => {
   const { result } = await recordedResult();

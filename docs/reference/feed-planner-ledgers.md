@@ -495,6 +495,8 @@ no permanent compatibility API.
 | K17 | Feed planner | `POST /api/2026-10-31/collections/cancel` | Cancels owned work, blocks partial-input selection, and returns rejection receipts and a partial-health batch reference |
 | K18 | Safe persist | `GET /api/2026-10-31/health` | Confirms the separately supervised delivery child, not planner enablement or feed health |
 | K19 | Safe persist | `POST /api/2026-10-31/safe-persist-data` | Reuses verified current metadata delivery through `safe_persist_data`; accepts only run number, attempt and exact completed paths |
+| K20 | Feed planner | `POST /api/2026-10-31/collections/finalize` | Drains owned work and raw diagnostics, then returns final status, failure cause and actual timing snapshot |
+| K21 | Feed planner | `POST /api/2026-10-31/collections/release` | Releases a finalized run/attempt after health summary; makes its in-memory batch eligible for bounded eviction |
 
 The health responses belong to separate listeners; planner and safe persist use
 the same versioned path at different workflow steps. The standalone RAM

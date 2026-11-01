@@ -10,6 +10,7 @@ import { getCollection } from "../src/api/collection-operation";
 import { createPlanTestServer } from "./plan-test-server";
 import { collectRecordedFeeds } from "./collection-recordings";
 import { FetchResponseSchema, ParseResponseSchema } from "../src/api/document-response.schema";
+import { CancelledCollectionSchema, FinalizedCollectionSchema } from "../src/api/collection-contracts";
 
 test("large feeds retain every rejection without per-offer collection snapshots or rejected HTTP requests", async () => {
   const sources = [source(), source({ id: "second-feed", url: "https://news.example/second.xml" })];
@@ -84,6 +85,12 @@ test("explicit health reads capture current collection work without allowing pre
     expect((await post("collections/cancel", { collection_id: id })).status).toBe(200);
     expect(collection.signal.signal.aborted).toBe(true);
     expect(fixture.transport.requests.filter(request => request.url.pathname !== "/robots.txt")).toHaveLength(1);
+    expect(collection.state.work.rows().some(row => row.checked_at !== null)).toBe(true);
+    const outcome = FinalizedCollectionSchema.parse(await (await post("collections/finalize", {
+      collection_id: id, failure_code: "PLANNER_EXECUTION_FAILED",
+      collection_timing: { duration_ms: 1, status: "failed" },
+    })).json());
+    expect(outcome.status).toBe("partial");
   } finally { await app.close(); await fixture.close(); }
 }, 120000);
 
@@ -102,6 +109,7 @@ test("cancellation drains owned requests and retains partial accounting without 
     method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body),
   });
   let pending: Promise<Response> | undefined;
+  let operationSettled = false;
   try {
     expect((await post("collections", { collection_id: id, request: {} })).status).toBe(200);
     const collection = getCollection(fixture.inputs, id);
@@ -117,9 +125,12 @@ test("cancellation drains owned requests and retains partial accounting without 
     pending = post("fetch", {
       request_id: randomUUID(), feed_id: "recorded-news", fetch_item_type: "article",
       batch_id: parsed.batch_id, offer_id: parsed.offers[0]!.offer_id, correlation_id: collection.context.correlation_id,
-    });
+    }).then(response => { operationSettled = true; return response; });
     await fetching;
-    expect((await post("collections/cancel", { collection_id: id })).status).toBe(200);
+    const cancellation = await post("collections/cancel", { collection_id: id });
+    expect(cancellation.status).toBe(200);
+    expect(operationSettled).toBe(true);
+    expect(CancelledCollectionSchema.parse(await cancellation.json()).has_work).toBe(true);
     const cancelled = await pending;
     expect(cancelled.status).toBe(200);
     const terminal = FetchResponseSchema.parse(await cancelled.json());
@@ -134,6 +145,14 @@ test("cancellation drains owned requests and retains partial accounting without 
     expect(captured.work_rows.some(row => (row.feed_requests ?? 0) > 0)).toBe(true);
     expect(fixture.transport.peak).toBeLessThanOrEqual(fixture.inputs.harvest.config.harvest.concurrency);
     expect((await post("select-articles", { batch_id: captured.batch_id })).status).toBe(409);
+    const outcome = FinalizedCollectionSchema.parse(await (await post("collections/finalize", {
+      collection_id: id, failure_code: "PLANNER_EXECUTION_FAILED",
+      collection_timing: { duration_ms: 3, status: "failed" },
+    })).json());
+    expect(outcome.status).toBe("partial");
+    expect(outcome.api_timings.filter(timing => timing.operation === "fetch")).toEqual([
+      { operation: "fetch", duration_ms: 3, status: "failed" },
+    ]);
   } finally {
     try { await pending; }
     finally {

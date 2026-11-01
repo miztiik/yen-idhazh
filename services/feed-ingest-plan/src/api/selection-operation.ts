@@ -16,10 +16,17 @@ import { recordFinalizedDocumentWork } from "./record-standalone-run";
 import { collectionForRun } from "./collection-operation";
 import { snapshotCollectionBatch } from "./collection-batch";
 
-export function requireStageConfiguration(batch: { config_sha256: string }, inputs: PlanInputs, runtime: PlanRuntime) {
+export function requireStageConfiguration(
+  batch: { config_sha256: string; context?: { run_id: string } }, inputs: PlanInputs, runtime: PlanRuntime,
+  allowFinalizedSummary = false,
+) {
   if (!inputs.settings.enabled) throw new PlanError("PLANNER_DISABLED", "Planner is disabled", "enabled");
   if (batch.config_sha256 !== stageConfigFingerprint(inputs, runtime)) {
     throw new PlanError("REQUEST_CONFLICT", "Batch configuration differs from the current planner", "batch_id");
+  }
+  const collection = batch.context === undefined ? undefined : collectionForRun(inputs, batch.context.run_id);
+  if (collection?.finalizing || (collection?.finalization !== undefined && !allowFinalizedSummary)) {
+    throw new PlanError("REQUEST_CONFLICT", "Collection outcome is already finalized", "batch_id");
   }
 }
 export async function executeSelection(raw: unknown, inputs: PlanInputs, runtime: PlanRuntime,
@@ -30,7 +37,8 @@ export async function executeSelection(raw: unknown, inputs: PlanInputs, runtime
   let parsed = store.read("parsed", request.batch_id, ParsedFeedBatchSchema);
   requireStageConfiguration(parsed, inputs, runtime);
   const collection = collectionForRun(inputs, parsed.context.run_id);
-  if (collection !== undefined && (collection.status !== "complete" || collection.completed_batch_id !== parsed.batch_id)) {
+  if (collection !== undefined && (collection.status !== "complete" || collection.finalizing
+    || collection.finalization !== undefined || collection.completed_batch_id !== parsed.batch_id)) {
     throw new PlanError("BATCH_INCOMPLETE", "Selection requires the completed global collection, not one feed's batch", "batch_id");
   }
   if (collection !== undefined) parsed = snapshotCollectionBatch(inputs, collection, collection.pending_offers === 0);

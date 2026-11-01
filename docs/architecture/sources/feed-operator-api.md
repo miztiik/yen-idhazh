@@ -149,6 +149,9 @@ Table A
 | A5 | `collections` | Starts one run-owned collection with a UUIDv4 `collection_id` and validated planning controls. Returns the captured UTC context and configured feed IDs, not article text. |
 | A6 | `collections/complete` | Accepts `collection_id`; refuses until every required feed and offered article has a terminal outcome. Saves discovery and harvested-rejection evidence and exposes the complete global batch for selection. |
 | A7 | `collections/cancel` | Accepts `collection_id`; cancels owned work and prevents selection. Returns harvested-rejection receipts and a batch reference for explicit partial-health recording. |
+| A8 | `collections/finalize` | Accepts measured collection timing and the orchestration failure cause after stage writes settle. Drains owned work and raw diagnostics, then returns state-based status, failure cause and timing snapshot. |
+| A9 | `collections/release` | Accepts `run_id` and `attempt`; releases a finalized collection after its later health-summary attempt. This does not erase written files. |
+| A10 | `collections/exists` | Accepts `collection_id`; reports whether the owner still holds that collection after an ambiguous startup response. |
 
 Orchestration consumes the validated selection and partition response metadata,
 not their text-bearing batches. Selection returns its saved timestamps without
@@ -225,7 +228,10 @@ uses the run's captured calculations and actual completed work but does not
 write health. The separate
 `feed-health-state` request can summarize or record a batch.
 The workflow HTTP client calls `/health`, `/plan`, then
-`/feed-health-state` with `action: summarize` when a batch exists. The
+`/feed-health-state` with `action: summarize` when a batch exists, and releases
+the finalized collection after that attempt. Final accounting does not release
+its batch; the summary must be read while the child still owns that in-memory
+batch. The
 [workflow entry](feed-plan-runner.md#entry-points-and-controls) supervises a
 separate server child and keeps that same listener alive for all three calls
 because parsed, selected and partitioned batches are in memory. A restart
@@ -260,14 +266,24 @@ flowchart TD
   PERSIST --> TEXT["Separate selected full-text JSON artifact<br/>summarization is a later consumer"]
   READY --> HEALTH["POST /feed-health-state<br/>record actual work and current availability"]
   HEALTH --> HEALTH_LEDGER[("feed-health-state")]
-  PERSIST --> FINAL["Record completed, partial or failed run"]
+  PERSIST --> FINAL["POST /collections/finalize<br/>settled status, failure cause and timings"]
   HEALTH --> FINAL
   FINAL --> RUNS[("plan-runs")]
   PLAN -->|"Cancellation or incomplete work"| CANCEL["POST /collections/cancel<br/>no selection of partial input"]
   CANCEL --> REJECTIONS
   CANCEL -->|"Completed feed work"| HEALTH
   CANCEL --> FINAL
+  FINAL --> SUMMARY["POST /feed-health-state<br/>summarize while batch is retained"]
+  SUMMARY --> RELEASE["POST /collections/release"]
 ```
+
+`/collections/finalize` does not release the collection. Cancellation first
+aborts and drains every owned document request before it snapshots rejection
+and health evidence. Raw-document diagnostics also finish before final status
+and timings are returned. The status is `completed` without a failure cause;
+with a cause, it is `partial` only when a work row has a feed check, otherwise
+it is `failed`. The separate release call makes completed and cancelled
+collections eligible for the existing bounded capacity rules.
 
 Article fetch and parse requests can overlap and update the same batch.
 Parsing retains earliest first-sighting facts in `discovered-articles`.
