@@ -250,10 +250,12 @@ build-time Bun process and workers, not the published browser bundle.
 TidyURL 1.18.3 adds its bundled URL-cleaning rules and no runtime dependencies
 for request-target cleanup. Its installed bytes remain build-time only.
 Impit's beneficiary is native browser TLS and HTTP fingerprints with bounded
-decoded response reads. Its Windows x64 native binary occupies 10,276,352 bytes
-(about 9.8 MiB); service installation took about 17 seconds on a shared Windows
-x64 host, including the service's other dependencies. Linux runner installation
-time and native size remain unmeasured. Native binaries are install-time
+decoded response reads. Its Windows x64 native binary occupies 10,286,080 bytes
+(about 9.8 MiB); Linux x64 occupies 10,581,792 bytes (about 10.1 MiB).
+Service and probe installation took 18 seconds on a GitHub Windows x64 runner
+and 2 seconds on a GitHub Linux x64 runner, after shared publication packages
+were installed. Both reported four logical CPUs and about 16 GiB RAM.
+Native binaries are install-time
 dependencies, never committed or shipped to the published site.
 The remaining `undici-types` dependency is type declarations required by
 Bun/Node types, not a runtime HTTP client. No runtime Undici dependency remains
