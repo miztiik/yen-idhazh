@@ -7,7 +7,7 @@ import type { FeedIngestEvent } from "@idhazh/common-contracts";
 import { selectedArtifactPath } from "../src/selected-artifact-path";
 import { createPlanTestServer } from "./plan-test-server";
 import { prepareProgressEvent } from "../src/logging/structured-logger";
-import { publishUploadInventory } from "../scripts/feed-ingest-plan-upload-inventory";
+import { publishUploadInventory, publishWorkflowUploadInventories } from "../scripts/feed-ingest-plan-upload-inventory";
 import { recordedPlan } from "./plan-recordings";
 import { source } from "./harvest-recordings";
 import { recordedPersistenceBatch } from "./persistence-recordings";
@@ -195,7 +195,7 @@ test("upload JSONL names real visible ZIP members, including recovery files, wit
   const f = await recordedPlan();
   const events: FeedIngestEvent[] = [];
   try {
-    const files = ["700-1-report.md", "700-1-selected-articles.json", "recovery/state/day.parquet"];
+    const files = ["feed-ingest-report-2026-10-29-700.md", "700-1-selected-articles.json", "recovery/state/day.parquet"];
     for (const file of [...files, ".hidden", ".private/body.json", "recovery/.hidden"]) {
       const target = join(f.directory, "artifacts", ...file.split("/"));
       await mkdir(join(target, ".."), { recursive: true });
@@ -210,6 +210,15 @@ test("upload JSONL names real visible ZIP members, including recovery files, wit
     expect(events.at(-1)).toMatchObject({ operation: "artifact-upload", phase: "completed", details: { file_count: files.length } });
     expect(events.every(event => event.details._compliance === undefined)).toBe(true);
     expect(JSON.stringify(events)).not.toContain("private body");
+    await mkdir(join(f.directory, "raw-document-artifacts"));
+    await writeFile(join(f.directory, "raw-document-artifacts", "raw-document-contents.jsonl"), "private raw body");
+    events.length = 0;
+    await publishWorkflowUploadInventories({
+      directory: f.directory, runNumber: "700", write: event => { events.push(event); },
+    });
+    expect(events.flatMap(event => typeof event.details.file === "string" ? [event.details.file] : []).sort())
+      .toEqual([...files, "raw-document-contents.jsonl"].sort());
+    expect(JSON.stringify(events)).not.toContain("private raw body");
     await expect(publishUploadInventory({ directory: join(f.directory, "missing"), runNumber: "700",
       write: event => { events.push(event); } })).rejects.toThrow();
     expect(events.at(-1)).toMatchObject({ operation: "artifact-upload", phase: "failed" });

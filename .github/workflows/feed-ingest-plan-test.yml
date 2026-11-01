@@ -46,6 +46,11 @@ on:
         options:
           - 'false'
           - 'true'
+      write_report:
+        description: Write the report file, run summary Markdown and workflow annotations
+        required: false
+        default: true
+        type: boolean
 
 permissions:
   contents: write
@@ -115,21 +120,34 @@ jobs:
         if: ${{ cancelled() }}
         run: echo "cancelled=true" >> "$GITHUB_OUTPUT"
 
-      - name: Commit ledgers and write report
-        id: finalize
+      - name: Commit ledgers
+        id: commit
         if: ${{ always() }}
         env:
+          FINALIZATION_OPERATION: commit-ledgers
           CURRENT_RUN_FILES: ${{ steps.plan.outputs.current_run_files }}
           RUN_CANCELLED: ${{ steps.cancellation.outputs.cancelled == 'true' }}
-          DUMP_RAW_DOCUMENT_CONTENTS: ${{ inputs.dump_raw_document_contents }}
+        run: bun run services/feed-ingest-plan/scripts/finalize-run-output.ts
+
+      - name: Write run report and annotations
+        id: report
+        if: ${{ always() && inputs.write_report }}
+        env:
+          FINALIZATION_OPERATION: write-report
+          RUN_CANCELLED: ${{ steps.cancellation.outputs.cancelled == 'true' }}
           RUN_ID: ${{ steps.plan.outputs.run_id }}
         run: bun run services/feed-ingest-plan/scripts/finalize-run-output.ts
 
-      - name: List actual upload files as JSONL
-        if: ${{ always() && steps.finalize.outputs.artifact_directory != '' }}
+      - name: Prepare artifacts and list upload files as JSONL
+        id: finalize
+        if: ${{ always() }}
         env:
-          ARTIFACT_DIRECTORY: ${{ steps.finalize.outputs.artifact_directory }}
-        run: bun run services/feed-ingest-plan/scripts/feed-ingest-plan-upload-inventory.ts
+          FINALIZATION_OPERATION: prepare-artifacts
+          RUN_CANCELLED: ${{ steps.cancellation.outputs.cancelled == 'true' }}
+          DUMP_RAW_DOCUMENT_CONTENTS: ${{ inputs.dump_raw_document_contents }}
+          RUN_ID: ${{ steps.plan.outputs.run_id }}
+          REPORT_FILENAME: ${{ steps.report.outputs.report_filename }}
+        run: bun run services/feed-ingest-plan/scripts/finalize-run-output.ts
 
       - name: Upload run artifacts
         id: upload
@@ -157,6 +175,9 @@ jobs:
           COLLECTION_OUTCOME: ${{ steps.plan.outcome }}
           PLANNING_COMPLETE: ${{ steps.plan.outputs.planning_complete }}
           FINALIZATION_OUTCOME: ${{ steps.finalize.outcome }}
+          COMMIT_OUTCOME: ${{ steps.commit.outcome }}
+          REPORT_OUTCOME: ${{ steps.report.outcome }}
+          WRITE_REPORT: ${{ inputs.write_report }}
           UPLOAD_OUTCOME: ${{ steps.upload.outcome }}
           UPLOAD_ARTIFACT_ID: ${{ steps.upload.outputs.artifact-id }}
           DUMP_RAW_DOCUMENT_CONTENTS: ${{ inputs.dump_raw_document_contents }}

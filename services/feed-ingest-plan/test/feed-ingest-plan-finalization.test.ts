@@ -23,7 +23,7 @@ async function recording(failCollection = false) {
       ...fixture,
       finalize: {
         root: fixture.repository, directory: fixture.directory, currentRunFiles: JSON.stringify(fixture.paths),
-        runNumber: "700", attempt: 3, cancelled: false,
+        runNumber: "700", attempt: 3, cancelled: false, runId: fixture.identity.run_id,
         gitSha: fixture.identity.git_sha,
         summaryPath: join(fixture.repository, "job-summary.md"), outputPath: join(fixture.directory, "step-outputs"),
       },
@@ -54,18 +54,27 @@ test("one Git delivery precedes the report and prepares only the selected handof
   const f = await recording();
   try {
     const indexBefore = await readFile(join(f.repository, ".git", "index"));
-    const finalized = await runScript("finalize-run-output.ts", f.repository, {
+    const controls = {
       RUNNER_TEMP: dirname(f.directory), GITHUB_RUN_ID: "700", GITHUB_RUN_ATTEMPT: "3",
       GITHUB_SHA: f.identity.git_sha,
       CURRENT_RUN_FILES: f.finalize.currentRunFiles, RUN_CANCELLED: "false",
       GITHUB_STEP_SUMMARY: f.finalize.summaryPath, GITHUB_OUTPUT: f.finalize.outputPath,
       DUMP_RAW_DOCUMENT_CONTENTS: "false", RUN_ID: f.identity.run_id,
-    });
-    expect(finalized.code).toBe(0);
-    expect(finalized.errors).toContain('"event":"safe_persist_http_completed"');
-    expect(finalized.errors).not.toContain('"event":"safe_persist_http_failed"');
-    expect(finalized.errors).not.toMatch(/[A-Za-z]:[\\/]/);
-    expect(finalized.errors).not.toContain("article_text");
+    };
+    for (const operation of ["commit-ledgers", "write-report", "prepare-artifacts"]) {
+      const finalized = await runScript("finalize-run-output.ts", f.repository, {
+        ...controls, FINALIZATION_OPERATION: operation,
+        REPORT_FILENAME: "feed-ingest-report-2026-10-21-700.md",
+      });
+      expect(finalized.code, finalized.errors).toBe(0);
+      if (operation === "commit-ledgers") {
+        expect(finalized.errors).toContain('"event":"safe_persist_http_completed"');
+        expect(await Bun.file(join(f.directory, "feed-ingest-report-2026-10-21-700.md")).exists()).toBe(false);
+      } else expect(finalized.errors).not.toContain('"event":"safe_persist_http_completed"');
+      expect(finalized.errors).not.toContain('"event":"safe_persist_http_failed"');
+      expect(finalized.errors).not.toMatch(/[A-Za-z]:[\\/]/);
+      expect(finalized.errors).not.toContain("article_text");
+    }
     const receipt = MetadataDeliveryResultSchema.parse(await Bun.file(join(f.directory, "delivery-result.json")).json());
     expect(receipt).toMatchObject({ status: "landed", files: f.paths.length, paths: f.paths });
     const committed = await fixtureGit(f.origin, [
@@ -76,7 +85,7 @@ test("one Git delivery precedes the report and prepares only the selected handof
     expect(await readFile(join(f.repository, ".git", "index"))).toEqual(indexBefore);
     const artifacts = join(f.directory, "artifacts");
     expect((await readdir(artifacts)).sort()).toEqual([
-      "700-3-delivery-result.json", "700-3-report.md", "700-3-selected-articles.json",
+      "700-3-delivery-result.json", "700-3-selected-articles.json", "feed-ingest-report-2026-10-21-700.md",
     ]);
     const inventory: FeedIngestEvent[] = [];
     expect(await publishUploadInventory({ directory: artifacts, runNumber: "700",
@@ -85,19 +94,23 @@ test("one Git delivery precedes the report and prepares only the selected handof
       .toEqual((await readdir(artifacts)).sort());
     const selected = await readFile(join(f.repository, f.summary.selected_articles_artifact!));
     expect(await readFile(join(artifacts, "700-3-selected-articles.json"))).toEqual(selected);
-    const report = await readFile(join(artifacts, "700-3-report.md"), "utf8");
+    const report = await readFile(join(artifacts, "feed-ingest-report-2026-10-21-700.md"), "utf8");
     expect(report).toBe(await readFile(f.finalize.summaryPath, "utf8"));
     expect(report).not.toContain("Metadata delivery");
     expect(report).not.toContain("Git delivery");
     expect(report).not.toContain(JSON.parse(selected.toString()).articles[0].article_text);
     expect(await readFile(f.finalize.outputPath, "utf8")).toContain("artifact_directory<<");
 
+    await expect(finishRunOutput({ ...f.finish, commitOutcome: "failure" }))
+      .rejects.toThrow("Run output is incomplete");
+    await expect(finishRunOutput({ ...f.finish, reportOutcome: "failure" }))
+      .rejects.toThrow("Run output is incomplete");
     await expect(finishRunOutput({ ...f.finish, uploadOutcome: "failure" }))
       .rejects.toThrow("Run output is incomplete");
     expect((await stat(f.directory)).isDirectory()).toBe(true);
     await expect(finishRunOutput({ ...f.finish, artifactId: "" })).rejects.toThrow("Run output is incomplete");
     expect((await stat(f.directory)).isDirectory()).toBe(true);
-    await finishRunOutput(f.finish);
+    await finishRunOutput({ ...f.finish, commitOutcome: "success", reportOutcome: "skipped", writeReport: false });
     await expect(stat(f.directory)).rejects.toMatchObject({ code: "ENOENT" });
     expect(await readFile(f.finalize.summaryPath, "utf8")).toBe(report);
     expect(await readFile(join(f.repository, f.summary.selected_articles_artifact!))).toEqual(selected);
@@ -119,7 +132,7 @@ test("a refused Git delivery still writes the report and prepares exact metadata
     }
     expect(await readFile(join(artifacts, "700-3-selected-articles.json")))
       .toEqual(await readFile(join(f.repository, f.summary.selected_articles_artifact!)));
-    expect(await readFile(join(artifacts, "700-3-report.md"), "utf8")).not.toContain("Git delivery");
+    expect(await readFile(join(artifacts, "feed-ingest-report-2026-10-21-700.md"), "utf8")).not.toContain("Git delivery");
     expect(await readFile(f.finalize.outputPath, "utf8")).toContain("artifact_directory<<");
     expect(await fixtureGit(f.origin, ["--git-dir", f.origin, "rev-parse", "main"])).toBe(f.head);
     await expect(finishRunOutput({ ...f.finish, finalizationOutcome: "failure" })).rejects.toThrow("Run output is incomplete");
@@ -133,7 +146,7 @@ test("a job-summary write failure cannot prevent an already-rendered report or s
     await expect(finalizeRunOutput({ ...f.finalize, summaryPath: f.repository })).rejects.toThrow("Run finalization failed");
     expect(MetadataDeliveryResultSchema.parse(await Bun.file(join(f.directory, "delivery-result.json")).json()).status).toBe("landed");
     const artifacts = join(f.directory, "artifacts");
-    expect(await Bun.file(join(artifacts, "700-3-report.md")).exists()).toBe(true);
+    expect(await Bun.file(join(artifacts, "feed-ingest-report-2026-10-21-700.md")).exists()).toBe(true);
     expect(await readFile(join(artifacts, "700-3-selected-articles.json")))
       .toEqual(await readFile(join(f.repository, f.summary.selected_articles_artifact!)));
     expect(await readFile(f.finalize.outputPath, "utf8")).toContain("artifact_directory<<");
@@ -146,7 +159,7 @@ test("cancelled finalization preserves recovery and a report without creating a 
     await finalizeRunOutput({ ...f.finalize, cancelled: true });
     expect(await fixtureGit(f.origin, ["--git-dir", f.origin, "rev-parse", "main"])).toBe(f.head);
     expect(await Bun.file(join(f.directory, "delivery-result.json")).exists()).toBe(false);
-    expect(await readFile(join(f.directory, "artifacts", "700-3-report.md"), "utf8")).not.toContain("Git delivery");
+    expect(await readFile(join(f.directory, "artifacts", "feed-ingest-report-2026-10-21-700.md"), "utf8")).not.toContain("Git delivery");
     expect(await Bun.file(join(f.directory, "artifacts", "uncommitted-metadata-700-3", "current-run-files.json")).json())
       .toEqual(f.paths);
     const finished = await runScript("finish-run-output.ts", f.repository, {
@@ -167,10 +180,13 @@ test("completed diagnostics can land and be cleaned while a partial collection s
   const f = await recording(true);
   try {
     expect(f.summary.planning_complete).toBe(false);
-    await finalizeRunOutput(f.finalize);
+    await finalizeRunOutput({ ...f.finalize, operation: "commit-ledgers" });
+    await finalizeRunOutput({ ...f.finalize, operation: "prepare-artifacts" });
     expect(MetadataDeliveryResultSchema.parse(await Bun.file(join(f.directory, "delivery-result.json")).json()).status).toBe("landed");
+    expect(await Bun.file(join(f.directory, "artifacts", "feed-ingest-report-2026-10-21-700.md")).exists()).toBe(false);
     expect(await Bun.file(join(f.directory, "artifacts", "700-3-selected-articles.json")).exists()).toBe(false);
-    await expect(finishRunOutput({ ...f.finish, collectionOutcome: "failure", planningComplete: "false" }))
+    await expect(finishRunOutput({ ...f.finish, collectionOutcome: "failure", planningComplete: "false",
+      commitOutcome: "success", reportOutcome: "skipped", writeReport: false }))
       .rejects.toThrow("Run output is incomplete");
     await expect(stat(f.directory)).rejects.toMatchObject({ code: "ENOENT" });
     expect(await fixtureGit(f.origin, ["--git-dir", f.origin, "rev-parse", "main"])).not.toBe(f.head);
@@ -210,11 +226,11 @@ test("missing collection output still produces a report artifact without inventi
     const directory = join(root, "runner", "feed-ingest-plan");
     const outputPath = join(root, "step-outputs");
     await expect(finalizeRunOutput({
-      root, directory, runNumber: "700", attempt: 1, cancelled: false,
+      root, directory, runNumber: "700", attempt: 1, cancelled: false, runId: "2026-10-21-700",
       gitSha: "a".repeat(40),
       summaryPath: join(root, "summary.md"), outputPath,
     })).rejects.toThrow("Run finalization failed");
-    expect(await readFile(join(directory, "artifacts", "700-1-report.md"), "utf8")).toContain("Planning result unavailable");
+    expect(await readFile(join(directory, "artifacts", "feed-ingest-report-2026-10-21-700.md"), "utf8")).toContain("Planning result unavailable");
     expect(await readFile(outputPath, "utf8")).toContain("artifact_directory<<");
     expect(await Bun.file(join(directory, "delivery-result.json")).exists()).toBe(false);
   } finally { await rm(root, { recursive: true, force: true }); }
