@@ -230,9 +230,23 @@ not appear in this table.
 Needs attention separates current recorded failures, paused coverage and
 missing evidence. A paused feed is not a new request failure. Historical
 causes remain unavailable when report inputs do not contain them. Current
-feed HTTP status may be shown when tied to its saved failure code; terminal
-article HTTP status exists in rejected-articles but is not wired into these
-report inputs. No response code or deeper cause is inferred. An eligible UTC
+feed HTTP status is shown only for an identified HTTP check tied to its saved
+failure code. The report reader verifies the exact rejected-article files named
+in this run's response before showing article HTTP, fetch and robots evidence.
+It counts each terminal execution/candidate once; retries are not extra
+articles. A robots response never substitutes for an article response.
+Detailed article rows replace the covered aggregate failure counts. Remaining
+aggregate counts keep their unknown status explicit.
+
+For paused feeds, the reader uses the initially staged health files within the
+run's recorded history bounds. It shows a validated earlier check only when its
+feed, endpoint and check instant match the saved availability update. Earlier
+checks are labelled separately from This run. No matching check means the
+historical cause stays unavailable; a current failure followed by a pause does
+not claim that no check occurred in this run. Missing native article files
+preserve aggregate evidence and add an attention item; invalid native bytes
+fail report creation. No network query, log parsing, API change or ledger write
+is involved. No response code or deeper cause is inferred. An eligible UTC
 deadline is not a scheduled request. Proven empty evidence states no recorded
 problems without an empty failure table.
 
@@ -258,6 +272,8 @@ Known-empty complete days need not contain records. Missing files do not
 establish a missing-record count. Input gaps and unattributable days remain
 explicit. Each period sorts by article requests, feed requests, then name;
 unknown values sort last. The request table does not repeat reliability.
+The closing staging note describes input transfer, not complete historical
+day coverage. Missing-day lists apply only to the historical window.
 
 Selection exclusions group routine article decisions by stage and
 plain-English reason, with affected feed counts. They are not a subtractable
@@ -319,6 +335,9 @@ Safe Git delivery and Markdown rendering remain separate functions. One
 standard artifact upload carries selected text, run evidence and any recovery
 files, so consolidation adds no upload dependency. Cleanup follows confirmed
 delivery instead of discarding the only recoverable copy.
+The report-only native evidence reader keeps file verification separate from
+Markdown layout. It reuses the existing Parquet and bounded health readers,
+so exact response evidence needs no new state store or API control.
 
 ## See also
 

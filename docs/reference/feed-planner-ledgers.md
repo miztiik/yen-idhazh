@@ -625,6 +625,14 @@ partitioning or selected-output persistence later fails; see the
 [write timing and process-loss limit](../architecture/sources/feed-harvesting.md#work-facts-and-failures).
 Feed-health counters
 remain grouped and never count these detail rows again.
+The workflow report verifies the current run's named rejection files and uses
+these fields in Needs attention. Terminal execution/candidate identities are
+counted once, and their detail replaces covered health aggregates rather than
+adding a second article count. Article and robots response codes stay separate.
+Earlier pause explanations use validated staged health checks, not rejection
+rows or parsed job logs; see the
+[report evidence rules](../how-to/run-feed-ingest-plan-test.md#saved-output-and-failures).
+Reporting changes no API shape, ledger columns, schemas or stored bytes.
 Repeated writes of an identical raw rejection batch use the same physical
 file identity and verify that existing file before reusing it. Other planner
 ledgers keep their existing file identities.

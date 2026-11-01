@@ -85,8 +85,7 @@ test("both report modes leave the recorded result and every native file unchange
     const report = renderWorkflowPlanMarkdown(evidence);
     expect(await readFile(summary, "utf8")).toBe(report.markdown);
     expect(annotations).toEqual(report.notices.map(formatWorkflowAnnotation));
-    const directory = join(fixture.directory, "evidence");
-    await mkdir(directory);
+    const directory = fixture.directory;
     await writeFile(join(directory, "response.json"), JSON.stringify(response));
     await writeFile(join(directory, "health.json"), JSON.stringify(health));
     await writeFile(join(directory, "workflow-policy.json"), JSON.stringify(evidence.policy));

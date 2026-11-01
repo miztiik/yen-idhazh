@@ -13,9 +13,12 @@ import type { PlannerMarkdown } from "../src/reporting";
 import { formatHostFingerprintSummary } from "./feed-ingest-plan-host-summary";
 import { formatPolicyTable } from "./feed-ingest-plan-policy-report";
 import { formatWorkflowAnnotation } from "./feed-ingest-plan-report-format";
+import { readReportFailureEvidence } from "./feed-ingest-plan-report-evidence";
+import type { ReportFailureEvidence } from "../src/reporting/failure-evidence-markdown";
 
 export type WorkflowReportEvidence = {
   response: unknown; health?: unknown; policy?: unknown; host?: unknown;
+  failures?: ReportFailureEvidence;
 };
 
 export function renderWorkflowPlanMarkdown(
@@ -28,6 +31,7 @@ export function renderWorkflowPlanMarkdown(
     response, health: input.health, policy: { markdown: policy.summary, notice: policy.notice },
     host: { markdown: host.cells, notice: host.notice },
     maximum: policy.maximum,
+    ...(input.failures === undefined ? {} : { failures: input.failures }),
   });
 }
 
@@ -56,7 +60,7 @@ export async function writePlannerReport(input: {
   return { status: "written" as const, annotations: report.notices.length, markdown: report.markdown };
 }
 
-export async function readExecutionEvidence(directory: string): Promise<WorkflowReportEvidence> {
+export async function readExecutionEvidence(directory: string, root?: string): Promise<WorkflowReportEvidence> {
   const response: unknown = JSON.parse(await readFile(join(directory, "response.json"), "utf8"));
   const evidence: WorkflowReportEvidence = { response };
   for (const [key, name] of [
@@ -66,6 +70,9 @@ export async function readExecutionEvidence(directory: string): Promise<Workflow
     const file = Bun.file(join(directory, name));
     if (await file.exists()) evidence[key] = await file.json();
   }
+  evidence.failures = await readReportFailureEvidence({
+    directory, ...(root === undefined ? {} : { root }), response, health: evidence.health,
+  });
   return evidence;
 }
 
@@ -83,7 +90,7 @@ export async function writeWorkflowReport(input: {
   let report: PlannerMarkdown;
   let diagnostics = "";
   if (await Bun.file(join(input.directory, "response.json")).exists()) {
-    const evidence = await readExecutionEvidence(input.directory);
+    const evidence = await readExecutionEvidence(input.directory, input.root);
     report = renderWorkflowPlanMarkdown(evidence);
     if (evidence.health !== undefined) {
       diagnostics = renderExclusionDiagnostics(FeedHealthStateUpdateResponseSchema.parse(evidence.health).rows);
