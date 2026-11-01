@@ -6,6 +6,8 @@ const encoded = new Map([
   ["gzip", gzipSync(payload)], ["br", brotliCompressSync(payload)], ["deflate", deflateSync(payload)],
 ]);
 let stopping = false;
+const timeoutMs = Number(process.argv[2]);
+if (!Number.isSafeInteger(timeoutMs) || timeoutMs <= 0) throw new Error("Generated source needs a positive timeout");
 const server = createServer((request, response) => {
   const path = new URL(request.url, "http://127.0.0.1").pathname.slice(1);
   process.send({ agent: request.headers["user-agent"] ?? "" });
@@ -34,13 +36,21 @@ const server = createServer((request, response) => {
     response.end("followed");
     return;
   }
-  if (path === "stalled" || path.startsWith("native-control-") || path === "cutoff" || path === "reference") {
+  if (path === "stalled" || path === "body-timeout" || path === "cutoff" || path === "reference") {
+    let timer;
     response.once("close", () => {
+      clearTimeout(timer);
       if (!stopping) process.send({ closed: path });
     });
     response.writeHead(403, { "content-type": "text/html" });
     response.flushHeaders();
     response.write(new Uint8Array(16384));
+    if (path === "body-timeout") {
+      timer = setTimeout(() => {
+        response.write(new Uint8Array(16384));
+        process.send({ continued: path });
+      }, timeoutMs + 250);
+    }
     return;
   }
   const body = encoded.get(path) ?? payload;

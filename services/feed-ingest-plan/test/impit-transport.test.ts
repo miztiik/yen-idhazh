@@ -6,19 +6,21 @@ import { once } from "node:events";
 import { createConnection } from "node:net";
 import { createImpitTransport } from "../src/harvest-feeds/impit-transport";
 import { BodyLimitError, ResponseReadError } from "../src/harvest-feeds/transport";
-import { Impit, TimeoutError } from "impit";
+import { TimeoutError } from "impit";
 import { inputs } from "./harvest-recordings";
 
 test("native profiles decode compressed bodies and retain status at cutoff and cancellation", async () => {
-  const loaded = await inputs();
+  const configured = await Bun.file(new URL("../../../config/feed-ingest-plan.json", import.meta.url)).json();
+  const loaded = await inputs(undefined, { harvest: { fetch_timeout_ms: configured.harvest.fetch_timeout_ms } });
   const payload = Buffer.from("generated response ".repeat(300));
   let followed = 0;
   const agents: string[] = [];
   const cancellations = new Map<string, () => void>();
   const arrivals = new Map<string, () => void>();
   const closed = new Map<string, number>();
+  const continued = new Set<string>();
   const retryAfter = "1".repeat(300);
-  const server = fork(join(import.meta.dir, "impit-loopback-source.cjs"), [], {
+  const server = fork(join(import.meta.dir, "impit-loopback-source.cjs"), [String(loaded.config.harvest.fetch_timeout_ms)], {
     execPath: "node", stdio: ["ignore", "ignore", "inherit", "ipc"],
   });
   const port = await new Promise<number>((resolve, reject) => {
@@ -30,6 +32,7 @@ test("native profiles decode compressed bodies and retain status at cutoff and c
       else if ("agent" in message && typeof message.agent === "string") agents.push(message.agent);
       else if ("followed" in message && message.followed === true) followed++;
       else if ("received" in message && typeof message.received === "string") arrivals.get(message.received)?.();
+      else if ("continued" in message && typeof message.continued === "string") continued.add(message.continued);
       else if ("closed" in message && typeof message.closed === "string") {
         closed.set(message.closed, performance.now());
         cancellations.get(message.closed)?.();
@@ -96,41 +99,6 @@ test("native profiles decode compressed bodies and retain status at cutoff and c
       expect(error.cause).toBeInstanceOf(BodyLimitError);
     }
     await cancelled("cutoff");
-    {
-      const path = "native-control-direct";
-      const nativeController = new AbortController();
-      const native = new Impit({ browser: base.profile.browser, followRedirects: false });
-      const started = performance.now();
-      const nativeResponse = await native.fetch(target(path), {
-        signal: nativeController.signal, timeout: base.timeout_ms, redirect: "manual",
-      });
-      const nativeReader = nativeResponse.body.getReader();
-      const nativeReading = (async () => {
-        for (;;) {
-          if ((await nativeReader.read()).done) return;
-        }
-      })();
-      const timer = setTimeout(() => nativeController.abort(), 300);
-      try { await expect(nativeReading).rejects.toBeInstanceOf(Error); }
-      finally { clearTimeout(timer); nativeReader.releaseLock(); }
-      const rejectedAfterMs = performance.now() - started;
-      try { await cancelled(path); }
-      catch (oracleError) {
-        const closure = new Promise<void>(resolve => cancellations.set(path, resolve));
-        let deadline: ReturnType<typeof setTimeout> | undefined;
-        try {
-          if (!closed.has(path)) await Promise.race([closure, new Promise<void>(resolve => {
-            deadline = setTimeout(resolve, Math.max(0, base.timeout_ms + 1000 - (performance.now() - started)));
-          })]);
-          const closedAt = closed.get(path);
-          console.info(JSON.stringify({ control: path, native_timeout_ms: base.timeout_ms,
-            read_rejected_after_ms: rejectedAfterMs,
-            source_closed_after_ms: closedAt === undefined ? null : closedAt - started,
-            observed_until_ms: performance.now() - started }));
-        } finally { clearTimeout(deadline); cancellations.delete(path); }
-        throw oracleError;
-      }
-    }
     const controller = new AbortController();
     const stalled = transport.request({ ...base, max_body_bytes: 32768, url: target("stalled"), signal: controller.signal });
     const timer = setTimeout(() => controller.abort(), 300);
@@ -170,6 +138,28 @@ test("native profiles decode compressed bodies and retain status at cutoff and c
     await expect(transport.request({ ...base, url: target("no-headers"), timeout_ms: 200 }))
       .rejects.toBeInstanceOf(TimeoutError);
     await cancelled("no-headers");
+    const started = performance.now();
+    try {
+      await transport.request({ ...base, url: target("body-timeout"), max_body_bytes: 32768 });
+      throw new Error("An unfinished body must fail at the native request deadline");
+    } catch (error) {
+      expect(error).toBeInstanceOf(ResponseReadError);
+      if (!(error instanceof ResponseReadError)) throw error;
+      const primary = error.cause instanceof AggregateError ? error.cause.cause : error.cause;
+      expect(primary).toBeInstanceOf(TimeoutError);
+      expect(error.http_status).toBe(403);
+      expect(error.response_evidence.decoded_bytes).toBe(16384);
+    }
+    const rejectedAfterMs = performance.now() - started;
+    try { await cancelled("body-timeout"); }
+    catch (oracleError) {
+      const closedAt = closed.get("body-timeout");
+      console.info(JSON.stringify({ control: "body-timeout", native_timeout_ms: base.timeout_ms,
+        read_rejected_after_ms: rejectedAfterMs, source_wrote_after_timeout: continued.has("body-timeout"),
+        source_closed_after_ms: closedAt === undefined ? null : closedAt - started,
+        observed_until_ms: performance.now() - started }));
+      throw oracleError;
+    }
   } finally {
     const exited = once(server, "exit");
     server.send("stop");
