@@ -33,3 +33,17 @@ test("native exception types classify failures without inventing message-derived
   const unknown = new Error("unrecognized local failure");
   expect(() => classifyTransportFailure(unknown, signal)).toThrow(unknown);
 });
+
+test("response disposal keeps native timeout and its separate cleanup failure", () => {
+  const evidence = HttpResponseEvidenceSchema.parse({
+    content_type: "text/html", decoded_bytes: 0, declared_content_length: null,
+    selected_headers: {}, headers_truncated: [], request_profile: "firefox",
+  });
+  const primary = new ConnectTimeout("native timeout");
+  const cleanup = Object.assign(new Error("OS cleanup failure"), { code: "ECANCELED" });
+  const combined = new AggregateError([primary, cleanup], "Response cleanup failed", { cause: primary });
+  const wrapped = new ResponseReadError(403, evidence, combined);
+  expect(classifyTransportFailure(wrapped, new AbortController().signal)).toBe("timeout");
+  expect(readTransportErrorCode(wrapped)).toBe("ECANCELED");
+  expect(combined.errors).toEqual([primary, cleanup]);
+});

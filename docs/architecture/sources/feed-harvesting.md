@@ -235,8 +235,9 @@ Before headers arrive, Impit has no supported immediate native cancellation
 API. The request keeps ownership until headers arrive or that native timeout
 expires; early cancellation can wait up to the attempt budget plus settlement
 overhead. It never returns early while that native request remains active.
-After headers arrive, a cancelled caller first cancels the decoded response
-stream. Otherwise caller cancellation forwards to the owned native signal.
+After headers arrive, caller cancellation first cancels the decoded response
+stream, waits for disposal and then aborts the owned native signal. Sending
+the native abort first can error a stream before its cancellation disposes it.
 The existing application deadline still bounds response reading.
 Aborting the request stops a decoded-byte cutoff or failed body read without
 letting cleanup replace its observed status and byte count.

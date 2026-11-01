@@ -10,7 +10,8 @@ import { InvalidArticleUrlError } from "./article-url";
 export function classifyTransportFailure(error: unknown, signal: AbortSignal): FetchFailure {
   if (readBodyLimitEvidence(error) !== undefined) return "body-too-large";
   if (error instanceof ResponseReadError) {
-    return signal.aborted || error.cause instanceof TimeoutError ? "timeout" : "network";
+    const primary = error.cause instanceof AggregateError ? error.cause.cause : error.cause;
+    return signal.aborted || primary instanceof TimeoutError ? "timeout" : "network";
   }
   if (error instanceof UnsafeTargetError || error instanceof InvalidArticleUrlError) return "unsafe-target";
   if (signal.aborted || error instanceof TimeoutError) return "timeout";
@@ -26,7 +27,8 @@ export function classifyTransportFailure(error: unknown, signal: AbortSignal): F
 
 export function readTransportErrorCode(error: unknown): string | null {
   let cause = error instanceof ResponseReadError ? error.cause : error;
-  if (cause instanceof AggregateError && cause.cause instanceof BodyLimitError) cause = cause.errors[1];
+  if (cause instanceof AggregateError && cause.errors.length === 2
+    && (cause.cause instanceof BodyLimitError || cause.cause === cause.errors[0])) cause = cause.errors[1];
   if (cause instanceof Error && cause.cause instanceof Error) cause = cause.cause;
   if (cause && typeof cause === "object" && "code" in cause && typeof cause.code === "string") {
     if (!(cause.code in osConstants.errno)

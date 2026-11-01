@@ -2,7 +2,7 @@
 import { Impit } from "impit";
 import { HttpResponseEvidenceSchema } from "@idhazh/common-contracts";
 import type { HttpResponseEvidence } from "@idhazh/common-contracts";
-import { BodyLimitError, ResponseReadError } from "./transport";
+import { BodyLimitError, ResponseReadError, readBodyLimitEvidence } from "./transport";
 import type { HarvestTransport, TransportRequest } from "./transport";
 
 export function responseEvidence(
@@ -40,7 +40,6 @@ export function createImpitTransport(): HarvestTransport {
         clients.set(key, client);
       }
       const controller = new AbortController();
-      const abort = () => controller.abort(input.signal.reason);
       try {
         const response = await client.fetch(input.url, {
           signal: controller.signal, redirect: "manual", timeout: input.timeout_ms,
@@ -49,6 +48,14 @@ export function createImpitTransport(): HarvestTransport {
         const reader = response.body.getReader();
         const chunks: Uint8Array[] = [];
         let bytes = 0;
+        let cancellation: Promise<void> | undefined;
+        const abort = () => {
+          cancellation ??= reader.cancel();
+          void cancellation.then(
+            () => controller.abort(input.signal.reason),
+            () => controller.abort(input.signal.reason),
+          );
+        };
         try {
           if (input.signal.aborted) {
             try { await reader.cancel(); }
@@ -62,6 +69,7 @@ export function createImpitTransport(): HarvestTransport {
           for (;;) {
             input.signal.throwIfAborted();
             const chunk = await reader.read();
+            input.signal.throwIfAborted();
             if (chunk.done) break;
             bytes += chunk.value.byteLength;
             evidence = { ...evidence, decoded_bytes: bytes };
@@ -77,6 +85,16 @@ export function createImpitTransport(): HarvestTransport {
           return { status: response.status, body: Buffer.concat(chunks, bytes).toString("utf8"),
             location: response.headers.get("location"), evidence };
         } catch (error) {
+          const cleanup = cancellation ?? (readBodyLimitEvidence(error) === undefined ? reader.cancel() : undefined);
+          if (cleanup !== undefined) {
+            try { await cleanup; }
+            catch (cleanup) {
+              throw new ResponseReadError(response.status, evidence,
+                new AggregateError([error, cleanup], "Response cleanup failed", {
+                  cause: error instanceof AggregateError && error.cause instanceof BodyLimitError ? error.cause : error,
+                }));
+            }
+          }
           throw new ResponseReadError(response.status, evidence, error);
         } finally {
           input.signal.removeEventListener("abort", abort);
