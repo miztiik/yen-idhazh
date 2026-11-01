@@ -31,7 +31,7 @@ export const ServiceSettingsSchema = z.strictObject({
   ),
   removal_condition: NonEmptySchema,
   dump_raw_document_contents: z.boolean().default(false).describe(
-    "Append failed raw documents only to the optional private diagnostic artifact.",
+    "Append body-free failed-document metadata only to the optional private diagnostic artifact.",
   ),
   listener: z.strictObject({
     hostname: NonEmptySchema, port: PositiveCountSchema.max(65535),

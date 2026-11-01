@@ -68,7 +68,7 @@ async function runRecordingAt(root: string) {
   harvest.config.partition.enabled = false;
   const transport = new RecordedTransport(recordings);
   const runtime: PlanRuntime = { git_sha: "a".repeat(40), run_number: "7300", clock: () => new Date(now),
-    observation_clock: () => new Date(now), boundary: { transport, resolve: transport.resolve } };
+    observation_clock: () => new Date(now), boundary: { transport } };
   const key = (url: string) => deriveArticleIdentity(url, harvest.config.harvest).url_key;
   const discovery = { url_key: key("https://news.example/second"), first_seen_at: `${prior}T10:00:00Z`, date: prior };
   const seed = FeedHealthStateRowContract.schema.parse(

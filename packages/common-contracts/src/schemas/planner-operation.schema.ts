@@ -4,8 +4,9 @@ import { CountSchema, NonEmptySchema, RunIdSchema, Sha256Schema, SlugSchema, Tim
 import { BodyLimitEvidenceSchema, FetchFailureSchema } from "./harvest-diagnostics.schema";
 import { RecordedInstantSchema } from "./recorded-instant.schema";
 import { SourceArticleRefusalReasonSchema } from "./rejection.schema";
+import { HttpResponseEvidenceSchema, RequestProfileSchema } from "./http-response-evidence.schema";
 
-export const OPERATION_VERSION = "2026-10-31" as const;
+export const OPERATION_VERSION = "2026-11-01" as const;
 const OperationVersionSchema = z.literal(OPERATION_VERSION).default(OPERATION_VERSION);
 export const SourceArticleOutcomeSchema = z.strictObject({
   disposition: z.enum(["admitted", "source_refused"]),
@@ -24,8 +25,25 @@ export const FetchAttemptSchema = z.strictObject({
   http_status: z.int().min(100).max(599).nullable(),
   failure: FetchFailureSchema.nullable(),
   error_code: z.string().max(64).regex(/^[A-Z][A-Z0-9_]*$/).nullable(),
+  request_profile: RequestProfileSchema.nullable().default(null),
+  request_url: UrlSchema.nullable().default(null),
+  response_evidence: HttpResponseEvidenceSchema.nullable().default(null),
 });
 export type FetchAttempt = z.infer<typeof FetchAttemptSchema>;
+export const NetworkFailureDetailsSchema = z.strictObject({
+  requested_url: UrlSchema.nullable(), final_attempted_url: UrlSchema.nullable(), failed_url: UrlSchema.nullable(),
+  http_status: FetchAttemptSchema.shape.http_status,
+  request_profile: RequestProfileSchema.nullable(),
+  response_evidence: HttpResponseEvidenceSchema.nullable(),
+  robots_response_evidence: HttpResponseEvidenceSchema.nullable(),
+  robots_http_status: FetchAttemptSchema.shape.http_status,
+  robots_failure: FetchFailureSchema.nullable(),
+  attempt: FetchAttemptSchema.nullable(),
+}).meta({
+  version: OPERATION_VERSION,
+  changelog: [{ version: OPERATION_VERSION, change: "Validate body-free failure details separately from flexible log fields." }],
+});
+export type NetworkFailureDetails = z.infer<typeof NetworkFailureDetailsSchema>;
 export const PlannerObservationSchema = z.strictObject({
   event_id: z.uuid({ version: "v5" }), caused_by_event_id: z.uuid({ version: "v5" }).nullable(),
   correlation_id: NonEmptySchema, run_id: RunIdSchema, article_id: Sha256Schema,
@@ -40,6 +58,15 @@ export const FetchedDocumentSchema = z.strictObject({
   error_code: FetchAttemptSchema.shape.error_code, robots_failure: FetchFailureSchema.nullable(),
   robots_http_status: z.int().min(100).max(599).nullable(),
   body_limit: BodyLimitEvidenceSchema.nullable().default(null),
+  response_evidence: HttpResponseEvidenceSchema.nullable().default(null),
+  robots_response_evidence: HttpResponseEvidenceSchema.nullable().default(null),
+  requested_url: UrlSchema.nullable().default(null),
+  final_attempted_url: UrlSchema.nullable().default(null),
+  failed_url: UrlSchema.nullable().default(null),
+  redirects: z.array(z.strictObject({
+    request_url: UrlSchema.nullable(), destination_url: UrlSchema.nullable(),
+    http_status: z.int().min(300).max(399),
+  })).default([]),
   attempts: z.array(FetchAttemptSchema), observation: PlannerObservationSchema,
   attempt_observations: z.array(PlannerObservationSchema), body_sha256: Sha256Schema.nullable(),
   parent_fetch_request_id: RequestIdSchema.nullable().default(null),
@@ -72,11 +99,11 @@ export const FetchedDocumentSchema = z.strictObject({
 }).meta({
   version: OPERATION_VERSION,
   changelog: [
+    { version: OPERATION_VERSION, change: "Add native response, profile and safe request-address evidence." },
     { version: OPERATION_VERSION, change: "Require current fetched documents without older-format readers." },
     { version: "2026-10-30", change: "Retain configured response limits and observed cutoff bytes." },
     { version: "2026-10-29", change: "Identify shared query-free article captures." },
-    { version: "2026-10-28", change: "Rename fetched document and observation feed identity from source_id to feed_id." },
-    { version: "2026-10-27", change: "Name the fetched item type and refuse older fetch artifacts." },
+    { version: "2026-10-28", change: "Earlier changes are in this file's Git history." },
   ],
 });
 export type FetchedDocument = z.infer<typeof FetchedDocumentSchema>;

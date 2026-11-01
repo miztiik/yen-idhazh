@@ -6,6 +6,7 @@ import {
 import {
   FeedCurationPolicySchema, FeedScreeningPolicySchema,
 } from "./policy.schema";
+import { RequestProfileSchema, ResponseDiagnosticsConfigSchema } from "./http-response-evidence.schema";
 
 export const FeedUrlExclusionSchema = z.strictObject({
   host: z.hostname(),
@@ -43,20 +44,13 @@ export const FeedContentFiltersConfigSchema = z.strictObject({
   press_release: FeedPressReleaseFilterSchema,
   link_heavy: FeedLinkHeavyFilterSchema,
 });
-// Navigation metadata cannot replace request authority, credentials or crawler identity.
-const browserHeaderNames = new Set([
-  "user-agent", "accept", "accept-language", "sec-ch-ua", "sec-ch-ua-mobile", "sec-ch-ua-platform",
-  "sec-fetch-dest", "sec-fetch-mode", "sec-fetch-site", "sec-fetch-user", "upgrade-insecure-requests",
-]);
-const BrowserHeadersSchema = z.record(z.string(), NonEmptySchema.regex(/^[\x20-\x7e]+$/)).superRefine((headers, ctx) => {
-  if (!Object.keys(headers).length) reject(ctx, "a browser header profile must not be empty");
-  for (const name of Object.keys(headers)) {
-    if (!browserHeaderNames.has(name)) reject(ctx, "unsupported browser header", [name]);
-  }
+const BrowserProfileSchema = z.strictObject({
+  browser: RequestProfileSchema,
+  headers: z.partialRecord(z.enum(["accept", "accept-language"]), NonEmptySchema.regex(/^[\x20-\x7e]+$/)),
 });
 export const FeedRequestHeadersSchema = z.strictObject({
-  primary: BrowserHeadersSchema,
-  secondary: BrowserHeadersSchema.nullable(),
+  primary: BrowserProfileSchema,
+  secondary: BrowserProfileSchema.nullable(),
   recoverable_http_statuses: z.array(z.int().min(400).max(599)),
   recovery_min_body_bytes: z.int().nonnegative(),
 }).superRefine((value, ctx) => {
@@ -88,8 +82,8 @@ export const FeedHarvestConfigSchema = z.strictObject({
   tidy_urls: z.boolean().describe(
     "Apply additional article cleanup before removing all queries and fragments. Remove this switch and the disabled path when additional cleanup becomes mandatory.",
   ),
-  user_agent: NonEmptySchema,
   request_headers: FeedRequestHeadersSchema,
+  response_diagnostics: ResponseDiagnosticsConfigSchema,
   semantic_fallback: FeedSemanticFallbackConfigSchema,
   blocked_categories: z.array(NonEmptySchema),
   url_exclusions: z.array(FeedUrlExclusionSchema),
@@ -177,7 +171,7 @@ export const FeedLifecyclePolicySchema = z.strictObject({
 });
 export type FeedLifecyclePolicy = z.infer<typeof FeedLifecyclePolicySchema>;
 export const FeedIngestConfigSchema = z.strictObject({
-  version: z.literal("2026-10-31"),
+  version: z.literal("2026-11-01"),
   availability: FeedLifecyclePolicySchema,
   harvest: FeedHarvestConfigSchema,
   content_filters: FeedContentFiltersConfigSchema,
@@ -192,6 +186,9 @@ export const FeedIngestConfigSchema = z.strictObject({
   ).meta({
     default: {}, type: "object", additionalProperties: false,
   }),
+}).meta({
+  version: "2026-11-01",
+  changelog: [{ version: "2026-11-01", change: "Use native browser profiles and configured safe response headers." }],
 });
 
 export type FeedIngestConfig = z.infer<typeof FeedIngestConfigSchema>;

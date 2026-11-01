@@ -1,14 +1,16 @@
 /** Fetch safe targets while retaining robots evidence and honoring article enforcement. */
 import robotsParser from "robots-parser";
 import { constants as osConstants } from "node:os";
-import { HarvestDiagnosticsSchema } from "@idhazh/common-contracts";
-import type { FeedIngestConfig } from "@idhazh/common-contracts";
+import { HarvestDiagnosticsSchema, FetchAttemptSchema } from "@idhazh/common-contracts";
+import type { FeedIngestConfig, HttpResponseEvidence } from "@idhazh/common-contracts";
+import { NetworkError, TimeoutError, DecodingError, ProtocolError, StreamError } from "impit";
 import type { FetchFailure } from "./harvest-types";
 import type { ExtractionControls } from "./load-harvest-inputs";
-import { BodyLimitError, ResponseReadError, networkTransport } from "./transport";
+import { BodyLimitError, ResponseReadError } from "./transport";
+import { createImpitTransport } from "./impit-transport";
 import type { BodyLimitEvidence, HarvestTransport, TransportResponse } from "./transport";
-import { UnsafeTargetError, resolveAddresses, validateTarget, validateTargetName } from "./safe-target";
-import type { ResolveAddresses } from "./safe-target";
+import { UnsafeTargetError, validateTargetName } from "./safe-target";
+import { diagnosticUrl } from "../logging/diagnostic-url";
 import type { FetchAttempt } from "../api/operation-contracts";
 import { utcTimestamp } from "./harvest-types";
 import { cleanArticleUrl } from "./article-url";
@@ -17,9 +19,11 @@ import { InvalidArticleUrlError } from "./article-url";
 export type FetchAttemptMeasurement = {
   attempt: FetchAttempt; occurred_at: string; outcome: "success" | "failed";
   dispatched_request_count: number; request_coverage: "complete";
+  final_attempted_url: string | null;
 };
 type AttemptCapture = {
-  rows: FetchAttempt[]; emit?: (measurement: FetchAttemptMeasurement) => Promise<void>;
+  rows: FetchAttempt[]; final_attempted_url: string | null;
+  emit?: (measurement: FetchAttemptMeasurement) => Promise<void>;
 };
 
 export type FetchResult = {
@@ -33,16 +37,25 @@ export type FetchResult = {
   attempts?: FetchAttempt[];
   body_limit?: BodyLimitEvidence | null;
   final_attempted_url?: string | null;
+  requested_url?: string | null;
+  failed_url?: string | null;
+  response_evidence?: HttpResponseEvidence | null;
+  robots_response_evidence?: HttpResponseEvidence | null;
+  redirects?: { request_url: string | null; destination_url: string | null; http_status: number }[];
 };
 type RawResult = {
   response: TransportResponse | null; failure: FetchFailure | null; http_status: number | null;
   error_code?: string | null; body_limit?: BodyLimitEvidence;
+  response_evidence?: HttpResponseEvidence | null;
+  failed_url?: string | null;
 };
 type TargetResult = RawResult & { retained_response?: TransportResponse };
 type RobotDocument = ReturnType<typeof robotsParser> | null;
 type RobotResult = {
   document: RobotDocument; failure: FetchFailure | null; http_status: number | null;
   error_code?: string | null; body_limit?: BodyLimitEvidence;
+  response_evidence?: HttpResponseEvidence | null;
+  failed_url?: string | null;
 };
 export type PermittedFetcher = ReturnType<typeof createPermittedFetcher>;
 export const retryableStatus = new Set([408, 425, 429, 500, 502, 503, 504]);
@@ -55,31 +68,29 @@ function decodeUnreserved(value: string): string {
   });
 }
 
-export function crawlerProduct(userAgent: string): string {
-  // The configured planner identifies its product inside the standard compatible wrapper.
-  const product = /compatible;\s*([a-z0-9_-]+)/i.exec(userAgent)?.[1]
-    ?? /^([a-z0-9_-]+)/i.exec(userAgent)?.[1];
-  if (!product || /[\r\n]/.test(userAgent)) throw new Error("harvest.user_agent must name a crawler product");
-  return product;
-}
-
 export function parseRobots(body: string, origin: string) {
   return robotsParser(`${origin}/robots.txt`, decodeUnreserved(body));
 }
 
-export function robotsPermits(document: ReturnType<typeof parseRobots>, url: string, userAgent: string): boolean {
-  return document.isAllowed(decodeUnreserved(url), crawlerProduct(userAgent)) === true;
+export function robotsPermits(document: ReturnType<typeof parseRobots>, url: string): boolean {
+  return document.isAllowed(decodeUnreserved(url), "*") === true;
 }
 
 function transportFailure(error: unknown, signal: AbortSignal): FetchFailure {
-  if (error instanceof ResponseReadError) return transportFailure(error.cause, signal);
+  if (error instanceof ResponseReadError) {
+    if (signal.aborted || error.cause instanceof TimeoutError) return "timeout";
+    return error.cause instanceof BodyLimitError ? "body-too-large" : "network";
+  }
   if (error instanceof UnsafeTargetError || error instanceof InvalidArticleUrlError) return "unsafe-target";
   if (signal.aborted) return "timeout";
   if (error instanceof BodyLimitError) return "body-too-large";
+  if (error instanceof TimeoutError) return "timeout";
+  if (error instanceof NetworkError || error instanceof ProtocolError || error instanceof DecodingError
+    || error instanceof StreamError) return "network";
   const cause = error instanceof Error && error.cause instanceof Error ? error.cause : error;
   if (cause && typeof cause === "object" && "code" in cause && typeof cause.code === "string") {
     if (["ENOTFOUND", "EAI_AGAIN", "ENODATA"].includes(cause.code)) return "dns";
-    if (["ETIMEDOUT", "UND_ERR_CONNECT_TIMEOUT", "UND_ERR_HEADERS_TIMEOUT", "UND_ERR_BODY_TIMEOUT"].includes(cause.code)) return "timeout";
+    if (cause.code === "ETIMEDOUT") return "timeout";
     return "network";
   }
   throw error;
@@ -87,11 +98,11 @@ function transportFailure(error: unknown, signal: AbortSignal): FetchFailure {
 
 function transportErrorCode(error: unknown): string | null {
   const cause = error instanceof Error && error.cause instanceof Error ? error.cause : error;
-  // OS, TLS and Undici protocol codes only; exception messages can contain addresses or credentials.
+  // Available OS/TLS codes only; native exception messages may contain secrets.
   if (cause && typeof cause === "object" && "code" in cause && typeof cause.code === "string") {
     if (!(cause.code in osConstants.errno)
       && !["ENOTFOUND", "EAI_AGAIN", "ENODATA"].includes(cause.code)
-      && !/^(UND_ERR_|ERR_TLS_|ERR_SSL_|CERT_|DEPTH_|SELF_SIGNED_|UNABLE_TO_)/.test(cause.code)) return null;
+      && !/^(ERR_TLS_|ERR_SSL_|CERT_|DEPTH_|SELF_SIGNED_|UNABLE_TO_)/.test(cause.code)) return null;
     const parsed = HarvestDiagnosticsSchema.shape.error_code.safeParse(cause.code);
     if (parsed.success) return parsed.data;
   }
@@ -120,53 +131,37 @@ async function pause(milliseconds: number, signal: AbortSignal): Promise<void> {
 
 export function createPermittedFetcher(
   config: FeedIngestConfig["harvest"], controls: ExtractionControls,
-  boundary: { transport?: HarvestTransport; resolve?: ResolveAddresses } = {},
+  boundary: { transport?: HarvestTransport } = {},
   clock: () => Date = () => new Date(),
 ) {
-  const product = crawlerProduct(config.user_agent);
-  const transport = boundary.transport ?? networkTransport;
-  const resolve = boundary.resolve ?? resolveAddresses;
+  const transport = boundary.transport ?? createImpitTransport();
   const documents = new Map<string, Promise<RobotResult>>();
 
-  function userAgentFor(headers: Readonly<Record<string, string>>): string {
-    const userAgent = headers["user-agent"] ? `${config.user_agent} ${headers["user-agent"]}` : config.user_agent;
-    if (crawlerProduct(userAgent) !== product) {
-      throw new Error("harvest.request_headers must preserve the configured crawler product");
-    }
-    return userAgent;
-  }
-  userAgentFor(config.request_headers.primary);
-  if (config.request_headers.secondary !== null) userAgentFor(config.request_headers.secondary);
-
   async function requestOnce(
-    raw: string, headers: Readonly<Record<string, string>>, signal: AbortSignal, dispatched: () => void,
+    raw: string, profile: FeedIngestConfig["harvest"]["request_headers"]["primary"], signal: AbortSignal, dispatched: () => void,
   ): Promise<TransportResponse> {
-    const { url, addresses } = await validateTarget(raw, resolve, signal);
+    const url = validateTargetName(raw);
     signal.throwIfAborted();
-    const user_agent = userAgentFor(headers);
     dispatched();
-    const response = await transport.request({
-      url, addresses, headers: { ...headers, "user-agent": user_agent }, signal, user_agent,
+    return transport.request({
+      url, profile, diagnostics: config.response_diagnostics, signal,
       max_body_bytes: controls.max_body_bytes,
     });
-    const observedBytes = Buffer.byteLength(response.body, "utf8");
-    if (observedBytes > controls.max_body_bytes) {
-      throw new BodyLimitError(response.status, controls.max_body_bytes, observedBytes);
-    }
-    return response;
   }
 
   async function retry<T>(
     signal: AbortSignal, phase: FetchAttempt["phase"], attempts: AttemptCapture,
     execute: (signal: AbortSignal, dispatched: () => void) => Promise<T>, status: (value: T) => number | null,
+    request?: { url: string; profile: FeedIngestConfig["harvest"]["request_headers"]["primary"];
+      evidence: (value: T) => HttpResponseEvidence },
   ): Promise<{
     value: T | null; failure: FetchFailure | null; http_status: number | null;
-    error_code: string | null; body_limit?: BodyLimitEvidence;
+    error_code: string | null; body_limit?: BodyLimitEvidence; response_evidence?: HttpResponseEvidence | null;
   }> {
     const loopStarted = performance.now();
     let result: {
       value: T | null; failure: FetchFailure | null; http_status: number | null;
-      error_code: string | null; body_limit?: BodyLimitEvidence;
+      error_code: string | null; body_limit?: BodyLimitEvidence; response_evidence?: HttpResponseEvidence | null;
     } = {
       value: null, failure: "network", http_status: null, error_code: null,
     };
@@ -183,7 +178,8 @@ export function createPermittedFetcher(
       try {
         const value = await execute(attemptSignal, () => { dispatched_request_count++; });
         const http_status = status(value);
-        result = { value, failure: http_status !== null && http_status >= 400 ? "http" : null, http_status, error_code: null };
+        result = { value, failure: http_status !== null && http_status >= 400 ? "http" : null, http_status, error_code: null,
+          response_evidence: request?.evidence(value) ?? null };
         failed = result.failure !== null;
         classified = true;
       } catch (error) {
@@ -192,21 +188,26 @@ export function createPermittedFetcher(
           value: null, failure: transportFailure(error, attemptSignal),
           http_status: error instanceof BodyLimitError || error instanceof ResponseReadError ? error.http_status : null,
           error_code: transportErrorCode(error),
+          response_evidence: error instanceof ResponseReadError || error instanceof BodyLimitError ? error.response_evidence : null,
           ...(bodyLimit === undefined ? {} : { body_limit: bodyLimit }),
         };
         classified = true;
       } finally {
         clearTimeout(timer);
-        evidence = {
+        evidence = FetchAttemptSchema.parse({
           phase, sequence: attempts.rows.length, retry: attempt, duration_ms: Math.round(performance.now() - started),
           backoff_ms: 0, retry_total_ms: attempt === 0 ? 0 : Math.round(started - loopStarted),
           http_status: classified ? result.http_status : null, failure: classified ? result.failure : null,
           error_code: classified ? result.error_code : null,
-        };
+          request_url: dispatched_request_count > 0 && request ? diagnosticUrl(request.url) ?? null : null,
+          request_profile: dispatched_request_count > 0 && request ? request.profile.browser : null,
+          response_evidence: classified ? result.response_evidence ?? null : null,
+        });
         attempts.rows.push(evidence);
         await attempts.emit?.({
           attempt: evidence, occurred_at: utcTimestamp(clock), outcome: failed ? "failed" : "success",
           dispatched_request_count, request_coverage: "complete",
+          final_attempted_url: attempts.final_attempted_url,
         });
       }
       if (result.value !== null && (result.http_status === null || !retryableStatus.has(result.http_status))) return result;
@@ -225,17 +226,19 @@ export function createPermittedFetcher(
 
   async function read(
     raw: string, signal: AbortSignal, phase: "robots" | "target", attempts: AttemptCapture,
-    headers: Readonly<Record<string, string>> = {},
+    profile: FeedIngestConfig["harvest"]["request_headers"]["primary"] = config.request_headers.primary,
     onDispatched?: () => void,
   ): Promise<RawResult> {
     const result = await retry(signal, phase, attempts,
-      (current, dispatched) => requestOnce(raw, headers, current, () => {
+      (current, dispatched) => requestOnce(raw, profile, current, () => {
         dispatched();
         onDispatched?.();
-      }), value => value.status);
+      }), value => value.status, { url: raw, profile, evidence: value => value.evidence });
     return {
       response: result.value, failure: result.failure, http_status: result.http_status,
       error_code: result.error_code,
+      response_evidence: result.response_evidence ?? null,
+      failed_url: result.failure === null ? null : attempts.rows.at(-1)?.request_url ?? null,
       ...(result.body_limit === undefined ? {} : { body_limit: result.body_limit }),
     };
   }
@@ -266,24 +269,30 @@ export function createPermittedFetcher(
   async function readRobots(origin: string, signal: AbortSignal, attempts: AttemptCapture): Promise<RobotResult> {
     let target = `${origin}/robots.txt`;
     let observedStatus: number | null = null;
+    let observedEvidence: HttpResponseEvidence | null = null;
     const visited = new Set<string>();
     for (;;) {
       if (visited.has(target) || signal.aborted) return {
         document: null, failure: signal.aborted ? "timeout" : "redirect-loop", http_status: observedStatus,
+        response_evidence: observedEvidence, failed_url: null,
       };
       visited.add(target);
       const result = await read(target, signal, "robots", attempts);
       const { response } = result;
-      if (!response) return { ...result, document: null, http_status: result.http_status ?? observedStatus };
+      if (!response) return { ...result, document: null, http_status: result.http_status ?? observedStatus,
+        response_evidence: result.response_evidence ?? observedEvidence };
       observedStatus = response.status;
+      observedEvidence = response.evidence;
       if (redirectStatus.has(response.status) && response.location) {
         try { target = new URL(response.location, target).href; }
-        catch { return { document: null, failure: "unsafe-target", http_status: response.status }; }
+        catch { return { document: null, failure: "unsafe-target", http_status: response.status,
+          response_evidence: response.evidence, failed_url: null }; }
         continue;
       }
-      if (response.status >= 200 && response.status < 300) return { document: parseRobots(response.body, origin), failure: null, http_status: response.status };
-      if (response.status >= 400 && response.status < 500 && response.status !== 429) return { document: parseRobots("", origin), failure: null, http_status: response.status };
-      return { document: null, failure: "http", http_status: response.status };
+      if (response.status >= 200 && response.status < 300) return { document: parseRobots(response.body, origin), failure: null, http_status: response.status, response_evidence: response.evidence };
+      if (response.status >= 400 && response.status < 500 && response.status !== 429) return { document: parseRobots("", origin), failure: null, http_status: response.status, response_evidence: response.evidence };
+      return { document: null, failure: "http", http_status: response.status, response_evidence: response.evidence,
+        failed_url: result.failed_url ?? null };
     }
   }
 
@@ -294,18 +303,24 @@ export function createPermittedFetcher(
   ): Promise<FetchResult> {
     let target = raw;
     let observedStatus: number | null = null;
+    let observedEvidence: HttpResponseEvidence | null = null;
     let finalAttemptedUrl: string | null = null;
+    const redirects: NonNullable<FetchResult["redirects"]> = [];
     const withAttemptedUrl = (result: Omit<FetchResult, "final_attempted_url">): FetchResult => ({
-      ...result, final_attempted_url: finalAttemptedUrl,
+      ...result, requested_url: diagnosticUrl(raw) ?? null,
+      final_attempted_url: finalAttemptedUrl === null ? null : diagnosticUrl(finalAttemptedUrl) ?? null,
+      response_evidence: result.response_evidence ?? observedEvidence,
+      failed_url: result.failed_url ?? null,
+      redirects,
     });
     let retained: FetchResult | null = null;
-    let evidence: Pick<FetchResult, "robots" | "robots_failure" | "robots_http_status" | "body_limit"> = { robots: null };
+    let evidence: Pick<FetchResult, "robots" | "robots_failure" | "robots_http_status" | "body_limit" | "robots_response_evidence"> = { robots: null };
     const preserveResponse = (result: FetchResult): FetchResult => retained !== null && result.failure !== null
       && ["http", "dns", "network", "timeout", "redirect-loop"].includes(result.failure) ? retained : result;
     const visited = new Set<string>();
     for (;;) {
       let url: URL;
-      // Syntax is refused without retries; transient initial DNS failures use the same retry policy.
+      // URL validation has no source dispatch and no DNS lookup.
       const started = performance.now();
       try {
         url = kind === "article" ? validateTargetName(cleanArticleUrl(target, config)) : validateTargetName(target);
@@ -313,19 +328,23 @@ export function createPermittedFetcher(
       }
       catch (error) {
         const failure = transportFailure(error, signal);
-        const attempt: FetchAttempt = {
+        const attempt = FetchAttemptSchema.parse({
           phase: "validation", sequence: attempts.rows.length, retry: 0,
           duration_ms: Math.round(performance.now() - started), backoff_ms: 0, retry_total_ms: 0,
           http_status: null, failure, error_code: transportErrorCode(error),
-        };
+        });
         attempts.rows.push(attempt);
         await attempts.emit?.({
           attempt, occurred_at: utcTimestamp(clock), outcome: "failed",
           dispatched_request_count: 0, request_coverage: "complete",
+          final_attempted_url: attempts.final_attempted_url,
         });
         return withAttemptedUrl({ body: null, http_status: observedStatus, failure, ...evidence, error_code: attempt.error_code });
       }
-      const validated = await retry(signal, "validation", attempts, current => validateTarget(target, resolve, current), () => null);
+      const validated = await retry(signal, "validation", attempts, async current => {
+        current.throwIfAborted();
+        return validateTargetName(target);
+      }, () => null);
       if (!validated.value) return withAttemptedUrl(preserveResponse({
         body: null, http_status: observedStatus, failure: validated.failure, ...evidence, error_code: validated.error_code,
       }));
@@ -337,6 +356,7 @@ export function createPermittedFetcher(
       let robotResult: RobotResult;
       try {
         let document = documents.get(url.origin);
+        const ownsRequest = document === undefined;
         if (!document) {
           const controller = new AbortController();
           const timer = setTimeout(() => controller.abort(new DOMException("robots deadline exceeded", "TimeoutError")), robotsAllowance);
@@ -344,7 +364,7 @@ export function createPermittedFetcher(
             .finally(() => clearTimeout(timer));
           documents.set(url.origin, document);
         }
-        robotResult = await waitForRobots(document, robotsSignal);
+        robotResult = ownsRequest ? await document : await waitForRobots(document, robotsSignal);
       } catch (error) {
         if (!robotsSignal.aborted) throw error;
         return withAttemptedUrl({ body: null, http_status: observedStatus, failure: "timeout", ...evidence });
@@ -352,10 +372,11 @@ export function createPermittedFetcher(
       const rules = robotResult.document;
       const robotEvidence = {
         robots_failure: robotResult.failure, robots_http_status: robotResult.http_status,
+        robots_response_evidence: robotResult.response_evidence ?? null,
         ...(robotResult.body_limit === undefined ? {} : { body_limit: robotResult.body_limit }),
       };
       const permission = rules === null ? "unknown"
-        : robotsPermits(rules, url.href, userAgentFor(config.request_headers.primary)) ? "allowed" : "denied";
+        : robotsPermits(rules, url.href) ? "allowed" : "denied";
       if (evidence.robots === null || evidence.robots === "allowed") {
         evidence = { robots: permission, ...robotEvidence };
       }
@@ -363,23 +384,32 @@ export function createPermittedFetcher(
         return withAttemptedUrl({
           body: null, http_status: observedStatus, failure: permission === "denied" ? "robots-denied" : "robots-unknown",
           robots: permission, ...robotEvidence, error_code: robotResult.error_code ?? null,
+          failed_url: permission === "unknown" ? robotResult.failed_url ?? null : null,
         });
       }
-      const result = await readTarget(url.href, signal, attempts, kind, () => { finalAttemptedUrl = url.href; });
+      const result = await readTarget(url.href, signal, attempts, kind, () => {
+        finalAttemptedUrl = url.href;
+        attempts.final_attempted_url = diagnosticUrl(url.href) ?? null;
+      });
       if (result.retained_response !== undefined) retained ??= {
         body: result.retained_response.body, http_status: result.retained_response.status,
-        failure: null, ...evidence,
+        failure: null, ...evidence, response_evidence: result.retained_response.evidence,
       };
       if (!result.response) return withAttemptedUrl(preserveResponse({
         body: null, http_status: result.http_status ?? observedStatus, failure: result.failure,
         ...evidence, error_code: result.error_code ?? null,
+        response_evidence: result.response_evidence ?? null,
+        failed_url: result.failed_url ?? null,
         ...(result.body_limit === undefined ? {} : { body_limit: result.body_limit }),
       }));
       const { response } = result;
       observedStatus = response.status;
+      observedEvidence = response.evidence;
       if (redirectStatus.has(response.status) && response.location) {
         try { target = new URL(response.location, url).href; }
         catch { return withAttemptedUrl({ body: null, http_status: response.status, failure: "unsafe-target", ...evidence }); }
+        redirects.push({ request_url: diagnosticUrl(url.href) ?? null,
+          destination_url: diagnosticUrl(target) ?? null, http_status: response.status });
         continue;
       }
       return withAttemptedUrl(preserveResponse({
@@ -387,6 +417,8 @@ export function createPermittedFetcher(
         http_status: response.status,
         failure: response.status >= 200 && response.status < 300 ? null : "http",
         ...evidence,
+        response_evidence: response.evidence,
+        failed_url: result.failure === null ? null : result.failed_url ?? null,
       }));
     }
   }
@@ -398,7 +430,7 @@ export function createPermittedFetcher(
     const operationSignal = externalSignal === undefined
       ? controller.signal
       : AbortSignal.any([controller.signal, externalSignal]);
-    const attempts: AttemptCapture = { rows: [], ...(emit === undefined ? {} : { emit }) };
+    const attempts: AttemptCapture = { rows: [], final_attempted_url: null, ...(emit === undefined ? {} : { emit }) };
     // Robots uses one retry allowance; target profiles share their own allowance across hops.
     const backoff = Array.from({ length: controls.max_retries }, (_, retry) =>
       controls.backoff_initial_seconds * 1000 * controls.backoff_multiplier ** retry).reduce((sum, value) => sum + value, 0);

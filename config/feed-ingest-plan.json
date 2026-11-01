@@ -1,5 +1,5 @@
 {
-  "version": "2026-10-31",
+  "version": "2026-11-01",
   "availability": {
     "consecutive_failed_checks_before_rest": 5,
     "rest_hours": 24,
@@ -13,32 +13,21 @@
     "parse_timeout_ms": 10000,
     "article_robots_policy": "observe",
     "tidy_urls": true,
-    "user_agent": "Mozilla/5.0 (compatible; YenIdhazhReader/2026.10; +https://github.com/miztiik/yen-idhazh)",
     "request_headers": {
       "primary": {
-        "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
-        "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
-        "accept-language": "en-US,en;q=0.9",
-        "sec-ch-ua": "\"Chromium\";v=\"131\", \"Not_A Brand\";v=\"24\"",
-        "sec-ch-ua-mobile": "?0",
-        "sec-ch-ua-platform": "\"Windows\"",
-        "sec-fetch-dest": "document",
-        "sec-fetch-mode": "navigate",
-        "sec-fetch-site": "none",
-        "sec-fetch-user": "?1",
-        "upgrade-insecure-requests": "1"
+        "browser": "firefox",
+        "headers": {}
       },
       "secondary": {
-        "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 14.7; rv:132.0) Gecko/20100101 Firefox/132.0",
-        "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-        "accept-language": "en-US,en;q=0.5",
-        "sec-fetch-dest": "document",
-        "sec-fetch-mode": "navigate",
-        "sec-fetch-site": "none",
-        "upgrade-insecure-requests": "1"
+        "browser": "chrome",
+        "headers": {}
       },
       "recoverable_http_statuses": [403, 406, 408, 425, 500, 502, 503, 504],
       "recovery_min_body_bytes": 200
+    },
+    "response_diagnostics": {
+      "header_names": ["content-type", "content-length", "retry-after"],
+      "max_header_value_chars": 256
     },
     "semantic_fallback": {
       "content_roots": [

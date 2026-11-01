@@ -240,6 +240,19 @@ The native package command supplies its declared timeout. Keep shorter
 process deadlines and existing independent failure checks; do not raise
 timeouts to retain repeated planning work.
 
+For native source HTTP changes, add
+`test/impit-transport.test.ts` to the service selection. It uses real Impit
+under Bun against generated loopback responses, not live publishers:
+gzip, Brotli and deflate decoding, decoded-byte cutoff, stalled-read
+cancellation, manual redirects and native Firefox/Chrome wire headers.
+Run it on Windows locally and on Linux in merge-candidate CI. Ordinary source
+tests keep their recorded HTTP boundary; they do not access the open web.
+The focused `native_source_transport` CI job runs this oracle on both Linux
+and Windows with committed, frozen dependencies. If a local registry cannot
+install a native patch, CI can prepare and verify its normal manifest and
+generated locks before they enter the branch. Ordinary candidate CI must
+then verify the committed files; a dependency-preparation run is not its verdict.
+
 For planner file-input changes, also run the shared writer's `check` and
 `test/planner-day-files.test.ts`. Combine `file-baseline.test.ts`,
 `raw-day-members.test.ts`, `collection-http.test.ts`, `ledger-history.test.ts`,

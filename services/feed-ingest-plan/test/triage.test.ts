@@ -395,7 +395,7 @@ test("public harvesting observations compose with screening without duplicating 
     ...recorded, writer: { ...recorded.writer, run_id: input.run.run_id }, correlation_id: input.run.correlation_id,
     max_future_hours: input.clock_config.collect.max_future_hours,
     clock: () => new Date(input.run.now), observation_clock: () => new Date(fetchedAt),
-  }, { transport, resolve: transport.resolve });
+  }, { transport });
   const observations = Object.fromEntries(harvested.articles.flatMap(article =>
     article.candidate === null ? [] : [[article.candidate.candidate_id, article.observation]],
   ));

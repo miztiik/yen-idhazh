@@ -17,9 +17,6 @@ import { EXTRACTOR_VERSION, SANITIZER_FINGERPRINT } from "../src/harvest-feeds/e
 import { countWords, measureExtractionQuality } from "../src/harvest-feeds/extraction-quality";
 import { extractSemanticContent } from "../src/harvest-feeds/semantic-extractor";
 import { deriveArticleIdentity, InvalidArticleUrlError } from "../src/harvest-feeds/article-identity";
-import { createPinnedDispatcher, readResponseBody } from "../src/harvest-feeds/transport";
-import { addAbortSignal, PassThrough, Readable } from "node:stream";
-import { createGunzip, gzipSync } from "node:zlib";
 import { RecordedTransport, contentFilterPage, context, inputs, readContentFilters, readRecordings, source } from "./harvest-recordings";
 import { recordHarvestObservations } from "./observation-recordings";
 import { excludeArticleContent } from "../src/screen-article-candidates/content-filters";
@@ -52,39 +49,6 @@ test("publisher reference validation accepts shared, distinct and unknown identi
   expect(() => validatePublisherReferences(publishers, [
     { id: "unreviewed-source", publisher_id: "unlisted-publisher" },
   ])).toThrow("unknown publisher");
-});
-
-test("the live transport owns a real closable pinned dispatcher without opening a connection", async () => {
-  expect(() => createPinnedDispatcher([])).toThrow("no address");
-  const dispatcher = createPinnedDispatcher([{ address: "93.184.216.34", family: 4 }]);
-  expect(typeof dispatcher.dispatch).toBe("function");
-  expect(dispatcher.closed).toBe(false);
-  await dispatcher.close();
-  expect(dispatcher.closed).toBe(true);
-});
-
-test("real response streams enforce decoded byte limits and release an aborted body", async () => {
-  const body = (await readRecordings()).bodies.article;
-  const decoded = Readable.from([gzipSync(body)]).pipe(createGunzip());
-  expect(await readResponseBody(decoded, 200, Buffer.byteLength(body))).toBe(body);
-  const oversized = Readable.from([Buffer.from(body)]);
-  await expect(readResponseBody(oversized, 200, Buffer.byteLength(body) - 1))
-    .rejects.toMatchObject({
-      http_status: 200, configured_limit_bytes: Buffer.byteLength(body) - 1,
-      observed_at_least_bytes: Buffer.byteLength(body),
-    });
-  expect(oversized.destroyed).toBe(true);
-  const cutoff = Readable.from([Buffer.alloc(1024), Buffer.alloc(32), Buffer.alloc(1024)]);
-  await expect(readResponseBody(cutoff, 200, 1024)).rejects.toMatchObject({
-    configured_limit_bytes: 1024, observed_at_least_bytes: 1056,
-  });
-  expect(cutoff.destroyed).toBe(true);
-  const controller = new AbortController();
-  const pending = addAbortSignal(controller.signal, new PassThrough());
-  const reading = readResponseBody(pending, 200, 100);
-  controller.abort();
-  await expect(reading).rejects.toMatchObject({ code: "ABORT_ERR" });
-  expect(pending.destroyed).toBe(true);
 });
 
 test("Feedsmith formats retain categories, author, ordinal and only entry-level UTC timestamps", async () => {
@@ -145,12 +109,11 @@ test("Feedsmith formats retain categories, author, ordinal and only entry-level 
     replay.responses["https://news.example/feed.xml"] = [{ status: 200, body: body.replaceAll("image/jpeg", "video/mp4") }];
     for (const entry of media.slice(1)) if (entry.link !== null) {
       const url = new URL(entry.link);
-      replay.addresses[url.hostname] = [{ address: "93.184.216.34", family: 4 }];
       replay.responses[`${url.origin}/robots.txt`] = [{ status: 200, body: "User-agent: *\nAllow: /\n" }];
       replay.responses[deriveArticleIdentity(entry.link, (await inputs()).config.harvest).canonical_url] = [{ status: 200, fixture: "article" }];
     }
     const transport = new RecordedTransport(replay);
-    const result = await harvestFeeds(await inputs(), context(), { transport, resolve: transport.resolve });
+    const result = await harvestFeeds(await inputs(), context(), { transport });
     expect(result.articles[0]?.rejection).toMatchObject({
       drop_reason: "MEDIA_CONTENT", title: media[0]!.title,
       candidate_id: deriveCandidateId(context().writer.run_id, "recorded-news", 0),
@@ -185,7 +148,7 @@ test("public harvest returns strict full text and streamed work facts without pe
   const logged: unknown[] = [];
   const runContext = context(record => logged.push(record));
   const facts = recordHarvestObservations(runContext);
-  const result = await harvestFeeds(loaded, runContext, { transport, resolve: transport.resolve });
+  const result = await harvestFeeds(loaded, runContext, { transport });
   expect(facts.filter(row => row.operation === "attempt")
     .reduce((count, row) => count + row.dispatched_request_count!, 0)).toBe(transport.requests.length);
   expect(facts.every(row => DocumentWorkFactSchema.safeParse(row).success)).toBe(true);
@@ -284,7 +247,7 @@ test("public harvest returns strict full text and streamed work facts without pe
   const trackedTransport = new RecordedTransport(trackedRecordings);
   trackedRecordings.responses[offeredFeed] = [{ status: 200, fixture: "rss" }];
   const trackedResult = await harvestFeeds(await inputs([source({ url: offeredFeed })]), context(),
-    { transport: trackedTransport, resolve: trackedTransport.resolve });
+    { transport: trackedTransport });
   expect(trackedTransport.requests.some(request => request.url.href === "https://news.example/feed.xml")).toBe(false);
   expect(trackedTransport.requests.some(request => request.url.href === offeredFeed)).toBe(true);
   expect(trackedResult.candidates[0]?.source.feed_url).toBe(offeredFeed);
@@ -300,11 +263,11 @@ test("inactive, empty, malformed, HTTP, timeout and address failures are distinc
     source({ id: "malformed", url: "https://news.example/malformed.xml" }),
     source({ id: "http", url: "https://news.example/not-found" }),
     source({ id: "timeout", url: "https://news.example/timeout" }),
-    source({ id: "inward", url: "https://inward.example/feed.xml" }),
+    source({ id: "inward", url: "https://127.0.0.1/feed.xml" }),
   ]);
   const runContext = context();
   const facts = recordHarvestObservations(runContext);
-  const result = await harvestFeeds(loaded, runContext, { transport, resolve: transport.resolve });
+  const result = await harvestFeeds(loaded, runContext, { transport });
   const attributionCases = await Bun.file(new URL(
     "../../../tests/fixtures/feed-ingest-plan/ingest-outcomes.json", import.meta.url,
   )).json() as Array<{ name: string; evidence: Parameters<typeof attributeIngestOutcome>[0]; attribution: ReturnType<typeof attributeIngestOutcome> }>;
@@ -555,7 +518,7 @@ test("rootless extraction, empty content and article request failures do not kil
   const loaded = await inputs([source({ url: "https://news.example/article-failures.xml" })]);
   const runContext = context();
   const facts = recordHarvestObservations(runContext);
-  const result = await harvestFeeds(loaded, runContext, { transport, resolve: transport.resolve });
+  const result = await harvestFeeds(loaded, runContext, { transport });
   expect(result.articles).toHaveLength(9);
   expect(result.candidates.map(candidate => candidate.entry_ordinal)).toEqual([4, 5, 6, 7]);
   expect(result.feed_outcomes).toHaveLength(1);
@@ -590,7 +553,7 @@ test("rootless extraction, empty content and article request failures do not kil
       { isAccessibleForFree: { toString: "" } }, { "@type": "NewsArticle", articleBody: recordedBody },
     ] })}</script></head>`);
   const metadataTransport = new RecordedTransport(malformedRecording);
-  const metadataResult = await harvestFeeds(loaded, context(), { transport: metadataTransport, resolve: metadataTransport.resolve });
+  const metadataResult = await harvestFeeds(loaded, context(), { transport: metadataTransport });
   expect(metadataResult.candidates.map(candidate => candidate.entry_ordinal)).toEqual([4, 5, 6, 7]);
   expect(metadataResult.articles[4]?.observation.diagnostics?.quality?.corroborated_word_count).toBe(recordedBody.split(/\s+/u).length);
   for (const article of result.articles) {
@@ -621,7 +584,7 @@ test("configured quality rejection keeps parsing complete and reports measured r
     activities.push({ operation, phase, details, ...(url === undefined ? {} : { url }) });
   };
   const facts = recordHarvestObservations(runContext);
-  const result = await harvestFeeds(loaded, runContext, { transport, resolve: transport.resolve });
+  const result = await harvestFeeds(loaded, runContext, { transport });
   const rejected = result.articles.find(article => article.rejection?.drop_reason === "EXTRACT_FAILED"
     && article.observation.diagnostics?.quality?.rejected);
   expect(rejected?.observation.diagnostics).toMatchObject({
@@ -733,7 +696,7 @@ test("planner inputs ignore added feed labels while configured tiers retain thei
     config: baseline.config, taxonomy: baseline.registry, sources: { feeds: [historical] }, extraction: baseline.extraction_settings,
   })).toThrow(/source\.[a-z0-9]+(?:-[a-z0-9]+)*\.tier: missing registered snapshot weight/u);
   const transport = new RecordedTransport(await readRecordings());
-  const result = await harvestFeeds(loaded, context(), { transport, resolve: transport.resolve });
+  const result = await harvestFeeds(loaded, context(), { transport });
   expect(transport.requests).toEqual([]);
   expect(result.rejections[0]?.drop_reason).toBe("SOURCE_INACTIVE");
   expect(result.feed_outcomes[0]?.source).toMatchObject({

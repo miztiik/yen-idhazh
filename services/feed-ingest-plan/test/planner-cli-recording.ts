@@ -14,7 +14,7 @@ try {
   const transport = new RecordedTransport(await readRecordings());
   const result = await main(Bun.argv.slice(2), {
     inputs, runtime: {
-      ...runtime, boundary: { transport, resolve: transport.resolve },
+      ...runtime, boundary: { transport },
       selection_clock: () => new Date("2026-10-22T00:00:00Z"),
       observation_clock: () => new Date("2026-10-21T23:59:59Z"),
       log: event => appendFileSync(join(process.cwd(), "recorded-events.jsonl"), `${JSON.stringify(event)}\n`),

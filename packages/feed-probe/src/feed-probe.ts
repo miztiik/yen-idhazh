@@ -23,17 +23,14 @@ import { FeedParseError, parseFeed } from "@idhazh/feed-ingest-plan/parse-feed";
 import { createPermittedFetcher } from "@idhazh/feed-ingest-plan/robots-policy";
 import type { FetchResult } from "@idhazh/feed-ingest-plan/robots-policy";
 import type { HarvestTransport } from "@idhazh/feed-ingest-plan/transport";
-import type { ResolveAddresses } from "@idhazh/feed-ingest-plan/safe-target";
 
 export type FeedProbeOptions = {
   signal?: AbortSignal;
   harvest?: FeedIngestConfig["harvest"];
   extraction?: ExtractionControls;
   transport?: HarvestTransport;
-  resolve?: ResolveAddresses;
   boundary?: {
     transport?: HarvestTransport;
-    resolve?: ResolveAddresses;
   };
 };
 
@@ -181,7 +178,6 @@ export async function probeFeed(
   const boundary = {
     ...(options.boundary ?? {}),
     ...(options.transport === undefined ? {} : { transport: options.transport }),
-    ...(options.resolve === undefined ? {} : { resolve: options.resolve }),
   };
   const fetcher = createPermittedFetcher(
     settings.harvest,

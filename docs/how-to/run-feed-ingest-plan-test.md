@@ -163,9 +163,9 @@ Five tasks follow `Collect and select articles with a supervised server`:
    summarizer, plus the delivery result and Markdown report when available.
    The summarizer downloads this named artifact and reads its selected JSON
    file, not a ledger. Article bodies never enter the Git request.
-4. `Upload failed raw documents` runs only when the dropdown is `true` and a
+4. `Upload failed document metadata` runs only when the dropdown is `true` and a
    diagnostic file exists. Preparation first hands the closed
-   `raw-document-contents.jsonl` to the hash-free artifact-directory destination,
+   `raw-document-contents-<UTC-day>-<numeric-run-id>-<attempt>.jsonl` to the hash-free artifact-directory destination,
    with only that exact target permitted. The separate archive is named
    `raw-document-contents-<run>-<attempt>`. Zero failed documents means no file
    and no debug upload. Failed collection still prepares and uploads available

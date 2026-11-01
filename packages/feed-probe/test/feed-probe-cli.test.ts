@@ -10,8 +10,9 @@ import {
 import type {
   HarvestTransport,
   TransportResponse,
+  TransportRequest,
 } from "@idhazh/feed-ingest-plan/transport";
-import type { ResolveAddresses } from "@idhazh/feed-ingest-plan/safe-target";
+import { HttpResponseEvidenceSchema } from "@idhazh/common-contracts";
 import { probeFeed } from "../src/feed-probe";
 import { runFeedProbeCli } from "../src/cli";
 import { parseFeedProbeCliArguments } from "../src/cli-options";
@@ -51,31 +52,23 @@ type RecordedRoute = {
 class RecordedFeedTransport implements HarvestTransport {
   constructor(private readonly routes: ReadonlyMap<string, RecordedRoute>) {}
 
-  async request(input: {
-    url: URL;
-    addresses: readonly { address: string; family: 4 | 6 }[];
-    user_agent: string;
-    headers: Readonly<Record<string, string>>;
-    max_body_bytes: number;
-    signal: AbortSignal;
-  }): Promise<TransportResponse> {
+  async request(input: TransportRequest): Promise<TransportResponse> {
     const route = this.routes.get(input.url.href) ?? { status: 404, body: "" };
     return {
       status: route.status,
       body: route.body,
       location: route.location ?? null,
+      evidence: HttpResponseEvidenceSchema.parse({
+        content_type: null, decoded_bytes: Buffer.byteLength(route.body), declared_content_length: null,
+        selected_headers: {}, headers_truncated: [], request_profile: input.profile.browser,
+      }),
     };
   }
 }
 
-const resolveFixtureAddress: ResolveAddresses = async () => [
-  { address: "8.8.8.8", family: 4 },
-];
-
 async function recordedBoundary(routes: Record<string, RecordedRoute>) {
   return {
     transport: new RecordedFeedTransport(new Map(Object.entries(routes))),
-    resolve: resolveFixtureAddress,
   };
 }
 

@@ -1,16 +1,32 @@
-/** Append failed raw documents locally and finish their writer before artifact delivery. */
+/** Append body-free failure metadata and close its writer before artifact delivery. */
 import { lstat, mkdir, open, realpath } from "node:fs/promises";
 import type { FileHandle } from "node:fs/promises";
 import { join } from "node:path";
-import { RawDocumentFailureSchema } from "@idhazh/common-contracts";
-import type { RawDocumentFailure } from "@idhazh/common-contracts";
+import { RawDocumentFailureSchema, FetchedDocumentSchema } from "@idhazh/common-contracts";
+import type { RawDocumentFailure, FetchedDocument } from "@idhazh/common-contracts";
+import { diagnosticUrl } from "./logging/diagnostic-url";
 import type { PlanInputs } from "./load-plan-inputs";
 import type { RunContext } from "./resolve-run-context";
 import { rawDocumentContentsPath } from "./selected-artifact-path";
 import { describePlanError } from "./api/plan-request";
 import { writeJsonLine } from "./logging/structured-logger";
 
-type FailureInput = Omit<RawDocumentFailure, "schema_version">;
+type FailureInput = Omit<RawDocumentFailure, "schema_version" | "document"> & { document: FetchedDocument };
+
+export function failureMetadata(raw: FailureInput): RawDocumentFailure {
+  const { body: _body, observation, attempt_observations, canonical_url, ...document } = FetchedDocumentSchema.parse(raw.document);
+  const withoutRun = ({ run_id: _run, ...value }: FetchedDocument["observation"]) => value;
+  const safe = (url: string | null) => url === null ? null : diagnosticUrl(url) ?? null;
+  return RawDocumentFailureSchema.parse({
+    ...raw, document: { ...document, canonical_url: diagnosticUrl(canonical_url) ?? null,
+      requested_url: safe(document.requested_url), final_attempted_url: safe(document.final_attempted_url),
+      failed_url: safe(document.failed_url),
+      attempts: document.attempts.map(attempt => ({ ...attempt, request_url: safe(attempt.request_url) })),
+      redirects: document.redirects.map(redirect => ({ ...redirect,
+        request_url: safe(redirect.request_url), destination_url: safe(redirect.destination_url) })),
+      observation: withoutRun(observation), attempt_observations: attempt_observations.map(withoutRun) },
+  });
+}
 
 async function openFailureFile(inputs: PlanInputs, context: RunContext): Promise<FileHandle> {
   const parts = rawDocumentContentsPath(inputs.settings.inputs.artifact_root, context).split("/");
@@ -37,7 +53,7 @@ function createFailureWriter(inputs: PlanInputs, context: RunContext) {
         return Promise.reject(error);
       }
       const operation = tail.then(async () => {
-        const record = RawDocumentFailureSchema.parse(raw);
+        const record = failureMetadata(raw);
         file ??= await openFailureFile(inputs, context);
         await file.appendFile(`${JSON.stringify(record)}\n`, "utf8");
       });

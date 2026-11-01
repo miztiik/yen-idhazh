@@ -83,7 +83,7 @@ test("preflight uses the configured age ladder, strict boundary and future toler
       settledFailureDays: [{ day: "2026-10-22", raw_files: settled.files.map(file => file.path) }],
     });
     run.exclusions = { ...history, published_window_days: 1 };
-    const result = await harvestFeeds(loaded, run, { transport, resolve: transport.resolve });
+    const result = await harvestFeeds(loaded, run, { transport });
     expect(result.rejections.map(row => row.drop_reason).sort()).toEqual([
       "ALREADY_PUBLISHED", "BLOCKED_URL_MARKER", "REJECTED_AGE_EXCEEDS_MAX_TIER_ENVELOPE", "SETTLED_FAILURE",
     ]);

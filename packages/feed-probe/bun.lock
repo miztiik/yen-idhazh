@@ -18,15 +18,15 @@
   "packages": {
     "@idhazh/common-contracts": ["@idhazh/common-contracts@file:../common-contracts", { "dependencies": { "zod": "^4.1.12" }, "devDependencies": { "@types/bun": "^1.3.0", "typescript": "^5.9.3" } }],
 
-    "@idhazh/feed-ingest-plan": ["@idhazh/feed-ingest-plan@file:../../services/feed-ingest-plan", { "dependencies": { "@idhazh/common-contracts": "file:../../packages/common-contracts", "@idhazh/data-delivery": "file:../../packages/data-delivery", "@idhazh/ledger-file-writer": "file:../../packages/ledger-file-writer", "apache-arrow": "^21.2.0", "defuddle": "0.19.5", "feedsmith": "3.0.1", "hono": "^4.10.0", "ipaddr.js": "2.5.0", "linkedom": "0.18.13", "parquet-wasm": "^0.9.0", "robots-parser": "3.0.1", "tidy-url": "1.18.3", "tldts": "^7.4.19", "turndown": "7.2.4", "undici": "7.16.0", "zod": "^4.1.12" }, "devDependencies": { "@types/bun": "^1.3.0", "@types/turndown": "5.0.6", "typescript": "^5.9.3" } }],
+    "@idhazh/feed-ingest-plan": ["@idhazh/feed-ingest-plan@file:../../services/feed-ingest-plan", { "dependencies": { "@idhazh/common-contracts": "file:../../packages/common-contracts", "@idhazh/data-delivery": "file:../../packages/data-delivery", "@idhazh/ledger-file-writer": "file:../../packages/ledger-file-writer", "apache-arrow": "^21.2.0", "defuddle": "0.19.5", "feedsmith": "3.0.1", "hono": "^4.10.0", "impit": "0.14.7", "ipaddr.js": "2.5.0", "linkedom": "0.18.13", "parquet-wasm": "^0.9.0", "robots-parser": "3.0.1", "tidy-url": "1.18.3", "tldts": "^7.4.19", "turndown": "7.2.4", "zod": "^4.1.12" }, "devDependencies": { "@types/bun": "^1.3.0", "@types/turndown": "5.0.6", "typescript": "^5.9.3" } }],
 
     "@mixmark-io/domino": ["@mixmark-io/domino@2.2.0", "https://ms-feed-25.pkgs.visualstudio.com/1es-public/_packaging/npm-public/npm/registry/@mixmark-io/domino/-/domino-2.2.0.tgz", {}, "sha1-To7Gm/Gv63oU8GKLfiwPNb2zNsM="],
 
     "@nodable/entities": ["@nodable/entities@3.1.0", "https://ms-feed-25.pkgs.visualstudio.com/1es-public/_packaging/npm-public/npm/registry/@nodable/entities/-/entities-3.1.0.tgz", {}, "sha512-LsS/DjHr+uDM647Gru/cA8+J3a3HfhttwCKLyuoyN7yXTFCxKBtSgMQBvrW9yNPa2/zDRUNuGPaH5QUFoa4arQ=="],
 
-    "@types/bun": ["@types/bun@1.4.3", "https://ms-feed-25.pkgs.visualstudio.com/1es-public/_packaging/npm-public/npm/registry/@types/bun/-/bun-1.4.3.tgz", { "dependencies": { "bun-types": "1.4.3" } }, "sha512-N67Pqy8JXbAY/j0tNraS3V5mubGvc6rrrNDmDCtZLlFzccbUJPDb0tvgUBC5q4m8ybkP93Jcn1QB+RYQ6PvBhw=="],
+    "@types/bun": ["@types/bun@1.4.4", "https://ms-feed-25.pkgs.visualstudio.com/1es-public/_packaging/npm-public/npm/registry/@types/bun/-/bun-1.4.4.tgz", { "dependencies": { "bun-types": "1.4.4" } }, "sha512-9wkRDXUXK124pEnAutE6n/l18j+i9GC5IAHK8TmX/2nlySETmky0OU6yL5U8pW1AoKh++AN9auDCr647BfurjQ=="],
 
-    "@types/node": ["@types/node@26.6.5", "https://ms-feed-25.pkgs.visualstudio.com/1es-public/_packaging/npm-public/npm/registry/@types/node/-/node-26.6.5.tgz", { "dependencies": { "undici-types": "~8.9.0" } }, "sha512-uMzsv9stDdofIZBx4UGh4Z9ZgXnGC9seRDscilBcTHAeOFk67MZg/k9bWVfO+bk4qZmG+l52hRnLwUiH2LnJTg=="],
+    "@types/node": ["@types/node@25.9.9", "https://ms-feed-25.pkgs.visualstudio.com/1es-public/_packaging/npm-public/npm/registry/@types/node/-/node-25.9.9.tgz", { "dependencies": { "undici-types": ">=7.24.0 <7.24.7" } }, "sha512-b4e2xxj/yMeT2hNlD6x7zNFiQK2Dlmkb9CQ6v3/1G2RezKN4YS2lcEv8lzGm1mhs4f2lM4yNAMI/zUDBZBBt7w=="],
 
     "@types/turndown": ["@types/turndown@5.0.6", "https://ms-feed-25.pkgs.visualstudio.com/1es-public/_packaging/npm-public/npm/registry/@types/turndown/-/turndown-5.0.6.tgz", {}, "sha1-QqJzlymKMS1giPKcD/SBnFGMHss="],
 
@@ -38,7 +38,7 @@
 
     "boolbase": ["boolbase@2.0.0", "https://ms-feed-25.pkgs.visualstudio.com/1es-public/_packaging/npm-public/npm/registry/boolbase/-/boolbase-2.0.0.tgz", {}, "sha1-gylo0hHVwAjYM7huBJuzlDA25bE="],
 
-    "bun-types": ["bun-types@1.4.3", "https://ms-feed-25.pkgs.visualstudio.com/1es-public/_packaging/npm-public/npm/registry/bun-types/-/bun-types-1.4.3.tgz", { "dependencies": { "@types/node": "*", "undici-types": "*" } }, "sha512-tinRJNGOmUN+tEAsn2y2e942n9JHRHR42iUYzDH75NmhJqVBokGSQkkfSFdNWwsANIdrK6ACH9t01M452YyTwg=="],
+    "bun-types": ["bun-types@1.4.4", "https://ms-feed-25.pkgs.visualstudio.com/1es-public/_packaging/npm-public/npm/registry/bun-types/-/bun-types-1.4.4.tgz", { "dependencies": { "@types/node": "*", "undici-types": "*" } }, "sha512-yjrJh5oGX7mMPKGd19YXyIjmEuj4G4zNC30bs7PM9Az7NQ3ndF3j6hbeRdvJTRQEhJ/FYQwW0a2moweEi2hMxQ=="],
 
     "commander": ["commander@12.1.0", "https://ms-feed-25.pkgs.visualstudio.com/1es-public/_packaging/npm-public/npm/registry/commander/-/commander-12.1.0.tgz", {}, "sha1-AUI7NvUBJZ/arE0OTWDJbJkVhdM="],
 
@@ -68,11 +68,29 @@
 
     "flatbuffers": ["flatbuffers@25.9.23", "https://ms-feed-25.pkgs.visualstudio.com/1es-public/_packaging/npm-public/npm/registry/flatbuffers/-/flatbuffers-25.9.23.tgz", {}, "sha1-NGgRVX/pMSq1ZHU155PHYenIHrE="],
 
-    "hono": ["hono@4.13.13", "https://ms-feed-25.pkgs.visualstudio.com/1es-public/_packaging/npm-public/npm/registry/hono/-/hono-4.13.13.tgz", {}, "sha512-CQ46U0ZkAGmbT/4UxdzzGJpacP2IeKgY4a5/tOI9AABbpOMfK739wfDXmv1usCk+3RkKj1hQy4/fjhiwa2xlrA=="],
+    "hono": ["hono@4.13.14", "https://ms-feed-25.pkgs.visualstudio.com/1es-public/_packaging/npm-public/npm/registry/hono/-/hono-4.13.14.tgz", {}, "sha512-yhRLQ21U6qa9Hsu2N7Qcbh8tE+WKEcoErjIo56LeSGiGXGp9sA7UpE86Ui9uexb61KakiGwuHMn2QdV7w6i6kQ=="],
 
     "html-escaper": ["html-escaper@3.0.3", "https://ms-feed-25.pkgs.visualstudio.com/1es-public/_packaging/npm-public/npm/registry/html-escaper/-/html-escaper-3.0.3.tgz", {}, "sha1-TTNmdGUr6x3Lwp72trp/a+b9/tY="],
 
     "htmlparser2": ["htmlparser2@10.1.0", "https://ms-feed-25.pkgs.visualstudio.com/1es-public/_packaging/npm-public/npm/registry/htmlparser2/-/htmlparser2-10.1.0.tgz", { "dependencies": { "domelementtype": "^2.3.0", "domhandler": "^5.0.3", "domutils": "^3.2.2", "entities": "^7.0.1" } }, "sha1-/j8uEsc7bkYtThA5XbnBEZ5NauQ="],
+
+    "impit": ["impit@0.14.7", "https://ms-feed-25.pkgs.visualstudio.com/1es-public/_packaging/npm-public/npm/registry/impit/-/impit-0.14.7.tgz", { "optionalDependencies": { "impit-darwin-arm64": "0.14.7", "impit-darwin-x64": "0.14.7", "impit-linux-arm64-gnu": "0.14.7", "impit-linux-arm64-musl": "0.14.7", "impit-linux-x64-gnu": "0.14.7", "impit-linux-x64-musl": "0.14.7", "impit-win32-arm64-msvc": "0.14.7", "impit-win32-x64-msvc": "0.14.7" } }, "sha512-x1X+7AZwAaNlcmeIut5VJnw+YqvilS/WqdJjCY2IgIPBRXMB6PY7juNmbLPaWWWIX+ZKu2/FgUs1tg+A+iawow=="],
+
+    "impit-darwin-arm64": ["impit-darwin-arm64@0.14.7", "https://ms-feed-25.pkgs.visualstudio.com/1es-public/_packaging/npm-public/npm/registry/impit-darwin-arm64/-/impit-darwin-arm64-0.14.7.tgz", { "os": "darwin", "cpu": "arm64" }, "sha512-I8HyccLpgA5qecpPP+uKzp+h4ezbbyYfo/mkqwW60XP4t8X3c6gAisUsknDo7MaylhFXlRsKThwfRxUCRIckpA=="],
+
+    "impit-darwin-x64": ["impit-darwin-x64@0.14.7", "https://ms-feed-25.pkgs.visualstudio.com/1es-public/_packaging/npm-public/npm/registry/impit-darwin-x64/-/impit-darwin-x64-0.14.7.tgz", { "os": "darwin", "cpu": "x64" }, "sha512-g39kYkzL/KuEyU/52t4R3W+s6sMOJh3aQgMZPPKP/xuWFaBhglRzWRGBaIo1GAZGxj6Xc4xHUcFErHBXDa98bw=="],
+
+    "impit-linux-arm64-gnu": ["impit-linux-arm64-gnu@0.14.7", "https://ms-feed-25.pkgs.visualstudio.com/1es-public/_packaging/npm-public/npm/registry/impit-linux-arm64-gnu/-/impit-linux-arm64-gnu-0.14.7.tgz", { "os": "linux", "cpu": "arm64" }, "sha512-JVH41qrg3aUWRnj9+3yT4gUnOtY7pGPaSOCYUTPovUbBHt6N8PIfYYvi4tIN+72UfcqHvD/xx0EVqlyB8W3p4w=="],
+
+    "impit-linux-arm64-musl": ["impit-linux-arm64-musl@0.14.7", "https://ms-feed-25.pkgs.visualstudio.com/1es-public/_packaging/npm-public/npm/registry/impit-linux-arm64-musl/-/impit-linux-arm64-musl-0.14.7.tgz", { "os": "linux", "cpu": "arm64" }, "sha512-jrsKvgsmYBhCSs9rDLA4cATb/a7HX7vMs8cP/y3yJlprH1wfAJHVIgMXqhxw/sMVpD8/4Q6TYniFEUmQlNOB2A=="],
+
+    "impit-linux-x64-gnu": ["impit-linux-x64-gnu@0.14.7", "https://ms-feed-25.pkgs.visualstudio.com/1es-public/_packaging/npm-public/npm/registry/impit-linux-x64-gnu/-/impit-linux-x64-gnu-0.14.7.tgz", { "os": "linux", "cpu": "x64" }, "sha512-p6bmIrYNfSlGGhU85kEDRTc0W12QtC3mokdWvvo8ziJ5YMVFIQ9ETfsJpQlElUyVLEFqkwsHBoBLlo4ko5+UOQ=="],
+
+    "impit-linux-x64-musl": ["impit-linux-x64-musl@0.14.7", "https://ms-feed-25.pkgs.visualstudio.com/1es-public/_packaging/npm-public/npm/registry/impit-linux-x64-musl/-/impit-linux-x64-musl-0.14.7.tgz", { "os": "linux", "cpu": "x64" }, "sha512-ZnU4QYTOv9MPRfQSNZA7gEg4usLdUCZrBs67+A9odXtlI25Wn9cJjTTQWi1DjJs5Ssu39ptTbQtq3WepMJVR1A=="],
+
+    "impit-win32-arm64-msvc": ["impit-win32-arm64-msvc@0.14.7", "https://ms-feed-25.pkgs.visualstudio.com/1es-public/_packaging/npm-public/npm/registry/impit-win32-arm64-msvc/-/impit-win32-arm64-msvc-0.14.7.tgz", { "os": "win32", "cpu": "arm64" }, "sha512-RsN0QSrOiLnrsCNJ7tfYWHND2sOo1r8SxJGxIHtDiDWI1MJrnvNL7pKbQzyk3KK9GR2dFpn4n5DUHYy29rjwzg=="],
+
+    "impit-win32-x64-msvc": ["impit-win32-x64-msvc@0.14.7", "https://ms-feed-25.pkgs.visualstudio.com/1es-public/_packaging/npm-public/npm/registry/impit-win32-x64-msvc/-/impit-win32-x64-msvc-0.14.7.tgz", { "os": "win32", "cpu": "x64" }, "sha512-ZSmB/nmCLEPwq7oPcItt/D5WPfHGy7G4sjKAuTYlZDk2EEf0vCX/fTYEYc3Siq9CHdzJ4Xp4k5KT/4X2LXNxFQ=="],
 
     "ipaddr.js": ["ipaddr.js@2.5.0", "https://ms-feed-25.pkgs.visualstudio.com/1es-public/_packaging/npm-public/npm/registry/ipaddr.js/-/ipaddr.js-2.5.0.tgz", {}, "sha1-fUtsOfk5L7Yc+AfebkJeIsEOBh8="],
 
@@ -102,7 +120,7 @@
 
     "tldts-core": ["tldts-core@7.4.19", "https://ms-feed-25.pkgs.visualstudio.com/1es-public/_packaging/npm-public/npm/registry/tldts-core/-/tldts-core-7.4.19.tgz", {}, "sha512-goNXV6Ho9TIOfpJZanTd6CKG5DyYgYAL+k+22T0SLh8l6+KHIfBUPFuePuSZv05UttIaaLmI9tb7TmGIdK5AkQ=="],
 
-    "tslib": ["tslib@2.8.1", "https://ms-feed-25.pkgs.visualstudio.com/1es-public/_packaging/npm-public/npm/registry/tslib/-/tslib-2.8.1.tgz", {}, "sha1-YS7+TtI11Wfoq6Xypfq3AoCt6D8="],
+    "tslib": ["tslib@2.9.1", "https://ms-feed-25.pkgs.visualstudio.com/1es-public/_packaging/npm-public/npm/registry/tslib/-/tslib-2.9.1.tgz", {}, "sha512-a4Ux9VKuIMHsOS7ENbEq6hK2ZGYIT27Rtl0E4eD9KqwxhKiQeMZE/9xb3IdYwWaSOyIBQLExhQgXDTYoiCxnWA=="],
 
     "turndown": ["turndown@7.2.4", "https://ms-feed-25.pkgs.visualstudio.com/1es-public/_packaging/npm-public/npm/registry/turndown/-/turndown-7.2.4.tgz", { "dependencies": { "@mixmark-io/domino": "^2.2.0" } }, "sha1-QtmCAq76jBiMmXtYa8baeL3yfqI="],
 
@@ -110,23 +128,19 @@
 
     "uhyphen": ["uhyphen@0.2.0", "https://ms-feed-25.pkgs.visualstudio.com/1es-public/_packaging/npm-public/npm/registry/uhyphen/-/uhyphen-0.2.0.tgz", {}, "sha1-j98GIzFEhuAgo8AO5cx6Ev5yK4E="],
 
-    "undici": ["undici@7.16.0", "https://ms-feed-25.pkgs.visualstudio.com/1es-public/_packaging/npm-public/npm/registry/undici/-/undici-7.16.0.tgz", {}, "sha1-yyoelXcm1Fi1NuPwdr9R8GaQHBo="],
-
     "undici-types": ["undici-types@8.12.3", "https://ms-feed-25.pkgs.visualstudio.com/1es-public/_packaging/npm-public/npm/registry/undici-types/-/undici-types-8.12.3.tgz", {}, "sha512-EXE4ydL3S76dFb27UFjNVZHTyv/TLdATj/KUe29ptdcg6qXL48J2tZ3126E5kICj5jn781OR+XlVH1N6Mz8jbA=="],
 
     "xml-naming": ["xml-naming@0.3.0", "https://ms-feed-25.pkgs.visualstudio.com/1es-public/_packaging/npm-public/npm/registry/xml-naming/-/xml-naming-0.3.0.tgz", {}, "sha1-RsHhi/4oWEeZgt0qzPNNFudJ7aI="],
 
     "zod": ["zod@4.6.7", "https://ms-feed-25.pkgs.visualstudio.com/1es-public/_packaging/npm-public/npm/registry/zod/-/zod-4.6.7.tgz", {}, "sha512-g8W2D2kU6a8untc053fX1uVBKzM7yqAxW/3zwk83+6RyF2+SKOuV+c0wBDhUwzV1PaGapmZH+rmcUzPf+3CGwg=="],
 
-    "@idhazh/feed-ingest-plan/@idhazh/common-contracts": ["@idhazh/common-contracts@file:../common-contracts", {}],
+    "@idhazh/feed-ingest-plan/@idhazh/common-contracts": ["@idhazh/common-contracts@file:..\\common-contracts", {}],
 
-    "@idhazh/feed-ingest-plan/@idhazh/data-delivery": ["@idhazh/data-delivery@file:../data-delivery", {}],
+    "@idhazh/feed-ingest-plan/@idhazh/data-delivery": ["@idhazh/data-delivery@file:..\\data-delivery", {}],
 
-    "@idhazh/feed-ingest-plan/@idhazh/ledger-file-writer": ["@idhazh/ledger-file-writer@file:../ledger-file-writer", {}],
+    "@idhazh/feed-ingest-plan/@idhazh/ledger-file-writer": ["@idhazh/ledger-file-writer@file:..\\ledger-file-writer", {}],
 
-    "@types/node/undici-types": ["undici-types@8.9.0", "https://ms-feed-25.pkgs.visualstudio.com/1es-public/_packaging/npm-public/npm/registry/undici-types/-/undici-types-8.9.0.tgz", {}, "sha1-4kDZfItdheU0fOc9JYZceQbB7J8="],
-
-    "apache-arrow/@types/node": ["@types/node@25.9.9", "https://ms-feed-25.pkgs.visualstudio.com/1es-public/_packaging/npm-public/npm/registry/@types/node/-/node-25.9.9.tgz", { "dependencies": { "undici-types": ">=7.24.0 <7.24.7" } }, "sha512-b4e2xxj/yMeT2hNlD6x7zNFiQK2Dlmkb9CQ6v3/1G2RezKN4YS2lcEv8lzGm1mhs4f2lM4yNAMI/zUDBZBBt7w=="],
+    "@types/node/undici-types": ["undici-types@7.24.6", "https://ms-feed-25.pkgs.visualstudio.com/1es-public/_packaging/npm-public/npm/registry/undici-types/-/undici-types-7.24.6.tgz", {}, "sha1-YSdbSF1/1OnSacfPBOwoc8nMD5E="],
 
     "dom-serializer/domelementtype": ["domelementtype@3.0.0", "https://ms-feed-25.pkgs.visualstudio.com/1es-public/_packaging/npm-public/npm/registry/domelementtype/-/domelementtype-3.0.0.tgz", {}, "sha1-5sCiS9Ocpet+pnqY0vaZSX17zFU="],
 
@@ -139,8 +153,6 @@
     "htmlparser2/domhandler": ["domhandler@5.0.3", "https://ms-feed-25.pkgs.visualstudio.com/1es-public/_packaging/npm-public/npm/registry/domhandler/-/domhandler-5.0.3.tgz", { "dependencies": { "domelementtype": "^2.3.0" } }, "sha1-zDhff3UfHR/GUMITdIBCVFOMfTE="],
 
     "htmlparser2/domutils": ["domutils@3.2.2", "https://ms-feed-25.pkgs.visualstudio.com/1es-public/_packaging/npm-public/npm/registry/domutils/-/domutils-3.2.2.tgz", { "dependencies": { "dom-serializer": "^2.0.0", "domelementtype": "^2.3.0", "domhandler": "^5.0.3" } }, "sha1-7b/itmiwwdl8JLrw8QYrEyIhvHg="],
-
-    "apache-arrow/@types/node/undici-types": ["undici-types@7.24.6", "https://ms-feed-25.pkgs.visualstudio.com/1es-public/_packaging/npm-public/npm/registry/undici-types/-/undici-types-7.24.6.tgz", {}, "sha1-YSdbSF1/1OnSacfPBOwoc8nMD5E="],
 
     "htmlparser2/domutils/dom-serializer": ["dom-serializer@2.0.0", "https://ms-feed-25.pkgs.visualstudio.com/1es-public/_packaging/npm-public/npm/registry/dom-serializer/-/dom-serializer-2.0.0.tgz", { "dependencies": { "domelementtype": "^2.3.0", "domhandler": "^5.0.2", "entities": "^4.2.0" } }, "sha1-5BuALh7t+fbK4YPOXmIteJ19jlM="],
 

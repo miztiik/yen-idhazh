@@ -30,7 +30,7 @@ async function setup(options: {
   if (options.target) recordings.responses[target] = options.target;
   const transport = new RecordedTransport(recordings);
   const fetcher = createPermittedFetcher(config.harvest, loaded.extraction, {
-    transport, resolve: transport.resolve,
+    transport,
   });
   return { config, transport, fetcher };
 }
@@ -64,7 +64,7 @@ test("the article policy accepts only enforce or observe and missing policy enfo
     });
     const transport = new RecordedTransport(await readRecordings());
     const fetched = await createPermittedFetcher(parsed.harvest, (await inputs()).extraction, {
-      transport, resolve: transport.resolve,
+      transport,
     }).fetch("https://denied.example/story");
     expect(fetched).toMatchObject({ failure: "robots-denied", http_status: null, robots: "denied" });
     expect(requested(transport)).toEqual(["https://denied.example/robots.txt"]);
@@ -325,7 +325,7 @@ test("external cancellation during robots or article work cannot dispatch anothe
 });
 
 test("observe mode never dispatches unsafe robots or article redirect destinations", async () => {
-  for (const destination of ["http://127.0.0.1/secret", "https://mixed.example/story"]) {
+  for (const destination of ["http://127.0.0.1/secret", "https://local.internal/story"]) {
     const unsafeRobots = await setup({ robots: [{ status: 302, body: "", location: destination }] });
     const observed = await unsafeRobots.fetcher.fetch(target);
     expect(observed).toMatchObject({

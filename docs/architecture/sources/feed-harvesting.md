@@ -1,6 +1,6 @@
 # Isolated feed harvesting
 
-**Last Updated**: 2026-10-31
+**Last Updated**: 2026-11-01
 
 How do configured feeds become sanitized article candidates?
 This build-time path leaves production Python discovery and extraction
@@ -14,9 +14,10 @@ extraction configuration before work. The taxonomy contributes active source
 kinds and numeric tier weights, not vertical policy or article labels.
 
 The actual harvester accepts validated context plus an optional recorded
-transport/resolver boundary. Ordinary execution uses the installed Undici
-request API and operating-system resolver. The response remains pinned to
-validated addresses. Each request dispatcher closes after success or refusal.
+source-response boundary. Ordinary execution uses native Impit. One fetcher
+reuses one client per configured browser profile; each request owns its
+cancellation signal and releases its response on completion or refusal.
+Impit has no public client-close API. No dispatcher or resolver adapter remains.
 
 Independent feeds overlap within configured bounds. Article work can start
 after its supplying feed is parsed. Native workers perform the production
@@ -55,7 +56,9 @@ the HTTP scheme spelling before storage, retaining their original query and
 fragment as historical evidence. The final serialized article address must
 pass the same URL format and length contract as downstream payloads before
 hashing or dispatch; percent-encoding cannot bypass that bound. Each transformed address
-passes public-address validation and DNS checks before pinned dispatch.
+passes URL, hostname and explicit-address checks before dispatch.
+Impit resolves hostnames; this TypeScript path does not resolve or pin their
+addresses and does not protect against DNS rebinding.
 Robots results are retained as evidence; article `enforce` policy may stop an
 article before target dispatch. An unsafe transformed address is never
 dispatched.
@@ -98,7 +101,7 @@ failure records `parser-failed`. These are local parser failures, never
 evidence that a source should retire. Malformed feed data retains its distinct
 `malformed-feed` result.
 
-The permitted fetcher retains public-address validation, socket pinning,
+The permitted fetcher retains URL, hostname and explicit-address validation,
 robots evidence, safe redirects, retries, bounded deadlines and decoded
 body limits. Validation occurs before dispatch. Safe feed targets and feed
 redirect hops are attempted even when robots permission is denied or unknown.
@@ -112,12 +115,17 @@ count over `extract.max_body_bytes`. Its diagnostic records that configured
 limit and the bytes observed so far as a lower bound; it does not read the rest
 of the response or claim its full size.
 
-`harvest.request_headers` supplies primary and nullable secondary navigation
-profiles. Both feed and article targets use them; robots downloads do not.
-Each wire user agent keeps the configured crawler identity and adds its
-profile's distinct browser signature. Robots matching uses that same crawler
-product, checked against the actual wire value. Profiles cannot replace it.
-These headers do not provide browser execution or bot signing.
+`harvest.request_headers` supplies primary and nullable secondary native browser
+profiles. Firefox is primary; Chrome is secondary. Robots use the primary
+profile. Impit selects TLS, HTTP/2 and wire-header defaults together. Explicit
+`accept` and `accept-language` overrides can select content or language;
+the committed profiles use no overrides.
+Wire headers have no crawler user-agent suffix or copied browser version.
+Impit does not expose its native user-agent for permission matching, so the
+robots parser checks general `User-agent: *` rules, not browser-specific groups.
+The wire identity is a browser profile, not an identified crawler with contact
+details. This trade-off leaves native headers intact; it does not execute
+JavaScript, sign requests, import credentials or guarantee publisher access.
 A denied or unknown robots result is retained across redirects. It blocks an
 article only when that article uses `enforce`; it does not block a safe feed
 request or an article in `observe`.
@@ -134,7 +142,7 @@ This also holds when a secondary redirect ends in a download failure.
 An unsafe article redirect always refuses the operation. Denied or unknown
 permission on a safe redirect follows the document's robots policy.
 Each enabled profile contributes one configured attempt-and-backoff allowance
-to the deadline shared by target DNS and all article redirect hops. Robots
+to the deadline shared by all target reads and article redirect hops. Robots
 work has a separate allowance: one configured retry sequence, including its
 attempt timeouts and backoff. Waiting for robots does not consume target time
 or abort its signal. Each new origin has that same bounded robots allowance;
@@ -214,19 +222,42 @@ The robots checker can be wrong or unavailable. Attempting a safe feed target
 keeps that evidence separate from the publisher's actual response. Keep the
 robots verdict, status and retrieval failure, but let the target response
 decide whether the feed fetch succeeded. Article `enforce` remains an explicit
-option; this change does not weaken address checks or request limits.
+option. URL and explicit-address checks remain; hostname address resolution
+and socket pinning do not. Manual redirects keep each destination subject to
+those remaining checks before dispatch.
+
+Native defaults keep TLS verification enabled, use HTTP/2 where supported,
+and decode gzip, Brotli and deflate streams. HTTP/3 is opt-in and is not
+requested; no measured source need justifies adding a control for it.
+No proxy, persistent cookie jar or weaker TLS fallback is enabled.
+Application deadlines own abort signals instead of a second native timeout.
+Aborting the request stops a decoded-byte cutoff or failed body read without
+letting cleanup replace its observed status and byte count.
+The native stream must also release an unfinished response after abort,
+not only reject its JavaScript promise. The transport test keeps Impit under
+Bun and uses a genuine Node source to check response closure; a raw TCP
+disconnect verifies the source's close observer first.
 
 ## Dependencies and cost
 
 Feedsmith 3.0.1 replaces rss-parser and adds JSON Feed and RDF support. Its
 XML parser and entity decoder replace the old XML dependency tree.
 The existing Defuddle 0.19.5 node entry uses its installed Markdown converter;
-LinkeDOM still supplies inert documents. Undici, address and robots
-libraries retain transport control. These dependencies run in the
+LinkeDOM still supplies inert documents. Impit replaces the former HTTP client
+and its compression/dispatcher machinery; the address and robots libraries
+retain URL/literal checks and rule parsing. These dependencies run in the
 build-time Bun process and workers, not the published browser bundle.
 TidyURL 1.18.3 adds its bundled URL-cleaning rules and no runtime dependencies
 for request-target cleanup. Its installed bytes remain build-time only.
-No new HTTP client, parser framework or profiler is introduced.
+Impit's beneficiary is native browser TLS and HTTP fingerprints with bounded
+decoded response reads. Its Windows x64 native binary occupies 10,276,352 bytes
+(about 9.8 MiB); service installation took about 17 seconds on a shared Windows
+x64 host, including the service's other dependencies. Linux runner installation
+time and native size remain unmeasured. Native binaries are install-time
+dependencies, never committed or shipped to the published site.
+The remaining `undici-types` dependency is type declarations required by
+Bun/Node types, not a runtime HTTP client. No runtime Undici dependency remains
+in the service or probe lockfile. No parser framework or profiler is introduced.
 The pinned Bun runtime's native Markdown parser measures labels and lists
 without another package. Turndown 7.2.4, already installed by Defuddle, is now
 declared directly for semantic-recovery measurement. It adds no installed

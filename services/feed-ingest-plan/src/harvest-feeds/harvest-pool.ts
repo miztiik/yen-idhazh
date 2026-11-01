@@ -8,7 +8,6 @@ import { feedDocumentWork, readFeed } from "./feed-client";
 import { harvestArticle } from "./harvest-article";
 import { createPermittedFetcher } from "./robots-policy";
 import type { HarvestTransport } from "./transport";
-import type { ResolveAddresses } from "./safe-target";
 import { ArticleParserPool } from "./article-parser-pool";
 
 export { loadHarvestInputs, readHarvestInputs } from "./load-harvest-inputs";
@@ -52,7 +51,7 @@ export function workPool(concurrency: number) {
 
 export async function harvestFeeds(
   inputs: HarvestInputs, context: HarvestContext,
-  boundary: { transport?: HarvestTransport; resolve?: ResolveAddresses } = {},
+  boundary: { transport?: HarvestTransport } = {},
 ): Promise<HarvestResult> {
   WriterIdentitySchema.parse(context.writer);
   const fetcher = createPermittedFetcher(inputs.config.harvest, inputs.extraction, boundary, context.observation_clock);

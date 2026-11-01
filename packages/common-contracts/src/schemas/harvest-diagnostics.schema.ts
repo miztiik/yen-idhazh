@@ -1,6 +1,7 @@
 /** Which bounded fetch and extraction evidence survives every planner boundary? */
 import { z } from "zod";
 import { CountSchema, NonEmptySchema, reject } from "./primitives";
+import { HttpResponseEvidenceSchema } from "./http-response-evidence.schema";
 
 export const ExtractionSignalSchema = z.enum(["contaminated", "boilerplate", "not_prose", "too_short"]);
 export const ExtractionQualitySchema = z.strictObject({
@@ -48,6 +49,8 @@ const HarvestDiagnosticsBaseSchema = z.strictObject({
   robots_http_status: z.int().min(100).max(599).nullable().default(null),
   body_limit: BodyLimitEvidenceSchema.nullable().default(null),
   error_code: z.string().max(64).regex(/^[A-Z][A-Z0-9_]*$/).nullable().default(null),
+  response_evidence: HttpResponseEvidenceSchema.nullable().default(null),
+  robots_response_evidence: HttpResponseEvidenceSchema.nullable().default(null),
   extraction_failure: ExtractionFailureSchema.nullable().default(null),
   failure_code: z.enum([
     "robots_denied", "robots_unreachable", "blocked_address", "http_client_error",
@@ -64,8 +67,9 @@ const HarvestDiagnosticsBaseSchema = z.strictObject({
   warnings: z.array(z.enum(["malformed-json-ld", "semantic-dom-fallback"])).max(2).default([]),
   quality: ExtractionQualitySchema.nullable().default(null),
 }).meta({
-  version: "2026-10-30",
+  version: "2026-11-01",
   changelog: [
+    { version: "2026-11-01", change: "Retain bounded native response evidence; missing historical evidence stays null." },
     { version: "2026-10-30", change: "Distinguish parser deadline, cancellation and worker failures from source failures." },
   ],
 });

@@ -1,17 +1,23 @@
 /** Keep artifact configuration and produced paths inside the native relative-path contract. */
-import { RelPathSchema } from "@idhazh/common-contracts";
+import { RelPathSchema, RunIdSchema, WriterIdentitySchema } from "@idhazh/common-contracts";
 
 // The filename and 128-bit UUID run-number limit are fixed output/identity protocols.
 const artifactFilename = "selected-articles.json";
-export const RAW_DOCUMENT_CONTENTS_FILENAME = "raw-document-contents.jsonl";
 const maximumGeneratedRun = `9999-12-31-${((1n << 128n) - 1n).toString()}`;
 export const ArtifactRootSchema = RelPathSchema.refine(root =>
-  RelPathSchema.safeParse(`${root}/${maximumGeneratedRun}/${Number.MAX_SAFE_INTEGER}/${RAW_DOCUMENT_CONTENTS_FILENAME}`).success,
+  RelPathSchema.safeParse(`${root}/${maximumGeneratedRun}/${Number.MAX_SAFE_INTEGER}/${rawDocumentContentsFilename({
+    run_id: maximumGeneratedRun, writer: { attempt: Number.MAX_SAFE_INTEGER },
+  })}`).success,
   "Artifact root must leave room for the generated execution, attempt and filename");
 
 export function selectedArtifactPath(root: string, context: { run_id: string; writer: { attempt: number } }) {
   return RelPathSchema.parse(`${root}/${context.run_id}/${context.writer.attempt}/${artifactFilename}`);
 }
 export function rawDocumentContentsPath(root: string, context: { run_id: string; writer: { attempt: number } }) {
-  return RelPathSchema.parse(`${root}/${context.run_id}/${context.writer.attempt}/${RAW_DOCUMENT_CONTENTS_FILENAME}`);
+  return RelPathSchema.parse(`${root}/${context.run_id}/${context.writer.attempt}/${rawDocumentContentsFilename(context)}`);
+}
+export function rawDocumentContentsFilename(context: { run_id: string; writer: { attempt: number } }) {
+  const run = RunIdSchema.parse(context.run_id);
+  const attempt = WriterIdentitySchema.shape.attempt.parse(context.writer.attempt);
+  return RelPathSchema.parse(`raw-document-contents-${run.slice(0, 10)}-${run.slice(11)}-${attempt}.jsonl`);
 }

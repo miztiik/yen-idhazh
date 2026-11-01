@@ -104,6 +104,61 @@ jobs:
           fi
           echo "playwright=$version" >> "$GITHUB_OUTPUT"
 
+  native_source_transport:
+    needs: scope
+    if: needs.scope.outputs.code == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+
+      - uses: ./.github/actions/publication-runtime
+
+      - name: Install native source dependencies
+        id: native_dependencies
+        run: |
+          set -euo pipefail
+          start=$SECONDS
+          if [[ "$GITHUB_EVENT_NAME" == "workflow_dispatch" ]]; then
+            bun add --cwd services/feed-ingest-plan --registry https://registry.npmjs.org --exact impit@0.14.8
+            node -e 'require("node:fs").unlinkSync("packages/feed-probe/bun.lock")'
+            bun install --cwd packages/feed-probe --registry https://registry.npmjs.org --no-cache
+          else
+            bun install --cwd services/feed-ingest-plan --frozen-lockfile
+            bun install --cwd packages/feed-probe --frozen-lockfile
+          fi
+          printf 'Service and probe dependency installation took %d seconds.\n' "$((SECONDS - start))"
+          cd services/feed-ingest-plan
+          node -e 'const fs = require("node:fs"), os = require("node:os"); const name = process.platform === "win32" ? "impit-win32-x64-msvc" : "impit-linux-x64-gnu"; console.log(JSON.stringify({native_binary_bytes: fs.statSync(require.resolve(name)).size, host_platform: process.platform, host_architecture: process.arch, host_logical_cpus: os.cpus().length, host_ram_bytes: os.totalmem()}))'
+
+      - name: Verify native source response ownership
+        run: |
+          bun run --cwd services/feed-ingest-plan check
+          bun run --cwd packages/feed-probe check
+          bun run --cwd services/feed-ingest-plan test ./test/impit-transport.test.ts
+
+      - name: Preserve generated dependency updates
+        if: ${{ !cancelled() && github.event_name == 'workflow_dispatch' && steps.native_dependencies.outcome == 'success' }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: native-source-dependencies-${{ matrix.os }}
+          path: |
+            services/feed-ingest-plan/package.json
+            services/feed-ingest-plan/bun.lock
+            packages/feed-probe/bun.lock
+          if-no-files-found: error
+
   gates:
     needs: scope
     if: needs.scope.outputs.code == 'true'

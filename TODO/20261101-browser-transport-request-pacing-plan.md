@@ -39,7 +39,7 @@ Table C - PR-shaped tasks
 
 | ID | # | Row title | Depends-on | Parallel-group | Status | Worktree | PR | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| C1 | 1 | Replace Undici completely with Impit and failure evidence | - | A | PENDING | - | - | - |
+| C1 | 1 | Replace Undici completely with Impit and failure evidence | - | A | IN_PROGRESS | impit-transport-and-evidence | - | - |
 | C2 | 2 | Space requests across domains and publishers | 1 | B | PENDING | - | - | - |
 | C3 | 3 | Verify the completed Impit-only branch pipeline | 2 | C | PENDING | - | - | - |
 

@@ -198,6 +198,7 @@ test("manual controls exercise the planner API and keep only required outputs", 
   expect(finish?.run).toBe("bun run services/feed-ingest-plan/scripts/finish-run-output.ts");
   expect(finish?.env).toEqual({
     COLLECTION_OUTCOME: "${{ steps.plan.outcome }}", PLANNING_COMPLETE: "${{ steps.plan.outputs.planning_complete }}",
+    RUN_ID: "${{ steps.plan.outputs.run_id }}",
     FINALIZATION_OUTCOME: "${{ steps.finalize.outcome }}", UPLOAD_OUTCOME: "${{ steps.upload.outcome }}",
     COMMIT_OUTCOME: "${{ steps.commit.outcome }}", REPORT_OUTCOME: "${{ steps.report.outcome }}",
     WRITE_REPORT: "${{ inputs.write_report }}",

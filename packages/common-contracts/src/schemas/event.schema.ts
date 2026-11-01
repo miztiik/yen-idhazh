@@ -8,7 +8,7 @@ import { ParsedFeedBatchSchema, SelectedFeedBatchSchema, PartitionedFeedBatchSch
 import { PlanApiTimingSchema } from "./plan-run.schema";
 import { FEED_INGEST_EVENT_VERSION, FEED_OUTCOME_PAYLOAD_VERSION } from "../version";
 
-const FEED_INGEST_OPERATIONS = ["history", ...PlanApiTimingSchema.shape.operation.options, "plan", "artifact-upload", "quality"] as const;
+const FEED_INGEST_OPERATIONS = ["history", ...PlanApiTimingSchema.shape.operation.options, "plan", "artifact-upload", "quality", "request-attempt"] as const;
 export const FeedIngestEventSchema = z.strictObject({
   version: z.literal(FEED_INGEST_EVENT_VERSION).default(FEED_INGEST_EVENT_VERSION),
   run_id: RunIdSchema, correlation_id: z.uuid({ version: "v4" }),
@@ -19,11 +19,11 @@ export const FeedIngestEventSchema = z.strictObject({
 }).meta({
   version: FEED_INGEST_EVENT_VERSION,
   changelog: [
+    { version: FEED_INGEST_EVENT_VERSION, change: "Add independently validated native request-failure evidence." },
     { version: FEED_INGEST_EVENT_VERSION, change: "Require current progress events without earlier-version conversion." },
     { version: "2026-10-30T22:48", change: "Add separate typed quality-rejection events." },
     { version: "2026-10-30T22:25", change: "Record safe feed failure targets and response byte-limit evidence." },
-    { version: "2026-10-29T08:00", change: "Add artifact-upload inventory and safe article addresses." },
-    { version: "2026-10-29", change: "Move operation-specific fields into flexible details." },
+    { version: "2026-10-29T08:00", change: "Earlier changes are in this file's Git history." },
   ],
 });
 export type FeedIngestEvent = z.infer<typeof FeedIngestEventSchema>;
