@@ -20,7 +20,7 @@ await runPlannerServer(async startup => {
   let completed = false;
   return {
     ...restored, runtime: {
-      ...restored.runtime, boundary: { transport, resolve: transport.resolve },
+      ...restored.runtime, boundary: { transport },
       log: event => {
         if (event.operation === "plan" && event.phase === "completed") completed = true;
         appendFileSync(join(process.cwd(), "recorded-events.jsonl"), `${JSON.stringify(event)}\n`);

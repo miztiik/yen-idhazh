@@ -1,0 +1,68 @@
+name: Source transport tests
+run-name: Source transport tests - ${{ github.ref_name }}
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - .github/workflows/source-transport-test.yml
+      - .github/actions/publication-runtime/action.yml
+      - services/feed-ingest-plan/**
+      - services/host-fingerprints/**
+      - packages/common-contracts/**
+      - packages/data-delivery/**
+      - packages/ledger-file-writer/**
+      - packages/feed-probe/**
+      - config/feed-ingest-plan.json
+      - tests/fixtures/feed-ingest-plan/**
+
+permissions:
+  contents: read
+
+concurrency:
+  group: source-transport-test-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  native_source_transport:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+
+      - uses: ./.github/actions/publication-runtime
+
+      - name: Record candidate identity
+        env:
+          CANDIDATE_REF: ${{ github.head_ref || github.ref_name }}
+        run: |
+          printf 'Code SHA: %s\nCandidate ref: %s\nRun: %s\nAttempt: %s\n' \
+            "$(git rev-parse HEAD)" "$CANDIDATE_REF" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" \
+            | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: Install native source dependencies
+        run: |
+          set -euo pipefail
+          start=$SECONDS
+          bun install --cwd services/feed-ingest-plan --frozen-lockfile
+          bun install --cwd packages/feed-probe --frozen-lockfile
+          bun install --cwd services/host-fingerprints --frozen-lockfile
+          printf 'Native source verification dependency installation took %d seconds.\n' "$((SECONDS - start))"
+          cd services/feed-ingest-plan
+          node -e 'const fs = require("node:fs"), os = require("node:os"); console.log(JSON.stringify({native_binary_bytes: fs.statSync(require.resolve("impit-linux-x64-gnu")).size, host_platform: process.platform, host_architecture: process.arch, host_logical_cpus: os.cpus().length, host_ram_bytes: os.totalmem()}))'
+          bun -e 'const config = JSON.parse(await Bun.file("../../config/feed-ingest-plan.json").text()); console.log(JSON.stringify({profiles: config.harvest.request_headers, attempt_timeout_ms: config.harvest.fetch_timeout_ms, response_diagnostics: config.harvest.response_diagnostics}))'
+
+      - name: Verify native source response ownership
+        run: |
+          bun run --cwd services/feed-ingest-plan check
+          bun run --cwd packages/feed-probe check
+          bun run --cwd services/feed-ingest-plan test ./test/impit-transport.test.ts

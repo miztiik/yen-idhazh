@@ -77,8 +77,8 @@ export async function fetchDocument(
   const attemptObservations: ReturnType<typeof observeDocument>[] = [];
   const emit = createStageLogger(state.context, runtime.log);
   const work = documentWork({
-    document_activity: (operation, phase, details, url, feedUrls) =>
-      emit(operation, phase, details, ["feed_id", "publisher_id"], url, feedUrls),
+    document_activity: (operation, phase, details, url, feedUrls, evidence) =>
+      emit(operation, phase, details, ["feed_id", "publisher_id"], url, feedUrls, evidence),
     observations: createIngestObservations(state.work.observe), observation_clock: runtime.observation_clock ?? (() => new Date()),
     on_attempt: observation => { attemptObservations.push(observation); },
   }, { run_id: record.context.run_id, correlation_id: record.context.correlation_id, article_id: identity.url_key, feed_id: source.id },
@@ -128,7 +128,7 @@ export async function fetchDocument(
     throw error;
   }
   const { fetched, observation } = result;
-  const { final_attempted_url: _finalAttemptedUrl, ...fetchedDocument } = fetched;
+  const fetchedDocument = fetched;
   const artifact = FetchedDocumentSchema.parse({
     ...fetchedDocument, fetch_item_type: request.fetch_item_type, canonical_url: identity.canonical_url, article_id: identity.url_key, feed_id: source.id,
     error_code: fetched.error_code ?? null, robots_failure: fetched.robots_failure ?? null, robots_http_status: fetched.robots_http_status ?? null,

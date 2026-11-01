@@ -1,6 +1,6 @@
 # Feed and article failure diagnostics
 
-**Last Updated**: 2026-10-31
+**Last Updated**: 2026-11-01
 
 Which operation failed, what evidence survives it, and which durations were
 actually measured? This is the isolated TypeScript planner's diagnostic
@@ -29,15 +29,16 @@ Table A - diagnostic fields
 | A2 | `robots` | Permission for the checked target: allowed, denied or unknown. Null before permission was checked, including an unsafe redirect destination. |
 | A3 | `fetch_failure` | Exact terminal fetch cause: HTTP, timeout, unsafe target, DNS, network, robots denied, robots unknown, body size or redirect cycle. |
 | A4 | `robots_failure`, `robots_http_status` | The cached robots lookup's cause and last HTTP status. These distinguish a denied rule from an unreachable or unsafe robots document without inventing a target response. |
-| A5 | `error_code` | An available OS, TLS or Undici error token. The wire format admits only uppercase letters, digits and underscores, up to 64 characters. No exception message, URL, header or local path is copied. |
+| A5 | `error_code` | An actually available safe OS/TLS error token. Installed native error classes are classified by type, not message text. Unavailable DNS detail stays null. The wire format admits only uppercase letters, digits and underscores, up to 64 characters. |
 | A6 | `extraction_failure` | Missing document root, DOM depth overflow, empty extracted content or missing title. Successful body extraction with no title remains distinguishable from empty text. |
 | A7 | `failure_code` | The existing Python item-health vocabulary where meanings match, including the selected measured extraction signal. A signal alone is not a refusal. A configured quality rejection stays separate from successful parsing and is unresolved for source attribution. Unmatched conditions use `unknown`, with their exact typed `detail`, rather than pretending to be a network failure. |
 | A8 | `stopped_stage`, `detail` | The failed operation (`fetch`, `extract` or feed `parse`) and its fixed cause token. Feed parsing distinguishes malformed input from a successfully parsed empty feed. No fetched prose reaches this field. |
-| A9 | `fetch_ms` | Measured milliseconds around that item's complete permitted fetch, including DNS, robots lookup or cache wait, retries, backoff, redirects and body reading. |
+| A9 | `fetch_ms` | Measured milliseconds around that item's complete permitted fetch, including native connection work, robots lookup or cache wait, retries, backoff, redirects and body reading. |
 | A10 | `extract_ms` | Measured milliseconds around the synchronous article extractor, including typed failures. Null if extraction was not attempted. |
 | A11 | `warnings` | A bounded set of warning kinds. Currently `malformed-json-ld` identifies invalid publisher metadata without declaring the article failed. |
 | A12 | `quality` | Measured source/body words, independent publisher length, native shape signals, configured consequence and actual implementation fingerprints. Null before extraction or on historical rows. [Extraction quality](extraction-quality.md) owns each meaning and its unavailable readings. |
 | A13 | `body_limit` | The configured decoded-byte limit and bytes observed at cutoff as a lower bound. It is present only when a feed, article or robots response hit the limit; the remaining response is not read to obtain a full size. |
+| A14 | `response_evidence`, `robots_response_evidence` | Independent target and robots facts: content type, measured decoded bytes, declared content length if available, selected headers, truncation names and native browser profile. An absent response stays null. |
 
 Null means unavailable or unperformed; zero milliseconds means a real
 measurement rounded below one millisecond. Inactive feeds, invalid entry
@@ -52,6 +53,24 @@ query values and fragments are removed. The requested address is not presented
 as the final address after a redirect. The final field names the last feed
 target sent in an HTTP request, or is null when no such request was sent.
 Neither address comes from feed contents.
+Each failed dispatched request also emits a `request-attempt` event. Its
+separately validated `network_failure` details keep the actual status, profile,
+response evidence and ordered attempt facts. Failed requests remain visible
+when a later retry or secondary profile succeeds. Terminal fetch/parse events
+carry captured evidence; a parse failure has no invented failed HTTP address.
+`requested_url` is the operation input, `final_attempted_url` is the last
+dispatched target, and `failed_url` is the actual failed request, including
+robots when its retrieval caused the refusal. Local validation has no failed
+request address. Redirect history preserves sanitized hop addresses and status.
+
+`harvest.response_diagnostics` initially selects `content-type`,
+`content-length` and `retry-after`, bounded to 256 characters per value.
+Configuration rejects credential-related header names and redirect headers.
+Values are printable ASCII; shortened values name their header in
+`headers_truncated`. The typed evidence format admits at most 32 headers and
+512 characters per value, independent of the flexible log-detail budget.
+Decoded size is measured before UTF-8 conversion. Native decompression may
+remove content length; no replacement length is invented.
 When a robots response hits the byte limit, the progress event marks
 `body_limit_source` as `robots`; otherwise the source is the feed or article
 response. A target address appears in the event only when its target request
@@ -101,11 +120,10 @@ its parser nor patches or suppresses the global console; removing malformed
 scripts prevents its parser from retrying and logging them. Its debug option
 stays off.
 
-Undici's decompression interceptor remains experimental. That warning concerns
-dependency stability, not an article failure. The mature built-in zlib codecs
-alone are not an equivalent replacement for the interceptor's HTTP content
-encoding and stream lifecycle handling; this phase does not redesign transport
-or weaken decoded byte limits, abort handling or address pinning.
+Native decompression and cancellation belong to the
+[source transport](feed-harvesting.md#request-and-extraction-controls).
+Failure evidence includes response headers received before a body read fails;
+cleanup cannot replace that status with an unclassified cancellation error.
 
 ## Historical records
 
@@ -118,6 +136,11 @@ diagnostics; existing historical diagnostics gain null quality and null
 reconstructs a missing HTTP status, error token or duration from a broad old
 rejection reason. The existing publication-time migration is unchanged.
 Source-run predecessors retain their counts and recorded completion proof.
+New native response evidence defaults to null on older transient diagnostics.
+The five retained planner ledger shapes and their read-side commitments are
+unchanged; response header maps do not enter the rejected-article Parquet row.
+Current live stages and optional failure artifacts use the new native shape,
+without reopening old transport captures.
 
 The native Parquet reader validates old files against their original column
 shape and physical digest before migrating them. Logical record commitments
@@ -157,8 +180,8 @@ change request, media or response-limit policy.
 No granular DNS, connect, TLS, first-byte, body, robots or retry timing is
 reported separately. The current transport supplies no such measurements;
 the complete fetch duration must not be divided into invented socket phases.
-Intermediate retry error history is not retained; the terminal cause and last
-received status are retained.
+Failed retry/profile attempts are retained in current events and optional
+body-free diagnostics. They do not create a committed per-request history.
 
 The [quality contract](extraction-quality.md) records the remaining extractor
 differences, missing sibling-host measurement and worker-owned token/cap

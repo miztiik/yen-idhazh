@@ -1,7 +1,8 @@
 /** Publish bounded planner progress events without work batches or article bodies. */
-import { ExtractionQualitySchema, ExtractionSignalSchema, FeedIngestEventSchema } from "@idhazh/common-contracts";
+import { ExtractionQualitySchema, ExtractionSignalSchema, FeedIngestEventSchema, NetworkFailureDetailsSchema } from "@idhazh/common-contracts";
 import { z } from "zod";
-import type { FeedIngestEvent } from "@idhazh/common-contracts";
+import type { FeedIngestEvent, NetworkFailureDetails } from "@idhazh/common-contracts";
+import { diagnosticUrl } from "./diagnostic-url";
 import type { RunContext } from "../resolve-run-context";
 // RFC 4122 DNS namespace identifies deterministic local work events.
 export const EVENT_NAMESPACE = "6ba7b810-9dad-11d1-80b4-00c04fd430c8";
@@ -15,22 +16,6 @@ const QualityRejectionSchema = z.strictObject({
   word_count: ExtractionQualitySchema.shape.word_count,
 });
 type ComplianceViolation = Readonly<{ code: string; path: string }>;
-
-/** A diagnostic address never retains credentials, query values or fragments. */
-function diagnosticUrl(value: string): string | undefined {
-  try {
-    const url = new URL(value);
-    if (!["http:", "https:"].includes(url.protocol) || url.username || url.password) return undefined;
-    // Signed addresses must not be copied, even with their signature removed.
-    if ([...url.searchParams.keys()].some(key => /token|secret|signature|credential|authorization|key|auth|sig/i.test(key))) return undefined;
-    url.search = "";
-    url.hash = "";
-    return url.href.length <= DETAIL_LIMITS.stringLength ? url.href : undefined;
-  } catch (error) {
-    if (!(error instanceof TypeError)) throw error;
-    return undefined;
-  }
-}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   if (value === null || typeof value !== "object" || Array.isArray(value)) return false;
@@ -46,6 +31,7 @@ function hasQualityRejection(value: unknown): boolean {
 export function prepareProgressEvent(
   raw: unknown, requiredDetails: readonly string[] = [], failureArticleUrl?: string,
   failureFeedUrls?: Readonly<{ requested: string; final_attempted: string | null }>,
+  failureEvidence?: NetworkFailureDetails,
 ): FeedIngestEvent {
   if (!isRecord(raw)) throw new TypeError("Progress event must be an object");
   const { details: rawDetails, ...envelope } = raw;
@@ -175,6 +161,18 @@ export function prepareProgressEvent(
       ] } };
     }
   }
+  if (failureEvidence !== undefined) {
+    if (base.phase !== "failed" || !["fetch", "parse", "request-attempt"].includes(base.operation)) {
+      throw new TypeError("Network failure evidence requires a failed document or request attempt");
+    }
+    const evidence = NetworkFailureDetailsSchema.parse(failureEvidence);
+    const safe = (url: string | null) => url === null ? null : diagnosticUrl(url) ?? null;
+    details.network_failure = { ...evidence,
+      requested_url: safe(evidence.requested_url), final_attempted_url: safe(evidence.final_attempted_url),
+      failed_url: safe(evidence.failed_url),
+      attempt: evidence.attempt === null ? null : { ...evidence.attempt, request_url: safe(evidence.attempt.request_url) },
+    };
+  }
   return FeedIngestEventSchema.parse({ ...base, details });
 }
 
@@ -184,11 +182,11 @@ export function createStageLogger(
 ) {
   return (operation: FeedIngestEvent["operation"], phase: FeedIngestEvent["phase"],
     details: Record<string, unknown> = {}, requiredDetails: readonly string[] = [], failureArticleUrl?: string,
-    failureFeedUrls?: Readonly<{ requested: string; final_attempted: string | null }>) => {
+    failureFeedUrls?: Readonly<{ requested: string; final_attempted: string | null }>, failureEvidence?: NetworkFailureDetails) => {
     write(prepareProgressEvent({
       run_id: context.run_id, correlation_id: context.correlation_id, occurred_at: new Date().toISOString(),
       operation, phase, details,
-    }, requiredDetails, failureArticleUrl, failureFeedUrls));
+    }, requiredDetails, failureArticleUrl, failureFeedUrls, failureEvidence));
   };
 }
 export type StageLogger = ReturnType<typeof createStageLogger>;

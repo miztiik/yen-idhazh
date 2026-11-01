@@ -125,15 +125,28 @@ if (Bun.argv.includes("--emit-schemas")) {
     const config = await readConfig();
     const profiles = config.harvest.request_headers;
     expect(configs.FeedRequestHeadersSchema.parse({ ...profiles, secondary: null }).secondary).toBeNull();
+    for (const browser of ["firefox", "chrome"]) {
+      for (const headers of [{}, { accept: "application/xml" }, { "accept-language": "en" }]) {
+        expect(configs.FeedRequestHeadersSchema.safeParse({ ...profiles, primary: { browser, headers } }).success).toBe(true);
+      }
+    }
     for (const headers of [
-      {}, { host: "internal.example" },
+      { host: "internal.example" }, { "user-agent": "retired crawler" },
       { authorization: "credentials" }, { accept: "text/html\r\nhost: internal.example" },
       { accept: "" }, { Accept: "text/html" },
     ]) {
       for (const name of ["primary", "secondary"]) {
-        expect(configs.FeedRequestHeadersSchema.safeParse({ ...profiles, [name]: headers }).success).toBe(false);
+        expect(configs.FeedRequestHeadersSchema.safeParse({
+          ...profiles, [name]: { browser: "firefox", headers },
+        }).success).toBe(false);
       }
     }
+    for (const primary of [{ accept: "text/html" }, { browser: "unsupported", headers: {} }]) {
+      expect(configs.FeedRequestHeadersSchema.safeParse({ ...profiles, primary }).success).toBe(false);
+    }
+    expect(configs.FeedIngestConfigSchema.safeParse({
+      ...config, harvest: { ...config.harvest, user_agent: "retired crawler" },
+    }).success).toBe(false);
     expect(configs.FeedRequestHeadersSchema.safeParse({
       ...profiles, recoverable_http_statuses: [403, 403],
     }).success).toBe(false);

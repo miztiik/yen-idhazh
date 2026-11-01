@@ -4,7 +4,7 @@ import { randomUUID } from "node:crypto";
 import { mkdir, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { FeedIngestEvent } from "@idhazh/common-contracts";
-import { selectedArtifactPath } from "../src/selected-artifact-path";
+import { selectedArtifactPath, rawDocumentContentsFilename } from "../src/selected-artifact-path";
 import { createPlanTestServer } from "./plan-test-server";
 import { prepareProgressEvent } from "../src/logging/structured-logger";
 import { publishUploadInventory, publishWorkflowUploadInventories } from "../scripts/feed-ingest-plan-upload-inventory";
@@ -53,6 +53,11 @@ test("standalone document work logs failure addresses only and persistence logs 
         }
         if (event.operation === failedOperation && event.phase === "failed") {
           expect(event.details.article_url).toBe(url);
+          expect(event.details.network_failure).toMatchObject({ requested_url: url,
+            final_attempted_url: url, failed_url: url, http_status: 404, request_profile: "firefox" });
+        } else if (event.operation === "request-attempt" && event.phase === "failed") {
+          expect(event.details.network_failure).toMatchObject({ failed_url: url,
+            http_status: 404, attempt: { phase: "target", request_profile: "firefox" } });
         } else expect(JSON.stringify(event)).not.toContain("https://");
       }
     }
@@ -211,14 +216,15 @@ test("upload JSONL names real visible ZIP members, including recovery files, wit
     expect(events.every(event => event.details._compliance === undefined)).toBe(true);
     expect(JSON.stringify(events)).not.toContain("private body");
     await mkdir(join(f.directory, "raw-document-artifacts"));
-    await writeFile(join(f.directory, "raw-document-artifacts", "raw-document-contents.jsonl"), "private raw body");
+    const filename = rawDocumentContentsFilename({ run_id: "2026-10-29-700", writer: { attempt: 1 } });
+    await writeFile(join(f.directory, "raw-document-artifacts", filename), "private diagnostic metadata");
     events.length = 0;
     await publishWorkflowUploadInventories({
       directory: f.directory, runNumber: "700", write: event => { events.push(event); },
     });
     expect(events.flatMap(event => typeof event.details.file === "string" ? [event.details.file] : []).sort())
-      .toEqual([...files, "raw-document-contents.jsonl"].sort());
-    expect(JSON.stringify(events)).not.toContain("private raw body");
+      .toEqual([...files, filename].sort());
+    expect(JSON.stringify(events)).not.toContain("private diagnostic metadata");
     await expect(publishUploadInventory({ directory: join(f.directory, "missing"), runNumber: "700",
       write: event => { events.push(event); } })).rejects.toThrow();
     expect(events.at(-1)).toMatchObject({ operation: "artifact-upload", phase: "failed" });

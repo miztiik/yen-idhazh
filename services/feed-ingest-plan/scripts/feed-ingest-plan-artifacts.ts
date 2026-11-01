@@ -9,7 +9,7 @@ import { isMetadataDeliveryConfirmed, MetadataDeliveryResultSchema } from "./fee
 import { writeGitHubOutputs } from "./feed-ingest-plan-outputs";
 import { safe_persist_data } from "@idhazh/data-delivery";
 import { parseRawDocumentDumpControl, ServiceSettingsSchema } from "../src/config/service-settings";
-import { rawDocumentContentsPath, RAW_DOCUMENT_CONTENTS_FILENAME } from "../src/selected-artifact-path";
+import { rawDocumentContentsPath, rawDocumentContentsFilename } from "../src/selected-artifact-path";
 import { workflowReportFilename } from "./feed-ingest-plan-report";
 
 // This separate upload directory is an artifact packaging protocol, not a content or retention setting.
@@ -27,13 +27,14 @@ async function prepareRawDocumentArtifact(input: {
     run_id: runId, writer: { attempt: input.attempt },
   });
   if (!await Bun.file(join(input.root, sourcePath)).exists()) return undefined;
+  const filename = rawDocumentContentsFilename({ run_id: runId, writer: { attempt: input.attempt } });
   await safe_persist_data({
     sourceRoot: input.root,
-    files: [{ sourcePath, targetPath: RAW_DOCUMENT_CONTENTS_FILENAME }],
-    permittedPaths: [RAW_DOCUMENT_CONTENTS_FILENAME],
+    files: [{ sourcePath, targetPath: filename }],
+    permittedPaths: [filename],
     destination: { kind: "artifact-directory", directory: join(input.directory, RAW_DOCUMENT_ARTIFACT_DIRECTORY) },
   });
-  return `${RAW_DOCUMENT_ARTIFACT_DIRECTORY}/${RAW_DOCUMENT_CONTENTS_FILENAME}`;
+  return `${RAW_DOCUMENT_ARTIFACT_DIRECTORY}/${filename}`;
 }
 
 export async function prepareWorkflowArtifacts(input: {

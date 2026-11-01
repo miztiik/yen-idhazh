@@ -25,6 +25,8 @@ export function fetchDiagnostics(result: FetchResult, fetch_ms: number | null): 
     robots_failure: result.robots_failure ?? null, robots_http_status: result.robots_http_status ?? null,
     body_limit: result.body_limit ?? null,
     error_code: result.error_code ?? null,
+    response_evidence: result.response_evidence ?? null,
+    robots_response_evidence: result.robots_response_evidence ?? null,
     failure_code: failureCode(result), stopped_stage: result.failure === null ? null : "fetch",
     detail: result.failure, fetch_ms,
   });

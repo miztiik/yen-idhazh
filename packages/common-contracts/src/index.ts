@@ -33,3 +33,4 @@ export * from "./schemas/planner-maintenance.schema";
 export * from "./schemas/planner-file-validation.schema";
 export * from "./schemas/planner-publication.schema";
 export * from "./schemas/feed-probe.schema";
+export * from "./schemas/http-response-evidence.schema";

@@ -1,13 +1,10 @@
-/** Refuse non-public targets before a request and again at socket DNS lookup. */
-import { lookup } from "node:dns/promises";
+/** Refuse unsafe URL names and literal addresses before source dispatch. */
 import { isIP } from "node:net";
 import ipaddr from "ipaddr.js";
 
 export class UnsafeTargetError extends Error {
   constructor() { super("address is not on the public internet"); }
 }
-export type ResolvedAddress = { address: string; family: 4 | 6 };
-export type ResolveAddresses = (hostname: string) => Promise<readonly ResolvedAddress[]>;
 
 export function isPublicAddress(address: string): boolean {
   if (!ipaddr.isValid(address)) return false;
@@ -31,41 +28,4 @@ export function validateTargetName(raw: string): URL {
   }
   if (isIP(hostname) && !isPublicAddress(hostname)) throw new UnsafeTargetError();
   return url;
-}
-
-export const resolveAddresses: ResolveAddresses = async hostname => {
-  const addresses = await lookup(hostname, { all: true, verbatim: true });
-  return addresses.map(({ address, family }) => {
-    if (family !== 4 && family !== 6) throw new UnsafeTargetError();
-    return { address, family };
-  });
-};
-
-export async function validateTarget(
-  raw: string, resolve: ResolveAddresses, signal: AbortSignal,
-): Promise<{ url: URL; addresses: readonly ResolvedAddress[] }> {
-  const url = validateTargetName(raw);
-  const hostname = url.hostname.replace(/^\[|\]$/g, "");
-  signal.throwIfAborted();
-  const literalFamily = isIP(hostname);
-  let addresses: readonly ResolvedAddress[];
-  if (literalFamily === 4 || literalFamily === 6) {
-    addresses = [{ address: hostname, family: literalFamily }];
-  } else {
-    let abort: () => void = () => {};
-    try {
-      addresses = await Promise.race([
-        resolve(hostname),
-        new Promise<never>((_, reject) => {
-          abort = () => reject(signal.reason);
-          signal.addEventListener("abort", abort, { once: true });
-        }),
-      ]);
-    } finally { signal.removeEventListener("abort", abort); }
-  }
-  if (!addresses.length || addresses.some(({ address }) => !isPublicAddress(address))) {
-    throw new UnsafeTargetError();
-  }
-  signal.throwIfAborted();
-  return { url, addresses };
 }

@@ -39,7 +39,7 @@ on:
           - round-robin
           - none
       dump_raw_document_contents:
-        description: Include failed raw feed and article documents in a separate diagnostic artifact
+        description: Include body-free failed feed and article metadata in a separate diagnostic artifact
         required: false
         default: 'false'
         type: choice
@@ -159,7 +159,7 @@ jobs:
           include-hidden-files: false
           if-no-files-found: error
 
-      - name: Upload failed raw documents
+      - name: Upload failed document metadata
         id: upload-raw-documents
         if: ${{ always() && inputs.dump_raw_document_contents == 'true' && steps.finalize.outputs.raw_document_contents != '' }}
         uses: actions/upload-artifact@v7
@@ -182,6 +182,7 @@ jobs:
           UPLOAD_ARTIFACT_ID: ${{ steps.upload.outputs.artifact-id }}
           DUMP_RAW_DOCUMENT_CONTENTS: ${{ inputs.dump_raw_document_contents }}
           RAW_DOCUMENT_CONTENTS: ${{ steps.finalize.outputs.raw_document_contents }}
+          RUN_ID: ${{ steps.plan.outputs.run_id }}
           RAW_UPLOAD_OUTCOME: ${{ steps.upload-raw-documents.outcome }}
           RAW_UPLOAD_ARTIFACT_ID: ${{ steps.upload-raw-documents.outputs.artifact-id }}
         run: bun run services/feed-ingest-plan/scripts/finish-run-output.ts

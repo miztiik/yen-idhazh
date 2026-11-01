@@ -9,8 +9,9 @@ import {
 import type {
   HarvestTransport,
   TransportResponse,
+  TransportRequest,
 } from "@idhazh/feed-ingest-plan/transport";
-import type { ResolveAddresses } from "@idhazh/feed-ingest-plan/safe-target";
+import { HttpResponseEvidenceSchema } from "@idhazh/common-contracts";
 import { probeFeed } from "../src/feed-probe";
 
 type RecordedRoute = {
@@ -22,26 +23,19 @@ type RecordedRoute = {
 class RecordedFeedTransport implements HarvestTransport {
   constructor(private readonly routes: ReadonlyMap<string, RecordedRoute>) {}
 
-  async request(input: {
-    url: URL;
-    addresses: readonly { address: string; family: 4 | 6 }[];
-    user_agent: string;
-    headers: Readonly<Record<string, string>>;
-    max_body_bytes: number;
-    signal: AbortSignal;
-  }): Promise<TransportResponse> {
+  async request(input: TransportRequest): Promise<TransportResponse> {
     const route = this.routes.get(input.url.href) ?? { status: 404, body: "" };
     return {
       status: route.status,
       body: route.body,
       location: route.location ?? null,
+      evidence: HttpResponseEvidenceSchema.parse({
+        content_type: null, decoded_bytes: Buffer.byteLength(route.body), declared_content_length: null,
+        selected_headers: {}, headers_truncated: [], request_profile: input.profile.browser,
+      }),
     };
   }
 }
-
-const resolveFixtureAddress: ResolveAddresses = async () => [
-  { address: "8.8.8.8", family: 4 },
-];
 
 async function fixture(name: string): Promise<string> {
   return Bun.file(new URL(`../../../tests/fixtures/feed-probe/${name}`, import.meta.url)).text();
@@ -50,7 +44,6 @@ async function fixture(name: string): Promise<string> {
 async function boundary(routes: Record<string, RecordedRoute>) {
   return {
     transport: new RecordedFeedTransport(new Map(Object.entries(routes))),
-    resolve: resolveFixtureAddress,
   };
 }
 
@@ -133,7 +126,7 @@ test("HTTP feed failure does not pass", async () => {
   expect(result.failure_code).toBe("http_client_error");
 });
 
-test("article robots warnings do not hide readable content but feed robots still refuses", async () => {
+test("observed article and feed robots warnings do not hide readable content", async () => {
   const feed = await fixture("one-paywall-feed.xml");
   const article = await fixture("readable-article.html");
   const config = FeedIngestConfigSchema.parse(await Bun.file(new URL(
@@ -151,15 +144,10 @@ test("article robots warnings do not hide readable content but feed robots still
     const result = await probeFeed(
       { feed_url: "https://fixture.test/feed.xml", sample_count: 1 }, { harvest, boundary: transport },
     );
-    if (allowedFeed) {
-      expect(result.passed).toBe(true);
-      expect(result.samples[0]?.diagnostics).toMatchObject({
-        robots: "denied", robots_http_status: 200, fetch_failure: null, http_status: 200,
-      });
-    } else {
-      expect(result.verdict).toBe("feed_failure");
-      expect(result.diagnostics).toMatchObject({ robots: "denied", fetch_failure: "robots-denied", http_status: null });
-    }
+    expect(result.passed).toBe(true);
+    expect(result.samples[0]?.diagnostics).toMatchObject({
+      robots: "denied", robots_http_status: 200, fetch_failure: null, http_status: 200,
+    });
   }
   const unavailable = await boundary({
     ...robotsRoute(),

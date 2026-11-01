@@ -27,14 +27,14 @@
   ],
   "robots": [
     {
-      "name": "repeated groups and exact configured identity",
-      "body": "User-agent: OtherBot\nDisallow: /\n\nUser-agent: {{crawler_product}}\nDisallow: /private\n\nUser-agent: {{crawler_product}}\nDisallow: /second\nAllow: /private/open\n\nUser-agent: *\nDisallow: /\n",
+      "name": "repeated general groups ignore browser-specific groups",
+      "body": "User-agent: Firefox\nDisallow: /\n\nUser-agent: *\nDisallow: /private\n\nUser-agent: *\nDisallow: /second\nAllow: /private/open\n",
       "allowed": ["/", "/private/open"],
       "denied": ["/private/file", "/second/file"]
     },
     {
       "name": "longest rule and allow on a tie",
-      "body": "User-agent: {{crawler_product}}\nDisallow: /area\nAllow: /area/public\nDisallow: /tie\nAllow: /tie\n",
+      "body": "User-agent: *\nDisallow: /area\nAllow: /area/public\nDisallow: /tie\nAllow: /tie\n",
       "allowed": ["/area/public/story", "/tie"],
       "denied": ["/area/secret"]
     },

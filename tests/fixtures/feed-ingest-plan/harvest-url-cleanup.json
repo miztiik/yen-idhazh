@@ -46,7 +46,7 @@
       "requests": []
     },
     {
-      "offered": "https://www.google.com/url?url=https%3A%2F%2Finward.example%2Fstory",
+      "offered": "https://www.google.com/url?url=http%3A%2F%2F10.0.0.7%2Fstory",
       "failure": "unsafe-target",
       "requests": []
     },

@@ -17,7 +17,7 @@ URL. An article request uses either an explicit permitted operator URL or
 the complete server-owned `batch_id` and `offer_id` pair, not both.
 No caller supplies a file path.
 
-The permitted fetcher retains DNS/address validation, pinned sockets, robots,
+The permitted fetcher uses native Impit with URL/name/literal-address checks, robots,
 redirect, retry, deadline and decoded-byte controls. Its strict response
 contains a reference and body-free outcome, not fetched bytes. A failed
 fetch remains a typed failure.
@@ -98,19 +98,24 @@ and persistence.
 
 ## Failure-only raw document artifact
 
-The optional diagnostic contains a failed input document as downloaded, with
-its recorded fetch facts. It is not extracted article text.
+The optional diagnostic contains body-free metadata for a failed input,
+with its recorded fetch facts. It contains neither downloaded bytes nor
+extracted article text.
 `dump_raw_document_contents` in `config/feed-ingest-plan-service.json` defaults
-to false. When enabled, the planner appends failed native document JSON to
-`inputs.artifact_root/<run_id>/<attempt>/raw-document-contents.jsonl`.
+to false. When enabled, the planner appends validated failed-document metadata to
+`inputs.artifact_root/<run_id>/<attempt>/raw-document-contents-<UTC-day>-<numeric-run-id>-<attempt>.jsonl`.
 The run and attempt determine the path, never downloaded text.
 
 Each compact JSONL record uses
 [`RawDocumentFailureSchema`](../../../packages/common-contracts/src/schemas/raw-document-failure.schema.ts):
 `schema_version`, `document_kind` (`feed` or `article`), `request_id`, the
 observing `operation` (`fetch` or `parse`), actual UTC `failed_at`, the reported
-`failure_reason`, and the validated raw `document`. Its body remains null when
-no body was obtained. An unresolved request has only its existing body-free
+`failure_reason`, and the validated metadata `document`. The body field,
+text samples and repeated run identity are absent, not null placeholders.
+The filename carries UTC day, numeric run and attempt; observations keep hashes,
+parent references and complete ordered attempts without nested `run_id`.
+Response evidence and addresses follow the
+[diagnostic contract](feed-failure-diagnostics.md). An unresolved request has only its existing body-free
 error handling.
 
 One live writer serializes appends and creates the file only on the first
@@ -121,7 +126,7 @@ The [manual workflow](../../how-to/run-feed-ingest-plan-test.md#manual-controls)
 uploads it separately only when enabled and present, including after failed
 collection, and waits for upload confirmation before cleanup.
 
-No successful raw document is archived or retained to diagnose a later failure.
+No raw document is archived or retained to diagnose a later failure.
 There is no refetch, replay, extracted-text substitute or diagnostic reader for
 execution. Raw content never enters normal HTTP responses, logs, Git delivery,
 selected metadata or public pages. Request headers and credentials are not

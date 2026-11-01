@@ -7,7 +7,7 @@ import { describePlanError, PlanError } from "../src/api/plan-request";
 import { collectWorkflowFiles, readWorkflowDeliveryContext } from "./feed-ingest-plan-current-files";
 import { isMetadataDeliveryConfirmed, MetadataDeliveryResultSchema } from "./feed-ingest-plan-delivery-result";
 import { parseRawDocumentDumpControl } from "../src/config/service-settings";
-import { RAW_DOCUMENT_CONTENTS_FILENAME } from "../src/selected-artifact-path";
+import { rawDocumentContentsFilename } from "../src/selected-artifact-path";
 import { RAW_DOCUMENT_ARTIFACT_DIRECTORY } from "./feed-ingest-plan-artifacts";
 
 const OutcomeSchema = z.enum(["success", "failure", "cancelled", "skipped"]);
@@ -33,7 +33,7 @@ export async function finishRunOutput(input: {
   gitSha: string;
   collectionOutcome: unknown; planningComplete: unknown; finalizationOutcome: unknown;
   uploadOutcome: unknown; artifactId?: string;
-  dumpRawDocumentContents?: boolean; rawDocumentContents?: string;
+  dumpRawDocumentContents?: boolean; rawDocumentContents?: string; runId?: string;
   rawUploadOutcome?: unknown; rawArtifactId?: string;
   commitOutcome?: unknown; reportOutcome?: unknown; writeReport?: boolean;
 }) {
@@ -53,8 +53,14 @@ export async function finishRunOutput(input: {
   if (finalization !== "success") failures.push(new Error("Artifact preparation failed"));
   const uploaded = upload === "success" && z.string().regex(/^\d+$/).safeParse(input.artifactId).success;
   if (!uploaded) failures.push(new Error("The run artifact upload was not confirmed"));
-  const rawPath = input.rawDocumentContents === undefined || input.rawDocumentContents === "" ? undefined
-    : z.literal(`${RAW_DOCUMENT_ARTIFACT_DIRECTORY}/${RAW_DOCUMENT_CONTENTS_FILENAME}`).parse(input.rawDocumentContents);
+  let rawPath: string | undefined;
+  if (input.rawDocumentContents !== undefined && input.rawDocumentContents !== "") {
+    if (input.runId === undefined) throw new Error("Diagnostic artifact requires runId");
+    if (input.runId.slice(11) !== input.runNumber) throw new Error("Diagnostic artifact run differs from the workflow");
+    rawPath = z.literal(`${RAW_DOCUMENT_ARTIFACT_DIRECTORY}/${rawDocumentContentsFilename({
+      run_id: input.runId, writer: { attempt: input.attempt },
+    })}`).parse(input.rawDocumentContents);
+  }
   const rawRequired = input.dumpRawDocumentContents === true && rawPath !== undefined;
   const rawUploaded = !rawRequired || (OutcomeSchema.parse(input.rawUploadOutcome) === "success"
     && z.string().regex(/^\d+$/).safeParse(input.rawArtifactId).success);
@@ -101,11 +107,12 @@ if (import.meta.main) {
     const { RUNNER_TEMP, GITHUB_RUN_ID, GITHUB_RUN_ATTEMPT, COLLECTION_OUTCOME, PLANNING_COMPLETE,
       FINALIZATION_OUTCOME, UPLOAD_OUTCOME, UPLOAD_ARTIFACT_ID,
       DUMP_RAW_DOCUMENT_CONTENTS, RAW_DOCUMENT_CONTENTS, RAW_UPLOAD_OUTCOME, RAW_UPLOAD_ARTIFACT_ID, GITHUB_SHA,
-      COMMIT_OUTCOME, REPORT_OUTCOME, WRITE_REPORT } = process.env;
+      COMMIT_OUTCOME, REPORT_OUTCOME, WRITE_REPORT, RUN_ID } = process.env;
     if (!RUNNER_TEMP || !GITHUB_RUN_ID || !GITHUB_RUN_ATTEMPT || !GITHUB_SHA) throw new Error("Workflow completion controls are missing");
     await finishRunOutput({
       root: process.cwd(), temporaryRoot: RUNNER_TEMP, runNumber: GITHUB_RUN_ID, attempt: Number(GITHUB_RUN_ATTEMPT),
       gitSha: GITHUB_SHA,
+      ...(RUN_ID === undefined || RUN_ID === "" ? {} : { runId: RUN_ID }),
       collectionOutcome: COLLECTION_OUTCOME, planningComplete: PLANNING_COMPLETE,
       finalizationOutcome: FINALIZATION_OUTCOME, uploadOutcome: UPLOAD_OUTCOME,
       ...(COMMIT_OUTCOME === undefined ? {} : { commitOutcome: COMMIT_OUTCOME }),

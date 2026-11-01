@@ -1,42 +1,24 @@
-/** Replay only the named offline feed, article, address and protocol recordings. */
+/** Replay only the named offline feed, article and protocol recordings. */
 import { z } from "zod";
 import { loadHarvestInputs } from "../src/harvest-feeds/load-harvest-inputs";
 import type { ConfiguredSource } from "../src/harvest-feeds/load-harvest-inputs";
 import type { HarvestContext } from "../src/harvest-feeds/harvest-types";
 import type { HarvestTransport, TransportRequest, TransportResponse } from "../src/harvest-feeds/transport";
-import type { ResolveAddresses } from "../src/harvest-feeds/safe-target";
+import { responseEvidence } from "../src/harvest-feeds/impit-transport";
+import { BodyLimitError } from "../src/harvest-feeds/transport";
 import { parseHTML } from "linkedom";
-import { crawlerProduct } from "../src/harvest-feeds/robots-policy";
 
 const root = new URL("../../../", import.meta.url);
 const fixtures = new URL("tests/fixtures/feed-ingest-plan/", root);
-const CRAWLER_PRODUCT_PLACEHOLDER = "{{crawler_product}}";
-const AddressSchema = z.object({ address: z.string(), family: z.union([z.literal(4), z.literal(6)]) });
 const ResponseSchema = z.object({
   status: z.int().optional(), body: z.string().optional(), fixture: z.enum(["rss", "atom", "article"]).optional(),
   location: z.string().optional(), error: z.string().optional(),
+  headers: z.record(z.string(), z.string()).optional(),
 });
 const RecordingsSchema = z.object({
-  addresses: z.record(z.string(), z.array(AddressSchema)),
   responses: z.record(z.string(), z.array(ResponseSchema).min(1)),
 });
 export type RecordedResponse = z.infer<typeof ResponseSchema>;
-
-function expandCrawlerProduct(value: unknown, product: string): unknown {
-  if (typeof value === "string") return value.replaceAll(CRAWLER_PRODUCT_PLACEHOLDER, product);
-  if (Array.isArray(value)) return value.map(item => expandCrawlerProduct(item, product));
-  if (value !== null && typeof value === "object") {
-    return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, expandCrawlerProduct(item, product)]));
-  }
-  return value;
-}
-
-async function configuredCrawlerProduct(): Promise<string> {
-  const planning = z.object({
-    harvest: z.object({ user_agent: z.string() }),
-  }).parse(await Bun.file(new URL("config/feed-ingest-plan.json", root)).json());
-  return crawlerProduct(planning.harvest.user_agent);
-}
 
 export async function readHeaderRecovery() {
   const cases = z.array(z.object({ name: z.string(), responses: z.array(ResponseSchema).min(1) }));
@@ -47,14 +29,13 @@ export async function readHeaderRecovery() {
 }
 
 export async function readRecordings() {
-  const [raw, rss, atom, article, product] = await Promise.all([
+  const [raw, rss, atom, article] = await Promise.all([
     Bun.file(new URL("harvest-responses.json", fixtures)).json(),
     Bun.file(new URL("harvest-rss.xml", fixtures)).text(),
     Bun.file(new URL("harvest-atom.xml", fixtures)).text(),
     Bun.file(new URL("harvest-article.html", fixtures)).text(),
-    configuredCrawlerProduct(),
   ]);
-  return { ...RecordingsSchema.parse(expandCrawlerProduct(raw, product)), bodies: { rss, atom, article } };
+  return { ...RecordingsSchema.parse(raw), bodies: { rss, atom, article } };
 }
 export type Recordings = Awaited<ReturnType<typeof readRecordings>>;
 
@@ -114,12 +95,6 @@ export class RecordedTransport implements HarvestTransport {
   private readonly positions = new Map<string, number>();
   constructor(readonly recordings: Recordings) {}
 
-  readonly resolve: ResolveAddresses = async hostname => {
-    const addresses = this.recordings.addresses[hostname];
-    if (!addresses) throw Object.assign(new Error("recorded DNS has no address"), { code: "ENOTFOUND" });
-    return addresses;
-  };
-
   async request(input: TransportRequest): Promise<TransportResponse> {
     input.signal.throwIfAborted();
     const url = input.url.href;
@@ -144,7 +119,10 @@ export class RecordedTransport implements HarvestTransport {
       if (response.status === undefined) throw new Error("recording is missing its observed status");
       const body = response.fixture ? this.recordings.bodies[response.fixture] : response.body;
       if (body === undefined) throw new Error("recording is missing its observed body");
-      return { status: response.status, body, location: response.location ?? null };
+      const bytes = Buffer.byteLength(body);
+      const evidence = responseEvidence(new Headers(response.headers), input, bytes);
+      if (bytes > input.max_body_bytes) throw new BodyLimitError(response.status, input.max_body_bytes, bytes, evidence);
+      return { status: response.status, body, location: response.location ?? null, evidence };
     } finally { this.active--; }
   }
 }
@@ -205,10 +183,7 @@ export function context(log: HarvestContext["log"] = () => {}): HarvestContext {
 }
 
 export async function readSafety() {
-  const [raw, product] = await Promise.all([
-    Bun.file(new URL("harvest-safety.json", fixtures)).json(),
-    configuredCrawlerProduct(),
-  ]);
+  const raw = await Bun.file(new URL("harvest-safety.json", fixtures)).json();
   return z.object({
     sanitizer_version: z.string(),
     sanitizer: z.array(z.object({ input: z.string(), expected: z.string() })),
@@ -228,5 +203,5 @@ export async function readSafety() {
     robots_responses: z.array(ResponseSchema.extend({
       expected: z.enum(["robots-denied", "robots-unknown"]).nullable(),
     })),
-  }).parse(expandCrawlerProduct(raw, product));
+  }).parse(raw);
 }

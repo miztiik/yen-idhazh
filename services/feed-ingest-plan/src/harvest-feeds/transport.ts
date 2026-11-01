@@ -1,19 +1,16 @@
-/** Read one validated target with pinned DNS, manual redirects and a bounded body. */
-import type { LookupFunction } from "node:net";
-// The package request API avoids Bun's incomplete fetch implementation.
-import { Agent, interceptors, request } from "undici/index.js";
-import type { Readable } from "node:stream";
-import type { ResolvedAddress } from "./safe-target";
+/** Which native source request and response facts cross the harvest boundary? */
+import type { FeedIngestConfig, HttpResponseEvidence } from "@idhazh/common-contracts";
 
 export class BodyLimitError extends Error {
   constructor(
     readonly http_status: number,
     readonly configured_limit_bytes: number,
     readonly observed_at_least_bytes: number,
+    readonly response_evidence: HttpResponseEvidence,
   ) { super("response exceeds extract.max_body_bytes"); }
 }
 export class ResponseReadError extends Error {
-  constructor(readonly http_status: number, cause: unknown) {
+  constructor(readonly http_status: number, readonly response_evidence: HttpResponseEvidence, cause: unknown) {
     super("response body could not be read", { cause });
   }
 }
@@ -21,65 +18,26 @@ export type TransportResponse = {
   status: number;
   body: string;
   location: string | null;
+  evidence: HttpResponseEvidence;
 };
 export type BodyLimitEvidence = Pick<BodyLimitError, "configured_limit_bytes" | "observed_at_least_bytes">;
+export function readBodyLimitEvidence(error: unknown): BodyLimitEvidence | undefined {
+  const readCause = error instanceof ResponseReadError ? error.cause : error;
+  const primary = readCause instanceof AggregateError ? readCause.cause : readCause;
+  if (!(primary instanceof BodyLimitError)) return undefined;
+  return {
+    configured_limit_bytes: primary.configured_limit_bytes,
+    observed_at_least_bytes: primary.observed_at_least_bytes,
+  };
+}
 export type TransportRequest = {
   url: URL;
-  addresses: readonly ResolvedAddress[];
-  user_agent: string;
-  headers: Readonly<Record<string, string>>;
+  profile: FeedIngestConfig["harvest"]["request_headers"]["primary"];
+  diagnostics: FeedIngestConfig["harvest"]["response_diagnostics"];
   max_body_bytes: number;
+  timeout_ms: number;
   signal: AbortSignal;
 };
 export interface HarvestTransport {
   request(input: TransportRequest): Promise<TransportResponse>;
 }
-
-export function createPinnedDispatcher(addresses: readonly ResolvedAddress[]) {
-  const first = addresses[0];
-  if (!first) throw new Error("validated target has no address");
-  // DNS is not consulted a second time: every possible socket address was validated.
-  const lookup: LookupFunction = (_hostname, options, callback) => {
-    if (options.all) callback(null, [...addresses]);
-    else callback(null, first.address, first.family);
-  };
-  return new Agent({ connect: { lookup } });
-}
-
-export async function readResponseBody(body: Readable, status: number, limit: number): Promise<string> {
-  const chunks: Uint8Array[] = [];
-  let bytes = 0;
-  for await (const value of body) {
-    const chunk = Buffer.isBuffer(value) ? value : Buffer.from(value);
-    bytes += chunk.byteLength;
-    if (bytes > limit) throw new BodyLimitError(status, limit, bytes);
-    chunks.push(chunk);
-  }
-  return Buffer.concat(chunks, bytes).toString("utf8");
-}
-
-export const networkTransport: HarvestTransport = {
-  async request({ url, addresses, user_agent, headers, max_body_bytes, signal }) {
-    const dispatcher = createPinnedDispatcher(addresses);
-    try {
-      const response = await request(url, {
-        dispatcher: dispatcher.compose(interceptors.decompress({ skipErrorResponses: false })),
-        signal,
-        headers: { ...headers, "user-agent": user_agent },
-      });
-      const location = response.headers.location;
-      if (Array.isArray(location)) throw new Error("response has multiple redirect locations");
-      let body: string;
-      try { body = await readResponseBody(response.body, response.statusCode, max_body_bytes); }
-      catch (error) { throw new ResponseReadError(response.statusCode, error); }
-      return {
-        status: response.statusCode,
-        body,
-        location: location ?? null,
-      };
-    } finally {
-      // A per-request dispatcher has no shared work to drain on refusal or abort.
-      await dispatcher.destroy();
-    }
-  },
-};

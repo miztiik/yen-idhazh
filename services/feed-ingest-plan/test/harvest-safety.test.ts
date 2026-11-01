@@ -3,7 +3,7 @@ import { expect, test } from "bun:test";
 import { FeedUrlExclusionSchema } from "@idhazh/common-contracts";
 import { sanitizeText, SANITIZER_VERSION } from "../src/harvest-feeds/sanitize-text";
 import { isPublicAddress, validateTargetName } from "../src/harvest-feeds/safe-target";
-import { createPermittedFetcher, crawlerProduct, parseRobots, robotsPermits } from "../src/harvest-feeds/robots-policy";
+import { createPermittedFetcher, parseRobots, robotsPermits } from "../src/harvest-feeds/robots-policy";
 import { mapPool } from "../src/harvest-feeds/harvest-pool";
 import { matchUrlExclusion } from "../src/harvest-feeds/url-exclusions";
 import { fetchDiagnostics } from "../src/harvest-feeds/fetch-diagnostics";
@@ -36,8 +36,8 @@ test("literal, encoded and named unsafe addresses fail before transport", async 
   const loaded = await inputs([source()], { harvest: { article_robots_policy: "enforce" } });
   const unsafeTransport = new RecordedTransport(await readRecordings());
   const fetcher = createPermittedFetcher(loaded.config.harvest, loaded.extraction,
-    { transport: unsafeTransport, resolve: unsafeTransport.resolve });
-  for (const target of [...safety.unsafe_targets, "https://inward.example/feed.xml", "https://mixed.example/feed.xml"]) {
+    { transport: unsafeTransport });
+  for (const target of safety.unsafe_targets) {
     expect((await fetcher.fetch(target)).failure).toBe("unsafe-target");
   }
   expect(unsafeTransport.requests).toEqual([]);
@@ -55,7 +55,7 @@ test("literal, encoded and named unsafe addresses fail before transport", async 
     const transport = new RecordedTransport(await readRecordings());
     const identity = deriveArticleIdentity(vector.offered, loaded.config.harvest);
     const result = await createPermittedFetcher(loaded.config.harvest, loaded.extraction,
-      { transport, resolve: transport.resolve }).fetch(vector.offered);
+      { transport }).fetch(vector.offered);
     expect(result.failure, vector.offered).toBeNull();
     expect(transport.requests.at(-1)?.url.href).toBe(vector.target);
     expect(identity.canonical_url).toBe(vector.canonical_url);
@@ -65,7 +65,7 @@ test("literal, encoded and named unsafe addresses fail before transport", async 
   for (const vector of fixture.refused) {
     const transport = new RecordedTransport(await readRecordings());
     const result = await createPermittedFetcher(loaded.config.harvest, loaded.extraction,
-      { transport, resolve: transport.resolve }).fetch(vector.offered);
+      { transport }).fetch(vector.offered);
     expect(result.failure, vector.offered).toBe(vector.failure);
     expect(transport.requests.map(request => request.url.href)).toEqual(vector.requests);
   }
@@ -78,7 +78,7 @@ test("literal, encoded and named unsafe addresses fail before transport", async 
     const article = await harvestArticle({
       source: sourceSnapshot(loaded, loaded.sources[0]!),
       entry: { entry_ordinal: 0, title: null, link: vector.offered, categories: [], author: null, published_at: null },
-    }, loaded, createPermittedFetcher(loaded.config.harvest, loaded.extraction, { transport, resolve: transport.resolve }), context());
+    }, loaded, createPermittedFetcher(loaded.config.harvest, loaded.extraction, { transport }), context());
     if (vector.excluded) {
       expect(article.rejection).toMatchObject({
         drop_reason: "MEDIA_CONTENT", canonical_url: vector.canonical_url, url_key: identity.url_key, title: null,
@@ -94,13 +94,12 @@ test("literal, encoded and named unsafe addresses fail before transport", async 
   recordings.responses[vector.offered] = [{ status: 200, fixture: "article" }];
   const transport = new RecordedTransport(recordings);
   expect((await createPermittedFetcher({ ...loaded.config.harvest, tidy_urls: false }, loaded.extraction,
-    { transport, resolve: transport.resolve }).fetch(vector.offered)).failure).toBeNull();
+    { transport }).fetch(vector.offered)).failure).toBeNull();
   expect(transport.requests.at(-1)?.url.href).toBe("https://news.example/second");
 });
 
 test("recorded robots rules and structured URL exclusions bind configured policy", async () => {
   const loaded = await inputs();
-  const agent = loaded.config.harvest.user_agent;
   const fixture = await readSafety();
   expect(loaded.config.harvest.url_exclusions).toEqual(fixture.url_exclusions);
   for (const rule of fixture.url_exclusions) expect(FeedUrlExclusionSchema.safeParse(rule).success).toBe(true);
@@ -138,15 +137,15 @@ test("recorded robots rules and structured URL exclusions bind configured policy
   })?.media_match).toBe("url");
   for (const recording of fixture.robots) {
     const document = parseRobots(recording.body, "https://news.example");
-    for (const path of recording.allowed) expect(robotsPermits(document, `https://news.example${path}`, agent), `${recording.name} ${path}`).toBe(true);
-    for (const path of recording.denied) expect(robotsPermits(document, `https://news.example${path}`, agent), `${recording.name} ${path}`).toBe(false);
+    for (const path of recording.allowed) expect(robotsPermits(document, `https://news.example${path}`), `${recording.name} ${path}`).toBe(true);
+    for (const path of recording.denied) expect(robotsPermits(document, `https://news.example${path}`), `${recording.name} ${path}`).toBe(false);
   }
 });
 
 test("denied or unknown permission never requests the target; robots cache is per normalized origin and run", async () => {
   const loaded = await inputs([], { harvest: { article_robots_policy: "enforce" } });
   const transport = new RecordedTransport(await readRecordings());
-  const boundary = { transport, resolve: transport.resolve };
+  const boundary = { transport };
   const fetcher = createPermittedFetcher(loaded.config.harvest, loaded.extraction, boundary);
   const denied = fetchDiagnostics(await fetcher.fetch("https://denied.example/story"), 0);
   expect(denied).toMatchObject({
@@ -163,7 +162,7 @@ test("denied or unknown permission never requests the target; robots cache is pe
   expect(transport.requests.map(request => request.url.href)).toEqual([
     "https://denied.example/robots.txt", "https://unknown.example/robots.txt", "https://news.example/robots.txt",
   ]);
-  for (const request of transport.requests) expect(request.user_agent).toBe(loaded.config.harvest.user_agent);
+  for (const request of transport.requests) expect(request.profile).toEqual(loaded.config.harvest.request_headers.primary);
   const nextRun = createPermittedFetcher(loaded.config.harvest, loaded.extraction, boundary);
   await nextRun.fetch("https://denied.example/story");
   expect(transport.requests.filter(request => request.url.hostname === "denied.example")).toHaveLength(2);
@@ -172,7 +171,7 @@ test("denied or unknown permission never requests the target; robots cache is pe
 test("redirects establish safe destination and robots permission before requesting the next hop", async () => {
   const loaded = await inputs([], { harvest: { article_robots_policy: "enforce" } });
   const transport = new RecordedTransport(await readRecordings());
-  const fetcher = createPermittedFetcher(loaded.config.harvest, loaded.extraction, { transport, resolve: transport.resolve });
+  const fetcher = createPermittedFetcher(loaded.config.harvest, loaded.extraction, { transport });
   expect(await fetcher.fetch("https://news.example/unsafe-redirect")).toMatchObject({ failure: "unsafe-target", http_status: 302 });
   expect((await fetcher.fetch("https://news.example/denied-redirect")).failure).toBe("robots-denied");
   expect((await fetcher.fetch("https://news.example/safe-redirect")).http_status).toBe(200);
@@ -187,7 +186,7 @@ test("permanent statuses do not retry; transient statuses use existing retry con
     extraction: { max_retries: 1, backoff_initial_seconds: 0.01 },
   });
   const transport = new RecordedTransport(await readRecordings());
-  const fetcher = createPermittedFetcher(loaded.config.harvest, loaded.extraction, { transport, resolve: transport.resolve });
+  const fetcher = createPermittedFetcher(loaded.config.harvest, loaded.extraction, { transport });
   expect(fetchDiagnostics(await fetcher.fetch("https://news.example/not-found"), 0)).toMatchObject({
     http_status: 404, fetch_failure: "http", failure_code: "http_client_error",
   });
@@ -205,7 +204,7 @@ test("permanent statuses do not retry; transient statuses use existing retry con
         if (event === interruption) throw new Error("progress destination interrupted");
       };
       await expect(harvestFeeds(await inputs(), interruptedContext, {
-        transport: interruptedTransport, resolve: interruptedTransport.resolve,
+        transport: interruptedTransport,
       })).rejects.toThrow("completed work is retained");
       expect(interruptedTransport.requests.length).toBeGreaterThanOrEqual(2);
       expect(facts.filter(row => row.operation === "attempt")
@@ -235,7 +234,7 @@ test("permanent statuses do not retry; transient statuses use existing retry con
   const retryTransport = new RecordedTransport(replay);
   const retryFetcher = createPermittedFetcher(
     loaded.config.harvest, loaded.extraction,
-    { transport: retryTransport, resolve: retryTransport.resolve },
+    { transport: retryTransport },
   );
   const recovered = await retryFetcher.fetch("https://news.example/timeout");
   expect(recovered.http_status).toBe(200);
@@ -252,27 +251,11 @@ test("permanent statuses do not retry; transient statuses use existing retry con
   );
   expect(targetAttempts[1]!.backoff_ms).toBe(0);
   expect((await retryFetcher.fetch("https://news.example/network-error")).http_status).toBe(200);
-  let resolutions = 0;
-  const dnsRetry = createPermittedFetcher(loaded.config.harvest, loaded.extraction, {
-    transport: retryTransport,
-    resolve: async hostname => {
-      if (resolutions++ === 0) throw Object.assign(new Error("recorded transient DNS"), { code: "EAI_AGAIN" });
-      return retryTransport.resolve(hostname);
-    },
-  });
-  const dnsRecovered = await dnsRetry.fetch("https://news.example/second");
-  expect(dnsRecovered.http_status).toBe(200);
-  expect(dnsRecovered.attempts!.slice(0, 2).map(attempt => ({
-    phase: attempt.phase, retry: attempt.retry, failure: attempt.failure,
-  }))).toEqual([
-    { phase: "validation", retry: 0, failure: "dns" },
-    { phase: "validation", retry: 1, failure: null },
-  ]);
   const timeoutTransport = new RecordedTransport(await readRecordings());
   const exhausted = await createPermittedFetcher(
     { ...loaded.config.harvest, fetch_timeout_ms: 30,
       request_headers: { ...loaded.config.harvest.request_headers, secondary: null } }, loaded.extraction,
-    { transport: timeoutTransport, resolve: timeoutTransport.resolve },
+    { transport: timeoutTransport },
   ).fetch("https://news.example/timeout");
   expect(exhausted.failure).toBe("timeout");
   expect(timeoutTransport.requests.filter(request => request.url.pathname === "/timeout").length).toBeLessThanOrEqual(2);
@@ -293,7 +276,7 @@ test("permanent statuses do not retry; transient statuses use existing retry con
   const recoveredTimeoutTransport = new RecordedTransport(timeoutRecordings);
   const recoveredTimeout = await createPermittedFetcher(
     loaded.config.harvest, loaded.extraction,
-    { transport: recoveredTimeoutTransport, resolve: recoveredTimeoutTransport.resolve },
+    { transport: recoveredTimeoutTransport },
   ).fetch(target);
   expect(recoveredTimeout.failure).toBeNull();
   expect(recoveredTimeout.body).toBe(timeoutRecordings.bodies.article);
@@ -302,14 +285,14 @@ test("permanent statuses do not retry; transient statuses use existing retry con
   }))).toEqual([{ retry: 0, failure: "timeout" }, { retry: 1, failure: "timeout" }, { retry: 0, failure: null }]);
   const timeoutRequests = recoveredTimeoutTransport.requests.filter(request => request.url.href === target);
   expect(timeoutRequests).toHaveLength(3);
-  expect(timeoutRequests[0]?.user_agent).toBe(timeoutRequests[1]?.user_agent);
-  expect(timeoutRequests[1]?.user_agent).not.toBe(timeoutRequests[2]?.user_agent);
+  expect(timeoutRequests[0]?.profile).toEqual(timeoutRequests[1]?.profile);
+  expect(timeoutRequests[1]?.profile).not.toEqual(timeoutRequests[2]?.profile);
   for (const vector of fixture.recoveries) {
     const recordings = await readRecordings();
     recordings.responses[target] = vector.responses;
     const transport = new RecordedTransport(recordings);
     const result = await createPermittedFetcher(profileInputs.config.harvest, profileInputs.extraction,
-      { transport, resolve: transport.resolve }).fetch(target);
+      { transport }).fetch(target);
     expect(result.failure, vector.name).toBeNull();
     expect(result.body).toBe(recordings.bodies.article);
     const requests = transport.requests.filter(request => request.url.href === target);
@@ -317,14 +300,11 @@ test("permanent statuses do not retry; transient statuses use existing retry con
       profileInputs.config.harvest.request_headers.primary, profileInputs.config.harvest.request_headers.secondary,
     ].entries()) {
       if (profile === null) throw new Error("Recorded recovery requires the configured secondary profile");
-      const userAgent = `${profileInputs.config.harvest.user_agent} ${profile["user-agent"]}`;
-      expect(requests[index]?.headers).toEqual({ ...profile, "user-agent": userAgent });
-      expect(requests[index]?.user_agent).toBe(userAgent);
-      expect(crawlerProduct(userAgent)).toBe(crawlerProduct(profileInputs.config.harvest.user_agent));
+      expect(requests[index]?.profile).toEqual(profile);
     }
-    expect(requests[0]?.user_agent).not.toBe(requests[1]?.user_agent);
-    expect(transport.requests.filter(request => request.url.pathname === "/robots.txt").map(request => request.headers))
-      .toEqual([{ "user-agent": profileInputs.config.harvest.user_agent }]);
+    expect(requests[0]?.profile.browser).not.toBe(requests[1]?.profile.browser);
+    expect(transport.requests.filter(request => request.url.pathname === "/robots.txt").map(request => request.profile))
+      .toEqual([profileInputs.config.harvest.request_headers.primary]);
     expect(result.attempts?.filter(attempt => attempt.phase === "target").map(attempt => attempt.retry)).toEqual([0, 0]);
   }
   for (const vector of fixture.permanent_failures) {
@@ -332,7 +312,7 @@ test("permanent statuses do not retry; transient statuses use existing retry con
     recordings.responses[target] = vector.responses;
     const transport = new RecordedTransport(recordings);
     const result = await createPermittedFetcher(profileInputs.config.harvest, profileInputs.extraction,
-      { transport, resolve: transport.resolve }).fetch(target);
+      { transport }).fetch(target);
     expect(result.failure, vector.name).toBe("http");
     expect(transport.requests.filter(request => request.url.href === target)).toHaveLength(1);
   }
@@ -340,24 +320,34 @@ test("permanent statuses do not retry; transient statuses use existing retry con
   recordings.responses[target] = [{ status: 200, body: fixture.short_content }, { status: 403, body: "" }];
   const retainedTransport = new RecordedTransport(recordings);
   const retained = await createPermittedFetcher(profileInputs.config.harvest, profileInputs.extraction,
-    { transport: retainedTransport, resolve: retainedTransport.resolve }).fetch(target);
+    { transport: retainedTransport }).fetch(target);
   expect(retained).toMatchObject({ body: fixture.short_content, http_status: 200, failure: null });
+  expect(retained.response_evidence).toMatchObject({
+    decoded_bytes: Buffer.byteLength(fixture.short_content), request_profile: "firefox",
+  });
+  expect(retained.attempts?.filter(attempt => attempt.phase === "target").map(attempt =>
+    [attempt.http_status, attempt.request_profile])).toEqual([[200, "firefox"], [403, "chrome"]]);
   const redirectRecordings = await readRecordings();
   redirectRecordings.responses[target] = [{ status: 200, body: fixture.short_content }, fixture.short_redirect];
   const redirectTransport = new RecordedTransport(redirectRecordings);
   const redirectCounts: number[] = [];
   const redirected = await createPermittedFetcher(profileInputs.config.harvest, profileInputs.extraction,
-    { transport: redirectTransport, resolve: redirectTransport.resolve }).fetch(target,
+    { transport: redirectTransport }).fetch(target,
     async measurement => { redirectCounts.push(measurement.dispatched_request_count); });
   expect(redirected).toMatchObject({ body: fixture.short_content, http_status: 200, failure: null });
+  expect(redirected.response_evidence).toMatchObject({
+    decoded_bytes: Buffer.byteLength(fixture.short_content), request_profile: "firefox",
+  });
   expect(redirected.attempts?.filter(attempt => attempt.phase === "target").map(attempt => attempt.http_status))
     .toEqual([200, 302, 404]);
   expect(redirectCounts.reduce((sum, count) => sum + count, 0)).toBe(redirectTransport.requests.length);
   redirectRecordings.responses["https://news.example/not-found"] = [{ error: "ECONNRESET" }];
   const failedRedirectTransport = new RecordedTransport(redirectRecordings);
   const failedRedirect = await createPermittedFetcher(profileInputs.config.harvest, profileInputs.extraction,
-    { transport: failedRedirectTransport, resolve: failedRedirectTransport.resolve }).fetch(target);
+    { transport: failedRedirectTransport }).fetch(target);
   expect(failedRedirect).toMatchObject({ body: fixture.short_content, http_status: 200, failure: null });
+  expect(failedRedirect.response_evidence?.request_profile).toBe("firefox");
+  expect(failedRedirect.failed_url).toBeNull();
   for (const [location, failure] of [
     ["http://127.0.0.1/secret", "unsafe-target"],
     ["https://denied.example/story", "robots-denied"],
@@ -368,25 +358,25 @@ test("permanent statuses do not retry; transient statuses use existing retry con
     ];
     const refusedTransport = new RecordedTransport(redirectRecordings);
     const refused = await createPermittedFetcher(profileInputs.config.harvest, profileInputs.extraction,
-      { transport: refusedTransport, resolve: refusedTransport.resolve }).fetch(target);
+      { transport: refusedTransport }).fetch(target);
     expect(refused).toMatchObject({ body: null, failure });
     expect(refusedTransport.requests.some(request => request.url.href === location)).toBe(false);
   }
   const noRecovery = new RecordedTransport(recordings);
   const disabled = await createPermittedFetcher({
     ...profileInputs.config.harvest, request_headers: { ...profileInputs.config.harvest.request_headers, secondary: null },
-  }, profileInputs.extraction, { transport: noRecovery, resolve: noRecovery.resolve }).fetch(target);
+  }, profileInputs.extraction, { transport: noRecovery }).fetch(target);
   expect(disabled.body).toBe(fixture.short_content);
   expect(noRecovery.requests.filter(request => request.url.href === target)).toHaveLength(1);
   const threshold = new RecordedTransport(recordings);
   await createPermittedFetcher({
     ...profileInputs.config.harvest,
     request_headers: { ...profileInputs.config.harvest.request_headers, recovery_min_body_bytes: 0 },
-  }, profileInputs.extraction, { transport: threshold, resolve: threshold.resolve }).fetch(target);
+  }, profileInputs.extraction, { transport: threshold }).fetch(target);
   expect(threshold.requests.filter(request => request.url.href === target)).toHaveLength(1);
   const feedTransport = new RecordedTransport(recordings);
   const shortFeed = await createPermittedFetcher(profileInputs.config.harvest, profileInputs.extraction,
-    { transport: feedTransport, resolve: feedTransport.resolve }).fetch(target, undefined, "feed");
+    { transport: feedTransport }).fetch(target, undefined, "feed");
   expect(shortFeed).toMatchObject({ body: fixture.short_content, http_status: 200, failure: null });
   expect(feedTransport.requests.filter(request => request.url.href === target)).toHaveLength(1);
   const retryRecordings = await readRecordings();
@@ -395,7 +385,7 @@ test("permanent statuses do not retry; transient statuses use existing retry con
   ];
   const retried = new RecordedTransport(retryRecordings);
   const profileRecovered = await createPermittedFetcher(profileInputs.config.harvest, { ...profileInputs.extraction, max_retries: 1 },
-    { transport: retried, resolve: retried.resolve }).fetch(target);
+    { transport: retried }).fetch(target);
   expect(profileRecovered.failure).toBeNull();
   expect(profileRecovered.attempts?.filter(attempt => attempt.phase === "target").map(attempt => attempt.retry)).toEqual([0, 1, 0]);
 });
@@ -431,7 +421,7 @@ test("recorded robots HTTP and transport outcomes apply the absence-versus-unkno
     const recordings = await readRecordings();
     recordings.responses["https://news.example/robots.txt"] = [recording];
     const transport = new RecordedTransport(recordings);
-    const fetcher = createPermittedFetcher(loaded.config.harvest, loaded.extraction, { transport, resolve: transport.resolve });
+    const fetcher = createPermittedFetcher(loaded.config.harvest, loaded.extraction, { transport });
     const result = await fetcher.fetch("https://news.example/second");
     expect(result.failure, JSON.stringify(recording)).toBe(recording.expected);
     if (result.robots === "unknown") {
@@ -443,29 +433,10 @@ test("recorded robots HTTP and transport outcomes apply the absence-versus-unkno
   }
 });
 
-test("DNS rebinding or a pending DNS request cannot bypass safe target checks or deadline", async () => {
-  const loaded = await inputs([], { harvest: { fetch_timeout_ms: 50, article_robots_policy: "enforce" } });
-  const transport = new RecordedTransport(await readRecordings());
-  const addresses = transport.recordings.addresses["mixed.example"];
-  if (!addresses?.[0] || !addresses[1]) throw new Error("recorded mixed addresses missing");
-  const publicAddress = addresses[0], privateAddress = addresses[1];
-  let resolutions = 0;
-  const fetcher = createPermittedFetcher(loaded.config.harvest, loaded.extraction, {
-    transport,
-    resolve: async () => [++resolutions === 1 ? publicAddress : privateAddress],
-  });
-  expect((await fetcher.fetch("https://news.example/second")).failure).toBe("robots-unknown");
-  expect(transport.requests).toEqual([]);
-  const pending = createPermittedFetcher(loaded.config.harvest, loaded.extraction, {
-    transport, resolve: () => new Promise(() => {}),
-  });
-  expect((await pending.fetch("https://news.example/second")).failure).toBe("timeout");
-});
-
 test("existing byte controls reject a complete oversized recorded body without losing observed status", async () => {
   const loaded = await inputs([], { extraction: { max_body_bytes: 1024 } });
   const transport = new RecordedTransport(await readRecordings());
-  const fetcher = createPermittedFetcher(loaded.config.harvest, loaded.extraction, { transport, resolve: transport.resolve });
+  const fetcher = createPermittedFetcher(loaded.config.harvest, loaded.extraction, { transport });
   const result = await fetcher.fetch("https://news.example/second");
   expect(result).toMatchObject({ body: null, failure: "body-too-large", http_status: 200 });
   expect(fetchDiagnostics(result, 0).body_limit).toEqual({

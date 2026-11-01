@@ -69,7 +69,7 @@ The version string, `SANITIZER_VERSION`, is a recorded pipeline input ([../contr
 
 ## The address is untrusted before the text is
 
-A feed is a stranger's list of addresses, and the pipeline dials them from inside CI with a repository token in the environment. So an address is validated before it is dialled, not after:
+A feed is a stranger's list of addresses, and the pipeline dials them from inside CI with a repository token in the environment. So an address is validated before it is dialled, not after. The following DNS-resolution and crawler-identity rules describe Python extraction:
 
 - **Only `http` and `https`.** A `file://` entry in a feed is not a fetch, it is a read of the build machine.
 - **The loopback, private, link-local and reserved ranges are refused**, by literal and again after DNS resolution. A cloud metadata endpoint is otherwise one feed entry away, and it is the single highest-value target on a build runner.
@@ -120,6 +120,16 @@ Ten captured files under `tests/fixtures/robots/` carry the cases the two implem
 Two arguments swap silently and neither answer is wrong-looking: `Protego.can_fetch(url, user_agent)` takes them in the opposite order to `RobotFileParser.can_fetch(useragent, url)`, and a swap answers every question the same way. So every fixture case asserts a permitted path **and** a refused one, and a call that returned one constant fails whichever constant it returned.
 
 **A group naming another crawler does not bind us.** The identity stays `yen-idhazh/1.0 (+https://github.com/miztiik/yen-idhazh)`, which carries a contact address a publisher can act on. Sending a user agent a site allows would defeat the publisher's stated policy and throw that address away.
+
+The isolated TypeScript planner instead uses
+[native browser transport](feed-harvesting.md#request-and-extraction-controls).
+It rejects unsafe schemes, credentials, local names and explicit private or
+reserved addresses before each manual redirect dispatch. Impit resolves
+hostnames; this path has no project DNS lookup, socket address pinning or
+DNS-rebinding protection. It keeps native browser headers and matches general
+`User-agent: *` robots rules, not browser-specific groups. Feed requests observe
+permission; articles preserve their configured enforce-or-observe policy.
+Python's transport, permission rules and declared identity remain unchanged.
 
 ### Permission is a value, and a target without it is never requested
 

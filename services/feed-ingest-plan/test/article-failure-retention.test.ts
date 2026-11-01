@@ -132,14 +132,18 @@ test("observed robots denial retains the actual dispatched target failures", asy
     recorded.inputs.harvest.config.harvest.article_robots_policy = "observe";
     recorded.inputs.harvest.extraction.max_retries = 0;
     recorded.inputs.harvest.config.harvest.request_headers.secondary = null;
-    recorded.transport.recordings.responses["https://news.example/robots.txt"] = [{ status: 200, body: "User-agent: *\nDisallow: /\n" }];
+    for (const entry of cases) {
+      recorded.transport.recordings.responses[`${new URL(entry.url).origin}/robots.txt`] = [
+        { status: 200, body: "User-agent: *\nDisallow: /\n" },
+      ];
+    }
     for (const entry of cases) if (entry.responses) recorded.transport.recordings.responses[entry.url] = entry.responses;
     await capture(recorded, cases.map(entry => entry.url));
     const rows = await rejectedRows(recorded);
     expect(rows).toHaveLength(cases.length);
     for (const entry of cases) {
       expect(rows.find(row => row.url_key === deriveArticleIdentity(entry.url, recorded.inputs.harvest.config.harvest).url_key),
-        entry.name).toMatchObject({ ...entry.expected, robots: "denied" });
+        entry.name).toMatchObject({ ...entry.expected, robots: "denied", robots_http_status: 200 });
       expect(recorded.transport.requests.some(request => request.url.href === entry.url)).toBe(true);
     }
   } finally { await recorded.close(); }

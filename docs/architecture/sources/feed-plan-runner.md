@@ -216,7 +216,12 @@ keys or unsafe details with `details._compliance.status` set to
 detail keys are allowed. Caller-supplied HTTP URLs and detail keys for article
 text, bodies, policies, headers, credentials or URLs are refused. Details are limited to
 4,096 bytes, six levels, 128 values, 128 characters per key and 512 characters
-per string. The document execution unit emits one started and one completed
+per string. Failed source requests also use a separately schema-validated,
+fixed-size `network_failure` projection for required status, profile,
+safe addresses and bounded response headers. The flexible-field filter and
+its budget remain intact; they do not remove this typed evidence.
+The [diagnostic contract](feed-failure-diagnostics.md) owns its bounds.
+The document execution unit emits one started and one completed
 or failed event for each fetch or parse, both in `/plan` and standalone calls.
 It names the server-owned request and article identity, `feed_id` and
 `publisher_id`. `scope: document` identifies this work; `scope: plan` identifies
