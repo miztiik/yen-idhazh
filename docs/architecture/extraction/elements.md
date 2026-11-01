@@ -403,11 +403,9 @@ one of them being unusable says nothing about the others.
 The model names the organisation in the item's words; code matches that name
 against the entities we already track. An unknown name is one we do not track
 yet, and inventing a slug for it would put two spellings of one company in two
-groups for ever. The alias map is separate, unfinished work. It must be
-conservative, record each merge, report the merge rate, and stamp every
-computed score with the map version; scores from different versions require
-rescoring before comparison. Alias additions need review. The current pass
-matches only names already on the watchlist and does not normalize aliases.
+groups for ever. Alias normalization is outside the current scope. The current
+pass matches only names already on the watchlist and does not normalize
+aliases; no alias map, version-stamped score or rescoring path is delivered.
 
 ### What `proposed` is for, now that the candidate pass exists
 

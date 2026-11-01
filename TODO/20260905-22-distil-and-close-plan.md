@@ -41,24 +41,30 @@ Execute per docs/how-to/execute-a-plan.md. This C1 pass opens a documentation-on
 - **Tasks:**
   1. Read `TODO/20260902-visual-planner-pseudo-plan.md` and `TODO/20260902-yen-idhazh-visual-planning-architecture.md` as source records. Inventory durable decisions, corrections, gaps, contradictions and execution lessons; leave speculation and per-pull-request history out.
   2. Check each item against current code and `docs/`. Do not repeat a rule that already has a current canonical page.
-  3. Put the complete inventory in a three-column table in the C1 pull request: `Source item`, `Outcome`, `Evidence`. Use exactly one outcome per accounted item: **implemented** (plan and pull request), **recorded** (existing doc and section), or **superseded** (what replaced it). List unimplemented decisions separately as closure blockers. Do not create a separate findings document or a fourth outcome.
+  3. Put the complete inventory in a three-column table in the C1 pull request body: `Source item`, `Outcome`, `Evidence`. Use exactly one outcome per item: **implemented** (plan and pull request), **recorded** (existing doc and section), or **superseded** (what replaced it). Do not create a separate findings document or a fourth outcome.
   4. For **recorded**, edit only the existing page that defines the rule and only when its current wording is missing. Verify O40 in the digest visual rule; O47 formatting in the design system and unit conversion in the Derived Value contract; O1 in the digest's visual rule; and new execution lessons in the agent-notes reference.
   5. Record O42 as **superseded** by O46: the query ships with the element table; the contrast and sequence lexicons remain deferred with diagram delivery. Name both dispositions in the audit table.
   6. If a decision was never implemented, stop final closure and surface the unfinished work. Do not classify it as a new outcome or delete its only source.
   7. If a durable finding has no clear canonical page, stop final closure and resolve the documentation-structure question; do not create an archive by default. Safe C1 repairs to clearly owned pages may proceed.
 - **Files touched:** `docs/concepts/digest.md`, `docs/concepts/design-system.md`, `docs/concepts/evaluation.md`, `docs/concepts/telemetry.md`, `docs/concepts/adaptive-pruning.md`, `docs/architecture/**`, `docs/reference/agent-notes.md`, `docs/reference/pipeline-cost.md`
-- **Acceptance gates:** direct documentation link checks; ASCII and LF checks for changed Markdown; the shared changed-file selector. Application suites are not run for this documentation-only row.
-- **Oracle:** Every accounted durable decision, correction, gap, contradiction and execution lesson in either source document appears exactly once in the C1 pull request's three-column audit table, with one of the three outcomes above and its evidence. Unimplemented items remain separate closure blockers. There is no fourth outcome and no separate findings document.
+- **Acceptance gates:** the full suite; the docs cross-link check; `backend/tests/contracts/`'s ASCII and LF check.
+- **Oracle:** Every durable decision, correction, gap, contradiction and execution lesson in either source document appears exactly once in the C1 pull request body's three-column audit table, with one of the three outcomes above and its evidence. Any unimplemented decision stops closure. There is no fourth outcome and no separate findings document.
 
-### Remaining closure blockers
+### C1 delivery check
 
-- The conservative, reviewed, versioned alias map is not implemented. Current classification matches known watchlist names only; the alias-map requirement and its scoring/version rules are recorded in [the element page](../docs/architecture/extraction/elements.md).
-- Pre-shard semantic duplicate removal remains unresolved (pseudo-plan O25/O27 and row 52). Current `collapse_same_story` groups items during assembly but removes none, so it cannot avoid earlier planning or model work. Decide whether the proposed plan-stage cut remains in scope before final closure ([current grouping rule](../docs/architecture/publishing/autotune-content-similarity.md)).
-- Diagram support remains deferred. The contrast and sequence word lists and the rule for deciding whether source text supports an edge are not implemented; no reader-facing diagram is claimed ([visual planning](../docs/architecture/publishing/visuals.md#diagrams-deferred)).
-- [Plan 19 row 4](20260905-19-visual-telemetry-plan.md) remains deferred. Whole-day reconstruction still needs committed complete plans and elements, and refused plan bodies need a registered expiring home. `VisualAttemptRow` stores outcomes and counts, not those inputs; the local review card cannot show a refused drawing.
-- Cross-day visual repetition remains unresolved (pseudo-plan P.R18/G43). The current within-day type-diversity measure does not tell whether a continuing story repeats the same visual while its figures stay unchanged; no `(element set, type)` fingerprint or `visual_repetition_rate` exists. Decide whether this rule remains in scope and where it belongs before final closure.
-- Model grading of finished visuals remains unresolved (pseudo-plan O41). Current visual-label rows are human `KEEP`/`DISCARD` answers; the [evaluation page](../docs/concepts/evaluation.md) says a model-written verdict needs a separate contract and decision.
-- The proposed documentation check remains undecided: should a working record name its owning `docs/` page, and should that page link back? The current contract requires decisions on their owning pages. No check or `CLAUDE.md` change is part of C1.
+C1 may deliver documentation repairs and its pull request without closing Row 1. The source-to-evidence inventory and unresolved entries are recorded in the C1 pull request body. Row 1 stays **IN PROGRESS** until the oracle above is met; the C1 documentation checks do not replace the original acceptance gates for final closure.
+
+### Retired C2 follow-up scope
+
+These follow-up proposals are retired from the current scope. This records scope, not delivery. The original Row 1 oracle and acceptance gates remain unchanged.
+
+- Further reconciliation of the C1 inventory (A1) is retired. The inventory in the C1 pull request remains as written, including its unresolved entries; this is not a claim that those entries were implemented.
+- Alias-map delivery and its versioned scoring and rescoring rules (A2) are retired. The current classifier still matches only names already on the watchlist and does not normalize aliases; see [the element page](../docs/architecture/extraction/elements.md).
+- Whole-day reconstruction inputs and registered, expiring storage for refused plan bodies (A3) are not current follow-up requirements. [Plan 19 row 4](20260905-19-visual-telemetry-plan.md) remains deferred; its implementation and delivered behavior are unchanged.
+- Further gap work (A4), including pre-shard semantic duplicate removal, cross-day visual-repetition measurement and model grading of finished visuals, is retired from this scope. Existing same-story grouping and human visual labels remain unchanged.
+- The documentation ownership/backlink check (A5) is retired. No check or `CLAUDE.md` change is part of this work.
+
+The diagram family remains explicitly deferred, not a prerequisite for Plan 22 closure. Its contrast and sequence word lists and edge rule are not implemented; the current deferred status and future-work boundary are recorded in [visual planning](../docs/architecture/publishing/visuals.md#diagrams-deferred).
 
 ### Decisions
 
