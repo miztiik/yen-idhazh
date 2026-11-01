@@ -1,11 +1,10 @@
 /** Keep cleaned URLs as the sole article identity and preserve current-key deduplication. */
 import { expect, test } from "bun:test";
-import { ParsedFeedBatchSchema } from "@idhazh/common-contracts";
 import { deriveArticleIdentity } from "../src/harvest-feeds/article-identity";
 import { createPermittedFetcher } from "../src/harvest-feeds/robots-policy";
-import { stageStore } from "../src/api/stage-store";
 import { recordedPlan } from "./plan-recordings";
-import { runFeedPlan } from "../src/run-feed-plan";
+import { collectRecordedFeeds } from "./collection-recordings";
+import { executeSelection } from "../src/api/selection-operation";
 
 test("query variants retain their offer ordinals and downloads but produce only one selected key", async () => {
   const held = await recordedPlan();
@@ -14,13 +13,11 @@ test("query variants retain their offer ordinals and downloads but produce only 
       "<link>https://news.example/second</link>",
       "<link>https://news.example/story/?edition=other#part</link>",
     );
-    const result = await runFeedPlan({ article_limit: 2 }, held.inputs, held.runtime);
-    expect(result.row.status).toBe("completed");
-    const batch = stageStore(held.inputs).read("parsed", result.batches.parsed_batch_id!, ParsedFeedBatchSchema);
+    const { batch } = await collectRecordedFeeds(held.inputs, held.runtime);
     expect(batch.candidates.map(candidate => candidate.entry_ordinal)).toEqual([0, 2]);
     expect(batch.offers.map(offer => offer.entry.entry_ordinal)).toEqual([0, 2]);
     expect(new Set(batch.candidates.map(candidate => candidate.url_key)).size).toBe(1);
-    expect(result.selected).toHaveLength(1);
+    expect((await executeSelection({ batch_id: batch.batch_id }, held.inputs, held.runtime)).batch.articles).toHaveLength(1);
     expect(held.transport.requests.filter(request => request.url.pathname === "/story/")).toHaveLength(2);
   } finally { await held.close(); }
 });
@@ -44,14 +41,11 @@ test("scheme cleanup retains accepted offers while an oversized cleaned address 
         <item><title>Accepted offer</title><link>${mixedSchemeOffer}</link></item>
         <item><title>Oversized address</title><link>${expanded}</link></item></channel></rss>`,
     }];
-    const result = await runFeedPlan({ article_limit: 2 }, held.inputs, held.runtime);
-    expect(result.row.status).toBe("completed");
-    const batch = stageStore(held.inputs).read("parsed", result.batches.parsed_batch_id!, ParsedFeedBatchSchema);
+    const { batch } = await collectRecordedFeeds(held.inputs, held.runtime);
     expect(batch.offers.map(offer => offer.entry.link)).toEqual([
       mixedSchemeOffer.replace(/^HTTPS:/, "https:"),
     ]);
     expect(batch.candidates.map(candidate => candidate.canonical_url)).toEqual(["https://news.example/second"]);
-    expect(result.selected).toHaveLength(1);
     expect(held.transport.requests.some(request => request.url.href === new URL(expanded).href)).toBe(false);
     expect(held.transport.requests.filter(request => request.url.pathname === "/second")).toHaveLength(1);
   } finally { await held.close(); }

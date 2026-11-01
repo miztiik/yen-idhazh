@@ -1,4 +1,4 @@
-/** Build a bounded real planner run from the named offline RSS, HTML and transport recordings. */
+/** Load bounded offline source inputs without starting stages or creating unused Git history. */
 import { existsSync } from "node:fs";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";

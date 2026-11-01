@@ -22,7 +22,7 @@ import { resolveHealthDays } from "../src/read-ledger-history/resolve-health-day
 import { preparePlannerWorkflow, readWorkflowRequest } from "../scripts/feed-ingest-plan-workflow-inputs";
 import { completeHistoryDayInputs, historyIndexPaths, resolveHistoryInventory, sparseCheckoutPath } from "../scripts/feed-ingest-plan-outputs";
 import { loadPlanInputs } from "../src/load-plan-inputs";
-import { fixtureGit } from "./publication-recordings";
+import { fixtureGit } from "./fixture-git";
 
 const root = fileURLToPath(new URL("../../../", import.meta.url));
 

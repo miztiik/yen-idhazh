@@ -6,9 +6,7 @@ import { summarizeRequestReport } from "../src/read-ledger-history/request-summa
 import { inputEndpointKey } from "../src/read-ledger-history/health-summary";
 import { renderRequestReport } from "../src/reporting/request-report-markdown";
 import { renderPlanMarkdown } from "../src/reporting/plan-markdown";
-import { runFeedPlan, summarizePlan } from "../src/run-feed-plan";
-import { recordedPlan } from "./plan-recordings";
-import { executeFeedHealthState } from "../src/api/feed-health-state-operation";
+import { readPlannerOutputRecording } from "./planner-output-recordings";
 import { escapeMarkdown } from "../src/reporting/markdown-format";
 import { randomUUID } from "node:crypto";
 
@@ -127,11 +125,7 @@ test("sorts request rows by article requests, feed requests, then name with unkn
     sources: cases.map(value => ({ ...source, feed_id: value.feed_id })),
   });
   const before = structuredClone(request_report);
-  const fixturePlan = await recordedPlan();
-  try {
-    const response = summarizePlan(await runFeedPlan({}, fixturePlan.inputs, fixturePlan.runtime));
-    const health = await executeFeedHealthState({ batch_id: response.batches.selection_batch_id, action: "summarize" },
-      fixturePlan.inputs, fixturePlan.runtime);
+    const { response, health } = await readPlannerOutputRecording();
     const original = renderPlanMarkdown({ response, health });
     const rendered = renderPlanMarkdown({ response, health: { ...health, request_report } });
     const lines = rendered.markdown.split("\n").filter(line => /^\| F\d+ \|/.test(line));
@@ -146,15 +140,10 @@ test("sorts request rows by article requests, feed requests, then name with unkn
     expect(html).toContain("Partial totals include recorded counts only");
     expect(rendered.markdown).toContain("<summary>Request counts and coverage");
     expect(renderRequestReport(report([row])).markdown).not.toContain("Partial*");
-  } finally { await fixturePlan.close(); }
 });
 
 test("sorts feed results by admitted and chosen articles, and exclusions by count then reason", async () => {
-  const fixturePlan = await recordedPlan();
-  try {
-    const response = summarizePlan(await runFeedPlan({}, fixturePlan.inputs, fixturePlan.runtime));
-    const health = await executeFeedHealthState({ batch_id: response.batches.selection_batch_id, action: "summarize" },
-      fixturePlan.inputs, fixturePlan.runtime);
+    const { response, health } = await readPlannerOutputRecording();
     const base = health.rows[0]!;
     const cause = base.rejection_counts[0]!;
     const rows = [
@@ -180,7 +169,6 @@ test("sorts feed results by admitted and chosen articles, and exclusions by coun
     );
     expect(rendered.markdown).toContain("<summary>Per-feed article results</summary>");
     expect(rendered.markdown).toContain("<summary>Grouped exclusions</summary>");
-  } finally { await fixturePlan.close(); }
 });
 
 test("joins latest recorded feed reliability without treating missing or incomplete scores as zero", async () => {

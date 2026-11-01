@@ -5,6 +5,18 @@ import { fileURLToPath } from "node:url";
 import { recordedPlan } from "./plan-recordings";
 import { loadPlanInputs } from "../src/load-plan-inputs";
 import { createPlannerStartup } from "../scripts/feed-ingest-plan-supervisor";
+import { readPlannerOutputRecording } from "./planner-output-recordings";
+
+export async function readPlannerStartupRecording() {
+  const inputs = await loadPlanInputs(fileURLToPath(new URL("../../../", import.meta.url)));
+  const { response } = await readPlannerOutputRecording();
+  inputs.settings.enabled = true;
+  const startup = createPlannerStartup(inputs, {
+    git_sha: "a".repeat(40), run_number: response.run_id.slice(11), correlation_id: response.correlation_id,
+    attempt: response.attempt, captured_at: response.started_at,
+  });
+  return { inputs, startup };
+}
 
 export async function recordedPlannerProcess(
   sources?: Parameters<typeof recordedPlan>[0], options: { reserveListener?: boolean } = {},

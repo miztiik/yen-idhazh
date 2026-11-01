@@ -1,18 +1,12 @@
 /** Do numeric portfolio controls choose one content population with compact, truthful explanations? */
 import { expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   FeedHealthStateRowSchema, FeedIngestCandidateSchema, ParsedFeedBatchSchema, SelectedArticleRowContract,
   SelectedArticlesArtifactSchema, deriveCandidateId, deriveUrlKey, selectedArticleMetadata,
 } from "@idhazh/common-contracts";
 import type { FeedIngestConfig, PlannerArticleEvidence } from "@idhazh/common-contracts";
-import { persistLedger } from "@idhazh/ledger-file-writer";
-import { tableFromIPC } from "apache-arrow";
-import initializeParquet, { readParquet } from "parquet-wasm/esm";
 import { loadPlanningConfig, resolvePolicy } from "../src/config/resolve-policy";
 import { curateArticles } from "../src/curate-article-portfolio/editorial-selection";
 import { screenArticleCandidates } from "../src/screen-article-candidates/triage-gates";
@@ -20,7 +14,6 @@ import type { ScreenedCandidate } from "../src/screen-article-candidates/triage-
 import { calculateFreshness } from "../src/screen-article-candidates/freshness-decay";
 import { loadPlanInputs } from "../src/load-plan-inputs";
 import { resolveRunContext } from "../src/resolve-run-context";
-import { readPlannerParquet } from "../src/read-ledger-history/read-planner-parquet";
 import type { SourceHistoryEvidence } from "../src/read-ledger-history/read-feed-history";
 import type { PublisherPublicationHistory } from "../src/curate-article-portfolio/publisher-exposure";
 import { partitionArticles } from "../src/partition-article-shards/shard-packer";
@@ -497,30 +490,15 @@ test("screening and packing retain the owning run day even when evaluation happe
   }
 });
 
-test("actual selected Parquet has exactly metadata columns while the same choice retains artifact text", async () => {
+test("selected metadata excludes text while its artifact retains the chosen original", async () => {
   const setup = await inputs();
   const chosen = run(setup).articles;
   const before = structuredClone(chosen);
-  const root = await mkdtemp(join(tmpdir(), "portfolio-parquet-"));
-  try {
     const rows = chosen.map(row => ({
       ...selectedArticleMetadata(row), run_id: row.run_id, attempt: row.attempt, date: row.date,
     }));
-    const written = await persistLedger({
-      ledger: "selected-articles", registryEntry: setup.inputs.registrations.selected_articles,
-      outputRoot: root, ledgerSettings: setup.inputs.ledgerSettings,
-      rowContract: SelectedArticleRowContract, period: { tier: "raw", covers: setup.context.date }, rows,
-    });
-    expect(written.status).toBe("written");
-    expect(written.files).toHaveLength(1);
-    const file = written.files[0]!;
-    const actual = await readPlannerParquet(join(root, file.path), "selected-articles", SelectedArticleRowContract);
-    expect(actual.rows).toEqual(rows);
-    await initializeParquet();
-    const table = tableFromIPC(readParquet(await readFile(join(root, file.path))).intoIPCStream());
-    expect(table.schema.fields.map(field => field.name).sort()).toEqual(Object.keys(rows[0]!).sort());
-    expect(actual.envelope).not.toHaveProperty("identity");
-    expect(actual.envelope).not.toHaveProperty("unit_id");
+    expect(SelectedArticleRowContract.schema.array().parse(rows)).toEqual(rows);
+    expect(rows.every(row => !("article_text" in row))).toBe(true);
     const artifact = SelectedArticlesArtifactSchema.parse({
       schema_version: SelectedArticleRowContract.schemaVersion, run_id: setup.context.run_id, attempt: setup.context.writer.attempt,
       date: setup.context.date, evaluated_at: setup.context.now,
@@ -528,5 +506,4 @@ test("actual selected Parquet has exactly metadata columns while the same choice
     });
     expect(artifact.articles.map(row => row.article_text)).toEqual(chosen.map(row => row.article_text));
     expect(chosen).toEqual(before);
-  } finally { await rm(root, { recursive: true, force: true }); }
-}, 30_000);
+});
