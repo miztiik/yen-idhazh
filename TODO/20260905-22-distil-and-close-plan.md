@@ -27,7 +27,7 @@ Execute per docs/how-to/execute-a-plan.md. This C1 pass opens a documentation-on
 
 | # | Row title | Depends-on | Parallel-group | Status | Worktree | PR | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| 1 | What is durable, and where it already lives | - | A | IN PROGRESS | - | - | - |
+| 1 | What is durable, and where it already lives | - | A | IN PROGRESS | - | #1873 | - |
 | 2 | The numbers, taken again on the tree that shipped | 1 | B | ABANDONED | - | - | - |
 | 3 | The two documents go, and nothing links to a ghost | 1 | C | PENDING | - | - | - |
 
