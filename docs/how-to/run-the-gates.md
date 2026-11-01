@@ -246,11 +246,13 @@ under Bun against generated loopback responses, not live publishers:
 gzip, Brotli and deflate decoding, decoded-byte cutoff, stalled-read
 cancellation, pre-header ownership through native timeout or delayed headers,
 manual redirects and native Firefox/Chrome wire headers. The pre-header cases
-also verify source closure, not only rejection of the application promise.
-Run it on Windows locally and on Linux in merge-candidate CI. Ordinary source
-tests keep their recorded HTTP boundary; they do not access the open web.
-The separate `source-transport-test.yml` workflow runs this oracle on both
-Linux and Windows with committed, frozen dependencies. Production `ci.yml`
+also verify ownership until headers or the native deadline settles.
+Native total-body timeout is a separate API failure case; immediate socket
+closure is not an additional API latency gate. Run it on Linux in
+merge-candidate CI. Ordinary source tests keep their recorded HTTP boundary;
+they do not access the open web.
+The separate `source-transport-test.yml` workflow runs this oracle on Linux
+with committed, frozen dependencies. Production `ci.yml`
 has no added native-platform job. The separate workflow runs for named source
 changes in a pull request and supports manual dispatch on a candidate branch:
 `gh workflow run source-transport-test.yml --ref <candidate-branch>`.

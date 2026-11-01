@@ -39,7 +39,7 @@ Table C - PR-shaped tasks
 
 | ID | # | Row title | Depends-on | Parallel-group | Status | Worktree | PR | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| C1 | 1 | Replace Undici completely with Impit and failure evidence | - | A | IN_PROGRESS | impit-transport-and-evidence | #1874 | - |
+| C1 | 1 | Replace Undici completely with Impit and failure evidence | - | A | BLOCKED | impit-transport-and-evidence | #1874 | - |
 | C2 | 2 | Space requests across domains and publishers | 1 | B | PENDING | - | - | - |
 | C3 | 3 | Verify the completed Impit-only branch pipeline | 2 | C | PENDING | - | - | - |
 
@@ -120,7 +120,7 @@ Table D - declarations before implementation
   - `docs/architecture/sources/trust-boundary.md`
   - `docs/how-to/run-the-gates.md`
   - `TODO/20261101-browser-transport-request-pacing-plan.md`
-- **Acceptance gates:** Local: inspect shared selection; run native `check` for common contracts, service and probe, then combined changed contract, transport, harvest, robots, logging, failure-retention and probe tests. Exercise the real Impit client under Bun on Windows and Linux with bounded generated loopback responses in the separate `source-transport-test.yml` workflow; ordinary source tests use recorded responses. Audit source/probe manifests, lockfiles, imports, helpers, assertions and current docs for Undici and pinning debris. Explain a transitive dependency rather than class it as unrelated silently; surface any required replacement. Production CI stays unchanged and runs the full candidate suite with supervised API/CLI, workers and required persisted readers.
+- **Acceptance gates:** On Linux, inspect shared selection; run native `check` for common contracts, service and probe, then combined changed contract, transport, harvest, robots, logging, failure-retention and probe tests. Exercise the real Impit client under Bun on Linux with bounded generated loopback responses in the separate `source-transport-test.yml` workflow; ordinary source tests use recorded responses. Verify API deadline completion without adding an immediate socket-close latency gate; report separately any unfinished native work that outlives the configured attempt budget. Audit source/probe manifests, lockfiles, imports, helpers, assertions and current docs for Undici and pinning debris. Explain a transitive dependency rather than class it as unrelated silently; surface any required replacement. Production CI stays unchanged and runs the full candidate suite with supervised API/CLI, workers and required persisted readers.
 - **Oracle:** The real Impit adapter reads generated compressed response streams, refuses an oversized decoded body at cutoff, cancels a stalled response and returns a redirect without following it; the real API then preserves the exact observed status and bounded failure evidence without feeding failure HTML to the parser. This proves transport behavior and evidence boundaries, not access to a live publisher.
 
 Table E - decisions

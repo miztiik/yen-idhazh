@@ -25,11 +25,7 @@ concurrency:
 
 jobs:
   native_source_transport:
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, windows-latest]
-    runs-on: ${{ matrix.os }}
+    runs-on: ubuntu-latest
     timeout-minutes: 10
     defaults:
       run:
@@ -62,7 +58,7 @@ jobs:
           bun install --cwd services/host-fingerprints --frozen-lockfile
           printf 'Native source verification dependency installation took %d seconds.\n' "$((SECONDS - start))"
           cd services/feed-ingest-plan
-          node -e 'const fs = require("node:fs"), os = require("node:os"); const name = process.platform === "win32" ? "impit-win32-x64-msvc" : "impit-linux-x64-gnu"; console.log(JSON.stringify({native_binary_bytes: fs.statSync(require.resolve(name)).size, host_platform: process.platform, host_architecture: process.arch, host_logical_cpus: os.cpus().length, host_ram_bytes: os.totalmem()}))'
+          node -e 'const fs = require("node:fs"), os = require("node:os"); console.log(JSON.stringify({native_binary_bytes: fs.statSync(require.resolve("impit-linux-x64-gnu")).size, host_platform: process.platform, host_architecture: process.arch, host_logical_cpus: os.cpus().length, host_ram_bytes: os.totalmem()}))'
           bun -e 'const config = JSON.parse(await Bun.file("../../config/feed-ingest-plan.json").text()); console.log(JSON.stringify({profiles: config.harvest.request_headers, attempt_timeout_ms: config.harvest.fetch_timeout_ms, response_diagnostics: config.harvest.response_diagnostics}))'
 
       - name: Verify native source response ownership

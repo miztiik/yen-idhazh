@@ -16,7 +16,7 @@ kinds and numeric tier weights, not vertical policy or article labels.
 The actual harvester accepts validated context plus an optional recorded
 source-response boundary. Ordinary execution uses native Impit. One fetcher
 reuses one client per configured browser profile; each request owns its
-cancellation signal and releases its response on completion or refusal.
+cancellation signal and releases its response reader on completion or refusal.
 Impit has no public client-close API. No dispatcher or resolver adapter remains.
 
 Independent feeds overlap within configured bounds. Article work can start
@@ -231,6 +231,8 @@ and decode gzip, Brotli and deflate streams. HTTP/3 is opt-in and is not
 requested; no measured source need justifies adding a control for it.
 No proxy, persistent cookie jar or weaker TLS fallback is enabled.
 Each request passes the existing attempt budget to Impit's native timeout.
+This is a total connection-through-body deadline, not a headers-only timeout.
+The public JavaScript API has no separate connect-only or read-only timeout.
 Before headers arrive, Impit has no supported immediate native cancellation
 API. The request keeps ownership until headers arrive or that native timeout
 expires; early cancellation can wait up to the attempt budget plus settlement
@@ -240,17 +242,23 @@ The body reader keeps ownership until the native stream observes that abort;
 it does not leave the read loop early on the caller signal. A cancelled result
 is never returned as successful content. Failed reads also await stream cleanup.
 The existing application deadline still bounds response reading.
-Aborting the request stops a decoded-byte cutoff or failed body read without
-letting cleanup replace its observed status and byte count.
+Request cancellation and failed-reader cleanup must not replace the observed
+status and byte count.
 A proven decoded cutoff remains the primary failure if later cancellation or
 stream cleanup also fails. Combined errors retain the cleanup cause and any
 available safe code without exposing exception messages.
-The native stream must also release an unfinished response after abort,
-not only reject its JavaScript promise. The transport test keeps Impit under
-Bun and uses a genuine Node source to check response closure; a raw TCP
-disconnect verifies the source's close observer first.
+API completion and native response termination are different events.
+The transport test keeps Impit under Bun and uses a genuine Node source to
+check decoded-byte limits, cancellation, native deadlines and response evidence.
+Native total-body timeout is checked separately from caller cancellation.
+An unfinished response can remain active after its native deadline; an API
+failure does not prove physical response termination. The public API has no
+bounded disposal acknowledgement for that error path. A pacing policy that
+waits for physical termination would need a different lifecycle control.
+Streamed native errors may be untyped; their messages are not used to invent
+a timeout class or safe error code.
 The separate `source-transport-test.yml` workflow runs this same native
-ownership test on Linux and Windows and records the actual candidate SHA.
+API test on Linux and records the actual candidate SHA.
 Production CI keeps its existing full-candidate checks.
 
 ## Dependencies and cost
@@ -265,11 +273,10 @@ build-time Bun process and workers, not the published browser bundle.
 TidyURL 1.18.3 adds its bundled URL-cleaning rules and no runtime dependencies
 for request-target cleanup. Its installed bytes remain build-time only.
 Impit's beneficiary is native browser TLS and HTTP fingerprints with bounded
-decoded response reads. Its Windows x64 native binary occupies 10,286,080 bytes
-(about 9.8 MiB); Linux x64 occupies 10,581,792 bytes (about 10.1 MiB).
-Service and probe installation took 18 seconds on a GitHub Windows x64 runner
-and 2 seconds on a GitHub Linux x64 runner, after shared publication packages
-were installed. Both reported four logical CPUs and about 16 GiB RAM.
+decoded response reads. Its Linux x64 native binary occupies 10,581,792 bytes
+(about 10.1 MiB). Service and probe installation took 2 seconds on a GitHub
+Linux x64 runner, after shared publication packages were installed. The host
+reported four logical CPUs and about 16 GiB RAM.
 Native binaries are install-time
 dependencies, never committed or shipped to the published site.
 The remaining `undici-types` dependency is type declarations required by

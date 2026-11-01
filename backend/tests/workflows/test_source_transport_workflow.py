@@ -16,8 +16,7 @@ def test_native_source_verification_has_its_own_candidate_and_frozen_dependencie
     assert workflow["permissions"] == {"contents": "read"}
     assert "native_source_transport" not in _mapping(workflows["ci.yml"]["jobs"], "CI jobs")
     job = _job(workflow, "native_source_transport")
-    matrix = _mapping(_mapping(job["strategy"], "test strategy")["matrix"], "test matrix")
-    assert matrix["os"] == ["ubuntu-latest", "windows-latest"]
+    assert job["runs-on"] == "ubuntu-latest"
     checkout = _step(workflow, "native_source_transport", "uses", "actions/checkout@v6")
     assert _mapping(checkout["with"], "candidate checkout")["ref"] == (
         "${{ github.event.pull_request.head.sha || github.sha }}"

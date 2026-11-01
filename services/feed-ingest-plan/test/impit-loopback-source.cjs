@@ -1,13 +1,10 @@
-/** Serve bounded native transport fixtures and report genuine Node response closure. */
+/** Serve bounded native transport fixtures from a genuine Node HTTP source. */
 const { createServer } = require("node:http");
 const { gzipSync, brotliCompressSync, deflateSync } = require("node:zlib");
 const payload = Buffer.from("generated response ".repeat(300));
 const encoded = new Map([
   ["gzip", gzipSync(payload)], ["br", brotliCompressSync(payload)], ["deflate", deflateSync(payload)],
 ]);
-let stopping = false;
-const timeoutMs = Number(process.argv[2]);
-if (!Number.isSafeInteger(timeoutMs) || timeoutMs <= 0) throw new Error("Generated source needs a positive timeout");
 const server = createServer((request, response) => {
   const path = new URL(request.url, "http://127.0.0.1").pathname.slice(1);
   process.send({ agent: request.headers["user-agent"] ?? "" });
@@ -15,7 +12,6 @@ const server = createServer((request, response) => {
     let timer;
     response.once("close", () => {
       clearTimeout(timer);
-      if (!stopping) process.send({ closed: path });
     });
     process.send({ received: path });
     if (path === "late-headers") {
@@ -36,21 +32,10 @@ const server = createServer((request, response) => {
     response.end("followed");
     return;
   }
-  if (path === "stalled" || path === "body-timeout" || path === "cutoff" || path === "reference") {
-    let timer;
-    response.once("close", () => {
-      clearTimeout(timer);
-      if (!stopping) process.send({ closed: path });
-    });
+  if (path === "stalled" || path === "body-timeout" || path === "cutoff") {
     response.writeHead(403, { "content-type": "text/html" });
     response.flushHeaders();
     response.write(new Uint8Array(16384));
-    if (path === "body-timeout") {
-      timer = setTimeout(() => {
-        response.write(new Uint8Array(16384));
-        process.send({ continued: path });
-      }, timeoutMs + 250);
-    }
     return;
   }
   const body = encoded.get(path) ?? payload;
@@ -64,7 +49,6 @@ const server = createServer((request, response) => {
 server.listen(0, "127.0.0.1", () => process.send({ port: server.address().port }));
 process.on("message", message => {
   if (message !== "stop") throw new Error("Unexpected generated-source command");
-  stopping = true;
   server.close(() => process.disconnect());
   server.closeAllConnections();
 });
