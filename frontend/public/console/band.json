@@ -26,11 +26,11 @@
   },
   "compaction_lag_days": 0,
   "covers_through": "2026-10-31",
-  "generated_at": "2026-11-01T00:06:40Z",
+  "generated_at": "2026-11-01T02:00:47Z",
   "routes": [
-    {"carries": "The model spent 94 h 25 m of this.","description": "Did the runs work, and what each stage cost.","href": "/console/","id": "pipelines","label": "Pipelines","severity": 2,"worst": "7 runs worth a look"},
-    {"carries": "This day ran in 8 runs, 1.27x apart on read speed.","description": "What the model wrote, how long it took, and what it got wrong.","href": "/console/model/","id": "model","label": "Summaries","severity": 3,"worst": "114 items failed"},
-    {"carries": "315 articles on this day.","description": "The hardware the model ran on, and how much it varied between runs.","href": "/console/machine/","id": "machine","label": "Hardware","severity": 2,"worst": "free swap fell to 1697.6 MB"},
+    {"carries": "The model spent 105 h 24 m of this.","description": "Did the runs work, and what each stage cost.","href": "/console/","id": "pipelines","label": "Pipelines","severity": 2,"worst": "8 runs worth a look"},
+    {"carries": "This day ran in 9 runs, 1.27x apart on read speed.","description": "What the model wrote, how long it took, and what it got wrong.","href": "/console/model/","id": "model","label": "Summaries","severity": 3,"worst": "130 items failed"},
+    {"carries": "336 articles on this day.","description": "The hardware the model ran on, and how much it varied between runs.","href": "/console/machine/","id": "machine","label": "Hardware","severity": 2,"worst": "free swap fell to 1697.6 MB"},
     {"carries": "30 summaries were marked \"not sure\" on this day.","description": "Which stories the day merged, and where the judge and a person disagreed.","href": "/console/judgement/","id": "judgement","label": "Judgement","severity": 0,"worst": null},
     {"carries": "100 feeds failed on the last ask.","description": "Who supplied the day, and how far each feed is discounted.","href": "/console/voices/","id": "voices","label": "Voices","severity": 2,"worst": "52 feeds discounted to the floor"},
     {"carries": "Every published ledger the other routes draw from, open to a question of your own.","description": "What the ledgers hold, and whatever you ask of them.","href": "/console/data-explorer/","id": "data-explorer","label": "Data explorer","severity": 0,"worst": null}
@@ -134,12 +134,12 @@
     "compared_from": "2026-09-14"
   },
   "size": {
-    "articles_to_cap": 447785,
-    "bytes": 57469085,
-    "cap_fraction": 0.05352225620299578,
-    "left_mb": 969.1932096481323,
+    "articles_to_cap": 447764,
+    "bytes": 57516221,
+    "cap_fraction": 0.05356615502387285,
+    "left_mb": 969.1482572555542,
     "measured_days": 70,
-    "sentence": "54.8 MB of the 1 GB limit - room for about 448,000 more articles."
+    "sentence": "54.9 MB of the 1 GB limit - room for about 448,000 more articles."
   },
   "verdict": {
     "date": "2026-10-31",
@@ -152,15 +152,16 @@
       {"health": "amber","label": "Run 4 is worth a look"},
       {"health": "amber","label": "Run 5 is worth a look"},
       {"health": "amber","label": "Run 6 is worth a look"},
-      {"health": "amber","label": "Run 7 is worth a look"}
+      {"health": "amber","label": "Run 7 is worth a look"},
+      {"health": "amber","label": "Run 8 is worth a look"}
     ],
-    "sentence": "2026-10-31 ran 7 runs and published 382 of 484 planned items. 102 items failed."
+    "sentence": "2026-10-31 ran 8 runs and published 446 of 564 planned items. 118 items failed."
   },
   "version": "2026-10-11T21:00",
   "worst": {
     "href": "/console/model/",
     "id": "model",
     "label": "Summaries",
-    "sentence": "114 items failed, so they are not in the day the digest published."
+    "sentence": "130 items failed, so they are not in the day the digest published."
   }
 }
