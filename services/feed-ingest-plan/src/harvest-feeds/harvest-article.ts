@@ -13,7 +13,7 @@ import { documentWork, describeArticleParse } from "./document-work";
 import { prepareArticle, resolveArticleTitle } from "./prepare-article";
 
 export async function harvestArticle(
-  offered: OfferedArticle, inputs: HarvestInputs, fetcher: PermittedFetcher, context: HarvestContext,
+  offered: OfferedArticle, inputs: HarvestInputs, fetcher: Pick<PermittedFetcher, "fetch">, context: HarvestContext,
 ): Promise<HarvestArticleResult> {
   const { source, entry } = offered;
   const prepared = prepareArticle(offered, inputs, context);

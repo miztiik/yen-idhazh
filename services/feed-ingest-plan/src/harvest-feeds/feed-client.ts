@@ -22,7 +22,7 @@ export function feedDocumentWork(source: SourceSnapshot, context: HarvestContext
 }
 
 export async function readFeed(
-  source: SourceSnapshot, fetcher: PermittedFetcher, context: HarvestContext, timeout_ms: number,
+  source: SourceSnapshot, fetcher: Pick<PermittedFetcher, "fetch">, context: HarvestContext, timeout_ms: number,
 ): Promise<{ entries: FeedEntry[]; rejection: CandidateRejectionRecord | null; outcome: FeedOutcomePayload }> {
   const outcome: FeedOutcomePayload = {
     version: FEED_OUTCOME_PAYLOAD_VERSION, kind: "feed_outcome", source,
