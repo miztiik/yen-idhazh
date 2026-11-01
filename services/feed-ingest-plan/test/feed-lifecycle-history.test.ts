@@ -11,8 +11,7 @@ import { projectFeedHealthFields } from "../src/read-ledger-history/read-feed-he
 import { reuseFeedLifecycle, recoverFeedLifecycle } from "../src/read-ledger-history/feed-lifecycle-history";
 import { reuseFeedReliability } from "../src/read-ledger-history/feed-reliability-history";
 import { readFeedHealthFieldsDay } from "../src/read-ledger-history/read-feed-health-fields";
-import { commitFixtureFiles, compactRows, registration, writeRows } from "./partition-fixtures";
-import { fixtureGit } from "./publication-recordings";
+import { compactRows, registration, writeRows } from "./partition-fixtures";
 
 function row(day: string, run: number, productive = true) {
   const seed = plannerRecordings(day).find(record => record.name === "feed-health-state")!.row;
@@ -53,11 +52,9 @@ test("a check present in monthly Parquet and a late raw file is one fact across 
         from_day: "2026-09-30", through_day: "2026-09-30", complete: true } };
     const state = join(root, "state");
     const raw = await writeRows(state, "feed-health-state", latest.date, FeedHealthStateRowContract, [latest]);
-    await compactRows(state, "feed-health-state", latest.date, FeedHealthStateRowContract, [latest], "monthly", root);
-    await commitFixtureFiles(root, raw.files.map(file => `state/${file.path}`));
-    const revision = await fixtureGit(root, ["rev-parse", "HEAD"]);
+    await compactRows(state, "feed-health-state", latest.date, FeedHealthStateRowContract, [latest], "monthly");
     const capture = await readFeedHealthFieldsDay(root, registration("feed-health-state"), {
-      day: latest.date, raw_revision: revision, raw_files: raw.files.map(file => `state/${file.path}`),
+      day: latest.date, raw_files: raw.files.map(file => `state/${file.path}`),
     });
     expect(capture.complete).toBe(true);
     expect(capture.uses.feed_rest.rows).toHaveLength(1);

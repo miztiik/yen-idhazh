@@ -1,22 +1,25 @@
-/** Does planner maintenance replace only validated files from one captured revision? */
+/** Does planner maintenance replace only validated local files without Git? */
 import { execFileSync } from "node:child_process";
 import { expect, setDefaultTimeout, test } from "bun:test";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { delimiter, dirname, join, resolve } from "node:path";
+import { tmpdir } from "node:os";
 import {
   PLANNER_FILE_VALIDATION_VERSION,
-  PLANNER_MAINTENANCE_VERSION, PlannerMaintenanceRequestSchema,
+  PLANNER_MAINTENANCE_VERSION, PlannerMaintenanceRequestSchema, PlannerMaintenanceResultSchema,
   deriveUrlKey,
 } from "@idhazh/common-contracts";
+import type { PlannerMaintenanceResult } from "@idhazh/common-contracts";
 import { maintainPlannerPeriod, persistLedger, readPlannerParquet } from "../src";
+import { readMaintenanceSource } from "../src/planner-maintenance";
 import { validatePlannerFiles } from "../src/validate-planner-files";
 import { plannerRecordings } from "./planner-recordings";
 
 setDefaultTimeout(60_000);
 
 const registration = {
-  name: "discovered-articles",
+  name: "discovered-articles" as const,
   family: "feed-ingest-plan",
   grain: "raw-and-compact" as const,
   lifecycle_status: "active" as const,
@@ -28,16 +31,8 @@ const ledgerSettings = {
   compression_compact: "zstd" as const,
 };
 
-function git(root: string, ...args: string[]): string {
-  return execFileSync("git", args, { cwd: root, encoding: "utf8" }).trim();
-}
-
 async function fixtureRoot(): Promise<string> {
-  const root = await mkdtemp(join(process.cwd(), ".tmp_planner-maintenance-"));
-  git(root, "init", "--quiet");
-  git(root, "config", "user.name", "Fixture");
-  git(root, "config", "user.email", "fixture@example.invalid");
-  return root;
+  return mkdtemp(join(tmpdir(), "planner-maintenance-"));
 }
 
 async function addRawDay(root: string, day: string): Promise<string> {
@@ -83,15 +78,12 @@ async function addRawDay(root: string, day: string): Promise<string> {
           expected.push(row);
           inputs.push(`state/${written.files[0]!.path}`);
         }
-        git(root, "add", "state");
-        git(root, "commit", "--quiet", "-m", "record mixed article generations");
         const sortRows = (rows: Record<string, unknown>[]) =>
           [...rows].sort((a, b) => String(a.url_key).localeCompare(String(b.url_key)));
         for (const [period, covers] of [
           ["daily", day], ["monthly", "2026-10"], ["yearly", "2026"],
         ] as const) {
-          const revision = git(root, "rev-parse", "HEAD");
-          const requested = await request(root, revision, period, covers);
+          const requested = await request(root, period, covers);
           const result = await maintainPlannerPeriod(root, {
             ...requested, ledger, registry_entry,
           });
@@ -113,8 +105,6 @@ async function addRawDay(root: string, day: string): Promise<string> {
           expect(validation.files[0]?.status).toBe("valid");
           for (const path of result.delete_paths) await rm(join(root, ...path.split("/")));
           await rm(join(root, result.output_path.split("/")[0]!), { recursive: true });
-          git(root, "add", "state");
-          git(root, "commit", "--quiet", "-m", `retain mixed article rows in ${period} compact`);
         }
       }
     } finally {
@@ -124,7 +114,6 @@ async function addRawDay(root: string, day: string): Promise<string> {
 
   async function request(
   root: string,
-  revision: string,
   period: "daily" | "monthly" | "yearly",
   covers: string,
   maxRawFiles = 100,
@@ -133,7 +122,6 @@ async function addRawDay(root: string, day: string): Promise<string> {
   await mkdir(join(root, stagingRoot));
   return PlannerMaintenanceRequestSchema.parse({
     version: PLANNER_MAINTENANCE_VERSION,
-    revision,
     staging_root: stagingRoot,
     ledger: "discovered-articles",
     period,
@@ -151,11 +139,8 @@ test("monthly maintenance settles captured raw files and deletes only its valida
       await addRawDay(root, "2026-10-20"),
       await addRawDay(root, "2026-10-21"),
     ];
-    git(root, "add", "state");
-    git(root, "commit", "--quiet", "-m", "record raw planner fixtures");
-    const revision = git(root, "rev-parse", "HEAD");
     const result = await maintainPlannerPeriod(
-      root, await request(root, revision, "monthly", "2026-10"),
+      root, await request(root, "monthly", "2026-10"),
     );
     expect(result.status).toBe("written");
     if (result.status !== "written") return;
@@ -173,11 +158,8 @@ test("monthly maintenance settles captured raw files and deletes only its valida
     await writeFile(target, await readFile(staged));
     for (const path of raw) await rm(join(root, ...path.split("/")));
     await rm(join(root, result.output_path.split("/")[0]!), { recursive: true });
-    git(root, "add", "state");
-    git(root, "commit", "--quiet", "-m", "replace captured raw planner files");
-    const currentRevision = git(root, "rev-parse", "HEAD");
     const repeated = await maintainPlannerPeriod(
-      root, await request(root, currentRevision, "monthly", "2026-10"),
+      root, await request(root, "monthly", "2026-10"),
     );
     expect(repeated.status).toBe("unchanged");
     if (repeated.status === "unchanged") expect(repeated.reason).toBe("already-current");
@@ -186,26 +168,88 @@ test("monthly maintenance settles captured raw files and deletes only its valida
   }
 });
 
-test("a changed Git member is refused without falling through to a complete result", async () => {
+test("a malformed local member is refused without falling through to a complete result", async () => {
   const root = await fixtureRoot();
   try {
     const raw = await addRawDay(root, "2026-10-20");
-    git(root, "add", "state");
-    git(root, "commit", "--quiet", "-m", "record raw planner fixture");
-    const revision = git(root, "rev-parse", "HEAD");
     await writeFile(join(root, ...raw.split("/")), "changed");
     const result = await maintainPlannerPeriod(
-      root, await request(root, revision, "monthly", "2026-10"),
+      root, await request(root, "monthly", "2026-10"),
     );
     expect(result.status).toBe("refused");
     if (result.status === "refused") {
-      expect(result.reason).toBe("changed-member");
+      expect(result.reason).toBe("malformed-member");
       expect(result.path).toBeNull();
     }
     expect(await Bun.file(join(root, ...raw.split("/"))).text()).toBe("changed");
   } finally {
     await rm(root, { recursive: true, force: true });
   }
+});
+
+test("local compact replacement retains its original target digest and deletes only late raw input", async () => {
+  const root = await fixtureRoot();
+  try {
+    const original = await addRawDay(root, "2026-10-20");
+    const first = await maintainPlannerPeriod(root, await request(root, "monthly", "2026-10"));
+    if (first.status !== "written") throw new Error("The target guard requires one real compact file");
+    const target = join(root, first.target_path);
+    await mkdir(dirname(target), { recursive: true });
+    const before = await readFile(join(root, first.output_path));
+    await writeFile(target, before);
+    await rm(join(root, original));
+    const late = await addRawDay(root, "2026-10-21");
+    const replacement = await maintainPlannerPeriod(root, await request(root, "monthly", "2026-10"));
+    expect(replacement.status).toBe("written");
+    if (replacement.status !== "written") throw new Error("Late raw input did not produce a compact replacement");
+    expect(replacement.expected_target_sha256).toBe(createHash("sha256").update(before).digest("hex"));
+    expect(replacement.input_files.map(file => file.path).sort()).toEqual([first.target_path, late].sort());
+    expect(replacement.delete_paths).toEqual([late]);
+    expect(await readFile(target)).toEqual(before);
+    const stored = await readPlannerParquet(join(root, replacement.output_path),
+      "discovered-articles", plannerRecordings()[0]!.contract);
+    expect(stored.rows).toEqual([plannerRecordings()[0]!.row]);
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test("a compact source reused across UTC days retains its first file identity after a real rewrite", async () => {
+  const root = await fixtureRoot();
+  try {
+    const contract = plannerRecordings()[0]!.contract;
+    const days = ["2026-10-20", "2026-10-21"];
+    const rows = days.map(day => ({
+      ...plannerRecordings(day)[0]!.row,
+      url_key: deriveUrlKey(`https://example.org/reused-compact/${day}`),
+    }));
+    async function writeCompact(directory: string, rows: Record<string, unknown>[]) {
+      const result = await persistLedger({
+        ledger: registration.name, rowContract: contract, rows,
+        outputRoot: join(directory, "state"), registryEntry: registration, ledgerSettings,
+        period: { tier: "compact", period: "monthly", covers: "2026-10", builtFrom: 2 },
+      });
+      if (result.status !== "written") throw new Error("The source identity check requires real compact bytes");
+      return `state/${result.files[0]!.path}`;
+    }
+    const path = await writeCompact(root, rows);
+    const replacementRoot = join(root, "replacement");
+    const replacement = await writeCompact(replacementRoot, rows.map((row, index) => ({
+      ...row, first_seen_at: `${days[index]}T11:00:00.123Z`,
+    })));
+    type Source = Extract<PlannerMaintenanceResult, { status: "written" }>["input_files"][number];
+    const sources = new Map<string, Source>();
+    const target = "state/compact/feed-ingest-plan/discovered-articles/yearly/2026/2026.parquet";
+    const first = await readMaintenanceSource(root, path, registration.name, contract, sources, target);
+    expect(first.rows.filter(row => row.date === days[0])).toEqual([rows[0]!]);
+    const proof = sources.get(path);
+    expect(proof?.file_sha256).toBe(first.file_sha256);
+    const bytes = await readFile(join(replacementRoot, replacement));
+    expect(createHash("sha256").update(bytes).digest("hex")).not.toBe(first.file_sha256);
+    await writeFile(join(root, path), bytes);
+    await expect(readMaintenanceSource(root, path, registration.name, contract, sources, target))
+      .rejects.toMatchObject({ reason: "changed-member", path });
+    expect(sources.get(path)).toBe(proof);
+    expect(sources.get(path)?.file_sha256).toBe(first.file_sha256);
+  } finally { await rm(root, { recursive: true, force: true }); }
 });
 
 test("yearly maintenance keeps uncaptured raw files for the next bounded pass", async () => {
@@ -215,11 +259,8 @@ test("yearly maintenance keeps uncaptured raw files for the next bounded pass", 
       await addRawDay(root, "2024-02-28"),
       await addRawDay(root, "2024-02-29"),
     ];
-    git(root, "add", "state");
-    git(root, "commit", "--quiet", "-m", "record yearly planner fixtures");
-    const revision = git(root, "rev-parse", "HEAD");
     const result = await maintainPlannerPeriod(
-      root, await request(root, revision, "yearly", "2024", 1),
+      root, await request(root, "yearly", "2024", 1),
     );
     expect(result.status).toBe("written");
     if (result.status !== "written") return;
@@ -238,11 +279,8 @@ test("daily maintenance refuses a legacy JSON compact member", async () => {
     const legacy = "state/compact/feed-ingest-plan/discovered-articles/daily/2026/10/20.json";
     await mkdir(dirname(join(root, legacy)), { recursive: true });
     await writeFile(join(root, legacy), "{}");
-    git(root, "add", "state");
-    git(root, "commit", "--quiet", "-m", "record legacy compact fixture");
-    const revision = git(root, "rev-parse", "HEAD");
     const result = await maintainPlannerPeriod(
-      root, await request(root, revision, "daily", "2026-10-20"),
+      root, await request(root, "daily", "2026-10-20"),
     );
     expect(result.status).toBe("refused");
     if (result.status === "refused") {
@@ -258,17 +296,17 @@ test("the Python scheduler receives verified compact bytes from the real adapter
   const root = await fixtureRoot();
   try {
     const raw = await addRawDay(root, "2026-10-20");
-    git(root, "add", "state");
-    git(root, "commit", "--quiet", "-m", "record raw planner fixture");
     const projectRoot = resolve(import.meta.dir, "../../..");
-    const python = process.env.IDHAZH_PYTHON ?? "python";
+    const python = process.env.IDHAZH_PYTHON ?? Bun.which("python");
+    if (python === null) throw new Error("The real scheduler check requires the installed Python runtime");
     const script = [
-      "import contextlib, io, json, sys",
+      "import contextlib, io, json, shutil, sys",
       "from pathlib import Path",
       "from idhazh.contracts.ledger_name import LedgerName",
       "from idhazh.ledger.published_columns import check",
       "from idhazh.ledger.planner_maintenance import maintain_period",
       "root = Path(sys.argv[1]).resolve()",
+      "assert shutil.which('git') is None",
       "result = maintain_period(root, LedgerName('discovered-articles'), 'monthly', '2026-10', max_raw_files_per_period=100)",
       "result.target_path.parent.mkdir(parents=True, exist_ok=True)",
       "result.target_path.write_bytes(result.data)",
@@ -281,6 +319,7 @@ test("the Python scheduler receives verified compact bytes from the real adapter
       encoding: "utf8",
       env: {
         ...process.env,
+        PATH: dirname(process.execPath), Path: dirname(process.execPath),
         PYTHONPATH: [
           resolve(projectRoot, "backend"),
           process.env.PYTHONPATH,
@@ -301,6 +340,49 @@ test("the Python scheduler receives verified compact bytes from the real adapter
   } finally {
     await rm(root, { recursive: true, force: true });
   }
+});
+
+test("the native maintenance CLI reads actual local Parquet with Git unavailable", async () => {
+  const root = await fixtureRoot();
+  try {
+    const raw = await addRawDay(root, "2026-10-20");
+    const requested = await request(root, "monthly", "2026-10");
+    const cli = resolve(import.meta.dir, "../src/planner-maintenance-cli.ts");
+    const child = Bun.spawn([process.execPath, "run", cli], {
+      cwd: root, env: { ...process.env, PATH: "", Path: "" },
+      stdin: new Blob([JSON.stringify(requested)]), stdout: "pipe", stderr: "pipe",
+    });
+    const [output, error, status] = await Promise.all([
+      new Response(child.stdout).text(), new Response(child.stderr).text(), child.exited,
+    ]);
+    expect(status, error).toBe(0);
+    const result = PlannerMaintenanceResultSchema.parse(JSON.parse(output));
+    expect(result.status).toBe("written");
+    if (result.status !== "written") throw new Error("The native CLI did not compact its local input");
+    expect(result.delete_paths).toEqual([raw]);
+    const stored = await readPlannerParquet(join(root, result.output_path),
+      "discovered-articles", plannerRecordings()[0]!.contract);
+    expect(stored.rows).toEqual([plannerRecordings()[0]!.row]);
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test("obsolete revision controls and refusal results fail the transient maintenance contract", async () => {
+  const root = await fixtureRoot();
+  try {
+    const current = await request(root, "daily", "2026-10-20");
+    expect(PlannerMaintenanceRequestSchema.safeParse({
+      ...current, revision: "a".repeat(40),
+    }).success).toBe(false);
+    expect(PlannerMaintenanceRequestSchema.safeParse({
+      ...current, version: "2026-10-27",
+    }).success).toBe(false);
+    const result = { version: PLANNER_MAINTENANCE_VERSION, status: "empty",
+      ledger: current.ledger, period: current.period, covers: current.covers };
+    expect(PlannerMaintenanceResultSchema.safeParse({ ...result, revision: "a".repeat(40) }).success).toBe(false);
+    expect(PlannerMaintenanceResultSchema.safeParse({
+      ...result, status: "refused", reason: "revision-changed", path: null,
+    }).success).toBe(false);
+  } finally { await rm(root, { recursive: true, force: true }); }
 });
 
 test("published planner files use the TypeScript contract and reject malformed rows", async () => {

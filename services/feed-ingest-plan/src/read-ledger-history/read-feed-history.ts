@@ -20,7 +20,8 @@ export type FeedHistoryInput = HealthCaptureInput & {
   lifecycle_policy: FeedLifecyclePolicy;
   lifecycle_window_days: number; request_report_closed_days: number; concurrency: number;
 };
-export async function readFeedHistory(input: FeedHistoryInput, cache?: HealthCaptureCache) {
+export function validateHealthDayInputs(input: Pick<FeedHistoryInput,
+  "health_days" | "now" | "lifecycle_window_days" | "policy" | "request_report_closed_days">) {
   const limit = Math.max(input.lifecycle_window_days, input.policy.reliability_window_days);
   if (input.health_days.length > limit + input.request_report_closed_days) {
     throw new Error("Planner health inventory exceeds its configured represented-day and closed-day bounds");
@@ -30,6 +31,9 @@ export async function readFeedHistory(input: FeedHistoryInput, cache?: HealthCap
     if (named.has(day.day) || day.day > input.now.slice(0, 10)) throw new Error("Planner health inventory must name distinct past UTC days");
     named.add(day.day);
   }
+}
+export async function readFeedHistory(input: FeedHistoryInput, cache?: HealthCaptureCache) {
+  validateHealthDayInputs(input);
   const capture = await readHealthCapture({ ...input, current_rows: [] }, input.health_days, cache);
   return { ...capture, ...summarizePlanningHealth({ ...input, ...capture }) };
 }

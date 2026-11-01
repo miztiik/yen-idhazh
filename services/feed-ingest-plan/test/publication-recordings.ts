@@ -1,23 +1,15 @@
-/** How is one real planner and host run prepared against an isolated bare Git origin? */
+/** Prepare captured native planner output and host evidence against an isolated Git origin. */
 import { copyFile, mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { recordedPlan } from "./plan-recordings";
-import { recordedWorkflowHost } from "./host-recordings";
-import { runFeedPlan, summarizePlan } from "../src/run-feed-plan";
+import { metadataRegistrations } from "./host-recordings";
+import { writeRecordedHostOutput } from "./host-output-recordings";
 import { createExecutionOutputs } from "../scripts/feed-ingest-plan-outputs";
+import { fixtureGit } from "./fixture-git";
+import { writePlannerOutputRecording } from "./planner-output-recordings";
+import { ServiceSettingsSchema } from "../src/config/service-settings";
 
-export async function fixtureGit(directory: string, args: string[], environment: Record<string, string> = {}) {
-  const env = { ...Bun.env, GIT_AUTHOR_NAME: "Fixture", GIT_AUTHOR_EMAIL: "fixture@example.test",
-    GIT_COMMITTER_NAME: "Fixture", GIT_COMMITTER_EMAIL: "fixture@example.test", ...environment };
-  const child = Bun.spawn(["git", ...args], { cwd: directory, env, stdout: "pipe", stderr: "pipe" });
-  const [output, errors, code] = await Promise.all([
-    new Response(child.stdout).text(), new Response(child.stderr).text(), child.exited,
-  ]);
-  if (code !== 0) throw new Error(`Generated publication Git ${args[0]} failed: ${errors}`);
-  return output.trim();
-}
-
-export async function publicationRecording(failPlanning = false) {
+export async function publicationGitRecording() {
   const plan = await recordedPlan();
   try {
     const repository = join(plan.directory, "checkout");
@@ -26,37 +18,50 @@ export async function publicationRecording(failPlanning = false) {
     await mkdir(join(repository, "config"), { recursive: true });
     await fixtureGit(plan.directory, ["init", "--bare", "--initial-branch=main", origin]);
     await fixtureGit(repository, ["init", "--initial-branch=main"]);
-    await writeFile(join(repository, "README.md"), "Generated publication fixture.\n");
-    for (const name of ["ledgers.json", "feed-ingest-plan-service.json"]) {
+    for (const name of ["ledgers.json", "feed-ingest-plan-service.json", "data-delivery.json"]) {
       await copyFile(new URL(`../../../config/${name}`, import.meta.url), join(repository, "config", name));
     }
+    const settingsPath = join(repository, "config", "feed-ingest-plan-service.json");
+    const settings = ServiceSettingsSchema.parse(await Bun.file(settingsPath).json());
+    const reservation = Bun.serve({ hostname: "127.0.0.1", port: 0, fetch: () => new Response() });
+    settings.listener.port = reservation.port!;
+    await reservation.stop(true);
+    plan.inputs.settings.listener.port = settings.listener.port;
+    await writeFile(settingsPath, JSON.stringify(settings));
     const retry = await Bun.file(new URL("../../../config/push-retry.json", import.meta.url)).json();
     await writeFile(join(repository, "config", "push-retry.json"), JSON.stringify(retry));
-    await fixtureGit(repository, ["add", "--", "README.md", "config/ledgers.json",
-      "config/feed-ingest-plan-service.json", "config/push-retry.json"]);
+    await fixtureGit(repository, ["add", "--", "config/ledgers.json",
+      "config/feed-ingest-plan-service.json", "config/push-retry.json", "config/data-delivery.json"]);
     await fixtureGit(repository, ["commit", "-m", "Create generated publication inputs"]);
     await fixtureGit(repository, ["remote", "add", "origin", origin]);
     await fixtureGit(repository, ["push", "origin", "HEAD:refs/heads/main"]);
     const head = await fixtureGit(repository, ["rev-parse", "HEAD"]);
-    const identity = { run_id: "2026-10-21-700", attempt: 1, git_sha: head };
-    const host = await recordedWorkflowHost(directory, identity);
+    const identity = { run_id: "2026-10-21-700", attempt: 3, git_sha: head };
+    const registrations = await metadataRegistrations();
+    await mkdir(directory, { recursive: true });
     plan.inputs.root = repository;
     plan.inputs.outputRoot = join(directory, "state");
-    plan.inputs.harvest.config.discovered_articles.lookback_days = 1;
-    plan.inputs.clock_config.collect.published_window_days = 1;
     plan.runtime.git_sha = head;
-    if (failPlanning) {
-      plan.inputs.settings.inputs.artifact_root = "blocked-artifacts";
-      await writeFile(join(repository, "blocked-artifacts"), "Artifact persistence must fail");
-    }
-    const summary = summarizePlan(await runFeedPlan({}, plan.inputs, plan.runtime));
+    const paths: string[] = [];
+    const commit = { repository, stateRoot: plan.inputs.outputRoot, paths, identity,
+      registrations, message: "Record generated planner and host metadata", retry };
+    return { ...plan, repository, origin, directory, head, identity, registrations, commit };
+  } catch (error) { await plan.close(); throw error; }
+}
+
+export async function publicationRecording(failPlanning = false) {
+  const fixture = await publicationGitRecording();
+  try {
+    const { directory, identity, origin, head } = fixture;
+    const host = await writeRecordedHostOutput(directory, identity, fixture.inputs.ledgerSettings);
+    const recorded = await writePlannerOutputRecording(fixture.inputs, failPlanning);
+    const summary = recorded.response;
     const beforeDelivery = await fixtureGit(origin, ["--git-dir", origin, "rev-parse", "main"]);
     if (beforeDelivery !== head) throw new Error("Planner stages made a Git commit before final delivery");
     await writeFile(join(directory, "response.json"), JSON.stringify(summary));
-    const plannerPaths: string[] = JSON.parse(createExecutionOutputs(summary, plan.inputs.registrations).current_run_files!);
+    const plannerPaths: string[] = JSON.parse(createExecutionOutputs(summary, fixture.inputs.registrations).current_run_files!);
     const paths = [...host.response.files.map(file => file.path), ...plannerPaths];
-    const commit = { repository, stateRoot: plan.inputs.outputRoot, paths, identity,
-      registrations: host.registrations, message: "Record generated planner and host metadata", retry };
-    return { ...plan, repository, origin, directory, head, host, summary, plannerPaths, paths, commit };
-  } catch (error) { await plan.close(); throw error; }
+    const commit = { ...fixture.commit, paths };
+    return { ...fixture, host, summary, plannerPaths, paths, commit };
+  } catch (error) { await fixture.close(); throw error; }
 }

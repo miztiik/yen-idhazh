@@ -23,10 +23,11 @@ contains a reference and body-free outcome, not fetched bytes. A failed
 fetch remains a typed failure.
 
 `POST /api/2026-10-31/parse` accepts `request_id`, `fetch_request_id`,
-`article_id` and `correlation_id`. It checks the saved receipt, configuration,
+`article_id` and `correlation_id`. It claims the live fetched reference and checks configuration,
 URL hash, byte limit and identities, then parses without any network call.
-Missing receipts return HTTP 404; unavailable fetch content returns HTTP 409.
-Malformed controls and damaged receipts fail explicitly.
+Missing or consumed references return HTTP 404. A reference already owned by
+another parser returns HTTP 409. Malformed controls and invalid documents fail
+explicitly. Parsing releases the original downloaded body on success or failure.
 
 Feed parsing returns sanitized, body-free offers, discovery evidence and one
 parsed `batch_id`. Article parsing completes that same batch without depending
@@ -39,6 +40,11 @@ article. Concurrent article parses atomically update the same complete feed
 batch. Selection refuses while any offer is still pending. A separate
 operator article URL can produce its own batch; unrelated documents are
 not silently combined.
+
+Collection-owned feed parses return only pending admitted offers to the
+planner. Preflight rejections remain in the completed collection and its
+rejection ledger; no article HTTP call is needed to settle them. Standalone
+feed parses retain their existing public offer flow.
 
 Combined planning and standalone document work prepare the same required
 health fields before fetching. They do not read extra request-report days or
@@ -58,45 +64,69 @@ Publisher IDs remain curated or null.
 Transient work facts retain actual UTC operation times and request attempts.
 They feed grouped health counters, not a committed per-operation history.
 Public responses, progress and commit manifests contain no article bodies.
-The body-bearing fetch receipt remains private for the parse operation.
+The downloaded body remains private in memory for its one parse operation.
+Extracted article text continues through selection and its separate artifact.
 
 ## Structured operation logs
 
 Standalone fetch, parse and persistence use the same structured publisher
-as `/plan`. Completed replays emit no new work events. Invalid controls that
+as `/plan`. Invalid controls that
 cannot resolve a document do not log caller-supplied addresses.
 The [runner](feed-plan-runner.md#first-sight-and-retained-output) owns event
 fields, failure-only article addresses and elapsed-time meaning.
 
-## Durable replay and interrupted requests
+## Live document lifetime
 
-`planner-operations.sqlite` lives under the configured output root.
-TypeScript contracts declare its private `PlannerOperation` and
-`FetchedDocument` records. Reads use one indexed request key, never a history
-walk.
+The listener holds current fetched documents under server-owned request IDs.
+It claims each reference before parsing and removes it when parsing ends.
+Failed fetches release their raw input when fetch handling ends. Active
+references are never evicted; configured capacity bounds concurrent handoffs,
+not the offered article population.
 
-The key is shared across fetch, parse and keyed plans. Reuse with different
-input, operation or configuration returns HTTP 409. A short transaction
-claims the request before asynchronous work; a second short transaction
-saves its validated result. No SQLite write lock spans network or worker
-parsing work, and independent requests can overlap.
+Run state keeps body-free work facts, source outcomes and original UTC
+observations. Health and selection read this live state and retained ledgers.
+Releasing a body does not erase warnings, partial request counts, rejected rows
+or grouped causes, and later parsing cannot move earlier fetch work to its own
+UTC day.
 
-Completed keys replay their saved response without repeating work.
-Only current receipt and fetched-document formats can replay. Older or missing
-stored stamps refuse without rewriting the journal.
-A started or interrupted key returns `REQUEST_INCOMPLETE`; it is not
-silently retried. An expired in-memory parsed batch cannot replay a dead
-successful stage reference. Inspection or a new execution is required.
-This does not promise exactly-once external HTTP work across a hard crash.
+There is no request journal, completed fetch/parse/plan response cache, reopening
+loader or automatic re-execution. A new process cannot recover old references.
+Reusing an owned live request ID returns HTTP 409. `Idempotency-Key` on plan,
+fetch or parse is unsupported and returns HTTP 400 before work.
+Selection still creates a fresh result that can continue through partitioning
+and persistence.
 
-Saved fetch receipts retain their original work date. On restart, known
-attempt evidence restores real request spend on that date; incomplete
-accounting remains unknown. A later parse cannot relabel earlier fetches
-as complete zero requests on its own API day.
+## Failure-only raw document artifact
 
-The optional UUIDv4 `Idempotency-Key` on `/plan` uses this same replay
-boundary. Selection has no idempotency key: another call creates a fresh
-result that can continue through partitioning and persistence.
+The optional diagnostic contains a failed input document as downloaded, with
+its recorded fetch facts. It is not extracted article text.
+`dump_raw_document_contents` in `config/feed-ingest-plan-service.json` defaults
+to false. When enabled, the planner appends failed native document JSON to
+`inputs.artifact_root/<run_id>/<attempt>/raw-document-contents.jsonl`.
+The run and attempt determine the path, never downloaded text.
+
+Each compact JSONL record uses
+[`RawDocumentFailureSchema`](../../../packages/common-contracts/src/schemas/raw-document-failure.schema.ts):
+`schema_version`, `document_kind` (`feed` or `article`), `request_id`, the
+observing `operation` (`fetch` or `parse`), actual UTC `failed_at`, the reported
+`failure_reason`, and the validated raw `document`. Its body remains null when
+no body was obtained. An unresolved request has only its existing body-free
+error handling.
+
+One live writer serializes appends and creates the file only on the first
+failure. It is drained and closed before the completed file goes separately to
+the artifact-directory delivery destination. Only that exact diagnostic target
+is permitted. No expected file checksum is supplied.
+The [manual workflow](../../how-to/run-feed-ingest-plan-test.md#manual-controls)
+uploads it separately only when enabled and present, including after failed
+collection, and waits for upload confirmation before cleanup.
+
+No successful raw document is archived or retained to diagnose a later failure.
+There is no refetch, replay, extracted-text substitute or diagnostic reader for
+execution. Raw content never enters normal HTTP responses, logs, Git delivery,
+selected metadata or public pages. Request headers and credentials are not
+record fields. Append, close, preparation and upload errors remain explicit;
+they do not erase the document failure or completed normal output.
 
 ## Selection, partition and persistence APIs
 
@@ -121,9 +151,42 @@ Table A
 | A7 | `collections/cancel` | Accepts `collection_id`; cancels owned work and prevents selection. Returns harvested-rejection receipts and a batch reference for explicit partial-health recording. |
 
 Each finalized execution is immutable. A fresh result must not overwrite a
-prior artifact or double-count its HTTP work. Replaying the same finalized
+prior artifact or double-count its HTTP work. Repeating the same finalized
 result returns its existing receipt. The removed `persist-dispatches`
 endpoint has no alias and returns ordinary HTTP 404.
+
+## Safe-persist HTTP delivery
+
+`POST /api/2026-10-31/safe-persist-data` calls the existing verified metadata
+adapter and `safe_persist_data`, not another Git implementation. Its strict
+request contains `runNumber`, `attempt` and `paths`, the exact completed paths
+relative to the run's state directory. The response retains the existing
+`status`, `commit`, `files` and `paths` receipt without changing its saved shape.
+No article body, credential or delivery setting enters the request.
+
+The runner checkout and private startup pipe supply the repository and temporary
+output directory. The existing adapter still checks execution identity and
+completed files, reads registered paths, and loads the committer and retry
+settings from committed configuration. HTTP adds no permission or identity
+system.
+
+Always-run finalization owns a separate delivery child because collection has
+already closed its planner child. The delivery child needs no live planner batch
+or collection inputs; completed partial metadata remains deliverable after
+planner failure. It reuses the configured listener and supervision limits,
+checks owned-child readiness through `/health`, and closes and reaps that child
+after success, failure or cancellation. Cancellation known before finalization
+skips new Git delivery.
+
+`safe_persist_http_completed` records the run number, attempt, confirmed status,
+commit and file count in the workflow log. The API and client use the existing
+`writeJsonLine` helper to write one JSON object per stderr line.
+`safe_persist_http_failed` and
+`safe_persist_http_client_failed` identify server and transport failures without
+article bodies. An unconfirmed response or failed child shutdown records a failed
+receipt, not a successful one. Report generation and artifact preparation still
+run independently; [the workflow guide](../../how-to/run-feed-ingest-plan-test.md#saved-output-and-failures)
+defines recovery and upload behavior.
 
 ## Markdown rendering API
 
@@ -136,7 +199,7 @@ package API, not an HTTP route.
 
 The manual workflow uses an adapter to write that Markdown to its job summary
 and turn notices into workflow annotations. Its finalization task first calls
-the separate safe Git delivery API, then renders the report before the artifact
+the safe-persist HTTP endpoint, then renders the report before the artifact
 upload. The delivery receipt stays separate from the rendered report; the pure
 renderer does not commit or upload files. This workflow presentation is not
 the production digest renderer; production can choose a reader-facing format
@@ -159,8 +222,8 @@ The workflow HTTP client calls `/health`, `/plan`, then
 `/feed-health-state` with `action: summarize` when a batch exists. The
 [workflow entry](feed-plan-runner.md#entry-points-and-controls) supervises a
 separate server child and keeps that same listener alive for all three calls
-because parsed, selected and partitioned batches are in memory. The private
-SQLite journal does not restore those references after a restart. The workflow
+because parsed, selected and partitioned batches are in memory. A restart
+does not restore those references. The workflow
 checks health against its expected child and run identity before sending work;
 ordinary `--serve` health remains an availability and enablement check.
 Startup controls pass only through the private process pipe, never HTTP paths.
@@ -170,11 +233,10 @@ flowchart TD
   OP["Operator"] --> PLAN["POST /plan"]
   PLAN --> BEGIN["POST /collections<br/>one run identity, effective policy and cancellation"]
   BEGIN --> FETCH_FEED["POST /fetch for each eligible feed"]
-  CURRENT[("Durable endpoint availability<br/>revision-checked reservation before external work")] <--> FETCH_FEED
+  CURRENT[("Captured health calculations<br/>supported endpoint eligibility")] --> FETCH_FEED
   FETCH_FEED --> PARSE_FEED["POST /parse<br/>bounded XML worker"]
-  PARSE_FEED --> CURRENT
   PARSE_FEED --> BATCH["One run-owned collection batch<br/>feed provenance and terminal outcomes"]
-  BATCH --> FETCH_ARTICLE["POST /fetch for each admitted offer<br/>age checked before download"]
+  BATCH --> FETCH_ARTICLE["POST /fetch for each admitted offer<br/>preflight rejections already settled"]
   FETCH_ARTICLE --> PARSE_ARTICLE["POST /parse<br/>bounded HTML worker"]
   PARSE_ARTICLE --> BATCH
   FETCH_FEED -->|"Failure or eligibility skip"| BATCH
@@ -214,14 +276,18 @@ a partial run records only the work it finished.
 Server-owned offer references preserve a complete public feed-to-article
 flow without granting fetched prose authority over paths or later requests.
 Shared bounded parsing capacity keeps the listener responsive while real
-HTML extraction runs. Short private-journal transactions protect request
-identity without restoring a listener-wide run queue.
+HTML extraction runs. A live claim protects each fetched reference without
+serializing all runs. Removing that reference after parsing avoids retaining
+successful downloads as hidden execution state.
 The Plan API does not collect per-document CPU or RAM profiles. These samples
 do not change fetch, parse, selection or persistence results; host fingerprints
 remain separate ledger records.
 The Markdown renderer is a pure package function, not another HTTP route:
 formatting needs no service call, workflow annotations stay in the workflow
 adapter, and production can choose a separate reader-facing presentation.
+Final delivery gets its own short-lived child so a stopped or failed planner
+cannot prevent completed metadata from reaching the unchanged Git engine.
+Both children use the same private-pipe shutdown and exact-process reaping code.
 
 ## See also
 

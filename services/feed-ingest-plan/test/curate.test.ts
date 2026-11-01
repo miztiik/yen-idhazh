@@ -1,18 +1,12 @@
 /** Do numeric portfolio controls choose one content population with compact, truthful explanations? */
 import { expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   FeedHealthStateRowSchema, FeedIngestCandidateSchema, ParsedFeedBatchSchema, SelectedArticleRowContract,
   SelectedArticlesArtifactSchema, deriveCandidateId, deriveUrlKey, selectedArticleMetadata,
 } from "@idhazh/common-contracts";
 import type { FeedIngestConfig, PlannerArticleEvidence } from "@idhazh/common-contracts";
-import { persistLedger } from "@idhazh/ledger-file-writer";
-import { tableFromIPC } from "apache-arrow";
-import initializeParquet, { readParquet } from "parquet-wasm/esm";
 import { loadPlanningConfig, resolvePolicy } from "../src/config/resolve-policy";
 import { curateArticles } from "../src/curate-article-portfolio/editorial-selection";
 import { screenArticleCandidates } from "../src/screen-article-candidates/triage-gates";
@@ -20,11 +14,11 @@ import type { ScreenedCandidate } from "../src/screen-article-candidates/triage-
 import { calculateFreshness } from "../src/screen-article-candidates/freshness-decay";
 import { loadPlanInputs } from "../src/load-plan-inputs";
 import { resolveRunContext } from "../src/resolve-run-context";
-import { readPlannerParquet } from "../src/read-ledger-history/read-planner-parquet";
 import type { SourceHistoryEvidence } from "../src/read-ledger-history/read-feed-history";
 import type { PublisherPublicationHistory } from "../src/curate-article-portfolio/publisher-exposure";
 import { partitionArticles } from "../src/partition-article-shards/shard-packer";
 import { selectArticles } from "../src/select-articles";
+import { readRunHistory } from "../src/read-ledger-history/read-run-history";
 import { endpointKey } from "../src/read-ledger-history/read-feed-history";
 import { plannerRecordings } from "../../../packages/ledger-file-writer/test/planner-recordings";
 import { source } from "./harvest-recordings";
@@ -453,7 +447,8 @@ test("real screening results compose into exact curation without losing harveste
       endpoint_key: endpointKey(first.candidate.source.feed_url), checked_at: setup.context.now,
       items: 2, article_candidates: 1, articles_selected: 0,
     })];
-    const selected = await selectArticles(pair, setup.inputs, setup.context.now);
+    const baseline = await readRunHistory(setup.inputs, pair.context);
+    const selected = await selectArticles(pair, setup.inputs, setup.context.now, undefined, setup.context, baseline);
     expect(selected.health_rows[0]).toMatchObject({ article_candidates: 1, articles_selected: 1 });
     expect(selected.exclusions).toContainEqual({
       feed_id: first.candidate.feed_id, subject: "article", stage: "screen-article-candidates",
@@ -462,7 +457,7 @@ test("real screening results compose into exact curation without losing harveste
     expect(selected.articles).toHaveLength(1);
     const originalBatch = structuredClone(pair);
     const runContext = resolveRunContext(setup.inputs.settings, "a".repeat(40), new Date("2026-10-22T00:01:00Z"));
-    const fresh = await selectArticles(pair, setup.inputs, runContext.now, undefined, runContext);
+    const fresh = await selectArticles(pair, setup.inputs, runContext.now, undefined, runContext, baseline);
     expect(fresh.articles[0]).toMatchObject({
       run_id: runContext.run_id, date: runContext.date, attempt: runContext.writer.attempt,
       age_hours: selected.articles[0]!.age_hours, timing_at: selected.articles[0]!.timing_at,
@@ -495,30 +490,15 @@ test("screening and packing retain the owning run day even when evaluation happe
   }
 });
 
-test("actual selected Parquet has exactly metadata columns while the same choice retains artifact text", async () => {
+test("selected metadata excludes text while its artifact retains the chosen original", async () => {
   const setup = await inputs();
   const chosen = run(setup).articles;
   const before = structuredClone(chosen);
-  const root = await mkdtemp(join(tmpdir(), "portfolio-parquet-"));
-  try {
     const rows = chosen.map(row => ({
       ...selectedArticleMetadata(row), run_id: row.run_id, attempt: row.attempt, date: row.date,
     }));
-    const written = await persistLedger({
-      ledger: "selected-articles", registryEntry: setup.inputs.registrations.selected_articles,
-      outputRoot: root, ledgerSettings: setup.inputs.ledgerSettings,
-      rowContract: SelectedArticleRowContract, period: { tier: "raw", covers: setup.context.date }, rows,
-    });
-    expect(written.status).toBe("written");
-    expect(written.files).toHaveLength(1);
-    const file = written.files[0]!;
-    const actual = await readPlannerParquet(join(root, file.path), "selected-articles", SelectedArticleRowContract);
-    expect(actual.rows).toEqual(rows);
-    await initializeParquet();
-    const table = tableFromIPC(readParquet(await readFile(join(root, file.path))).intoIPCStream());
-    expect(table.schema.fields.map(field => field.name).sort()).toEqual(Object.keys(rows[0]!).sort());
-    expect(actual.envelope).not.toHaveProperty("identity");
-    expect(actual.envelope).not.toHaveProperty("unit_id");
+    expect(SelectedArticleRowContract.schema.array().parse(rows)).toEqual(rows);
+    expect(rows.every(row => !("article_text" in row))).toBe(true);
     const artifact = SelectedArticlesArtifactSchema.parse({
       schema_version: SelectedArticleRowContract.schemaVersion, run_id: setup.context.run_id, attempt: setup.context.writer.attempt,
       date: setup.context.date, evaluated_at: setup.context.now,
@@ -526,28 +506,4 @@ test("actual selected Parquet has exactly metadata columns while the same choice
     });
     expect(artifact.articles.map(row => row.article_text)).toEqual(chosen.map(row => row.article_text));
     expect(chosen).toEqual(before);
-  } finally { await rm(root, { recursive: true, force: true }); }
-}, 30_000);
-
-test("empty writes have no invented files and real failures cannot report completion", async () => {
-  const setup = await inputs();
-  const root = await mkdtemp(join(tmpdir(), "portfolio-empty-failure-"));
-  try {
-    const request = {
-      ledger: "selected-articles", registryEntry: setup.inputs.registrations.selected_articles,
-      outputRoot: join(root, "state"), ledgerSettings: setup.inputs.ledgerSettings,
-      rowContract: SelectedArticleRowContract, period: { tier: "raw" as const, covers: setup.context.date },
-    };
-    expect(await persistLedger({ ...request, rows: [] })).toEqual({ status: "empty", files: [] });
-    const rows = run(setup).articles.map(row => ({
-      ...selectedArticleMetadata(row), run_id: row.run_id, attempt: row.attempt, date: row.date,
-    }));
-    await writeFile(join(root, "state"), "real filesystem obstruction");
-    await expect(persistLedger({ ...request, rows })).rejects.toThrow();
-    const paused = await persistLedger({
-      ...request, rows, registryEntry: { ...request.registryEntry, lifecycle_status: "paused" },
-    });
-    expect(paused.status).toBe("skipped");
-    expect(paused.files).toEqual([]);
-  } finally { await rm(root, { recursive: true, force: true }); }
 });

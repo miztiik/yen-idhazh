@@ -1,0 +1,172 @@
+/** Which bounded represented health days are named by local publication inventory and compact periods? */
+import {
+  COMPACT_INDEX_VERSION, CompactIndexSchema, DateStampSchema, PublicationInventoryInputSchema,
+} from "@idhazh/common-contracts";
+import type { CompactIndex } from "@idhazh/common-contracts";
+import type { LedgerDayInput } from "../config/service-settings";
+import { closedRequestDays } from "./request-summary";
+import { classifyPlannerHistoryGap } from "./planner-history-gap";
+import { LedgerHistoryReadError } from "./ledger-history-error";
+
+function createHealthDay(prefix: readonly string[], day: string) {
+  return {
+    day: DateStampSchema.parse(day),
+    indexes: {
+      yearly: `state/compact/${prefix.join("/")}/index/yearly.json`,
+      monthly: `state/compact/${prefix.join("/")}/index/monthly.json`,
+      daily: `state/compact/${prefix.join("/")}/index/daily.json`,
+    },
+  };
+}
+
+function representedPeriodDays(period: CompactIndex["period"], covers: string, today: string) {
+  const first = period === "yearly" ? `${covers}-01-01` : period === "monthly" ? `${covers}-01` : covers;
+  const start = new Date(`${first}T00:00:00Z`);
+  if (!Number.isFinite(start.getTime()) || start.getUTCFullYear() < 1 || start.toISOString().slice(0, 10) !== first) {
+    throw new LedgerHistoryReadError("Health cover is not a valid UTC period");
+  }
+  const end = new Date(start);
+  if (period === "yearly") end.setUTCFullYear(end.getUTCFullYear() + 1);
+  else if (period === "monthly") end.setUTCMonth(end.getUTCMonth() + 1);
+  else end.setUTCDate(end.getUTCDate() + 1);
+  const days: string[] = [];
+  for (const at = new Date(start); at < end; at.setUTCDate(at.getUTCDate() + 1)) {
+    const day = at.toISOString().slice(0, 10);
+    if (day > today) break;
+    days.push(day);
+  }
+  return days;
+}
+
+export async function resolveHealthDays(input: {
+  ledger: "feed-health-state"; prefix: readonly string[]; now: string;
+  health_window_days: number; request_report_closed_days: number; period_limit: number;
+  authored: readonly LedgerDayInput[];
+  read: (path: string) => Promise<unknown | undefined>;
+  read_period: (path: string) => Promise<unknown>;
+  raw_files: (day: string) => Promise<readonly string[]>;
+}) {
+  if (!Number.isSafeInteger(input.period_limit) || input.period_limit < 1) throw new Error("Health period limit must be positive");
+  const base = input.prefix.join("/");
+  if (base !== "feed-ingest-plan/feed-health-state") throw new Error("Health history requires its current planner registration");
+  const defaults = createHealthDay(input.prefix, input.now.slice(0, 10));
+  const compact: CompactIndex[] = [];
+  const files = new Set<string>(["frontend/public/publication.json", ...Object.values(defaults.indexes)]);
+  const notices: string[] = [];
+  for (const period of ["yearly", "monthly", "daily"] as const) {
+    try {
+      const raw = await input.read(defaults.indexes[period]);
+      if (raw === undefined) continue;
+      const index = CompactIndexSchema.parse(raw);
+      if (index.version > COMPACT_INDEX_VERSION || index.ledger !== input.ledger || index.period !== period) {
+        throw new LedgerHistoryReadError("Health index is unsupported or belongs to another registered output");
+      }
+      compact.push(index);
+    } catch (error) {
+      const code = classifyPlannerHistoryGap(error);
+      if (code === null) throw error;
+      notices.push(`health_index_refused:${period}`);
+    }
+  }
+  const days = new Map<string, LedgerDayInput>();
+  const rawDays = new Map<string, readonly string[]>();
+  async function rawFiles(day: string) {
+    let files = rawDays.get(day);
+    if (files === undefined) {
+      try { files = await input.raw_files(day); }
+      catch (error) {
+        if (classifyPlannerHistoryGap(error) === null) throw error;
+        notices.push(`health_day_refused:${day}`);
+        files = [];
+      }
+      rawDays.set(day, files);
+    }
+    return files;
+  }
+  let entries: ReturnType<typeof PublicationInventoryInputSchema.parse>["entries"] = [];
+  try {
+    const inventory = await input.read("frontend/public/publication.json");
+    if (inventory === undefined) notices.push("publication_inventory_missing");
+    else entries = PublicationInventoryInputSchema.parse(inventory).entries;
+  } catch (error) {
+    if (classifyPlannerHistoryGap(error) === null) throw error;
+    notices.push("health_inventory_refused");
+  }
+  for (const entry of entries) {
+    const prefix = `raw/${base}/`;
+    if (entry.root !== "state" || !entry.path.startsWith(prefix)) continue;
+    const parts = entry.path.slice(prefix.length).split("/");
+    if (parts.length !== 4 || !/^[0-9a-f-]{36}\.parquet$/.test(parts[3]!)) continue;
+    const day = DateStampSchema.parse(parts.slice(0, 3).join("-"));
+    if (day > input.now.slice(0, 10)) continue;
+    const held: LedgerDayInput = days.get(day) ?? createHealthDay(input.prefix, day);
+    const rawFiles = [...new Set([...(held.raw_files ?? []), `state/${entry.path}`])];
+    days.set(day, { day, indexes: defaults.indexes, raw_files: rawFiles });
+  }
+  const periods = compact.flatMap(index => index.entries.filter(entry => entry.state === "packed" && entry.rows > 0).map(entry => ({
+    period: index.period, covers: entry.covers,
+    path: `state/compact/${base}/${index.period}/${index.period === "yearly"
+      ? `${entry.covers}/${entry.covers}` : entry.covers.replaceAll("-", "/")}.parquet`,
+  }))).sort((a, b) => b.covers.localeCompare(a.covers) || a.period.localeCompare(b.period));
+  let inspected = 0;
+  for (const period of periods) {
+    const chosen = [...days.keys()].sort().slice(-input.health_window_days);
+    const end = period.period === "daily" ? period.covers : period.period === "monthly"
+      ? `${period.covers}-31` : `${period.covers}-12-31`;
+    if (chosen.length >= input.health_window_days && end < chosen[0]!) break;
+    if (inspected >= input.period_limit) { notices.push("health_period_limit_reached"); break; }
+    inspected++;
+    files.add(period.path);
+    try {
+      for (const day of representedPeriodDays(period.period, period.covers, input.now.slice(0, 10))) {
+        if (!days.has(day)) days.set(day, createHealthDay(input.prefix, day));
+      }
+      await input.read_period(period.path);
+    } catch (error) {
+      const code = classifyPlannerHistoryGap(error);
+      if (code === null) throw error;
+      notices.push(`health_period_refused:${period.covers}`);
+    }
+  }
+  for (const day of [...closedRequestDays(input.now, input.request_report_closed_days), input.now.slice(0, 10)]) {
+    const named = createHealthDay(input.prefix, day);
+    if (!days.has(day) && (await rawFiles(day)).length > 0) days.set(day, named);
+  }
+  for (const named of input.authored) {
+    if (named.day > input.now.slice(0, 10)) throw new Error("Authored health day exceeds the captured UTC clock");
+    days.set(named.day, named);
+  }
+  const selected = [...days.values()].sort((a, b) => a.day.localeCompare(b.day)).slice(-input.health_window_days);
+  const from = selected[0]?.day;
+  if (from !== undefined && compact.some(index => index.entries.some(entry =>
+    (entry.state === "lost" && entry.covers >= from && entry.covers <= input.now.slice(0, 10))
+      || entry.lost_days.some(day => day >= from && day <= input.now.slice(0, 10))
+      || (entry.set_aside > 0 && entry.covers >= from.slice(0, entry.covers.length)
+        && entry.covers <= input.now.slice(0, entry.covers.length))))) {
+    notices.push("health_coverage_gap");
+  }
+  for (const [position, day] of selected.entries()) {
+    const members = [...await rawFiles(day.day)];
+    const authored = input.authored.find(value => value.day === day.day);
+    if (authored?.raw_files !== undefined && [...authored.raw_files].sort().join("\n") !== [...members].sort().join("\n")) {
+      notices.push(`health_membership_refused:${day.day}`);
+    }
+    selected[position] = { ...day, raw_files: authored?.raw_files ?? members };
+    try {
+      for (const member of members) {
+        if (!member.startsWith(`state/raw/${base}/${day.day.replaceAll("-", "/")}/`)
+          || member.split("/").length !== 8) {
+          throw new LedgerHistoryReadError("Raw health member lies outside its named UTC day");
+        }
+        files.add(member);
+      }
+      for (const period of periods) {
+        if (day.day.startsWith(period.covers)) files.add(period.path);
+      }
+    } catch (error) {
+      if (classifyPlannerHistoryGap(error) === null) throw error;
+      notices.push(`health_history_refused:${day.day}`);
+    }
+  }
+  return { inputs: selected, files: [...files].sort(), represented_days: selected.map(day => day.day), notices };
+}

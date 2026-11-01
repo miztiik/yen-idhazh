@@ -2,7 +2,7 @@
 import { resolve } from "node:path";
 import { DiscoveredArticleRowContract, DiscoveredArticleRowSchema } from "@idhazh/common-contracts";
 import type { DiscoveredArticleRow } from "@idhazh/common-contracts";
-import { persistLedger } from "@idhazh/ledger-file-writer";
+import { persistLedger, regularPlannerPath } from "@idhazh/ledger-file-writer";
 import type { LedgerRegistration, LedgerSettings } from "@idhazh/ledger-file-writer";
 import { LedgerDayInputSchema, RelativePathSchema } from "../config/service-settings";
 import type { LedgerDayInput } from "../config/service-settings";
@@ -13,6 +13,7 @@ import { readPlannerDay, createPlannerHistoryCache } from "./read-planner-histor
 import { readPlannerParquet } from "./read-planner-parquet";
 import { mapPool } from "../harvest-feeds/harvest-pool";
 import { defaultDayInput } from "./named-days";
+import { classifyPlannerHistoryGap } from "./planner-history-gap";
 
 export function parseDiscoveredDays(days: readonly LedgerDayInput[]): LedgerDayInput[] {
   const parsed = days.map(day => LedgerDayInputSchema.parse(day));
@@ -43,19 +44,33 @@ export async function readDiscoveredEvidence(input: {
   const inventory = required.map(day => byDay.get(day) ?? defaultDayInput(input.registration.prefix, day));
   const cache = createPlannerHistoryCache<DiscoveredArticleRow>();
   const [files, days] = await Promise.all([
-    mapPool(input.discovered_files, input.concurrency, path =>
-      readPlannerParquet(resolve(input.root, RelativePathSchema.parse(path)), "discovered-articles", DiscoveredArticleRowContract)),
+    mapPool(input.discovered_files, input.concurrency, async name => {
+      const path = RelativePathSchema.parse(name);
+      try {
+        await regularPlannerPath(input.root, path);
+        return { ...(await readPlannerParquet(resolve(input.root, path), "discovered-articles", DiscoveredArticleRowContract)),
+          complete: true, gaps: [] };
+      } catch (error) {
+        const reason = classifyPlannerHistoryGap(error);
+        if (reason === null) throw error;
+        input.log?.("history", "failed", {
+          source: "planner-ledger", failed_check: "named-file-read", reason, ledger: "discovered-articles", path,
+        });
+        return { rows: [], complete: false, gaps: [reason] };
+      }
+    }),
     mapPool(inventory, input.concurrency, day => readPlannerDay(
       input.root, input.registration, day, DiscoveredArticleRowContract, cache, input.log,
     )),
   ]);
   const rows = foldDiscoveryHistory([...files.flatMap(file => file.rows), ...days.flatMap(day => day.rows), ...(input.own_rows ?? [])]);
-  const complete = required.every(day => days.find(value => value.day === day)?.complete === true);
+  const complete = files.every(file => file.complete)
+    && required.every(day => days.find(value => value.day === day)?.complete === true);
   return {
     discovered: rows.length > 0 || named.length > 0 || input.discovered_files.length > 0
       ? { availability: "available" as const, rows } : { availability: "unavailable" as const },
     absence_proof: complete ? "within_configured_window" as const : "unavailable" as const,
-    rows,
+    rows, gaps: [...new Set([...files.flatMap(file => file.gaps), ...days.flatMap(day => day.gaps)])],
   };
 }
 export async function rememberDiscoveries(

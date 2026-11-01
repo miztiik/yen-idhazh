@@ -1,7 +1,5 @@
 {
   "entries": [
-    {"bytes": 43261,"covers": "2026-09-29","lost_days": [],"rows": 2,"set_aside": 0,"state": "packed"},
-    {"bytes": 0,"covers": "2026-09-30","lost_days": [],"rows": 0,"set_aside": 0,"state": "empty"},
     {"bytes": 0,"covers": "2026-10-01","lost_days": [],"rows": 0,"set_aside": 0,"state": "empty"},
     {"bytes": 0,"covers": "2026-10-02","lost_days": [],"rows": 0,"set_aside": 0,"state": "empty"},
     {"bytes": 0,"covers": "2026-10-03","lost_days": [],"rows": 0,"set_aside": 0,"state": "empty"},
@@ -30,7 +28,8 @@
     {"bytes": 0,"covers": "2026-10-26","lost_days": [],"rows": 0,"set_aside": 0,"state": "empty"},
     {"bytes": 0,"covers": "2026-10-27","lost_days": [],"rows": 0,"set_aside": 0,"state": "empty"},
     {"bytes": 45303,"covers": "2026-10-28","lost_days": [],"rows": 3,"set_aside": 0,"state": "packed"},
-    {"bytes": 0,"covers": "2026-10-29","lost_days": [],"rows": 0,"set_aside": 0,"state": "empty"}
+    {"bytes": 0,"covers": "2026-10-29","lost_days": [],"rows": 0,"set_aside": 0,"state": "empty"},
+    {"bytes": 0,"covers": "2026-10-30","lost_days": [],"rows": 0,"set_aside": 0,"state": "empty"}
   ],
   "ledger": "item-health",
   "period": "daily",

@@ -1,6 +1,6 @@
 # Running the isolated feed planner
 
-**Last Updated**: 2026-10-31
+**Last Updated**: 2026-11-01
 
 How do the API and CLI execute one real feed plan?
 Both compose the same units. The production Python news pipeline, digest
@@ -17,8 +17,8 @@ published-URL exclusion window; the global value remains unchanged for other
 consumers. The local seven-day window is not the article-age limit.
 `listener.max_body_bytes` limits incoming API request bodies.
 `extract.max_body_bytes` limits fetched article response bytes.
-`listener.parser_concurrency` controls concurrent article HTML parser workers,
-not the number of feeds fetched.
+`listener.parser_concurrency` controls the shared feed XML and article HTML
+parser workers, not the number of feeds fetched.
 
 The standalone health route reports listener availability and enablement.
 The workflow child also reports its startup nonce, process ID and run identity.
@@ -27,9 +27,17 @@ calls `services/feed-ingest-plan/scripts/`; no native API depends on
 `.github/scripts/`. The two independent experiment files retained there
 do not supply API execution, history, verification or reporting.
 The workflow entry is `scripts/run-feed-ingest-plan.ts`. Preparation lives in
-`scripts/feed-ingest-plan-workflow-inputs.ts`: it stages bounded history,
-enables only this invocation and captures identity, effective policy and host
-evidence. `scripts/feed-ingest-plan-http-client.ts` calls an existing listener
+`scripts/feed-ingest-plan-workflow-inputs.ts`: it loads authored settings from
+the initial checkout, enables only this invocation and captures identity, effective policy and host
+evidence. Code identity comes from the checkout's validated `GITHUB_SHA`, or
+an explicitly supplied runtime identity for a standalone caller. Missing or
+invalid identity fails before writes. Preparation, startup, output verification,
+reports and artifact packaging never query `HEAD` or invoke Git.
+The initial checkout supplies code, registered raw and compact ledger inputs,
+and the existing publication inventory at the same ref. No later history fetch
+or sparse expansion changes that input. Git is used again only for actual
+final data delivery.
+`scripts/feed-ingest-plan-http-client.ts` calls an existing listener
 and verifies retained output; it does not start or stop the listener. The entry
 supervises `scripts/feed-ingest-plan-server.ts` as a separate child process in
 one workflow step. It verifies private-pipe readiness against the child's
@@ -37,6 +45,11 @@ process ID, a fresh startup nonce, run, attempt, captured UTC clock and code
 revision, then checks that the HTTP health response matches. An occupied port,
 wrong identity, early child exit or expired readiness fails the step explicitly.
 The same child handles planning and the health summary before shutdown.
+Always-run finalization then owns a separate
+[safe-persist HTTP child](feed-operator-api.md#safe-persist-http-delivery).
+It reuses the existing metadata adapter and the same process-lifetime code,
+without loading collection inputs or reopening in-memory planner batches.
+This keeps completed partial metadata available after the planner exits.
 
 The private startup pipe carries validated effective settings and planning
 policy, a relative temporary output root and scalar execution identity.
@@ -44,7 +57,8 @@ The child reloads named authored inputs, applies that invocation's effective
 policy, then reconstructs its fixed run-start clock and live selection
 clock. No function, map, credential or article body crosses this pipe. Startup
 data is not a saved artifact and is never accepted by an HTTP route. Plain
-`--serve` does not stage history or supply workflow controls.
+`--serve` does not acquire history or supply workflow controls. Each standalone
+execution follows the same file-capture rules as a collection.
 Workflow age overrides travel in that private policy, not as extra `/plan`
 request fields. Each child receives its own policy without editing authored
 configuration.
@@ -82,6 +96,14 @@ the trusted local listener using validated JSON requests and outcomes. HTTP
 is transport, not process isolation or an external message broker.
 One collection owns one parsed batch for every configured feed, its offers,
 terminal outcomes, identity, effective policy and cancellation.
+Offers and article results are indexed by candidate identity within that
+collection. Each fetch or parse reads and changes only its own offer.
+The complete validated parsed payload is assembled at collection completion,
+cancellation or an explicit stage read, not after each article. Current health
+counters are captured at those boundaries, not copied into every offer update.
+Feed parsing applies the existing pre-download gates before scheduling article
+HTTP calls. Rejected offers keep their original identities, first sight and
+rejection accounting without a fetch receipt or another failed HTTP call.
 Selection waits for all required feed and article work. It cannot select a
 single feed's partial input. When partitioning is enabled, its HTTP request
 follows selection. When disabled, there is no partition request: selected
@@ -97,14 +119,15 @@ the first attempt. The caller supplies the producer identity at runtime when
 it has one; the standalone runner uses its named default. Neither value is a
 service setting.
 Elapsed duration comes from the monotonic process clock, not wall-clock
-subtraction. A restarted standalone chain records unavailable total duration
-as null.
+subtraction. If the original execution clock is unavailable, total duration
+is null. A restart does not resume a standalone chain.
 
-The [shared health operation](planner-feed-history.md) captures saved calculations
-before fetching and applies this run's actual work before selection and finish. Its complete
-measured cost belongs in `plan-runs`, without per-candidate history reads
-or a separate persisted summary cache. The captured calculations are reused
-across the run's HTTP calls.
+The [shared history load](planner-feed-history.md) captures saved health,
+discovery, exclusions and publisher linkage before fetching. It retains that
+input in the live execution state, then applies actual current work before
+selection and finish. Its complete measured cost belongs in `plan-runs`, without
+per-candidate history reads or a separate persisted summary cache. The same
+captured records supply every HTTP stage, including request reporting.
 New timing entries name these purposes `feed-health-before-fetch` and
 `feed-health-for-selection`. Their names, not their positions, identify them.
 Selected publication fallback uses the same saved selection-start instant,
@@ -119,8 +142,29 @@ commits before final delivery.
 There is no all-runs readiness chain. Independent plans and document
 requests can progress together. Configured pools bound permitted requests
 and history reads. One listener shares `listener.parser_concurrency`
-native HTML workers; concurrent requests do not each create another full
+native XML and HTML workers; concurrent requests do not each create another full
 pool. CLI work can own a pool for its own lifetime.
+Live work pins its loaded evidence and retained references. Capacity expiry
+removes both together; an expired stage cannot reload old input. No listener-wide
+run queue is added.
+The feed pool bounds active feed chains by `harvest.concurrency`. The article
+pool allows that many fetches plus `listener.parser_concurrency` parses to be
+in flight; waiting for a parser does not occupy every fetch slot. The listener
+still enforces its separate request and parser limits.
+Within one plan, feed and article parse HTTP calls share one
+`listener.parser_concurrency` limit before those calls start. Other offers wait
+in orchestration, rather than starting a worker deadline before a parser can
+serve them. The worker deadline
+still includes its own queue, and the elapsed collection timing includes the
+orchestration wait. Rejected offers do not
+enter either pool. The final article limit does not stop required collection
+work or reduce its input.
+Fetch/parse pairs also share the configured live-document capacity. Waiting
+for a slot does not remove an offered article. A parser claims its fetched
+input exclusively and releases the original body when processing ends; active
+run and stage references remain pinned until the work ends.
+Preflight rejections remain in discovery and health totals, but do not emit
+article-work progress events for requests that never started.
 
 Workers use the actual extractor and sanitizer. Fetch precedes its parse.
 One request's cancellation or failed worker must not close another request's
@@ -138,9 +182,10 @@ artifact and recovery tasks. A planning failure remains a failed workflow.
 ## First sight and retained output
 
 Discovery records global earliest sight by canonical URL key, independent of
-the feed that encountered it. Named files and native indexes bound its
-configured lookback. Missing history does not prove absence. Current real
-sightings can be saved without pretending that missing days were empty.
+the feed that encountered it. Exact named UTC-day directories and compact
+files bound its configured lookback. A failed read or missing referenced file
+does not prove absence; a successful empty local membership check does.
+Each execution keeps its new sightings separate from the saved baseline.
 
 The chosen result produces metadata-only Parquet and one text-bearing
 artifact. Health is batched by execution and actual UTC work day. A small
@@ -163,8 +208,11 @@ It names the server-owned request and article identity, `feed_id` and
 aggregate orchestration, not a second fetch of that document. Worker callbacks
 do not emit duplicate lifecycles. Started events have null duration; terminal
 events measure elapsed milliseconds, including time waiting for a parser.
+Per-document timings stay in those progress events. A plan's saved API timings
+contain one elapsed collection entry, not one entry per article or a sum of
+overlapping durations. Standalone document chains retain their own API timings.
 Persistence emits its lifecycle around the actual write, including standalone
-requests; replay does not repeat completed work.
+requests.
 
 Article fetch and parse failure events alone may include `details.article_url`.
 The execution unit supplies this address separately from flexible details.
@@ -180,7 +228,29 @@ The report displays flexible details and warns when the publisher marks an
 event non-compliant.
 Completed earlier files are retained after a later failure.
 
+The optional [failure-only raw document artifact](feed-operator-api.md#failure-only-raw-document-artifact)
+has a separate writer and upload. Run completion drains and closes its writer.
+An append or close failure keeps completed metadata and selected text available
+while marking the run incomplete; it does not replace an earlier failure.
+The supervised child finishes remaining writers during shutdown before
+artifact preparation. With the flag off, no diagnostic file is created.
+
 ## Design rationale
+
+Repeated whole-collection copies make each later article cost more as earlier
+articles and discovery evidence accumulate. Indexed offer updates keep that
+work independent of collection size; boundary validation still checks the
+complete payload before another stage consumes it. Early preflight removes
+requests that cannot download content without changing the chosen population,
+the rejection ledger or the full-collection requirement.
+Parser admission before HTTP also prevents avoidable deadline failures and
+repeated cold worker starts. It uses the configured parser limit rather than
+raising the deadline or reducing the collected population.
+
+Recorded test runs use their fixture fetch concurrency as the parser-worker
+budget. The same real pool still fills and leaves work queued, without creating
+production-sized pools for tiny feeds. The scale fixture keeps the rejected
+tail but admits only enough articles to fill its configured work pools.
 
 The maintainer-directed change on 2026-10-29 permits diagnostic article
 addresses only on fetch/parse failures, replacing the former blanket refusal.

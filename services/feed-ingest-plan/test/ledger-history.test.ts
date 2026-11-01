@@ -3,7 +3,7 @@ import { beforeAll, expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
 import { mkdtemp, mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { dirname, join, relative } from "node:path";
+import { dirname, join } from "node:path";
 import {
   COMPACT_INDEX_VERSION, PlanRunRowContract, SelectedArticleRowContract,
   SelectedArticleRowSchema,
@@ -25,9 +25,8 @@ import { LedgerHistoryReadError } from "../src/read-ledger-history/ledger-histor
 import { ItemHealthPublicationSchema, PublishedRowSchema, PUBLISHED_ROW_SCHEMA_VERSION } from "../src/metrics/publication-evidence";
 import { ITEM_HEALTH_ROW_SCHEMA_VERSION } from "../src/read-ledger-history/item-health-version";
 import {
-  commitFixtureFiles, compactRows, registration, settings, writer, writeRows,
+  compactRows, registration, settings, writer, writeRows,
 } from "./partition-fixtures";
-import { fixtureGit } from "./publication-recordings";
 
 const day = "2026-10-20";
 const publishedContract = { schema: PublishedRowSchema, schemaVersion: PUBLISHED_ROW_SCHEMA_VERSION };
@@ -35,13 +34,6 @@ beforeAll(async () => { await initializeParquet(); });
 function selection(date = day, attempt = 1) {
   return SelectedArticleRowSchema.parse(plannerRecordings(date, attempt).find(record => record.name === "selected-articles")!.row);
 }
-async function commitRaw(root: string, written: PersistLedgerResult) {
-  const repository = dirname(root);
-  await fixtureGit(repository, ["init", "--initial-branch=main"]);
-  await fixtureGit(repository, ["add", "--", ...written.files.map(file => `state/${file.path}`)]);
-  await fixtureGit(repository, ["commit", "--allow-empty", "-m", "Record native fixture members"]);
-}
-
 test("native raw and daily reads preserve another family's original writer identity", async () => {
   const root = await mkdtemp(join(tmpdir(), "history-other-family-"));
   try {
@@ -118,9 +110,8 @@ test("native compact precedence reads only the requested day's original rows", a
       const stateRoot = join(periodRoot, "state");
       const row = selection(day, period === "yearly" ? 3 : period === "monthly" ? 2 : 1);
       const compact = await compactRows(stateRoot, "selected-articles", day, SelectedArticleRowContract,
-        period === "daily" ? [row] : [row, neighbor], period, periodRoot);
-      const raw_revision = await fixtureGit(periodRoot, ["rev-parse", "--verify", "HEAD"]);
-      const input = { day, raw_revision, raw_files: [] };
+        period === "daily" ? [row] : [row, neighbor], period);
+      const input = { day, raw_files: [] };
       const current = await readPlannerDay(periodRoot, registration("selected-articles"), input, SelectedArticleRowContract);
       expect(current.complete).toBe(true);
       expect(current.represented).toBe(true);
@@ -138,35 +129,30 @@ test("native compact precedence reads only the requested day's original rows", a
   } finally { await rm(root, { recursive: true, force: true }); }
 }, 30_000);
 
-test("planner compact members are validated at one Git revision and never fall through on a gap", async () => {
+test("planner compact members keep native validation and never fall through on a named gap", async () => {
   const root = await mkdtemp(join(tmpdir(), "history-states-"));
   try {
     const original = selection();
     const compact = await compactRows(join(root, "state"), "selected-articles", day,
-      SelectedArticleRowContract, [original], "daily", root);
+      SelectedArticleRowContract, [original], "daily");
     const path = compact.path!;
-    let revision = await fixtureGit(root, ["rev-parse", "--verify", "HEAD"]);
     const read = (requestedDay = day) => readPlannerDay(root, registration("selected-articles"), {
-      day: requestedDay, raw_revision: revision,
+      day: requestedDay, ...(requestedDay === "2026-10-19" ? { raw_files: [] } : {}),
     }, SelectedArticleRowContract);
     expect(await read()).toMatchObject({ complete: true, represented: true, rows: [original] });
     const empty = await compactRows(join(root, "state"), "selected-articles", "2026-10-19",
-      SelectedArticleRowContract, [], "daily", root);
+      SelectedArticleRowContract, [], "daily");
     expect(empty.path).toBeUndefined();
     expect(await read("2026-10-19")).toMatchObject({ complete: true, represented: false, rows: [] });
 
     const saved = await readFile(path);
     await writeFile(path, new Uint8Array([1, 2, 3]));
-    await commitFixtureFiles(root, [relative(root, path).replaceAll("\\", "/")]);
-    revision = await fixtureGit(root, ["rev-parse", "--verify", "HEAD"]);
     const refused = await read();
     expect(refused.complete).toBe(false);
     expect(refused.rows).toEqual([]);
     await writeFile(path, saved);
-    await commitFixtureFiles(root, [relative(root, path).replaceAll("\\", "/")]);
-    revision = await fixtureGit(root, ["rev-parse", "--verify", "HEAD"]);
     await rm(path);
-    expect((await read()).complete).toBe(false);
+    expect(await read()).toMatchObject({ complete: true, represented: false, rows: [] });
 
     const publication = await writeRows(root, "published", day, publishedContract, [{
       version: PUBLISHED_ROW_SCHEMA_VERSION, url_key: original.url_key, published_on: day, item_id: "recorded-item-01",
@@ -197,12 +183,12 @@ test("planner compact members are validated at one Git revision and never fall t
 test("explicit completed files retain integrity and genuine publications require an unambiguous publisher join", async () => {
   const root = await mkdtemp(join(tmpdir(), "history-raw-index-"));
   try {
-    const written = await writeRows(root, "selected-articles", day, SelectedArticleRowContract, [selection()]);
+    const written = await writeRows(join(root, "state"), "selected-articles", day, SelectedArticleRowContract, [selection()]);
     const read = () => readPlannerDay(root, registration("selected-articles"), {
-      day, raw_files: written.files.map(file => file.path),
+      day, raw_files: written.files.map(file => `state/${file.path}`),
     }, SelectedArticleRowContract);
     expect((await read()).rows).toEqual([selection()]);
-    await rm(join(root, written.files[0]!.path));
+    await rm(join(root, "state", written.files[0]!.path));
     const missing = await read();
     expect(missing.complete).toBe(false);
     expect(missing.rows).toEqual([]);
@@ -223,7 +209,6 @@ test("explicit completed files retain integrity and genuine publications require
     const publication = await writeRows(stateRoot, "published", day, publishedContract,
       [{ version: PUBLISHED_ROW_SCHEMA_VERSION, published_on: day, url_key: selected.url_key, item_id: identity.item_id }], writerIdentity);
     const snapshots = await writeRows(stateRoot, "selected-articles", day, SelectedArticleRowContract, [selected]);
-    await commitRaw(stateRoot, snapshots);
     const localFiles = (written: PersistLedgerResult) => written.files.map(file => `state/${file.path}`);
     const request = {
       root: publisherRoot, day, published: registration("published"), item_health: registration("item-health"),
@@ -238,11 +223,16 @@ test("explicit completed files retain integrity and genuine publications require
     expect(notPublished.availability).toBe("available");
     expect(notPublished.counts.size).toBe(0);
     const compact = await compactRows(stateRoot, "selected-articles", day, SelectedArticleRowContract,
-      [selected], "daily", publisherRoot);
+      [selected], "daily");
     expect((await readPublisherPublication(request)).counts).toEqual(counted.counts);
     const compactBytes = await readFile(compact.path!);
     await rm(compact.path!);
+    expect((await readPublisherPublication(request)).counts).toEqual(counted.counts);
+    const rawPath = join(stateRoot, snapshots.files[0]!.path);
+    const rawBytes = await readFile(rawPath);
+    await rm(rawPath);
     expect((await readPublisherPublication(request)).availability).toBe("unavailable");
+    await writeFile(rawPath, rawBytes);
     await writeFile(compact.path!, compactBytes);
 
     for (const row of [
@@ -250,13 +240,13 @@ test("explicit completed files retain integrity and genuine publications require
       { ...selected, publisher_id: null },
     ]) {
       const changed = await writeRows(stateRoot, "selected-articles", day, SelectedArticleRowContract, [row]);
-      await commitRaw(stateRoot, changed);
-      // Earlier committed siblings remain visible; a later snapshot cannot hide them.
+      expect(changed.status).toBe("written");
+      // Earlier local siblings remain visible; a later snapshot cannot hide them.
       expect((await readPublisherPublication(request)).availability).toBe(row.publisher_id === null ? "unavailable" : "available");
     }
     const changedPublisher = await writeRows(stateRoot, "selected-articles", day, SelectedArticleRowContract,
       [{ ...selected, attempt: 2, publisher_id: "conflicting-publisher" }]);
-    await commitRaw(stateRoot, { status: "written", files: [...snapshots.files, ...changedPublisher.files] });
+    expect(changedPublisher.status).toBe("written");
     const ambiguous = await readPublisherPublication(request);
     expect(ambiguous.availability).toBe("unavailable");
     expect(ambiguous.counts.size).toBe(0);
@@ -304,20 +294,17 @@ test("native digest tampering, wrong ledger, schema and undeclared planner ident
     }))
       .rejects.toThrow("current row schema");
     const compact = await compactRows(join(root, "state"), "selected-articles", day,
-      SelectedArticleRowContract, [selection()], "daily", root);
+      SelectedArticleRowContract, [selection()], "daily");
     const compactPath = compact.path!;
     const compactBytes = await readFile(compactPath);
     await writeFile(compactPath, new Uint8Array([1, 2, 3]));
-    await commitFixtureFiles(root, [relative(root, compactPath).replaceAll("\\", "/")]);
-    const revision = await fixtureGit(root, ["rev-parse", "--verify", "HEAD"]);
     const refused = await readPlannerDay(root, registration("selected-articles"), {
-      day, raw_revision: revision,
+      day,
     }, SelectedArticleRowContract);
     expect(refused.complete).toBe(false);
     expect(refused.rows).toEqual([]);
     expect(refused.gaps.length).toBeGreaterThan(0);
     await writeFile(compactPath, compactBytes);
-    await commitFixtureFiles(root, [relative(root, compactPath).replaceAll("\\", "/")]);
     const bytes = await readFile(path);
     const renamed = join(dirname(path), `${randomUUID()}.parquet`);
     await writeFile(renamed, bytes);

@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import hashlib
 import json
-import os
 import re
 import shutil
 import stat
@@ -28,7 +27,6 @@ _REFUSALS: Final = frozenset({
     "changed-member",
     "malformed-member",
     "unsupported-member",
-    "revision-changed",
     "target-conflict",
 })
 _WRITER_DIRECTORY: Final = Path(__file__).resolve().parents[3] / "packages" / "ledger-file-writer"
@@ -82,7 +80,7 @@ def _receipt_base(
         raise ValueError("planner maintenance adapter returned no result object")
     if (
         not isinstance(value.get("version"), str)
-        or not isinstance(value.get("revision"), str)
+        or "revision" in value
         or value.get("ledger") != ledger.value
         or value.get("period") != period
         or value.get("covers") != covers
@@ -118,21 +116,6 @@ def _remove_stage(path: Path, owner: tuple[int, int]) -> None:
     ):
         raise RuntimeError("planner maintenance staging directory changed before cleanup")
     shutil.rmtree(path)
-
-
-def _git_revision(repository: Path) -> str:
-    result = subprocess.run(
-        ["git", "rev-parse", "--verify", "HEAD^{commit}"],
-        cwd=repository,
-        check=True,
-        capture_output=True,
-        text=True,
-        env=os.environ | {"GIT_NO_LAZY_FETCH": "1"},
-    )
-    revision = result.stdout.strip()
-    if not re.fullmatch(r"[0-9a-f]{40}", revision):
-        raise ValueError("planner maintenance requires one full Git revision")
-    return revision
 
 
 def _registered_request(ledger: LedgerName) -> tuple[dict[str, Any], dict[str, Any]]:
@@ -319,7 +302,6 @@ def maintain_period(
     stage_name, stage_path, owner = _stage_directory(repository)
     try:
         request = {
-            "revision": _git_revision(repository),
             "staging_root": stage_name,
             "ledger": ledger.value,
             "period": period,
@@ -328,7 +310,6 @@ def maintain_period(
             "registry_entry": registration,
             "ledger_settings": settings,
         }
-        revision = request["revision"]
         completed = subprocess.run(
             ["bun", "run", str(_WRITER_CLI)],
             cwd=repository,
@@ -336,7 +317,6 @@ def maintain_period(
             capture_output=True,
             text=True,
             check=False,
-            env=os.environ | {"GIT_NO_LAZY_FETCH": "1"},
         )
         if completed.returncode != 0:
             detail = completed.stderr.strip()
@@ -349,8 +329,6 @@ def maintain_period(
         except json.JSONDecodeError as refusal:
             raise ValueError("planner maintenance adapter returned invalid JSON") from refusal
         receipt = _receipt_base(raw_result, ledger=ledger, period=period, covers=covers)
-        if receipt["revision"] != revision:
-            raise PlannerMaintenanceRefusalError("revision-changed")
         status = receipt.get("status")
         if status in {"empty", "unchanged"}:
             return PlannerPeriodResult(
@@ -419,8 +397,6 @@ def maintain_period(
             or hashlib.sha256(output_bytes).hexdigest() != target_digest
         ):
             raise ValueError("planner maintenance output differs from its receipt")
-        if _git_revision(repository) != revision:
-            raise PlannerMaintenanceRefusalError("revision-changed")
         return PlannerPeriodResult(
             status="written",
             target_path=repository.joinpath(*PurePosixPath(target).parts),

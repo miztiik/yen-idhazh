@@ -1,6 +1,6 @@
 # Contracts and Schemas
 
-**Last Updated**: 2026-10-27
+**Last Updated**: 2026-10-31
 
 The persisted-shape subsystem: where the models live, how a schema is obtained from one, the small hand copy the frontend carries, and the tests that stop the two drifting apart. This is the operational home of Guardrail #3 (contracts before logic) and `CLAUDE.md` sections 1a and 11.
 
@@ -29,7 +29,7 @@ commit and run the two binding tests.
 The planner TypeScript contracts are the named exception in `CLAUDE.md`
 Guardrail #3. Zod schemas under `packages/common-contracts/src/schemas/` own
 planner configuration, events, requests, private receipts, stage payloads and
-the four planner ledgers. They produce JSON Schema, versions and changelogs on
+the five planner ledgers. They produce JSON Schema, versions and changelogs on
 demand. Python does not read planner rows or stage payloads, and has no planner
 model or comparison copy. The Python gardener keeps its scheduler and delegates
 planner file validation and compaction to the TypeScript writer; generic
@@ -136,9 +136,9 @@ the package; the backend gate installs its locked dependencies before pytest.
 The remaining native copies are bound by
 `backend/tests/contracts/test_native_typescript_bindings.py`.
 
-The current planner family has four strict native payloads:
+The current planner family has five strict native payloads:
 `DiscoveredArticleRow`, `SelectedArticleRow`, `FeedHealthStateRow` and
-`PlanRunRow`. Their `PlannerRow` declaration uses the current schema stamp
+`PlanRunRow`, plus `RejectedArticleRow`. Their `PlannerRow` declaration uses the current schema stamp
 once in file metadata, not a repeated row version or generic identity.
 `SelectedArticlesArtifact` carries the same declared selected content plus
 text, with one stamped header. The exact fields and review IDs are
@@ -169,8 +169,11 @@ time remains separate from source provenance. There is no dual writer or
 restored audit shape. Finite historical generic-envelope vectors for unrelated
 families remain readable. Python has no planner row reader or schema binding;
 the shared gardener keeps its generic compact-index records for scheduling.
-The private fetch journal retains its separately declared finite receipt
-stamps; it does not preserve an obsolete planner ledger.
+There is no private fetch journal or saved-request compatibility reader.
+Current fetched documents are validated during live handoff.
+`RawDocumentFailure` declares the optional failure-only JSONL artifact, not an
+execution receipt or ledger. Its [lifetime and delivery boundary](../sources/feed-operator-api.md#failure-only-raw-document-artifact)
+keep raw content out of normal responses, logs and selected metadata.
 
 Candidates retain sanitized content and only configured feed facts.
 They contain no vertical, desk, lens, entity, carrier or quality payload
@@ -301,6 +304,11 @@ is needed. `PublicationReceipt`, version `2026-10-09`, is the simple invocation
 evidence contract: existing `WriterIdentity` and `writes: relative-path -> SHA256`.
 Its fixture roundtrips canonically with LF. It grants no permissions and is not
 a committed publication/audit ledger.
+
+TypeScript `safe_persist_data` requests are in-process inputs, not saved
+receipts. They name completed source and target paths with separate permissions
+and no expected file checksum. Native ledger digests and Git object identities
+remain unchanged; [delivery](../publishing/committing.md) owns the handoff.
 
 That is not "pre-creating an empty module for later" (`CLAUDE.md` section 10). The file is the ledger, and its header is the contract's own column list; what is being avoided is a failure mode in the step that commits it.
 

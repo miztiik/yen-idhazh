@@ -49,11 +49,6 @@ export async function writeGitHubOutputs(path: string, outputs: Readonly<Record<
   });
   await appendFile(path, lines.join(""), "utf8");
 }
-export function sparseCheckoutPath(path: string) {
-  if (/[\u0000-\u001f\u007f]/.test(path)) throw new Error("History path contains a control character");
-  RelativePathSchema.parse(path);
-  return `/${path.replace(/[\\*?[\]!#]/g, character => `\\${character}`)}`;
-}
 export function createHistoryDayInputs(prefix: readonly string[], days: readonly string[]) {
   const indexes = resolveHistoryIndexes(prefix);
   return days.map(day => ({

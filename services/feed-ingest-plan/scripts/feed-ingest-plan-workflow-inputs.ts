@@ -2,14 +2,13 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
-import { PositiveCountSchema } from "@idhazh/common-contracts";
+import { CommitShaSchema, PositiveCountSchema } from "@idhazh/common-contracts";
 import { loadPlanInputs } from "../src/load-plan-inputs";
 import { parseCliRequest } from "../src/api/plan-request";
 import { parseAgeWindows, resolveRunPolicy, RunPolicyOverridesSchema } from "../src/config/resolve-run-policy";
 import type { PlanRequest } from "../src/api/plan-request";
 import type { RunPolicyOverrides } from "../src/config/resolve-run-policy";
-import { ServiceSettingsSchema } from "../src/config/service-settings";
-import { stagePlannerHistory } from "./feed-ingest-plan-history";
+import { parseRawDocumentDumpControl, ServiceSettingsSchema } from "../src/config/service-settings";
 import { WorkflowPolicySchema } from "./feed-ingest-plan-policy-report";
 import { captureWorkflowHostFingerprint } from "./feed-ingest-plan-host-fingerprint";
 import { readMetadataRegistrations } from "./feed-ingest-plan-metadata";
@@ -37,22 +36,20 @@ export function readWorkflowRequest(environment: Record<string, string | undefin
 
 export async function preparePlannerWorkflow(root: string, environment: Record<string, string | undefined>) {
   const { request, policy_overrides: policyOverrides } = readWorkflowRequest(environment);
+  const dumpRawDocuments = environment.DUMP_RAW_DOCUMENT_CONTENTS === undefined ? undefined
+    : parseRawDocumentDumpControl(environment.DUMP_RAW_DOCUMENT_CONTENTS);
   const { RUNNER_TEMP, GITHUB_OUTPUT, GITHUB_RUN_ID, GITHUB_RUN_ATTEMPT } = environment;
   if (!RUNNER_TEMP || !GITHUB_OUTPUT || !GITHUB_RUN_ID || !GITHUB_RUN_ATTEMPT) throw new Error("Workflow execution controls are missing");
+  const gitSha = CommitShaSchema.parse(environment.GITHUB_SHA);
   const directory = join(RUNNER_TEMP, "feed-ingest-plan");
   const inputs = await loadPlanInputs(root);
   inputs.harvest = { ...inputs.harvest, config: resolveRunPolicy(inputs.harvest.config, policyOverrides) };
   const attempt = PositiveCountSchema.parse(Number(GITHUB_RUN_ATTEMPT));
-  const staged = await stagePlannerHistory(root, inputs, new Date().toISOString().replace(/\.\d{3}Z$/, "Z"));
   inputs.settings = ServiceSettingsSchema.parse({
     ...inputs.settings, enabled: true,
-    inputs: { ...inputs.settings.inputs, feed_health_days: staged.feed_health_days,
-      feed_health_input_gap: staged.feed_health_input_gap },
+    ...(dumpRawDocuments === undefined ? {} : { dump_raw_document_contents: dumpRawDocuments }),
   });
   inputs.outputRoot = join(directory, "state");
-  const git = Bun.spawn(["git", "rev-parse", "HEAD"], { cwd: root, stdout: "pipe", stderr: "pipe" });
-  const [gitSha] = await Promise.all([new Response(git.stdout).text(), new Response(git.stderr).text()]);
-  if (await git.exited !== 0) throw new Error("Code identity could not be read");
   const captured = new Date();
   const correlationId = randomUUID();
   await mkdir(directory, { recursive: true });
@@ -60,9 +57,8 @@ export async function preparePlannerWorkflow(root: string, environment: Record<s
     config: inputs.harvest.config, request: { ...request, ...policyOverrides }, history: inputs.clock_config.collect,
     parser_concurrency: inputs.settings.listener.parser_concurrency,
   })));
-  console.error(JSON.stringify({ event: "planner_history_staged", notices: staged.notices }));
   const identity = { run_id: `${captured.toISOString().slice(0, 10)}-${GITHUB_RUN_ID}`,
-    attempt, git_sha: gitSha.trim() };
+    attempt, git_sha: gitSha };
   const registryPath = join(root, inputs.settings.inputs.registrations);
   const registrations = await readMetadataRegistrations(registryPath);
   const host = await captureWorkflowHostFingerprint({

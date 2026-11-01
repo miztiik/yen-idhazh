@@ -2,6 +2,8 @@ import { expect, test } from "bun:test";
 import { SafePersistDataCommitterSchema } from "@idhazh/data-delivery";
 import { deliverPlannerFiles, metadataWritePermissions } from "../scripts/feed-ingest-plan-deliver";
 import type { MetadataLedger, MetadataRegistrations } from "../scripts/feed-ingest-plan-metadata";
+import { MetadataDeliveryResultSchema, SafePersistHttpRequestSchema, SafePersistHttpStartupSchema } from "../scripts/feed-ingest-plan-delivery-result";
+import { readPlannerStartupRecording } from "./planner-process-recordings";
 
 function registration(name: MetadataLedger, prefix: string[]) {
   return {
@@ -27,6 +29,41 @@ function registrations(): MetadataRegistrations {
 test("the configured Git committer satisfies the shared delivery contract", async () => {
   const config = await Bun.file(new URL("../../../config/data-delivery.json", import.meta.url)).json();
   expect(SafePersistDataCommitterSchema.safeParse(config).success).toBe(true);
+});
+
+test("the safe-persist HTTP contract reuses run, attempt, exact paths and the unchanged delivery receipt", () => {
+  const request = { runNumber: "700", attempt: 3, paths: ["raw/generated/run.parquet"] };
+  expect(SafePersistHttpRequestSchema.parse(request)).toEqual(request);
+  for (const invalid of [
+    { ...request, runNumber: 700 }, { ...request, attempt: "3" }, { ...request, attempt: 0 },
+    { ...request, paths: ["../outside"] }, { ...request, paths: ["raw\\outside"] },
+    { ...request, paths: [...request.paths, ...request.paths] },
+    { ...request, repository: "outside" }, { ...request, permittedPaths: ["state"] },
+    { ...request, git_sha: "a".repeat(40) },
+  ]) expect(SafePersistHttpRequestSchema.safeParse(invalid).success).toBe(false);
+  expect(MetadataDeliveryResultSchema.parse({
+    status: "landed", commit: "a".repeat(40), files: 1, paths: request.paths,
+  })).toEqual({ status: "landed", commit: "a".repeat(40), files: 1, paths: request.paths });
+  expect(MetadataDeliveryResultSchema.safeParse({
+    status: "failed", commit: "a".repeat(40), files: 1, paths: request.paths,
+  }).success).toBe(false);
+  expect(MetadataDeliveryResultSchema.safeParse({
+    status: "landed", commit: "a".repeat(40), files: 0, paths: request.paths,
+  }).success).toBe(false);
+});
+
+test("safe-persist startup keeps only the existing private loopback controls", async () => {
+  const { startup } = await readPlannerStartupRecording();
+  const controls = { nonce: startup.nonce, settings: startup.settings, output_root: startup.output_root,
+    git_sha: startup.runtime.git_sha };
+  expect(SafePersistHttpStartupSchema.parse(controls)).toEqual(controls);
+  expect(SafePersistHttpStartupSchema.safeParse({ ...controls, git_sha: "" }).success).toBe(false);
+  expect(SafePersistHttpStartupSchema.safeParse({ ...controls, git_sha: undefined }).success).toBe(false);
+  expect(SafePersistHttpStartupSchema.safeParse({ ...controls, permittedPaths: ["state"] }).success).toBe(false);
+  expect(SafePersistHttpStartupSchema.safeParse({
+    ...controls, settings: { ...controls.settings,
+      listener: { ...controls.settings.listener, hostname: "0.0.0.0" } },
+  }).success).toBe(false);
 });
 
 test("planner delivery permissions follow registered prefixes and never grant a ledger root", () => {

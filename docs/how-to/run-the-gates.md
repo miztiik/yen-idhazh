@@ -1,6 +1,6 @@
 # Run the Gates
 
-**Last Updated**: 2026-10-28
+**Last Updated**: 2026-11-01
 Set up a machine, then run every check `CLAUDE.md` section 9 asks for before a
 merge. This page owns the project's actual gate commands; the neutral PR
 lifecycle that calls for them is
@@ -226,6 +226,76 @@ schema, footer, identifier and canonical-digest checks. These results do not
 claim that a Python reader was executed. Persisted-contract changes still
 require the approval and compatibility rules in `CLAUDE.md`.
 
+For planner entry-point changes, use the named native selection from the
+repository root:
+
+```powershell
+npm --prefix .\frontend run test:changed -- --list
+bun run --cwd .\services\feed-ingest-plan check
+bun run --cwd .\services\feed-ingest-plan test .\test\plan-entry-points.test.ts .\test\plan-api.test.ts .\test\plan-cli.test.ts .\test\plan-engine.test.ts .\test\collection-http.test.ts .\test\feed-ingest-plan-http-client.test.ts .\test\feed-ingest-plan-supervisor.test.ts .\test\operation-logging.test.ts .\test\curate.test.ts
+```
+
+The shared selection lists affected surfaces; it does not execute Bun.
+The native package command supplies its declared timeout. Keep shorter
+process deadlines and existing independent failure checks; do not raise
+timeouts to retain repeated planning work.
+
+For planner file-input changes, also run the shared writer's `check` and
+`test/planner-day-files.test.ts`. Combine `file-baseline.test.ts`,
+`raw-day-members.test.ts`, `collection-http.test.ts`, `ledger-history.test.ts`,
+`history-window.test.ts`, `health-fields.test.ts`, `planning-health.test.ts`
+and `plan-cli.test.ts` in one service invocation. Add the actual changed
+callers' native cases to that selection. `file-baseline.test.ts` starts a real
+Bun child with Git unavailable, replays recorded source responses over the
+real local APIs, edits and adds historical native files after capture, and
+reads back selected metadata, selected text and health output. It also covers
+standalone capture and the next UTC day. Ordinary planner fixtures do not
+initialize a Git repository; Git fixtures belong to final delivery
+checks, not execution readers. Full merge-candidate CI remains authoritative.
+`plan-entry-points.test.ts` makes one successful request through the real
+supervised API child and one through the actual awaited CLI in a Bun child.
+Partitioning is enabled for the API and disabled for the CLI.
+Formatting, validation, packing and lifecycle checks use bounded native inputs
+at their own boundaries. They do not run the whole planner. Process failures
+still use real children, and delivery checks still use generated local Git
+origins.
+
+The committed inputs under
+`tests/fixtures/feed-ingest-plan/entry-points/` contain the API response,
+health response, selected text artifact and five native ledger row transcripts
+from the same verified API test. To replace them, set
+`IDHAZH_CAPTURE_PLANNER_RECORDINGS=1` for that test, then unset it before
+ordinary checks. The test reads actual Parquet output and validates each
+transcript with its native row model before cleanup; it does not generate
+another planner result. Ordinary runs only read these committed recordings.
+`planner-output-recordings.ts` validates those existing models, writes actual
+Parquet through the shared writer and builds file receipts from its results.
+Each caller owns its writable directory. `plan-recordings.ts` creates no Git
+history unless its caller needs that boundary; `fixture-git.ts` owns only
+generated Git commands. Pure partition inputs live in
+`partition-recordings.ts`, separate from the native writer/history helpers.
+
+For a change spanning those helpers, run the following native selection instead
+of the shorter entry-point selection above:
+
+```powershell
+bun run --cwd .\services\feed-ingest-plan test .\test\plan-entry-points.test.ts .\test\plan-api.test.ts .\test\plan-cli.test.ts .\test\plan-engine.test.ts .\test\collection-http.test.ts .\test\collection-work.test.ts .\test\feed-ingest-plan-http-client.test.ts .\test\feed-ingest-plan-supervisor.test.ts .\test\operation-logging.test.ts .\test\article-failure-retention.test.ts .\test\article-url-cleanup.test.ts .\test\early-age.test.ts .\test\feed-first-use.test.ts .\test\feed-lifecycle-http.test.ts .\test\feed-lifecycle-history.test.ts .\test\failure-evidence.test.ts .\test\feed-ingest-plan-outputs.test.ts .\test\feed-ingest-plan-report.test.ts .\test\feed-ingest-plan-finalization.test.ts .\test\request-report.test.ts .\test\run-policy.test.ts .\test\curate.test.ts .\test\partition.test.ts .\test\raw-day-members.test.ts .\test\ledger-history.test.ts .\test\health-fields.test.ts .\test\history-window.test.ts .\test\logical-completion.test.ts
+```
+
+Retain the revision, selection, host, executed counts and case/total times
+outside the repository. Overlapping repair runs are not added to that final
+selection's counts. Full safety, native writer, worker and process coverage
+remains in CI.
+
+The formatter input `tests/fixtures/feed-ingest-plan/host-report.json` was
+captured by the real fingerprint API and native writer from the named Linux
+inspection recordings in `tests/fixtures/host-fingerprints/linux-inputs.json`.
+It conforms to `WorkflowHostFingerprintSchema`; its completed file receipt is
+the writer's actual result. To replace it, use the host service's existing
+fixture and `captureLocalFingerprint`, validate the declared report input and
+save it before cleanup. The ordinary formatter test only loads this recording;
+it neither probes live hardware nor writes hardware metadata.
+
 For the manual planner's metadata integration, select its five named native
 cases: `feed-ingest-plan-report.test.ts`, `feed-ingest-plan-outputs.test.ts`,
 `feed-ingest-plan-workflow.test.ts`, `feed-ingest-plan-host.test.ts` and
@@ -246,6 +316,26 @@ the Python-scheduler adapter cases in
 Python-to-TypeScript binding remains for Python-owned native shapes in
 `backend/tests/contracts/test_native_typescript_bindings.py`.
 Hosted duration is measured by the CI step, not estimated as a passing gate.
+
+For planner acquisition and maintenance changes, run the common contracts,
+shared writer and planner `check` commands. In the writer, combine
+`planner-maintenance.test.ts` and `planner-day-files.test.ts`. In the service,
+combine `feed-ingest-plan-workflow.test.ts`, `feed-ingest-plan-supervisor.test.ts`,
+`feed-ingest-plan-outputs.test.ts`, `feed-ingest-plan-finalization.test.ts`,
+`feed-ingest-plan-delivery.test.ts`, `safe-persist-http.test.ts` and
+`file-baseline.test.ts`. The workflow case loads configuration, starts a real
+supervised HTTP child, retains the expected missing-history refusal, and
+writes reports/artifacts with Git unavailable.
+The unchanged file-baseline case retains nonempty recorded collection,
+native Parquet and selected-text readback.
+Existing Python scheduler cases remain applicable: select
+`gardener/tasks/test_compaction_planner_siblings.py`, `gardener/test_period_inputs.py`,
+`gardener/test_sparse_shard.py`, `gardener/test_publish.py` and
+`workflows/test_gardener_workflow.py` under `backend/tests/`.
+They retain planner-only, mixed-family, original-source replacement/deletion
+and workflow-boundary evidence. Local planner task transfer is zero because
+initial checkout already supplied its files; this is not a measurement of
+checkout download size or time. Keep full merge-candidate suites in CI.
 
 The published-column check also needs Bun and the native writer packages,
 even when Python starts it from `frontend/build`. CI and publishing jobs share

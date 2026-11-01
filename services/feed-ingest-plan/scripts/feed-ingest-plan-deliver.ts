@@ -6,7 +6,7 @@ import {
   SafePersistDataCommitterSchema,
   SafePersistDataInputSchema,
 } from "@idhazh/data-delivery";
-import type { SafePersistDataCommitter } from "@idhazh/data-delivery";
+import type { SafePersistDataCommitter, SafePersistDataInput } from "@idhazh/data-delivery";
 import { verifyMetadataFile } from "./feed-ingest-plan-metadata";
 import type { ExecutionIdentity, MetadataRegistrations } from "./feed-ingest-plan-metadata";
 import { collectWorkflowFiles, readWorkflowDeliveryContext } from "./feed-ingest-plan-current-files";
@@ -14,6 +14,7 @@ import { MetadataDeliveryResultSchema } from "./feed-ingest-plan-delivery-result
 import { describePlanError } from "../src/api/plan-request";
 import { RelativePathSchema } from "../src/config/service-settings";
 import { z } from "zod";
+import { writeJsonLine } from "../src/logging/structured-logger";
 
 export function metadataWritePermissions(registrations: MetadataRegistrations): string[] {
   return Object.values(registrations).map(({ prefix }) => `state/raw/${prefix.join("/")}`);
@@ -32,18 +33,17 @@ export async function deliverPlannerFiles(input: Readonly<{
   if (new Set(input.paths).size !== input.paths.length) {
     throw new Error("delivery: duplicate output paths");
   }
-  const completed: { sourcePath: string; targetPath: string; sha256: string }[] = [];
+  const completed: SafePersistDataInput["files"] = [];
   for (const path of input.paths) {
-    const metadata = await verifyMetadataFile(input.stateRoot, path, input.registrations, input.identity);
+    await verifyMetadataFile(input.stateRoot, path, input.registrations, input.identity);
     completed.push({
       sourcePath: path,
       targetPath: `state/${path}`,
-      sha256: metadata.file_sha256,
     });
   }
   const request = SafePersistDataInputSchema.parse({
     sourceRoot: input.stateRoot,
-    files: completed.map(({ sourcePath, targetPath, sha256 }) => ({ sourcePath, targetPath, sha256 })),
+    files: completed,
     permittedPaths: metadataWritePermissions(input.registrations),
     destination: { kind: "git", repository: input.repository },
     committer: input.committer,
@@ -63,7 +63,7 @@ export async function deliverPlannerFiles(input: Readonly<{
 }
 
 export async function deliverWorkflowMetadata(input: {
-  root: string; directory: string; currentRunFiles: string; runNumber: string; attempt: number;
+  root: string; directory: string; currentRunFiles: string; runNumber: string; attempt: number; gitSha: string;
 }) {
   const paths = z.array(RelativePathSchema).parse(JSON.parse(input.currentRunFiles));
   try {
@@ -74,10 +74,10 @@ export async function deliverWorkflowMetadata(input: {
     if ([...paths].sort().join("\n") !== [...completed.paths].sort().join("\n")) {
       throw new Error("Delivery paths differ from the validated completed API output");
     }
-    if (completed.failures.length) console.error(JSON.stringify({
+    if (completed.failures.length) writeJsonLine({
       event: "planner_metadata_producers_failed",
       failures: completed.failures.length,
-    }));
+    });
     const result = MetadataDeliveryResultSchema.parse(await deliverPlannerFiles({
       repository: input.root,
       stateRoot: join(input.directory, "state"),
@@ -88,36 +88,37 @@ export async function deliverWorkflowMetadata(input: {
       committer: SafePersistDataCommitterSchema.parse(await Bun.file(join(input.root, "config", "data-delivery.json")).json()),
     }));
     await writeFile(join(input.directory, "delivery-result.json"), JSON.stringify(result));
-    console.log(JSON.stringify(result));
     return result;
   } catch (error) {
     const result = MetadataDeliveryResultSchema.parse({ status: "failed", commit: null, files: paths.length, paths });
     await writeFile(join(input.directory, "delivery-result.json"), JSON.stringify(result));
-    console.error(JSON.stringify({
+    writeJsonLine({
       event: "planner_metadata_delivery_failed",
       ...result,
       code: error instanceof Error ? error.name : "UnknownError",
       reason: error instanceof Error
         ? error.message.replaceAll(input.directory, "feed-ingest-plan").replaceAll(input.root, ".").replaceAll("\\", "/")
         : "Unknown delivery failure",
-    }));
+    });
     throw error;
   }
 }
 
 if (import.meta.main) {
   try {
-    const { RUNNER_TEMP, CURRENT_RUN_FILES, GITHUB_RUN_ID, GITHUB_RUN_ATTEMPT } = process.env;
-    if (!RUNNER_TEMP || !CURRENT_RUN_FILES || !GITHUB_RUN_ID || !GITHUB_RUN_ATTEMPT) {
+    const { RUNNER_TEMP, CURRENT_RUN_FILES, GITHUB_RUN_ID, GITHUB_RUN_ATTEMPT, GITHUB_SHA } = process.env;
+    if (!RUNNER_TEMP || !CURRENT_RUN_FILES || !GITHUB_RUN_ID || !GITHUB_RUN_ATTEMPT || !GITHUB_SHA) {
       throw new Error("Delivery requires exact output paths and the executed run and attempt");
     }
-    await deliverWorkflowMetadata({
+    const result = await deliverWorkflowMetadata({
       root: process.cwd(), directory: join(RUNNER_TEMP, "feed-ingest-plan"),
       currentRunFiles: CURRENT_RUN_FILES, runNumber: GITHUB_RUN_ID, attempt: Number(GITHUB_RUN_ATTEMPT),
+      gitSha: GITHUB_SHA,
     });
+    console.log(JSON.stringify(result));
   } catch (error) {
-    console.error(JSON.stringify({ event: "planner_metadata_delivery_cli_failed",
-      code: describePlanError(error, process.cwd()).code }));
+    writeJsonLine({ event: "planner_metadata_delivery_cli_failed",
+      code: describePlanError(error, process.cwd()).code });
     process.exitCode = 2;
   }
 }

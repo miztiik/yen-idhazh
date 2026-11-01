@@ -1,6 +1,6 @@
 # Feed history used by the TypeScript planner
 
-**Last Updated**: 2026-10-31
+**Last Updated**: 2026-11-01
 
 Which saved observations can change feed rest and measured reliability?
 The isolated planner reads current-format required `feed-health-state` fields and its
@@ -15,11 +15,13 @@ Discovery reads the configured `discovered_articles.lookback_days` of prior
 UTC days plus today. It retains the earliest known timestamp by canonical URL;
 another feed or fetch cannot renew an article's age.
 
-Service settings name bounded UTC days, compact indexes and either raw
-indexes or explicit complete raw-file lists. The workflow resolves represented
-health days from existing native indexes and publication inventory. It reads
-only the named periods needed by the configured lookback, within the
-`health_period_limit` control.
+Service settings name bounded UTC days and optional complete raw-file lists.
+Before the first fetch, the planner resolves represented health days from the
+site publisher's `frontend/public/publication.json` and the gardener's existing
+compact-period indexes. It reads only the named periods needed by the configured
+lookback, within `health_period_limit`. These files choose represented dates;
+native planner membership uses the exact local UTC-day directories and compact
+Parquet paths, not raw-day indexes or Git history.
 `discovered_files` names extra existing discovered-article Parquet files by
 path; it does not create another ledger. The normal history read comes from
 the configured UTC-day window, and this list is empty by default.
@@ -38,8 +40,10 @@ The exact windows, units and skip rules are
 Lifecycle and reliability share the validated health input, not each other's
 window setting. Each calculation validates only its required columns under the
 [field-read contract](../../reference/feed-planner-ledgers.md#field-based-health-history).
-The request report uses closed calendar days instead. Those extra calendar
-reads and historical counter calculations do not run during fetch/parse setup.
+The request report uses closed calendar days instead. Its additional files are
+loaded into the same execution input before fetching, but its totals are
+calculated only when a response needs them. Missing report-only evidence never
+prevents feed or article work.
 
 Native represented membership is not limited to row-bearing dates. A daily
 compact entry contributes its date only when it has rows. A nonempty month
@@ -49,13 +53,22 @@ when January's only saved read was on January 1. This does not invent a
 logical feed check or pad days outside named evidence. Known-empty daily
 entries remain outside lifecycle/reliability membership.
 
-Within a capture, index and Parquet caches prevent reopening one compact file
-for each day it represents. The workflow fetches current remote main once and
-stages raw and compact input from that same revision without changing source
-code or committing data. One boundary day is retained for known rolling-window
-adjustments. A run reuses its captured calculations across HTTP stages and
-applies actual current work at selection and finish. The age clock remains
-separate from this feedback clock.
+One execution loads and validates health, discovery, publication exclusions,
+settled failures and genuine publisher linkage before its first source request.
+It retains those records in its live document state. Directory membership and
+native file reads are shared within that capture. Later stages use the retained
+records; edits, additions and removals on disk cannot change their decisions.
+Current sightings and completed work remain separate from the saved baseline.
+Another execution loads its own input, including any newly available files.
+
+The initial checkout obtains code and the required saved raw/compact files at
+one ref. Workflow preparation does not fetch newer history or expand the checkout.
+Application startup and history computation invoke no Git or remote Git data API.
+The supplied input directory is the file authority; readers do not prove
+an arbitrary commit or reject a regular file because it is untracked. The current
+UTC day and the next day are captured for supported boundary adjustments. A run
+applies actual current work at selection and finish without reopening history.
+The age clock remains separate from this feedback clock.
 New parsed batches retain the existing `history_rows` field as an empty list;
 historical rows need not satisfy the current full-row format to cross a stage.
 Selection reads current field-based evidence instead of that saved list.
@@ -90,6 +103,10 @@ schema, native-format, index and filesystem refusals produce short body-free
 gap diagnostics and incomplete coverage. Valid sibling files remain usable.
 Unexpected programming errors propagate rather than becoming an empty day.
 
+The [raw-day membership contract](../../reference/feed-planner-ledgers.md#raw-day-membership)
+defines empty membership and missing references. A live capture retains its
+missing-file diagnostics; adding a file later cannot heal the running execution.
+
 No logical feed evidence means unknown lifecycle and unavailable reliability.
 Partial history does not become perfect health. Current work does not turn
 an unverified earlier day into a measured zero.
@@ -114,19 +131,15 @@ Access, extraction, required fields and the minimum word count determine this
 outcome. Age, content-policy, publication and quota losses do not change it.
 Incomplete represented evidence or a zero denominator means unknown.
 
-Each staged article fetch receipt settles its first known `source_outcome`
-atomically in the existing operation journal. Its saved body and response stay
-immutable. The parent feed receipt names its completed article captures, so
-reconstruction reads only that root and those members, never the whole journal.
-Reparse and reselection reuse the original capture outcome; a genuinely new
+Each live article capture settles its first known source outcome in memory.
+Parsing consumes its held raw body; later selection uses the completed live
+metadata rather than reopening a document or a request journal. A genuinely new
 capture is separate work. Whole-plan work uses the same technical outcome rule.
 Settlement uses its actual UTC day, independently of selection time.
 
-Source outcomes survive process restart. Finalized-health ownership and write
-deduplication remain process-local; this change adds no durable finalization
-snapshot or general replay framework. The maintainer directed delivery without
-that extension on 2026-10-27 UTC. Retrying health recording after a process
-restart does not carry an exactly-once output guarantee.
+A process restart starts a new execution. There is no journal, replay or saved
+input set. Finalized-health ownership and write deduplication remain
+process-local; retrying after a restart has no exactly-once output guarantee.
 
 Only active configured feeds may fetch. The separate retired-source list
 does not add live reads. A changed endpoint key cannot inherit the former
@@ -139,21 +152,24 @@ or modify the separate Python retirement machinery.
 
 Publication exclusions and publisher exposure use genuine external published
 and item-health evidence. Selected articles are not publication evidence.
-Unknown publisher identities and missing linkage stay explicit.
+The required selected-metadata linkage is captured alongside those records,
+before fetching. Unknown publisher identities and missing linkage stay explicit.
 
 ## Design rationale
 
-File caches and saved calculations belong to one captured run input. Other
-runs can publish later without changing that run's decisions. Actual completed
-work updates its own calculations once. Rolling-window changes use only known
-entering and leaving contributions; unsupported changes stay incomplete and
-do not relabel an old measurement's dates.
+Retaining validated records gives every stage the same input without copying
+files or adding another saved catalog. Other runs can publish later without
+changing that input. Actual completed work updates its own calculations once.
+Rolling-window changes use only known entering and leaving contributions;
+unsupported changes stay incomplete and do not relabel an old measurement's
+dates. Live work pins its capture. Capacity expiry removes that execution's
+retained batch references with its input, so an old reference fails explicitly
+rather than reopening historical files.
 
-Request reporting is independent of planning evidence. A damaged report-only
+Request reporting is independent of planning decisions. A damaged report-only
 day must not prevent a feed fetch, a document parse or current-run request
-accounting. Selection and explicit summaries load request evidence when their
-response needs it; they share verified file reads with planning evidence
-without making the report an execution prerequisite.
+accounting. Selection and explicit summaries calculate from the captured
+request fields and actual current work, without new historical reads.
 
 ## See also
 

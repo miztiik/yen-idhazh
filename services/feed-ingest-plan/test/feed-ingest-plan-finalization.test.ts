@@ -7,7 +7,8 @@ import { fileURLToPath } from "node:url";
 import { finalizeRunOutput } from "../scripts/finalize-run-output";
 import { finishRunOutput } from "../scripts/finish-run-output";
 import { MetadataDeliveryResultSchema } from "../scripts/feed-ingest-plan-delivery-result";
-import { publicationRecording, fixtureGit } from "./publication-recordings";
+import { publicationRecording } from "./publication-recordings";
+import { fixtureGit } from "./fixture-git";
 import { publishUploadInventory } from "../scripts/feed-ingest-plan-upload-inventory";
 import type { FeedIngestEvent } from "@idhazh/common-contracts";
 
@@ -22,11 +23,13 @@ async function recording(failCollection = false) {
       ...fixture,
       finalize: {
         root: fixture.repository, directory: fixture.directory, currentRunFiles: JSON.stringify(fixture.paths),
-        runNumber: "700", attempt: 1, cancelled: false,
+        runNumber: "700", attempt: 3, cancelled: false,
+        gitSha: fixture.identity.git_sha,
         summaryPath: join(fixture.repository, "job-summary.md"), outputPath: join(fixture.directory, "step-outputs"),
       },
       finish: {
-        root: fixture.repository, temporaryRoot: dirname(fixture.directory), runNumber: "700", attempt: 1,
+        root: fixture.repository, temporaryRoot: dirname(fixture.directory), runNumber: "700", attempt: 3,
+        gitSha: fixture.identity.git_sha,
         collectionOutcome: "success", planningComplete: "true", finalizationOutcome: "success",
         uploadOutcome: "success", artifactId: "123",
       },
@@ -52,11 +55,17 @@ test("one Git delivery precedes the report and prepares only the selected handof
   try {
     const indexBefore = await readFile(join(f.repository, ".git", "index"));
     const finalized = await runScript("finalize-run-output.ts", f.repository, {
-      RUNNER_TEMP: dirname(f.directory), GITHUB_RUN_ID: "700", GITHUB_RUN_ATTEMPT: "1",
-      GITHUB_OUTPUT: f.finalize.outputPath, GITHUB_STEP_SUMMARY: f.finalize.summaryPath,
+      RUNNER_TEMP: dirname(f.directory), GITHUB_RUN_ID: "700", GITHUB_RUN_ATTEMPT: "3",
+      GITHUB_SHA: f.identity.git_sha,
       CURRENT_RUN_FILES: f.finalize.currentRunFiles, RUN_CANCELLED: "false",
+      GITHUB_STEP_SUMMARY: f.finalize.summaryPath, GITHUB_OUTPUT: f.finalize.outputPath,
+      DUMP_RAW_DOCUMENT_CONTENTS: "false", RUN_ID: f.identity.run_id,
     });
-    expect(finalized.code, finalized.errors).toBe(0);
+    expect(finalized.code).toBe(0);
+    expect(finalized.errors).toContain('"event":"safe_persist_http_completed"');
+    expect(finalized.errors).not.toContain('"event":"safe_persist_http_failed"');
+    expect(finalized.errors).not.toMatch(/[A-Za-z]:[\\/]/);
+    expect(finalized.errors).not.toContain("article_text");
     const receipt = MetadataDeliveryResultSchema.parse(await Bun.file(join(f.directory, "delivery-result.json")).json());
     expect(receipt).toMatchObject({ status: "landed", files: f.paths.length, paths: f.paths });
     const committed = await fixtureGit(f.origin, [
@@ -67,7 +76,7 @@ test("one Git delivery precedes the report and prepares only the selected handof
     expect(await readFile(join(f.repository, ".git", "index"))).toEqual(indexBefore);
     const artifacts = join(f.directory, "artifacts");
     expect((await readdir(artifacts)).sort()).toEqual([
-      "700-1-delivery-result.json", "700-1-report.md", "700-1-selected-articles.json",
+      "700-3-delivery-result.json", "700-3-report.md", "700-3-selected-articles.json",
     ]);
     const inventory: FeedIngestEvent[] = [];
     expect(await publishUploadInventory({ directory: artifacts, runNumber: "700",
@@ -75,8 +84,8 @@ test("one Git delivery precedes the report and prepares only the selected handof
     expect(inventory.flatMap(event => typeof event.details.file === "string" ? [event.details.file] : []).sort())
       .toEqual((await readdir(artifacts)).sort());
     const selected = await readFile(join(f.repository, f.summary.selected_articles_artifact!));
-    expect(await readFile(join(artifacts, "700-1-selected-articles.json"))).toEqual(selected);
-    const report = await readFile(join(artifacts, "700-1-report.md"), "utf8");
+    expect(await readFile(join(artifacts, "700-3-selected-articles.json"))).toEqual(selected);
+    const report = await readFile(join(artifacts, "700-3-report.md"), "utf8");
     expect(report).toBe(await readFile(f.finalize.summaryPath, "utf8"));
     expect(report).not.toContain("Metadata delivery");
     expect(report).not.toContain("Git delivery");
@@ -88,12 +97,7 @@ test("one Git delivery precedes the report and prepares only the selected handof
     expect((await stat(f.directory)).isDirectory()).toBe(true);
     await expect(finishRunOutput({ ...f.finish, artifactId: "" })).rejects.toThrow("Run output is incomplete");
     expect((await stat(f.directory)).isDirectory()).toBe(true);
-    const finished = await runScript("finish-run-output.ts", f.repository, {
-      RUNNER_TEMP: dirname(f.directory), GITHUB_RUN_ID: "700", GITHUB_RUN_ATTEMPT: "1",
-      COLLECTION_OUTCOME: "success", PLANNING_COMPLETE: "true", FINALIZATION_OUTCOME: "success",
-      UPLOAD_OUTCOME: "success", UPLOAD_ARTIFACT_ID: "123",
-    });
-    expect(finished.code, finished.errors).toBe(0);
+    await finishRunOutput(f.finish);
     await expect(stat(f.directory)).rejects.toMatchObject({ code: "ENOENT" });
     expect(await readFile(f.finalize.summaryPath, "utf8")).toBe(report);
     expect(await readFile(join(f.repository, f.summary.selected_articles_artifact!))).toEqual(selected);
@@ -108,14 +112,14 @@ test("a refused Git delivery still writes the report and prepares exact metadata
     const receipt = MetadataDeliveryResultSchema.parse(await Bun.file(join(f.directory, "delivery-result.json")).json());
     expect(receipt.status).toBe("failed");
     const artifacts = join(f.directory, "artifacts");
-    const recovery = join(artifacts, "uncommitted-metadata-700-1");
+    const recovery = join(artifacts, "uncommitted-metadata-700-3");
     expect(await Bun.file(join(recovery, "current-run-files.json")).json()).toEqual(f.paths);
     for (const path of f.paths) {
       expect(await readFile(join(recovery, path))).toEqual(await readFile(join(f.directory, "state", path)));
     }
-    expect(await readFile(join(artifacts, "700-1-selected-articles.json")))
+    expect(await readFile(join(artifacts, "700-3-selected-articles.json")))
       .toEqual(await readFile(join(f.repository, f.summary.selected_articles_artifact!)));
-    expect(await readFile(join(artifacts, "700-1-report.md"), "utf8")).not.toContain("Git delivery");
+    expect(await readFile(join(artifacts, "700-3-report.md"), "utf8")).not.toContain("Git delivery");
     expect(await readFile(f.finalize.outputPath, "utf8")).toContain("artifact_directory<<");
     expect(await fixtureGit(f.origin, ["--git-dir", f.origin, "rev-parse", "main"])).toBe(f.head);
     await expect(finishRunOutput({ ...f.finish, finalizationOutcome: "failure" })).rejects.toThrow("Run output is incomplete");
@@ -129,8 +133,8 @@ test("a job-summary write failure cannot prevent an already-rendered report or s
     await expect(finalizeRunOutput({ ...f.finalize, summaryPath: f.repository })).rejects.toThrow("Run finalization failed");
     expect(MetadataDeliveryResultSchema.parse(await Bun.file(join(f.directory, "delivery-result.json")).json()).status).toBe("landed");
     const artifacts = join(f.directory, "artifacts");
-    expect(await Bun.file(join(artifacts, "700-1-report.md")).exists()).toBe(true);
-    expect(await readFile(join(artifacts, "700-1-selected-articles.json")))
+    expect(await Bun.file(join(artifacts, "700-3-report.md")).exists()).toBe(true);
+    expect(await readFile(join(artifacts, "700-3-selected-articles.json")))
       .toEqual(await readFile(join(f.repository, f.summary.selected_articles_artifact!)));
     expect(await readFile(f.finalize.outputPath, "utf8")).toContain("artifact_directory<<");
   } finally { await f.close(); }
@@ -142,16 +146,19 @@ test("cancelled finalization preserves recovery and a report without creating a 
     await finalizeRunOutput({ ...f.finalize, cancelled: true });
     expect(await fixtureGit(f.origin, ["--git-dir", f.origin, "rev-parse", "main"])).toBe(f.head);
     expect(await Bun.file(join(f.directory, "delivery-result.json")).exists()).toBe(false);
-    expect(await readFile(join(f.directory, "artifacts", "700-1-report.md"), "utf8")).not.toContain("Git delivery");
-    expect(await Bun.file(join(f.directory, "artifacts", "uncommitted-metadata-700-1", "current-run-files.json")).json())
+    expect(await readFile(join(f.directory, "artifacts", "700-3-report.md"), "utf8")).not.toContain("Git delivery");
+    expect(await Bun.file(join(f.directory, "artifacts", "uncommitted-metadata-700-3", "current-run-files.json")).json())
       .toEqual(f.paths);
     const finished = await runScript("finish-run-output.ts", f.repository, {
-      RUNNER_TEMP: dirname(f.directory), GITHUB_RUN_ID: "700", GITHUB_RUN_ATTEMPT: "1",
+      RUNNER_TEMP: dirname(f.directory), GITHUB_RUN_ID: "700", GITHUB_RUN_ATTEMPT: "3",
+      GITHUB_SHA: f.identity.git_sha,
       COLLECTION_OUTCOME: "cancelled", PLANNING_COMPLETE: "false", FINALIZATION_OUTCOME: "success",
       UPLOAD_OUTCOME: "success", UPLOAD_ARTIFACT_ID: "123",
     });
     expect(finished.code).toBe(2);
     expect(finished.errors).not.toMatch(/[A-Za-z]:[\\/]/);
+    expect(finished.errors).not.toContain('"event":"workflow_cleanup_refused"');
+    expect(finished.errors).not.toContain('"code":"ENOENT"');
     expect((await stat(f.directory)).isDirectory()).toBe(true);
   } finally { await f.close(); }
 });
@@ -162,7 +169,7 @@ test("completed diagnostics can land and be cleaned while a partial collection s
     expect(f.summary.planning_complete).toBe(false);
     await finalizeRunOutput(f.finalize);
     expect(MetadataDeliveryResultSchema.parse(await Bun.file(join(f.directory, "delivery-result.json")).json()).status).toBe("landed");
-    expect(await Bun.file(join(f.directory, "artifacts", "700-1-selected-articles.json")).exists()).toBe(false);
+    expect(await Bun.file(join(f.directory, "artifacts", "700-3-selected-articles.json")).exists()).toBe(false);
     await expect(finishRunOutput({ ...f.finish, collectionOutcome: "failure", planningComplete: "false" }))
       .rejects.toThrow("Run output is incomplete");
     await expect(stat(f.directory)).rejects.toMatchObject({ code: "ENOENT" });
@@ -185,6 +192,7 @@ test("cleanup refuses a repository directory and a temporary-directory junction"
     for (const temporaryRoot of [repository, runner]) {
       await expect(finishRunOutput({
         root: repository, temporaryRoot, runNumber: "700", attempt: 1,
+        gitSha: "a".repeat(40),
         collectionOutcome: "success", planningComplete: "true", finalizationOutcome: "success",
         uploadOutcome: "success", artifactId: "123",
       })).rejects.toThrow("Run output is incomplete");
@@ -203,6 +211,7 @@ test("missing collection output still produces a report artifact without inventi
     const outputPath = join(root, "step-outputs");
     await expect(finalizeRunOutput({
       root, directory, runNumber: "700", attempt: 1, cancelled: false,
+      gitSha: "a".repeat(40),
       summaryPath: join(root, "summary.md"), outputPath,
     })).rejects.toThrow("Run finalization failed");
     expect(await readFile(join(directory, "artifacts", "700-1-report.md"), "utf8")).toContain("Planning result unavailable");

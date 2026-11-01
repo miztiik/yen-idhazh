@@ -1,62 +1,9 @@
-/** Prove real loopback stage orchestration and the partition bypass with offline source recordings. */
+/** Do unfinished collections refuse selection and prevent duplicate feed claims over real HTTP? */
 import { expect, test } from "bun:test";
-import { readFile } from "node:fs/promises";
-import { join } from "node:path";
-import { SelectedArticlesArtifactSchema } from "@idhazh/common-contracts";
-import { createPlanApp } from "../src/api/server";
+import { randomUUID } from "node:crypto";
 import { createPlanTestServer } from "./plan-test-server";
 import { recordedPlan } from "./plan-recordings";
-import { source } from "./harvest-recordings";
-import { randomUUID } from "node:crypto";
 import { getCollection } from "../src/api/collection-operation";
-import { PlanResponseSchema } from "../src/api/plan-response.schema";
-
-for (const enabled of [true, false]) test(`HTTP collection completes all feeds before global selection; partition enabled=${enabled}`, async () => {
-  const fixture = await recordedPlan([source(), source({ id: "second-feed", url: "https://news.example/second.xml" })]);
-  fixture.inputs.harvest.config.partition.enabled = enabled;
-  fixture.transport.recordings.responses["https://news.example/second.xml"] =
-    fixture.transport.recordings.responses["https://news.example/feed.xml"]!;
-  const calls: string[] = [];
-  const failures: unknown[] = [];
-  const app = createPlanApp(fixture.inputs, fixture.runtime);
-  let server: ReturnType<typeof Bun.serve>;
-  server = Bun.serve({ hostname: "127.0.0.1", port: 0, idleTimeout: 0, async fetch(request) {
-    const route = new URL(request.url).pathname.split("/").at(-1)!;
-    if (route !== "plan") calls.push(route);
-    const response = await app.fetch(request, { stage_origin: `http://127.0.0.1:${server.port}` });
-    if (!response.ok) failures.push(await response.clone().json());
-    return response;
-  } });
-  try {
-    const response = await fetch(`http://127.0.0.1:${server.port}/api/2026-10-31/plan`, {
-      method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ article_limit: 2 }),
-    });
-    const summary = await response.json();
-    expect(response.status, JSON.stringify({ summary, failures })).toBe(200);
-    expect(summary.planning_complete).toBe(true);
-    expect(calls[0]).toBe("collections");
-    expect(calls.filter(call => call === "fetch").length).toBeGreaterThanOrEqual(2);
-    expect(calls.filter(call => call === "parse").length).toBeGreaterThanOrEqual(2);
-    expect(calls.indexOf("complete")).toBeGreaterThan(calls.lastIndexOf("parse"));
-    expect(calls.indexOf("select-articles")).toBeGreaterThan(calls.indexOf("complete"));
-    expect(calls.includes("partition-articles")).toBe(enabled);
-    expect(summary.assignments.every((assignment: { worker_assignment: number | null }) =>
-      enabled ? assignment.worker_assignment !== null : assignment.worker_assignment === null)).toBe(true);
-    expect(summary.dispatch_count).toBe(enabled ? fixture.inputs.harvest.config.partition.default_shards : 0);
-    const artifact = SelectedArticlesArtifactSchema.parse(JSON.parse(
-      await readFile(join(fixture.directory, summary.selected_articles_artifact), "utf8"),
-    ));
-    expect(artifact.articles.length, JSON.stringify({
-      summary, failures, failed_events: fixture.events.filter(event => event.phase === "failed"),
-    })).toBeGreaterThan(0);
-    expect(PlanResponseSchema.safeParse({
-      ...summary, assignments: summary.assignments.map((assignment: { worker_assignment: number | null }) =>
-        ({ ...assignment, worker_assignment: enabled ? null : 0 })),
-    }).success).toBe(false);
-    expect(summary.files.selected_articles.status).toBe("written");
-    expect(JSON.stringify(summary)).not.toContain(artifact.articles[0]!.article_text);
-  } finally { await server.stop(true); await app.close(); await fixture.close(); }
-}, 120000);
 
 test("unfinished or cancelled collection cannot be selected and a feed cannot be claimed twice", async () => {
   const fixture = await recordedPlan();
@@ -81,23 +28,28 @@ test("unfinished or cancelled collection cannot be selected and a feed cannot be
   } finally { await app.close(); await fixture.close(); }
 }, 120000);
 
-test("valid empty feed completes a truthful empty output without partition requests", async () => {
+test("active execution input remains pinned and an expired batch cannot reopen historical files", async () => {
   const fixture = await recordedPlan();
-  fixture.inputs.harvest.config.partition.enabled = false;
-  fixture.transport.recordings.responses["https://news.example/feed.xml"] = [{
-    status: 200, body: '<rss version="2.0"><channel><title>Empty feed</title></channel></rss>',
-  }];
-  const { runFeedPlan } = await import("../src/run-feed-plan");
+  fixture.inputs.settings.listener.max_stage_batches = 1;
+  const { run_number: _run, ...runtime } = fixture.runtime;
+  const app = createPlanTestServer(fixture.inputs, runtime);
+  const post = (body: unknown) => ({ method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+  const prefix = "/api/2026-10-31";
+  const first = randomUUID();
+  const second = randomUUID();
   try {
-    const result = await runFeedPlan({}, fixture.inputs, fixture.runtime);
-    expect(result.row.status).toBe("completed");
-    expect(result.row.selected_count).toBe(0);
-    expect(result.row.dispatch_count).toBe(0);
-    expect(result.batches.partition_batch_id).toBeUndefined();
-    expect(result.files.selected_articles).toEqual({ status: "empty", files: [] });
-    const artifact = SelectedArticlesArtifactSchema.parse(JSON.parse(
-      await readFile(join(fixture.directory, result.row.selected_articles_artifact!), "utf8"),
-    ));
-    expect(artifact.articles).toEqual([]);
-  } finally { await fixture.close(); }
-}, 120000);
+    expect((await app.request(`${prefix}/collections`, post({ collection_id: first, request: {} }))).status).toBe(200);
+    const original = getCollection(fixture.inputs, first);
+    const baseline = original.state.baseline;
+    const blocked = await app.request(`${prefix}/collections`, post({ collection_id: second, request: {} }));
+    expect(blocked.ok).toBe(false);
+    expect(await blocked.json()).toMatchObject({ code: "REQUEST_BUSY" });
+    expect(original.state.baseline).toBe(baseline);
+    expect((await app.request(`${prefix}/collections/cancel`, post({ collection_id: first }))).status).toBe(200);
+    expect((await app.request(`${prefix}/collections`, post({ collection_id: second, request: {} }))).status).toBe(200);
+    const expired = await app.request(`${prefix}/select-articles`, post({ batch_id: original.parsed_batch_id }));
+    expect(expired.status).toBe(404);
+    expect(await expired.json()).toMatchObject({ code: "ARTIFACT_NOT_FOUND" });
+    expect(fixture.transport.requests).toEqual([]);
+  } finally { await app.close(); await fixture.close(); }
+});

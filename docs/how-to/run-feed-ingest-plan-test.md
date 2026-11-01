@@ -1,6 +1,6 @@
 # Run the isolated feed planner checks
 
-**Last Updated**: 2026-10-31
+**Last Updated**: 2026-11-01
 
 How do you check the TypeScript planner without changing daily publication?
 Use offline cases for validation. The manual workflow performs real feed work
@@ -18,7 +18,7 @@ the Python pipeline and global health data are unchanged.
 The workflow calls `services/feed-ingest-plan/scripts/run-feed-ingest-plan.ts`.
 Its preparation and HTTP client are separate modules. Execution supervises the
 real loopback server in a separate child process within one workflow step.
-Validated private startup data preserves staged history, invocation-only
+Validated private startup data preserves local input settings, invocation-only
 enablement, temporary output, run/attempt/revision identity and UTC clocks.
 Readiness must match that exact child and invocation, not merely an available
 port. The client posts to `/plan` and reads the batch health summary while the
@@ -44,6 +44,14 @@ its own config before article fetch, screening, selection and reporting;
 concurrent requests cannot replace each other's age windows. The applied
 policy report shows each effective age list and its origin.
 For `none`, clear the worker count or set it to one.
+
+`dump_raw_document_contents` is a dropdown with the strings `false` and `true`;
+its default is `false`, not a checked or unchecked boolean input. The adapter
+accepts exactly those strings, converts the choice to a native boolean, and
+passes it through the invocation's validated settings in the private startup
+pipe. It is not an HTTP control. The authored service setting also defaults
+to false. When enabled, only failed downloaded inputs may enter the
+[separate raw-document artifact](../architecture/sources/feed-operator-api.md#failure-only-raw-document-artifact).
 
 `partition.enabled` in `config/feed-ingest-plan.json` defaults to true. Worker
 counts default to four, with configured bounds of one through twenty. When
@@ -97,13 +105,17 @@ an external feed, starts a live workflow or requires local Python.
 The generated bare-origin case executes the actual commit CLI, checks the
 new remote metadata without raw-day indexes, replays it safely and verifies that
 the checkout did not change. Helper-only coverage cannot certify this entry.
+`safe-persist-http.test.ts` checks real loopback delivery and exact remote bytes.
+The finalization cases also run the actual finalizer CLI through its separate
+delivery child and require the `safe_persist_http_completed` log event.
+They retain report and metadata recovery checks after delivery failure.
 Independent writer and contract tests own native digest, identifier and
 historical ledger coverage. The workflow does not add a synthetic receipt.
 
 ## Saved output and failures
 
-`services/feed-ingest-plan/scripts/` owns workflow execution, bounded history
-staging, native verification, metadata commits, artifact preparation and
+`services/feed-ingest-plan/scripts/` owns workflow execution, local input loading,
+native verification, metadata commits, artifact preparation and
 reporting. `services/host-probes/scripts/` owns optional controlled host tools.
 Workflow YAML calls those modules directly. `.github/scripts/` retains only
 the independent `ai-pipeline.ts` experiment and `serve-evaluator.py`; neither
@@ -120,15 +132,24 @@ A normal push retry preserves another writer's immutable additions. It does
 not rewrite the checkout, rebase or force-push. Git receives ordinary ledger
 files at their registered paths, never an archive.
 
-History staging uses the [bounded day membership contract](../reference/feed-planner-ledgers.md#raw-day-membership).
-Named Git days, not saved raw-day JSON lists, identify all Parquet siblings.
+Initial checkout obtains code, required registered raw/compact inputs and the
+existing publication inventory at one ref. History uses the
+[bounded day membership contract](../reference/feed-planner-ledgers.md#raw-day-membership):
+exact local UTC-day directories identify Parquet siblings. No later fetch,
+Git file catalog, sparse expansion or saved input copy is used.
+Startup and finalization validate the supplied `GITHUB_SHA`; they do not query
+`HEAD`. The safe-persist child receives that identity through its existing
+private startup pipe, never through public planning or delivery controls.
 
-Four tasks follow `Collect and select articles with a supervised server`:
+Five tasks follow `Collect and select articles with a supervised server`:
 
-1. `Commit ledgers and write report` calls the safe-delivery API once for all
-   verified completed ledgers, then calls the Markdown API and prepares the
-   upload directory. A commit or report failure does not stop the remaining
-   preparation; the task still fails after preserving its useful output.
+1. `Commit ledgers and write report` starts its own supervised
+   [safe-persist HTTP child](../architecture/sources/feed-operator-api.md#safe-persist-http-delivery)
+   and sends one request for all verified completed ledgers. The existing
+   adapter and Git engine perform delivery. The task closes and reaps that
+   child, then calls the Markdown API and prepares the upload directory.
+   A delivery or report failure does not stop the remaining preparation;
+   the task still fails after preserving its useful output.
 2. `List actual upload files as JSONL` uses the existing structured publisher
    to name each actual file relative to the ZIP root, then its total count.
    It reads only this run's prepared `artifacts` directory, follows the
@@ -142,19 +163,33 @@ Four tasks follow `Collect and select articles with a supervised server`:
    summarizer, plus the delivery result and Markdown report when available.
    The summarizer downloads this named artifact and reads its selected JSON
    file, not a ledger. Article bodies never enter the Git request.
-4. `Finish and clean up` checks collection, finalization and the upload's
-   returned artifact identity. It rechecks the saved result and exact Git
+4. `Upload failed raw documents` runs only when the dropdown is `true` and a
+   diagnostic file exists. Preparation first hands the closed
+   `raw-document-contents.jsonl` to the hash-free artifact-directory destination,
+   with only that exact target permitted. The separate archive is named
+   `raw-document-contents-<run>-<attempt>`. Zero failed documents means no file
+   and no debug upload. Failed collection still prepares and uploads available
+   diagnostics; no successful raw input, extracted-text substitute or new
+   retention policy is added.
+5. `Finish and clean up` checks collection, finalization and the normal upload's
+   returned artifact identity, plus the diagnostic upload when applicable.
+   It rechecks the saved result and exact Git
    delivery receipt before removing only the temporary run directory.
    An earlier collection failure still fails the job after completed
    diagnostics have landed. Failed finalization, missing confirmation or a
    failed upload leaves temporary files untouched. A recovery artifact does
    not turn a failed commit into success.
+   Cancellation deliberately skips delivery confirmation and retains output:
+   no Git delivery receipt is expected when that delivery was skipped. The job
+   remains cancelled or failed because collection did not finish, without a
+   second missing-file cleanup error.
 
 When the metadata commit is not confirmed, the same artifact also contains
 `uncommitted-metadata-<run>-<attempt>/`: only the exact validated current-run
 metadata files and `current-run-files.json`. It can contain multiple UTC-day
-files. No whole temporary root, private SQLite store or parsed/rejected
-population is uploaded. Invalid evidence fails preparation while independently
+files. No whole temporary root or private parsed/rejected
+population is uploaded. Raw diagnostics never enter this normal archive or
+the metadata Git request. Invalid evidence fails preparation while independently
 verified files remain recoverable. Cancellation skips new Git delivery while
 still attempting the report and recovery upload.
 
@@ -299,11 +334,12 @@ remain available in the recovery artifact.
 
 The manual workflow proves that the real Plan API can fetch, parse, select,
 write body-free ledger rows and hand selected text to the next stage. Named
-history reads day-level ledger data from the current commit, not only the
+history reads day-level ledger data from the initial input directory, not only the
 immediately previous workflow run; its data families and windows are in the
 [bounded day membership contract](../reference/feed-planner-ledgers.md#raw-day-membership).
-The sparse checkout still supplies runnable source and configuration while
-keeping the growing state tree out of the worktree. Adapter checks remain in
+The sparse checkout supplies runnable source, configuration and the required
+saved ledger namespaces together. This acquires more saved data up front, but
+adds no input store or independent revision proof. Adapter checks remain in
 CI; repeating them here does not exercise a live API. The selected text upload
 and ledger commit stay separate because the summarizer needs article bodies
 while the ledger does not. CPU and RAM profiling does not prove API correctness,

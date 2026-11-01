@@ -6,31 +6,25 @@ import { screenArticleCandidates } from "./screen-article-candidates/triage-gate
 import { curateArticles } from "./curate-article-portfolio/editorial-selection";
 import { resolvePlanRequest } from "./api/plan-request";
 import { resolvePlanningInputs } from "./resolve-planning-inputs";
-import { readPublisherPublication } from "./read-ledger-history/read-publisher-publication";
 import { captureHealthRows } from "./read-ledger-history/health-summary";
 import { prepareExecutionHealth } from "./api/feed-health-state-operation";
 import type { RunContext } from "./resolve-run-context";
-import { readExclusionEvidence } from "./read-ledger-history/read-exclusion-evidence";
 import { freshnessCutoff } from "./article-freshness-policy";
 import { foldDiscoveryHistory } from "./read-ledger-history/read-discovered-evidence";
-import { createStageLogger } from "./logging/structured-logger";
 import { createFeedHealthRow } from "./health-row";
 import { sourceSnapshot } from "./harvest-feeds/load-harvest-inputs";
+import type { RunHistory } from "./read-ledger-history/read-run-history";
+import { capturedExclusions, requireDocumentState } from "./api/document-state";
 
 export async function selectArticles(batch: ParsedFeedBatch, inputs: PlanInputs, selectionStartedAt: string,
-  currentHealth?: Pick<Awaited<ReturnType<typeof prepareExecutionHealth>>, "sources" | "request_report">, context: RunContext = batch.context) {
+  currentHealth?: Pick<Awaited<ReturnType<typeof prepareExecutionHealth>>, "sources" | "request_report">,
+  context: RunContext = batch.context, captured?: RunHistory) {
   const request = resolvePlanRequest(batch.request, inputs.harvest.config);
   const planning = resolvePlanningInputs(inputs, request);
+  const baseline = captured ?? (await requireDocumentState(inputs, batch.context)).baseline;
   const health = currentHealth ?? await prepareExecutionHealth(inputs, selectionStartedAt,
-    { context: batch.context, rows: batch.work_rows });
-  const exclusions = await readExclusionEvidence({
-    root: inputs.root, now: selectionStartedAt, publishedWindowDays: inputs.clock_config.collect.published_window_days,
-    settledFailureCodes: inputs.clock_config.collect.settled_failure_codes,
-    publishedRegistration: inputs.registrations.published, itemHealthRegistration: inputs.registrations.item_health,
-    publishedDays: inputs.settings.inputs.published_days.filter(day => day.day <= selectionStartedAt.slice(0, 10)),
-    settledFailureDays: inputs.settings.inputs.settled_failure_days.filter(day => day.day === selectionStartedAt.slice(0, 10)),
-    concurrency: inputs.harvest.config.harvest.concurrency,
-  });
+    { context: batch.context, rows: batch.work_rows }, baseline);
+  const exclusions = capturedExclusions(baseline, selectionStartedAt);
   const discoveryRows = batch.discovered.availability === "available" ? batch.discovered.rows : [];
   const publishedOn = new Map(exclusions.published_on);
   const failureCodes = new Map(exclusions.settled_failure_codes);
@@ -61,12 +55,7 @@ export async function selectArticles(batch: ParsedFeedBatch, inputs: PlanInputs,
       matched_published_keys: publishedKeys, matched_failure_keys: failureKeys,
     },
   });
-  const publications = await readPublisherPublication({
-    root: inputs.root, day: selectionStartedAt.slice(0, 10), published: inputs.registrations.published,
-    item_health: inputs.registrations.item_health, selections: inputs.registrations.selected_articles,
-    published_days: inputs.settings.inputs.published_days, health_days: inputs.settings.inputs.settled_failure_days,
-    log: createStageLogger(context),
-  });
+  const publications = baseline.publications.get(selectionStartedAt.slice(0, 10))!;
   const curation = curateArticles({
     articles: screening.admitted, batch, inputs, health: health.sources, publications, context, selectionStartedAt,
   });

@@ -1,29 +1,28 @@
 /** Read one named planner UTC day, merging raw and compact representations of its facts. */
-import { realpath } from "node:fs/promises";
 import { resolve, relative } from "node:path";
 import { DateStampSchema, PlannerLedgerNameSchema, FEED_HEALTH_STATE_VERSION } from "@idhazh/common-contracts";
 import type { PlannerStoredFileEnvelope } from "@idhazh/common-contracts";
-import { readStoredPlannerParquet } from "@idhazh/ledger-file-writer";
-import type { LedgerRegistration, LedgerRowContract } from "@idhazh/ledger-file-writer";
+import {
+  readStoredPlannerParquet, compactPeriodFile, rawDayDirectory,
+  readPlannerDayFiles, readPlannerCompactFile, regularPlannerPath,
+} from "@idhazh/ledger-file-writer";
+import type { LedgerRegistration, LedgerRowContract, PlannerRawDayFiles } from "@idhazh/ledger-file-writer";
 import type { LedgerDayInput } from "../config/service-settings";
+import { PlannerDayInputSchema } from "../config/service-settings";
 import { readPlannerParquet } from "./read-planner-parquet";
 import { LedgerHistoryReadError } from "./ledger-history-error";
 import { classifyPlannerHistoryGap } from "./planner-history-gap";
 import type { StageLogger } from "../logging/structured-logger";
-import {
-  compactPeriodFile, fixedHistoryRevision, listExactRawDayMembers, rawDayDirectory,
-  readNamedGitMember, verifiedHistoryRevision, verifyRawDayMember,
-} from "./raw-day-members";
 type PlannerHistoryFile<T extends object> = {
   envelope: PlannerStoredFileEnvelope; rows: T[]; bytes: number; file_sha256: string;
 };
 export type PlannerHistoryCache<T extends object> = {
   files: Map<string, Promise<PlannerHistoryFile<T>>>;
-  revision?: Promise<string>;
-  trees: Map<string, Promise<string>>;
+  days: Map<string, Promise<PlannerRawDayFiles>>;
+  compact: Map<string, Promise<string | undefined>>;
 };
 export function createPlannerHistoryCache<T extends object>(): PlannerHistoryCache<T> {
-  return { files: new Map(), trees: new Map() };
+  return { files: new Map(), days: new Map(), compact: new Map() };
 }
 export async function readPlannerDay<T extends object>(
   root: string, registration: LedgerRegistration, day: LedgerDayInput, contract: LedgerRowContract<T>,
@@ -57,9 +56,11 @@ async function readPlannerDayUsing<T extends object>(
   readFile: (path: string, ledger: PlannerStoredFileEnvelope["ledger"]) => Promise<PlannerHistoryFile<T>>,
   includesRow: (row: T, envelope: PlannerStoredFileEnvelope) => boolean,
 ) {
-  if (day.raw_index !== undefined) throw new LedgerHistoryReadError("Planner raw days do not accept raw_index");
-  if (day.indexes !== undefined) throw new LedgerHistoryReadError("Planner compact indexes are no longer accepted");
-  rawDayDirectory(registration, day.day);
+  PlannerDayInputSchema.parse(day);
+  const directory = rawDayDirectory(registration, day.day);
+  if (day.raw_files !== undefined && new Set(day.raw_files).size !== day.raw_files.length) {
+    throw new LedgerHistoryReadError("Planner raw input repeats a file");
+  }
   const ledger = PlannerLedgerNameSchema.parse(registration.name);
   const files: PlannerHistoryFile<T>[] = [];
   let represented: boolean | null = null;
@@ -69,7 +70,11 @@ async function readPlannerDayUsing<T extends object>(
   function readParquet(path: string) {
     const key = `${mode}:${path}`;
     let pending = cache.files.get(key);
-    if (pending === undefined) { pending = readFile(path, ledger); cache.files.set(key, pending); }
+    if (pending === undefined) {
+      pending = regularPlannerPath(root, relative(root, path).replaceAll("\\", "/"))
+        .then(() => readFile(path, ledger));
+      cache.files.set(key, pending);
+    }
     return pending;
   }
   async function attempt<R>(path: string, read: () => Promise<R>): Promise<R | undefined> {
@@ -82,83 +87,62 @@ async function readPlannerDayUsing<T extends object>(
       return undefined;
     }
   }
-  let revision: string | undefined;
-  if (day.raw_files === undefined || day.raw_revision !== undefined) {
-    revision = await attempt(root, async () => {
-      const requested = day.raw_revision === undefined
-        ? await (cache.revision ??= fixedHistoryRevision(root))
-        : await verifiedHistoryRevision(root, day.raw_revision);
-      const captured = await (cache.revision ??= Promise.resolve(requested));
-      if (requested !== captured) {
-        throw new LedgerHistoryReadError("Raw and compact history revisions differ within one capture");
-      }
-      return captured;
-    });
-  }
-  const capturedRevision = revision;
-  if (capturedRevision !== undefined) for (const period of ["yearly", "monthly", "daily"] as const) {
+  for (const period of ["yearly", "monthly", "daily"] as const) {
     const covers = period === "yearly" ? day.day.slice(0, 4) : period === "monthly" ? day.day.slice(0, 7) : day.day;
     const path = compactPeriodFile(registration, period, covers);
-    const before = complete;
-    const member = await attempt(resolve(root, path), () =>
-      readNamedGitMember(root, path, capturedRevision, cache.trees));
-    if (member === undefined) {
-      if (!complete || !before) break;
-      continue;
-    }
+    const before = gaps.size;
+    const member = await attempt(resolve(root, path), () => {
+      let pending = cache.compact.get(path);
+      if (pending === undefined) {
+        pending = readPlannerCompactFile(root, registration, period, covers);
+        cache.compact.set(path, pending);
+      }
+      return pending;
+    });
+    if (member === undefined) { if (gaps.size > before) break; continue; }
+    covered = true;
     const held = await attempt(resolve(root, path), async () => {
       const held = await readParquet(resolve(root, path));
       if (held.envelope.tier !== "compact" || held.envelope.period !== period
-        || held.envelope.covers !== covers || held.bytes !== member.bytes.byteLength
-        || held.file_sha256 !== member.file_sha256 || held.rows.length === 0) {
-        throw new LedgerHistoryReadError("Planner compact file differs from its selected Git revision");
+        || held.envelope.covers !== covers || held.rows.length === 0) {
+        throw new LedgerHistoryReadError("Planner compact file differs from its named period");
       }
       return held;
     });
     if (held !== undefined) {
-      covered = true;
       represented = true;
       files.push(held);
     }
     break;
   }
-  let rawPaths = day.raw_files?.map(path => resolve(root, path));
-  const committedDigests = new Map<string, string>();
-  if (rawPaths === undefined || day.raw_revision !== undefined) {
-    const discovered = await attempt(resolve(root, `state/raw/${registration.prefix.join("/")}`), async () => {
-      if (revision === undefined) throw new LedgerHistoryReadError("Raw history has no captured Git revision");
-      const listing = await listExactRawDayMembers(root, registration, day.day, revision, cache.trees);
-      const expected = listing.members.map(member => resolve(root, member.path));
-      if (rawPaths !== undefined && [...rawPaths].sort().join("\n") !== [...expected].sort().join("\n")) {
-        throw new LedgerHistoryReadError("Supplied raw members differ from the complete named Git day");
-      }
-      for (const member of listing.members) {
-        committedDigests.set(resolve(root, member.path), (await verifyRawDayMember(root, member)).file_sha256);
-      }
-      return expected;
-    });
-    rawPaths = discovered;
-  }
-  if (rawPaths !== undefined) {
+  const listing = await attempt(resolve(root, directory), () => {
+    let pending = cache.days.get(directory);
+    if (pending === undefined) {
+      pending = readPlannerDayFiles(root, registration, day.day);
+      cache.days.set(directory, pending);
+    }
+    return pending;
+  });
+  if (listing !== undefined) {
+    for (const refusal of listing.refused) {
+      complete = false;
+      gaps.set(refusal.reason, refusal.path);
+    }
+    if (day.raw_files !== undefined
+      && [...day.raw_files].sort().join("\n") !== listing.members.join("\n")) {
+      complete = false;
+      gaps.set("membership_refused", directory);
+    }
     covered = true;
-    represented = rawPaths.length > 0 ? true : represented ?? (complete ? false : null);
-    if (new Set(rawPaths).size !== rawPaths.length) throw new LedgerHistoryReadError("Planner raw input repeats a file");
-    for (const path of rawPaths) {
+    const paths = [...new Set([...listing.members, ...day.raw_files ?? []])];
+    represented = paths.length > 0 ? true : represented ?? (covered && complete ? false : null);
+    for (const local of paths) {
+      const path = resolve(root, local);
       await attempt(path, async () => {
-        const local = relative(root, path).replaceAll("\\", "/");
-        const suffix = `raw/${registration.prefix.join("/")}/${day.day.replaceAll("-", "/")}/`;
-        if (local.startsWith("../") || (local !== `${suffix}${local.split("/").at(-1)}`
-          && local !== `state/${suffix}${local.split("/").at(-1)}`)) {
+        if (local !== `${directory}/${local.split("/").at(-1)}`) {
           throw new LedgerHistoryReadError("Planner raw file lies outside its registered UTC day");
         }
-        const actual = await realpath(path);
-        const expected = resolve(await realpath(root), local);
-        if (actual !== expected) throw new LedgerHistoryReadError("Planner raw file crosses a linked directory");
         const held = await readParquet(path);
-        const digest = committedDigests.get(path);
-        if (digest !== undefined && held.file_sha256 !== digest) {
-          throw new LedgerHistoryReadError("Raw history bytes changed during the named revision read");
-        }
         if (held.envelope.tier !== "raw" || held.envelope.covers !== day.day) {
           throw new LedgerHistoryReadError("Planner raw file differs from its named day");
         }
@@ -166,6 +150,7 @@ async function readPlannerDayUsing<T extends object>(
       });
     }
   }
+  if (!covered && gaps.size === 0) gaps.set("missing", directory);
   if (log !== undefined) {
     for (const [code, path] of gaps) log("history", "failed", {
       source: "planner-ledger", failed_check: "named-day-read", reason: code, ledger, day: day.day, path,

@@ -18,10 +18,12 @@ import { FetchResponseSchema, ParseResponseSchema } from "./api/document-respons
 import { SelectionResponseSchema, PartitionResponseSchema, PersistenceResponseSchema, StageErrorResponseSchema } from "./api/stage-response.schema";
 import { FeedHealthStateUpdateResponseSchema } from "./api/feed-health-state.schema";
 import { stageStore } from "./api/stage-store";
-import { currentExecutionState } from "./api/document-state";
+import { appendDocumentTiming, currentExecutionState } from "./api/document-state";
 import { getCollection, collectionForRun, prepareCollectionContext, discardCollectionContext } from "./api/collection-operation";
 import { resolveRunContext } from "./resolve-run-context";
+import { finishRawDocumentFailures } from "./dump-raw-document-failure";
 
+const documentPools = new WeakMap<PlanInputs, ReturnType<typeof workPool>>();
 export type PlanRuntime = {
   git_sha: string; run_number?: string; correlation_id?: string;
   attempt?: number; producer?: string; clock?: () => Date;
@@ -48,7 +50,7 @@ export async function runFeedPlan(raw: unknown, inputs: PlanInputs, runtime: Pla
     const server = Bun.serve({ hostname: inputs.settings.listener.hostname, port: 0, idleTimeout: 0, fetch: app.fetch });
     try { return await runFeedPlan(raw, inputs, { ...runtime,
       stage_origin: `http://${server.hostname}:${server.port}` }); }
-    finally { await server.stop(true); app.close(); }
+    finally { await server.stop(true); await app.close(); }
   }
   const collectionId = randomUUID();
   const started = performance.now();
@@ -82,154 +84,189 @@ export async function runFeedPlan(raw: unknown, inputs: PlanInputs, runtime: Pla
     });
     return { context, row: recorded.row, batches: {}, files: { plan_runs: recorded.files }, selected: [] };
   } finally { discardCollectionContext(inputs, collectionId); }
-  const emit = createStageLogger(context, runtime.log);
-  const files: Partial<Record<"discovered_articles" | "selected_articles" | "rejected_articles" | "feed_health_state" | "plan_runs", PersistLedgerResult>> = {};
-  const batches: { parsed_batch_id?: string; selection_batch_id?: string; partition_batch_id?: string } = {};
-  let selected: SelectedFeedBatch | undefined;
-  let partitioned: z.infer<typeof PartitionedFeedBatchSchema> | undefined;
-  let artifact: string | null = null;
-  let failureCode: string | null = null;
-  emit("plan", "started");
   try {
-    const pool = workPool(inputs.harvest.config.harvest.concurrency);
-    const processFeed = async (feedId: string) => {
-      runtime.signal?.throwIfAborted();
-      runtime.progress?.({ eventType: "FEED_FETCH_STARTED", feed_id: feedId, output_count: null });
-      let fetched;
-      try {
-        fetched = await call("fetch", {
-          request_id: randomUUID(), correlation_id: context.correlation_id,
-          feed_id: feedId, fetch_item_type: "feed", collection_id: collectionId,
-        }, FetchResponseSchema);
-      } catch (error) {
-        if (!(error instanceof PlanError) || !["FEED_RESTING", "FEED_RETIRED"].includes(error.code)) throw error;
-        emit("fetch", "completed", { feed_id: feedId, availability: error.code, output_count: 0 });
-        runtime.progress?.({ eventType: "FEED_FETCH_COMPLETED", feed_id: feedId, output_count: 0 });
-        return;
+    const emit = createStageLogger(context, runtime.log);
+    const files: Partial<Record<"discovered_articles" | "selected_articles" | "rejected_articles" | "feed_health_state" | "plan_runs", PersistLedgerResult>> = {};
+    const batches: { parsed_batch_id?: string; selection_batch_id?: string; partition_batch_id?: string } = {};
+    let selected: SelectedFeedBatch | undefined;
+    let partitioned: z.infer<typeof PartitionedFeedBatchSchema> | undefined;
+    let artifact: string | null = null;
+    let failureCode: string | null = null;
+    const collectionStarted = performance.now();
+    let collectionFinished = false;
+    emit("plan", "started");
+    emit("fetch", "started", { scope: "plan" });
+    try {
+      const feedPool = workPool(inputs.harvest.config.harvest.concurrency);
+      const articlePool = workPool(inputs.harvest.config.harvest.concurrency + inputs.settings.listener.parser_concurrency);
+      const parsePool = workPool(inputs.settings.listener.parser_concurrency);
+      let documentPool = documentPools.get(inputs);
+      if (documentPool === undefined) {
+        documentPool = workPool(inputs.settings.listener.max_stage_batches);
+        documentPools.set(inputs, documentPool);
       }
-      if (fetched.failure !== null) {
-        runtime.progress?.({ eventType: "FEED_FETCH_COMPLETED", feed_id: feedId, output_count: 0 });
-        return;
-      }
-      const parsed = await call("parse", {
-        request_id: randomUUID(), fetch_request_id: fetched.fetch_request_id,
-        article_id: fetched.article_id, correlation_id: context.correlation_id,
-      }, ParseResponseSchema);
-      if (parsed.fetch_item_type !== "feed") throw new PlanError("ARTIFACT_INVALID", "Feed parsing returned an article result");
-      runtime.progress?.({ eventType: "FEED_FETCH_COMPLETED", feed_id: feedId, output_count: parsed.parsed_count });
-      const articleOutcomes = await Promise.allSettled(parsed.offers.map(offer => pool(async () => {
+      const boundedDocuments = documentPool;
+      const processFeed = async (feedId: string) => {
         runtime.signal?.throwIfAborted();
-        runtime.progress?.({ eventType: "ARTICLE_HARVEST_STARTED", feed_id: feedId, output_count: null });
-        let article;
-        try {
-          article = await call("fetch", {
-            request_id: randomUUID(), correlation_id: context.correlation_id,
-            feed_id: feedId, fetch_item_type: "article", batch_id: parsed.batch_id, offer_id: offer.offer_id,
-          }, FetchResponseSchema);
-        } catch (error) {
-          if (error instanceof PlanError && error.code === "ARTICLE_EXCLUDED") {
+        runtime.progress?.({ eventType: "FEED_FETCH_STARTED", feed_id: feedId, output_count: null });
+        const parsed = await boundedDocuments(async () => {
+          let fetched;
+          try {
+            fetched = await call("fetch", {
+              request_id: randomUUID(), correlation_id: context.correlation_id,
+              feed_id: feedId, fetch_item_type: "feed", collection_id: collectionId,
+            }, FetchResponseSchema);
+          } catch (error) {
+            if (!(error instanceof PlanError) || !["FEED_RESTING", "FEED_RETIRED"].includes(error.code)) throw error;
+            emit("fetch", "completed", { feed_id: feedId, availability: error.code, output_count: 0 });
+            return null;
+          }
+          if (fetched.failure !== null) {
+            return null;
+          }
+          return parsePool(() => call("parse", {
+            request_id: randomUUID(), fetch_request_id: fetched.fetch_request_id,
+            article_id: fetched.article_id, correlation_id: context.correlation_id,
+          }, ParseResponseSchema));
+        });
+        if (parsed === null) {
+          runtime.progress?.({ eventType: "FEED_FETCH_COMPLETED", feed_id: feedId, output_count: 0 });
+          return;
+        }
+        if (parsed.fetch_item_type !== "feed") throw new PlanError("ARTIFACT_INVALID", "Feed parsing returned an article result");
+        runtime.progress?.({ eventType: "FEED_FETCH_COMPLETED", feed_id: feedId, output_count: parsed.parsed_count });
+        const articleOutcomes = await Promise.allSettled(parsed.offers.map(offer => articlePool(() => boundedDocuments(async () => {
+          runtime.signal?.throwIfAborted();
+          runtime.progress?.({ eventType: "ARTICLE_HARVEST_STARTED", feed_id: feedId, output_count: null });
+          let article;
+          try {
+            article = await call("fetch", {
+              request_id: randomUUID(), correlation_id: context.correlation_id,
+              feed_id: feedId, fetch_item_type: "article", batch_id: parsed.batch_id, offer_id: offer.offer_id,
+            }, FetchResponseSchema);
+          } catch (error) {
+            if (error instanceof PlanError && error.code === "ARTICLE_EXCLUDED") {
+              runtime.progress?.({ eventType: "ARTICLE_HARVEST_COMPLETED", feed_id: feedId, output_count: 0 });
+              return;
+            }
+            throw error;
+          }
+          if (article.failure !== null) {
             runtime.progress?.({ eventType: "ARTICLE_HARVEST_COMPLETED", feed_id: feedId, output_count: 0 });
             return;
           }
-          throw error;
-        }
-        if (article.failure !== null) {
-          runtime.progress?.({ eventType: "ARTICLE_HARVEST_COMPLETED", feed_id: feedId, output_count: 0 });
-          return;
-        }
-        const parsedArticle = await call("parse", {
-          request_id: randomUUID(), fetch_request_id: article.fetch_request_id,
-          article_id: article.article_id, correlation_id: context.correlation_id,
-        }, ParseResponseSchema);
-        runtime.progress?.({ eventType: "ARTICLE_HARVEST_COMPLETED", feed_id: feedId, output_count: parsedArticle.parsed_count });
-        if (parsedArticle.fetch_item_type === "article" && parsedArticle.warnings.length) {
-          runtime.progress?.({ eventType: "ARTICLE_EXTRACTION_WARNING", feed_id: feedId, output_count: null });
-        }
-      })));
-      const articleFailure = articleOutcomes.find(outcome => outcome.status === "rejected");
-      if (articleFailure?.status === "rejected") throw articleFailure.reason;
-    };
-    // Settle all required work before selection or failure finalization.
-    const outcomes = await Promise.allSettled(begin.feeds.map(feed => processFeed(feed)));
-    const failed = outcomes.find(outcome => outcome.status === "rejected");
-    if (failed?.status === "rejected") throw failed.reason;
-    const collected = await call("collections/complete", { collection_id: collectionId }, CompletedCollectionSchema);
-    files.discovered_articles = collected.discovered_articles;
-    files.rejected_articles = collected.rejected_articles;
-    batches.parsed_batch_id = collected.batch_id;
-    const selection = await call("select-articles", { batch_id: collected.batch_id }, SelectionResponseSchema);
-    batches.selection_batch_id = selection.batch_id;
-    selected = stageStore(inputs).read("selected", selection.batch_id, SelectedFeedBatchSchema);
-    let outputId = selected.batch_id;
-    if (inputs.harvest.config.partition.enabled) {
-      const partition = await call("partition-articles", {
-        batch_id: selected.batch_id, strategy: request.partition_strategy, shards: request.shards,
-      }, PartitionResponseSchema);
-      batches.partition_batch_id = partition.batch_id;
-      partitioned = stageStore(inputs).read("partitioned", partition.batch_id, PartitionedFeedBatchSchema);
-      outputId = partition.batch_id;
-    }
-    const outputs = await Promise.allSettled([
-      call("feed-health-state", { batch_id: outputId, action: "record" }, FeedHealthStateUpdateResponseSchema),
-      call("persist-selected-articles", { batch_id: outputId }, PersistenceResponseSchema),
-    ]);
-    if (outputs[0].status === "fulfilled" && outputs[0].value.files !== undefined) files.feed_health_state = outputs[0].value.files;
-    if (outputs[1].status === "fulfilled") {
-      files.selected_articles = outputs[1].value.files;
-      const harvested = files.rejected_articles.files;
-      const rejected = [...harvested, ...outputs[1].value.rejected_files.files];
-      files.rejected_articles = rejected.length ? { status: "written", files: rejected } : { status: "empty", files: [] };
-      artifact = outputs[1].value.artifact;
-    }
-    const outputFailure = outputs.find(outcome => outcome.status === "rejected");
-    if (outputFailure?.status === "rejected") throw outputFailure.reason;
-  } catch (error) {
-    failureCode = error instanceof PlanError ? error.code : "PLANNER_EXECUTION_FAILED";
-    emit("plan", "failed", { failure_code: failureCode });
-    const collection = getCollection(inputs, collectionId);
-    // A failed collection is not eligible for selection, but completed work remains inspectable.
-    let partialBatchId: string | undefined;
-    try {
-      const cancelled = await call("collections/cancel", { collection_id: collectionId }, CancelledCollectionSchema, true);
-      files.rejected_articles ??= cancelled.rejected_articles;
-      partialBatchId = cancelled.batch_id;
-    } catch {
-      emit("plan", "failed", { failure_code: "COLLECTION_CANCEL_FAILED" });
-    }
-    if (partialBatchId !== undefined && files.feed_health_state === undefined
-      && collection.state.work.rows().length > 0) {
+          const parsedArticle = await parsePool(() => call("parse", {
+            request_id: randomUUID(), fetch_request_id: article.fetch_request_id,
+            article_id: article.article_id, correlation_id: context.correlation_id,
+          }, ParseResponseSchema));
+          runtime.progress?.({ eventType: "ARTICLE_HARVEST_COMPLETED", feed_id: feedId, output_count: parsedArticle.parsed_count });
+          if (parsedArticle.fetch_item_type === "article" && parsedArticle.warnings.length) {
+            runtime.progress?.({ eventType: "ARTICLE_EXTRACTION_WARNING", feed_id: feedId, output_count: null });
+          }
+        }))));
+        const articleFailure = articleOutcomes.find(outcome => outcome.status === "rejected");
+        if (articleFailure?.status === "rejected") throw articleFailure.reason;
+      };
+      // Settle all required work before selection or failure finalization.
+      const outcomes = await Promise.allSettled(begin.feeds.map(feed => feedPool(() => processFeed(feed))));
+      const failed = outcomes.find(outcome => outcome.status === "rejected");
+      if (failed?.status === "rejected") throw failed.reason;
+      const collected = await call("collections/complete", { collection_id: collectionId }, CompletedCollectionSchema);
+      collectionFinished = true;
+      const collectionDuration = Math.round(performance.now() - collectionStarted);
+      await appendDocumentTiming(inputs, context.run_id, {
+        operation: "fetch", duration_ms: collectionDuration, status: "completed",
+      }, "plan");
+      emit("fetch", "completed", { scope: "plan", duration_ms: collectionDuration });
+      files.discovered_articles = collected.discovered_articles;
+      files.rejected_articles = collected.rejected_articles;
+      batches.parsed_batch_id = collected.batch_id;
+      const selection = await call("select-articles", { batch_id: collected.batch_id }, SelectionResponseSchema);
+      batches.selection_batch_id = selection.batch_id;
+      selected = stageStore(inputs).read("selected", selection.batch_id, SelectedFeedBatchSchema);
+      let outputId = selected.batch_id;
+      if (inputs.harvest.config.partition.enabled) {
+        const partition = await call("partition-articles", {
+          batch_id: selected.batch_id, strategy: request.partition_strategy, shards: request.shards,
+        }, PartitionResponseSchema);
+        batches.partition_batch_id = partition.batch_id;
+        partitioned = stageStore(inputs).read("partitioned", partition.batch_id, PartitionedFeedBatchSchema);
+        outputId = partition.batch_id;
+      }
+      const outputs = await Promise.allSettled([
+        call("feed-health-state", { batch_id: outputId, action: "record" }, FeedHealthStateUpdateResponseSchema),
+        call("persist-selected-articles", { batch_id: outputId }, PersistenceResponseSchema),
+      ]);
+      if (outputs[0].status === "fulfilled" && outputs[0].value.files !== undefined) files.feed_health_state = outputs[0].value.files;
+      if (outputs[1].status === "fulfilled") {
+        files.selected_articles = outputs[1].value.files;
+        const harvested = files.rejected_articles.files;
+        const rejected = [...harvested, ...outputs[1].value.rejected_files.files];
+        files.rejected_articles = rejected.length ? { status: "written", files: rejected } : { status: "empty", files: [] };
+        artifact = outputs[1].value.artifact;
+      }
+      const outputFailure = outputs.find(outcome => outcome.status === "rejected");
+      if (outputFailure?.status === "rejected") throw outputFailure.reason;
+    } catch (error) {
+      failureCode = error instanceof PlanError ? error.code : "PLANNER_EXECUTION_FAILED";
+      if (!collectionFinished) {
+        const collectionDuration = Math.round(performance.now() - collectionStarted);
+        await appendDocumentTiming(inputs, context.run_id, {
+          operation: "fetch", duration_ms: collectionDuration, status: "failed",
+        }, "plan");
+        emit("fetch", "failed", { scope: "plan", duration_ms: collectionDuration, failure_code: failureCode });
+      }
+      emit("plan", "failed", { failure_code: failureCode });
+      const collection = getCollection(inputs, collectionId);
+      // A failed collection is not eligible for selection, but completed work remains inspectable.
+      let partialBatchId: string | undefined;
       try {
-        const health = await call("feed-health-state", { batch_id: partialBatchId, action: "record" },
-          FeedHealthStateUpdateResponseSchema, true);
-        if (health.files !== undefined) files.feed_health_state = health.files;
+        const cancelled = await call("collections/cancel", { collection_id: collectionId }, CancelledCollectionSchema, true);
+        files.rejected_articles ??= cancelled.rejected_articles;
+        partialBatchId = cancelled.batch_id;
       } catch {
-        emit("persist", "failed", { failure_code: "FEED_HEALTH_WRITE_FAILED" });
+        emit("plan", "failed", { failure_code: "COLLECTION_CANCEL_FAILED" });
+      }
+      if (partialBatchId !== undefined && files.feed_health_state === undefined
+        && collection.state.work.rows().length > 0) {
+        try {
+          const health = await call("feed-health-state", { batch_id: partialBatchId, action: "record" },
+            FeedHealthStateUpdateResponseSchema, true);
+          if (health.files !== undefined) files.feed_health_state = health.files;
+        } catch {
+          emit("persist", "failed", { failure_code: "FEED_HEALTH_WRITE_FAILED" });
+        }
       }
     }
-  }
-  const state = await currentExecutionState(inputs, context.run_id);
-  if (state?.kind === "document") {
-    for (const family of ["discovered_articles", "rejected_articles"] as const) {
-      const retained = [...(state.completed_files?.[family] ?? []), ...(files[family] === undefined ? [] : [files[family]])];
-      const written = retained.flatMap(result => result.status === "written" ? result.files : []);
-      if (written.length) files[family] = { status: "written", files: [...new Map(written.map(file => [file.path, file])).values()] };
-      else if (retained.length) files[family] = { status: "empty", files: [] };
+    const state = await currentExecutionState(inputs, context.run_id);
+    if (state?.kind === "document") {
+      for (const family of ["discovered_articles", "rejected_articles"] as const) {
+        const retained = [...(state.completed_files?.[family] ?? []), ...(files[family] === undefined ? [] : [files[family]])];
+        const written = retained.flatMap(result => result.status === "written" ? result.files : []);
+        if (written.length) files[family] = { status: "written", files: [...new Map(written.map(file => [file.path, file])).values()] };
+        else if (retained.length) files[family] = { status: "empty", files: [] };
+      }
     }
-  }
-  const timings = state?.api_timings ?? [];
-  const recorded = await recordPlanRun(inputs, context, {
-    duration_ms: Math.round(performance.now() - started), status: failureCode === null ? "completed"
-      : getCollection(inputs, collectionId).state.work.rows().some(row => row.checked_at !== null) ? "partial" : "failed",
-    failure_code: failureCode, selected_count: selected?.articles.length ?? 0,
-    strategy: partitioned?.strategy ?? (inputs.harvest.config.partition.enabled ? request.partition_strategy : "none"),
-    dispatch_count: partitioned?.dispatch_count ?? 0,
-    selected_articles_artifact: artifact, api_timings: timings,
-    evaluated_at: selected?.evaluated_at ?? context.now,
-    selection_started_at_utc: selected?.selection_started_at_utc ?? null,
-  });
-  files.plan_runs = recorded.files;
-  if (failureCode === null) emit("plan", "completed", { output_count: recorded.row.selected_count, duration_ms: recorded.row.duration_ms });
-  return { context, row: recorded.row, batches, files, selected: partitioned?.articles ?? selected?.articles ?? [] };
+    const timings = state?.api_timings ?? [];
+    try { await finishRawDocumentFailures(inputs, context); }
+    catch {
+      failureCode ??= "RAW_DOCUMENT_OUTPUT_FAILED";
+      emit("plan", "failed", { failure_code: "RAW_DOCUMENT_OUTPUT_FAILED" });
+    }
+    const recorded = await recordPlanRun(inputs, context, {
+      duration_ms: Math.round(performance.now() - started), status: failureCode === null ? "completed"
+        : getCollection(inputs, collectionId).state.work.rows().some(row => row.checked_at !== null) ? "partial" : "failed",
+      failure_code: failureCode, selected_count: selected?.articles.length ?? 0,
+      strategy: partitioned?.strategy ?? (inputs.harvest.config.partition.enabled ? request.partition_strategy : "none"),
+      dispatch_count: partitioned?.dispatch_count ?? 0,
+      selected_articles_artifact: artifact, api_timings: timings,
+      evaluated_at: selected?.evaluated_at ?? context.now,
+      selection_started_at_utc: selected?.selection_started_at_utc ?? null,
+    });
+    files.plan_runs = recorded.files;
+    if (failureCode === null) emit("plan", "completed", { output_count: recorded.row.selected_count, duration_ms: recorded.row.duration_ms });
+    return { context, row: recorded.row, batches, files, selected: partitioned?.articles ?? selected?.articles ?? [] };
+  } finally { stageStore(inputs).releaseRun(context.run_id); }
 }
 export function summarizePlan(result: FeedPlanResult) {
   return {

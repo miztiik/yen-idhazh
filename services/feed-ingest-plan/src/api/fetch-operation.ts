@@ -1,16 +1,14 @@
 /** Fetch one configured feed or authorized server-owned article offer without parsing it. */
-import { FetchedDocumentSchema, ParsedFeedBatchSchema } from "@idhazh/common-contracts";
-import type { PlannerOperation } from "@idhazh/common-contracts";
+import { FetchedDocumentSchema } from "@idhazh/common-contracts";
 import type { z } from "zod";
 import { FetchRequestSchema } from "./operation-contracts";
-import type { OperationStore } from "./operation-store";
-import { sha256 } from "./operation-store";
+import type { DocumentOperationContext } from "./operation-context";
+import { hashText } from "../hash-text";
 import type { PlanInputs } from "../load-plan-inputs";
 import type { PlanRuntime } from "../run-feed-plan";
 import { PlanError } from "./plan-request";
-import { stageStore } from "./stage-store";
 import { requireStageConfiguration } from "./selection-operation";
-import { checkFetchedDocument, documentExclusions, documentState } from "./document-state";
+import { documentExclusions, documentState } from "./document-state";
 import { deriveArticleIdentity, InvalidArticleUrlError } from "../harvest-feeds/article-identity";
 import { deriveFeedIdentity } from "../harvest-feeds/feed-identity";
 import { validateTargetName, UnsafeTargetError } from "../harvest-feeds/safe-target";
@@ -18,7 +16,7 @@ import { documentWork } from "../harvest-feeds/document-work";
 import type { observeDocument } from "../harvest-feeds/document-observation";
 import { createIngestObservations } from "../ingest-observations";
 import { prepareArticle } from "../harvest-feeds/prepare-article";
-import { updateFeedOffer } from "./feed-offers";
+import { readFeedOffer, updateFeedOffer } from "./feed-offer-state";
 import { workPool } from "../harvest-feeds/harvest-pool";
 import { fetchRejection, recordRejection } from "../harvest-feeds/record-rejection";
 import { fetchDiagnostics } from "../harvest-feeds/fetch-diagnostics";
@@ -32,25 +30,23 @@ import { recordDocumentRejections } from "./record-document-rejections";
 import { resolveFeedEligibility } from "../availability/feed-lifecycle";
 import { projectLifecycleFields } from "../health-row";
 import { collectionFeedRequest } from "./collection-operation";
+import { stageStore } from "./stage-store";
 
 type FetchRequest = z.infer<typeof FetchRequestSchema>;
 const requestPools = new WeakMap<PlanInputs, ReturnType<typeof workPool>>();
-export function resolveFetchParent(request: FetchRequest, inputs: PlanInputs, runtime: PlanRuntime, store: OperationStore) {
+export function resolveFetchParent(request: FetchRequest, inputs: PlanInputs, runtime: PlanRuntime) {
   if (request.batch_id === undefined || request.offer_id === undefined) return null;
-  const batch = stageStore(inputs).read("parsed", request.batch_id, ParsedFeedBatchSchema);
+  const { batch, offer } = readFeedOffer(inputs, request.batch_id, request.offer_id);
   requireStageConfiguration(batch, inputs, runtime);
-  const offer = batch.offers.find(offer => offer.offer_id === request.offer_id);
   if (offer === undefined || offer.source.feed_id !== request.feed_id || request.correlation_id !== batch.context.correlation_id
     ) throw new PlanError("INVALID_REQUEST", "Article reference does not belong to this feed batch", "offer_id");
   const rootId = batch.feed_fetch_request_id ?? collectionFeedRequest(inputs, batch.context.run_id, request.feed_id);
   if (rootId === undefined) throw new PlanError("ARTIFACT_NOT_FOUND", "Feed batch has no captured feed reference", "batch_id");
-  const root = store.get(rootId);
-  if (root === null || checkFetchedDocument(root, inputs).fetch_item_type !== "feed") throw new PlanError("ARTIFACT_NOT_FOUND", "Feed batch has no completed fetched input", "batch_id");
-  return { batch, offer, root };
+  return { batch, offer, fetch_request_id: rootId };
 }
 export async function fetchDocument(
-  request: FetchRequest, record: PlannerOperation, inputs: PlanInputs, runtime: PlanRuntime,
-  parent: ReturnType<typeof resolveFetchParent>, store: OperationStore,
+  request: FetchRequest, record: DocumentOperationContext, inputs: PlanInputs, runtime: PlanRuntime,
+  parent: ReturnType<typeof resolveFetchParent>,
 ) {
   const source = inputs.harvest.sources.find(source => source.id === request.feed_id);
   if (source === undefined || source.status !== "active") throw new PlanError("INVALID_REQUEST", "Fetch requires an active configured feed", "feed_id");
@@ -63,8 +59,13 @@ export async function fetchDocument(
       throw new PlanError("INVALID_REQUEST", "Fetch requires a public HTTP address without credentials", "url");
     }
   }
-  const state = await documentState(record, inputs, runtime, store, parent?.root);
+  const state = await documentState(record, inputs, runtime);
   if (state.health_written) throw new PlanError("REQUEST_CONFLICT", "This execution finalized its health; start a new feed fetch for new work", "request_id");
+  if (state.fetch_request_ids.has(record.request_id)) throw new PlanError("REQUEST_CONFLICT", "Fetch request identity already belongs to this live execution", "request_id");
+  if (parent !== null && !state.fetch_request_ids.has(parent.fetch_request_id)) {
+    throw new PlanError("ARTIFACT_NOT_FOUND", "Feed batch has no live captured work", "batch_id");
+  }
+  state.fetch_request_ids.add(record.request_id);
   let identity: ReturnType<typeof deriveArticleIdentity>;
   try {
     identity = request.fetch_item_type === "feed" ? deriveFeedIdentity(url)
@@ -80,10 +81,10 @@ export async function fetchDocument(
       emit(operation, phase, details, ["feed_id", "publisher_id"], url, feedUrls),
     observations: createIngestObservations(state.work.observe), observation_clock: runtime.observation_clock ?? (() => new Date()),
     on_attempt: observation => { attemptObservations.push(observation); },
-  }, { run_id: record.run_id, correlation_id: record.correlation_id, article_id: identity.url_key, feed_id: source.id },
+  }, { run_id: record.context.run_id, correlation_id: record.context.correlation_id, article_id: identity.url_key, feed_id: source.id },
   record.request_id, {
     document_kind: request.fetch_item_type, feed_id: source.id, publisher_id: source.publisher_id,
-    observed_run_id: record.run_id, observed_attempt: state.context.writer.attempt, candidate_id: parent?.offer.offer_id ?? null,
+    observed_run_id: record.context.run_id, observed_attempt: state.context.writer.attempt, candidate_id: parent?.offer.offer_id ?? null,
   });
   if (request.fetch_item_type === "feed") {
     const status = resolveFeedEligibility(projectLifecycleFields(state.history.sources.get(source.id)), utcTimestamp(runtime.observation_clock));
@@ -91,7 +92,7 @@ export async function fetchDocument(
     if (status === "resting") throw new PlanError("FEED_RESTING", "Feed is resting until its supported UTC recovery deadline", "feed_id");
   }
   if (request.fetch_item_type === "article") {
-    const exclusions = await documentExclusions(state, inputs);
+    const exclusions = documentExclusions(state);
     const offered = parent?.offer ?? { source: sourceSnapshot(inputs.harvest, source), entry: {
       entry_ordinal: 0, title: null, link: url, categories: [], author: null, published_at: null, media_types: [],
     } };
@@ -127,7 +128,17 @@ export async function fetchDocument(
     throw error;
   }
   const { fetched, observation } = result;
-  state.recovered.add(record.request_id);
+  const { final_attempted_url: _finalAttemptedUrl, ...fetchedDocument } = fetched;
+  const artifact = FetchedDocumentSchema.parse({
+    ...fetchedDocument, fetch_item_type: request.fetch_item_type, canonical_url: identity.canonical_url, article_id: identity.url_key, feed_id: source.id,
+    error_code: fetched.error_code ?? null, robots_failure: fetched.robots_failure ?? null, robots_http_status: fetched.robots_http_status ?? null,
+    body_sha256: fetched.body === null ? null : hashText(fetched.body), attempts: fetched.attempts ?? [],
+    observation, attempt_observations: attemptObservations,
+    parent_fetch_request_id: parent?.fetch_request_id ?? null, parent_batch_id: parent?.batch.batch_id ?? null,
+    entry_ordinal: parent?.offer.entry.entry_ordinal ?? null,
+  });
+  stageStore(inputs).rememberFetchedDocument(record.request_id, artifact);
+  stageStore(inputs).rememberDocumentWork(record.request_id, record.context.run_id);
   if (request.fetch_item_type === "feed") {
     state.work.pendingFeed(source.id, fetched, observation.occurred_at, record.request_id);
   }
@@ -139,7 +150,7 @@ export async function fetchDocument(
       max_future_hours: inputs.clock_config.collect.max_future_hours,
       observation_clock: runtime.observation_clock ?? (() => new Date()),
     }, refusal.reason, refusal.details, {
-      candidate_id: parent?.offer.offer_id ?? deriveCandidateId(record.run_id, source.id, 0),
+      candidate_id: parent?.offer.offer_id ?? deriveCandidateId(record.context.run_id, source.id, 0),
       canonical_url: identity.canonical_url, url_key: identity.url_key,
       title: parent?.offer.entry.title ?? null, categories: parent?.offer.entry.categories ?? [],
     });
@@ -160,18 +171,9 @@ export async function fetchDocument(
   }
   if (parent !== null) updateFeedOffer(inputs, state, parent.batch.batch_id, parent.offer.offer_id,
     fetched.failure === null && fetched.body !== null ? "fetched" : "rejected", record.request_id);
-  const { final_attempted_url: _finalAttemptedUrl, ...fetchedDocument } = fetched;
-  const artifact = FetchedDocumentSchema.parse({
-    ...fetchedDocument, fetch_item_type: request.fetch_item_type, canonical_url: identity.canonical_url, article_id: identity.url_key, feed_id: source.id,
-    error_code: fetched.error_code ?? null, robots_failure: fetched.robots_failure ?? null, robots_http_status: fetched.robots_http_status ?? null,
-    body_sha256: fetched.body === null ? null : sha256(fetched.body), attempts: fetched.attempts ?? [],
-    observation, attempt_observations: attemptObservations,
-    parent_fetch_request_id: parent?.root.request_id ?? null, parent_batch_id: parent?.batch.batch_id ?? null,
-    entry_ordinal: parent?.offer.entry.entry_ordinal ?? null,
-  });
-  return { artifact, source_outcome: sourceOutcome, response_json: JSON.stringify({
+  return { artifact, response_json: JSON.stringify({
     fetch_request_id: record.request_id, batch_id: parent?.batch.batch_id ?? record.request_id,
-    run_id: record.run_id, correlation_id: record.correlation_id, fetch_item_type: request.fetch_item_type, feed_id: source.id,
+    run_id: record.context.run_id, correlation_id: record.context.correlation_id, fetch_item_type: request.fetch_item_type, feed_id: source.id,
     article_id: identity.url_key, canonical_url: identity.canonical_url, http_status: fetched.http_status,
     failure: fetched.failure, body_sha256: artifact.body_sha256,
   }) };

@@ -11,8 +11,7 @@ import { formatHostFingerprintSummary } from "../scripts/feed-ingest-plan-host-s
 import { formatPolicyTable, formatWorkflowPolicy } from "../scripts/feed-ingest-plan-policy-report";
 import { formatWorkflowAnnotation } from "../scripts/feed-ingest-plan-report-format";
 import { renderPlannerProgressMarkdown } from "../src/reporting";
-import { fixture as hostFixture } from "../../host-fingerprints/test/fixture";
-import { captureLocalFingerprint } from "../../host-fingerprints/src/api/local-fingerprint";
+import { WorkflowHostFingerprintSchema } from "../scripts/feed-ingest-plan-host-fingerprint";
 import { parseHTML } from "linkedom";
 
 async function fixture() {
@@ -67,15 +66,11 @@ test("absent progress stays unavailable and zero counts do not certify publicati
   const config = FeedIngestConfigSchema.parse(await Bun.file(
     new URL("../../../config/feed-ingest-plan.json", import.meta.url),
   ).json());
-  const f = await hostFixture();
-  try {
-    const host = await captureLocalFingerprint(f.apiInput, { ...f.config, listen_port: 0 }, f.settings, {
-      outputRoot: join(f.directory, "state"), inspection: f.inspection,
-    });
-    if (host.status !== "written") throw new Error("A report fixture requires completed host Parquet");
-    const summary = formatHostFingerprintSummary({
-      host_request: f.apiInput, host: { ...host, status: "recorded" },
-    });
+    const evidence = WorkflowHostFingerprintSchema.parse(await Bun.file(new URL(
+      "../../../tests/fixtures/feed-ingest-plan/host-report.json", import.meta.url)).json());
+    if (evidence.host.status !== "recorded") throw new Error("The host report recording must contain its actual native row");
+    const host = evidence.host;
+    const summary = formatHostFingerprintSummary(evidence);
     expect(summary.notice).toContain("Host fingerprint recorded:");
     expect(summary.summary).toContain("Total machine RAM capacity");
     expect(summary.summary).not.toContain("CPU quota");
@@ -87,7 +82,6 @@ test("absent progress stays unavailable and zero counts do not certify publicati
     expect(rendered).toContain(`<td>Logical processors</td><td>${host.row.cpu_logical_processors}</td>`);
     expect(rendered).toContain(`<td>Allowed processors</td><td>${host.row.cpu_allowed_processors}</td>`);
     expect(rendered).not.toContain("Live planner process");
-  } finally { await f.cleanup(); }
   const settings = await Bun.file(new URL("../../../config/idhazh.json", import.meta.url)).json();
   const policy = formatWorkflowPolicy({ config: {
     ...config, curate_articles: {

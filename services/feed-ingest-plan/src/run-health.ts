@@ -2,7 +2,7 @@
 import { FeedHealthStateRowSchema } from "@idhazh/common-contracts";
 import type {
   CandidateRejectionRecord, DocumentWorkFact, FeedHealthStateRow,
-  FeedOutcomePayload, PlannerRejectionCount, SourceSnapshot, FetchedDocument, SourceArticleOutcome,
+  FeedOutcomePayload, PlannerRejectionCount, SourceSnapshot, SourceArticleOutcome,
 } from "@idhazh/common-contracts";
 import type { RunContext } from "./resolve-run-context";
 import type { SourceHistoryEvidence } from "./read-ledger-history/read-feed-history";
@@ -18,8 +18,7 @@ import { hasArticleCapture, resolveArticleSourceOutcome } from "./article-source
 
 export function createRunHealth(context: RunContext, sources: readonly SourceSnapshot[],
   history: ReadonlyMap<string, SourceHistoryEvidence>,
-  admission: { min_words: number; blocked_http_statuses: readonly number[]; tidy_urls: boolean; clock?: () => Date },
-  initialRows: readonly FeedHealthStateRow[] = []) {
+  admission: { min_words: number; blocked_http_statuses: readonly number[]; tidy_urls: boolean; clock?: () => Date }) {
   const rows = new Map<string, FeedHealthStateRow>();
   const exclusions = new Map<string, PlannerRejectionCount>();
   const pendingReads = new Map<string, FeedHealthStateRow>();
@@ -77,20 +76,6 @@ export function createRunHealth(context: RunContext, sources: readonly SourceSna
         : attribution === "unresolved" ? "unknown" : attribution, count: 1,
     };
     group(grouped, rejection.rejected_at);
-  }
-  for (const original of initialRows) {
-    const saved = FeedHealthStateRowSchema.parse(original);
-    if (saved.run_id !== context.run_id || saved.attempt !== context.writer.attempt) throw new Error("Initial health belongs to another execution");
-    saved.article_candidates = 0;
-    saved.rejection_counts = saved.rejection_counts.filter(value => value.subject !== "article" || value.attribution !== "feed");
-    rows.set(`${saved.date}:${saved.feed_id}`, saved);
-    for (const rejection of saved.rejection_counts) {
-      const value = { feed_id: saved.feed_id, ...rejection };
-      const key = JSON.stringify([value.feed_id, value.subject, value.stage, value.reason_code, value.attribution]);
-      const held = exclusions.get(key);
-      if (held === undefined) exclusions.set(key, value);
-      else held.count += value.count;
-    }
   }
   function captureArticle(id: string, feedId: string, capturedAt: string, outcome: SourceArticleOutcome | null) {
     const previous = captures.get(id);
@@ -186,25 +171,6 @@ export function createRunHealth(context: RunContext, sources: readonly SourceSna
       target.article_requests = null;
       target.robots_requests = null;
       target.counts_complete = false;
-    },
-    restoreRequests(artifact: FetchedDocument) {
-      if (artifact.attempts.length === 0) {
-        const target = row(artifact.feed_id, artifact.observation.occurred_at);
-        target.feed_requests = null;
-        target.article_requests = null;
-        target.robots_requests = null;
-        target.counts_complete = false;
-      }
-      for (const [index, attempt] of artifact.attempts.entries()) {
-        const instant = artifact.attempt_observations[index]!.occurred_at;
-        const target = row(artifact.feed_id, instant);
-        if (attempt.phase === "validation") continue;
-        const field = attempt.phase === "robots" ? "robots_requests" : artifact.fetch_item_type === "feed" ? "feed_requests" : "article_requests";
-        if (attempt.http_status === null) {
-          target[field] = null;
-          target.counts_complete = false;
-        } else if (target[field] !== null) target[field]++;
-      }
     },
     feed(outcome: FeedOutcomePayload, entries: readonly FeedEntry[], checkedAt: string, fetched?: FetchResult, requestId?: string) {
       const target = row(outcome.source.feed_id, checkedAt);

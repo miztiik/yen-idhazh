@@ -1,0 +1,138 @@
+{
+  "run_id": "2026-10-21-700",
+  "started_at": "2026-10-21T23:59:59.999Z",
+  "duration_ms": 3829,
+  "status": "completed",
+  "failure_code": null,
+  "selected_count": 1,
+  "strategy": "bin-pack",
+  "dispatch_count": 4,
+  "selected_articles_artifact": "backend/var/feed-ingest-plan/2026-10-21-700/3/selected-articles.json",
+  "api_timings": [
+    {
+      "operation": "feed-health-before-fetch",
+      "duration_ms": 19,
+      "status": "completed"
+    },
+    {
+      "operation": "fetch",
+      "duration_ms": 3256,
+      "status": "completed"
+    },
+    {
+      "operation": "feed-health-for-selection",
+      "duration_ms": 27,
+      "status": "completed"
+    },
+    {
+      "operation": "select",
+      "duration_ms": 89,
+      "status": "completed"
+    },
+    {
+      "operation": "partition",
+      "duration_ms": 5,
+      "status": "completed"
+    },
+    {
+      "operation": "persist",
+      "duration_ms": 195,
+      "status": "completed"
+    }
+  ],
+  "date": "2026-10-21",
+  "attempt": 3,
+  "lifecycle_window_days": 31,
+  "reliability_floor": 0.5,
+  "reliability_penalty_enabled": true,
+  "evaluated_at": "2026-10-21T23:59:59Z",
+  "request_report_closed_days": 7,
+  "reliability_window_days": 30,
+  "selection_started_at_utc": "2026-10-22T00:00:00Z",
+  "planning_complete": true,
+  "correlation_id": "7cef34e3-dd9f-40ce-9a56-4d01ff5115cc",
+  "batches": {
+    "parsed_batch_id": "7e3c5ec5-8e7a-4871-a500-c3c047be24a2",
+    "selection_batch_id": "21d83190-de2a-4ec1-9538-91d35617795e",
+    "partition_batch_id": "a97fd236-55fc-4c40-888f-c316595546d8"
+  },
+  "files": {
+    "discovered_articles": {
+      "status": "written",
+      "files": [
+        {
+          "path": "raw/feed-ingest-plan/discovered-articles/2026/10/21/01a193b7-813d-8383-b52a-40c4dcc3e1cd.parquet",
+          "file_id": "01a193b7-813d-8383-b52a-40c4dcc3e1cd",
+          "covers": "2026-10-21",
+          "content_sha256": "cb68a24de5661af2f04213d9e91c525727d58f274a41e627d77444f31e808eef",
+          "row_count": 2
+        }
+      ]
+    },
+    "selected_articles": {
+      "status": "written",
+      "files": [
+        {
+          "path": "raw/feed-ingest-plan/selected-articles/2026/10/21/01a193b7-8432-8de0-968d-396d97cb7b96.parquet",
+          "file_id": "01a193b7-8432-8de0-968d-396d97cb7b96",
+          "covers": "2026-10-21",
+          "content_sha256": "1ce326d5061e46ba10b8991f45277c8ae3242a20043fed232404f346d796339f",
+          "row_count": 1
+        }
+      ]
+    },
+    "rejected_articles": {
+      "status": "written",
+      "files": [
+        {
+          "path": "raw/feed-ingest-plan/rejected-articles/2026/10/21/c5f0a5fe-ce31-835d-8343-e49796376ff7.parquet",
+          "file_id": "c5f0a5fe-ce31-835d-8343-e49796376ff7",
+          "covers": "2026-10-21",
+          "content_sha256": "3ffb8c92909479efb64fa129e46b8e92dccbed557b6a140f000c472046c12c4b",
+          "row_count": 1
+        }
+      ]
+    },
+    "feed_health_state": {
+      "status": "written",
+      "files": [
+        {
+          "path": "raw/feed-ingest-plan/feed-health-state/2026/10/21/01a193b7-8378-8af5-889a-fbbc21e6d411.parquet",
+          "file_id": "01a193b7-8378-8af5-889a-fbbc21e6d411",
+          "covers": "2026-10-21",
+          "content_sha256": "bc8e228c800133509c4f11a7f455264c8c83f19513f4db105c83cc2a33391b8c",
+          "row_count": 1
+        },
+        {
+          "path": "raw/feed-ingest-plan/feed-health-state/2026/10/22/01a193b7-83db-8e9e-9644-5a6ad95eed82.parquet",
+          "file_id": "01a193b7-83db-8e9e-9644-5a6ad95eed82",
+          "covers": "2026-10-22",
+          "content_sha256": "e3cad42a16e43ec4d38e069d66c386c56da7253cd20dd853a8ac41d28c16156d",
+          "row_count": 1
+        }
+      ]
+    },
+    "plan_runs": {
+      "status": "written",
+      "files": [
+        {
+          "path": "raw/feed-ingest-plan/plan-runs/2026/10/21/01a193b7-84e5-81ba-b911-12649f080f20.parquet",
+          "file_id": "01a193b7-84e5-81ba-b911-12649f080f20",
+          "covers": "2026-10-21",
+          "content_sha256": "f28c072bc85b4ed85a127812280acf93819fa59629c0d2faccbea7f36656744e",
+          "row_count": 1
+        }
+      ]
+    }
+  },
+  "selected_url_keys": [
+    "34e91ac0637aa19d63c0802b5d6ed9a038c2c3f068a40c393c8c7749badf0b76"
+  ],
+  "assignments": [
+    {
+      "url_key": "34e91ac0637aa19d63c0802b5d6ed9a038c2c3f068a40c393c8c7749badf0b76",
+      "editorial_rank": 1,
+      "worker_assignment": 0
+    }
+  ]
+}

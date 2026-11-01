@@ -16,7 +16,6 @@ export const LedgerDayInputSchema = z.strictObject({
   }).optional(),
   raw_files: z.array(RelativePathSchema).optional(),
   raw_index: RelativePathSchema.optional(),
-  raw_revision: z.string().regex(/^[0-9a-f]{40}$/).optional(),
 }).refine(value => value.raw_files === undefined || value.raw_index === undefined, {
   message: "name raw_files or raw_index, not both",
 });
@@ -24,8 +23,6 @@ export const PlannerDayInputSchema = LedgerDayInputSchema.refine(value => value.
   message: "Planner raw days use Parquet members, not raw_index",
 }).refine(value => value.indexes === undefined, {
   message: "Planner compact membership uses exact files, not indexes",
-}).refine(value => value.raw_files === undefined || value.raw_revision !== undefined, {
-  message: "Configured planner raw_files require their complete raw_revision",
 });
 export type LedgerDayInput = z.infer<typeof LedgerDayInputSchema>;
 export const ServiceSettingsSchema = z.strictObject({
@@ -33,6 +30,9 @@ export const ServiceSettingsSchema = z.strictObject({
     "Remove when the planner is approved for production use.",
   ),
   removal_condition: NonEmptySchema,
+  dump_raw_document_contents: z.boolean().default(false).describe(
+    "Append failed raw documents only to the optional private diagnostic artifact.",
+  ),
   listener: z.strictObject({
     hostname: NonEmptySchema, port: PositiveCountSchema.max(65535),
     idle_timeout_seconds: PositiveCountSchema.max(255),
@@ -49,7 +49,6 @@ export const ServiceSettingsSchema = z.strictObject({
     planning: RelativePathSchema, taxonomy: RelativePathSchema, sources: RelativePathSchema,
     extraction: RelativePathSchema, registrations: RelativePathSchema,
     output_root: RelativePathSchema, discovered_files: z.array(RelativePathSchema).default([]),
-    digest_root: RelativePathSchema.default("frontend/public/digest"),
     published_url_lookback_days: NonNegativeSchema.optional(),
     artifact_root: ArtifactRootSchema.default("backend/var/feed-ingest-plan"),
     health_period_limit: PositiveCountSchema.default(32),
@@ -61,3 +60,7 @@ export const ServiceSettingsSchema = z.strictObject({
   }),
 });
 export type ServiceSettings = z.infer<typeof ServiceSettingsSchema>;
+
+export function parseRawDocumentDumpControl(value: string): boolean {
+  return z.enum(["false", "true"]).parse(value) === "true";
+}

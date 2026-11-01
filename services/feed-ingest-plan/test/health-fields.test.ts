@@ -3,7 +3,7 @@ import { expect, test } from "bun:test";
 import { copyFile, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import { tmpdir } from "node:os";
-import { dirname, join, relative } from "node:path";
+import { dirname, join } from "node:path";
 import { z } from "zod";
 import { FeedHealthStateRowContract, FeedHealthStateRowSchema, FeedIngestEventSchema } from "@idhazh/common-contracts";
 import { persistLedger, readPlannerParquet, readStoredPlannerParquet } from "@idhazh/ledger-file-writer";
@@ -11,8 +11,7 @@ import { createStageLogger } from "../src/logging/structured-logger";
 import { readFeedHealthFieldsDay } from "../src/read-ledger-history/read-feed-health-fields";
 import { createPlannerHistoryCache, readPlannerDay } from "../src/read-ledger-history/read-planner-history";
 import { healthFieldFixture, rewriteHealthFields } from "./health-field-fixtures";
-import { commitFixtureFiles, compactRows, registration, settings } from "./partition-fixtures";
-import { fixtureGit } from "./publication-recordings";
+import { compactRows, registration, settings } from "./partition-fixtures";
 
 const shape = FeedHealthStateRowSchema.shape;
 const schema = z.object(shape);
@@ -20,13 +19,13 @@ const schema = z.object(shape);
 test("field readers and full readers refuse old stamps while current-format fields remain independent", async () => {
   const root = await mkdtemp(join(tmpdir(), "health-field-stamps-"));
   try {
-    const { row, written } = await healthFieldFixture(root);
-    const path = join(root, written.files[0]!.path);
+    const { row, written } = await healthFieldFixture(join(root, "state"));
+    const path = join(root, "state", written.files[0]!.path);
     for (const stamp of ["2026-10-25", "2026-10-27", FeedHealthStateRowContract.schemaVersion, "2027-01-01"]) {
       await rewriteHealthFields(path, [row], schema, { stamp });
       const cache = createPlannerHistoryCache<Record<string, unknown>>();
       const input = {
-        day: row.date, raw_files: [written.files[0]!.path],
+        day: row.date, raw_files: [`state/${written.files[0]!.path}`],
       };
       const read = await readFeedHealthFieldsDay(root, registration("feed-health-state"), input, cache);
       if (stamp !== FeedHealthStateRowContract.schemaVersion) {
@@ -63,8 +62,8 @@ test("field readers and full readers refuse old stamps while current-format fiel
 test("missing, added and retyped columns affect only the uses that require them", async () => {
   const root = await mkdtemp(join(tmpdir(), "health-field-columns-"));
   try {
-    const { row, written } = await healthFieldFixture(root);
-    const path = join(root, written.files[0]!.path);
+    const { row, written } = await healthFieldFixture(join(root, "state"));
+    const path = join(root, "state", written.files[0]!.path);
     const variant = schema.omit({ permission: true, reliability: true, articles_selected: true }).extend({
       status: z.string(), detail: z.object({ label: z.string(), readings: z.array(z.number()) }),
       rejection_counts: z.array(z.object(shape.rejection_counts.element.shape).omit({ stage: true }).extend({
@@ -77,7 +76,7 @@ test("missing, added and retyped columns affect only the uses that require them"
     });
     await rewriteHealthFields(path, [stored], variant);
     const read = await readFeedHealthFieldsDay(root, registration("feed-health-state"), {
-      day: row.date, raw_files: [written.files[0]!.path],
+      day: row.date, raw_files: [`state/${written.files[0]!.path}`],
     });
     expect(read.complete).toBe(true);
     for (const use of [read.uses.request_totals, read.uses.article_admission]) expect(use.gaps).toEqual([]);
@@ -95,8 +94,8 @@ test("missing, added and retyped columns affect only the uses that require them"
 test("request field gaps retain independent checks and individual valid counters without inventing zero", async () => {
   const root = await mkdtemp(join(tmpdir(), "health-field-partial-"));
   try {
-    const { row, written } = await healthFieldFixture(root);
-    const path = join(root, written.files[0]!.path);
+    const { row, written } = await healthFieldFixture(join(root, "state"));
+    const path = join(root, "state", written.files[0]!.path);
     const variant = schema.omit({ article_requests: true });
     const stored = { ...variant.parse(row), feed_requests: -1, robots_requests: null };
     await rewriteHealthFields(path, [stored], variant);
@@ -104,7 +103,7 @@ test("request field gaps retain independent checks and individual valid counters
     const correlation_id = randomUUID();
     const log = createStageLogger({ run_id: row.run_id, correlation_id }, event => logged.push(event));
     const read = await readFeedHealthFieldsDay(root, registration("feed-health-state"), {
-      day: row.date, raw_files: [written.files[0]!.path],
+      day: row.date, raw_files: [`state/${written.files[0]!.path}`],
     }, createPlannerHistoryCache(), undefined, log);
     expect(read.complete).toBe(true);
     expect(read.uses.request_totals.rows).toEqual([]);
@@ -138,13 +137,13 @@ test("request field gaps retain independent checks and individual valid counters
     }
     await rewriteHealthFields(path, [variant.parse(row)], variant);
     const partial = await readFeedHealthFieldsDay(root, registration("feed-health-state"), {
-      day: row.date, raw_files: [written.files[0]!.path],
+      day: row.date, raw_files: [`state/${written.files[0]!.path}`],
     });
     expect(partial.uses.request_totals.partial_rows[0]).toMatchObject({ feed_requests: 2, robots_requests: 0 });
     expect(partial.uses.request_totals.partial_rows[0]).not.toHaveProperty("article_requests");
     await rewriteHealthFields(path, [{ ...row, article_requests: null }], schema);
     const unknown = await readFeedHealthFieldsDay(root, registration("feed-health-state"), {
-      day: row.date, raw_files: [written.files[0]!.path],
+      day: row.date, raw_files: [`state/${written.files[0]!.path}`],
     });
     expect(unknown.uses.request_totals.rows[0]?.article_requests).toBeNull();
   } finally { await rm(root, { recursive: true, force: true }); }
@@ -153,13 +152,13 @@ test("request field gaps retain independent checks and individual valid counters
 test("invalid types, observation dates and admission counts affect only their declared uses", async () => {
   const root = await mkdtemp(join(tmpdir(), "health-field-invalid-"));
   try {
-    const { row, written } = await healthFieldFixture(root);
-    const path = join(root, written.files[0]!.path);
+    const { row, written } = await healthFieldFixture(join(root, "state"));
+    const path = join(root, "state", written.files[0]!.path);
     const variant = schema.extend({ feed_requests: z.string() });
     const stored = { ...row, feed_requests: "2", checked_at: "2026-10-24T10:00:00Z", article_candidates: -1 };
     await rewriteHealthFields(path, [stored], variant);
     const read = await readFeedHealthFieldsDay(root, registration("feed-health-state"), {
-      day: row.date, raw_files: [written.files[0]!.path],
+      day: row.date, raw_files: [`state/${written.files[0]!.path}`],
     });
     expect(read.uses.request_totals.gaps[0]).toMatchObject({ field: "feed_requests", code: "invalid" });
     for (const use of [read.uses.feed_rest, read.uses.feed_reliability]) {
@@ -174,7 +173,7 @@ test("invalid types, observation dates and admission counts affect only their de
     });
     await rewriteHealthFields(path, [missingCount.parse(row)], missingCount);
     const nested = await readFeedHealthFieldsDay(root, registration("feed-health-state"), {
-      day: row.date, raw_files: [written.files[0]!.path],
+      day: row.date, raw_files: [`state/${written.files[0]!.path}`],
     });
     expect(nested.uses.article_admission.gaps[0]).toMatchObject({
       field: "rejection_counts.0.count", code: "missing", day: row.date,
@@ -186,15 +185,13 @@ test("invalid types, observation dates and admission counts affect only their de
 test("captured raw and compact members share field-based reading and duplicate protection", async () => {
   const root = await mkdtemp(join(tmpdir(), "health-field-compact-"));
   try {
-    const { row, written } = await healthFieldFixture(join(root, "state"));
+    const { row } = await healthFieldFixture(join(root, "state"));
     const compact = await compactRows(join(root, "state"), "feed-health-state", row.date,
-      FeedHealthStateRowContract, [row], "monthly", root);
+      FeedHealthStateRowContract, [row], "monthly");
     const path = compact.path!;
     await rewriteHealthFields(path, [row], schema);
-    const paths = [relative(root, path).replaceAll("\\", "/"), ...written.files.map(file => `state/${file.path}`)];
-    await commitFixtureFiles(root, paths);
     const read = async () => readFeedHealthFieldsDay(root, registration("feed-health-state"), {
-      day: row.date, raw_revision: await fixtureGit(root, ["rev-parse", "--verify", "HEAD"]),
+      day: row.date,
     });
     const held = await read();
     expect(held.complete).toBe(true);
@@ -203,7 +200,6 @@ test("captured raw and compact members share field-based reading and duplicate p
       expect(use.gaps).toEqual([]);
     }
     await rewriteHealthFields(path, [{ ...row, feed_requests: 9 }], schema);
-    await commitFixtureFiles(root, [paths[0]!]);
     const conflicting = await read();
     expect(conflicting.uses.feed_rest.rows).toEqual([]);
     expect(conflicting.uses.feed_rest.gaps).toContainEqual(expect.objectContaining({ code: "conflict" }));
@@ -213,10 +209,10 @@ test("captured raw and compact members share field-based reading and duplicate p
 test("duplicates compare actual stored fields before projection and retain endpoint and attempt identity", async () => {
   const root = await mkdtemp(join(tmpdir(), "health-field-duplicates-"));
   try {
-    const { row, written } = await healthFieldFixture(root);
-    const path = join(root, written.files[0]!.path);
+    const { row, written } = await healthFieldFixture(join(root, "state"));
+    const path = join(root, "state", written.files[0]!.path);
     const read = () => readFeedHealthFieldsDay(root, registration("feed-health-state"), {
-      day: row.date, raw_files: [written.files[0]!.path],
+      day: row.date, raw_files: [`state/${written.files[0]!.path}`],
     });
     await rewriteHealthFields(path, [row, row, { ...row, attempt: 2, check_request_id: randomUUID() },
       { ...row, endpoint_key: "2".repeat(64), check_request_id: randomUUID() }], schema);
@@ -242,9 +238,9 @@ test("duplicates compare actual stored fields before projection and retain endpo
 test("damaged bytes, wrong ledger identity, renamed files and repeated members never become usable history", async () => {
   const root = await mkdtemp(join(tmpdir(), "health-field-integrity-"));
   try {
-    const { row, written } = await healthFieldFixture(root);
-    const path = join(root, written.files[0]!.path);
-    const input = { day: row.date, raw_files: [written.files[0]!.path] };
+    const { row, written } = await healthFieldFixture(join(root, "state"));
+    const path = join(root, "state", written.files[0]!.path);
+    const input = { day: row.date, raw_files: [`state/${written.files[0]!.path}`] };
     const read = () => readFeedHealthFieldsDay(root, registration("feed-health-state"), input);
     const saved = await readFile(path);
     await writeFile(path, new Uint8Array([1, 2, 3]));
@@ -260,7 +256,7 @@ test("damaged bytes, wrong ledger identity, renamed files and repeated members n
     await copyFile(path, renamed);
     await expect(readStoredPlannerParquet(renamed, "feed-health-state")).rejects.toThrow("filename");
     await expect(readFeedHealthFieldsDay(root, registration("feed-health-state"), {
-      ...input, raw_files: [written.files[0]!.path, written.files[0]!.path],
+      ...input, raw_files: [`state/${written.files[0]!.path}`, `state/${written.files[0]!.path}`],
     })).rejects.toThrow("repeats a file");
     await rewriteHealthFields(path, [row], schema, { stamp: "not-a-date" });
     expect((await read()).complete).toBe(false);

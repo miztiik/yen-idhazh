@@ -3,9 +3,9 @@ import { expect, test } from "bun:test";
 import { createPlannerStartup } from "../scripts/feed-ingest-plan-supervisor";
 import { restorePlannerStartup } from "../scripts/feed-ingest-plan-server";
 import { PlannerStartupSchema } from "../src/config/planner-startup";
-import { operationConfigFingerprint } from "../src/api/operation-context";
+import { stageConfigFingerprint } from "../src/api/operation-context";
 import { PlanRequestSchema } from "../src/api/plan-request";
-import { recordedPlannerProcess } from "./planner-process-recordings";
+import { readPlannerStartupRecording } from "./planner-process-recordings";
 import { FeedIngestConfigSchema, SourceBasedQualityBucketsSchema } from "@idhazh/common-contracts";
 import { parseAgeWindows, resolveRunPolicy } from "../src/config/resolve-run-policy";
 import { allocateSourceBasedQualityBucketBudgets, rejectArticleAge } from "../src/article-freshness-policy";
@@ -91,23 +91,21 @@ test("policy reporting records effective ages and names their actual origin", as
 });
 
 test("the private child boundary preserves isolated age policies and fences different effective controls", async () => {
-  const fixture = await recordedPlannerProcess();
-  try {
+  const fixture = await readPlannerStartupRecording();
     const original = fixture.inputs.harvest.config;
     const baseline = await config();
     const narrowed = resolveRunPolicy(baseline, { trade_press_age_hours: [1, 2] });
     const startup = createPlannerStartup({
       ...fixture.inputs, harvest: { ...fixture.inputs.harvest, config: narrowed },
     }, fixture.startup.runtime);
-    const first = await restorePlannerStartup(PlannerStartupSchema.parse(JSON.parse(JSON.stringify(startup))), fixture.directory);
+    const first = await restorePlannerStartup(PlannerStartupSchema.parse(JSON.parse(JSON.stringify(startup))), fixture.inputs.root);
     const second = await restorePlannerStartup(createPlannerStartup({
       ...fixture.inputs, harvest: { ...fixture.inputs.harvest, config: baseline },
-    }, fixture.startup.runtime), fixture.directory);
+    }, fixture.startup.runtime), fixture.inputs.root);
     expect(first.inputs.harvest.config.curate_articles.source_based_quality_buckets
       .find(bucket => bucket.id === "trade-press")!.ladder_hours).toEqual([1, 2]);
     expect(second.inputs.harvest.config).toEqual(baseline);
-    expect(operationConfigFingerprint(first.inputs, first.runtime))
-      .not.toBe(operationConfigFingerprint(second.inputs, second.runtime));
+    expect(stageConfigFingerprint(first.inputs, first.runtime))
+      .not.toBe(stageConfigFingerprint(second.inputs, second.runtime));
     expect(fixture.inputs.harvest.config).toEqual(original);
-  } finally { await fixture.close(); }
-}, 120000);
+});

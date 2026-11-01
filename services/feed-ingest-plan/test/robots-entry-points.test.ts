@@ -1,10 +1,10 @@
-/** Do bulk and standalone entry points apply the same document policy without rewriting receipts? */
+/** Do bulk and standalone entry points apply the same document policy? */
 import { expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
 import { join } from "node:path";
 import { FeedHealthStateRowContract, PLANNER_API_PREFIX } from "@idhazh/common-contracts";
 import { createPlanTestServer } from "./plan-test-server";
-import { openOperationStore } from "../src/api/operation-store";
+import { stageStore } from "../src/api/stage-store";
 import { harvestFeeds } from "../src/harvest-feeds/harvest-pool";
 import { readPlannerParquet } from "../src/read-ledger-history/read-planner-parquet";
 import { context } from "./harvest-recordings";
@@ -45,13 +45,10 @@ test("bulk and standalone feed reads dispatch targets after denied or failed rob
           });
           expect(response.status).toBe(200);
           expect(await response.json()).toMatchObject({ failure: null, http_status: 200 });
-          const store = await openOperationStore(recorded.inputs.outputRoot);
-          try {
-            expect(store.get(requestId)?.artifact).toMatchObject({
-              failure: null, http_status: 200, robots: scenario.permission,
-              robots_http_status: scenario.robots_http_status, robots_failure: scenario.robots_failure,
-            });
-          } finally { store.close(); }
+          expect(stageStore(recorded.inputs).fetchedDocument(requestId)?.document).toMatchObject({
+            failure: null, http_status: 200, robots: scenario.permission,
+            robots_http_status: scenario.robots_http_status, robots_failure: scenario.robots_failure,
+          });
         }
         expect(recorded.transport.requests.map(request => request.url.href))
           .toEqual(["https://news.example/robots.txt", "https://news.example/feed.xml"]);
@@ -106,7 +103,7 @@ test("the plan records target work after robots denial without inventing a faile
   }
 });
 
-test("standalone observed success extracts real text, retains the warning and replays without a request", async () => {
+test("standalone observed success parses its live input without another request", async () => {
   const recorded = await recordedPlan();
   const app = createPlanTestServer(recorded.inputs, recorded.runtime);
   try {
@@ -127,8 +124,6 @@ test("standalone observed success extracts real text, retains the warning and re
     const result = await response.json();
     expect(result).toMatchObject({ failure: null, http_status: 200 });
     const requests = recorded.transport.requests.length;
-    expect(await (await fetch()).json()).toEqual(result);
-    expect(recorded.transport.requests).toHaveLength(requests);
     const parsed = await app.request("/api/2026-10-31/parse", {
       method: "POST", headers: { "content-type": "application/json" },
       body: JSON.stringify({
@@ -137,18 +132,12 @@ test("standalone observed success extracts real text, retains the warning and re
       }),
     });
     expect(parsed.status).toBe(200);
-    const store = await openOperationStore(recorded.inputs.outputRoot);
-    try {
-      expect(store.get(requestId)).toMatchObject({
-        source_outcome: { disposition: "admitted", reason_code: null },
-        artifact: { robots: "denied", robots_http_status: 200, robots_failure: null, failure: null, http_status: 200 },
-      });
-      expect(store.get(requestId)!.artifact!.body!.length).toBeGreaterThan(0);
-    } finally { store.close(); }
+    expect(await parsed.json()).toMatchObject({ parsed_count: 1, failure: null });
+    expect(recorded.transport.requests).toHaveLength(requests);
   } finally { await app.close(); await recorded.close(); }
 });
 
-test("a saved enforced refusal replays as unrequested and never gains target attempts", async () => {
+test("an enforced standalone refusal never dispatches the article target", async () => {
   const recorded = await recordedPlan();
   recorded.inputs.harvest.config.harvest.article_robots_policy = "enforce";
   recorded.transport.recordings.responses["https://news.example/robots.txt"] = [{
@@ -165,13 +154,6 @@ test("a saved enforced refusal replays as unrequested and never gains target att
       method: "POST", headers: { "content-type": "application/json" }, body,
     });
     expect(await (await fetch()).json()).toMatchObject({ failure: "robots-denied", http_status: null });
-    const store = await openOperationStore(recorded.inputs.outputRoot);
-    try {
-      const saved = store.get(requestId);
-      expect(saved!.artifact!.attempts.some(attempt => attempt.phase === "target")).toBe(false);
-      expect((await fetch()).status).toBe(200);
-      expect(store.get(requestId)).toEqual(saved);
-      expect(recorded.transport.requests.map(request => request.url.href)).toEqual(["https://news.example/robots.txt"]);
-    } finally { store.close(); }
+    expect(recorded.transport.requests.map(request => request.url.href)).toEqual(["https://news.example/robots.txt"]);
   } finally { await app.close(); await recorded.close(); }
 });

@@ -13,8 +13,7 @@ import { readPlannerDay } from "../src/read-ledger-history/read-planner-history"
 import { readPlannerParquet } from "../src/read-ledger-history/read-planner-parquet";
 import { settleHealthRows } from "../src/read-ledger-history/health-summary";
 import { foldDiscoveryHistory } from "../src/read-ledger-history/read-discovered-evidence";
-import { commitFixtureFiles, compactRows, registration, writeRows } from "./partition-fixtures";
-import { fixtureGit } from "./publication-recordings";
+import { compactRows, registration, writeRows } from "./partition-fixtures";
 
 const day = "2026-10-20";
 const contracts = {
@@ -34,7 +33,7 @@ test("explicit run results survive native daily, monthly and yearly packing with
       const raw = await writeRows(root, record.name, day, record.contract, [record.row]);
       expect(raw.status).toBe("written");
       for (const period of ["daily", "monthly", "yearly"] as const) {
-        const packed = await compactRows(join(root, "state"), record.name, day, record.contract, [record.row], period, root);
+        const packed = await compactRows(join(root, "state"), record.name, day, record.contract, [record.row], period);
         for (const file of raw.files) await rm(join(root, file.path), { force: true });
         const reopened = await readPlannerDay(root, registration(record.name), {
           day,
@@ -59,11 +58,9 @@ test("identical storage copies count once while distinct attempts retain their r
     const raw = await Promise.all([first, retry].map(row =>
       writeRows(join(root, "state"), original.name, day, FeedHealthStateRowContract, [row])));
     const rawFiles = raw.flatMap(result => result.files.map(file => `state/${file.path}`));
-    await commitFixtureFiles(root, rawFiles);
-    await compactRows(join(root, "state"), original.name, day, FeedHealthStateRowContract, [first, retry], "daily", root);
-    const raw_revision = await fixtureGit(root, ["rev-parse", "--verify", "HEAD"]);
+    await compactRows(join(root, "state"), original.name, day, FeedHealthStateRowContract, [first, retry], "daily");
     const merged = await readPlannerDay(root, registration(original.name), {
-      day, raw_files: rawFiles, raw_revision,
+      day, raw_files: rawFiles,
     }, FeedHealthStateRowContract);
     expect(merged.rows).toHaveLength(4);
     const settled = settleHealthRows(merged.rows);
@@ -99,13 +96,13 @@ test("a later explicit zero completion coexists with prior selections and failed
     for (const period of ["daily", "monthly", "yearly"] as const) {
       for (const population of populations) {
         const rows = population.name === "plan-runs" ? runs : [selected];
-        await compactRows(join(root, "state"), population.name, day, population.contract, rows, period, root);
+        await compactRows(join(root, "state"), population.name, day, population.contract, rows, period);
         const held = await readPlannerDay(root, registration(population.name), {
           day,
         }, population.contract);
         expect(held.rows).toEqual(rows);
       }
-      await compactRows(join(root, "state"), "feed-health-state", day, FeedHealthStateRowContract, health, period, root);
+      await compactRows(join(root, "state"), "feed-health-state", day, FeedHealthStateRowContract, health, period);
       const held = await readPlannerDay(root, registration("feed-health-state"), {
         day,
       }, FeedHealthStateRowContract);

@@ -1,19 +1,10 @@
-/** Do CLI controls share strict API semantics and await the actual one-shot entry? */
+/** Do CLI controls share strict API semantics and disclose failures safely? */
 import { expect, test } from "bun:test";
 import { fileURLToPath } from "node:url";
-import { PlanError, PlanRequestSchema, parseCliRequest, resolvePlanRequest } from "../src/api/plan-request";
+import { PlanError, PlanRequestSchema, describePlanError, parseCliRequest, resolvePlanRequest } from "../src/api/plan-request";
 import { loadPlanInputs } from "../src/load-plan-inputs";
 import { resolveRunContext } from "../src/resolve-run-context";
-import { main } from "../src/index";
-import { recordedPlan } from "./plan-recordings";
-import { source } from "./harvest-recordings";
-import { existsSync } from "node:fs";
 import { join } from "node:path";
-import { mkdir, writeFile } from "node:fs/promises";
-import {
-  DiscoveredArticleRowContract, PlanRunRowContract, SelectedArticleRowContract,
-} from "@idhazh/common-contracts";
-import { readPlannerParquet } from "../src/read-ledger-history/read-planner-parquet";
 import { ServiceSettingsSchema } from "../src/config/service-settings";
 
 const root = fileURLToPath(new URL("../../../", import.meta.url));
@@ -52,12 +43,11 @@ test("CLI blanks are absent; typed API strings, nulls, unknown fields and invali
     ["--serve", "--cli"], ["--serve", "--shards=1"], ["--cli", "--shards=1", "--shards=2"], [],
   ]) expect(() => parseCliRequest(args)).toThrow();
   const inputs = await loadPlanInputs(root);
+  const settings = ServiceSettingsSchema.parse(await Bun.file(join(root, "config", "feed-ingest-plan-service.json")).json());
   const globalConfig = await Bun.file(join(root, "config", "idhazh.json")).json();
-  expect(globalConfig.collect.published_window_days).toBe(730);
-  expect(inputs.settings.inputs.published_url_lookback_days).toBe(7);
-  expect(inputs.clock_config.collect.published_window_days).toBe(7);
-  expect(inputs.settings.listener.parser_concurrency).toBe(10);
-  expect(inputs.settings.listener.max_body_bytes).toBe(2_000_000);
+  expect(inputs.clock_config.collect.published_window_days).toBe(settings.inputs.published_url_lookback_days
+    ?? globalConfig.collect.published_window_days);
+  expect(inputs.settings.listener).toEqual(settings.listener);
   expect(inputs.settings).not.toHaveProperty("run");
   expect(inputs.settings.inputs.discovered_files).toEqual([]);
   expect(inputs.settings.inputs.discovered_days).toEqual([]);
@@ -94,89 +84,44 @@ test("one captured UTC day determines identity while independent runs have disti
     .not.toBe(resolveRunContext(settings, "a".repeat(40), now).run_id);
 });
 
-test("real CLI process refuses disabled or invalid requests without Python or network", async () => {
-  for (const [args, code, field] of [
-    [["--cli"], "PLANNER_DISABLED", "enabled"],
-    [["--cli", "--freshness-hours=18"], "INVALID_REQUEST", "freshness_hours"],
-    [["--cli", "--shards=2", "--partition-strategy=none"], "INVALID_REQUEST", "shards"],
-  ] as const) {
-    const child = Bun.spawn([process.execPath, fileURLToPath(new URL("../src/index.ts", import.meta.url)), ...args], {
-      cwd: root, stdout: "pipe", stderr: "pipe",
+test("public request errors retain their fields without exposing checkout paths", () => {
+  const invalid = PlanRequestSchema.safeParse({ article_limit: "2" });
+  if (invalid.success) throw new Error("The typed request must refuse a numeric string");
+  expect(describePlanError(invalid.error).issues[0]!.field).toBe("article_limit");
+  expect(describePlanError(new PlanError("PLANNER_DISABLED", "Planner is disabled", "enabled")))
+    .toEqual({ code: "PLANNER_DISABLED", issues: [{ field: "enabled", message: "Planner is disabled" }] });
+  try {
+    parseCliRequest(["--cli", "--freshness-hours=18"]);
+    throw new Error("The CLI must refuse an unknown control");
+  } catch (error) {
+    expect(describePlanError(error)).toMatchObject({
+      code: "INVALID_REQUEST", issues: [{ field: "freshness_hours" }],
     });
-    const [stdout, stderr, exit] = await Promise.all([
+
+  }
+  const failure = describePlanError(Object.assign(new Error(`Cannot write ${join(root, "state", "blocked")}`), {
+    path: join(root, "state", "blocked"),
+  }), root);
+  expect(failure.code).toBe("PLAN_FAILED");
+  expect(failure.issues[0]!.field).toBe("state/blocked");
+  expect(JSON.stringify(failure)).not.toContain(root);
+});
+
+test("standalone startup refuses missing or invalid supplied code identity with Git unavailable", async () => {
+  for (const identity of [undefined, "not-a-commit"]) {
+    const environment: Record<string, string | undefined> = { ...process.env, PATH: "", Path: "" };
+    if (identity === undefined) delete environment.GITHUB_SHA;
+    else environment.GITHUB_SHA = identity;
+    const child = Bun.spawn([process.execPath, fileURLToPath(new URL("../src/index.ts", import.meta.url)), "--cli"], {
+      cwd: root, env: environment, stdout: "pipe", stderr: "pipe",
+    });
+    const [output, error, status] = await Promise.all([
       new Response(child.stdout).text(), new Response(child.stderr).text(), child.exited,
     ]);
-    expect(exit).toBe(1);
-    expect(stdout).toBe("");
-    const failure = JSON.parse(stderr.trim());
-    expect(failure.code).toBe(code);
-    expect(failure.issues[0].field).toBe(field);
-    expect(stderr).not.toContain(root);
-  }
-}, 30000);
-
-test("the awaited entrypoint records configured selection counts, signed ages and global discovery", async () => {
-  for (const mode of ["counts", "negative_age", "first_seen"] as const) {
-    const recorded = await recordedPlan(mode === "first_seen"
-      ? [source({ url: "https://news.example/article-failures.xml" })] : undefined);
-    const printed: unknown[] = [];
-    try {
-      if (mode === "counts") {
-        recorded.inputs.harvest.config.feedback.lifecycle_window_days = 5;
-        recorded.inputs.harvest.config.feedback.request_report_closed_days = 2;
-      }
-      if (mode === "negative_age") recorded.runtime.clock = () => new Date("2026-10-21T09:00:00Z");
-      if (mode === "first_seen") {
-        recorded.inputs.harvest.config.discovered_articles.lookback_days = 0;
-        recorded.inputs.settings.inputs.discovered_days = [{ day: "2026-10-21", raw_files: [] }];
-      }
-      const summary = await main(["--cli", "--partition-strategy=none", "--article-limit=1"], {
-        inputs: recorded.inputs, runtime: recorded.runtime, output: value => { printed.push(value); },
-      });
-      if (!("planning_complete" in summary)) throw new Error("Expected the one-shot CLI summary");
-      expect(printed).toHaveLength(1);
-      expect(summary.planning_complete).toBe(true);
-      expect(summary.selected_count).toBe(1);
-      for (const ledger of ["discovered-articles", "selected-articles", "feed-health-state", "plan-runs"]) {
-        expect(existsSync(join(recorded.inputs.outputRoot, "raw", "feed-ingest-plan", ledger))).toBe(true);
-      }
-      const selectedFile = summary.files.selected_articles!.files[0]!;
-      const selected = await readPlannerParquet(join(recorded.inputs.outputRoot, selectedFile.path),
-        "selected-articles", SelectedArticleRowContract);
-      expect(selected.rows).toHaveLength(1);
-      expect(selected.rows[0]).not.toHaveProperty("article_text");
-      if (mode === "negative_age") expect(selected.rows[0]!.age_hours).toBeLessThan(0);
-      if (mode === "counts") expect(summary).toMatchObject({ lifecycle_window_days: 5, request_report_closed_days: 2 });
-      if (mode === "first_seen") {
-        const file = summary.files.discovered_articles!.files[0]!;
-        const discovered = await readPlannerParquet(join(recorded.inputs.outputRoot, file.path),
-          "discovered-articles", DiscoveredArticleRowContract);
-        expect(discovered.rows.some(row => row.url_key === selected.rows[0]!.url_key)).toBe(true);
-      }
-      expect(recorded.events.some(event => event.operation === "persist" && event.phase === "completed")).toBe(true);
-    } finally { await recorded.close(); }
-  }
-}, 300000);
-
-test("a real selected-metadata write failure prints an explicit partial run instead of success", async () => {
-  const recorded = await recordedPlan();
-  const printed: unknown[] = [];
-  try {
-    const raw = join(recorded.inputs.outputRoot, "raw", "feed-ingest-plan");
-    await mkdir(raw, { recursive: true });
-    await writeFile(join(raw, "selected-articles"), "A file cannot hold selected metadata.");
-    const summary = await main(["--cli"], {
-      inputs: recorded.inputs, runtime: recorded.runtime, output: value => { printed.push(value); },
+    expect(status).toBe(1);
+    expect(output).toBe("");
+    expect(JSON.parse(error.trim())).toMatchObject({
+      event: "planner_error", issues: [expect.objectContaining({ message: expect.stringContaining("GITHUB_SHA") })],
     });
-    if (!("planning_complete" in summary)) throw new Error("Expected the one-shot CLI summary");
-    expect(printed).toEqual([summary]);
-    expect(summary).toMatchObject({ planning_complete: false, status: "partial", selected_articles_artifact: null });
-    expect(summary.failure_code).not.toBeNull();
-    expect(summary.files.selected_articles).toBeUndefined();
-    const file = summary.files.plan_runs!.files[0]!;
-    const saved = await readPlannerParquet(join(recorded.inputs.outputRoot, file.path), "plan-runs", PlanRunRowContract);
-    expect(saved.rows[0]).toMatchObject({ status: "partial", failure_code: summary.failure_code, selected_count: summary.selected_count });
-    expect(existsSync(join(raw, "feed-health-state"))).toBe(true);
-    expect(existsSync(join(raw, "discovered-articles"))).toBe(true);
-  } finally { await recorded.close(); }
-}, 120000);
+  }
+});

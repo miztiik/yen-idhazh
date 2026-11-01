@@ -1,10 +1,10 @@
-"""Does a shard that checks out only its code land what a shard that checks out every folder lands?
+"""Does a shard with initial planner input land what a full checkout lands?
 
 Over one fixture tree - the tree the retention tasks' record was taken over -
 every shipped task a wake runs on this repository's files runs twice: once in
 a full clone, where every file is on disk, and once in a partial clone whose
-checkout holds only config, where a task learns its members from the commit's
-names and fetches the folders it reads. Each lands on an origin of its own, and
+checkout includes config and saved planner namespaces. Other families learn
+members from the commit and fetch the periods they read. Each lands on an origin of its own, and
 the two must write the same record rows, apart from what each downloaded and
 how long each took, say the same of each task in its finished event, apart from
 how long it took, and change the same paths.
@@ -139,6 +139,7 @@ def landed(
         run_id=RUN_ID,
         attempt=1,
         shard=0,
+        git_sha=git(checkout, "rev-parse", "HEAD").strip(),
         trees=OriginBlobs(origin),
         package=package,
         clock=lambda: WAKE,
@@ -197,7 +198,7 @@ def said_of(caplog: pytest.LogCaptureFixture) -> dict[str, str]:
     return finished
 
 
-def test_a_shard_that_checks_out_only_code_lands_what_a_full_checkout_lands(
+def test_a_shard_with_initial_planner_input_lands_what_a_full_checkout_lands(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
 ) -> None:
     quiet_git(tmp_path, monkeypatch)
@@ -205,13 +206,16 @@ def test_a_shard_that_checks_out_only_code_lands_what_a_full_checkout_lands(
     settings = a_live_garden(tmp_path / "garden")
     names = in_the_repository(settings)
     full = a_full_clone(tmp_path, full_origin)
-    only_code = a_partial_clone(tmp_path, names_origin, "config", name="only-code")
+    named_inputs = a_partial_clone(
+        tmp_path, names_origin, "config", "state/raw/feed-ingest-plan",
+        "state/compact/feed-ingest-plan", name="named-inputs",
+    )
     package = named_task_package(tmp_path, monkeypatch)
 
     with caplog.at_level(logging.INFO, logger=event_log.__name__):
         whole, whole_rows, _ = landed(names, settings, full, full_origin, package)
         whole_said = said_of(caplog)
-        lean, lean_rows, _ = landed(names, settings, only_code, names_origin, package)
+        lean, lean_rows, _ = landed(names, settings, named_inputs, names_origin, package)
         lean_said = said_of(caplog)
 
     assert lean.exit_code == whole.exit_code, (whole_said, lean_said)

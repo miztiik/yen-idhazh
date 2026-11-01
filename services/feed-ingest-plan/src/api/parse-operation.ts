@@ -1,19 +1,18 @@
-/** Parse one saved response without network access and complete its server-owned article batch. */
+/** Consume one live fetched document without network access and complete its article batch. */
 import { randomUUID } from "node:crypto";
 import {
   FEED_OUTCOME_PAYLOAD_VERSION, FeedIngestCandidateSchema, ParsedFeedBatchSchema, PlannerHarvestObservationSchema,
   deriveCandidateId,
   HarvestDiagnosticsSchema,
 } from "@idhazh/common-contracts";
-import type { FeedIngestCandidate, PlannerOperation, PlannerHarvestObservation, PlannerFeedOffer } from "@idhazh/common-contracts";
+import type { FeedIngestCandidate, PlannerHarvestObservation, PlannerFeedOffer } from "@idhazh/common-contracts";
 import type { z } from "zod";
 import { ParseRequestSchema } from "./operation-contracts";
-import type { OperationStore } from "./operation-store";
+import type { FetchedDocumentReference } from "./stage-store";
 import type { PlanInputs } from "../load-plan-inputs";
 import type { PlanRuntime } from "../run-feed-plan";
 import { checkFetchedDocument, documentState } from "./document-state";
 import { PlanError } from "./plan-request";
-import { operationConfigFingerprint } from "./operation-context";
 import { sourceSnapshot } from "../harvest-feeds/load-harvest-inputs";
 import { documentWork, describeArticleParse, describeFeedParse } from "../harvest-feeds/document-work";
 import { createIngestObservations } from "../ingest-observations";
@@ -22,9 +21,10 @@ import { parseDocument } from "../harvest-feeds/parse-document";
 import { fetchEvidence, recordRejection } from "../harvest-feeds/record-rejection";
 import { resolveArticleTitle } from "../harvest-feeds/prepare-article";
 import { stageStore } from "./stage-store";
-import { createParsedFeedBatch, publicFeedOffers, updateFeedOffer } from "./feed-offers";
+import { createParsedFeedBatch, publicFeedOffers } from "./feed-offers";
+import { readFeedOffer, updateFeedOffer } from "./feed-offer-state";
 import { HarvestArticleResultSchema, utcTimestamp } from "../harvest-feeds/harvest-types";
-import { readDiscoveredEvidence, rememberDiscoveries } from "../read-ledger-history/read-discovered-evidence";
+import { foldDiscoveryHistory, rememberDiscoveries } from "../read-ledger-history/read-discovered-evidence";
 import { requiredUtcDays } from "../utc-instant";
 import { resolveArticleEvidence } from "../website-group";
 import { DiscoveredArticleRowSchema } from "@idhazh/common-contracts";
@@ -35,42 +35,42 @@ import { recordDocumentRejections } from "./record-document-rejections";
 import { collectionFeedRequest } from "./collection-operation";
 
 export async function parseFetchedDocument(
-  request: z.infer<typeof ParseRequestSchema>, record: PlannerOperation, fetched: PlannerOperation,
-  inputs: PlanInputs, runtime: PlanRuntime, store: OperationStore, signal?: AbortSignal,
+  request: z.infer<typeof ParseRequestSchema>, fetched: FetchedDocumentReference,
+  inputs: PlanInputs, runtime: PlanRuntime, signal?: AbortSignal,
 ) {
   const artifact = checkFetchedDocument(fetched, inputs);
-  if (fetched.config_sha256 !== record.config_sha256 || record.config_sha256 !== operationConfigFingerprint(inputs, runtime)) {
-    throw new PlanError("REQUEST_CONFLICT", "Fetched configuration differs", "fetch_request_id");
-  }
-  if (artifact.article_id !== request.article_id || fetched.correlation_id !== request.correlation_id) {
+  if (artifact.article_id !== request.article_id || fetched.context.correlation_id !== request.correlation_id) {
     throw new PlanError("INVALID_REQUEST", "Parse identity differs from its fetched document", "article_id");
   }
   if (artifact.body === null || artifact.failure !== null) throw new PlanError("FETCH_UNAVAILABLE", "Fetch has no successful body", "fetch_request_id");
   const source = inputs.harvest.sources.find(source => source.id === artifact.feed_id);
   if (source === undefined) throw new PlanError("ARTIFACT_INVALID", "Fetched feed is no longer configured", "feed_id");
-  const parent = artifact.parent_fetch_request_id === null ? undefined : store.get(artifact.parent_fetch_request_id);
-  if (parent === null) throw new PlanError("ARTIFACT_NOT_FOUND", "Fetched offer has no parent response", "fetch_request_id");
+  const state = await documentState(fetched, inputs, runtime);
+  if (artifact.parent_fetch_request_id !== null && !state.fetch_request_ids.has(artifact.parent_fetch_request_id)) {
+    throw new PlanError("ARTIFACT_NOT_FOUND", "Fetched offer has no live parent work", "fetch_request_id");
+  }
   let offer: PlannerFeedOffer | undefined;
   if (artifact.parent_batch_id !== null) {
-    const batch = stageStore(inputs).read("parsed", artifact.parent_batch_id, ParsedFeedBatchSchema);
-    offer = batch.offers.find(offer => offer.source.feed_id === artifact.feed_id
-      && offer.entry.entry_ordinal === artifact.entry_ordinal);
+    if (artifact.entry_ordinal === null) throw new PlanError("ARTIFACT_INVALID", "Fetched offer has no original entry ordinal", "fetch_request_id");
+    const reference = readFeedOffer(inputs, artifact.parent_batch_id,
+      deriveCandidateId(fetched.context.run_id, artifact.feed_id, artifact.entry_ordinal));
+    const batch = reference.batch;
+    offer = reference.offer;
     if (offer === undefined || offer.fetch_request_id !== fetched.request_id
-      || (batch.feed_fetch_request_id ?? collectionFeedRequest(inputs, batch.context.run_id, source.id)) !== parent?.request_id) {
+      || (batch.feed_fetch_request_id ?? collectionFeedRequest(inputs, batch.context.run_id, source.id)) !== artifact.parent_fetch_request_id) {
       throw new PlanError("ARTIFACT_INVALID", "Fetched article does not match its current offer", "fetch_request_id");
     }
   }
-  const state = await documentState(fetched, inputs, runtime, store, parent);
   if (state.health_written) throw new PlanError("REQUEST_CONFLICT", "This execution finalized its health; parse in a new execution", "request_id");
   const emit = createStageLogger(state.context, runtime.log);
   const work = documentWork({
     document_activity: (operation, phase, details, url, feedUrls) =>
       emit(operation, phase, details, ["feed_id", "publisher_id"], url, feedUrls),
     observations: createIngestObservations(state.work.observe), observation_clock: runtime.observation_clock ?? (() => new Date()),
-  }, { run_id: fetched.run_id, correlation_id: fetched.correlation_id, article_id: artifact.article_id, feed_id: source.id },
-  record.request_id, {
+  }, { run_id: fetched.context.run_id, correlation_id: fetched.context.correlation_id, article_id: artifact.article_id, feed_id: source.id },
+  request.request_id, {
     document_kind: artifact.fetch_item_type, feed_id: source.id, publisher_id: source.publisher_id,
-    observed_run_id: fetched.run_id, observed_attempt: state.context.writer.attempt, candidate_id: offer?.offer_id ?? null,
+    observed_run_id: fetched.context.run_id, observed_attempt: state.context.writer.attempt, candidate_id: offer?.offer_id ?? null,
   });
   if (artifact.fetch_item_type === "feed") {
     const parseSignal = signal ?? runtime.signal;
@@ -100,9 +100,10 @@ export async function parseFetchedDocument(
     const batch = await createParsedFeedBatch({
       state, inputs, runtime, feed_id: source.id, entries, fetched_request_id: fetched.request_id, observed_at: parsed.observation.occurred_at,
     });
-    return { artifact: null, response_json: JSON.stringify({
-      batch_id: batch.batch_id, fetch_request_id: fetched.request_id, run_id: fetched.run_id, fetch_item_type: "feed",
-      parsed_count: entries.length, failure: parsed.failure, offers: publicFeedOffers(batch, inputs.harvest.config.harvest, source.id),
+    return { response_json: JSON.stringify({
+      batch_id: batch.batch_id, fetch_request_id: fetched.request_id, run_id: fetched.context.run_id, fetch_item_type: "feed",
+      parsed_count: entries.length, failure: parsed.failure,
+      offers: publicFeedOffers(batch, inputs.harvest.config.harvest, source.id, state.plan_owned === true),
     }) };
   }
   const pool = runtime.parser_pool ?? new ArticleParserPool(inputs.settings.listener.parser_concurrency);
@@ -156,34 +157,28 @@ export async function parseFetchedDocument(
   const result = HarvestArticleResultSchema.parse({ candidate, rejection, observation });
   const measuredOutcome = resolveArticleSourceOutcome(result, inputs.harvest.config.triage.min_words,
     inputs.harvest.config.triage.blocked_http_statuses, utcTimestamp(runtime.observation_clock));
-  const sourceOutcome = fetched.source_outcome ?? (measuredOutcome === null ? null
-    : store.settleSourceOutcome(fetched.request_id, measuredOutcome));
-  state.work.article(result, fetched.request_id, sourceOutcome);
+  state.work.article(result, fetched.request_id, measuredOutcome);
   if (rejection !== null) {
     await recordDocumentRejections([rejection], state, inputs);
   }
-  let batch;
+  let batch: { batch_id: string; pending_offers: number };
   if (offer !== undefined && artifact.parent_batch_id !== null) {
     batch = updateFeedOffer(inputs, state, artifact.parent_batch_id, offer.offer_id, candidate === null ? "rejected" : "parsed", fetched.request_id, result);
   } else {
-    const discovered = await readDiscoveredEvidence({
-      root: inputs.root, discovered_files: inputs.settings.inputs.discovered_files, discovered_days: inputs.settings.inputs.discovered_days,
-      registration: inputs.registrations.discovered_articles, now: state.context.now,
-      lookback_days: inputs.harvest.config.discovered_articles.lookback_days, concurrency: inputs.harvest.config.harvest.concurrency,
-      own_rows: plannerMemory(inputs).discoveries(), log: emit,
-    });
     const instant = utcTimestamp(runtime.observation_clock);
-    const saved = await rememberDiscoveries(discovered.rows, candidate === null ? [] : [
+    state.discovered_rows = foldDiscoveryHistory([...state.discovered_rows, ...candidate === null ? [] : [
       DiscoveredArticleRowSchema.parse({
       url_key: candidate.url_key, first_seen_at: instant, date: instant.slice(0, 10),
       }),
-    ], state.context, { outputRoot: inputs.outputRoot, registryEntry: inputs.registrations.discovered_articles, ledgerSettings: inputs.ledgerSettings });
+    ]]);
+    const saved = await rememberDiscoveries(state.baseline.discovered.rows, state.discovered_rows,
+      state.context, { outputRoot: inputs.outputRoot, registryEntry: inputs.registrations.discovered_articles, ledgerSettings: inputs.ledgerSettings });
     plannerMemory(inputs).rememberDiscoveries(saved.rows, requiredUtcDays(
       state.context.now, inputs.harvest.config.discovered_articles.lookback_days,
     )[0]!);
     const observations: Record<string, PlannerHarvestObservation> = candidate === null ? {} : { [candidate.candidate_id]: observation };
-    batch = stageStore(inputs).write("parsed", ParsedFeedBatchSchema, {
-      batch_id: randomUUID(), context: state.context, config_sha256: record.config_sha256, request: {},
+    const standalone = stageStore(inputs).write("parsed", ParsedFeedBatchSchema, {
+      batch_id: randomUUID(), context: state.context, config_sha256: fetched.config_sha256, request: {},
       candidates: candidate === null ? [] : [candidate], observations,
       evidence: candidate === null ? {} : { [candidate.candidate_id]: resolveArticleEvidence(
         candidate, undefined, inputs.harvest.config.curate_articles.website_grouping.include_private_suffixes,
@@ -192,11 +187,12 @@ export async function parseFetchedDocument(
       history_rows: [], history_days: state.history.days, work_rows: state.work.rows(), exclusions: state.work.exclusions(),
       article_fetch_request_id: fetched.request_id,
     });
+    batch = { batch_id: standalone.batch_id, pending_offers: 0 };
   }
-  return { artifact: null, response_json: JSON.stringify({
-    batch_id: batch.batch_id, fetch_request_id: fetched.request_id, fetch_item_type: "article", run_id: fetched.run_id,
+  return { response_json: JSON.stringify({
+    batch_id: batch.batch_id, fetch_request_id: fetched.request_id, fetch_item_type: "article", run_id: fetched.context.run_id,
     parsed_count: candidate === null ? 0 : 1, failure: rejected,
     warnings: diagnostics.warnings,
-    pending_offers: batch.offers.filter(offer => offer.state !== "parsed" && offer.state !== "rejected").length,
+    pending_offers: batch.pending_offers,
   }) };
 }

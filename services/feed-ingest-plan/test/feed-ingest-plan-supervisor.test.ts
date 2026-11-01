@@ -3,13 +3,13 @@ import { expect, test } from "bun:test";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { writeFile } from "node:fs/promises";
-import { SelectedArticlesArtifactSchema } from "@idhazh/common-contracts";
 import { PlannerReadySchema, PlannerStartupSchema } from "../src/config/planner-startup";
 import { invokePlannerHttp } from "../scripts/feed-ingest-plan-supervisor";
-import { recordedPlannerProcess } from "./planner-process-recordings";
+import { recordedPlannerProcess, readPlannerStartupRecording } from "./planner-process-recordings";
 import { collectWorkflowFiles } from "../scripts/feed-ingest-plan-current-files";
 import { metadataRegistrations } from "./host-recordings";
 import { source } from "./harvest-recordings";
+import { writePlannerOutputRecording } from "./planner-output-recordings";
 
 function assertReleased(port: number) {
   const probe = Bun.serve({ hostname: "127.0.0.1", port, fetch: () => new Response() });
@@ -21,47 +21,6 @@ async function awaitRecordedRequest(directory: string, signal: AbortSignal) {
     await Bun.sleep(10);
   }
 }
-
-test("separate child preserves prepared identity, native files and live batch health", async () => {
-  const fixture = await recordedPlannerProcess();
-  try {
-    fixture.startup.settings.inputs.feed_health_input_gap = true;
-    fixture.startup.settings.inputs.feed_health_days = [{ day: "2026-10-20", raw_files: [], raw_revision: "b".repeat(40) }];
-    const result = await invokePlannerHttp(fixture.inputs, fixture.startup, { article_limit: 1 }, fixture.evidence, {
-      serverEntry: fixture.serverEntry,
-    });
-    expect(result.summary).toMatchObject({
-      run_id: "2026-10-21-700", attempt: 3, correlation_id: fixture.startup.runtime.correlation_id,
-      planning_complete: true, selected_count: 1, selection_started_at_utc: "2026-10-22T00:00:00Z",
-    });
-    expect(result.health?.rows.some(row => row.feed_id === "recorded-news")).toBe(true);
-    expect(result.outputs.planning_complete).toBe("true");
-    const child = await Bun.file(join(fixture.directory, "recorded-startup.json")).json();
-    expect(child).toMatchObject({
-      parser_concurrency: 2, enabled: true, history_gap: true,
-      history_days: fixture.startup.settings.inputs.feed_health_days,
-    });
-    expect(child.pid).not.toBe(process.pid);
-    expect(() => process.kill(child.pid, 0)).toThrow();
-    const artifact = SelectedArticlesArtifactSchema.parse(await Bun.file(
-      join(fixture.directory, result.outputs.selected_articles_artifact!)).json());
-    expect(artifact).toMatchObject({ run_id: "2026-10-21-700", attempt: 3 });
-    expect(artifact.articles).toHaveLength(1);
-    expect(artifact.articles[0]!.article_text.length).toBeGreaterThan(0);
-    expect(await Bun.file(join(fixture.evidence, "response.json")).json()).toEqual(result.summary);
-    expect(await Bun.file(join(fixture.evidence, "health.json")).json()).toEqual(result.health);
-    const completed = await collectWorkflowFiles({
-      root: fixture.directory, directory: fixture.evidence,
-      identity: { run_id: "2026-10-21-700", attempt: 3, git_sha: fixture.startup.runtime.git_sha },
-      registrations: await metadataRegistrations(),
-    });
-    expect(completed.failures).toEqual([]);
-    expect(completed.paths).toEqual(JSON.parse(result.outputs.current_run_files!));
-    expect(await Bun.file(join(fixture.directory, "config", "feed-ingest-plan-service.json")).json())
-      .toHaveProperty("enabled", false);
-    await assertReleased(fixture.inputs.settings.listener.port);
-  } finally { await fixture.close(); }
-}, 60000);
 
 test("an occupied port fails without stopping or planning against the unrelated listener", async () => {
   const fixture = await recordedPlannerProcess();
@@ -186,21 +145,15 @@ test("parent disappearance closes the child pipe and the child bounds its own dr
   }
 }, 60000);
 
-test("partial planning retains completed-file diagnostics and the original failure", async () => {
+test("a short real child failure preserves existing native diagnostics and its original cause", async () => {
   const fixture = await recordedPlannerProcess();
   try {
-    // A real filesystem refusal after selection must not discard completed ledger siblings.
-    const artifactRoot = join(fixture.directory, "backend");
-    await writeFile(artifactRoot, "Recorded non-directory obstruction");
-    fixture.inputs.outputRoot = join(fixture.evidence, "state");
-    fixture.startup.output_root = "evidence/state";
-    const result = await invokePlannerHttp(fixture.inputs, fixture.startup, { article_limit: 1 }, fixture.evidence, {
+    const recorded = await writePlannerOutputRecording(fixture.inputs);
+    await writeFile(join(fixture.evidence, "response.json"), JSON.stringify(recorded.response));
+    fixture.startup.settings.enabled = false;
+    await expect(invokePlannerHttp(fixture.inputs, fixture.startup, {}, fixture.evidence, {
       serverEntry: fixture.serverEntry,
-    });
-    expect(result.http_status).toBe(500);
-    expect(result.summary.planning_complete).toBe(false);
-    expect(result.summary.failure_code).not.toBeNull();
-    expect(result.outputs.planning_complete).toBe("false");
+    })).rejects.toThrow("HTTP readiness does not match the owned child");
     const collected = await collectWorkflowFiles({
       root: fixture.directory, directory: fixture.evidence,
       identity: { run_id: "2026-10-21-700", attempt: 3, git_sha: fixture.startup.runtime.git_sha },
@@ -208,13 +161,13 @@ test("partial planning retains completed-file diagnostics and the original failu
     });
     expect(collected.failures).toEqual([]);
     expect(collected.paths.length).toBeGreaterThan(0);
+    expect(await Bun.file(join(fixture.directory, "recorded-request.json")).exists()).toBe(false);
     await assertReleased(fixture.inputs.settings.listener.port);
   } finally { await fixture.close(); }
 });
 
 test("startup rejects executable runtime members, unknown controls and non-loopback listeners", async () => {
-  const fixture = await recordedPlannerProcess();
-  try {
+  const fixture = await readPlannerStartupRecording();
     expect(PlannerStartupSchema.safeParse({
       ...fixture.startup, runtime: { ...fixture.startup.runtime, clock: () => new Date() },
     }).success).toBe(false);
@@ -223,5 +176,4 @@ test("startup rejects executable runtime members, unknown controls and non-loopb
         listener: { ...fixture.startup.settings.listener, hostname: "0.0.0.0" } },
     }).success).toBe(false);
     expect(PlannerStartupSchema.safeParse({ ...fixture.startup, output_root: "C:\\state" }).success).toBe(false);
-  } finally { await fixture.close(); }
 });

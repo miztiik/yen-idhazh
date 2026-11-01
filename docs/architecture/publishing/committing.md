@@ -1,6 +1,6 @@
 # How completed output reaches the repository
 
-**Last Updated**: 2026-10-31
+**Last Updated**: 2026-11-01
 
 Start here when a workflow delivers generated files. Python jobs use
 [`backend/utilities/publish_to_repo.py`](../../../backend/utilities/publish_to_repo.py)
@@ -141,28 +141,40 @@ that main rejected a push. Gardener preserves its logged crash/exit-1 path.
 For a TypeScript caller, validate the producer's output and ownership before
 calling `safe_persist_data`. Its input schema validates the in-process request;
 it is not a persisted contract because no later run reads the request. The API
-accepts explicitly named files with expected SHA256 values and independently
+accepts explicitly named completed files and independently
 declared whole-segment permissions, plus a caller-supplied Git committer
-identity. The manual planner test workflow reads that identity from
+identity. The caller finishes each file before handoff and must not change it
+during delivery. The manual planner test workflow reads that identity from
 [`config/data-delivery.json`](../../../config/data-delivery.json). Git delivery refuses immutable collisions,
-verifies each source hash before writing its bytes as an unfiltered Git blob,
+checks source paths and modes before writing bytes as an unfiltered Git blob,
 uses a private candidate on fetched `main`, and
 retries with the named `config/push-retry.json` settings. Artifact-directory
 delivery copies only named files and refuses symlink parents or replacement
-with different bytes. Neither destination supports deletion or mutable
+with different bytes, compared directly. Neither destination asks for an
+expected file checksum or supports deletion or mutable
 replacement.
 
 The planner's [availability calculations](../sources/feed-availability.md) are ordinary
 immutable health-ledger output. Fetch, parse, collection, selection and health
 recording make no Git commits; only final `safe_persist_data` delivery publishes
 their completed metadata files.
+Initial checkout acquires the required saved planner input at the code ref.
+No planner acquisition, computation, report or artifact step invokes Git.
+Output verification compares the saved writer metadata with the supplied
+initial checkout identity, not a queried `HEAD`.
+The gardener remains a separate final shard publisher: planner compact
+replacements and deletions retain original-source collision checks, permission
+checks and retries. They do not enter the immutable-append-only TypeScript API.
 
 The manual planner test workflow is a consumer, not an application publishing
-stage. Its adapter validates the exact completed planner and host metadata
-against registered raw ledger prefixes, then calls the shared API. It does not
+stage. Finalization calls the
+[safe-persist HTTP endpoint](../sources/feed-operator-api.md#safe-persist-http-delivery)
+in its own supervised child after the collection listener has stopped.
+The endpoint reuses the existing adapter, which validates exact completed
+planner and host metadata against registered raw ledger prefixes, then calls the shared API. It does not
 give the API planner registration or Parquet policy. Selected article text is
 uploaded separately and is never part of the Git request.
-One workflow task may call this delivery API and then the independent Markdown
+One workflow task calls this delivery endpoint and then the independent Markdown
 renderer. Task consolidation does not give the Git API report or upload
 responsibilities. The report precedes the artifact upload; cleanup waits for
 confirmed delivery and preserves an earlier producer failure.
@@ -246,6 +258,10 @@ their execution evidence. It passes only those exact files to
 inventory records, or article-text commits. Selected text stays in a separate
 uploaded artifact. The planner input contract defines bounded day discovery
 separately from compact-period metadata.
+HTTP changes only that adapter's transport. The runner and existing adapter
+retain repository, output, registration, committer and retry inputs; the request
+names only the run, attempt and completed paths. A separate finalization child
+preserves completed output after collection failure without restarting collection.
 
 The Git committer identity belongs to the caller, not the reusable delivery
 API. This keeps generated commits from claiming the workflow operator's

@@ -10,6 +10,9 @@ import { PlanError } from "../plan-request";
 export function documentRoute(inputs: PlanInputs, runtime: () => PlanRuntime) {
   const app = new Hono<{ Bindings: PlanningBindings }>();
   for (const operation of ["fetch", "parse"] as const) app.post(`/${operation}`, async c => {
+    if (c.req.header("Idempotency-Key") !== undefined) {
+      throw new PlanError("INVALID_REQUEST", "Idempotency-Key is unsupported; send a new live request", "Idempotency-Key");
+    }
     let raw: unknown;
     try { raw = await c.req.json(); }
     catch (error) {

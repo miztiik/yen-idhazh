@@ -1,6 +1,7 @@
 {
   "entries": [
-    {"bytes": 10731,"covers": "2026-10-29","lost_days": [],"rows": 18,"set_aside": 0,"state": "packed"}
+    {"bytes": 10731,"covers": "2026-10-29","lost_days": [],"rows": 18,"set_aside": 0,"state": "packed"},
+    {"bytes": 45460,"covers": "2026-10-30","lost_days": [],"rows": 516,"set_aside": 0,"state": "packed"}
   ],
   "ledger": "visual-design-attempts",
   "period": "daily",
