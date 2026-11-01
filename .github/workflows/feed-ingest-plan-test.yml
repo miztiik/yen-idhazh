@@ -98,7 +98,7 @@ jobs:
           bun install --frozen-lockfile --cwd services/host-fingerprints
 
       # This one step owns the child server, readiness, HTTP client and shutdown.
-      - name: Collect and select articles with a supervised server
+      - name: Collect and select articles
         id: plan
         env:
           ARTICLE_LIMIT: ${{ inputs.article_limit }}
