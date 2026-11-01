@@ -40,7 +40,7 @@ Table C - PR-shaped tasks
 | ID | # | Row title | Depends-on | Parallel-group | Status | Worktree | PR | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | C1 | 1 | Replace Undici completely with Impit and failure evidence | - | A | DONE | impit-transport-and-evidence | #1874 | - |
-| C2 | 2 | Space requests across domains and publishers | 1 | B | PENDING | - | - | - |
+| C2 | 2 | Space requests across domains and publishers | 1 | B | IN REVIEW | shared-source-pacing-c2 | #1879 | - |
 | C3 | 3 | Verify the completed Impit-only branch pipeline | 2 | C | PENDING | - | - | - |
 
 ## 2 - Shared implementation contracts
