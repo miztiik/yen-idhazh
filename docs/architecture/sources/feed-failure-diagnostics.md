@@ -138,9 +138,10 @@ cleanup cannot replace that status with an unclassified cancellation error.
 Current rejection rows and planner events use their declared current schema
 versions; source-run vocabulary and its stamp are unchanged. Python ledger
 declarations carry their changelog entries; TypeScript owns the event changelog.
-Earlier rejection and assessment rows without diagnostics migrate with null
-diagnostics; existing historical diagnostics gain null quality and null
-`body_limit`. Nothing
+Earlier assessment rows without diagnostics migrate with null diagnostics;
+existing historical diagnostics gain null quality and null `body_limit`.
+Rejected-article rows use the current-only Parquet reader described below.
+Nothing
 reconstructs a missing HTTP status, error token or duration from a broad old
 rejection reason. The existing publication-time migration is unchanged.
 Source-run predecessors retain their counts and recorded completion proof.
