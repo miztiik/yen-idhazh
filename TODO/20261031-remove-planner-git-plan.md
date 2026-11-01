@@ -18,10 +18,10 @@ Table A
 | A7 | Removed guarantee and cost | Readers no longer independently prove that local files match an arbitrary Git commit or reject a file solely because it is untracked. The initial checkout or explicit caller input directory is the input authority. Later remote commits are not adopted during the run. Initial checkout acquires more saved data up front. |
 | A8 | Identity | Use the initial checkout's `GITHUB_SHA`, validated with `CommitShaSchema`, or the existing explicitly supplied runtime identity. Missing or invalid identity fails before writes. Do not query `HEAD`, invent a revision or add identity to public plan controls. |
 | A9 | External prerequisite | Deliver the outcome titled `Remove planner SQLite and add failure-only raw-document output` in `TODO/20261031-planner-sqlite-removal-plan.md` before editing overlapping execution-state code. Preserve that work; do not reopen SQLite removal or restore delivery-only checksums. |
-| A10 | Execution | Author-and-stop. Implementation starts only when execution is requested. Parallel N = 1 because the deliveries share history helpers, documentation and workflow integration. |
+| A10 | Execution | Implement one outcome per nested PR. Parallel N = 1 because the deliveries share history helpers, documentation and workflow integration. |
 | A11 | Escalation | Stop before changing `CLAUDE.md`, another ledger family's formats or execution rules, history rewriting, source permissions, required collection scope, retention policy, configured limits, or adding a persisted input store. Surface any caller that still needs arbitrary-revision reads or saved-request recovery. |
 
-Execute per docs/how-to/execute-a-plan.md: one maintainer carries the plan; keep parallel N = 1 because the deliveries share inputs and documentation; honor the escalation triggers in section 0. AUTHOR-AND-STOP until execution is requested.
+Execute per docs/how-to/execute-a-plan.md: one maintainer carries the plan; keep parallel N = 1 because the deliveries share inputs and documentation; honor the escalation triggers in section 0.
 
 Table B
 
@@ -38,7 +38,7 @@ Table C
 
 | ID | Row | Title | Depends-on | Parallel-group | Status | Worktree | PR | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| C1 | 1 | Make planner execution use fixed file-loaded evidence | - | A | PENDING | - | - | - |
+| C1 | 1 | Make planner execution use fixed file-loaded evidence | - | A | DONE | musical-doodle | - | Planner file inputs |
 | C2 | 2 | Restrict acquisition and maintenance Git to delivery boundaries | 1 | B | PENDING | - | - | - |
 
 ## 2 - Input and contract changes
@@ -95,7 +95,6 @@ Table E
   - `services/feed-ingest-plan/src/select-articles.ts`
   - `services/feed-ingest-plan/scripts/feed-ingest-plan-workflow-inputs.ts`
   - `services/feed-ingest-plan/scripts/feed-ingest-plan-history.ts`
-  - `services/feed-ingest-plan/scripts/feed-ingest-plan-feed-history.ts`
   - `services/feed-ingest-plan/test/plan-recordings.ts`
   - `services/feed-ingest-plan/test/publication-recordings.ts`
   - `services/feed-ingest-plan/test/raw-day-members.test.ts`
@@ -149,7 +148,6 @@ Table G
   - `.github/workflows/idhazh-gardener.yml` (planner input acquisition and redundant setup only; not history rewriting)
   - `config/feed-ingest-plan-service.json`
   - `services/feed-ingest-plan/scripts/feed-ingest-plan-history.ts` (delete after its useful file logic moved)
-  - `services/feed-ingest-plan/scripts/feed-ingest-plan-feed-history.ts` (delete after its useful file logic moved)
   - `services/feed-ingest-plan/scripts/feed-ingest-plan-outputs.ts`
   - `services/feed-ingest-plan/scripts/feed-ingest-plan-workflow-inputs.ts`
   - `services/feed-ingest-plan/scripts/feed-ingest-plan-current-files.ts`

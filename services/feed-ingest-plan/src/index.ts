@@ -1,5 +1,6 @@
 /** Route an awaited one-shot CLI or the operator HTTP listener. */
 import { fileURLToPath } from "node:url";
+import { CommitShaSchema } from "@idhazh/common-contracts";
 import { loadPlanInputs } from "./load-plan-inputs";
 import type { PlanInputs } from "./load-plan-inputs";
 import { parseCliRequest, describePlanError } from "./api/plan-request";
@@ -15,13 +16,11 @@ export async function main(args: readonly string[], options: {
   const inputs = options.inputs ?? await loadPlanInputs(fileURLToPath(new URL("../../../", import.meta.url)));
   let runtime = options.runtime;
   if (runtime === undefined) {
-    const git = Bun.spawn(["git", "--no-pager", "rev-parse", "HEAD"], {
-      cwd: inputs.root, stdout: "pipe", stderr: "pipe",
-    });
-    const git_sha = (await new Response(git.stdout).text()).trim();
-    if (await git.exited !== 0) throw new Error("git_sha: git could not resolve the checkout commit");
-    runtime = { git_sha };
+    const identity = CommitShaSchema.safeParse(process.env.GITHUB_SHA);
+    if (!identity.success) throw new Error("GITHUB_SHA: a valid checkout commit or supplied runtime identity is required");
+    runtime = { git_sha: identity.data };
   }
+  CommitShaSchema.parse(runtime.git_sha);
   if (mode === "serve") return servePlan(inputs, runtime);
   const plan = await runFeedPlan(request, inputs, runtime);
   const result = summarizePlan(plan);

@@ -98,6 +98,7 @@ test("public request errors retain their fields without exposing checkout paths"
     expect(describePlanError(error)).toMatchObject({
       code: "INVALID_REQUEST", issues: [{ field: "freshness_hours" }],
     });
+
   }
   const failure = describePlanError(Object.assign(new Error(`Cannot write ${join(root, "state", "blocked")}`), {
     path: join(root, "state", "blocked"),
@@ -105,4 +106,23 @@ test("public request errors retain their fields without exposing checkout paths"
   expect(failure.code).toBe("PLAN_FAILED");
   expect(failure.issues[0]!.field).toBe("state/blocked");
   expect(JSON.stringify(failure)).not.toContain(root);
+});
+
+test("standalone startup refuses missing or invalid supplied code identity with Git unavailable", async () => {
+  for (const identity of [undefined, "not-a-commit"]) {
+    const environment: Record<string, string | undefined> = { ...process.env, PATH: "", Path: "" };
+    if (identity === undefined) delete environment.GITHUB_SHA;
+    else environment.GITHUB_SHA = identity;
+    const child = Bun.spawn([process.execPath, fileURLToPath(new URL("../src/index.ts", import.meta.url)), "--cli"], {
+      cwd: root, env: environment, stdout: "pipe", stderr: "pipe",
+    });
+    const [output, error, status] = await Promise.all([
+      new Response(child.stdout).text(), new Response(child.stderr).text(), child.exited,
+    ]);
+    expect(status).toBe(1);
+    expect(output).toBe("");
+    expect(JSON.parse(error.trim())).toMatchObject({
+      event: "planner_error", issues: [expect.objectContaining({ message: expect.stringContaining("GITHUB_SHA") })],
+    });
+  }
 });

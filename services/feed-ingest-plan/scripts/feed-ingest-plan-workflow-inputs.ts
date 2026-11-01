@@ -2,7 +2,7 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
-import { PositiveCountSchema } from "@idhazh/common-contracts";
+import { CommitShaSchema, PositiveCountSchema } from "@idhazh/common-contracts";
 import { loadPlanInputs } from "../src/load-plan-inputs";
 import { parseCliRequest } from "../src/api/plan-request";
 import { parseAgeWindows, resolveRunPolicy, RunPolicyOverridesSchema } from "../src/config/resolve-run-policy";
@@ -41,6 +41,7 @@ export async function preparePlannerWorkflow(root: string, environment: Record<s
     : parseRawDocumentDumpControl(environment.DUMP_RAW_DOCUMENT_CONTENTS);
   const { RUNNER_TEMP, GITHUB_OUTPUT, GITHUB_RUN_ID, GITHUB_RUN_ATTEMPT } = environment;
   if (!RUNNER_TEMP || !GITHUB_OUTPUT || !GITHUB_RUN_ID || !GITHUB_RUN_ATTEMPT) throw new Error("Workflow execution controls are missing");
+  const gitSha = CommitShaSchema.parse(environment.GITHUB_SHA);
   const directory = join(RUNNER_TEMP, "feed-ingest-plan");
   const inputs = await loadPlanInputs(root);
   inputs.harvest = { ...inputs.harvest, config: resolveRunPolicy(inputs.harvest.config, policyOverrides) };
@@ -53,9 +54,6 @@ export async function preparePlannerWorkflow(root: string, environment: Record<s
       feed_health_input_gap: staged.feed_health_input_gap },
   });
   inputs.outputRoot = join(directory, "state");
-  const git = Bun.spawn(["git", "rev-parse", "HEAD"], { cwd: root, stdout: "pipe", stderr: "pipe" });
-  const [gitSha] = await Promise.all([new Response(git.stdout).text(), new Response(git.stderr).text()]);
-  if (await git.exited !== 0) throw new Error("Code identity could not be read");
   const captured = new Date();
   const correlationId = randomUUID();
   await mkdir(directory, { recursive: true });
@@ -65,7 +63,7 @@ export async function preparePlannerWorkflow(root: string, environment: Record<s
   })));
   console.error(JSON.stringify({ event: "planner_history_staged", notices: staged.notices }));
   const identity = { run_id: `${captured.toISOString().slice(0, 10)}-${GITHUB_RUN_ID}`,
-    attempt, git_sha: gitSha.trim() };
+    attempt, git_sha: gitSha };
   const registryPath = join(root, inputs.settings.inputs.registrations);
   const registrations = await readMetadataRegistrations(registryPath);
   const host = await captureWorkflowHostFingerprint({

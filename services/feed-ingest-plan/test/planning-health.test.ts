@@ -1,21 +1,22 @@
 /** Reuse real saved Parquet calculations and recover only the calculation that is absent. */
 import { expect, test } from "bun:test";
-import { join } from "node:path";
-import { readFile, writeFile } from "node:fs/promises";
+import { dirname, join } from "node:path";
+import { mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { z } from "zod";
 import { randomUUID } from "node:crypto";
-import { FeedHealthStateRowContract, FeedHealthStateRowSchema } from "@idhazh/common-contracts";
+import { COMPACT_INDEX_VERSION, CompactIndexSchema, FeedHealthStateRowContract, FeedHealthStateRowSchema } from "@idhazh/common-contracts";
 import type { FeedHealthReliability } from "@idhazh/common-contracts";
 import { healthFieldFixture, rewriteHealthFields } from "./health-field-fixtures";
 import { recordedPlan } from "./plan-recordings";
 import { preparePlanningHealth } from "../src/api/prepare-planning-health";
+import { readPlanningHistory, readRunHistory } from "../src/read-ledger-history/read-run-history";
 import { recordFeedHealthState } from "../src/api/feed-health-state-operation";
 import { resolveRunContext } from "../src/resolve-run-context";
 import { inputEndpointKey } from "../src/read-ledger-history/health-summary";
 import { sourceSnapshot } from "../src/harvest-feeds/load-harvest-inputs";
 import { createFeedHealthRow } from "../src/health-row";
 import { readPlannerParquet } from "../src/read-ledger-history/read-planner-parquet";
-import { writeRows } from "./partition-fixtures";
+import { compactRows, writeRows } from "./partition-fixtures";
 
 const schema = z.object(FeedHealthStateRowSchema.shape);
 async function recording() {
@@ -75,7 +76,8 @@ test("carried reliability reuses the requested saved window even when the availa
       reliability: { productive: 0, attempted: 0, success_fraction: null, production_factor: null,
         from_day: "2026-10-30", through_day: "2026-10-31", complete: true },
     });
-    const snapshots = [...read.uses.feed_reliability.rows, ...read.uses.feed_reliability.partial_rows];
+    const snapshots = [...read.uses.feed_reliability.rows, ...read.uses.feed_reliability.partial_rows]
+      .filter(row => row.date !== undefined && row.date >= older.day);
     expect(snapshots).toHaveLength(2);
     expect(snapshots.every(row => row.checked_at === null && row.check_request_id === null)).toBe(true);
     const carried = await writeCarriedSummary(setup, "2026-11-01", "9102", {
@@ -158,14 +160,57 @@ test("one run retains its captured input while a later independent run reads cha
   const setup = await recording();
   try {
     const context = resolveRunContext(setup.inputs.settings, setup.runtime.git_sha, new Date(setup.now), "701");
-    const first = await preparePlanningHealth(setup.inputs, setup.now, { context, rows: [] });
+    const baseline = await readPlanningHistory(setup.inputs, setup.now, { context, rows: [] });
+    const first = await preparePlanningHealth(setup.inputs, setup.now, { context, rows: [] }, baseline);
     const changed = { ...setup.row, reliability: { ...setup.row.reliability!, productive: 3, success_fraction: 0.6, production_factor: 0.6 } };
     await rewriteHealthFields(setup.path, [changed], schema);
-    expect((await preparePlanningHealth(setup.inputs, setup.now, { context, rows: [] })).sources)
+    expect((await preparePlanningHealth(setup.inputs, setup.now, { context, rows: [] }, baseline)).sources)
       .toEqual(first.sources);
     const next = resolveRunContext(setup.inputs.settings, setup.runtime.git_sha, new Date(setup.now), "702");
-    expect((await preparePlanningHealth(setup.inputs, setup.now, { context: next, rows: [] })).sources.get(setup.row.feed_id)?.reliability)
+    const nextBaseline = await readPlanningHistory(setup.inputs, setup.now, { context: next, rows: [] });
+    expect((await preparePlanningHealth(setup.inputs, setup.now, { context: next, rows: [] }, nextBaseline)).sources.get(setup.row.feed_id)?.reliability)
       .toMatchObject({ productive: 3, attempted: 5, success_fraction: 0.6 });
+  } finally { await setup.close(); }
+});
+
+test("a declared missing compact period stays partial without discarding raw siblings or healing a live capture", async () => {
+  const setup = await recording();
+  try {
+    const compact = await compactRows(setup.inputs.outputRoot, "feed-health-state", setup.row.date,
+      FeedHealthStateRowContract, [setup.row], "monthly");
+    const indexPath = join(setup.inputs.outputRoot, "compact", "feed-ingest-plan", "feed-health-state", "index", "monthly.json");
+    await mkdir(dirname(indexPath), { recursive: true });
+    await writeFile(indexPath, JSON.stringify(CompactIndexSchema.parse({
+      version: COMPACT_INDEX_VERSION, ledger: "feed-health-state", period: "monthly",
+      entries: [{ covers: setup.row.date.slice(0, 7), state: "packed", rows: 1, bytes: (await stat(compact.path!)).size }],
+    })));
+    await rm(compact.path!);
+    const context = resolveRunContext(setup.inputs.settings, setup.runtime.git_sha, new Date(setup.now), "704");
+    const baseline = await readRunHistory(setup.inputs, context);
+    expect(baseline.health.days).toContainEqual({ day: setup.now.slice(0, 10), complete: false });
+    expect(baseline.health.uses.feed_rest.rows).toContainEqual(expect.objectContaining({ feed_id: setup.row.feed_id }));
+    expect(baseline.requests.request_days.every(day => !day.complete)).toBe(true);
+    const original = structuredClone(baseline);
+    await compactRows(setup.inputs.outputRoot, "feed-health-state", setup.row.date,
+      FeedHealthStateRowContract, [setup.row], "monthly");
+    await preparePlanningHealth(setup.inputs, setup.now, { context, rows: [] }, baseline.health);
+    expect(baseline).toEqual(original);
+    const next = resolveRunContext(setup.inputs.settings, setup.runtime.git_sha, new Date(setup.now), "705");
+    const fresh = await readRunHistory(setup.inputs, next);
+    expect(fresh.health.days.every(day => day.complete)).toBe(true);
+  } finally { await setup.close(); }
+});
+
+test("a missing configured health member records a gap while a valid sibling still supplies its supported deadline", async () => {
+  const setup = await recording();
+  try {
+    setup.inputs.settings.inputs.feed_health_days[0]!.raw_files!.push(
+      `state/raw/feed-ingest-plan/feed-health-state/${setup.row.date.replaceAll("-", "/")}/01a1592e-c600-84d0-96e4-7bb01708ce01.parquet`,
+    );
+    const read = await preparePlanningHealth(setup.inputs, setup.now);
+    expect(read.days[0]!.complete).toBe(false);
+    expect(read.sources.get(setup.row.feed_id)?.availability_updated_at).toBe(setup.row.availability_updated_at);
+    expect(read.sources.get(setup.row.feed_id)?.availability_complete).toBe(true);
   } finally { await setup.close(); }
 });
 
@@ -176,17 +221,19 @@ test("a recovered calculation is reused across API calls after its original fact
     await rewriteHealthFields(setup.path, [variant.parse(setup.row)], variant);
     const now = `${setup.row.date}T12:00:00.000Z`;
     const context = resolveRunContext(setup.inputs.settings, setup.runtime.git_sha, new Date(now), "800");
-    const captured = await preparePlanningHealth(setup.inputs, now, { context, rows: [] });
+    const baseline = await readPlanningHistory(setup.inputs, now, { context, rows: [] });
+    const captured = await preparePlanningHealth(setup.inputs, now, { context, rows: [] }, baseline);
     expect(captured.sources.get(setup.row.feed_id)).toMatchObject({ strikes: 0, reliability: { productive: 1, attempted: 1 } });
-    captured.uses.feed_rest.rows.length = 0;
-    captured.uses.feed_rest.partial_rows.length = 0;
-    captured.uses.feed_reliability.rows.length = 0;
-    captured.uses.feed_reliability.partial_rows.length = 0;
+    const withoutFacts = structuredClone(baseline);
+    withoutFacts.uses.feed_rest.rows.length = 0;
+    withoutFacts.uses.feed_rest.partial_rows.length = 0;
+    withoutFacts.uses.feed_reliability.rows.length = 0;
+    withoutFacts.uses.feed_reliability.partial_rows.length = 0;
     const current = FeedHealthStateRowSchema.parse({
       ...setup.row, run_id: context.run_id, check_request_id: randomUUID(), checked_at: now,
       check_result: "confirmed-http-failure", status: 503, outcome: "transient", items: 0,
     });
-    const updated = await preparePlanningHealth(setup.inputs, now, { context, rows: [current] });
+    const updated = await preparePlanningHealth(setup.inputs, now, { context, rows: [current] }, withoutFacts);
     expect(updated.sources.get(setup.row.feed_id)).toMatchObject({
       strikes: 1, availability_complete: true, first_confirmed_failure_at: now,
       reliability: { productive: 1, attempted: 2, success_fraction: 0.5 },
@@ -198,7 +245,8 @@ test("finalized carry-forward Parquet reloads supported calculations without cla
   const setup = await recording();
   try {
     const context = resolveRunContext(setup.inputs.settings, setup.runtime.git_sha, new Date(setup.now), "703");
-    const history = await preparePlanningHealth(setup.inputs, setup.now, { context, rows: [] });
+    const baseline = await readPlanningHistory(setup.inputs, setup.now, { context, rows: [] });
+    const history = await preparePlanningHealth(setup.inputs, setup.now, { context, rows: [] }, baseline);
     const source = sourceSnapshot(setup.inputs.harvest, setup.inputs.harvest.sources[0]!);
     const carry = createFeedHealthRow(context, source, history.sources.get(source.feed_id), setup.now);
     const written = await recordFeedHealthState([carry], context, setup.inputs);
@@ -211,6 +259,7 @@ test("finalized carry-forward Parquet reloads supported calculations without cla
     const fresh = { ...setup.inputs, settings: { ...setup.inputs.settings, inputs: {
       ...setup.inputs.settings.inputs, feed_health_days: [{ day: context.date, raw_files: [`state/${written.files[0]!.path}`] }],
     } } };
+    await rm(setup.path);
     const reloaded = await preparePlanningHealth(fresh, setup.now);
     // The stored measurement still covers its original day, not the carry-forward work day.
     expect(reloaded.sources.get(source.feed_id)?.availability_updated_at).toBe(setup.row.availability_updated_at);

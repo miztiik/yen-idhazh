@@ -1,12 +1,12 @@
 /** First-use failures enter real timed recovery without fabricating successful history. */
 import { expect, test } from "bun:test";
 import { join } from "node:path";
+import { existsSync } from "node:fs";
 import { FeedHealthStateRowContract } from "@idhazh/common-contracts";
 import type { FeedHealthStateRow } from "@idhazh/common-contracts";
 import { readPlannerParquet } from "@idhazh/ledger-file-writer";
 import { recordedPlan } from "./plan-recordings";
 import { runFeedPlan } from "../src/run-feed-plan";
-import { fixtureGit } from "./publication-recordings";
 
 test("fresh HTTP runs reload observed partial failure counts through rest and confirmed recovery retirement", async () => {
   const fixture = await recordedPlan();
@@ -16,7 +16,7 @@ test("fresh HTTP runs reload observed partial failure counts through rest and co
   let latest: { day: string; raw_files: string[] }[] = [];
   let run = 900;
   let last: FeedHealthStateRow | undefined;
-  const initialHead = await fixtureGit(fixture.directory, ["rev-parse", "HEAD"]);
+  expect(existsSync(join(fixture.directory, ".git"))).toBe(false);
   const initial = Date.parse("2026-10-21T00:00:00.000Z");
   async function attempt(hours: number) {
     const now = new Date(initial + hours * 3_600_000);
@@ -56,7 +56,7 @@ test("fresh HTTP runs reload observed partial failure counts through rest and co
       expect(row.retired_at).toBe(count === settings.failed_recovery_checks_before_retirement ? row.checked_at : null);
     }
     expect(last).toMatchObject({ availability: "retired", retirement_reason: "confirmed-recovery-failures", rest_until: null });
-    expect(await fixtureGit(fixture.directory, ["rev-parse", "HEAD"])).toBe(initialHead);
+    expect(existsSync(join(fixture.directory, ".git"))).toBe(false);
   } finally { await fixture.close(); }
 }, 120_000);
 

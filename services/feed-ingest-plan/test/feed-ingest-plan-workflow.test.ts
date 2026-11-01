@@ -17,11 +17,62 @@ import { readPlannerParquet } from "../src/read-ledger-history/read-planner-parq
 import { LedgerHistoryReadError } from "../src/read-ledger-history/ledger-history-error";
 import { requiredUtcDays } from "../src/utc-instant";
 import { createPlannerHistoryInputs } from "../scripts/feed-ingest-plan-history";
-import { stageFeedHistory } from "../scripts/feed-ingest-plan-feed-history";
+import { stagePlannerHistory } from "../scripts/feed-ingest-plan-history";
+import { resolveHealthDays } from "../src/read-ledger-history/resolve-health-days";
 import { preparePlannerWorkflow, readWorkflowRequest } from "../scripts/feed-ingest-plan-workflow-inputs";
 import { completeHistoryDayInputs, historyIndexPaths, resolveHistoryInventory, sparseCheckoutPath } from "../scripts/feed-ingest-plan-outputs";
+import { loadPlanInputs } from "../src/load-plan-inputs";
+import { fixtureGit } from "./publication-recordings";
 
 const root = fileURLToPath(new URL("../../../", import.meta.url));
+
+test("existing acquisition stages selected linkage and complete file-only health inputs before startup", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "planner-acquisition-"));
+  try {
+    const producer = join(directory, "producer");
+    const consumer = join(directory, "consumer");
+    const origin = join(directory, "origin.git");
+    await mkdir(producer);
+    await fixtureGit(producer, ["init", "--initial-branch=main"]);
+    await writeFile(join(producer, "README.md"), "Generated planner input authority.\n");
+    await fixtureGit(producer, ["add", "--", "README.md"]);
+    await fixtureGit(producer, ["commit", "-m", "Create generated planner checkout"]);
+    await fixtureGit(directory, ["init", "--bare", "--initial-branch=main", origin]);
+    await fixtureGit(producer, ["remote", "add", "origin", origin]);
+    await fixtureGit(producer, ["push", "origin", "HEAD:refs/heads/main"]);
+    await fixtureGit(directory, ["clone", "--quiet", origin, consumer]);
+    const original = await fixtureGit(consumer, ["rev-parse", "HEAD"]);
+    await fixtureGit(consumer, ["sparse-checkout", "set", "--no-cone", "/README.md"]);
+    const inputs = await loadPlanInputs(root);
+    const day = "2026-10-20";
+    const paths: string[] = [];
+    for (const record of plannerRecordings(day).filter(record =>
+      ["discovered-articles", "selected-articles", "feed-health-state"].includes(record.name))) {
+      const entry = Object.values(inputs.registrations).find(entry => entry.name === record.name)!;
+      const written = await persistLedger({
+        ledger: record.name, registryEntry: entry, outputRoot: join(producer, "state"),
+        ledgerSettings: inputs.ledgerSettings, rowContract: record.contract,
+        rows: [record.row], period: { tier: "raw", covers: day },
+        ...(record.name === "feed-health-state" ? { updatedAt: `${day}T23:59:59.123Z` } : {}),
+      });
+      paths.push(...written.files.map(file => `state/${file.path}`));
+    }
+    await fixtureGit(producer, ["add", "--", ...paths]);
+    await fixtureGit(producer, ["commit", "-m", "Record generated planner input files"]);
+    await fixtureGit(producer, ["push", "origin", "HEAD:refs/heads/main"]);
+    inputs.harvest.config.discovered_articles.lookback_days = 0;
+    inputs.clock_config.collect.published_window_days = 0;
+    inputs.clock_config.collect.reliability_window_days = 1;
+    inputs.harvest.config.feedback.lifecycle_window_days = 1;
+    const staged = await stagePlannerHistory(consumer, inputs, `${day}T12:00:00Z`);
+    expect(staged.feed_health_days).toEqual([{
+      day, raw_files: paths.filter(path => path.includes("/feed-health-state/")),
+    }]);
+    for (const path of paths) expect(await readFile(join(consumer, path))).toEqual(await readFile(join(producer, path)));
+    expect(await fixtureGit(consumer, ["rev-parse", "HEAD"])).toBe(original);
+  } finally { await rm(directory, { recursive: true, force: true }); }
+});
+
 const StepSchema = z.object({
   id: z.string().optional(), name: z.string().optional(), run: z.string().optional(), uses: z.string().optional(),
   if: z.string().optional(), "continue-on-error": z.boolean().optional(),
@@ -156,7 +207,6 @@ test("manual controls exercise the planner API and keep only required outputs", 
 });
 
 test("planner history removes staging indexes before strict configuration validation", async () => {
-  const revision = "a".repeat(40);
   const history = createPlannerHistoryInputs([{
     day: "2026-10-27",
     indexes: {
@@ -165,11 +215,10 @@ test("planner history removes staging indexes before strict configuration valida
       daily: "state/compact/feed-ingest-plan/feed-health-state/index/daily.json",
     },
     raw_files: ["state/raw/feed-ingest-plan/feed-health-state/2026/10/27/01a17c6e-7acc-834f-a173-7b12dbfa240d.parquet"],
-  }], revision);
+  }]);
   expect(history).toEqual([{
     day: "2026-10-27",
     raw_files: ["state/raw/feed-ingest-plan/feed-health-state/2026/10/27/01a17c6e-7acc-834f-a173-7b12dbfa240d.parquet"],
-    raw_revision: revision,
   }]);
   const settings = ServiceSettingsSchema.parse(await Bun.file(join(root, "config", "feed-ingest-plan-service.json")).json());
   expect(ServiceSettingsSchema.parse({
@@ -225,7 +274,7 @@ test("bounded discovery history preserves covered-day membership and planner raw
     }
     await mkdir(join(directory, "frontend", "public"), { recursive: true });
     await writeFile(join(directory, "frontend", "public", "publication.json"), JSON.stringify({ version: PUBLICATION_INVENTORY_VERSION, entries }));
-    const stage = () => stageFeedHistory({
+    const stage = () => resolveHealthDays({
       ledger: "feed-health-state", prefix: registration.prefix, now: "2026-01-01T23:59:59Z",
       health_window_days: 2, request_report_closed_days: 7, period_limit: 3, authored: [],
       raw_files: async day => entries.filter(entry => entry.path.includes(`/${day.replaceAll("-", "/")}/`))
@@ -248,7 +297,7 @@ test("bounded discovery history preserves covered-day membership and planner raw
     const inertIndex = join(directory, "state", "raw", ...registration.prefix, "2026", "01", "01", "index.json");
     await writeFile(inertIndex, JSON.stringify({ invalid: true }));
     expect((await stage()).notices).not.toContain("health_index_refused:2026-01-01");
-    await expect(stageFeedHistory({
+    await expect(resolveHealthDays({
       ledger: "feed-health-state", prefix: registration.prefix, now: "2026-01-01T23:59:59Z",
       health_window_days: 2, request_report_closed_days: 7, period_limit: 3, authored: [],
       raw_files: async () => [],

@@ -1,6 +1,6 @@
 /** Keep one document chain's actual work and original clock isolated across concurrent requests. */
 import { FetchedDocumentSchema } from "@idhazh/common-contracts";
-import type { PlanApiTiming, CandidateRejectionRecord } from "@idhazh/common-contracts";
+import type { PlanApiTiming, CandidateRejectionRecord, DiscoveredArticleRow } from "@idhazh/common-contracts";
 import type { PlanInputs } from "../load-plan-inputs";
 import type { PlanRuntime } from "../run-feed-plan";
 import { createRunHealth } from "../run-health";
@@ -11,7 +11,8 @@ import { deriveArticleIdentity } from "../harvest-feeds/article-identity";
 import { deriveFeedIdentity } from "../harvest-feeds/feed-identity";
 import { PlanError } from "./plan-request";
 import { hashText } from "../hash-text";
-import { readExclusionEvidence } from "../read-ledger-history/read-exclusion-evidence";
+import { readRunHistory } from "../read-ledger-history/read-run-history";
+import type { RunHistory } from "../read-ledger-history/read-run-history";
 import { existsSync } from "node:fs";
 import { resolve } from "node:path";
 import { stageStore } from "./stage-store";
@@ -35,7 +36,8 @@ export type DocumentState = ExecutionStateBase & {
   work: ReturnType<typeof createRunHealth>; fetcher: ReturnType<typeof createPermittedFetcher>;
   config_sha256: string;
   fetch_request_ids: Set<string>;
-  exclusions: Promise<Awaited<ReturnType<typeof readExclusionEvidence>>> | null;
+  baseline: RunHistory;
+  discovered_rows: DiscoveredArticleRow[];
 };
 export type ExecutionState = DocumentState | (ExecutionStateBase & { kind: "plan" | "selection" | "partition" });
 const documents = new WeakMap<PlanInputs, Map<string, Promise<ExecutionState>>>();
@@ -49,8 +51,8 @@ function statesForExecution(inputs: PlanInputs, runId: string) {
   while (states.size >= inputs.settings.listener.max_stage_batches && !states.has(runId)) {
     const expired = [...states.keys()].find(id => !stageStore(inputs).isRunActive(id));
     if (expired === undefined) throw new PlanError("REQUEST_BUSY", "Run capacity is occupied by active work");
+    stageStore(inputs).forgetRun(expired);
     states.delete(expired);
-    stageStore(inputs).forgetDocumentWork(expired);
   }
   return states;
 }
@@ -91,14 +93,15 @@ export async function documentState(record: DocumentOperationContext, inputs: Pl
       const started = performance.now();
       const context = record.context;
       const historyStarted = performance.now();
-      const history = await preparePlanningHealth(inputs, context.now, { context, rows: [] });
+      const baseline = await readRunHistory(inputs, context);
+      const history = await preparePlanningHealth(inputs, context.now, { context, rows: [] }, baseline.health);
       return {
         kind: "document", context, history, work: createRunHealth(context,
           inputs.harvest.sources.map(source => sourceSnapshot(inputs.harvest, source)), history.sources,
           { ...inputs.harvest.config.triage, tidy_urls: inputs.harvest.config.harvest.tidy_urls,
             clock: runtime.observation_clock ?? (() => new Date()) }),
         fetcher: createPermittedFetcher(inputs.harvest.config.harvest, inputs.harvest.extraction, runtime.boundary, runtime.observation_clock),
-        config_sha256: record.config_sha256, fetch_request_ids: new Set<string>(), exclusions: null, started,
+        config_sha256: record.config_sha256, fetch_request_ids: new Set<string>(), baseline, discovered_rows: [], started,
         api_timings: [{ operation: "feed-health-before-fetch", duration_ms: Math.round(performance.now() - historyStarted), status: "completed" }],
         health_written: false, health_fingerprint: null, owns_choice: false,
       };
@@ -120,14 +123,20 @@ export async function readDocumentHealthBatch(batchId: string, inputs: PlanInput
   if (state.kind !== "document") throw new PlanError("ARTIFACT_INVALID", "Document work belongs to a different execution", "batch_id");
   return state;
 }
-export function documentExclusions(state: DocumentState, inputs: PlanInputs) {
-  state.exclusions ??= readExclusionEvidence({
-    root: inputs.root, now: state.context.now, publishedWindowDays: inputs.clock_config.collect.published_window_days,
-    settledFailureCodes: inputs.clock_config.collect.settled_failure_codes, publishedRegistration: inputs.registrations.published,
-    itemHealthRegistration: inputs.registrations.item_health, publishedDays: inputs.settings.inputs.published_days,
-    settledFailureDays: inputs.settings.inputs.settled_failure_days, concurrency: inputs.harvest.config.harvest.concurrency,
-  });
-  return state.exclusions;
+export function documentExclusions(state: DocumentState) {
+  return capturedExclusions(state.baseline, state.context.now);
+}
+export function capturedExclusions(baseline: RunHistory, now: string) {
+  const held = baseline.exclusions.get(now.slice(0, 10));
+  if (held === undefined) throw new PlanError("HISTORY_WINDOW_UNAVAILABLE", "Exclusions lie outside the captured UTC days", "batch_id");
+  return held;
+}
+export async function requireDocumentState(inputs: PlanInputs, context: RunContext) {
+  const state = await currentExecutionState(inputs, context.run_id);
+  if (state?.kind !== "document" || state.context.writer.attempt !== context.writer.attempt) {
+    throw new PlanError("ARTIFACT_NOT_FOUND", "Stage has no live captured input", "batch_id");
+  }
+  return state;
 }
 export async function appendDocumentTiming(inputs: PlanInputs, runId: string, timing: PlanApiTiming, scope: "document" | "plan" = "document") {
   const pending = documents.get(inputs)?.get(runId);

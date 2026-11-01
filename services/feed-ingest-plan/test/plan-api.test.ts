@@ -120,8 +120,8 @@ test("one listener isolates concurrent live work with output outside the checkou
   try {
     const url = `http://127.0.0.1:${server.port}${prefix}`;
     const first = fetch(`${url}/plan`, json({ article_limit: 2 }));
-    await parsing;
     const second = fetch(`${url}/plan`, json({ article_limit: 1 }));
+    await parsing;
     expect((await fetch(`${url}/health`)).status).toBe(200);
     expect(activeParsers).toBeGreaterThan(0);
     const independent = await fetch(`${url}/fetch`, json({

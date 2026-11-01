@@ -36,7 +36,7 @@ test("concurrent snapshots each apply actual work once; late publication preserv
       return {
         inputs: { ...fixture.inputs, settings: { ...fixture.inputs.settings, inputs: {
           ...fixture.inputs.settings.inputs, feed_health_days: [{
-            day, raw_revision: head, raw_files: saved.files.map(file => `state/${file.path}`),
+            day, raw_files: saved.files.map(file => `state/${file.path}`),
           }],
         } } },
         runtime: { ...fixture.runtime, git_sha: head, run_number: String(run),

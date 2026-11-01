@@ -92,7 +92,7 @@ export async function fetchDocument(
     if (status === "resting") throw new PlanError("FEED_RESTING", "Feed is resting until its supported UTC recovery deadline", "feed_id");
   }
   if (request.fetch_item_type === "article") {
-    const exclusions = await documentExclusions(state, inputs);
+    const exclusions = documentExclusions(state);
     const offered = parent?.offer ?? { source: sourceSnapshot(inputs.harvest, source), entry: {
       entry_ordinal: 0, title: null, link: url, categories: [], author: null, published_at: null, media_types: [],
     } };

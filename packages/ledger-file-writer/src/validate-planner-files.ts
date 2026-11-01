@@ -1,6 +1,4 @@
 /** Validate named planner files with their current TypeScript row contracts. */
-import { lstat, realpath } from "node:fs/promises";
-import { resolve } from "node:path";
 import { z } from "zod";
 import {
   PLANNER_FILE_VALIDATION_VERSION,
@@ -13,6 +11,7 @@ import type {
 } from "@idhazh/common-contracts";
 import { PLANNER_CONTRACTS } from "./registration";
 import { PlannerLedgerFileError, readPlannerParquet } from "./read-planner-file";
+import { regularPlannerPath } from "./read-planner-day-files";
 
 function isMissing(error: unknown): boolean {
   return error instanceof Error && "code" in error && error.code === "ENOENT";
@@ -33,22 +32,8 @@ function readPlannerFile(path: string, ledger: PlannerFileValidationRequest["fil
   }
 }
 
-async function assertRegularFile(root: string, path: string): Promise<string> {
-  const segments = path.split("/");
-  let current = await realpath(root);
-  for (const [index, segment] of segments.entries()) {
-    current = resolve(current, segment);
-    const info = await lstat(current);
-    const final = index === segments.length - 1;
-    if (info.isSymbolicLink() || (final ? !info.isFile() : !info.isDirectory())) {
-      throw new PlannerLedgerFileError("Planner file path is not a regular file beneath the site tree");
-    }
-  }
-  return current;
-}
-
 export async function readNamedPlannerFile(root: string, path: string, ledger: PlannerFileValidationRequest["files"][number]["ledger"]) {
-  return readPlannerFile(await assertRegularFile(root, path), ledger);
+  return readPlannerFile(await regularPlannerPath(root, path), ledger);
 }
 
 export async function validatePlannerFiles(

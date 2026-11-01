@@ -1,6 +1,6 @@
 # Run the Gates
 
-**Last Updated**: 2026-10-28
+**Last Updated**: 2026-10-31
 Set up a machine, then run every check `CLAUDE.md` section 9 asks for before a
 merge. This page owns the project's actual gate commands; the neutral PR
 lifecycle that calls for them is
@@ -239,6 +239,19 @@ The shared selection lists affected surfaces; it does not execute Bun.
 The native package command supplies its declared timeout. Keep shorter
 process deadlines and existing independent failure checks; do not raise
 timeouts to retain repeated planning work.
+
+For planner file-input changes, also run the shared writer's `check` and
+`test/planner-day-files.test.ts`. Combine `file-baseline.test.ts`,
+`raw-day-members.test.ts`, `collection-http.test.ts`, `ledger-history.test.ts`,
+`history-window.test.ts`, `health-fields.test.ts`, `planning-health.test.ts`
+and `plan-cli.test.ts` in one service invocation. Add the actual changed
+callers' native cases to that selection. `file-baseline.test.ts` starts a real
+Bun child with Git unavailable, replays recorded source responses over the
+real local APIs, edits and adds historical native files after capture, and
+reads back selected metadata, selected text and health output. It also covers
+standalone capture and the next UTC day. Ordinary planner fixtures do not
+initialize a Git repository; Git fixtures belong to acquisition and delivery
+checks, not execution readers. Full merge-candidate CI remains authoritative.
 `plan-entry-points.test.ts` makes one successful request through the real
 supervised API child and one through the actual awaited CLI in a Bun child.
 Partitioning is enabled for the API and disabled for the CLI.

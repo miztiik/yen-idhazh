@@ -13,39 +13,64 @@ import { readRequestHistory } from "../read-ledger-history/read-request-history"
 import { createPlannerHistoryCache } from "../read-ledger-history/read-planner-history";
 import { healthHistoryInput, preparePlanningHealth } from "./prepare-planning-health";
 import type { CurrentHealthWork } from "./prepare-planning-health";
+import type { RunHistory } from "../read-ledger-history/read-run-history";
 import { captureHealthRows } from "../read-ledger-history/health-summary";
 import { FeedHealthStateUpdateRequestSchema } from "./feed-health-state.schema";
 import { stageStore } from "./stage-store";
 import { requireStageConfiguration } from "./selection-operation";
 import { utcTimestamp } from "../harvest-feeds/harvest-types";
 import { PlanError } from "./plan-request";
-import { currentExecutionState, readDocumentHealthBatch, rememberDocumentHealth } from "./document-state";
+import { currentExecutionState, readDocumentHealthBatch, rememberDocumentHealth, requireDocumentState } from "./document-state";
 import { plannerMemory } from "../planner-memory";
 import { summarizeFeedAvailability } from "../availability/feed-availability-view";
 import { projectLifecycleFields } from "../health-row";
 import { summarizeRequestReport } from "../read-ledger-history/request-summary";
 import { collectionForBatch } from "./collection-operation";
 import { snapshotCollectionBatch } from "./collection-batch";
+import { projectFeedHealthFields } from "../read-ledger-history/read-feed-health-fields";
 
-export async function prepareExecutionHealth(inputs: PlanInputs, now: string, current?: CurrentHealthWork) {
-  const planning = await preparePlanningHealth(inputs, now, current);
+export async function prepareExecutionHealth(inputs: PlanInputs, now: string, current?: CurrentHealthWork, baseline?: RunHistory) {
+  const captured = baseline ?? (current === undefined ? undefined : (await requireDocumentState(inputs, current.context)).baseline);
+  const planning = await preparePlanningHealth(inputs, now, current, captured?.health);
+  const requestFields = captured === undefined ? planning.uses.request_totals : currentRequestFields(captured, current);
   return { ...planning, request_report: summarizeRequestReport({
-    ...healthHistoryInput(inputs, now, current), ...planning.uses.request_totals,
-    days: planning.request_days, input_complete: !inputs.settings.inputs.feed_health_input_gap,
+    ...healthHistoryInput(inputs, now, current), ...requestFields,
+    days: captured?.requests.request_days ?? planning.request_days,
+    input_complete: !inputs.settings.inputs.feed_health_input_gap,
   }) };
+}
+
+function currentRequestFields(baseline: RunHistory, current?: CurrentHealthWork) {
+  const fields = structuredClone(baseline.requests.uses.request_totals);
+  const rows = current?.rows ?? [];
+  for (const day of new Set(rows.map(row => row.date))) {
+    const work = projectFeedHealthFields(day, rows.filter(row => row.date === day)).request_totals;
+    fields.rows.push(...work.rows);
+    fields.partial_rows.push(...work.partial_rows);
+    fields.gaps.push(...work.gaps);
+  }
+  return fields;
 }
 
 export async function prepareRequestReport(inputs: PlanInputs, now: string, current?: CurrentHealthWork,
   cache = createPlannerHistoryCache<Record<string, unknown>>()) {
+  if (current !== undefined) {
+    const baseline = (await requireDocumentState(inputs, current.context)).baseline;
+    return summarizeRequestReport({
+      ...healthHistoryInput(inputs, now, current), ...currentRequestFields(baseline, current),
+      days: baseline.requests.request_days, input_complete: !inputs.settings.inputs.feed_health_input_gap,
+    });
+  }
   const { request_report } = await readRequestHistory({
     ...healthHistoryInput(inputs, now, current), input_complete: !inputs.settings.inputs.feed_health_input_gap,
   }, cache);
   return request_report;
 }
 export async function prepareFeedHealthState(inputs: PlanInputs, now: string, current?: CurrentHealthWork) {
+  if (current !== undefined) return prepareExecutionHealth(inputs, now, current);
   const cache = createPlannerHistoryCache<Record<string, unknown>>();
   const [planning, request_report] = await Promise.all([
-    preparePlanningHealth(inputs, now, current, cache), prepareRequestReport(inputs, now, current, cache),
+    preparePlanningHealth(inputs, now), prepareRequestReport(inputs, now, undefined, cache),
   ]);
   return { ...planning, request_report };
 }

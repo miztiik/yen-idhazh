@@ -24,7 +24,7 @@ import { stageStore } from "./stage-store";
 import { createParsedFeedBatch, publicFeedOffers } from "./feed-offers";
 import { readFeedOffer, updateFeedOffer } from "./feed-offer-state";
 import { HarvestArticleResultSchema, utcTimestamp } from "../harvest-feeds/harvest-types";
-import { readDiscoveredEvidence, rememberDiscoveries } from "../read-ledger-history/read-discovered-evidence";
+import { foldDiscoveryHistory, rememberDiscoveries } from "../read-ledger-history/read-discovered-evidence";
 import { requiredUtcDays } from "../utc-instant";
 import { resolveArticleEvidence } from "../website-group";
 import { DiscoveredArticleRowSchema } from "@idhazh/common-contracts";
@@ -165,18 +165,14 @@ export async function parseFetchedDocument(
   if (offer !== undefined && artifact.parent_batch_id !== null) {
     batch = updateFeedOffer(inputs, state, artifact.parent_batch_id, offer.offer_id, candidate === null ? "rejected" : "parsed", fetched.request_id, result);
   } else {
-    const discovered = await readDiscoveredEvidence({
-      root: inputs.root, discovered_files: inputs.settings.inputs.discovered_files, discovered_days: inputs.settings.inputs.discovered_days,
-      registration: inputs.registrations.discovered_articles, now: state.context.now,
-      lookback_days: inputs.harvest.config.discovered_articles.lookback_days, concurrency: inputs.harvest.config.harvest.concurrency,
-      own_rows: plannerMemory(inputs).discoveries(), log: emit,
-    });
     const instant = utcTimestamp(runtime.observation_clock);
-    const saved = await rememberDiscoveries(discovered.rows, candidate === null ? [] : [
+    state.discovered_rows = foldDiscoveryHistory([...state.discovered_rows, ...candidate === null ? [] : [
       DiscoveredArticleRowSchema.parse({
       url_key: candidate.url_key, first_seen_at: instant, date: instant.slice(0, 10),
       }),
-    ], state.context, { outputRoot: inputs.outputRoot, registryEntry: inputs.registrations.discovered_articles, ledgerSettings: inputs.ledgerSettings });
+    ]]);
+    const saved = await rememberDiscoveries(state.baseline.discovered.rows, state.discovered_rows,
+      state.context, { outputRoot: inputs.outputRoot, registryEntry: inputs.registrations.discovered_articles, ledgerSettings: inputs.ledgerSettings });
     plannerMemory(inputs).rememberDiscoveries(saved.rows, requiredUtcDays(
       state.context.now, inputs.harvest.config.discovered_articles.lookback_days,
     )[0]!);

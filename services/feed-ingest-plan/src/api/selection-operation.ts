@@ -35,6 +35,9 @@ export async function executeSelection(raw: unknown, inputs: PlanInputs, runtime
   }
   if (collection !== undefined) parsed = snapshotCollectionBatch(inputs, collection, collection.pending_offers === 0);
   const original = await currentExecutionState(inputs, parsed.context.run_id);
+  if (original?.kind !== "document") {
+    throw new PlanError("ARTIFACT_NOT_FOUND", "Selection requires its live captured input", "batch_id");
+  }
   if (original?.kind === "document" && store.ownership(parsed.batch_id).health_fingerprint === null) {
     parsed = store.replace("parsed", ParsedFeedBatchSchema, {
       ...parsed, work_rows: original.work.rows(), exclusions: original.work.exclusions(),
@@ -45,7 +48,7 @@ export async function executeSelection(raw: unknown, inputs: PlanInputs, runtime
   const captured = (runtime.selection_clock ?? runtime.clock)?.() ?? new Date();
   const selectionStartedAt = utcTimestamp(() => captured);
   const claim = store.ownership(parsed.batch_id);
-  claim.scope = original?.kind === "plan" || (original?.kind === "document" && original.plan_owned) ? "plan" : claim.scope;
+  claim.scope = original.plan_owned ? "plan" : claim.scope;
   if (original?.health_fingerprint !== null && original?.health_fingerprint !== undefined) {
     claim.health_fingerprint = original.health_fingerprint;
   }
@@ -65,7 +68,8 @@ export async function executeSelection(raw: unknown, inputs: PlanInputs, runtime
   let healthDuration: number;
   let healthStatus: PlanApiTiming["status"] = "failed";
   try {
-    health = await prepareExecutionHealth(inputs, selectionStartedAt, { context: parsed.context, rows: parsed.work_rows });
+    health = await prepareExecutionHealth(inputs, selectionStartedAt,
+      { context: parsed.context, rows: parsed.work_rows }, original.baseline);
     healthStatus = "completed";
   } finally {
     healthDuration = Math.round(performance.now() - healthStarted);
@@ -73,7 +77,7 @@ export async function executeSelection(raw: unknown, inputs: PlanInputs, runtime
     recordHealthTiming?.(timing);
     await appendDocumentTiming(inputs, context.run_id, timing);
   }
-  const result = await selectArticles(parsed, inputs, selectionStartedAt, health, context);
+  const result = await selectArticles(parsed, inputs, selectionStartedAt, health, context, original.baseline);
   const batch = store.write("selected", SelectedFeedBatchSchema, {
     batch_id: randomUUID(), parsed_batch_id: parsed.batch_id, config_sha256: parsed.config_sha256,
     context, selection_started_at_utc: selectionStartedAt, evaluated_at: parsed.context.now, ...result,

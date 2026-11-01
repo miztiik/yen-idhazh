@@ -1,21 +1,19 @@
 /** Build a bounded real screening -> curation -> metadata write from recorded work sizes. */
 import { randomUUID } from "node:crypto";
-import { relative, resolve, join } from "node:path";
+import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
-  FeedIngestCandidateSchema, ParsedFeedBatchSchema, SelectedArticleRowContract,
+  FeedIngestCandidateSchema, ParsedFeedBatchSchema, PlannerLedgerNameSchema, SelectedArticleRowContract,
   WriterIdentitySchema, deriveCandidateId, deriveUrlKey, selectedArticleMetadata,
 } from "@idhazh/common-contracts";
 import type { WriterIdentity } from "@idhazh/common-contracts";
-import { persistLedger } from "@idhazh/ledger-file-writer";
+import { persistLedger, readPlannerParquet } from "@idhazh/ledger-file-writer";
 import type { LedgerRegistration, LedgerRowContract, LedgerSettings, PersistLedgerResult } from "@idhazh/ledger-file-writer";
 import { loadPlanningConfig } from "../src/config/resolve-policy";
 import { curateArticles } from "../src/curate-article-portfolio/editorial-selection";
 import { screenArticleCandidates } from "../src/screen-article-candidates/triage-gates";
-import { readPlannerDay } from "../src/read-ledger-history/read-planner-history";
 import { loadPlanInputs } from "../src/load-plan-inputs";
 import { resolveRunContext } from "../src/resolve-run-context";
-import { fixtureGit } from "./publication-recordings";
 
 export type HistoryFixture = {
   date: string; run_id: string; correlation_id: string; observed_at: string;
@@ -120,9 +118,12 @@ export async function readWritten<T extends object>(
   root: string, ledger: string, day: string, contract: LedgerRowContract<T>, written: PersistLedgerResult,
 ) {
   if (written.status === "skipped") throw new Error("Fixture ledger was skipped");
-  return readPlannerDay(root, registration(ledger), {
-    day, raw_files: written.files.map(file => join(root, file.path)),
-  }, contract);
+  const files = await Promise.all(written.files.map(file => readPlannerParquet(join(root, file.path),
+    PlannerLedgerNameSchema.parse(ledger), contract)));
+  if (files.some(file => file.envelope.ledger !== ledger || file.envelope.covers !== day)) {
+    throw new Error("Completed fixture output differs from its named ledger day");
+  }
+  return { rows: files.flatMap(file => file.rows) };
 }
 export async function writeRows<T extends object>(
   root: string, ledger: string, day: string, contract: LedgerRowContract<T>, rows: readonly T[],
@@ -135,21 +136,9 @@ export async function writeRows<T extends object>(
   });
 }
 
-export async function commitFixtureFiles(repositoryRoot: string, paths: readonly string[]) {
-  if (paths.length === 0) return;
-  try {
-    const top = await fixtureGit(repositoryRoot, ["rev-parse", "--show-toplevel"]);
-    if (resolve(top) !== resolve(repositoryRoot)) {
-      await fixtureGit(repositoryRoot, ["init", "--initial-branch=main"]);
-    }
-  } catch { await fixtureGit(repositoryRoot, ["init", "--initial-branch=main"]); }
-  await fixtureGit(repositoryRoot, ["add", "--", ...paths]);
-  await fixtureGit(repositoryRoot, ["commit", "--allow-empty", "-m", "Record planner fixture files"]);
-}
-
 export async function compactRows<T extends object>(
   root: string, ledger: string, day: string, contract: LedgerRowContract<T>, rows: readonly T[],
-  period: "daily" | "monthly" | "yearly", repositoryRoot = root,
+  period: "daily" | "monthly" | "yearly",
 ) {
   const covers = day.slice(0, period === "daily" ? 10 : period === "monthly" ? 7 : 4);
   const written = await persistLedger({
@@ -158,9 +147,5 @@ export async function compactRows<T extends object>(
     ...(ledger === "feed-health-state" ? { updatedAt: `${day}T23:59:59.123Z` } : {}),
   });
   const file = written.files[0];
-  if (file !== undefined) {
-    const path = relative(repositoryRoot, join(root, file.path)).replaceAll("\\", "/");
-    await commitFixtureFiles(repositoryRoot, [path]);
-  }
   return { written, path: file === undefined ? undefined : join(root, file.path) };
 }
