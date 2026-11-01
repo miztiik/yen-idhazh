@@ -41,7 +41,7 @@ Table C - PR-shaped tasks
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | C1 | 1 | Replace Undici completely with Impit and failure evidence | - | A | DONE | impit-transport-and-evidence | #1874 | - |
 | C2 | 2 | Space requests across domains and publishers | 1 | B | IN REVIEW | shared-source-pacing-c2 | #1879 | - |
-| C3 | 3 | Verify the completed Impit-only branch pipeline | 2 | C | PENDING | - | - | - |
+| C3 | 3 | Verify the completed Impit-only branch pipeline | 2 | C | IN PROGRESS | branch-pipeline-verification | - | - |
 
 ## 2 - Shared implementation contracts
 
@@ -205,8 +205,10 @@ Table H - rejected alternatives
 - **Scope:** Add safe branch-validation delivery controls, complete one successful actual Impit-only pipeline run from this branch, and close the plan only when no Undici or pinning implementation debris remains.
 - **Files touched:**
   - `.github/workflows/feed-ingest-plan-test.yml`
+  - `.github/workflows/source-transport-test.yml`
   - `services/feed-ingest-plan/scripts/feed-ingest-plan-workflow-inputs.ts`
   - `services/feed-ingest-plan/scripts/finalize-run-output.ts`
+  - `services/feed-ingest-plan/scripts/feed-ingest-plan-report.ts`
   - `services/feed-ingest-plan/scripts/feed-ingest-plan-artifacts.ts`
   - `services/feed-ingest-plan/scripts/feed-ingest-plan-delivery-result.ts`
   - `services/feed-ingest-plan/scripts/finish-run-output.ts`
@@ -229,6 +231,7 @@ Table H - rejected alternatives
   - `docs/architecture/sources/feed-plan-runner.md`
   - `docs/architecture/sources/feed-operator-api.md`
   - `docs/how-to/run-the-gates.md`
+  - `docs/how-to/run-feed-ingest-plan-test.md`
   - `TODO/20261101-browser-transport-request-pacing-plan.md`
 - **Acceptance gates:** Local before dispatch: native checks, workflow/finalization tests and actual supervised API/CLI fixture composition. CI: full candidate suite. Live: push the Impit-only candidate containing PRs 1 and 2 and no-delivery controls; dispatch `feed-ingest-plan-test.yml` with `--ref` naming this branch, diagnostic artifact enabled and metadata delivery disabled. Read its SHA/configuration, response/report, selected artifact, health, metadata-only failures, pacing/attempt evidence and shutdown. One completed successful run suffices; no baseline or mandatory second run. Failed runs require correction and another candidate run. Audit final source/probe dependencies, callers, tests and docs for debris; CI verifies the final merge candidate.
 - **Oracle:** This branch completes collection, parsing, selection, configured partitioning, local persistence, artifact verification and shutdown using Impit and pacing, with D16 identity and no metadata commit. Undici, migration switches, pinned dispatchers and resolver injection are already absent. Functional boundary tests remain green. This proves completed integration and clean removal, not universal publisher access.

@@ -11,6 +11,7 @@ import { parseRawDocumentDumpControl } from "../src/config/service-settings";
 import { writeJsonLine } from "../src/logging/structured-logger";
 import { publishWorkflowUploadInventories } from "./feed-ingest-plan-upload-inventory";
 import { writeGitHubOutputs } from "./feed-ingest-plan-outputs";
+import { collectWorkflowFiles, readWorkflowDeliveryContext } from "./feed-ingest-plan-current-files";
 
 const FinalizationOperationSchema = z.enum(["all", "commit-ledgers", "write-report", "prepare-artifacts"]);
 
@@ -20,6 +21,7 @@ export async function finalizeRunOutput(input: {
   cancelled: boolean; summaryPath?: string; outputPath?: string;
   dumpRawDocumentContents?: boolean; runId?: string; signal?: AbortSignal;
   operation?: z.infer<typeof FinalizationOperationSchema>; reportFilename?: string;
+  deliverMetadata?: boolean;
 }) {
   const runNumber = z.string().regex(/^\d+$/).parse(input.runNumber);
   const attempt = WriterIdentitySchema.shape.attempt.parse(input.attempt);
@@ -36,6 +38,20 @@ export async function finalizeRunOutput(input: {
       }
       if (!input.currentRunFiles) {
         throw new PlanError("COMPLETED_PATHS_MISSING", "Collection did not supply its exact completed ledger paths");
+      }
+      if (input.deliverMetadata === false) {
+        writeJsonLine({ event: "workflow_ledger_commit_skipped", reason: "delivery_not_requested" });
+        const context = await readWorkflowDeliveryContext({ ...input, runNumber, attempt, gitSha });
+        const completed = await collectWorkflowFiles({ ...input, ...context });
+        if (completed.failures.length) throw new AggregateError(completed.failures, "Local metadata validation failed");
+        const expected = z.array(z.string()).parse(JSON.parse(input.currentRunFiles));
+        if (expected.length !== completed.paths.length || new Set(expected).size !== expected.length
+          || expected.some(path => !completed.paths.includes(path))) {
+          throw new PlanError("COMPLETED_PATHS_DIFFER", "Completed ledger paths differ from verified local output");
+        }
+        writeJsonLine({ event: "workflow_local_metadata_verified", files: completed.paths.length,
+          delivery: "not_requested" });
+        return;
       }
       return deliverWorkflowMetadataHttp({ ...input, runNumber, attempt, gitSha, currentRunFiles: input.currentRunFiles },
         input.signal === undefined ? {} : { signal: input.signal });
@@ -78,7 +94,7 @@ if (import.meta.main) {
   try {
     const { RUNNER_TEMP, GITHUB_RUN_ID, GITHUB_RUN_ATTEMPT, GITHUB_STEP_SUMMARY, GITHUB_OUTPUT,
       CURRENT_RUN_FILES, RUN_CANCELLED, DUMP_RAW_DOCUMENT_CONTENTS, RUN_ID, GITHUB_SHA,
-      FINALIZATION_OPERATION, REPORT_FILENAME } = process.env;
+      FINALIZATION_OPERATION, REPORT_FILENAME, DELIVER_METADATA } = process.env;
     if (!RUNNER_TEMP || !GITHUB_RUN_ID || !GITHUB_RUN_ATTEMPT || !GITHUB_OUTPUT || !GITHUB_SHA) {
       throw new Error("Workflow finalization controls are missing");
     }
@@ -88,6 +104,7 @@ if (import.meta.main) {
       runNumber: GITHUB_RUN_ID, attempt: Number(GITHUB_RUN_ATTEMPT),
       gitSha: GITHUB_SHA,
       cancelled: z.enum(["true", "false"]).parse(RUN_CANCELLED) === "true",
+      ...(DELIVER_METADATA === undefined ? {} : { deliverMetadata: z.enum(["true", "false"]).parse(DELIVER_METADATA) === "true" }),
       ...(GITHUB_STEP_SUMMARY === undefined ? {} : { summaryPath: GITHUB_STEP_SUMMARY }),
       outputPath: GITHUB_OUTPUT,
       dumpRawDocumentContents: DUMP_RAW_DOCUMENT_CONTENTS === undefined ? false : parseRawDocumentDumpControl(DUMP_RAW_DOCUMENT_CONTENTS),

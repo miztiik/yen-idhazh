@@ -51,6 +51,11 @@ on:
         required: false
         default: true
         type: boolean
+      deliver_metadata:
+        description: Deliver verified metadata to Git; false validates and packages local output only
+        required: false
+        default: true
+        type: boolean
 
 permissions:
   contents: write
@@ -127,6 +132,7 @@ jobs:
           FINALIZATION_OPERATION: commit-ledgers
           CURRENT_RUN_FILES: ${{ steps.plan.outputs.current_run_files }}
           RUN_CANCELLED: ${{ steps.cancellation.outputs.cancelled == 'true' }}
+          DELIVER_METADATA: ${{ inputs.deliver_metadata }}
         run: bun run services/feed-ingest-plan/scripts/finalize-run-output.ts
 
       - name: Write run report and annotations
@@ -136,6 +142,7 @@ jobs:
           FINALIZATION_OPERATION: write-report
           RUN_CANCELLED: ${{ steps.cancellation.outputs.cancelled == 'true' }}
           RUN_ID: ${{ steps.plan.outputs.run_id }}
+          DELIVER_METADATA: ${{ inputs.deliver_metadata }}
         run: bun run services/feed-ingest-plan/scripts/finalize-run-output.ts
 
       - name: Prepare artifacts and list upload files as JSONL
@@ -147,6 +154,7 @@ jobs:
           DUMP_RAW_DOCUMENT_CONTENTS: ${{ inputs.dump_raw_document_contents }}
           RUN_ID: ${{ steps.plan.outputs.run_id }}
           REPORT_FILENAME: ${{ steps.report.outputs.report_filename }}
+          DELIVER_METADATA: ${{ inputs.deliver_metadata }}
         run: bun run services/feed-ingest-plan/scripts/finalize-run-output.ts
 
       - name: Upload run artifacts
@@ -178,6 +186,7 @@ jobs:
           COMMIT_OUTCOME: ${{ steps.commit.outcome }}
           REPORT_OUTCOME: ${{ steps.report.outcome }}
           WRITE_REPORT: ${{ inputs.write_report }}
+          DELIVER_METADATA: ${{ inputs.deliver_metadata }}
           UPLOAD_OUTCOME: ${{ steps.upload.outcome }}
           UPLOAD_ARTIFACT_ID: ${{ steps.upload.outputs.artifact-id }}
           DUMP_RAW_DOCUMENT_CONTENTS: ${{ inputs.dump_raw_document_contents }}
