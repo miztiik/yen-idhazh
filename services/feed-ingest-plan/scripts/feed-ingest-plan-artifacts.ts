@@ -80,8 +80,11 @@ export async function prepareWorkflowArtifacts(input: {
   }
   await retain("delivery", join(input.directory, "delivery-result.json"), "delivery-result.json");
   if (input.deliverMetadata === false) {
-    for (const filename of ["response.json", "health.json", "workflow-policy.json", "host-fingerprint.json"]) {
-      await retain(filename, join(input.directory, filename), filename);
+    for (const [key, filename] of [
+      ["response", "response.json"], ["health", "health.json"],
+      ["policy", "workflow-policy.json"], ["host", "host-fingerprint.json"],
+    ] as const) {
+      await retain(key, join(input.directory, filename), filename);
     }
   }
   const reportFilename = input.reportFilename === undefined
