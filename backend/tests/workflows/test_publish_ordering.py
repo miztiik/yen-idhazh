@@ -31,6 +31,7 @@ PUBLICATION_RUNTIME_ACTION: Final = "./.github/actions/publication-runtime"
 @pytest.mark.parametrize(
     ("filename", "job_name", "work_step"),
     (
+        ("pages.yml", "build", "Build"),
         ("ci.yml", "site", "Build the site"),
         ("ci.yml", "browser", "Build the canary day"),
         ("ci.yml", "gates", "TypeScript ledger writer"),

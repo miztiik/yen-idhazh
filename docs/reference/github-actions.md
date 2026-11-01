@@ -55,11 +55,12 @@ Keep successful items and commit failure records; annotate a planned run that
 publishes nothing. Overlapping runs use distinct writer identities and the
 [commit protocol](../architecture/publishing/committing.md), not a shared queue.
 
-Digest assembly, vector backfill and CI's backend, site and browser jobs use
-the shared `publication-runtime` action. It installs Bun and the locked native
-packages, then checks validator startup outside the checkout before assembly,
-re-encoding or site work. This startup check reads no ledger files; the later
-published-column check still validates the built site's actual files.
+Pages publication, digest assembly, vector backfill and CI's backend, site and
+browser jobs use the shared `publication-runtime` action. It installs Bun and
+the locked native packages, then checks validator startup outside the checkout
+before assembly, re-encoding or site work. This startup check reads no ledger
+files; the later published-column check still validates the built site's actual
+files.
 
 ## Assembly recovery
 
