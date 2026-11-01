@@ -1,10 +1,10 @@
 # 23 - What an article is about, decided by reading it
 
-**Last Updated**: 2026-10-10
+**Last Updated**: 2026-11-01
 **Level**: 5 (a persisted contract, the published vocabulary, the call structure and the trust boundary)
 
 **Chain**: previous the two-call summariser plan (delivered, removed from TODO/).
-**Reference**: [`20260902-visual-planner-pseudo-plan.md`](20260902-visual-planner-pseudo-plan.md) - O40, O41, O43, O45, E1, E5.
+**Current evidence**: [digest visual rule](../docs/concepts/digest.md#the-visual-rule), [visual planning](../docs/architecture/publishing/visuals.md), [number provenance](../docs/architecture/publishing/where-every-drawn-figure-came-from.md), [summary and plan call](../docs/architecture/summarize/prompt.md#the-second-call-writes-this-summary-and-the-article-is-read-once), and [evaluation policy](../CLAUDE.md#1a-architecture-principles).
 
 Execute per [`../docs/how-to/execute-a-plan.md`](../docs/how-to/execute-a-plan.md): the orchestrator dispatches one worktree-isolated worker per row; workers consult personas on ambiguity; AUTO-merge on green gates; **parallel N = 4**; honour the ESCALATE triggers in section 0. AUTHOR-AND-STOP until the user authorizes.
 
@@ -1707,7 +1707,9 @@ Named here so they are not mistaken for work this plan is doing.
 - [`20260910-25-placement-plan.md`](20260910-25-placement-plan.md) - the plan this one spawned; it decides where a story goes, and its rows #7 and #8 are what stops a read desk turning a five-desk day into a one-desk day. **Its row #12 owns the producer, the contract and the payload of the `/console/judgement/` tab row #15 here draws** (row #15 decision 6a), **its row #9a extends the counterfactual ledger row #21 here creates** (row #21), **its row #9b is retired by row #17 here**, and **its row #2 and row #20 here both write `docs/concepts/placement.md`**.
 - [`20260911-26-retire-prerender-plan.md`](20260911-26-retire-prerender-plan.md) - the plan that took the prerender gap out of section 26; it rules that the six prerendered routes stay and the build-time guard goes.
 - [`20260911-classification-research-record.md`](20260911-classification-research-record.md) - the decision and research record for the conversation that wrote this plan: the maintainer decisions with their dates, the measurements with their provenance, the papers, and the alternatives that were rejected and why.
-- [`20260902-visual-planner-pseudo-plan.md`](20260902-visual-planner-pseudo-plan.md) - the decision record O43, E1 and E5 come from.
+- [Visual planning](../docs/architecture/publishing/visuals.md) - the current plan path and its publication boundary.
+- [Article elements](../docs/architecture/extraction/elements.md) - source-backed extraction and the unfinished alias map.
+- [Summary and plan call](../docs/architecture/summarize/prompt.md#the-second-call-writes-this-summary-and-the-article-is-read-once) - call order, recovery and refusal behavior.
 - [`CLAUDE.md`](../CLAUDE.md) - what a read over a growing collection must declare.
 - [`../docs/how-to/execute-a-plan.md`](../docs/how-to/execute-a-plan.md) - how a worker runs a row, and where the no-two-rows-one-file rule comes from.
 - [`../docs/how-to/author-a-plan.md`](../docs/how-to/author-a-plan.md) - the shape every row above is written in.

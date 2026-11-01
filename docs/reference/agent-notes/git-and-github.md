@@ -1,6 +1,6 @@
 # Agent Notes - Git and GitHub
 
-**Last Updated**: 2026-10-09
+**Last Updated**: 2026-11-01
 
 Checks for agents using Git and GitHub. Follow the
 [PR workflow](../../how-to/ship-a-pr.md) and [git rules](../../../CLAUDE.md#8-git-hygiene).
@@ -13,6 +13,10 @@ Checks for agents using Git and GitHub. Follow the
 - A failed removal can delete tracked files before a locked generated executable stops it. Inspect both `git worktree list --porcelain` and the remaining directory before retrying. Leave the residue when its process cannot safely be stopped; do not force deletion or terminate another task.
 - **A merge succeeds but cleanup reports `Filename too long`.** The merge and local worktree removal are separate operations. Confirm the pull request's `state` and `mergeCommit` with `gh pr view` before retrying anything. Inspect the remaining worktree and preserve it if cleanup cannot safely finish; a cleanup error is not proof that the merge failed.
 - **`gh pr merge --delete-branch` also removes the worktree that holds the merged branch** (seen twice on 2026-10-06 with gh 2.101.0). Afterwards the folder is gone and `git worktree list` does not name it. A later `cd` into that folder fails, and the next command then runs in the shell's own checkout. Copy out anything you need first, and do not chain a `cd` into that worktree after the merge. Run from a folder that is not a git checkout, with `--repo account/name`, the same command merged and deleted the remote branch and left the worktree and its local branch in place (seen twice on 2026-10-05 with gh 2.101.0). Use that form when a worktree must outlive its merge, such as one an app session works in.
+- **A deletion can get swept into an unrelated commit.** `git rm` stages a deletion immediately. The tell is that the deleted path appears beside unrelated files in the staged path list. Confirm the file is tracked first, make deletion the final staging action, then inspect the staged paths:
+  ```powershell
+  git diff --cached --name-only
+  ```
 
 ## The moving base
 

@@ -1,6 +1,6 @@
 # Digest
 
-**Last Updated**: 2026-10-08
+**Last Updated**: 2026-11-01
 
 What a reader actually gets: the published surface, the item, and the rule that decides whether an item gets a picture. This page fixes the vocabulary and the invariants; the concrete layout and typography are Jony's territory and live in [ui-shell.md](ui-shell.md) and [design-system.md](design-system.md).
 
@@ -32,19 +32,33 @@ Everything else earns its place by surviving a deletion attempt.
 
 ## The visual rule
 
-There are exactly three answers, and the third is the common one:
+The visual must complement the article at high information compression. It
+earns space only when it makes a supported comparison or relationship quicker
+to grasp than the prose alone.
 
-- **Numbers in the article -> a chart**, built from a specification whose data values are drawn from the article. The constraint that makes this safe: a number in the chart that is not in the article is a defect, not a rounding difference.
-- **A process in the article -> a diagram**, rendered deterministically from a text description.
-- **Anything else -> nothing.**
+The current reader has three outcomes:
 
-"Nothing" is a real, frequent, correct answer. The failure mode being designed against is decoration: a generated picture of a chart with invented axis labels is worse than no picture, because it looks like evidence. A reader who once notices invented numbers stops trusting every summary on the page - the same contagion that makes an unmeasured summarizer dangerous.
+- **A chart** when article evidence supports a useful numeric pattern, such as a comparison or distribution. Values may be source figures or code-derived arithmetic with a traceable source chain; formatting a number does not change its value. [Where each drawn figure comes from](../architecture/publishing/where-every-drawn-figure-came-from.md) defines the boundary.
+- **A Who/What grid** when source text supports an actor and claim in the same sentence. It is a separate, source-backed format, not a chart ([layout](design-system.md#the-whowhat-grid-keeps-each-actor-beside-its-claim), [rendering](../architecture/publishing/where-a-drawing-becomes-pixels.md#the-whowhat-grid-is-a-separate-format-and-reader)).
+- **No visual** when neither form is supported or useful. This is a common, correct outcome, not a failure.
+
+Diagrams are deferred; no reader-facing diagram is currently produced. The
+[visual planning page](../architecture/publishing/visuals.md#diagrams-deferred)
+records what remains before that work can return.
+
+The failure mode being designed against is decoration: a picture that looks
+like evidence but adds no supported information is worse than no picture. A
+reader who notices invented or misleading numbers stops trusting every summary
+on the page.
 
 A render failure degrades the item to no visual. It never fails the item, and it never fails the run.
 
 ### A number can be right and still be mislabelled
 
-The invented-number failure is closed by construction. Every value drawn comes from the article's own bytes, so a chart cannot carry a figure the article does not.
+The invented-number failure is bounded by construction. A displayed value must
+either resolve to the article's own characters or be deterministic arithmetic
+over source-backed elements with a traceable chain. See
+[where each drawn figure comes from](../architecture/publishing/where-every-drawn-figure-came-from.md).
 
 **What a number means is a different question, and it is not closed.** A pattern can find `4,200 tonnes`. It cannot know whether that is exports or production. Only the model can say, so the model does - and that judgement is the one part of a visual nothing verifies. Two failures follow, and neither raises an error:
 
@@ -57,7 +71,7 @@ Three controls narrow it, and none of them closes it:
 - A label is attached to an **element identifier**, never to a free string, so it can at least be checked against that element's own unit and magnitude.
 - The model never types a value. No field of the reply schema accepts a number, so authorship is refused by the grammar rather than caught by a check.
 
-**This is a permanent property of the design, not a defect waiting for a fix.** The alternative is to draw only what a pattern can name, which produces charts whose axis reads "number" - correct, verifiable, and worth nobody's attention. A digest that will not say what a figure means is not publishing a fact, it is publishing a decoration with better provenance. Maintainer decision, 2026-09-04.
+**This is a permanent property of the design, not a defect waiting for a fix.** The alternative is to draw only what a pattern can name, which produces charts whose axis reads "number" - correct, verifiable, and worth nobody's attention. A digest that will not say what a figure means is not publishing a fact, it is publishing a decoration with better provenance.
 
 Note the split this implies, because it is easy to lose: **code finds and cuts every character a reader sees; the model points at where to cut and says what the cut means.** A value is never model-authored. A meaning always is.
 

@@ -199,8 +199,8 @@ article, roughly 5 minutes a shard.
 
 ### Why it was built - the document you asked for
 
-[`TODO/20260902-visual-planner-pseudo-plan.md`](20260902-visual-planner-pseudo-plan.md)
-line 999:
+[The article-elements page](../docs/architecture/extraction/elements.md)
+records the old search rationale and the current absence of a consumer:
 
 > | **Topical keyphrases**, 5-8, verbatim | **The only search surface that needs no embedding model.** Also an archive facet | ~50 | 4.5 min | **TAKE.** Verbatim and span-anchored, or not at all |
 

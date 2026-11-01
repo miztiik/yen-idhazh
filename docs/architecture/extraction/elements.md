@@ -1,6 +1,6 @@
 # Elements: every fact in an article, with the characters that prove it
 
-**Last Updated**: 2026-10-10
+**Last Updated**: 2026-11-01
 
 The extraction subsystem's fact table. This page owns the element shape - the
 six kinds, the two tiers, and the span that makes a drawn figure checkable - the
@@ -403,7 +403,11 @@ one of them being unusable says nothing about the others.
 The model names the organisation in the item's words; code matches that name
 against the entities we already track. An unknown name is one we do not track
 yet, and inventing a slug for it would put two spellings of one company in two
-groups for ever. The alias ledger is separate work.
+groups for ever. The alias map is separate, unfinished work. It must be
+conservative, record each merge, report the merge rate, and stamp every
+computed score with the map version; scores from different versions require
+rescoring before comparison. Alias additions need review. The current pass
+matches only names already on the watchlist and does not normalize aliases.
 
 ### What `proposed` is for, now that the candidate pass exists
 

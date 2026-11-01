@@ -1,6 +1,6 @@
 # 19 - Every attempt is recorded
 
-**Last Updated**: 2026-10-29
+**Last Updated**: 2026-11-01
 **Level**: 5 contract decisions authorized for delivery; row 4 remains deferred.
 
 **Current ruling, 2026-10-29 UTC:** the maintainer authorized implementation
@@ -13,7 +13,7 @@ design in row 1 and the older read-only scope below. Plan 22 is not closed by
 this work; the delivered console views are documented separately.
 
 **Chain**: diagrams are [deferred](../docs/architecture/publishing/visuals.md#diagrams-deferred), not a prerequisite | delivered [visual-attempt console views](../docs/architecture/publishing/what-the-pipelines-route-draws.md#visual-attempt-views-read-the-unpublished-record-at-build-time).
-**Reference**: [`20260902-visual-planner-pseudo-plan.md`](20260902-visual-planner-pseudo-plan.md) - rows 54, 55, sections 12.6 G1, 12.7 G7, G10, G11, 12.9 G12, 12.13 G37, 12.14 G40, G41, section 9.2, 9.3.
+**Current evidence**: [visual-attempt reporting](../docs/concepts/telemetry.md#visual-design-attempts), [visual planning and deferred diagrams](../docs/architecture/publishing/visuals.md#diagrams-deferred), and [retention rules](../docs/concepts/adaptive-pruning.md).
 
 Execute per docs/how-to/execute-a-plan.md: one maintainer carries the plan and delegates a row where delegation pays; keep parallel N = 4 rows in flight, refilling a slot as soon as a worker returns and never waiting on a merge; consult a persona only where two answers would lead to different code; AUTO-merge on green gates; honor the ESCALATE triggers in section 0. AUTHOR-AND-STOP until the user authorizes.
 
@@ -149,6 +149,7 @@ Execute per docs/how-to/execute-a-plan.md: one maintainer carries the plan and d
 
 ## See also
 
-- [`20260902-visual-planner-pseudo-plan.md`](20260902-visual-planner-pseudo-plan.md) - the decision record this group executes.
+- [Visual-attempt reporting](../docs/concepts/telemetry.md#visual-design-attempts) - the delivered record and reporting scope.
+- [Visual planning and rendering](../docs/architecture/publishing/visuals.md) - the current visual path and deferred diagram work.
 - [Diagrams deferred](../docs/architecture/publishing/visuals.md#diagrams-deferred) - not a prerequisite for visual telemetry.
 - [Visual-attempt console views](../docs/architecture/publishing/what-the-pipelines-route-draws.md#visual-attempt-views-read-the-unpublished-record-at-build-time) - the delivered console reader.
