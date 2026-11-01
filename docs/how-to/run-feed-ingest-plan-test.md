@@ -1,6 +1,6 @@
 # Run the isolated feed planner checks
 
-**Last Updated**: 2026-10-31
+**Last Updated**: 2026-11-01
 
 How do you check the TypeScript planner without changing daily publication?
 Use offline cases for validation. The manual workflow performs real feed work
@@ -18,7 +18,7 @@ the Python pipeline and global health data are unchanged.
 The workflow calls `services/feed-ingest-plan/scripts/run-feed-ingest-plan.ts`.
 Its preparation and HTTP client are separate modules. Execution supervises the
 real loopback server in a separate child process within one workflow step.
-Validated private startup data preserves staged history, invocation-only
+Validated private startup data preserves local input settings, invocation-only
 enablement, temporary output, run/attempt/revision identity and UTC clocks.
 Readiness must match that exact child and invocation, not merely an available
 port. The client posts to `/plan` and reads the batch health summary while the
@@ -114,8 +114,8 @@ historical ledger coverage. The workflow does not add a synthetic receipt.
 
 ## Saved output and failures
 
-`services/feed-ingest-plan/scripts/` owns workflow execution, bounded history
-staging, native verification, metadata commits, artifact preparation and
+`services/feed-ingest-plan/scripts/` owns workflow execution, local input loading,
+native verification, metadata commits, artifact preparation and
 reporting. `services/host-probes/scripts/` owns optional controlled host tools.
 Workflow YAML calls those modules directly. `.github/scripts/` retains only
 the independent `ai-pipeline.ts` experiment and `serve-evaluator.py`; neither
@@ -132,8 +132,14 @@ A normal push retry preserves another writer's immutable additions. It does
 not rewrite the checkout, rebase or force-push. Git receives ordinary ledger
 files at their registered paths, never an archive.
 
-History staging uses the [bounded day membership contract](../reference/feed-planner-ledgers.md#raw-day-membership).
-Named Git days, not saved raw-day JSON lists, identify all Parquet siblings.
+Initial checkout obtains code, required registered raw/compact inputs and the
+existing publication inventory at one ref. History uses the
+[bounded day membership contract](../reference/feed-planner-ledgers.md#raw-day-membership):
+exact local UTC-day directories identify Parquet siblings. No later fetch,
+Git file catalog, sparse expansion or saved input copy is used.
+Startup and finalization validate the supplied `GITHUB_SHA`; they do not query
+`HEAD`. The safe-persist child receives that identity through its existing
+private startup pipe, never through public planning or delivery controls.
 
 Five tasks follow `Collect and select articles with a supervised server`:
 
@@ -328,11 +334,12 @@ remain available in the recovery artifact.
 
 The manual workflow proves that the real Plan API can fetch, parse, select,
 write body-free ledger rows and hand selected text to the next stage. Named
-history reads day-level ledger data from the current commit, not only the
+history reads day-level ledger data from the initial input directory, not only the
 immediately previous workflow run; its data families and windows are in the
 [bounded day membership contract](../reference/feed-planner-ledgers.md#raw-day-membership).
-The sparse checkout still supplies runnable source and configuration while
-keeping the growing state tree out of the worktree. Adapter checks remain in
+The sparse checkout supplies runnable source, configuration and the required
+saved ledger namespaces together. This acquires more saved data up front, but
+adds no input store or independent revision proof. Adapter checks remain in
 CI; repeating them here does not exercise a live API. The selected text upload
 and ledger commit stay separate because the summarizer needs article bodies
 while the ledger does not. CPU and RAM profiling does not prove API correctness,

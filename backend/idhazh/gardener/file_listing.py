@@ -75,9 +75,10 @@ a file an earlier task deleted.
 from __future__ import annotations
 
 import re
+import stat
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Any, Final, Protocol
 
 #: A git object id as `git ls-tree` prints it: forty lowercase hex digits. A tree
@@ -191,17 +192,33 @@ def _on_disk(repo_root: Path, names: Iterable[str]) -> dict[str, int]:
     sizes: dict[str, int] = {}
     for name in sorted(set(names)):
         root = repo_root / name
-        if root.is_symlink():
-            raise ValueError(f"{root} is a symlink inside a named period path")
-        if root.is_file():
+        parts = PurePosixPath(name).parts
+        if not parts or any(part in {"", ".", ".."} for part in parts):
+            raise ValueError("a named period path must be canonical and relative")
+        current = repo_root
+        info = None
+        for index, part in enumerate(parts):
+            current = current / part
+            try:
+                info = current.lstat()
+            except FileNotFoundError:
+                info = None
+                break
+            if stat.S_ISLNK(info.st_mode) or current.is_junction():
+                raise ValueError(f"{name} has a linked ancestor or member")
+            if index < len(parts) - 1 and not stat.S_ISDIR(info.st_mode):
+                raise ValueError(f"{name} has a parent that is not a directory")
+        if info is None:
+            continue
+        if stat.S_ISREG(info.st_mode):
             candidates: Iterable[Path] = (root,)
-        elif root.is_dir():
+        elif stat.S_ISDIR(info.st_mode):
             candidates = root.rglob("*")
         else:
-            continue
+            raise ValueError(f"{name} is not a regular named period file or directory")
         for path in candidates:
-            if path.is_symlink():
-                raise ValueError(f"{path} is a symlink inside a named period path")
+            if path.is_symlink() or path.is_junction():
+                raise ValueError(f"{name} contains a linked member")
             if path.is_file():
                 sizes[path.relative_to(repo_root).as_posix()] = path.stat().st_size
     return dict(sorted(sizes.items()))
@@ -306,12 +323,15 @@ class FileListing:
 
     @classmethod
     def from_disk(
-        cls, repo_root: Path, folders: Iterable[str], *, paths: Iterable[Path]
+        cls, repo_root: Path, folders: Iterable[str], *, paths: Iterable[Path],
+        budget: int | None = None,
     ) -> FileListing:
         """Every file under these named period paths, weighed on disk.
 
         A path named later is walked the same way, so a step that names its
         periods as it runs reads the disk exactly as this listing did.
+        A supplied task budget records zero transfer for these acquired files;
+        callers without a budget retain an unmeasured local listing.
         """
         chosen = tuple(sorted({_folder(folder) for folder in folders}))
         named: set[str] = set()
@@ -331,7 +351,9 @@ class FileListing:
             folders=chosen,
             named=tuple(sorted(named)),
             sizes=_on_disk(repo_root, named),
-            checkout=_Checkout(repo_root=repo_root, widen=None, folders=chosen, lister=walked),
+            checkout=_Checkout(
+                repo_root=repo_root, widen=None, folders=chosen, lister=walked, budget=budget
+            ),
         )
 
     @classmethod
@@ -681,9 +703,10 @@ class FileListing:
     def downloaded(self) -> dict[str, int] | None:
         """What the shard's widenings added, in bytes, under each folder it listed.
 
-        None for a listing read off the disk, where nothing was downloaded.
+        A supplied task budget records zero transfer for already-acquired local
+        input. An ordinary local listing without a budget has no transfer measurement.
         """
-        if self.checkout.widen is None:
+        if self.checkout.widen is None and self.checkout.budget is None:
             return None
         weights = dict.fromkeys(self.checkout.folders, 0)
         for path, size in self.checkout.added.items():

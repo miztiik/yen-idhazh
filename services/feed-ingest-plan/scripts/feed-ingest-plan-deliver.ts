@@ -63,7 +63,7 @@ export async function deliverPlannerFiles(input: Readonly<{
 }
 
 export async function deliverWorkflowMetadata(input: {
-  root: string; directory: string; currentRunFiles: string; runNumber: string; attempt: number;
+  root: string; directory: string; currentRunFiles: string; runNumber: string; attempt: number; gitSha: string;
 }) {
   const paths = z.array(RelativePathSchema).parse(JSON.parse(input.currentRunFiles));
   try {
@@ -106,13 +106,14 @@ export async function deliverWorkflowMetadata(input: {
 
 if (import.meta.main) {
   try {
-    const { RUNNER_TEMP, CURRENT_RUN_FILES, GITHUB_RUN_ID, GITHUB_RUN_ATTEMPT } = process.env;
-    if (!RUNNER_TEMP || !CURRENT_RUN_FILES || !GITHUB_RUN_ID || !GITHUB_RUN_ATTEMPT) {
+    const { RUNNER_TEMP, CURRENT_RUN_FILES, GITHUB_RUN_ID, GITHUB_RUN_ATTEMPT, GITHUB_SHA } = process.env;
+    if (!RUNNER_TEMP || !CURRENT_RUN_FILES || !GITHUB_RUN_ID || !GITHUB_RUN_ATTEMPT || !GITHUB_SHA) {
       throw new Error("Delivery requires exact output paths and the executed run and attempt");
     }
     const result = await deliverWorkflowMetadata({
       root: process.cwd(), directory: join(RUNNER_TEMP, "feed-ingest-plan"),
       currentRunFiles: CURRENT_RUN_FILES, runNumber: GITHUB_RUN_ID, attempt: Number(GITHUB_RUN_ATTEMPT),
+      gitSha: GITHUB_SHA,
     });
     console.log(JSON.stringify(result));
   } catch (error) {

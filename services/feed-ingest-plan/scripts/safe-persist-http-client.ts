@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import { writeFile } from "node:fs/promises";
 import { join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
-import { PLANNER_API_PREFIX } from "@idhazh/common-contracts";
+import { CommitShaSchema, PLANNER_API_PREFIX } from "@idhazh/common-contracts";
 import { z } from "zod";
 import { PlanError, describePlanError } from "../src/api/plan-request";
 import { ServiceSettingsSchema } from "../src/config/service-settings";
@@ -15,15 +15,16 @@ import {
 import { superviseHttpChild } from "./http-child-lifetime";
 
 export async function deliverWorkflowMetadataHttp(input: {
-  root: string; directory: string; currentRunFiles: string; runNumber: string; attempt: number;
+  root: string; directory: string; currentRunFiles: string; runNumber: string; attempt: number; gitSha: string;
 }, options: { signal?: AbortSignal; serverEntry?: string } = {}) {
+  const gitSha = CommitShaSchema.parse(input.gitSha);
   const request = SafePersistHttpRequestSchema.parse({
     runNumber: input.runNumber, attempt: input.attempt, paths: JSON.parse(input.currentRunFiles),
   });
   try {
     const settings = ServiceSettingsSchema.parse(await Bun.file(join(input.root, "config", "feed-ingest-plan-service.json")).json());
     const startup = SafePersistHttpStartupSchema.parse({
-      nonce: randomUUID(), settings,
+      nonce: randomUUID(), settings, git_sha: gitSha,
       output_root: relative(input.root, input.directory).replaceAll("\\", "/"),
     });
     return await superviseHttpChild({

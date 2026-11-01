@@ -75,6 +75,29 @@ def test_a_listing_read_off_the_disk_names_every_file_with_its_size(tmp_path: Pa
     assert listing.downloaded() is None, "nothing was downloaded to read the disk"
 
 
+def test_already_acquired_periods_record_zero_task_transfer_without_spending_the_budget(
+    tmp_path: Path,
+) -> None:
+    root = a_checkout(tmp_path)
+    period = root / "state/traces/2026/09/01"
+    listing = FileListing.from_disk(root, ["state/traces"], paths=[period], budget=1)
+    assert listing.cost([period]) == 0 and listing.lacking([period]) == {}
+    listing.fetch_within_budget([period])
+    assert listing.downloaded() == {"state/traces": 0}
+    assert listing.room() == 1
+
+
+def test_local_listing_refuses_a_non_directory_ancestor_instead_of_reporting_empty(
+    tmp_path: Path,
+) -> None:
+    root = a_checkout(tmp_path)
+    (root / "state/unsafe").write_text("not a directory", encoding="ascii")
+    with pytest.raises(ValueError, match="parent that is not a directory"):
+        FileListing.from_disk(
+            root, ["state/unsafe"], paths=[root / "state/unsafe/2026/09/01"],
+        )
+
+
 def test_named_paths_ignore_unlisted_neighbours(tmp_path: Path) -> None:
     root = a_checkout(tmp_path)
     named = root / "state/days/2026/09/01.csv"

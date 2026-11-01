@@ -146,6 +146,10 @@ jobs:
     if: needs.plan.outputs.any_active_task == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    env:
+      GIT_CONFIG_COUNT: '1'
+      GIT_CONFIG_KEY_0: index.sparse
+      GIT_CONFIG_VALUE_0: 'true'
     # `contents: write` pushes the shard's record. `actions: write` lets the two
     # collection tasks list this repository's workflow artifacts and runs, and
     # delete them once a person turns their dry run off.
@@ -158,14 +162,9 @@ jobs:
       fail-fast: false
       max-parallel: ${{ fromJSON(needs.plan.outputs.shard_count) }}
     steps:
-      # The checkout holds only the three folders the code and config live in.
-      # Every name a task decides from comes from the commit: gardener_publish.py
-      # lists the files under the folders the shard's tasks own or read with
-      # `git ls-tree`, and downloads none of them. A task that reads a file's
-      # content first widens this checkout by the day or month folders that step
-      # reads, in one download. `blob:none` downloads no file outside the
-      # checkout, and a task never takes a file it lacks for a member that is not
-      # there: it fetches the file or it fails.
+      # Planner data arrives with code at this ref. Planner tasks read only
+      # named local periods; other families retain their named commit listing
+      # and content acquisition.
       - uses: actions/checkout@v6
         with:
           fetch-depth: 1
@@ -176,12 +175,8 @@ jobs:
             .github
             packages/common-contracts
             packages/ledger-file-writer
-
-      # Each widening rewrites the checkout's index, which expands it to the
-      # whole repository unless the index is sparse, and actions/checkout leaves
-      # it not. The commit a shard lands is built in an index of its own.
-      - name: Keep the index sparse
-        run: git config index.sparse true
+            state/raw/feed-ingest-plan
+            state/compact/feed-ingest-plan
 
       - uses: actions/setup-python@v7
         with:

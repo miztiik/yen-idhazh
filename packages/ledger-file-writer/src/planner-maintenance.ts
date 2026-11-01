@@ -1,7 +1,7 @@
-/** Compacts one bounded planner period from exact files present at one Git revision. */
+/** Compacts one bounded planner period from validated local files. */
 import { createHash } from "node:crypto";
 import { lstat, readFile, realpath } from "node:fs/promises";
-import { relative, resolve } from "node:path";
+import { resolve } from "node:path";
 import { z } from "zod";
 import {
   PlannerMaintenanceRequestSchema, PlannerMaintenanceResultSchema,
@@ -12,7 +12,8 @@ import type {
 import { PLANNER_CONTRACTS } from "./registration";
 import { readPlannerParquet } from "./read-planner-file";
 import { persistLedger } from "./persist-ledger";
-import type { LedgerPeriod, LedgerRegistration, LedgerRowContract } from "./ledger-types";
+import { compactPeriodFile, readPlannerDayFiles, regularPlannerPath } from "./read-planner-day-files";
+import type { LedgerPeriod, LedgerRowContract } from "./ledger-types";
 
 type SourceFile = Extract<PlannerMaintenanceResult, { status: "written" }>["input_files"][number];
 type RefusalReason = Extract<PlannerMaintenanceResult, { status: "refused" }>["reason"];
@@ -27,153 +28,79 @@ function isMissing(error: unknown): boolean {
   return error instanceof Error && "code" in error && error.code === "ENOENT";
 }
 
-type GitMember = { blob: string; bytes: number };
-
-async function git(root: string, args: string[], input?: string): Promise<string> {
-  const child = Bun.spawn(["git", ...args], {
-    cwd: root,
-    env: { ...process.env, GIT_LITERAL_PATHSPECS: "1" },
-    stdin: input === undefined ? "ignore" : "pipe",
-    stdout: "pipe",
-    stderr: "pipe",
-  });
-  if (input !== undefined) {
-    if (child.stdin === undefined) throw new Error("Planner maintenance Git did not open stdin");
-    child.stdin.write(input);
-    child.stdin.end();
-  }
-  const [stdout, stderr, status] = await Promise.all([
-    new Response(child.stdout).text(),
-    new Response(child.stderr).text(),
-    child.exited,
-  ]);
-  if (status !== 0) throw new Error(`Planner maintenance Git ${args[0]} failed: ${stderr.trim()}`);
-  return stdout.trim();
-}
-
-async function currentRevision(root: string): Promise<string> {
-  const revision = await git(root, ["rev-parse", "--verify", "HEAD^{commit}"]);
-  if (!/^[0-9a-f]{40}$/.test(revision)) throw new Error("Planner maintenance received an invalid Git revision");
-  return revision;
-}
-
-function rootRelative(root: string, path: string): string {
-  const result = relative(root, path);
-  if (!result || result === ".." || result.startsWith(`..\\`) || result.startsWith("../")) {
-    throw new MaintenanceRefusal("malformed-member", path.replaceAll("\\", "/"));
-  }
-  return result.replaceAll("\\", "/");
-}
-
 async function captureMembers(
   root: string,
   request: PlannerMaintenanceRequest,
   days: readonly string[],
-  targetPath: string,
-): Promise<{ compact: Map<string, { period: "daily" | "monthly" | "yearly"; covers: string }>; raw: Map<string, string[]>; members: Map<string, GitMember> }> {
-  const compact = new Map<string, { period: "daily" | "monthly" | "yearly"; covers: string }>();
+): Promise<{ raw: Map<string, string[]>; compact: Set<string> }> {
   const raw = new Map<string, string[]>();
-  const pathspecs = new Set<string>();
+  const compact = new Set<string>();
+  const named = new Set<string>();
   for (const day of days) {
-    const rawDirectory = rawDayDirectory(request.registry_entry, day);
-    raw.set(day, []);
-    pathspecs.add(rawDirectory);
+    const files = await readPlannerDayFiles(root, request.registry_entry, day);
+    const refused = files.refused[0];
+    if (refused !== undefined) {
+      throw new MaintenanceRefusal(refused.reason === "nonregular-member"
+        ? "malformed-member" : "unsupported-member");
+    }
+    raw.set(day, files.members);
     for (const period of ["yearly", "monthly", "daily"] as const) {
       const covers = period === "yearly" ? day.slice(0, 4)
         : period === "monthly" ? day.slice(0, 7) : day;
-      for (const format of ["parquet", "json"] as const) {
-        const path = compactPeriodPath(request.registry_entry, period, covers, format);
-        compact.set(path, { period, covers });
-        pathspecs.add(path);
+      const parquet = compactPeriodFile(request.registry_entry, period, covers);
+      for (const path of [parquet, parquet.replace(/\.parquet$/, ".json")]) {
+        if (named.has(path)) continue;
+        named.add(path);
+        try {
+          await regularPlannerPath(root, path);
+          compact.add(path);
+        } catch (error) {
+          if (isMissing(error)) continue;
+          if (error instanceof Error && error.name === "PlannerLedgerFileError") {
+            throw new MaintenanceRefusal("malformed-member", path);
+          }
+          throw error;
+        }
       }
     }
   }
-  const named = [...pathspecs];
-  const lines: string[] = [];
-  for (let index = 0; index < named.length; index += 96) {
-    const output = await git(root, [
-      "ls-tree", "-r", "-l", request.revision, "--", ...named.slice(index, index + 96),
-    ]);
-    if (output !== "") lines.push(...output.split("\n").filter(Boolean));
-  }
-  const members = new Map<string, GitMember>();
-  const rawFolders = [...raw.keys()].map(day => [day, rawDayDirectory(request.registry_entry, day)] as const);
-  for (const line of lines) {
-    const separator = line.indexOf("\t");
-    const metadata = line.slice(0, separator);
-    const path = line.slice(separator + 1);
-    const rawDay = rawFolders.find(([, directory]) => path.startsWith(`${directory}/`))?.[0];
-    if (rawDay !== undefined && path === `${rawDayDirectory(request.registry_entry, rawDay)}/index.json`) continue;
-    const match = /^(\d{6}) blob ([0-9a-f]{40})\s+(\d+)$/.exec(metadata);
-    if (match === null || match[1] !== "100644") {
-      throw new MaintenanceRefusal("malformed-member", path);
-    }
-    if (rawDay !== undefined) {
-      const name = path.slice(path.lastIndexOf("/") + 1);
-      if (!/^[0-9a-f]{8}-[0-9a-f]{4}-8[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\.parquet$/.test(name)) {
-        throw new MaintenanceRefusal("unsupported-member", path);
-      }
-      raw.get(rawDay)!.push(path);
-    } else if (!compact.has(path)) {
-      throw new MaintenanceRefusal("unsupported-member", path);
-    }
-    members.set(path, { blob: match[2]!, bytes: Number(match[3]) });
-  }
-  const targetStatus = await git(root, [
-    "status", "--porcelain=v1", "--untracked-files=all", "--", targetPath,
-  ]);
-  if (targetStatus !== "") throw new MaintenanceRefusal("target-conflict", targetPath);
-  for (let index = 0; index < named.length; index += 96) {
-    const status = await git(root, [
-      "status", "--porcelain=v1", "--untracked-files=all", "--", ...named.slice(index, index + 96),
-    ]);
-    if (status !== "") throw new MaintenanceRefusal("changed-member");
-  }
-  return { compact, raw, members };
+  return { raw, compact };
 }
 
 async function verifyMember(
-  root: string, path: string, member: GitMember, target = false,
+  root: string, path: string, expected?: SourceFile, target = false,
 ): Promise<{ bytes: Uint8Array; file_sha256: string }> {
-  const file = resolve(root, ...path.split("/"));
-  const localPath = rootRelative(root, file);
-  const [rootPath, actualPath] = await Promise.all([realpath(root), realpath(file).catch(error => {
+  const file = await regularPlannerPath(root, path).catch(error => {
     if (isMissing(error)) throw new MaintenanceRefusal("missing-local-member", path);
+    if (error instanceof Error && error.name === "PlannerLedgerFileError") {
+      throw new MaintenanceRefusal("malformed-member", path);
+    }
     throw error;
-  })]);
-  if (actualPath !== resolve(rootPath, ...localPath.split("/"))) {
-    throw new MaintenanceRefusal("malformed-member", path);
-  }
+  });
   const bytes = await readFile(file).catch(error => {
     if (isMissing(error)) throw new MaintenanceRefusal("missing-local-member", path);
     throw error;
   });
-  const blob = createHash("sha1").update(`blob ${bytes.byteLength}\0`).update(bytes).digest("hex");
-  if (bytes.byteLength !== member.bytes || blob !== member.blob) {
+  const file_sha256 = createHash("sha256").update(bytes).digest("hex");
+  if (expected !== undefined && (bytes.byteLength !== expected.bytes || file_sha256 !== expected.file_sha256)) {
     throw new MaintenanceRefusal(target ? "target-conflict" : "changed-member", path);
   }
-  return {
-    bytes,
-    file_sha256: createHash("sha256").update(bytes).digest("hex"),
-  };
+  return { bytes, file_sha256 };
 }
 
-function rawDayDirectory(registration: LedgerRegistration, day: string): string {
-  return `state/raw/${registration.prefix.join("/")}/${day.replaceAll("-", "/")}`;
-}
-
-function compactPeriodPath(
-  registration: LedgerRegistration,
-  period: "daily" | "monthly" | "yearly",
-  covers: string,
-  format: "parquet" | "json" = "parquet",
-): string {
-  const pieces = covers.split("-");
-  const extension = `.${format}`;
-  const suffix = period === "yearly" ? `${covers}/${covers}${extension}`
-    : period === "monthly" ? `${pieces[0]}/${pieces[1]}${extension}`
-      : `${pieces[0]}/${pieces[1]}/${pieces[2]}${extension}`;
-  return `state/compact/${registration.prefix.join("/")}/${period}/${suffix}`;
+async function verifySources(root: string, sources: Map<string, SourceFile>, targetPath: string) {
+  for (const source of sources.values()) {
+    await verifyMember(root, source.path, source, source.path === targetPath);
+  }
+  if (!sources.has(targetPath)) {
+    try {
+      await regularPlannerPath(root, targetPath);
+    } catch (error) {
+      if (isMissing(error)) return;
+      throw error;
+    }
+    throw new MaintenanceRefusal("target-conflict", targetPath);
+  }
 }
 
 function daysOf(request: PlannerMaintenanceRequest): string[] {
@@ -226,7 +153,6 @@ function result(
 ): PlannerMaintenanceResult {
   return PlannerMaintenanceResultSchema.parse({
     version: request.version,
-    revision: request.revision,
     ledger: request.ledger,
     period: request.period,
     covers: request.covers,
@@ -248,21 +174,18 @@ export async function maintainPlannerPeriod(root: string, rawRequest: unknown): 
 async function maintainPeriod<T extends object>(
   root: string, request: PlannerMaintenanceRequest, rowContract: LedgerRowContract<T>,
 ): Promise<PlannerMaintenanceResult> {
-  if (await currentRevision(root) !== request.revision) {
-    return result(request, { status: "refused", reason: "revision-changed", path: null });
-  }
   const registration = request.registry_entry;
   const settings = request.ledger_settings;
   const period: Extract<LedgerPeriod, { tier: "compact" }> = {
     tier: "compact", period: request.period, covers: request.covers, builtFrom: 0,
   };
-  const targetPath = compactPeriodPath(registration, request.period, request.covers);
+  const targetPath = compactPeriodFile(registration, request.period, request.covers);
   const days = daysOf(request);
   const sources = new Map<string, SourceFile>();
   const rows: T[] = [];
   let carriedOver = false;
   try {
-    const captured = await captureMembers(root, request, days, targetPath);
+    const captured = await captureMembers(root, request, days);
     const rawPathsByDay = new Map(
       days.map(day => [day, [...(captured.raw.get(day) ?? [])].sort()] as const),
     );
@@ -280,14 +203,13 @@ async function maintainPeriod<T extends object>(
       for (const candidate of ["yearly", "monthly", "daily"] as const) {
         const covers = candidate === "yearly" ? day.slice(0, 4)
           : candidate === "monthly" ? day.slice(0, 7) : day;
-        const path = compactPeriodPath(registration, candidate, covers);
-        const jsonPath = compactPeriodPath(registration, candidate, covers, "json");
-        if (captured.members.has(jsonPath)) {
+        const path = compactPeriodFile(registration, candidate, covers);
+        const jsonPath = path.replace(/\.parquet$/, ".json");
+        if (captured.compact.has(jsonPath)) {
           throw new MaintenanceRefusal("unsupported-member", jsonPath);
         }
-        const member = captured.members.get(path);
-        if (member === undefined) continue;
-        const verified = await verifyMember(root, path, member, path === targetPath);
+        if (!captured.compact.has(path)) continue;
+        const verified = await verifyMember(root, path);
         const file = await readPlannerParquet(resolve(root, ...path.split("/")), request.ledger, rowContract);
         if (file.bytes !== verified.bytes.byteLength || file.file_sha256 !== verified.file_sha256
           || file.envelope.tier !== "compact" || file.envelope.period !== candidate
@@ -304,9 +226,7 @@ async function maintainPeriod<T extends object>(
       }
       for (const path of rawPathsByDay.get(day) ?? []) {
         if (!selectedRawPaths.has(path)) continue;
-        const member = captured.members.get(path);
-        if (member === undefined) throw new MaintenanceRefusal("changed-member", path);
-        const verified = await verifyMember(root, path, member);
+        const verified = await verifyMember(root, path);
         const file = await readPlannerParquet(resolve(root, ...path.split("/")), request.ledger, rowContract);
         if (file.bytes !== verified.bytes.byteLength || file.file_sha256 !== verified.file_sha256
           || file.envelope.tier !== "raw" || file.envelope.covers !== day
@@ -317,6 +237,7 @@ async function maintainPeriod<T extends object>(
         rows.push(...file.rows);
       }
     }
+    await verifySources(root, sources, targetPath);
   } catch (error) {
     if (error instanceof MaintenanceRefusal) {
       return result(request, { status: "refused", reason: error.reason, path: error.path });
@@ -326,9 +247,6 @@ async function maintainPeriod<T extends object>(
     }
     if (isMissing(error)) return result(request, { status: "refused", reason: "missing-local-member", path: null });
     throw error;
-  }
-  if (await currentRevision(root) !== request.revision) {
-    return result(request, { status: "refused", reason: "revision-changed", path: null });
   }
   const targetSha = sources.get(targetPath)?.file_sha256 ?? null;
   if (rows.length === 0) return result(request, { status: "empty" });
@@ -378,8 +296,13 @@ async function maintainPeriod<T extends object>(
   }
   const targetBytes = await readFile(resolve(outputRoot, ...relativeTarget.split("/")));
   const targetFileSha = createHash("sha256").update(targetBytes).digest("hex");
-  if (await currentRevision(root) !== request.revision) {
-    return result(request, { status: "refused", reason: "revision-changed", path: null });
+  try {
+    await verifySources(root, sources, targetPath);
+  } catch (error) {
+    if (error instanceof MaintenanceRefusal) {
+      return result(request, { status: "refused", reason: error.reason, path: error.path });
+    }
+    throw error;
   }
   const deletePaths = [...sources.keys()].filter(path => path !== targetPath);
   return result(request, {

@@ -1,12 +1,12 @@
 /** What the Python scheduler asks TypeScript to compact, and what it may safely replace. */
 import { z } from "zod";
 import {
-  CommitShaSchema, CountSchema, DateStampSchema, MonthStampSchema,
+  CountSchema, DateStampSchema, MonthStampSchema,
   RelPathSchema, Sha256Schema, YearStampSchema, reject,
 } from "./primitives";
 import { PlannerLedgerNameSchema } from "./envelope.schema";
 
-export const PLANNER_MAINTENANCE_VERSION = "2026-10-27" as const;
+export const PLANNER_MAINTENANCE_VERSION = "2026-11-01" as const;
 const CompactPeriodSchema = z.enum(["daily", "monthly", "yearly"]);
 const PeriodStampSchema = z.union([DateStampSchema, MonthStampSchema, YearStampSchema]);
 const RelativeLedgerPathSchema = RelPathSchema.refine(path => /\.(json|parquet)$/.test(path));
@@ -14,7 +14,6 @@ const RelativeParquetPathSchema = RelativeLedgerPathSchema.refine(path => path.e
 
 export const PlannerMaintenanceRequestSchema = z.strictObject({
   version: z.literal(PLANNER_MAINTENANCE_VERSION).default(PLANNER_MAINTENANCE_VERSION),
-  revision: CommitShaSchema,
   staging_root: z.string().regex(/^\.planner-maintenance-[0-9a-f]{32}$/),
   ledger: PlannerLedgerNameSchema,
   period: CompactPeriodSchema,
@@ -44,7 +43,10 @@ export const PlannerMaintenanceRequestSchema = z.strictObject({
   }
 }).meta({
   version: PLANNER_MAINTENANCE_VERSION,
-  changelog: [{ version: PLANNER_MAINTENANCE_VERSION, change: "Declare revision-pinned planner compact maintenance." }],
+  changelog: [
+    { version: PLANNER_MAINTENANCE_VERSION, change: "Use local named-period files without a revision control." },
+    { version: "2026-10-27", change: "Declare revision-pinned planner compact maintenance." },
+  ],
 });
 export type PlannerMaintenanceRequest = z.infer<typeof PlannerMaintenanceRequestSchema>;
 
@@ -57,13 +59,12 @@ const SourceFileSchema = z.strictObject({
   file_sha256: Sha256Schema,
 });
 const InputGapSchema = z.enum([
-  "missing-local-member", "changed-member", "malformed-member", "unsupported-member", "revision-changed",
+  "missing-local-member", "changed-member", "malformed-member", "unsupported-member",
 ]);
 export const PlannerMaintenanceResultSchema = z.discriminatedUnion("status", [
   z.strictObject({
     version: z.literal(PLANNER_MAINTENANCE_VERSION),
     status: z.literal("written"),
-    revision: CommitShaSchema,
     ledger: PlannerLedgerNameSchema,
     period: CompactPeriodSchema,
     covers: PeriodStampSchema,
@@ -81,7 +82,6 @@ export const PlannerMaintenanceResultSchema = z.discriminatedUnion("status", [
   z.strictObject({
     version: z.literal(PLANNER_MAINTENANCE_VERSION),
     status: z.literal("empty"),
-    revision: CommitShaSchema,
     ledger: PlannerLedgerNameSchema,
     period: CompactPeriodSchema,
     covers: PeriodStampSchema,
@@ -89,7 +89,6 @@ export const PlannerMaintenanceResultSchema = z.discriminatedUnion("status", [
   z.strictObject({
     version: z.literal(PLANNER_MAINTENANCE_VERSION),
     status: z.literal("unchanged"),
-    revision: CommitShaSchema,
     ledger: PlannerLedgerNameSchema,
     period: CompactPeriodSchema,
     covers: PeriodStampSchema,
@@ -98,7 +97,6 @@ export const PlannerMaintenanceResultSchema = z.discriminatedUnion("status", [
   z.strictObject({
     version: z.literal(PLANNER_MAINTENANCE_VERSION),
     status: z.literal("refused"),
-    revision: CommitShaSchema,
     ledger: PlannerLedgerNameSchema,
     period: CompactPeriodSchema,
     covers: PeriodStampSchema,
@@ -107,6 +105,9 @@ export const PlannerMaintenanceResultSchema = z.discriminatedUnion("status", [
   }),
 ]).meta({
   version: PLANNER_MAINTENANCE_VERSION,
-  changelog: [{ version: PLANNER_MAINTENANCE_VERSION, change: "Return validated compact receipts or explicit maintenance refusals." }],
+  changelog: [
+    { version: PLANNER_MAINTENANCE_VERSION, change: "Remove revision results and retain source and target file guards." },
+    { version: "2026-10-27", change: "Return validated compact receipts or explicit maintenance refusals." },
+  ],
 });
 export type PlannerMaintenanceResult = z.infer<typeof PlannerMaintenanceResultSchema>;

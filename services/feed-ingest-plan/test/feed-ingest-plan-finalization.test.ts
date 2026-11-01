@@ -24,10 +24,12 @@ async function recording(failCollection = false) {
       finalize: {
         root: fixture.repository, directory: fixture.directory, currentRunFiles: JSON.stringify(fixture.paths),
         runNumber: "700", attempt: 3, cancelled: false,
+        gitSha: fixture.identity.git_sha,
         summaryPath: join(fixture.repository, "job-summary.md"), outputPath: join(fixture.directory, "step-outputs"),
       },
       finish: {
         root: fixture.repository, temporaryRoot: dirname(fixture.directory), runNumber: "700", attempt: 3,
+        gitSha: fixture.identity.git_sha,
         collectionOutcome: "success", planningComplete: "true", finalizationOutcome: "success",
         uploadOutcome: "success", artifactId: "123",
       },
@@ -54,6 +56,7 @@ test("one Git delivery precedes the report and prepares only the selected handof
     const indexBefore = await readFile(join(f.repository, ".git", "index"));
     const finalized = await runScript("finalize-run-output.ts", f.repository, {
       RUNNER_TEMP: dirname(f.directory), GITHUB_RUN_ID: "700", GITHUB_RUN_ATTEMPT: "3",
+      GITHUB_SHA: f.identity.git_sha,
       CURRENT_RUN_FILES: f.finalize.currentRunFiles, RUN_CANCELLED: "false",
       GITHUB_STEP_SUMMARY: f.finalize.summaryPath, GITHUB_OUTPUT: f.finalize.outputPath,
       DUMP_RAW_DOCUMENT_CONTENTS: "false", RUN_ID: f.identity.run_id,
@@ -148,6 +151,7 @@ test("cancelled finalization preserves recovery and a report without creating a 
       .toEqual(f.paths);
     const finished = await runScript("finish-run-output.ts", f.repository, {
       RUNNER_TEMP: dirname(f.directory), GITHUB_RUN_ID: "700", GITHUB_RUN_ATTEMPT: "3",
+      GITHUB_SHA: f.identity.git_sha,
       COLLECTION_OUTCOME: "cancelled", PLANNING_COMPLETE: "false", FINALIZATION_OUTCOME: "success",
       UPLOAD_OUTCOME: "success", UPLOAD_ARTIFACT_ID: "123",
     });
@@ -188,6 +192,7 @@ test("cleanup refuses a repository directory and a temporary-directory junction"
     for (const temporaryRoot of [repository, runner]) {
       await expect(finishRunOutput({
         root: repository, temporaryRoot, runNumber: "700", attempt: 1,
+        gitSha: "a".repeat(40),
         collectionOutcome: "success", planningComplete: "true", finalizationOutcome: "success",
         uploadOutcome: "success", artifactId: "123",
       })).rejects.toThrow("Run output is incomplete");
@@ -206,6 +211,7 @@ test("missing collection output still produces a report artifact without inventi
     const outputPath = join(root, "step-outputs");
     await expect(finalizeRunOutput({
       root, directory, runNumber: "700", attempt: 1, cancelled: false,
+      gitSha: "a".repeat(40),
       summaryPath: join(root, "summary.md"), outputPath,
     })).rejects.toThrow("Run finalization failed");
     expect(await readFile(join(directory, "artifacts", "700-1-report.md"), "utf8")).toContain("Planning result unavailable");

@@ -39,7 +39,7 @@ Table C
 | ID | Row | Title | Depends-on | Parallel-group | Status | Worktree | PR | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | C1 | 1 | Make planner execution use fixed file-loaded evidence | - | A | DONE | musical-doodle | - | Planner file inputs |
-| C2 | 2 | Restrict acquisition and maintenance Git to delivery boundaries | 1 | B | PENDING | - | - | - |
+| C2 | 2 | Restrict acquisition and maintenance Git to delivery boundaries | 1 | B | DONE | fictional-spoon | - | Planner git boundaries |
 
 ## 2 - Input and contract changes
 

@@ -1,6 +1,6 @@
 # The gardener
 
-**Last Updated**: 2026-10-27
+**Last Updated**: 2026-11-01
 
 How the one program that deletes and rewrites what this repository keeps is put
 together: where its tasks come from, how a wake is split into shards, what a
@@ -37,8 +37,8 @@ cannot change which tasks a wake plans.
 | Step | Job | Who | What it does |
 | --- | --- | --- | --- |
 | 1 | `plan` | `backend/utilities/gardener_shards.py` | Splits the active tasks into shards and prints the plan. Standard library only, reads `config/` alone |
-| 2 | `run-tasks`, one job a shard | `backend/utilities/gardener_publish.py --shard N` | Loads the named declarations, selects each retention task's fixed UTC period window and each compaction's ledger indexes, and lists the name and size of files only at those named paths in the commit; it then finds the modules and runs the pre-flight |
-| 3 | `run-tasks` | the runner | Runs every task of the shard, one after another, timing each. A task fetches the day or month folders it reads before it opens them |
+| 2 | `run-tasks`, one job a shard | `backend/utilities/gardener_publish.py --shard N` | Loads the named declarations and selects fixed UTC periods and compact indexes. Planner paths are listed locally; other families are listed from the commit. It then finds the modules and runs the pre-flight |
+| 3 | `run-tasks` | the runner | Runs every task of the shard, one after another, timing each. Planner input is already local; other families fetch the named periods they read |
 | 4 | `run-tasks` | the runner | Holds every path each task touched to what that task owns |
 | 5 | `run-tasks` | the runner | Writes the shard's one record through `ledger.persist`, and hands back what to land |
 | 6 | `run-tasks` | `gardener_publish.publish` | Builds one commit of exactly what the shard wrote and deleted, pushes it, and tries again on a newer tip if the push failed. Lands nothing when `main` changed one of those paths after the commit the shard ran on |
@@ -52,8 +52,17 @@ the same shards, no shard is empty, and every task is in exactly one. How much
 work a task holds is not read: one owned folder can hold one file or ten
 thousand, so counting folders would balance nothing.
 
-**A shard checks out only its code and config, and lists the rest from the
-commit.** `gardener_publish.py` reads, in one `git ls-tree -r -l` over the commit
+**Initial checkout supplies code, config and planner data at one ref.**
+Planner tasks use exact named local periods and the existing compact indexes.
+They do not query Git or a remote Git data API, prove blobs, or expand the
+checkout. Code identity comes from `GITHUB_SHA` or the explicit caller identity,
+validated before writes. Mixed shards route planner paths only to that local
+listing; the shared callbacks cannot send them to Git.
+Sparse-index configuration is supplied through the job's native Git environment,
+not a separate post-checkout Git setup process.
+
+**Other families keep their existing commit acquisition.**
+`gardener_publish.py` reads, in one `git ls-tree -r -l` over the commit
 with lazy fetching off, the name and size of every file under the folders the
 shard's tasks own or read - and under the folders the complement task sweeps,
 which only the commit can name - and downloads none of them. A file's size is
@@ -63,7 +72,7 @@ are matched to git's names by blob id; a name left with no size is refused, and
 no task runs. So what a shard's listing costs grows with the number of names,
 not with what the files weigh.
 
-**A task decides from those names and fetches only what it reads.** A task that
+**A non-planner task decides from those names and fetches only what it reads.** A task that
 decides from the date in a path downloads nothing, and its deletions land from
 the names alone. A task that reads a file's content - a compaction packing a
 day, the census summary reading a month - first widens the checkout by exactly
@@ -75,6 +84,8 @@ and wrote, so a later task of the shard that reads the same folder sees the
 tree the shard will commit, and never fetches a file an earlier task deleted.
 
 **A task is handed the folders it walks, and never lists `state/` itself.**
+Planner folder presence comes from the initial local input, without a commit
+query. For the other families,
 `gardener_publish.py` reads, in one `git ls-tree` with no recursion, which of
 the folders the shard's tasks own or read the commit holds, and every folder
 directly under `state/`, and the runner turns that into
@@ -123,8 +134,8 @@ flowchart TB
     PLAN["plan job: gardener_shards.py<br/>standard library only,<br/>before any install;<br/>reads the config alone"]
     ANY{"any active task<br/>for the matrix?"}
     IDLE["no shard runs"]
-    TEND["run-tasks job, one a shard:<br/>gardener_publish.py --shard N<br/>lists its folders' files<br/>from the commit"]
-    RUN["for each task in the shard:<br/>select from names, fetch<br/>what it reads, report, delete"]
+    TEND["run-tasks job, one a shard:<br/>gardener_publish.py --shard N<br/>reads named planner paths locally;<br/>other families from the commit"]
+    RUN["for each task in the shard:<br/>select from names, read acquired input,<br/>report, delete"]
     OWNED{"every path a task<br/>wrote or deleted inside<br/>that task's owns?"}
     OUTSIDE["exit 2<br/>the ownership<br/>claim is wrong"]
     LANDED{"all exact shard operations<br/>already on origin/main?"}
@@ -296,6 +307,11 @@ shard's tasks downloaded to read: the content of every file a widening brought.
 The code folders every shard checks out - `config/`, `backend/` and `.github/` -
 are in neither: they are the same in every shard, and they grow with code rather
 than with what the pipeline keeps.
+Planner data is also acquired by initial checkout. Its local task reads add
+zero `downloaded_bytes`; this does not report or estimate checkout transfer.
+A mixed shard still counts each later download for the other families.
+The existing record repeats that shard total on every task row; it is not a
+separate per-task measurement.
 
 **A compaction takes only what fits what is left of `max_downloaded_mb`.**
 Each step reads its periods' sizes off the listing before anything is
@@ -543,7 +559,8 @@ none: it never runs as a step on GitHub.
 
 `backend/utilities/gardener_publish.py` owns shard orchestration, not a push loop.
 It calls the shared `backend/utilities/publish_to_repo.py` with independent
-task permissions and exact completed operations. It reads the checkout commit, calls the
+task permissions and exact completed operations. It retains the supplied initial
+identity for planner-containing shards, calls the
 runner, and lands the `Shard` the runner hands back - the record, every path the
 shard's live tasks wrote and deleted, every report any of its
 tasks filed, and the commit message. Each attempt fetches `main` and builds the
@@ -560,6 +577,10 @@ quietly. A failed push waits a random time - up to 1, 2, 4, 8 and then 8 seconds
 and tries again on the new tip. No wait follows the last attempt. A deletion of
 a file the commit did not list lands nothing, and the shard exits 2: a task
 decided it from something other than the commit.
+Planner replacement/deletion baselines use the original supplied identity,
+even if the local `HEAD` changes after computation. Git source checks happen
+only in this final publisher. Direct non-planner callers retain their existing
+source lookup and final-publication behavior.
 
 **Every exact operation decides whether the shard already landed.** A matching
 record alone is insufficient: all confirmed write blobs/modes and all completed

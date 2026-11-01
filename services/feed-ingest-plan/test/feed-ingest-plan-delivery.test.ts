@@ -39,6 +39,7 @@ test("the safe-persist HTTP contract reuses run, attempt, exact paths and the un
     { ...request, paths: ["../outside"] }, { ...request, paths: ["raw\\outside"] },
     { ...request, paths: [...request.paths, ...request.paths] },
     { ...request, repository: "outside" }, { ...request, permittedPaths: ["state"] },
+    { ...request, git_sha: "a".repeat(40) },
   ]) expect(SafePersistHttpRequestSchema.safeParse(invalid).success).toBe(false);
   expect(MetadataDeliveryResultSchema.parse({
     status: "landed", commit: "a".repeat(40), files: 1, paths: request.paths,
@@ -53,8 +54,11 @@ test("the safe-persist HTTP contract reuses run, attempt, exact paths and the un
 
 test("safe-persist startup keeps only the existing private loopback controls", async () => {
   const { startup } = await readPlannerStartupRecording();
-  const controls = { nonce: startup.nonce, settings: startup.settings, output_root: startup.output_root };
+  const controls = { nonce: startup.nonce, settings: startup.settings, output_root: startup.output_root,
+    git_sha: startup.runtime.git_sha };
   expect(SafePersistHttpStartupSchema.parse(controls)).toEqual(controls);
+  expect(SafePersistHttpStartupSchema.safeParse({ ...controls, git_sha: "" }).success).toBe(false);
+  expect(SafePersistHttpStartupSchema.safeParse({ ...controls, git_sha: undefined }).success).toBe(false);
   expect(SafePersistHttpStartupSchema.safeParse({ ...controls, permittedPaths: ["state"] }).success).toBe(false);
   expect(SafePersistHttpStartupSchema.safeParse({
     ...controls, settings: { ...controls.settings,

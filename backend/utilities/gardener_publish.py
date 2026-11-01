@@ -84,13 +84,14 @@ import logging
 import os
 import subprocess
 import sys
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path, PurePosixPath
 from types import ModuleType
 from typing import Final
 
+from idhazh import ledger
 from idhazh.config import GardenerSettings
 from idhazh.contracts.base import ServerJob
 from idhazh.contracts.file_envelope import WriterIdentity
@@ -124,6 +125,7 @@ from idhazh.gardener.outcome import (
     worst,
 )
 from idhazh.gardener.period_inputs import paths_for_task, scheduled_range
+from idhazh.ledger import paths as ledger_paths
 from idhazh.ledger import staging
 from idhazh.site_weight import BYTES_PER_MB
 from utilities.publication_git import Repository
@@ -321,7 +323,10 @@ def publish(
         refused = _refuse_a_directory(shard, repo)
         if refused is not None:
             raise IntegrityError(refused)
-        source = git.git("rev-parse", "HEAD").strip()
+        source = (
+            identity.git_sha if planner_input_folders(shard.owned_prefixes)
+            else git.git("rev-parse", "HEAD").strip()
+        )
         git.prime(source, set(shard.written_paths) | set(shard.deleted_paths))
         writes = {
             path: Write(
@@ -390,11 +395,14 @@ def read_the_listing(
     trees: TreeReader | None,
     *,
     budget: int | None = None,
+    local_folders: Sequence[str] = (),
 ) -> FileListing:
-    """Every file the commit holds under these named period paths, with its size.
+    """Every file at the named periods, from local planner input or another family's commit.
 
     The listing answers only for these paths, and refuses a path under its
-    folders that none of them names. Git's size where the clone holds the
+    folders that none of them names. Planner folders use already-acquired local
+    files and never enter Git listing, size lookup or widening callbacks.
+    Other folders use Git's size where the clone holds the
     file. For one it never downloaded, GitHub's blob API is asked for that
     named file and its size is matched by blob id. `trees` stands in for that
     API, and None reaches it for this repo. A step that names a period as it
@@ -410,6 +418,24 @@ def read_the_listing(
     """
     chosen = sorted(set(folders))
     named = sorted(set(period_paths))
+    local = sorted(set(local_folders))
+    if any(folder not in chosen for folder in local):
+        raise ValueError("local planner folders must be declared in the listing")
+
+    def local_path(path: str) -> bool:
+        return any(ownership.contains(path, folder) for folder in local)
+
+    def local_listing(wanted: Sequence[str]) -> FileListing:
+        return FileListing.from_disk(
+            repo_root,
+            local,
+            paths=[repo_root / path for path in wanted if local_path(path)],
+            budget=budget,
+        )
+
+    if local == chosen:
+        return local_listing(named)
+
     listed: set[str] = set()
     above: set[str] = set()
 
@@ -430,15 +456,21 @@ def read_the_listing(
             if parent.parts
         )
 
-    entries = checkout.list_files(named)
+    entries = checkout.list_files([path for path in named if not local_path(path)])
     remember(entries)
 
     def lister(wanted: Sequence[str]) -> dict[str, int]:
-        found = checkout.list_files(wanted)
+        found = checkout.list_files([path for path in wanted if not local_path(path)])
         remember(found)
-        return sizes_of(found, asked_of_github(found))
+        return {
+            **sizes_of(found, asked_of_github(found)),
+            **local_listing(wanted).sizes,
+        }
 
     def widen(wanted: Sequence[str]) -> None:
+        wanted = [path for path in wanted if not local_path(path)]
+        if not wanted:
+            return
         stray = [
             entry
             for entry in wanted
@@ -453,7 +485,7 @@ def read_the_listing(
             )
         checkout.widen(wanted)
 
-    return FileListing.from_commit(
+    listing = FileListing.from_commit(
         repo_root,
         chosen,
         entries,
@@ -462,6 +494,9 @@ def read_the_listing(
         widen=widen,
         lister=lister,
         budget=budget,
+    )
+    return dataclasses.replace(
+        listing, sizes=dict(sorted({**listing.sizes, **local_listing(named).sizes}.items()))
     )
 
 
@@ -472,6 +507,23 @@ def declared_folders(
     owned = sorted({folder for name in names for folder in settings.tasks[name].owns})
     read = sorted({folder for name in names for folder in settings.tasks[name].reads})
     return owned, read
+
+
+def planner_input_folders(folders: Iterable[str]) -> tuple[str, ...]:
+    """Which declared ledger folders use the planner's local input authority?"""
+    roots = {
+        (ledger.STATE_DIRNAME, ledger_paths.RAW_DIRNAME),
+        (ledger.STATE_DIRNAME, ledger_paths.COMPACT_DIRNAME),
+    }
+    local: list[str] = []
+    for folder in folders:
+        parts = PurePosixPath(folder).parts
+        if parts[:2] not in roots:
+            continue
+        which = ledger.door_ledger_at(tuple(parts[2:]))
+        if which is not None and ledger_paths.is_planner_ledger(which):
+            local.append(folder)
+    return tuple(sorted(set(local)))
 
 
 #: Python's own exit status when an exception ends it: what a shard that crashed exits with.
@@ -535,6 +587,7 @@ def run_and_land(
     run_id: str,
     attempt: int,
     shard: int,
+    git_sha: str | None = None,
     period_range: tuple[str, str] | None = None,
     package: ModuleType = shipped_tasks,
     trees: TreeReader | None = None,
@@ -561,6 +614,7 @@ def run_and_land(
             period_range=period_range,
             package=package,
             trees=trees,
+            git_sha=git_sha,
             clock=clock,
             say=say,
         )
@@ -580,10 +634,11 @@ def _run_and_land(
     period_range: tuple[str, str] | None,
     package: ModuleType,
     trees: TreeReader | None,
+    git_sha: str | None,
     clock: Callable[[], datetime],
     say: Callable[[str], None],
 ) -> tuple[Outcome, ShardPublished]:
-    """Read the commit's names, run the shard, and land what it hands back; the worst code wins.
+    """Load named inputs, run the shard, and land what it hands back; the worst code wins.
 
     The listing covers only the named periods each task may read, and a period
     a step names as it runs. A listing that cannot be read runs no task and
@@ -594,16 +649,30 @@ def _run_and_land(
     """
     names, shard = run.names, run.shard
     checkout = Checkout(repo_root)
-    sha = checkout.head()
+    owned, read = declared_folders(names, settings)
+    local = planner_input_folders([*owned, *read])
+    sha = git_sha if git_sha is not None else (
+        os.environ.get("GITHUB_SHA") if local else checkout.head()
+    )
     if sha is None:
-        say(f"shard {shard}: {repo_root.name} is not a git checkout, so no record can name it")
+        say(
+            f"shard {shard}: a planner task requires GITHUB_SHA or an explicit runtime "
+            "code identity" if local else
+            f"shard {shard}: {repo_root.name} is not a git checkout, so no record can name it"
+        )
         return _refused(run, EXIT_INTEGRITY)
+    WriterIdentity(
+        run_id=run.run_id, attempt=run.attempt, job=ServerJob.RUN_TASKS,
+        shard=shard, producer="gardener.runner", git_sha=sha,
+    )
     if period_range is not None and len(names) != 1:
         say("a named period range runs one task, not a shard")
         return _refused(run, EXIT_INTEGRITY)
     started_at = clock()
-    owned, read = declared_folders(names, settings)
-    committed = checkout.committed_folders([*owned, *read])
+    remote = [folder for folder in [*owned, *read] if folder not in local]
+    committed = (
+        checkout.committed_folders(remote) if remote else frozenset()
+    ) | frozenset(folder for folder in local if (repo_root / folder).is_dir())
     try:
         paths = sorted(
             {
@@ -627,6 +696,7 @@ def _run_and_land(
             paths,
             trees,
             budget=settings.config.max_downloaded_mb * BYTES_PER_MB,
+            local_folders=local,
         )
     except (OSError, RuntimeError, ValueError) as refusal:
         error, where = event_log.cause_of(refusal)

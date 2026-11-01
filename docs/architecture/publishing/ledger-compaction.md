@@ -1,6 +1,6 @@
 # Ledger compaction
 
-**Last Updated**: 2026-10-27
+**Last Updated**: 2026-11-01
 
 How a ledger's daily, monthly and yearly files are packed and dropped. The
 gardener runs a compaction like any other task; how a wake runs its tasks and
@@ -207,20 +207,28 @@ conflicting records refuse the period before destructive changes.
 The Python gardener still chooses bounded periods and keeps the shared
 compact-index marks used by all ledger families. For planner rows, it delegates
 validation and daily, monthly, reopened-month and yearly compaction to the
-TypeScript writer. That adapter checks exact canonical raw and compact paths at
-one captured Git revision, settles rows through their declared identities,
+TypeScript writer. Initial checkout acquires the planner's saved data with code.
+That adapter checks exact canonical local raw and compact paths, settles rows through their declared identities,
 and returns verified output bytes and exact deletion paths. Missing, changed
 or unsupported members refuse the period; no Python planner row model or
 second scheduler is added. Readers include late raw planner work beside
 compact coverage; another family keeps its existing compact-first rule.
 Packing preserves captured reliability and score values rather than summing
 them. Run counters can be aggregated later, once per fact.
-Before a planner period is fetched, the Python pass names its candidate compact
-sibling paths, then asks the listing which exact files the commit holds. A
-missing sibling is not passed as a fetch member. Daily, monthly, reopened-month
+Before a planner period is opened, the Python pass names its candidate compact
+sibling paths, then asks the local listing which exact files exist. A
+missing sibling is not passed as a required member. Daily, monthly, reopened-month
 monthly and yearly periods use this rule. A held JSON sibling is still named,
 so the TypeScript owner can refuse unsupported legacy JSON; a held Parquet
 file alone names no other format as a guess.
+Planner-only shards need no Git executable for acquisition or computation.
+Mixed shards keep planner paths out of the other families' Git listing, size
+lookup and widening callbacks. Local reads add zero task download bytes; the
+initial checkout's transfer is not measured here. Period, raw-file and retention
+limits remain unchanged. The transient maintenance request/result has no
+revision control. Native validation, source sizes/digests, target guards and
+exact deletion checks remain. Only the final shard publisher uses Git and
+checks planner replacements/deletions against the supplied initial identity.
 The row identities and missing-data rules are
 [the planner reference](../../reference/feed-planner-ledgers.md#e-dates-counters-and-compaction).
 After all stages decide their files, the pass writes each final index once,
