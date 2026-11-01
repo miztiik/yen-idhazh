@@ -39,11 +39,11 @@ test("real API receipts survive a missing planner result and keep byte-valued ca
     const before = await readFile(join(directory, "state", paths[0]!));
     const hostSummary = formatHostFingerprintSummary(host.evidence);
     const report = renderUnavailablePlanMarkdown({
-      host: { markdown: hostSummary.summary, notice: hostSummary.notice },
+      host: { markdown: hostSummary.cells, notice: hostSummary.notice },
     });
     expect(report.markdown).toContain("Planning result unavailable");
     expect(report.markdown.indexOf("Planning result unavailable"))
-      .toBeLessThan(report.markdown.indexOf("## Table H - Host fingerprint"));
+      .toBeLessThan(report.markdown.indexOf("## Table H - Execution measurements"));
     const hostNotice = hostSummary.notice;
     expect(hostNotice).toContain("L3 48.00 MiB");
     expect(hostNotice).toContain("total RAM 16383.750 MiB");

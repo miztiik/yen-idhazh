@@ -28,18 +28,17 @@ function facts(markdown: string) {
   }));
 }
 
-test("keeps status, identity, attempt and literal assignment values in distinct fact rows", async () => {
+test("keeps compact outcome and useful elapsed units without duplicate settings", async () => {
   const { feed, run } = await fixture();
   const rows = [feed, { ...feed, date: "2026-10-24", checked_at: "2026-10-24T10:00:00Z" }];
   const before = structuredClone(rows);
-  const report = renderRunFacts(run, rows);
+  const report = renderRunFacts(run, rows, "10", 2);
   expect(facts(report.markdown)).toMatchObject({
-    Status: "completed", Attempt: "1", "Feeds with saved run rows": "1", "Feeds checked": "1",
-    "Admitted articles": "6", "Feeds with unavailable admission totals": "0",
-    "Chosen articles": "2", "Article assignments": "3", "Assignment strategy": "round-robin",
-    "Elapsed planning time (ms)": "1234", "Selection started": "true",
+    Result: "completed", "Feeds checked": "1", "Feeds paused": "2",
+    "Technically eligible articles": "6", "Selected / configured maximum": "2 / 10",
+    "Elapsed planning time": "1.23 s",
   });
-  expect(facts(report.markdown).Run).toBe("2026-10-25-1234");
+  expect(facts(report.markdown)).not.toHaveProperty("Run");
   expect(report.markdown).not.toContain("Article assignments group selected articles");
   expect(rows).toEqual(before);
 });
@@ -49,31 +48,28 @@ test("keeps admission subtotal separate from unavailable totals and request comp
   const rows = [feed, { ...feed, feed_id: "unresolved", article_candidates: null, counts_complete: false }];
   const report = renderRunFacts(run, rows);
   expect(facts(report.markdown)).toMatchObject({
-    "Known admitted articles": "3", "Feeds with unavailable admission totals": "1",
+    "Technically eligible articles": "3 known; exact total unavailable for 1 feed",
   });
   expect(report.markdown).toContain("exact total unavailable");
-  expect(report.markdown).toContain("unresolved");
-  expect(report.notice).toContain("3 known admitted articles (1 feed total unavailable)");
-  expect(report.notice).toContain("Request counts complete");
+  expect(report.markdown).not.toContain("requests");
   expect(renderRunFacts(run, [{ ...rows[1]!, article_requests: null }]).notice)
-    .toContain("Request counts incomplete");
+    .toContain("Not recorded");
 });
 
 test("distinguishes known empty, absent and entirely unknown counts", async () => {
   const { feed, run } = await fixture();
   expect(facts(renderRunFacts(run, []).markdown)).toMatchObject({
-    "Admitted articles": "0", "Feeds checked": "0",
+    "Technically eligible articles": "0", "Feeds checked": "0",
   });
   expect(facts(renderRunFacts(run, undefined).markdown)).toMatchObject({
-    "Admitted articles": "Not recorded", "Feeds checked": "Not recorded",
+    "Technically eligible articles": "Not recorded", "Feeds checked": "Not recorded",
   });
   const report = renderRunFacts(run, [{ ...feed, article_candidates: null, feed_reads: null }]);
   expect(facts(report.markdown)).toMatchObject({
-    "Known admitted articles": "Not recorded", "Feeds checked": "0*",
+    "Technically eligible articles": "Not recorded; exact total unavailable for 1 feed", "Feeds checked": "0; exact total unavailable",
   });
-  expect(report.markdown).toContain("some check counts are unavailable");
-  expect(report.notice).toContain("Admission subtotal unavailable");
-  expect(report.notice).not.toContain("Not recorded known admitted articles");
+  expect(report.markdown).not.toContain("*");
+  expect(report.notice).toContain("Not recorded");
 });
 
 test("keeps failed and unstarted selection facts distinct from configuration switches", async () => {
@@ -81,8 +77,7 @@ test("keeps failed and unstarted selection facts distinct from configuration swi
   const report = renderRunFacts({ ...run, status: "failed", failure_code: "PLANNER_EXECUTION_FAILED",
     selection_started_at_utc: null, duration_ms: null }, undefined);
   expect(facts(report.markdown)).toMatchObject({
-    Status: "failed", "Failure code": "PLANNER_EXECUTION_FAILED",
-    "Selection started": "false", "Elapsed planning time (ms)": "Not recorded",
+    Result: "failed: PLANNER_EXECUTION_FAILED", "Elapsed planning time": "Not recorded",
   });
   expect(facts(report.markdown)).not.toHaveProperty("Selection began at (UTC)");
 });

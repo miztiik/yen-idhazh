@@ -880,6 +880,13 @@ reported separately, never presented as a count of lost records. Each
 counter is complete only when all configured closed days are complete.
 Feed and report completeness require every counter to be complete.
 
+The workflow's Request counts and coverage fold shows This run separately
+from this historical window. It shares identical coverage rows across feeds
+and categories and lists exceptions without repeating per-feed paragraphs.
+Partial counters have no cell asterisk; one note states that only recorded
+requests are counted. See the [workflow guide](../how-to/run-feed-ingest-plan-test.md#saved-output-and-failures)
+for the report layout and technical-admission subtotal rules.
+
 The request report retains its unchanged current `2026-10-29` shape; selected
 and partitioned payloads use `2026-10-31`. Stage readers refuse earlier formats under the
 TypeScript planner compatibility rule; no historical ledger is rewritten.

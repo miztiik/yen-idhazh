@@ -4,6 +4,8 @@ import { join } from "node:path";
 import { FeedIngestConfigSchema, WriterIdentitySchema } from "../../../packages/common-contracts/src/index";
 import { z } from "zod";
 import { PlanResponseSchema } from "../src/api/plan-response.schema";
+import { FeedHealthStateUpdateResponseSchema } from "../src/api/feed-health-state.schema";
+import { renderExclusionDiagnostics } from "../src/reporting/selection-exclusions-markdown";
 import {
   renderPlanMarkdown, renderPlannerProgressMarkdown, renderUnavailablePlanMarkdown,
 } from "../src/reporting";
@@ -22,13 +24,11 @@ export function renderWorkflowPlanMarkdown(
   const response = PlanResponseSchema.parse(input.response);
   const policy = formatPolicyTable(input.policy, response.selection_started_at_utc !== null, documentationUrl);
   const host = formatHostFingerprintSummary(input.host);
-  const report = renderPlanMarkdown({
+  return renderPlanMarkdown({
     response, health: input.health, policy: { markdown: policy.summary, notice: policy.notice },
+    host: { markdown: host.cells, notice: host.notice },
+    maximum: policy.maximum,
   });
-  return {
-    markdown: placeHostFingerprintFirst(report.markdown, host.summary),
-    notices: [{ level: "notice", title: "Host fingerprint", message: host.notice }, ...report.notices],
-  };
 }
 
 export function resolveWorkflowGuideUrl(context: NodeJS.ProcessEnv): string | undefined {
@@ -39,12 +39,6 @@ export function resolveWorkflowGuideUrl(context: NodeJS.ProcessEnv): string | un
     `${GITHUB_REPOSITORY}/blob/${GITHUB_SHA}/docs/how-to/run-feed-ingest-plan-test.md`,
     `${GITHUB_SERVER_URL}/`,
   ).href;
-}
-
-function placeHostFingerprintFirst(markdown: string, hostSummary: string): string {
-  const title = "# Feed planner run\n\n";
-  if (!markdown.startsWith(title)) throw new Error("Planner report is missing its title");
-  return `${title}${hostSummary}\n\n${markdown.slice(title.length)}`;
 }
 
 export async function writePlannerReport(input: {
@@ -87,20 +81,21 @@ export async function writeWorkflowReport(input: {
   if (!input.summaryPath) throw new Error("Enabled reporting requires a summary output path");
   await mkdir(input.directory, { recursive: true });
   let report: PlannerMarkdown;
+  let diagnostics = "";
   if (await Bun.file(join(input.directory, "response.json")).exists()) {
-    report = renderWorkflowPlanMarkdown(await readExecutionEvidence(input.directory));
+    const evidence = await readExecutionEvidence(input.directory);
+    report = renderWorkflowPlanMarkdown(evidence);
+    if (evidence.health !== undefined) {
+      diagnostics = renderExclusionDiagnostics(FeedHealthStateUpdateResponseSchema.parse(evidence.health).rows);
+    }
   } else {
     const hostFile = Bun.file(join(input.directory, "host-fingerprint.json"));
     const host = formatHostFingerprintSummary(await hostFile.exists() ? await hostFile.json() : undefined);
-    const unavailable = renderUnavailablePlanMarkdown();
-    report = {
-      markdown: placeHostFingerprintFirst(unavailable.markdown, host.summary),
-      notices: [...unavailable.notices, { level: "notice", title: "Host fingerprint", message: host.notice }],
-    };
+    report = renderUnavailablePlanMarkdown({ host: { markdown: host.cells, notice: host.notice } });
   }
   const markdown = report.markdown;
   const filename = workflowReportFilename(input);
-  await writeFile(join(input.directory, filename), markdown, "utf8");
+  await writeFile(join(input.directory, filename), markdown + diagnostics, "utf8");
   await appendFile(input.summaryPath, markdown, "utf8");
   for (const notice of report.notices) console.log(formatWorkflowAnnotation(notice));
   return { status: "written" as const, markdown, filename };
