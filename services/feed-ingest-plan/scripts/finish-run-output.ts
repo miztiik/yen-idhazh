@@ -36,7 +36,6 @@ export async function finishRunOutput(input: {
   dumpRawDocumentContents?: boolean; rawDocumentContents?: string; runId?: string;
   rawUploadOutcome?: unknown; rawArtifactId?: string;
   commitOutcome?: unknown; reportOutcome?: unknown; writeReport?: boolean;
-  deliverMetadata?: boolean;
 }) {
   const gitSha = CommitShaSchema.parse(input.gitSha);
   const collection = OutcomeSchema.parse(input.collectionOutcome);
@@ -76,12 +75,10 @@ export async function finishRunOutput(input: {
       const context = await readWorkflowDeliveryContext({ ...input, directory, gitSha });
       const completed = await collectWorkflowFiles({ ...input, directory, ...context });
       if (completed.failures.length) throw new AggregateError(completed.failures, "Cleanup found invalid completed output");
-      if (input.deliverMetadata !== false) {
-        operation = "confirm-delivery";
-        const delivery = MetadataDeliveryResultSchema.parse(await Bun.file(join(directory, "delivery-result.json")).json());
-        if (!isMetadataDeliveryConfirmed(delivery, completed.paths)) {
-          throw new PlanError("DELIVERY_UNCONFIRMED", "Cleanup requires confirmed ledger delivery");
-        }
+      operation = "confirm-delivery";
+      const delivery = MetadataDeliveryResultSchema.parse(await Bun.file(join(directory, "delivery-result.json")).json());
+      if (!isMetadataDeliveryConfirmed(delivery, completed.paths)) {
+        throw new PlanError("DELIVERY_UNCONFIRMED", "Cleanup requires confirmed ledger delivery");
       }
       if (collection === "success" && input.planningComplete === "true" && completed.response?.planning_complete !== true) {
         failures.push(new Error("The completed planning control differs from the saved result"));
@@ -98,8 +95,7 @@ export async function finishRunOutput(input: {
     }
   }
   console.error(JSON.stringify({
-    event: "workflow_output_finished", collection, commit: input.deliverMetadata === false ? "not_requested" : commit,
-    metadata_validation: commit, report, finalization, upload,
+    event: "workflow_output_finished", collection, commit, report, finalization, upload,
     cleanup: cleaned ? "removed" : "retained", status: failures.length ? "failed" : "completed",
     failures: failures.map(error => error instanceof Error ? error.message : "Unknown completion failure"),
   }));
@@ -111,12 +107,11 @@ if (import.meta.main) {
     const { RUNNER_TEMP, GITHUB_RUN_ID, GITHUB_RUN_ATTEMPT, COLLECTION_OUTCOME, PLANNING_COMPLETE,
       FINALIZATION_OUTCOME, UPLOAD_OUTCOME, UPLOAD_ARTIFACT_ID,
       DUMP_RAW_DOCUMENT_CONTENTS, RAW_DOCUMENT_CONTENTS, RAW_UPLOAD_OUTCOME, RAW_UPLOAD_ARTIFACT_ID, GITHUB_SHA,
-      COMMIT_OUTCOME, REPORT_OUTCOME, WRITE_REPORT, RUN_ID, DELIVER_METADATA } = process.env;
+      COMMIT_OUTCOME, REPORT_OUTCOME, WRITE_REPORT, RUN_ID } = process.env;
     if (!RUNNER_TEMP || !GITHUB_RUN_ID || !GITHUB_RUN_ATTEMPT || !GITHUB_SHA) throw new Error("Workflow completion controls are missing");
     await finishRunOutput({
       root: process.cwd(), temporaryRoot: RUNNER_TEMP, runNumber: GITHUB_RUN_ID, attempt: Number(GITHUB_RUN_ATTEMPT),
       gitSha: GITHUB_SHA,
-      ...(DELIVER_METADATA === undefined ? {} : { deliverMetadata: z.enum(["true", "false"]).parse(DELIVER_METADATA) === "true" }),
       ...(RUN_ID === undefined || RUN_ID === "" ? {} : { runId: RUN_ID }),
       collectionOutcome: COLLECTION_OUTCOME, planningComplete: PLANNING_COMPLETE,
       finalizationOutcome: FINALIZATION_OUTCOME, uploadOutcome: UPLOAD_OUTCOME,

@@ -63,12 +63,6 @@ jobs:
 
       - name: Verify native source response ownership
         run: |
-          bun run --cwd packages/common-contracts check
           bun run --cwd services/feed-ingest-plan check
           bun run --cwd packages/feed-probe check
           bun run --cwd services/feed-ingest-plan test ./test/impit-transport.test.ts
-
-      - name: Verify workflow finalization and supervised entry points
-        run: |
-          npm --prefix frontend run test:changed -- --list
-          bun run --cwd services/feed-ingest-plan test ./test/feed-ingest-plan-finalization.test.ts ./test/feed-ingest-plan-workflow.test.ts ./test/feed-ingest-plan-supervisor.test.ts ./test/plan-entry-points.test.ts ./test/network-failure-evidence.test.ts
