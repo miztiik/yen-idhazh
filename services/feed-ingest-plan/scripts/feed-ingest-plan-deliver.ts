@@ -14,6 +14,7 @@ import { MetadataDeliveryResultSchema } from "./feed-ingest-plan-delivery-result
 import { describePlanError } from "../src/api/plan-request";
 import { RelativePathSchema } from "../src/config/service-settings";
 import { z } from "zod";
+import { writeJsonLine } from "../src/logging/structured-logger";
 
 export function metadataWritePermissions(registrations: MetadataRegistrations): string[] {
   return Object.values(registrations).map(({ prefix }) => `state/raw/${prefix.join("/")}`);
@@ -73,10 +74,10 @@ export async function deliverWorkflowMetadata(input: {
     if ([...paths].sort().join("\n") !== [...completed.paths].sort().join("\n")) {
       throw new Error("Delivery paths differ from the validated completed API output");
     }
-    if (completed.failures.length) console.error(JSON.stringify({
+    if (completed.failures.length) writeJsonLine({
       event: "planner_metadata_producers_failed",
       failures: completed.failures.length,
-    }));
+    });
     const result = MetadataDeliveryResultSchema.parse(await deliverPlannerFiles({
       repository: input.root,
       stateRoot: join(input.directory, "state"),
@@ -87,19 +88,18 @@ export async function deliverWorkflowMetadata(input: {
       committer: SafePersistDataCommitterSchema.parse(await Bun.file(join(input.root, "config", "data-delivery.json")).json()),
     }));
     await writeFile(join(input.directory, "delivery-result.json"), JSON.stringify(result));
-    console.log(JSON.stringify(result));
     return result;
   } catch (error) {
     const result = MetadataDeliveryResultSchema.parse({ status: "failed", commit: null, files: paths.length, paths });
     await writeFile(join(input.directory, "delivery-result.json"), JSON.stringify(result));
-    console.error(JSON.stringify({
+    writeJsonLine({
       event: "planner_metadata_delivery_failed",
       ...result,
       code: error instanceof Error ? error.name : "UnknownError",
       reason: error instanceof Error
         ? error.message.replaceAll(input.directory, "feed-ingest-plan").replaceAll(input.root, ".").replaceAll("\\", "/")
         : "Unknown delivery failure",
-    }));
+    });
     throw error;
   }
 }
@@ -110,13 +110,14 @@ if (import.meta.main) {
     if (!RUNNER_TEMP || !CURRENT_RUN_FILES || !GITHUB_RUN_ID || !GITHUB_RUN_ATTEMPT) {
       throw new Error("Delivery requires exact output paths and the executed run and attempt");
     }
-    await deliverWorkflowMetadata({
+    const result = await deliverWorkflowMetadata({
       root: process.cwd(), directory: join(RUNNER_TEMP, "feed-ingest-plan"),
       currentRunFiles: CURRENT_RUN_FILES, runNumber: GITHUB_RUN_ID, attempt: Number(GITHUB_RUN_ATTEMPT),
     });
+    console.log(JSON.stringify(result));
   } catch (error) {
-    console.error(JSON.stringify({ event: "planner_metadata_delivery_cli_failed",
-      code: describePlanError(error, process.cwd()).code }));
+    writeJsonLine({ event: "planner_metadata_delivery_cli_failed",
+      code: describePlanError(error, process.cwd()).code });
     process.exitCode = 2;
   }
 }

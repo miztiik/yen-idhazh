@@ -1,6 +1,30 @@
-/** Which exact immutable paths did the metadata publisher confirm or refuse? */
+/** Which completed metadata can cross the safe-persist HTTP boundary and be confirmed? */
 import { z } from "zod";
+import { WriterIdentitySchema } from "@idhazh/common-contracts";
+import { PlannerReadySchema, PlannerStartupSchema, PlannerStartupFailureSchema } from "../src/config/planner-startup";
 import { RelativePathSchema } from "../src/config/service-settings";
+
+export const SafePersistHttpRequestSchema = z.strictObject({
+  runNumber: z.string().regex(/^\d+$/),
+  attempt: WriterIdentitySchema.shape.attempt,
+  paths: z.array(RelativePathSchema).refine(paths => new Set(paths).size === paths.length,
+    "Completed output paths must be unique"),
+}).meta({
+  version: "2026-10-31",
+  changelog: [{ version: "2026-10-31", change: "Identify completed metadata for the existing safe-persist adapter over HTTP." }],
+});
+export type SafePersistHttpRequest = z.infer<typeof SafePersistHttpRequestSchema>;
+
+// Startup controls use the existing private pipe protocol, never the HTTP request.
+export const SafePersistHttpStartupSchema = PlannerStartupSchema.pick({
+  nonce: true, settings: true, output_root: true,
+});
+export const SafePersistHttpReadySchema = PlannerReadySchema.pick({
+  nonce: true, pid: true, port: true,
+}).extend({ event: z.literal("safe_persist_ready") });
+export const SafePersistHttpStartupFailureSchema = PlannerStartupFailureSchema.extend({
+  event: z.literal("safe_persist_startup_failed"),
+});
 
 export const MetadataDeliveryResultSchema = z.strictObject({
   status: z.enum(["landed", "already-on-main", "no-changes", "failed"]),
@@ -13,6 +37,9 @@ export const MetadataDeliveryResultSchema = z.strictObject({
     || ((value.status === "landed" || value.status === "already-on-main") && value.files === 0)) {
     context.addIssue({ code: "custom", message: "Commit status, identity and exact file paths must agree" });
   }
+}).meta({
+  version: "2026-10-31",
+  changelog: [{ version: "2026-10-31", change: "Expose the unchanged exact metadata delivery receipt over HTTP." }],
 });
 
 export function isMetadataDeliveryConfirmed(

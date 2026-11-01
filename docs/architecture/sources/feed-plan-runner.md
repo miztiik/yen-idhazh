@@ -37,6 +37,11 @@ process ID, a fresh startup nonce, run, attempt, captured UTC clock and code
 revision, then checks that the HTTP health response matches. An occupied port,
 wrong identity, early child exit or expired readiness fails the step explicitly.
 The same child handles planning and the health summary before shutdown.
+Always-run finalization then owns a separate
+[safe-persist HTTP child](feed-operator-api.md#safe-persist-http-delivery).
+It reuses the existing metadata adapter and the same process-lifetime code,
+without loading collection inputs or reopening in-memory planner batches.
+This keeps completed partial metadata available after the planner exits.
 
 The private startup pipe carries validated effective settings and planning
 policy, a relative temporary output root and scalar execution identity.

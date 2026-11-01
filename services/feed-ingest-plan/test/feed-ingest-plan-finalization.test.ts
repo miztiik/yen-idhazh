@@ -38,7 +38,7 @@ async function recording(failCollection = false) {
   }
 }
 
-async function runScript(name: "finish-run-output.ts", root: string, controls: Record<string, string>) {
+async function runScript(name: "finalize-run-output.ts" | "finish-run-output.ts", root: string, controls: Record<string, string>) {
   const child = Bun.spawn([process.execPath, fileURLToPath(new URL(`../scripts/${name}`, import.meta.url))], {
     cwd: root, env: { ...Bun.env, ...controls }, stdout: "pipe", stderr: "pipe",
   });
@@ -52,7 +52,17 @@ test("one Git delivery precedes the report and prepares only the selected handof
   const f = await recording();
   try {
     const indexBefore = await readFile(join(f.repository, ".git", "index"));
-    await finalizeRunOutput(f.finalize);
+    const finalized = await runScript("finalize-run-output.ts", f.repository, {
+      RUNNER_TEMP: dirname(f.directory), GITHUB_RUN_ID: "700", GITHUB_RUN_ATTEMPT: "3",
+      CURRENT_RUN_FILES: f.finalize.currentRunFiles, RUN_CANCELLED: "false",
+      GITHUB_STEP_SUMMARY: f.finalize.summaryPath, GITHUB_OUTPUT: f.finalize.outputPath,
+      DUMP_RAW_DOCUMENT_CONTENTS: "false", RUN_ID: f.identity.run_id,
+    });
+    expect(finalized.code).toBe(0);
+    expect(finalized.errors).toContain('"event":"safe_persist_http_completed"');
+    expect(finalized.errors).not.toContain('"event":"safe_persist_http_failed"');
+    expect(finalized.errors).not.toMatch(/[A-Za-z]:[\\/]/);
+    expect(finalized.errors).not.toContain("article_text");
     const receipt = MetadataDeliveryResultSchema.parse(await Bun.file(join(f.directory, "delivery-result.json")).json());
     expect(receipt).toMatchObject({ status: "landed", files: f.paths.length, paths: f.paths });
     const committed = await fixtureGit(f.origin, [
