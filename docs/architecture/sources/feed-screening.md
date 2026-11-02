@@ -1,6 +1,6 @@
 # Feed candidate screening
 
-**Last Updated**: 2026-10-27
+**Last Updated**: 2026-11-02
 
 Which parsed articles can reach numeric selection?
 Screening validates the complete server-owned candidate batch, current
@@ -82,6 +82,22 @@ The selected metadata retains its actual timing basis and timestamp.
 The normal tier's final age step is checked before a tighter run override.
 An override cannot widen any tier window. Harvest preflight uses the same
 maximum envelope, not the initial fresh window, so it preserves viable backfill.
+
+## Cached substance evidence
+
+After all cheap gates pass, screening measures retained paragraphs once and
+caches their word count and signed substance score in the native admitted
+evidence. The shared schema checks that retained words do not exceed the
+parser's full-body count. Missing count or score fails validation rather than
+being filled with zero.
+
+The raw `triage.min_words` technical minimum still controls admission.
+Measured zero retained words stays admitted; unknown timing stays null with
+zero recency. Neither adds a refusal or changes technical pass counts.
+Original article text, raw count, known-age tier limits and worker estimates
+are unchanged. The current selector does not use substance for ranking.
+Paragraph, length, density and headline rules live in
+[article substance scoring](article-substance-scoring.md).
 
 ## Rejection persistence
 

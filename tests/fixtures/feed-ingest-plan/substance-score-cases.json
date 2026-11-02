@@ -1,0 +1,84 @@
+{
+  "absolute_tolerance": 0.000000000001,
+  "length_cases": [
+    { "words": 0, "points": 0 },
+    { "words": 150, "points": 0.2 },
+    { "words": 300, "points": 0.4 },
+    { "words": 449, "points": 0.5986666666666667 },
+    { "words": 450, "points": 0.6 },
+    { "words": 600, "points": 0.8 },
+    { "words": 749, "points": 0.9986666666666667 },
+    { "words": 750, "points": 1 },
+    { "words": 2500, "points": 1 },
+    { "words": 3500, "points": 1 },
+    { "words": 3501, "points": 0.99992 },
+    { "words": 4750, "points": 0.9 },
+    { "words": 5000, "points": 0.88 },
+    { "words": 5999, "points": 0.80008 },
+    { "words": 6000, "points": 0.8 },
+    { "words": 6001, "points": 0.8 },
+    { "words": 7000, "points": 0.8 }
+  ],
+  "headlines": [
+    { "title": "US TECH GIANTS FACE HUGE NEW FINES", "shouting": true },
+    { "title": "WAR IN GAZA AS UN CHIEF CALLS FOR PEACE", "shouting": true },
+    { "title": "NATO and EU Agree on AI Defense Strategy", "shouting": false },
+    { "title": "BIG NEWS calm words", "shouting": true },
+    { "title": "BIG NEWS calm words today", "shouting": false },
+    { "title": "ALARMING report", "shouting": false },
+    { "title": "NATO EU AI", "shouting": false },
+    { "title": "123 456", "shouting": false },
+    { "title": "!! ?!", "shouting": false },
+    { "title": "", "shouting": false },
+    { "title": "UP IN calm words", "shouting": true },
+    { "title": "BIG NEWS NATO EU", "shouting": true },
+    { "title": "BIG NEWS NATO EU AI", "shouting": false }
+  ],
+  "paragraphs": [
+    {
+      "name": "one-word names and multiword quantity",
+      "text": "Alice collected 12 samples. Bob reviewed twenty five records.",
+      "words": 9, "sentences": 2, "names": 2, "numbers": 2, "retained": true
+    },
+    {
+      "name": "abbreviations do not create a second sentence",
+      "text": "Dr. Alice reviewed U.S. records.",
+      "words": 5, "sentences": 1, "names": 1, "numbers": 0, "retained": false
+    },
+    {
+      "name": "two sentences without lexical signals",
+      "text": "The team reviewed the samples. They published the report.",
+      "words": 9, "sentences": 2, "names": 0, "numbers": 0, "retained": true
+    },
+    {
+      "name": "short two-sentence footer survives",
+      "text": "Subscribe now. Terms apply.",
+      "words": 4, "sentences": 2, "names": 0, "numbers": 0, "retained": true
+    },
+    {
+      "name": "multiword name and decimal quantity",
+      "text": "New York recorded 3.5 percent growth. Alice counted twenty five samples.",
+      "words": 11, "sentences": 2, "names": 2, "numbers": 2, "retained": true
+    },
+    {
+      "name": "ordinary numeric road label follows library tagging",
+      "text": "Route 66 carries 12 buses. London recorded 3 visits.",
+      "words": 9, "sentences": 2, "names": 1, "numbers": 3, "retained": true
+    },
+    {
+      "name": "numeric surname contributes a name rather than a second quantity",
+      "text": "John Seven visited London. Alice counted 12 samples.",
+      "words": 8, "sentences": 2, "names": 3, "numbers": 1, "retained": true
+    },
+    {
+      "name": "multiword numerical place name does not duplicate quantity credit",
+      "text": "Alice visited One Hundred Oaks. Bob counted 12 samples.",
+      "words": 9, "sentences": 2, "names": 3, "numbers": 1, "retained": true
+    },
+    {
+      "name": "unterminated sentence",
+      "text": "Alice reviewed 12 samples",
+      "words": 4, "sentences": 1, "names": 1, "numbers": 1, "retained": false
+    }
+  ]
+}

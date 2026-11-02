@@ -33,6 +33,7 @@ export function formatWorkflowPolicy(input: unknown, selectionRan: boolean) {
     community_age_hours: _community, ...selectionRequest } = supplied;
   const request = resolvePlanRequest(selectionRequest, config);
   const policy = resolvePolicy({ config });
+  const substance = config.curate_articles.substance;
   const source = (key: keyof typeof supplied) => supplied[key] === undefined ? "configuration" : "workflow override";
   const assignmentSource = (key: "shards" | "partition_strategy") => config.partition.enabled
     ? source(key) : supplied[key] === undefined ? "partition disabled" : "ignored workflow override";
@@ -51,7 +52,23 @@ export function formatWorkflowPolicy(input: unknown, selectionRan: boolean) {
     configured("Fetch timeout per HTTP attempt (ms)", config.harvest.fetch_timeout_ms),
     configured("Parse deadline including queue (ms)", config.harvest.parse_timeout_ms),
     configured("Parser workers", parser_concurrency),
-    configured("Minimum article words", policy.triage.min_words),
+    configured("Raw technical minimum (full-body words)", policy.triage.min_words),
+    ["Substance scoring", "Measured once and cached; not used by current ranking", "screening"],
+    ["Retained-word admission minimum", "None; measured zero stays eligible", "screening"],
+    configured("Paragraph retention (minimum words OR sentences)",
+      `${substance.substantive_paragraph_min_words} words OR ${substance.substantive_paragraph_min_sentences} sentences`),
+    configured("Retained-word full-credit start (words)", substance.word_count_ramp_end),
+    configured("Retained-word full-credit end (words)", substance.word_count_sweet_spot_max),
+    configured("Retained-word taper end (words)", substance.word_count_plateau_start),
+    configured("Length points at full credit", substance.length_scores.full),
+    configured("Length points after taper", substance.long_form_floor_score),
+    configured("Maximum name/number-density points", substance.entity_density_weight),
+    configured("Name/number signals per sentence for full credit", substance.entity_density_full_credit),
+    configured("Maximum headline deduction (points)", substance.headline_hype_penalty),
+    ["Retained-word length curve", `Linear from zero words / zero points to ${substance.word_count_ramp_end} words / `
+      + `${substance.length_scores.full} points; full through ${substance.word_count_sweet_spot_max} words; `
+      + `linear taper to ${substance.long_form_floor_score} points at ${substance.word_count_plateau_start} words; then constant`,
+      "configuration"],
     configured("Recency half-life (hours)", policy.triage.recency_half_life_hours),
     configured("Recency weight", policy.triage.recency_weight),
     configured("Estimated source authority coefficient", policy.curate_articles.source_authority_weight),
@@ -92,7 +109,8 @@ export function formatWorkflowPolicy(input: unknown, selectionRan: boolean) {
     notice: `Policy config version: ${config.version}; selection started: ${selectionRan}; `
       + `article limit: ${request.article_limit} (${source("article_limit")}); article assignments: ${config.partition.enabled ? request.shards : 0}; `
       + `strategy: ${config.partition.enabled ? request.partition_strategy : "bypassed"}; article-pass adjustment enabled: `
-      + `${config.curate_articles.source_reliability_penalty_enabled}. Full settings are in Effective policy.`,
+      + `${config.curate_articles.source_reliability_penalty_enabled}. Substance is measured and cached, not used by current ranking. `
+      + `Full settings are in Effective policy.`,
     rows,
   };
 }

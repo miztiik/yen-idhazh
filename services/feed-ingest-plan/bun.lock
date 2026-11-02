@@ -10,6 +10,7 @@
         "@idhazh/ledger-file-writer": "file:../../packages/ledger-file-writer",
         "apache-arrow": "^21.2.0",
         "bottleneck": "2.19.5",
+        "compromise": "14.19.0",
         "defuddle": "0.19.5",
         "feedsmith": "3.0.1",
         "hono": "^4.10.0",
@@ -61,6 +62,8 @@
 
     "commander": ["commander@12.1.0", "https://ms-feed-25.pkgs.visualstudio.com/1es-public/_packaging/npm-public/npm/registry/commander/-/commander-12.1.0.tgz", {}, "sha1-AUI7NvUBJZ/arE0OTWDJbJkVhdM="],
 
+    "compromise": ["compromise@14.19.0", "", { "dependencies": { "efrt": "2.9.0", "suffix-thumb": "6.0.0" } }, "sha512-nA/ClpXt0PaS2Ne389wClhxFBBxV0el3nv6V7XFpoRRQBr8eCnV3Iv4ZY6C5H06UHq1k7bqth73nVc/hv/rrCg=="],
+
     "css-select": ["css-select@7.0.0", "https://ms-feed-25.pkgs.visualstudio.com/1es-public/_packaging/npm-public/npm/registry/css-select/-/css-select-7.0.0.tgz", { "dependencies": { "boolbase": "^2.0.0", "css-what": "^8.0.0", "domhandler": "^6.0.1", "domutils": "^4.0.2", "nth-check": "^3.0.1" } }, "sha1-dTK6tZd7Hw6DvBYDZmHb4JaLTew="],
 
     "css-what": ["css-what@8.0.0", "https://ms-feed-25.pkgs.visualstudio.com/1es-public/_packaging/npm-public/npm/registry/css-what/-/css-what-8.0.0.tgz", {}, "sha1-I3iJ1gxK/vRzaJLznhM6tMjCHww="],
@@ -76,6 +79,8 @@
     "domhandler": ["domhandler@6.0.1", "https://ms-feed-25.pkgs.visualstudio.com/1es-public/_packaging/npm-public/npm/registry/domhandler/-/domhandler-6.0.1.tgz", { "dependencies": { "domelementtype": "^3.0.0" } }, "sha1-dfNRoDpuEMNeCEGPnPDSh+AHl88="],
 
     "domutils": ["domutils@4.0.2", "https://ms-feed-25.pkgs.visualstudio.com/1es-public/_packaging/npm-public/npm/registry/domutils/-/domutils-4.0.2.tgz", { "dependencies": { "dom-serializer": "^3.0.0", "domelementtype": "^3.0.0", "domhandler": "^6.0.0" } }, "sha1-DBrB/b6PVUpgpvXrFD7oVjAyfJQ="],
+
+    "efrt": ["efrt@2.9.0", "", {}, "sha512-ZMAvlcu4AfmtJ4K/0hs0uofVUZPSeLG/w4yOyZawQLl9YEy8iDKIxIIPsUAlS907clC7bgD17e73vi5unwNE/g=="],
 
     "entities": ["entities@7.0.1", "https://ms-feed-25.pkgs.visualstudio.com/1es-public/_packaging/npm-public/npm/registry/entities/-/entities-7.0.1.tgz", {}, "sha1-JuioiInbY0F9y5oeeaPxvJK1l2s="],
 
@@ -130,6 +135,8 @@
     "robots-parser": ["robots-parser@3.0.1", "https://ms-feed-25.pkgs.visualstudio.com/1es-public/_packaging/npm-public/npm/registry/robots-parser/-/robots-parser-3.0.1.tgz", {}, "sha1-PYo836isJAy7BipL0W/MDg+57SM="],
 
     "strnum": ["strnum@2.5.1", "https://ms-feed-25.pkgs.visualstudio.com/1es-public/_packaging/npm-public/npm/registry/strnum/-/strnum-2.5.1.tgz", { "dependencies": { "anynum": "^1.0.1" } }, "sha512-UM4nTLWzQiDBseVxUGxN0wJzIk0UU89Qi7pKXz9qISo+lhviJikTuikBsK/oFRlpvYHvSdz0TVoLyQ+sEpYwxA=="],
+
+    "suffix-thumb": ["suffix-thumb@6.0.0", "", {}, "sha512-HsCTMLaupbob5ZG//ZW6PSj446tHT5kSJ1qXS5F/qO2Nt13uAn6ZLPhJQ/H6bN/jVQCb+pcqe2psEwy4Mp5+Vw=="],
 
     "temml": ["temml@0.13.5", "https://ms-feed-25.pkgs.visualstudio.com/1es-public/_packaging/npm-public/npm/registry/temml/-/temml-0.13.5.tgz", {}, "sha1-lsU8Ts5ZrnGYWeKlB0ttQlHO5CM="],
 

@@ -57,5 +57,9 @@
     { "name": "unknown undated history", "published_at": null, "reason": null, "age": null, "clock": "unknown", "bonus": 0 },
     { "name": "untrustworthy date without history", "published_at": "2026-10-22T12:00:00Z", "reason": null, "age": null, "clock": "unknown", "bonus": 0 },
     { "name": "half life score", "published_at": "2026-10-20T18:00:00Z", "reason": null, "age": 18, "bonus": 0.3 }
+  ],
+  "substance_cases": [
+    { "name": "technically admitted empty retained view", "block": "Alice reviewed 12 samples.", "repetitions": 50, "title": "BIG NEWS!!", "retained_words": 0, "score": -0.2 },
+    { "name": "two-sentence fragments remain admitted", "block": "Subscribe now. Terms apply.", "repetitions": 50, "title": "Subscribe terms", "retained_words": 200, "score": 0.26666666666666666 }
   ]
 }

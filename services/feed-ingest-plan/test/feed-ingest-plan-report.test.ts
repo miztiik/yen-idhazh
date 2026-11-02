@@ -123,6 +123,55 @@ test("escapes command data and refuses URLs or arbitrary progress fields", async
   expect(() => renderPlannerProgressMarkdown([{ ...events[0], url: "https://news.example/private" }])).toThrow();
 });
 
+test("effective report separates raw admission from cached soft scoring and retains active controls", async () => {
+  const config = FeedIngestConfigSchema.parse(await Bun.file(
+    new URL("../../../config/feed-ingest-plan.json", import.meta.url)).json());
+  const settings = await Bun.file(new URL("../../../config/idhazh.json", import.meta.url)).json();
+  const input = { config, request: {}, history: settings.collect, parser_concurrency: 2 };
+  const policy = formatWorkflowPolicy(input, true);
+  const cells = Object.fromEntries(policy.rows.map(([label, value]) => [label, value]));
+  expect(cells).toMatchObject({
+    "Raw technical minimum (full-body words)": "180",
+    "Substance scoring": "Measured once and cached; not used by current ranking",
+    "Retained-word admission minimum": "None; measured zero stays eligible",
+    "Paragraph retention (minimum words OR sentences)": "25 words OR 2 sentences",
+    "Retained-word full-credit start (words)": "750",
+    "Retained-word full-credit end (words)": "3500",
+    "Retained-word taper end (words)": "6000",
+    "Length points at full credit": "1",
+    "Length points after taper": "0.8",
+    "Maximum name/number-density points": "0.3",
+    "Name/number signals per sentence for full credit": "1",
+    "Maximum headline deduction (points)": "0.25",
+    "Per-feed share limit (fraction)": String(config.curate_articles.soft_caps.max_source_share),
+    "Exploration share (fraction)": String(config.curate_articles.exploration_slot_share),
+  });
+  expect(cells["Retained-word length curve"]).toContain("zero words / zero points");
+  expect(policy.notice).toContain("not used by current ranking");
+  const changed = structuredClone(input);
+  changed.config.triage.min_words = 200;
+  Object.assign(changed.config.curate_articles.substance, {
+    substantive_paragraph_min_words: 30, substantive_paragraph_min_sentences: 3,
+    word_count_ramp_end: 500, word_count_sweet_spot_max: 2000, word_count_plateau_start: 4000,
+    length_scores: { full: 2 }, long_form_floor_score: 0.6,
+  });
+  const rendered = parseHTML(Bun.markdown.html(formatPolicyTable(changed, true).summary)).document;
+  const changedCells = Object.fromEntries([...rendered.querySelectorAll("tbody tr")].map(row => {
+    const columns = [...row.querySelectorAll("td")].map(cell => cell.textContent);
+    return [columns[1], columns[2]];
+  }));
+  expect(changedCells).toMatchObject({
+    "Raw technical minimum (full-body words)": "200",
+    "Paragraph retention (minimum words OR sentences)": "30 words OR 3 sentences",
+    "Retained-word full-credit start (words)": "500",
+    "Retained-word full-credit end (words)": "2000",
+    "Retained-word taper end (words)": "4000",
+    "Length points at full credit": "2",
+    "Length points after taper": "0.6",
+  });
+  expect(changedCells["Retained-word length curve"]).toContain("4000 words; then constant");
+});
+
 test("policy cells preserve effective JSON values and override sources without inventing enablement", async () => {
   const config = FeedIngestConfigSchema.parse(await Bun.file(
     new URL("../../../config/feed-ingest-plan.json", import.meta.url),
