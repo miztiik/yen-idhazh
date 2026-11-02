@@ -1,5 +1,5 @@
 {
-  "batch_id": "21d83190-de2a-4ec1-9538-91d35617795e",
+  "batch_id": "55649e3b-8564-41f4-ab81-fdac49c92e53",
   "status": "summarized",
   "rows": [
     {
@@ -9,7 +9,7 @@
       "permission": "allowed",
       "availability": "eligible",
       "strikes": 0,
-      "check_request_id": "1689a3d8-6a1d-4043-a079-501caee1206a",
+      "check_request_id": "100574c0-9691-49f2-9dda-c8667e7dfad8",
       "check_result": "valid-feed",
       "rest_until": null,
       "first_confirmed_failure_at": null,
@@ -108,16 +108,8 @@
   "request_report": {
     "from_day": "2026-10-15",
     "through_day": "2026-10-21",
-    "complete": false,
-    "missing_days": [
-      "2026-10-15",
-      "2026-10-16",
-      "2026-10-17",
-      "2026-10-18",
-      "2026-10-19",
-      "2026-10-20",
-      "2026-10-21"
-    ],
+    "complete": true,
+    "missing_days": [],
     "unattributed_days": [],
     "input_complete": true,
     "feeds": [
@@ -126,34 +118,58 @@
         "feed_requests": 1,
         "article_requests": 2,
         "robots_requests": 1,
-        "counts_complete": false,
+        "counts_complete": true,
         "coverage": {
           "feed_requests": {
-            "status": "partial",
+            "status": "complete",
             "known_records": 1,
             "unknown_records": 0,
             "recorded_days": [
               "2026-10-21"
             ],
-            "complete_days": []
+            "complete_days": [
+              "2026-10-15",
+              "2026-10-16",
+              "2026-10-17",
+              "2026-10-18",
+              "2026-10-19",
+              "2026-10-20",
+              "2026-10-21"
+            ]
           },
           "article_requests": {
-            "status": "partial",
+            "status": "complete",
             "known_records": 1,
             "unknown_records": 0,
             "recorded_days": [
               "2026-10-21"
             ],
-            "complete_days": []
+            "complete_days": [
+              "2026-10-15",
+              "2026-10-16",
+              "2026-10-17",
+              "2026-10-18",
+              "2026-10-19",
+              "2026-10-20",
+              "2026-10-21"
+            ]
           },
           "robots_requests": {
-            "status": "partial",
+            "status": "complete",
             "known_records": 1,
             "unknown_records": 0,
             "recorded_days": [
               "2026-10-21"
             ],
-            "complete_days": []
+            "complete_days": [
+              "2026-10-15",
+              "2026-10-16",
+              "2026-10-17",
+              "2026-10-18",
+              "2026-10-19",
+              "2026-10-20",
+              "2026-10-21"
+            ]
           }
         }
       }
