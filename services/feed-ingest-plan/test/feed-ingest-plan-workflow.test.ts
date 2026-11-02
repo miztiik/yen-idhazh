@@ -114,10 +114,11 @@ test("the execution SHA checkout installs frozen dependencies and the locked bro
     "bun install --frozen-lockfile --cwd services/feed-ingest-plan",
     "bun install --frozen-lockfile --cwd services/host-fingerprints",
   ]);
-  const browsers = steps.filter(step => step.run?.includes("browser:install"));
+  const browsers = steps.filter(step => step.uses === "./.github/actions/source-browser-runtime");
   expect(browsers).toHaveLength(1);
   const browser = browsers[0]!;
-  expect(browser.run).toBe("bun run --cwd services/feed-ingest-plan browser:install");
+  expect(browser.run).toBeUndefined();
+  expect(String(checkout.with?.["sparse-checkout"])).toContain("/.github/actions/source-browser-runtime/");
   expect(browser.if).toBeUndefined();
   expect(steps.indexOf(checkout)).toBeLessThan(steps.indexOf(dependencies));
   expect(steps.indexOf(dependencies)).toBeLessThan(steps.indexOf(browser));
@@ -129,6 +130,27 @@ test("the execution SHA checkout installs frozen dependencies and the locked bro
     expect(step.env).not.toHaveProperty("GITHUB_SHA");
     expect(step.run ?? "").not.toMatch(/\b(?:bunx|npx)\b/);
   }
+});
+
+test("both source workflows install the locked browser with executable-scoped sandbox permissions", async () => {
+  const action = z.object({ runs: z.object({ using: z.literal("composite"), steps: z.array(StepSchema) }) })
+    .parse(Bun.YAML.parse(await readFile(join(root, ".github", "actions", "source-browser-runtime", "action.yml"), "utf8")));
+  const preparation = action.runs.steps[0]!;
+  const script = preparation.run!;
+  expect(script).toContain('mktemp -d "$RUNNER_TEMP/source-browser.XXXXXX"');
+  expect(script).toContain("bun run --cwd services/feed-ingest-plan browser:install");
+  expect(script).toContain('find "$PLAYWRIGHT_BROWSERS_PATH"');
+  expect(script).toContain('-name chrome -o -name chrome-headless-shell');
+  expect(script).toContain('flags=(unconfined) {\\n  userns,');
+  expect(script).toContain('sudo apparmor_parser -r "$profile"');
+  expect(script).toContain('test "$count" -eq 2');
+  expect(script).toContain('test "$(cat "$restriction")" = "$before"');
+  expect(script).not.toMatch(/--no-sandbox|sysctl\s+-w|service\s+apparmor/);
+  const source = z.object({ jobs: z.object({ browser_source_transport: z.object({ steps: z.array(StepSchema) }) }) })
+    .parse(Bun.YAML.parse(await readFile(join(root, ".github", "workflows", "source-transport-test.yml"), "utf8")));
+  const sourceSteps = source.jobs.browser_source_transport.steps;
+  expect(sourceSteps.findIndex(step => step.uses === "./.github/actions/source-browser-runtime"))
+    .toBeLessThan(sourceSteps.findIndex(step => step.name === "Verify checked browser source ownership"));
 });
 
 test("workflow preparation validates dispatch data and requires execution controls before loading files", async () => {

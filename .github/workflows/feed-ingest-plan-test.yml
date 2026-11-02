@@ -67,6 +67,7 @@ jobs:
           sparse-checkout-cone-mode: false
           sparse-checkout: |
             /config/
+            /.github/actions/source-browser-runtime/
             /packages/common-contracts/package.json
             /packages/common-contracts/bun.lock
             /packages/common-contracts/src/
@@ -104,7 +105,7 @@ jobs:
           bun install --frozen-lockfile --cwd services/host-fingerprints
 
       - name: Install locked source browser
-        run: bun run --cwd services/feed-ingest-plan browser:install
+        uses: ./.github/actions/source-browser-runtime
 
       # This one step owns the child server, readiness, HTTP client and shutdown.
       - name: Collect and select articles

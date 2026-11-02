@@ -152,6 +152,19 @@ reports `network` with `ERR_UNSUPPORTED_BROWSER_TARGET`.
 Browser subprocesses receive only startup, temporary-directory and locale
 environment values, not repository credentials. Sandboxing remains enabled.
 
+## Design rationale
+
+Ubuntu restricts unprivileged user namespaces for downloaded browser binaries.
+The source workflows prepare a fresh job-owned browser installation and load
+AppArmor profiles attached only to its full Chromium and headless-shell
+executable paths. These profiles grant `userns` using Chromium's documented
+`flags=(unconfined)` form; they do not disable AppArmor or change the global
+namespace restriction. No profile covers a repository path, wildcard executable
+or unrelated program. The real Linux oracle still requires active Seccomp-BPF
+sandboxing. See the [upstream sandbox setup](https://raw.githubusercontent.com/chromium/chromium/main/docs/security/apparmor-userns-restrictions.md).
+
+## Browser response handling
+
 Feeds and robots return the completed original network body, not the
 browser's XML viewer. Narrow response-header continuation permits inline
 reading of download-like XML while evidence retains original headers.

@@ -30,13 +30,15 @@ Completed planning is not proof of summarization or publication.
 ## Source browser preparation
 
 The existing `feed-ingest-plan-test.yml` checks out the exact `GITHUB_SHA`,
-installs its declared TypeScript dependencies with frozen locks, then runs
-`bun run --cwd services/feed-ingest-plan browser:install` before collection.
-This service script installs the locked Playwright version's matching Chromium
+installs its declared TypeScript dependencies with frozen locks, then invokes
+`.github/actions/source-browser-runtime` before collection. This shared action
+runs `bun run --cwd services/feed-ingest-plan browser:install` in a fresh
+job-owned browser directory and loads executable-scoped AppArmor permissions.
+The service script installs the locked Playwright version's matching Chromium
 and Linux dependencies. It does not download an unpinned CLI or select an
 unrelated system browser. A failed installation prevents collection; the
 existing failure finalization still runs without inventing completed output.
-The browser installation step's duration is available in the workflow run.
+Installation and sandbox preparation durations are logged separately.
 
 Before live collection on a candidate branch, require the
 [Linux source transport check](run-the-gates.md#independent-typescript-packages-and-services)

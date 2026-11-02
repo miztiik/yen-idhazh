@@ -1,0 +1,37 @@
+name: Prepare sandboxed source browser
+description: Install the locked source browser and permit only its executables to create sandbox namespaces.
+runs:
+  using: composite
+  steps:
+    - name: Install locked source browser and sandbox permissions
+      shell: bash
+      run: |
+        set -euo pipefail
+        export PLAYWRIGHT_BROWSERS_PATH
+        PLAYWRIGHT_BROWSERS_PATH="$(mktemp -d "$RUNNER_TEMP/source-browser.XXXXXX")"
+        printf 'PLAYWRIGHT_BROWSERS_PATH=%s\n' "$PLAYWRIGHT_BROWSERS_PATH" >> "$GITHUB_ENV"
+        start=$SECONDS
+        bun run --cwd services/feed-ingest-plan browser:install
+        printf 'Chromium installation took %d seconds.\n' "$((SECONDS - start))"
+        printf 'Kernel: '; uname -r
+        restriction=/proc/sys/kernel/apparmor_restrict_unprivileged_userns
+        before="$(cat "$restriction")"
+        printf 'AppArmor user namespace restriction: %s\n' "$before"
+        cat /sys/module/apparmor/parameters/enabled
+        sudo apparmor_parser --version
+        start=$SECONDS
+        profile="$(mktemp "$RUNNER_TEMP/source-browser-profile.XXXXXX")"
+        count=0
+        while IFS= read -r -d '' executable; do
+          test -x "$executable"
+          count=$((count + 1))
+          printf 'abi <abi/4.0>,\ninclude <tunables/global>\nprofile source-browser-%d "%s" flags=(unconfined) {\n  userns,\n}\n' \
+            "$count" "$executable" > "$profile"
+          sudo apparmor_parser -r "$profile"
+          printf 'Sandbox namespace permission loaded for %s\n' "$executable"
+        done < <(find "$PLAYWRIGHT_BROWSERS_PATH" -type f \( -name chrome -o -name chrome-headless-shell \) -print0)
+        rm "$profile"
+        test "$count" -eq 2
+        test "$(cat "$restriction")" = "$before"
+        printf 'AppArmor user namespace restriction unchanged: %s\n' "$before"
+        printf 'Sandbox preparation took %d seconds.\n' "$((SECONDS - start))"

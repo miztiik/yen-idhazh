@@ -7,6 +7,7 @@ on:
     paths:
       - .github/workflows/source-transport-test.yml
       - .github/actions/publication-runtime/action.yml
+      - .github/actions/source-browser-runtime/action.yml
       - services/feed-ingest-plan/**
       - services/host-fingerprints/**
       - packages/common-contracts/**
@@ -57,12 +58,11 @@ jobs:
           bun install --cwd packages/feed-probe --frozen-lockfile
           bun install --cwd services/host-fingerprints --frozen-lockfile
           printf 'Source dependency installation took %d seconds.\n' "$((SECONDS - start))"
-          start=$SECONDS
-          bun run --cwd services/feed-ingest-plan browser:install
-          printf 'Chromium installation took %d seconds.\n' "$((SECONDS - start))"
           cd services/feed-ingest-plan
           node -e 'const os = require("node:os"); console.log(JSON.stringify({host_platform: process.platform, host_architecture: process.arch, host_logical_cpus: os.cpus().length, host_ram_bytes: os.totalmem()}))'
           bun -e 'const config = JSON.parse(await Bun.file("../../config/feed-ingest-plan.json").text()); console.log(JSON.stringify({browser: config.harvest.browser, request_headers: config.harvest.request_headers, attempt_timeout_ms: config.harvest.fetch_timeout_ms, response_diagnostics: config.harvest.response_diagnostics}))'
+
+      - uses: ./.github/actions/source-browser-runtime
 
       - name: Verify checked browser source ownership
         run: |

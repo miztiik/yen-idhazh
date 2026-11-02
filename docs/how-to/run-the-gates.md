@@ -272,6 +272,11 @@ changes in a pull request and supports manual dispatch on a candidate branch:
 Its summary records the checked-out code SHA, candidate ref, run and attempt;
 logs retain browser settings, attempt timeout, measured host and installation
 duration. Browser binaries are not committed.
+Both source workflows use `.github/actions/source-browser-runtime` to install
+the locked browser in a fresh job directory. On Ubuntu, it loads AppArmor
+profiles granting user namespaces only to that installation's two browser
+executables. It records the actual kernel restriction before and after, without
+changing it. The real oracle must still prove active Chromium sandboxing.
 A new workflow can run from a pull request before it is available for manual
 dispatch on the default branch. If a local registry cannot
 install a native patch, CI can prepare and verify its normal manifest and

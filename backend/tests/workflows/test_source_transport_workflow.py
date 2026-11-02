@@ -27,7 +27,7 @@ def test_browser_source_verification_has_its_own_candidate_and_frozen_dependenci
     )
     for path in ("services/feed-ingest-plan", "packages/feed-probe", "services/host-fingerprints"):
         assert f"bun install --cwd {path} --frozen-lockfile" in installation
-    assert "bun run --cwd services/feed-ingest-plan browser:install" in installation
+    _step(workflow, "browser_source_transport", "uses", "./.github/actions/source-browser-runtime")
     verification = _step(
         workflow, "browser_source_transport", "name", "Verify checked browser source ownership"
     )
