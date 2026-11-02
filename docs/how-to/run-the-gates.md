@@ -260,7 +260,11 @@ Completed-body admission does not claim an early stream cutoff.
 Ordinary source tests keep their recorded HTTP boundary.
 
 Linux runs use the actual Bun browser implementation and check active
-Chromium sandboxing. Windows runs use Node for the browser oracle because
+Chromium sandboxing through the live renderers' kernel process records:
+Seccomp filtering, no new privileges, additional filters beyond the browser
+process and a separate process-ID namespace. The headless shell does not expose
+the full browser's internal sandbox page.
+Windows runs use Node for the browser oracle because
 the local Bun browser pipe does not initialize; that result is not proof
 of Linux compatibility. Linux Bun verification must pass before live
 collection.

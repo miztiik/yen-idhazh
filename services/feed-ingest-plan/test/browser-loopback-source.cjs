@@ -390,11 +390,38 @@ const { parseHTML } = require("linkedom");
         assert(admitted.includes(path), `Not admitted: ${path}`);
         assert(dispatched.includes(path), `Not dispatched: ${path}`);
       }
+      const sandbox = [];
       if (process.platform === "linux") {
-        await page.goto("chrome://sandbox", { waitUntil: "domcontentloaded", timeout: 10000 });
-        assert.match(await page.locator("body").innerText(), /Seccomp-BPF sandbox\s+Yes/);
+        const session = await page.context().browser().newBrowserCDPSession();
+        try {
+          const { processInfo } = await session.send("SystemInfo.getProcessInfo");
+          const browser = processInfo.find(process => process.type === "browser");
+          assert(browser, "Browser process is unavailable for sandbox verification");
+          const browserStatus = await readFile(`/proc/${browser.id}/status`, "utf8");
+          const renderers = processInfo.filter(process => process.type === "renderer");
+          assert(renderers.length > 0, "No live renderer exists for sandbox verification");
+          const field = (status, name) => {
+            const value = status.match(new RegExp(`^${name}:\\s*(.+)$`, "m"))?.[1];
+            assert(value, `Kernel sandbox field is unavailable: ${name}`);
+            return value.trim();
+          };
+          for (const renderer of renderers) {
+            const status = await readFile(`/proc/${renderer.id}/status`, "utf8");
+            assert.equal(field(status, "Seccomp"), "2", "Renderer Seccomp filter is not active");
+            assert.equal(field(status, "NoNewPrivs"), "1", "Renderer can gain new privileges");
+            assert(Number(field(status, "Seccomp_filters")) > Number(field(browserStatus, "Seccomp_filters")),
+              "Renderer has no additional sandbox filter beyond the browser process");
+            assert(field(status, "NSpid").split(/\s+/).length > field(browserStatus, "NSpid").split(/\s+/).length,
+              "Renderer has no separate process-ID namespace");
+            sandbox.push({ seccomp: field(status, "Seccomp"), no_new_privileges: field(status, "NoNewPrivs"),
+              filter_count: Number(field(status, "Seccomp_filters")),
+              browser_filter_count: Number(field(browserStatus, "Seccomp_filters")),
+              pid_namespace_depth: field(status, "NSpid").split(/\s+/).length,
+              browser_pid_namespace_depth: field(browserStatus, "NSpid").split(/\s+/).length });
+          }
+        } finally { await session.detach(); }
       }
-      console.log(JSON.stringify({ passed: true, admitted, dispatched, targetTypes }));
+      console.log(JSON.stringify({ passed: true, admitted, dispatched, targetTypes, sandbox }));
     } finally { await execution.close(); }
   } finally {
     await runtime.close(); source.closeAllConnections(); source.close(); cross.closeAllConnections(); cross.close();

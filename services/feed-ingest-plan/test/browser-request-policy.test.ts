@@ -26,5 +26,6 @@ test("Chromium admits redirects and child requests before dispatch", async () =>
     });
     expect({ result, errors }).toEqual({ result: 0, errors: "" });
     expect(JSON.parse(output).passed).toBe(true);
+    if (process.platform === "linux") console.log(JSON.stringify({ renderer_sandbox: JSON.parse(output).sandbox }));
   } finally { await rm(temporary, { recursive: true, force: true }); }
 }, 40000);
