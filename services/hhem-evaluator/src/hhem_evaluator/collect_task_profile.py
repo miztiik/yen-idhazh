@@ -122,7 +122,11 @@ class TaskMeasurement:
         self,
         final_worker: WorkerIdentity | None,
     ) -> tuple[ResourceStatus, ResourceReason | None]:
-        if self.started is not None and final_worker != self.initial_worker:
+        if (
+            self.started is not None
+            and final_worker is not None
+            and final_worker != self.initial_worker
+        ):
             return "incomplete", "worker_replaced"
         if self.reason is not None:
             status: ResourceStatus = "incomplete" if self.started is not None else "unavailable"
@@ -132,6 +136,8 @@ class TaskMeasurement:
             return "unavailable", "measurement_unavailable"
         if profile.end_reason != "explicit_stop" or profile.outcome == "cancelled":
             return "incomplete", "profile_interrupted"
+        if final_worker is None:
+            return "incomplete", "measurement_unavailable"
         worker = profile.processes.worker
         if worker.cpu.reason is not None or worker.sampled_rss_max_kb is None:
             return "incomplete", "measurement_unavailable"

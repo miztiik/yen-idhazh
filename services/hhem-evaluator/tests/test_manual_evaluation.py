@@ -73,7 +73,7 @@ def observed_report(observation: ManualObservation) -> WorkflowReport:
         ("owner_exited", "profile_interrupted"),
         ("pid_reused", "profile_interrupted"),
         ("stop_failed", "profile_stop_failed"),
-        ("partial", None),
+        ("partial", "profile_interrupted"),
         ("partial_and_stop_failed", "profile_stop_failed"),
     ],
 )
@@ -115,7 +115,10 @@ def test_actual_handlers_preserve_scores_and_explain_resource_coverage(
 
             async def close_observation() -> None:
                 prepare_proc(tmp_path, worker, closing=True, write_status=mode != "missing_memory")
-                if mode == "owner_exited":
+                if mode in ("owner_exited", "partial", "partial_and_stop_failed"):
+                    if mode != "owner_exited":
+                        assert service.worker.exit_confirmed
+                        assert service.worker.worker is None
                     (tmp_path / str(worker.pid) / "stat").unlink()
                 elif mode == "pid_reused":
                     path = tmp_path / str(worker.pid) / "stat"
@@ -170,7 +173,10 @@ def test_actual_handlers_preserve_scores_and_explain_resource_coverage(
                 )
                 assert not any(event.operation == "full" for event in service.log.events)
                 assert report.resources.initial_worker == worker
-                assert report.resources.final_worker == worker
+                if mode in ("partial", "partial_and_stop_failed"):
+                    assert report.resources.final_worker is None
+                else:
+                    assert report.resources.final_worker == worker
                 assert report.resources.reason == expected
                 if mode == "normal":
                     assert report.status == "complete"
@@ -184,6 +190,16 @@ def test_actual_handlers_preserve_scores_and_explain_resource_coverage(
                         measured.cpu.value.percent_one_core,
                         measured.cpu.value.cpu_time_ms / measured.cpu_interval_ms * 100,
                     )
+                    missing_identity = build_resource_evidence(
+                        observation.measurement,
+                        None,
+                        report.resources.shutdown,
+                    )
+                    assert missing_identity.status == "incomplete"
+                    assert missing_identity.reason == "measurement_unavailable"
+                    retained = build_report(report.evaluation, missing_identity, [])
+                    assert retained.evaluation == report.evaluation
+                    assert retained.status == "partial"
                 if mode == "disabled":
                     assert report.resources.profile is None and host.requests == 1
                 if mode in ("memory_off", "missing_memory"):
@@ -206,6 +222,10 @@ def test_actual_handlers_preserve_scores_and_explain_resource_coverage(
                         and error.phase == "evaluation"
                         for error in report.errors
                     )
+                    if not pending:
+                        assert report.resources.profile is not None
+                        assert report.resources.profile.end_reason == "owner_exited"
+                        assert report.resources.profile.outcome == "cancelled"
                 if pending:
                     assert any(
                         error.phase == "cleanup" and error.http_status == 500
@@ -226,8 +246,16 @@ def test_actual_handlers_preserve_scores_and_explain_resource_coverage(
                     assert text not in serialized and text not in rendered
                     assert text not in service.log.getvalue()
                 assert '"samples"' not in serialized and '"cache_counters"' not in serialized
-                assert "MiB" in rendered or report.resources.profile is None
-                assert service.worker.process is not None and service.worker.process.is_alive()
+                profile = report.resources.profile
+                if profile is not None:
+                    rss = profile.processes.worker.sampled_rss_max_kb
+                    if rss is not None:
+                        assert f"{rss / 1024:.3f} MiB ({rss} KiB)" in rendered
+                if mode in ("partial", "partial_and_stop_failed"):
+                    assert service.worker.exit_confirmed
+                    assert service.worker.last_exit == (worker.generation, worker.pid)
+                else:
+                    assert service.worker.process is not None and service.worker.process.is_alive()
             finally:
                 closed = await asyncio.to_thread(host.close)
                 assert closed["clean"] is (not pending)
@@ -251,6 +279,9 @@ def test_actual_worker_replacement_cannot_be_complete_resource_coverage(tmp_path
             async def replacement() -> None:
                 assert controller.recovery_task is not None
                 await controller.recovery_task
+                assert controller.loading_task is not None
+                await controller.loading_task
+                assert controller.health().status == "ready"
                 (tmp_path / str(worker.pid) / "stat").unlink()
 
             observation = ManualObservation()

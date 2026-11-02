@@ -283,7 +283,8 @@ The [host API](host-probe-api.md) and
 [measurement reference](host-metrics.md#whole-task-typescript-samples) own
 resource semantics and units. One-core CPU percent is not capped at 100.
 Stored memory remains KiB; Markdown also shows MiB. Null readings require
-their actual native reason.
+their actual native reason. A missing final worker identity does not prove a
+replacement; it leaves coverage incomplete.
 
 The profile opens after model readiness and closes before worker shutdown,
 excluding download/load time. Both launchers observe parent-pipe EOF.
