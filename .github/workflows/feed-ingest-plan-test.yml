@@ -62,6 +62,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
         with:
+          ref: ${{ github.sha }}
           persist-credentials: true
           sparse-checkout-cone-mode: false
           sparse-checkout: |
@@ -101,6 +102,9 @@ jobs:
           bun install --frozen-lockfile --cwd packages/ledger-file-writer
           bun install --frozen-lockfile --cwd services/feed-ingest-plan
           bun install --frozen-lockfile --cwd services/host-fingerprints
+
+      - name: Install locked source browser
+        run: bun run --cwd services/feed-ingest-plan browser:install
 
       # This one step owns the child server, readiness, HTTP client and shutdown.
       - name: Collect and select articles

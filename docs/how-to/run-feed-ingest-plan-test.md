@@ -1,6 +1,6 @@
 # Run the isolated feed planner checks
 
-**Last Updated**: 2026-11-01
+**Last Updated**: 2026-11-02
 
 How do you check the TypeScript planner without changing daily publication?
 Use offline cases for validation. The manual workflow performs real feed work
@@ -27,6 +27,26 @@ It verifies the returned
 five-format native output and selected artifact before exposing commit paths.
 Completed planning is not proof of summarization or publication.
 
+## Source browser preparation
+
+The existing `feed-ingest-plan-test.yml` checks out the exact `GITHUB_SHA`,
+installs its declared TypeScript dependencies with frozen locks, then runs
+`bun run --cwd services/feed-ingest-plan browser:install` before collection.
+This service script installs the locked Playwright version's matching Chromium
+and Linux dependencies. It does not download an unpinned CLI or select an
+unrelated system browser. A failed installation prevents collection; the
+existing failure finalization still runs without inventing completed output.
+The browser installation step's duration is available in the workflow run.
+
+Before live collection on a candidate branch, require the
+[Linux source transport check](run-the-gates.md#independent-typescript-packages-and-services)
+to prove the real Bun browser path and active Chromium sandboxing.
+Windows Node browser results do not settle that gate. Workflow wiring and
+offline checks do not prove external publisher recovery. Keep the replacement
+code off `main` until the live observation establishes parsed feeds and usable
+public article text for the targeted blocked sources without unexplained
+regressions elsewhere.
+
 ## Manual controls
 
 The dispatch form takes article limit, worker count, partition strategy and
@@ -35,6 +55,10 @@ three independent article-age overrides. Their labels are:
 - `Institutional sources - article age windows (hours)`
 - `Trade press - article age windows (hours)`
 - `Community sources - article age windows (hours)`
+
+The article limit bounds selected output after collection, not source downloads
+or run time. Collection retains the full configured source inventory and its
+existing eligibility rules; there is no browser-specific source filter or cap.
 
 Each age input accepts a strictly increasing comma-separated list of positive
 hours, such as `24,36,48`. Blank optional values use configuration. Duplicate,
@@ -141,29 +165,33 @@ Startup and finalization validate the supplied `GITHUB_SHA`; they do not query
 `HEAD`. The safe-persist child receives that identity through its existing
 private startup pipe, never through public planning or delivery controls.
 
-Five tasks follow `Collect and select articles with a supervised server`:
+Seven steps follow `Collect and select articles`:
 
-1. `Commit ledgers and write report` starts its own supervised
+1. `Record workflow cancellation` records cancellation for finalization.
+2. `Commit ledgers` starts its own supervised
    [safe-persist HTTP child](../architecture/sources/feed-operator-api.md#safe-persist-http-delivery)
    and sends one request for all verified completed ledgers. The existing
    adapter and Git engine perform delivery. The task closes and reaps that
-   child, then calls the Markdown API and prepares the upload directory.
-   A delivery or report failure does not stop the remaining preparation;
-   the task still fails after preserving its useful output.
-2. `List actual upload files as JSONL` uses the existing structured publisher
+   child. Only verified completed registered metadata is delivered to `main`;
+   branch code and selected article text are not in that request.
+3. `Write run report and annotations` calls the Markdown API when `write_report`
+   is true. It runs even after delivery failure.
+4. `Prepare artifacts and list upload files as JSONL` prepares available output
+   despite earlier collection, delivery or report failure. It uses the existing
+   structured publisher
    to name each actual file relative to the ZIP root, then its total count.
    It reads only this run's prepared `artifacts` directory, follows the
    upload's ordinary file matching and excludes hidden files and directories.
    The inventory is beside the upload in the job log; it does not change the
    third-party action's file-count message or add a file to the archive.
    Its `artifact-upload` completion means enumeration, not upload success.
-3. `Upload run artifacts` uploads that prepared directory as one archive named
+5. `Upload run artifacts` uploads that prepared directory as one archive named
    `collect-and-select-articles-<run>-<attempt>`, including after finalization
    failure. It contains `<run>-<attempt>-selected-articles.json` for the next
    summarizer, plus the delivery result and Markdown report when available.
    The summarizer downloads this named artifact and reads its selected JSON
    file, not a ledger. Article bodies never enter the Git request.
-4. `Upload failed document metadata` runs only when the dropdown is `true` and a
+6. `Upload failed document metadata` runs only when the dropdown is `true` and a
    diagnostic file exists. Preparation first hands the closed
    `raw-document-contents-<UTC-day>-<numeric-run-id>-<attempt>.jsonl` to the hash-free artifact-directory destination,
    with only that exact target permitted. The separate archive is named
@@ -171,7 +199,7 @@ Five tasks follow `Collect and select articles with a supervised server`:
    and no debug upload. Failed collection still prepares and uploads available
    diagnostics; no successful raw input, extracted-text substitute or new
    retention policy is added.
-5. `Finish and clean up` checks collection, finalization and the normal upload's
+7. `Finish and clean up` checks collection, finalization and the normal upload's
    returned artifact identity, plus the diagnostic upload when applicable.
    It rechecks the saved result and exact Git
    delivery receipt before removing only the temporary run directory.

@@ -1,6 +1,6 @@
 # GitHub Actions Workflows
 
-**Last Updated**: 2026-10-31
+**Last Updated**: 2026-11-02
 
 Which workflows run, when they run, and what they may publish.
 The [workflow declarations](../../.github/workflows/) are authoritative.
@@ -108,11 +108,16 @@ published files. A check-only run with no published changes does not deploy.
 ## Manual feed planner
 
 `feed-ingest-plan-test.yml` calls both real HTTP services on its own runner.
+It checks out the execution SHA, installs frozen TypeScript dependencies and
+calls the service's `browser:install` script before collection. The
+[browser preparation guide](../how-to/run-feed-ingest-plan-test.md#source-browser-preparation)
+defines its locked Chromium installation, Linux verification and live-recovery
+requirements. Existing manual controls and collection scope remain unchanged.
 The host service uses committed telemetry, placement and task-selected copy
 controls. It returns one completed raw host Parquet file, or an explicit
 disabled result. The caller validates it and combines it with the current
 planner metadata for the [bounded commit adapter](../architecture/publishing/committing.md#design-rationale).
-Only the four planner ledgers maintain their existing raw-day indexes.
+The planner writes no raw-day JSON indexes.
 There is no host index, remote host service or direct collector call. The
 workflow records a host fingerprint but does not profile live planner CPU or
 RAM.
@@ -124,8 +129,9 @@ The workflow resolves an isolated effective config before article collection
 and records the same settings in its policy report. These source-based
 budgets do not claim article-quality verdicts.
 
-Three tasks close the collection: commit all verified ledgers and write the
-report, upload one prepared run artifact, then check completion and clean up.
+After collection, separate always-run steps deliver verified completed metadata,
+write the optional report, prepare artifacts, upload available output and check
+completion before cleanup. Cancellation skips new Git delivery.
 Finalization owns a separate supervised safe-persist HTTP child and sends its
 completed metadata to the existing adapter and Git engine. It does not depend
 on the stopped collection listener.

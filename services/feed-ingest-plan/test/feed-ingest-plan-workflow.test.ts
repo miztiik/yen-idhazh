@@ -42,6 +42,7 @@ test("workflow preparation, supervised missing-history refusal, reports and outp
       'assert.equal(Bun.which("git"), null);',
       'const controls = JSON.parse(await Bun.stdin.text());',
       'const prepared = await preparePlannerWorkflow(process.cwd(), controls.environment);',
+      'assert.equal(prepared.startup.runtime.git_sha, controls.environment.GITHUB_SHA);',
       'const result = await invokePlannerHttp(prepared.inputs, prepared.startup, prepared.request, prepared.directory, { serverEntry: controls.serverEntry });',
       'assert.equal(result.summary.planning_complete, false);',
       'assert.equal(result.summary.status, "failed");',
@@ -100,6 +101,35 @@ async function workflow() {
   const parsed = WorkflowSchema.parse(Bun.YAML.parse(text));
   return { text, parsed, steps: parsed.jobs["isolated-plan"].steps };
 }
+
+test("the execution SHA checkout installs frozen dependencies and the locked browser before collection", async () => {
+  const { steps } = await workflow();
+  const checkout = steps.find(step => step.uses?.startsWith("actions/checkout@"))!;
+  expect(checkout.with?.ref).toBe("${{ github.sha }}");
+  const dependencies = steps.find(step => step.name === "Install declared TypeScript dependencies")!;
+  expect(dependencies.run?.trim().split("\n").map(line => line.trim())).toEqual([
+    "bun install --frozen-lockfile --cwd packages/common-contracts",
+    "bun install --frozen-lockfile --cwd packages/data-delivery",
+    "bun install --frozen-lockfile --cwd packages/ledger-file-writer",
+    "bun install --frozen-lockfile --cwd services/feed-ingest-plan",
+    "bun install --frozen-lockfile --cwd services/host-fingerprints",
+  ]);
+  const browsers = steps.filter(step => step.run?.includes("browser:install"));
+  expect(browsers).toHaveLength(1);
+  const browser = browsers[0]!;
+  expect(browser.run).toBe("bun run --cwd services/feed-ingest-plan browser:install");
+  expect(browser.if).toBeUndefined();
+  expect(steps.indexOf(checkout)).toBeLessThan(steps.indexOf(dependencies));
+  expect(steps.indexOf(dependencies)).toBeLessThan(steps.indexOf(browser));
+  expect(steps.indexOf(browser) + 1).toBe(steps.findIndex(step => step.id === "plan"));
+  const manifest = z.object({ scripts: z.object({ "browser:install": z.string() }) })
+    .parse(await Bun.file(join(root, "services", "feed-ingest-plan", "package.json")).json());
+  expect(manifest.scripts["browser:install"]).toBe("playwright install --with-deps chromium");
+  for (const step of steps) {
+    expect(step.env).not.toHaveProperty("GITHUB_SHA");
+    expect(step.run ?? "").not.toMatch(/\b(?:bunx|npx)\b/);
+  }
+});
 
 test("workflow preparation validates dispatch data and requires execution controls before loading files", async () => {
   expect(readWorkflowRequest({ ARTICLE_LIMIT: "", SHARDS: "  " })).toEqual({ request: {}, policy_overrides: {} });
@@ -359,6 +389,10 @@ test("the initial workflow checkout includes runtime code and every registered s
     "services/feed-ingest-plan/scripts/safe-persist-http-client.ts",
     "services/feed-ingest-plan/scripts/safe-persist-http-server.ts",
     "services/feed-ingest-plan/src/config/planner-startup.ts",
+    "services/feed-ingest-plan/src/harvest-feeds/browser-runtime.ts",
+    "services/feed-ingest-plan/src/harvest-feeds/browser-request-gate.ts",
+    "services/feed-ingest-plan/src/harvest-feeds/browser-document-response.ts",
+    "services/feed-ingest-plan/src/harvest-feeds/playwright-transport.ts",
     "services/feed-ingest-plan/scripts/feed-ingest-plan-deliver.ts",
     "services/feed-ingest-plan/scripts/finalize-run-output.ts",
     "services/feed-ingest-plan/scripts/finish-run-output.ts",
