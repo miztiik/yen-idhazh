@@ -5,13 +5,6 @@
   "policy_version": "portfolio-recorded-1",
   "config_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
   "reliability_floor": 0.5,
-  "publisher_exposure_cases": [
-    { "name": "known empty day", "availability": "available", "published": 0, "coefficient": 0.25, "first_penalty": 0 },
-    { "name": "unequal known publication", "availability": "available", "published": 2, "coefficient": 1, "first_penalty": 1 },
-    { "name": "saturated day remains soft", "availability": "available", "published": 20, "coefficient": 0.25, "first_penalty": 0.25 },
-    { "name": "unavailable ignores partial publication counts", "availability": "unavailable", "published": 20, "coefficient": 0.25, "first_penalty": 0 },
-    { "name": "zero coefficient removes only exposure effect", "availability": "available", "published": 2, "coefficient": 0, "first_penalty": 0 }
-  ],
   "reliability_cases": [
     {
       "name": "failed reads reduce only source authority", "enabled": true, "floor": 0.5,
@@ -92,31 +85,7 @@
   ],
   "expected": {
     "baseline": ["first", "middle"],
-    "each_saturation_coefficient_one": ["first", "alternative"],
-    "base_scores": { "first": 1, "middle": 0.5, "alternative": 0.25 },
+    "base_scores": { "first": 1.35, "middle": 0.8500000000000001, "alternative": 0.6000000000000001 },
     "selected_ranks": [1, 2]
-  },
-  "story_pairs": [
-    { "left": "Budget 2025", "right": "Budget 2026", "expected": "figure-clash" },
-    { "left": "Purchase $12.9 billion", "right": "Purchase $12.93bn", "expected": "recorded-event-cluster" },
-    { "left": "Unrelated original report", "right": "Unrelated original report", "expected": "unavailable" }
-  ],
-  "recorded_format": {
-    "row_schema_version": "2026-10-24",
-    "candidate_first": "2abf9cb422a726f33a6f4a80295c8e2efa7ab9d3691114b9d7d328e83334d07a",
-    "selection_unit_id": "fd2713f9-a8d3-5a9e-af1d-f81f8d50c1d8",
-    "rejection_unit_id": "71f34820-62ad-5876-899c-bd53e451d073",
-    "selection_scalar_types": {
-      "candidate_id": "Utf8",
-      "editorial_rank": "Int64",
-      "estimated_work": "Float64",
-      "run_id": "Utf8",
-      "attempt": "Int64",
-      "shard": "Int64"
-    },
-    "selection_columns": ["candidate_id", "editorial_rank", "estimated_work", "ratings", "policy", "unit_id", "run_id", "attempt", "shard"],
-    "rejection_reason": "MMR_PORTFOLIO_CUTOFF",
-    "selection_count": 2,
-    "rejection_count": 1
   }
 }

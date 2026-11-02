@@ -93,7 +93,7 @@ export async function fetchDocument(
   }
   if (request.fetch_item_type === "article") {
     const exclusions = documentExclusions(state);
-    const offered = parent?.offer ?? { source: sourceSnapshot(inputs.harvest, source), entry: {
+    const offered = parent?.offer ?? { source: sourceSnapshot(source), entry: {
       entry_ordinal: 0, title: null, link: url, categories: [], author: null, published_at: null, media_types: [],
     } };
     const prepared = prepareArticle(offered, inputs.harvest, {

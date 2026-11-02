@@ -45,7 +45,7 @@ test("screened candidates bind retained counts to the original parsed count with
     candidate_id: deriveCandidateId("2026-11-02-1", "recorded-feed", 0), entry_ordinal: 0,
     feed_id: "recorded-feed", source: {
       feed_id: "recorded-feed", feed_url: "https://feed.example/rss", publisher_id: null,
-      title: "Recorded feed", tier: 1, status: "active", weight: 1, applied_tier_weight: 1,
+      title: "Recorded feed", status: "active", weight: 1,
     },
     canonical_url, url_key: deriveUrlKey(canonical_url), title: "Recorded article", categories: [],
     article_text: "Two words", word_count: 2, author: null, published_at: null, fetched_at: "2026-11-02T13:00:00Z",
@@ -53,7 +53,7 @@ test("screened candidates bind retained counts to the original parsed count with
   const screened = {
     candidate, policy: {
       triage: { min_words: 1, recency_half_life_hours: 18, recency_weight: 0.6 },
-      curate_articles: { source_authority_weight: 1, mmr_weights: { lambda_source: 0, lambda_website_group: 0 } },
+      curate_articles: { source_authority_weight: 1 },
     },
     freshness: { ...unknownTiming, substance_score: 0, substance_word_count: 0 },
     observation: null, discovered_availability: "unavailable",

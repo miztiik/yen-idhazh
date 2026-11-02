@@ -66,10 +66,12 @@ test("both report modes leave the recorded result and every native file unchange
   const fixture = await plannerOutputRecording();
   try {
     const { response, health } = fixture;
-    const before = structuredClone({ response, health });
+    const selected = await verifyParquetFiles(fixture.inputs.outputRoot, "selected-articles",
+      response.files.selected_articles!, fixture.inputs.registrations.selected_articles);
+    const before = structuredClone({ response, health, selected: selected.rows });
     const paths: string[] = JSON.parse(fixture.outputs.current_run_files!);
     const bytes = await Promise.all(paths.map(path => readFile(join(fixture.inputs.outputRoot, path))));
-    const evidence = { response, health, policy: {
+    const evidence = { response, health, selected: selected.rows, policy: {
       config: fixture.inputs.harvest.config, request: {}, history: fixture.inputs.clock_config.collect,
       parser_concurrency: fixture.inputs.settings.listener.parser_concurrency,
     } };
@@ -90,7 +92,7 @@ test("both report modes leave the recorded result and every native file unchange
     await writeFile(join(directory, "health.json"), JSON.stringify(health));
     await writeFile(join(directory, "workflow-policy.json"), JSON.stringify(evidence.policy));
     expect(await readExecutionReport(directory)).toBe(report.markdown);
-    expect({ response, health }).toEqual(before);
+    expect({ response, health, selected: selected.rows }).toEqual(before);
     for (const [index, path] of paths.entries()) expect(await readFile(join(fixture.inputs.outputRoot, path))).toEqual(bytes[index]!);
     await verifyPlanningCompletion(fixture.inputs.outputRoot, response, fixture.inputs.registrations, fixture.directory);
   } finally { await fixture.close(); }

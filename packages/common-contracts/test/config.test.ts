@@ -119,22 +119,16 @@ if (Bun.argv.includes("--emit-schemas")) {
     expect(configs.FeedIngestConfigSchema.safeParse({ ...config, version: "2026-11-01" }).success).toBe(false);
   });
 
-  test("source-based budgets use distinct bucket IDs and source-tier mappings", () => {
-    const rules = [
-      { id: "community-first", source_tier_id: 3, share_pct: 60, buffer_pct: 10, ladder_hours: [12, 24] },
-      { id: "institutional-second", source_tier_id: 1, share_pct: 40, buffer_pct: 5, ladder_hours: [6] },
-    ];
-    expect(configs.SourceBasedQualityBucketsSchema.parse(rules)).toEqual(rules);
-    for (const invalid of [
-      [{ ...rules[0], ladder_hours: [24, 12] }, rules[1]],
-      [{ ...rules[0], ladder_hours: [12, 12] }, rules[1]],
-      [{ ...rules[0], ladder_hours: [0] }, rules[1]],
-      [{ ...rules[0], share_pct: 61 }, rules[1]],
-      [{ ...rules[0], buffer_pct: 41 }, rules[1]],
-      [rules[0], { ...rules[1], id: rules[0]!.id }],
-      [rules[0], { ...rules[1], source_tier_id: rules[0]!.source_tier_id }],
-      [{ ...rules[0], tier: 3 }, rules[1]],
-    ]) expect(configs.SourceBasedQualityBucketsSchema.safeParse(invalid).success).toBe(false);
+  test("current policy refuses retired allocation and penalty controls by field name", async () => {
+    const config = await readConfig();
+    for (const name of ["source_based_quality_buckets", "soft_caps", "mmr_weights", "exploration_slot_share"]) {
+      expect(() => configs.FeedCurateArticlesConfigSchema.parse({
+        ...config.curate_articles, [name]: {},
+      })).toThrow(name);
+    }
+    expect(() => policies.FeedCurationPolicySchema.parse({
+      source_authority_weight: 1, mmr_weights: {},
+    })).toThrow("mmr_weights");
   });
 
   test("partition enablement defaults on and its configured bounds stay enforced", () => {
@@ -153,9 +147,10 @@ if (Bun.argv.includes("--emit-schemas")) {
     [["curate_articles", "source_authority_weight"], Infinity],
     [["curate_articles", "source_reliability_penalty_enabled"], null],
     [["curate_articles", "article_limit"], -1],
-    [["curate_articles", "mmr_weights", "lambda_website_group"], NaN],
-    [["curate_articles", "mmr_weights", "lambda_lens"], 0],
-    [["curate_articles", "soft_caps", "max_source_share"], 0],
+    [["curate_articles", "mmr_weights"], {}],
+    [["curate_articles", "soft_caps"], {}],
+    [["curate_articles", "source_based_quality_buckets"], []],
+    [["curate_articles", "exploration_slot_share"], 0],
     [["discovered_articles", "lookback_days"], -1],
     [["harvest", "concurrency"], "2"],
     [["content_filters", "media", "enabled"], "true"],
@@ -185,13 +180,6 @@ if (Bun.argv.includes("--emit-schemas")) {
     for (const segment of path.slice(0, -1)) leaf = leaf[segment];
     leaf[path.at(-1)!] = value;
     expect(configs.FeedIngestConfigSchema.safeParse(config).success).toBe(false);
-  });
-
-  test("each independent penalty accepts zero without dropping other dimensions", () => {
-    const weights = { lambda_source: 0.1, lambda_website_group: 0.1 };
-    for (const name of Object.keys(policies.FeedPenaltyWeightsSchema.shape)) {
-      expect(policies.FeedPenaltyWeightsSchema.parse({ ...weights, [name]: 0 })[name as keyof typeof weights]).toBe(0);
-    }
   });
 
   test("global config rejects bad bounds, unknown keys, and invalid references", async () => {

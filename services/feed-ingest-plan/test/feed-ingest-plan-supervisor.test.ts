@@ -42,7 +42,7 @@ test("an occupied port fails without stopping or planning against the unrelated 
 test("a real child with missing authored inputs exits before readiness and is reaped", async () => {
   const fixture = await recordedPlannerProcess();
   try {
-    fixture.startup.settings.inputs.taxonomy = "config/absent.json";
+    fixture.startup.settings.inputs.planning = "config/absent.json";
     await expect(invokePlannerHttp(fixture.inputs, fixture.startup, {}, fixture.evidence))
       .rejects.toThrow();
     await assertReleased(fixture.inputs.settings.listener.port);

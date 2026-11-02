@@ -74,7 +74,7 @@ export async function harvestFeeds(
     parser_options: { ...context.parser_options, timeout_ms: inputs.config.harvest.parse_timeout_ms } };
   try {
     const feeds = await mapPool(inputs.sources, inputs.config.harvest.concurrency, async configured => {
-      const source = sourceSnapshot(inputs, configured);
+      const source = sourceSnapshot(configured);
       const history = context.feed_history?.get(source.feed_id);
       if (source.status === "active" && history?.lifecycle === "resting") {
         await feedDocumentWork(source, runContext).skip();

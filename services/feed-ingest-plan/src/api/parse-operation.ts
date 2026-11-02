@@ -89,7 +89,7 @@ export async function parseFetchedDocument(
     const entries = parsed.parsed ?? [];
     state.work.feed({
       version: FEED_OUTCOME_PAYLOAD_VERSION, kind: "feed_outcome",
-      source: sourceSnapshot(inputs.harvest, source), fetch_status: "success",
+      source: sourceSnapshot(source), fetch_status: "success",
       parse_status: parsed.failure === null ? entries.length ? "success" : "empty" : "failure",
       parsed_count: entries.length, harvested_count: 0, fetch_duration_ms: null, parse_duration_ms: null,
       rejection_reason: parsed.failure === null ? entries.length ? null : "FEED_EMPTY" : "FEED_PARSE_FAILED",
@@ -150,7 +150,7 @@ export async function parseFetchedDocument(
     date: artifact.observation.occurred_at.slice(0, 10), fetched_at: artifact.observation.occurred_at,
     correlation_id: state.context.correlation_id, run_id: state.context.run_id,
     candidate_id: candidateId, entry_ordinal: offer?.entry.entry_ordinal ?? 0, feed_id: source.id,
-    source: sourceSnapshot(inputs.harvest, source), canonical_url: artifact.canonical_url, url_key: artifact.article_id,
+    source: sourceSnapshot(source), canonical_url: artifact.canonical_url, url_key: artifact.article_id,
     title, categories: offer?.entry.categories ?? [], article_text: parsed.parsed.article_text, word_count: parsed.parsed.word_count,
     author: parsed.parsed.author ?? offer?.entry.author ?? null, published_at: offer?.entry.published_at ?? null,
   });

@@ -1,6 +1,6 @@
 # Run the isolated feed planner checks
 
-**Last Updated**: 2026-11-01
+**Last Updated**: 2026-11-02
 
 How do you check the TypeScript planner without changing daily publication?
 Use offline cases for validation. The manual workflow performs real feed work
@@ -30,19 +30,18 @@ Completed planning is not proof of summarization or publication.
 ## Manual controls
 
 The dispatch form takes article limit, worker count, partition strategy and
-three independent article-age overrides. Their labels are:
-
-- `Institutional sources - article age windows (hours)`
-- `Trade press - article age windows (hours)`
-- `Community sources - article age windows (hours)`
-
-Each age input accepts a strictly increasing comma-separated list of positive
-hours, such as `24,36,48`. Blank optional values use configuration. Duplicate,
-decreasing, zero, negative and malformed age lists fail before collection.
+one optional `global_age_ceiling_hours` override. It accepts a single positive
+finite number of hours, such as `24` or `36`. Blank uses
+`curate_articles.global_age_ceiling_hours` from configuration, currently
+36 hours. Zero, negative, non-finite, malformed and comma-list values fail
+before collection; retired age-array controls are not aliases.
 Values are environment data, never interpolated shell code. The run resolves
 its own config before article fetch, screening, selection and reporting;
-concurrent requests cannot replace each other's age windows. The applied
-policy report shows each effective age list and its origin.
+concurrent requests cannot replace each other's ceiling. The applied
+policy report shows the one effective ceiling and its configuration or run
+override origin. The ceiling applies only to known age, with equality
+admitted. Unknown age stays eligible with zero recency and explicit missing
+timing evidence; it is not assumed to be new.
 For `none`, clear the worker count or set it to one.
 
 `dump_raw_document_contents` is a dropdown with the strings `false` and `true`;
@@ -56,8 +55,9 @@ to false. When enabled, only failed downloaded inputs may enter the
 `partition.enabled` in `config/feed-ingest-plan.json` defaults to true. Worker
 counts default to four, with configured bounds of one through twenty. When
 partitioning is disabled, selection still runs but worker assignment is
-bypassed. Source-based bucket shares and buffers remain 60/10, 30/5 and 10/5
-percent; age controls do not turn source authority into an article verdict.
+bypassed. Worker controls cannot change winners or fill missing article slots.
+The [selection rules](../architecture/sources/feed-curation.md) explain the
+global unique-URL capacity, cached scores and soft diversity adjustments.
 
 The workflow does not profile live planner CPU or RAM. It still records the
 configured host fingerprint and commits it with the planner ledgers.
@@ -112,11 +112,37 @@ They retain report and metadata recovery checks after delivery failure.
 Independent writer and contract tests own native digest, identifier and
 historical ledger coverage. The workflow does not add a synthetic receipt.
 
+## Offline recording in CI
+
+The existing CI workflow has a default-off `capture_planner_recordings`
+dispatch input. It checks out the selected revision and runs the existing
+real API recorder against recorded RSS and HTML. It does not read live feeds,
+commit data or change parser or test deadlines.
+
+```text
+gh workflow run ci.yml --ref <branch> -f capture_planner_recordings=true
+gh run download <run-id> --name planner-current-recordings --dir <temporary-directory>
+```
+
+The `planner-current-recordings` artifact is uploaded only after the recorder
+succeeds. It contains exactly eight files for
+`tests/fixtures/feed-ingest-plan/entry-points/`: `response.json`, `health.json`,
+`selected-articles.json` and the `discovered-articles`, `selected-articles`,
+`rejected-articles`, `feed-health-state` and `plan-runs` `.rows.json` files.
+The capture switch is unset when the recorder step exits, including on failure.
+Review and commit only these generated current recordings, then run ordinary
+candidate CI without capture. Existing replay, CLI and full-suite gates remain
+unchanged; a recording run is not their replacement.
+
 ## Saved output and failures
 
 `services/feed-ingest-plan/scripts/` owns workflow execution, local input loading,
 native verification, metadata commits, artifact preparation and
 reporting. `services/host-probes/scripts/` owns optional controlled host tools.
+`workflow_reporting.score_decimal_places` controls displayed selected scores,
+with a default of three decimal places. Saved metadata and selected-text
+artifacts keep exact scores; rounding never affects winner comparisons.
+
 Workflow YAML calls those modules directly. `.github/scripts/` retains only
 the independent `ai-pipeline.ts` experiment and `serve-evaluator.py`; neither
 is required for the native feed APIs. Recorded compatibility drivers live in
@@ -201,11 +227,12 @@ client, then closes the child pipe. Pipe closure also triggers child cleanup
 when the supervisor disappears. Only the exact spawned child can be forcibly
 killed. The server is never detached or kept alive across workflow steps.
 
-The Markdown report reads the body-free response, health result, captured
-effective settings and host fingerprint. Only Run outcome and Needs attention
-are visible. Per-feed article results, Request counts and coverage, Why
-articles were not selected, Effective settings and Execution measurements
-use closed-by-default folds. Routine notices do not repeat the tables;
+The Markdown report reads the body-free response, verified selected metadata,
+health result, captured effective settings and host fingerprint. Only Run
+outcome and Needs attention are visible. Per-feed article results, Request
+counts and coverage, Why articles were not selected, Selected article evidence,
+Effective settings and Execution measurements use closed-by-default folds.
+Routine notices do not repeat the tables;
 actionable run and progress warnings remain. The report cannot establish
 publication and stays separate from the delivery receipt.
 The workflow writes the summary into the existing downloadable Markdown
@@ -254,10 +281,12 @@ Effective settings use one control per row with its effective value and
 source, including workflow overrides. Missing captured policy does not
 substitute committed defaults. The fold links to this guide at the workflow
 commit when that context is available. The article limit is a maximum, not a
-promise. Shares remain fractions and switches remain booleans.
-The authority coefficient is not a source-tier weight; the
-[curation rules](../architecture/sources/feed-curation.md#inputs-and-independent-evidence)
-define the separate feed and tier factors.
+promise. Switches remain booleans. The authority coefficient multiplies
+configured feed weight only; [curation](../architecture/sources/feed-curation.md#fixed-score-preparation)
+defines its contribution separately from measured substance and reliability.
+The report distinguishes the raw technical word minimum from retained-word
+score evidence, including measured zero, and accounts for terminal losses
+without presenting retired source allocations or exposure controls.
 Execution measurements hold the machine fingerprint, run identity, attempt
 and operation durations. Concurrent durations can overlap; their sum is not
 elapsed planning time.

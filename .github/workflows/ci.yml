@@ -13,6 +13,12 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      capture_planner_recordings:
+        description: 'Capture offline planner fixtures; remove this input and its job when the recorder is retired.'
+        type: boolean
+        required: false
+        default: false
 
 permissions:
   contents: read
@@ -33,6 +39,45 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  planner-recordings:
+    if: github.event_name == 'workflow_dispatch' && inputs.capture_planner_recordings == true
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - uses: ./.github/actions/publication-runtime
+
+      - name: Install locked recorder dependencies
+        run: |
+          bun install --frozen-lockfile --cwd services/host-fingerprints
+          bun install --frozen-lockfile --cwd services/feed-ingest-plan
+
+      - name: Capture current planner recordings from the real offline API
+        run: |
+          set -euo pipefail
+          trap 'unset IDHAZH_CAPTURE_PLANNER_RECORDINGS' EXIT
+          export IDHAZH_CAPTURE_PLANNER_RECORDINGS=1
+          bun run --cwd services/feed-ingest-plan test ./test/plan-entry-points.test.ts --test-name-pattern '^one recorded API request writes a valid selected artifact$'
+
+      - name: Upload current planner recordings
+        uses: actions/upload-artifact@v7
+        with:
+          name: planner-current-recordings
+          if-no-files-found: error
+          path: |
+            tests/fixtures/feed-ingest-plan/entry-points/response.json
+            tests/fixtures/feed-ingest-plan/entry-points/health.json
+            tests/fixtures/feed-ingest-plan/entry-points/selected-articles.json
+            tests/fixtures/feed-ingest-plan/entry-points/discovered-articles.rows.json
+            tests/fixtures/feed-ingest-plan/entry-points/selected-articles.rows.json
+            tests/fixtures/feed-ingest-plan/entry-points/rejected-articles.rows.json
+            tests/fixtures/feed-ingest-plan/entry-points/feed-health-state.rows.json
+            tests/fixtures/feed-ingest-plan/entry-points/plan-runs.rows.json
+
   # What a change has to pay for. Two questions, not one.
   #
   # `code` asks whether anything but documentation changed. That branch is a

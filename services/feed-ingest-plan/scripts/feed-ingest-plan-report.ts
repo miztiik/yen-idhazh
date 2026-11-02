@@ -15,9 +15,10 @@ import { formatPolicyTable } from "./feed-ingest-plan-policy-report";
 import { formatWorkflowAnnotation } from "./feed-ingest-plan-report-format";
 import { readReportFailureEvidence } from "./feed-ingest-plan-report-evidence";
 import type { ReportFailureEvidence } from "../src/reporting/failure-evidence-markdown";
+import { verifyParquetFiles } from "./feed-ingest-plan-verification";
 
 export type WorkflowReportEvidence = {
-  response: unknown; health?: unknown; policy?: unknown; host?: unknown;
+  response: unknown; health?: unknown; selected?: unknown; policy?: unknown; host?: unknown;
   failures?: ReportFailureEvidence;
 };
 
@@ -28,7 +29,8 @@ export function renderWorkflowPlanMarkdown(
   const policy = formatPolicyTable(input.policy, response.selection_started_at_utc !== null, documentationUrl);
   const host = formatHostFingerprintSummary(input.host);
   return renderPlanMarkdown({
-    response, health: input.health, policy: { markdown: policy.summary, notice: policy.notice },
+    response, health: input.health, selected: input.selected, policy: { markdown: policy.summary, notice: policy.notice },
+    ...(policy.score_decimal_places === undefined ? {} : { score_decimal_places: policy.score_decimal_places }),
     host: { markdown: host.cells, notice: host.notice },
     maximum: policy.maximum,
     ...(input.failures === undefined ? {} : { failures: input.failures }),
@@ -73,6 +75,22 @@ export async function readExecutionEvidence(directory: string, root?: string): P
   evidence.failures = await readReportFailureEvidence({
     directory, ...(root === undefined ? {} : { root }), response, health: evidence.health,
   });
+  const selected = PlanResponseSchema.parse(response).files.selected_articles;
+  if (selected !== undefined) {
+    try {
+      const saved = await verifyParquetFiles(join(directory, "state"), "selected-articles", selected, {
+        name: "selected-articles", family: "feed-ingest-plan", lifecycle_status: "active",
+        grain: "raw-and-compact", prefix: ["feed-ingest-plan", "selected-articles"],
+      });
+      evidence.selected = saved.rows;
+    } catch (error) {
+      if (!(error instanceof Error && "code" in error && error.code === "ENOENT")) throw error;
+      evidence.failures = { ...evidence.failures, gaps: [
+        ...(evidence.failures.gaps ?? []),
+        ["Run", "Selected metadata file missing", "Saved totals retained; measured counts and scores unavailable"],
+      ] };
+    }
+  }
   return evidence;
 }
 

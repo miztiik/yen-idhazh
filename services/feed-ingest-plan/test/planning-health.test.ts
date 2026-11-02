@@ -247,7 +247,7 @@ test("finalized carry-forward Parquet reloads supported calculations without cla
     const context = resolveRunContext(setup.inputs.settings, setup.runtime.git_sha, new Date(setup.now), "703");
     const baseline = await readPlanningHistory(setup.inputs, setup.now, { context, rows: [] });
     const history = await preparePlanningHealth(setup.inputs, setup.now, { context, rows: [] }, baseline);
-    const source = sourceSnapshot(setup.inputs.harvest, setup.inputs.harvest.sources[0]!);
+    const source = sourceSnapshot(setup.inputs.harvest.sources[0]!);
     const carry = createFeedHealthRow(context, source, history.sources.get(source.feed_id), setup.now);
     const written = await recordFeedHealthState([carry], context, setup.inputs);
     const actual = await readPlannerParquet(join(setup.inputs.outputRoot, written.files[0]!.path), "feed-health-state", FeedHealthStateRowContract);

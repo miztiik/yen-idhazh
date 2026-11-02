@@ -17,7 +17,6 @@
   },
   "inputs": {
     "planning": "config/feed-ingest-plan.json",
-    "taxonomy": "config/taxonomy.json",
     "sources": "config/sources.json",
     "extraction": "config/idhazh.json",
     "registrations": "config/ledgers.json",

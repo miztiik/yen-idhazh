@@ -62,14 +62,8 @@ export const FeedScreeningPolicySchema = z.strictObject({
   recency_weight: NonNegativeSchema,
 });
 
-export const FeedPenaltyWeightsSchema = z.strictObject({
-  lambda_source: NonNegativeSchema,
-  lambda_website_group: NonNegativeSchema,
-});
-
 export const FeedCurationPolicySchema = z.strictObject({
   source_authority_weight: NonNegativeSchema,
-  mmr_weights: FeedPenaltyWeightsSchema,
 });
 
 export const EffectiveFeedPolicySchema = z.strictObject({

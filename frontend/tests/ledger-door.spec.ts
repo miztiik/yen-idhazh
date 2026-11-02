@@ -501,7 +501,7 @@ test('current selected metadata survives the real door without exposing article 
 		ledgers: ['selected-articles'] as const,
 		from: '2026-10-20', to: '2026-10-23',
 		sql: 'SELECT title, author, categories, estimated_work AS work, ratings.base_article_score AS score, ' +
-			'exploration_slot AS exploration, worker_assignment AS worker FROM "selected-articles" ORDER BY date',
+			'word_count, substance_word_count, worker_assignment AS worker FROM "selected-articles" ORDER BY date',
 		maxChars: limits.query_max_chars, maxRows: limits.max_rows, maxFetchBytes: limits.max_fetch_bytes, maxFiles: 128
 	};
 	const answer = await readAsk(keeper, question);
@@ -510,12 +510,13 @@ test('current selected metadata survives the real door without exposing article 
 		columns: [
 			{ name: 'title', type: 'VARCHAR' }, { name: 'author', type: 'VARCHAR' },
 			{ name: 'categories', type: 'VARCHAR[]' }, { name: 'work', type: 'BIGINT' },
-			{ name: 'score', type: 'DOUBLE' }, { name: 'exploration', type: 'BOOLEAN' },
+			{ name: 'score', type: 'DOUBLE' }, { name: 'word_count', type: 'BIGINT' },
+			{ name: 'substance_word_count', type: 'BIGINT' },
 			{ name: 'worker', type: 'BIGINT' }
 		],
 		rows: [1].map(() => ({
 			title: 'Caf\u00e9 \u6771\u4eac', author: null,
-			work: '180', score: '1.5', exploration: 'false', worker: '0'
+			work: '180', score: '1.5', word_count: '180', substance_word_count: '0', worker: '0'
 		}))
 	});
 	if (answer.state !== 'ok') throw new Error('The current selected metadata must be queryable');

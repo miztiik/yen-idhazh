@@ -3,7 +3,7 @@ import { createHash } from "node:crypto";
 import { z } from "zod";
 import {
   DateStampSchema, LifecycleStatusSchema, NonEmptySchema,
-  PositiveCountSchema, SlugSchema, SourceSnapshotSchema, UrlSchema,
+  SlugSchema, SourceSnapshotSchema, UrlSchema,
 } from "@idhazh/common-contracts";
 import type { SourceSnapshot } from "@idhazh/common-contracts";
 import { loadPlanningConfig } from "../config/resolve-policy";
@@ -25,7 +25,7 @@ const ConfiguredUrlSchema = UrlSchema.refine(value => {
 }, { message: "configured feed URL must be valid and contain no credentials" });
 const SourceConfigSchema = LifecycleSchema.safeExtend({
   id: SlugSchema, url: ConfiguredUrlSchema, title: NonEmptySchema,
-  tier: PositiveCountSchema, weight: WeightSchema,
+  weight: WeightSchema,
   added_on: DateStampSchema.nullable().default(null),
   publisher_id: SlugSchema.nullable().default(null),
   retirement_reason: z.string().min(1).nullable().default(null).refine(
@@ -58,9 +58,6 @@ const SourcesSchema = z.object({
   })).default([]),
   publishers: z.array(PublisherDefinitionSchema).default([]),
 });
-const RegistrySchema = z.object({
-  source_tiers: z.array(LifecycleSchema.safeExtend({ id: PositiveCountSchema, weight: WeightSchema })),
-});
 const ExtractionSchema = z.object({
   extract: ExtractionControlsSchema.omit({ semantic_fallback: true, press_release_filter: true }),
   summarize: z.object({ bands: z.array(z.object({ target_words_min: z.int().min(1) })).min(1) }),
@@ -76,10 +73,9 @@ export type ConfiguredSource = z.infer<typeof SourceConfigSchema>;
 export type HarvestInputs = ReturnType<typeof loadHarvestInputs>;
 
 export function loadHarvestInputs(raw: {
-  config: unknown; taxonomy: unknown; sources: unknown; extraction: unknown;
+  config: unknown; sources: unknown; extraction: unknown;
 }) {
   const planning = loadPlanningConfig(raw.config);
-  const registry = RegistrySchema.parse(raw.taxonomy);
   const { feeds: sources, retired, publishers } = SourcesSchema.parse(raw.sources);
   validatePublisherReferences(publishers, [...sources, ...retired]);
   const extraction_settings = ExtractionSchema.parse(raw.extraction);
@@ -88,54 +84,31 @@ export function loadHarvestInputs(raw: {
     press_release_filter: planning.config.content_filters.press_release,
   });
   validateSemanticSelectors(extraction.semantic_fallback);
-  for (const [name, ids] of [
-    ["source", [...sources, ...retired].map(source => source.id)],
-    ["source tier", registry.source_tiers.map(tier => tier.id)],
-  ] as const) {
-    if (new Set<string | number>(ids).size !== ids.length) throw new Error(`${name} ids must be distinct`);
-  }
-  for (const source of sources) {
-    if (source.status === "retired") {
-      if (!registry.source_tiers.some(tier => tier.id === source.tier)) {
-        throw new Error(`source.${source.id}.tier: missing registered snapshot weight`);
-      }
-      continue;
-    }
-    if (!registry.source_tiers.some(tier => tier.id === source.tier && tier.status === "active")) {
-      throw new Error(`source.${source.id}.tier: source tier must be active and registered`);
-    }
-  }
-  const rules = new Set(planning.config.curate_articles.source_based_quality_buckets.map(rule => rule.source_tier_id));
-  const active = registry.source_tiers.filter(tier => tier.status === "active");
-  if (active.some(tier => !rules.has(tier.id)) || [...rules].some(id => !active.some(tier => tier.id === id))) {
-    throw new Error("curate_articles.source_based_quality_buckets: rules must name every active source tier exactly once");
-  }
+  const ids = [...sources, ...retired].map(source => source.id);
+  if (new Set(ids).size !== ids.length) throw new Error("source ids must be distinct");
   // This digest covers every validated input that can change harvested content or provenance.
   const { workflow_reporting, ...contentConfig } = planning.config;
   const snapshot = {
-    config: contentConfig, registry, sources, retired, publishers, extraction,
+    config: contentConfig, sources, retired, publishers, extraction,
     extractor_version: EXTRACTOR_VERSION, sanitizer_version: SANITIZER_FINGERPRINT,
   };
   const config_sha256 = createHash("sha256").update(JSON.stringify(snapshot)).digest("hex");
-  return { ...planning, registry, sources, retired_sources: retired, publishers, extraction, extraction_settings, config_sha256 };
+  return { ...planning, sources, retired_sources: retired, publishers, extraction, extraction_settings, config_sha256 };
 }
 
 export async function readHarvestInputs(paths: {
-  config: string; taxonomy: string; sources: string; extraction: string;
+  config: string; sources: string; extraction: string;
 }): Promise<HarvestInputs> {
-  const [config, taxonomy, sources, extraction] = await Promise.all([
-    Bun.file(paths.config).json(), Bun.file(paths.taxonomy).json(),
+  const [config, sources, extraction] = await Promise.all([
+    Bun.file(paths.config).json(),
     Bun.file(paths.sources).json(), Bun.file(paths.extraction).json(),
   ]);
-  return loadHarvestInputs({ config, taxonomy, sources, extraction });
+  return loadHarvestInputs({ config, sources, extraction });
 }
 
-export function sourceSnapshot(inputs: HarvestInputs, source: ConfiguredSource): SourceSnapshot {
-  const tier = inputs.registry.source_tiers.find(tier => tier.id === source.tier);
-  if (!tier) throw new Error(`source.${source.id}.tier: unknown registry entry`);
+export function sourceSnapshot(source: ConfiguredSource): SourceSnapshot {
   return SourceSnapshotSchema.parse({
     feed_id: source.id, feed_url: source.url, title: source.title,
-    publisher_id: source.publisher_id, tier: source.tier, status: source.status,
-    weight: source.weight, applied_tier_weight: tier.weight,
+    publisher_id: source.publisher_id, status: source.status, weight: source.weight,
   });
 }

@@ -1,111 +1,74 @@
-/** Do per-request age controls remain separate from source authority and concurrent runs? */
+/** Does the one run age override remain validated and isolated through the private child boundary? */
 import { expect, test } from "bun:test";
+import { FeedIngestConfigSchema } from "@idhazh/common-contracts";
 import { createPlannerStartup } from "../scripts/feed-ingest-plan-supervisor";
 import { restorePlannerStartup } from "../scripts/feed-ingest-plan-server";
 import { PlannerStartupSchema } from "../src/config/planner-startup";
 import { stageConfigFingerprint } from "../src/api/operation-context";
 import { PlanRequestSchema } from "../src/api/plan-request";
 import { readPlannerStartupRecording } from "./planner-process-recordings";
-import { FeedIngestConfigSchema, SourceBasedQualityBucketsSchema } from "@idhazh/common-contracts";
-import { parseAgeWindows, resolveRunPolicy } from "../src/config/resolve-run-policy";
-import { allocateSourceBasedQualityBucketBudgets, rejectArticleAge } from "../src/article-freshness-policy";
+import { parseGlobalAgeCeiling, resolveRunPolicy, RunPolicyOverridesSchema } from "../src/config/resolve-run-policy";
+import { rejectArticleAge } from "../src/article-freshness-policy";
 import { readWorkflowRequest } from "../scripts/feed-ingest-plan-workflow-inputs";
-import { formatWorkflowPolicy } from "../scripts/feed-ingest-plan-policy-report";
 
 async function config() {
-  const authored = await Bun.file(new URL("../../../config/feed-ingest-plan.json", import.meta.url)).json();
-  return FeedIngestConfigSchema.parse({
-    ...authored, curate_articles: { ...authored.curate_articles, source_based_quality_buckets: [
-      { id: "institutional", source_tier_id: 1, share_pct: 60, buffer_pct: 10, ladder_hours: [24, 36, 48] },
-      { id: "trade-press", source_tier_id: 2, share_pct: 30, buffer_pct: 5, ladder_hours: [24, 30] },
-      { id: "community", source_tier_id: 3, share_pct: 10, buffer_pct: 5, ladder_hours: [24] },
-    ] },
-  });
+  return FeedIngestConfigSchema.parse(await Bun.file(new URL("../../../config/feed-ingest-plan.json", import.meta.url)).json());
 }
 
-test("blank age controls retain config and populated controls require strictly increasing positive ages", () => {
-  expect(parseAgeWindows(" \t")).toBeUndefined();
-  expect(parseAgeWindows(undefined)).toBeUndefined();
-  expect(parseAgeWindows("12, 24,36.5")).toEqual([12, 24, 36.5]);
-  for (const value of ["0", "-1", "24,24", "36,24", "24,", ",24", "24,,48", "NaN", "Infinity", "0x18", "1e2", "one"]) {
-    expect(() => parseAgeWindows(value)).toThrow();
+test("the single age control accepts positive hours and rejects retired or invalid controls", async () => {
+  expect(parseGlobalAgeCeiling(" \t")).toBeUndefined();
+  expect(parseGlobalAgeCeiling(undefined)).toBeUndefined();
+  expect(parseGlobalAgeCeiling("36.5")).toBe(36.5);
+  for (const value of ["0", "-1", "24,36", "NaN", "Infinity", "0x18", "1e2", "one"]) {
+    expect(() => parseGlobalAgeCeiling(value)).toThrow();
   }
-  const workflow = readWorkflowRequest({
-    ARTICLE_LIMIT: "2",
-    INSTITUTIONAL_AGE_HOURS: "12, 24", TRADE_PRESS_AGE_HOURS: "  ", COMMUNITY_AGE_HOURS: "6",
-  });
-  expect(workflow.policy_overrides).toEqual({ institutional_age_hours: [12, 24], community_age_hours: [6] });
+  for (const value of [0, -1, NaN, Infinity, null, "36"]) {
+    expect(RunPolicyOverridesSchema.safeParse({ global_age_ceiling_hours: value }).success).toBe(false);
+  }
+  for (const name of ["institutional_age_hours", "trade_press_age_hours", "community_age_hours"]) {
+    expect(() => RunPolicyOverridesSchema.parse({ [name]: [12, 24] })).toThrow(name);
+  }
+  const workflow = readWorkflowRequest({ ARTICLE_LIMIT: "2", GLOBAL_AGE_CEILING_HOURS: "12.5" });
+  expect(workflow.policy_overrides).toEqual({ global_age_ceiling_hours: 12.5 });
   expect(PlanRequestSchema.parse(workflow.request)).toEqual({ article_limit: 2 });
-});
-
-test("source-based budgets use list order and source tier mapping, not matching identifiers", async () => {
   const original = await config();
-  const changed = FeedIngestConfigSchema.parse({
-    ...original, curate_articles: { ...original.curate_articles, source_based_quality_buckets: [
-      { id: "third-first", source_tier_id: 3, share_pct: 50, buffer_pct: 0, ladder_hours: [6] },
-      { id: "first-second", source_tier_id: 1, share_pct: 50, buffer_pct: 0, ladder_hours: [12] },
-    ] },
-  });
-  expect(allocateSourceBasedQualityBucketBudgets(changed, 3).map(budget =>
-    [budget.rule.id, budget.target])).toEqual([["third-first", 2], ["first-second", 1]]);
-  expect(rejectArticleAge(changed, 3, 7)?.details.max_age_hours).toBe(6);
-  expect(rejectArticleAge(changed, 1, 7)).toBeNull();
-  const rules = changed.curate_articles.source_based_quality_buckets;
-  expect(SourceBasedQualityBucketsSchema.safeParse([rules[0], { ...rules[1], id: rules[0]!.id }]).success).toBe(false);
-  expect(SourceBasedQualityBucketsSchema.safeParse([rules[0], { ...rules[1], source_tier_id: 3 }]).success).toBe(false);
+  expect(rejectArticleAge(original, 36)).toBeNull();
+  expect(rejectArticleAge(original, null)).toBeNull();
+  expect(rejectArticleAge(original, -1)).toBeNull();
+  expect(rejectArticleAge(original, 36.1)?.details.max_age_hours).toBe(36);
 });
 
-test("effective settings do not mutate the shared config or another request", async () => {
+test("effective settings do not mutate shared config or another request", async () => {
   const original = await config();
   const before = structuredClone(original);
   const [first, second] = await Promise.all([
-    Promise.resolve().then(() => resolveRunPolicy(original, { institutional_age_hours: [6, 12] })),
-    Promise.resolve().then(() => resolveRunPolicy(original, { institutional_age_hours: [48, 72], trade_press_age_hours: [30] })),
+    Promise.resolve().then(() => resolveRunPolicy(original, { global_age_ceiling_hours: 12 })),
+    Promise.resolve().then(() => resolveRunPolicy(original, { global_age_ceiling_hours: 72 })),
   ]);
   expect(original).toEqual(before);
-  expect(first.curate_articles.source_based_quality_buckets[0]!.ladder_hours).toEqual([6, 12]);
-  expect(second.curate_articles.source_based_quality_buckets[0]!.ladder_hours).toEqual([48, 72]);
-  expect(first.curate_articles.source_based_quality_buckets[1]!.ladder_hours).toEqual(
-    original.curate_articles.source_based_quality_buckets[1]!.ladder_hours);
+  expect(first.curate_articles.global_age_ceiling_hours).toBe(12);
+  expect(second.curate_articles.global_age_ceiling_hours).toBe(72);
   expect(first.curate_articles.source_authority_weight).toBe(original.curate_articles.source_authority_weight);
-  first.curate_articles.source_based_quality_buckets[0]!.ladder_hours.push(18);
-  expect(second.curate_articles.source_based_quality_buckets[0]!.ladder_hours).toEqual([48, 72]);
+  first.curate_articles.diversity.lambda_domain = 99;
+  expect(second.curate_articles.diversity).toEqual(original.curate_articles.diversity);
   expect(original).toEqual(before);
-  expect(() => resolveRunPolicy(original, { community_age_hours: [24, 12] })).toThrow();
+  expect(() => resolveRunPolicy(original, { global_age_ceiling_hours: 0 })).toThrow("global_age_ceiling_hours");
 });
 
-test("policy reporting records effective ages and names their actual origin", async () => {
-  const original = await config();
-  const settings = await Bun.file(new URL("../../../config/idhazh.json", import.meta.url)).json();
-  const report = formatWorkflowPolicy({
-    config: original, request: { institutional_age_hours: [6, 12], community_age_hours: [3] },
-    history: settings.collect, parser_concurrency: 4,
-  }, true);
-  expect(report.rows.find(([name]) => name === "institutional age steps (hours)"))
-    .toEqual(["institutional age steps (hours)", "6 / 12", "workflow override"]);
-  expect(report.rows.find(([name]) => name === "trade-press age steps (hours)"))
-    .toEqual(["trade-press age steps (hours)", "24 / 30", "configuration"]);
-  expect(report.rows.find(([name]) => name === "community age steps (hours)"))
-    .toEqual(["community age steps (hours)", "3", "workflow override"]);
-  expect(original.curate_articles.source_based_quality_buckets[0]!.ladder_hours).toEqual([24, 36, 48]);
-});
-
-test("the private child boundary preserves isolated age policies and fences different effective controls", async () => {
+test("private children preserve the age override and fence different effective policies", async () => {
   const fixture = await readPlannerStartupRecording();
-    const original = fixture.inputs.harvest.config;
-    const baseline = await config();
-    const narrowed = resolveRunPolicy(baseline, { trade_press_age_hours: [1, 2] });
-    const startup = createPlannerStartup({
-      ...fixture.inputs, harvest: { ...fixture.inputs.harvest, config: narrowed },
-    }, fixture.startup.runtime);
-    const first = await restorePlannerStartup(PlannerStartupSchema.parse(JSON.parse(JSON.stringify(startup))), fixture.inputs.root);
-    const second = await restorePlannerStartup(createPlannerStartup({
-      ...fixture.inputs, harvest: { ...fixture.inputs.harvest, config: baseline },
-    }, fixture.startup.runtime), fixture.inputs.root);
-    expect(first.inputs.harvest.config.curate_articles.source_based_quality_buckets
-      .find(bucket => bucket.id === "trade-press")!.ladder_hours).toEqual([1, 2]);
-    expect(second.inputs.harvest.config).toEqual(baseline);
-    expect(stageConfigFingerprint(first.inputs, first.runtime))
-      .not.toBe(stageConfigFingerprint(second.inputs, second.runtime));
-    expect(fixture.inputs.harvest.config).toEqual(original);
+  const original = structuredClone(fixture.inputs.harvest.config);
+  const baseline = await config();
+  const narrowed = resolveRunPolicy(baseline, { global_age_ceiling_hours: 2 });
+  const startup = createPlannerStartup({
+    ...fixture.inputs, harvest: { ...fixture.inputs.harvest, config: narrowed },
+  }, fixture.startup.runtime);
+  const first = await restorePlannerStartup(PlannerStartupSchema.parse(JSON.parse(JSON.stringify(startup))), fixture.inputs.root);
+  const second = await restorePlannerStartup(createPlannerStartup({
+    ...fixture.inputs, harvest: { ...fixture.inputs.harvest, config: baseline },
+  }, fixture.startup.runtime), fixture.inputs.root);
+  expect(first.inputs.harvest.config.curate_articles.global_age_ceiling_hours).toBe(2);
+  expect(second.inputs.harvest.config).toEqual(baseline);
+  expect(stageConfigFingerprint(first.inputs, first.runtime)).not.toBe(stageConfigFingerprint(second.inputs, second.runtime));
+  expect(fixture.inputs.harvest.config).toEqual(original);
 });

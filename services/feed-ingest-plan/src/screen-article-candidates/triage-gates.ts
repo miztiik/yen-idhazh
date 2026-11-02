@@ -66,7 +66,7 @@ export async function screenArticleCandidates(
     } else if (candidate.word_count < required) {
       rejection = { drop_reason: "REJECTED_SCREENING_MIN_WORDS", details: { words_found: candidate.word_count, words_required: required } };
     } else {
-      rejection = rejectArticleAge(planning.config, candidate.source.tier, freshness.age_hours);
+      rejection = rejectArticleAge(planning.config, freshness.age_hours);
     }
     if (rejection === null) {
       const { substance_word_count, substance_score } = scoreSubstance(candidate.title, candidate.article_text);

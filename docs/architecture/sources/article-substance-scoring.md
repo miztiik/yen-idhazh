@@ -4,9 +4,10 @@
 
 How does screening measure article shape without changing the source text?
 It measures retained paragraphs once and caches `substance_word_count` and
-the signed `substance_score` for each admitted article. The current selector
-does not use this score for ranking. Its active rules remain in
-[feed curation](feed-curation.md).
+the signed `substance_score` for each admitted article. The selector adds this
+cached score to authority, recency and the technical pass adjustment once in
+the [base calculation](feed-curation.md#fixed-score-preparation). Selection
+does not analyze article text.
 
 ## Paragraph evidence and separate counts
 
@@ -110,14 +111,15 @@ fields fail native validation; they are never filled with zero. The native
 screened-candidate schema also enforces retained count <= raw count.
 
 Unknown age remains null, with timing source unknown and zero recency. It does
-not prevent substance measurement or add a technical refusal. Known-age
-limits and technical pass/refusal denominators remain unchanged.
+not prevent substance measurement or add a technical refusal. Only known
+age is checked against the effective global ceiling; technical pass/refusal
+denominators are independent of age and selection.
 
 ## Design rationale
 
-Substance is a complete screening measurement before it becomes a ranking
-input. This keeps admission and original-output parity independently
-verifiable. Separate counts prevent navigation padding from buying length or
+Substance is measured during screening and reused as a fixed ranking input.
+Admission and shape scoring remain separate. Separate counts prevent
+navigation padding from buying length or
 density credit while preserving the original body for later processing.
 The scorer's preferences do not establish factual quality or complete
 boilerplate removal.

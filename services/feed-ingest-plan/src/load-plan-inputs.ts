@@ -34,7 +34,7 @@ export async function loadPlanInputs(root: string, settingsPath = "config/feed-i
   const paths = settings.inputs;
   const [harvest, extraction, registry] = await Promise.all([
     readHarvestInputs({
-      config: resolve(root, paths.planning), taxonomy: resolve(root, paths.taxonomy),
+      config: resolve(root, paths.planning),
       sources: resolve(root, paths.sources), extraction: resolve(root, paths.extraction),
     }),
     Bun.file(resolve(root, paths.extraction)).json().then(value => ExtractionSettingsSchema.parse(value)),

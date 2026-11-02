@@ -85,7 +85,7 @@ Table C
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | C1 | 1 | Prepare contracts and configuration | - | A | DONE | selection-contract-readiness | - | 77e2fd0b-3c3f-4e30-ab1e-c571119a90d7 |
 | C2 | 2 | Add substance scoring during screening | 1 | B | DONE | article-substance-scoring | - | 78ec8fbd-56fc-4654-9a07-cec0ec44faa4 |
-| C3 | 3 | Replace the selection engine and its consumers | 2 | C | PENDING | - | - | - |
+| C3 | 3 | Replace the selection engine and its consumers | 2 | C | DONE | diversity-selection-engine | #1889 | c0109686-cc01-482a-ad99-250a1d6fe486 |
 | C4 | 4 | Add diversity run metrics and audit reporting | 3 | D | PENDING | - | - | - |
 
 ## 2 - Row 1 - Prepare contracts and configuration
@@ -622,6 +622,10 @@ Table P
 - **Scope:** Activate the sole diversity-aware selector, delete the retired runtime and old-only tests, replace obsolete documentation with the new algorithm, and change required contracts and callers in the same cutover.
 - **Files touched:**
   - `TODO/20261101-diversity-aware-top-k-selection-plan.md`
+  - `.github/workflows/ci.yml`
+  - `backend/tests/workflows/test_ci_selection.py`
+  - `backend/tests/workflows/_harness.py`
+  - `backend/tests/workflows/test_triggers.py`
   - `config/feed-ingest-plan.json`
   - `config/feed-ingest-plan-service.json`
   - `packages/common-contracts/src/index.ts`
@@ -660,6 +664,9 @@ Table P
   - `services/feed-ingest-plan/src/curate-article-portfolio/editorial-selection.ts`
   - `services/feed-ingest-plan/src/curate-article-portfolio/publisher-exposure.ts` (delete)
   - `services/feed-ingest-plan/src/curate-article-portfolio/select-diverse-articles.ts` (new)
+  - `services/feed-ingest-plan/src/reporting/selected-evidence-markdown.ts` (new)
+  - `services/feed-ingest-plan/src/reporting/plan-markdown.ts`
+  - `services/feed-ingest-plan/scripts/feed-ingest-plan-report.ts`
   - `services/feed-ingest-plan/src/select-articles.ts`
   - `services/feed-ingest-plan/src/api/selection-operation.ts`
   - `services/feed-ingest-plan/src/api/plan-response.schema.ts`
@@ -697,6 +704,8 @@ Table P
   - `services/feed-ingest-plan/test/feed-ingest-plan-report.test.ts`
   - `services/feed-ingest-plan/test/feed-ingest-plan-workflow.test.ts`
   - `services/feed-ingest-plan/test/diverse-selection.test.ts` (new)
+  - `services/feed-ingest-plan/test/feed-ingest-plan-outputs.test.ts`
+  - `services/feed-ingest-plan/test/streamlined-report.test.ts`
   - `tests/fixtures/feed-ingest-plan/portfolio-cases.json`
   - `tests/fixtures/feed-ingest-plan/screening-cases.json`
   - `tests/fixtures/feed-ingest-plan/diverse-selection-cases.json` (new)

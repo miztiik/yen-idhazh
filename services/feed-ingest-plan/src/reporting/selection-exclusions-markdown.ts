@@ -12,15 +12,9 @@ const reasonLabels: Record<string, string> = {
   PAYWALL_OR_BLOCKED: "Article blocked by screening rules",
   DUPLICATE: "Duplicate article", REJECTED_DUPLICATE: "Duplicate article",
   REJECTED_AGE: "Article outside the allowed age window",
-  REJECTED_AGE_EXCEEDS_MAX_TIER_ENVELOPE: "Article outside the allowed age window",
+  REJECTED_SCREENING_AGE_CEILING: "Article exceeds the maximum known age",
   REJECTED_DUPLICATE_CANONICAL_CARRIER: "Duplicate story already represented",
-  REJECTED_LADDER_WINDOW_NOT_ACTIVATED: "Wider age window not needed",
-  REJECTED_SLACK_DEFICIT_FULFILLED: "Remaining article target already met",
   REJECTED_GLOBAL_CAPACITY_REACHED: "Selected article maximum reached",
-  REJECTED_SOURCE_SHARE_LIMIT_REACHED: "Per-feed article share limit reached",
-  REJECTED_DOMAIN_SHARE_LIMIT_REACHED: "Website-group article share limit reached",
-  REJECTED_TIER_BUFFER_CEILING_REACHED: "Source-tier article ceiling reached",
-  REJECTED_DISTINCT_SOURCE_REQUIREMENT_UNMET: "Distinct-feed requirement not met",
 };
 const stageLabels: Record<string, string> = {
   "harvest-feeds": "Technical admission",

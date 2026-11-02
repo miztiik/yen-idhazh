@@ -6,9 +6,6 @@ import { resolvePolicy } from "../src/config/resolve-policy";
 import { resolveRunPolicy, RunPolicyOverridesSchema } from "../src/config/resolve-run-policy";
 import { FeedHistoryPolicySchema } from "../src/read-ledger-history/read-feed-history";
 import { escapeMarkdown } from "../src/reporting/markdown-format";
-import {
-  allocateSourceBasedQualityBucketBudgets, resolveSourceBasedQualityBucketWindows,
-} from "../src/article-freshness-policy";
 
 export const WorkflowPolicySchema = z.strictObject({
   config: FeedIngestConfigSchema,
@@ -23,14 +20,16 @@ export const WorkflowPolicySchema = z.strictObject({
 
 export function formatWorkflowPolicy(input: unknown, selectionRan: boolean) {
   if (input === undefined) return {
+    score_decimal_places: undefined,
     notice: "Effective settings were not recorded; committed defaults do not prove what this run used.",
     rows: [["Effective settings", "Not recorded", "Policy evidence unavailable"]],
   };
   const { config: recordedConfig, request: supplied, history, parser_concurrency } = WorkflowPolicySchema.parse(input);
-  const config = resolveRunPolicy(recordedConfig, supplied);
+  const config = resolveRunPolicy(recordedConfig, {
+    global_age_ceiling_hours: supplied.global_age_ceiling_hours,
+  });
   const availability = config.availability;
-  const { institutional_age_hours: _institutional, trade_press_age_hours: _trade,
-    community_age_hours: _community, ...selectionRequest } = supplied;
+  const { global_age_ceiling_hours: _ageCeiling, ...selectionRequest } = supplied;
   const request = resolvePlanRequest(selectionRequest, config);
   const policy = resolvePolicy({ config });
   const substance = config.curate_articles.substance;
@@ -39,9 +38,6 @@ export function formatWorkflowPolicy(input: unknown, selectionRan: boolean) {
     ? source(key) : supplied[key] === undefined ? "partition disabled" : "ignored workflow override";
   const configured = (label: string, value: string | number | boolean): [string, string, string] =>
     [label, String(value), "configuration"];
-  const ageSources: Record<string, keyof typeof supplied> = {
-    institutional: "institutional_age_hours", "trade-press": "trade_press_age_hours", community: "community_age_hours",
-  };
   const rows: [string, string, string][] = [
     configured("Policy config version", config.version),
     ["Article limit", String(request.article_limit), source("article_limit")],
@@ -53,7 +49,7 @@ export function formatWorkflowPolicy(input: unknown, selectionRan: boolean) {
     configured("Parse deadline including queue (ms)", config.harvest.parse_timeout_ms),
     configured("Parser workers", parser_concurrency),
     configured("Raw technical minimum (full-body words)", policy.triage.min_words),
-    ["Substance scoring", "Measured once and cached; not used by current ranking", "screening"],
+    ["Substance scoring", "Measured once and cached in the base score", "screening and selection"],
     ["Retained-word admission minimum", "None; measured zero stays eligible", "screening"],
     configured("Paragraph retention (minimum words OR sentences)",
       `${substance.substantive_paragraph_min_words} words OR ${substance.substantive_paragraph_min_sentences} sentences`),
@@ -72,19 +68,14 @@ export function formatWorkflowPolicy(input: unknown, selectionRan: boolean) {
     configured("Recency half-life (hours)", policy.triage.recency_half_life_hours),
     configured("Recency weight", policy.triage.recency_weight),
     configured("Estimated source authority coefficient", policy.curate_articles.source_authority_weight),
-    ...allocateSourceBasedQualityBucketBudgets(config, request.article_limit).flatMap(budget => [
-      [`${budget.rule.id} age steps (hours)`, resolveSourceBasedQualityBucketWindows(budget.rule).steps.join(" / "),
-        source(ageSources[budget.rule.id]!)] satisfies [string, string, string],
-      configured(`${budget.rule.id} source tier`, budget.rule.source_tier_id),
-      [`${budget.rule.id} article target / ceiling`, `${budget.target} / ${budget.ceiling}`, "effective article limit and configuration"] satisfies [string, string, string],
-    ]),
-    configured("Per-feed share limit (fraction)", config.curate_articles.soft_caps.max_source_share),
-    configured("Website-group share limit (fraction)", config.curate_articles.soft_caps.max_website_group_share),
-    configured("Distinct-feed target", config.curate_articles.soft_caps.min_distinct_sources),
-    configured("Limit relaxation order", JSON.stringify(config.curate_articles.soft_caps.relaxation_order)),
-    configured("Publisher exposure weight", policy.curate_articles.mmr_weights.lambda_source),
-    configured("Website-group exposure weight", policy.curate_articles.mmr_weights.lambda_website_group),
-    configured("Exploration share (fraction)", config.curate_articles.exploration_slot_share),
+    ["Maximum known age (hours)", String(config.curate_articles.global_age_ceiling_hours), source("global_age_ceiling_hours")],
+    ["Unknown age", "Eligible with null timing and zero recency points", "screening and selection"],
+    ["Selection capacity", "Smaller of article limit and distinct eligible URLs; negative scores remain eligible", "selection"],
+    ["Source authority", "Configured feed weight times authority coefficient; not an article-quality verdict", "selection"],
+    ["Substance evidence", "Retained paragraph shape, not factual verification", "screening"],
+    configured("Website squared-count penalty coefficient", config.curate_articles.diversity.lambda_domain),
+    configured("Feed squared-count penalty coefficient", config.curate_articles.diversity.lambda_feed),
+    configured("First-use feed bonus (points)", config.curate_articles.diversity.novelty_bonus),
     configured("Feed-status history (represented UTC days)", config.feedback.lifecycle_window_days),
     ["Availability controls", availability === undefined ? "Not recorded" : "Recorded", "configuration"],
     ...(availability === undefined ? [] : [
@@ -106,10 +97,11 @@ export function formatWorkflowPolicy(input: unknown, selectionRan: boolean) {
     configured("URL exclusion rules", config.harvest.url_exclusions.length),
   ];
   return {
+    score_decimal_places: config.workflow_reporting.score_decimal_places,
     notice: `Policy config version: ${config.version}; selection started: ${selectionRan}; `
       + `article limit: ${request.article_limit} (${source("article_limit")}); article assignments: ${config.partition.enabled ? request.shards : 0}; `
       + `strategy: ${config.partition.enabled ? request.partition_strategy : "bypassed"}; article-pass adjustment enabled: `
-      + `${config.curate_articles.source_reliability_penalty_enabled}. Substance is measured and cached, not used by current ranking. `
+      + `${config.curate_articles.source_reliability_penalty_enabled}. Substance is measured once and included in the base score. `
       + `Full settings are in Effective policy.`,
     rows,
   };
@@ -119,6 +111,7 @@ export function formatPolicyTable(input: unknown, selectionRan: boolean, documen
   const policy = formatWorkflowPolicy(input, selectionRan);
   const ignored = policy.rows.filter(([, , source]) => source === "ignored workflow override").map(([setting]) => setting);
   return {
+    score_decimal_places: policy.score_decimal_places,
     notice: policy.notice,
     maximum: policy.rows.find(([setting]) => setting === "Article limit")?.[1] ?? "Not recorded",
     summary: [

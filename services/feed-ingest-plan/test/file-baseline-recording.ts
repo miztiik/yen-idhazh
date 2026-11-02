@@ -58,13 +58,6 @@ async function runRecordingAt(root: string) {
   ]);
   harvest.config.triage.min_words = 100;
   harvest.config.discovered_articles.lookback_days = 3;
-  harvest.config.curate_articles.soft_caps.max_source_share = 1;
-  harvest.config.curate_articles.soft_caps.max_website_group_share = 1;
-  harvest.config.curate_articles.source_based_quality_buckets = harvest.registry.source_tiers
-    .filter(tier => tier.status === "active").map(tier => ({
-      id: `source-tier-${tier.id}`, source_tier_id: tier.id,
-      share_pct: tier.id === harvest.sources[0]!.tier ? 100 : 0, buffer_pct: 0, ladder_hours: [48],
-    }));
   harvest.config.partition.enabled = false;
   const transport = new RecordedTransport(recordings);
   const runtime: PlanRuntime = { git_sha: "a".repeat(40), run_number: "7300", clock: () => new Date(now),
@@ -108,7 +101,6 @@ async function runRecordingAt(root: string) {
     });
   await compact("feed-health-state", FeedHealthStateRowContract, healthRows, "2026-10", "monthly");
   await compact("discovered-articles", DiscoveredArticleRowContract, [discovery], prior, "daily");
-  const selections = await writeRows(stateRoot, "selected-articles", day, SelectedArticleRowContract, [snapshot]);
   const publications = await writeRows(stateRoot, "published", day, publishedContract, [published], writer(snapshot.run_id));
   const itemHealth = await writeRows(stateRoot, "item-health", day, healthContract, [publicationHealth, failure], writer(snapshot.run_id));
   const inputs = { ...loaded, root, outputRoot: join(root, "output", "state"), harvest, settings: {
@@ -135,7 +127,6 @@ async function runRecordingAt(root: string) {
     assert.equal(transport.requests.length, 0, "All history must load before the first source request");
     const collection = getCollection(inputs, collectionId);
     const baseline = structuredClone(collection.state.baseline);
-    assert.equal(baseline.publications.get(day)!.counts.get("recorded-publisher"), 1);
     assert.equal(baseline.discovered.rows.find(row => row.url_key === discovery.url_key)!.first_seen_at, discovery.first_seen_at);
     const changedHealth = healthRows.map(row => ({ ...row, availability: "eligible" as const, strikes: 0,
       rest_until: null, first_confirmed_failure_at: null,
@@ -149,9 +140,6 @@ async function runRecordingAt(root: string) {
       [{ ...discovery, date: "2026-10-18", first_seen_at: "2026-10-18T00:00:00Z" }]);
     await compact("discovered-articles", DiscoveredArticleRowContract,
       [{ ...discovery, first_seen_at: `${prior}T01:00:00Z` }], prior, "daily");
-    await rm(join(stateRoot, selections.files[0]!.path));
-    await writeRows(stateRoot, "selected-articles", day, SelectedArticleRowContract,
-      [{ ...snapshot, attempt: 2, publisher_id: "changed-publisher" }]);
     const newPublication = await writeRows(stateRoot, "published", day, publishedContract,
       [{ ...published, url_key: key("https://atom.example/entry") }], writer(`${day}-44`));
     for (const file of publications.files) await rm(join(stateRoot, file.path));
@@ -194,11 +182,7 @@ async function runRecordingAt(root: string) {
     assert.deepEqual(metadata.rows.map(row => row.canonical_url).sort(),
       ["https://atom.example/entry", "https://news.example/second"]);
     assert.equal(metadata.rows.find(row => row.url_key === discovery.url_key)!.timing_at, discovery.first_seen_at);
-    assert(metadata.rows.every(row => row.ratings.adjustments.some(term => term.term === "publisher_exposure" && term.value !== null)));
-    const first = metadata.rows.find(row => row.editorial_rank === 1)!;
-    const exposure = -harvest.config.curate_articles.mmr_weights.lambda_source
-      / harvest.config.curate_articles.article_limit;
-    assert.equal(first.ratings.adjustments.find(term => term.term === "publisher_exposure")!.value, exposure === 0 ? 0 : exposure);
+    assert(metadata.rows.every(row => row.ratings.adjustments.every(term => Number.isFinite(term.value))));
     const summary = await post("feed-health-state", { batch_id: selected.batch_id, action: "summarize" },
       FeedHealthStateUpdateResponseSchema);
     assert(summary.rows.some(row => row.feed_id === "recorded-news" && (row.feed_requests ?? 0) > 0));
@@ -214,7 +198,7 @@ async function runRecordingAt(root: string) {
     assert.equal(nextDaySelection.request_report.feeds.find(feed => feed.feed_id === "recorded-news")!.feed_requests,
       seed.feed_requests + currentRequests);
     assert(nextDaySelection.articles.every(row => row.ratings.adjustments.some(term =>
-      term.term === "publisher_exposure_current_run")));
+      term.term === "substance_quality_score")));
     assert.deepEqual(collection.state.baseline, baseline);
     const freshInputs = { ...inputs, settings: { ...inputs.settings, inputs: { ...inputs.settings.inputs,
       published_days: [{ day, raw_files: newPublication.files.map(file => `state/${file.path}`) }],

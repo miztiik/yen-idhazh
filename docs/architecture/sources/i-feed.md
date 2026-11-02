@@ -1,6 +1,6 @@
 # Intelligent F.E.E.D - I Feed
 
-**Last Updated**: 2026-10-27
+**Last Updated**: 2026-11-02
 
 **Status: design proposal and guidelines, not deployed behavior.**
 F.E.E.D expands to Feed Evaluation & Execution Decider. Intelligent F.E.E.D -
@@ -897,9 +897,10 @@ Planner storage validation and compaction do not complete that migration.
 Conditional feed requests, cached bodies and `304` recovery remain excluded;
 ordinary fetching can repeat unchanged-body transfer. Identity-changing query
 cleanup is removed, not an outstanding migration. The
-[configured priority review](feed-curation.md#configured-priority-review)
-is closed with no new score terms. Reopening any of these choices requires a
-separate maintainer decision.
+[current curation rules](feed-curation.md) govern the isolated planner, not
+this separate catalog proposal. Watchlist, theme and repeated-URL priority
+are not additional requirements of this proposal. Reopening any of these
+choices requires a separate maintainer decision.
 
 ### What the next design pass must settle
 

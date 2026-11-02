@@ -1,6 +1,6 @@
 # Feed history used by the TypeScript planner
 
-**Last Updated**: 2026-11-01
+**Last Updated**: 2026-11-02
 
 Which saved observations can change feed rest and measured reliability?
 The isolated planner reads current-format required `feed-health-state` fields and its
@@ -54,7 +54,7 @@ logical feed check or pad days outside named evidence. Known-empty daily
 entries remain outside lifecycle/reliability membership.
 
 One execution loads and validates health, discovery, publication exclusions,
-settled failures and genuine publisher linkage before its first source request.
+and settled failures before its first source request.
 It retains those records in its live document state. Directory membership and
 native file reads are shared within that capture. Later stages use the retained
 records; edits, additions and removals on disk cannot change their decisions.
@@ -128,8 +128,11 @@ empty-feed reset and proven retirement.
 Article technical admission is a separate derived fraction: admitted original
 captures divided by admitted captures plus source-attributed article refusals.
 Access, extraction, required fields and the minimum word count determine this
-outcome. Age, content-policy, publication and quota losses do not change it.
-Incomplete represented evidence or a zero denominator means unknown.
+outcome. Age, content-policy, publication and selection losses do not change it.
+Incomplete represented evidence or a zero denominator means unknown. Selection
+records a numeric zero adjustment for unavailable history while preserving
+the null observed fraction. A complete measured zero fraction still receives
+the configured reliability-floor penalty.
 
 Each live article capture settles its first known source outcome in memory.
 Parsing consumes its held raw body; later selection uses the completed live
@@ -150,10 +153,12 @@ save a proven retirement decision in its existing health ledger when both
 configured recovery gates hold. It does not create another retirement store
 or modify the separate Python retirement machinery.
 
-Publication exclusions and publisher exposure use genuine external published
-and item-health evidence. Selected articles are not publication evidence.
-The required selected-metadata linkage is captured alongside those records,
-before fetching. Unknown publisher identities and missing linkage stay explicit.
+Publication-URL exclusions and settled-failure checks use genuine external
+published and item-health evidence captured before fetching. Selected articles
+are not publication evidence. Selection does not read publisher-exposure
+counts or selected-metadata linkage. Curated publisher identity remains
+metadata; current-run diversity counts use feed IDs and canonical website
+keys, as [curation](feed-curation.md#current-score-and-exact-choice) defines.
 
 ## Design rationale
 

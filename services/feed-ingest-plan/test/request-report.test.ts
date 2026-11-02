@@ -13,7 +13,7 @@ import { randomUUID } from "node:crypto";
 async function fixture() {
   const source = SourceSnapshotSchema.parse({
     feed_id: "recorded-feed", feed_url: "https://news.example/feed.xml", title: "Recorded feed",
-    tier: 2, status: "active", weight: 1, applied_tier_weight: 1,
+    status: "active", weight: 1,
   });
   const row = FeedHealthStateRowSchema.parse({
     ...await Bun.file(new URL("../../../tests/fixtures/feed-ingest-plan/health-field-history.json", import.meta.url)).json(),

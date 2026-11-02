@@ -139,6 +139,7 @@ DISPATCH_READ_BY_NAME: Final = "read by name"
 DISPATCH_INPUT_SHAPES: Final[dict[tuple[str, str], str]] = {
     ("backfill.yml", "commit"): DISPATCH_BOOLEAN,
     ("backfill.yml", "days"): DISPATCH_READ_BY_NAME,
+    ("ci.yml", "capture_planner_recordings"): DISPATCH_BOOLEAN,
     ("digest-recovery.yml", "source_run"): DISPATCH_READ_BY_NAME,
     ("digest-recovery.yml", "check_only"): DISPATCH_BOOLEAN,
     # The one that decides a published address. See the two tests that run the

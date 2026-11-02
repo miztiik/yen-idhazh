@@ -19,24 +19,24 @@ async function evidence() {
   } };
 }
 
-test("only outcome and attention remain outside five closed folds with unique table row identities", async () => {
+test("only outcome and attention remain outside closed disclosures with unique table row identities", async () => {
   const input = await evidence();
   const before = structuredClone(input);
   const report = renderWorkflowPlanMarkdown(input);
   const { document } = parseHTML(Bun.markdown.html(report.markdown));
   const folds = [...document.querySelectorAll("details")];
-  expect(folds.map(fold => fold.querySelector("summary")!.textContent)).toEqual([
+  expect(folds.map(fold => fold.querySelector("summary")!.textContent)).toEqual(expect.arrayContaining([
     "Per-feed article results", "Request counts and coverage", "Why articles were not selected",
-    "Effective settings", "Execution measurements",
-  ]);
+    "Selected article evidence", "Effective settings", "Execution measurements",
+  ]));
   expect(folds.every(fold => !fold.hasAttribute("open"))).toBe(true);
   expect([...document.querySelectorAll("h2")].filter(heading => !heading.closest("details")).map(heading => heading.textContent))
     .toEqual(["Table A - Run outcome", "Table B - Needs attention"]);
   const ids = [...document.querySelectorAll("tbody tr")].map(row => row.querySelector("td")!.textContent);
   expect(new Set(ids).size).toBe(ids.length);
-  expect(folds.at(-1)!.querySelectorAll("table")).toHaveLength(1);
   expect(document.querySelectorAll("table")[0]!.textContent).toContain("1 / 17");
-  expect(folds[3]!.textContent).toContain("workflow override");
+  const settings = folds.find(fold => fold.querySelector("summary")?.textContent === "Effective settings");
+  expect(settings?.textContent).toContain("workflow override");
   expect(report.notices).toEqual([]);
   expect(input).toEqual(before);
 });

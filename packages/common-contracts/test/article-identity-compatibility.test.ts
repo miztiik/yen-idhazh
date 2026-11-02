@@ -5,6 +5,8 @@ import {
   OPERATION_VERSION, PARSED_FEED_BATCH_VERSION,
   DiscoveredArticleRowSchema, SelectedArticleRowSchema, SelectedArticleMetadataSchema, PlannerFileEnvelopeSchema,
   FetchedDocumentSchema, ParsedFeedBatchSchema,
+  FeedIngestCandidateSchema, FeedOutcomePayloadSchema, PlannerFeedOfferSchema,
+  SourceSnapshotSchema, FEED_OUTCOME_PAYLOAD_VERSION, deriveCandidateId,
   readSelectedArticlesArtifact, readFeedIngestEvent, FEED_INGEST_EVENT_VERSION, deriveUrlKey,
 } from "../src";
 
@@ -16,11 +18,15 @@ function metadata() {
   return SelectedArticleMetadataSchema.parse({
     url_key: deriveUrlKey(url), feed_id: "fixture-feed", publisher_id: null,
     canonical_url: url, title: "Recorded article", categories: [], author: null,
-    published_at: at, published_at_source: "selection", tier: 1, weight: 1,
-    applied_tier_weight: 1, editorial_rank: 1, estimated_work: 3, worker_assignment: null,
-    feed_limit: 1, exploration_slot: false, cap_relaxations: [], timing_at: at,
-    timing_basis: "first_seen", age_hours: 0, freshness_cutoff_at: null,
-    ratings: { base_article_score: 1, marginal_score: 1, adjustments: [], recency_score: 1, feed_authority_score: 0 },
+    published_at: at, published_at_source: "selection", weight: 1,
+    word_count: 3, substance_word_count: 0,
+    editorial_rank: 1, estimated_work: 3, worker_assignment: null,
+    timing_at: at, timing_basis: "first_seen", age_hours: 0, freshness_cutoff_at: at,
+    ratings: { base_article_score: 1, marginal_score: 1, adjustments: [
+      { term: "article_pass_rate", value: 0 }, { term: "substance_quality_score", value: 0 },
+      { term: "domain_diversity_penalty", value: 0 }, { term: "feed_diversity_penalty", value: 0 },
+      { term: "novelty_bonus", value: 0 },
+    ], recency_score: 1, feed_authority_score: 0 },
   });
 }
 
@@ -74,5 +80,43 @@ test("event readers require the current recorded version instead of rewriting ol
   expect(readFeedIngestEvent(event)).toEqual(event);
   for (const version of ["2026-10-29T08:00", "2026-10-30T22:25", "2026-10-30T22:48", undefined]) {
     expect(() => readFeedIngestEvent({ ...event, version })).toThrow();
+  }
+});
+
+test("current source, candidate, offer and outcome projections refuse retired source fields and versions", () => {
+  const source = SourceSnapshotSchema.parse({
+    feed_id: "fixture-feed", publisher_id: null, feed_url: "https://example.org/feed",
+    title: "Recorded feed", status: "active", weight: 1,
+  });
+  const candidate = FeedIngestCandidateSchema.parse({
+    date: day, correlation_id: "recorded", run_id: run,
+    candidate_id: deriveCandidateId(run, source.feed_id, 0), entry_ordinal: 0,
+    feed_id: source.feed_id, source, canonical_url: url, url_key: deriveUrlKey(url),
+    title: "Recorded article", categories: [], article_text: "Unchanged body.", word_count: 2,
+    author: null, published_at: null, fetched_at: `${day}T12:00:00Z`,
+  });
+  const offer = PlannerFeedOfferSchema.parse({
+    offer_id: "a".repeat(64), source, entry: {
+      entry_ordinal: 0, title: null, link: url, categories: [], author: null, published_at: null,
+    }, state: "pending", fetch_request_id: null,
+  });
+  const outcome = FeedOutcomePayloadSchema.parse({
+    kind: "feed_outcome", source, fetch_status: "success", parse_status: "success",
+    parsed_count: 1, harvested_count: 1, fetch_duration_ms: 0, parse_duration_ms: 0,
+    rejection_reason: null,
+  });
+  expect(outcome.version).toBe(FEED_OUTCOME_PAYLOAD_VERSION);
+  for (const [schema, value] of [
+    [FeedIngestCandidateSchema, candidate], [FeedOutcomePayloadSchema, outcome],
+  ] as const) {
+    expect(schema.parse(JSON.parse(JSON.stringify(value)))).toEqual(value);
+    expect(schema.safeParse({ ...value, version: "2026-10-31" }).success).toBe(false);
+  }
+  for (const patch of [{ tier: 1 }, { applied_tier_weight: 1 }]) {
+    const retired = { ...source, ...patch };
+    expect(SourceSnapshotSchema.safeParse(retired).success).toBe(false);
+    expect(FeedIngestCandidateSchema.safeParse({ ...candidate, source: retired }).success).toBe(false);
+    expect(PlannerFeedOfferSchema.safeParse({ ...offer, source: retired }).success).toBe(false);
+    expect(FeedOutcomePayloadSchema.safeParse({ ...outcome, source: retired }).success).toBe(false);
   }
 });

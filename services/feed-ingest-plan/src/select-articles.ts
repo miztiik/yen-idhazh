@@ -55,9 +55,8 @@ export async function selectArticles(batch: ParsedFeedBatch, inputs: PlanInputs,
       matched_published_keys: publishedKeys, matched_failure_keys: failureKeys,
     },
   });
-  const publications = baseline.publications.get(selectionStartedAt.slice(0, 10))!;
   const curation = curateArticles({
-    articles: screening.admitted, batch, inputs, health: health.sources, publications, context, selectionStartedAt,
+    articles: screening.admitted, batch, inputs, health: health.sources, context, selectionStartedAt,
   });
   const rejectedArticles = [
     ...screening.rejections.map(rejection => ({
@@ -95,7 +94,7 @@ export async function selectArticles(batch: ParsedFeedBatch, inputs: PlanInputs,
   const healthRows = originalWork ? captureHealthRows(batch.work_rows, health.sources) : [];
   for (const source of inputs.harvest.sources.filter(source => source.status === "active")) {
     if (!healthRows.some(row => row.feed_id === source.id && row.date === selectionStartedAt.slice(0, 10))) {
-      healthRows.push(createFeedHealthRow(context, sourceSnapshot(inputs.harvest, source), health.sources.get(source.id), selectionStartedAt));
+      healthRows.push(createFeedHealthRow(context, sourceSnapshot(source), health.sources.get(source.id), selectionStartedAt));
     }
   }
   for (const candidate of batch.candidates) {
@@ -103,7 +102,7 @@ export async function selectArticles(batch: ParsedFeedBatch, inputs: PlanInputs,
     if (row === undefined) {
       const source = planning.sources.find(source => source.id === candidate.feed_id);
       if (source === undefined) throw new Error("Selection candidate lacks its configured feed");
-      row = createFeedHealthRow(context, sourceSnapshot(inputs.harvest, source), health.sources.get(source.id), selectionStartedAt);
+      row = createFeedHealthRow(context, sourceSnapshot(source), health.sources.get(source.id), selectionStartedAt);
       healthRows.push(row);
     }
   }

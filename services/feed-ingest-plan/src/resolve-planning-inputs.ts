@@ -8,7 +8,6 @@ export function resolvePlanningInputs(
 ) {
   return loadHarvestInputs({
     config: { ...inputs.harvest.config, curate_articles: { ...inputs.harvest.config.curate_articles, article_limit: request.article_limit } },
-    taxonomy: inputs.harvest.registry,
     sources: {
       feeds: inputs.harvest.sources, retired: inputs.harvest.retired_sources,
       publishers: inputs.harvest.publishers,

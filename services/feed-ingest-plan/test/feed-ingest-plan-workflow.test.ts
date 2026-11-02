@@ -118,18 +118,13 @@ test("manual controls exercise the planner API and keep only required outputs", 
   expect(parsed.jobs["isolated-plan"]["timeout-minutes"]).toBe(360);
   const controls = parsed.on.workflow_dispatch.inputs;
   expect(Object.keys(controls)).toEqual([
-    "article_limit", "shards", "institutional_age_hours", "trade_press_age_hours", "community_age_hours", "partition_strategy",
+    "article_limit", "shards", "global_age_ceiling_hours", "partition_strategy",
     "dump_raw_document_contents", "write_report",
   ]);
-  for (const [field, description] of [
-    ["institutional_age_hours", "Institutional sources - article age windows (hours)"],
-    ["trade_press_age_hours", "Trade press - article age windows (hours)"],
-    ["community_age_hours", "Community sources - article age windows (hours)"],
-  ] as const) {
-    expect(controls[field]!.description).toBe(`${description}; increasing comma-separated steps; blank uses configuration`);
-    expect(controls[field]!.default).toBe("");
-    expect(controls[field]!.required).toBe(false);
-  }
+  expect(controls.global_age_ceiling_hours).toMatchObject({
+    description: "Optional positive maximum known article age in hours; blank uses configuration",
+    default: "", required: false, type: "string",
+  });
   const config = FeedIngestConfigSchema.parse(await Bun.file(join(root, "config", "feed-ingest-plan.json")).json());
   for (const [field, value] of Object.entries({
     article_limit: config.curate_articles.article_limit,
@@ -143,9 +138,7 @@ test("manual controls exercise the planner API and keep only required outputs", 
   expect(plan.env).toEqual({
     ARTICLE_LIMIT: "${{ inputs.article_limit }}",
     SHARDS: "${{ inputs.shards }}", PARTITION_STRATEGY: "${{ inputs.partition_strategy }}",
-    INSTITUTIONAL_AGE_HOURS: "${{ inputs.institutional_age_hours }}",
-    TRADE_PRESS_AGE_HOURS: "${{ inputs.trade_press_age_hours }}",
-    COMMUNITY_AGE_HOURS: "${{ inputs.community_age_hours }}",
+    GLOBAL_AGE_CEILING_HOURS: "${{ inputs.global_age_ceiling_hours }}",
     DUMP_RAW_DOCUMENT_CONTENTS: "${{ inputs.dump_raw_document_contents }}",
   });
   expect(plan.run).not.toContain("${{");

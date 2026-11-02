@@ -45,8 +45,7 @@ async function inputs() {
     source: {
       feed_id: recorded.source.feed_id, publisher_id: recorded.source.publisher_id ?? null,
       feed_url: recorded.source.feed_url, title: recorded.source.title,
-      tier: recorded.source.tier, status: recorded.source.status,
-      weight: recorded.source.weight, applied_tier_weight: recorded.source.applied_tier_weight,
+      status: recorded.source.status, weight: recorded.source.weight,
     },
     canonical_url: recorded.canonical_url, url_key: recorded.url_key, title: recorded.title,
     categories: recorded.categories, article_text: recorded.article_text, word_count: recorded.word_count,
@@ -62,9 +61,7 @@ async function inputs() {
       harvest: { ...authored.harvest, blocked_categories: ["links", "video"] },
       triage: { ...authored.triage, min_words: 180, blocked_http_statuses: [401, 403, 429],
         recency_half_life_hours: 18, recency_weight: 0.6 },
-      curate_articles: { ...authored.curate_articles, source_based_quality_buckets: [
-        { id: "institutional", source_tier_id: candidate.source.tier, share_pct: 100, buffer_pct: 0, ladder_hours: [24] },
-      ] },
+      curate_articles: { ...authored.curate_articles, global_age_ceiling_hours: 36 },
     }),
     clock_config: { collect: { max_future_hours: 6 } },
     run: { now: fixture.now, run_id: candidate.run_id, correlation_id: candidate.correlation_id },
@@ -114,7 +111,7 @@ test("recorded word, blocking, precedence and exact freshness boundaries", async
     if (entry.age !== undefined) expect(result.admitted[0]?.freshness.age_hours, entry.name).toBe(entry.age);
     if (entry.clock !== undefined) expect(result.admitted[0]?.freshness.timing_source, entry.name).toBe(entry.clock);
     if (entry.bonus !== undefined) expect(result.admitted[0]?.freshness.recency_bonus, entry.name).toBe(entry.bonus);
-    if (entry.name === "one second past cutoff") expect(result.rejections[0]?.details.age_hours).toBeCloseTo(24 + 1 / 3600, 10);
+    if (entry.name === "one second past cutoff") expect(result.rejections[0]?.details.age_hours).toBeCloseTo(36 + 1 / 3600, 10);
   }
   expect(input).toEqual(before);
   const filters = await readContentFilters();
@@ -209,19 +206,17 @@ test("global policies change only their declared gates for every feed", async ()
   input.planning = loadPlanningConfig({
     ...input.planning.config,
     triage: { ...input.planning.config.triage, min_words: 190 },
-    curate_articles: { ...input.planning.config.curate_articles, source_based_quality_buckets: [
-      { id: "institutional", source_tier_id: candidate.source.tier, share_pct: 100, buffer_pct: 0, ladder_hours: [12] },
-    ] },
+    curate_articles: { ...input.planning.config.curate_articles, global_age_ceiling_hours: 12 },
   });
   for (const feed of [candidate.feed_id, "another-configured-feed"]) {
     expect((await change(189, "2026-10-21T11:00:00Z", feed)).rejections[0]?.details.words_required).toBe(190);
     expect((await change(190, "2026-10-21T11:00:00Z", feed)).admitted).toHaveLength(1);
   }
-  expect((await change(200, "2026-10-20T18:00:00Z")).rejections[0]?.drop_reason).toBe("REJECTED_AGE_EXCEEDS_MAX_TIER_ENVELOPE");
+  expect((await change(200, "2026-10-20T18:00:00Z")).rejections[0]?.drop_reason).toBe("REJECTED_SCREENING_AGE_CEILING");
   const admitted = await change(200, "2026-10-21T00:00:00Z");
   expect(admitted.admitted[0]?.freshness.recency_bonus).toBeCloseTo(0.6 * 0.5 ** (12 / 18));
   expect(admitted.admitted[0]?.policy.triage.recency_half_life_hours).toBe(18);
-  expect(input.planning.config.curate_articles.source_based_quality_buckets[0]!.ladder_hours).toEqual([12]);
+  expect(input.planning.config.curate_articles.global_age_ceiling_hours).toBe(12);
   input.planning.config.triage.min_words = 200;
   expect((await change(199, "2026-10-21T11:00:00Z")).rejections[0]?.details.words_required).toBe(200);
   input.planning.config.triage.recency_weight = 0;
@@ -353,7 +348,7 @@ test("survivors require real substance evidence while cheap refusals avoid parag
   const old = await screenArticleCandidates({
     ...input, candidates: [{ ...undercounted, published_at: "2026-10-19T12:00:00Z" }],
   });
-  expect(old.rejections[0]?.drop_reason).toBe("REJECTED_AGE_EXCEEDS_MAX_TIER_ENVELOPE");
+  expect(old.rejections[0]?.drop_reason).toBe("REJECTED_SCREENING_AGE_CEILING");
   const rawFailure = await screenArticleCandidates({ ...input, candidates: [{ ...undercounted, word_count: 179 }] });
   expect(rawFailure.rejections[0]?.drop_reason).toBe("REJECTED_SCREENING_MIN_WORDS");
 });
@@ -424,7 +419,7 @@ test("transient rejections preserve exact details, candidate identity and the UT
   const result = await screenArticleCandidates(input);
   expect(result.admitted).toEqual([]);
   expect(result.rejections.map(row => row.drop_reason)).toEqual([
-    "REJECTED_SCREENING_MIN_WORDS", "CATEGORY_EXCLUDED", "REJECTED_AGE_EXCEEDS_MAX_TIER_ENVELOPE", "PAYWALL_OR_BLOCKED",
+    "REJECTED_SCREENING_MIN_WORDS", "CATEGORY_EXCLUDED", "REJECTED_SCREENING_AGE_CEILING", "PAYWALL_OR_BLOCKED",
   ]);
   for (const [index, rejection] of result.rejections.entries()) {
     expect(CandidateRejectionRecordSchema.parse(rejection)).toEqual(rejection);
@@ -435,7 +430,7 @@ test("transient rejections preserve exact details, candidate identity and the UT
     });
   }
   expect(result.rejections[0]?.details).toMatchObject({ words_found: 1, words_required: 180 });
-  expect(result.rejections[2]?.details).toMatchObject({ age_hours: 50, max_age_hours: 24 });
+  expect(result.rejections[2]?.details).toMatchObject({ age_hours: 50, max_age_hours: 36 });
   expect(result.rejections[3]?.details.http_status).toBe(403);
   expect(input.candidates[0]!.date).toBe("2026-10-20");
   expect(result).not.toHaveProperty("sealing");

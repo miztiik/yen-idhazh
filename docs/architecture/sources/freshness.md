@@ -1,6 +1,6 @@
 # Freshness and Identity
 
-**Last Updated**: 2026-10-29
+**Last Updated**: 2026-11-02
 
 How often the pipeline runs, what makes an article worth today's slot, what stops the same article being published twice, and how an item keeps its name across the runs of one day. This page owns the decisions the planning step makes before any model loads.
 
@@ -9,10 +9,12 @@ The separate TypeScript feed-ingest planner records discovery in
 `discovered_articles.lookback_days`; it does not use this pipeline's native
 `seen` ledger. See [planner feed history](planner-feed-history.md) and
 [candidate screening](feed-screening.md).
-Its separate [selection rules](feed-curation.md#targets-fresh-buffers-and-older-deficits)
-use tier-specific fresh windows and older-deficit steps. The saved batch clock
-determines age; a run override only tightens those windows. The native pipeline
-rules below do not configure that planner.
+Its separate [selection rules](feed-curation.md#fixed-score-preparation)
+use one global known-age ceiling, 36 hours by default or one run override.
+The saved UTC batch clock determines age from trusted publication or captured
+first sight. Unknown age stays eligible with null timing and zero recency;
+the cutoff is policy, not proof of freshness. The native pipeline rules below
+do not configure that planner.
 
 ## The run happens five times each day
 

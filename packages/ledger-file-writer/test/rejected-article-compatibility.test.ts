@@ -1,7 +1,6 @@
 /** Refuse old rejected-file formats without inventing fetch evidence or rewriting bytes. */
 import { expect, test } from "bun:test";
 import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { z } from "zod";
 import { RejectedArticleRowContract, RejectedArticleRowSchema, REJECTED_ARTICLE_VERSION, deriveCandidateId, deriveUrlKey } from "@idhazh/common-contracts";
@@ -50,7 +49,7 @@ async function writePriorPhysical(root: string, stamp: string) {
 }
 
 test("current rejected metadata round-trips and older stamps refuse without null-fill migration", async () => {
-  const root = await mkdtemp(join(tmpdir(), "rejected-current-format-"));
+  const root = await mkdtemp(join(process.cwd(), ".rejected-current-format-check-"));
   try {
     const current = row();
     const result = await persistLedger({
@@ -58,7 +57,7 @@ test("current rejected metadata round-trips and older stamps refuse without null
       registryEntry: registration, ledgerSettings: settings, period: { tier: "raw", covers: day },
     });
     expect((await readPlannerParquet(join(root, result.files[0]!.path), "rejected-articles", RejectedArticleRowContract)).rows).toEqual([current]);
-    for (const stamp of ["2026-10-27", "2026-10-29", "2026-10-29T20:15", "2026-10-31"]) {
+    for (const stamp of ["2026-10-27", "2026-10-29", "2026-10-29T20:15", "2026-10-31", "2026-11-01"]) {
       const path = await writePriorPhysical(root, stamp);
       const before = await readFile(path);
       await expect(readStoredPlannerParquet(path, "rejected-articles")).rejects.toThrow();

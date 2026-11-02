@@ -18,7 +18,7 @@ function recording() {
   const run = "2026-10-27-1";
   const source = SourceSnapshotSchema.parse({
     feed_id: "recorded", publisher_id: null, feed_url: "https://example.org/feed",
-    title: "Recorded source", tier: 1, status: "active", weight: 1, applied_tier_weight: 1,
+    title: "Recorded source", status: "active", weight: 1,
   });
   const context = PlannerStageContextSchema.parse({
     now: at, captured_at: at, date: at.slice(0, 10), run_id: run, correlation_id: randomUUID(),
