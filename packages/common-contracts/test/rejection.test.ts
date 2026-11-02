@@ -5,7 +5,8 @@ import { z } from "zod";
 import {
   CandidateRejectionRecordSchema, FeedIngestCandidateSchema,
   ArticleContentEvidenceSchema,
-  FeedIngestEventSchema, FileEnvelopeSchema, PlannerFileEnvelopeSchema,
+  FeedIngestEventSchema, FileEnvelopeSchema, PlannerFileEnvelopeSchema, PlannerStoredFileEnvelopeSchema,
+  PlannerLedgerNameSchema, PLANNER_ROW_SCHEMA_VERSIONS,
   REASON_STAGES, REQUIRED_DETAILS, RejectionDetailsSchema,
   SourceSnapshotSchema, WriterIdentitySchema, deriveCandidateId, deriveUrlKey, validateEnvelopeContainer,
   readFeedIngestEvent, HarvestDiagnosticsSchema, FetchAttemptSchema, OPERATION_VERSION,
@@ -394,6 +395,22 @@ describe("rejection evidence", () => {
       ...planner, row_schema_version: PLAN_RUN_VERSION,
       ledger: "plan-runs", updated_at: null,
     }).success).toBe(true);
+    for (const ledger of PlannerLedgerNameSchema.options) {
+      const current = PLANNER_ROW_SCHEMA_VERSIONS[ledger];
+      for (const row_schema_version of ["2026-10-25", current, "2027-01-01"]) {
+        const stored = { ...planner, ledger, row_schema_version,
+          updated_at: ledger === "feed-health-state" ? at : null };
+        expect(PlannerStoredFileEnvelopeSchema.parse(stored)).toEqual(stored);
+        expect(PlannerFileEnvelopeSchema.safeParse(stored).success).toBe(row_schema_version === current);
+      }
+    }
+    for (const invalid of [
+      { version: "2026-10-29" }, { row_schema_version: "not-a-date" },
+      { ledger: "feed-health" }, { tier: "compact", period: null },
+      { file_id: row.unit_id }, { updated_at: null },
+    ]) {
+      expect(PlannerStoredFileEnvelopeSchema.safeParse({ ...planner, ...invalid }).success).toBe(false);
+    }
   });
 });
 

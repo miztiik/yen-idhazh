@@ -122,20 +122,21 @@ export const PlannerStoredFileEnvelopeSchema = z.strictObject({
   if (!stamp.safeParse(value.covers).success) reject(ctx, "planner covers must match its tier and period");
   if (value.file_id[14] !== "8") reject(ctx, "planner file_id must be UUID version 8");
   if ((value.ledger === "feed-health-state") !== (value.updated_at !== null)) reject(ctx, "only feed-health-state files require updated_at");
-  if (value.row_schema_version !== PLANNER_ROW_SCHEMA_VERSIONS[value.ledger]) {
-    reject(ctx, `${value.ledger} requires its current row schema`);
-  }
 });
 export type PlannerStoredFileEnvelope = z.infer<typeof PlannerStoredFileEnvelopeSchema>;
 
-export const PlannerFileEnvelopeSchema = PlannerStoredFileEnvelopeSchema.meta({
+export const PlannerFileEnvelopeSchema = PlannerStoredFileEnvelopeSchema.superRefine((value, ctx) => {
+  if (value.row_schema_version !== PLANNER_ROW_SCHEMA_VERSIONS[value.ledger]) {
+    reject(ctx, `${value.ledger} requires its current row schema`);
+  }
+}).meta({
   version: PLANNER_ENVELOPE_VERSION,
   changelog: [
+    { version: "2026-11-02", change: "Read verified stored fields independently of row stamps while keeping full-row consumers strict." },
     { version: PLANNER_ENVELOPE_VERSION, change: "Require current planner envelopes and row stamps without older-format readers." },
     { version: "2026-10-29", change: "Separate stored-file integrity from current row-schema compliance." },
     { version: "2026-10-27", change: "Register rejected articles and current selection and article-outcome row stamps." },
-    { version: "2026-10-26", change: "Require the current row stamp for selected articles and plan runs." },
-    { version: "2026-10-25", change: "Declare planner-only file metadata without generic writer identity." },
+    { version: "2026-10-26", change: "Earlier changes are in git." },
   ],
 });
 export type PlannerFileEnvelope = z.infer<typeof PlannerFileEnvelopeSchema>;

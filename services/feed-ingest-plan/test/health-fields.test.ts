@@ -6,7 +6,9 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { z } from "zod";
 import { FeedHealthStateRowContract, FeedHealthStateRowSchema, FeedIngestEventSchema } from "@idhazh/common-contracts";
-import { persistLedger, readPlannerParquet, readStoredPlannerParquet } from "@idhazh/ledger-file-writer";
+import {
+  persistLedger, readPlannerParquet, readStoredPlannerParquet, PlannerUnsupportedFormatError,
+} from "@idhazh/ledger-file-writer";
 import { createStageLogger } from "../src/logging/structured-logger";
 import { readFeedHealthFieldsDay } from "../src/read-ledger-history/read-feed-health-fields";
 import { createPlannerHistoryCache, readPlannerDay } from "../src/read-ledger-history/read-planner-history";
@@ -16,31 +18,34 @@ import { compactRows, registration, settings } from "./partition-fixtures";
 const shape = FeedHealthStateRowSchema.shape;
 const schema = z.object(shape);
 
-test("field readers and full readers refuse old stamps while current-format fields remain independent", async () => {
+test("field projections survive row stamps while full reads and writers require the current schema", async () => {
   const root = await mkdtemp(join(tmpdir(), "health-field-stamps-"));
   try {
     const { row, written } = await healthFieldFixture(join(root, "state"));
     const path = join(root, "state", written.files[0]!.path);
+    const input = {
+      day: row.date, raw_files: [`state/${written.files[0]!.path}`],
+    };
+    const expected = await readFeedHealthFieldsDay(root, registration("feed-health-state"), input);
     for (const stamp of ["2026-10-25", "2026-10-27", FeedHealthStateRowContract.schemaVersion, "2027-01-01"]) {
       await rewriteHealthFields(path, [row], schema, { stamp });
+      const before = await readFile(path);
       const cache = createPlannerHistoryCache<Record<string, unknown>>();
-      const input = {
-        day: row.date, raw_files: [`state/${written.files[0]!.path}`],
-      };
       const read = await readFeedHealthFieldsDay(root, registration("feed-health-state"), input, cache);
+      expect(read.complete).toBe(true);
+      expect(read.records).toEqual([row]);
+      expect(read.uses).toEqual(expected.uses);
       if (stamp !== FeedHealthStateRowContract.schemaVersion) {
-        expect(read.complete).toBe(false);
-        for (const use of Object.values(read.uses)) expect(use.rows).toEqual([]);
         expect((await readPlannerDay<Record<string, unknown>>(root, registration("feed-health-state"),
           input, FeedHealthStateRowContract, cache)).complete).toBe(false);
-        await expect(readPlannerParquet(path, "feed-health-state", FeedHealthStateRowContract)).rejects.toThrow();
+        await expect(readPlannerParquet(path, "feed-health-state", FeedHealthStateRowContract))
+          .rejects.toBeInstanceOf(PlannerUnsupportedFormatError);
         await expect(persistLedger({
           ledger: "feed-health-state", outputRoot: root, registryEntry: registration("feed-health-state"),
           rowContract: { ...FeedHealthStateRowContract, schemaVersion: stamp }, ledgerSettings: settings,
           period: { tier: "raw", covers: row.date }, rows: [row], updatedAt: row.checked_at!,
         })).rejects.toThrow();
       } else {
-        expect(read.complete).toBe(true);
         for (const use of Object.values(read.uses)) {
           expect(use.rows).toHaveLength(1);
           expect(use.gaps).toEqual([]);
@@ -55,6 +60,7 @@ test("field readers and full readers refuse old stamps while current-format fiel
           period: { tier: "raw", covers: row.date }, rows: [row], updatedAt: row.checked_at!,
         })).resolves.toBeDefined();
       }
+      expect(await readFile(path)).toEqual(before);
     }
   } finally { await rm(root, { recursive: true, force: true }); }
 });
@@ -74,7 +80,8 @@ test("missing, added and retyped columns affect only the uses that require them"
       ...row, status: "retained", detail: { label: "extra", readings: [0.25, 0.5] },
       rejection_counts: row.rejection_counts.map(reason => ({ ...reason, detail: "unrelated" })),
     });
-    await rewriteHealthFields(path, [stored], variant);
+    await rewriteHealthFields(path, [stored], variant, { stamp: "2026-10-25" });
+    const before = await readFile(path);
     const read = await readFeedHealthFieldsDay(root, registration("feed-health-state"), {
       day: row.date, raw_files: [`state/${written.files[0]!.path}`],
     });
@@ -85,6 +92,7 @@ test("missing, added and retyped columns affect only the uses that require them"
     expect(read.uses.request_totals.rows[0]).toMatchObject({ feed_requests: 2, article_requests: 4, robots_requests: 0 });
     expect(read.uses.feed_reliability.partial_rows[0]).toMatchObject({ outcome: "ok", items: 4 });
     await expect(readPlannerParquet(path, "feed-health-state", FeedHealthStateRowContract)).rejects.toThrow();
+    expect(await readFile(path)).toEqual(before);
     await rewriteHealthFields(path, [{ ...stored, detail: { label: "tampered", readings: [0.25, 0.5] } }], variant,
       { preserve_digest: true });
     await expect(readStoredPlannerParquet(path, "feed-health-state")).rejects.toThrow("digest");
@@ -98,7 +106,7 @@ test("request field gaps retain independent checks and individual valid counters
     const path = join(root, "state", written.files[0]!.path);
     const variant = schema.omit({ article_requests: true });
     const stored = { ...variant.parse(row), feed_requests: -1, robots_requests: null };
-    await rewriteHealthFields(path, [stored], variant);
+    await rewriteHealthFields(path, [stored], variant, { stamp: "2026-10-25" });
     const logged: unknown[] = [];
     const correlation_id = randomUUID();
     const log = createStageLogger({ run_id: row.run_id, correlation_id }, event => logged.push(event));
@@ -185,19 +193,28 @@ test("invalid types, observation dates and admission counts affect only their de
 test("captured raw and compact members share field-based reading and duplicate protection", async () => {
   const root = await mkdtemp(join(tmpdir(), "health-field-compact-"));
   try {
-    const { row } = await healthFieldFixture(join(root, "state"));
+    const { row, written } = await healthFieldFixture(join(root, "state"));
+    const raw = join(root, "state", written.files[0]!.path);
     const compact = await compactRows(join(root, "state"), "feed-health-state", row.date,
       FeedHealthStateRowContract, [row], "monthly");
     const path = compact.path!;
-    await rewriteHealthFields(path, [row], schema);
+    await rewriteHealthFields(raw, [row], schema, { stamp: "2026-10-25" });
+    await rewriteHealthFields(path, [row], schema, { stamp: "2027-01-01" });
+    const before = new Map([[raw, await readFile(raw)], [path, await readFile(path)]]);
     const read = async () => readFeedHealthFieldsDay(root, registration("feed-health-state"), {
       day: row.date,
     });
     const held = await read();
     expect(held.complete).toBe(true);
+    expect(held.records).toEqual([row, row]);
     for (const use of Object.values(held.uses)) {
       expect(use.rows).toHaveLength(1);
       expect(use.gaps).toEqual([]);
+    }
+    for (const [file, bytes] of before) {
+      await expect(readPlannerParquet(file, "feed-health-state", FeedHealthStateRowContract))
+        .rejects.toBeInstanceOf(PlannerUnsupportedFormatError);
+      expect(await readFile(file)).toEqual(bytes);
     }
     await rewriteHealthFields(path, [{ ...row, feed_requests: 9 }], schema);
     const conflicting = await read();

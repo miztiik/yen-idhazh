@@ -3,7 +3,8 @@
 **Last Updated**: 2026-11-02
 
 Which saved observations can change feed rest and measured reliability?
-The isolated planner reads current-format required `feed-health-state` fields and its
+The isolated planner reads required `feed-health-state` fields from intact
+stored files, independently of their row-version dates, and its
 planner-owned `discovered-articles` ledger. The native Python `seen` ledger
 remains separate and is not the planner's discovery source.
 The global Python `feed-health` ledger and public health JSON remain separate
@@ -90,9 +91,17 @@ floor to the original fraction before truncation, so a floor of `0.5005`
 can save numeric `0.5`. JSON numbers do not retain trailing zeros.
 Both values come from the original integer counts; article-pass rates,
 selection scores and semantic similarity retain their own precision.
-No general precision setting is introduced. Current health files use `2026-10-31`. Earlier health formats remain on disk
-but refuse with a diagnostic. Current-format field gaps are partial evidence,
-not a migration. Compaction preserves saved values rather than rounding them again.
+No general precision setting is introduced. Current health writers use
+`2026-10-31`. Historical raw and compact files with other valid row-version dates
+remain usable when their required fields validate. Readers verify the supported
+file envelope, registered ledger, named membership, raw filename identity and
+canonical digest over every stored column before projection. Extra columns
+do not affect a calculation, but remain part of that integrity check.
+Required-field gaps are partial evidence, not a migration or a failed planning
+request. Full-row reads, new writes, compaction, publication and current-run
+delivery still require the complete current row schema and stamp.
+No historical file or index is rewritten, deleted or null-filled by a read.
+Compaction preserves saved values rather than rounding them again.
 Uncertain time order remains uncertain under
 [the recorded-instant contract](../contracts/recorded-instants.md).
 
