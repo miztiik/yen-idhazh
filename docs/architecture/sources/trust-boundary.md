@@ -127,9 +127,9 @@ It rejects unsafe schemes, credentials, local names and explicit private or
 reserved addresses before dispatch, including browser redirects and resources.
 Chromium resolves
 hostnames; this path has no project DNS lookup, socket address pinning or
-DNS-rebinding protection. It keeps native browser headers and matches general
-`User-agent: *` robots rules, not browser-specific groups. Feed requests observe
-permission; articles preserve their configured enforce-or-observe policy.
+DNS-rebinding protection. It keeps native browser headers and does not request
+or enforce robots files for pages, redirects or resources. Browser robots
+evidence stays null. Non-browser transports retain their separate robots policy.
 Sandboxed browser contexts are temporary and receive no repository credentials.
 The request gate is installed before page or child-target execution; an
 unsupported target is refused rather than given an unchecked route.

@@ -49,7 +49,7 @@ their request parameters. Feed identity and Python discovery remain unchanged.
 `article-url.ts` exports `cleanArticleUrl`, the shared article cleanup policy.
 `article-identity.ts` hashes its exact serialized result as `url_key` and retains
 that result as `canonical_url`. The permitted fetcher uses the same policy for
-robots permission and the initial article request. Redirects do not change
+the initial article request and any non-browser robots permission check. Redirects do not change
 the initial identity. The lower-level `http-request-target.ts` applies the
 optional cleaner; it does not hash addresses.
 
@@ -62,9 +62,9 @@ hashing or dispatch; percent-encoding cannot bypass that bound. Each transformed
 passes URL, hostname and explicit-address checks before dispatch.
 Chromium resolves hostnames; this TypeScript path does not resolve or pin their
 addresses and does not protect against DNS rebinding.
-Robots results are retained as evidence; article `enforce` policy may stop an
-article before target dispatch. An unsafe transformed address is never
-dispatched.
+Browser navigation does not fetch or enforce robots files. Non-browser
+transports retain robots evidence and the article `enforce` policy.
+An unsafe transformed address is never dispatched.
 
 Feedsmith normalizes RSS, Atom, RDF and JSON Feed entries. They retain
 categories, authors, offered ordinals and entry-level UTC dates. A feed's
@@ -105,12 +105,16 @@ evidence that a source should retire. Malformed feed data retains its distinct
 `malformed-feed` result.
 
 The permitted fetcher retains URL, hostname and explicit-address validation,
-robots evidence, safe redirects, retries, bounded deadlines and decoded
-body limits. Validation occurs before dispatch. Safe feed targets and feed
+safe redirects, retries, bounded deadlines and decoded body limits.
+Validation occurs before dispatch. Browser requests do not look up or enforce
+robots files, including for redirects and resource origins; their robots
+permission, status, failure and response evidence remain null.
+Non-browser transports retain origin-cached robots checks. Safe feed targets and feed
 redirect hops are attempted even when robots permission is denied or unknown.
 `harvest.article_robots_policy` selects `enforce` or `observe` for articles
 and their redirect hops. Missing settings default to `enforce`; committed
-planner configuration uses `observe`. In `observe`, denied or unknown robots
+planner configuration uses `observe`. This setting has no effect on browser
+requests. In non-browser `observe`, denied or unknown robots
 permission does not block a safe article request. Actual retry and redirect dispatches
 each count; cache reuse adds no request.
 After a response completes, decoded HTTP bytes must fit
@@ -122,25 +126,26 @@ or a browser-memory bound. A decoding or completion failure remains a failure;
 an available prefix is never returned as a successful response.
 
 `harvest.request_headers` is an allowlisted header map, default `{}`.
-Chromium supplies its own browser headers. The robots parser matches general
+Chromium supplies its own browser headers. The non-browser robots parser matches general
 `User-agent: *` rules, not browser-specific groups. There is no secondary
 profile or fallback transport. Older fingerprint-shaped configuration fails
 validation instead of being converted.
-A denied or unknown robots result is retained across redirects. It blocks an
+A non-browser denied or unknown robots result is retained across redirects. It blocks an
 article only when that article uses `enforce`; it does not block a safe feed
 request or an article in `observe`.
 
 `harvest.browser.headless` defaults to true. The document deadline starts
 at first document dispatch; `harvest.browser.document_timeout_ms` defaults
 to 30000 ms, an initial estimate rather than measured performance.
-Per-request timeouts, retries and backoff remain separate. Robots work has
+Per-request timeouts, retries and backoff remain separate. Non-browser robots work has
 its own requests and origin cache; startup and robots waiting have cancellation
 owners. A failed robots check becomes unknown and is cached for the execution.
 Robots resources use an explicit mode that does not request robots recursively.
 
 The browser request gate is installed before page execution. Redirects,
 scripts, fetch requests, cross-origin frames, dedicated workers and preflights
-pass URL, hostname, literal-address, robots and pacing checks before dispatch.
+pass URL, hostname and literal-address checks before dispatch. Optional
+configured pacing applies only when enabled.
 Browser-generated parameters survive; only the initial article address uses
 identity cleanup. Unsafe destinations refuse the operation. Unsolicited
 popups, service workers and WebSockets are blocked. Chromium starts with
@@ -165,7 +170,7 @@ sandboxing. See the [upstream sandbox setup](https://raw.githubusercontent.com/c
 
 ## Browser response handling
 
-Feeds and robots return the completed original network body, not the
+Feeds return the completed original network body, not the
 browser's XML viewer. Narrow response-header continuation permits inline
 reading of download-like XML while evidence retains original headers.
 Articles return rendered HTML through the existing inert parser and sanitizer.
@@ -184,14 +189,25 @@ cookies can proceed until the document deadline. No credentials, persistent
 profile, proxy, solver or human challenge step is introduced. Browser execution
 alone does not demonstrate readable content or live publisher recovery.
 
+Browser favicon downloads are refused before dispatch or request accounting.
+This includes the default `/favicon.ico` and addresses declared by icon links;
+an icon refusal therefore cannot become a failed feed or document attempt.
+Document navigation remains admitted; unrelated image and script requests
+are not suppressed just because their address ends in `.ico`. Normal navigation, page scripts,
+rendering and temporary cookies provide browser behavior; no fake pointer
+movement, random interaction, stealth modification or challenge bypass is used.
+
 `harvest.request_pacing` applies a process-local scheduler to every dispatched
-robots, feed and article request, including resources, retries and redirect
+feed and article request, including resources, retries and redirect
 hops. Each request uses its destination domain and, when present,
 the curated publisher ID. The domain key groups hostnames by registrable domain
 (the domain beneath the public suffix), using the configured private-suffix
 policy; a missing publisher ID adds no publisher key. Both keys are acquired
 domain first, then publisher. Cache hits and validation-only refusals do not
 dispatch and use no slot.
+The committed `harvest.request_pacing.enabled` is false: requests bypass these
+queues and report zero pacing wait. The delays and jitter apply only if pacing
+is explicitly enabled. Non-browser robots requests also use that setting.
 
 The first request for a key has no initial delay. After the application request
 settles with content or failure, the next request waits for that key's configured
@@ -279,11 +295,13 @@ Only selected article text enters the summarizer artifact.
 
 ## Design rationale
 
-The robots checker can be wrong or unavailable. Attempting a safe feed target
-keeps that evidence separate from the publisher's actual response. Keep the
-robots verdict, status and retrieval failure, but let the target response
-decide whether the feed fetch succeeded. Article `enforce` remains an explicit
-option. URL and explicit-address checks remain; hostname address resolution
+The browser follows ordinary navigation without requesting robots files.
+Previously, every browser page and resource entered the robots checker;
+the first resource origin's result could populate the enclosing document's
+robots evidence. Removing that browser lookup removes the unrelated evidence,
+its wait and its enforcement, rather than relabelling a resource check as a
+document check. Non-browser transports retain their separate permission policy.
+URL and explicit-address checks remain; hostname address resolution
 and socket pinning do not. Browser request interception checks each
 destination before dispatch, including requests that page JavaScript creates.
 Unsupported child targets are refused before execution because observing their
@@ -297,6 +315,10 @@ Separate admission of the rendered parser input prevents DOM expansion from
 bypassing the existing limit; neither check bounds browser memory.
 Resource failures remain visible without converting optional assets into
 document refusals or source penalties.
+Only main-document navigation adds article redirect evidence or changes its
+final attempted address. A background resource redirect cannot fail the
+document. HTTP 204 and 205 resources have no body, so Chromium's `ERR_ABORTED`
+completion for them is successful HTTP work, not an article network failure.
 
 The separate `source-transport-test.yml` workflow runs the actual browser
 modules under Linux Bun, checks active Chromium sandboxing, and records the
@@ -338,7 +360,7 @@ Passing those rows through parsed, selected and partitioned batches would not
 add restart recovery: `StageStore` holds those batches in a bounded in-memory
 `Map`, not on disk.
 
-Robots results are evidence, not a veto for a safe feed target. The committed
+For non-browser transports, robots results are evidence, not a veto for a safe feed target. The committed
 article setting also observes them; explicit article `enforce` remains
 available. Retain the verdict, HTTP status and retrieval failure, then use
 the actual target response to determine fetch success or rejection. Separate

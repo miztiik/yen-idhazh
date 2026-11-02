@@ -8,12 +8,12 @@ test("Chromium admits redirects and child requests before dispatch", async () =>
   const temporary = await mkdtemp(join(import.meta.dir, "../node_modules/.source-browser-"));
   try {
     const built = await Bun.build({
-      entrypoints: [join(import.meta.dir, "../src/harvest-feeds/browser-runtime.ts")],
+      entrypoints: [join(import.meta.dir, "browser-oracle-entry.ts")],
       outdir: temporary, target: "node", external: ["playwright"],
     });
     expect(built.success).toBe(true);
     const child = spawn(process.platform === "win32" ? "node" : process.execPath, [
-      join(import.meta.dir, "browser-loopback-source.cjs"), join(temporary, "browser-runtime.js"),
+      join(import.meta.dir, "browser-loopback-source.cjs"), join(temporary, "browser-oracle-entry.js"),
     ], { env: { ...process.env, NODE_PATH: join(import.meta.dir, "../node_modules") },
       stdio: ["ignore", "pipe", "pipe"] });
     let output = "";

@@ -6,7 +6,7 @@ import { spawn } from "node:child_process";
 import { parseDocument } from "../src/harvest-feeds/parse-document";
 import { inputs } from "./harvest-recordings";
 
-test("the browser source boundary retains raw feeds, cookies, rendered articles and real failures", async () => {
+async function runSourceOracle(mode: "transport" | "corrections") {
   const temporary = await mkdtemp(join(import.meta.dir, "../node_modules/.source-browser-"));
   try {
     const built = await Bun.build({
@@ -35,7 +35,7 @@ export function validateTargetName(raw: string): URL {
     });
     expect(built.success).toBe(true);
     const child = spawn(process.platform === "win32" ? "node" : process.execPath, [
-      join(import.meta.dir, "browser-loopback-source.cjs"), join(temporary, "browser-oracle-entry.js"), "transport",
+      join(import.meta.dir, "browser-loopback-source.cjs"), join(temporary, "browser-oracle-entry.js"), mode,
     ], { stdio: ["ignore", "pipe", "pipe"] });
     let output = "";
     let errors = "";
@@ -47,15 +47,25 @@ export function validateTargetName(raw: string): URL {
     });
     if (result !== 0) console.error(errors);
     expect({ result, errors }).toEqual({ result: 0, errors: "" });
-    const observed = JSON.parse(output) as { feed: string; article: string; unsupported_article: string };
-    const loaded = await inputs();
-    const entries = await parseDocument("feed", observed.feed, "https://source.example/feed.xml");
-    const article = await parseDocument("article", observed.article, "https://source.example/article", loaded.extraction);
-    expect(entries.length).toBeGreaterThan(0);
-    expect(article.article_text.length).toBeGreaterThan(0);
-    expect(article.article_text).not.toContain("<script");
-    const unsupported = await parseDocument("article", observed.unsupported_article,
-      "https://source.example/shared-worker", loaded.extraction);
-    expect(unsupported.article_text).toBe("");
+    return output;
   } finally { await rm(temporary, { recursive: true, force: true }); }
+}
+
+test("the browser source boundary retains raw feeds, cookies, rendered articles and real failures", async () => {
+  const observed = JSON.parse(await runSourceOracle("transport")) as {
+    feed: string; article: string; unsupported_article: string;
+  };
+  const loaded = await inputs();
+  const entries = await parseDocument("feed", observed.feed, "https://source.example/feed.xml");
+  const article = await parseDocument("article", observed.article, "https://source.example/article", loaded.extraction);
+  expect(entries.length).toBeGreaterThan(0);
+  expect(article.article_text.length).toBeGreaterThan(0);
+  expect(article.article_text).not.toContain("<script");
+  const unsupported = await parseDocument("article", observed.unsupported_article,
+    "https://source.example/shared-worker", loaded.extraction);
+  expect(unsupported.article_text).toBe("");
+}, 180000);
+
+test("browser icons and background redirects cannot corrupt document outcomes", async () => {
+  expect(JSON.parse(await runSourceOracle("corrections")).passed).toBe(true);
 }, 180000);

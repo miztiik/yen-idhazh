@@ -10,8 +10,9 @@ const { parseHTML } = require("linkedom");
 
 (async () => {
   const boundary = await import(pathToFileURL(process.argv[2]).href);
-  const { createBrowserRuntime } = boundary;
-  const transportMode = process.argv[3] === "transport";
+  const { createBrowserRuntime, isBrowserIconRequest } = boundary;
+  const correctionsMode = process.argv[3] === "corrections";
+  const transportMode = process.argv[3] === "transport" || correctionsMode;
   const root = resolve(__dirname, "../../..");
   const recordedArticle = await readFile(resolve(root, "tests/fixtures/feed-ingest-plan/harvest-article.html"), "utf8");
   const { document } = parseHTML(recordedArticle);
@@ -116,9 +117,25 @@ const { parseHTML } = require("linkedom");
     } else if (path === "/robots-enforced") {
       response.writeHead(200, { "content-type": "text/html" });
       response.end(`<article></article><script>fetch('/robots-refused-asset')
-        .catch(() => document.querySelector('article').textContent='Article remains available without the refused resource.')</script>`);
-    } else if (path === "/asset-refused") {
+        .then(() => document.querySelector('article').textContent='Article resource loaded without a robots check.')</script>`);
+    } else if (path === "/icon-page") {
+      response.writeHead(200, { "content-type": "text/html" });
+      response.end('<link rel="shortcut icon" href="/custom-site-icon.png"><img src="/custom-site-icon.png"><article>Generated article with an icon.</article>');
+    } else if (path === "/default-icon-page") {
+      response.writeHead(200, { "content-type": "text/html" });
+      response.end('<img src="/favicon.ico"><article>Generated article with the default icon.</article>');
+    } else if (path === "/favicon.ico" || path === "/custom-site-icon.png") {
+      response.writeHead(403, { "content-type": "text/plain" }).end("Icon access refused");
+    } else if (path === "/asset-refused" || path === "/document-refused") {
       response.writeHead(403, { "content-type": "text/plain" }).end("Optional asset refused");
+    } else if (path === "/analytics-page") {
+      response.writeHead(200, { "content-type": "text/html" });
+      response.end(`<article></article><iframe src="/analytics-collect"></iframe><script>
+        fetch('/analytics-collect?fetch').then(() => fetch('/redirect-loop-a')).catch(() => {})
+        .then(() => document.querySelector('article').textContent='Article remains readable after background traffic.');
+        </script>`);
+    } else if (path === "/analytics-collect") {
+      response.writeHead(204, { "content-type": "text/plain", "content-length": "0" }).end();
     } else if (path === "/cross-origin") {
       response.writeHead(200, { "content-type": "text/html" });
       response.end(`<article></article><script>
@@ -170,14 +187,14 @@ const { parseHTML } = require("linkedom");
     const configured = JSON.parse(await readFile(resolve(root, "config/feed-ingest-plan.json"), "utf8"));
     const extraction = JSON.parse(await readFile(resolve(root, "config/idhazh.json"), "utf8")).extract;
     const settings = boundary.FeedIngestConfigSchema.parse(configured);
+    assert.equal(settings.harvest.request_pacing.enabled, false, "Committed source pacing is still enabled");
     const controls = boundary.ExtractionControlsSchema.parse({
       ...extraction, max_retries: 0,
       semantic_fallback: settings.harvest.semantic_fallback,
       press_release_filter: settings.content_filters.press_release,
     });
     const harvest = { ...settings.harvest, fetch_timeout_ms: 1000,
-      browser: { ...settings.harvest.browser, document_timeout_ms: 2000 },
-      request_pacing: { ...settings.harvest.request_pacing, enabled: false } };
+      browser: { ...settings.harvest.browser, document_timeout_ms: 2000 } };
     const shared = createBrowserRuntime(harvest.browser);
     function measuredFetcher(extractionControls, harvestConfig = harvest) {
       const actual = boundary.createPermittedFetcher(harvestConfig, extractionControls, { browser_runtime: shared });
@@ -193,6 +210,14 @@ const { parseHTML } = require("linkedom");
             await emit?.(measurement);
           }, ...rest);
           measurements.sort((a, b) => a.attempt.sequence - b.attempt.sequence);
+          assert.equal(result.robots, null);
+          assert.equal(result.robots_http_status, null);
+          assert.equal(result.robots_failure, null);
+          assert.equal(result.robots_response_evidence, null);
+          assert(!result.attempts.some(row => row.phase === "robots"));
+          assert.equal(result.pacing_settings.enabled, false);
+          assert.equal(result.pacing_time_ms, 0);
+          assert(result.attempts.every(row => row.pacing_wait_ms === 0));
           assert.deepEqual(measurements.map(row => row.attempt), result.attempts);
           assert.deepEqual(result.attempts.map(row => row.sequence), result.attempts.map((_, index) => index));
           const observed = dispatched.length + crossDispatched.length + unsafeDispatches - before;
@@ -211,7 +236,7 @@ const { parseHTML } = require("linkedom");
       assert.equal(feed.failure, null, JSON.stringify(feed));
       assert.equal(feed.body, feedFixture);
       assert.equal(feed.response_evidence.content_type, "application/rss+xml");
-      assert.equal(feed.attempts.filter(row => row.phase === "robots").length, 1);
+      assert.equal(feed.attempts.filter(row => row.phase === "robots").length, 0);
       const article = await fetcher.fetch(`${origin}/article?identity=removed`);
       assert.equal(article.failure, null, JSON.stringify(article));
       assert(article.body.includes("article"));
@@ -222,14 +247,52 @@ const { parseHTML } = require("linkedom");
       assert.equal(optional.http_status, 200);
       assert.equal(optional.final_attempted_url, `${origin}/optional-resource`);
       assert(optional.attempts.some(row => row.request_role === "resource" && row.http_status === 403));
+      if (correctionsMode) {
+        for (const [path, icon] of [["/icon-page", "/custom-site-icon.png"], ["/default-icon-page", "/favicon.ico"]]) {
+          const iconPage = await fetcher.fetch(`${origin}${path}`);
+          assert.equal(iconPage.failure, null, JSON.stringify(iconPage));
+          assert.equal(iconPage.http_status, 200);
+          assert(!iconPage.attempts.some(row => row.request_url === `${origin}${icon}`));
+          assert(!dispatched.includes(icon), `Browser icon reached the source: ${icon}`);
+        }
+        const analytics = await fetcher.fetch(`${origin}/analytics-page`);
+        assert.equal(analytics.failure, null, JSON.stringify(analytics));
+        assert.equal(analytics.http_status, 200);
+        assert.equal(analytics.final_attempted_url, `${origin}/analytics-page`);
+        assert.equal(analytics.failed_url, null);
+        assert.deepEqual(analytics.redirects, []);
+        assert(analytics.body.includes("Article remains readable after background traffic."));
+        const emptyResources = analytics.attempts.filter(row => row.request_url === `${origin}/analytics-collect`);
+        assert.equal(emptyResources.length, 2);
+        assert(emptyResources.every(row => row.http_status === 204 && row.failure === null
+          && row.request_role === "resource"), JSON.stringify(emptyResources));
+        assert(analytics.attempts.some(row => row.request_role === "resource" && row.http_status === 302));
+        const documentRefusal = await fetcher.fetch(`${origin}/document-refused`);
+        assert.equal(documentRefusal.failure, "http", JSON.stringify(documentRefusal));
+        assert.equal(documentRefusal.http_status, 403);
+        assert.equal(documentRefusal.final_attempted_url, `${origin}/document-refused`);
+        assert.equal(documentRefusal.failed_url, `${origin}/document-refused`);
+        assert(documentRefusal.attempts.some(row => row.request_role === "document"
+          && row.http_status === 403 && row.failure === "http"));
+        const redirected = await fetcher.fetch(`${origin}/redirect`);
+        assert.equal(redirected.failure, null, JSON.stringify(redirected));
+        assert.equal(redirected.final_attempted_url, `${origin}/page`);
+        assert.deepEqual(redirected.redirects, [{
+          request_url: `${origin}/redirect`, destination_url: `${origin}/page`, http_status: 302,
+        }]);
+        assert(!dispatched.includes("/robots.txt"));
+        assert(!crossDispatched.some(row => row.path === "/robots.txt"));
+        console.log(JSON.stringify({ passed: true }));
+        return;
+      }
       const enforcing = measuredFetcher(controls, { ...harvest, article_robots_policy: "enforce" });
       try {
         const allowed = await enforcing.fetch(`${origin}/robots-enforced`);
         assert.equal(allowed.failure, null, JSON.stringify(allowed));
-        assert(allowed.body.includes("Article remains available"));
-        assert(!dispatched.includes("/robots-refused-asset"));
+        assert(allowed.body.includes("Article resource loaded without a robots check."));
+        assert(dispatched.includes("/robots-refused-asset"));
         assert(allowed.attempts.some(row => row.request_role === "resource"
-          && row.failure === "robots-denied" && row.request_url === null));
+          && row.failure === null && row.request_url === `${origin}/robots-refused-asset`));
       } finally { await enforcing.close(); }
       const preflight = await fetcher.fetch(`${origin}/cross-origin`);
       assert.equal(preflight.failure, null, JSON.stringify(preflight));
@@ -348,6 +411,10 @@ const { parseHTML } = require("linkedom");
         server.close(error => error ? reject(error) : resolve());
       })));
       assert(!dispatched.includes("/shared-worker.js"), "SharedWorker script arrived after refusal or cleanup");
+      assert(!dispatched.includes("/robots.txt"), "Browser fetched a robots file");
+      assert(!crossDispatched.some(row => row.path === "/robots.txt"), "Browser checked a resource origin's robots file");
+      assert(!dispatched.includes("/favicon.ico"), "Browser fetched the default favicon");
+      assert(!dispatched.includes("/custom-site-icon.png"), "Browser fetched a declared favicon");
       assert.equal(unsafeDispatches, 0);
       console.log(JSON.stringify({ feed: feed.body, article: article.body,
         unsupported_article: unsupported.body, dispatched, passed: true }));
@@ -363,6 +430,8 @@ const { parseHTML } = require("linkedom");
     headless: true, document_timeout_ms: 10000,
     challenge_selectors: ["#challenge-form", "#challenge-running", "#cf-challenge-running"],
   });
+  const suppressedIcons = [];
+  let iconSuppressed = () => {};
   try {
     const execution = await runtime.context({
       fail(error) { errors.push(error); console.error(error); },
@@ -371,6 +440,12 @@ const { parseHTML } = require("linkedom");
         session.on("Fetch.requestPaused", event => {
           (async () => {
             const url = new URL(event.request.url);
+            if (await isBrowserIconRequest(session, url.href, event.resourceType)) {
+              suppressedIcons.push(url.pathname);
+              await session.send("Fetch.failRequest", { requestId: event.requestId, errorReason: "BlockedByClient" });
+              iconSuppressed(url.pathname);
+              return;
+            }
             admitted.push(url.pathname);
             if (url.origin !== origin || url.pathname === "/blocked") {
               await session.send("Fetch.failRequest", { requestId: event.requestId, errorReason: "BlockedByClient" });
@@ -390,6 +465,26 @@ const { parseHTML } = require("linkedom");
         assert(admitted.includes(path), `Not admitted: ${path}`);
         assert(dispatched.includes(path), `Not dispatched: ${path}`);
       }
+      for (const [path, icon] of [["/icon-page", "/custom-site-icon.png"], ["/default-icon-page", "/favicon.ico"]]) {
+        let timer;
+        const refused = new Promise((resolve, reject) => {
+          timer = setTimeout(() => reject(new Error(`Browser did not request its icon: ${icon}`)), 10000);
+          iconSuppressed = path => { if (path === icon) resolve(); };
+        });
+        try {
+          await page.goto(`${origin}${path}`, { waitUntil: "load", timeout: 10000 });
+          await refused;
+        } finally { clearTimeout(timer); iconSuppressed = () => {}; }
+        assert(suppressedIcons.includes(icon), `Browser icon was not suppressed: ${icon}`);
+        assert(!dispatched.includes(icon), `Browser icon reached the server: ${icon}`);
+        assert(!admitted.includes(icon), `Browser icon entered request diagnostics: ${icon}`);
+      }
+      assert.equal(await page.evaluate(async () => (await fetch("/non-icon.ico")).status), 200,
+        "An unrelated script request was incorrectly classified as an icon");
+      assert(dispatched.includes("/non-icon.ico"));
+      assert.equal((await page.goto(`${origin}/favicon.ico`, { waitUntil: "load", timeout: 10000 })).status(), 403,
+        "Icon suppression incorrectly blocked a document navigation");
+      assert.deepEqual(errors, []);
       const sandbox = [];
       if (process.platform === "linux") {
         const session = await page.context().browser().newBrowserCDPSession();

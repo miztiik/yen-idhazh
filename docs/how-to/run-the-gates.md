@@ -252,6 +252,8 @@ The real Chromium cases use bounded generated loopback responses and named
 recorded content, not live publishers. They cover temporary cookies,
 navigation, raw download-like XML, rendered articles, unresolved challenges,
 request admission, cross-origin frames and preflights, dedicated workers,
+icon suppression, absent browser robots checks, disabled pacing, empty
+background HTTP responses and separation of resource and document redirects,
 unsafe destinations, browser-enforced SharedWorker refusal before script
 download, late requests after cleanup, cancellation, truncated and malformed
 encoded bodies,

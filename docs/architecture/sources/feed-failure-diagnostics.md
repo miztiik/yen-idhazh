@@ -26,9 +26,9 @@ Table A - diagnostic fields
 | Id | Field | Meaning |
 | --- | --- | --- |
 | A1 | `http_status` | Last received target HTTP status, including a redirect or headers received before body failure. Null if no target responded. Never the robots-file status. |
-| A2 | `robots` | Permission for the checked target: allowed, denied or unknown. Null before permission was checked, including an unsafe redirect destination. |
+| A2 | `robots` | Permission for the checked target: allowed, denied or unknown. Null when unchecked. Browser navigation never checks robots, so this stays null. |
 | A3 | `fetch_failure` | Exact terminal fetch cause: HTTP, timeout, unsafe target, DNS, network, robots denied, robots unknown, body size, redirect cycle or unresolved browser challenge. |
-| A4 | `robots_failure`, `robots_http_status` | The cached robots lookup's cause and last HTTP status. These distinguish a denied rule from an unreachable or unsafe robots document without inventing a target response. |
+| A4 | `robots_failure`, `robots_http_status` | The non-browser cached robots lookup's cause and last HTTP status. Browser requests leave both null, as well as `robots_response_evidence`. |
 | A5 | `error_code` | An actually available safe OS, TLS or Chromium token, never a copied exception message. Unavailable DNS detail stays null. The wire format admits only uppercase letters, digits and underscores, up to 64 characters. |
 | A6 | `extraction_failure` | Missing document root, DOM depth overflow, empty extracted content or missing title. Successful body extraction with no title remains distinguishable from empty text. |
 | A7 | `failure_code` | The existing Python item-health vocabulary where meanings match, including the selected measured extraction signal. A signal alone is not a refusal. A configured quality rejection stays separate from successful parsing and is unresolved for source attribution. Unmatched conditions use `unknown`, with their exact typed `detail`, rather than pretending to be a network failure. |
@@ -53,6 +53,8 @@ elapsed time includes them. A robots cache hit adds no request or wait;
 validation-only refusals record zero wait. Null pacing measurements mean they
 were not recorded. The slot covers application response or failure settlement
 plus cooldown, not any native response work that continues after a timeout.
+The committed pacing switch is false, so current requests report zero queue
+wait; configured delays and jitter are inactive.
 
 Failed feed progress events may include `requested_feed_url` and
 `final_attempted_feed_url`. Each address uses the same diagnostic policy as an
@@ -82,7 +84,13 @@ request address.
 
 An optional resource failure cannot overwrite the document status, final
 document address or source-reliability outcome. Unsafe destinations still
-refuse the operation. An unsupported root browser target is closed before
+refuse the operation. Browser favicon downloads are blocked before dispatch,
+so they emit no failed-resource attempt and do not enter request counts.
+An HTTP 204 or 205 resource response has no body. Chromium's `ERR_ABORTED`
+completion for that response is not a network failure. Actual resource
+failures retain their resource role; they do not add document redirects or
+replace document status or the final document address.
+An unsupported root browser target is closed before
 execution and reports `network` with `ERR_UNSUPPORTED_BROWSER_TARGET`.
 SharedWorker creation is disabled before its script can download, rather than
 closed after dispatch. The page can continue without it; extraction records

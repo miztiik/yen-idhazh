@@ -1,4 +1,4 @@
-/** Admit source requests before dispatch while retaining origin-cached robots evidence. */
+/** Admit source requests before dispatch, checking robots only for non-browser transports. */
 import robotsParser from "robots-parser";
 import { FeedWebsiteGroupingConfigSchema, FetchAttemptSchema } from "@idhazh/common-contracts";
 import type { FeedIngestConfig, HttpResponseEvidence } from "@idhazh/common-contracts";
@@ -159,7 +159,7 @@ export function createPermittedFetcher(
   ): Promise<TransportResponse> {
     const url = await admitTarget(raw, signal, capture);
     let permissionFailure: PermissionError | undefined;
-    if (kind !== "robots") {
+    if (!transport.browser_managed && kind !== "robots") {
       const observed = await robots(url, signal, capture);
       const permission = observed.document === null ? "unknown"
         : robotsPermits(observed.document, url.href) ? "allowed" : "denied";

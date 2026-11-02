@@ -12,6 +12,7 @@ import type { HarvestTransport, TransportResponse } from "./transport";
 import { admitParserInput, completedBrowserResponse, inlineDocumentHeaders } from "./browser-document-response";
 import { responseEvidence } from "./source-response-evidence";
 import { UnsafeTargetError } from "./safe-target";
+import { isBrowserIconRequest } from "./browser-icon-request";
 
 type PendingResponse = {
   url: string; role: "document" | "resource"; status: number | null; headers: Headers;
@@ -135,13 +136,16 @@ export function createPlaywrightTransport(
             requests.delete(event.requestId);
             const code = typeof event.errorText === "string"
               ? /^net::(ERR_[A-Z0-9_]+)$/.exec(event.errorText)?.[1] ?? null : null;
-            if (request.redirected && !pageClosing && request.status !== null) {
-              fail(new ResponseReadError(request.status, responseEvidence(request.headers, input, null),
-                new BrowserNetworkError("Chromium redirect navigation did not complete", code)));
+            if (request.redirected) {
+              if (request.role === "document" && !pageClosing && request.status !== null) {
+                fail(new ResponseReadError(request.status, responseEvidence(request.headers, input, null),
+                  new BrowserNetworkError("Chromium redirect navigation did not complete", code)));
+              }
               return;
             }
-            // These statuses have no HTTP body and abort navigation instead of creating a document.
-            if (!signal.aborted && code === "ERR_ABORTED" && request.body?.length === 0
+            // These statuses have no HTTP body; Chromium can abort both navigation and resource delivery.
+            if (!signal.aborted && code === "ERR_ABORTED"
+              && (request.role === "resource" || request.body?.length === 0)
               && (request.status === 204 || request.status === 205)) {
               settleCompleted(request);
               return;
@@ -171,6 +175,11 @@ export function createPlaywrightTransport(
             const url = request.url;
             const role = event.resourceType === "Document" && event.frameId === mainFrame ? "document" : "resource";
             const job = (async () => {
+              if (event.responseStatusCode === undefined && event.responseErrorReason === undefined
+                && await isBrowserIconRequest(session, url, event.resourceType)) {
+                await session.send("Fetch.failRequest", { requestId: fetchId, errorReason: "BlockedByClient" });
+                return;
+              }
               if (typeof event.responseErrorReason === "string") {
                 const pending = requests.get(networkId);
                 if (!pending) throw new Error("Chromium response failure has no admitted request");
