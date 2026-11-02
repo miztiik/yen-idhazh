@@ -35,7 +35,7 @@ Table C - Delivery outcomes
 
 | Id | # | Row title | Depends-on | Parallel-group | Status | Worktree | PR | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| C1 | 1 | Declare independent contracts and startup settings | - | A | PENDING | - | - | - |
+| C1 | 1 | Declare independent contracts and startup settings | - | A | DONE | verbose-funicular | - | Hhem contracts |
 | C2 | 2 | Serve real bounded HHEM evaluations | 1 | B | PENDING | - | - | - |
 | C3 | 3 | Run the manual workflow with resource evidence | 2 | C | PENDING | - | - | - |
 

@@ -1,0 +1,52 @@
+[
+  {
+    "name": "first-event",
+    "namespace": "6ba7b810-9dad-11d1-80b4-00c04fd430c8",
+    "execution_id": "11111111-2222-4333-8444-555555555555",
+    "sequence": 1,
+    "request_id": "12345678-1234-4234-8234-123456789abc",
+    "correlation_id": "87654321-4321-4321-8321-cba987654321",
+    "seed": "hhem\n11111111-2222-4333-8444-555555555555\n1",
+    "expected_uuid": "97f112d2-e561-5666-bfb6-8f35c81be338"
+  },
+  {
+    "name": "next-event",
+    "namespace": "6ba7b810-9dad-11d1-80b4-00c04fd430c8",
+    "execution_id": "11111111-2222-4333-8444-555555555555",
+    "sequence": 2,
+    "request_id": "12345678-1234-4234-8234-123456789abc",
+    "correlation_id": "87654321-4321-4321-8321-cba987654321",
+    "seed": "hhem\n11111111-2222-4333-8444-555555555555\n2",
+    "expected_uuid": "1162b353-b79c-5fd8-9f2c-48da22926d2e"
+  },
+  {
+    "name": "repeated-caller-ids",
+    "namespace": "6ba7b810-9dad-11d1-80b4-00c04fd430c8",
+    "execution_id": "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee",
+    "sequence": 1,
+    "request_id": "12345678-1234-4234-8234-123456789abc",
+    "correlation_id": "87654321-4321-4321-8321-cba987654321",
+    "seed": "hhem\naaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee\n1",
+    "expected_uuid": "7440d341-9dce-555a-a1f3-544adcebd51e"
+  },
+  {
+    "name": "case-preserved-seed",
+    "namespace": "6ba7b810-9dad-11d1-80b4-00c04fd430c8",
+    "execution_id": "AAAAAAAA-BBBB-4CCC-8DDD-EEEEEEEEEEEE",
+    "sequence": 1,
+    "request_id": "12345678-1234-4234-8234-123456789abc",
+    "correlation_id": "87654321-4321-4321-8321-cba987654321",
+    "seed": "hhem\nAAAAAAAA-BBBB-4CCC-8DDD-EEEEEEEEEEEE\n1",
+    "expected_uuid": "36b8168b-8857-5052-8358-7b545eaa8f32"
+  },
+  {
+    "name": "larger-sequence",
+    "namespace": "6ba7b810-9dad-11d1-80b4-00c04fd430c8",
+    "execution_id": "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee",
+    "sequence": 1000000,
+    "request_id": "12345678-1234-4234-8234-123456789abc",
+    "correlation_id": "87654321-4321-4321-8321-cba987654321",
+    "seed": "hhem\naaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee\n1000000",
+    "expected_uuid": "d3c8ee41-e24a-5790-90f2-27e5d3dcfeef"
+  }
+]
