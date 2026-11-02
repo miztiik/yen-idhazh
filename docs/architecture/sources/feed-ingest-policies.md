@@ -26,19 +26,21 @@ configuration owns defaults; it has no Python planner mirror.
 
 The current configuration stamp is `2026-11-02`; older authored planner
 configurations fail validation rather than being converted. It declares
-`curate_articles.global_age_ceiling_hours`, `diversity` and `substance` in
-preparation for a later selection change. These blocks are global-only and
-excluded from the current effective candidate policy. They do not yet change
-age admission, scoring, allocation or selected output.
+`curate_articles.global_age_ceiling_hours`, `diversity` and `substance` as
+global-only blocks excluded from the current effective candidate policy.
+The age ceiling and diversity settings remain preparation for a later
+selection change.
+
+Screening reads `substance` directly to measure each admitted article once
+and cache its retained-word count and signed score. The current ranking does
+not use that cache. See [article substance scoring](article-substance-scoring.md)
+for the measurement rules. There is no retained-word admission minimum.
+Age admission, allocation, selected output, the raw technical minimum,
+recency coefficients, reliability floor and history window remain unchanged.
 
 The prepared age ceiling is 36 hours of known age. Diversity declares squared
-website/feed count coefficients and a first-use feed bonus. Substance declares
-a retained-word ramp, full-credit interval and long-form floor, name/number
-density, headline deductions and paragraph retention thresholds. Their bounds,
-curve order, distinct lowercase stop words and Unicode punctuation expressions
-are validated at load. Retained-word settings describe scoring, never a new
-admission minimum. The existing raw technical minimum, recency coefficients,
-reliability floor and history window remain unchanged.
+website/feed count coefficients and a first-use feed bonus. All three blocks
+are validated at load.
 
 ## Global controls and evidence
 
