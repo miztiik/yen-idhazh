@@ -83,7 +83,7 @@ Table C
 
 | Id | # | Row title | Depends-on | Parallel-group | Status | Worktree | PR | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| C1 | 1 | Prepare contracts and configuration | - | A | IN-FLIGHT | selection-contract-readiness | - | 77e2fd0b-3c3f-4e30-ab1e-c571119a90d7 |
+| C1 | 1 | Prepare contracts and configuration | - | A | DONE | selection-contract-readiness | - | 77e2fd0b-3c3f-4e30-ab1e-c571119a90d7 |
 | C2 | 2 | Add substance scoring during screening | 1 | B | PENDING | - | - | - |
 | C3 | 3 | Replace the selection engine and its consumers | 2 | C | PENDING | - | - | - |
 | C4 | 4 | Add diversity run metrics and audit reporting | 3 | D | PENDING | - | - | - |
