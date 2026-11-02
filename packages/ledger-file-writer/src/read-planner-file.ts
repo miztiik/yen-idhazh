@@ -122,7 +122,7 @@ async function loadStoredPlannerParquet(path: string, ledger: PlannerStoredFileE
     const envelopeVersion = values.get("envelope_version");
     if (footerLedger === ledger && SchemaVersionSchema.safeParse(envelopeVersion).success
       && SchemaVersionSchema.safeParse(rowSchemaVersion).success
-      && (envelopeVersion !== PLANNER_ENVELOPE_VERSION || rowSchemaVersion !== PLANNER_ROW_SCHEMA_VERSIONS[ledger])) {
+      && envelopeVersion !== PLANNER_ENVELOPE_VERSION) {
       throw new PlannerUnsupportedFormatError(ledger, envelopeVersion!, rowSchemaVersion!);
     }
     envelope = PlannerStoredFileEnvelopeSchema.parse({
@@ -171,6 +171,9 @@ export async function readPlannerParquet<T extends object>(
   path: string, ledger: PlannerStoredFileEnvelope["ledger"], contract: LedgerRowContract<T>,
 ) {
   const { fields, ...stored } = await loadStoredPlannerParquet(path, ledger);
+  if (stored.envelope.row_schema_version !== PLANNER_ROW_SCHEMA_VERSIONS[ledger]) {
+    throw new PlannerUnsupportedFormatError(ledger, stored.envelope.version, stored.envelope.row_schema_version);
+  }
   if (stored.envelope.row_schema_version !== contract.schemaVersion) {
     throw new PlannerLedgerFileError(
       `Planner ${ledger} requires its current row schema ${contract.schemaVersion}`,

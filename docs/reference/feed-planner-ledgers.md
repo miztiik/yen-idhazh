@@ -852,28 +852,32 @@ tables above explain field disposition; they are not migration instructions.
 
 ### TypeScript current-format refusal
 
-**User-approved ruling, 2026-10-31 UTC:** The planner accepts only current
-native formats, including private receipts and events. Older formats refuse
-instead of being converted. Missing current health fields affect their own
-calculation; they do not permit an old format or invented provenance.
+Full-row readers, writers, compaction, publication and current-run delivery
+require current native formats, as do private receipts and events. Other
+row formats refuse instead of being converted. Historical health calculations
+use the separate required-field rule below; a different row-version date does
+not make otherwise valid facts unusable.
 
-This is the maintainer-approved TypeScript exception to the read-side migration
-rule in `CLAUDE.md` section 11. Python's historical planner row readers and
-contract copies are retired. The gardener registry and scheduler remain; the
-published-file validator and compact writer use the current TypeScript
-contracts.
+The TypeScript current-format rule is the scoped exception to the read-side
+migration rule in `CLAUDE.md` section 11. Python's historical planner row
+readers and contract copies are retired. The gardener registry and scheduler
+remain; the published-file validator and compact writer use the current
+TypeScript contracts.
 
 The native planner reader has no migration table or historical physical schema.
 Strict full-row validation accepts only the current contract stamp. The health
-field reader checks that stamp, then validates required columns independently.
+field reader validates required columns independently of the stored row stamp.
 
 ### Field-based health history
 
-**User-approved ruling, 2026-10-31 UTC:** Health history reads accept only the
-current native health format. Earlier stamps refuse with diagnostics and are
-unchanged on disk. Missing or invalid fields in the current format affect only
-the calculation that requires them. Writers, compaction and publication still
-require the complete current row schema.
+Health history reads accept any valid stored row-version date within the
+supported file envelope. Each calculation validates only the fields it needs;
+an extra unrelated column or different row-version date does not discard usable
+evidence. Missing, invalid or conflicting required facts produce explicit gaps
+for their own use, not a failed planning request. Historical raw files, compact
+files and indexes remain unchanged: no migration, rewrite, deletion or null-fill
+is part of reading them. Writers, compaction, publication and current-run
+delivery still require the complete current row schema and stamp.
 
 The shared writer package exports `readStoredPlannerParquet` for stored-file
 validation and retains `readPlannerParquet` for strict full-row validation.
@@ -882,10 +886,11 @@ and whole-file canonical digest. Stored-file validation computes that digest
 from the actual Arrow columns, including nested and unrelated columns, not
 from the consumer's projection. A changed unrelated cell still fails integrity.
 An unsupported stored physical type fails explicitly rather than skipping
-part of the digest.
+part of the digest. The file-envelope format is unchanged. Strict reads retain
+their typed unsupported-format refusal for noncurrent row stamps.
 
 `readFeedHealthFieldsDay` in the planner service reads one named UTC day through
-the same filesystem membership and current native-file checks.
+the same named filesystem membership and stored-file integrity checks.
 It returns independent `uses`: `request_totals`, `feed_rest`,
 `feed_reliability` and `article_admission`. Their schemas are declared once in
 `packages/common-contracts/src/schemas/feed-health-fields.schema.ts`:
