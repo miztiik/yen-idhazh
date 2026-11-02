@@ -31,15 +31,16 @@ from contextvars import ContextVar
 from dataclasses import dataclass, field, fields, replace
 from functools import cache
 from http.client import HTTPResponse
-from typing import Final, Protocol
+from typing import TYPE_CHECKING, Final, Protocol
 from urllib import request
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlsplit
 
-from protego import Protego
-
 from idhazh.contracts.feed_health import FetchOutcome, RobotsOutcome
 from idhazh.contracts.knobs.extract import ExtractConfig
+
+if TYPE_CHECKING:
+    from protego import Protego
 
 #: Bumped when fetch policy changes. `-2` reads robots.txt with `protego`
 #: rather than `urllib.robotparser`, which changes what some files mean - see
@@ -215,6 +216,8 @@ def robots_allows(robots_txt: str, user_agent: str, url: str) -> bool:
     silent - it answers every question the same way - so the fixtures assert an
     allowance and a denial rather than only exercising the call.
     """
+    from protego import Protego
+
     return bool(Protego.parse(robots_txt).can_fetch(url, user_agent))
 
 
@@ -265,6 +268,8 @@ def robots_rules(result: FetchResult) -> RobotsRules:
     re-parsed per path, because a host is asked once and its pages are asked
     about many times.
     """
+    from protego import Protego
+
     if result.ok:
         return RobotsRules(Protego.parse(result.body.decode("utf-8", "replace")))
     if result.outcome is FetchOutcome.PERMANENT:
