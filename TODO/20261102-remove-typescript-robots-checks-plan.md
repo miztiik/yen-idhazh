@@ -92,6 +92,7 @@ Table F - versions, ledgers and history
 ## 3 - Row #1 - Read health history by required fields across row-version dates
 
 - **Scope:** Ship a permanent separation between verified stored bytes and current full-row validation so historical health calculations survive unrelated schema changes.
+- **CI cleanup:** Remove stale test references to the deleted native-transport workflow. Python runtime behavior and stored formats remain unchanged.
 - **Files touched:**
   - `packages/common-contracts/src/schemas/envelope.schema.ts`
   - `packages/common-contracts/test/rejection.test.ts`
@@ -103,9 +104,12 @@ Table F - versions, ledgers and history
   - `services/feed-ingest-plan/test/planning-health.test.ts`
   - `docs/reference/feed-planner-ledgers.md`
   - `docs/architecture/sources/planner-feed-history.md`
+  - `backend/tests/workflows/_harness.py`
+  - `backend/tests/workflows/test_source_transport_workflow.py` (delete)
   - `TODO/20261102-remove-typescript-robots-checks-plan.md`
 - **Acceptance gates - local:** Inspect the shared selector with `npm run test:changed -- --list` from `frontend`. Run `check` in common contracts, the ledger writer and the planner. In common contracts select `test/rejection.test.ts`; in the writer combine `test/planner-stored-file.test.ts`, `test/planner-publication.test.ts`, `test/planner-maintenance-unsupported.test.ts`; in the service combine `test/health-fields.test.ts`, `test/planning-health.test.ts`, `test/history-window.test.ts`, `test/file-baseline.test.ts` and `test/ledger-history.test.ts`. Use each package's declared runner and retain the selection/results.
 - **Acceptance gates - CI:** Full merge-candidate suites, strict writer/publication/maintenance checks and existing Python-owned contract bindings. No new live workflow or repository-history scan.
+- **Acceptance gates - test inventory:** Run backend lint and type checking, then combine `backend/tests/workflows/test_triggers.py`, `backend/tests/workflows/test_pinned_versions.py` and `backend/tests/workflows/test_workflow_inputs.py` in one focused pytest invocation. Retain the unchanged TypeScript results.
 - **Oracle:** For a generated, integrity-valid health file, changing only its valid row-version date must preserve the same usable field projections; removing a required field must degrade only its consumer, while a strict full-row read still refuses a non-current schema and the file bytes remain unchanged. This does not establish that missing historical values can be recovered or that source fetching is faster.
 
 Table G - implementation tasks and decisions
@@ -117,6 +121,7 @@ Table G - implementation tasks and decisions
 | G3 | 3 | Remove the extra health row-version gate in `readStoredPlannerDay`. Preserve captured-input caching, raw/compact membership, endpoint identity, conflict checks and independent field gaps. | The current gate runs before field selection; F6 replaces that admission rule. |
 | G4 | 4 | Update the existing generated-file tests and rename the writer test to describe stored-file integrity. Cover raw and compact input, extra/missing columns, valid saved deadlines/rates, partial counters and unchanged bytes. | Reuse the existing field-reader test tier; no historical decoder or production-data fixture is needed. |
 | G5 | 5 | Update the two current history references to distinguish F6 from F7. | Each read rule needs one current definition, not an old-format exception list. |
+| G6 | 6 | Remove the deleted native-transport workflow from the named test inventory and delete its dedicated workflow-only test. | CI must read existing named files; native source tests remain in the service suite. |
 
 Table H - rejected alternatives
 
