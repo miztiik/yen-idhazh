@@ -70,8 +70,9 @@ This is lexical evidence, not factual verification.
 ## Headline deductions
 
 Preserve original headline case for shouting. Read public `doc.json()` as
-unknown and validate each consumed term's text, normal form and tags with
-local Zod. Ignore unused metadata; do not inspect library internals.
+unknown and validate each consumed term's text, normal form, tags and optional
+root with local Zod. A root can be a string, null or absent, as returned by the
+public library output. Ignore unused metadata; do not inspect library internals.
 
 Shouting counts headline terms with at least two Unicode letters by default.
 An uppercase term must equal its uppercase form and differ from its lowercase
@@ -87,13 +88,15 @@ match repeated exclamation marks and mixed question/exclamation marks.
 Patterns are prepared once per screening invocation, not per article.
 
 For opening overlap, lowercase separate headline and bounded-opening documents,
-then run `nouns().toSingular()` followed by `verbs().toInfinitive()`. Compare
-validated public term normal forms, not display text. Keep distinct headline
-keywords with at least four Unicode letters after configured grammar-word
-exclusions. A mismatch needs nonempty keyword and opening sets with no
-whole-term intersection. Missing opening evidence cannot prove mismatch.
-Ordinary inflections can match; substrings, synonyms and arbitrary
-derivational pairs are not treated as equivalent.
+then run public `compute('root')` without rewriting sentences. Use a validated
+word root only for terms tagged `Verb` or both `Noun` and `Plural`. Otherwise,
+or when the root is null or absent, keep the term's normal form. Adjectives,
+adverbs and singular nouns keep their normal forms. Compare whole words, not
+display text. Keep distinct headline keywords with at least four Unicode
+letters after configured grammar-word exclusions. A mismatch needs nonempty
+keyword and opening sets with no whole-term intersection. Missing opening
+evidence cannot prove mismatch. Ordinary inflections can match; substrings,
+synonyms and arbitrary derivational pairs are not treated as equivalent.
 
 Default deductions are 0.10 points for shouting, 0.10 for punctuation and
 0.05 for opening mismatch. Clamp their sum to the configured 0.25-point
@@ -128,6 +131,11 @@ compromise 14.19.0 supplies sentence, proper-name, quantity and inflection
 analysis. It adds service-side JavaScript and two direct dependencies, efrt
 and suffix-thumb. It adds no native build, model download or browser payload.
 No timing or installed-byte guarantee is claimed.
+
+Opening overlap needs word base forms, not rewritten sentences. Whole-sentence
+verb conversion can fail on ordinary questions in headlines or retained prose.
+Public word roots avoid that conversion. The noun and verb tag checks prevent
+adjective and adverb roots from widening the comparison.
 
 ## See also
 
