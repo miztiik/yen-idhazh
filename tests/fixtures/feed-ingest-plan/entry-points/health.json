@@ -1,5 +1,5 @@
 {
-  "batch_id": "139601ce-176a-47ed-b072-e17912d42797",
+  "batch_id": "7e638643-4ea5-4a0c-99ae-3b08250d2291",
   "status": "summarized",
   "rows": [
     {
@@ -8,7 +8,7 @@
       "checked_at": "2026-10-21T23:59:59Z",
       "availability": "eligible",
       "strikes": 0,
-      "check_request_id": "ec637288-c855-439e-ae98-c1e6289e481c",
+      "check_request_id": "d5d03686-f532-4c4c-a173-8669b24fffd2",
       "check_result": "valid-feed",
       "rest_until": null,
       "first_confirmed_failure_at": null,

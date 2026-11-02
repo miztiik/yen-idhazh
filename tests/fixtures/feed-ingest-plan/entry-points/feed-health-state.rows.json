@@ -5,7 +5,7 @@
     "checked_at": "2026-10-21T23:59:59Z",
     "availability": "eligible",
     "strikes": 0,
-    "check_request_id": "ec637288-c855-439e-ae98-c1e6289e481c",
+    "check_request_id": "d5d03686-f532-4c4c-a173-8669b24fffd2",
     "check_result": "valid-feed",
     "rest_until": null,
     "first_confirmed_failure_at": null,

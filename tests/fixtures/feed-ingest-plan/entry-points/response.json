@@ -1,7 +1,7 @@
 {
   "run_id": "2026-10-21-700",
   "started_at": "2026-10-21T23:59:59.999Z",
-  "duration_ms": 841,
+  "duration_ms": 1164,
   "status": "completed",
   "failure_code": null,
   "selected_count": 1,
@@ -16,32 +16,32 @@
   "api_timings": [
     {
       "operation": "feed-health-before-fetch",
-      "duration_ms": 21,
+      "duration_ms": 29,
       "status": "completed"
     },
     {
       "operation": "fetch",
-      "duration_ms": 536,
+      "duration_ms": 769,
       "status": "completed"
     },
     {
       "operation": "feed-health-for-selection",
-      "duration_ms": 18,
+      "duration_ms": 9,
       "status": "completed"
     },
     {
       "operation": "select",
-      "duration_ms": 174,
+      "duration_ms": 225,
       "status": "completed"
     },
     {
       "operation": "partition",
-      "duration_ms": 2,
+      "duration_ms": 3,
       "status": "completed"
     },
     {
       "operation": "persist",
-      "duration_ms": 36,
+      "duration_ms": 47,
       "status": "completed"
     }
   ],
@@ -57,17 +57,17 @@
   "planning_complete": true,
   "correlation_id": "7cef34e3-dd9f-40ce-9a56-4d01ff5115cc",
   "batches": {
-    "parsed_batch_id": "596dc393-f601-4ac0-a492-78a44bd50085",
-    "selection_batch_id": "139601ce-176a-47ed-b072-e17912d42797",
-    "partition_batch_id": "bca8cea2-146c-4d46-bb7c-365e19ff49e3"
+    "parsed_batch_id": "d85e1d51-a6fa-43bb-90c7-6cd26c2497fa",
+    "selection_batch_id": "7e638643-4ea5-4a0c-99ae-3b08250d2291",
+    "partition_batch_id": "37814bf4-4330-4ba0-8a8e-c0658aa8288d"
   },
   "files": {
     "discovered_articles": {
       "status": "written",
       "files": [
         {
-          "path": "raw/feed-ingest-plan/discovered-articles/2026/10/21/01a19e1f-b5e4-850b-932c-76c071000165.parquet",
-          "file_id": "01a19e1f-b5e4-850b-932c-76c071000165",
+          "path": "raw/feed-ingest-plan/discovered-articles/2026/10/21/01a19e39-a34a-8b9b-9d65-ae68c3c24481.parquet",
+          "file_id": "01a19e39-a34a-8b9b-9d65-ae68c3c24481",
           "covers": "2026-10-21",
           "content_sha256": "cb68a24de5661af2f04213d9e91c525727d58f274a41e627d77444f31e808eef",
           "row_count": 2
@@ -78,8 +78,8 @@
       "status": "written",
       "files": [
         {
-          "path": "raw/feed-ingest-plan/selected-articles/2026/10/21/01a19e1f-b70a-8af4-be28-551d9f35cd27.parquet",
-          "file_id": "01a19e1f-b70a-8af4-be28-551d9f35cd27",
+          "path": "raw/feed-ingest-plan/selected-articles/2026/10/21/01a19e39-a4d2-87a2-b752-2dddb6b491fc.parquet",
+          "file_id": "01a19e39-a4d2-87a2-b752-2dddb6b491fc",
           "covers": "2026-10-21",
           "content_sha256": "8bb632dd5e89124cfe1322cd682bf07c196926360aa4f1a6a63349a3005e4dc9",
           "row_count": 1
@@ -102,15 +102,15 @@
       "status": "written",
       "files": [
         {
-          "path": "raw/feed-ingest-plan/feed-health-state/2026/10/21/01a19e1f-b6df-8a8f-a0f8-7c940f1eb6f7.parquet",
-          "file_id": "01a19e1f-b6df-8a8f-a0f8-7c940f1eb6f7",
+          "path": "raw/feed-ingest-plan/feed-health-state/2026/10/21/01a19e39-a496-8e70-929a-381623ed8c1e.parquet",
+          "file_id": "01a19e39-a496-8e70-929a-381623ed8c1e",
           "covers": "2026-10-21",
-          "content_sha256": "880086573aed5f883b7cb31ed8a2fab3eb43ff504df7d9dfce3ec73e9ac4a3e3",
+          "content_sha256": "75f622c93c7a6c748f6f7a73d7def656f4415018487df7c0e5d95d3bb57ff877",
           "row_count": 1
         },
         {
-          "path": "raw/feed-ingest-plan/feed-health-state/2026/10/22/01a19e1f-b6f1-8a16-a91c-38765e542587.parquet",
-          "file_id": "01a19e1f-b6f1-8a16-a91c-38765e542587",
+          "path": "raw/feed-ingest-plan/feed-health-state/2026/10/22/01a19e39-a4af-8b67-806a-32559d5eb7d7.parquet",
+          "file_id": "01a19e39-a4af-8b67-806a-32559d5eb7d7",
           "covers": "2026-10-22",
           "content_sha256": "4a9a1c3ca769964efe3b0b59ef684208d0e5b5e24ed7d21a7a873ecd34c530e8",
           "row_count": 1
@@ -121,10 +121,10 @@
       "status": "written",
       "files": [
         {
-          "path": "raw/feed-ingest-plan/plan-runs/2026/10/21/01a19e1f-b730-8cbf-bfaa-faf4352c489b.parquet",
-          "file_id": "01a19e1f-b730-8cbf-bfaa-faf4352c489b",
+          "path": "raw/feed-ingest-plan/plan-runs/2026/10/21/01a19e39-a4ff-86fa-abb2-9f1571799d31.parquet",
+          "file_id": "01a19e39-a4ff-86fa-abb2-9f1571799d31",
           "covers": "2026-10-21",
-          "content_sha256": "c2e6544cf604a2c7d6d665264a97b12d17725b379084800a0c2cba9188ccd535",
+          "content_sha256": "5c603a55d2931ed104bc1f5b3fb8c62e4d3e66251dcc5219055cc2efd1c5c130",
           "row_count": 1
         }
       ]
