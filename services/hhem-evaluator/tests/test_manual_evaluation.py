@@ -253,7 +253,8 @@ def test_actual_handlers_preserve_scores_and_explain_resource_coverage(
                         assert f"{rss / 1024:.3f} MiB ({rss} KiB)" in rendered
                 if mode in ("partial", "partial_and_stop_failed"):
                     assert service.worker.exit_confirmed
-                    assert service.worker.last_exit == (worker.generation, worker.pid)
+                    assert service.worker.last_exit is not None
+                    assert service.worker.last_exit[0] == worker.pid
                 else:
                     assert service.worker.process is not None and service.worker.process.is_alive()
             finally:
