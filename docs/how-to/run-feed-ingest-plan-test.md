@@ -128,10 +128,13 @@ gh run download <run-id> --name planner-current-recordings --dir <temporary-dire
 ```
 
 The `planner-current-recordings` artifact is uploaded only after the recorder
-succeeds. It contains exactly eight files for
+succeeds. It contains eight files for
 `tests/fixtures/feed-ingest-plan/entry-points/`: `response.json`, `health.json`,
 `selected-articles.json` and the `discovered-articles`, `selected-articles`,
 `rejected-articles`, `feed-health-state` and `plan-runs` `.rows.json` files.
+It also contains `report-events.json`, the same request's validated progress
+events. This current fixture is captured, not rebuilt by changing an earlier
+event's version or inventing its timings.
 The capture switch is unset when the recorder step exits, including on failure.
 Review and commit only these generated current recordings, then run ordinary
 candidate CI without capture. Existing replay, CLI and full-suite gates remain

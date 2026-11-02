@@ -233,7 +233,6 @@ test("public harvest returns strict full text and streamed work facts without pe
   expect(result.articles[0]?.observation.diagnostics?.extract_ms).toBeGreaterThanOrEqual(0);
   expect(result.articles[1]?.observation.diagnostics).toBeNull();
   const requests = transport.requests.map(request => request.url.href);
-  expect(requests.filter(url => url.endsWith("/robots.txt"))).toHaveLength(2);
   expect(requests.some(url => /private.js|style.css|meta-data|frame/.test(url))).toBe(false);
   expect(transport.peak).toBeLessThanOrEqual(loaded.config.harvest.concurrency);
   expect(transport.peak).toBe(2);

@@ -79,6 +79,29 @@ async function inputs() {
   return { input, candidate, observation, cases: CaseSchema.array().parse(fixture.cases), discovered };
 }
 
+test("shared earlier failures ignore retired robots reasons but retain applicable screening exclusions", async () => {
+  const { input, candidate } = await inputs();
+  const before = structuredClone(input);
+  for (const code of ["robots_denied", "robots_unreachable", "network_error"] as const) {
+    const result = await screenArticleCandidates({
+      ...input, exclusions: {
+        published_window_days: 7, published_on: {},
+        settled_failure_codes: { [candidate.url_key]: code },
+      },
+    });
+    if (code === "network_error") {
+      expect(result.admitted).toEqual([]);
+      expect(result.rejections).toMatchObject([{
+        drop_reason: "SETTLED_FAILURE", details: { failure_code: code, matched_url_key: candidate.url_key },
+      }]);
+    } else {
+      expect(result.rejections).toEqual([]);
+      expect(result.admitted.map(row => row.candidate.candidate_id)).toEqual([candidate.candidate_id]);
+    }
+  }
+  expect(input).toEqual(before);
+});
+
 test("recorded word, blocking, precedence and exact freshness boundaries", async () => {
   const { input, candidate, cases, discovered, observation } = await inputs();
   const diagnostics = HarvestDiagnosticsSchema.parse({ http_status: 200, fetch_ms: 17, extract_ms: 3 });
@@ -96,28 +119,6 @@ test("recorded word, blocking, precedence and exact freshness boundaries", async
       published_at: entry.published_at === undefined ? candidate.published_at : entry.published_at,
     });
 
-    test("shared earlier failures ignore retired robots reasons but retain applicable screening exclusions", async () => {
-      const { input, candidate } = await inputs();
-      const before = structuredClone(input);
-      for (const code of ["robots_denied", "robots_unreachable", "network_error"] as const) {
-        const result = await screenArticleCandidates({
-          ...input, exclusions: {
-            published_window_days: 7, published_on: {},
-            settled_failure_codes: { [candidate.url_key]: code },
-          },
-        });
-        if (code === "network_error") {
-          expect(result.admitted).toEqual([]);
-          expect(result.rejections).toMatchObject([{
-            drop_reason: "SETTLED_FAILURE", details: { failure_code: code, matched_url_key: candidate.url_key },
-          }]);
-        } else {
-          expect(result.rejections).toEqual([]);
-          expect(result.admitted.map(row => row.candidate.candidate_id)).toEqual([candidate.candidate_id]);
-        }
-      }
-      expect(input).toEqual(before);
-    });
     const result = await screenArticleCandidates({
       ...input, candidates: [offered],
       observations: { [offered.candidate_id]: {

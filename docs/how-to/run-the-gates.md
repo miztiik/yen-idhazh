@@ -368,7 +368,8 @@ origins.
 The committed inputs under
 `tests/fixtures/feed-ingest-plan/entry-points/` contain the API response,
 health response, selected text artifact and five native ledger row transcripts
-from the same verified API test. To replace them, set
+from the same verified API test. Its validated sparse progress also supplies
+`tests/fixtures/feed-ingest-plan/report-events.json`. To replace them, set
 `IDHAZH_CAPTURE_PLANNER_RECORDINGS=1` for that test, then unset it before
 ordinary checks. The test reads actual Parquet output and validates each
 transcript with its native row model before cleanup; it does not generate
