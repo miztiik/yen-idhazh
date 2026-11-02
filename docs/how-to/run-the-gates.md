@@ -270,6 +270,33 @@ the captured model identity. Existing full-suite merge-candidate gates remain un
 The [service reference](../reference/hhem-evaluation-api.md) owns the fields
 and dependency boundary.
 
+For the manual caller, also prepare the existing locked host instrument and
+run its three named modules together from the service directory:
+
+```powershell
+bun install --frozen-lockfile --cwd .\services\host-probes
+Set-Location .\services\hhem-evaluator
+uv run --frozen ruff check src tests
+uv run --frozen mypy src tests
+uv run --frozen pytest tests/test_host_profile_reader_parity.py tests/test_manual_evaluation.py tests/test_manual_workflow.py
+```
+
+The host compatibility test exports the actual native schemas through Bun.
+Missing preparation fails; it does not skip. Caller integration composes the
+real ASGI handler/controller and the native host handler/collector over test
+pipes with named proc fixtures. It opens no HTTP listener. The existing
+Windows asyncio socket-pair limitation above also applies to these cases.
+Owned-process fixtures launch the actual CPython executable with the same
+environment's installed packages: a Windows virtual-environment redirector
+has a different PID. The runtime ownership check stays strict.
+The isolated CI job prepares the host's locked dependencies and checks the
+new Bun scripts with that package's compiler; it still installs no model.
+The bounded workflow inventory change also selects
+`backend/tests/workflows/test_workflow_inputs.py` and
+`backend/tests/workflows/test_triggers.py`. Keep full suites in CI.
+The [manual procedure](run-hhem-evaluation-api.md) owns registration and real
+hosted evidence; offline results do not close that check.
+
 ### Independent TypeScript packages and services
 
 Maintainer ruling, 2026-10-21: remaining feed-planner development and tests do not

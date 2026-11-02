@@ -1,6 +1,6 @@
 # GitHub Actions Workflows
 
-**Last Updated**: 2026-10-31
+**Last Updated**: 2026-11-02
 
 Which workflows run, when they run, and what they may publish.
 The [workflow declarations](../../.github/workflows/) are authoritative.
@@ -20,11 +20,15 @@ All schedules and run dates are UTC. Every workflow supports manual dispatch.
 | `digest-recovery.yml` | `Digest assembly recovery` | none | Complete assembly from retained worker artifacts |
 | `idhazh-pipeline-tests.yaml` | `Pipeline tests` | none | Check a model with real articles |
 | `feed-ingest-plan-test.yml` | `Feed ingest plan test` | none | Run the real planner HTTP API and publish its completed planner and host metadata |
+| `hhem-evaluation-api-test.yml` | `HHEM evaluation API test` | none | Score two supplied texts once through the independent CPU API and report worker resources without publication |
 | `yen-ai-pipeline.yml` | `Yen-AI-Pipeline` | none | Run the independent summarizer API |
 | `ai-pipeline-tests.yml` | `Yen-Summarizers` | none | Run independent TypeScript inference and its existing audit |
 
 Use filenames for dispatch and API calls. `workflow_run.workflows` matches display
 names instead: update its callers and the workflow tests when renaming a label.
+
+The [HHEM manual procedure](../how-to/run-hhem-evaluation-api.md) covers its
+first default-branch registration, exact-ref dispatch and body-free evidence.
 
 Both independent inference workflows accept `models_file`. Blank follows
 `config/idhazh.json`; a value selects that declaration through the shared
