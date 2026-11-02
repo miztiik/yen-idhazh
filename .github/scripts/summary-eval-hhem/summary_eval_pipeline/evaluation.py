@@ -66,6 +66,7 @@ async def evaluate(
         pipeline,
         settings.queue.wait_timeout_ms
         + settings.evaluation.timeout_ms
+        + settings.worker.shutdown_timeout_ms
         + pipeline.http_connect_timeout_ms,
         service="hhem",
         phase="evaluation",

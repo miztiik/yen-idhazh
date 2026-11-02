@@ -3,6 +3,7 @@
 import asyncio
 from pathlib import Path
 
+import httpx
 import pytest
 from summary_eval_pipeline.contracts import ServiceShutdown
 from summary_eval_pipeline.evaluation import evaluate, read_owned_health
@@ -43,6 +44,13 @@ def test_actual_handlers_preserve_scores_including_error_http_results(
         try:
             async with running_service() as service:
                 controller = service.app.state.controller
+                evaluation_timeouts: list[object] = []
+
+                async def observe_timeout(sent: httpx.Request) -> None:
+                    if sent.url.path.endswith("/summary-eval-hhem"):
+                        evaluation_timeouts.append(sent.extensions["timeout"]["read"])
+
+                service.client.event_hooks["request"].append(observe_timeout)
                 await read_owned_health(
                     service.client,
                     "http://127.0.0.1:3010",
@@ -59,6 +67,15 @@ def test_actual_handlers_preserve_scores_including_error_http_results(
                     controller.settings,
                     pipeline,
                 )
+                assert evaluation_timeouts == [
+                    (
+                        controller.settings.queue.wait_timeout_ms
+                        + controller.settings.evaluation.timeout_ms
+                        + controller.settings.worker.shutdown_timeout_ms
+                        + pipeline.http_connect_timeout_ms
+                    )
+                    / 1000
+                ]
                 if status != 200:
                     errors.append(
                         WorkflowError(

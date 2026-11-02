@@ -30,7 +30,7 @@ Table A - `config/summary-eval-hhem.json`
 | --- | --- | --- |
 | A1 | `event_envelope_bytes` | 65536 bytes (64 KiB) above the API body allowance when reading only `GITHUB_EVENT_PATH`. The encoded request must still fit the API allowance. |
 | A2 | `max_response_bytes`, `control_max_bytes` | 2097152 bytes (2 MiB) per response or evidence read; 16384 bytes (16 KiB) per private control packet. |
-| A3 | `http_connect_timeout_ms`, `poll_interval_ms` | 5000 milliseconds (five seconds) for connection; 100 milliseconds between readiness observations. Scoring uses the API's queue and evaluation deadlines. |
+| A3 | `http_connect_timeout_ms`, `poll_interval_ms` | 5000 milliseconds (five seconds) for connection; 100 milliseconds between readiness observations. The response deadline covers queue, evaluation and bounded worker cleanup, plus connection time. |
 | A4 | `pipeline_name`, `task_name` | Committed labels, never derived from either text. The run identity uses the UTC day and platform run number. |
 | A5 | `output_directory` | `backend/var/summary-eval-hhem`, one disposable run directory. Only `evaluation.json` and `report.md` are uploaded. |
 
