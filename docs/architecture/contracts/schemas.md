@@ -1,6 +1,6 @@
 # Contracts and Schemas
 
-**Last Updated**: 2026-10-31
+**Last Updated**: 2026-11-02
 
 The persisted-shape subsystem: where the models live, how a schema is obtained from one, the small hand copy the frontend carries, and the tests that stop the two drifting apart. This is the operational home of Guardrail #3 (contracts before logic) and `CLAUDE.md` sections 1a and 11.
 
@@ -34,6 +34,15 @@ demand. Python does not read planner rows or stage payloads, and has no planner
 model or comparison copy. The Python gardener keeps its scheduler and delegates
 planner file validation and compaction to the TypeScript writer; generic
 compact-index and non-planner ledger contracts retain their Pydantic owners.
+
+Transient HHEM API contracts live only in
+`services/hhem-evaluator/src/hhem_evaluator/contracts/`. Their native Pydantic
+models own validation and on-demand schemas without importing the backend or
+entering its persisted-contract registry. The
+[service reference](../../reference/hhem-evaluation-api.md) owns their current
+fields, versions and startup settings. Caller-saved responses are outputs of
+one run, not inputs to a later run; adding such a reader requires a persisted
+contract design first.
 
 ## Recursive ledger types
 

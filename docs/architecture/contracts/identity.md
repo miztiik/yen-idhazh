@@ -1,6 +1,6 @@
 # Identity and Deterministic Identifiers
 
-**Last Updated**: 2026-10-22
+**Last Updated**: 2026-11-02
 
 How files, work units, events, and correlation contexts are identified across Python and TypeScript stages.
 
@@ -109,8 +109,38 @@ The `correlation_id` binds all operations belonging to a single pipeline invocat
 
 ---
 
+## 6. HHEM execution and event identity
+
+The independent evaluator creates a fresh lowercase UUIDv4 for each HTTP
+attempt before reading its body. Service lifecycle work has a separate
+execution identity. A caller's request and correlation IDs do not determine
+either execution identity.
+
+Supplied request and correlation IDs must be hyphenated UUIDv4 strings. Keep
+their exact spelling, including letter case. Only omission generates a new
+lowercase UUIDv4; explicit null and invalid supplied IDs are refused.
+
+Each operation gets a fresh UUIDv4 retained across its phases. One parent
+emitter orders events with a positive sequence starting at one per execution.
+Use section 4's DNS namespace and standard UUIDv5 with exactly this UTF-8 name,
+without a trailing newline:
+
+```text
+hhem
+{execution_id}
+{sequence}
+```
+
+`services/hhem-evaluator/src/hhem_evaluator/resolve_ids.py` declares this encoding
+once and uses Python's standard UUID implementation. The named
+`tests/fixtures/hhem-evaluator/event-id-vectors.json` vectors also run through
+the existing TypeScript `createUuidV5` implementation. Missing Bun or its locked
+dependencies fails that comparison; no TypeScript runtime is added to the
+service installation.
+
 ## See also
 
 - [persistence.md](persistence.md) - how the ledger door reads and writes file envelopes.
 - [schemas.md](schemas.md) - schema rules and contract definitions.
+- [../../reference/hhem-evaluation-api.md](../../reference/hhem-evaluation-api.md) - transient HHEM fields and their native owner.
 - [../../how-to/execute-a-plan.md](../../how-to/execute-a-plan.md) - execution contract.

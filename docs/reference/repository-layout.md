@@ -1,6 +1,6 @@
 # Repository Layout
 
-**Last Updated**: 2026-10-24
+**Last Updated**: 2026-11-02
 
 Every top-level directory, what it holds, who writes it, and whether a reader
 ever sees it. Read this before adding a directory, or when deciding where a new
@@ -35,6 +35,7 @@ question, and the four answers do not mix.
 | `.github/workflows/` | CI, the daily pipeline, and the Pages deploy | a person | no |
 | `.github/scripts/` | The independent `ai-pipeline.ts` experiment and `serve-evaluator.py`; no native API or workflow-support implementation | a person | no |
 | `services/feed-ingest-plan/`, `services/host-probes/` | Native API implementations plus their own workflow, report and controlled-host helpers under `scripts/`; offline cases under `test/` | a person | no |
+| `services/hhem-evaluator/` | Independent Python package, locked environment and native transient HHEM contracts; offline cases under `tests/`. Its committed startup settings are `config/hhem-evaluator/settings.json`; bounded shared vectors are `tests/fixtures/hhem-evaluator/event-id-vectors.json` | a person | no |
 | `packages/feed-probe/` | The standalone TypeScript feed access and article readability probe, its CLI, machine-readable reports and package-local tests | a person | no |
 | `.github/agents/` | The seven persona advisors (`CLAUDE.md` section 14) | a person | no |
 | `.claude/skills/` | Claude Code skill wrappers that point at `docs/`, so one procedure is not written twice | a person | no |

@@ -1,6 +1,6 @@
 # Run the Gates
 
-**Last Updated**: 2026-11-01
+**Last Updated**: 2026-11-02
 Set up a machine, then run every check `CLAUDE.md` section 9 asks for before a
 merge. This page owns the project's actual gate commands; the neutral PR
 lifecycle that calls for them is
@@ -210,6 +210,35 @@ frozen one. There is no export step and nothing to compare: the frontend hand
 copies are held by the binding tests listed in the
 [contract guide](../architecture/contracts/schemas.md#what-holds-the-copy-in-step),
 which run inside the backend group.
+
+### Independent Python service contracts
+
+Project bindings: the HHEM package uses its own CPython 3.12 environment and
+manifest. Inspect the shared selection without changing its selector. Prepare
+the existing writer for the real UUID comparison, then run from the service
+directory:
+
+```powershell
+npm --prefix .\frontend run test:changed -- --list
+bun install --frozen-lockfile --cwd .\packages\common-contracts
+bun install --frozen-lockfile --cwd .\packages\ledger-file-writer
+Set-Location .\services\hhem-evaluator
+uv sync --frozen --group dev
+uv run --frozen ruff check src tests
+uv run --frozen mypy src tests
+uv run --frozen pytest tests/test_contracts.py tests/test_settings.py tests/test_event_ids.py
+```
+
+If Bun cannot copy the local writer dependency on Windows, repeat its locked
+install with `--linker=isolated`; do not change either package manifest or lock.
+The isolated `hhem-evaluator` CI job runs the complete offline service suite,
+strict types and lint when the scope job selects code. It installs neither
+the backend nor the model extra. The named UUID test fails with preparation
+instructions when its real TypeScript dependency is absent; it never skips.
+These checks certify contracts and configuration, not model loading, scoring
+or HTTP lifecycle. Existing full-suite merge-candidate gates remain unchanged.
+The [service reference](../reference/hhem-evaluation-api.md) owns the fields
+and dependency boundary.
 
 ### Independent TypeScript packages and services
 
