@@ -86,7 +86,7 @@ Table C
 | C1 | 1 | Prepare contracts and configuration | - | A | DONE | selection-contract-readiness | - | 77e2fd0b-3c3f-4e30-ab1e-c571119a90d7 |
 | C2 | 2 | Add substance scoring during screening | 1 | B | DONE | article-substance-scoring | - | 78ec8fbd-56fc-4654-9a07-cec0ec44faa4 |
 | C3 | 3 | Replace the selection engine and its consumers | 2 | C | DONE | diversity-selection-engine | #1889 | c0109686-cc01-482a-ad99-250a1d6fe486 |
-| C4 | 4 | Add diversity run metrics and audit reporting | 3 | D | IN_PROGRESS | saved-selection-metrics | - | c9f89a61-1e61-4c28-8439-3d8302b653cd |
+| C4 | 4 | Add diversity run metrics and audit reporting | 3 | D | DONE | saved-selection-metrics | #1890 | c9f89a61-1e61-4c28-8439-3d8302b653cd |
 
 ## 2 - Row 1 - Prepare contracts and configuration
 
